@@ -1,18 +1,18 @@
-import { queryOne, exec, type RowDataPacket } from './db';
-import type { OrgSettings } from './types';
+import { exec, queryOne, type RowDataPacket } from './db'
+import type { OrgSettings } from './types'
 
 interface SettingsRow extends RowDataPacket {
-  session_minutes: number;
-  keep_signed_in_allowed: number;
-  keep_signed_in_days: number;
-  trusted_device_days: number;
-  concurrent_session_limit: number;
-  mfa_required: number;
-  sso_enforced_domains: string[] | string | null;
-  external_users_allowed: number;
-  invite_expiry_days: number;
-  updated_by: number | null;
-  updated_at: Date;
+  session_minutes: number
+  keep_signed_in_allowed: number
+  keep_signed_in_days: number
+  trusted_device_days: number
+  concurrent_session_limit: number
+  mfa_required: number
+  sso_enforced_domains: string[] | string | null
+  external_users_allowed: number
+  invite_expiry_days: number
+  updated_by: number | null
+  updated_at: Date
 }
 
 /** Defaults mirror the DDL, so a missing row degrades to the documented values. */
@@ -28,22 +28,22 @@ const FALLBACK: OrgSettings = {
   inviteExpiryDays: 7,
   updatedBy: null,
   updatedAt: new Date(0).toISOString(),
-};
+}
 
-let cache: { value: OrgSettings; at: number } | null = null;
-const TTL_MS = 5_000;
+let cache: { value: OrgSettings; at: number } | null = null
+const TTL_MS = 5_000
 
 function parseDomains(raw: SettingsRow['sso_enforced_domains']): string[] {
-  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw)) return raw
   if (typeof raw === 'string') {
     try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
     } catch {
-      return [];
+      return []
     }
   }
-  return [];
+  return []
 }
 
 /**
@@ -52,9 +52,9 @@ function parseDomains(raw: SettingsRow['sso_enforced_domains']): string[] {
  * from anything the client sends.
  */
 export async function getSettings(): Promise<OrgSettings> {
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.value;
+  if (cache && Date.now() - cache.at < TTL_MS) return cache.value
 
-  const row = await queryOne<SettingsRow>('SELECT * FROM settings WHERE id = 1');
+  const row = await queryOne<SettingsRow>('SELECT * FROM settings WHERE id = 1')
   const value: OrgSettings = row
     ? {
         sessionMinutes: row.session_minutes,
@@ -69,27 +69,27 @@ export async function getSettings(): Promise<OrgSettings> {
         updatedBy: row.updated_by ? String(row.updated_by) : null,
         updatedAt: row.updated_at.toISOString(),
       }
-    : FALLBACK;
+    : FALLBACK
 
-  cache = { value, at: Date.now() };
-  return value;
+  cache = { value, at: Date.now() }
+  return value
 }
 
 export function invalidateSettingsCache(): void {
-  cache = null;
+  cache = null
 }
 
 /** True when the address falls under an SSO-enforced domain (password sign-in off). */
 export async function isSsoEnforced(email: string): Promise<boolean> {
-  const { ssoEnforcedDomains } = await getSettings();
-  const lower = email.toLowerCase();
+  const { ssoEnforcedDomains } = await getSettings()
+  const lower = email.toLowerCase()
   return ssoEnforcedDomains.some((domain) => {
-    const suffix = domain.startsWith('@') ? domain.toLowerCase() : `@${domain.toLowerCase()}`;
-    return lower.endsWith(suffix);
-  });
+    const suffix = domain.startsWith('@') ? domain.toLowerCase() : `@${domain.toLowerCase()}`
+    return lower.endsWith(suffix)
+  })
 }
 
 export async function touchSettingsUpdatedBy(userId: number): Promise<void> {
-  await exec('UPDATE settings SET updated_by = ? WHERE id = 1', [userId]);
-  invalidateSettingsCache();
+  await exec('UPDATE settings SET updated_by = ? WHERE id = 1', [userId])
+  invalidateSettingsCache()
 }

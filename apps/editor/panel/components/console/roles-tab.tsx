@@ -1,55 +1,60 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Minus } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { Button, SegBar, SegButton } from '@panel/components/ui/controls';
-import { Caps } from '@panel/components/ui/caps';
-import { Dialog, Toast } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
-import type { RolesFullResponse } from '@panel/lib/api-contract';
-import { collator, resolveApiMessage } from '@panel/lib/i18n';
-import { PERMISSIONS, type Permission } from '@panel/lib/types';
-import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint';
-import { cn } from '@panel/lib/cn';
+import { useApp } from '@panel/components/app-providers'
+import { Caps } from '@panel/components/ui/caps'
+import { Button, SegBar, SegButton } from '@panel/components/ui/controls'
+import { Dialog, Toast } from '@panel/components/ui/feedback'
+import type { RolesFullResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint'
+import { collator, resolveApiMessage } from '@panel/lib/i18n'
+import { PERMISSIONS, type Permission } from '@panel/lib/types'
+import { Check, ChevronDown, ChevronUp, Minus } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 
-type RoleRow = RolesFullResponse['roles'][number];
+type RoleRow = RolesFullResponse['roles'][number]
 
 export function RolesTab() {
-  const { t, lang } = useApp();
-  const { touch } = useBreakpoint();
+  const { t, lang } = useApp()
+  const { touch } = useBreakpoint()
 
-  const [roles, setRoles] = useState<RoleRow[]>([]);
-  const [canEdit, setCanEdit] = useState(false);
-  const [view, setView] = useState<'matrix' | 'list'>('matrix');
-  const [search, setSearch] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<RoleRow | null>(null);
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
+  const [roles, setRoles] = useState<RoleRow[]>([])
+  const [canEdit, setCanEdit] = useState(false)
+  const [view, setView] = useState<'matrix' | 'list'>('matrix')
+  const [search, setSearch] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<RoleRow | null>(null)
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
   const notify = useCallback((message: string, tone: 'success' | 'error' = 'success') => {
-    setToast({ message, tone });
-    setTimeout(() => setToast(null), 2600);
-  }, []);
+    setToast({ message, tone })
+    setTimeout(() => setToast(null), 2600)
+  }, [])
 
   const load = useCallback(async () => {
-    const res = await call<RolesFullResponse>('/api/roles');
+    const res = await call<RolesFullResponse>('/api/roles')
     if (!res.ok) {
-      notify(resolveApiMessage(t, res.messageKey), 'error');
-      return;
+      notify(resolveApiMessage(t, res.messageKey), 'error')
+      return
     }
-    setRoles(res.data.roles);
-    setCanEdit(res.data.canEdit);
-  }, [notify, t]);
+    setRoles(res.data.roles)
+    setCanEdit(res.data.canEdit)
+  }, [notify, t])
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load()
+  }, [load])
 
-  const compare = collator(lang);
-  const visible = roles.filter((role) => !search.trim() || compare.compare(role.name, search) === 0 || role.name.toLocaleLowerCase(lang).includes(search.trim().toLocaleLowerCase(lang)));
+  const compare = collator(lang)
+  const visible = roles.filter(
+    (role) =>
+      !search.trim() ||
+      compare.compare(role.name, search) === 0 ||
+      role.name.toLocaleLowerCase(lang).includes(search.trim().toLocaleLowerCase(lang)),
+  )
 
   /**
    * A matrix toggle writes straight to the API and the row re-reads from the
@@ -58,37 +63,37 @@ export function RolesTab() {
    */
   const togglePermission = useCallback(
     async (role: RoleRow, permission: Permission) => {
-      if (!canEdit || role.isSystem) return;
+      if (!canEdit || role.isSystem) return
       const next = role.permissions.includes(permission)
         ? role.permissions.filter((p) => p !== permission)
-        : [...role.permissions, permission];
+        : [...role.permissions, permission]
 
       const res = await call(`/api/roles/${encodeURIComponent(role.name)}`, {
         method: 'PUT',
         body: { permissions: next },
-      });
+      })
       if (!res.ok) {
-        notify(resolveApiMessage(t, res.messageKey), 'error');
-        return;
+        notify(resolveApiMessage(t, res.messageKey), 'error')
+        return
       }
-      void load();
+      void load()
     },
     [canEdit, load, notify, t],
-  );
+  )
 
   const createRole = useCallback(async () => {
-    if (!newName.trim()) return;
-    const res = await call('/api/roles', { body: { name: newName.trim() } });
+    if (!newName.trim()) return
+    const res = await call('/api/roles', { body: { name: newName.trim() } })
     if (!res.ok) {
-      notify(resolveApiMessage(t, res.messageKey), 'error');
-      return;
+      notify(resolveApiMessage(t, res.messageKey), 'error')
+      return
     }
-    setNewName('');
-    setAdding(false);
-    void load();
-  }, [newName, load, notify, t]);
+    setNewName('')
+    setAdding(false)
+    void load()
+  }, [newName, load, notify, t])
 
-  const cols = `minmax(0,1.5fr) repeat(${visible.length}, ${touch ? '56px' : 'minmax(0,1fr)'})`;
+  const cols = `minmax(0,1.5fr) repeat(${visible.length}, ${touch ? '56px' : 'minmax(0,1fr)'})`
 
   return (
     <section className="flex min-w-0 flex-col gap-[14px]" style={{ animation: 'dtFade 0.2s ease' }}>
@@ -133,7 +138,9 @@ export function RolesTab() {
           style={{ animation: 'dtDrop 0.16s ease' }}
         >
           <div className="flex min-w-[170px] flex-1 flex-col gap-[5px]">
-            <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.newRoleName}</Caps>
+            <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+              {t.newRoleName}
+            </Caps>
             <input
               type="text"
               placeholder={t.egRole}
@@ -195,8 +202,8 @@ export function RolesTab() {
                 <span className="font-mono text-[9px] text-muted-fg">{permission}</span>
               </div>
               {visible.map((role) => {
-                const on = role.permissions.includes(permission);
-                const locked = !canEdit || role.isSystem;
+                const on = role.permissions.includes(permission)
+                const locked = !canEdit || role.isSystem
                 return (
                   <button
                     key={`${role.name}-${permission}`}
@@ -207,7 +214,9 @@ export function RolesTab() {
                     className={cn(
                       'mx-auto flex items-center justify-center rounded-[6px] border',
                       touch ? 'h-11 w-11' : 'h-[26px] w-[26px]',
-                      on ? 'border-brand bg-field text-brand-fg' : 'border-border bg-transparent text-muted-fg',
+                      on
+                        ? 'border-brand bg-field text-brand-fg'
+                        : 'border-border bg-transparent text-muted-fg',
                       locked && 'cursor-not-allowed opacity-60',
                     )}
                   >
@@ -217,7 +226,7 @@ export function RolesTab() {
                       <Minus className="h-[11px] w-[11px] opacity-50" strokeWidth={2.5} />
                     )}
                   </button>
-                );
+                )
               })}
             </div>
           ))}
@@ -225,9 +234,12 @@ export function RolesTab() {
       ) : (
         <div className="flex flex-col gap-[9px]">
           {visible.map((role) => {
-            const open = expanded === role.name;
+            const open = expanded === role.name
             return (
-              <div key={role.name} className="overflow-hidden rounded-[12px] border border-border bg-surface">
+              <div
+                key={role.name}
+                className="overflow-hidden rounded-[12px] border border-border bg-surface"
+              >
                 <div className="flex h-10 items-center justify-between gap-[10px] px-3">
                   <button
                     type="button"
@@ -240,7 +252,10 @@ export function RolesTab() {
                         role.isSystem ? 'bg-brand' : 'bg-input',
                       )}
                     />
-                    <Caps invariant className="truncate text-[12.5px] font-semibold tracking-[0.04em]">
+                    <Caps
+                      invariant
+                      className="truncate text-[12.5px] font-semibold tracking-[0.04em]"
+                    >
                       {role.name}
                     </Caps>
                     {role.isSystem ? (
@@ -278,7 +293,9 @@ export function RolesTab() {
                         key={permission}
                         className={cn(
                           'flex min-w-0 items-center gap-2 text-[11.5px]',
-                          role.isSystem || !canEdit ? 'cursor-not-allowed text-muted-fg' : 'cursor-pointer',
+                          role.isSystem || !canEdit
+                            ? 'cursor-not-allowed text-muted-fg'
+                            : 'cursor-pointer',
                         )}
                       >
                         <input
@@ -295,7 +312,7 @@ export function RolesTab() {
                   </div>
                 ) : null}
               </div>
-            );
+            )
           })}
         </div>
       )}
@@ -307,7 +324,9 @@ export function RolesTab() {
           <h2 id="dt-role-del" className="m-0 text-[15px] font-semibold tracking-[-0.01em]">
             {t.roleDeleteConfirm}
           </h2>
-          <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">{t.roleDeleteLead}</p>
+          <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">
+            {t.roleDeleteLead}
+          </p>
           <span className="font-mono text-[11px] text-fg">{deleting.name}</span>
           <div className="flex flex-col gap-[9px]">
             <Button
@@ -316,13 +335,13 @@ export function RolesTab() {
                 const res = await call<{ reassigned: number }>(
                   `/api/roles/${encodeURIComponent(deleting.name)}`,
                   { method: 'DELETE' },
-                );
+                )
                 if (!res.ok) {
-                  notify(resolveApiMessage(t, res.messageKey), 'error');
-                  return;
+                  notify(resolveApiMessage(t, res.messageKey), 'error')
+                  return
                 }
-                setDeleting(null);
-                void load();
+                setDeleting(null)
+                void load()
               }}
             >
               {t.confirmDelete}
@@ -336,10 +355,10 @@ export function RolesTab() {
 
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </section>
-  );
+  )
 }
 
 /** Human label for a permission key; the mono key stays visible beside it. */
 function labelFor(permission: Permission): string {
-  return permission.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  return permission.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 }

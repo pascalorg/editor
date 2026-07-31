@@ -1,34 +1,34 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Search } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { Caps } from '@panel/components/ui/caps';
-import { useModalFocus } from '@panel/components/ui/modal-focus';
-import { call } from '@panel/lib/client-api';
-import type { UsersListResponse } from '@panel/lib/api-contract';
-import { useEscapeLayer } from '@panel/lib/escape-layers';
-import { CONSOLE_TABS, TAB_META, tabLabel, type ConsoleTab } from '@panel/lib/console-tabs';
-import type { SessionUser } from '@panel/lib/types';
-import { cn } from '@panel/lib/cn';
+import { useApp } from '@panel/components/app-providers'
+import { Caps } from '@panel/components/ui/caps'
+import { useModalFocus } from '@panel/components/ui/modal-focus'
+import type { UsersListResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { CONSOLE_TABS, type ConsoleTab, TAB_META, tabLabel } from '@panel/lib/console-tabs'
+import { useEscapeLayer } from '@panel/lib/escape-layers'
+import type { SessionUser } from '@panel/lib/types'
+import { Search } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface Item {
-  id: string;
-  label: string;
-  hint: string;
-  run: () => void;
+  id: string
+  label: string
+  hint: string
+  run: () => void
 }
 
 interface Group {
-  label: string;
-  items: Item[];
+  label: string
+  items: Item[]
 }
 
 /** Per group, as the prototype does — a palette that scrolls has stopped helping. */
-const MAX_PER_GROUP = 8;
+const MAX_PER_GROUP = 8
 /** Long enough that typing a name does not fire a request per keystroke. */
-const SEARCH_DEBOUNCE_MS = 180;
+const SEARCH_DEBOUNCE_MS = 180
 
 /**
  * ⌘K / Ctrl+K command palette.
@@ -49,40 +49,43 @@ export function CommandPalette({
   open,
   onClose,
 }: {
-  user: SessionUser;
-  open: boolean;
-  onClose: () => void;
+  user: SessionUser
+  open: boolean
+  onClose: () => void
 }) {
-  const { t, lang, theme, toggleTheme } = useApp();
-  const router = useRouter();
+  const { t, lang, theme, toggleTheme } = useApp()
+  const router = useRouter()
 
-  const [query, setQuery] = useState('');
-  const [cursor, setCursor] = useState(0);
-  const [people, setPeople] = useState<UsersListResponse['users']>([]);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const [query, setQuery] = useState('')
+  const [cursor, setCursor] = useState(0)
+  const [people, setPeople] = useState<UsersListResponse['users']>([])
+  const panelRef = useRef<HTMLDivElement>(null)
 
-  useEscapeLayer(open, onClose);
-  useModalFocus(panelRef, open);
+  useEscapeLayer(open, onClose)
+  useModalFocus(panelRef, open)
 
   // A palette that reopens showing the last search is a palette that acts on
   // stale intent the first time you press Enter.
   useEffect(() => {
-    if (!open) return;
-    setQuery('');
-    setCursor(0);
-    setPeople([]);
-  }, [open]);
+    if (!open) return
+    setQuery('')
+    setCursor(0)
+    setPeople([])
+  }, [open])
 
-  const can = useCallback((permission: string) => user.permissions.includes(permission as never), [user]);
+  const can = useCallback(
+    (permission: string) => user.permissions.includes(permission as never),
+    [user],
+  )
 
   const go = useCallback(
     (tab: ConsoleTab, query?: Record<string, string>) => {
-      onClose();
-      const search = query ? `?${new URLSearchParams(query)}` : '';
-      router.push(`/console/${tab}${search}`);
+      onClose()
+      const search = query ? `?${new URLSearchParams(query)}` : ''
+      router.push(`/console/${tab}${search}`)
     },
     [onClose, router],
-  );
+  )
 
   /**
    * Live user lookup, so the group is not capped at whatever the first page
@@ -92,76 +95,86 @@ export function CommandPalette({
    * contract defines — so the group silently never appeared.)
    */
   useEffect(() => {
-    if (!open) return;
-    const term = query.trim();
+    if (!open) return
+    const term = query.trim()
     if (term.length < 2) {
-      setPeople([]);
-      return;
+      setPeople([])
+      return
     }
 
-    let cancelled = false;
+    let cancelled = false
     const timer = setTimeout(async () => {
-      const params = new URLSearchParams({ search: term, pageSize: String(MAX_PER_GROUP), lang });
-      const res = await call<UsersListResponse>(`/api/users?${params}`);
-      if (!cancelled && res.ok) setPeople(res.data.users);
-    }, SEARCH_DEBOUNCE_MS);
+      const params = new URLSearchParams({ search: term, pageSize: String(MAX_PER_GROUP), lang })
+      const res = await call<UsersListResponse>(`/api/users?${params}`)
+      if (!cancelled && res.ok) setPeople(res.data.users)
+    }, SEARCH_DEBOUNCE_MS)
 
     return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [open, query, lang]);
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [open, query, lang])
 
   const groups = useMemo<Group[]>(() => {
-    const fold = (value: string) => value.toLocaleLowerCase(lang === 'tr' ? 'tr-TR' : 'en-GB');
-    const needle = fold(query.trim());
-    const matches = (item: Item) => !needle || fold(`${item.label} ${item.hint}`).includes(needle);
+    const fold = (value: string) => value.toLocaleLowerCase(lang === 'tr' ? 'tr-TR' : 'en-GB')
+    const needle = fold(query.trim())
+    const matches = (item: Item) => !needle || fold(`${item.label} ${item.hint}`).includes(needle)
 
     const tabs: Item[] = CONSOLE_TABS.filter((tab) => {
-      const permission = TAB_META[tab].permission;
-      return !permission || user.permissions.includes(permission);
+      const permission = TAB_META[tab].permission
+      return !permission || user.permissions.includes(permission)
     }).map((tab) => ({
       id: `tab:${tab}`,
       label: tabLabel(t, tab),
       hint: t.c.goTo,
       run: () => go(tab),
-    }));
+    }))
 
-    const actions: Item[] = [];
+    const actions: Item[] = []
     if (can('edit_users')) {
-      actions.push({ id: 'act:invite', label: t.cpInvite, hint: t.c.users, run: () => go('users', { new: '1' }) });
+      actions.push({
+        id: 'act:invite',
+        label: t.cpInvite,
+        hint: t.c.users,
+        run: () => go('users', { new: '1' }),
+      })
     }
     if (can('edit_roles')) {
-      actions.push({ id: 'act:role', label: t.cpNewRole, hint: t.c.roles, run: () => go('roles') });
+      actions.push({ id: 'act:role', label: t.cpNewRole, hint: t.c.roles, run: () => go('roles') })
     }
     actions.push({
       id: 'act:theme',
       label: theme === 'dark' ? t.cpThemeLight : t.cpThemeDark,
       hint: t.seAppearance,
       run: () => {
-        toggleTheme();
-        onClose();
+        toggleTheme()
+        onClose()
       },
-    });
+    })
     if (can('view_logs')) {
-      actions.push({ id: 'act:logs', label: t.cpClearLogs, hint: t.c.diagnostics, run: () => go('logs') });
+      actions.push({
+        id: 'act:logs',
+        label: t.cpClearLogs,
+        hint: t.c.diagnostics,
+        run: () => go('logs'),
+      })
     }
     actions.push({
       id: 'act:signout',
       label: t.c.signOut,
       hint: t.c.sessions,
       run: () => {
-        onClose();
-        router.push('/signin');
+        onClose()
+        router.push('/signin')
       },
-    });
+    })
 
     const persons: Item[] = people.map((person) => ({
       id: `user:${person.id}`,
       label: `${person.name} — ${person.role}`,
       hint: person.email.split('@')[0] ?? '',
       run: () => go('users', { q: person.name }),
-    }));
+    }))
 
     return [
       { label: t.c.goTo, items: tabs.filter(matches) },
@@ -171,32 +184,32 @@ export function CommandPalette({
       { label: t.c.users, items: persons },
     ]
       .map((group) => ({ ...group, items: group.items.slice(0, MAX_PER_GROUP) }))
-      .filter((group) => group.items.length > 0);
-  }, [query, lang, t, user.permissions, can, theme, toggleTheme, people, go, onClose, router]);
+      .filter((group) => group.items.length > 0)
+  }, [query, lang, t, user.permissions, can, theme, toggleTheme, people, go, onClose, router])
 
-  const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
-  const active = flat[Math.min(cursor, flat.length - 1)];
+  const flat = useMemo(() => groups.flatMap((g) => g.items), [groups])
+  const active = flat[Math.min(cursor, flat.length - 1)]
 
   // Typing narrows the list under the cursor; leaving it where it was would run
   // whatever happened to slide into that position.
   useEffect(() => {
-    setCursor(0);
-  }, [query, people]);
+    setCursor(0)
+  }, [query, people])
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setCursor((c) => (flat.length === 0 ? 0 : (c + 1) % flat.length));
+      event.preventDefault()
+      setCursor((c) => (flat.length === 0 ? 0 : (c + 1) % flat.length))
     } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setCursor((c) => (flat.length === 0 ? 0 : (c - 1 + flat.length) % flat.length));
+      event.preventDefault()
+      setCursor((c) => (flat.length === 0 ? 0 : (c - 1 + flat.length) % flat.length))
     } else if (event.key === 'Enter') {
-      event.preventDefault();
-      active?.run();
+      event.preventDefault()
+      active?.run()
     }
-  };
+  }
 
-  if (!open) return null;
+  if (!open) return null
 
   return (
     <div
@@ -261,7 +274,9 @@ export function CommandPalette({
                     )}
                   >
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                    <span className="shrink-0 font-mono text-[10px] text-muted-fg">{item.hint}</span>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-fg">
+                      {item.hint}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -270,5 +285,5 @@ export function CommandPalette({
         </div>
       </div>
     </div>
-  );
+  )
 }

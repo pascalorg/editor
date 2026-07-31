@@ -1,61 +1,61 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDown, Clock, Search } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { Button, LangToggle, ThemeToggle } from '@panel/components/ui/controls';
-import { Dialog, Toast } from '@panel/components/ui/feedback';
-import { BrandLockup } from '@panel/components/ui/netlog-logo';
-import { CommandPalette } from '@panel/components/console/command-palette';
-import { call } from '@panel/lib/client-api';
-import type { SessionResponse, TouchResponse } from '@panel/lib/api-contract';
-import { cn } from '@panel/lib/cn';
-import { useEscapeLayer } from '@panel/lib/escape-layers';
-import { railEntries, tabLabel, type ConsoleTab } from '@panel/lib/console-tabs';
-import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint';
-import type { SessionUser } from '@panel/lib/types';
-import { Caps } from '@panel/components/ui/caps';
+import { useApp } from '@panel/components/app-providers'
+import { CommandPalette } from '@panel/components/console/command-palette'
+import { Caps } from '@panel/components/ui/caps'
+import { Button, LangToggle, ThemeToggle } from '@panel/components/ui/controls'
+import { Dialog, Toast } from '@panel/components/ui/feedback'
+import { BrandLockup } from '@panel/components/ui/netlog-logo'
+import type { SessionResponse, TouchResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { type ConsoleTab, railEntries, tabLabel } from '@panel/lib/console-tabs'
+import { useEscapeLayer } from '@panel/lib/escape-layers'
+import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint'
+import type { SessionUser } from '@panel/lib/types'
+import { ChevronDown, Clock, Search } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** Warning appears two minutes before the idle limit — the figure from WP4. */
-const WARN_AT_SECONDS = 120;
-const POLL_MS = 30_000;
+const WARN_AT_SECONDS = 120
+const POLL_MS = 30_000
 
 export function ConsoleShell({
   user: initialUser,
   tab,
   children,
 }: {
-  user: SessionUser;
-  tab: ConsoleTab;
-  children: React.ReactNode;
+  user: SessionUser
+  tab: ConsoleTab
+  children: React.ReactNode
 }) {
-  const { t } = useApp();
-  const router = useRouter();
-  const pathname = usePathname();
-  const { isWide, isMobile, touch } = useBreakpoint();
+  const { t } = useApp()
+  const router = useRouter()
+  const pathname = usePathname()
+  const { isWide, isMobile, touch } = useBreakpoint()
 
-  const [user] = useState(initialUser);
-  const [navOpen, setNavOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
-  const signingOut = useRef(false);
+  const [user] = useState(initialUser)
+  const [navOpen, setNavOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
+  const signingOut = useRef(false)
 
   const rail = useMemo(
     () => railEntries(t).filter((e) => !e.permission || user.permissions.includes(e.permission)),
     [t, user.permissions],
-  );
+  )
 
   const signOut = useCallback(
     async (reason: 'user' | 'idle') => {
-      if (signingOut.current) return;
-      signingOut.current = true;
-      await call('/api/auth/signout', { body: { allDevices: false } });
-      router.push(reason === 'idle' ? '/signin?expired=1' : '/signin');
+      if (signingOut.current) return
+      signingOut.current = true
+      await call('/api/auth/signout', { body: { allDevices: false } })
+      router.push(reason === 'idle' ? '/signin?expired=1' : '/signin')
     },
     [router],
-  );
+  )
 
   /**
    * The countdown is server-owned: every poll replaces the local number with
@@ -63,66 +63,66 @@ export function ConsoleShell({
    * only there to make the dialog count smoothly.
    */
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
 
     const sync = async () => {
       // A hidden tab must not keep the session alive — the poll is activity.
-      if (document.visibilityState === 'hidden') return;
-      const res = await call<SessionResponse>('/api/auth/session');
-      if (cancelled) return;
-      if (!res.ok) return;
+      if (document.visibilityState === 'hidden') return
+      const res = await call<SessionResponse>('/api/auth/session')
+      if (cancelled) return
+      if (!res.ok) return
       if (res.data.state === 'anonymous') {
-        void signOut('idle');
-        return;
+        void signOut('idle')
+        return
       }
-      setSecondsLeft(res.data.expiresInSeconds);
-    };
+      setSecondsLeft(res.data.expiresInSeconds)
+    }
 
     // Named, so the listener can actually be removed again — an inline arrow
     // here leaks one listener per remount.
-    const onVisibility = () => void sync();
+    const onVisibility = () => void sync()
 
-    void sync();
-    const poll = setInterval(() => void sync(), POLL_MS);
-    document.addEventListener('visibilitychange', onVisibility);
+    void sync()
+    const poll = setInterval(() => void sync(), POLL_MS)
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
-      cancelled = true;
-      clearInterval(poll);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [signOut]);
+      cancelled = true
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [signOut])
 
   // Local tick between polls, purely so the countdown reads smoothly. The poll
   // above is what the number is actually anchored to.
-  const counting = secondsLeft !== null;
+  const counting = secondsLeft !== null
   useEffect(() => {
-    if (!counting) return;
+    if (!counting) return
     const tick = setInterval(() => {
       setSecondsLeft((prev) => {
-        if (prev === null) return prev;
+        if (prev === null) return prev
         if (prev <= 1) {
-          void signOut('idle');
-          return 0;
+          void signOut('idle')
+          return 0
         }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(tick);
-  }, [counting, signOut]);
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(tick)
+  }, [counting, signOut])
 
-  const idleWarning = secondsLeft !== null && secondsLeft <= WARN_AT_SECONDS && secondsLeft > 0;
+  const idleWarning = secondsLeft !== null && secondsLeft <= WARN_AT_SECONDS && secondsLeft > 0
 
   const staySignedIn = useCallback(async () => {
-    const res = await call<TouchResponse>('/api/auth/session/touch', { body: {} });
+    const res = await call<TouchResponse>('/api/auth/session/touch', { body: {} })
     if (!res.ok) {
-      void signOut('idle');
-      return;
+      void signOut('idle')
+      return
     }
-    setSecondsLeft(res.data.expiresInSeconds);
-    setToast({ message: t.idleExtended, tone: 'success' });
-    setTimeout(() => setToast(null), 2400);
-  }, [signOut, t]);
+    setSecondsLeft(res.data.expiresInSeconds)
+    setToast({ message: t.idleExtended, tone: 'success' })
+    setTimeout(() => setToast(null), 2400)
+  }, [signOut, t])
 
   /**
    * Escape chain: menu → command palette → drawer → dialog → inline edit. Only
@@ -130,8 +130,8 @@ export function ConsoleShell({
    * `@/lib/escape-layers` — mounting order is nesting order, so no layer has to
    * know what sits above it.
    */
-  const closeNav = useCallback(() => setNavOpen(false), []);
-  useEscapeLayer(navOpen, closeNav);
+  const closeNav = useCallback(() => setNavOpen(false), [])
+  useEscapeLayer(navOpen, closeNav)
 
   /**
    * ⌘K on macOS, Ctrl+K elsewhere. Bound at the window so it works from any
@@ -139,37 +139,37 @@ export function ConsoleShell({
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return;
-      event.preventDefault();
-      setPaletteOpen((open) => !open);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+      if (event.key.toLowerCase() !== 'k' || !(event.metaKey || event.ctrlKey)) return
+      event.preventDefault()
+      setPaletteOpen((open) => !open)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
-  const closePalette = useCallback(() => setPaletteOpen(false), []);
+  const closePalette = useCallback(() => setPaletteOpen(false), [])
 
   // Dismiss the "Go to" menu on any outside click, matching CustomSelect.
   useEffect(() => {
-    if (!navOpen) return;
-    const onClick = () => setNavOpen(false);
-    window.addEventListener('click', onClick);
-    return () => window.removeEventListener('click', onClick);
-  }, [navOpen]);
+    if (!navOpen) return
+    const onClick = () => setNavOpen(false)
+    window.addEventListener('click', onClick)
+    return () => window.removeEventListener('click', onClick)
+  }, [navOpen])
 
   const goto = useCallback(
     (next: ConsoleTab) => {
-      if (pathname !== `/console/${next}`) router.push(`/console/${next}`);
+      if (pathname !== `/console/${next}`) router.push(`/console/${next}`)
     },
     [pathname, router],
-  );
+  )
 
   const initials = user.name
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0] ?? '')
     .join('')
-    .toLocaleUpperCase('tr');
+    .toLocaleUpperCase('tr')
 
   return (
     <div data-screen-label="Admin console" className="flex min-h-screen flex-col bg-bg text-fg">
@@ -195,7 +195,9 @@ export function ConsoleShell({
             >
               <Search className="block h-3 w-3 shrink-0 text-muted-fg" strokeWidth={2.2} />
               <span className="text-[11.5px] text-muted-fg">{t.c.search}</span>
-              <span className="rounded-[4px] bg-hover px-1 py-px font-mono text-[9px] text-muted-fg">⌘K</span>
+              <span className="rounded-[4px] bg-hover px-1 py-px font-mono text-[9px] text-muted-fg">
+                ⌘K
+              </span>
             </button>
           ) : null}
 
@@ -206,52 +208,55 @@ export function ConsoleShell({
               lists every destination, and at 402 px the extra control pushed the
               brand label out of the header entirely. */}
           {isWide ? (
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setNavOpen((v) => !v);
-              }}
-              aria-expanded={navOpen}
-              className={cn(
-                'flex shrink-0 items-center gap-[6px] whitespace-nowrap border border-border bg-field px-[9px] text-[11.5px] font-medium text-fg hover:bg-hover',
-                touch ? 'h-11 rounded-[10px]' : 'h-7 rounded-[8px]',
-              )}
-            >
-              <span>{t.c.goTo}</span>
-              <ChevronDown
-                className={cn('block h-3 w-3 shrink-0 text-muted-fg transition-transform', navOpen && 'rotate-180')}
-                strokeWidth={2.5}
-              />
-            </button>
-
-            {navOpen ? (
-              <div
-                className="absolute right-0 top-8 z-[70] w-[172px] rounded-[10px] border border-border bg-popover p-1 shadow-e4"
-                style={{ animation: 'dtDrop 0.14s ease' }}
-                onClick={(e) => e.stopPropagation()}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setNavOpen((v) => !v)
+                }}
+                aria-expanded={navOpen}
+                className={cn(
+                  'flex shrink-0 items-center gap-[6px] whitespace-nowrap border border-border bg-field px-[9px] text-[11.5px] font-medium text-fg hover:bg-hover',
+                  touch ? 'h-11 rounded-[10px]' : 'h-7 rounded-[8px]',
+                )}
               >
-                {rail
-                  .filter((entry) => entry.kind === 'item')
-                  .slice(0, 5)
-                  .map((entry) => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      onClick={() => {
-                        setNavOpen(false);
-                        goto(entry.id!);
-                      }}
-                      className="flex h-[30px] w-full items-center gap-2 rounded-[7px] px-2 text-left text-xs font-medium text-fg hover:bg-hover"
-                    >
-                      <span className="h-1 w-1 shrink-0 rounded-full bg-brand" />
-                      <span>{entry.label}</span>
-                    </button>
-                  ))}
-              </div>
-            ) : null}
-          </div>
+                <span>{t.c.goTo}</span>
+                <ChevronDown
+                  className={cn(
+                    'block h-3 w-3 shrink-0 text-muted-fg transition-transform',
+                    navOpen && 'rotate-180',
+                  )}
+                  strokeWidth={2.5}
+                />
+              </button>
+
+              {navOpen ? (
+                <div
+                  className="absolute right-0 top-8 z-[70] w-[172px] rounded-[10px] border border-border bg-popover p-1 shadow-e4"
+                  style={{ animation: 'dtDrop 0.14s ease' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {rail
+                    .filter((entry) => entry.kind === 'item')
+                    .slice(0, 5)
+                    .map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => {
+                          setNavOpen(false)
+                          goto(entry.id!)
+                        }}
+                        className="flex h-[30px] w-full items-center gap-2 rounded-[7px] px-2 text-left text-xs font-medium text-fg hover:bg-hover"
+                      >
+                        <span className="h-1 w-1 shrink-0 rounded-full bg-brand" />
+                        <span>{entry.label}</span>
+                      </button>
+                    ))}
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           <div className="flex shrink-0 items-center gap-2 rounded-[8px] border border-border bg-field px-2 py-1">
@@ -259,7 +264,9 @@ export function ConsoleShell({
               {initials}
             </span>
             {isWide ? (
-              <span className="whitespace-nowrap text-[11.5px] font-medium text-fg">{user.name}</span>
+              <span className="whitespace-nowrap text-[11.5px] font-medium text-fg">
+                {user.name}
+              </span>
             ) : null}
           </div>
 
@@ -288,7 +295,9 @@ export function ConsoleShell({
                 aria-current={entry.id === tab ? 'page' : undefined}
                 className={cn(
                   'h-11 whitespace-nowrap rounded-[6px] px-[10px] text-[11px] font-medium',
-                  entry.id === tab ? 'bg-panel-hi text-fg shadow-e2' : 'bg-transparent text-muted-fg',
+                  entry.id === tab
+                    ? 'bg-panel-hi text-fg shadow-e2'
+                    : 'bg-transparent text-muted-fg',
                 )}
               >
                 {entry.label}
@@ -316,7 +325,9 @@ export function ConsoleShell({
                   className={cn(
                     'flex w-full min-w-0 items-center gap-[9px] rounded-[7px] px-2 font-medium',
                     touch ? 'h-11 text-[13px]' : 'h-[30px] text-[12.5px]',
-                    entry.id === tab ? 'bg-panel text-fg' : 'bg-transparent text-muted-fg hover:text-fg',
+                    entry.id === tab
+                      ? 'bg-panel text-fg'
+                      : 'bg-transparent text-muted-fg hover:text-fg',
                   )}
                 >
                   <span
@@ -384,11 +395,11 @@ export function ConsoleShell({
 
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </div>
-  );
+  )
 }
 
 function formatCountdown(totalSeconds: number): string {
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
 }

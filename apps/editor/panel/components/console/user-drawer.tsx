@@ -1,20 +1,20 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { Button } from '@panel/components/ui/controls';
-import { Caps } from '@panel/components/ui/caps';
-import { Dialog } from '@panel/components/ui/feedback';
-import { useModalFocus } from '@panel/components/ui/modal-focus';
-import { call } from '@panel/lib/client-api';
-import { useEscapeLayer } from '@panel/lib/escape-layers';
-import type { UserDetailResponse } from '@panel/lib/api-contract';
-import { formatDate, resolveApiMessage } from '@panel/lib/i18n';
-import { PERMISSIONS, type Permission } from '@panel/lib/types';
-import { cn } from '@panel/lib/cn';
+import { useApp } from '@panel/components/app-providers'
+import { Caps } from '@panel/components/ui/caps'
+import { Button } from '@panel/components/ui/controls'
+import { Dialog } from '@panel/components/ui/feedback'
+import { useModalFocus } from '@panel/components/ui/modal-focus'
+import type { UserDetailResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { useEscapeLayer } from '@panel/lib/escape-layers'
+import { formatDate, resolveApiMessage } from '@panel/lib/i18n'
+import { PERMISSIONS, type Permission } from '@panel/lib/types'
+import { X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-type Detail = UserDetailResponse['user'];
+type Detail = UserDetailResponse['user']
 
 /**
  * Right-hand detail drawer: identity, site-by-site roles, effective permissions
@@ -28,43 +28,43 @@ export function UserDrawer({
   onChanged,
   notify,
 }: {
-  userId: string;
-  onClose: () => void;
-  onChanged: () => void;
-  notify: (message: string, tone?: 'success' | 'error') => void;
+  userId: string
+  onClose: () => void
+  onChanged: () => void
+  notify: (message: string, tone?: 'success' | 'error') => void
 }) {
-  const { t, lang } = useApp();
+  const { t, lang } = useApp()
 
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [sites, setSites] = useState<string[]>([]);
-  const [roles, setRoles] = useState<string[]>([]);
-  const [canEdit, setCanEdit] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [tempPassword, setTempPassword] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [copied, setCopied] = useState(false);
+  const [detail, setDetail] = useState<Detail | null>(null)
+  const [sites, setSites] = useState<string[]>([])
+  const [roles, setRoles] = useState<string[]>([])
+  const [canEdit, setCanEdit] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [tempPassword, setTempPassword] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [copied, setCopied] = useState(false)
 
   const apply = useCallback((data: UserDetailResponse) => {
-    setDetail(data.user);
-    setSites(data.sites);
-    setRoles(data.roles);
-    setCanEdit(data.canEdit);
-  }, []);
+    setDetail(data.user)
+    setSites(data.sites)
+    setRoles(data.roles)
+    setCanEdit(data.canEdit)
+  }, [])
 
   const load = useCallback(async () => {
-    const res = await call<UserDetailResponse>(`/api/users/${userId}`);
+    const res = await call<UserDetailResponse>(`/api/users/${userId}`)
     if (!res.ok) {
-      notify(resolveApiMessage(t, res.messageKey), 'error');
-      onClose();
-      return;
+      notify(resolveApiMessage(t, res.messageKey), 'error')
+      onClose()
+      return
     }
-    apply(res.data);
-  }, [userId, apply, notify, onClose, t]);
+    apply(res.data)
+  }, [userId, apply, notify, onClose, t])
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load()
+  }, [load])
 
   /**
    * Escape chain: this drawer sits below any dialog it opens. The dialogs push
@@ -75,54 +75,54 @@ export function UserDrawer({
    * inspecting the two dialog states. It broke the moment a third dialog was
    * added to the drawer, because the new one was not in the if-chain.
    */
-  useEscapeLayer(true, onClose);
+  useEscapeLayer(true, onClose)
 
   // The drawer declares aria-modal, so it owes the same three things a dialog
   // does: focus in, focus trapped, focus back on the row that opened it.
-  useModalFocus(panelRef, Boolean(detail));
+  useModalFocus(panelRef, Boolean(detail))
 
   const mutate = useCallback(
     async (path: string, init: { method?: string; body?: unknown }, successMessage?: string) => {
-      setBusy(true);
-      const res = await call<UserDetailResponse>(path, init);
-      setBusy(false);
+      setBusy(true)
+      const res = await call<UserDetailResponse>(path, init)
+      setBusy(false)
 
       if (!res.ok) {
-        notify(resolveApiMessage(t, res.messageKey), 'error');
-        return false;
+        notify(resolveApiMessage(t, res.messageKey), 'error')
+        return false
       }
-      if ('user' in res.data) apply(res.data);
-      if (successMessage) notify(successMessage);
-      onChanged();
-      return true;
+      if ('user' in res.data) apply(res.data)
+      if (successMessage) notify(successMessage)
+      onChanged()
+      return true
     },
     [apply, notify, onChanged, t],
-  );
+  )
 
   /** Click a site's role badge to walk role → role → no access, as in the design. */
   const cycleSiteRole = useCallback(
     async (site: string) => {
-      if (!detail || !canEdit) return;
-      const ladder = [...roles, null];
-      const current = detail.siteRoles?.[site] ?? null;
-      const next = ladder[(ladder.indexOf(current as string | null) + 1) % ladder.length] ?? null;
+      if (!detail || !canEdit) return
+      const ladder = [...roles, null]
+      const current = detail.siteRoles?.[site] ?? null
+      const next = ladder[(ladder.indexOf(current as string | null) + 1) % ladder.length] ?? null
 
       await mutate(`/api/users/${userId}/assignments`, {
         method: 'PUT',
         body: { siteRoles: { [site]: next } },
-      });
+      })
     },
     [detail, canEdit, roles, userId, mutate],
-  );
+  )
 
-  if (!detail) return null;
+  if (!detail) return null
 
   const initials = detail.name
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0] ?? '')
     .join('')
-    .toLocaleUpperCase('tr');
+    .toLocaleUpperCase('tr')
 
   const meta: Array<{ k: string; v: string }> = [
     { k: t.dwUsername, v: detail.username },
@@ -131,7 +131,7 @@ export function UserDrawer({
     { k: t.dwSessions, v: String(detail.activeSessions) },
     { k: t.dwOrgLbl, v: detail.org === 'external' ? t.orgExternal : t.orgInternal },
     { k: t.c.colRole, v: String(detail.role) },
-  ];
+  ]
 
   return (
     <>
@@ -209,7 +209,7 @@ export function UserDrawer({
                 </span>
                 {detail.isPrimaryAdmin ? (
                   <span className="rounded-[5px] border border-border bg-field px-[7px] py-px font-mono text-[9px] text-muted-fg">
-                    {t.dwPrimaryAdmin.split('—')[0].trim()}
+                    {(t.dwPrimaryAdmin.split('—')[0] ?? t.dwPrimaryAdmin).trim()}
                   </span>
                 ) : null}
               </div>
@@ -222,7 +222,9 @@ export function UserDrawer({
                     key={row.k}
                     className="flex min-w-0 flex-col gap-[2px] rounded-[9px] border border-border-soft bg-surface px-[11px] py-[9px]"
                   >
-                    <Caps className="font-mono text-[8.5px] tracking-[0.1em] text-muted-fg">{row.k}</Caps>
+                    <Caps className="font-mono text-[8.5px] tracking-[0.1em] text-muted-fg">
+                      {row.k}
+                    </Caps>
                     <span className="truncate text-xs text-fg">{row.v}</span>
                   </div>
                 ))}
@@ -232,8 +234,12 @@ export function UserDrawer({
             <Cascade delay={160}>
               <div className="flex flex-col gap-2">
                 <div className="flex items-baseline justify-between gap-[10px]">
-                  <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.dwSiteAccess}</Caps>
-                  {canEdit ? <span className="text-[10.5px] text-muted-fg">{t.dwSiteHint}</span> : null}
+                  <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+                    {t.dwSiteAccess}
+                  </Caps>
+                  {canEdit ? (
+                    <span className="text-[10.5px] text-muted-fg">{t.dwSiteHint}</span>
+                  ) : null}
                 </div>
                 <div className="flex flex-col overflow-hidden rounded-[10px] border border-border bg-surface">
                   {/* A fresh install, or one where every site is archived, left
@@ -245,7 +251,7 @@ export function UserDrawer({
                     </p>
                   ) : null}
                   {sites.map((site) => {
-                    const role = detail.siteRoles?.[site] ?? null;
+                    const role = detail.siteRoles?.[site] ?? null
                     return (
                       <div
                         key={site}
@@ -266,7 +272,7 @@ export function UserDrawer({
                           {role ?? t.dwNoAccess}
                         </button>
                       </div>
-                    );
+                    )
                   })}
                 </div>
               </div>
@@ -274,24 +280,31 @@ export function UserDrawer({
 
             <Cascade delay={210}>
               <div className="flex flex-col gap-2">
-                <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.dwPermsLbl}</Caps>
+                <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+                  {t.dwPermsLbl}
+                </Caps>
                 <div className="flex flex-wrap gap-[6px]">
                   {PERMISSIONS.map((perm: Permission) => {
-                    const on = detail.effectivePermissions.includes(perm);
+                    const on = detail.effectivePermissions.includes(perm)
                     return (
                       <span
                         key={perm}
                         className={cn(
                           'flex items-center gap-[6px] rounded-[5px] border px-[7px] py-px font-mono text-[10px]',
-                          on ? 'border-border bg-field text-fg' : 'border-border-soft text-muted-fg',
+                          on
+                            ? 'border-border bg-field text-fg'
+                            : 'border-border-soft text-muted-fg',
                         )}
                       >
                         <span
-                          className={cn('h-[5px] w-[5px] rounded-full', on ? 'bg-brand' : 'bg-input')}
+                          className={cn(
+                            'h-[5px] w-[5px] rounded-full',
+                            on ? 'bg-brand' : 'bg-input',
+                          )}
                         />
                         {perm}
                       </span>
-                    );
+                    )
                   })}
                 </div>
               </div>
@@ -299,7 +312,9 @@ export function UserDrawer({
 
             <Cascade delay={260}>
               <div className="flex flex-col gap-2">
-                <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.dwActions}</Caps>
+                <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+                  {t.dwActions}
+                </Caps>
 
                 {detail.status === 'Invited' && detail.invitation ? (
                   <>
@@ -336,20 +351,20 @@ export function UserDrawer({
                   variant="secondary"
                   disabled={!canEdit || busy}
                   onClick={async () => {
-                    setBusy(true);
+                    setBusy(true)
                     const res = await call<{ temporaryPassword: string }>(
                       `/api/users/${userId}/temp-password`,
                       { body: {} },
-                    );
-                    setBusy(false);
+                    )
+                    setBusy(false)
                     if (!res.ok) {
-                      notify(resolveApiMessage(t, res.messageKey), 'error');
-                      return;
+                      notify(resolveApiMessage(t, res.messageKey), 'error')
+                      return
                     }
-                    setTempPassword(res.data.temporaryPassword);
-                    notify(`${detail.email} ${t.dwPassToast}`);
-                    onChanged();
-                    void load();
+                    setTempPassword(res.data.temporaryPassword)
+                    notify(`${detail.email} ${t.dwPassToast}`)
+                    onChanged()
+                    void load()
                   }}
                 >
                   {t.dwResetPass}
@@ -391,7 +406,9 @@ export function UserDrawer({
                 </Button>
 
                 {detail.isPrimaryAdmin ? (
-                  <p className="m-0 text-[11px] leading-[1.5] text-muted-fg text-pretty">{t.dwPrimaryAdmin}</p>
+                  <p className="m-0 text-[11px] leading-[1.5] text-muted-fg text-pretty">
+                    {t.dwPrimaryAdmin}
+                  </p>
                 ) : null}
               </div>
             </Cascade>
@@ -404,7 +421,9 @@ export function UserDrawer({
           <h2 id="dt-temp-title" className="m-0 text-[15px] font-semibold tracking-[-0.01em]">
             {t.tempPassTitle}
           </h2>
-          <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">{t.tempPassLead}</p>
+          <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">
+            {t.tempPassLead}
+          </p>
           <span className="select-all break-all rounded-[8px] border border-border bg-field px-3 py-2 font-mono text-[13px] tracking-[0.04em] text-fg">
             {tempPassword}
           </span>
@@ -412,9 +431,9 @@ export function UserDrawer({
             <Button
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(tempPassword);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1600);
+                  await navigator.clipboard.writeText(tempPassword)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1600)
                 } catch {
                   /* clipboard blocked — the value is selectable on screen */
                 }
@@ -430,27 +449,33 @@ export function UserDrawer({
       ) : null}
 
       {confirmDelete ? (
-        <Dialog role="alertdialog" labelledBy="dt-del-title" onClose={() => setConfirmDelete(false)}>
+        <Dialog
+          role="alertdialog"
+          labelledBy="dt-del-title"
+          onClose={() => setConfirmDelete(false)}
+        >
           <h2 id="dt-del-title" className="m-0 text-[15px] font-semibold tracking-[-0.01em]">
             {t.confirmDeleteTitle}
           </h2>
-          <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">{t.confirmDeleteLead}</p>
+          <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">
+            {t.confirmDeleteLead}
+          </p>
           <span className="font-mono text-[11px] text-fg">{detail.email}</span>
           <div className="flex flex-col gap-[9px]">
             <Button
               variant="destructive"
               disabled={busy}
               onClick={async () => {
-                setBusy(true);
-                const res = await call(`/api/users/${userId}`, { method: 'DELETE' });
-                setBusy(false);
+                setBusy(true)
+                const res = await call(`/api/users/${userId}`, { method: 'DELETE' })
+                setBusy(false)
                 if (!res.ok) {
-                  notify(resolveApiMessage(t, res.messageKey), 'error');
-                  return;
+                  notify(resolveApiMessage(t, res.messageKey), 'error')
+                  return
                 }
-                setConfirmDelete(false);
-                onChanged();
-                onClose();
+                setConfirmDelete(false)
+                onChanged()
+                onClose()
               }}
             >
               {t.confirmDelete}
@@ -462,12 +487,14 @@ export function UserDrawer({
         </Dialog>
       ) : null}
     </>
-  );
+  )
 }
 
 /** One staged reveal step of the drawer cascade. */
 function Cascade({ delay, children }: { delay: number; children: React.ReactNode }) {
   return (
-    <div style={{ animation: `dtFade 0.3s ease backwards`, animationDelay: `${delay}ms` }}>{children}</div>
-  );
+    <div style={{ animation: `dtFade 0.3s ease backwards`, animationDelay: `${delay}ms` }}>
+      {children}
+    </div>
+  )
 }

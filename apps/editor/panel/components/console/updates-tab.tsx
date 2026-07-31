@@ -1,12 +1,12 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useState } from 'react';
-import { useApp } from '@panel/components/app-providers';
-import { Caps } from '@panel/components/ui/caps';
-import { call } from '@panel/lib/client-api';
-import type { ChangelogResponse, ReleaseEntry } from '@panel/lib/api-contract';
-import { formatDateOnly } from '@panel/lib/i18n';
-import { cn } from '@panel/lib/cn';
+import { useApp } from '@panel/components/app-providers'
+import { Caps } from '@panel/components/ui/caps'
+import type { ChangelogResponse, ReleaseEntry } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { formatDateOnly } from '@panel/lib/i18n'
+import { useCallback, useEffect, useState } from 'react'
 
 /**
  * Release notes as a vertical timeline, newest first.
@@ -16,35 +16,35 @@ import { cn } from '@panel/lib/cn';
  * design settled on after the repo URLs leaked into the UI.
  */
 export function UpdatesTab() {
-  const { t, lang } = useApp();
+  const { t, lang } = useApp()
 
-  const [entries, setEntries] = useState<ReleaseEntry[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [live, setLive] = useState(false);
-  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [tag, setTag] = useState<string | null>(null);
+  const [entries, setEntries] = useState<ReleaseEntry[]>([])
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [live, setLive] = useState(false)
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tag, setTag] = useState<string | null>(null)
 
   const load = useCallback(async (nextCursor?: string) => {
-    const params = new URLSearchParams({ limit: '20' });
-    if (nextCursor) params.set('cursor', nextCursor);
+    const params = new URLSearchParams({ limit: '20' })
+    if (nextCursor) params.set('cursor', nextCursor)
 
-    const res = await call<ChangelogResponse>(`/api/changelog?${params}`);
-    setLoading(false);
-    if (!res.ok) return;
+    const res = await call<ChangelogResponse>(`/api/changelog?${params}`)
+    setLoading(false)
+    if (!res.ok) return
 
-    setEntries((prev) => (nextCursor ? [...prev, ...res.data.entries] : res.data.entries));
-    setCursor(res.data.nextCursor);
-    setLive(res.data.live);
-    setFetchedAt(res.data.fetchedAt);
-  }, []);
+    setEntries((prev) => (nextCursor ? [...prev, ...res.data.entries] : res.data.entries))
+    setCursor(res.data.nextCursor)
+    setLive(res.data.live)
+    setFetchedAt(res.data.fetchedAt)
+  }, [])
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load()
+  }, [load])
 
-  const visible = tag ? entries.filter((e) => e.tags.includes(tag)) : entries;
-  const allTags = [...new Set(entries.flatMap((e) => e.tags))].slice(0, 10);
+  const visible = tag ? entries.filter((e) => e.tags.includes(tag)) : entries
+  const allTags = [...new Set(entries.flatMap((e) => e.tags))].slice(0, 10)
 
   return (
     <section className="flex min-w-0 flex-col gap-[14px]" style={{ animation: 'dtFade 0.2s ease' }}>
@@ -61,7 +61,9 @@ export function UpdatesTab() {
               live ? 'border-brand text-brand-fg' : 'border-border text-muted-fg',
             )}
           >
-            <span className={cn('h-[5px] w-[5px] rounded-full', live ? 'bg-brand' : 'bg-muted-fg')} />
+            <span
+              className={cn('h-[5px] w-[5px] rounded-full', live ? 'bg-brand' : 'bg-muted-fg')}
+            />
             <Caps invariant>{live ? t.clLive : t.clSnapshot}</Caps>
           </span>
           {fetchedAt ? (
@@ -181,5 +183,5 @@ export function UpdatesTab() {
         </button>
       ) : null}
     </section>
-  );
+  )
 }

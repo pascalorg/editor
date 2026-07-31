@@ -1,8 +1,8 @@
-'use client';
+'use client'
 
-import { useEffect, useRef, type ClipboardEvent, type KeyboardEvent } from 'react';
-import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint';
-import { cn } from '@panel/lib/cn';
+import { cn } from '@panel/lib/cn'
+import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint'
+import { type ClipboardEvent, type KeyboardEvent, useEffect, useRef } from 'react'
 
 /**
  * Six-cell OTP entry with the three ergonomics the design calls out by name:
@@ -19,60 +19,60 @@ export function OtpInput({
   invalid = false,
   autoFocus = true,
 }: {
-  value: string[];
-  onChange: (next: string[]) => void;
-  onComplete?: (code: string) => void;
-  invalid?: boolean;
-  autoFocus?: boolean;
+  value: string[]
+  onChange: (next: string[]) => void
+  onComplete?: (code: string) => void
+  invalid?: boolean
+  autoFocus?: boolean
 }) {
-  const { touch } = useBreakpoint();
-  const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const { touch } = useBreakpoint()
+  const refs = useRef<Array<HTMLInputElement | null>>([])
 
   useEffect(() => {
-    if (autoFocus) refs.current[0]?.focus();
-  }, [autoFocus]);
+    if (autoFocus) refs.current[0]?.focus()
+  }, [autoFocus])
 
   const commit = (next: string[]) => {
-    onChange(next);
-    const joined = next.join('');
-    if (joined.length === 6 && onComplete) onComplete(joined);
-  };
+    onChange(next)
+    const joined = next.join('')
+    if (joined.length === 6 && onComplete) onComplete(joined)
+  }
 
   const setCell = (index: number, raw: string) => {
-    const digit = raw.replace(/\D/g, '').slice(-1);
-    const next = [...value];
-    next[index] = digit;
-    commit(next);
-    if (digit && index < 5) refs.current[index + 1]?.focus();
-  };
+    const digit = raw.replace(/\D/g, '').slice(-1)
+    const next = [...value]
+    next[index] = digit
+    commit(next)
+    if (digit && index < 5) refs.current[index + 1]?.focus()
+  }
 
   const onKeyDown = (index: number, event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Backspace' && !value[index] && index > 0) {
-      event.preventDefault();
-      const next = [...value];
-      next[index - 1] = '';
-      onChange(next);
-      refs.current[index - 1]?.focus();
-      return;
+      event.preventDefault()
+      const next = [...value]
+      next[index - 1] = ''
+      onChange(next)
+      refs.current[index - 1]?.focus()
+      return
     }
     if (event.key === 'ArrowLeft' && index > 0) {
-      event.preventDefault();
-      refs.current[index - 1]?.focus();
+      event.preventDefault()
+      refs.current[index - 1]?.focus()
     }
     if (event.key === 'ArrowRight' && index < 5) {
-      event.preventDefault();
-      refs.current[index + 1]?.focus();
+      event.preventDefault()
+      refs.current[index + 1]?.focus()
     }
-  };
+  }
 
   const onPaste = (event: ClipboardEvent<HTMLInputElement>) => {
-    const digits = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (!digits) return;
-    event.preventDefault();
-    const next = Array.from({ length: 6 }, (_, i) => digits[i] ?? '');
-    commit(next);
-    refs.current[Math.min(digits.length, 5)]?.focus();
-  };
+    const digits = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (!digits) return
+    event.preventDefault()
+    const next = Array.from({ length: 6 }, (_, i) => digits[i] ?? '')
+    commit(next)
+    refs.current[Math.min(digits.length, 5)]?.focus()
+  }
 
   return (
     <div className="flex gap-[7px]">
@@ -80,7 +80,7 @@ export function OtpInput({
         <input
           key={index}
           ref={(el) => {
-            refs.current[index] = el;
+            refs.current[index] = el
           }}
           type="text"
           inputMode="numeric"
@@ -100,5 +100,5 @@ export function OtpInput({
         />
       ))}
     </div>
-  );
+  )
 }

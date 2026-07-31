@@ -1,10 +1,10 @@
-import { fail, handler, ok } from '@panel/lib/api';
-import type { ChangelogResponse } from '@panel/lib/api-contract';
-import { requireSession } from '@panel/lib/auth/guard';
-import { changelogPage } from '@panel/lib/changelog';
+import { fail, handler, ok } from '@panel/lib/api'
+import type { ChangelogResponse } from '@panel/lib/api-contract'
+import { requireSession } from '@panel/lib/auth/guard'
+import { changelogPage } from '@panel/lib/changelog'
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/changelog?cursor=&limit=20
@@ -14,12 +14,12 @@ export const dynamic = 'force-dynamic';
  * rather than one per viewer.
  */
 export const GET = handler(async (request: Request) => {
-  const guard = await requireSession();
-  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired');
+  const guard = await requireSession()
+  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired')
 
-  const params = new URL(request.url).searchParams;
-  const page = await changelogPage(params.get('cursor'), Number(params.get('limit') ?? 20) || 20);
+  const params = new URL(request.url).searchParams
+  const page = await changelogPage(params.get('cursor'), Number(params.get('limit') ?? 20) || 20)
 
-  const body: ChangelogResponse = page;
-  return ok(body);
-});
+  const body: ChangelogResponse = page
+  return ok(body)
+})

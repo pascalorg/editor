@@ -1,48 +1,54 @@
-'use client';
+'use client'
 
-import { useCallback, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useApp } from '@panel/components/app-providers';
-import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell';
-import { AuthCard, Button, Field, FieldLabel } from '@panel/components/ui/controls';
-import { ErrorBox, Kicker, ScreenTitle, SuccessMark } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
-import type { MfaRecoveryResponse } from '@panel/lib/api-contract';
-import { resolveApiMessage } from '@panel/lib/i18n';
+import { useApp } from '@panel/components/app-providers'
+import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell'
+import { AuthCard, Button, Field, FieldLabel } from '@panel/components/ui/controls'
+import { ErrorBox, Kicker, ScreenTitle, SuccessMark } from '@panel/components/ui/feedback'
+import type { MfaRecoveryResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { resolveApiMessage } from '@panel/lib/i18n'
+import { useRouter } from 'next/navigation'
+import { useCallback, useState } from 'react'
 
 export function MfaRecoveryScreen() {
-  const { t } = useApp();
-  const router = useRouter();
+  const { t } = useApp()
+  const router = useRouter()
 
-  const [value, setValue] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  const [remaining, setRemaining] = useState(0);
-  const [nextRoute, setNextRoute] = useState('/console/overview');
+  const [value, setValue] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [remaining, setRemaining] = useState(0)
+  const [nextRoute, setNextRoute] = useState('/console/overview')
 
   const submit = useCallback(async () => {
     // Client-side shape check first, so an obviously malformed code never costs
     // a failed attempt against the account's lockout counter.
     if (!/^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$/.test(value.trim())) {
-      setError(t.recErr);
-      return;
+      setError(t.recErr)
+      return
     }
 
-    setBusy(true);
-    setError(null);
-    const res = await call<MfaRecoveryResponse>('/api/mfa/recovery', { body: { code: value.trim().toUpperCase() } });
-    setBusy(false);
+    setBusy(true)
+    setError(null)
+    const res = await call<MfaRecoveryResponse>('/api/mfa/recovery', {
+      body: { code: value.trim().toUpperCase() },
+    })
+    setBusy(false)
 
     if (!res.ok) {
-      setError(resolveApiMessage(t, res.messageKey, { seconds: Number(res.details.retryAfterSeconds ?? 30) }));
-      return;
+      setError(
+        resolveApiMessage(t, res.messageKey, {
+          seconds: Number(res.details.retryAfterSeconds ?? 30),
+        }),
+      )
+      return
     }
 
-    setRemaining(res.data.codesRemaining);
-    setNextRoute(res.data.state === 'firstSignIn' ? '/welcome' : '/console/overview');
-    setDone(true);
-  }, [value, t]);
+    setRemaining(res.data.codesRemaining)
+    setNextRoute(res.data.state === 'firstSignIn' ? '/welcome' : '/console/overview')
+    setDone(true)
+  }, [value, t])
 
   return (
     <AuthShell label="Recovery sign-in">
@@ -52,7 +58,9 @@ export function MfaRecoveryScreen() {
             <SuccessMark />
             <div className="flex flex-col gap-[5px]">
               <h1 className="m-0 text-[18px] font-semibold tracking-[-0.01em]">{t.recDoneTitle}</h1>
-              <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">{t.recDoneLead}</p>
+              <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">
+                {t.recDoneLead}
+              </p>
               <span className="font-mono text-[11px] text-muted-fg">
                 {remaining} {t.muTitleCodes.toLocaleLowerCase()}
               </span>
@@ -79,8 +87,8 @@ export function MfaRecoveryScreen() {
                 value={value}
                 invalid={Boolean(error)}
                 onChange={(e) => {
-                  setValue(e.target.value.toUpperCase());
-                  setError(null);
+                  setValue(e.target.value.toUpperCase())
+                  setError(null)
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && void submit()}
                 className="font-mono uppercase tracking-[0.08em]"
@@ -105,5 +113,5 @@ export function MfaRecoveryScreen() {
 
       <AuthFooter protectedUpper={t.protectedUpper} signature={t.signature} />
     </AuthShell>
-  );
+  )
 }

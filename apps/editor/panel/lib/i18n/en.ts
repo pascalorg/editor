@@ -218,10 +218,13 @@ export const en = {
   bulkDeactivate: 'Deactivate',
   bulkDelete: 'Delete',
   bulkConfirmTitle: 'Apply to {count} account(s)?',
-  bulkRoleViewerLead: 'Every selected account drops to Viewer. Site-level assignments are untouched.',
+  bulkRoleViewerLead:
+    'Every selected account drops to Viewer. Site-level assignments are untouched.',
   bulkRevokeLead: 'Every selected account is signed out on all devices and must sign in again.',
-  bulkDeactivateLead: 'Deactivated accounts cannot sign in, and their live sessions end immediately.',
-  bulkDeleteLead: 'Accounts, their site assignments and their sessions are removed. This cannot be undone.',
+  bulkDeactivateLead:
+    'Deactivated accounts cannot sign in, and their live sessions end immediately.',
+  bulkDeleteLead:
+    'Accounts, their site assignments and their sessions are removed. This cannot be undone.',
   bulkSkipNote: 'The primary administrator and your own account are skipped automatically.',
   bulkTypeCount: 'Type {count} to confirm',
   bulkApplied: '{count} account(s) updated',
@@ -329,7 +332,8 @@ export const en = {
   stFp2: 'Footprint (m²)',
   stUsers: 'People',
   stEmptyTitle: 'No sites yet',
-  stEmptyLead: 'Create the first warehouse — its card appears here and provisioning is tracked in the job queue.',
+  stEmptyLead:
+    'Create the first warehouse — its card appears here and provisioning is tracked in the job queue.',
   stQueuedToast: 'provisioning queued',
   stOpenNote: 'The site opens in the running editor app — not part of this console.',
   jbLead: 'Imports, report exports and backups — the queue streams live.',
@@ -356,7 +360,8 @@ export const en = {
   igScopeRead: 'Read',
   igScopeWrite: 'Read + write',
   igSecretTitle: 'Key generated — copy it now',
-  igSecretNote: 'For security it is never shown again; if it is lost, revoke it and generate a new one.',
+  igSecretNote:
+    'For security it is never shown again; if it is lost, revoke it and generate a new one.',
   igRevoke: 'Revoke',
   igRevoked: 'Revoked',
   igNever: 'Never used',
@@ -376,7 +381,8 @@ export const en = {
   igTestFail: 'test event failed',
   igNoHooks: 'No webhooks yet.',
   igLastDelivery: 'Last delivery',
-  seLead: 'Session policy, identity rules and appearance — every change is written to the audit trail.',
+  seLead:
+    'Session policy, identity rules and appearance — every change is written to the audit trail.',
   seSecurity: 'Security',
   seIdentity: 'Identity and invites',
   seAppearance: 'Appearance',
@@ -469,7 +475,8 @@ export const en = {
     settings: 'Settings',
     overviewLead: 'Runtime health and access activity across the platform.',
     rolesTitle: 'Roles and permissions',
-    rolesLead: 'A permission matrix instead of nested accordions — scan a whole role in one glance.',
+    rolesLead:
+      'A permission matrix instead of nested accordions — scan a whole role in one glance.',
     auditLead: 'Who changed what, and when. Separate from runtime diagnostics.',
     sessionsTitle: 'Active sessions',
     sysStatus: 'System status',
@@ -630,7 +637,7 @@ export const en = {
     requestRejected: 'Access request rejected: {email}',
     browserError: 'Browser error captured: {message}',
   },
-};
+}
 
 /**
  * Deliberately not `as const`: literal types here would make every Turkish
@@ -639,4 +646,4 @@ export const en = {
  * exactly the same key set.
  */
 
-export type Dictionary = typeof en;
+export type Dictionary = typeof en

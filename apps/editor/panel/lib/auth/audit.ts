@@ -1,7 +1,7 @@
-import { exec } from '../db';
-import { AUDIT_EVENT_FIELD, type AuditEvent } from '../audit-events';
+import { AUDIT_EVENT_FIELD, type AuditEvent } from '../audit-events'
+import { exec } from '../db'
 
-export type AuditLevel = 'info' | 'warn' | 'error';
+export type AuditLevel = 'info' | 'warn' | 'error'
 
 /**
  * Append-only trail. Every mutation writes one row; clearing diagnostics never
@@ -13,16 +13,18 @@ export type AuditLevel = 'info' | 'warn' | 'error';
  * changing. See `src/lib/audit-events.ts` for why those are separate.
  */
 export async function audit(entry: {
-  actorUserId?: number | null;
-  actorLabel: string;
-  level: AuditLevel;
-  kind: string;
-  message: string;
-  event?: AuditEvent;
-  meta?: Record<string, unknown> | null;
+  actorUserId?: number | null
+  actorLabel: string
+  level: AuditLevel
+  kind: string
+  message: string
+  event?: AuditEvent
+  meta?: Record<string, unknown> | null
 }): Promise<void> {
   // The event rides inside meta; callers keep using meta for anything else.
-  const meta = entry.event ? { ...(entry.meta ?? {}), [AUDIT_EVENT_FIELD]: entry.event } : entry.meta;
+  const meta = entry.event
+    ? { ...(entry.meta ?? {}), [AUDIT_EVENT_FIELD]: entry.event }
+    : entry.meta
 
   try {
     await exec(
@@ -36,8 +38,8 @@ export async function audit(entry: {
         entry.message.slice(0, 1024),
         meta ? JSON.stringify(meta) : null,
       ],
-    );
+    )
   } catch (err) {
-    console.error('[audit] write failed:', err);
+    console.error('[audit] write failed:', err)
   }
 }

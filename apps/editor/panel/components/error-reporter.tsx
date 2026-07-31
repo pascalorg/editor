@@ -1,6 +1,6 @@
-'use client';
+'use client'
 
-import { useEffect } from 'react';
+import { useEffect } from 'react'
 
 /**
  * Browser error catcher. `window.onerror` plus unhandled promise rejections go
@@ -16,22 +16,22 @@ import { useEffect } from 'react';
  * It reports and does nothing else — no swallowing, no re-throwing. The console
  * still shows the error to whoever has devtools open.
  */
-const SUPPRESS_MS = 5000;
-const recent = new Map<string, number>();
+const SUPPRESS_MS = 5000
+const recent = new Map<string, number>()
 
 function shouldReport(key: string): boolean {
-  const now = Date.now();
-  const last = recent.get(key);
-  if (last !== undefined && now - last < SUPPRESS_MS) return false;
+  const now = Date.now()
+  const last = recent.get(key)
+  if (last !== undefined && now - last < SUPPRESS_MS) return false
 
-  recent.set(key, now);
+  recent.set(key, now)
   // The map is bounded so a page throwing unique messages cannot grow it forever.
   if (recent.size > 50) {
     for (const [entry, at] of recent) {
-      if (now - at > SUPPRESS_MS) recent.delete(entry);
+      if (now - at > SUPPRESS_MS) recent.delete(entry)
     }
   }
-  return true;
+  return true
 }
 
 function report(payload: Record<string, unknown>): void {
@@ -44,7 +44,7 @@ function report(payload: Record<string, unknown>): void {
       keepalive: true,
     }).catch(() => {
       /* the sink being down must never itself throw */
-    });
+    })
   } catch {
     /* ignore */
   }
@@ -55,8 +55,8 @@ export function ErrorReporter() {
     const onError = (event: ErrorEvent) => {
       // A failed resource load fires an error event with no message on the
       // element, not on window — not a JS error, and not worth a row.
-      if (!event.message && !event.error) return;
-      if (!shouldReport(event.message)) return;
+      if (!event.message && !event.error) return
+      if (!shouldReport(event.message)) return
 
       report({
         message: event.message || 'Unknown error',
@@ -64,29 +64,33 @@ export function ErrorReporter() {
         line: Number.isFinite(event.lineno) ? event.lineno : undefined,
         column: Number.isFinite(event.colno) ? event.colno : undefined,
         stack: event.error instanceof Error ? event.error.stack : undefined,
-      });
-    };
+      })
+    }
 
     const onRejection = (event: PromiseRejectionEvent) => {
-      const reason = event.reason;
+      const reason = event.reason
       const message =
-        reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Unhandled rejection';
-      if (!shouldReport(message)) return;
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === 'string'
+            ? reason
+            : 'Unhandled rejection'
+      if (!shouldReport(message)) return
 
       report({
         message: `Unhandled rejection: ${message}`,
         stack: reason instanceof Error ? reason.stack : undefined,
-      });
-    };
+      })
+    }
 
-    window.addEventListener('error', onError);
-    window.addEventListener('unhandledrejection', onRejection);
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onRejection)
 
     return () => {
-      window.removeEventListener('error', onError);
-      window.removeEventListener('unhandledrejection', onRejection);
-    };
-  }, []);
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onRejection)
+    }
+  }, [])
 
-  return null;
+  return null
 }

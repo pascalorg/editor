@@ -1,112 +1,112 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useState } from 'react';
-import { useApp } from '@panel/components/app-providers';
-import { Button, SegBar, SegButton } from '@panel/components/ui/controls';
-import { Caps } from '@panel/components/ui/caps';
-import { Dialog, Toast } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
+import { useApp } from '@panel/components/app-providers'
+import { Caps } from '@panel/components/ui/caps'
+import { Button, SegBar, SegButton } from '@panel/components/ui/controls'
+import { Dialog, Toast } from '@panel/components/ui/feedback'
 import type {
   CreateKeyResponse,
   KeysResponse,
-  WebhookTestResponse,
   WebhooksResponse,
-} from '@panel/lib/api-contract';
-import { formatDate, resolveApiMessage } from '@panel/lib/i18n';
-import type { ApiKey, Webhook } from '@panel/lib/types';
-import { cn } from '@panel/lib/cn';
+  WebhookTestResponse,
+} from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { formatDate, resolveApiMessage } from '@panel/lib/i18n'
+import type { ApiKey, Webhook } from '@panel/lib/types'
+import { useCallback, useEffect, useState } from 'react'
 
 export function IntegrationsTab() {
-  const { t, lang } = useApp();
+  const { t, lang } = useApp()
 
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [sites, setSites] = useState<string[]>([]);
-  const [hooks, setHooks] = useState<Webhook[]>([]);
-  const [events, setEvents] = useState<string[]>([]);
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
+  const [keys, setKeys] = useState<ApiKey[]>([])
+  const [sites, setSites] = useState<string[]>([])
+  const [hooks, setHooks] = useState<Webhook[]>([])
+  const [events, setEvents] = useState<string[]>([])
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
-  const [creatingKey, setCreatingKey] = useState(false);
-  const [keyName, setKeyName] = useState('');
-  const [keyScope, setKeyScope] = useState<'read' | 'read_write'>('read');
-  const [keySite, setKeySite] = useState<string>('');
-  const [freshSecret, setFreshSecret] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [creatingKey, setCreatingKey] = useState(false)
+  const [keyName, setKeyName] = useState('')
+  const [keyScope, setKeyScope] = useState<'read' | 'read_write'>('read')
+  const [keySite, setKeySite] = useState<string>('')
+  const [freshSecret, setFreshSecret] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
-  const [addingHook, setAddingHook] = useState(false);
-  const [hookUrl, setHookUrl] = useState('');
-  const [hookEvents, setHookEvents] = useState<string[]>([]);
+  const [addingHook, setAddingHook] = useState(false)
+  const [hookUrl, setHookUrl] = useState('')
+  const [hookEvents, setHookEvents] = useState<string[]>([])
 
   const notify = useCallback((message: string, tone: 'success' | 'error' = 'success') => {
-    setToast({ message, tone });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+    setToast({ message, tone })
+    setTimeout(() => setToast(null), 3000)
+  }, [])
 
   const load = useCallback(async () => {
     const [k, h] = await Promise.all([
       call<KeysResponse>('/api/keys'),
       call<WebhooksResponse>('/api/webhooks'),
-    ]);
+    ])
     if (k.ok) {
-      setKeys(k.data.keys);
-      setSites(k.data.sites);
+      setKeys(k.data.keys)
+      setSites(k.data.sites)
     }
     if (h.ok) {
-      setHooks(h.data.webhooks);
-      setEvents(h.data.events);
+      setHooks(h.data.webhooks)
+      setEvents(h.data.events)
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load()
+  }, [load])
 
   const createKey = useCallback(async () => {
     if (!keyName.trim()) {
-      notify(t.errFields, 'error');
-      return;
+      notify(t.errFields, 'error')
+      return
     }
     const res = await call<CreateKeyResponse>('/api/keys', {
       body: { name: keyName.trim(), scope: keyScope, siteName: keySite || null },
-    });
+    })
     if (!res.ok) {
-      notify(resolveApiMessage(t, res.messageKey), 'error');
-      return;
+      notify(resolveApiMessage(t, res.messageKey), 'error')
+      return
     }
-    setKeyName('');
-    setCreatingKey(false);
-    setFreshSecret(res.data.key.secret);
-    void load();
-  }, [keyName, keyScope, keySite, notify, t, load]);
+    setKeyName('')
+    setCreatingKey(false)
+    setFreshSecret(res.data.key.secret)
+    void load()
+  }, [keyName, keyScope, keySite, notify, t, load])
 
   const createHook = useCallback(async () => {
-    const res = await call('/api/webhooks', { body: { url: hookUrl.trim(), events: hookEvents } });
+    const res = await call('/api/webhooks', { body: { url: hookUrl.trim(), events: hookEvents } })
     if (!res.ok) {
-      notify(resolveApiMessage(t, res.messageKey), 'error');
-      return;
+      notify(resolveApiMessage(t, res.messageKey), 'error')
+      return
     }
-    setHookUrl('');
-    setHookEvents([]);
-    setAddingHook(false);
-    void load();
-  }, [hookUrl, hookEvents, notify, t, load]);
+    setHookUrl('')
+    setHookEvents([])
+    setAddingHook(false)
+    void load()
+  }, [hookUrl, hookEvents, notify, t, load])
 
   const testHook = useCallback(
     async (hook: Webhook) => {
-      const res = await call<WebhookTestResponse>(`/api/webhooks/${hook.id}/test`, { body: {} });
+      const res = await call<WebhookTestResponse>(`/api/webhooks/${hook.id}/test`, { body: {} })
       if (!res.ok) {
-        notify(resolveApiMessage(t, res.messageKey), 'error');
-        return;
+        notify(resolveApiMessage(t, res.messageKey), 'error')
+        return
       }
       notify(
         res.data.delivered
           ? `${hook.url} — ${t.igTestOk}`
           : `${hook.url} — ${t.igTestFail}${res.data.responseStatus ? ` (HTTP ${res.data.responseStatus})` : ''}`,
         res.data.delivered ? 'success' : 'error',
-      );
-      void load();
+      )
+      void load()
     },
     [notify, t, load],
-  );
+  )
 
   return (
     <section className="flex min-w-0 flex-col gap-6" style={{ animation: 'dtFade 0.2s ease' }}>
@@ -132,7 +132,9 @@ export function IntegrationsTab() {
             style={{ animation: 'dtDrop 0.16s ease' }}
           >
             <div className="flex min-w-[160px] flex-1 flex-col gap-[5px]">
-              <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.igKeyNameLbl}</Caps>
+              <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+                {t.igKeyNameLbl}
+              </Caps>
               <input
                 type="text"
                 placeholder="WMS sync"
@@ -143,19 +145,26 @@ export function IntegrationsTab() {
             </div>
 
             <div className="flex flex-col gap-[5px]">
-              <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.igScopeLbl}</Caps>
+              <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+                {t.igScopeLbl}
+              </Caps>
               <SegBar>
                 <SegButton active={keyScope === 'read'} onClick={() => setKeyScope('read')}>
                   {t.igScopeRead}
                 </SegButton>
-                <SegButton active={keyScope === 'read_write'} onClick={() => setKeyScope('read_write')}>
+                <SegButton
+                  active={keyScope === 'read_write'}
+                  onClick={() => setKeyScope('read_write')}
+                >
                   {t.igScopeWrite}
                 </SegButton>
               </SegBar>
             </div>
 
             <div className="flex min-w-[150px] flex-col gap-[5px]">
-              <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.igSiteLbl}</Caps>
+              <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+                {t.igSiteLbl}
+              </Caps>
               <select
                 value={keySite}
                 onChange={(e) => setKeySite(e.target.value)}
@@ -205,7 +214,12 @@ export function IntegrationsTab() {
                     the "Revoked" label instead, both of which survive at full
                     contrast. */}
                 <div className="flex min-w-[180px] flex-1 flex-col gap-[2px]">
-                  <span className={cn('truncate text-[12.5px] font-medium', key.revokedAt && 'line-through')}>
+                  <span
+                    className={cn(
+                      'truncate text-[12.5px] font-medium',
+                      key.revokedAt && 'line-through',
+                    )}
+                  >
                     {key.name}
                   </span>
                   <span
@@ -232,12 +246,12 @@ export function IntegrationsTab() {
                   <button
                     type="button"
                     onClick={async () => {
-                      const res = await call(`/api/keys/${key.id}`, { method: 'DELETE' });
+                      const res = await call(`/api/keys/${key.id}`, { method: 'DELETE' })
                       if (!res.ok) {
-                        notify(resolveApiMessage(t, res.messageKey), 'error');
-                        return;
+                        notify(resolveApiMessage(t, res.messageKey), 'error')
+                        return
                       }
-                      void load();
+                      void load()
                     }}
                     className="h-[26px] shrink-0 rounded-[6px] border border-destructive bg-transparent px-[10px] text-[11px] text-destructive hover:bg-hover"
                   >
@@ -283,20 +297,26 @@ export function IntegrationsTab() {
             </div>
 
             <div className="flex flex-col gap-[5px]">
-              <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.igEventsLbl}</Caps>
+              <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+                {t.igEventsLbl}
+              </Caps>
               <div className="flex flex-wrap gap-[6px]">
                 {events.map((event) => {
-                  const on = hookEvents.includes(event);
+                  const on = hookEvents.includes(event)
                   return (
                     <button
                       key={event}
                       type="button"
                       onClick={() =>
-                        setHookEvents((prev) => (on ? prev.filter((e) => e !== event) : [...prev, event]))
+                        setHookEvents((prev) =>
+                          on ? prev.filter((e) => e !== event) : [...prev, event],
+                        )
                       }
                       className={cn(
                         'flex h-[26px] items-center gap-2 rounded-[6px] border px-[9px] font-mono text-[10.5px]',
-                        on ? 'border-brand bg-field text-fg' : 'border-border bg-transparent text-muted-fg',
+                        on
+                          ? 'border-brand bg-field text-fg'
+                          : 'border-border bg-transparent text-muted-fg',
                       )}
                     >
                       <span
@@ -307,7 +327,7 @@ export function IntegrationsTab() {
                       />
                       {event}
                     </button>
-                  );
+                  )
                 })}
               </div>
             </div>
@@ -374,7 +394,11 @@ export function IntegrationsTab() {
                           : 'bg-muted-fg',
                     )}
                   />
-                  {hook.status === 'active' ? t.igStActive : hook.status === 'paused' ? t.igStPaused : t.igStFailing}
+                  {hook.status === 'active'
+                    ? t.igStActive
+                    : hook.status === 'paused'
+                      ? t.igStPaused
+                      : t.igStFailing}
                 </span>
 
                 <span className="w-[150px] shrink-0 truncate font-mono text-[10px] text-muted-fg">
@@ -395,12 +419,12 @@ export function IntegrationsTab() {
                       const res = await call(`/api/webhooks/${hook.id}`, {
                         method: 'PATCH',
                         body: { status: hook.status === 'paused' ? 'active' : 'paused' },
-                      });
+                      })
                       if (!res.ok) {
-                        notify(resolveApiMessage(t, res.messageKey), 'error');
-                        return;
+                        notify(resolveApiMessage(t, res.messageKey), 'error')
+                        return
                       }
-                      void load();
+                      void load()
                     }}
                     className="h-[26px] rounded-[6px] border border-border bg-transparent px-[10px] text-[11px] text-muted-fg hover:bg-hover hover:text-fg"
                   >
@@ -409,12 +433,12 @@ export function IntegrationsTab() {
                   <button
                     type="button"
                     onClick={async () => {
-                      const res = await call(`/api/webhooks/${hook.id}`, { method: 'DELETE' });
+                      const res = await call(`/api/webhooks/${hook.id}`, { method: 'DELETE' })
                       if (!res.ok) {
-                        notify(resolveApiMessage(t, res.messageKey), 'error');
-                        return;
+                        notify(resolveApiMessage(t, res.messageKey), 'error')
+                        return
                       }
-                      void load();
+                      void load()
                     }}
                     className="h-[26px] rounded-[6px] border border-destructive bg-transparent px-[10px] text-[11px] text-destructive hover:bg-hover"
                   >
@@ -435,14 +459,16 @@ export function IntegrationsTab() {
           <code className="select-all break-all rounded-[8px] border border-border bg-field px-3 py-2 font-mono text-[12px] text-fg">
             {freshSecret}
           </code>
-          <p className="m-0 text-[11.5px] leading-[1.5] text-muted-fg text-pretty">{t.igSecretNote}</p>
+          <p className="m-0 text-[11.5px] leading-[1.5] text-muted-fg text-pretty">
+            {t.igSecretNote}
+          </p>
           <div className="flex gap-[9px]">
             <Button
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(freshSecret);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1600);
+                  await navigator.clipboard.writeText(freshSecret)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1600)
                 } catch {
                   /* clipboard blocked — the value is selectable on screen */
                 }
@@ -459,5 +485,5 @@ export function IntegrationsTab() {
 
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </section>
-  );
+  )
 }

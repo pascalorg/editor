@@ -1,5 +1,5 @@
-import { RequestAccessScreen } from '@panel/components/auth/request-access-screen';
+import { RequestAccessScreen } from '@panel/components/auth/request-access-screen'
 
 export default function RequestPage() {
-  return <RequestAccessScreen />;
+  return <RequestAccessScreen />
 }

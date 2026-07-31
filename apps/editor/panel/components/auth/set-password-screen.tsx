@@ -1,19 +1,19 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Check } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell';
-import { AuthCard, Button, Checkbox, Field, FieldLabel } from '@panel/components/ui/controls';
-import { ErrorBox, Kicker, ScreenTitle, SuccessMark } from '@panel/components/ui/feedback';
-import { checkPasswordPolicy } from '@panel/lib/password-policy';
-import { call } from '@panel/lib/client-api';
-import type { ResetConfirmResponse } from '@panel/lib/api-contract';
-import { resolveApiMessage } from '@panel/lib/i18n';
-import { Caps } from '@panel/components/ui/caps';
+import { useApp } from '@panel/components/app-providers'
+import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell'
+import { Caps } from '@panel/components/ui/caps'
+import { AuthCard, Button, Checkbox, Field, FieldLabel } from '@panel/components/ui/controls'
+import { ErrorBox, Kicker, ScreenTitle, SuccessMark } from '@panel/components/ui/feedback'
+import type { ResetConfirmResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { resolveApiMessage } from '@panel/lib/i18n'
+import { checkPasswordPolicy } from '@panel/lib/password-policy'
+import { Check } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-type Mode = 'reset' | 'welcome';
+type Mode = 'reset' | 'welcome'
 
 /**
  * One screen, two modes — the design's `SetPasswordPage` with a `welcome` flag.
@@ -30,50 +30,51 @@ export function SetPasswordScreen({
   requestedMode,
   identity: knownIdentity,
 }: {
-  token: string | null;
-  requestedMode: Mode;
-  identity?: string;
+  token: string | null
+  requestedMode: Mode
+  identity?: string
 }) {
-  const { t } = useApp();
-  const router = useRouter();
+  const { t } = useApp()
+  const router = useRouter()
 
-  const [mode, setMode] = useState<Mode>(requestedMode);
-  const [identity, setIdentity] = useState(knownIdentity ?? '');
-  const [tokenError, setTokenError] = useState<string | null>(null);
-  const [checking, setChecking] = useState(token !== null);
+  const [mode, setMode] = useState<Mode>(requestedMode)
+  const [identity, setIdentity] = useState(knownIdentity ?? '')
+  const [tokenError, setTokenError] = useState<string | null>(null)
+  const [checking, setChecking] = useState(token !== null)
 
-  const [password, setPassword] = useState('');
-  const [again, setAgain] = useState('');
-  const [revokeOthers, setRevokeOthers] = useState(true);
-  const [consent, setConsent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [next, setNext] = useState<ResetConfirmResponse['next']>('signin');
+  const [password, setPassword] = useState('')
+  const [again, setAgain] = useState('')
+  const [revokeOthers, setRevokeOthers] = useState(true)
+  const [consent, setConsent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [next, setNext] = useState<ResetConfirmResponse['next']>('signin')
 
   useEffect(() => {
-    if (token === null) return; // session-driven mode — nothing to resolve
+    if (token === null) return // session-driven mode — nothing to resolve
     void (async () => {
       const res = await call<
-        { kind: 'reset'; email: string; username: string } | { kind: 'invite'; email: string; fullName: string }
-      >(`/api/auth/reset/${encodeURIComponent(token)}`);
-      setChecking(false);
+        | { kind: 'reset'; email: string; username: string }
+        | { kind: 'invite'; email: string; fullName: string }
+      >(`/api/auth/reset/${encodeURIComponent(token)}`)
+      setChecking(false)
 
       if (!res.ok) {
-        setTokenError(resolveApiMessage(t, res.messageKey));
-        return;
+        setTokenError(resolveApiMessage(t, res.messageKey))
+        return
       }
-      setMode(res.data.kind === 'invite' ? 'welcome' : 'reset');
-      setIdentity(res.data.kind === 'reset' ? res.data.username : res.data.email);
-    })();
+      setMode(res.data.kind === 'invite' ? 'welcome' : 'reset')
+      setIdentity(res.data.kind === 'reset' ? res.data.username : res.data.email)
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token])
 
-  const policy = useMemo(() => checkPasswordPolicy(password, identity), [password, identity]);
-  const matches = again.length > 0 && password === again;
-  const mismatch = again.length > 0 && password !== again;
-  const isWelcome = mode === 'welcome';
-  const canSubmit = policy.ok && matches && (!isWelcome || consent);
+  const policy = useMemo(() => checkPasswordPolicy(password, identity), [password, identity])
+  const matches = again.length > 0 && password === again
+  const mismatch = again.length > 0 && password !== again
+  const isWelcome = mode === 'welcome'
+  const canSubmit = policy.ok && matches && (!isWelcome || consent)
 
   const rules = [
     { ok: policy.minLength, label: t.c1 },
@@ -81,16 +82,20 @@ export function SetPasswordScreen({
     { ok: policy.digit, label: t.c3 },
     { ok: policy.symbol, label: t.c4 },
     { ok: policy.noIdentity, label: t.c5 },
-  ];
+  ]
 
   const meterColor =
-    policy.strength <= 0 ? 'var(--dt-destructive)' : policy.strength <= 2 ? 'var(--dt-warn)' : 'var(--dt-ok)';
+    policy.strength <= 0
+      ? 'var(--dt-destructive)'
+      : policy.strength <= 2
+        ? 'var(--dt-warn)'
+        : 'var(--dt-ok)'
 
   const submit = useCallback(async () => {
-    if (!canSubmit || busy) return;
+    if (!canSubmit || busy) return
 
-    setBusy(true);
-    setError(null);
+    setBusy(true)
+    setError(null)
     const res =
       token === null
         ? await call<ResetConfirmResponse>('/api/auth/password', {
@@ -109,33 +114,44 @@ export function SetPasswordScreen({
               revokeOtherSessions: revokeOthers,
               acceptPolicy: consent,
             },
-          });
-    setBusy(false);
+          })
+    setBusy(false)
 
     if (!res.ok) {
-      setError(resolveApiMessage(t, res.messageKey));
-      return;
+      setError(resolveApiMessage(t, res.messageKey))
+      return
     }
-    setNext(res.data.next);
-    setSaved(true);
-  }, [canSubmit, busy, token, password, again, revokeOthers, consent, t]);
+    setNext(res.data.next)
+    setSaved(true)
+  }, [canSubmit, busy, token, password, again, revokeOthers, consent, t])
 
   const continueOn = useCallback(() => {
-    router.push(next === 'console' ? '/console/overview' : next === 'mfa-setup' ? '/mfa/setup' : '/signin');
-  }, [next, router]);
+    router.push(
+      next === 'console' ? '/console/overview' : next === 'mfa-setup' ? '/mfa/setup' : '/signin',
+    )
+  }, [next, router])
 
   if (checking) {
     return (
       <AuthShell label="Set new password">
         <AuthCard gap={18}>
           <div className="flex flex-col gap-2">
-            <span className="h-3 w-24 rounded bg-hover" style={{ animation: 'dtShimmer 1.4s ease infinite' }} />
-            <span className="h-6 w-48 rounded bg-hover" style={{ animation: 'dtShimmer 1.4s ease infinite' }} />
-            <span className="h-3 w-full rounded bg-hover" style={{ animation: 'dtShimmer 1.4s ease infinite' }} />
+            <span
+              className="h-3 w-24 rounded bg-hover"
+              style={{ animation: 'dtShimmer 1.4s ease infinite' }}
+            />
+            <span
+              className="h-6 w-48 rounded bg-hover"
+              style={{ animation: 'dtShimmer 1.4s ease infinite' }}
+            />
+            <span
+              className="h-3 w-full rounded bg-hover"
+              style={{ animation: 'dtShimmer 1.4s ease infinite' }}
+            />
           </div>
         </AuthCard>
       </AuthShell>
-    );
+    )
   }
 
   if (tokenError) {
@@ -156,7 +172,7 @@ export function SetPasswordScreen({
         </AuthCard>
         <AuthFooter protectedUpper={t.protectedUpper} signature={t.signature} />
       </AuthShell>
-    );
+    )
   }
 
   return (
@@ -167,7 +183,9 @@ export function SetPasswordScreen({
             <SuccessMark />
             <div className="flex flex-col gap-[5px]">
               <h1 className="m-0 text-[18px] font-semibold tracking-[-0.01em]">{t.spDoneTitle}</h1>
-              <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">{t.spDoneLead}</p>
+              <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">
+                {t.spDoneLead}
+              </p>
             </div>
             <Button onClick={continueOn}>{isWelcome ? t.spDoneCtaFirst : t.spDoneCta}</Button>
           </div>
@@ -221,7 +239,9 @@ export function SetPasswordScreen({
                   >
                     {rule.ok ? <Check className="h-[9px] w-[9px]" strokeWidth={3} /> : null}
                   </span>
-                  <span className={`text-[11.5px] ${rule.ok ? 'text-fg' : 'text-muted-fg'}`}>{rule.label}</span>
+                  <span className={`text-[11.5px] ${rule.ok ? 'text-fg' : 'text-muted-fg'}`}>
+                    {rule.label}
+                  </span>
                 </div>
               ))}
             </div>
@@ -238,7 +258,9 @@ export function SetPasswordScreen({
                 onChange={(e) => setAgain(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && void submit()}
               />
-              {mismatch ? <span className="text-[11px] text-destructive">{t.spMismatch}</span> : null}
+              {mismatch ? (
+                <span className="text-[11px] text-destructive">{t.spMismatch}</span>
+              ) : null}
             </div>
 
             <Checkbox checked={revokeOthers} onChange={setRevokeOthers}>
@@ -275,5 +297,5 @@ export function SetPasswordScreen({
 
       <AuthFooter protectedUpper={t.protectedUpper} signature={t.signature} />
     </AuthShell>
-  );
+  )
 }

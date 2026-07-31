@@ -1,20 +1,20 @@
-import { queryOne, type RowDataPacket } from '../db';
+import { queryOne, type RowDataPacket } from '../db'
 
-export const WORK_DOMAIN = '@netlog.com.tr';
+export const WORK_DOMAIN = '@netlog.com.tr'
 
 export interface UserRow extends RowDataPacket {
-  id: number;
-  public_id: string;
-  email: string;
-  username: string;
-  full_name: string;
-  org: 'internal' | 'external';
-  global_role: string;
-  status: 'invited' | 'active' | 'inactive' | 'suspended';
-  password_hash: Buffer | null;
-  must_change_password: number;
-  failed_attempts: number;
-  locked_until: Date | null;
+  id: number
+  public_id: string
+  email: string
+  username: string
+  full_name: string
+  org: 'internal' | 'external'
+  global_role: string
+  status: 'invited' | 'active' | 'inactive' | 'suspended'
+  password_hash: Buffer | null
+  must_change_password: number
+  failed_attempts: number
+  locked_until: Date | null
 }
 
 /**
@@ -23,10 +23,10 @@ export interface UserRow extends RowDataPacket {
  * work address, or the full address. Resolution is a single indexed query.
  */
 export async function findUserByIdentifier(identifier: string): Promise<UserRow | null> {
-  const raw = identifier.trim();
-  if (!raw) return null;
+  const raw = identifier.trim()
+  if (!raw) return null
 
-  const asEmail = raw.includes('@') ? raw.toLowerCase() : `${raw.toLowerCase()}${WORK_DOMAIN}`;
+  const asEmail = raw.includes('@') ? raw.toLowerCase() : `${raw.toLowerCase()}${WORK_DOMAIN}`
 
   return queryOne<UserRow>(
     `SELECT id, public_id, email, username, full_name, org, global_role, status,
@@ -35,7 +35,7 @@ export async function findUserByIdentifier(identifier: string): Promise<UserRow 
       WHERE username = ? OR email = ?
       LIMIT 1`,
     [raw, asEmail],
-  );
+  )
 }
 
 export async function findUserByEmail(email: string): Promise<UserRow | null> {
@@ -46,7 +46,7 @@ export async function findUserByEmail(email: string): Promise<UserRow | null> {
       WHERE email = ?
       LIMIT 1`,
     [email.trim().toLowerCase()],
-  );
+  )
 }
 
 export async function findUserById(id: number): Promise<UserRow | null> {
@@ -56,12 +56,12 @@ export async function findUserById(id: number): Promise<UserRow | null> {
        FROM users
       WHERE id = ?`,
     [id],
-  );
+  )
 }
 
 /** Label shown on the OTP screen: the username for accounts without a real inbox. */
 export function pendingLabel(user: UserRow): string {
   return user.email.startsWith('admin@') && user.username.toLowerCase() === 'admin'
     ? user.username
-    : user.email;
+    : user.email
 }

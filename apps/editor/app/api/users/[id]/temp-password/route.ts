@@ -1,14 +1,14 @@
-import { fail, handler, ok } from '@panel/lib/api';
-import type { TempPasswordResponse } from '@panel/lib/api-contract';
-import { audit } from '@panel/lib/auth/audit';
-import { requirePermission } from '@panel/lib/auth/guard';
-import { generateTempPassword, hashPassword } from '@panel/lib/auth/password';
-import { revokeAllSessions } from '@panel/lib/auth/session';
-import { exec } from '@panel/lib/db';
-import { findInternalId, getUserDetail } from '@panel/lib/users';
+import { fail, handler, ok } from '@panel/lib/api'
+import type { TempPasswordResponse } from '@panel/lib/api-contract'
+import { audit } from '@panel/lib/auth/audit'
+import { requirePermission } from '@panel/lib/auth/guard'
+import { generateTempPassword, hashPassword } from '@panel/lib/auth/password'
+import { revokeAllSessions } from '@panel/lib/auth/session'
+import { exec } from '@panel/lib/db'
+import { findInternalId, getUserDetail } from '@panel/lib/users'
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/users/:id/temp-password
@@ -21,17 +21,19 @@ export const dynamic = 'force-dynamic';
  * reach the set-password screen.
  */
 export const POST = handler(async (_request: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const guard = await requirePermission('edit_users');
+  const guard = await requirePermission('edit_users')
   if (!guard.ok) {
-    return guard.reason === 'forbidden' ? fail('forbidden', 'err.forbidden') : fail('unauthenticated', 'err.sessionExpired');
+    return guard.reason === 'forbidden'
+      ? fail('forbidden', 'err.forbidden')
+      : fail('unauthenticated', 'err.sessionExpired')
   }
 
-  const { id } = await ctx.params;
-  const user = await getUserDetail(id);
-  const internalId = await findInternalId(id);
-  if (!user || !internalId) return fail('not_found', 'err.notFound');
+  const { id } = await ctx.params
+  const user = await getUserDetail(id)
+  const internalId = await findInternalId(id)
+  if (!user || !internalId) return fail('not_found', 'err.notFound')
 
-  const temporaryPassword = generateTempPassword();
+  const temporaryPassword = generateTempPassword()
   await exec(
     `UPDATE users
         SET password_hash = ?, password_set_at = NOW(), must_change_password = 1,
@@ -39,8 +41,8 @@ export const POST = handler(async (_request: Request, ctx: { params: Promise<{ i
             status = CASE WHEN status = 'invited' THEN 'active' ELSE status END
       WHERE id = ?`,
     [await hashPassword(temporaryPassword), internalId],
-  );
-  await revokeAllSessions(internalId, null);
+  )
+  await revokeAllSessions(internalId, null)
 
   await audit({
     actorUserId: guard.session.userId,
@@ -49,8 +51,8 @@ export const POST = handler(async (_request: Request, ctx: { params: Promise<{ i
     kind: 'user',
     message: `Temporary password issued for ${user.email}`,
     event: { k: 'tempPassword', p: { email: user.email } },
-  });
+  })
 
-  const body: TempPasswordResponse = { temporaryPassword };
-  return ok(body);
-});
+  const body: TempPasswordResponse = { temporaryPassword }
+  return ok(body)
+})

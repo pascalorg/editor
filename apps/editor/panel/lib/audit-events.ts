@@ -72,17 +72,17 @@ export type AuditEventKey =
   | 'requestIgnoredPending'
   | 'requestApproved'
   | 'requestRejected'
-  | 'browserError';
+  | 'browserError'
 
 export interface AuditEvent {
   /** Key into the `audit` dictionary block. */
-  k: AuditEventKey;
+  k: AuditEventKey
   /** Placeholder values, already formatted. */
-  p?: Record<string, string | number>;
+  p?: Record<string, string | number>
 }
 
 /** Reserved slot inside `audit_log.meta`. */
-export const AUDIT_EVENT_FIELD = 'event';
+export const AUDIT_EVENT_FIELD = 'event'
 
 /**
  * Pulls the event back out of a stored `meta` blob.
@@ -92,16 +92,19 @@ export const AUDIT_EVENT_FIELD = 'event';
  * A log screen that throws because one row is odd is worse than one line of
  * English.
  */
-export function readAuditEvent(meta: Record<string, unknown> | null | undefined): AuditEvent | null {
-  if (!meta) return null;
-  const raw = meta[AUDIT_EVENT_FIELD];
-  if (!raw || typeof raw !== 'object') return null;
+export function readAuditEvent(
+  meta: Record<string, unknown> | null | undefined,
+): AuditEvent | null {
+  if (!meta) return null
+  const raw = meta[AUDIT_EVENT_FIELD]
+  if (!raw || typeof raw !== 'object') return null
 
-  const candidate = raw as { k?: unknown; p?: unknown };
-  if (typeof candidate.k !== 'string') return null;
+  const candidate = raw as { k?: unknown; p?: unknown }
+  if (typeof candidate.k !== 'string') return null
 
   return {
     k: candidate.k as AuditEventKey,
-    p: candidate.p && typeof candidate.p === 'object' ? (candidate.p as AuditEvent['p']) : undefined,
-  };
+    p:
+      candidate.p && typeof candidate.p === 'object' ? (candidate.p as AuditEvent['p']) : undefined,
+  }
 }

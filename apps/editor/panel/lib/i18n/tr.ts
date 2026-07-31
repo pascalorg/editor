@@ -1,4 +1,4 @@
-import type { Dictionary } from './en';
+import type { Dictionary } from './en'
 
 /**
  * Turkish dictionary — full parity with `en`, not a subset. Typed as Dictionary
@@ -97,7 +97,8 @@ export const tr: Dictionary = {
   errSuspended: 'Bu hesap askıya alınmış. Bir yöneticiyle görüşün.',
   errInactive: 'Bu hesap pasif durumda. Bir yöneticiyle görüşün.',
   errSsoRequired: 'Bu alan adı için şifreyle giriş kapalı — Netlog hesabınızı kullanın.',
-  errServer: 'Bizim tarafımızda bir şeyler ters gitti. Tekrar deneyin ya da bu referansı desteğe iletin.',
+  errServer:
+    'Bizim tarafımızda bir şeyler ters gitti. Tekrar deneyin ya da bu referansı desteğe iletin.',
   errNetwork: 'Sunucuya ulaşılamıyor. Bağlantınızı kontrol edip tekrar deneyin.',
   errTokenInvalid: 'Bu bağlantı geçerli değil.',
   errTokenExpired: 'Bu bağlantının süresi doldu. Yenisini talep edin.',
@@ -162,8 +163,7 @@ export const tr: Dictionary = {
   /* ——— kurtarma ile giriş ——— */
   recKick: 'Kurtarma',
   recTitle: 'Kurtarma koduyla giriş',
-  recLead:
-    'Doğrulayıcı cihazınıza erişemiyorsanız, kurulumda indirdiğiniz kodlardan birini girin.',
+  recLead: 'Doğrulayıcı cihazınıza erişemiyorsanız, kurulumda indirdiğiniz kodlardan birini girin.',
   recLabel: 'Kurtarma kodu',
   recCta: 'Doğrula ve gir',
   recBack: 'Kod girişine dön',
@@ -216,7 +216,8 @@ export const tr: Dictionary = {
   bulkDelete: 'Sil',
   bulkConfirmTitle: '{count} hesaba uygulansın mı?',
   bulkRoleViewerLead: 'Seçili her hesap Viewer rolüne düşer. Site bazlı atamalar değişmez.',
-  bulkRevokeLead: 'Seçili her hesap tüm cihazlarda oturumdan çıkar ve yeniden giriş yapmak zorunda kalır.',
+  bulkRevokeLead:
+    'Seçili her hesap tüm cihazlarda oturumdan çıkar ve yeniden giriş yapmak zorunda kalır.',
   bulkDeactivateLead: 'Pasifleştirilen hesaplar giriş yapamaz ve açık oturumları anında kapanır.',
   bulkDeleteLead: 'Hesaplar, site atamaları ve oturumları silinir. Bu işlem geri alınamaz.',
   bulkSkipNote: 'Birincil yönetici ve kendi hesabınız otomatik olarak atlanır.',
@@ -281,8 +282,7 @@ export const tr: Dictionary = {
   asgConfirm: 'Onayla ve davet gönder',
   invitedToast: 'davet edildi — davet bağlantısı gönderildi',
   confirmDeleteTitle: 'Bu hesap silinsin mi?',
-  confirmDeleteLead:
-    'Hesap, site atamaları ve oturumları kaldırılır. Denetim izi kaydı korur.',
+  confirmDeleteLead: 'Hesap, site atamaları ve oturumları kaldırılır. Denetim izi kaydı korur.',
   confirmDelete: 'Sil',
   newRoleName: 'Yeni rol adı',
   roleDeleteConfirm: 'Bu özel rol silinsin mi?',
@@ -474,7 +474,8 @@ export const tr: Dictionary = {
     userAccounts: 'Kullanıcı hesapları',
     incidentLog: 'Tanılama olay kaydı',
     rolePerms: 'Rol izinleri',
-    changelogLead: 'Kamuya açık sayfadaki girişlerin aynısı; dağıtımı inceleyen yöneticiler için burada tutulur.',
+    changelogLead:
+      'Kamuya açık sayfadaki girişlerin aynısı; dağıtımı inceleyen yöneticiler için burada tutulur.',
     addUser: 'Kullanıcı ekle',
     addRole: 'Rol ekle',
     clearLogs: 'Kayıtları temizle',
@@ -488,7 +489,8 @@ export const tr: Dictionary = {
     activeSites: 'Etkin sahalar',
     userSearchPh: 'Ad, e-posta veya rol ara',
     readOnly: 'Salt okunur',
-    readOnlyLead: 'Rolünüzde edit_users izni bulunmadığı için hesaplar listelenir ama düzenlenemez.',
+    readOnlyLead:
+      'Rolünüzde edit_users izni bulunmadığı için hesaplar listelenir ama düzenlenemez.',
     goTo: 'Git',
     colUser: 'Ad soyad',
     colEmail: 'E-posta',
@@ -598,7 +600,8 @@ export const tr: Dictionary = {
     roleCreated: 'Rol oluşturuldu: {name}',
     rolePermissions: '{name} rolünün izinleri güncellendi{changes}',
     roleDeleted: 'Rol silindi: {name} — {count} hesap Viewer rolüne alındı',
-    siteCreated: 'Site oluşturuldu: {name} ({template}) — kurulum {jobId} işi olarak kuyruğa alındı',
+    siteCreated:
+      'Site oluşturuldu: {name} ({template}) — kurulum {jobId} işi olarak kuyruğa alındı',
     siteArchived: 'Site arşivlendi: {name}',
     siteRestored: 'Site geri alındı: {name}',
     jobRequeued: 'İş yeniden kuyruğa alındı: {id} ({kind}), {attempt}. deneme',
@@ -621,4 +624,4 @@ export const tr: Dictionary = {
     requestRejected: 'Erişim talebi reddedildi: {email}',
     browserError: 'Tarayıcı hatası yakalandı: {message}',
   },
-};
+}

@@ -1,10 +1,10 @@
-import { handler, ok, parseBody } from '@panel/lib/api';
-import { telemetrySchema } from '@panel/lib/api-contract';
-import { audit } from '@panel/lib/auth/audit';
-import { getSession } from '@panel/lib/auth/session';
+import { handler, ok, parseBody } from '@panel/lib/api'
+import { telemetrySchema } from '@panel/lib/api-contract'
+import { audit } from '@panel/lib/auth/audit'
+import { getSession } from '@panel/lib/auth/session'
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/telemetry — the browser error sink.
@@ -19,11 +19,11 @@ export const dynamic = 'force-dynamic';
  * session has expired misses exactly the errors worth having.
  */
 export const POST = handler(async (request: Request) => {
-  const parsed = await parseBody(request, telemetrySchema);
-  if (!parsed.ok) return ok({ accepted: false }, { status: 202 });
+  const parsed = await parseBody(request, telemetrySchema)
+  if (!parsed.ok) return ok({ accepted: false }, { status: 202 })
 
-  const session = await getSession({ touch: false });
-  const { message, source, line, column, stack } = parsed.data;
+  const session = await getSession({ touch: false })
+  const { message, source, line, column, stack } = parsed.data
 
   await audit({
     actorUserId: session?.userId ?? null,
@@ -39,7 +39,7 @@ export const POST = handler(async (request: Request) => {
       stack: stack?.slice(0, 2000) ?? null,
       user: session?.user.email ?? null,
     },
-  });
+  })
 
-  return ok({ accepted: true }, { status: 202 });
-});
+  return ok({ accepted: true }, { status: 202 })
+})

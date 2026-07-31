@@ -1,4 +1,4 @@
-import type { PasswordPolicyResult } from './api-contract';
+import type { PasswordPolicyResult } from './api-contract'
 
 /**
  * The five policy rules, as one pure function shared by both sides.
@@ -12,17 +12,17 @@ import type { PasswordPolicyResult } from './api-contract';
  * contains it, or the word "netlog".
  */
 export function checkPasswordPolicy(password: string, identity = ''): PasswordPolicyResult {
-  const parts = identityParts(identity);
-  const lower = password.toLowerCase();
+  const parts = identityParts(identity)
+  const lower = password.toLowerCase()
 
-  const minLength = password.length >= 10;
-  const mixedCase = /[a-z]/.test(password) && /[A-Z]/.test(password);
-  const digit = /\d/.test(password);
-  const symbol = /[^A-Za-z0-9]/.test(password);
+  const minLength = password.length >= 10
+  const mixedCase = /[a-z]/.test(password) && /[A-Z]/.test(password)
+  const digit = /\d/.test(password)
+  const symbol = /[^A-Za-z0-9]/.test(password)
   const noIdentity =
-    password.length > 0 && !lower.includes('netlog') && !parts.some((part) => lower.includes(part));
+    password.length > 0 && !lower.includes('netlog') && !parts.some((part) => lower.includes(part))
 
-  const passed = [minLength, mixedCase, digit, symbol, noIdentity].filter(Boolean).length;
+  const passed = [minLength, mixedCase, digit, symbol, noIdentity].filter(Boolean).length
 
   return {
     minLength,
@@ -33,7 +33,7 @@ export function checkPasswordPolicy(password: string, identity = ''): PasswordPo
     ok: passed === 5,
     // Same mapping as the prototype: ceil(passed * 4 / 5) - 1, clamped to 0..3.
     strength: Math.max(0, Math.min(3, Math.ceil((passed * 4) / 5) - 1)) as 0 | 1 | 2 | 3,
-  };
+  }
 }
 
 /**
@@ -49,9 +49,9 @@ export function checkPasswordPolicy(password: string, identity = ''): PasswordPo
  * every password containing those two letters.
  */
 function identityParts(identity: string): string[] {
-  const local = (identity.split('@')[0] ?? '').toLowerCase();
-  const segments = local.split(/[^a-z0-9]+/i).filter((part) => part.length >= 3);
-  const joined = local.replace(/[^a-z0-9]+/gi, '');
+  const local = (identity.split('@')[0] ?? '').toLowerCase()
+  const segments = local.split(/[^a-z0-9]+/i).filter((part) => part.length >= 3)
+  const joined = local.replace(/[^a-z0-9]+/gi, '')
 
-  return joined.length >= 3 ? [...new Set([...segments, joined])] : segments;
+  return joined.length >= 3 ? [...new Set([...segments, joined])] : segments
 }

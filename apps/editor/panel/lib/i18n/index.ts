@@ -1,15 +1,15 @@
-import { en, type Dictionary } from './en';
-import { tr } from './tr';
-import { LOCALE } from '../casing';
-import { readAuditEvent, type AuditEventKey } from '../audit-events';
-import type { Lang } from '../types';
+import { type AuditEventKey, readAuditEvent } from '../audit-events'
+import { LOCALE } from '../casing'
+import type { Lang } from '../types'
+import { type Dictionary, en } from './en'
+import { tr } from './tr'
 
-export const dictionaries: Record<Lang, Dictionary> = { en, tr };
-export const DEFAULT_LANG: Lang = 'en';
-export type { Dictionary };
+export const dictionaries: Record<Lang, Dictionary> = { en, tr }
+export const DEFAULT_LANG: Lang = 'en'
+export type { Dictionary }
 
 export function dictionaryFor(lang: Lang): Dictionary {
-  return dictionaries[lang] ?? en;
+  return dictionaries[lang] ?? en
 }
 
 /**
@@ -17,8 +17,8 @@ export function dictionaryFor(lang: Lang): Dictionary {
  * render it. `tr` is typed as `Dictionary`, so satisfying this for English
  * satisfies it for Turkish too.
  */
-const _auditCoverage: Record<AuditEventKey, string> = en.audit;
-void _auditCoverage;
+const _auditCoverage: Record<AuditEventKey, string> = en.audit
+void _auditCoverage
 
 /**
  * The audit trail, in the reader's language.
@@ -32,20 +32,20 @@ export function auditText(
   dict: Dictionary,
   entry: { message: string; meta?: Record<string, unknown> | null },
 ): string {
-  const event = readAuditEvent(entry.meta);
-  if (!event) return entry.message;
+  const event = readAuditEvent(entry.meta)
+  if (!event) return entry.message
 
-  const template = (dict.audit as Record<string, string | undefined>)[event.k];
-  if (!template) return entry.message;
+  const template = (dict.audit as Record<string, string | undefined>)[event.k]
+  if (!template) return entry.message
 
-  return format(template, event.p ?? {});
+  return format(template, event.p ?? {})
 }
 
 /** Replaces `{name}` placeholders. Anything unmatched is left as-is, visibly. */
 export function format(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (whole, key: string) =>
     key in values ? String(values[key]) : whole,
-  );
+  )
 }
 
 /**
@@ -58,17 +58,19 @@ export function format(template: string, values: Record<string, string | number>
  */
 
 export function formatNumber(lang: Lang, value: number): string {
-  return new Intl.NumberFormat(LOCALE[lang]).format(value);
+  return new Intl.NumberFormat(LOCALE[lang]).format(value)
 }
 
 export function formatDate(lang: Lang, value: string | Date): string {
-  const date = typeof value === 'string' ? new Date(value) : value;
-  return new Intl.DateTimeFormat(LOCALE[lang], { dateStyle: 'short', timeStyle: 'short' }).format(date);
+  const date = typeof value === 'string' ? new Date(value) : value
+  return new Intl.DateTimeFormat(LOCALE[lang], { dateStyle: 'short', timeStyle: 'short' }).format(
+    date,
+  )
 }
 
 export function formatDateOnly(lang: Lang, value: string | Date): string {
-  const date = typeof value === 'string' ? new Date(value) : value;
-  return new Intl.DateTimeFormat(LOCALE[lang], { dateStyle: 'short' }).format(date);
+  const date = typeof value === 'string' ? new Date(value) : value
+  return new Intl.DateTimeFormat(LOCALE[lang], { dateStyle: 'short' }).format(date)
 }
 
 /**
@@ -77,7 +79,7 @@ export function formatDateOnly(lang: Lang, value: string | Date): string {
  * would make it invisible.
  */
 export function collator(lang: Lang): Intl.Collator {
-  return new Intl.Collator(LOCALE[lang], { sensitivity: 'base', numeric: true });
+  return new Intl.Collator(LOCALE[lang], { sensitivity: 'base', numeric: true })
 }
 
 /**
@@ -115,6 +117,6 @@ export function resolveApiMessage(
     'err.eventRequired': dict.errEventRequired,
     'err.badJson': dict.errValidation,
     'err.server': dict.errServer,
-  };
-  return format(map[key] ?? dict.errServer, values);
+  }
+  return format(map[key] ?? dict.errServer, values)
 }

@@ -1,4 +1,4 @@
-import nodemailer, { type Transporter } from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer'
 
 /**
  * Delivery for the three transactional messages the auth flows send.
@@ -14,17 +14,17 @@ import nodemailer, { type Transporter } from 'nodemailer';
  */
 
 export function appUrl(path: string): string {
-  const base = process.env.APP_URL ?? 'http://localhost:3000';
-  return new URL(path, base).toString();
+  const base = process.env.APP_URL ?? 'http://localhost:3000'
+  return new URL(path, base).toString()
 }
 
 interface Envelope {
-  to: string;
-  subject: string;
-  body: string;
+  to: string
+  subject: string
+  body: string
 }
 
-let transporter: Transporter | null = null;
+let transporter: Transporter | null = null
 
 /**
  * One connection pool for the process. Built on first use rather than at import
@@ -32,14 +32,14 @@ let transporter: Transporter | null = null;
  * SMTP_HOST is reported when someone actually asks for SMTP.
  */
 function smtp(): Transporter {
-  if (transporter) return transporter;
+  if (transporter) return transporter
 
-  const host = process.env.SMTP_HOST;
-  if (!host) throw new Error('MAIL_TRANSPORT="smtp" needs SMTP_HOST.');
+  const host = process.env.SMTP_HOST
+  if (!host) throw new Error('MAIL_TRANSPORT="smtp" needs SMTP_HOST.')
 
-  const port = Number(process.env.SMTP_PORT ?? 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASSWORD;
+  const port = Number(process.env.SMTP_PORT ?? 587)
+  const user = process.env.SMTP_USER
+  const pass = process.env.SMTP_PASSWORD
 
   transporter = nodemailer.createTransport({
     host,
@@ -48,9 +48,9 @@ function smtp(): Transporter {
     secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === '1' : port === 465,
     auth: user ? { user, pass } : undefined,
     pool: true,
-  });
+  })
 
-  return transporter;
+  return transporter
 }
 
 /**
@@ -64,7 +64,7 @@ function smtp(): Transporter {
  * do, one retry later.
  */
 async function send(envelope: Envelope): Promise<void> {
-  const transport = process.env.MAIL_TRANSPORT ?? 'console';
+  const transport = process.env.MAIL_TRANSPORT ?? 'console'
 
   if (transport === 'console') {
     console.info(
@@ -73,13 +73,13 @@ async function send(envelope: Envelope): Promise<void> {
         `Subject: ${envelope.subject}\n\n` +
         `${envelope.body}\n` +
         `────────────────────────────────────────────\n`,
-    );
-    return;
+    )
+    return
   }
 
   if (transport !== 'smtp') {
-    console.error(`[mail] MAIL_TRANSPORT="${transport}" is not a transport; nothing was sent.`);
-    return;
+    console.error(`[mail] MAIL_TRANSPORT="${transport}" is not a transport; nothing was sent.`)
+    return
   }
 
   try {
@@ -88,20 +88,20 @@ async function send(envelope: Envelope): Promise<void> {
       to: envelope.to,
       subject: envelope.subject,
       text: envelope.body,
-    });
+    })
   } catch (err) {
     // The address is logged, the body is not — it carries a single-use token.
-    console.error(`[mail] delivery to ${envelope.to} failed:`, err);
+    console.error(`[mail] delivery to ${envelope.to} failed:`, err)
   }
 }
 
 export async function deliverResetLink(opts: {
-  email: string;
-  fullName: string;
-  token: string;
-  expiresAt: Date;
+  email: string
+  fullName: string
+  token: string
+  expiresAt: Date
 }): Promise<void> {
-  const minutes = Math.max(1, Math.round((opts.expiresAt.getTime() - Date.now()) / 60_000));
+  const minutes = Math.max(1, Math.round((opts.expiresAt.getTime() - Date.now()) / 60_000))
   await send({
     to: opts.email,
     subject: 'DigitalTwin — password reset',
@@ -111,17 +111,20 @@ export async function deliverResetLink(opts: {
       `${appUrl(`/reset/${opts.token}`)}\n\n` +
       `It expires in ${minutes} minutes. If you did not ask for it, ignore this message — ` +
       `an administrator has been notified of the request.`,
-  });
+  })
 }
 
 export async function deliverInvite(opts: {
-  email: string;
-  fullName: string;
-  token: string;
-  temporaryPassword?: string;
-  expiresAt: string;
+  email: string
+  fullName: string
+  token: string
+  temporaryPassword?: string
+  expiresAt: string
 }): Promise<void> {
-  const days = Math.max(1, Math.ceil((new Date(opts.expiresAt).getTime() - Date.now()) / 86_400_000));
+  const days = Math.max(
+    1,
+    Math.ceil((new Date(opts.expiresAt).getTime() - Date.now()) / 86_400_000),
+  )
   await send({
     to: opts.email,
     subject: 'DigitalTwin — your account is ready',
@@ -132,10 +135,13 @@ export async function deliverInvite(opts: {
       `${appUrl(`/welcome?token=${opts.token}`)}\n\n` +
       (opts.temporaryPassword ? `Temporary password: ${opts.temporaryPassword}\n\n` : '') +
       `The link is valid for ${days} day(s).`,
-  });
+  })
 }
 
-export async function deliverRequestReceipt(opts: { email: string; fullName: string }): Promise<void> {
+export async function deliverRequestReceipt(opts: {
+  email: string
+  fullName: string
+}): Promise<void> {
   await send({
     to: opts.email,
     subject: 'DigitalTwin — account request received',
@@ -143,5 +149,5 @@ export async function deliverRequestReceipt(opts: { email: string; fullName: str
       `${opts.fullName},\n\n` +
       `Your access request is with the administrators. You will get another message ` +
       `with a sign-in link once it is approved.`,
-  });
+  })
 }

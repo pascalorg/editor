@@ -1,41 +1,41 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ListChecks } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { Caps } from '@panel/components/ui/caps';
-import { SegBar, SegButton } from '@panel/components/ui/controls';
-import { Toast } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
-import type { JobsResponse } from '@panel/lib/api-contract';
-import { formatDate, resolveApiMessage } from '@panel/lib/i18n';
-import type { Job, JobStatus } from '@panel/lib/types';
-import { cn } from '@panel/lib/cn';
+import { useApp } from '@panel/components/app-providers'
+import { Caps } from '@panel/components/ui/caps'
+import { SegBar, SegButton } from '@panel/components/ui/controls'
+import { Toast } from '@panel/components/ui/feedback'
+import type { JobsResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { formatDate, resolveApiMessage } from '@panel/lib/i18n'
+import type { Job, JobStatus } from '@panel/lib/types'
+import { ListChecks } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-const FILTERS: Array<JobStatus | 'All'> = ['All', 'queued', 'running', 'failed', 'done'];
-const POLL_FALLBACK_MS = 4000;
+const FILTERS: Array<JobStatus | 'All'> = ['All', 'queued', 'running', 'failed', 'done']
+const POLL_FALLBACK_MS = 4000
 
 export function JobsTab() {
-  const { t, lang } = useApp();
+  const { t, lang } = useApp()
 
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [filter, setFilter] = useState<JobStatus | 'All'>('All');
-  const [loading, setLoading] = useState(true);
-  const [live, setLive] = useState(false);
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
-  const filterRef = useRef(filter);
-  filterRef.current = filter;
+  const [jobs, setJobs] = useState<Job[]>([])
+  const [filter, setFilter] = useState<JobStatus | 'All'>('All')
+  const [loading, setLoading] = useState(true)
+  const [live, setLive] = useState(false)
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
+  const filterRef = useRef(filter)
+  filterRef.current = filter
 
   const notify = useCallback((message: string, tone: 'success' | 'error' = 'success') => {
-    setToast({ message, tone });
-    setTimeout(() => setToast(null), 2600);
-  }, []);
+    setToast({ message, tone })
+    setTimeout(() => setToast(null), 2600)
+  }, [])
 
   const load = useCallback(async () => {
-    const res = await call<JobsResponse>('/api/jobs');
-    if (res.ok) setJobs(res.data.jobs);
-    setLoading(false);
-  }, []);
+    const res = await call<JobsResponse>('/api/jobs')
+    if (res.ok) setJobs(res.data.jobs)
+    setLoading(false)
+  }, [])
 
   /**
    * SSE first, 4 s poll as the fallback the contract asks for. The stream sends
@@ -43,63 +43,67 @@ export function JobsTab() {
    * every filter change would have to tear the connection down and rebuild it.
    */
   useEffect(() => {
-    void load();
+    void load()
 
-    let source: EventSource | null = null;
-    let poll: ReturnType<typeof setInterval> | null = null;
+    let source: EventSource | null = null
+    let poll: ReturnType<typeof setInterval> | null = null
 
     const startPolling = () => {
-      if (poll) return;
-      setLive(false);
-      poll = setInterval(() => void load(), POLL_FALLBACK_MS);
-    };
+      if (poll) return
+      setLive(false)
+      poll = setInterval(() => void load(), POLL_FALLBACK_MS)
+    }
 
     try {
-      source = new EventSource('/api/jobs/stream');
-      source.addEventListener('open', () => setLive(true));
+      source = new EventSource('/api/jobs/stream')
+      source.addEventListener('open', () => setLive(true))
       source.addEventListener('jobs', (event) => {
         try {
-          setJobs((JSON.parse((event as MessageEvent).data) as JobsResponse).jobs);
-          setLoading(false);
+          setJobs((JSON.parse((event as MessageEvent).data) as JobsResponse).jobs)
+          setLoading(false)
         } catch {
           /* malformed frame — the next one replaces it */
         }
-      });
+      })
       source.addEventListener('error', () => {
-        source?.close();
-        source = null;
-        startPolling();
-      });
+        source?.close()
+        source = null
+        startPolling()
+      })
     } catch {
-      startPolling();
+      startPolling()
     }
 
     return () => {
-      source?.close();
-      if (poll) clearInterval(poll);
-    };
-  }, [load]);
+      source?.close()
+      if (poll) clearInterval(poll)
+    }
+  }, [load])
 
   const act = useCallback(
     async (job: Job, action: 'retry' | 'cancel') => {
-      const res = await call(`/api/jobs/${job.id}/${action}`, { body: {} });
+      const res = await call(`/api/jobs/${job.id}/${action}`, { body: {} })
       if (!res.ok) {
-        notify(resolveApiMessage(t, res.messageKey), 'error');
-        return;
+        notify(resolveApiMessage(t, res.messageKey), 'error')
+        return
       }
-      void load();
+      void load()
     },
     [notify, t, load],
-  );
+  )
 
-  const visible = filter === 'All' ? jobs : jobs.filter((j) => j.status === filter);
+  const visible = filter === 'All' ? jobs : jobs.filter((j) => j.status === filter)
 
   const statusLabel = (status: JobStatus) =>
-    status === 'queued' ? t.jbQueued
-    : status === 'running' ? t.jbRunning
-    : status === 'failed' ? t.jbFailed
-    : status === 'done' ? t.jbDone
-    : t.jbCancelled;
+    status === 'queued'
+      ? t.jbQueued
+      : status === 'running'
+        ? t.jbRunning
+        : status === 'failed'
+          ? t.jbFailed
+          : status === 'done'
+            ? t.jbDone
+            : t.jbCancelled
 
   return (
     <section className="flex min-w-0 flex-col gap-[14px]" style={{ animation: 'dtFade 0.2s ease' }}>
@@ -130,15 +134,23 @@ export function JobsTab() {
       <div className="flex min-w-0 flex-col overflow-hidden rounded-[12px] border border-border">
         {loading ? (
           Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="flex h-[58px] items-center gap-4 border-b border-border-soft px-3">
-              <span className="h-[9px] w-[220px] rounded bg-hover" style={{ animation: 'dtShimmer 1.4s ease infinite' }} />
+            <div
+              key={i}
+              className="flex h-[58px] items-center gap-4 border-b border-border-soft px-3"
+            >
+              <span
+                className="h-[9px] w-[220px] rounded bg-hover"
+                style={{ animation: 'dtShimmer 1.4s ease infinite' }}
+              />
             </div>
           ))
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-12">
             <ListChecks className="h-[22px] w-[22px] text-muted-fg" strokeWidth={1.6} />
             <span className="text-[12.5px] font-semibold">{t.jbEmptyTitle}</span>
-            <span className="max-w-[380px] text-center text-[11.5px] text-muted-fg text-pretty">{t.jbEmptyLead}</span>
+            <span className="max-w-[380px] text-center text-[11.5px] text-muted-fg text-pretty">
+              {t.jbEmptyLead}
+            </span>
           </div>
         ) : (
           visible.map((job) => (
@@ -148,7 +160,9 @@ export function JobsTab() {
             >
               <div className="flex min-w-[200px] flex-1 flex-col gap-[2px]">
                 <div className="flex items-center gap-2">
-                  <span className="shrink-0 font-mono text-[10px] text-muted-fg">{job.id.slice(-8)}</span>
+                  <span className="shrink-0 font-mono text-[10px] text-muted-fg">
+                    {job.id.slice(-8)}
+                  </span>
                   <span className="truncate text-[12.5px] font-medium">{job.kind}</span>
                 </div>
                 <span className="truncate font-mono text-[10px] text-muted-fg">
@@ -197,7 +211,9 @@ export function JobsTab() {
                           ? 'bg-ok'
                           : 'bg-muted-fg',
                   )}
-                  style={job.status === 'running' ? { animation: 'dtPulse 2s ease infinite' } : undefined}
+                  style={
+                    job.status === 'running' ? { animation: 'dtPulse 2s ease infinite' } : undefined
+                  }
                 />
                 {statusLabel(job.status)}
               </span>
@@ -229,5 +245,5 @@ export function JobsTab() {
 
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </section>
-  );
+  )
 }

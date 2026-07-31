@@ -1,8 +1,8 @@
-import { redirect } from 'next/navigation';
-import { SetPasswordScreen } from '@panel/components/auth/set-password-screen';
-import { getSession } from '@panel/lib/auth/session';
+import { SetPasswordScreen } from '@panel/components/auth/set-password-screen'
+import { getSession } from '@panel/lib/auth/session'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
 /**
  * First sign-in, reachable two ways:
@@ -15,17 +15,15 @@ export const dynamic = 'force-dynamic';
 export default async function WelcomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ token?: string }>;
+  searchParams: Promise<{ token?: string }>
 }) {
-  const { token } = await searchParams;
-  if (token) return <SetPasswordScreen token={token} requestedMode="welcome" />;
+  const { token } = await searchParams
+  if (token) return <SetPasswordScreen token={token} requestedMode="welcome" />
 
-  const session = await getSession({ touch: false });
-  if (!session) redirect('/signin');
-  if (session.mfaPending) redirect('/mfa');
-  if (!session.user.mustChangePassword) redirect('/console/overview');
+  const session = await getSession({ touch: false })
+  if (!session) redirect('/signin')
+  if (session.mfaPending) redirect('/mfa')
+  if (!session.user.mustChangePassword) redirect('/console/overview')
 
-  return (
-    <SetPasswordScreen token={null} requestedMode="welcome" identity={session.user.username} />
-  );
+  return <SetPasswordScreen token={null} requestedMode="welcome" identity={session.user.username} />
 }

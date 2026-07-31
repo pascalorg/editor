@@ -1,12 +1,12 @@
-import { fail, handler, ok, parseBody } from '@panel/lib/api';
-import { bulkUsersSchema, type BulkUsersResponse } from '@panel/lib/api-contract';
-import { audit } from '@panel/lib/auth/audit';
-import { requirePermission } from '@panel/lib/auth/guard';
-import { revokeAllSessions } from '@panel/lib/auth/session';
-import { deleteUser, getUserDetail, findInternalId, updateUser } from '@panel/lib/users';
+import { fail, handler, ok, parseBody } from '@panel/lib/api'
+import { type BulkUsersResponse, bulkUsersSchema } from '@panel/lib/api-contract'
+import { audit } from '@panel/lib/auth/audit'
+import { requirePermission } from '@panel/lib/auth/guard'
+import { revokeAllSessions } from '@panel/lib/auth/session'
+import { deleteUser, findInternalId, getUserDetail, updateUser } from '@panel/lib/users'
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/users/bulk — the selection toolbar on the Users tab.
@@ -31,76 +31,79 @@ export const dynamic = 'force-dynamic';
  * sign-in gate, which enforces the policy that is in effect.
  */
 export const POST = handler(async (request: Request) => {
-  const guard = await requirePermission('edit_users');
+  const guard = await requirePermission('edit_users')
   if (!guard.ok) {
     return guard.reason === 'forbidden'
       ? fail('forbidden', 'err.forbidden')
-      : fail('unauthenticated', 'err.sessionExpired');
+      : fail('unauthenticated', 'err.sessionExpired')
   }
 
-  const parsed = await parseBody(request, bulkUsersSchema);
-  if (!parsed.ok) return parsed.response;
+  const parsed = await parseBody(request, bulkUsersSchema)
+  if (!parsed.ok) return parsed.response
 
-  const { action, ids } = parsed.data;
-  const skipped: BulkUsersResponse['skipped'] = [];
-  let applied = 0;
+  const { action, ids } = parsed.data
+  const skipped: BulkUsersResponse['skipped'] = []
+  let applied = 0
 
   // Duplicates in the payload would otherwise be applied — and audited — twice.
   for (const id of [...new Set(ids)]) {
-    const user = await getUserDetail(id);
+    const user = await getUserDetail(id)
     if (!user) {
-      skipped.push({ id, label: id, reason: 'notFound' });
-      continue;
+      skipped.push({ id, label: id, reason: 'notFound' })
+      continue
     }
 
-    const internalId = await findInternalId(id);
+    const internalId = await findInternalId(id)
     if (internalId === null) {
-      skipped.push({ id, label: user.email, reason: 'notFound' });
-      continue;
+      skipped.push({ id, label: user.email, reason: 'notFound' })
+      continue
     }
 
-    const isSelf = internalId === guard.session.userId;
+    const isSelf = internalId === guard.session.userId
 
     // Demoting or disabling the only account that can grant permissions is not
     // a recoverable mistake; revoking its sessions is merely inconvenient.
     if (user.isPrimaryAdmin && action !== 'revokeSessions') {
-      skipped.push({ id, label: user.email, reason: 'primaryAdmin' });
-      continue;
+      skipped.push({ id, label: user.email, reason: 'primaryAdmin' })
+      continue
     }
     // Signing yourself out in bulk is a legitimate thing to want; deleting or
     // deactivating yourself mid-request is not.
     if (isSelf && (action === 'delete' || action === 'deactivate')) {
-      skipped.push({ id, label: user.email, reason: 'self' });
-      continue;
+      skipped.push({ id, label: user.email, reason: 'self' })
+      continue
     }
 
     switch (action) {
       case 'roleViewer': {
         if (user.role === 'Viewer') {
-          skipped.push({ id, label: user.email, reason: 'noop' });
-          continue;
+          skipped.push({ id, label: user.email, reason: 'noop' })
+          continue
         }
-        await updateUser(internalId, { role: 'Viewer' }, user.org);
+        await updateUser(internalId, { role: 'Viewer' }, user.org)
         await audit({
           actorUserId: guard.session.userId,
           actorLabel: guard.session.user.email,
           level: 'info',
           kind: 'user',
           message: `User updated: ${user.email} (role: ${user.role} → Viewer)`,
-          event: { k: 'userUpdated', p: { email: user.email, changes: `role: ${user.role} → Viewer` } },
+          event: {
+            k: 'userUpdated',
+            p: { email: user.email, changes: `role: ${user.role} → Viewer` },
+          },
           meta: { bulk: action, role: 'Viewer' },
-        });
-        break;
+        })
+        break
       }
 
       case 'revokeSessions': {
         // Signing your own other devices out is legitimate; signing out the
         // console you are working in halfway through a batch is not. The first
         // run of this endpoint did exactly that and 401'd its own next request.
-        const ended = await revokeAllSessions(internalId, isSelf ? guard.session.id : null);
+        const ended = await revokeAllSessions(internalId, isSelf ? guard.session.id : null)
         if (ended === 0) {
-          skipped.push({ id, label: user.email, reason: 'noop' });
-          continue;
+          skipped.push({ id, label: user.email, reason: 'noop' })
+          continue
         }
         await audit({
           actorUserId: guard.session.userId,
@@ -110,33 +113,36 @@ export const POST = handler(async (request: Request) => {
           message: `Sessions revoked: ${user.email} (${ended})`,
           event: { k: 'sessionsRevokedFor', p: { email: user.email, count: ended } },
           meta: { bulk: action, sessions: ended },
-        });
-        break;
+        })
+        break
       }
 
       case 'deactivate': {
         if (user.status === 'Inactive') {
-          skipped.push({ id, label: user.email, reason: 'noop' });
-          continue;
+          skipped.push({ id, label: user.email, reason: 'noop' })
+          continue
         }
-        await updateUser(internalId, { status: 'Inactive' }, user.org);
+        await updateUser(internalId, { status: 'Inactive' }, user.org)
         // Same rule as the single-account path: a deactivation that leaves live
         // sessions running is cosmetic until the idle timeout happens to fire.
-        await revokeAllSessions(internalId, null);
+        await revokeAllSessions(internalId, null)
         await audit({
           actorUserId: guard.session.userId,
           actorLabel: guard.session.user.email,
           level: 'warn',
           kind: 'user',
           message: `User updated: ${user.email} (status: ${user.status} → Inactive)`,
-          event: { k: 'userUpdated', p: { email: user.email, changes: `status: ${user.status} → Inactive` } },
+          event: {
+            k: 'userUpdated',
+            p: { email: user.email, changes: `status: ${user.status} → Inactive` },
+          },
           meta: { bulk: action, status: 'Inactive' },
-        });
-        break;
+        })
+        break
       }
 
       case 'delete': {
-        await deleteUser(internalId);
+        await deleteUser(internalId)
         await audit({
           actorUserId: guard.session.userId,
           actorLabel: guard.session.user.email,
@@ -145,14 +151,14 @@ export const POST = handler(async (request: Request) => {
           message: `User deleted: ${user.email}`,
           event: { k: 'userDeleted', p: { email: user.email } },
           meta: { bulk: action, role: user.role, org: user.org },
-        });
-        break;
+        })
+        break
       }
     }
 
-    applied += 1;
+    applied += 1
   }
 
-  const body: BulkUsersResponse = { applied, skipped };
-  return ok(body);
-});
+  const body: BulkUsersResponse = { applied, skipped }
+  return ok(body)
+})

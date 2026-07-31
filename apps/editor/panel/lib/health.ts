@@ -1,5 +1,5 @@
-import { cpuUsage, memoryUsage } from 'node:process';
-import { totalmem, freemem, loadavg, cpus } from 'node:os';
+import { cpus, freemem, loadavg, totalmem } from 'node:os'
+import { cpuUsage, memoryUsage } from 'node:process'
 
 /**
  * Real runtime measurement, replacing the prototype's simulated metrics.
@@ -11,42 +11,42 @@ import { totalmem, freemem, loadavg, cpus } from 'node:os';
  */
 
 interface Sample {
-  cpu: ReturnType<typeof cpuUsage>;
-  at: number;
+  cpu: ReturnType<typeof cpuUsage>
+  at: number
 }
 
-let previous: Sample | null = null;
+let previous: Sample | null = null
 
 export interface HealthReading {
   /** 0–100, clamped to 5–95. */
-  cpuPercent: number;
+  cpuPercent: number
   /** Resident heap in GB, two decimals. */
-  heapGb: number;
+  heapGb: number
   /** System memory in use, GB. */
-  systemUsedGb: number;
-  systemTotalGb: number;
-  loadAverage1m: number;
-  cores: number;
-  uptimeSeconds: number;
-  at: string;
+  systemUsedGb: number
+  systemTotalGb: number
+  loadAverage1m: number
+  cores: number
+  uptimeSeconds: number
+  at: string
 }
 
 export function readHealth(): HealthReading {
-  const now = Date.now();
-  const cpu = cpuUsage();
+  const now = Date.now()
+  const cpu = cpuUsage()
 
-  let cpuPercent = 5;
+  let cpuPercent = 5
   if (previous) {
-    const elapsedMs = Math.max(1, now - previous.at);
-    const usedMs = (cpu.user - previous.cpu.user + (cpu.system - previous.cpu.system)) / 1000;
-    const cores = Math.max(1, cpus().length);
-    cpuPercent = Math.round((usedMs / (elapsedMs * cores)) * 100);
+    const elapsedMs = Math.max(1, now - previous.at)
+    const usedMs = (cpu.user - previous.cpu.user + (cpu.system - previous.cpu.system)) / 1000
+    const cores = Math.max(1, cpus().length)
+    cpuPercent = Math.round((usedMs / (elapsedMs * cores)) * 100)
   }
-  previous = { cpu, at: now };
+  previous = { cpu, at: now }
 
-  const memory = memoryUsage();
-  const total = totalmem();
-  const free = freemem();
+  const memory = memoryUsage()
+  const total = totalmem()
+  const free = freemem()
 
   return {
     cpuPercent: Math.min(95, Math.max(5, cpuPercent)),
@@ -57,9 +57,9 @@ export function readHealth(): HealthReading {
     cores: cpus().length,
     uptimeSeconds: Math.round(process.uptime()),
     at: new Date(now).toISOString(),
-  };
+  }
 }
 
 function round2(value: number): number {
-  return Math.round(value * 100) / 100;
+  return Math.round(value * 100) / 100
 }

@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { hashPassword } from '@panel/lib/auth/password'
-import { db, exec, query, queryOne } from '@panel/lib/db'
+import { db, exec, query, queryOne, type RowDataPacket } from '@panel/lib/db'
 import { ulid } from 'ulid'
 
 /**
@@ -49,7 +49,9 @@ async function runSqlMigrations(): Promise<void> {
     [],
   )
   const done = new Set(
-    (await query<{ name: string }>('SELECT name FROM schema_migrations')).map((r) => r.name),
+    (await query<RowDataPacket & { name: string }>('SELECT name FROM schema_migrations')).map(
+      (r) => r.name,
+    ),
   )
   const dir = join(process.cwd(), 'panel-migrations')
   const files = readdirSync(dir)
@@ -76,7 +78,7 @@ async function ensureSettingsRow(): Promise<void> {
   )
 }
 
-interface LegacyUser {
+interface LegacyUser extends RowDataPacket {
   id: string
   email: string
   role: string
@@ -86,7 +88,7 @@ async function migrateLegacyAccounts(): Promise<void> {
   const legacy = await query<LegacyUser>('SELECT id, email, role FROM legacy_editor_users')
   for (const row of legacy) {
     const email = row.email.trim().toLowerCase()
-    const existing = await queryOne<{ public_id: string }>(
+    const existing = await queryOne<RowDataPacket & { public_id: string }>(
       'SELECT public_id FROM users WHERE email = ?',
       [email],
     )
@@ -131,7 +133,7 @@ function tempPassword(): string {
 }
 
 async function tableExists(name: string): Promise<boolean> {
-  const row = await queryOne<{ n: number }>(
+  const row = await queryOne<RowDataPacket & { n: number }>(
     'SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?',
     [name],
   )
@@ -139,7 +141,7 @@ async function tableExists(name: string): Promise<boolean> {
 }
 
 async function columnExists(table: string, column: string): Promise<boolean> {
-  const row = await queryOne<{ n: number }>(
+  const row = await queryOne<RowDataPacket & { n: number }>(
     'SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
     [table, column],
   )

@@ -1,19 +1,18 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Search, ShieldAlert, XCircle } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { Button, SegBar, SegButton } from '@panel/components/ui/controls';
-import { Caps } from '@panel/components/ui/caps';
-import { Dialog, Toast } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
-import type { LogsResponse } from '@panel/lib/api-contract';
-import { auditText, formatDate, resolveApiMessage } from '@panel/lib/i18n';
-import { cn } from '@panel/lib/cn';
+import { useApp } from '@panel/components/app-providers'
+import { Button, SegBar, SegButton } from '@panel/components/ui/controls'
+import { Dialog, Toast } from '@panel/components/ui/feedback'
+import type { LogsResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { auditText, formatDate, resolveApiMessage } from '@panel/lib/i18n'
+import { AlertTriangle, CheckCircle2, Search, ShieldAlert, XCircle } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 
-type Level = 'All' | 'info' | 'warn' | 'error';
-type Range = 'hour' | 'today' | 'week' | 'all';
-type Entry = LogsResponse['entries'][number];
+type Level = 'All' | 'info' | 'warn' | 'error'
+type Range = 'hour' | 'today' | 'week' | 'all'
+type Entry = LogsResponse['entries'][number]
 
 /**
  * Runtime diagnostics.
@@ -22,56 +21,56 @@ type Entry = LogsResponse['entries'][number];
  * the log is being written to underneath it — which is the normal case here.
  */
 export function LogsTab() {
-  const { t, lang } = useApp();
+  const { t, lang } = useApp()
 
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [actors, setActors] = useState<string[]>([]);
-  const [counts, setCounts] = useState({ info: 0, warn: 0, error: 0 });
-  const [canClear, setCanClear] = useState(false);
-  const [restricted, setRestricted] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState<Entry[]>([])
+  const [cursor, setCursor] = useState<string | null>(null)
+  const [actors, setActors] = useState<string[]>([])
+  const [counts, setCounts] = useState({ info: 0, warn: 0, error: 0 })
+  const [canClear, setCanClear] = useState(false)
+  const [restricted, setRestricted] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  const [search, setSearch] = useState('');
-  const [level, setLevel] = useState<Level>('All');
-  const [range, setRange] = useState<Range>('all');
-  const [actor, setActor] = useState('All');
+  const [search, setSearch] = useState('')
+  const [level, setLevel] = useState<Level>('All')
+  const [range, setRange] = useState<Range>('all')
+  const [actor, setActor] = useState('All')
 
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
   const notify = useCallback((message: string, tone: 'success' | 'error' = 'success') => {
-    setToast({ message, tone });
-    setTimeout(() => setToast(null), 2600);
-  }, []);
+    setToast({ message, tone })
+    setTimeout(() => setToast(null), 2600)
+  }, [])
 
   const load = useCallback(
     async (nextCursor?: string) => {
-      const params = new URLSearchParams({ level, range, actor, limit: '50' });
-      if (search.trim()) params.set('search', search.trim());
-      if (nextCursor) params.set('cursor', nextCursor);
+      const params = new URLSearchParams({ level, range, actor, limit: '50' })
+      if (search.trim()) params.set('search', search.trim())
+      if (nextCursor) params.set('cursor', nextCursor)
 
-      const res = await call<LogsResponse>(`/api/logs?${params}`);
-      setLoading(false);
+      const res = await call<LogsResponse>(`/api/logs?${params}`)
+      setLoading(false)
 
       if (!res.ok) {
-        if (res.code === 'forbidden') setRestricted(true);
-        return;
+        if (res.code === 'forbidden') setRestricted(true)
+        return
       }
-      setRestricted(false);
-      setEntries((prev) => (nextCursor ? [...prev, ...res.data.entries] : res.data.entries));
-      setCursor(res.data.nextCursor);
-      setActors(res.data.actors);
-      setCounts(res.data.counts);
-      setCanClear(Boolean(res.data.canClear));
+      setRestricted(false)
+      setEntries((prev) => (nextCursor ? [...prev, ...res.data.entries] : res.data.entries))
+      setCursor(res.data.nextCursor)
+      setActors(res.data.actors)
+      setCounts(res.data.counts)
+      setCanClear(Boolean(res.data.canClear))
     },
     [level, range, actor, search],
-  );
+  )
 
   useEffect(() => {
-    setLoading(true);
-    void load();
-  }, [load]);
+    setLoading(true)
+    void load()
+  }, [load])
 
   if (restricted) {
     return (
@@ -80,10 +79,10 @@ export function LogsTab() {
         <span className="text-[12.5px] font-semibold">{t.c.logsRestricted}</span>
         <span className="text-[11.5px] text-muted-fg">{t.c.logsRestrictedLead}</span>
       </section>
-    );
+    )
   }
 
-  const total = counts.info + counts.warn + counts.error;
+  const total = counts.info + counts.warn + counts.error
 
   return (
     <section className="flex min-w-0 flex-col gap-[14px]" style={{ animation: 'dtFade 0.2s ease' }}>
@@ -91,14 +90,17 @@ export function LogsTab() {
         <div className="flex flex-col gap-[2px]">
           <h2 className="m-0 text-[15.5px] font-semibold tracking-[-0.01em]">{t.c.incidentLog}</h2>
           <p className="m-0 text-xs text-muted-fg">
-            {total} {t.c.events} · {counts.error} {t.c.lvError.toLocaleLowerCase(lang)} · {counts.warn}{' '}
-            {t.c.lvWarn.toLocaleLowerCase(lang)}
+            {total} {t.c.events} · {counts.error} {t.c.lvError.toLocaleLowerCase(lang)} ·{' '}
+            {counts.warn} {t.c.lvWarn.toLocaleLowerCase(lang)}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-[7px]">
           <div className="relative flex items-center">
-            <Search className="pointer-events-none absolute left-[9px] h-3 w-3 text-muted-fg" strokeWidth={2.2} />
+            <Search
+              className="pointer-events-none absolute left-[9px] h-3 w-3 text-muted-fg"
+              strokeWidth={2.2}
+            />
             <input
               type="text"
               placeholder={t.c.logSearchPh}
@@ -167,7 +169,10 @@ export function LogsTab() {
       <div className="flex min-w-0 flex-col overflow-hidden rounded-[12px] border border-border">
         {loading ? (
           Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="flex h-[46px] items-center gap-4 border-b border-border-soft px-3">
+            <div
+              key={i}
+              className="flex h-[46px] items-center gap-4 border-b border-border-soft px-3"
+            >
               <span
                 className="h-[9px] w-[280px] rounded bg-hover"
                 style={{ animation: 'dtShimmer 1.4s ease infinite' }}
@@ -195,23 +200,30 @@ export function LogsTab() {
       </div>
 
       {confirmClear ? (
-        <Dialog role="alertdialog" labelledBy="dt-clear-title" width={384} onClose={() => setConfirmClear(false)}>
+        <Dialog
+          role="alertdialog"
+          labelledBy="dt-clear-title"
+          width={384}
+          onClose={() => setConfirmClear(false)}
+        >
           <h2 id="dt-clear-title" className="m-0 text-[15px] font-semibold tracking-[-0.01em]">
             {t.lgClearTitle}
           </h2>
-          <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">{t.lgClearLead}</p>
+          <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">
+            {t.lgClearLead}
+          </p>
           <div className="flex flex-col gap-[9px]">
             <Button
               variant="destructive"
               onClick={async () => {
-                const res = await call<{ removed: number }>('/api/logs', { method: 'DELETE' });
-                setConfirmClear(false);
+                const res = await call<{ removed: number }>('/api/logs', { method: 'DELETE' })
+                setConfirmClear(false)
                 if (!res.ok) {
-                  notify(resolveApiMessage(t, res.messageKey), 'error');
-                  return;
+                  notify(resolveApiMessage(t, res.messageKey), 'error')
+                  return
                 }
-                notify(`${res.data.removed} ${t.lgCleared}`);
-                void load();
+                notify(`${res.data.removed} ${t.lgCleared}`)
+                void load()
               }}
             >
               {t.lgClear}
@@ -225,18 +237,23 @@ export function LogsTab() {
 
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </section>
-  );
+  )
 }
 
 function LogRow({ entry, lang, text }: { entry: Entry; lang: 'en' | 'tr'; text: string }) {
-  const Icon = entry.level === 'error' ? XCircle : entry.level === 'warn' ? AlertTriangle : CheckCircle2;
+  const Icon =
+    entry.level === 'error' ? XCircle : entry.level === 'warn' ? AlertTriangle : CheckCircle2
 
   return (
     <div className="flex min-w-0 items-start gap-[10px] border-b border-border-soft px-3 py-2 last:border-b-0">
       <Icon
         className={cn(
           'mt-[2px] h-[13px] w-[13px] shrink-0',
-          entry.level === 'error' ? 'text-destructive' : entry.level === 'warn' ? 'text-warn' : 'text-muted-fg',
+          entry.level === 'error'
+            ? 'text-destructive'
+            : entry.level === 'warn'
+              ? 'text-warn'
+              : 'text-muted-fg',
         )}
         strokeWidth={2.2}
       />
@@ -254,5 +271,5 @@ function LogRow({ entry, lang, text }: { entry: Entry; lang: 'en' | 'tr'; text: 
         </span>
       </div>
     </div>
-  );
+  )
 }

@@ -40,8 +40,8 @@ export default function TermsPage() {
             <h2 className="font-semibold text-xl">1. Introduction</h2>
             <p className="text-foreground/90 leading-relaxed">
               Welcome to the DigitalTwin editor (&quot;Editor&quot;) and the DigitalTwin platform
-              (&quot;Platform&quot;), operated by DigitalTwin (&quot;we,&quot; &quot;us,&quot;
-              or &quot;our&quot;). By accessing or using our services, you agree to these Terms of
+              (&quot;Platform&quot;), operated by DigitalTwin (&quot;we,&quot; &quot;us,&quot; or
+              &quot;our&quot;). By accessing or using our services, you agree to these Terms of
               Service.
             </p>
           </section>
@@ -49,13 +49,13 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">2. The Editor and Platform</h2>
             <p className="text-foreground/90 leading-relaxed">
-              The DigitalTwin editor is open-source software released under the MIT License. You may use,
-              copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Editor
-              software in accordance with the MIT License terms.
+              The DigitalTwin editor is open-source software released under the MIT License. You may
+              use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+              Editor software in accordance with the MIT License terms.
             </p>
             <p className="text-foreground/90 leading-relaxed">
-              The DigitalTwin platform and its associated services, including user accounts,
-              cloud storage, and project hosting, are proprietary services owned and operated by
+              The DigitalTwin platform and its associated services, including user accounts, cloud
+              storage, and project hosting, are proprietary services owned and operated by
               DigitalTwin. These Terms govern your use of the Platform.
             </p>
           </section>

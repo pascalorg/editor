@@ -112,6 +112,19 @@
   },
   "overrides": [
     {
+      // Vendored console sources (synced from ovurrsl/panel). Its hooks
+      // intentionally pin effect dependencies; re-deriving them here would
+      // change runtime behavior, so the rule is off for this subtree only.
+      "includes": ["apps/editor/panel/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": ["packages/editor/components/debug/react-scan.tsx"],
       "assist": {
         "actions": {

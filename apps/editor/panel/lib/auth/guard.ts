@@ -1,11 +1,9 @@
-import { getSession, type ActiveSession } from './session';
-import type { Permission } from '../types';
+import type { Permission } from '../types'
+import { type ActiveSession, getSession } from './session'
 
-export type GuardFailure = 'unauthenticated' | 'mfa_required' | 'forbidden';
+export type GuardFailure = 'unauthenticated' | 'mfa_required' | 'forbidden'
 
-export type GuardResult =
-  | { ok: true; session: ActiveSession }
-  | { ok: false; reason: GuardFailure };
+export type GuardResult = { ok: true; session: ActiveSession } | { ok: false; reason: GuardFailure }
 
 /**
  * Server-side permission gate. Section 08's rule, restated: the console only
@@ -16,17 +14,17 @@ export type GuardResult =
  * MFA endpoints themselves, which read the session directly.
  */
 export async function requirePermission(...required: Permission[]): Promise<GuardResult> {
-  const session = await getSession();
-  if (!session) return { ok: false, reason: 'unauthenticated' };
-  if (session.mfaPending) return { ok: false, reason: 'mfa_required' };
+  const session = await getSession()
+  if (!session) return { ok: false, reason: 'unauthenticated' }
+  if (session.mfaPending) return { ok: false, reason: 'mfa_required' }
 
-  const granted = new Set(session.user.permissions);
-  if (required.every((perm) => granted.has(perm))) return { ok: true, session };
+  const granted = new Set(session.user.permissions)
+  if (required.every((perm) => granted.has(perm))) return { ok: true, session }
 
-  return { ok: false, reason: 'forbidden' };
+  return { ok: false, reason: 'forbidden' }
 }
 
 /** Signed-in, MFA cleared, no particular permission needed. */
 export async function requireSession(): Promise<GuardResult> {
-  return requirePermission();
+  return requirePermission()
 }

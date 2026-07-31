@@ -1,4 +1,4 @@
-import type { ReleaseEntry } from './api-contract';
+import type { ReleaseEntry } from './api-contract'
 
 /**
  * Changelog source.
@@ -16,19 +16,19 @@ import type { ReleaseEntry } from './api-contract';
 const SOURCES = {
   editor: { owner: 'pascalorg', repo: 'editor' },
   plugin: { owner: 'ovurrsl', repo: 'plugin-warehouse' },
-} as const;
+} as const
 
-const CACHE_TTL_MS = 60_000;
-const FETCH_TIMEOUT_MS = 4000;
+const CACHE_TTL_MS = 60_000
+const FETCH_TIMEOUT_MS = 4000
 
 interface Cache {
-  entries: ReleaseEntry[];
-  live: boolean;
-  fetchedAt: number;
+  entries: ReleaseEntry[]
+  live: boolean
+  fetchedAt: number
 }
 
-let cache: Cache | null = null;
-let inFlight: Promise<Cache> | null = null;
+let cache: Cache | null = null
+let inFlight: Promise<Cache> | null = null
 
 /**
  * Bundled fallback. Real content, taken from the same upstreams — so an offline
@@ -50,7 +50,8 @@ const SNAPSHOT: ReleaseEntry[] = [
   {
     id: 'snapshot-editor-0.9.0',
     title: 'In-world handles and the IFC importer',
-    summary: 'Direct manipulation handles in the scene, plus an IFC importer for existing building models.',
+    summary:
+      'Direct manipulation handles in the scene, plus an IFC importer for existing building models.',
     version: 'v0.9.0',
     date: '2026-06-21T00:00:00.000Z',
     tags: ['ifc', 'editor'],
@@ -60,7 +61,8 @@ const SNAPSHOT: ReleaseEntry[] = [
   {
     id: 'snapshot-editor-0.8.0',
     title: 'Plugin architecture published',
-    summary: 'The plugin contract shipped, letting equipment catalogues live outside the editor core.',
+    summary:
+      'The plugin contract shipped, letting equipment catalogues live outside the editor core.',
     version: 'v0.8.0',
     date: '2026-06-09T00:00:00.000Z',
     tags: ['plugin', 'editor'],
@@ -78,17 +80,17 @@ const SNAPSHOT: ReleaseEntry[] = [
     authors: ['ovurrsl', 'claude'],
     channel: 'plugin',
   },
-];
+]
 
 function githubHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     accept: 'application/vnd.github+json',
     'user-agent': 'digitaltwin-console',
-  };
+  }
   // A token lifts the 60/hour anonymous limit. Optional — without it the cache
   // and the snapshot between them keep the tab usable.
-  if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-  return headers;
+  if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+  return headers
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -97,36 +99,36 @@ async function fetchJson<T>(url: string): Promise<T | null> {
       headers: githubHeaders(),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       cache: 'no-store',
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
+    })
+    if (!response.ok) return null
+    return (await response.json()) as T
   } catch {
-    return null;
+    return null
   }
 }
 
 interface GhRelease {
-  id: number;
-  name: string | null;
-  tag_name: string;
-  body: string | null;
-  published_at: string | null;
-  author: { login: string } | null;
+  id: number
+  name: string | null
+  tag_name: string
+  body: string | null
+  published_at: string | null
+  author: { login: string } | null
 }
 
 interface GhCommit {
-  sha: string;
-  commit: { message: string; author: { name: string; date: string } | null };
-  author: { login: string } | null;
+  sha: string
+  commit: { message: string; author: { name: string; date: string } | null }
+  author: { login: string } | null
 }
 
 function summarise(body: string | null, fallback: string): string {
-  if (!body) return fallback;
+  if (!body) return fallback
   const firstParagraph = body
     .split(/\r?\n\r?\n/)
     .map((p) => p.replace(/[#*`>-]/g, '').trim())
-    .find((p) => p.length > 20);
-  return (firstParagraph ?? fallback).slice(0, 320);
+    .find((p) => p.length > 20)
+  return (firstParagraph ?? fallback).slice(0, 320)
 }
 
 async function loadUpstream(): Promise<Cache> {
@@ -137,11 +139,11 @@ async function loadUpstream(): Promise<Cache> {
     fetchJson<GhCommit[]>(
       `https://api.github.com/repos/${SOURCES.plugin.owner}/${SOURCES.plugin.repo}/commits?per_page=20`,
     ),
-  ]);
+  ])
 
-  if (!releases && !commits) return snapshot();
+  if (!releases && !commits) return snapshot()
 
-  const entries: ReleaseEntry[] = [];
+  const entries: ReleaseEntry[] = []
 
   for (const release of releases ?? []) {
     entries.push({
@@ -153,29 +155,33 @@ async function loadUpstream(): Promise<Cache> {
       tags: ['editor'],
       authors: release.author ? [release.author.login] : [],
       channel: 'editor',
-    });
+    })
   }
 
   for (const commit of commits ?? []) {
-    const [headline, ...rest] = commit.commit.message.split('\n');
+    const [headline, ...rest] = commit.commit.message.split('\n')
     entries.push({
       id: `plugin-${commit.sha.slice(0, 12)}`,
-      title: headline.slice(0, 160),
+      title: (headline ?? '').slice(0, 160),
       summary: summarise(rest.join('\n').trim() || null, 'Warehouse plugin change.'),
       version: null,
       date: commit.commit.author?.date ?? new Date(0).toISOString(),
       tags: ['warehouse'],
-      authors: commit.author ? [commit.author.login] : commit.commit.author ? [commit.commit.author.name] : [],
+      authors: commit.author
+        ? [commit.author.login]
+        : commit.commit.author
+          ? [commit.commit.author.name]
+          : [],
       channel: 'plugin',
-    });
+    })
   }
 
-  return { entries: byNewest(entries), live: true, fetchedAt: Date.now() };
+  return { entries: byNewest(entries), live: true, fetchedAt: Date.now() }
 }
 
 /** One chronological timeline across both channels, newest first. */
 function byNewest(entries: ReleaseEntry[]): ReleaseEntry[] {
-  return [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 }
 
 /**
@@ -184,7 +190,7 @@ function byNewest(entries: ReleaseEntry[]): ReleaseEntry[] {
  * timeline, because the constant is grouped by channel rather than by date.
  */
 function snapshot(): Cache {
-  return { entries: byNewest(SNAPSHOT), live: false, fetchedAt: Date.now() };
+  return { entries: byNewest(SNAPSHOT), live: false, fetchedAt: Date.now() }
 }
 
 /**
@@ -193,45 +199,45 @@ function snapshot(): Cache {
  * the rate limit twice as fast.
  */
 export async function loadChangelog(): Promise<Cache> {
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache;
-  if (inFlight) return inFlight;
+  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache
+  if (inFlight) return inFlight
 
   inFlight = loadUpstream()
     .then((next) => {
-      cache = next;
-      return next;
+      cache = next
+      return next
     })
     .catch(() => {
-      const fallback = snapshot();
-      cache = fallback;
-      return fallback;
+      const fallback = snapshot()
+      cache = fallback
+      return fallback
     })
     .finally(() => {
-      inFlight = null;
-    });
+      inFlight = null
+    })
 
-  return inFlight;
+  return inFlight
 }
 
 export interface ChangelogPage {
-  entries: ReleaseEntry[];
-  nextCursor: string | null;
-  live: boolean;
-  fetchedAt: string;
+  entries: ReleaseEntry[]
+  nextCursor: string | null
+  live: boolean
+  fetchedAt: string
 }
 
 /** Cursor is the index into the cached, already-sorted timeline. */
 export async function changelogPage(cursor: string | null, limit: number): Promise<ChangelogPage> {
-  const loaded = await loadChangelog();
-  const start = Math.max(0, Number(cursor ?? 0) || 0);
-  const size = Math.min(50, Math.max(1, limit));
-  const slice = loaded.entries.slice(start, start + size);
-  const next = start + size;
+  const loaded = await loadChangelog()
+  const start = Math.max(0, Number(cursor ?? 0) || 0)
+  const size = Math.min(50, Math.max(1, limit))
+  const slice = loaded.entries.slice(start, start + size)
+  const next = start + size
 
   return {
     entries: slice,
     nextCursor: next < loaded.entries.length ? String(next) : null,
     live: loaded.live,
     fetchedAt: new Date(loaded.fetchedAt).toISOString(),
-  };
+  }
 }

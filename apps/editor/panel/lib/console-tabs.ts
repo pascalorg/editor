@@ -1,5 +1,5 @@
-import type { Dictionary } from './i18n';
-import type { Permission } from './types';
+import type { Dictionary } from './i18n'
+import type { Permission } from './types'
 
 export const CONSOLE_TABS = [
   'overview',
@@ -13,19 +13,19 @@ export const CONSOLE_TABS = [
   'integrations',
   'updates',
   'settings',
-] as const;
+] as const
 
-export type ConsoleTab = (typeof CONSOLE_TABS)[number];
+export type ConsoleTab = (typeof CONSOLE_TABS)[number]
 
 export function isConsoleTab(value: string): value is ConsoleTab {
-  return (CONSOLE_TABS as readonly string[]).includes(value);
+  return (CONSOLE_TABS as readonly string[]).includes(value)
 }
 
 export interface TabMeta {
   /** Permission the tab needs; absent means every signed-in user may see it. */
-  permission?: Permission;
+  permission?: Permission
   /** Dictionary key under `c` for the rail label. */
-  labelKey: keyof Dictionary['c'];
+  labelKey: keyof Dictionary['c']
 }
 
 /**
@@ -58,13 +58,13 @@ export const TAB_META: Record<ConsoleTab, TabMeta> = {
   integrations: { labelKey: 'integrations', permission: 'admin_access' },
   updates: { labelKey: 'changelog' },
   settings: { labelKey: 'settings', permission: 'admin_access' },
-};
+}
 
 export interface RailEntry {
-  kind: 'heading' | 'item';
-  id?: ConsoleTab;
-  label: string;
-  permission?: Permission;
+  kind: 'heading' | 'item'
+  id?: ConsoleTab
+  label: string
+  permission?: Permission
 }
 
 /**
@@ -78,7 +78,7 @@ export function railEntries(t: Dictionary): RailEntry[] {
     id,
     label: t.c[TAB_META[id].labelKey] as string,
     permission: TAB_META[id].permission,
-  });
+  })
 
   return [
     { kind: 'heading', label: t.c.monitor },
@@ -97,13 +97,13 @@ export function railEntries(t: Dictionary): RailEntry[] {
     item('integrations'),
     item('updates'),
     item('settings'),
-  ];
+  ]
 }
 
 export function tabLabel(t: Dictionary, tab: ConsoleTab): string {
-  return (t.c[TAB_META[tab].labelKey] as string) ?? tab;
+  return (t.c[TAB_META[tab].labelKey] as string) ?? tab
 }
 
 export function tabPermission(tab: ConsoleTab): Permission | undefined {
-  return TAB_META[tab].permission;
+  return TAB_META[tab].permission
 }

@@ -1,14 +1,14 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useState } from 'react';
-import { Monitor } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { Caps } from '@panel/components/ui/caps';
-import { Toast } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
-import type { SessionResponse, SessionsResponse } from '@panel/lib/api-contract';
-import { formatDate, resolveApiMessage } from '@panel/lib/i18n';
-import type { SessionInfo } from '@panel/lib/types';
+import { useApp } from '@panel/components/app-providers'
+import { Caps } from '@panel/components/ui/caps'
+import { Toast } from '@panel/components/ui/feedback'
+import type { SessionResponse, SessionsResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { formatDate, resolveApiMessage } from '@panel/lib/i18n'
+import type { SessionInfo } from '@panel/lib/types'
+import { Monitor } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 
 /**
  * The signed-in user's own devices, plus a read-only view of the policy the
@@ -17,47 +17,50 @@ import type { SessionInfo } from '@panel/lib/types';
  * the Settings tab owns in step 7.
  */
 export function SessionsTab() {
-  const { t, lang } = useApp();
+  const { t, lang } = useApp()
 
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [sessionMinutes, setSessionMinutes] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
+  const [sessions, setSessions] = useState<SessionInfo[]>([])
+  const [sessionMinutes, setSessionMinutes] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
 
   const load = useCallback(async () => {
     const [list, meta] = await Promise.all([
       call<SessionsResponse>('/api/auth/sessions'),
       call<SessionResponse>('/api/auth/session'),
-    ]);
-    if (list.ok) setSessions(list.data.sessions);
-    if (meta.ok) setSessionMinutes(meta.data.sessionMinutes);
-    setLoading(false);
-  }, []);
+    ])
+    if (list.ok) setSessions(list.data.sessions)
+    if (meta.ok) setSessionMinutes(meta.data.sessionMinutes)
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load()
+  }, [load])
 
   const revoke = useCallback(
     async (session: SessionInfo) => {
-      const res = await call<{ revoked: number; self: boolean }>(`/api/auth/sessions/${session.id}`, {
-        method: 'DELETE',
-      });
+      const res = await call<{ revoked: number; self: boolean }>(
+        `/api/auth/sessions/${session.id}`,
+        {
+          method: 'DELETE',
+        },
+      )
       if (!res.ok) {
-        setToast({ message: resolveApiMessage(t, res.messageKey), tone: 'error' });
-        setTimeout(() => setToast(null), 2600);
-        return;
+        setToast({ message: resolveApiMessage(t, res.messageKey), tone: 'error' })
+        setTimeout(() => setToast(null), 2600)
+        return
       }
       // Revoking your own session drops the cookie, so the next navigation is a
       // sign-in. Reloading here is what makes that immediate rather than eventual.
       if (res.data.self) {
-        window.location.href = '/signin';
-        return;
+        window.location.href = '/signin'
+        return
       }
-      void load();
+      void load()
     },
     [load, t],
-  );
+  )
 
   return (
     <section className="flex min-w-0 flex-col gap-[14px]" style={{ animation: 'dtFade 0.2s ease' }}>
@@ -69,9 +72,14 @@ export function SessionsTab() {
       </header>
 
       <div className="flex flex-col gap-2 rounded-[12px] border border-border bg-surface p-3">
-        <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.sessionPolicy}</Caps>
+        <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+          {t.sessionPolicy}
+        </Caps>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
-          <PolicyValue label={t.polIdle} value={sessionMinutes ? `${sessionMinutes} ${t.polMin}` : '—'} />
+          <PolicyValue
+            label={t.polIdle}
+            value={sessionMinutes ? `${sessionMinutes} ${t.polMin}` : '—'}
+          />
           <PolicyValue label={t.polMfa} value={t.on} />
         </div>
         <p className="m-0 text-[11.5px] text-muted-fg text-pretty">{t.sessionPolicyLead}</p>
@@ -81,7 +89,10 @@ export function SessionsTab() {
         {loading ? (
           <div className="flex flex-col">
             {Array.from({ length: 3 }, (_, i) => (
-              <div key={i} className="flex h-[52px] items-center gap-4 border-b border-border-soft px-3">
+              <div
+                key={i}
+                className="flex h-[52px] items-center gap-4 border-b border-border-soft px-3"
+              >
                 <span
                   className="h-[9px] w-[180px] rounded bg-hover"
                   style={{ animation: 'dtShimmer 1.4s ease infinite' }}
@@ -102,7 +113,9 @@ export function SessionsTab() {
             >
               <div className="flex min-w-[180px] flex-1 flex-col gap-[2px]">
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-[12.5px] font-medium">{session.device ?? '—'}</span>
+                  <span className="truncate text-[12.5px] font-medium">
+                    {session.device ?? '—'}
+                  </span>
                   {session.current ? (
                     <span className="shrink-0 rounded-[4px] border border-brand px-[5px] font-mono text-[8.5px] text-brand-fg">
                       {t.thisDevice}
@@ -128,7 +141,7 @@ export function SessionsTab() {
 
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </section>
-  );
+  )
 }
 
 function PolicyValue({ label, value }: { label: string; value: string }) {
@@ -137,5 +150,5 @@ function PolicyValue({ label, value }: { label: string; value: string }) {
       <Caps className="font-mono text-[8.5px] tracking-[0.1em] text-muted-fg">{label}</Caps>
       <span className="font-mono text-[13px] text-fg">{value}</span>
     </div>
-  );
+  )
 }

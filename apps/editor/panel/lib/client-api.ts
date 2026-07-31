@@ -1,16 +1,16 @@
-'use client';
+'use client'
 
-import { isApiError, type ApiError } from './api-contract';
+import { type ApiError, isApiError } from './api-contract'
 
 export interface CallFailure {
-  ok: false;
-  code: ApiError['error']['code'];
+  ok: false
+  code: ApiError['error']['code']
   /** i18n key — resolve with resolveApiMessage before showing it. */
-  messageKey: string;
-  details: Record<string, unknown>;
+  messageKey: string
+  details: Record<string, unknown>
 }
 
-export type CallResult<T> = { ok: true; data: T } | CallFailure;
+export type CallResult<T> = { ok: true; data: T } | CallFailure
 
 /**
  * Single fetch wrapper for every client call. Normalises three different failure
@@ -21,7 +21,7 @@ export async function call<T>(
   path: string,
   init?: { method?: string; body?: unknown; signal?: AbortSignal },
 ): Promise<CallResult<T>> {
-  let response: Response;
+  let response: Response
   try {
     response = await fetch(path, {
       method: init?.method ?? (init?.body ? 'POST' : 'GET'),
@@ -29,16 +29,16 @@ export async function call<T>(
       body: init?.body ? JSON.stringify(init.body) : undefined,
       credentials: 'same-origin',
       signal: init?.signal,
-    });
+    })
   } catch {
-    return { ok: false, code: 'server_error', messageKey: 'err.network', details: {} };
+    return { ok: false, code: 'server_error', messageKey: 'err.network', details: {} }
   }
 
-  let payload: unknown = null;
+  let payload: unknown = null
   try {
-    payload = await response.json();
+    payload = await response.json()
   } catch {
-    payload = null;
+    payload = null
   }
 
   if (!response.ok || isApiError(payload)) {
@@ -48,10 +48,10 @@ export async function call<T>(
         code: payload.error.code,
         messageKey: payload.error.message,
         details: payload.error.details ?? {},
-      };
+      }
     }
-    return { ok: false, code: 'server_error', messageKey: 'err.server', details: {} };
+    return { ok: false, code: 'server_error', messageKey: 'err.server', details: {} }
   }
 
-  return { ok: true, data: payload as T };
+  return { ok: true, data: payload as T }
 }

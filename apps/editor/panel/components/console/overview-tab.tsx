@@ -1,56 +1,56 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { AlertTriangle } from 'lucide-react';
-import { useApp } from '@panel/components/app-providers';
-import { Sparkline } from '@panel/components/console/sparkline';
-import { Caps } from '@panel/components/ui/caps';
-import { call } from '@panel/lib/client-api';
-import type { OverviewResponse } from '@panel/lib/api-contract';
-import { auditText, formatDate, formatNumber } from '@panel/lib/i18n';
-import { cn } from '@panel/lib/cn';
+import { useApp } from '@panel/components/app-providers'
+import { Sparkline } from '@panel/components/console/sparkline'
+import { Caps } from '@panel/components/ui/caps'
+import type { OverviewResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { auditText, formatDate, formatNumber } from '@panel/lib/i18n'
+import { AlertTriangle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** The 4 s cadence the design specifies for health polling. */
-const POLL_MS = 4000;
-const SERIES_LENGTH = 24;
+const POLL_MS = 4000
+const SERIES_LENGTH = 24
 
 export function OverviewTab() {
-  const { t, lang } = useApp();
-  const router = useRouter();
+  const { t, lang } = useApp()
+  const router = useRouter()
 
-  const [data, setData] = useState<OverviewResponse | null>(null);
-  const [cpuSeries, setCpuSeries] = useState<number[]>([]);
-  const [memSeries, setMemSeries] = useState<number[]>([]);
-  const stopped = useRef(false);
+  const [data, setData] = useState<OverviewResponse | null>(null)
+  const [cpuSeries, setCpuSeries] = useState<number[]>([])
+  const [memSeries, setMemSeries] = useState<number[]>([])
+  const stopped = useRef(false)
 
   const load = useCallback(async () => {
     // A hidden tab must not keep polling — the old panel's health probe ran
     // regardless of visibility and burned cycles on tabs nobody was watching.
-    if (document.visibilityState === 'hidden') return;
+    if (document.visibilityState === 'hidden') return
 
-    const res = await call<OverviewResponse>('/api/overview');
-    if (!res.ok || stopped.current) return;
+    const res = await call<OverviewResponse>('/api/overview')
+    if (!res.ok || stopped.current) return
 
-    setData(res.data);
-    setCpuSeries((prev) => [...prev, res.data.health.cpuPercent].slice(-SERIES_LENGTH));
-    setMemSeries((prev) => [...prev, res.data.health.heapGb].slice(-SERIES_LENGTH));
-  }, []);
+    setData(res.data)
+    setCpuSeries((prev) => [...prev, res.data.health.cpuPercent].slice(-SERIES_LENGTH))
+    setMemSeries((prev) => [...prev, res.data.health.heapGb].slice(-SERIES_LENGTH))
+  }, [])
 
   useEffect(() => {
-    stopped.current = false;
-    void load();
+    stopped.current = false
+    void load()
 
-    const timer = setInterval(() => void load(), POLL_MS);
-    const onVisibility = () => void load();
-    document.addEventListener('visibilitychange', onVisibility);
+    const timer = setInterval(() => void load(), POLL_MS)
+    const onVisibility = () => void load()
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
-      stopped.current = true;
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [load]);
+      stopped.current = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [load])
 
   if (!data) {
     return (
@@ -63,10 +63,10 @@ export function OverviewTab() {
           />
         ))}
       </div>
-    );
+    )
   }
 
-  const { health, counts, connected, incidents } = data;
+  const { health, counts, connected, incidents } = data
 
   const metrics = [
     {
@@ -97,7 +97,7 @@ export function OverviewTab() {
       series: [],
       foot: `${counts.without2fa} ${t.c.without2fa}`,
     },
-  ];
+  ]
 
   return (
     <section className="flex min-w-0 flex-col gap-[14px]" style={{ animation: 'dtFade 0.2s ease' }}>
@@ -114,7 +114,9 @@ export function OverviewTab() {
             // Cards reveal in sequence, 60 ms apart, as the design specifies.
             style={{ animation: 'dtFade 0.3s ease backwards', animationDelay: `${index * 60}ms` }}
           >
-            <Caps className="font-mono text-[8.5px] tracking-[0.12em] text-muted-fg">{metric.label}</Caps>
+            <Caps className="font-mono text-[8.5px] tracking-[0.12em] text-muted-fg">
+              {metric.label}
+            </Caps>
             <div className="flex items-baseline gap-1">
               <span className="font-mono text-[26px] font-medium leading-none tracking-[-0.02em] text-fg">
                 {metric.value}
@@ -130,7 +132,9 @@ export function OverviewTab() {
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col overflow-hidden rounded-[12px] border border-border">
           <div className="flex items-center justify-between gap-2 border-b border-border bg-surface px-3 py-2">
-            <Caps className="font-mono text-[8.5px] tracking-[0.12em] text-muted-fg">{t.c.connectedUsers}</Caps>
+            <Caps className="font-mono text-[8.5px] tracking-[0.12em] text-muted-fg">
+              {t.c.connectedUsers}
+            </Caps>
             <span className="flex items-center gap-[6px] font-mono text-[9px] text-muted-fg">
               <span
                 className="h-[5px] w-[5px] rounded-full bg-ok"
@@ -141,7 +145,9 @@ export function OverviewTab() {
           </div>
 
           {connected.length === 0 ? (
-            <div className="px-3 py-8 text-center text-[11.5px] text-muted-fg">{t.ovNoConnected}</div>
+            <div className="px-3 py-8 text-center text-[11.5px] text-muted-fg">
+              {t.ovNoConnected}
+            </div>
           ) : (
             connected.map((row) => (
               <div
@@ -175,7 +181,9 @@ export function OverviewTab() {
           </div>
 
           {incidents.length === 0 ? (
-            <div className="px-3 py-8 text-center text-[11.5px] text-muted-fg">{t.ovNoIncidents}</div>
+            <div className="px-3 py-8 text-center text-[11.5px] text-muted-fg">
+              {t.ovNoIncidents}
+            </div>
           ) : (
             incidents.map((entry) => (
               <div
@@ -190,7 +198,9 @@ export function OverviewTab() {
                   strokeWidth={2.2}
                 />
                 <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
-                  <span className="truncate font-mono text-[11px] text-fg">{auditText(t, entry)}</span>
+                  <span className="truncate font-mono text-[11px] text-fg">
+                    {auditText(t, entry)}
+                  </span>
                   <span className="truncate font-mono text-[9.5px] text-muted-fg">
                     {formatDate(lang, entry.createdAt)} · {entry.actor}
                     {entry.kind ? ` · ${entry.kind}` : ''}
@@ -202,5 +212,5 @@ export function OverviewTab() {
         </div>
       </div>
     </section>
-  );
+  )
 }

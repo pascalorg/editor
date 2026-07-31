@@ -1,12 +1,12 @@
-import { fail, handler, ok } from '@panel/lib/api';
-import type { OverviewResponse } from '@panel/lib/api-contract';
-import { requireSession } from '@panel/lib/auth/guard';
-import { queryOne, type RowDataPacket } from '@panel/lib/db';
-import { readHealth } from '@panel/lib/health';
-import { listLogs, recentActors } from '@panel/lib/logs';
+import { fail, handler, ok } from '@panel/lib/api'
+import type { OverviewResponse } from '@panel/lib/api-contract'
+import { requireSession } from '@panel/lib/auth/guard'
+import { queryOne, type RowDataPacket } from '@panel/lib/db'
+import { readHealth } from '@panel/lib/health'
+import { listLogs, recentActors } from '@panel/lib/logs'
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/overview — one round trip for the whole landing tab.
@@ -16,18 +16,18 @@ export const dynamic = 'force-dynamic';
  * screen that always shows all four together.
  */
 export const GET = handler(async () => {
-  const guard = await requireSession();
-  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired');
+  const guard = await requireSession()
+  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired')
 
   const counts = await queryOne<
     RowDataPacket & {
-      users: number;
-      active_users: number;
-      without_2fa: number;
-      sites: number;
-      active_sites: number;
-      signed_in: number;
-      queued_jobs: number;
+      users: number
+      active_users: number
+      without_2fa: number
+      sites: number
+      active_sites: number
+      signed_in: number
+      queued_jobs: number
     }
   >(`
     SELECT
@@ -41,10 +41,10 @@ export const GET = handler(async () => {
       (SELECT COUNT(DISTINCT user_id) FROM sessions
         WHERE revoked_at IS NULL AND expires_at > NOW()) AS signed_in,
       (SELECT COUNT(*) FROM jobs WHERE status IN ('queued','running')) AS queued_jobs
-  `);
+  `)
 
   // Incidents are the warn/error tail of diagnostics — the five most recent.
-  const incidents = await listLogs({ view: 'diagnostics', level: 'All', limit: 20 });
+  const incidents = await listLogs({ view: 'diagnostics', level: 'All', limit: 20 })
 
   const body: OverviewResponse = {
     health: readHealth(),
@@ -59,6 +59,6 @@ export const GET = handler(async () => {
     },
     connected: await recentActors(20),
     incidents: incidents.entries.filter((e) => e.level !== 'info').slice(0, 5),
-  };
-  return ok(body);
-});
+  }
+  return ok(body)
+})

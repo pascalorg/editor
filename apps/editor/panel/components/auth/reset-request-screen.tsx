@@ -1,43 +1,45 @@
-'use client';
+'use client'
 
-import { useCallback, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useApp } from '@panel/components/app-providers';
-import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell';
-import { AuthCard, Button, Field, FieldLabel } from '@panel/components/ui/controls';
-import { ErrorBox, ScreenTitle, SuccessMark } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
-import type { ResetRequestResponse } from '@panel/lib/api-contract';
-import { resolveApiMessage } from '@panel/lib/i18n';
+import { useApp } from '@panel/components/app-providers'
+import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell'
+import { AuthCard, Button, Field, FieldLabel } from '@panel/components/ui/controls'
+import { ErrorBox, ScreenTitle, SuccessMark } from '@panel/components/ui/feedback'
+import type { ResetRequestResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { resolveApiMessage } from '@panel/lib/i18n'
+import { useRouter } from 'next/navigation'
+import { useCallback, useState } from 'react'
 
 export function ResetRequestScreen() {
-  const { t } = useApp();
-  const router = useRouter();
+  const { t } = useApp()
+  const router = useRouter()
 
-  const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState('')
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   const submit = useCallback(async () => {
     if (!email.trim()) {
-      setError(t.errFields);
-      return;
+      setError(t.errFields)
+      return
     }
 
-    setBusy(true);
-    setError(null);
-    const res = await call<ResetRequestResponse>('/api/auth/reset', { body: { email: email.trim() } });
-    setBusy(false);
+    setBusy(true)
+    setError(null)
+    const res = await call<ResetRequestResponse>('/api/auth/reset', {
+      body: { email: email.trim() },
+    })
+    setBusy(false)
 
     // The endpoint answers 202 for every address that parses, so the only way to
     // land here is a malformed address or a dead network — never "no such user".
     if (!res.ok) {
-      setError(resolveApiMessage(t, res.messageKey));
-      return;
+      setError(resolveApiMessage(t, res.messageKey))
+      return
     }
-    setSent(true);
-  }, [email, t]);
+    setSent(true)
+  }, [email, t])
 
   return (
     <AuthShell label="Password reset">
@@ -71,8 +73,8 @@ export function ResetRequestScreen() {
                 placeholder="name@netlog.com.tr"
                 value={email}
                 onChange={(e) => {
-                  setEmail(e.target.value);
-                  setError(null);
+                  setEmail(e.target.value)
+                  setError(null)
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && void submit()}
               />
@@ -92,5 +94,5 @@ export function ResetRequestScreen() {
 
       <AuthFooter protectedUpper={t.protectedUpper} signature={t.signature} />
     </AuthShell>
-  );
+  )
 }

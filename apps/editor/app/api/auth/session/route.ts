@@ -1,10 +1,10 @@
-import { handler, ok } from '@panel/lib/api';
-import type { SessionResponse } from '@panel/lib/api-contract';
-import { getSession } from '@panel/lib/auth/session';
-import { getSettings } from '@panel/lib/settings';
+import { handler, ok } from '@panel/lib/api'
+import type { SessionResponse } from '@panel/lib/api-contract'
+import { getSession } from '@panel/lib/auth/session'
+import { getSettings } from '@panel/lib/settings'
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/auth/session
@@ -18,8 +18,8 @@ export const dynamic = 'force-dynamic';
  * hidden so a background tab does not keep a session alive forever.
  */
 export const GET = handler(async () => {
-  const settings = await getSettings();
-  const session = await getSession();
+  const settings = await getSettings()
+  const session = await getSession()
 
   if (!session) {
     const body: SessionResponse = {
@@ -27,8 +27,8 @@ export const GET = handler(async () => {
       user: null,
       expiresInSeconds: 0,
       sessionMinutes: settings.sessionMinutes,
-    };
-    return ok(body);
+    }
+    return ok(body)
   }
 
   const body: SessionResponse = {
@@ -36,6 +36,6 @@ export const GET = handler(async () => {
     user: session.user,
     expiresInSeconds: Math.max(0, Math.floor((session.expiresAt.getTime() - Date.now()) / 1000)),
     sessionMinutes: settings.sessionMinutes,
-  };
-  return ok(body);
-});
+  }
+  return ok(body)
+})

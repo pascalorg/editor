@@ -18,7 +18,7 @@ export interface SessionUser {
  */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const session = await getSession()
-  if (!session || session.state !== 'signedIn') return null
+  if (session?.state !== 'signedIn') return null
   const user = session.user
   return {
     id: user.id,

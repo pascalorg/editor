@@ -1,43 +1,50 @@
-'use client';
+'use client'
 
-import { useCallback, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useApp } from '@panel/components/app-providers';
-import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell';
-import { AuthCard, Button, Field, FieldLabel, SegBar, SegButton } from '@panel/components/ui/controls';
-import { ErrorBox, ScreenTitle, SuccessMark } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
-import type { AccessRequestResponse } from '@panel/lib/api-contract';
-import { resolveApiMessage } from '@panel/lib/i18n';
-import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint';
-import { Caps } from '@panel/components/ui/caps';
+import { useApp } from '@panel/components/app-providers'
+import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell'
+import { Caps } from '@panel/components/ui/caps'
+import {
+  AuthCard,
+  Button,
+  Field,
+  FieldLabel,
+  SegBar,
+  SegButton,
+} from '@panel/components/ui/controls'
+import { ErrorBox, ScreenTitle, SuccessMark } from '@panel/components/ui/feedback'
+import type { AccessRequestResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint'
+import { resolveApiMessage } from '@panel/lib/i18n'
+import { useRouter } from 'next/navigation'
+import { useCallback, useState } from 'react'
 
-const DOMAIN = '@netlog.com.tr';
-const DEPARTMENTS = ['Warehouse', 'Operations', 'Engineering', 'IT'];
-const ROLES = ['Editor', 'Viewer'];
+const DOMAIN = '@netlog.com.tr'
+const DEPARTMENTS = ['Warehouse', 'Operations', 'Engineering', 'IT']
+const ROLES = ['Editor', 'Viewer']
 
 export function RequestAccessScreen() {
-  const { t } = useApp();
-  const router = useRouter();
-  const { touch } = useBreakpoint();
+  const { t } = useApp()
+  const router = useRouter()
+  const { touch } = useBreakpoint()
 
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
-  const [department, setDepartment] = useState(DEPARTMENTS[0]);
-  const [role, setRole] = useState(ROLES[0]);
-  const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [fullName, setFullName] = useState('')
+  const [username, setUsername] = useState('')
+  const [department, setDepartment] = useState(DEPARTMENTS[0])
+  const [role, setRole] = useState(ROLES[0])
+  const [note, setNote] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
 
   const submit = useCallback(async () => {
     if (!fullName.trim() || !username.trim()) {
-      setError(t.errFields);
-      return;
+      setError(t.errFields)
+      return
     }
 
-    setBusy(true);
-    setError(null);
+    setBusy(true)
+    setError(null)
     const res = await call<AccessRequestResponse>('/api/requests', {
       body: {
         fullName: fullName.trim(),
@@ -48,15 +55,15 @@ export function RequestAccessScreen() {
         requestedRole: role,
         note: note.trim() || undefined,
       },
-    });
-    setBusy(false);
+    })
+    setBusy(false)
 
     if (!res.ok) {
-      setError(resolveApiMessage(t, res.messageKey));
-      return;
+      setError(resolveApiMessage(t, res.messageKey))
+      return
     }
-    setSent(true);
-  }, [fullName, username, department, role, note, t]);
+    setSent(true)
+  }, [fullName, username, department, role, note, t])
 
   return (
     <AuthShell label="Account request">
@@ -66,8 +73,12 @@ export function RequestAccessScreen() {
             <div className="flex flex-col gap-5">
               <SuccessMark />
               <div className="flex flex-col gap-[6px]">
-                <h1 className="m-0 text-[18px] font-semibold tracking-[-0.01em]">{t.reqSentTitle}</h1>
-                <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">{t.reqSentLead}</p>
+                <h1 className="m-0 text-[18px] font-semibold tracking-[-0.01em]">
+                  {t.reqSentTitle}
+                </h1>
+                <p className="m-0 text-[12.5px] leading-[1.55] text-muted-fg text-pretty">
+                  {t.reqSentLead}
+                </p>
                 <span className="font-mono text-[11px] text-fg">
                   {username.trim().toLowerCase()}
                   {DOMAIN}
@@ -117,7 +128,9 @@ export function RequestAccessScreen() {
                     {DOMAIN}
                   </span>
                 </div>
-                <span className="font-mono text-[9px] tracking-[0.06em] text-muted-fg">{t.usernameHint}</span>
+                <span className="font-mono text-[9px] tracking-[0.06em] text-muted-fg">
+                  {t.usernameHint}
+                </span>
               </div>
 
               <div className="flex flex-col gap-[6px]">
@@ -173,5 +186,5 @@ export function RequestAccessScreen() {
 
       <AuthFooter protectedUpper={t.protectedUpper} signature={t.signature} />
     </AuthShell>
-  );
+  )
 }

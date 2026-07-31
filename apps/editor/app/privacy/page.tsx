@@ -40,8 +40,8 @@ export default function PrivacyPage() {
             <h2 className="font-semibold text-xl">1. Introduction</h2>
             <p className="text-foreground/90 leading-relaxed">
               DigitalTwin (&quot;we,&quot; &quot;us,&quot; or &quot;our&quot;) operates the
-              DigitalTwin editor and platform. This Privacy Policy explains how we collect,
-              use, and protect your information when you use our services.
+              DigitalTwin editor and platform. This Privacy Policy explains how we collect, use, and
+              protect your information when you use our services.
             </p>
           </section>
 

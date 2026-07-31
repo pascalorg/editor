@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { ZodError, type ZodType } from 'zod';
-import type { ApiError, ApiErrorCode } from './api-contract';
+import { NextResponse } from 'next/server'
+import { ZodError, type ZodType } from 'zod'
+import type { ApiError, ApiErrorCode } from './api-contract'
 
 const STATUS: Record<ApiErrorCode, number> = {
   invalid_credentials: 401,
@@ -25,10 +25,10 @@ const STATUS: Record<ApiErrorCode, number> = {
   validation: 422,
   rate_limited: 429,
   server_error: 500,
-};
+}
 
 export function ok<T>(body: T, init?: ResponseInit): NextResponse<T> {
-  return NextResponse.json(body, init);
+  return NextResponse.json(body, init)
 }
 
 export function fail(
@@ -36,7 +36,10 @@ export function fail(
   message: string,
   details?: Record<string, unknown>,
 ): NextResponse<ApiError> {
-  return NextResponse.json({ error: { code, message, ...(details ? { details } : {}) } }, { status: STATUS[code] });
+  return NextResponse.json(
+    { error: { code, message, ...(details ? { details } : {}) } },
+    { status: STATUS[code] },
+  )
 }
 
 /**
@@ -47,30 +50,34 @@ export async function parseBody<T>(
   request: Request,
   schema: ZodType<T>,
 ): Promise<{ ok: true; data: T } | { ok: false; response: NextResponse<ApiError> }> {
-  let raw: unknown;
+  let raw: unknown
   try {
-    raw = await request.json();
+    raw = await request.json()
   } catch {
-    return { ok: false, response: fail('validation', 'err.badJson') };
+    return { ok: false, response: fail('validation', 'err.badJson') }
   }
 
   try {
-    return { ok: true, data: schema.parse(raw) };
+    return { ok: true, data: schema.parse(raw) }
   } catch (err) {
     if (err instanceof ZodError) {
-      const first = err.issues[0];
+      const first = err.issues[0]
       // A schema-level refine can carry a specific code (password_mismatch);
       // anything else is a plain validation failure.
-      const params = (first as { params?: { code?: ApiErrorCode } } | undefined)?.params;
-      const code = params?.code ?? 'validation';
+      const params = (first as { params?: { code?: ApiErrorCode } } | undefined)?.params
+      const code = params?.code ?? 'validation'
       return {
         ok: false,
-        response: fail(code, first?.message?.startsWith('err.') ? first.message : 'err.validation', {
-          field: first?.path.join('.') ?? null,
-        }),
-      };
+        response: fail(
+          code,
+          first?.message?.startsWith('err.') ? first.message : 'err.validation',
+          {
+            field: first?.path.join('.') ?? null,
+          },
+        ),
+      }
     }
-    return { ok: false, response: fail('validation', 'err.validation') };
+    return { ok: false, response: fail('validation', 'err.validation') }
   }
 }
 
@@ -80,10 +87,10 @@ export function handler<A extends unknown[]>(
 ): (...args: A) => Promise<NextResponse> {
   return async (...args: A) => {
     try {
-      return await fn(...args);
+      return await fn(...args)
     } catch (err) {
-      console.error('[api]', err);
-      return fail('server_error', 'err.server');
+      console.error('[api]', err)
+      return fail('server_error', 'err.server')
     }
-  };
+  }
 }

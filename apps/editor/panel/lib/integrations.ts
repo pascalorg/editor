@@ -1,8 +1,8 @@
-import { randomBytes } from 'node:crypto';
-import { ulid } from 'ulid';
-import { exec, query, queryOne, type RowDataPacket } from './db';
-import { encryptSecret, sha256 } from './auth/crypto';
-import type { ApiKey, Webhook } from './types';
+import { randomBytes } from 'node:crypto'
+import { ulid } from 'ulid'
+import { encryptSecret, sha256 } from './auth/crypto'
+import { exec, query, queryOne, type RowDataPacket } from './db'
+import type { ApiKey, Webhook } from './types'
 
 export const HOOK_EVENTS = [
   'user.invited',
@@ -10,20 +10,20 @@ export const HOOK_EVENTS = [
   'site.created',
   'job.failed',
   'release.published',
-] as const;
+] as const
 
 /* ——— API keys ——— */
 
 interface KeyRow extends RowDataPacket {
-  public_id: string;
-  name: string;
-  prefix: string;
-  scope: 'read' | 'read_write';
-  site_name: string | null;
-  created_by_email: string;
-  created_at: Date;
-  last_used_at: Date | null;
-  revoked_at: Date | null;
+  public_id: string
+  name: string
+  prefix: string
+  scope: 'read' | 'read_write'
+  site_name: string | null
+  created_by_email: string
+  created_at: Date
+  last_used_at: Date | null
+  revoked_at: Date | null
 }
 
 const KEY_SELECT = `
@@ -32,7 +32,7 @@ const KEY_SELECT = `
     FROM api_keys k
     JOIN users u ON u.id = k.created_by
     LEFT JOIN sites s ON s.id = k.site_id
-`;
+`
 
 function toKey(row: KeyRow): ApiKey {
   return {
@@ -45,12 +45,12 @@ function toKey(row: KeyRow): ApiKey {
     createdAt: row.created_at.toISOString(),
     lastUsedAt: row.last_used_at ? row.last_used_at.toISOString() : null,
     revokedAt: row.revoked_at ? row.revoked_at.toISOString() : null,
-  };
+  }
 }
 
 export async function listKeys(): Promise<ApiKey[]> {
-  const rows = await query<KeyRow>(`${KEY_SELECT} ORDER BY k.created_at DESC`);
-  return rows.map(toKey);
+  const rows = await query<KeyRow>(`${KEY_SELECT} ORDER BY k.created_at DESC`)
+  return rows.map(toKey)
 }
 
 /**
@@ -59,53 +59,55 @@ export async function listKeys(): Promise<ApiKey[]> {
  * password, and the reason the list can only ever show the 8-char prefix.
  */
 export async function createKey(opts: {
-  name: string;
-  scope: 'read' | 'read_write';
-  siteName: string | null;
-  createdBy: number;
+  name: string
+  scope: 'read' | 'read_write'
+  siteName: string | null
+  createdBy: number
 }): Promise<ApiKey & { secret: string }> {
-  const publicId = ulid();
-  const secret = `dt_${randomBytes(24).toString('base64url')}`;
-  const prefix = secret.slice(0, 8);
+  const publicId = ulid()
+  const secret = `dt_${randomBytes(24).toString('base64url')}`
+  const prefix = secret.slice(0, 8)
 
   const site = opts.siteName
-    ? await queryOne<RowDataPacket & { id: number }>('SELECT id FROM sites WHERE name = ?', [opts.siteName])
-    : null;
+    ? await queryOne<RowDataPacket & { id: number }>('SELECT id FROM sites WHERE name = ?', [
+        opts.siteName,
+      ])
+    : null
 
   await exec(
     `INSERT INTO api_keys (public_id, name, prefix, key_hash, scope, site_id, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [publicId, opts.name, prefix, sha256(secret), opts.scope, site?.id ?? null, opts.createdBy],
-  );
+  )
 
-  const row = await queryOne<KeyRow>(`${KEY_SELECT} WHERE k.public_id = ?`, [publicId]);
-  if (!row) throw new Error('api key insert did not round-trip');
-  return { ...toKey(row), secret };
+  const row = await queryOne<KeyRow>(`${KEY_SELECT} WHERE k.public_id = ?`, [publicId])
+  if (!row) throw new Error('api key insert did not round-trip')
+  return { ...toKey(row), secret }
 }
 
 export async function revokeKey(publicId: string): Promise<ApiKey | null> {
-  const row = await queryOne<KeyRow>(`${KEY_SELECT} WHERE k.public_id = ?`, [publicId]);
-  if (!row || row.revoked_at) return null;
+  const row = await queryOne<KeyRow>(`${KEY_SELECT} WHERE k.public_id = ?`, [publicId])
+  if (!row || row.revoked_at) return null
 
-  await exec('UPDATE api_keys SET revoked_at = NOW() WHERE public_id = ?', [publicId]);
-  const fresh = await queryOne<KeyRow>(`${KEY_SELECT} WHERE k.public_id = ?`, [publicId]);
-  return fresh ? toKey(fresh) : null;
+  await exec('UPDATE api_keys SET revoked_at = NOW() WHERE public_id = ?', [publicId])
+  const fresh = await queryOne<KeyRow>(`${KEY_SELECT} WHERE k.public_id = ?`, [publicId])
+  return fresh ? toKey(fresh) : null
 }
 
 /* ——— Webhooks ——— */
 
 interface HookRow extends RowDataPacket {
-  public_id: string;
-  url: string;
-  events: unknown;
-  status: 'active' | 'paused' | 'failing';
-  fail_count: number;
-  last_delivery_at: Date | null;
-  created_at: Date;
+  public_id: string
+  url: string
+  events: unknown
+  status: 'active' | 'paused' | 'failing'
+  fail_count: number
+  last_delivery_at: Date | null
+  created_at: Date
 }
 
 function toHook(row: HookRow): Webhook {
-  const raw = typeof row.events === 'string' ? safeParse(row.events) : row.events;
+  const raw = typeof row.events === 'string' ? safeParse(row.events) : row.events
   return {
     id: row.public_id,
     url: row.url,
@@ -114,43 +116,46 @@ function toHook(row: HookRow): Webhook {
     failCount: row.fail_count,
     lastDeliveryAt: row.last_delivery_at ? row.last_delivery_at.toISOString() : null,
     createdAt: row.created_at.toISOString(),
-  };
+  }
 }
 
 function safeParse(raw: string): unknown {
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw)
   } catch {
-    return null;
+    return null
   }
 }
 
 export async function listWebhooks(): Promise<Webhook[]> {
-  const rows = await query<HookRow>('SELECT * FROM webhooks ORDER BY created_at DESC');
-  return rows.map(toHook);
+  const rows = await query<HookRow>('SELECT * FROM webhooks ORDER BY created_at DESC')
+  return rows.map(toHook)
 }
 
 export async function createWebhook(url: string, events: string[]): Promise<Webhook> {
-  const publicId = ulid();
+  const publicId = ulid()
   // Signing secret, encrypted at rest like the TOTP secret. Deliveries carry an
   // HMAC of the body so a receiver can tell a real event from a replayed one.
-  const secret = encryptSecret(`whsec_${randomBytes(24).toString('base64url')}`);
+  const secret = encryptSecret(`whsec_${randomBytes(24).toString('base64url')}`)
 
   await exec('INSERT INTO webhooks (public_id, url, events, secret) VALUES (?, ?, ?, ?)', [
     publicId,
     url,
     JSON.stringify(events),
     secret,
-  ]);
+  ])
 
-  const row = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId]);
-  if (!row) throw new Error('webhook insert did not round-trip');
-  return toHook(row);
+  const row = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId])
+  if (!row) throw new Error('webhook insert did not round-trip')
+  return toHook(row)
 }
 
-export async function setWebhookStatus(publicId: string, status: 'active' | 'paused'): Promise<Webhook | null> {
-  const row = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId]);
-  if (!row) return null;
+export async function setWebhookStatus(
+  publicId: string,
+  status: 'active' | 'paused',
+): Promise<Webhook | null> {
+  const row = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId])
+  if (!row) return null
 
   // Resuming clears the failure counter — otherwise a hook that was fixed still
   // reads as "failing" until it happens to fail again.
@@ -159,21 +164,21 @@ export async function setWebhookStatus(publicId: string, status: 'active' | 'pau
       ? "UPDATE webhooks SET status = 'active', fail_count = 0 WHERE public_id = ?"
       : "UPDATE webhooks SET status = 'paused' WHERE public_id = ?",
     [publicId],
-  );
+  )
 
-  const fresh = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId]);
-  return fresh ? toHook(fresh) : null;
+  const fresh = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId])
+  return fresh ? toHook(fresh) : null
 }
 
 export async function deleteWebhook(publicId: string): Promise<boolean> {
-  const res = await exec('DELETE FROM webhooks WHERE public_id = ?', [publicId]);
-  return res.affectedRows > 0;
+  const res = await exec('DELETE FROM webhooks WHERE public_id = ?', [publicId])
+  return res.affectedRows > 0
 }
 
 export interface DeliveryResult {
-  delivered: boolean;
-  responseStatus: number | null;
-  hook: Webhook | null;
+  delivered: boolean
+  responseStatus: number | null
+  hook: Webhook | null
 }
 
 /**
@@ -185,18 +190,18 @@ export interface DeliveryResult {
  * someone to read a log.
  */
 export async function deliverTest(publicId: string): Promise<DeliveryResult> {
-  const row = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId]);
-  if (!row) return { delivered: false, responseStatus: null, hook: null };
+  const row = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId])
+  if (!row) return { delivered: false, responseStatus: null, hook: null }
 
   const body = JSON.stringify({
     event: 'ping',
     id: ulid(),
     sentAt: new Date().toISOString(),
     data: { message: 'DigitalTwin webhook test' },
-  });
+  })
 
-  let responseStatus: number | null = null;
-  let delivered = false;
+  let responseStatus: number | null = null
+  let delivered = false
 
   try {
     const response = await fetch(row.url, {
@@ -204,18 +209,18 @@ export async function deliverTest(publicId: string): Promise<DeliveryResult> {
       headers: { 'content-type': 'application/json', 'x-digitaltwin-event': 'ping' },
       body,
       signal: AbortSignal.timeout(5000),
-    });
-    responseStatus = response.status;
-    delivered = response.ok;
+    })
+    responseStatus = response.status
+    delivered = response.ok
   } catch {
-    delivered = false;
+    delivered = false
   }
 
   if (delivered) {
     await exec(
       "UPDATE webhooks SET last_delivery_at = NOW(), fail_count = 0, status = CASE WHEN status = 'failing' THEN 'active' ELSE status END WHERE public_id = ?",
       [publicId],
-    );
+    )
   } else {
     await exec(
       `UPDATE webhooks
@@ -223,9 +228,9 @@ export async function deliverTest(publicId: string): Promise<DeliveryResult> {
               status = CASE WHEN fail_count + 1 >= 3 AND status <> 'paused' THEN 'failing' ELSE status END
         WHERE public_id = ?`,
       [publicId],
-    );
+    )
   }
 
-  const fresh = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId]);
-  return { delivered, responseStatus, hook: fresh ? toHook(fresh) : null };
+  const fresh = await queryOne<HookRow>('SELECT * FROM webhooks WHERE public_id = ?', [publicId])
+  return { delivered, responseStatus, hook: fresh ? toHook(fresh) : null }
 }

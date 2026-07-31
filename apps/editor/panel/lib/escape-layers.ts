@@ -1,6 +1,6 @@
-'use client';
+'use client'
 
-import { useEffect } from 'react';
+import { useEffect } from 'react'
 
 /**
  * The Escape chain, as a stack.
@@ -19,17 +19,17 @@ import { useEffect } from 'react';
  * the chain is whatever the component tree already says it is — no layer needs
  * to know what is above or below it.
  */
-const layers: Array<() => void> = [];
-let listening = false;
+const layers: Array<() => void> = []
+let listening = false
 
 function onKeyDown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || layers.length === 0) return;
+  if (event.key !== 'Escape' || layers.length === 0) return
 
-  const top = layers[layers.length - 1];
-  event.preventDefault();
+  const top = layers[layers.length - 1]
+  event.preventDefault()
   // Stops a native listener further out from treating the same press as its own.
-  event.stopPropagation();
-  top?.();
+  event.stopPropagation()
+  top?.()
 }
 
 /**
@@ -37,24 +37,24 @@ function onKeyDown(event: KeyboardEvent): void {
  * the tests, which exercise the ordering rule without mounting React.
  */
 export function pushEscapeLayer(close: () => void): () => void {
-  layers.push(close);
+  layers.push(close)
 
   if (!listening) {
     // Capture phase, so the chain sees the press before anything inside the
     // dialog can swallow it.
-    window.addEventListener('keydown', onKeyDown, true);
-    listening = true;
+    window.addEventListener('keydown', onKeyDown, true)
+    listening = true
   }
 
   return () => {
-    const index = layers.lastIndexOf(close);
-    if (index !== -1) layers.splice(index, 1);
+    const index = layers.lastIndexOf(close)
+    if (index !== -1) layers.splice(index, 1)
 
     if (layers.length === 0 && listening) {
-      window.removeEventListener('keydown', onKeyDown, true);
-      listening = false;
+      window.removeEventListener('keydown', onKeyDown, true)
+      listening = false
     }
-  };
+  }
 }
 
 /**
@@ -66,12 +66,12 @@ export function pushEscapeLayer(close: () => void): () => void {
  */
 export function useEscapeLayer(active: boolean, onClose: () => void): void {
   useEffect(() => {
-    if (!active) return;
-    return pushEscapeLayer(onClose);
-  }, [active, onClose]);
+    if (!active) return
+    return pushEscapeLayer(onClose)
+  }, [active, onClose])
 }
 
 /** Test seam: how many layers are currently open. */
 export function openLayerCount(): number {
-  return layers.length;
+  return layers.length
 }

@@ -1,9 +1,9 @@
-'use client';
+'use client'
 
-import type { ReactNode } from 'react';
-import { GlowBlobs, GridBackdrop } from '@panel/components/ui/backdrop';
-import { LangToggle, ThemeToggle } from '@panel/components/ui/controls';
-import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint';
+import { GlowBlobs, GridBackdrop } from '@panel/components/ui/backdrop'
+import { LangToggle, ThemeToggle } from '@panel/components/ui/controls'
+import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint'
+import type { ReactNode } from 'react'
 
 /**
  * The shared frame for the six single-column auth screens (sign-in has its own
@@ -16,11 +16,11 @@ export function AuthShell({
   label,
   paused = false,
 }: {
-  children: ReactNode;
-  label: string;
-  paused?: boolean;
+  children: ReactNode
+  label: string
+  paused?: boolean
 }) {
-  const { isMobile } = useBreakpoint();
+  const { isMobile } = useBreakpoint()
 
   return (
     <div
@@ -45,16 +45,22 @@ export function AuthShell({
         {children}
       </main>
     </div>
-  );
+  )
 }
 
 /** The mono signature line that closes every auth screen. */
-export function AuthFooter({ protectedUpper, signature }: { protectedUpper: string; signature: string }) {
+export function AuthFooter({
+  protectedUpper,
+  signature,
+}: {
+  protectedUpper: string
+  signature: string
+}) {
   return (
     // No text-transform here: one uppercase pass over mixed Turkish and brand
     // text is always wrong for half of it, so the literals carry their own case.
     <p className="m-0 font-mono text-[9px] leading-[1.6] tracking-[0.1em] text-muted-fg">
       {protectedUpper} · {signature}
     </p>
-  );
+  )
 }

@@ -1,73 +1,75 @@
-'use client';
+'use client'
 
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useApp } from '@panel/components/app-providers';
-import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell';
-import { OtpInput } from '@panel/components/auth/otp-input';
-import { Button, AuthCard, Checkbox } from '@panel/components/ui/controls';
-import { ErrorBox, Kicker, ScreenTitle } from '@panel/components/ui/feedback';
-import { call } from '@panel/lib/client-api';
-import type { MfaVerifyResponse, SessionResponse } from '@panel/lib/api-contract';
-import { resolveApiMessage } from '@panel/lib/i18n';
-import { Caps } from '@panel/components/ui/caps';
+import { useApp } from '@panel/components/app-providers'
+import { AuthFooter, AuthShell } from '@panel/components/auth/auth-shell'
+import { OtpInput } from '@panel/components/auth/otp-input'
+import { Caps } from '@panel/components/ui/caps'
+import { AuthCard, Button, Checkbox } from '@panel/components/ui/controls'
+import { ErrorBox, Kicker, ScreenTitle } from '@panel/components/ui/feedback'
+import type { MfaVerifyResponse, SessionResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { resolveApiMessage } from '@panel/lib/i18n'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
 
 export function MfaVerifyScreen() {
-  const { t } = useApp();
-  const router = useRouter();
+  const { t } = useApp()
+  const router = useRouter()
 
-  const [code, setCode] = useState<string[]>(Array(6).fill(''));
-  const [trustDevice, setTrustDevice] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [resent, setResent] = useState(false);
-  const [account, setAccount] = useState('');
+  const [code, setCode] = useState<string[]>(Array(6).fill(''))
+  const [trustDevice, setTrustDevice] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [resent, setResent] = useState(false)
+  const [account, setAccount] = useState('')
 
   // The half-open session already knows who is signing in — showing the address
   // here is what makes "Use another account" a meaningful offer.
   useEffect(() => {
     void call<SessionResponse>('/api/auth/session').then((res) => {
-      if (!res.ok) return;
+      if (!res.ok) return
       if (res.data.state === 'anonymous') {
-        router.replace('/signin');
-        return;
+        router.replace('/signin')
+        return
       }
-      if (res.data.user) setAccount(res.data.user.email);
-    });
-  }, [router]);
+      if (res.data.user) setAccount(res.data.user.email)
+    })
+  }, [router])
 
   const verify = useCallback(
     async (joined?: string) => {
-      const value = joined ?? code.join('');
+      const value = joined ?? code.join('')
       if (value.length !== 6) {
-        setError(t.errCode);
-        return;
+        setError(t.errCode)
+        return
       }
 
-      setBusy(true);
-      setError(null);
+      setBusy(true)
+      setError(null)
       const res = await call<MfaVerifyResponse>('/api/mfa/verify', {
         body: { code: value, trustDevice },
-      });
-      setBusy(false);
+      })
+      setBusy(false)
 
       if (!res.ok) {
         setError(
-          resolveApiMessage(t, res.messageKey, { seconds: Number(res.details.retryAfterSeconds ?? 30) }),
-        );
-        setCode(Array(6).fill(''));
-        return;
+          resolveApiMessage(t, res.messageKey, {
+            seconds: Number(res.details.retryAfterSeconds ?? 30),
+          }),
+        )
+        setCode(Array(6).fill(''))
+        return
       }
 
-      router.push(res.data.state === 'firstSignIn' ? '/welcome' : '/console/overview');
+      router.push(res.data.state === 'firstSignIn' ? '/welcome' : '/console/overview')
     },
     [code, trustDevice, router, t],
-  );
+  )
 
   const signOutAndRestart = useCallback(async () => {
-    await call('/api/auth/signout', { body: { allDevices: false } });
-    router.push('/signin');
-  }, [router]);
+    await call('/api/auth/signout', { body: { allDevices: false } })
+    router.push('/signin')
+  }, [router])
 
   return (
     <AuthShell label="Two-factor verification">
@@ -80,7 +82,12 @@ export function MfaVerifyScreen() {
 
         {error ? <ErrorBox shield={false}>{error}</ErrorBox> : null}
 
-        <OtpInput value={code} onChange={setCode} onComplete={(joined) => void verify(joined)} invalid={Boolean(error)} />
+        <OtpInput
+          value={code}
+          onChange={setCode}
+          onComplete={(joined) => void verify(joined)}
+          invalid={Boolean(error)}
+        />
 
         <Checkbox checked={trustDevice} onChange={setTrustDevice}>
           {t.trustDevice}
@@ -128,5 +135,5 @@ export function MfaVerifyScreen() {
 
       <AuthFooter protectedUpper={t.protectedUpper} signature={t.signature} />
     </AuthShell>
-  );
+  )
 }

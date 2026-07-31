@@ -1,16 +1,16 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useApp } from '@panel/components/app-providers';
-import { Caps } from '@panel/components/ui/caps';
-import { SegBar, SegButton } from '@panel/components/ui/controls';
-import { call } from '@panel/lib/client-api';
-import type { CreateUserResponse } from '@panel/lib/api-contract';
-import { resolveApiMessage } from '@panel/lib/i18n';
-import type { UserV3 } from '@panel/lib/types';
-import { cn } from '@panel/lib/cn';
+import { useApp } from '@panel/components/app-providers'
+import { Caps } from '@panel/components/ui/caps'
+import { SegBar, SegButton } from '@panel/components/ui/controls'
+import type { CreateUserResponse } from '@panel/lib/api-contract'
+import { call } from '@panel/lib/client-api'
+import { cn } from '@panel/lib/cn'
+import { resolveApiMessage } from '@panel/lib/i18n'
+import type { UserV3 } from '@panel/lib/types'
+import { useState } from 'react'
 
-const DOMAIN = '@netlog.com.tr';
+const DOMAIN = '@netlog.com.tr'
 
 /**
  * Inline "add user" row. Notably it does NOT take a password: the account is
@@ -24,28 +24,28 @@ export function InviteForm({
   onCreated,
   onError,
 }: {
-  roles: string[];
-  sites: string[];
-  onCancel: () => void;
-  onCreated: (user: UserV3) => void;
-  onError: (message: string) => void;
+  roles: string[]
+  sites: string[]
+  onCancel: () => void
+  onCreated: (user: UserV3) => void
+  onError: (message: string) => void
 }) {
-  const { t } = useApp();
+  const { t } = useApp()
 
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
-  const [role, setRole] = useState(roles.includes('Editor') ? 'Editor' : (roles[0] ?? 'Viewer'));
-  const [org, setOrg] = useState<'internal' | 'external'>('internal');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [fullName, setFullName] = useState('')
+  const [username, setUsername] = useState('')
+  const [role, setRole] = useState(roles.includes('Editor') ? 'Editor' : (roles[0] ?? 'Viewer'))
+  const [org, setOrg] = useState<'internal' | 'external'>('internal')
+  const [selected, setSelected] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
 
   const submit = async () => {
     if (!fullName.trim() || !username.trim()) {
-      onError(t.errFields);
-      return;
+      onError(t.errFields)
+      return
     }
 
-    setBusy(true);
+    setBusy(true)
     const res = await call<CreateUserResponse>('/api/users', {
       body: {
         fullName: fullName.trim(),
@@ -54,15 +54,15 @@ export function InviteForm({
         org,
         siteNames: selected,
       },
-    });
-    setBusy(false);
+    })
+    setBusy(false)
 
     if (!res.ok) {
-      onError(resolveApiMessage(t, res.messageKey));
-      return;
+      onError(resolveApiMessage(t, res.messageKey))
+      return
     }
-    onCreated(res.data.user);
-  };
+    onCreated(res.data.user)
+  }
 
   return (
     <div
@@ -70,7 +70,9 @@ export function InviteForm({
       style={{ animation: 'dtDrop 0.16s ease' }}
     >
       <div className="flex min-w-[132px] flex-1 flex-col gap-[5px]">
-        <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.inviteFullName}</Caps>
+        <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+          {t.inviteFullName}
+        </Caps>
         <input
           type="text"
           placeholder={t.egName}
@@ -81,7 +83,9 @@ export function InviteForm({
       </div>
 
       <div className="flex min-w-[190px] flex-1 flex-col gap-[5px]">
-        <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.inviteEmail}</Caps>
+        <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+          {t.inviteEmail}
+        </Caps>
         <div className="flex min-w-0 items-center overflow-hidden rounded-[8px] border border-input bg-field focus-within:border-ring">
           <input
             type="text"
@@ -100,11 +104,7 @@ export function InviteForm({
         <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.inviteRole}</Caps>
         <SegBar>
           {roles.map((name) => (
-            <SegButton
-              key={name}
-              active={role === name}
-              onClick={() => setRole(name)}
-            >
+            <SegButton key={name} active={role === name} onClick={() => setRole(name)}>
               {name}
             </SegButton>
           ))}
@@ -124,18 +124,24 @@ export function InviteForm({
       </div>
 
       <div className="flex w-full flex-col gap-[5px]">
-        <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">{t.inviteSites}</Caps>
+        <Caps className="font-mono text-[9px] tracking-[0.12em] text-muted-fg">
+          {t.inviteSites}
+        </Caps>
         <div className="flex flex-wrap gap-[6px]">
           {sites.map((site) => {
-            const on = selected.includes(site);
+            const on = selected.includes(site)
             return (
               <button
                 key={site}
                 type="button"
-                onClick={() => setSelected((prev) => (on ? prev.filter((s) => s !== site) : [...prev, site]))}
+                onClick={() =>
+                  setSelected((prev) => (on ? prev.filter((s) => s !== site) : [...prev, site]))
+                }
                 className={cn(
                   'flex h-[28px] items-center gap-2 rounded-[7px] border px-[9px] text-[11.5px]',
-                  on ? 'border-brand bg-field text-fg' : 'border-border bg-transparent text-muted-fg',
+                  on
+                    ? 'border-brand bg-field text-fg'
+                    : 'border-border bg-transparent text-muted-fg',
                 )}
               >
                 <span
@@ -146,7 +152,7 @@ export function InviteForm({
                 />
                 {site}
               </button>
-            );
+            )
           })}
         </div>
       </div>
@@ -169,5 +175,5 @@ export function InviteForm({
         </button>
       </div>
     </div>
-  );
+  )
 }

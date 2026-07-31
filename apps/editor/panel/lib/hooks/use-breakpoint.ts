@@ -1,6 +1,6 @@
-'use client';
+'use client'
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react'
 
 /**
  * Breakpoints are measured in JS against the real viewport, not declared in CSS
@@ -17,15 +17,15 @@ import { useEffect, useState } from 'react';
  * mobile landscape, both of which produced oversized controls when it did.
  */
 export interface Breakpoint {
-  width: number;
-  isDesktop: boolean;
-  isWide: boolean;
-  isNarrow: boolean;
-  isMobile: boolean;
+  width: number
+  isDesktop: boolean
+  isWide: boolean
+  isNarrow: boolean
+  isMobile: boolean
   /** Touch sizing gate — mobile portrait only. */
-  touch: boolean;
+  touch: boolean
   /** False until the first measurement, so SSR and hydration agree. */
-  ready: boolean;
+  ready: boolean
 }
 
 const SSR: Breakpoint = {
@@ -36,11 +36,11 @@ const SSR: Breakpoint = {
   isMobile: false,
   touch: false,
   ready: false,
-};
+}
 
 function measure(width: number): Breakpoint {
-  const isDesktop = width >= 1080;
-  const isMobile = width < 700;
+  const isDesktop = width >= 1080
+  const isMobile = width < 700
   return {
     width,
     isDesktop,
@@ -49,21 +49,21 @@ function measure(width: number): Breakpoint {
     isMobile,
     touch: isMobile,
     ready: true,
-  };
+  }
 }
 
 export function useBreakpoint(): Breakpoint {
-  const [state, setState] = useState<Breakpoint>(SSR);
+  const [state, setState] = useState<Breakpoint>(SSR)
 
   useEffect(() => {
-    const update = () => setState(measure(window.innerWidth));
-    update();
+    const update = () => setState(measure(window.innerWidth))
+    update()
 
     // resize covers orientation changes on every browser that matters; a
     // dedicated orientationchange listener would just fire a duplicate.
-    window.addEventListener('resize', update, { passive: true });
-    return () => window.removeEventListener('resize', update);
-  }, []);
+    window.addEventListener('resize', update, { passive: true })
+    return () => window.removeEventListener('resize', update)
+  }, [])
 
-  return state;
+  return state
 }
