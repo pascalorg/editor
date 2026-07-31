@@ -34,12 +34,27 @@ Everything is the default except the output directory.
 |---|---|
 | `PASCAL_MYSQL_URL` | `mysql://user:password@localhost:3306/database` |
 
-Without it the app falls back to a SQLite file under `~/.pascal/data`, which
-the host discards on every release. With it, scenes are stored in MySQL and
-survive redeploys; the three tables are created on first connection.
+or, if the panel mangles URL values, the separate fields:
 
-Percent-encode any of `@ : / ? # [ ] %` that appear in the password — `@`
-becomes `%40`, `#` becomes `%23`.
+| Name | Value |
+|---|---|
+| `PASCAL_MYSQL_HOST` | `localhost` |
+| `PASCAL_MYSQL_USER` | database user |
+| `PASCAL_MYSQL_PASSWORD` | database password |
+| `PASCAL_MYSQL_DATABASE` | database name |
+| `PASCAL_MYSQL_PORT` | `3306` (optional) |
+
+**MySQL is required.** Without a database configured the server refuses to
+start — check the runtime log for the reason. Tables are created on first
+connection. `/api/health` reports the selected backend
+(`"backend":"mysql"`) and whether the database answers (`"db":"ok"`), so one
+curl verifies a deploy. Setting `PASCAL_ALLOW_SQLITE=1` overrides the
+requirement, writing scenes to a local file the host discards on every
+release — never set it here.
+
+In `PASCAL_MYSQL_URL`, percent-encode any of `@ : / ? # [ ] %` that appear in
+the password — `@` becomes `%40`, `#` becomes `%23`. The separate fields need
+no encoding.
 
 ## Layout
 

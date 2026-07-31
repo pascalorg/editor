@@ -1,5 +1,5 @@
 import { resolveMysqlUrl } from './mysql-scene-store'
-import type { SceneStore } from './types'
+import { SceneInvalidError, type SceneStore } from './types'
 
 export * from './mysql-scene-store'
 export * from './slug'
@@ -13,8 +13,10 @@ export * from './types'
  * `~/.pascal/data/pascal.db`; set `PASCAL_DB_PATH` for an exact file path or
  * `PASCAL_DATA_DIR` for a directory containing `pascal.db`.
  *
- * Set `PASCAL_MYSQL_URL` to store scenes in MySQL instead — the backend for
- * hosts whose filesystem does not survive a redeploy.
+ * Set `PASCAL_MYSQL_URL` (or the HOST/USER/DATABASE trio) to store scenes in
+ * MySQL. In production MySQL is required: a host's filesystem rarely survives
+ * a redeploy, so silently writing to a local file loses every scene. Set
+ * `PASCAL_ALLOW_SQLITE=1` to override for throwaway production runs.
  */
 export async function createSceneStore(env?: NodeJS.ProcessEnv): Promise<SceneStore> {
   const resolved = env ?? process.env
@@ -22,13 +24,25 @@ export async function createSceneStore(env?: NodeJS.ProcessEnv): Promise<SceneSt
   if (mysqlUrl) {
     const mod = await import('./mysql-scene-store')
     const store = new mod.MysqlSceneStore({ env })
-    console.log(`[pascal:storage] backend=mysql ${describeMysqlTarget(mysqlUrl)}`)
+    console.log(`[digitaltwin:storage] backend=mysql ${describeMysqlTarget(mysqlUrl)}`)
     return store
   }
+
+  if (resolved.NODE_ENV === 'production' && resolved.PASCAL_ALLOW_SQLITE !== '1') {
+    throw new SceneInvalidError(
+      'No MySQL configuration found, and the SQLite fallback is disabled in production ' +
+        'because scenes written to the local filesystem are lost on redeploy. ' +
+        'Set PASCAL_MYSQL_URL (mysql://user:password@host:3306/database) or all of ' +
+        'PASCAL_MYSQL_HOST, PASCAL_MYSQL_USER and PASCAL_MYSQL_DATABASE ' +
+        '(plus PASCAL_MYSQL_PASSWORD/_PORT as needed). ' +
+        'Only set PASCAL_ALLOW_SQLITE=1 for a throwaway local production run.',
+    )
+  }
+
   const mod = await import('./sqlite-scene-store')
   const store = new mod.SqliteSceneStore({ env })
   console.log(
-    `[pascal:storage] backend=sqlite path=${store.databasePath} (set PASCAL_MYSQL_URL to use MySQL)`,
+    `[digitaltwin:storage] backend=sqlite path=${store.databasePath} (set PASCAL_MYSQL_URL to use MySQL)`,
   )
   return store
 }

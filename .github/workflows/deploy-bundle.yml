@@ -21,6 +21,19 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: digitaltwin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -64,18 +77,38 @@ jobs:
           cp .github/deploy/README.md bundle/README.md
           printf 'node_modules/\n' > bundle/.gitignore
 
-      - name: Smoke test
+      # MySQL is required in production: with no database configured the
+      # server must refuse to boot rather than silently write to a local
+      # SQLite file the host wipes on release.
+      - name: Smoke test — boot without a database must fail
         run: |
           cd bundle
           npm install --no-audit --no-fund
           npm run build
+          set +e
+          timeout 20 node server.js
+          status=$?
+          set -e
+          if [ "$status" = "0" ] || [ "$status" = "124" ]; then
+            echo "server started (or kept running) without a database; expected a startup failure"
+            exit 1
+          fi
+          echo "refused to boot without a database (exit $status), as intended"
+
+      - name: Smoke test — serve against MySQL
+        env:
+          PASCAL_MYSQL_URL: mysql://root@127.0.0.1:3306/digitaltwin
+        run: |
+          cd bundle
           node server.js &
           for _ in $(seq 1 30); do
             sleep 2
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/health || true)
-            [ "$code" = "200" ] && break
+            body=$(curl -s http://127.0.0.1:3000/api/health || true)
+            echo "$body" | grep -q '"status":"ok"' && break
           done
-          test "$code" = "200" || { echo "health check failed: $code"; exit 1; }
+          echo "health: $body"
+          echo "$body" | grep -q '"backend":"mysql"' || { echo "expected backend=mysql"; exit 1; }
+          echo "$body" | grep -q '"db":"ok"' || { echo "expected db=ok"; exit 1; }
           curl -sf -o /dev/null http://127.0.0.1:3000/ || { echo "home page failed"; exit 1; }
 
       - name: Publish

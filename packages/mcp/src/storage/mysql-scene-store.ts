@@ -98,18 +98,39 @@ const SCENE_COLUMNS =
  * `PASCAL_MYSQL_HOST`/`_USER`/`_PASSWORD`/`_DATABASE`/`_PORT`. The separate
  * variables exist because control panels hand out those fields individually,
  * and some mangle a value containing `://` and `@`.
+ *
+ * A partially configured trio throws instead of returning undefined: someone
+ * clearly meant to point at MySQL, and silently falling back to SQLite loses
+ * their data on the next release.
  */
 export function resolveMysqlUrl(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const raw = env.PASCAL_MYSQL_URL
-  if (raw && raw.length > 0) return raw
+  const read = (name: string): string | undefined => {
+    const value = env[name]?.trim()
+    return value && value.length > 0 ? value : undefined
+  }
 
-  const host = env.PASCAL_MYSQL_HOST
-  const user = env.PASCAL_MYSQL_USER
-  const database = env.PASCAL_MYSQL_DATABASE
-  if (!host || !user || !database) return undefined
+  const raw = read('PASCAL_MYSQL_URL')
+  if (raw) return raw
 
-  const password = env.PASCAL_MYSQL_PASSWORD ?? ''
-  const port = env.PASCAL_MYSQL_PORT ?? '3306'
+  const host = read('PASCAL_MYSQL_HOST')
+  const user = read('PASCAL_MYSQL_USER')
+  const database = read('PASCAL_MYSQL_DATABASE')
+  if (!host && !user && !database) return undefined
+  if (!host || !user || !database) {
+    const missing = [
+      !host && 'PASCAL_MYSQL_HOST',
+      !user && 'PASCAL_MYSQL_USER',
+      !database && 'PASCAL_MYSQL_DATABASE',
+    ].filter(Boolean)
+    throw new SceneInvalidError(
+      `Incomplete MySQL configuration: missing ${missing.join(', ')}. ` +
+        'Set all of PASCAL_MYSQL_HOST, PASCAL_MYSQL_USER and PASCAL_MYSQL_DATABASE ' +
+        '(plus PASCAL_MYSQL_PASSWORD/_PORT as needed), or a single PASCAL_MYSQL_URL.',
+    )
+  }
+
+  const password = read('PASCAL_MYSQL_PASSWORD') ?? ''
+  const port = read('PASCAL_MYSQL_PORT') ?? '3306'
   return `mysql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`
 }
 
@@ -216,7 +237,6 @@ export class MysqlSceneStore implements SceneStore {
 
   private readonly url: string
   private readonly maxSceneBytes: number
-  private readonly projectPlaceholders = new Map<string, ProjectPlaceholder>()
   private pool: MysqlPool | null = null
   private poolPromise: Promise<MysqlPool> | null = null
 
@@ -249,7 +269,18 @@ export class MysqlSceneStore implements SceneStore {
       createdAt: now,
       updatedAt: now,
     }
-    this.projectPlaceholders.set(id, project)
+    try {
+      await pool.execute(
+        `INSERT INTO project_placeholders (id, name, owner_id, thumbnail_url, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [id, project.name, project.ownerId, project.thumbnailUrl, now, now],
+      )
+    } catch (err) {
+      if ((err as { code?: string })?.code === 'ER_DUP_ENTRY') {
+        throw new SceneInvalidError(`Project with id "${id}" already exists`)
+      }
+      throw err
+    }
     return placeholderToProjectStatus(project)
   }
 
@@ -258,7 +289,7 @@ export class MysqlSceneStore implements SceneStore {
     const safeId = sanitizeSlug(id)
     const row = await this.getRow(pool, safeId)
     if (row) return rowToProjectStatus(row)
-    const placeholder = this.projectPlaceholders.get(safeId)
+    const placeholder = await this.getPlaceholder(pool, safeId)
     return placeholder ? placeholderToProjectStatus(placeholder) : null
   }
 
@@ -276,7 +307,7 @@ export class MysqlSceneStore implements SceneStore {
       }
 
       const existing = await this.getRow(conn, id, { forUpdate: true })
-      const placeholder = this.projectPlaceholders.get(id)
+      const placeholder = await this.getPlaceholder(conn, id, { forUpdate: true })
 
       if (existing && providedId !== undefined && opts.expectedVersion === undefined) {
         throw new SceneInvalidError(
@@ -369,7 +400,7 @@ export class MysqlSceneStore implements SceneStore {
         [id, version, graphJson, 'mcp', ownerId, now],
       )
 
-      this.projectPlaceholders.delete(id)
+      await conn.execute('DELETE FROM project_placeholders WHERE id = ?', [id])
 
       return {
         id,
@@ -609,6 +640,17 @@ export class MysqlSceneStore implements SceneStore {
     `)
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS project_placeholders (
+        id VARCHAR(64) NOT NULL PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        owner_id VARCHAR(64) NULL,
+        thumbnail_url TEXT NULL,
+        created_at VARCHAR(32) NOT NULL,
+        updated_at VARCHAR(32) NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `)
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS scene_events (
         event_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         scene_id VARCHAR(64) NOT NULL,
@@ -640,6 +682,35 @@ export class MysqlSceneStore implements SceneStore {
       throw err
     } finally {
       conn.release()
+    }
+  }
+
+  private async getPlaceholder(
+    queryable: MysqlQueryable,
+    id: string,
+    opts: { forUpdate?: boolean } = {},
+  ): Promise<ProjectPlaceholder | null> {
+    const [result] = await queryable.execute(
+      `SELECT id, name, owner_id, thumbnail_url, created_at, updated_at
+         FROM project_placeholders WHERE id = ?${opts.forUpdate ? ' FOR UPDATE' : ''}`,
+      [id],
+    )
+    const row = firstRow<{
+      id: string
+      name: string
+      owner_id: string | null
+      thumbnail_url: string | null
+      created_at: string
+      updated_at: string
+    }>(result)
+    if (!row) return null
+    return {
+      id: row.id,
+      name: row.name,
+      ownerId: row.owner_id,
+      thumbnailUrl: row.thumbnail_url,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     }
   }
 

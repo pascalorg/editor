@@ -198,7 +198,6 @@ export class SqliteSceneStore implements SceneStore {
   readonly databasePath: string
 
   private readonly maxSceneBytes: number
-  private readonly projectPlaceholders = new Map<string, ProjectPlaceholder>()
   private db: SqliteDatabase | null = null
   private dbPromise: Promise<SqliteDatabase> | null = null
 
@@ -227,7 +226,10 @@ export class SqliteSceneStore implements SceneStore {
       createdAt: now,
       updatedAt: now,
     }
-    this.projectPlaceholders.set(id, project)
+    db.query(
+      `INSERT INTO project_placeholders (id, name, owner_id, thumbnail_url, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(id, project.name, project.ownerId, project.thumbnailUrl, now, now)
     return placeholderToProjectStatus(project)
   }
 
@@ -236,7 +238,7 @@ export class SqliteSceneStore implements SceneStore {
     const safeId = sanitizeSlug(id)
     const row = this.getRow(db, safeId)
     if (row) return rowToProjectStatus(row)
-    const placeholder = this.projectPlaceholders.get(safeId)
+    const placeholder = this.getPlaceholder(db, safeId)
     return placeholder ? placeholderToProjectStatus(placeholder) : null
   }
 
@@ -254,7 +256,7 @@ export class SqliteSceneStore implements SceneStore {
       }
 
       const existing = this.getRow(db, id)
-      const placeholder = this.projectPlaceholders.get(id)
+      const placeholder = this.getPlaceholder(db, id)
 
       if (existing && providedId !== undefined && opts.expectedVersion === undefined) {
         throw new SceneInvalidError(
@@ -340,7 +342,7 @@ export class SqliteSceneStore implements SceneStore {
          ) VALUES (?, ?, ?, ?, ?, ?)`,
       ).run(id, version, graphJson, 'mcp', ownerId, now)
 
-      this.projectPlaceholders.delete(id)
+      db.query('DELETE FROM project_placeholders WHERE id = ?').run(id)
 
       return {
         id,
@@ -561,6 +563,15 @@ export class SqliteSceneStore implements SceneStore {
         FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS project_placeholders (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        owner_id TEXT,
+        thumbnail_url TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS scene_events (
         event_id INTEGER PRIMARY KEY AUTOINCREMENT,
         scene_id TEXT NOT NULL,
@@ -590,6 +601,32 @@ export class SqliteSceneStore implements SceneStore {
         // Ignore rollback errors so the original failure is preserved.
       }
       throw err
+    }
+  }
+
+  private getPlaceholder(db: SqliteDatabase, id: string): ProjectPlaceholder | null {
+    const row = db
+      .query(
+        `SELECT id, name, owner_id, thumbnail_url, created_at, updated_at
+           FROM project_placeholders
+          WHERE id = ?`,
+      )
+      .get(id) as {
+      id: string
+      name: string
+      owner_id: string | null
+      thumbnail_url: string | null
+      created_at: string
+      updated_at: string
+    } | null
+    if (!row) return null
+    return {
+      id: row.id,
+      name: row.name,
+      ownerId: row.owner_id,
+      thumbnailUrl: row.thumbnail_url,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     }
   }
 
