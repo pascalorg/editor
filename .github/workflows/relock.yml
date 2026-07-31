@@ -40,4 +40,4 @@ jobs:
           git commit -m 'chore: regenerate bun.lock on a real runner'
           git push
 
-# relock: 9e1b525b (rack level table)
+# relock: types for qrcode + nodemailer
