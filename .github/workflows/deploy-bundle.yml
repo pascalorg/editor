@@ -41,13 +41,22 @@ jobs:
         with:
           bun-version: 1.3.0
 
-      # The plugin is pinned over ssh; rewrite it to an authenticated https
-      # URL so the runner can fetch it whether or not the repo is public.
-      - name: Allow git dependencies over https
+      # plugin-warehouse is a private repository, so the runner needs a key to
+      # clone it. An ssh key rather than a token because bun shells out to
+      # `git clone` for a git+ssh dependency and ignores git's own url rewriting
+      # — verified, a `url.insteadOf` rule has no effect on its clones.
+      - name: Authorize the private plugin repository
+        env:
+          PLUGIN_SSH_KEY: ${{ secrets.PLUGIN_SSH_KEY }}
         run: |
-          git config --global \
-            url."https://x-access-token:${{ secrets.DEPLOY_TOKEN }}@github.com/".insteadOf \
-            "ssh://git@github.com/"
+          if [ -z "$PLUGIN_SSH_KEY" ]; then
+            echo "PLUGIN_SSH_KEY is not set — the private plugin will fail to resolve."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$PLUGIN_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
 
       # The hoisted linker keeps the standalone output free of symlinks, which
       # break once the host moves the deployed directory.
