@@ -22,6 +22,11 @@ export function AuthMenu() {
 
   return (
     <div className="flex items-center gap-2 text-sm">
+      {user.role === 'admin' && (
+        <a href="/admin" className="rounded-md border border-border px-3 py-1.5 font-medium">
+          Admin
+        </a>
+      )}
       <span className="text-neutral-500">{user.email}</span>
       <button
         type="button"
