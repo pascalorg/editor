@@ -131,6 +131,23 @@ export const tr: Dictionary = {
     'Sistemde hâlâ bu hesaba işaret eden kayıtlar var (oluşturduğu sahalar, gönderdiği davetler). Veritabanı, bu kayıtların silmeden sonra da yaşamasını sağlayan göçü henüz uygulamamış — göçlerin çalışması için uygulamayı yeniden başlatıp tekrar deneyin.',
   inviteMailFailed:
     'hesap oluşturuldu, ancak davet e-postası gönderilemedi. Posta çalışır hâle geldiğinde hesaptaki Yeniden gönder düğmesini kullanın.',
+  errExternalNotAllowed:
+    'Dış hesaplar kapalı. Ayarlar → Kimlik bölümünden açın ya da bu kişiyi kurum içi olarak onaylayın.',
+  errInviteNotResendable:
+    'Bu davet artık yeniden gönderilemez — ya kabul edilmiş ya da iptal edilmiş.',
+  errInviteNotRevocable:
+    'Bu davet artık iptal edilemez — ya kabul edilmiş ya da zaten iptal edilmiş.',
+  errJobNotCancellable: 'Yalnızca kuyruktaki veya çalışan bir iş iptal edilebilir.',
+  errJobNotRetryable: 'Yalnızca başarısız veya iptal edilmiş bir iş yeniden denenebilir.',
+  errKeyNotRevocable: 'Bu API anahtarı zaten iptal edilmiş.',
+  errMfaAlreadyEnrolled:
+    'Bu hesapta iki adımlı doğrulama zaten kurulu. Yeniden kurmak için önce kaldırın.',
+  errNotFound: 'Bu kayıt artık yok — başka bir oturumda silinmiş olabilir.',
+  errRequestDecided: 'Bu erişim talebi başka bir yönetici tarafından zaten sonuçlandırılmış.',
+  errRoleExists: 'Bu adda bir rol zaten var.',
+  errSiteStateUnchanged: 'Bu saha zaten bu durumda.',
+  errSystemRoleLocked: 'Yerleşik roller düzenlenemez veya silinemez.',
+  errUserExists: 'Bu e-posta adresi veya kullanıcı adı zaten kullanımda.',
   errMailFailed:
     'İleti gönderilemedi. SMTP sunucusunu, kapısını ve kimlik bilgilerini denetleyin — nedeni sunucu günlüğünde.',
   capsLock: 'Caps Lock açık',

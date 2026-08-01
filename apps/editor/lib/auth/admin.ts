@@ -6,7 +6,6 @@ export interface AdminUser {
   email: string
   role: 'user' | 'admin'
   createdAt: string
-  sceneCount: number
 }
 
 /** The current user if they are an admin, otherwise null. */
@@ -20,7 +19,6 @@ interface UserRow {
   email: string
   global_role: string
   created_at: string
-  scene_count: number | string
 }
 
 /**
@@ -31,19 +29,22 @@ interface UserRow {
  */
 export async function listUsers(): Promise<AdminUser[]> {
   const pool = await getAuthPool()
+  // No scene count here. It used to carry a correlated COUNT(*) over `scenes`
+  // per user — and because the collation split forces CONVERT() on the join
+  // column, that count could not seek `scenes_owner_updated_idx` and scanned
+  // the index once per account. The only caller maps these rows to {id, email}
+  // and throws the number away, so it was pure cost.
   const [rows] = await pool.query(`
-    SELECT u.public_id AS id, u.email, u.global_role, u.created_at,
-           (SELECT COUNT(*) FROM scenes s
-            WHERE CONVERT(s.owner_id USING utf8mb4) = CONVERT(u.public_id USING utf8mb4)) AS scene_count
+    SELECT u.public_id AS id, u.email, u.global_role, u.created_at
       FROM users u
      ORDER BY u.created_at DESC
+     LIMIT 500
   `)
   return (Array.isArray(rows) ? (rows as UserRow[]) : []).map((r) => ({
     id: r.id,
     email: r.email,
     role: r.global_role === 'Admin' ? 'admin' : 'user',
     createdAt: String(r.created_at),
-    sceneCount: Number(r.scene_count),
   }))
 }
 

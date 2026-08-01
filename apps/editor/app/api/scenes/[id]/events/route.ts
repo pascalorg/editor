@@ -1,3 +1,5 @@
+import { authorizeSceneRead } from '@/lib/auth/guard'
+import { publishedSceneIds } from '@/lib/auth/site-scenes'
 import {
   guardSceneApiRequest,
   sceneApiJson,
@@ -34,6 +36,14 @@ export async function GET(request: Request, { params }: RouteParams) {
   if (!scene) {
     return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
   }
+
+  // Same rule as the single-scene read: this stream carries the full graph of
+  // every revision, so an unauthorised subscriber would get the drawing plus
+  // a live feed of the work as it happens.
+  const auth = await authorizeSceneRead(scene.ownerId ?? null, {
+    published: (await publishedSceneIds()).has(id),
+  })
+  if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
 
   const url = new URL(request.url)
   const afterFromQuery = Number.parseInt(url.searchParams.get('after') ?? '0', 10)

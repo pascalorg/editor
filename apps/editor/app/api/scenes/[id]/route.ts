@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { authorizeSceneMutation } from '@/lib/auth/guard'
+import { authorizeSceneMutation, authorizeSceneRead } from '@/lib/auth/guard'
+import { publishedSceneIds } from '@/lib/auth/site-scenes'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import {
   guardSceneApiRequest,
@@ -41,6 +42,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!scene) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
+    // The origin guard above proves where the request came from, not who sent
+    // it. Without this a scene id was enough to read the drawing.
+    const auth = await authorizeSceneRead(scene.ownerId ?? null, {
+      published: (await publishedSceneIds()).has(id),
+    })
+    if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     return sceneApiJson(request, scene, {
       headers: { ETag: `"${scene.version}"` },
     })

@@ -9,20 +9,26 @@ interface InvitationRow extends RowDataPacket {
   public_id: string
   user_id: number
   user_public_id: string
-  invited_by_email: string
+  invited_by_email: string | null
   expires_at: Date
   resent_count: number
   accepted_at: Date | null
   revoked_at: Date | null
 }
 
+/**
+ * LEFT JOIN on the inviter, not INNER: migration 006 lets `invited_by` go NULL
+ * when the administrator who sent the invitation is deleted. An INNER JOIN
+ * would match nothing, and `resolveInvitationToken` would answer "this link is
+ * not valid" to somebody holding a perfectly good invitation.
+ */
 const SELECT = `
   SELECT i.id, i.public_id, i.user_id, u.public_id AS user_public_id,
          b.email AS invited_by_email, i.expires_at, i.resent_count,
          i.accepted_at, i.revoked_at
     FROM invitations i
     JOIN users u ON u.id = i.user_id
-    JOIN users b ON b.id = i.invited_by
+    LEFT JOIN users b ON b.id = i.invited_by
 `
 
 /**
@@ -39,7 +45,7 @@ function toInvitation(row: InvitationRow): Invitation {
   return {
     id: row.public_id,
     userId: row.user_public_id,
-    invitedBy: row.invited_by_email,
+    invitedBy: row.invited_by_email ?? '—',
     expiresAt: row.expires_at.toISOString(),
     resentCount: row.resent_count,
     acceptedAt: row.accepted_at ? row.accepted_at.toISOString() : null,
@@ -134,7 +140,7 @@ export async function resolveInvitationToken(token: string): Promise<ResolvedInv
             i.accepted_at, i.revoked_at, u.full_name, u.email
        FROM invitations i
        JOIN users u ON u.id = i.user_id
-       JOIN users b ON b.id = i.invited_by
+       LEFT JOIN users b ON b.id = i.invited_by
       WHERE i.token_hash = ?`,
     [sha256(token)],
   )

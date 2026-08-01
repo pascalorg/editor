@@ -22,14 +22,19 @@ const EMPTY_GRAPH = { nodes: {}, rootNodeIds: [] }
 interface PendingSite extends RowDataPacket {
   id: number
   name: string
-  owner_public_id: string
+  owner_public_id: string | null
 }
 
 export async function ensureSiteScenes(): Promise<number> {
   const pending = await query<PendingSite>(
+    // LEFT JOIN: migration 006 lets sites.created_by go NULL when the account
+    // that created the site is deleted. An INNER JOIN would silently skip
+    // those sites forever, leaving a card on Sites & Projects with no scene
+    // behind it. An ownerless scene is a supported state — that is what the
+    // console's "adopt unowned" action is for.
     `SELECT s.id, s.name, u.public_id AS owner_public_id
        FROM sites s
-       JOIN users u ON u.id = s.created_by
+       LEFT JOIN users u ON u.id = s.created_by
       WHERE s.scene_id IS NULL AND s.status <> 'archived'`,
   )
   if (pending.length === 0) return 0
@@ -40,7 +45,7 @@ export async function ensureSiteScenes(): Promise<number> {
     const meta = await operations.saveScene({
       name: site.name,
       projectId: null,
-      ownerId: site.owner_public_id,
+      ownerId: site.owner_public_id ?? undefined,
       graph: EMPTY_GRAPH as never,
       thumbnailUrl: null,
     })

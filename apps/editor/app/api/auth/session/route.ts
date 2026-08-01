@@ -13,13 +13,21 @@ export const dynamic = 'force-dynamic'
  * server owns `expiresInSeconds`, so a tampered clock or a stale tab cannot
  * stretch a session past settings.session_minutes.
  *
- * Reading the session slides the idle window — which is correct here, because a
- * poll from a visible tab is activity. The client stops polling when the tab is
- * hidden so a background tab does not keep a session alive forever.
+ * This read deliberately does NOT slide the idle window. It used to, on the
+ * reasoning that a poll from a visible tab is activity — but a visible tab is
+ * not a person. A console left open on an unattended screen polled itself every
+ * 30 seconds and so could never time out, which is the one thing the idle
+ * timeout exists to prevent on a system whose own sign-in screen says
+ * "authorised personnel only".
+ *
+ * Real work still slides it: every other console request goes through
+ * `requirePermission` → `getSession()`, which touches by default. And the idle
+ * dialog's "Stay signed in" has its own endpoint (`/api/auth/session/touch`).
+ * So the window now follows what the person does, not whether a tab is open.
  */
 export const GET = handler(async () => {
   const settings = await getSettings()
-  const session = await getSession()
+  const session = await getSession({ touch: false })
 
   if (!session) {
     const body: SessionResponse = {

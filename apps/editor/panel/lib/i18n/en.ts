@@ -128,6 +128,23 @@ export const en = {
     'Records in the system still point at this account (sites it created, invitations it sent). The database has not applied the migration that lets those survive a deletion — restart the application so migrations run, then try again.',
   inviteMailFailed:
     'the account was created, but the invitation email could not be sent. Use Resend on the account once mail is working.',
+  errExternalNotAllowed:
+    'External accounts are switched off. Enable them in Settings → Identity, or approve this person as internal.',
+  errInviteNotResendable:
+    'This invitation can no longer be resent — it has already been accepted, or it was revoked.',
+  errInviteNotRevocable:
+    'This invitation can no longer be revoked — it has already been accepted, or it was revoked.',
+  errJobNotCancellable: 'Only a queued or running job can be cancelled.',
+  errJobNotRetryable: 'Only a failed or cancelled job can be retried.',
+  errKeyNotRevocable: 'This API key has already been revoked.',
+  errMfaAlreadyEnrolled:
+    'Two-factor authentication is already set up on this account. Remove it before enrolling again.',
+  errNotFound: 'That record no longer exists — it may have been deleted in another session.',
+  errRequestDecided: 'This access request has already been decided by another administrator.',
+  errRoleExists: 'A role with that name already exists.',
+  errSiteStateUnchanged: 'That site is already in this state.',
+  errSystemRoleLocked: 'Built-in roles cannot be edited or deleted.',
+  errUserExists: 'That email address or username is already taken.',
   errMailFailed:
     'The message could not be delivered. Check the SMTP host, port and credentials — the reason is in the server log.',
   capsLock: 'Caps Lock is on',
