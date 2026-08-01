@@ -27,7 +27,7 @@ export const GET = handler(async () => {
       storage_slots: number | null
       picking_slots: number | null
       footprint_m2: number | null
-      created_by_email: string
+      created_by_email: string | null
       created_at: Date
       user_count: number
       scene_id: string | null
@@ -37,7 +37,7 @@ export const GET = handler(async () => {
             u.email AS created_by_email, s.created_at, s.scene_id,
             (SELECT COUNT(*) FROM assignments a WHERE a.site_id = s.id) AS user_count
        FROM sites s
-       JOIN users u ON u.id = s.created_by
+       LEFT JOIN users u ON u.id = s.created_by
       ORDER BY s.name`,
   )
 
@@ -48,7 +48,7 @@ export const GET = handler(async () => {
     storageSlots: r.storage_slots ?? undefined,
     pickingSlots: r.picking_slots ?? undefined,
     footprintM2: r.footprint_m2 ?? undefined,
-    createdBy: r.created_by_email,
+    createdBy: r.created_by_email ?? '—',
     createdAt: r.created_at.toISOString(),
     userCount: r.user_count,
     sceneId: r.scene_id,

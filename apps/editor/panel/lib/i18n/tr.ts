@@ -127,6 +127,8 @@ export const tr: Dictionary = {
   errPrimaryAdminProtected:
     'Birincil yönetici silinemez, devre dışı bırakılamaz ve rolü değiştirilemez. İzin verebilen tek hesabı kilitlemek geri dönüşü olmayan bir hatadır.',
   errCannotDeleteSelf: 'Oturum açtığınız hesabı silemezsiniz.',
+  errUserReferenced:
+    'Sistemde hâlâ bu hesaba işaret eden kayıtlar var (oluşturduğu sahalar, gönderdiği davetler). Veritabanı, bu kayıtların silmeden sonra da yaşamasını sağlayan göçü henüz uygulamamış — göçlerin çalışması için uygulamayı yeniden başlatıp tekrar deneyin.',
   errMailFailed:
     'İleti gönderilemedi. SMTP sunucusunu, kapısını ve kimlik bilgilerini denetleyin — nedeni sunucu günlüğünde.',
   capsLock: 'Caps Lock açık',

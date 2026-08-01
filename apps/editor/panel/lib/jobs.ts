@@ -10,7 +10,7 @@ interface JobRow extends RowDataPacket {
   progress: number
   error_text: string | null
   attempts: number
-  queued_by_email: string
+  queued_by_email: string | null
   queued_at: Date
   started_at: Date | null
   finished_at: Date | null
@@ -20,7 +20,7 @@ const SELECT = `
   SELECT j.public_id, j.kind, s.name AS site_name, j.status, j.progress, j.error_text,
          j.attempts, u.email AS queued_by_email, j.queued_at, j.started_at, j.finished_at
     FROM jobs j
-    JOIN users u ON u.id = j.queued_by
+    LEFT JOIN users u ON u.id = j.queued_by
     LEFT JOIN sites s ON s.id = j.site_id
 `
 
@@ -33,7 +33,7 @@ function toJob(row: JobRow): Job {
     progress: row.progress,
     errorText: row.error_text,
     attempts: row.attempts,
-    queuedBy: row.queued_by_email,
+    queuedBy: row.queued_by_email ?? '—',
     queuedAt: row.queued_at.toISOString(),
     startedAt: row.started_at ? row.started_at.toISOString() : null,
     finishedAt: row.finished_at ? row.finished_at.toISOString() : null,

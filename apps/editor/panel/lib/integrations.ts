@@ -20,7 +20,7 @@ interface KeyRow extends RowDataPacket {
   prefix: string
   scope: 'read' | 'read_write'
   site_name: string | null
-  created_by_email: string
+  created_by_email: string | null
   created_at: Date
   last_used_at: Date | null
   revoked_at: Date | null
@@ -30,7 +30,7 @@ const KEY_SELECT = `
   SELECT k.public_id, k.name, k.prefix, k.scope, s.name AS site_name,
          u.email AS created_by_email, k.created_at, k.last_used_at, k.revoked_at
     FROM api_keys k
-    JOIN users u ON u.id = k.created_by
+    LEFT JOIN users u ON u.id = k.created_by
     LEFT JOIN sites s ON s.id = k.site_id
 `
 
@@ -41,7 +41,7 @@ function toKey(row: KeyRow): ApiKey {
     prefix: row.prefix,
     scope: row.scope,
     siteId: row.site_name,
-    createdBy: row.created_by_email,
+    createdBy: row.created_by_email ?? '—',
     createdAt: row.created_at.toISOString(),
     lastUsedAt: row.last_used_at ? row.last_used_at.toISOString() : null,
     revokedAt: row.revoked_at ? row.revoked_at.toISOString() : null,

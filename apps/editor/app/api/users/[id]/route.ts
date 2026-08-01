@@ -153,7 +153,18 @@ export const DELETE = handler(
     if (!internal) return fail('not_found', 'err.notFound')
     if (internal.id === guard.session.userId) return fail('forbidden', 'err.cannotDeleteSelf')
 
-    await deleteUser(internal.id)
+    try {
+      await deleteUser(internal.id)
+    } catch (err) {
+      // MySQL 1451: a RESTRICT foreign key still points at this account.
+      // Migration 006 relaxed every provenance FK to SET NULL, so this only
+      // fires on a database that has not run it — but "something went wrong"
+      // is never an acceptable answer to a refused delete.
+      if ((err as { errno?: number }).errno === 1451) {
+        return fail('conflict', 'err.userReferenced')
+      }
+      throw err
+    }
     await audit({
       actorUserId: guard.session.userId,
       actorLabel: guard.session.user.email,
