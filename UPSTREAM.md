@@ -37,7 +37,7 @@ scaffold under `.github/deploy/`.
 | `apps/editor/lib/graph-schema.ts` | Keep ours: API validation must consult each plugin's own node schemas, not a static union. Port upstream's non-plugin changes around that. |
 | `apps/editor/app/api/scenes/**`, `lib/auth/guard.ts` | Merge both; keep the ownership/role checks (`authorizeSceneMutation`, `canEdit`). |
 | `apps/editor/components/scene-loader.tsx` | Merge both; keep the `readOnly` prop and the console-session `useSession` wiring. |
-| `apps/editor/app/scenes/`, `app/scene/[id]/`, `app/admin/` | Merge both; keep the console-session gating and the navigation that points Home at `/`. |
+| `apps/editor/app/scenes/`, `app/scene/[id]/` | Merge both; keep the console-session gating and the navigation that points Home at `/`. Scene administration lives in the console's 3D scenes tab, not in a standalone page. |
 | `apps/editor/next.config.ts` | Merge both; keep `serverExternalPackages: ['@node-rs/argon2']` and the standalone/output settings. |
 | `apps/editor/package.json`, `bun.lock`, `biome.jsonc` | Merge both; after changing dependencies, fire the Relock workflow (edit the trailing comment in `.github/workflows/relock.yml`). |
 

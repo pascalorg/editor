@@ -9,6 +9,7 @@ export const CONSOLE_TABS = [
   'audit',
   'sessions',
   'sites',
+  'scenes',
   'jobs',
   'integrations',
   'updates',
@@ -54,6 +55,9 @@ export const TAB_META: Record<ConsoleTab, TabMeta> = {
   audit: { labelKey: 'audit', permission: 'view_logs' },
   sessions: { labelKey: 'sessions' },
   sites: { labelKey: 'sites' },
+  // Scene ownership moves data between accounts — same blast radius as the
+  // org settings, so the same gate.
+  scenes: { labelKey: 'scenes', permission: 'admin_access' },
   jobs: { labelKey: 'jobs' },
   integrations: { labelKey: 'integrations', permission: 'admin_access' },
   updates: { labelKey: 'changelog' },
@@ -93,6 +97,7 @@ export function railEntries(t: Dictionary): RailEntry[] {
 
     { kind: 'heading', label: t.c.platform },
     item('sites'),
+    item('scenes'),
     item('jobs'),
     item('integrations'),
     item('updates'),

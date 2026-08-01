@@ -6,6 +6,7 @@ import { JobsTab } from '@panel/components/console/jobs-tab'
 import { LogsTab } from '@panel/components/console/logs-tab'
 import { OverviewTab } from '@panel/components/console/overview-tab'
 import { RolesTab } from '@panel/components/console/roles-tab'
+import { ScenesTab } from '@panel/components/console/scenes-tab'
 import { SessionsTab } from '@panel/components/console/sessions-tab'
 import { SettingsTab } from '@panel/components/console/settings-tab'
 import { SitesTab } from '@panel/components/console/sites-tab'
@@ -27,6 +28,8 @@ export function TabContent({ tab }: { tab: ConsoleTab }) {
       return <SessionsTab />
     case 'sites':
       return <SitesTab />
+    case 'scenes':
+      return <ScenesTab />
     case 'jobs':
       return <JobsTab />
     case 'integrations':

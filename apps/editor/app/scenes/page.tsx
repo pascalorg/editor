@@ -55,12 +55,12 @@ export default async function ScenesPage() {
           </nav>
           <div className="flex items-center gap-3">
             {user?.role === 'admin' && (
-              <Link
+              <a
                 className="rounded-md border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent/40"
-                href="/admin"
+                href="/console/scenes"
               >
                 Admin
-              </Link>
+              </a>
             )}
             {editingAllowed && (
               <>

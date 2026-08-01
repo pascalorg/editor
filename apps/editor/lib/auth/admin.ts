@@ -64,16 +64,6 @@ export async function ownerEmails(ownerIds: string[]): Promise<Map<string, strin
   return map
 }
 
-export async function setUserRole(userId: string, role: 'user' | 'admin'): Promise<void> {
-  // Console roles are richer than the editor's pair; promoting maps to the
-  // console's Admin, demoting to Viewer. Finer grades belong to the console UI.
-  const pool = await getAuthPool()
-  await pool.execute('UPDATE users SET global_role = ? WHERE public_id = ?', [
-    role === 'admin' ? 'Admin' : 'Viewer',
-    userId,
-  ])
-}
-
 export async function userExists(userId: string): Promise<boolean> {
   const pool = await getAuthPool()
   const [rows] = await pool.execute('SELECT 1 FROM users WHERE public_id = ?', [userId])

@@ -446,6 +446,20 @@ export const tr: Dictionary = {
   clEditor: 'DigitalTwin editör sürümü',
   clPlugin: 'DigitalTwin depo eklentisi',
   clConsole: 'DigitalTwin konsol paneli',
+
+  /* ——— Sahneler sekmesi ——— */
+  scTitle: 'Sahneler',
+  scLead: 'Sunucudaki tüm sahneler — sahibi kim, kime devredilecek.',
+  scScene: 'Sahne',
+  scOwner: 'Sahip',
+  scNodes: 'Düğüm',
+  scUpdated: 'Güncellenme',
+  scOpen: 'Aç',
+  scUnowned: 'sahipsiz',
+  scAdopt: 'Sahipsiz sahneleri devral',
+  scSaved: 'Kaydedildi.',
+  scSaveFailed: 'Kaydedilemedi — tekrar deneyin.',
+  scEmpty: 'Sunucuda henüz sahne yok.',
   clFetched: 'Çekildi',
   clEmpty: 'Sürüm notu bulunamadı.',
 
@@ -462,6 +476,7 @@ export const tr: Dictionary = {
     sessions: 'Oturumlar',
     changelog: 'Sürüm notları',
     sites: 'Siteler ve Projeler',
+    scenes: 'Sahneler',
     jobs: 'İş kuyruğu',
     integrations: 'API ve Webhook',
     settings: 'Ayarlar',

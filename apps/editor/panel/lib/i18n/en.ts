@@ -455,6 +455,20 @@ export const en = {
   clEditor: 'DigitalTwin editor release',
   clPlugin: 'DigitalTwin warehouse plugin',
   clConsole: 'DigitalTwin console',
+
+  /* ——— 3D scenes tab ——— */
+  scTitle: '3D scenes',
+  scLead: 'Every scene on the server — who owns it, and reassignment.',
+  scScene: 'Scene',
+  scOwner: 'Owner',
+  scNodes: 'Nodes',
+  scUpdated: 'Updated',
+  scOpen: 'Open',
+  scUnowned: 'unowned',
+  scAdopt: 'Adopt unowned scenes',
+  scSaved: 'Saved.',
+  scSaveFailed: 'Could not save — try again.',
+  scEmpty: 'No scenes on the server yet.',
   clFetched: 'Fetched',
   clEmpty: 'No release notes available.',
 
@@ -471,6 +485,7 @@ export const en = {
     sessions: 'Sessions',
     changelog: 'Changelog',
     sites: 'Sites & Projects',
+    scenes: '3D scenes',
     jobs: 'Job queue',
     integrations: 'API & Webhooks',
     settings: 'Settings',
