@@ -7,6 +7,15 @@ import localFont from 'next/font/local'
 import { ClientBootstrap } from './client-bootstrap'
 import './globals.css'
 
+/**
+ * No page in this app may be statically prerendered: the host's CDN caches
+ * static HTML for a year, and every redeploy renames the hashed assets that
+ * HTML points at — so a cached page comes back unstyled after the next
+ * release. Dynamic rendering makes Next send no-cache headers instead. The
+ * hashed /_next/static assets themselves stay long-cached, which is safe.
+ */
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: {
     default: 'DigitalTwin Editor',

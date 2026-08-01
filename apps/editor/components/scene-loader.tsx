@@ -8,6 +8,7 @@ import {
   Editor,
   type SceneGraph,
   type SidebarTab,
+  useEditor,
 } from '@pascal-app/editor'
 import { Hammer, Layers } from 'lucide-react'
 import Image from 'next/image'
@@ -69,6 +70,12 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
 interface SceneLoaderProps {
   initialScene: SceneGraph
   meta: SceneMeta
+  /**
+   * View-only account: the scene opens in preview and nothing is ever saved.
+   * The server refuses a viewer's writes anyway (403) — this stops the client
+   * from attempting them and from showing editing affordances on load.
+   */
+  readOnly?: boolean
 }
 
 type SceneGraphWithCollections = SceneGraph & {
@@ -93,7 +100,7 @@ function sceneGraphSignature(graph: SceneGraphWithCollections): string {
   })
 }
 
-export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoaderProps) {
   const router = useRouter()
   const versionRef = useRef(meta.version)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
@@ -102,10 +109,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const { openAuth } = useSession()
 
+  useEffect(() => {
+    if (readOnly) useEditor.getState().setPreviewMode(true)
+  }, [readOnly])
+
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
+      if (readOnly) return
       const graphJson = sceneGraphSignature(graph)
       const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
       if (lastRemoteGraphJsonRef.current === graphJson) {
@@ -153,7 +165,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
       }
     },
-    [meta.id, meta.name, openAuth],
+    [meta.id, meta.name, openAuth, readOnly],
   )
 
   useEffect(() => {

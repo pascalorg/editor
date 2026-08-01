@@ -3,7 +3,16 @@ import { getSession } from '@panel/lib/auth/session'
 export interface SessionUser {
   id: string
   email: string
-  role: 'user' | 'admin'
+  /**
+   * The console's permission model folded down to the editor's three tiers:
+   * admins run everything, editors build, viewers only look — a viewer opens
+   * scenes in preview and cannot save.
+   */
+  role: 'admin' | 'editor' | 'viewer'
+}
+
+export function canEdit(user: SessionUser): boolean {
+  return user.role !== 'viewer'
 }
 
 /**
@@ -20,11 +29,13 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const session = await getSession()
   if (session?.state !== 'signedIn') return null
   const user = session.user
-  return {
-    id: user.id,
-    email: user.email,
-    role: user.permissions.includes('admin_access') ? 'admin' : 'user',
-  }
+  const permissions = user.permissions
+  const role = permissions.includes('admin_access')
+    ? 'admin'
+    : permissions.includes('edit_projects') || permissions.includes('create_projects')
+      ? 'editor'
+      : 'viewer'
+  return { id: user.id, email: user.email, role }
 }
 
 /**

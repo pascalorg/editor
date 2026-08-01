@@ -454,6 +454,7 @@ export const en = {
   clSnapshot: 'Snapshot',
   clEditor: 'DigitalTwin editor release',
   clPlugin: 'DigitalTwin warehouse plugin',
+  clConsole: 'DigitalTwin console',
   clFetched: 'Fetched',
   clEmpty: 'No release notes available.',
 

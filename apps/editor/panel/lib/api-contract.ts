@@ -545,8 +545,8 @@ export interface ReleaseEntry {
   date: string
   tags: string[]
   authors: string[]
-  /** 'editor' | 'plugin' — which product line the entry belongs to. */
-  channel: 'editor' | 'plugin'
+  /** Which product line the entry belongs to. */
+  channel: 'editor' | 'plugin' | 'console'
 }
 
 export interface ChangelogResponse {

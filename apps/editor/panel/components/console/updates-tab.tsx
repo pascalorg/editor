@@ -135,7 +135,11 @@ export function UpdatesTab() {
                     </span>
                   ) : null}
                   <span className="font-mono text-[9.5px] text-muted-fg">
-                    {entry.channel === 'editor' ? t.clEditor : t.clPlugin}
+                    {entry.channel === 'editor'
+                      ? t.clEditor
+                      : entry.channel === 'console'
+                        ? t.clConsole
+                        : t.clPlugin}
                   </span>
                 </div>
 

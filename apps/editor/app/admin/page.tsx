@@ -30,16 +30,31 @@ export default async function AdminPage() {
       <header className="sticky top-0 z-10 border-border border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto flex items-center justify-between gap-4 px-6 py-4">
           <nav className="flex items-center gap-4 text-sm">
-            <Link className="text-muted-foreground hover:text-foreground" href="/editor">
+            <Link
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="/"
+            >
               Home
             </Link>
             <span className="text-muted-foreground">/</span>
-            <span className="font-medium">Admin</span>
+            <Link
+              className="text-muted-foreground transition-colors hover:text-foreground"
+              href="/scenes"
+            >
+              Scenes
+            </Link>
+            <span className="text-muted-foreground">/</span>
+            <span className="font-medium text-foreground">Admin</span>
           </nav>
           <span className="text-muted-foreground text-sm">{admin.email}</span>
         </div>
       </header>
-      <main className="container mx-auto max-w-5xl px-6 py-10">
+      <main className="container mx-auto max-w-5xl px-6 py-12">
+        <h1 className="mb-2 font-bold text-3xl">Administration</h1>
+        <p className="mb-8 text-muted-foreground text-sm">
+          {users.length} user{users.length === 1 ? '' : 's'}, {adminScenes.length} scene
+          {adminScenes.length === 1 ? '' : 's'}.
+        </p>
         <AdminPanel users={users} scenes={adminScenes} currentAdminId={admin.id} />
       </main>
     </div>

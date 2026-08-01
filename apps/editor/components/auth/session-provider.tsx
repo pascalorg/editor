@@ -5,7 +5,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useS
 export interface SessionUser {
   id: string
   email: string
-  role: 'user' | 'admin'
+  role: 'admin' | 'editor' | 'viewer'
 }
 
 interface SessionValue {
@@ -41,10 +41,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const res = await fetch('/api/auth/session', { cache: 'no-store' })
       const body = (await res.json()) as ConsoleSessionResponse
       if (body.state === 'signedIn' && body.user) {
+        const permissions = body.user.permissions ?? []
         setUser({
           id: body.user.id,
           email: body.user.email,
-          role: body.user.permissions?.includes('admin_access') ? 'admin' : 'user',
+          // Mirrors the server-side fold in lib/auth/session.ts.
+          role: permissions.includes('admin_access')
+            ? 'admin'
+            : permissions.includes('edit_projects') || permissions.includes('create_projects')
+              ? 'editor'
+              : 'viewer',
         })
       } else {
         setUser(null)

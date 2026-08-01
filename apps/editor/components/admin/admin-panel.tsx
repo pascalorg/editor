@@ -67,29 +67,32 @@ export function AdminPanel({
 
       <section>
         <h2 className="mb-3 font-bold text-2xl">Users ({users.length})</h2>
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-xl border border-border/60 bg-background">
           <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-muted-foreground">
+            <thead className="bg-accent/30 text-left text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Role</th>
-                <th className="px-4 py-2 font-medium">Scenes</th>
-                <th className="px-4 py-2 font-medium">Joined</th>
-                <th className="px-4 py-2" />
+                <th className="px-4 py-2.5 font-medium">Email</th>
+                <th className="px-4 py-2.5 font-medium">Role</th>
+                <th className="px-4 py-2.5 font-medium">Scenes</th>
+                <th className="px-4 py-2.5 font-medium">Joined</th>
+                <th className="px-4 py-2.5" />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-border border-t">
-                  <td className="px-4 py-2">{u.email}</td>
-                  <td className="px-4 py-2">
+                <tr
+                  key={u.id}
+                  className="border-border/60 border-t transition-colors hover:bg-accent/20"
+                >
+                  <td className="px-4 py-2.5">{u.email}</td>
+                  <td className="px-4 py-2.5">
                     <span className={u.role === 'admin' ? 'font-semibold' : ''}>{u.role}</span>
                   </td>
-                  <td className="px-4 py-2">{u.sceneCount}</td>
-                  <td className="px-4 py-2 text-muted-foreground">
+                  <td className="px-4 py-2.5">{u.sceneCount}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">
                     {new Date(u.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-2.5 text-right">
                     {u.id === currentAdminId ? (
                       <span className="text-muted-foreground text-xs">you</span>
                     ) : (
@@ -103,7 +106,7 @@ export function AdminPanel({
                             `role-${u.id}`,
                           )
                         }
-                        className="rounded-md border border-border px-2 py-1 text-xs"
+                        className="rounded-md border border-border px-2.5 py-1 font-medium text-xs transition-colors hover:bg-accent/40 disabled:opacity-50"
                       >
                         {u.role === 'admin' ? 'Make user' : 'Make admin'}
                       </button>
@@ -126,39 +129,42 @@ export function AdminPanel({
               onClick={() =>
                 call('/api/admin/scenes/adopt-unowned', { ownerId: currentAdminId }, 'adopt')
               }
-              className="rounded-md border border-border px-3 py-1.5 text-xs"
+              className="rounded-md border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent/40 disabled:opacity-50"
             >
               {busy === 'adopt' ? 'Adopting…' : `Adopt ${unownedCount} unowned scene(s) to me`}
             </button>
           )}
         </div>
-        <div className="overflow-x-auto rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-xl border border-border/60 bg-background">
           <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-muted-foreground">
+            <thead className="bg-accent/30 text-left text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 font-medium">Scene</th>
-                <th className="px-4 py-2 font-medium">Owner</th>
-                <th className="px-4 py-2 font-medium">Nodes</th>
-                <th className="px-4 py-2 font-medium">Updated</th>
-                <th className="px-4 py-2" />
+                <th className="px-4 py-2.5 font-medium">Scene</th>
+                <th className="px-4 py-2.5 font-medium">Owner</th>
+                <th className="px-4 py-2.5 font-medium">Nodes</th>
+                <th className="px-4 py-2.5 font-medium">Updated</th>
+                <th className="px-4 py-2.5" />
               </tr>
             </thead>
             <tbody>
               {scenes.map((s) => (
-                <tr key={s.id} className="border-border border-t">
-                  <td className="px-4 py-2">
-                    <a href={`/scene/${s.id}`} className="hover:underline">
+                <tr
+                  key={s.id}
+                  className="border-border/60 border-t transition-colors hover:bg-accent/20"
+                >
+                  <td className="px-4 py-2.5">
+                    <a href={`/scene/${s.id}`} className="font-medium hover:underline">
                       {s.name}
                     </a>
                   </td>
-                  <td className="px-4 py-2 text-muted-foreground">
+                  <td className="px-4 py-2.5 text-muted-foreground">
                     {s.ownerEmail ?? (s.ownerId ? s.ownerId : <em>unowned</em>)}
                   </td>
-                  <td className="px-4 py-2">{s.nodeCount}</td>
-                  <td className="px-4 py-2 text-muted-foreground">
+                  <td className="px-4 py-2.5">{s.nodeCount}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">
                     {new Date(s.updatedAt).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-2.5 text-right">
                     <select
                       disabled={busy !== null}
                       defaultValue={s.ownerId ?? ''}
@@ -169,7 +175,7 @@ export function AdminPanel({
                           `owner-${s.id}`,
                         )
                       }
-                      className="rounded-md border border-border bg-transparent px-2 py-1 text-xs"
+                      className="rounded-md border border-border bg-transparent px-2 py-1 text-xs transition-colors hover:bg-accent/40 disabled:opacity-50"
                     >
                       <option value="">unowned</option>
                       {users.map((u) => (

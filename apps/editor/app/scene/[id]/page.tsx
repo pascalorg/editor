@@ -1,6 +1,8 @@
 import type { SceneGraph } from '@pascal-app/editor'
 import Link from 'next/link'
 import { SceneLoader, type SceneMeta } from '@/components/scene-loader'
+import { authAvailable } from '@/lib/auth/db'
+import { canEdit, getSessionUser } from '@/lib/auth/session'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -46,6 +48,11 @@ export default async function ScenePage({ params }: { params: Promise<{ id: stri
     )
   }
 
+  // A view-only account gets the scene in preview; the server refuses its
+  // writes regardless. Without auth (SQLite dev) everything stays editable.
+  const user = authAvailable() ? await getSessionUser() : null
+  const readOnly = authAvailable() && (!user || !canEdit(user))
+
   const { graph, ...meta } = scene
-  return <SceneLoader initialScene={graph} meta={meta} />
+  return <SceneLoader initialScene={graph} meta={meta} readOnly={readOnly} />
 }

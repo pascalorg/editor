@@ -13,9 +13,16 @@ import type { ReleaseEntry } from './api-contract'
  *    screens render product wording from that.
  */
 
+/**
+ * The three repositories this deployment is actually made of: the deploy
+ * repository receives the merged editor+console builds the host runs, the
+ * plugin and the console each live in their own repository. The deploy
+ * repository is private — its entries only appear when GITHUB_TOKEN is set.
+ */
 const SOURCES = {
-  editor: { owner: 'pascalorg', repo: 'editor' },
+  deploy: { owner: 'ovurrsl', repo: 'Digitaltwin' },
   plugin: { owner: 'ovurrsl', repo: 'plugin-warehouse' },
+  console: { owner: 'ovurrsl', repo: 'panel' },
 } as const
 
 const CACHE_TTL_MS = 60_000
@@ -37,37 +44,37 @@ let inFlight: Promise<Cache> | null = null
  */
 const SNAPSHOT: ReleaseEntry[] = [
   {
-    id: 'snapshot-editor-0.9.1',
-    title: 'Presets, rooms and templates',
+    id: 'snapshot-deploy-2.1.2',
+    title: 'Home returns to the editor, mail gets its design',
     summary:
-      'A preset system for configured items, room and template libraries, and direct building manipulation in the viewport.',
+      'Navigation from scenes and admin lands back in the editor; transactional mail ships a designed HTML part in the console’s visual language.',
+    version: 'v2.1.2',
+    date: '2026-08-01T00:00:00.000Z',
+    tags: ['deploy', 'mail'],
+    authors: ['ovurrsl'],
+    channel: 'editor',
+  },
+  {
+    id: 'snapshot-deploy-2.0.0',
+    title: 'The console becomes the front door',
+    summary:
+      'Sign-in, two-factor, roles and the admin console own the root URL; the editor sits behind it and scenes belong to console accounts. The database self-migrates at boot.',
+    version: 'v2.0.0',
+    date: '2026-07-31T00:00:00.000Z',
+    tags: ['deploy', 'console', 'auth'],
+    authors: ['ovurrsl'],
+    channel: 'editor',
+  },
+  {
+    id: 'snapshot-console-0.9.1',
+    title: 'Real SMTP delivery',
+    summary:
+      'The console sends its reset, invitation and receipt mail through SMTP, with the console transport kept for development.',
     version: 'v0.9.1',
-    date: '2026-07-09T00:00:00.000Z',
-    tags: ['preset', 'template', 'editor'],
-    authors: ['sudhir9297', 'wass08', 'anton-pascal', 'marcelgruber'],
-    channel: 'editor',
-  },
-  {
-    id: 'snapshot-editor-0.9.0',
-    title: 'In-world handles and the IFC importer',
-    summary:
-      'Direct manipulation handles in the scene, plus an IFC importer for existing building models.',
-    version: 'v0.9.0',
-    date: '2026-06-21T00:00:00.000Z',
-    tags: ['ifc', 'editor'],
-    authors: ['sudhir9297', 'wass08', 'jelharou'],
-    channel: 'editor',
-  },
-  {
-    id: 'snapshot-editor-0.8.0',
-    title: 'Plugin architecture published',
-    summary:
-      'The plugin contract shipped, letting equipment catalogues live outside the editor core.',
-    version: 'v0.8.0',
-    date: '2026-06-09T00:00:00.000Z',
-    tags: ['plugin', 'editor'],
-    authors: ['Aymericr'],
-    channel: 'editor',
+    date: '2026-07-31T00:00:00.000Z',
+    tags: ['mail', 'smtp'],
+    authors: ['ovurrsl'],
+    channel: 'console',
   },
   {
     id: 'snapshot-plugin-0.1.0',
@@ -131,50 +138,72 @@ function summarise(body: string | null, fallback: string): string {
   return (firstParagraph ?? fallback).slice(0, 320)
 }
 
-async function loadUpstream(): Promise<Cache> {
-  const [releases, commits] = await Promise.all([
-    fetchJson<GhRelease[]>(
-      `https://api.github.com/repos/${SOURCES.editor.owner}/${SOURCES.editor.repo}/releases?per_page=20`,
-    ),
-    fetchJson<GhCommit[]>(
-      `https://api.github.com/repos/${SOURCES.plugin.owner}/${SOURCES.plugin.repo}/commits?per_page=20`,
-    ),
-  ])
+function commitsUrl(source: { owner: string; repo: string }): string {
+  return `https://api.github.com/repos/${source.owner}/${source.repo}/commits?per_page=20`
+}
 
-  if (!releases && !commits) return snapshot()
-
+function commitEntries(
+  commits: GhCommit[] | null,
+  opts: {
+    idPrefix: string
+    channel: ReleaseEntry['channel']
+    tags: string[]
+    fallback: string
+  },
+): ReleaseEntry[] {
   const entries: ReleaseEntry[] = []
-
-  for (const release of releases ?? []) {
-    entries.push({
-      id: `editor-${release.id}`,
-      title: release.name?.trim() || release.tag_name,
-      summary: summarise(release.body, 'Editor release.'),
-      version: release.tag_name,
-      date: release.published_at ?? new Date(0).toISOString(),
-      tags: ['editor'],
-      authors: release.author ? [release.author.login] : [],
-      channel: 'editor',
-    })
-  }
-
   for (const commit of commits ?? []) {
     const [headline, ...rest] = commit.commit.message.split('\n')
+    const title = (headline ?? '').slice(0, 160)
+    // Deploy commits are titled "v2.1.2 — …"; surface that as the version chip.
+    const version = /^v\d+\.\d+\.\d+/.exec(title)?.[0] ?? null
     entries.push({
-      id: `plugin-${commit.sha.slice(0, 12)}`,
-      title: (headline ?? '').slice(0, 160),
-      summary: summarise(rest.join('\n').trim() || null, 'Warehouse plugin change.'),
-      version: null,
+      id: `${opts.idPrefix}-${commit.sha.slice(0, 12)}`,
+      title,
+      summary: summarise(rest.join('\n').trim() || null, opts.fallback),
+      version,
       date: commit.commit.author?.date ?? new Date(0).toISOString(),
-      tags: ['warehouse'],
+      tags: opts.tags,
       authors: commit.author
         ? [commit.author.login]
         : commit.commit.author
           ? [commit.commit.author.name]
           : [],
-      channel: 'plugin',
+      channel: opts.channel,
     })
   }
+  return entries
+}
+
+async function loadUpstream(): Promise<Cache> {
+  const [deploy, plugin, console_] = await Promise.all([
+    fetchJson<GhCommit[]>(commitsUrl(SOURCES.deploy)),
+    fetchJson<GhCommit[]>(commitsUrl(SOURCES.plugin)),
+    fetchJson<GhCommit[]>(commitsUrl(SOURCES.console)),
+  ])
+
+  if (!deploy && !plugin && !console_) return snapshot()
+
+  const entries: ReleaseEntry[] = [
+    ...commitEntries(deploy, {
+      idPrefix: 'deploy',
+      channel: 'editor',
+      tags: ['deploy'],
+      fallback: 'Published to the server.',
+    }),
+    ...commitEntries(plugin, {
+      idPrefix: 'plugin',
+      channel: 'plugin',
+      tags: ['warehouse'],
+      fallback: 'Warehouse plugin change.',
+    }),
+    ...commitEntries(console_, {
+      idPrefix: 'console',
+      channel: 'console',
+      tags: ['console'],
+      fallback: 'Console change.',
+    }),
+  ]
 
   return { entries: byNewest(entries), live: true, fetchedAt: Date.now() }
 }

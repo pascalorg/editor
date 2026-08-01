@@ -1,23 +1,27 @@
 import Link from 'next/link'
-import { AuthMenu } from '@/components/auth/auth-menu'
+import { redirect } from 'next/navigation'
 import { IfcImportButton } from '@/components/ifc-import-button'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
 import { authAvailable } from '@/lib/auth/db'
-import { getSessionUser } from '@/lib/auth/session'
+import { getSessionUser, type SessionUser } from '@/lib/auth/session'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 
-async function fetchScenes(): Promise<SceneMeta[]> {
-  // With auth on, list only the signed-in user's scenes; signed-out shows
-  // none. Without auth (SQLite dev), list everything.
-  let ownerId: string | undefined
-  if (authAvailable()) {
-    const user = await getSessionUser()
-    if (!user) return []
-    ownerId = user.id
-  }
+/**
+ * Signing in belongs to the console alone, so this page carries no sign-in
+ * control: a visitor without a session is sent to /signin. Without auth
+ * (SQLite dev) everything is listed and there is nobody to redirect.
+ */
+async function requireUser(): Promise<SessionUser | null> {
+  if (!authAvailable()) return null
+  const user = await getSessionUser()
+  if (!user) redirect('/signin')
+  return user
+}
+
+async function fetchScenes(ownerId: string | undefined): Promise<SceneMeta[]> {
   const operations = await getSceneOperations()
   return (await operations.listScenes({ ownerId, limit: 50 })) as SceneMeta[]
 }
@@ -31,7 +35,9 @@ function formatDate(iso: string): string {
 }
 
 export default async function ScenesPage() {
-  const scenes = await fetchScenes()
+  const user = await requireUser()
+  const editingAllowed = user?.role !== 'viewer'
+  const scenes = await fetchScenes(user?.id)
 
   return (
     <div className="min-h-screen bg-background">
@@ -40,7 +46,7 @@ export default async function ScenesPage() {
           <nav className="flex items-center gap-4 text-sm">
             <Link
               className="text-muted-foreground transition-colors hover:text-foreground"
-              href="/editor"
+              href="/"
             >
               Home
             </Link>
@@ -48,9 +54,20 @@ export default async function ScenesPage() {
             <span className="font-medium text-foreground">Scenes</span>
           </nav>
           <div className="flex items-center gap-3">
-            <AuthMenu />
-            <IfcImportButton />
-            <CreateSceneButton />
+            {user?.role === 'admin' && (
+              <Link
+                className="rounded-md border border-border px-3 py-1.5 font-medium text-sm transition-colors hover:bg-accent/40"
+                href="/admin"
+              >
+                Admin
+              </Link>
+            )}
+            {editingAllowed && (
+              <>
+                <IfcImportButton />
+                <CreateSceneButton />
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -59,20 +76,25 @@ export default async function ScenesPage() {
         <h1 className="mb-2 font-bold text-3xl">Your scenes</h1>
         <p className="mb-8 text-muted-foreground text-sm">
           {scenes.length === 0
-            ? 'No scenes yet. Create one to get started.'
+            ? editingAllowed
+              ? 'No scenes yet. Create one to get started.'
+              : 'No scenes have been shared with you yet.'
             : `${scenes.length} scene${scenes.length === 1 ? '' : 's'}.`}
         </p>
 
         {scenes.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-background p-12 text-center">
             <p className="text-muted-foreground text-sm">
-              You haven&apos;t saved any scenes yet. Start from scratch, or import an IFC model
-              exported from Revit, ArchiCAD or similar.
+              {editingAllowed
+                ? 'You haven’t saved any scenes yet. Start from scratch, or import an IFC model exported from Revit, ArchiCAD or similar.'
+                : 'Ask an administrator to assign a scene to your account.'}
             </p>
-            <div className="mt-4 flex items-start justify-center gap-3">
-              <CreateSceneButton />
-              <IfcImportButton />
-            </div>
+            {editingAllowed && (
+              <div className="mt-4 flex items-start justify-center gap-3">
+                <CreateSceneButton />
+                <IfcImportButton />
+              </div>
+            )}
           </div>
         ) : (
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

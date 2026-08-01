@@ -445,6 +445,7 @@ export const tr: Dictionary = {
   clSnapshot: 'Anlık görüntü',
   clEditor: 'DigitalTwin editör sürümü',
   clPlugin: 'DigitalTwin depo eklentisi',
+  clConsole: 'DigitalTwin konsol paneli',
   clFetched: 'Çekildi',
   clEmpty: 'Sürüm notu bulunamadı.',
 
