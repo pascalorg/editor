@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { listUsers, ownerEmails, requireAdmin } from '@/lib/auth/admin'
+import { publishedSceneIds } from '@/lib/auth/site-scenes'
 import { guardSceneApiRequest, sceneApiJson } from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
@@ -16,7 +17,11 @@ export async function GET(request: NextRequest) {
   const admin = await requireAdmin()
   if (!admin) return sceneApiJson(request, { error: 'forbidden' }, { status: 403 })
 
-  const [users, operations] = await Promise.all([listUsers(), getSceneOperations()])
+  const [users, operations, published] = await Promise.all([
+    listUsers(),
+    getSceneOperations(),
+    publishedSceneIds(),
+  ])
   const scenes = await operations.listScenes({ limit: 500 })
   const emails = await ownerEmails(scenes.map((s) => s.ownerId).filter((x): x is string => !!x))
 
@@ -28,6 +33,7 @@ export async function GET(request: NextRequest) {
       ownerEmail: s.ownerId ? (emails.get(s.ownerId) ?? null) : null,
       updatedAt: s.updatedAt,
       nodeCount: s.nodeCount,
+      published: published.has(s.id),
     })),
     users: users.map((u) => ({ id: u.id, email: u.email })),
     adminId: admin.id,

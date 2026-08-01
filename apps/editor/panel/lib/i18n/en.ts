@@ -458,13 +458,19 @@ export const en = {
 
   /* ——— 3D scenes tab ——— */
   scTitle: '3D scenes',
-  scLead: 'Every scene on the server — who owns it, and reassignment.',
+  scLead:
+    'Every scene on the server. Drafts belong to whoever drew them; publishing puts a project on Sites & Projects.',
   scScene: 'Scene',
   scOwner: 'Owner',
   scNodes: 'Nodes',
   scUpdated: 'Updated',
   scOpen: 'Open',
   scUnowned: 'unowned',
+  scStatus: 'Status',
+  scPublished: 'Published',
+  scDraft: 'Draft',
+  scPublish: 'Publish',
+  scUnpublish: 'Withdraw',
   scAdopt: 'Adopt unowned scenes',
   scSaved: 'Saved.',
   scSaveFailed: 'Could not save — try again.',

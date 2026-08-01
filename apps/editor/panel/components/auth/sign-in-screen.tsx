@@ -136,16 +136,19 @@ export function SignInScreen() {
    * button. The changelog lives in this app, so it is always offered; the
    * sign-in gate in front of it is the correct answer to clicking it here.
    */
+  // The guide and the changelog are readable without an account, which is
+  // exactly what a visitor stuck on this screen needs; the editor links only
+  // appear when a deployment declares where its editor lives.
   const editorUrl = process.env.NEXT_PUBLIC_EDITOR_URL
   const quickLinks = [
+    { label: t.qlGuides, href: '/guides' },
+    { label: t.qlChangelog, href: '/changelog' },
     ...(editorUrl
       ? [
           { label: t.qlProjects, href: `${editorUrl.replace(/\/$/, '')}/projects` },
           { label: t.qlViewer, href: `${editorUrl.replace(/\/$/, '')}/viewer` },
-          { label: t.qlGuides, href: `${editorUrl.replace(/\/$/, '')}/guides` },
         ]
       : []),
-    { label: t.qlChangelog, href: '/console/updates' },
   ]
 
   const locked = lockSeconds > 0

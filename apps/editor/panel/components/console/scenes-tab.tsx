@@ -20,6 +20,8 @@ interface AdminSceneRow {
   ownerEmail: string | null
   updatedAt: string
   nodeCount: number
+  /** Approved: it carries a card on Sites & Projects. */
+  published: boolean
 }
 
 interface AdminScenesPayload {
@@ -110,6 +112,7 @@ export function ScenesTab() {
               <th className="px-[13px] py-[9px] font-medium">{t.scOwner}</th>
               <th className="px-[13px] py-[9px] font-medium">{t.scNodes}</th>
               <th className="px-[13px] py-[9px] font-medium">{t.scUpdated}</th>
+              <th className="px-[13px] py-[9px] font-medium">{t.scStatus}</th>
               <th className="px-[13px] py-[9px]" />
             </tr>
           </thead>
@@ -143,19 +146,45 @@ export function ScenesTab() {
                 <td className="px-[13px] py-[9px] font-mono text-[11px] text-muted-fg">
                   {formatDate(lang, scene.updatedAt)}
                 </td>
-                <td className="px-[13px] py-[9px] text-right">
-                  <a
-                    className="rounded-[6px] border border-border px-[9px] py-[4px] font-medium text-[11.5px] text-fg no-underline transition-colors hover:bg-hover"
-                    href={`/scene/${scene.id}`}
+                <td className="px-[13px] py-[9px]">
+                  <span
+                    className={`rounded-[4px] border px-[6px] py-px font-mono text-[9.5px] tracking-[0.1em] uppercase ${
+                      scene.published
+                        ? 'border-brand/40 text-brand-fg'
+                        : 'border-border text-muted-fg'
+                    }`}
                   >
-                    {t.scOpen}
-                  </a>
+                    {scene.published ? t.scPublished : t.scDraft}
+                  </span>
+                </td>
+                <td className="px-[13px] py-[9px] text-right">
+                  <div className="flex justify-end gap-[6px]">
+                    <button
+                      className="cursor-pointer rounded-[6px] border border-border bg-field px-[9px] py-[4px] font-medium text-[11.5px] text-fg transition-colors hover:bg-hover disabled:opacity-50"
+                      disabled={busy}
+                      onClick={() =>
+                        post('/api/admin/scenes/publish', {
+                          sceneId: scene.id,
+                          publish: !scene.published,
+                        })
+                      }
+                      type="button"
+                    >
+                      {scene.published ? t.scUnpublish : t.scPublish}
+                    </button>
+                    <a
+                      className="rounded-[6px] border border-border px-[9px] py-[4px] font-medium text-[11.5px] text-fg no-underline transition-colors hover:bg-hover"
+                      href={`/scene/${scene.id}`}
+                    >
+                      {t.scOpen}
+                    </a>
+                  </div>
                 </td>
               </tr>
             ))}
             {scenes.length === 0 ? (
               <tr>
-                <td className="px-[13px] py-[18px] text-center text-muted-fg" colSpan={5}>
+                <td className="px-[13px] py-[18px] text-center text-muted-fg" colSpan={6}>
                   {loading ? '…' : t.scEmpty}
                 </td>
               </tr>

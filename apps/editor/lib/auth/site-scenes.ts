@@ -3,15 +3,16 @@ import { ulid } from 'ulid'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 /**
- * Keeps the console's sites and the editor's scenes as two views of one
- * thing, in both directions:
+ * Where sites and scenes meet — and the direction matters.
  *
- *  - a site without a scene gets one (named after it, owned by its creator);
- *  - a scene no site references gets a site card, so work started in the
- *    editor shows up on Sites & Projects too.
+ * A site created in the console is an approved project, so it gets a real
+ * scene right away (the worker below). A scene drawn in the editor is a
+ * private draft and does NOT become a site on its own: an admin publishes
+ * it from the console's 3D scenes tab (`publishSceneAsSite`). Sites &
+ * Projects is therefore the approved catalogue, /scenes the workbench.
  *
  * The console's provisioning job still drives the card's progress; this
- * worker does the parts the console cannot, because only the editor has a
+ * file does the parts the console cannot, because only the editor has a
  * scene store. Editor-owned on purpose: it must never sync upstream.
  */
 
@@ -58,48 +59,85 @@ interface OrphanScene extends RowDataPacket {
   creator_id: number
 }
 
+export type PublishResult = 'published' | 'already_published' | 'scene_not_found'
+
 /**
- * The reverse pass: scenes created in the editor become site cards. Only
- * owned scenes qualify — sites require a creator, and an ownerless legacy
- * scene gets its card as soon as an admin assigns it an owner in the 3D
- * scenes tab. Site names are unique; a clash gets the scene id's tail
- * appended rather than silently swallowing the scene.
+ * Publishing is an admin's act of approval, never automatic.
+ *
+ * The two screens mean different things: /scenes is where people draw, and
+ * every scene there is a private draft. Sites & Projects is the approved
+ * catalogue — a project only lands there when an admin publishes it from
+ * the console's 3D scenes tab. So this runs on request, not on a timer.
+ *
+ * The card is credited to the scene's owner, whose work is being published;
+ * an ownerless legacy scene falls back to the approving admin. Site names
+ * are unique, so a clash gets the scene id's tail appended.
  */
-export async function ensureSceneSites(): Promise<number> {
+export async function publishSceneAsSite(
+  sceneId: string,
+  approverPublicId: string,
+): Promise<PublishResult> {
+  if ((await publishedSceneIds()).has(sceneId)) return 'already_published'
+
   // The scenes table (editor store) and the console tables carry different
   // utf8mb4 collations; every textual join pins both sides to one collation
   // or MariaDB refuses the comparison.
-  const orphans = await query<OrphanScene>(
+  const rows = await query<OrphanScene>(
     `SELECT sc.id, sc.name, u.id AS creator_id
        FROM scenes sc
-       JOIN users u
+       LEFT JOIN users u
          ON CONVERT(u.public_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
           = CONVERT(sc.owner_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-       LEFT JOIN sites s
-         ON CONVERT(s.scene_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-          = CONVERT(sc.id USING utf8mb4) COLLATE utf8mb4_unicode_ci
-      WHERE s.id IS NULL`,
+      WHERE sc.id = ?`,
+    [sceneId],
   )
+  const scene = rows[0]
+  if (!scene) return 'scene_not_found'
 
-  let created = 0
-  for (const scene of orphans) {
-    const base = scene.name.slice(0, 100).trim() || 'Scene'
-    for (const name of [base, `${base} · ${scene.id.slice(0, 6)}`]) {
-      try {
-        await exec(
-          `INSERT INTO sites (public_id, name, status, created_by, scene_id)
-           VALUES (?, ?, 'active', ?, ?)`,
-          [ulid(), name, scene.creator_id, scene.id],
-        )
-        created++
-        console.log(`[digitaltwin:sites] site card created for scene "${scene.name}"`)
-        break
-      } catch (error) {
-        if ((error as { code?: string })?.code !== 'ER_DUP_ENTRY') throw error
-      }
+  let creatorId: number | null = scene.creator_id
+  if (creatorId === null) {
+    const approver = await query<RowDataPacket & { id: number }>(
+      'SELECT id FROM users WHERE public_id = ?',
+      [approverPublicId],
+    )
+    creatorId = approver[0]?.id ?? null
+  }
+  if (creatorId === null) return 'scene_not_found'
+
+  const base = scene.name.slice(0, 100).trim() || 'Scene'
+  for (const name of [base, `${base} · ${scene.id.slice(0, 6)}`]) {
+    try {
+      await exec(
+        `INSERT INTO sites (public_id, name, status, created_by, scene_id)
+         VALUES (?, ?, 'active', ?, ?)`,
+        [ulid(), name, creatorId, scene.id],
+      )
+      console.log(`[digitaltwin:sites] scene "${scene.name}" published as a site`)
+      return 'published'
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'ER_DUP_ENTRY') throw error
     }
   }
-  return created
+  return 'already_published'
+}
+
+/** Scene ids that already carry a site card — the published set. */
+export async function publishedSceneIds(): Promise<Set<string>> {
+  const rows = await query<RowDataPacket & { scene_id: string }>(
+    'SELECT scene_id FROM sites WHERE scene_id IS NOT NULL',
+  )
+  return new Set(rows.map((r) => r.scene_id))
+}
+
+/** Withdraws a published project: the card goes, the scene stays. */
+export async function unpublishScene(sceneId: string): Promise<boolean> {
+  const result = await exec(
+    `DELETE FROM sites
+      WHERE CONVERT(scene_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          = CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci`,
+    [sceneId],
+  )
+  return result.affectedRows > 0
 }
 
 let worker: ReturnType<typeof setInterval> | undefined
@@ -113,7 +151,6 @@ export function startSiteSceneWorker(): void {
     running = true
     try {
       await ensureSiteScenes()
-      await ensureSceneSites()
     } catch (error) {
       console.error('[digitaltwin:sites] scene provisioning failed:', error)
     } finally {

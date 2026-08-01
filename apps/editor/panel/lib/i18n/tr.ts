@@ -449,13 +449,19 @@ export const tr: Dictionary = {
 
   /* ——— Sahneler sekmesi ——— */
   scTitle: 'Sahneler',
-  scLead: 'Sunucudaki tüm sahneler — sahibi kim, kime devredilecek.',
+  scLead:
+    'Sunucudaki tüm sahneler. Taslaklar çizen kişiye aittir; yayınlamak projeyi Siteler ve Projeler ekranına taşır.',
   scScene: 'Sahne',
   scOwner: 'Sahip',
   scNodes: 'Düğüm',
   scUpdated: 'Güncellenme',
   scOpen: 'Aç',
   scUnowned: 'sahipsiz',
+  scStatus: 'Durum',
+  scPublished: 'Yayında',
+  scDraft: 'Taslak',
+  scPublish: 'Yayınla',
+  scUnpublish: 'Geri çek',
   scAdopt: 'Sahipsiz sahneleri devral',
   scSaved: 'Kaydedildi.',
   scSaveFailed: 'Kaydedilemedi — tekrar deneyin.',
