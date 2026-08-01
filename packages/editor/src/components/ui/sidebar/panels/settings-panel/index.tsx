@@ -9,6 +9,7 @@ import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
 import {
   type KeyboardEvent,
+  type ReactNode,
   type SyntheticEvent,
   useCallback,
   useMemo,
@@ -176,12 +177,19 @@ export interface SettingsPanelProps {
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
   ) => Promise<void>
+  /**
+   * Host-owned account section (who is signed in, their access, a way out) —
+   * rendered above everything else. The host owns identity and sessions, not
+   * this package, so it is a slot rather than a built-in section.
+   */
+  accountSection?: ReactNode
 }
 
 export function SettingsPanel({
   projectId,
   projectVisibility,
   onVisibilityChange,
+  accountSection,
 }: SettingsPanelProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const nodes = useScene((state) => state.nodes)
@@ -319,6 +327,8 @@ export function SettingsPanel({
 
   return (
     <div className="flex flex-col gap-6 p-3">
+      {accountSection}
+
       {/* Visibility Section (only for cloud projects) */}
       {projectId && !isLocalProject && (
         <div className="space-y-3">

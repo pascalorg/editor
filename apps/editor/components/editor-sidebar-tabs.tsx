@@ -59,7 +59,11 @@ export const EDITOR_SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType
     component: ScenesTab,
     mobileDefaultSnap: 0.6,
     mobileIcon: <FolderOpen className="h-5 w-5" />,
-    icon: railIcon('/icons/collection.webp'),
+    // No illustrated asset for a scene library exists in the shared icon set —
+    // `collection.webp` was a byte-for-byte copy of `zone.webp` (the floorplan
+    // zone tool), so Scenes silently wore the zone icon. Lucide's folder reads
+    // unambiguously as "a library of saved things" and matches the mobile rail.
+    icon: <FolderOpen className="h-7 w-7" strokeWidth={1.5} />,
   },
   {
     id: 'settings',

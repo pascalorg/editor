@@ -63,7 +63,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
-    await fetch('/api/auth/signout', { method: 'POST' }).catch(() => {})
+    // A bodyless POST fails JSON parsing server-side before the session is
+    // ever looked up, so the cookie and session row both survive — the UI
+    // would redirect to /signin while the account stayed signed in underneath.
+    await fetch('/api/auth/signout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allDevices: false }),
+    }).catch(() => {})
     setUser(null)
   }, [])
 

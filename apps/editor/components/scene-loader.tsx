@@ -6,6 +6,7 @@
 import { applySceneGraphToEditor, Editor, type SceneGraph, useEditor } from '@pascal-app/editor'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { AccountSettingsSection } from '@/components/account-settings-section'
 import { useSession } from '@/components/auth/session-provider'
 import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
@@ -205,6 +206,7 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
+        settingsPanelProps={{ accountSection: <AccountSettingsSection /> }}
         sidebarTabs={EDITOR_SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}

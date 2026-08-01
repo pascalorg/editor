@@ -1,6 +1,7 @@
 'use client'
 
 import { Editor } from '@pascal-app/editor'
+import { AccountSettingsSection } from '@/components/account-settings-section'
 import { EDITOR_SIDEBAR_TABS } from '@/components/editor-sidebar-tabs'
 import {
   CommunityViewerToolbarLeft,
@@ -24,6 +25,7 @@ export function EditorApp() {
       <Editor
         layoutVersion="v2"
         projectId={PROJECT_ID}
+        settingsPanelProps={{ accountSection: <AccountSettingsSection /> }}
         sidebarTabs={EDITOR_SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
