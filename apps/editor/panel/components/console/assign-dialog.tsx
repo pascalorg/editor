@@ -28,7 +28,7 @@ export function AssignDialog({
   roles: string[]
   sites: string[]
   onCancel: () => void
-  onDone: (email: string) => void
+  onDone: (email: string, mailDelivered: boolean) => void
   onError: (message: string) => void
 }) {
   const { t } = useApp()
@@ -54,7 +54,7 @@ export function AssignDialog({
       onError(resolveApiMessage(t, res.messageKey))
       return
     }
-    onDone(res.data.user.email)
+    onDone(res.data.user.email, res.data.mailDelivered)
   }
 
   const ready = selected.length > 0

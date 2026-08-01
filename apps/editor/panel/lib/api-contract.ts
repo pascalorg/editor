@@ -371,6 +371,12 @@ export type ApproveRequestBody = z.infer<typeof approveRequestSchema>
 export interface ApproveRequestResponse {
   user: UserV3
   invitation: Invitation
+  /**
+   * False when the invitation email could not be handed to the mail server.
+   * The account still exists and the invitation is still valid — it just has
+   * to be resent, or the link delivered another way.
+   */
+  mailDelivered: boolean
 }
 
 /* ——— Roles ——— */

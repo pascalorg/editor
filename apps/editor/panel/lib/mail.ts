@@ -99,7 +99,20 @@ function smtp(): Transporter {
     // Implicit TLS on 465, STARTTLS elsewhere — the usual split, overridable.
     secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === '1' : port === 465,
     auth: user ? { user, pass } : undefined,
-    pool: true,
+    // Deliberately unpooled (nodemailer's default; `pool: true` was removed).
+    // This system sends a handful of messages a day, and a pooled socket kept
+    // open between them is the classic shared-hosting failure: the provider
+    // drops the idle connection, the pool does not notice, and the next send
+    // fails on a socket that looks alive — which is exactly the shape of "the
+    // receipt arrived but the invitation never did". A fresh connection per
+    // message costs a TLS handshake nobody will ever feel.
+    //
+    // Without these timeouts a hung mail server holds the HTTP request open until the
+    // platform's own timeout kills it, turning a slow mail server into a slow
+    // console.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
   })
 
   return transporter
@@ -115,7 +128,7 @@ function smtp(): Transporter {
  * the logs and invisible to the caller — which is the same thing a queue would
  * do, one retry later.
  */
-async function send(envelope: Envelope, opts: { rethrow?: boolean } = {}): Promise<void> {
+async function send(envelope: Envelope, opts: { rethrow?: boolean } = {}): Promise<boolean> {
   const transport = process.env.MAIL_TRANSPORT ?? 'console'
 
   if (transport === 'console') {
@@ -126,12 +139,12 @@ async function send(envelope: Envelope, opts: { rethrow?: boolean } = {}): Promi
         `${envelope.body}\n` +
         `────────────────────────────────────────────\n`,
     )
-    return
+    return true
   }
 
   if (transport !== 'smtp') {
     console.error(`[mail] MAIL_TRANSPORT="${transport}" is not a transport; nothing was sent.`)
-    return
+    return false
   }
 
   try {
@@ -142,6 +155,7 @@ async function send(envelope: Envelope, opts: { rethrow?: boolean } = {}): Promi
       text: envelope.body,
       html: envelope.html,
     })
+    return true
   } catch (err) {
     // The address is logged, the body is not — it carries a single-use token.
     console.error(`[mail] delivery to ${envelope.to} failed:`, err)
@@ -151,6 +165,7 @@ async function send(envelope: Envelope, opts: { rethrow?: boolean } = {}): Promi
     // so reporting success when nothing was delivered is the one answer it
     // must never give.
     if (opts.rethrow) throw err
+    return false
   }
 }
 
@@ -164,7 +179,7 @@ async function compose(
   subject: string,
   page: Omit<MailPage, 'origin' | 'lang' | 'footer'>,
   opts: { rethrow?: boolean } = {},
-): Promise<void> {
+): Promise<boolean> {
   const lines: string[] = [page.heading, '', page.intro]
   if (page.facts?.length) {
     lines.push('')
@@ -179,7 +194,7 @@ async function compose(
   if (page.note) lines.push('', page.note)
   lines.push('', footer(lang))
 
-  await send(
+  return send(
     {
       to,
       subject,
@@ -248,13 +263,18 @@ export async function deliverResetLink(opts: {
   })
 }
 
+/**
+ * Returns whether the message actually reached the mail server. An invitation
+ * that is not delivered leaves an account nobody can activate, so the caller
+ * has to be able to say so rather than reporting a silent success.
+ */
 export async function deliverInvite(opts: {
   email: string
   fullName: string
   token: string
   expiresAt: string
   lang?: Lang
-}): Promise<void> {
+}): Promise<boolean> {
   const lang = opts.lang ?? (await localeFor(opts.email))
   const days = Math.max(
     1,
@@ -283,7 +303,7 @@ export async function deliverInvite(opts: {
           preheader: 'Set your password and enrol two-factor authentication.',
         }
 
-  await compose(opts.email, lang, subject(copy.subject), {
+  return compose(opts.email, lang, subject(copy.subject), {
     label: copy.label,
     heading: copy.heading,
     intro: copy.intro,

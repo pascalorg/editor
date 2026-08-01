@@ -68,7 +68,11 @@ export const POST = handler(async (request: Request, ctx: { params: Promise<{ id
   )
 
   const issued = await issueInvitation(created.userId, guard.session.userId)
-  await deliverInvite({
+  // The account is created and the invitation issued either way — those must
+  // not roll back because a mail server is unreachable. But an invitation
+  // nobody receives is an account nobody can activate, so whether it was
+  // delivered travels back to the administrator who pressed Approve.
+  const mailDelivered = await deliverInvite({
     email: row.email,
     fullName: row.full_name,
     token: issued.token,
@@ -93,6 +97,17 @@ export const POST = handler(async (request: Request, ctx: { params: Promise<{ id
   const user = await getUserDetail(created.publicId)
   if (!user) return fail('server_error', 'err.server')
 
-  const body: ApproveRequestResponse = { user, invitation: issued.invitation }
+  if (!mailDelivered) {
+    await audit({
+      actorUserId: guard.session.userId,
+      actorLabel: guard.session.user.email,
+      level: 'error',
+      kind: 'request',
+      message: `Invitation email to ${row.email} was not delivered; the account exists and the invitation is valid`,
+      event: { k: 'requestApproved' as const, p: { email: row.email, role: parsed.data.role } },
+    })
+  }
+
+  const body: ApproveRequestResponse = { user, invitation: issued.invitation, mailDelivered }
   return ok(body, { status: 201 })
 })

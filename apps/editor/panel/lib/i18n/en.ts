@@ -126,6 +126,8 @@ export const en = {
   errCannotDeleteSelf: 'You cannot delete the account you are signed in with.',
   errUserReferenced:
     'Records in the system still point at this account (sites it created, invitations it sent). The database has not applied the migration that lets those survive a deletion — restart the application so migrations run, then try again.',
+  inviteMailFailed:
+    'the account was created, but the invitation email could not be sent. Use Resend on the account once mail is working.',
   errMailFailed:
     'The message could not be delivered. Check the SMTP host, port and credentials — the reason is in the server log.',
   capsLock: 'Caps Lock is on',

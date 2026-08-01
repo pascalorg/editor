@@ -129,6 +129,8 @@ export const tr: Dictionary = {
   errCannotDeleteSelf: 'Oturum açtığınız hesabı silemezsiniz.',
   errUserReferenced:
     'Sistemde hâlâ bu hesaba işaret eden kayıtlar var (oluşturduğu sahalar, gönderdiği davetler). Veritabanı, bu kayıtların silmeden sonra da yaşamasını sağlayan göçü henüz uygulamamış — göçlerin çalışması için uygulamayı yeniden başlatıp tekrar deneyin.',
+  inviteMailFailed:
+    'hesap oluşturuldu, ancak davet e-postası gönderilemedi. Posta çalışır hâle geldiğinde hesaptaki Yeniden gönder düğmesini kullanın.',
   errMailFailed:
     'İleti gönderilemedi. SMTP sunucusunu, kapısını ve kimlik bilgilerini denetleyin — nedeni sunucu günlüğünde.',
   capsLock: 'Caps Lock açık',

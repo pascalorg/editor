@@ -561,10 +561,16 @@ export function UsersTab() {
           roles={data?.roles ?? []}
           sites={data?.sites ?? []}
           onCancel={() => setApproving(null)}
-          onDone={(email) => {
+          onDone={(email, mailDelivered) => {
             setRequests((prev) => prev.filter((r) => r.id !== approving.id))
             setApproving(null)
-            notify(`${email} ${t.invitedToast}`)
+            // The account exists either way; saying "invited" when the message
+            // never left would leave an administrator waiting for a reply that
+            // cannot come.
+            notify(
+              mailDelivered ? `${email} ${t.invitedToast}` : `${email} — ${t.inviteMailFailed}`,
+              mailDelivered ? 'success' : 'error',
+            )
             void load()
           }}
           onError={(message) => notify(message, 'error')}

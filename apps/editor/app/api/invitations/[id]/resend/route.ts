@@ -29,14 +29,18 @@ export const POST = handler(async (_request: Request, ctx: { params: Promise<{ i
     'SELECT u.email, u.full_name FROM invitations i JOIN users u ON u.id = i.user_id WHERE i.public_id = ?',
     [id],
   )
+  // "Resend" that quietly resends nothing is the least useful button in the
+  // console: it is pressed precisely when the first message did not arrive.
+  let mailDelivered = false
   if (recipient) {
-    await deliverInvite({
+    mailDelivered = await deliverInvite({
       email: recipient.email,
       fullName: recipient.full_name,
       token: issued.token,
       expiresAt: issued.invitation.expiresAt,
     })
   }
+  if (!mailDelivered) return fail('server_error', 'err.mailFailed')
 
   await audit({
     actorUserId: guard.session.userId,
