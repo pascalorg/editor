@@ -23,13 +23,38 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** Site figures shown in the hero summary card, rotating every eight seconds. */
-const SITES = [
-  { name: 'Sakarya LM1', storage: 12480, picking: 1840, footprint: 42000 },
-  { name: 'Esenyurt DC2', storage: 8120, picking: 2260, footprint: 28400 },
-  { name: 'Gebze LM3', storage: 19650, picking: 1120, footprint: 61800 },
-  { name: 'Torbalı CX', storage: 5340, picking: 3480, footprint: 17200 },
-  { name: 'Kocaeli LM2', storage: 15900, picking: 2015, footprint: 48600 },
-] as const
+interface ShowcaseSite {
+  name: string
+  footprintM2: number | null
+  nodeCount: number | null
+}
+
+/**
+ * The hero rotates through the projects an administrator has published —
+ * real names and real figures, never a draft and never a demo. Until
+ * something is published there is nothing to rotate, and the panel is left
+ * out rather than filled with invented warehouses.
+ */
+function useShowcaseSites(): ShowcaseSite[] {
+  const [sites, setSites] = useState<ShowcaseSite[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/showcase', { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : { sites: [] }))
+      .then((body: { sites?: ShowcaseSite[] }) => {
+        if (!cancelled) setSites(body.sites ?? [])
+      })
+      .catch(() => {
+        /* the hero simply stays empty */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return sites
+}
 
 export function SignInScreen() {
   const { t, lang } = useApp()
@@ -50,12 +75,14 @@ export function SignInScreen() {
   const [expiredOpen, setExpiredOpen] = useState(params.get('expired') === '1')
   const [sessionMinutes, setSessionMinutes] = useState(20)
 
-  const site = SITES[siteIndex] ?? SITES[0]
+  const showcase = useShowcaseSites()
+  const site = showcase[siteIndex] ?? showcase[0]
 
   useEffect(() => {
-    const id = setInterval(() => setSiteIndex((i) => (i + 1) % SITES.length), 8000)
+    if (showcase.length < 2) return
+    const id = setInterval(() => setSiteIndex((i) => (i + 1) % showcase.length), 8000)
     return () => clearInterval(id)
-  }, [])
+  }, [showcase.length])
 
   // Countdown on the lock, ticked client-side. The server re-checks on submit,
   // so a user who edits this out only gets a 423 a moment sooner.
@@ -200,7 +227,7 @@ export function SignInScreen() {
               {t.heroLead}
             </p>
 
-            {isDesktop ? (
+            {isDesktop && site ? (
               <div className="flex min-w-0 flex-col overflow-hidden rounded-[12px] border border-border bg-surface">
                 <div className="flex items-center justify-between gap-[10px] border-b border-border-soft px-[13px] py-[9px]">
                   <span className="truncate text-xs font-semibold text-fg">{site.name}</span>
@@ -214,9 +241,8 @@ export function SignInScreen() {
                 </div>
                 <div className="flex min-w-0">
                   {[
-                    { label: t.storage, value: site.storage, unit: t.pallets },
-                    { label: t.picking, value: site.picking, unit: t.positions },
-                    { label: t.footprint, value: site.footprint, unit: 'm²' },
+                    { label: t.scScene, value: site.nodeCount ?? 0, unit: t.scNodes },
+                    { label: t.footprint, value: site.footprintM2 ?? 0, unit: 'm²' },
                   ].map((cell, i) => (
                     <div
                       key={cell.label}

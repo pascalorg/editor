@@ -24,6 +24,9 @@ interface AdminSceneRow {
   published: boolean
 }
 
+const ACTION =
+  'cursor-pointer rounded-[6px] border border-border bg-field px-[9px] py-[4px] font-medium text-[11.5px] text-fg transition-colors hover:bg-hover disabled:opacity-50'
+
 interface AdminScenesPayload {
   scenes: AdminSceneRow[]
   users: { id: string; email: string }[]
@@ -158,9 +161,9 @@ export function ScenesTab() {
                   </span>
                 </td>
                 <td className="px-[13px] py-[9px] text-right">
-                  <div className="flex justify-end gap-[6px]">
+                  <div className="flex flex-wrap justify-end gap-[6px]">
                     <button
-                      className="cursor-pointer rounded-[6px] border border-border bg-field px-[9px] py-[4px] font-medium text-[11.5px] text-fg transition-colors hover:bg-hover disabled:opacity-50"
+                      className={ACTION}
                       disabled={busy}
                       onClick={() =>
                         post('/api/admin/scenes/publish', {
@@ -171,6 +174,44 @@ export function ScenesTab() {
                       type="button"
                     >
                       {scene.published ? t.scUnpublish : t.scPublish}
+                    </button>
+                    <button
+                      className={ACTION}
+                      disabled={busy}
+                      onClick={() => {
+                        const name = window.prompt(t.scRenamePrompt, scene.name)?.trim()
+                        if (name && name !== scene.name) {
+                          void post(`/api/admin/scenes/${scene.id}/manage`, {
+                            action: 'rename',
+                            name,
+                          })
+                        }
+                      }}
+                      type="button"
+                    >
+                      {t.scRename}
+                    </button>
+                    <button
+                      className={ACTION}
+                      disabled={busy}
+                      onClick={() =>
+                        post(`/api/admin/scenes/${scene.id}/manage`, { action: 'duplicate' })
+                      }
+                      type="button"
+                    >
+                      {t.scDuplicate}
+                    </button>
+                    <button
+                      className="cursor-pointer rounded-[6px] border border-destructive/40 px-[9px] py-[4px] font-medium text-[11.5px] text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm(t.scDeleteConfirm.replace('{name}', scene.name))) {
+                          void post(`/api/admin/scenes/${scene.id}/manage`, { action: 'delete' })
+                        }
+                      }}
+                      type="button"
+                    >
+                      {t.scDelete}
                     </button>
                     <a
                       className="rounded-[6px] border border-border px-[9px] py-[4px] font-medium text-[11.5px] text-fg no-underline transition-colors hover:bg-hover"
