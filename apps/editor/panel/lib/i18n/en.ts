@@ -80,7 +80,7 @@ export const en = {
   backToSignIn: 'Back to sign in',
   inboxTitle: 'Check your inbox',
   inboxLead:
-    'A single-use reset link is on its way. It expires in 30 minutes and an administrator is notified.',
+    'A single-use reset link is on its way. It expires in 30 minutes, and the request is recorded for the administrators.',
   openLink: 'Open the emailed link (prototype)',
 
   /* ——— account request ——— */
@@ -95,7 +95,7 @@ export const en = {
   submitRequest: 'Submit request',
   reqSentTitle: 'Request submitted',
   reqSentLead:
-    'An administrator reviews new accounts in the console. You will get an email with a temporary password once it is approved.',
+    'An administrator reviews new accounts in the console. Either way you will get an email — if it is approved, with a link to set your password.',
 
   /* ——— errors ——— */
   lockedPrefix: 'Locked',

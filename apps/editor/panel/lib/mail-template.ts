@@ -17,15 +17,45 @@ import type { Lang } from './types'
 
 const BRAND = '#ffc629'
 
+/**
+ * The console's own tokens, converted from oklch to hex because mail clients do
+ * not parse oklch. Every one of them is chroma-zero — the earlier set was
+ * Tailwind zinc, which carries a blue cast, so the message read subtly cooler
+ * than the product it came from.
+ *
+ * `page` is --dt-shell, `card` is --dt-sidebar: the same pairing the console
+ * uses behind its own cards, which is what gives the card an edge rather than
+ * leaving it floating on near-white.
+ */
 const LIGHT = {
-  page: '#f4f4f5',
-  card: '#ffffff',
-  border: '#e4e4e7',
-  hairline: '#f0f0f1',
-  fg: '#18181b',
-  muted: '#6b6b73',
-  field: '#fafafa',
+  page: '#ebebeb',
+  card: '#fafafa',
+  border: '#e5e5e5',
+  hairline: '#efefef',
+  fg: '#0a0a0a',
+  muted: '#696969',
+  field: '#f4f4f4',
 }
+
+const DARK = {
+  page: '#0a0a0a',
+  card: '#171717',
+  border: '#2e2e2e',
+  hairline: '#242424',
+  fg: '#fafafa',
+  muted: '#a1a1a1',
+  field: '#121212',
+}
+
+/**
+ * One 4 px scale for every vertical gap. The previous eleven ad-hoc values had
+ * no relationship to each other, and two were outright wrong — the last fact
+ * row kept its bottom padding, and the button used a gap nothing else used.
+ */
+const GAP = { tight: 8, snug: 12, block: 20, wide: 28 }
+
+/** Four sizes, all whole pixels: Word converts px to pt and rounds half-pixels unpredictably. */
+const SIZE = { heading: 21, body: 15, meta: 13, micro: 10 }
 
 const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"
@@ -91,7 +121,7 @@ function button(action: { label: string; url: string }): string {
   const label = escapeHtml(action.label)
   return `
               <tr>
-                <td style="padding: 24px 0 0 0;">
+                <td style="padding: ${GAP.block}px 0 0 0;">
                   <!--[if mso]>
                   <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
                                href="${href}" style="height:42px;v-text-anchor:middle;width:230px;" arcsize="24%" stroke="f" fillcolor="${BRAND}">
@@ -114,19 +144,29 @@ function button(action: { label: string; url: string }): string {
 }
 
 function factRows(facts: MailFact[]): string {
+  // width="1" on the label cell is what stops the browser splitting a
+  // width="100%" table near-evenly: a five-character label was followed by
+  // ~180 px of nothing before its value began. Both cells share one
+  // line-height so the mono label sits on the value's baseline instead of
+  // floating above it.
   const rows = facts
-    .map(
-      (fact, index) => `
+    .map((fact, index) => {
+      const top = index === 0 ? 0 : GAP.snug
+      // The last row carries no bottom padding: the block's own gap follows it,
+      // and keeping both made facts → button wider than every other gap.
+      const bottom = index === facts.length - 1 ? 0 : GAP.snug
+      const rule = index === 0 ? '' : `border-top: 1px solid ${LIGHT.hairline};`
+      return `
                       <tr>
-                        <td class="dt-rule" style="padding: ${index === 0 ? '0' : '9px'} 12px 9px 0; ${index === 0 ? '' : `border-top: 1px solid ${LIGHT.hairline};`} font-family: ${MONO}; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: ${LIGHT.muted}; white-space: nowrap; vertical-align: top;" class="dt-hint">${escapeHtml(fact.label)}</td>
-                        <td class="dt-rule dt-fg" style="padding: ${index === 0 ? '0' : '9px'} 0 9px 0; ${index === 0 ? '' : `border-top: 1px solid ${LIGHT.hairline};`} font-family: ${SANS}; font-size: 13.5px; line-height: 1.5; color: ${LIGHT.fg}; vertical-align: top;">${escapeHtml(fact.value)}</td>
-                      </tr>`,
-    )
+                        <td width="1" class="dt-rule dt-hint" style="padding: ${top}px 14px ${bottom}px 0; ${rule} font-family: ${MONO}; font-size: ${SIZE.micro}px; line-height: 20px; letter-spacing: 0.12em; text-transform: uppercase; color: ${LIGHT.muted}; white-space: nowrap; vertical-align: top;">${escapeHtml(fact.label)}</td>
+                        <td class="dt-rule dt-fg" style="padding: ${top}px 0 ${bottom}px 0; ${rule} font-family: ${SANS}; font-size: ${SIZE.meta}px; line-height: 20px; color: ${LIGHT.fg}; vertical-align: top;">${escapeHtml(fact.value)}</td>
+                      </tr>`
+    })
     .join('')
 
   return `
               <tr>
-                <td style="padding: 20px 0 0 0;">
+                <td style="padding: ${GAP.block}px 0 0 0;">
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${rows}
                   </table>
                 </td>
@@ -143,9 +183,9 @@ export function renderMail(page: MailPage): string {
   const fallback = page.action
     ? `
               <tr>
-                <td style="padding: 20px 0 0 0;">
-                  <div class="dt-hint" style="font-family: ${SANS}; font-size: 12px; line-height: 1.5; color: ${LIGHT.muted}; padding-bottom: 7px;">${chrome.paste}</div>
-                  <div class="dt-field" style="font-family: ${MONO}; font-size: 11.5px; line-height: 1.6; color: ${LIGHT.fg}; background: ${LIGHT.field}; border: 1px solid ${LIGHT.border}; border-radius: 8px; padding: 10px 12px; word-break: break-all;">${escapeHtml(page.action.url)}</div>
+                <td style="padding: ${GAP.block}px 0 0 0;">
+                  <div class="dt-hint" style="font-family: ${SANS}; font-size: ${SIZE.meta}px; line-height: 1.5; color: ${LIGHT.muted}; padding-bottom: ${GAP.tight}px;">${chrome.paste}</div>
+                  <div class="dt-field" style="font-family: ${MONO}; font-size: 12px; line-height: 1.6; color: ${LIGHT.fg}; background: ${LIGHT.field}; border: 1px solid ${LIGHT.border}; border-radius: 8px; padding: 10px 12px; word-break: break-all;">${escapeHtml(page.action.url)}</div>
                 </td>
               </tr>`
     : ''
@@ -153,12 +193,12 @@ export function renderMail(page: MailPage): string {
   const callout = page.callout
     ? `
               <tr>
-                <td style="padding: 20px 0 0 0;">
+                <td style="padding: ${GAP.block}px 0 0 0;">
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="dt-field"
                          style="background: ${LIGHT.field}; border: 1px solid ${LIGHT.border}; border-radius: 8px;">
                     <tr>
                       <td style="padding: 13px 15px;">
-                        <div class="dt-hint" style="font-family: ${MONO}; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: ${LIGHT.muted}; padding-bottom: 6px;">${escapeHtml(page.callout.label)}</div>
+                        <div class="dt-hint" style="font-family: ${MONO}; font-size: ${SIZE.micro}px; letter-spacing: 0.12em; text-transform: uppercase; color: ${LIGHT.muted}; padding-bottom: 6px;">${escapeHtml(page.callout.label)}</div>
                         <!-- dt-fg, not just the box's dt-field: an inline colour on this
                              element beats the colour it would otherwise inherit, and a
                              temporary password rendered near-black on near-black is a
@@ -176,7 +216,7 @@ export function renderMail(page: MailPage): string {
   const note = page.note
     ? `
               <tr>
-                <td class="dt-hint" style="padding: 20px 0 0 0; font-family: ${SANS}; font-size: 12.5px; line-height: 1.6; color: ${LIGHT.muted};">${escapeHtml(page.note)}</td>
+                <td class="dt-hint" style="padding: ${GAP.block}px 0 0 0; font-family: ${SANS}; font-size: ${SIZE.meta}px; line-height: 1.6; color: ${LIGHT.muted};">${escapeHtml(page.note)}</td>
               </tr>`
     : ''
 
@@ -191,12 +231,13 @@ export function renderMail(page: MailPage): string {
 <!--[if mso]><style>body,table,td,a{font-family:Arial,Helvetica,sans-serif !important}</style><![endif]-->
 <style>
   @media (prefers-color-scheme: dark) {
-    .dt-page { background: #131316 !important; }
-    .dt-card { background: #1c1c1f !important; border-color: #2c2c31 !important; }
-    .dt-fg { color: #fafafa !important; }
-    .dt-hint { color: #a1a1aa !important; }
-    .dt-rule { border-color: #2c2c31 !important; }
-    .dt-field { background: #16161a !important; border-color: #2c2c31 !important; color: #fafafa !important; }
+    .dt-page { background: ${DARK.page} !important; }
+    .dt-card { background: ${DARK.card} !important; border-color: ${DARK.border} !important; }
+    .dt-fg { color: ${DARK.fg} !important; }
+    .dt-hint { color: ${DARK.muted} !important; }
+    .dt-rule { border-color: ${DARK.border} !important; }
+    .dt-divider { background: ${DARK.border} !important; }
+    .dt-field { background: ${DARK.field} !important; border-color: ${DARK.border} !important; color: ${DARK.fg} !important; }
   }
   @media only screen and (max-width: 600px) {
     .dt-card-pad { padding: 24px 20px !important; }
@@ -209,32 +250,42 @@ export function renderMail(page: MailPage): string {
     <tr>
       <td align="center" style="padding: 32px 16px;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="dt-card"
-               style="max-width: 520px; background: ${LIGHT.card}; border: 1px solid ${LIGHT.border}; border-radius: 12px;">
+               style="max-width: 520px; background: ${LIGHT.card}; border: 1px solid ${LIGHT.border}; border-radius: 14px;">
           <tr>
-            <td class="dt-card-pad" style="padding: 28px 30px 30px 30px;">
+            <td class="dt-card-pad" style="padding: ${GAP.wide}px;">
+              <!-- The console's lockup, cell for cell: mark, 1 px hairline, product
+                   name. The divider is the signature — without it the mark reads as
+                   the DigitalTwin logo; with it, correctly, as Netlog's mark carrying
+                   DigitalTwin's name. alt is "Netlog" for the same reason: with images
+                   blocked (Outlook's default) alt="DigitalTwin" beside the wordmark
+                   rendered the header as "DigitalTwin DigitalTwin". -->
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="padding-right: 9px; line-height: 0;">
+                  <td style="padding-right: 10px; line-height: 0;">
                     <img src="${escapeHtml(page.origin)}/brand/digitaltwin-mark.png"
-                         width="30" height="22" alt="DigitalTwin"
+                         width="30" height="22" alt="Netlog"
                          style="display: block; width: 30px; height: 22px; border: 0;">
                   </td>
-                  <td class="dt-fg" style="font-family: ${SANS}; font-size: 15px; font-weight: 600; color: ${LIGHT.fg}; letter-spacing: -0.01em;">DigitalTwin</td>
+                  <td class="dt-divider" width="1" style="width: 1px; padding: 0; background: ${LIGHT.border}; font-size: 0; line-height: 0;">&nbsp;</td>
+                  <td class="dt-fg" style="padding-left: 10px; font-family: ${SANS}; font-size: 14px; font-weight: 600; color: ${LIGHT.fg}; letter-spacing: -0.01em;">DigitalTwin</td>
                 </tr>
               </table>
 
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
-                  <td class="dt-rule" style="padding: 20px 0 0 0; border-bottom: 1px solid ${LIGHT.border}; font-size: 0; line-height: 0;">&nbsp;</td>
+                  <td class="dt-rule" style="padding: ${GAP.block}px 0 0 0; border-bottom: 1px solid ${LIGHT.border}; font-size: 0; line-height: 0;">&nbsp;</td>
                 </tr>
                 <tr>
-                  <td class="dt-hint" style="padding: 20px 0 0 0; font-family: ${MONO}; font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: ${LIGHT.muted};">${escapeHtml(page.label)}</td>
+                  <td class="dt-hint" style="padding: ${GAP.block}px 0 0 0; font-family: ${MONO}; font-size: ${SIZE.micro}px; letter-spacing: 0.12em; text-transform: uppercase; color: ${LIGHT.muted};">${escapeHtml(page.label)}</td>
                 </tr>
                 <tr>
-                  <td class="dt-fg" style="padding: 8px 0 0 0; font-family: ${SANS}; font-size: 20px; font-weight: 600; line-height: 1.35; color: ${LIGHT.fg}; letter-spacing: -0.015em;">${escapeHtml(page.heading)}</td>
+                  <td class="dt-fg" style="padding: ${GAP.tight}px 0 0 0; font-family: ${SANS}; font-size: ${SIZE.heading}px; font-weight: 600; line-height: 1.3; color: ${LIGHT.fg}; letter-spacing: -0.015em;">${escapeHtml(page.heading)}</td>
                 </tr>
+                <!-- The lead reads in the foreground colour and the small print below
+                     stays muted. Both were grey, separated by a point and a half of
+                     size, which left the card one flat slab with no hierarchy. -->
                 <tr>
-                  <td class="dt-hint" style="padding: 10px 0 0 0; font-family: ${SANS}; font-size: 14px; line-height: 1.65; color: ${LIGHT.muted};">${escapeHtml(page.intro)}</td>
+                  <td class="dt-fg" style="padding: ${GAP.snug}px 0 0 0; font-family: ${SANS}; font-size: ${SIZE.body}px; line-height: 1.6; color: ${LIGHT.fg};">${escapeHtml(page.intro)}</td>
                 </tr>${facts}${callout}${action}${fallback}${note}
               </table>
             </td>
@@ -243,7 +294,7 @@ export function renderMail(page: MailPage): string {
 
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 520px;">
           <tr>
-            <td class="dt-hint" align="center" style="padding: 18px 8px 0 8px; font-family: ${SANS}; font-size: 11.5px; line-height: 1.7; color: ${LIGHT.muted};">${escapeHtml(page.footer).replace(/\n/g, '<br>')}<br>${chrome.automated}</td>
+            <td class="dt-hint" align="center" style="padding: ${GAP.block}px 8px 0 8px; font-family: ${MONO}; font-size: 9.5px; line-height: 1.8; letter-spacing: 0.06em; color: ${LIGHT.muted};">${escapeHtml(page.footer).replace(/\n/g, '<br>')}<br>${chrome.automated}</td>
           </tr>
         </table>
       </td>

@@ -242,7 +242,6 @@ export async function deliverInvite(opts: {
   email: string
   fullName: string
   token: string
-  temporaryPassword?: string
   expiresAt: string
   lang?: Lang
 }): Promise<void> {
@@ -261,7 +260,6 @@ export async function deliverInvite(opts: {
           heading: 'Hesabınız hazır',
           intro: `${opts.fullName}, bir yönetici sizin için bir DigitalTwin hesabı oluşturdu. Başlamak için parolanızı belirleyin ve iki adımlı doğrulamayı kurun.`,
           action: 'Hesabımı etkinleştir',
-          calloutLabel: 'Geçici parola',
           note: `Bağlantı ${days} gün geçerlidir. İlk girişte kendi parolanızı belirlemeniz istenecek.`,
           preheader: 'Parolanızı belirleyin ve iki adımlı doğrulamayı kurun.',
         }
@@ -271,7 +269,6 @@ export async function deliverInvite(opts: {
           heading: 'Your account is ready',
           intro: `${opts.fullName}, an administrator created a DigitalTwin account for you. Set your password and enrol two-factor authentication to get started.`,
           action: 'Activate my account',
-          calloutLabel: 'Temporary password',
           note: `The link is valid for ${days} day(s). You will be asked to set your own password on first sign-in.`,
           preheader: 'Set your password and enrol two-factor authentication.',
         }
@@ -281,9 +278,6 @@ export async function deliverInvite(opts: {
     heading: copy.heading,
     intro: copy.intro,
     facts: [account(lang, opts.email)],
-    callout: opts.temporaryPassword
-      ? { label: copy.calloutLabel, value: opts.temporaryPassword }
-      : undefined,
     action: { label: copy.action, url },
     note: copy.note,
     preheader: copy.preheader,
@@ -361,14 +355,13 @@ export async function deliverRequestRejected(opts: {
 /* ── Security notices ────────────────────────────────────────────────────── */
 
 /**
- * A password changed. Sent after a self-service change and after a reset is
- * completed alike: the point is that the owner finds out even when it was not
- * them who did it.
+ * A password changed — by a reset link, or on a forced first sign-in. The
+ * point is that the owner finds out even when it was not them who did it.
  */
 export async function deliverPasswordChanged(opts: {
   email: string
   fullName: string
-  via: 'reset' | 'self' | 'first-sign-in'
+  via: 'reset' | 'first-sign-in'
   lang?: Lang
 }): Promise<void> {
   const lang = opts.lang ?? (await localeFor(opts.email))

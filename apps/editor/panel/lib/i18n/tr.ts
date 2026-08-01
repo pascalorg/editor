@@ -82,7 +82,7 @@ export const tr: Dictionary = {
   backToSignIn: 'Girişe dön',
   inboxTitle: 'Gelen kutunuzu kontrol edin',
   inboxLead:
-    'Tek kullanımlık sıfırlama bağlantısı yolda. 30 dakika içinde geçersiz olur ve bir yönetici bilgilendirilir.',
+    'Tek kullanımlık sıfırlama bağlantısı yolda. 30 dakika içinde geçersiz olur ve istek yöneticiler için kayda geçer.',
   openLink: 'E-postadaki bağlantıyı aç (prototip)',
 
   /* ——— hesap talebi ——— */
@@ -97,7 +97,7 @@ export const tr: Dictionary = {
   submitRequest: 'Talebi gönder',
   reqSentTitle: 'Talep iletildi',
   reqSentLead:
-    'Yeni hesapları bir yönetici konsolda inceler. Onaylandığında geçici şifrenizi e-posta ile alırsınız.',
+    'Yeni hesapları bir yönetici konsolda inceler. Sonuç ne olursa olsun size e-posta gelir; onaylanırsa parolanızı belirleyeceğiniz bağlantıyla birlikte.',
 
   /* ——— hatalar ——— */
   lockedPrefix: 'Kilitli',
