@@ -1,6 +1,6 @@
 import { fail, handler, ok } from '@panel/lib/api'
 import type { OverviewResponse } from '@panel/lib/api-contract'
-import { requireSession } from '@panel/lib/auth/guard'
+import { requirePermission } from '@panel/lib/auth/guard'
 import { queryOne, type RowDataPacket } from '@panel/lib/db'
 import { readHealth } from '@panel/lib/health'
 import { listLogs, recentActors } from '@panel/lib/logs'
@@ -16,8 +16,12 @@ export const dynamic = 'force-dynamic'
  * screen that always shows all four together.
  */
 export const GET = handler(async () => {
-  const guard = await requireSession()
-  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired')
+  const guard = await requirePermission('admin_access')
+  if (!guard.ok) {
+    return guard.reason === 'forbidden'
+      ? fail('forbidden', 'err.forbidden')
+      : fail('unauthenticated', 'err.sessionExpired')
+  }
 
   const counts = await queryOne<
     RowDataPacket & {

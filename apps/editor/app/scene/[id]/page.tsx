@@ -1,5 +1,6 @@
 import type { SceneGraph } from '@pascal-app/editor'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { SceneLoader, type SceneMeta } from '@/components/scene-loader'
 import { authAvailable } from '@/lib/auth/db'
 import { canEdit, getSessionUser } from '@/lib/auth/session'
@@ -18,6 +19,13 @@ async function fetchScene(id: string): Promise<SceneWithGraph | null> {
 
 export default async function ScenePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+
+  // A scene is company work, and a link to one is not a licence to read it.
+  // The root and /scenes already sent strangers to sign in; this page did not,
+  // so anyone holding a scene id could open the drawing without an account.
+  const viewer = authAvailable() ? await getSessionUser() : null
+  if (authAvailable() && !viewer) redirect('/signin')
+
   const scene = await fetchScene(id)
 
   if (!scene) {
@@ -50,8 +58,7 @@ export default async function ScenePage({ params }: { params: Promise<{ id: stri
 
   // A view-only account gets the scene in preview; the server refuses its
   // writes regardless. Without auth (SQLite dev) everything stays editable.
-  const user = authAvailable() ? await getSessionUser() : null
-  const readOnly = authAvailable() && (!user || !canEdit(user))
+  const readOnly = authAvailable() && (!viewer || !canEdit(viewer))
 
   const { graph, ...meta } = scene
   return <SceneLoader initialScene={graph} meta={meta} readOnly={readOnly} />

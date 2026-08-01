@@ -1,7 +1,7 @@
 import { fail, handler, ok, parseBody } from '@panel/lib/api'
 import { createRoleSchema, type RolesFullResponse } from '@panel/lib/api-contract'
 import { audit } from '@panel/lib/auth/audit'
-import { requirePermission, requireSession } from '@panel/lib/auth/guard'
+import { requirePermission } from '@panel/lib/auth/guard'
 import { allRoles, invalidateRolesCache } from '@panel/lib/auth/roles'
 import { exec, query, type RowDataPacket } from '@panel/lib/db'
 
@@ -23,8 +23,12 @@ async function rolesWithCounts(canEdit: boolean): Promise<RolesFullResponse> {
 
 /** GET /api/roles — the permission matrix and the role cards read from here. */
 export const GET = handler(async () => {
-  const guard = await requireSession()
-  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired')
+  const guard = await requirePermission('admin_access')
+  if (!guard.ok) {
+    return guard.reason === 'forbidden'
+      ? fail('forbidden', 'err.forbidden')
+      : fail('unauthenticated', 'err.sessionExpired')
+  }
   return ok(await rolesWithCounts(guard.session.user.permissions.includes('edit_roles')))
 })
 

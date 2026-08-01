@@ -35,7 +35,7 @@ export const tr: Dictionary = {
   qlProjects: 'Editör projeleri',
   qlViewer: 'Görüntüleyici modu',
   qlGuides: 'Kullanım kılavuzları',
-  qlChangelog: 'Sürüm notları v0.9.1',
+  qlChangelog: 'Sürüm notları',
   noAccount: 'Hesabınız yok mu?',
   requestAccount: 'Hesap talebi oluştur',
   internalOnly: 'Dahili sistem — yalnızca yetkili personel',
@@ -47,6 +47,19 @@ export const tr: Dictionary = {
   sessionExpiredLead:
     '{minutes} dakika işlem yapılmadığı için oturumunuz askıya alındı. Kaldığınız yerden devam etmek için tekrar giriş yapın.',
   okLabel: 'Tamam',
+
+  /* ——— izin etiketleri ——— */
+  perm: {
+    admin_access: 'Yönetici erişimi',
+    edit_projects: 'Projeleri düzenle',
+    create_projects: 'Proje oluştur',
+    delete_projects: 'Proje sil',
+    access_settings: 'Ayarlara eriş',
+    view_projects: 'Projeleri görüntüle',
+    edit_users: 'Kullanıcıları düzenle',
+    edit_roles: 'Rolleri düzenle',
+    view_logs: 'Günlükleri görüntüle',
+  },
 
   /* ——— iki adımlı doğrulama ——— */
   step2: '2. adım / 2',

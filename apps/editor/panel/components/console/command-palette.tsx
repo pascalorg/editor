@@ -53,7 +53,7 @@ export function CommandPalette({
   open: boolean
   onClose: () => void
 }) {
-  const { t, lang, theme, toggleTheme } = useApp()
+  const { t, lang, themeChoice, setThemeChoice } = useApp()
   const router = useRouter()
 
   const [query, setQuery] = useState('')
@@ -142,12 +142,22 @@ export function CommandPalette({
     if (can('edit_roles')) {
       actions.push({ id: 'act:role', label: t.cpNewRole, hint: t.c.roles, run: () => go('roles') })
     }
+    // Same three-state cycle as the header button and the Appearance row —
+    // a palette action that only flipped light/dark could not get back to
+    // "system", which is the default the rest of the app respects.
+    const nextChoice =
+      themeChoice === 'system' ? 'light' : themeChoice === 'light' ? 'dark' : 'system'
     actions.push({
       id: 'act:theme',
-      label: theme === 'dark' ? t.cpThemeLight : t.cpThemeDark,
+      label:
+        nextChoice === 'system'
+          ? t.seSystem
+          : nextChoice === 'light'
+            ? t.cpThemeLight
+            : t.cpThemeDark,
       hint: t.seAppearance,
       run: () => {
-        toggleTheme()
+        setThemeChoice(nextChoice)
         onClose()
       },
     })
@@ -185,7 +195,19 @@ export function CommandPalette({
     ]
       .map((group) => ({ ...group, items: group.items.slice(0, MAX_PER_GROUP) }))
       .filter((group) => group.items.length > 0)
-  }, [query, lang, t, user.permissions, can, theme, toggleTheme, people, go, onClose, router])
+  }, [
+    query,
+    lang,
+    t,
+    user.permissions,
+    can,
+    themeChoice,
+    setThemeChoice,
+    people,
+    go,
+    onClose,
+    router,
+  ])
 
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups])
   const active = flat[Math.min(cursor, flat.length - 1)]

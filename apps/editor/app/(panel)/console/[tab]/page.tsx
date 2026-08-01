@@ -18,6 +18,12 @@ export default async function ConsoleTabPage({ params }: { params: Promise<{ tab
   const session = await getSession()
   if (!session) redirect('/signin')
 
+  // The console is administration, and administration is for administrators.
+  // Without this a view-only account reached Overview, Users and Sessions —
+  // every colleague's name, address and login history — because those tabs
+  // carry no permission of their own.
+  if (!session.user.permissions.includes('admin_access')) redirect('/')
+
   // Permission is re-checked here, not just hidden in the rail: a hand-typed URL
   // to a tab the role cannot see lands on Overview instead of rendering it.
   const required = tabPermission(tab)

@@ -33,7 +33,7 @@ export const en = {
   qlProjects: 'Editor projects',
   qlViewer: 'Viewer mode',
   qlGuides: 'User guides',
-  qlChangelog: 'Changelog v0.9.1',
+  qlChangelog: 'Changelog',
   noAccount: 'No account yet?',
   requestAccount: 'Request an account',
   internalOnly: 'Internal system — authorised personnel only',
@@ -45,6 +45,19 @@ export const en = {
   sessionExpiredLead:
     'Your session was suspended after {minutes} minutes of inactivity. Sign in again to resume your work.',
   okLabel: 'OK',
+
+  /* ——— permission labels ——— */
+  perm: {
+    admin_access: 'Admin access',
+    edit_projects: 'Edit projects',
+    create_projects: 'Create projects',
+    delete_projects: 'Delete projects',
+    access_settings: 'Access settings',
+    view_projects: 'View projects',
+    edit_users: 'Edit users',
+    edit_roles: 'Edit roles',
+    view_logs: 'View logs',
+  },
 
   /* ——— two-factor ——— */
   step2: 'Step 2 of 2',

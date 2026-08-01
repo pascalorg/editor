@@ -1,7 +1,7 @@
 import { fail, handler, ok, parseBody } from '@panel/lib/api'
 import { createSiteSchema } from '@panel/lib/api-contract'
 import { audit } from '@panel/lib/auth/audit'
-import { requirePermission, requireSession } from '@panel/lib/auth/guard'
+import { requirePermission } from '@panel/lib/auth/guard'
 import { exec, query, queryOne, type RowDataPacket } from '@panel/lib/db'
 import { enqueueJob, startJobWorker } from '@panel/lib/jobs'
 import type { Site } from '@panel/lib/types'
@@ -12,8 +12,12 @@ export const dynamic = 'force-dynamic'
 
 /** GET /api/sites — every site, archived ones included, newest name order. */
 export const GET = handler(async () => {
-  const guard = await requireSession()
-  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired')
+  const guard = await requirePermission('admin_access')
+  if (!guard.ok) {
+    return guard.reason === 'forbidden'
+      ? fail('forbidden', 'err.forbidden')
+      : fail('unauthenticated', 'err.sessionExpired')
+  }
 
   const rows = await query<
     RowDataPacket & {

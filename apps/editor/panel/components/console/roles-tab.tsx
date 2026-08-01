@@ -8,7 +8,7 @@ import type { RolesFullResponse } from '@panel/lib/api-contract'
 import { call } from '@panel/lib/client-api'
 import { cn } from '@panel/lib/cn'
 import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint'
-import { collator, resolveApiMessage } from '@panel/lib/i18n'
+import { collator, type Dictionary, resolveApiMessage } from '@panel/lib/i18n'
 import { PERMISSIONS, type Permission } from '@panel/lib/types'
 import { Check, ChevronDown, ChevronUp, Minus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -198,7 +198,7 @@ export function RolesTab() {
               style={{ gridTemplateColumns: cols }}
             >
               <div className="flex min-w-0 flex-col">
-                <span className="truncate text-[12.5px]">{labelFor(permission)}</span>
+                <span className="truncate text-[12.5px]">{labelFor(t, permission)}</span>
                 <span className="font-mono text-[9px] text-muted-fg">{permission}</span>
               </div>
               {visible.map((role) => {
@@ -306,7 +306,7 @@ export function RolesTab() {
                           className="h-[14px] w-[14px] shrink-0 cursor-pointer"
                           style={{ accentColor: 'var(--dt-brand)' }}
                         />
-                        <span className="truncate">{labelFor(permission)}</span>
+                        <span className="truncate">{labelFor(t, permission)}</span>
                       </label>
                     ))}
                   </div>
@@ -358,7 +358,13 @@ export function RolesTab() {
   )
 }
 
-/** Human label for a permission key; the mono key stays visible beside it. */
-function labelFor(permission: Permission): string {
-  return permission.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
+/**
+ * Human label for a permission key; the mono key stays visible beside it.
+ *
+ * From the dictionary, not from the key itself — deriving "Edit users" by
+ * replacing underscores left the whole permission matrix in English for a
+ * Turkish reader, on the one screen where the words decide who can do what.
+ */
+function labelFor(t: Dictionary, permission: Permission): string {
+  return t.perm[permission]
 }

@@ -1,7 +1,7 @@
 import { fail, handler, ok, parseBody } from '@panel/lib/api'
 import { type UserDetailResponse, updateUserSchema } from '@panel/lib/api-contract'
 import { audit } from '@panel/lib/auth/audit'
-import { requirePermission, requireSession } from '@panel/lib/auth/guard'
+import { requirePermission } from '@panel/lib/auth/guard'
 import { allRoles } from '@panel/lib/auth/roles'
 import { revokeAllSessions } from '@panel/lib/auth/session'
 import { queryOne, type RowDataPacket } from '@panel/lib/db'
@@ -13,8 +13,12 @@ export const dynamic = 'force-dynamic'
 
 /** GET /api/users/:id — everything the detail drawer renders. */
 export const GET = handler(async (_request: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const guard = await requireSession()
-  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired')
+  const guard = await requirePermission('admin_access')
+  if (!guard.ok) {
+    return guard.reason === 'forbidden'
+      ? fail('forbidden', 'err.forbidden')
+      : fail('unauthenticated', 'err.sessionExpired')
+  }
 
   const { id } = await ctx.params
   const user = await getUserDetail(id)

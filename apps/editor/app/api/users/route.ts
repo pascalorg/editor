@@ -5,7 +5,7 @@ import {
   type UsersListResponse,
 } from '@panel/lib/api-contract'
 import { audit } from '@panel/lib/auth/audit'
-import { requirePermission, requireSession } from '@panel/lib/auth/guard'
+import { requirePermission } from '@panel/lib/auth/guard'
 import { issueInvitation } from '@panel/lib/auth/invitations'
 import { allRoles } from '@panel/lib/auth/roles'
 import { WORK_DOMAIN } from '@panel/lib/auth/users'
@@ -33,7 +33,7 @@ const SORTS: UserSortKey[] = ['name', 'email', 'username', 'role', 'status']
  * read-only banner keys off. Mutation is a separate gate below.
  */
 export const GET = handler(async (request: Request) => {
-  const guard = await requireSession()
+  const guard = await requirePermission('admin_access')
   if (!guard.ok) {
     return guard.reason === 'forbidden'
       ? fail('forbidden', 'err.forbidden')

@@ -1,7 +1,7 @@
 import { fail, handler, ok, parseBody } from '@panel/lib/api'
 import { type SettingsResponse, updateSettingsSchema } from '@panel/lib/api-contract'
 import { audit } from '@panel/lib/auth/audit'
-import { requirePermission, requireSession } from '@panel/lib/auth/guard'
+import { requirePermission } from '@panel/lib/auth/guard'
 import { exec } from '@panel/lib/db'
 import { getSettings, invalidateSettingsCache } from '@panel/lib/settings'
 
@@ -15,8 +15,12 @@ export const dynamic = 'force-dynamic'
  * explicit that enforcement lives on the server, not in this screen.
  */
 export const GET = handler(async () => {
-  const guard = await requireSession()
-  if (!guard.ok) return fail('unauthenticated', 'err.sessionExpired')
+  const guard = await requirePermission('admin_access')
+  if (!guard.ok) {
+    return guard.reason === 'forbidden'
+      ? fail('forbidden', 'err.forbidden')
+      : fail('unauthenticated', 'err.sessionExpired')
+  }
 
   const body: SettingsResponse = {
     settings: await getSettings(),
