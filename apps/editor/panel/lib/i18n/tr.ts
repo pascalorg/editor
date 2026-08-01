@@ -202,6 +202,9 @@ export const tr: Dictionary = {
   cpEmpty: 'Buna uyan bir şey yok.',
 
   a11yTheme: 'Gündüz/gece modunu değiştir',
+  themeSystem: 'Tema: sistem',
+  themeLight: 'Tema: açık',
+  themeDark: 'Tema: koyu',
   a11yPalette: 'Komut paletini aç',
   a11yUserDetail: 'Kullanıcı ayrıntısını aç',
   a11yPrevPage: 'Önceki sayfa',

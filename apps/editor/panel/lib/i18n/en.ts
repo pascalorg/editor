@@ -204,6 +204,9 @@ export const en = {
   cpEmpty: 'Nothing matches that.',
 
   a11yTheme: 'Toggle day/night mode',
+  themeSystem: 'Theme: system',
+  themeLight: 'Theme: light',
+  themeDark: 'Theme: dark',
   a11yPalette: 'Open command palette',
   a11yUserDetail: 'Open user detail',
   a11yPrevPage: 'Previous page',

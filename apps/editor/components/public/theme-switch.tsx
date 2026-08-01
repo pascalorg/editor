@@ -6,13 +6,15 @@ type Choice = 'system' | 'light' | 'dark'
 
 const COOKIE = 'digitaltwin_theme'
 const CHOICE_COOKIE = 'digitaltwin_theme_choice'
+const ORDER: Choice[] = ['system', 'light', 'dark']
 
 /**
- * System / Light / Dark, in that order — “system” is the default and means
- * exactly that: the page follows the operating system and keeps following it
- * when the OS flips at dusk, rather than freezing whatever it was at first
- * paint. The resolved value is mirrored into a cookie so the server renders
- * the same theme on the next request and the page never flashes.
+ * One button, cycling System → Light → Dark.
+ *
+ * It starts on System and System means it: the page follows the operating
+ * system and keeps following it when the OS flips at dusk. Clicking once
+ * pins Light, again Dark, again back to System — an explicit choice then
+ * survives the OS changing under it.
  */
 export function ThemeSwitch({ labels }: { labels: Record<Choice, string> }) {
   const [choice, setChoice] = useState<Choice>('system')
@@ -30,15 +32,28 @@ export function ThemeSwitch({ labels }: { labels: Record<Choice, string> }) {
     document.documentElement.dataset.dtTheme = resolved
     document.cookie = `${COOKIE}=${resolved}; path=/; max-age=31536000; samesite=lax`
     document.cookie = `${CHOICE_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`
+    // The console reads the choice from localStorage and treats it as the
+    // authority over the cookie, so a choice made here has to be written to
+    // both or signing in would silently undo it.
+    try {
+      localStorage.setItem(COOKIE, next)
+    } catch {
+      /* private mode — the cookie still carries the choice */
+    }
   }, [])
 
   useEffect(() => {
-    const stored = document.cookie
+    let stored: string | null | undefined
+    try {
+      stored = localStorage.getItem(COOKIE)
+    } catch {
+      /* ignore */
+    }
+    stored ??= document.cookie
       .split('; ')
       .find((c) => c.startsWith(`${CHOICE_COOKIE}=`))
-      ?.split('=')[1] as Choice | undefined
-    const initial: Choice =
-      stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system'
+      ?.split('=')[1]
+    const initial: Choice = ORDER.includes(stored as Choice) ? (stored as Choice) : 'system'
     setChoice(initial)
     apply(initial)
   }, [apply])
@@ -52,32 +67,21 @@ export function ThemeSwitch({ labels }: { labels: Record<Choice, string> }) {
     return () => media.removeEventListener('change', onChange)
   }, [choice, apply])
 
-  const pick = (next: Choice) => {
+  const cycle = () => {
+    const next = ORDER[(ORDER.indexOf(choice) + 1) % ORDER.length] ?? 'system'
     setChoice(next)
     apply(next)
   }
 
   return (
-    <div
-      aria-label="Theme"
-      className="flex items-center gap-px rounded-full border border-border bg-surface p-[2px]"
-      role="group"
+    <button
+      aria-label={labels[choice]}
+      className="flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-full border border-border bg-surface text-[12px] text-muted-fg transition-colors hover:text-fg"
+      onClick={cycle}
+      title={labels[choice]}
+      type="button"
     >
-      {(['system', 'light', 'dark'] as const).map((option) => (
-        <button
-          aria-pressed={choice === option}
-          className={`cursor-pointer rounded-full px-[9px] py-[3px] text-[11px] transition-colors ${
-            choice === option ? 'bg-hover text-fg' : 'text-muted-fg hover:text-fg'
-          }`}
-          key={option}
-          onClick={() => pick(option)}
-          title={labels[option]}
-          type="button"
-        >
-          {option === 'system' ? '◐' : option === 'light' ? '☀' : '☾'}
-          <span className="sr-only">{labels[option]}</span>
-        </button>
-      ))}
-    </div>
+      {choice === 'system' ? '◐' : choice === 'light' ? '☀' : '☾'}
+    </button>
   )
 }

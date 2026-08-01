@@ -1,7 +1,7 @@
 'use client';
 
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Monitor, Moon, Sun } from 'lucide-react';
 import { useApp } from '@panel/components/app-providers';
 import { Caps } from '@panel/components/ui/caps';
 import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint';
@@ -113,23 +113,35 @@ export function AuthCard({
   );
 }
 
+/**
+ * One button, cycling System → Light → Dark. System is the default and keeps
+ * following the OS; picking Light or Dark pins it until the cycle comes round
+ * again. Three separate controls for one setting was one too many.
+ */
 export function ThemeToggle() {
-  const { t, theme, toggleTheme } = useApp();
+  const { t, themeChoice, setThemeChoice } = useApp();
   const { touch, isMobile } = useBreakpoint();
+
+  const order = ['system', 'light', 'dark'] as const;
+  const next = order[(order.indexOf(themeChoice) + 1) % order.length] ?? 'system';
+  const label =
+    themeChoice === 'system' ? t.themeSystem : themeChoice === 'light' ? t.themeLight : t.themeDark;
 
   return (
     <button
       type="button"
-      onClick={toggleTheme}
-      title={t.a11yTheme}
-      aria-label={t.a11yTheme}
+      onClick={() => setThemeChoice(next)}
+      title={label}
+      aria-label={label}
       className={cn(
         'flex shrink-0 items-center justify-center border border-border bg-field text-fg hover:bg-hover',
         touch ? 'h-11 w-11' : 'h-7 w-7',
         isMobile ? 'rounded-[10px]' : 'rounded-[8px]',
       )}
     >
-      {theme === 'dark' ? (
+      {themeChoice === 'system' ? (
+        <Monitor className="block h-[15px] w-[15px]" strokeWidth={2.5} />
+      ) : themeChoice === 'light' ? (
         <Sun className="block h-[15px] w-[15px]" strokeWidth={2.5} />
       ) : (
         <Moon className="block h-[15px] w-[15px]" strokeWidth={2.5} />

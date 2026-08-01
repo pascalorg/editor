@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { BrandLockup } from '@/components/brand-mark'
+import { LangSwitch } from '@/components/public/lang-switch'
 import { ThemeSwitch } from '@/components/public/theme-switch'
 import { authAvailable } from '@/lib/auth/db'
 import { getSessionUser } from '@/lib/auth/session'
@@ -48,11 +49,12 @@ export default async function PublicLayout({ children }: { children: ReactNode }
             <Link className="text-muted-fg no-underline hover:text-fg" href="/changelog">
               {lang === 'tr' ? 'Sürüm notları' : 'Changelog'}
             </Link>
+            <LangSwitch />
             <ThemeSwitch
               labels={{
-                system: lang === 'tr' ? 'Sistem' : 'System',
-                light: lang === 'tr' ? 'Açık' : 'Light',
-                dark: lang === 'tr' ? 'Koyu' : 'Dark',
+                system: t.themeSystem,
+                light: t.themeLight,
+                dark: t.themeDark,
               }}
             />
             <Link

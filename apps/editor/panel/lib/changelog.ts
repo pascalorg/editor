@@ -25,8 +25,8 @@ const SOURCES = {
   console: { owner: 'ovurrsl', repo: 'panel' },
 } as const
 
-const CACHE_TTL_MS = 60_000
-const FETCH_TIMEOUT_MS = 4000
+const CACHE_TTL_MS = 300_000
+const FETCH_TIMEOUT_MS = 2500
 
 interface Cache {
   entries: ReleaseEntry[]
@@ -223,29 +223,43 @@ function snapshot(): Cache {
 }
 
 /**
- * Cached upstream read. Concurrent callers share one in-flight request — without
- * that, a page load with two components mounted would fire two fetches and burn
- * the rate limit twice as fast.
+ * Cached upstream read that never makes a reader wait on GitHub.
+ *
+ * The page always renders from what is already here — the last good fetch, or
+ * the bundled snapshot — and a refresh happens behind it. Blocking was the
+ * wrong trade: three repositories, one of them private, each up to a couple of
+ * seconds when the network is unhappy, on a page a signed-out visitor opens
+ * from the sign-in screen.
+ *
+ * Concurrent callers share one in-flight refresh; without that, two components
+ * mounting together would fire two fetches and burn the rate limit twice as
+ * fast.
  */
 export async function loadChangelog(): Promise<Cache> {
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) return cache
-  if (inFlight) return inFlight
+  const current = cache ?? snapshot()
+  const stale = !cache || Date.now() - cache.fetchedAt >= CACHE_TTL_MS
 
-  inFlight = loadUpstream()
-    .then((next) => {
-      cache = next
-      return next
-    })
-    .catch(() => {
-      const fallback = snapshot()
-      cache = fallback
-      return fallback
-    })
-    .finally(() => {
-      inFlight = null
-    })
+  if (stale && !inFlight) {
+    inFlight = loadUpstream()
+      .then((next) => {
+        cache = next
+        return next
+      })
+      .catch(() => {
+        const fallback = snapshot()
+        cache = fallback
+        return fallback
+      })
+      .finally(() => {
+        inFlight = null
+      })
+    // Deliberately not awaited: the refresh lands in the cache for the next
+    // reader. An unhandled rejection here would take the process down, so the
+    // promise still carries a catch.
+    void inFlight.catch(() => undefined)
+  }
 
-  return inFlight
+  return current
 }
 
 export interface ChangelogPage {
