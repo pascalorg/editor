@@ -16,6 +16,17 @@ export const metadata: Metadata = { title: 'Changelog' }
  * two can never drift. The RSS button beside the heading is the same list
  * again, for anyone who would rather be told than remember to look.
  */
+/**
+ * Which of the three components a release belongs to. The repositories behind
+ * them are never named here — that rule is why the entries carry a `channel`
+ * rather than a repo — but a reader still has to be able to tell an editor
+ * release from a plugin one, and they version independently.
+ */
+const CHANNEL_LABEL: Record<Lang, Record<'editor' | 'plugin' | 'console', string>> = {
+  en: { editor: 'Editor', plugin: 'Warehouse plugin', console: 'Console' },
+  tr: { editor: 'Editör', plugin: 'Depo eklentisi', console: 'Konsol' },
+}
+
 function formatDay(lang: Lang, iso: string): string {
   try {
     return new Date(iso).toLocaleDateString(lang === 'tr' ? 'tr-TR' : 'en-GB', {
@@ -87,6 +98,10 @@ export default async function ChangelogPage() {
                     <span className="font-mono text-[13px] text-muted-fg">{entry.version}</span>
                   </>
                 ) : null}
+                <span className="text-muted-fg/40">·</span>
+                <span className="rounded-full border border-border px-[8px] py-[1px] font-mono text-[11px] text-muted-fg">
+                  {CHANNEL_LABEL[lang][entry.channel]}
+                </span>
               </div>
 
               <h2 className="m-0 font-semibold text-[22px] text-fg leading-snug tracking-[-0.015em]">

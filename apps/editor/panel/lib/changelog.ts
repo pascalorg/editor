@@ -142,6 +142,35 @@ function commitsUrl(source: { owner: string; repo: string }): string {
   return `https://api.github.com/repos/${source.owner}/${source.repo}/commits?per_page=20`
 }
 
+interface GhContent {
+  content?: string
+  encoding?: string
+}
+
+/**
+ * Each repository states its own version in its own package.json, and the
+ * three move independently — the editor, the console and the plugin are
+ * released separately. Reading it here is what lets every channel show its own
+ * number instead of borrowing the deploy repository's.
+ *
+ * Only the deploy repository writes the version into its commit subjects
+ * ("v2.8.0 — …"); for the other two this is the only place it exists.
+ */
+async function repoVersion(source: { owner: string; repo: string }): Promise<string | null> {
+  const body = await fetchJson<GhContent>(
+    `https://api.github.com/repos/${source.owner}/${source.repo}/contents/package.json`,
+  )
+  if (!body?.content || body.encoding !== 'base64') return null
+  try {
+    const parsed = JSON.parse(Buffer.from(body.content, 'base64').toString('utf8')) as {
+      version?: unknown
+    }
+    return typeof parsed.version === 'string' ? `v${parsed.version}` : null
+  } catch {
+    return null
+  }
+}
+
 function commitEntries(
   commits: GhCommit[] | null,
   opts: {
@@ -149,6 +178,8 @@ function commitEntries(
     channel: ReleaseEntry['channel']
     tags: string[]
     fallback: string
+    /** That repository's own version, for entries whose subject omits one. */
+    channelVersion?: string | null
   },
 ): ReleaseEntry[] {
   const entries: ReleaseEntry[] = []
@@ -156,7 +187,9 @@ function commitEntries(
     const [headline, ...rest] = commit.commit.message.split('\n')
     const title = (headline ?? '').slice(0, 160)
     // Deploy commits are titled "v2.1.2 — …"; surface that as the version chip.
-    const version = /^v\d+\.\d+\.\d+/.exec(title)?.[0] ?? null
+    // The other two repositories don't version their subjects, so they fall
+    // back to whatever their own package.json currently declares.
+    const version = /^v\d+\.\d+\.\d+/.exec(title)?.[0] ?? opts.channelVersion ?? null
     entries.push({
       id: `${opts.idPrefix}-${commit.sha.slice(0, 12)}`,
       title,
@@ -176,10 +209,12 @@ function commitEntries(
 }
 
 async function loadUpstream(): Promise<Cache> {
-  const [deploy, plugin, console_] = await Promise.all([
+  const [deploy, plugin, console_, pluginVersion, consoleVersion] = await Promise.all([
     fetchJson<GhCommit[]>(commitsUrl(SOURCES.deploy)),
     fetchJson<GhCommit[]>(commitsUrl(SOURCES.plugin)),
     fetchJson<GhCommit[]>(commitsUrl(SOURCES.console)),
+    repoVersion(SOURCES.plugin),
+    repoVersion(SOURCES.console),
   ])
 
   if (!deploy && !plugin && !console_) return snapshot()
@@ -196,12 +231,14 @@ async function loadUpstream(): Promise<Cache> {
       channel: 'plugin',
       tags: ['warehouse'],
       fallback: 'Warehouse plugin change.',
+      channelVersion: pluginVersion,
     }),
     ...commitEntries(console_, {
       idPrefix: 'console',
       channel: 'console',
       tags: ['console'],
       fallback: 'Console change.',
+      channelVersion: consoleVersion,
     }),
   ]
 
