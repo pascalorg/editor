@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { escapeHtml, renderMail } from './mail-template'
 
 const base = {
+  origin: 'https://opex.help',
   label: 'Password reset',
   heading: 'Set a new password',
   intro: 'Use the button below.',

@@ -270,6 +270,19 @@ export function ConsoleShell({
             ) : null}
           </div>
 
+          {/* The console and the editor are one product; an administrator
+              standing in the console should not have to type a URL to get
+              back to the work itself. */}
+          <a
+            className={cn(
+              'flex shrink-0 items-center whitespace-nowrap rounded-[8px] bg-brand px-[10px] font-medium text-[11.5px] text-[#18181b] no-underline transition-opacity hover:opacity-90',
+              touch ? 'h-11 rounded-[10px]' : 'h-7',
+            )}
+            href="/"
+          >
+            {t.c.openEditor}
+          </a>
+
           <button
             type="button"
             onClick={() => void signOut('user')}

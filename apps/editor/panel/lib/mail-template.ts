@@ -35,6 +35,8 @@ export function escapeHtml(value: string): string {
 }
 
 export interface MailPage {
+  /** Absolute origin, so the logo and footer link resolve in a mail client. */
+  origin: string
   /** Mono micro-label above the heading — the console's `Caps` treatment. */
   label: string
   heading: string
@@ -138,12 +140,10 @@ export function renderMail(page: MailPage): string {
             <td class="dt-card-pad" style="padding: 28px 30px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                 <tr>
-                  <td style="padding-right: 10px;">
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td width="26" height="26" bgcolor="${BRAND}" style="width: 26px; height: 26px; border-radius: 7px;"></td>
-                      </tr>
-                    </table>
+                  <td style="padding-right: 10px; line-height: 0;">
+                    <img src="${escapeHtml(page.origin)}/brand/digitaltwin-mark.png"
+                         width="30" height="22" alt="DigitalTwin"
+                         style="display: block; width: 30px; height: 22px; border: 0;">
                   </td>
                   <td class="dt-fg" style="font-family: ${SANS}; font-size: 15px; font-weight: 600; color: ${LIGHT.fg}; letter-spacing: -0.01em;">DigitalTwin</td>
                 </tr>

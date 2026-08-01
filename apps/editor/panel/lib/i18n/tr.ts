@@ -488,6 +488,7 @@ export const tr: Dictionary = {
     changelog: 'Sürüm notları',
     sites: 'Siteler ve Projeler',
     scenes: 'Sahneler',
+    openEditor: 'Editör',
     jobs: 'İş kuyruğu',
     integrations: 'API ve Webhook',
     settings: 'Ayarlar',

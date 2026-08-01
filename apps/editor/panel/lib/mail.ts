@@ -131,6 +131,7 @@ export async function deliverResetLink(opts: {
       action: { label: 'Set a new password', url },
       note,
       preheader: `Your reset link is valid for ${minutes} minutes.`,
+      origin: appUrl('/').replace(/\/$/, ''),
       footer: footer(),
     }),
   })
@@ -169,6 +170,7 @@ export async function deliverInvite(opts: {
       action: { label: 'Activate my account', url },
       note,
       preheader: 'Set your password and enrol two-factor authentication.',
+      origin: appUrl('/').replace(/\/$/, ''),
       footer: footer(),
     }),
   })
@@ -190,6 +192,7 @@ export async function deliverRequestReceipt(opts: {
       heading: 'Your request is under review',
       intro: `${opts.fullName}, ${intro}`,
       preheader: 'An administrator will review your access request.',
+      origin: appUrl('/').replace(/\/$/, ''),
       footer: footer(),
     }),
   })

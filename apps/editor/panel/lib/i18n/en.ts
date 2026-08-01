@@ -497,6 +497,7 @@ export const en = {
     changelog: 'Changelog',
     sites: 'Sites & Projects',
     scenes: '3D scenes',
+    openEditor: 'Editor',
     jobs: 'Job queue',
     integrations: 'API & Webhooks',
     settings: 'Settings',
