@@ -39,7 +39,7 @@ export const tr: Dictionary = {
   noAccount: 'Hesabınız yok mu?',
   requestAccount: 'Hesap talebi oluştur',
   internalOnly: 'Dahili sistem — yalnızca yetkili personel',
-  lastSignIn: 'Son giriş 24.07.2026 09:14 · İstanbul · Windows üzerinde Chrome',
+  lastSignIn: 'Son giriş',
   protected: 'DigitalTwin Editör v0.9.1 · Korumalı bağlantı',
   protectedUpper: 'DIGITALTWIN EDITÖR V0.9.1 · KORUMALI BAĞLANTI',
   signature: 'NETLOG LOJİSTİK HİZMETLERİ A.Ş. · BUILT BY RESUL ÖVÜR & CENGİZ TUNA',

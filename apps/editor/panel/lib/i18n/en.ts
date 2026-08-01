@@ -37,7 +37,7 @@ export const en = {
   noAccount: 'No account yet?',
   requestAccount: 'Request an account',
   internalOnly: 'Internal system — authorised personnel only',
-  lastSignIn: 'Last sign-in 24.07.2026 09:14 · İstanbul · Chrome on Windows',
+  lastSignIn: 'Last sign-in',
   protected: 'DigitalTwin Editor v0.9.1 · Protected connection',
   protectedUpper: 'DIGITALTWIN EDITOR V0.9.1 · PROTECTED CONNECTION',
   signature: 'NETLOG LOJİSTİK HİZMETLERİ A.Ş. · BUILT BY RESUL ÖVÜR & CENGİZ TUNA',

@@ -17,7 +17,7 @@ import { BrandLockup, NetlogLogo } from '@panel/components/ui/netlog-logo'
 import type { SignInResponse } from '@panel/lib/api-contract'
 import { call } from '@panel/lib/client-api'
 import { useBreakpoint } from '@panel/lib/hooks/use-breakpoint'
-import { format, formatNumber, resolveApiMessage } from '@panel/lib/i18n'
+import { format, formatDate, formatNumber, resolveApiMessage } from '@panel/lib/i18n'
 import { ArrowRight, Eye, EyeOff, KeyRound, Mail, ShieldCheck } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -56,6 +56,37 @@ function useShowcaseSites(): ShowcaseSite[] {
   return sites
 }
 
+interface LastActivity {
+  at: string
+  device: string | null
+}
+
+/**
+ * When the system was last signed in to — an activity signal, not a person.
+ * Nothing here identifies who it was, so it cannot be used to probe whether a
+ * given address has an account.
+ */
+function useLastActivity(): LastActivity | null {
+  const [last, setLast] = useState<LastActivity | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/last-activity', { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : { last: null }))
+      .then((body: { last?: LastActivity | null }) => {
+        if (!cancelled) setLast(body.last ?? null)
+      })
+      .catch(() => {
+        /* the line is simply left out */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return last
+}
+
 export function SignInScreen() {
   const { t, lang } = useApp()
   const router = useRouter()
@@ -76,6 +107,7 @@ export function SignInScreen() {
   const [sessionMinutes, setSessionMinutes] = useState(20)
 
   const showcase = useShowcaseSites()
+  const lastActivity = useLastActivity()
   const site = showcase[siteIndex] ?? showcase[0]
 
   useEffect(() => {
@@ -426,9 +458,12 @@ export function SignInScreen() {
             />
             <div className="flex min-w-0 flex-col gap-[2px]">
               <span className="text-[11.5px] font-medium text-fg">{t.internalOnly}</span>
-              <span className="font-mono text-[9.5px] text-muted-fg text-pretty">
-                {t.lastSignIn}
-              </span>
+              {lastActivity ? (
+                <span className="font-mono text-[9.5px] text-muted-fg text-pretty">
+                  {t.lastSignIn} {formatDate(lang, lastActivity.at)}
+                  {lastActivity.device ? ` · ${lastActivity.device}` : ''}
+                </span>
+              ) : null}
             </div>
           </div>
 
