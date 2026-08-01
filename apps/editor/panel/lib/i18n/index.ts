@@ -111,6 +111,8 @@ export function resolveApiMessage(
     'err.validation': dict.errValidation,
     'err.usernameChars': dict.errUsernameChars,
     'err.forbidden': dict.errForbidden,
+    'err.primaryAdminProtected': dict.errPrimaryAdminProtected,
+    'err.cannotDeleteSelf': dict.errCannotDeleteSelf,
     'err.logsRestricted': dict.c.logsRestrictedLead,
     'err.siteExists': dict.errSiteExists,
     'err.hookHttps': dict.errHookHttps,

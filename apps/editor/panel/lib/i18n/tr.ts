@@ -124,6 +124,9 @@ export const tr: Dictionary = {
   errValidation: 'İşaretli alanı kontrol edip tekrar deneyin.',
   errUsernameChars: 'Yalnızca harf, rakam, nokta, tire ve alt çizgi kullanın.',
   errForbidden: 'Rolünüzde bu işlem için gereken izin bulunmuyor.',
+  errPrimaryAdminProtected:
+    'Birincil yönetici silinemez, devre dışı bırakılamaz ve rolü değiştirilemez. İzin verebilen tek hesabı kilitlemek geri dönüşü olmayan bir hatadır.',
+  errCannotDeleteSelf: 'Oturum açtığınız hesabı silemezsiniz.',
   capsLock: 'Caps Lock açık',
   holdToShow: 'Şifreyi görmek için basılı tutun',
 

@@ -121,6 +121,9 @@ export const en = {
   errValidation: 'Check the highlighted field and try again.',
   errUsernameChars: 'Use letters, digits, dot, dash or underscore only.',
   errForbidden: 'Your role does not carry the permission for this action.',
+  errPrimaryAdminProtected:
+    'The primary administrator cannot be deleted, deactivated, or have its role changed. Locking out the only account that can grant permissions is not a recoverable mistake.',
+  errCannotDeleteSelf: 'You cannot delete the account you are signed in with.',
   capsLock: 'Caps Lock is on',
   holdToShow: 'Hold to show password',
 
