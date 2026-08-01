@@ -113,6 +113,7 @@ export function resolveApiMessage(
     'err.forbidden': dict.errForbidden,
     'err.primaryAdminProtected': dict.errPrimaryAdminProtected,
     'err.cannotDeleteSelf': dict.errCannotDeleteSelf,
+    'err.mailFailed': dict.errMailFailed,
     'err.logsRestricted': dict.c.logsRestrictedLead,
     'err.siteExists': dict.errSiteExists,
     'err.hookHttps': dict.errHookHttps,

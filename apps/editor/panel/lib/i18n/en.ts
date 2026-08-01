@@ -124,6 +124,8 @@ export const en = {
   errPrimaryAdminProtected:
     'The primary administrator cannot be deleted, deactivated, or have its role changed. Locking out the only account that can grant permissions is not a recoverable mistake.',
   errCannotDeleteSelf: 'You cannot delete the account you are signed in with.',
+  errMailFailed:
+    'The message could not be delivered. Check the SMTP host, port and credentials — the reason is in the server log.',
   capsLock: 'Caps Lock is on',
   holdToShow: 'Hold to show password',
 

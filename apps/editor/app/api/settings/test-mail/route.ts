@@ -33,11 +33,28 @@ export const POST = handler(async (request: Request) => {
 
   const to = parsed.data.to ?? guard.session.user.email
 
-  await deliverTestMessage({
-    email: to,
-    fullName: guard.session.user.name,
-    lang: parsed.data.lang,
-  })
+  // Unlike every other message, a failure here is the answer, not a nuisance:
+  // this endpoint exists to tell an administrator whether mail actually leaves
+  // the building. Reporting "sent" after a timeout would be worse than useless.
+  try {
+    await deliverTestMessage({
+      email: to,
+      fullName: guard.session.user.name,
+      lang: parsed.data.lang,
+    })
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    console.error(`[mail] test message to ${to} failed:`, err)
+    await audit({
+      actorUserId: guard.session.userId,
+      actorLabel: guard.session.user.email,
+      level: 'error',
+      kind: 'settings',
+      message: `Test message to ${to} failed: ${reason}`,
+      event: { k: 'settingsChanged', p: { changes: `test mail failed → ${to}` } },
+    })
+    return fail('server_error', 'err.mailFailed', { reason })
+  }
 
   await audit({
     actorUserId: guard.session.userId,

@@ -115,7 +115,7 @@ function smtp(): Transporter {
  * the logs and invisible to the caller — which is the same thing a queue would
  * do, one retry later.
  */
-async function send(envelope: Envelope): Promise<void> {
+async function send(envelope: Envelope, opts: { rethrow?: boolean } = {}): Promise<void> {
   const transport = process.env.MAIL_TRANSPORT ?? 'console'
 
   if (transport === 'console') {
@@ -145,6 +145,12 @@ async function send(envelope: Envelope): Promise<void> {
   } catch (err) {
     // The address is logged, the body is not — it carries a single-use token.
     console.error(`[mail] delivery to ${envelope.to} failed:`, err)
+    // Transactional mail swallows this on purpose: a mail server having a bad
+    // afternoon must not fail the password reset or invitation that triggered
+    // it. The test message is the exception — it exists only to prove delivery,
+    // so reporting success when nothing was delivered is the one answer it
+    // must never give.
+    if (opts.rethrow) throw err
   }
 }
 
@@ -157,6 +163,7 @@ async function compose(
   lang: Lang,
   subject: string,
   page: Omit<MailPage, 'origin' | 'lang' | 'footer'>,
+  opts: { rethrow?: boolean } = {},
 ): Promise<void> {
   const lines: string[] = [page.heading, '', page.intro]
   if (page.facts?.length) {
@@ -172,12 +179,15 @@ async function compose(
   if (page.note) lines.push('', page.note)
   lines.push('', footer(lang))
 
-  await send({
-    to,
-    subject,
-    body: lines.join('\n'),
-    html: renderMail({ ...page, lang, origin: origin(), footer: footer(lang) }),
-  })
+  await send(
+    {
+      to,
+      subject,
+      body: lines.join('\n'),
+      html: renderMail({ ...page, lang, origin: origin(), footer: footer(lang) }),
+    },
+    opts,
+  )
 }
 
 /** "DigitalTwin — <what happened>", the shape every subject line takes. */
@@ -689,14 +699,22 @@ export async function deliverTestMessage(opts: {
 
   const facts: MailFact[] = [...copy.facts, when(lang)]
 
-  await compose(opts.email, lang, subject(copy.subject), {
-    label: copy.label,
-    heading: copy.heading,
-    intro: copy.intro,
-    facts,
-    callout: { label: copy.calloutLabel, value: '482 913' },
-    action: { label: copy.action, url: appUrl('/console/overview') },
-    note: copy.note,
-    preheader: copy.preheader,
-  })
+  await compose(
+    opts.email,
+    lang,
+    subject(copy.subject),
+    {
+      label: copy.label,
+      heading: copy.heading,
+      intro: copy.intro,
+      facts,
+      callout: { label: copy.calloutLabel, value: '482 913' },
+      action: { label: copy.action, url: appUrl('/console/overview') },
+      note: copy.note,
+      preheader: copy.preheader,
+    },
+    // The one message whose whole job is to prove delivery: a failure has to
+    // reach the administrator who pressed the button.
+    { rethrow: true },
+  )
 }
