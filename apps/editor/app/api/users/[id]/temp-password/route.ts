@@ -5,6 +5,7 @@ import { requirePermission } from '@panel/lib/auth/guard'
 import { generateTempPassword, hashPassword } from '@panel/lib/auth/password'
 import { revokeAllSessions } from '@panel/lib/auth/session'
 import { exec } from '@panel/lib/db'
+import { deliverTemporaryPassword } from '@panel/lib/mail'
 import { findInternalId, getUserDetail } from '@panel/lib/users'
 
 export const runtime = 'nodejs'
@@ -51,6 +52,15 @@ export const POST = handler(async (_request: Request, ctx: { params: Promise<{ i
     kind: 'user',
     message: `Temporary password issued for ${user.email}`,
     event: { k: 'tempPassword', p: { email: user.email } },
+  })
+
+  // Still returned to the administrator once, for the case where mail is down
+  // — but the credential now has a way to reach its owner that is not a phone
+  // call.
+  await deliverTemporaryPassword({
+    email: user.email,
+    fullName: user.name,
+    temporaryPassword,
   })
 
   const body: TempPasswordResponse = { temporaryPassword }

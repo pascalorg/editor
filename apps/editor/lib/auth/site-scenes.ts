@@ -1,4 +1,5 @@
 import { exec, query, type RowDataPacket } from '@panel/lib/db'
+import { deliverScenePublished } from '@panel/lib/mail'
 import { ulid } from 'ulid'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
@@ -119,6 +120,34 @@ export async function publishSceneAsSite(
     }
   }
   return 'already_published'
+}
+
+/**
+ * Tells a scene's owner that their project went live.
+ *
+ * Separate from `publishSceneAsSite` so a mail failure can never roll back an
+ * approval that already happened. A scene with no owner — one adopted from the
+ * pre-account era — has nobody to tell, and that is not an error.
+ */
+export async function notifyScenePublished(sceneId: string): Promise<void> {
+  const rows = await query<RowDataPacket & { name: string; email: string; full_name: string }>(
+    `SELECT sc.name, u.email, u.full_name
+       FROM scenes sc
+       JOIN users u
+         ON CONVERT(u.public_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+          = CONVERT(sc.owner_id USING utf8mb4) COLLATE utf8mb4_unicode_ci
+      WHERE sc.id = ?`,
+    [sceneId],
+  )
+  const owner = rows[0]
+  if (!owner) return
+
+  await deliverScenePublished({
+    email: owner.email,
+    fullName: owner.full_name,
+    sceneName: owner.name,
+    sceneId,
+  })
 }
 
 /** Scene ids that already carry a site card — the published set. */

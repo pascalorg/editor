@@ -9,6 +9,7 @@ import { createSession, revokeAllSessions } from '@panel/lib/auth/session'
 import { isEnrolled } from '@panel/lib/auth/totp'
 import { findUserById } from '@panel/lib/auth/users'
 import { exec } from '@panel/lib/db'
+import { deliverPasswordChanged } from '@panel/lib/mail'
 import { getSettings } from '@panel/lib/settings'
 
 export const runtime = 'nodejs'
@@ -83,6 +84,13 @@ export const POST = handler(async (request: Request) => {
     event: { k: isInvite ? 'inviteAccepted' : 'passwordChanged' },
     meta: { revokedSessions },
   })
+
+  // An invitation being accepted is the account's own beginning and needs no
+  // warning; a reset completing is exactly the event whose owner must find out
+  // even when it was not them who did it.
+  if (!isInvite) {
+    await deliverPasswordChanged({ email: user.email, fullName: user.full_name, via: 'reset' })
+  }
 
   if (!isInvite) {
     // A reset ends on the sign-in screen: proving control of the inbox is not

@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/auth/admin'
-import { publishSceneAsSite, unpublishScene } from '@/lib/auth/site-scenes'
+import { notifyScenePublished, publishSceneAsSite, unpublishScene } from '@/lib/auth/site-scenes'
 import { guardSceneApiRequest, sceneApiJson } from '@/lib/scene-api-security'
 
 export const dynamic = 'force-dynamic'
@@ -41,5 +41,8 @@ export async function POST(request: NextRequest) {
   if (result === 'scene_not_found') {
     return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
   }
+  // Approval is the moment somebody's drawing becomes the organisation's, and
+  // they should hear it from the system rather than notice it later.
+  if (result === 'published') await notifyScenePublished(parsed.data.sceneId)
   return sceneApiJson(request, { published: true, changed: result === 'published' })
 }

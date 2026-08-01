@@ -2,6 +2,7 @@ import { fail, handler, ok } from '@panel/lib/api'
 import { audit } from '@panel/lib/auth/audit'
 import { requirePermission } from '@panel/lib/auth/guard'
 import { revokeAllSessions } from '@panel/lib/auth/session'
+import { deliverSessionsRevoked } from '@panel/lib/mail'
 import { findInternalId, getUserDetail } from '@panel/lib/users'
 
 export const runtime = 'nodejs'
@@ -31,6 +32,11 @@ export const POST = handler(async (_request: Request, ctx: { params: Promise<{ i
     event: { k: 'allSessionsRevoked', p: { email: user.email } },
     meta: { revoked },
   })
+
+  // Being thrown out of every device without explanation reads as a fault.
+  if (revoked > 0) {
+    await deliverSessionsRevoked({ email: user.email, fullName: user.name, byAdmin: true })
+  }
 
   return ok({ revoked })
 })

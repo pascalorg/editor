@@ -5,6 +5,7 @@ import { requirePermission, requireSession } from '@panel/lib/auth/guard'
 import { allRoles } from '@panel/lib/auth/roles'
 import { revokeAllSessions } from '@panel/lib/auth/session'
 import { queryOne, type RowDataPacket } from '@panel/lib/db'
+import { deliverAccessChanged } from '@panel/lib/mail'
 import { deleteUser, getUserDetail, siteNames, updateUser } from '@panel/lib/users'
 
 export const runtime = 'nodejs'
@@ -105,6 +106,17 @@ export const PATCH = handler(async (request: Request, ctx: { params: Promise<{ i
       : { k: 'userUpdatedPlain' as const, p: { email: before.email } },
     meta: parsed.data,
   })
+
+  // Losing or regaining access is the one change a person notices only as a
+  // sign-in that stops working, so it is announced. Every other edit — a name,
+  // a role — is the administrator's business and stays quiet.
+  if (parsed.data.status !== undefined && parsed.data.status !== before.status) {
+    await deliverAccessChanged({
+      email: before.email,
+      fullName: after?.name ?? before.name,
+      active: parsed.data.status === 'Active',
+    })
+  }
 
   const body: UserDetailResponse = {
     user: after!,

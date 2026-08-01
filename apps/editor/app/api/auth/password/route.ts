@@ -5,6 +5,7 @@ import { checkPasswordPolicy, hashPassword } from '@panel/lib/auth/password'
 import { getSession, revokeAllSessions } from '@panel/lib/auth/session'
 import { isEnrolled } from '@panel/lib/auth/totp'
 import { exec } from '@panel/lib/db'
+import { deliverPasswordChanged } from '@panel/lib/mail'
 import { getSettings } from '@panel/lib/settings'
 import { z } from 'zod'
 
@@ -66,6 +67,12 @@ export const POST = handler(async (request: Request) => {
     message: 'Password changed on first sign-in',
     event: { k: 'passwordChangedFirst' },
     meta: { revokedSessions },
+  })
+
+  await deliverPasswordChanged({
+    email: session.user.email,
+    fullName: session.user.name,
+    via: 'first-sign-in',
   })
 
   const settings = await getSettings()

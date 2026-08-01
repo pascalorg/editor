@@ -6,7 +6,9 @@ import { fakeVerify, verifyPassword } from '@panel/lib/auth/password'
 import { createSession, getSession, hasTrustedDevice } from '@panel/lib/auth/session'
 import { isEnrolled } from '@panel/lib/auth/totp'
 import { findUserByIdentifier, pendingLabel } from '@panel/lib/auth/users'
+import { exec } from '@panel/lib/db'
 import { getSettings, isSsoEnforced } from '@panel/lib/settings'
+import { cookies } from 'next/headers'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -91,6 +93,14 @@ export const POST = handler(async (request: Request) => {
   }
 
   await clearFailures(user.id)
+
+  // Remember which language to write to this person in. Mail is composed with
+  // nobody present to ask, and this is the one moment their own preference is
+  // both known and current.
+  const lang = (await cookies()).get('digitaltwin_lang')?.value === 'tr' ? 'tr' : 'en'
+  await exec('UPDATE users SET locale = ? WHERE id = ?', [lang, user.id]).catch(() => {
+    // A database that predates the column must not fail a sign-in over it.
+  })
 
   const settings = await getSettings()
   const enrolled = await isEnrolled(user.id)

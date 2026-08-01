@@ -3,20 +3,11 @@
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
-import {
-  applySceneGraphToEditor,
-  Editor,
-  type SceneGraph,
-  type SidebarTab,
-  useEditor,
-} from '@pascal-app/editor'
-import { Hammer, Layers } from 'lucide-react'
-import Image from 'next/image'
-import Link from 'next/link'
+import { applySceneGraphToEditor, Editor, type SceneGraph, useEditor } from '@pascal-app/editor'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from '@/components/auth/session-provider'
-import { BuildTab } from './build-tab'
+import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -31,41 +22,6 @@ export interface SceneMeta {
   sizeBytes: number
   nodeCount: number
 }
-
-const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
-  {
-    id: 'site',
-    label: 'Scene',
-    component: () => null, // Built-in SitePanel handles this
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Layers className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/scene.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'build',
-    label: 'Build',
-    component: BuildTab,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Hammer className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/build.webp"
-        width={32}
-      />
-    ),
-  },
-]
 
 interface SceneLoaderProps {
   initialScene: SceneGraph
@@ -243,21 +199,13 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
-      <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
-        <Link
-          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-          href="/scenes"
-        >
-          All scenes
-        </Link>
-      </div>
       <Editor
         layoutVersion="v2"
         onLoad={handleLoad}
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
-        sidebarTabs={SIDEBAR_TABS}
+        sidebarTabs={EDITOR_SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />

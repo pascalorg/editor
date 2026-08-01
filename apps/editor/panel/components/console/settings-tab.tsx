@@ -7,7 +7,7 @@ import { Toast } from '@panel/components/ui/feedback'
 import type { SettingsResponse, UpdateSettingsRequest } from '@panel/lib/api-contract'
 import { call } from '@panel/lib/client-api'
 import { cn } from '@panel/lib/cn'
-import { resolveApiMessage } from '@panel/lib/i18n'
+import { format, resolveApiMessage } from '@panel/lib/i18n'
 import type { Lang, OrgSettings, Theme } from '@panel/lib/types'
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 
@@ -20,7 +20,7 @@ import { type ReactNode, useCallback, useEffect, useState } from 'react'
  * rendered in the same list but never written to the settings row.
  */
 export function SettingsTab() {
-  const { t, theme, lang, setTheme, setLang } = useApp()
+  const { t, lang, themeChoice, setThemeChoice, setLang } = useApp()
 
   const [settings, setSettings] = useState<OrgSettings | null>(null)
   const [canEdit, setCanEdit] = useState(false)
@@ -37,6 +37,28 @@ export function SettingsTab() {
   useEffect(() => {
     void load()
   }, [load])
+
+  /**
+   * Delivery is the one setting that cannot be verified by reading it back —
+   * SMTP either reaches an inbox or it does not. The address is the signed-in
+   * administrator's own, chosen server-side, so this cannot be pointed at
+   * anybody else.
+   */
+  const [sending, setSending] = useState(false)
+  const sendTest = useCallback(async () => {
+    if (sending) return
+    setSending(true)
+    const res = await call<{ sent: boolean; to: string }>('/api/settings/test-mail', {
+      body: { lang },
+    })
+    setSending(false)
+    setToast(
+      res.ok
+        ? { message: format(t.seMailSent, { email: res.data.to }), tone: 'success' }
+        : { message: resolveApiMessage(t, res.messageKey), tone: 'error' },
+    )
+    setTimeout(() => setToast(null), 3200)
+  }, [lang, sending, t])
 
   const save = useCallback(
     async (patch: UpdateSettingsRequest) => {
@@ -187,12 +209,13 @@ export function SettingsTab() {
           label={t.seTheme}
           desc={t.seThemeD}
           options={[
-            ['dark', t.seDark],
+            ['system', t.seSystem],
             ['light', t.seLight],
+            ['dark', t.seDark],
           ]}
-          value={theme}
+          value={themeChoice}
           disabled={false}
-          onChange={(v) => setTheme(v as Theme)}
+          onChange={(v) => setThemeChoice(v as Theme | 'system')}
         />,
         <SegRow
           key="lang"
@@ -206,6 +229,21 @@ export function SettingsTab() {
           disabled={false}
           onChange={(v) => setLang(v as Lang)}
         />,
+      ],
+    },
+    {
+      title: t.seMail,
+      rows: [
+        <RowShell key="testmail" label={t.seMailTest} desc={t.seMailTestD}>
+          <button
+            className="rounded-[8px] border border-border bg-field px-3 py-[6px] font-medium text-[12px] text-fg hover:bg-hover disabled:opacity-50"
+            disabled={sending}
+            onClick={() => void sendTest()}
+            type="button"
+          >
+            {sending ? t.seMailSending : t.seMailSend}
+          </button>
+        </RowShell>,
       ],
     },
   ]
