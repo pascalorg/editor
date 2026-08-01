@@ -30,7 +30,7 @@ export default async function AdminPage() {
       <header className="sticky top-0 z-10 border-border border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto flex items-center justify-between gap-4 px-6 py-4">
           <nav className="flex items-center gap-4 text-sm">
-            <Link className="text-muted-foreground hover:text-foreground" href="/">
+            <Link className="text-muted-foreground hover:text-foreground" href="/editor">
               Home
             </Link>
             <span className="text-muted-foreground">/</span>
