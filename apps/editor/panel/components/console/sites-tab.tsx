@@ -293,7 +293,12 @@ export function SitesTab() {
                 <button
                   type="button"
                   disabled={site.status !== 'active'}
-                  onClick={() => notify(t.stOpenNote)}
+                  onClick={() => {
+                    // With the editor deployed alongside, the site's scene is
+                    // real and opens directly; standalone keeps the note.
+                    if (site.sceneId) window.location.assign(`/scene/${site.sceneId}`)
+                    else notify(t.stOpenNote)
+                  }}
                   className="h-[26px] flex-1 rounded-[6px] border border-border bg-field text-[11px] font-medium text-fg hover:bg-hover"
                 >
                   {t.stOpen}

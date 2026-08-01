@@ -61,6 +61,8 @@ export interface Site {
   createdBy: string
   createdAt: string
   userCount?: number
+  /** The 3D scene representing this site, once the editor has created it. */
+  sceneId?: string | null
 }
 
 export interface Invitation {

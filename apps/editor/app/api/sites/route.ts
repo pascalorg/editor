@@ -26,10 +26,11 @@ export const GET = handler(async () => {
       created_by_email: string
       created_at: Date
       user_count: number
+      scene_id: string | null
     }
   >(
     `SELECT s.public_id, s.name, s.status, s.storage_slots, s.picking_slots, s.footprint_m2,
-            u.email AS created_by_email, s.created_at,
+            u.email AS created_by_email, s.created_at, s.scene_id,
             (SELECT COUNT(*) FROM assignments a WHERE a.site_id = s.id) AS user_count
        FROM sites s
        JOIN users u ON u.id = s.created_by
@@ -46,6 +47,7 @@ export const GET = handler(async () => {
     createdBy: r.created_by_email,
     createdAt: r.created_at.toISOString(),
     userCount: r.user_count,
+    sceneId: r.scene_id,
   }))
 
   return ok({ sites, canEdit: guard.session.user.permissions.includes('admin_access') })

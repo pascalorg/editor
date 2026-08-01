@@ -35,6 +35,9 @@ export async function register() {
       await ensureConsoleSchema()
       await migrateAuth()
       console.log('[digitaltwin:boot] auth tables ready')
+      // Console sites become real scenes; the worker keeps them in step.
+      const { startSiteSceneWorker } = await import('./lib/auth/site-scenes')
+      startSiteSceneWorker()
     } catch (err) {
       console.error(`[digitaltwin:boot] auth unavailable: ${describeStartupError(err)}`)
       if (process.env.NODE_ENV === 'production') {
