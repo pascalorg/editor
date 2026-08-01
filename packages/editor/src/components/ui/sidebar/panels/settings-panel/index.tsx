@@ -202,6 +202,7 @@ export function SettingsPanel({
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
+  const setFloorplanMode = useFloorplanMode((state) => state.setMode)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
@@ -413,7 +414,18 @@ export function SettingsPanel({
         <div className="space-y-2">
           <div className="flex items-center justify-between font-medium text-muted-foreground text-xs">
             <span>Floor plan</span>
-            <span>{floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}</span>
+            <span className="flex items-center gap-2">
+              {floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}
+              {floorplanMode === 'expert' && (
+                <Button
+                  className="h-auto w-auto justify-start p-0 font-medium text-primary text-xs underline"
+                  onClick={() => setFloorplanMode('default')}
+                  variant="link"
+                >
+                  Switch to Default
+                </Button>
+              )}
+            </span>
           </div>
           <Button
             className="w-full justify-start gap-2"
