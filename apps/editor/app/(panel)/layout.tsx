@@ -6,7 +6,7 @@ import { cookies } from 'next/headers'
 import '@panel/globals.css'
 
 export const metadata: Metadata = {
-  title: 'DigitalTwin Console',
+  title: 'Console',
   description: 'DigitalTwin — authentication and administration console.',
 }
 
