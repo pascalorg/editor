@@ -6,6 +6,8 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { BrandLockup } from '@/components/brand-mark'
 import { ThemeSwitch } from '@/components/public/theme-switch'
+import { authAvailable } from '@/lib/auth/db'
+import { getSessionUser } from '@/lib/auth/session'
 
 /**
  * The shell for the two pages anyone may read without an account: the
@@ -19,6 +21,17 @@ export default async function PublicLayout({ children }: { children: ReactNode }
   const lang: Lang = jar.get('digitaltwin_lang')?.value === 'tr' ? 'tr' : 'en'
   const theme = jar.get('digitaltwin_theme')?.value === 'light' ? 'light' : 'dark'
   const t = dictionaryFor(lang)
+
+  // These pages are readable by anyone, so the call to action has to match who
+  // is reading: a stranger is offered the door, an editor the editor, and a
+  // view-only account the scenes it may look at.
+  const user = authAvailable() ? await getSessionUser() : null
+  const cta =
+    user === null
+      ? { href: '/signin', label: t.signIn }
+      : user.role === 'viewer'
+        ? { href: '/scenes', label: lang === 'tr' ? 'Sahnelerim' : 'My scenes' }
+        : { href: '/', label: lang === 'tr' ? 'Editörü aç' : 'Open the editor' }
 
   return (
     <div className="min-h-screen bg-bg text-fg" data-dt-theme={theme} lang={lang}>
@@ -44,9 +57,9 @@ export default async function PublicLayout({ children }: { children: ReactNode }
             />
             <Link
               className="rounded-full bg-brand px-[13px] py-[6px] font-medium text-[12.5px] text-[#18181b] no-underline transition-opacity hover:opacity-90"
-              href="/"
+              href={cta.href}
             >
-              {lang === 'tr' ? 'Editörü aç' : 'Open the editor'}
+              {cta.label}
             </Link>
           </nav>
         </div>

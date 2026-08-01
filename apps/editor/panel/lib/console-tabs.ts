@@ -13,6 +13,7 @@ export const CONSOLE_TABS = [
   'jobs',
   'integrations',
   'updates',
+  'guides',
   'settings',
 ] as const
 
@@ -61,6 +62,8 @@ export const TAB_META: Record<ConsoleTab, TabMeta> = {
   jobs: { labelKey: 'jobs' },
   integrations: { labelKey: 'integrations', permission: 'admin_access' },
   updates: { labelKey: 'changelog' },
+  // The manual is for everyone signed in, not just admins.
+  guides: { labelKey: 'guides' },
   settings: { labelKey: 'settings', permission: 'admin_access' },
 }
 
@@ -101,6 +104,7 @@ export function railEntries(t: Dictionary): RailEntry[] {
     item('jobs'),
     item('integrations'),
     item('updates'),
+    item('guides'),
     item('settings'),
   ]
 }

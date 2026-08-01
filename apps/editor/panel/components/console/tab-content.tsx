@@ -1,6 +1,7 @@
 'use client'
 
 import { AuditTab } from '@panel/components/console/audit-tab'
+import { GuidesTab } from '@panel/components/console/guides-tab'
 import { IntegrationsTab } from '@panel/components/console/integrations-tab'
 import { JobsTab } from '@panel/components/console/jobs-tab'
 import { LogsTab } from '@panel/components/console/logs-tab'
@@ -44,6 +45,8 @@ export function TabContent({ tab }: { tab: ConsoleTab }) {
       return <AuditTab />
     case 'updates':
       return <UpdatesTab />
+    case 'guides':
+      return <GuidesTab />
     // No default: `tab` is a ConsoleTab, every one of the eleven is handled
     // above, and TypeScript now fails the build if a twelfth is added without a
     // screen. A fallback here would have hidden that.
