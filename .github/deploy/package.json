@@ -1,9 +1,9 @@
 {
   "name": "digitaltwin",
-  "version": "2.7.2",
+  "version": "2.10.0",
   "private": true,
   "type": "module",
-  "description": "Pascal Editor, compiled and ready to run. Nothing is built at deploy time.",
+  "description": "DigitalTwin, compiled and ready to run. Nothing is built at deploy time.",
   "engines": {
     "node": ">=20.9"
   },
