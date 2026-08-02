@@ -223,4 +223,125 @@ describe('room tools', () => {
     }
     expect(bridge.validateScene().valid).toBe(true)
   })
+
+  test('furnish_room never leaves items blocking doors after bathroom layout', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const roomResult = await client.callTool({
+      name: 'create_room',
+      arguments: {
+        levelId: level.id,
+        name: 'Bath',
+        polygon: [
+          [0, 0],
+          [2.75, 0],
+          [2.75, 2.5],
+          [0, 2.5],
+        ],
+      },
+    })
+    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    // Door on north wall (index 2) — same geometry as the blocked master-suite bath.
+    await client.callTool({
+      name: 'add_door',
+      arguments: { wallId: room.wallIds[2], t: 0.5, width: 0.8 },
+    })
+
+    const furnish = await client.callTool({
+      name: 'furnish_room',
+      arguments: {
+        zoneId: room.zoneId,
+        roomType: 'bathroom',
+        doorWallIndex: 0,
+      },
+    })
+    expect(furnish.isError).toBeFalsy()
+    const parsed = JSON.parse((furnish.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.placed + parsed.skipped.length).toBeGreaterThan(0)
+
+    const { findBlockedDoors } = await import('./door-clearance')
+    const blocked = findBlockedDoors({ nodes: Object.values(bridge.getNodes()) })
+    expect(blocked).toEqual([])
+    // If the heuristic wanted a fixture in the clear zone, it must be skipped explicitly.
+    for (const reason of parsed.skipped as string[]) {
+      expect(typeof reason).toBe('string')
+    }
+  })
+
+  test('furnish_room does not stack items on each other (overlap smart skip/nudge)', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    // Large bedroom so multiple placements exist; still must end with zero item–item overlaps.
+    const roomResult = await client.callTool({
+      name: 'create_room',
+      arguments: {
+        levelId: level.id,
+        name: 'Bedroom',
+        polygon: [
+          [0, 0],
+          [6, 0],
+          [6, 5],
+          [0, 5],
+        ],
+      },
+    })
+    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    await client.callTool({
+      name: 'add_door',
+      arguments: { wallId: room.wallIds[0], t: 0.5, width: 0.9 },
+    })
+    const furnish = await client.callTool({
+      name: 'furnish_room',
+      arguments: { zoneId: room.zoneId, roomType: 'bedroom', doorWallIndex: 0 },
+    })
+    expect(furnish.isError).toBeFalsy()
+    const { findItemItemCollisions, findBlockedDoors } = await import('./layout-clearance')
+    const nodes = Object.values(bridge.getNodes())
+    expect(findItemItemCollisions({ nodes })).toEqual([])
+    expect(findBlockedDoors({ nodes })).toEqual([])
+  })
+
+  test('furnish_room records door-clearance skips when a door sits on the furniture wall', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    // Large bedroom so bed placement is near the "back" wall (edge opposite doorWallIndex).
+    const roomResult = await client.callTool({
+      name: 'create_room',
+      arguments: {
+        levelId: level.id,
+        name: 'Bedroom',
+        polygon: [
+          [0, 0],
+          [5.5, 0],
+          [5.5, 4],
+          [0, 4],
+        ],
+      },
+    })
+    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    // doorWallIndex default 0 → back wall is edge 2 (north). Put a door there so bed on back wall is blocked.
+    await client.callTool({
+      name: 'add_door',
+      arguments: { wallId: room.wallIds[2], t: 0.5, width: 0.9 },
+    })
+
+    const furnish = await client.callTool({
+      name: 'furnish_room',
+      arguments: {
+        zoneId: room.zoneId,
+        roomType: 'bedroom',
+        doorWallIndex: 0,
+      },
+    })
+    expect(furnish.isError).toBeFalsy()
+    const parsed = JSON.parse((furnish.content as Array<{ type: string; text: string }>)[0]!.text)
+    const { findBlockedDoors } = await import('./door-clearance')
+    expect(findBlockedDoors({ nodes: Object.values(bridge.getNodes()) })).toEqual([])
+    // Bed is placed against the back wall where the door is; expect clearance skip or empty bed.
+    const bedPlaced = Object.values(bridge.getNodes()).some(
+      (n) => n.type === 'item' && (n.name === 'Double Bed' || n.name === 'Single Bed'),
+    )
+    const doorSkips = (parsed.skipped as string[]).filter((s) => s.includes('blocks door clearance'))
+    expect(bedPlaced || doorSkips.length > 0).toBe(true)
+    if (bedPlaced) {
+      expect(doorSkips.length).toBe(0)
+    }
+  })
 })

@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   CeilingNode,
   DoorNode,
+  ItemNode,
   LevelNode,
   RoofNode,
   SlabNode,
@@ -81,6 +82,120 @@ describe('scene query tools', () => {
     expect(parsed.valid).toBe(true)
     expect(parsed.hasIssues).toBe(true)
     expect(parsed.issues.join('\n')).toContain('walls but no zones')
+  })
+
+  test('verify_scene reports item–item footprint overlaps', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    bridge.createNode(
+      ItemNode.parse({
+        name: 'Closet A',
+        position: [2, 0, 2],
+        rotation: [0, 0, 0],
+        asset: {
+          id: 'closet',
+          name: 'Closet',
+          category: 'furniture',
+          thumbnail: '/items/closet/thumbnail.webp',
+          src: '/items/closet/model.glb',
+          dimensions: [2, 2.5, 1],
+        },
+      }),
+      level.id,
+    )
+    bridge.createNode(
+      ItemNode.parse({
+        name: 'Closet B',
+        position: [2.3, 0, 2.1],
+        rotation: [0, 0, 0],
+        asset: {
+          id: 'closet',
+          name: 'Closet',
+          category: 'furniture',
+          thumbnail: '/items/closet/thumbnail.webp',
+          src: '/items/closet/model.glb',
+          dimensions: [2, 2.5, 1],
+        },
+      }),
+      level.id,
+    )
+
+    const result = await client.callTool({ name: 'verify_scene', arguments: {} })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.hasIssues).toBe(true)
+    expect(parsed.issues.join('\n')).toMatch(/overlap/i)
+  })
+
+  test('verify_scene reports furniture blocking door clearance', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({ start: [0, 2.5], end: [5.5, 2.5], height: 2.5 })
+    bridge.createNode(wall, level.id)
+    const door = DoorNode.parse({
+      wallId: wall.id,
+      position: [1.375, 1.05, 0],
+      width: 0.8,
+      height: 2.1,
+    })
+    bridge.createNode(door, wall.id)
+    // Toilet sitting on the south side of the door clear zone (same failure as master suite).
+    bridge.createNode(
+      ItemNode.parse({
+        name: 'Toilet',
+        position: [0.7, 0, 1.95],
+        rotation: [0, 0, 0],
+        asset: {
+          id: 'toilet',
+          name: 'Toilet',
+          category: 'bathroom',
+          thumbnail: '/items/toilet/thumbnail.webp',
+          src: '/items/toilet/model.glb',
+          dimensions: [1, 0.9, 1],
+        },
+      }),
+      level.id,
+    )
+    // Also give a zone+slab so verify does not only complain about missing rooms.
+    bridge.createNode(
+      ZoneNode.parse({
+        name: 'Bath',
+        polygon: [
+          [0, 0],
+          [2.75, 0],
+          [2.75, 2.5],
+          [0, 2.5],
+        ],
+      }),
+      level.id,
+    )
+    bridge.createNode(
+      SlabNode.parse({
+        polygon: [
+          [0, 0],
+          [2.75, 0],
+          [2.75, 2.5],
+          [0, 2.5],
+        ],
+      }),
+      level.id,
+    )
+    bridge.createNode(
+      CeilingNode.parse({
+        polygon: [
+          [0, 0],
+          [2.75, 0],
+          [2.75, 2.5],
+          [0, 2.5],
+        ],
+      }),
+      level.id,
+    )
+
+    const result = await client.callTool({ name: 'verify_scene', arguments: {} })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.hasIssues).toBe(true)
+    expect(parsed.issues.join('\n')).toMatch(/blocked by item/i)
+    expect(parsed.issues.join('\n')).toContain(door.id)
   })
 
   test('verify_scene separates occupied stories from dedicated roof levels', async () => {

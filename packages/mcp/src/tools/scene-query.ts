@@ -10,6 +10,7 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { computeWallSlabSupport } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { layoutIssuesFromScene } from './layout-clearance'
 import {
   distance2D,
   pointInPolygon,
@@ -829,6 +830,11 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
         if (validation.errors.length > 5) {
           issues.push(`Schema: ${validation.errors.length - 5} additional validation errors`)
         }
+      }
+
+      // Door keep-outs + item–item footprint overlaps (rotation-aware).
+      for (const layoutIssue of layoutIssuesFromScene(Object.values(bridge.getNodes()))) {
+        issues.push(layoutIssue)
       }
 
       const payload = {

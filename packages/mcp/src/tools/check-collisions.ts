@@ -1,8 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { AnyNodeId, ItemNode } from '@pascal-app/core/schema'
-import { getScaledDimensions } from '@pascal-app/core/schema'
+import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { findItemItemCollisions } from './layout-clearance'
 import { NodeIdSchema } from './schemas'
 
 export const checkCollisionsInput = {
@@ -19,55 +19,37 @@ export const checkCollisionsOutput = {
   ),
 }
 
-type AABB = { minX: number; maxX: number; minZ: number; maxZ: number }
-
-function itemAabb(item: ItemNode): AABB {
-  const [x, , z] = item.position
-  const [w, , d] = getScaledDimensions(item)
-  const halfW = w / 2
-  const halfD = d / 2
-  return {
-    minX: x - halfW,
-    maxX: x + halfW,
-    minZ: z - halfD,
-    maxZ: z + halfD,
-  }
-}
-
-function aabbOverlap(a: AABB, b: AABB): boolean {
-  return a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ
-}
-
 export function registerCheckCollisions(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'check_collisions',
     {
       title: 'Check collisions',
       description:
-        'Detect overlapping item footprints via an axis-aligned 2D bounding-box test. Optionally scoped to a single level.',
+        'Detect overlapping item footprints via a rotation-aware plan AABB test. Optionally scoped to a single level (items parented to that level).',
       inputSchema: checkCollisionsInput,
       outputSchema: checkCollisionsOutput,
     },
     async ({ levelId }) => {
-      const filter: { type: 'item'; levelId?: AnyNodeId } = { type: 'item' }
-      if (levelId) filter.levelId = levelId as AnyNodeId
-      const items = bridge.findNodes(filter) as ItemNode[]
-
-      const boxes = items.map((i) => ({ item: i, aabb: itemAabb(i) }))
-      const collisions: { aId: string; bId: string; kind: string }[] = []
-      for (let i = 0; i < boxes.length; i++) {
-        for (let j = i + 1; j < boxes.length; j++) {
-          const a = boxes[i]!
-          const b = boxes[j]!
-          if (aabbOverlap(a.aabb, b.aabb)) {
-            collisions.push({
-              aId: a.item.id as string,
-              bId: b.item.id as string,
-              kind: 'item-aabb',
-            })
-          }
-        }
+      const nodes = Object.values(bridge.getNodes())
+      let scoped = nodes
+      if (levelId) {
+        const levelItems = new Set(
+          bridge
+            .findNodes({ type: 'item', levelId: levelId as AnyNodeId })
+            .map((n) => n.id as string),
+        )
+        scoped = nodes.filter((n) => n.type !== 'item' || levelItems.has(n.id))
       }
+
+      const found = findItemItemCollisions({
+        nodes: scoped,
+        levelId: levelId as string | undefined,
+      })
+      const collisions = found.map((c) => ({
+        aId: c.aId,
+        bId: c.bId,
+        kind: c.kind,
+      }))
 
       const payload = { collisions }
       return {
