@@ -1,5 +1,4 @@
 import {
-  type AnyNodeId,
   type FenceNode as FenceNodeType,
   getFenceControlHandle,
   type HandleDescriptor,
@@ -21,7 +20,7 @@ import {
 } from './floorplan-affordances'
 import { fenceFloorplanMoveTarget } from './floorplan-move'
 import { buildFenceGeometry } from './geometry'
-import { resolveFenceLiftElevation } from './lift'
+import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from './lift'
 import { fencePaint } from './paint'
 import { fenceParametrics } from './parametrics'
 import { FenceNode } from './schema'
@@ -35,7 +34,10 @@ const HEIGHT_HANDLE_OFFSET = 0.45
 const MIN_FENCE_HEIGHT = 0.3
 
 function fenceBaseElevation(n: FenceNodeType, sceneApi?: SceneApi): number {
-  return resolveFenceLiftElevation(n, (id) => sceneApi?.get(id as AnyNodeId))
+  const nodes = sceneApi?.nodes()
+  return nodes
+    ? resolveFenceLiftElevationForNodes(n, nodes)
+    : resolveFenceLiftElevation(n, () => undefined)
 }
 
 function fenceMidpointFrame(n: FenceNodeType): {
@@ -149,9 +151,13 @@ function fenceElevationHandle(currentBase: number): HandleDescriptor<FenceNodeTy
       ),
     onDragEnd: (n) => clearStructuralElevationGuide(n.id),
     apply: (initial, newBase, sceneApi) => {
-      const supportBase = resolveFenceLiftElevation(
+      // The offset is measured from the support WITHOUT the current offset —
+      // including the ground, so dragging a fence's base to an absolute height
+      // on a hillside stores the delta from that hillside and the fence keeps
+      // following it.
+      const supportBase = resolveFenceLiftElevationForNodes(
         { ...initial, supportOffset: undefined },
-        (id) => sceneApi.get(id as AnyNodeId),
+        sceneApi.nodes(),
       )
       const nextOffset = newBase - supportBase
       return {

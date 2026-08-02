@@ -64,11 +64,26 @@ function cachedLevelElevations(
   return elevations
 }
 
+/**
+ * `siteOf` memoized on the `nodes` record identity, for the same reason
+ * `levelElevationCache` exists: the resolver is called per wall per frame (the
+ * spatial grid) and per wall per store update (the space-detection trigger), so
+ * an O(N) scan inside it makes those callers O(N²).
+ */
+const siteCache = new WeakMap<object, SiteNode | null>()
+
 function siteOf(nodes: Record<string, AnyNode>): SiteNode | null {
+  const cached = siteCache.get(nodes)
+  if (cached !== undefined) return cached
+  let site: SiteNode | null = null
   for (const node of Object.values(nodes)) {
-    if (node?.type === 'site') return node as SiteNode
+    if (node?.type === 'site') {
+      site = node as SiteNode
+      break
+    }
   }
-  return null
+  siteCache.set(nodes, site)
+  return site
 }
 
 /**
@@ -171,4 +186,67 @@ export function terrainSupportLift(
   // The lift is measured from the storey's own base, so a building sited on a
   // datum other than 0 does not double-count it.
   return heightAt(field, worldX, worldZ) - datum.baseWorldY
+}
+
+/**
+ * **The level base, in level-local metres, at level-local `x`/`z`** — the surface
+ * a node rests on when nothing built is under it. Sculpted ground where terrain
+ * supports this storey, `0` everywhere else.
+ *
+ * This is the one function every "nothing is under me, so I'm at zero" site in
+ * the codebase should call, and the reason it exists separately from
+ * {@link terrainSupportLift}: that function answers *"is there terrain here"*
+ * (nullable, so a caller can branch), while this one answers *"how high is the
+ * floor of the world here"* (total, so a caller does not have to know terrain
+ * exists). Spelling the second question `terrainSupportLift(…) ?? 0` at each
+ * site is what made terrain opt-in per kind — every new consumer had to remember
+ * to ask, and the ones that forgot silently assumed the plane `y = 0`. Kinds
+ * inherit terrain by resolving their base through here instead of hardcoding a
+ * zero; nothing has to be registered for that to work.
+ *
+ * Callers that must distinguish "flat ground" from "a built surface flush with
+ * the storey base" still need {@link terrainSupportLift}'s null — both read `0`
+ * here and only the first follows a hillside.
+ */
+export function levelBaseElevationAt(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  x: number,
+  z: number,
+): number {
+  return terrainSupportLift(nodes, levelId, x, z) ?? 0
+}
+
+/**
+ * Kinds whose geometry builder has actually asked for the level base, learned at
+ * runtime from the first build rather than declared.
+ *
+ * A builder that bakes its vertical origin (`ctx.levelBaseAt`) must be rebuilt
+ * when the ground moves, and core cannot see inside a pure function to know
+ * which kinds do. The two declarative alternatives both fail the goal: a flag on
+ * the definition is another per-kind opt-in — the exact thing that left half the
+ * scene flat on a hillside — and over-approximating to "every kind with a
+ * geometry builder" would rebuild every cabinet and duct on the ground floor on
+ * every dab of a brush stroke.
+ *
+ * So the question is answered by the call itself: asking for the ground is what
+ * enrolls the kind in following it. A plugin inherits terrain by reading
+ * `ctx.levelBaseAt` and nothing else — no registration, no capability, no core
+ * change. Keyed by node *type*, not id: types are bounded and stable, so the set
+ * cannot leak with the scene, and a kind that asked once will ask again on every
+ * subsequent build of every instance.
+ *
+ * Ordering is not a hazard: geometry builds on mount, long before any sculpt can
+ * happen, and a node created after a stroke builds against the current field.
+ */
+const levelBaseConsumerKinds = new Set<string>()
+
+/** Record that `type`'s geometry builder resolved its origin from the ground. */
+export function noteLevelBaseConsumer(type: string): void {
+  levelBaseConsumerKinds.add(type)
+}
+
+/** Whether `type`'s geometry has to be rebuilt when the sculpted ground moves. */
+export function isLevelBaseConsumer(type: string): boolean {
+  return levelBaseConsumerKinds.has(type)
 }
