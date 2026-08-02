@@ -34,6 +34,7 @@ import useEditor, {
   isMagneticSnapActive,
 } from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
+import { removeDeletedIdsFromSessionGroups } from '../../store/use-session-groups'
 import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import {
   classifyParticipant,
@@ -581,6 +582,7 @@ export function deleteSelection(): boolean {
       sfxEmitter.emit('sfx:structure-delete')
     }
     useScene.getState().deleteNodes(selectedIds)
+    removeDeletedIdsFromSessionGroups(selectedIds)
     useViewer.getState().setSelection({ selectedIds: [] })
   }
 

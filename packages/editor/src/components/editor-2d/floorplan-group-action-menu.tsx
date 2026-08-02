@@ -1,11 +1,20 @@
 'use client'
 
+import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isActive } from '../../lib/interaction/scope'
+import {
+  canCreateSessionGroup,
+  selectionIntersectsSessionGroup,
+} from '../../lib/session-groups'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
+import useSessionGroups, {
+  groupCurrentSelection,
+  ungroupCurrentSelection,
+} from '../../store/use-session-groups'
 import {
   deleteSelection,
   duplicateSelectionAndPickUp,
@@ -14,25 +23,27 @@ import {
 import { NodeActionMenu } from '../editor/node-action-menu'
 
 /**
- * Floating Move / Duplicate / Delete pill for a MULTI-selection in the 2D
- * floor plan — the group sibling of `FloorplanRegistryActionMenu` (which is
- * sole-selection only). Anchored above the dashed group selection box; every
- * action targets the whole selection: Move picks the group up (it rides the
- * cursor until a click places it), Duplicate clones the selection and picks
- * the clones up, Delete removes everything selected.
- *
- * Gated on floorplan hover so it never coexists with the 3D group menu in
- * split view (that one hides while the floor plan is hovered), and hidden
- * during any active interaction so it never competes with a live drag.
+ * Floating multi-select pill on the floor plan: Move, Group, Ungroup, Duplicate, Delete.
  */
 export function FloorplanGroupActionMenu() {
-  const isMultiSelect = useViewer((s) => s.selection.selectedIds.length > 1)
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const isMultiSelect = selectedIds.length > 1
   const movingNode = useMovingNode()
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const scopeActive = useInteractionScope((s) => isActive(s.scope))
+  const sessionGroups = useSessionGroups((s) => s.groups)
+  const sceneNodes = useScene((s) => s.nodes)
+  const liveIds = useMemo(() => new Set(Object.keys(sceneNodes)), [sceneNodes])
+  const showGroup = useMemo(
+    () => canCreateSessionGroup(sessionGroups, selectedIds, liveIds),
+    [sessionGroups, selectedIds, liveIds],
+  )
+  const showUngroup = useMemo(
+    () => selectionIntersectsSessionGroup(sessionGroups, selectedIds, liveIds),
+    [sessionGroups, selectedIds, liveIds],
+  )
 
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
-
   const isVisible = isMultiSelect && !movingNode && isFloorplanHovered && !scopeActive
 
   useEffect(() => {
@@ -43,9 +54,6 @@ export function FloorplanGroupActionMenu() {
     let raf = 0
     const tick = () => {
       raf = requestAnimationFrame(tick)
-      // The dashed group box exists exactly while the multi-selection has
-      // transformable participants — anchor to its top edge. Only publish
-      // actual changes so the idle poll doesn't re-render every frame.
       const box = document.querySelector('[data-group-selection-box]') as SVGGElement | null
       if (!box) {
         setPosition((prev) => (prev === null ? prev : null))
@@ -77,9 +85,11 @@ export function FloorplanGroupActionMenu() {
       <NodeActionMenu
         onDelete={() => deleteSelection()}
         onDuplicate={() => duplicateSelectionAndPickUp()}
+        onGroup={showGroup ? () => groupCurrentSelection() : undefined}
         onMove={() => startGroupPickUp()}
         onPointerDown={(event) => event.stopPropagation()}
         onPointerUp={(event) => event.stopPropagation()}
+        onUngroup={showUngroup ? () => ungroupCurrentSelection() : undefined}
       />
     </div>,
     document.body,

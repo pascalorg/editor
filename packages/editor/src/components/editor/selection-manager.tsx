@@ -68,6 +68,7 @@ import {
   selectionModifiersFromEvent,
   shouldPreserveSelectedRoofHostTarget,
 } from '../../lib/selection-routing'
+import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
@@ -590,6 +591,7 @@ const computeNextIds = (
     currentSelectedIds: selectedIds,
     modifierKeys: selectionModifiersFromEvent(event, modifierKeys),
     nodeId: node.id,
+    expandIdsForNode: expandSessionSelectionForNode,
   })
 }
 

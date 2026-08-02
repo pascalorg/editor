@@ -94,6 +94,14 @@ export function resolveSelectModeHelpHints({
     })
     hints.push({ keys: [ROTATE_KEYS], label: 'Rotate the selection ±45°' })
     hints.push({
+      keys: [COMMAND_KEY, 'G'],
+      label: 'Group selection (session only)',
+    })
+    hints.push({
+      keys: [COMMAND_KEY, SHIFT_KEY, 'G'],
+      label: 'Ungroup session selection',
+    })
+    hints.push({
       keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
       label: 'Add or remove objects from the selection',
       active: commandPressed || shiftPressed,

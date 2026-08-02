@@ -84,6 +84,7 @@ import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useDrawingView from '../../../store/use-drawing-view'
 import useEditor, { isAngleSnapActive } from '../../../store/use-editor'
+import { expandSessionSelectionForNode } from '../../../store/use-session-groups'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import useInteractionScope, {
@@ -589,13 +590,19 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   }, [bumpAffectedSiblingEpochs])
 
   const applyEntrySelection = useCallback(
-    (id: AnyNodeId, shouldToggle: boolean) => {
+    (id: AnyNodeId, options: { shouldToggle: boolean; isolateMember: boolean }) => {
       const currentSelectedIds = useViewer.getState().selection.selectedIds
-      const nextSelectedIds = shouldToggle
-        ? currentSelectedIds.includes(id)
+      let nextSelectedIds: AnyNodeId[]
+      if (options.shouldToggle) {
+        nextSelectedIds = currentSelectedIds.includes(id)
           ? currentSelectedIds.filter((selectedId) => selectedId !== id)
           : [...currentSelectedIds, id]
-        : [id]
+      } else if (options.isolateMember) {
+        nextSelectedIds = [id]
+      } else {
+        const expanded = expandSessionSelectionForNode(id)
+        nextSelectedIds = (expanded && expanded.length > 1 ? expanded : [id]) as AnyNodeId[]
+      }
       setSelection({ selectedIds: nextSelectedIds })
       if (nextSelectedIds.length === 1 && nextSelectedIds[0] === id) {
         const node = useScene.getState().nodes[id]
@@ -618,7 +625,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     (id: AnyNodeId, event: React.PointerEvent<SVGGElement>) => {
       if (event.button !== 0) return
       event.stopPropagation()
-      applyEntrySelection(id, event.metaKey || event.ctrlKey || event.shiftKey)
+      applyEntrySelection(id, {
+        shouldToggle: event.metaKey || event.ctrlKey || event.shiftKey,
+        isolateMember: event.altKey && !(event.metaKey || event.ctrlKey || event.shiftKey),
+      })
     },
     [applyEntrySelection],
   )

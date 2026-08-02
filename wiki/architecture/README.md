@@ -18,6 +18,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [interaction-scope](interaction-scope.md) | The authoritative interaction state machine ("the spine"): `InteractionScope` union, the begin/update/end/endIf contract, the raycast hot-set, and the overlay scope matrix |
 | [viewer-isolation](viewer-isolation.md) | Keeping `@pascal-app/viewer` editor-agnostic |
 | [selection-managers](selection-managers.md) | Two-layer selection (viewer + editor), events, outliner |
+| [selection-groups](selection-groups.md) | Session multi-select groups (Ctrl/Cmd+G), expand-on-click, PR roadmap for persistent groups |
 | [scene-registry](scene-registry.md) | Global node ID → Object3D map and `useRegistry` |
 | [spatial-queries](spatial-queries.md) | Placement validation (`canPlaceOnFloor`/`Wall`/`Ceiling`) for tools |
 | [node-schemas](node-schemas.md) | Zod schema pattern for node types, `createNode`, `updateNode` |
