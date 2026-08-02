@@ -21,9 +21,8 @@ import {
   openElevatorDoor,
   pointInPolygon2D,
   requestElevatorLevel,
-  resolveElevatorBuildingLevels,
   resolveElevatorDispatchTarget,
-  resolveElevatorServiceLevels,
+  resolveElevatorLevels,
   sceneRegistry,
   useInteractive,
   useScene,
@@ -430,45 +429,6 @@ function isInsideElevatorCab(
   )
 }
 
-function resolveElevatorColliderLevels(elevator: ElevatorNode, nodes: Record<string, AnyNode>) {
-  const allLevels = resolveElevatorBuildingLevels(elevator, nodes)
-  const levelElevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
-
-  const baseYByLevelId = new Map<string, number>()
-  let cumulativeY = 0
-  for (const level of allLevels) {
-    const elevation = levelElevations.get(level.id)
-    const baseY = elevation?.baseY ?? 0
-    baseYByLevelId.set(level.id, baseY)
-    cumulativeY = Math.max(cumulativeY, baseY + (elevation?.height ?? 0))
-  }
-
-  const serviceLevels = resolveElevatorServiceLevels(elevator, nodes)
-  const entries = serviceLevels.map((level) => ({
-    baseY: baseYByLevelId.get(level.id) ?? 0,
-    id: level.id as AnyNodeId,
-  }))
-  const firstServedLevel = serviceLevels[0] ?? null
-  const lastServedLevel = serviceLevels[serviceLevels.length - 1] ?? null
-  const shaftBaseY = firstServedLevel ? (baseYByLevelId.get(firstServedLevel.id) ?? 0) : 0
-  const lastServedIndex = lastServedLevel
-    ? allLevels.findIndex((level) => level.id === lastServedLevel.id)
-    : -1
-  const nextLevel = lastServedIndex >= 0 ? allLevels[lastServedIndex + 1] : null
-  const shaftTopY = nextLevel
-    ? (baseYByLevelId.get(nextLevel.id) ?? cumulativeY)
-    : lastServedLevel
-      ? cumulativeY
-      : elevator.cabHeight + 0.3
-
-  return {
-    entries,
-    shaftBaseY,
-    shaftTopY,
-    totalHeight: Math.max(shaftTopY - shaftBaseY, elevator.cabHeight + 0.3),
-  }
-}
-
 function createElevatorColliderMesh(
   elevatorId: AnyNodeId,
   kind: ElevatorColliderKind,
@@ -519,10 +479,7 @@ function buildElevatorColliderMeshes(): ElevatorColliderMesh[] {
     const node = nodes[typedElevatorId]
     if (node?.type !== 'elevator' || node.visible === false) continue
 
-    const { entries, shaftBaseY, shaftTopY, totalHeight } = resolveElevatorColliderLevels(
-      node,
-      nodes,
-    )
+    const { entries, shaftBaseY, shaftTopY, totalHeight } = resolveElevatorLevels(node, nodes)
     const cabWidth = getElevatorCabWidth(node)
     const cabDepth = getElevatorCabDepth(node)
     const shaftWidth = getElevatorShaftWidth(node, cabWidth)

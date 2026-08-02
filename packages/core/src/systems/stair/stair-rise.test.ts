@@ -8,7 +8,7 @@ import { spatialGridManager } from '../../hooks/spatial-grid/spatial-grid-manage
 import { nodeRegistry, registerNode } from '../../registry'
 import type { AnyNodeDefinition } from '../../registry/types'
 import type { AnyNode, StairNode as StairNodeType } from '../../schema'
-import { LevelNode, SlabNode, StairNode, StairSegmentNode } from '../../schema'
+import { BuildingNode, LevelNode, SlabNode, StairNode, StairSegmentNode } from '../../schema'
 import { resolveStairTotalRise, syncStairRises } from './stair-rise'
 
 // The deck branch elects the stair's floor-stack base through the node
@@ -144,6 +144,33 @@ describe('resolveStairTotalRise', () => {
     if (level.type !== 'level') throw new Error('expected level')
     const updated = { ...nodes, level_1: { ...level, height: 3.0 } }
     expect(resolveStairTotalRise(stair, updated)).toBe(3.0)
+  })
+
+  it('includes the next level base elevation in a following stair rise', () => {
+    const { stair, nodes } = buildScene(2.5, undefined)
+    const current = nodes.level_1
+    if (current.type !== 'level') throw new Error('expected level')
+    const building = BuildingNode.parse({
+      id: 'building_1',
+      children: ['level_1', 'level_2'],
+    })
+    const upper = LevelNode.parse({
+      id: 'level_2',
+      parentId: building.id,
+      level: 1,
+      baseElevation: 0.4,
+      height: 2.5,
+    })
+    const stackedNodes = {
+      ...nodes,
+      [building.id]: building,
+      level_1: { ...current, parentId: building.id },
+      level_2: upper,
+    } as Record<string, AnyNode>
+
+    expect(resolveStairTotalRise(stair, stackedNodes)).toBeCloseTo(2.9)
+    stackedNodes.level_2 = { ...upper, baseElevation: -0.4 }
+    expect(resolveStairTotalRise(stair, stackedNodes)).toBeCloseTo(2.1)
   })
 
   it('prefers an explicit totalRise over the storey height', () => {

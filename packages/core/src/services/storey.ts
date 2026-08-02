@@ -91,6 +91,26 @@ export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<strin
   return elevations
 }
 
+function resolveLevelFloorToFloorHeight(
+  levelId: string,
+  elevations: Map<string, LevelElevation>,
+): number | null {
+  const current = elevations.get(levelId)
+  if (!current) return null
+
+  const aboveId = findLevelAboveId(levelId, elevations)
+  if (!aboveId) return current.height
+  const above = elevations.get(aboveId)
+  return above ? above.baseY - current.baseY : current.height
+}
+
+export function getLevelFloorToFloorHeight(
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): number {
+  return resolveLevelFloorToFloorHeight(levelId, getLevelElevations(nodes)) ?? DEFAULT_LEVEL_HEIGHT
+}
+
 /**
  * The id of the level directly above `levelId` in its own stack (same
  * resolved building, or the shared legacy stack for building-less levels):
@@ -171,8 +191,8 @@ export function getLevelBelow(
 }
 
 type CoveringSlabContext = {
-  /** Stored storey height of the QUERIED level. */
-  storeyHeight: number
+  /** Offset-aware distance from the queried floor to the floor above. */
+  floorToFloorHeight: number
   /** Non-recessed slab children of the level above. */
   slabs: SlabNode[]
 }
@@ -190,7 +210,10 @@ function resolveCoveringSlabContext(
   const level = nodes[levelId as LevelNode['id']]
   if (level?.type !== 'level') return null
 
-  const above = getLevelAbove(levelId, nodes)
+  const elevations = getLevelElevations(nodes)
+  const aboveId = findLevelAboveId(levelId, elevations)
+  const aboveNode = aboveId ? nodes[aboveId as LevelNode['id']] : null
+  const above = aboveNode?.type === 'level' ? (aboveNode as LevelNode) : null
   const slabs: SlabNode[] = []
   for (const childId of above?.children ?? []) {
     const child = nodes[childId as keyof typeof nodes]
@@ -202,16 +225,21 @@ function resolveCoveringSlabContext(
     slabs.push(slab)
   }
 
-  return { storeyHeight: getStoredLevelHeight(level as LevelNode), slabs }
+  return {
+    floorToFloorHeight:
+      resolveLevelFloorToFloorHeight(levelId, elevations) ??
+      getStoredLevelHeight(level as LevelNode),
+    slabs,
+  }
 }
 
 /**
  * Underside of `slab`'s solid in the QUERIED level's local Y. The solid
  * occupies `[elevation - thickness, elevation]` in ITS level's local Y,
- * which sits `storeyHeight` above the queried level's floor.
+ * which sits `floorToFloorHeight` above the queried level's floor.
  */
-function coveringUndersideY(storeyHeight: number, slab: SlabNode): number {
-  return storeyHeight + ((slab.elevation ?? 0.05) - (slab.thickness ?? 0.05))
+function coveringUndersideY(floorToFloorHeight: number, slab: SlabNode): number {
+  return floorToFloorHeight + ((slab.elevation ?? 0.05) - (slab.thickness ?? 0.05))
 }
 
 /**
@@ -249,7 +277,7 @@ function lowestCoveringUndersideAt(
   let lowest: number | null = null
   for (const slab of context.slabs) {
     if (!slabCoversPoint(slab, x, z)) continue
-    const underside = coveringUndersideY(context.storeyHeight, slab)
+    const underside = coveringUndersideY(context.floorToFloorHeight, slab)
     if (lowest === null || underside < lowest) lowest = underside
   }
   return lowest
@@ -258,7 +286,7 @@ function lowestCoveringUndersideAt(
 /**
  * Underside of the LOWEST slab from the level above that covers
  * level-local point `[x, z]`, expressed in the queried level's local Y:
- * `storeyHeight + (slab.elevation - slab.thickness)`. `recessed` slabs
+ * `floorToFloorHeight + (slab.elevation - slab.thickness)`. `recessed` slabs
  * (pools) never cover. `null` when no covering slab (or no level above).
  *
  * Coordinate spaces: levels stack in Y only (`LevelNode` carries no XZ
@@ -305,9 +333,9 @@ export function getWallPlaneTop(
   const context = resolveCoveringSlabContext(levelId, nodes)
   if (!context) return DEFAULT_LEVEL_HEIGHT
 
-  let plane = context.storeyHeight
+  let plane = context.floorToFloorHeight
   for (const slab of context.slabs) {
-    const underside = coveringUndersideY(context.storeyHeight, slab)
+    const underside = coveringUndersideY(context.floorToFloorHeight, slab)
     if (underside >= plane) continue
     if (!wallOverlapsSlabFootprint(wall, slab.polygon, slab.holes)) continue
     plane = underside
@@ -337,7 +365,7 @@ export function getCeilingClampBound(
   const context = resolveCoveringSlabContext(levelId, nodes)
   if (!context) return Number.POSITIVE_INFINITY
 
-  let bound = context.storeyHeight
+  let bound = context.floorToFloorHeight
   if (polygon.length > 0) {
     let cx = 0
     let cz = 0

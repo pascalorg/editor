@@ -882,7 +882,7 @@ const LevelItem = memo(function LevelItem({
                 precision={2}
                 step={0.05}
                 unit="m"
-                value={Math.round(level.baseElevation * 100) / 100}
+                value={Math.round((level.baseElevation ?? 0) * 100) / 100}
               />
             </div>
             <LevelReferences

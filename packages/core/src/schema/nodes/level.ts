@@ -56,6 +56,12 @@ type CoreLevelChildId =
 
 const LevelChildId = z.string().transform((id) => id as CoreLevelChildId)
 
+export const DEFAULT_LEVEL_BASE_ELEVATION = 0
+
+export function normalizeLevelBaseElevation(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : DEFAULT_LEVEL_BASE_ELEVATION
+}
+
 export const LevelNode = BaseNode.extend({
   id: objectId('level'),
   type: nodeType('level'),
@@ -66,7 +72,7 @@ export const LevelNode = BaseNode.extend({
   level: z.number().default(0),
   baseElevation: z
     .number()
-    .default(0)
+    .default(DEFAULT_LEVEL_BASE_ELEVATION)
     .describe("Additive Y offset in meters applied above this level's computed stack position."),
   /**
    * Stored storey height in meters (floor-to-floor). No zod default on

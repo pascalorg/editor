@@ -3,7 +3,7 @@ import { DuctFittingNode } from './duct-fitting'
 import { DuctSegmentNode } from './duct-segment'
 import { DuctTerminalNode } from './duct-terminal'
 import { HvacEquipmentNode } from './hvac-equipment'
-import { LevelNode } from './level'
+import { LevelNode, normalizeLevelBaseElevation } from './level'
 import { LinesetNode } from './lineset'
 import { LiquidLineNode } from './liquid-line'
 import { PipeFittingNode } from './pipe-fitting'
@@ -23,6 +23,12 @@ describe('LevelNode', () => {
         name: 'Split level',
       }).baseElevation,
     ).toBe(1.25)
+  })
+
+  test('normalizes legacy missing and invalid baseElevation values to a finite zero', () => {
+    expect(normalizeLevelBaseElevation(undefined)).toBe(0)
+    expect(normalizeLevelBaseElevation(Number.NaN)).toBe(0)
+    expect(Number.isNaN(normalizeLevelBaseElevation(undefined))).toBe(false)
   })
 
   test('accepts every level-hosted MEP node ID', () => {

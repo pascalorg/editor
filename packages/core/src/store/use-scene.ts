@@ -10,7 +10,7 @@ import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
-import { LevelNode } from '../schema/nodes/level'
+import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
 import {
   getPitchFromActiveRoofHeight,
   type RoofSegmentNode,
@@ -948,6 +948,7 @@ function migrateNodes(nodes: Record<string, any>): {
       const levelNumber = getFiniteNumber(node.level, 0)
       patchedNodes[id] = {
         ...node,
+        baseElevation: normalizeLevelBaseElevation(node.baseElevation),
         level: levelNumber,
         children: validChildren,
       }
