@@ -3,9 +3,12 @@
  *
  * Furniture that overlaps a door clear zone is reported as blocking the door.
  * Used by furnish_room (skip placements) and verify_scene (layout issues).
+ *
+ * See docs/layout-clearance-error-log.md for pitfalls (levels, gap sign, scale).
  */
 
 import type { AnyNode, WallNode } from '@pascal-app/core/schema'
+import { getScaledDimensions } from '@pascal-app/core/schema'
 import { wallLength, type Vec2 } from './geometry'
 
 export type PlanAabb = {
@@ -18,6 +21,7 @@ export type PlanAabb = {
 export type DoorKeepout = {
   doorId: string
   wallId: string
+  levelId: string | null
   /** World-space AABB on both sides of the wall opening. */
   aabb: PlanAabb
   width: number
@@ -29,17 +33,44 @@ export const DEFAULT_DOOR_CLEAR_DEPTH = 0.65
 /** Extra half-width (m) beyond the door leaf along the wall. */
 export const DEFAULT_DOOR_SIDE_PAD = 0.05
 
-function aabbsOverlap(a: PlanAabb, b: PlanAabb, gap = 0): boolean {
+/**
+ * True when A and B come closer than `gap` meters (including penetration).
+ * `gap` is the **minimum free space required** between boxes:
+ * expand each box by gap/2, then test intersection.
+ */
+export function aabbsOverlap(a: PlanAabb, b: PlanAabb, gap = 0): boolean {
+  const g = gap
   return (
-    a.maxX - gap > b.minX &&
-    a.minX + gap < b.maxX &&
-    a.maxZ - gap > b.minZ &&
-    a.minZ + gap < b.maxZ
+    a.maxX + g > b.minX &&
+    a.minX - g < b.maxX &&
+    a.maxZ + g > b.minZ &&
+    a.minZ - g < b.maxZ
   )
 }
 
 /**
- * Axis-aligned item footprint in plan (x/z), matching furnish_room rotation handling.
+ * Walk parentId chain to the enclosing level id (pure; no bridge required).
+ */
+export function resolveNodeLevelId(
+  nodeId: string,
+  byId: Map<string, AnyNode>,
+): string | null {
+  let current: AnyNode | undefined = byId.get(nodeId)
+  const seen = new Set<string>()
+  while (current) {
+    if (seen.has(current.id)) return null
+    seen.add(current.id)
+    if (current.type === 'level') return current.id
+    const parentId = current.parentId
+    if (!parentId) return null
+    current = byId.get(parentId)
+  }
+  return null
+}
+
+/**
+ * Axis-aligned item footprint in plan (x/z), rotation-aware.
+ * Prefer scaled dimensions when the node is available.
  */
 export function itemPlanAabb(
   position: [number, number, number] | number[],
@@ -61,6 +92,14 @@ export function itemPlanAabb(
   }
 }
 
+/** Footprint for a scene item node (uses getScaledDimensions). */
+export function itemNodePlanAabb(node: AnyNode): PlanAabb | null {
+  if (node.type !== 'item') return null
+  const [w, , d] = getScaledDimensions(node)
+  const rotY = Array.isArray(node.rotation) ? (node.rotation[1] ?? 0) : 0
+  return itemPlanAabb(node.position as number[], [w, 0, d], rotY)
+}
+
 /**
  * Build a rectangular keep-out around a wall door, extruded perpendicular to the wall
  * on both faces so either swing side is protected.
@@ -68,7 +107,7 @@ export function itemPlanAabb(
 export function doorKeepoutFromWall(
   wall: Pick<WallNode, 'id' | 'start' | 'end'>,
   door: Pick<AnyNode, 'id' | 'position' | 'width'> & { type?: string },
-  options?: { clearDepth?: number; sidePad?: number },
+  options?: { clearDepth?: number; sidePad?: number; levelId?: string | null },
 ): DoorKeepout | null {
   const clearDepth = options?.clearDepth ?? DEFAULT_DOOR_CLEAR_DEPTH
   const sidePad = options?.sidePad ?? DEFAULT_DOOR_SIDE_PAD
@@ -82,7 +121,6 @@ export function doorKeepoutFromWall(
   const [ex, ez] = wall.end
   const dx = (ex - sx) / length
   const dz = (ez - sz) / length
-  // Perpendicular in plan (rotate tangent 90°): (dx,dz) -> (-dz, dx)
   const nx = -dz
   const nz = dx
 
@@ -101,6 +139,7 @@ export function doorKeepoutFromWall(
   return {
     doorId: door.id,
     wallId: wall.id,
+    levelId: options?.levelId ?? null,
     width,
     localX,
     aabb: {
@@ -114,7 +153,7 @@ export function doorKeepoutFromWall(
 
 export function collectDoorKeepouts(
   nodes: Iterable<AnyNode>,
-  options?: { clearDepth?: number; sidePad?: number },
+  options?: { clearDepth?: number; sidePad?: number; levelId?: string },
 ): DoorKeepout[] {
   const byId = new Map<string, AnyNode>()
   for (const node of nodes) byId.set(node.id, node)
@@ -126,7 +165,13 @@ export function collectDoorKeepouts(
     if (!wallId) continue
     const wall = byId.get(wallId)
     if (!wall || wall.type !== 'wall') continue
-    const keepout = doorKeepoutFromWall(wall, node, options)
+    const levelId = resolveNodeLevelId(wall.id, byId) ?? resolveNodeLevelId(node.id, byId)
+    if (options?.levelId && levelId !== options.levelId) continue
+    const keepout = doorKeepoutFromWall(wall, node, {
+      clearDepth: options?.clearDepth,
+      sidePad: options?.sidePad,
+      levelId,
+    })
     if (keepout) keepouts.push(keepout)
   }
   return keepouts
@@ -140,6 +185,7 @@ export type BlockedDoorIssue = {
   doorId: string
   wallId: string
   itemId: string
+  levelId?: string | null
   itemName?: string
   message: string
 }
@@ -148,27 +194,38 @@ export function findBlockedDoors(args: {
   nodes: Iterable<AnyNode>
   clearDepth?: number
   sidePad?: number
+  /** When set, only doors and items on this level are considered. */
+  levelId?: string
 }): BlockedDoorIssue[] {
   const nodes = [...args.nodes]
+  const byId = new Map(nodes.map((n) => [n.id, n] as const))
   const keepouts = collectDoorKeepouts(nodes, {
     clearDepth: args.clearDepth,
     sidePad: args.sidePad,
+    levelId: args.levelId,
   })
   if (keepouts.length === 0) return []
 
   const issues: BlockedDoorIssue[] = []
   for (const node of nodes) {
     if (node.type !== 'item') continue
-    const dims = node.asset?.dimensions as number[] | undefined
-    const rotY = Array.isArray(node.rotation) ? (node.rotation[1] ?? 0) : 0
-    const aabb = itemPlanAabb(node.position as number[], dims, rotY)
+    const itemLevel = resolveNodeLevelId(node.id, byId)
+    if (args.levelId && itemLevel !== args.levelId) continue
+
+    const aabb = itemNodePlanAabb(node)
+    if (!aabb) continue
+
     for (const keepout of keepouts) {
+      // Same-level only (multi-story safety).
+      if (keepout.levelId && itemLevel && keepout.levelId !== itemLevel) continue
+      if (args.levelId && keepout.levelId && keepout.levelId !== args.levelId) continue
       if (!itemBlocksDoorKeepout(aabb, keepout)) continue
       const itemName = node.name ?? node.asset?.name ?? node.id
       issues.push({
         doorId: keepout.doorId,
         wallId: keepout.wallId,
         itemId: node.id,
+        levelId: itemLevel,
         itemName: typeof itemName === 'string' ? itemName : undefined,
         message: `Door ${keepout.doorId} on wall ${keepout.wallId} is blocked by item ${itemName} (${node.id})`,
       })
@@ -212,8 +269,15 @@ export function keepoutForPolygonEdge(
   return keepout?.aabb ?? null
 }
 
+/**
+ * Whether an existing keep-out already covers this room-edge planned zone
+ * (so we do not double-count a real door on that edge).
+ */
+export function keepoutCoversPlanned(existing: PlanAabb, planned: PlanAabb): boolean {
+  // Centers roughly align / boxes overlap substantially.
+  return aabbsOverlap(existing, planned, 0)
+}
+
 export function aabbFromPlan(a: PlanAabb): PlanAabb {
   return a
 }
-
-export { aabbsOverlap }

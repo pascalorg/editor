@@ -15,23 +15,26 @@ function item(
   dimensions: [number, number, number],
   name = 'Item',
   rotY = 0,
+  parentId = 'level_1',
+  scale: [number, number, number] = [1, 1, 1],
 ) {
   return {
     object: 'node' as const,
     id,
     type: 'item' as const,
-    parentId: 'level_1',
+    parentId,
     visible: true,
     metadata: {},
     name,
     position,
     rotation: [0, rotY, 0] as [number, number, number],
+    scale,
     asset: {
       id: 'x',
       name,
       category: 'furniture',
       thumbnail: '',
-      src: '',
+      src: 'asset://x',
       dimensions,
     },
   }
@@ -106,6 +109,15 @@ describe('layout-clearance', () => {
   })
 
   test('layoutIssuesFromScene merges door blocks and item overlaps', () => {
+    const level = {
+      object: 'node' as const,
+      id: 'level_1',
+      type: 'level' as const,
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: [] as string[],
+    }
     const wall = {
       object: 'node' as const,
       id: 'wall_1',
@@ -134,8 +146,34 @@ describe('layout-clearance', () => {
     const toilet = item('t', [0.7, 0, 1.95], [1, 0.9, 1], 'Toilet')
     const a = item('a', [3, 0, 4], [1.5, 1, 1.5], 'A')
     const b = item('b', [3.2, 0, 4.1], [1.5, 1, 1.5], 'B')
-    const issues = layoutIssuesFromScene([wall, door, toilet, a, b] as unknown as AnyNode[])
+    const issues = layoutIssuesFromScene([
+      level,
+      wall,
+      door,
+      toilet,
+      a,
+      b,
+    ] as unknown as AnyNode[])
     expect(issues.some((m) => m.includes('blocked'))).toBe(true)
     expect(issues.some((m) => m.includes('overlap'))).toBe(true)
+  })
+
+  test('item gap of 0.08 m flags near-touching items (L3)', () => {
+    // centers 1.05 m apart, each half-width 0.5 → 0.05 m free space
+    const a = item('a', [0, 0, 0], [1, 1, 1], 'A')
+    const b = item('b', [1.05, 0, 0], [1, 1, 1], 'B')
+    const hits = findItemItemCollisions({
+      nodes: [a, b] as unknown as AnyNode[],
+      gap: 0.08,
+    })
+    expect(hits.length).toBe(1)
+  })
+
+  test('scaled items collide via getScaledDimensions (L4)', () => {
+    // base 1x1, scale 3 → large footprint at origin overlaps neighbor at 1.5
+    const a = item('a', [0, 0, 0], [1, 1, 1], 'A', 0, 'level_1', [3, 1, 3])
+    const b = item('b', [1.5, 0, 0], [1, 1, 1], 'B')
+    const hits = findItemItemCollisions({ nodes: [a, b] as unknown as AnyNode[] })
+    expect(hits.length).toBe(1)
   })
 })

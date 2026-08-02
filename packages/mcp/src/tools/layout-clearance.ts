@@ -1,11 +1,11 @@
 /**
  * Shared plan-layout clearance for MCP tools.
  *
- * - Door keep-outs (re-exports / wraps door-clearance)
- * - Item–item AABB overlap (rotation-aware)
+ * - Door keep-outs (level-scoped)
+ * - Item–item AABB overlap (rotation + scale aware)
  * - Placement candidate search when primary pose is blocked
  *
- * Used by furnish_room, verify_scene, and check_collisions.
+ * See docs/layout-clearance-error-log.md for regression checklist.
  */
 
 import type { AnyNode } from '@pascal-app/core/schema'
@@ -13,7 +13,9 @@ import {
   aabbsOverlap,
   collectDoorKeepouts,
   findBlockedDoors,
+  itemNodePlanAabb,
   itemPlanAabb,
+  resolveNodeLevelId,
   type PlanAabb,
 } from './door-clearance'
 
@@ -21,16 +23,19 @@ export {
   aabbsOverlap,
   collectDoorKeepouts,
   findBlockedDoors,
+  itemNodePlanAabb,
   itemPlanAabb,
+  resolveNodeLevelId,
   type PlanAabb,
 } from './door-clearance'
 
-/** Minimum gap (m) between item footprints (soft buffer). */
+/** Minimum free space (m) required between item footprints. */
 export const DEFAULT_ITEM_GAP = 0.08
 
 export type OccupiedFootprint = {
   id: string
   name?: string
+  levelId?: string | null
   aabb: PlanAabb
 }
 
@@ -39,24 +44,23 @@ export type ItemCollision = {
   bId: string
   aName?: string
   bName?: string
+  levelId?: string | null
   kind: 'item-aabb'
   message: string
 }
 
 export function nodeItemAabb(node: AnyNode): PlanAabb | null {
-  if (node.type !== 'item') return null
-  const dims = node.asset?.dimensions as number[] | undefined
-  const rotY = Array.isArray(node.rotation) ? (node.rotation[1] ?? 0) : 0
-  const pos = node.position as number[]
-  return itemPlanAabb(pos, dims, rotY)
+  return itemNodePlanAabb(node)
 }
 
 export function collectOccupiedFootprints(
   nodes: Iterable<AnyNode>,
   options?: { levelId?: string; excludeIds?: Set<string>; floorOnly?: boolean },
 ): OccupiedFootprint[] {
+  const list = [...nodes]
+  const byId = new Map(list.map((n) => [n.id, n] as const))
   const out: OccupiedFootprint[] = []
-  for (const node of nodes) {
+  for (const node of list) {
     if (node.type !== 'item') continue
     if (options?.excludeIds?.has(node.id)) continue
     const attach = node.asset?.attachTo
@@ -66,9 +70,13 @@ export function collectOccupiedFootprints(
     ) {
       continue
     }
-    if (options?.levelId && node.parentId && node.parentId !== options.levelId) {
-      // Floor packing only uses level-parented items (not wall children).
-      if (options.floorOnly) continue
+    const levelId = resolveNodeLevelId(node.id, byId)
+    if (options?.levelId && levelId !== options.levelId) continue
+    // Floor packing: prefer level-parented items (not wall-hosted children).
+    if (options?.floorOnly && node.parentId && levelId && node.parentId !== levelId) {
+      if (attach === 'wall' || attach === 'wall-side' || attach === 'ceiling') continue
+      // Wall-parented items without attachTo still skipped for floor packing.
+      if (byId.get(node.parentId)?.type === 'wall') continue
     }
     const aabb = nodeItemAabb(node)
     if (!aabb) continue
@@ -76,6 +84,7 @@ export function collectOccupiedFootprints(
     out.push({
       id: node.id,
       name: typeof name === 'string' ? name : undefined,
+      levelId,
       aabb,
     })
   }
@@ -94,12 +103,14 @@ export function findItemItemCollisions(args: {
     for (let j = i + 1; j < footprints.length; j++) {
       const a = footprints[i]!
       const b = footprints[j]!
+      if (a.levelId && b.levelId && a.levelId !== b.levelId) continue
       if (!aabbsOverlap(a.aabb, b.aabb, gap)) continue
       collisions.push({
         aId: a.id,
         bId: b.id,
         aName: a.name,
         bName: b.name,
+        levelId: a.levelId ?? b.levelId,
         kind: 'item-aabb',
         message: `Items overlap: ${a.name ?? a.id} (${a.id}) and ${b.name ?? b.id} (${b.id})`,
       })
@@ -152,18 +163,12 @@ export function classifyPlacement(args: {
   return 'ok'
 }
 
-/**
- * Generate alternate poses around a primary placement (lateral + inset nudges).
- * Used when the first pose hits a door or another item.
- */
 export function generatePlacementCandidates(
   primary: PlacementCandidate,
   options?: {
     lateralsM?: number[]
     insetsM?: number[]
-    /** Unit vector "into room" for inset (away from back wall). */
     inward?: { x: number; z: number }
-    /** Unit vector along the furniture wall. */
     along?: { x: number; z: number }
   },
 ): PlacementCandidate[] {
@@ -194,7 +199,9 @@ export function findValidPlacement(args: {
   roomBounds?: { minX: number; maxX: number; minZ: number; maxZ: number }
   along?: { x: number; z: number }
   inward?: { x: number; z: number }
-}): { candidate: PlacementCandidate; reason: PlacementRejectReason } | { candidate: null; reason: PlacementRejectReason } {
+}):
+  | { candidate: PlacementCandidate; reason: PlacementRejectReason }
+  | { candidate: null; reason: PlacementRejectReason } {
   const candidates = generatePlacementCandidates(args.primary, {
     along: args.along,
     inward: args.inward,
@@ -215,14 +222,34 @@ export function findValidPlacement(args: {
   return { candidate: null, reason: lastReason }
 }
 
+/**
+ * Collect layout issues, scoped per level so stacked floors do not false-positive.
+ */
 export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): string[] {
   const list = [...nodes]
+  const byId = new Map(list.map((n) => [n.id, n] as const))
+  const levelIds = new Set<string>()
+  for (const n of list) {
+    if (n.type === 'level') levelIds.add(n.id)
+  }
+  // Also collect levels referenced by walls/items (in case filter missed)
+  for (const n of list) {
+    const lid = resolveNodeLevelId(n.id, byId)
+    if (lid) levelIds.add(lid)
+  }
+
   const issues: string[] = []
-  for (const b of findBlockedDoors({ nodes: list })) {
-    issues.push(b.message)
+  const levels = levelIds.size > 0 ? [...levelIds] : [undefined]
+
+  for (const levelId of levels) {
+    for (const b of findBlockedDoors({ nodes: list, levelId })) {
+      issues.push(b.message)
+    }
+    for (const c of findItemItemCollisions({ nodes: list, levelId })) {
+      issues.push(c.message)
+    }
   }
-  for (const c of findItemItemCollisions({ nodes: list })) {
-    issues.push(c.message)
-  }
-  return issues
+
+  // Deduplicate (node may appear under multiple walks)
+  return [...new Set(issues)]
 }

@@ -13,7 +13,7 @@ import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { findCatalogItem, searchCatalogItems } from './asset-catalog'
 import { ErrorCode, throwMcpError } from './errors'
-import { keepoutForPolygonEdge } from './door-clearance'
+import { keepoutCoversPlanned, keepoutForPolygonEdge } from './door-clearance'
 import {
   collectDoorKeepouts,
   collectOccupiedFootprints,
@@ -579,12 +579,20 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
       const items: AnyNode[] = []
 
       const allNodes = Object.values(bridge.getNodes())
-      // Prefer real doors already on the level; fall back to a planned keep-out on the door wall edge.
-      const existingKeepouts = collectDoorKeepouts(allNodes)
+      // Doors on THIS level only (stacked floors must not interact in plan).
+      const existingKeepouts = collectDoorKeepouts(allNodes, { levelId: room.levelId })
       const doorKeepoutAabbs: PlanAabb[] = existingKeepouts.map((k) => k.aabb)
-      if (doorKeepoutAabbs.length === 0) {
-        const planned = keepoutForPolygonEdge(points, resolvedDoorWallIndex, { t: 0.5, width: 0.9 })
-        if (planned) doorKeepoutAabbs.push(planned)
+      // Always protect this room's door-wall edge when no keep-out already covers it
+      // (other rooms may already have doors elsewhere on the same level).
+      const planned = keepoutForPolygonEdge(points, resolvedDoorWallIndex, {
+        t: 0.5,
+        width: 0.9,
+      })
+      if (
+        planned &&
+        !doorKeepoutAabbs.some((existing) => keepoutCoversPlanned(existing, planned))
+      ) {
+        doorKeepoutAabbs.push(planned)
       }
 
       // Existing floor items on this level + footprints we place in this batch.
