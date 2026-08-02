@@ -9,6 +9,7 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { Hammer, Layers } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -16,6 +17,9 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
+
+/** Lighter preview path: skips post-FX and outline passes (viewer `?disable=` flags). */
+export const LIGHT_PREVIEW_QUERY = 'disable=postFx,outline'
 
 export interface SceneMeta {
   id: string
@@ -99,6 +103,21 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Light preview: solid shading pairs with `?disable=postFx` (viewer post-processing flags).
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const disable = params.get('disable') ?? ''
+    const light =
+      disable.split(',').some((p) => p.trim() === 'postFx') || params.get('safe') === '1'
+    if (!light) return
+    try {
+      useViewer.getState().setShading('solid')
+    } catch {
+      // Viewer store may not be ready yet on first paint.
+    }
+  }, [])
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
@@ -224,6 +243,12 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         </div>
       )}
       <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
+        <Link
+          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
+          href={`/scene/${meta.id}?${LIGHT_PREVIEW_QUERY}`}
+        >
+          Light preview
+        </Link>
         <Link
           className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
           href="/scenes"

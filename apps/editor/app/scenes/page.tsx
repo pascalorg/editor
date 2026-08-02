@@ -83,7 +83,8 @@ export default async function ScenesPage() {
               <li key={scene.id}>
                 <Link
                   className="group block rounded-xl border border-border/60 bg-background p-4 transition-colors hover:border-border hover:bg-accent/30"
-                  href={`/scene/${scene.id}`}
+                  href={`/scene/${scene.id}?disable=postFx,outline`}
+                  title="Opens with light preview (post-FX off) for stable local WebGPU"
                 >
                   <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-accent/30">
                     {scene.thumbnailUrl ? (
