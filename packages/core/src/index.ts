@@ -190,7 +190,10 @@ export {
 export { raycastTerrain, type TerrainHit } from './lib/terrain-raycast'
 export { commitTerrainField, terrainFieldForEdit, terrainFieldOf } from './lib/terrain-source'
 export {
+  isLevelBaseConsumer,
   isSiteDatum,
+  levelBaseElevationAt,
+  noteLevelBaseConsumer,
   SITE_DATUM_EPSILON,
   SITE_DATUM_Y,
   terrainSupportLift,

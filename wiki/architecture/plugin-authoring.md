@@ -53,6 +53,35 @@ A plugin's `nodes` array is the only meaningful contribution point in v1. Each e
 
 See [`node-definitions.md`](node-definitions.md) for the three-checkbox composition model that ties these together.
 
+## Standing on the ground (terrain)
+
+The site carries a sculpted heightfield, so "the floor" is not the plane `y = 0`. A plugin kind that
+hardcodes `0` as its base looks correct on a flat lot and buries itself in the hillside on a sculpted
+one. There is no capability to declare and nothing to register — pick whichever of these matches how
+your kind gets its Y, and terrain follows:
+
+- **Your node stands on a surface** → declare `capabilities.floorPlaced` with a `footprint` (or
+  `footprints` for a composite). `FloorElevationSystem` then lifts the registered mesh every frame,
+  electing between overlapping slabs and the ground per footprint. This is the whole contract: a tree,
+  a bench, a planter needs nothing else.
+- **Your `def.geometry` builder bakes its own vertical origin** → read `ctx.levelBaseAt(x, z)`
+  instead of writing `0`. It returns the ground at that level-local point (`0` when there is no
+  terrain under the storey). Calling it also enrols your kind in terrain invalidation, so the builder
+  re-runs when the ground moves; you don't wire a dirty rule. It is **absent for `def.floorplan`** —
+  the plan view has no elevation — so a builder shared between 2D and 3D must use
+  `ctx.levelBaseAt?.(x, z) ?? 0`.
+- **You ship a collective `renderer`** (one component drawing many nodes — instanced meshes, a merged
+  buffer) → you own each instance's Y. `FloorElevationSystem` writes to the node's *registered*
+  object, which for a collective kind is the invisible selection proxy, not the instance, so a raw
+  `node.position[1]` per instance ignores both slabs and terrain. Resolve through
+  `getFloorStackedPosition({ node, nodes, position })` when writing each instance matrix, and commit
+  the **base** position (`[x, 0, z]`) from your placement tool — the lift is presentation, never
+  stored.
+
+Sample the ground at the same XZ your geometry is anchored at. A handle, a snap guide and the mesh
+that sample different points on a slope will visibly disagree. Background:
+[`vertical-model.md`](vertical-model.md#inheriting-terrain-the-generic-seam).
+
 ## Importing host packages
 
 A plugin imports from the published `@pascal-app/*` packages — same surface the built-ins use, peer-dependency-style:

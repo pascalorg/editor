@@ -3,9 +3,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  findLevelAncestorId,
   type GeometryContext,
   getEffectiveNode,
+  levelBaseElevationAt,
   nodeRegistry,
+  noteLevelBaseConsumer,
   type SurfaceRole,
   sceneRegistry,
   useLiveNodeOverrides,
@@ -304,7 +307,24 @@ function buildGeometryContext(
     }
   }
 
-  return { resolve, children, siblings, parent, levelData, materials }
+  // The ground under this node, for builders that bake their own vertical
+  // origin (`ctx.levelBaseAt`). A closure rather than a scalar because the
+  // sample point is the builder's business: a fence samples its own start,
+  // and a kind that wanted to drape a span could sample along it. Resolved
+  // against the node's level ancestor, so a builder never has to know how
+  // the level graph is walked — and gets `0` when it has no level, which is
+  // the flat-ground answer those nodes already assumed.
+  //
+  // Calling it also enrolls the kind in terrain invalidation
+  // (`noteLevelBaseConsumer`) — see `terrain-support.ts` for why asking is
+  // the registration.
+  const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
+  const levelBaseAt = (x: number, z: number) => {
+    noteLevelBaseConsumer(node.type)
+    return levelId ? levelBaseElevationAt(nodes, levelId, x, z) : 0
+  }
+
+  return { resolve, children, siblings, parent, levelBaseAt, levelData, materials }
 }
 
 function disposeChildren(group: Group) {

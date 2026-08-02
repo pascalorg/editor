@@ -1,4 +1,4 @@
-import { terrainSupportLift } from '../../lib/terrain-support'
+import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type {
   FloorPlacedConfig,
@@ -108,7 +108,7 @@ export function getFloorPlacedElevation({
    */
   let groundLiftCache: number | null = null
   const groundLift = (): number => {
-    groundLiftCache ??= terrainSupportLift(nodes, resolvedLevelId, position[0], position[2]) ?? 0
+    groundLiftCache ??= levelBaseElevationAt(nodes, resolvedLevelId, position[0], position[2])
     return groundLiftCache
   }
 

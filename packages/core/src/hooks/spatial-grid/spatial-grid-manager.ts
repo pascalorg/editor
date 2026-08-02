@@ -1,5 +1,5 @@
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
-import { terrainSupportLift } from '../../lib/terrain-support'
+import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
@@ -1057,10 +1057,13 @@ export class SpatialGridManager {
     maxElevation?: number | null,
     supportOffset = 0,
   ): WallSlabSupport {
+    // Sampled at the wall's own start point — the same anchor the mesh is
+    // positioned at, so the resolver and the renderer cannot disagree about
+    // where the ground is under this wall.
+    const levelBase = levelBaseElevationAt(useScene.getState().nodes, levelId, start[0], start[1])
+
     if (preferredSlabId === GROUND_SUPPORT_ID) {
-      const nodes = useScene.getState().nodes
-      const elevation =
-        (terrainSupportLift(nodes, levelId, start[0], start[1]) ?? 0) + supportOffset
+      const elevation = levelBase + supportOffset
       return {
         elevation,
         electedSlabId: null,
@@ -1071,7 +1074,7 @@ export class SpatialGridManager {
 
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) {
-      const elevation = supportOffset
+      const elevation = levelBase + supportOffset
       return {
         elevation,
         electedSlabId: null,
@@ -1086,6 +1089,7 @@ export class SpatialGridManager {
       this.getLevelWallNodes(levelId).map((wall) => getEffectiveNode(wall)),
       preferredSlabId,
       maxElevation,
+      levelBase,
     )
     if (supportOffset === 0) return support
     return {

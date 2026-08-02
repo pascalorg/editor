@@ -29,6 +29,25 @@ export type GeometryContext = {
   /** Resolved parent (null for root-level nodes). */
   parent: AnyNode | null
   /**
+   * **The level base at level-local `x`/`z`** — the surface a node rests on
+   * when nothing built is under it. Sculpted ground where terrain supports this
+   * node's storey, `0` everywhere else (`levelBaseElevationAt`).
+   *
+   * This is how a pure builder that bakes its own vertical origin inherits
+   * terrain. Without it the only way to ask was to import the scene store,
+   * which a builder must not do, so every such kind hardcoded the plane
+   * `y = 0` — and stayed flat on a hillside. A kind that resolves its base
+   * through here follows the ground with nothing registered and nothing
+   * opted into; kinds whose Y comes from a parent group or from
+   * `capabilities.floorPlaced` ignore it.
+   *
+   * Populated by `<GeometrySystem>` for every `def.geometry` call. Absent for
+   * `def.floorplan` — the plan view draws no elevation — so builders shared
+   * between the two must treat it as optional rather than assume flat ground
+   * in 2D.
+   */
+  levelBaseAt?: (x: number, z: number) => number
+  /**
    * Pre-computed level-batch data, populated by the dispatcher when the
    * kind declares `def.computeLevelData` (3D) or
    * `def.computeFloorplanLevelData` (2D). Shared across every builder call
