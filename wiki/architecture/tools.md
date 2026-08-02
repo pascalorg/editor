@@ -100,6 +100,12 @@ export function MyTool() {
   a wall segment's 45° lock while in `angles` mode — the tool may still publish passive dashed
   alignment/proximity guides as long as it does not apply the guide snap delta. Use this for chained
   wall segments: users keep the fast constrained draft but still see proximity feedback for later points.
+- **Vertical structural datums use their own ephemeral guide channel.** Slab, ceiling, wall-base,
+  and fence-base elevation handles resolve same-level structural Y targets through scalar snap
+  callbacks, then publish a short horizontal datum + elevation readout only while exactly aligned.
+  The payload is owner-scoped and cleared through the handle descriptor's `onDragEnd`; it is editor
+  feedback, never a scene node. Do not encode Y datums into the floor-plane XZ alignment store or
+  the wall-opening guide store — their coordinate and lifecycle contracts differ.
 - **Help mirrors the model.** The shortcut dialog and the contextual HUD are part of the interaction
   contract: they describe the always-visible mode chip + `Alt` = force, **not** a hidden Shift bypass.
   The HUD is driven by the active interaction scope, so it shows only the current context's controls.

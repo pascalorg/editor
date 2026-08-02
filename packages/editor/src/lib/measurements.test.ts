@@ -72,6 +72,11 @@ describe('linear measurements', () => {
     expect(formatLinearMeasurement(3.456, 'metric')).toBe('3.46m')
   })
 
+  test('formats metric measurements in whole millimeters', () => {
+    expect(formatLinearMeasurement(3.456, 'metric', 'millimeters')).toBe('3456mm')
+    expect(formatLinearMeasurement(-0.1524, 'metric', 'millimeters')).toBe('-152mm')
+  })
+
   test('formats imperial measurements as feet and inches', () => {
     expect(formatLinearMeasurement(3.048, 'imperial')).toBe(`10'0"`)
     expect(formatLinearMeasurement(3.2004, 'imperial')).toBe(`10'6"`)

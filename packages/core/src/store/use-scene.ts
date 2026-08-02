@@ -28,10 +28,14 @@ import { getEffectiveWallSurfaceMaterial, type WallSurfaceSide } from '../schema
 import { WindowNode as WindowNodeSchema } from '../schema/nodes/window'
 import {
   generateSceneMaterialId,
-  type SceneMaterial,
+  SceneMaterial,
   type SceneMaterialId,
 } from '../schema/scene-material'
-import type { AnyNode, AnyNodeId } from '../schema/types'
+import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
+import { deriveLegacyLevelHeight } from '../services/level-height'
+import { getCeilingClampBound } from '../services/storey'
+import { computeWallSlabSupport } from '../systems/slab/slab-support'
+import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 import * as nodeActions from './actions/node-actions'
 import {
@@ -91,6 +95,7 @@ function getVector3(value: unknown, fallback: [number, number, number]): [number
 }
 
 function normalizeStairNode(node: Record<string, unknown>) {
+  const hasTotalRise = 'totalRise' in node
   const sanitized = {
     ...node,
     position: getVector3(node.position, [0, 0, 0]),
@@ -101,7 +106,7 @@ function normalizeStairNode(node: Record<string, unknown>) {
     slabOpeningMode: getEnumValue(node.slabOpeningMode, ['none', 'destination'] as const, 'none'),
     openingOffset: getFiniteNumber(node.openingOffset, 0),
     width: getFiniteNumber(node.width, 1),
-    totalRise: getFiniteNumber(node.totalRise, 2.5),
+    totalRise: hasTotalRise ? getFiniteNumber(node.totalRise, 2.5) : undefined,
     stepCount: getFiniteNumber(node.stepCount, 10),
     thickness: getFiniteNumber(node.thickness, 0.25),
     fillToFloor: getBoolean(node.fillToFloor, true),
@@ -117,7 +122,13 @@ function normalizeStairNode(node: Record<string, unknown>) {
   }
 
   const parsed = StairNodeSchema.safeParse(sanitized)
-  return parsed.success ? parsed.data : null
+  if (!parsed.success) return null
+  if (hasTotalRise) return parsed.data
+  // Absent `totalRise` means "rise derives from the storey height" and must
+  // survive the load: safeParse echoes the sanitized explicit-undefined key,
+  // which would flip `'totalRise' in node` checks — strip it back off.
+  const { totalRise: _totalRise, ...rest } = parsed.data
+  return rest
 }
 
 function normalizeStairSegmentNode(node: Record<string, unknown>) {
@@ -559,6 +570,72 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
   return next
 }
 
+function migrateConstructionDimension(node: Record<string, any>) {
+  const drawingOverrides = Array.isArray(node.drawingOverrides) ? node.drawingOverrides : []
+  const hasLegacyDrawingOverride = drawingOverrides.some(
+    (entry) =>
+      entry &&
+      typeof entry === 'object' &&
+      !Array.isArray(entry) &&
+      entry.presentation === 'reference',
+  )
+  if (!('reference' in node || 'referenceStyle' in node || hasLegacyDrawingOverride)) return node
+
+  const { reference: _reference, referenceStyle: _referenceStyle, ...dimension } = node
+  return {
+    ...dimension,
+    drawingOverrides: drawingOverrides.map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry
+      return entry.presentation === 'reference' ? { ...entry, presentation: 'shown' } : entry
+    }),
+  }
+}
+
+function removeRetiredDrawingSheets(nodes: Record<string, any>) {
+  const retiredIds = new Set(
+    Object.entries(nodes)
+      .filter(([, node]) => node?.type === 'drawing-sheet')
+      .map(([id]) => id),
+  )
+  if (retiredIds.size === 0) return
+
+  for (const id of retiredIds) delete nodes[id]
+  for (const [id, node] of Object.entries(nodes)) {
+    if (!Array.isArray(node?.children)) continue
+    const children = getStringArray(node.children)
+    if (!children.some((childId) => retiredIds.has(childId))) continue
+    nodes[id] = {
+      ...node,
+      children: children.filter((childId) => !retiredIds.has(childId)),
+    }
+  }
+}
+
+function migrateWallAssembly(node: Record<string, any>) {
+  if (!Object.hasOwn(node, 'assemblyLayers')) return node
+
+  const assemblyThickness = Array.isArray(node.assemblyLayers)
+    ? node.assemblyLayers.reduce((total: number, layer: unknown) => {
+        if (!(layer && typeof layer === 'object')) return total
+        const thickness = (layer as { thickness?: unknown }).thickness
+        return typeof thickness === 'number' && Number.isFinite(thickness) && thickness > 0
+          ? total + thickness
+          : total
+      }, 0)
+    : 0
+  const { assemblyLayers: _assemblyLayers, ...wall } = node
+  return assemblyThickness > 0 ? { ...wall, thickness: assemblyThickness } : wall
+}
+
+// Walls whose top lands within this of the storey plane become plane-bound;
+// ceilings whose stored height lands within this of their clamp bound become
+// follows-mode (step 3f) — same census-backed threshold for both.
+// From a prod census: the 0.15-short "hole pattern" (default 2.5 walls next to
+// a taller wall) must snap to the plane, while intentional 0.20-short walls
+// (2.5 under a 2.7 plane, 2.3 under a 2.5 plane) must keep their explicit
+// height — hence 0.20 with a strictly-less-than comparison.
+const PLANE_BOUND_EPSILON = 0.2
+
 function migrateNodes(nodes: Record<string, any>): {
   nodes: Record<string, AnyNode>
   mintedMaterials: Record<SceneMaterialId, SceneMaterial>
@@ -567,6 +644,7 @@ function migrateNodes(nodes: Record<string, any>): {
   // any per-type migration runs, so already-saved scenes load cleanly.
   const { nodes: healed } = healSceneNodes(nodes)
   const patchedNodes = { ...healed } as Record<string, any>
+  removeRetiredDrawingSheets(patchedNodes)
 
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
   // merged into the scene material map by the caller (`setScene`).
@@ -667,6 +745,10 @@ function migrateNodes(nodes: Record<string, any>): {
       }
     }
 
+    if (node.type === 'construction-dimension') {
+      patchedNodes[id] = migrateConstructionDimension(node)
+    }
+
     if (node.type === 'stair') {
       const normalized = normalizeStairNode(migrateStairSurfaceMaterials(node))
       if (normalized) {
@@ -683,7 +765,10 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'wall') {
-      patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id], mintedMaterials)
+      patchedNodes[id] = migrateWallSurfaceMaterials(
+        migrateWallAssembly(patchedNodes[id]),
+        mintedMaterials,
+      )
     }
 
     // Cabinet v2→v3: node-level `doorStyle` was dead (geometry reads only the
@@ -883,6 +968,169 @@ function migrateNodes(nodes: Record<string, any>): {
     const normalized = normalizeElevatorNode(parentMigrated)
     if (normalized) {
       patchedNodes[id] = normalized
+    }
+  }
+
+  // Pass 3: vertical building model.
+  // A level without `height` marks a scene saved before the vertical model
+  // landed. Computed before this pass mutates anything: the stair-rise
+  // cleanup below must never run on already-migrated scenes.
+  const isLegacyScene = Object.values(patchedNodes).some(
+    (node) => node?.type === 'level' && !('height' in node),
+  )
+
+  // 3a. Ordinal renumber — always runs, per building (idempotent
+  // self-healing; MCP's create-level historically wrote its elevation PARAM
+  // into the ordinal, so fractional/duplicate ordinals exist in the wild).
+  const buildingNodes = Object.values(patchedNodes).filter((node) => node?.type === 'building')
+  const levelsByBuilding = new Map<string | null, Array<{ id: string; ordinal: number }>>()
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    if (node?.type !== 'level') continue
+    // Mirrors the building resolution in services/storey.ts: an explicit
+    // parentId pointing at a building wins, membership in a building's
+    // children array is the legacy fallback, and unresolvable levels share
+    // one orphan bucket.
+    const buildingId =
+      buildingNodes.find((building) => building.id === node.parentId)?.id ??
+      buildingNodes.find((building) => getStringArray(building.children).includes(id))?.id ??
+      null
+    const bucket = levelsByBuilding.get(buildingId) ?? []
+    bucket.push({ id, ordinal: getFiniteNumber(node.level, 0) })
+    levelsByBuilding.set(buildingId, bucket)
+  }
+  for (const bucket of levelsByBuilding.values()) {
+    // Anchored at zero on purpose: ordinals are semantic — `level < 0`
+    // renders "Basement N" and `level === 0` is the ground-floor default —
+    // so negatives compact upward toward −1 and non-negatives compact down
+    // to 0. A blind 0..n renumber would rename basements.
+    const sorted = [...bucket].sort((a, b) => a.ordinal - b.ordinal)
+    const negativeCount = sorted.filter((entry) => entry.ordinal < 0).length
+    sorted.forEach((entry, index) => {
+      const nextOrdinal = index - negativeCount
+      const current = patchedNodes[entry.id]
+      if (current.level !== nextOrdinal) {
+        patchedNodes[entry.id] = { ...current, level: nextOrdinal }
+      }
+    })
+  }
+
+  // 3b. Stored storey heights: materialize the legacy stacked height verbatim
+  // (never rounded or snapped — snapping would move existing buildings).
+  // All planes derive before any wall height below mutates.
+  const legacyLevelIds = Object.entries(patchedNodes)
+    .filter(([, node]) => node?.type === 'level' && !('height' in node))
+    .map(([id]) => id)
+  const derivedHeights = new Map<string, number>()
+  for (const levelId of legacyLevelIds) {
+    derivedHeights.set(
+      levelId,
+      deriveLegacyLevelHeight(levelId, patchedNodes as Record<AnyNodeId, AnyNode>),
+    )
+  }
+
+  for (const levelId of legacyLevelIds) {
+    const plane = derivedHeights.get(levelId)!
+    const level = patchedNodes[levelId]
+    patchedNodes[levelId] = { ...level, height: plane }
+
+    // 3c. Wall-top classification against the just-written plane, using the
+    // same slab-support election as deriveLegacyLevelHeight (call shape
+    // mirrored from services/level-height.ts). Walls whose top meets the
+    // plane drop their explicit height and follow the level from now on;
+    // walls ending short (or tall) keep an explicit height — materializing
+    // the 2.5 default onto absent-height walls that end short of the plane.
+    const children = getStringArray(level.children)
+      .map((childId) => patchedNodes[childId])
+      .filter((child) => child !== undefined)
+    const slabs = children.filter((child) => child.type === 'slab')
+    const walls = children.filter((child) => child.type === 'wall')
+    for (const wall of walls) {
+      const electedBase = computeWallSlabSupport(
+        {
+          start: wall.start,
+          end: wall.end,
+          curveOffset: wall.curveOffset,
+          thickness: wall.thickness,
+        },
+        slabs,
+        walls,
+      ).elevation
+      const effectiveHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+      const top = Math.max(0, electedBase) + effectiveHeight
+      if (Math.abs(plane - top) < PLANE_BOUND_EPSILON) {
+        if ('height' in wall) {
+          const { height: _height, ...planeBound } = wall
+          patchedNodes[wall.id] = planeBound
+        }
+      } else {
+        patchedNodes[wall.id] = { ...wall, height: effectiveHeight }
+      }
+    }
+  }
+
+  // 3d. Stair rise: on legacy scenes a totalRise of exactly 2.5 is the old
+  // schema default, not a user choice — drop it so the rise derives from the
+  // storey height. Gated on isLegacyScene because on a post-migration scene
+  // a stored 2.5 IS a deliberately typed value and must survive reloads.
+  if (isLegacyScene) {
+    for (const [id, node] of Object.entries(patchedNodes)) {
+      if (node?.type !== 'stair') continue
+      if (node.totalRise !== 2.5) continue
+      const { totalRise: _totalRise, ...derivedRise } = node
+      patchedNodes[id] = derivedRise
+    }
+  }
+
+  // 3e. Slab placement/thickness split. `elevation` stays the walking surface;
+  // the new `thickness` grows downward so the solid occupies
+  // [elevation − thickness, elevation]. Legacy solids extruded [0, elevation],
+  // so thickness = elevation EXACTLY (including degenerate 0 — MIN_SLAB_THICKNESS
+  // applies to edits only, never here) keeps the occupied interval identical.
+  // Legacy pools (elevation < 0) become explicit `recessed` intent with
+  // elevation unchanged. Gated per slab on a missing `thickness` — the
+  // migration output is cast, so schema defaults never materialize on load.
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    if (node?.type !== 'slab' || 'thickness' in node) continue
+    const elevation = getFiniteNumber(node.elevation, 0.05)
+    patchedNodes[id] =
+      elevation < 0
+        ? { ...node, thickness: 0.05, recessed: true }
+        : { ...node, thickness: elevation }
+  }
+
+  // 3f. Ceiling follows-mode classification (the ceiling mirror of 3c; runs
+  // after 3b/3e so the clamp bound sees stored level heights and split slab
+  // thicknesses). A stored ceiling height within PLANE_BOUND_EPSILON of its
+  // clamp bound (min(storey plane, covering-slab underside) − margin, via
+  // getCeilingClampBound) is the legacy default tracking the level top, not
+  // a choice — drop it so the ceiling follows the level from now on.
+  // autoFromWalls ceilings always convert: their height was derived by the
+  // space-detection sync, never user intent. Gated on isLegacyScene, which
+  // is exact — nothing shipped between the level-height migration and this
+  // one — and makes the step idempotent. Known accepted edge: a
+  // post-migration user typing a custom height exactly equal to the bound
+  // keeps it (the gate prevents re-classification on later loads).
+  if (isLegacyScene) {
+    for (const [id, node] of Object.entries(patchedNodes)) {
+      if (node?.type !== 'ceiling' || !('height' in node)) continue
+      const dropHeight = () => {
+        const { height: _height, ...follows } = node
+        patchedNodes[id] = follows
+      }
+      if (node.autoFromWalls === true) {
+        dropHeight()
+        continue
+      }
+      if (typeof node.parentId !== 'string') continue
+      const bound = getCeilingClampBound(
+        node.parentId,
+        patchedNodes as Record<AnyNodeId, AnyNode>,
+        Array.isArray(node.polygon) ? node.polygon : [],
+      )
+      const stored = getFiniteNumber(node.height, Number.NaN)
+      if (Number.isFinite(bound) && Math.abs(stored - bound) < PLANE_BOUND_EPSILON) {
+        dropHeight()
+      }
     }
   }
 
@@ -1163,6 +1411,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         const level0 = LevelNode.parse({
           level: 0,
           children: [],
+          height: 2.5,
         })
 
         const building = BuildingNode.parse({
@@ -1385,75 +1634,344 @@ export type ScenePatch = {
   nodeUpdates: SceneNodePatch[]
 }
 
-export function applyScenePatch(changes: ScenePatch): boolean {
-  const beforeState = useScene.getState()
-  const hasInvalidNodeTarget = changes.nodeUpdates.some(({ id, data, removeFields }) => {
-    const node = beforeState.nodes[id]
-    if (!node) return true
-    if ('id' in data && data.id !== node.id) return true
-    if ('type' in data && data.type !== node.type) return true
-    if ('object' in data && data.object !== node.object) return true
-    if (removeFields.some((field) => field === 'id' || field === 'object' || field === 'type')) {
-      return true
+export type SceneNodeStructuralPatch = {
+  node: AnyNode
+  position: number
+}
+
+export type SceneOperationPatch = ScenePatch & {
+  nodeCreates: SceneNodeStructuralPatch[]
+  nodeDeletes: SceneNodeStructuralPatch[]
+}
+
+function sceneOperationPatchLiveConflictIds(
+  beforeState: SceneState,
+  changes: SceneOperationPatch,
+): Set<AnyNodeId> {
+  const ids = new Set<AnyNodeId>()
+  const addNodeAndParent = (node: AnyNode | undefined) => {
+    if (!node) return
+    ids.add(node.id)
+    if (node.parentId) ids.add(node.parentId as AnyNodeId)
+  }
+  for (const { id, data } of changes.nodeUpdates) {
+    ids.add(id)
+    if (Object.hasOwn(data, 'parentId')) {
+      const currentParentId = beforeState.nodes[id]?.parentId
+      if (currentParentId) ids.add(currentParentId as AnyNodeId)
+      if (typeof data.parentId === 'string') ids.add(data.parentId as AnyNodeId)
     }
-    return removeFields.some((field) => Object.hasOwn(data, field))
-  })
-  const hasInvalidMaterialTarget = changes.materialChanges.some(
-    ({ id, material }) => material !== null && material.id !== id,
+  }
+  for (const { node } of changes.nodeCreates) addNodeAndParent(node)
+  for (const { node } of changes.nodeDeletes) addNodeAndParent(node)
+  return ids
+}
+
+function sceneOperationPatchHasLiveConflict(
+  beforeState: SceneState,
+  changes: SceneOperationPatch,
+): boolean {
+  const overrides = useLiveNodeOverrides.getState()
+  const transforms = useLiveTransforms.getState()
+  for (const id of sceneOperationPatchLiveConflictIds(beforeState, changes)) {
+    if (overrides.get(id) || transforms.get(id)) return true
+  }
+  return false
+}
+
+function areScenePatchValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (typeof left !== typeof right || left === null || right === null) return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => areScenePatchValuesEqual(value, right[index]))
+    )
+  }
+  if (typeof left !== 'object' || typeof right !== 'object') return false
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const leftKeys = Object.keys(leftRecord)
+  if (leftKeys.length !== Object.keys(rightRecord).length) return false
+  return leftKeys.every(
+    (key) =>
+      Object.hasOwn(rightRecord, key) &&
+      areScenePatchValuesEqual(leftRecord[key], rightRecord[key]),
   )
+}
+
+function parseSceneOperationPatchNode(value: unknown): AnyNode | null {
+  const builtin = AnyNodeSchema.safeParse(value)
+  if (builtin.success) return builtin.data
+  if (!(value && typeof value === 'object' && !Array.isArray(value))) return null
+  const type = (value as { type?: unknown }).type
+  if (typeof type !== 'string') return null
+  const registered = nodeRegistry.get(type)?.schema.safeParse(value)
+  return registered?.success ? (registered.data as AnyNode) : null
+}
+
+function structuralSiblingIds(
+  nodes: Record<AnyNodeId, AnyNode>,
+  rootNodeIds: AnyNodeId[],
+  parentId: AnyNodeId | null,
+): AnyNodeId[] | null {
+  if (!parentId) return rootNodeIds
+  const parent = nodes[parentId]
+  if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+  return parent.children.every((id) => typeof id === 'string')
+    ? (parent.children as AnyNodeId[])
+    : null
+}
+
+function insertSceneStructuralPlacements(
+  base: AnyNodeId[],
+  placements: readonly SceneNodeStructuralPatch[],
+): AnyNodeId[] | null {
+  if (placements.length === 0) return base
+  const result = new Array<AnyNodeId | undefined>(base.length + placements.length)
+  for (const change of placements) {
+    if (
+      !Number.isSafeInteger(change.position) ||
+      change.position < 0 ||
+      change.position >= result.length ||
+      result[change.position] !== undefined
+    ) {
+      return null
+    }
+    result[change.position] = change.node.id
+  }
+  let baseIndex = 0
+  for (let index = 0; index < result.length; index += 1) {
+    if (result[index] !== undefined) continue
+    result[index] = base[baseIndex]
+    baseIndex += 1
+  }
+  return result as AnyNodeId[]
+}
+
+function sceneOperationPatchNextState(
+  beforeState: SceneState,
+  changes: SceneOperationPatch,
+): Pick<SceneState, 'materials' | 'nodes' | 'rootNodeIds'> | null {
+  const createIds = new Set<AnyNodeId>()
+  const deleteIds = new Set<AnyNodeId>()
+  const updateIds = new Set<AnyNodeId>()
+  const materialIds = new Set<SceneMaterialId>()
+  const parsedCreates: SceneNodeStructuralPatch[] = []
+
+  for (const change of changes.nodeCreates) {
+    const parsed = parseSceneOperationPatchNode(change.node)
+    if (
+      !parsed ||
+      parsed.id !== change.node.id ||
+      createIds.has(parsed.id) ||
+      Object.hasOwn(beforeState.nodes, parsed.id) ||
+      !Number.isSafeInteger(change.position) ||
+      change.position < 0
+    ) {
+      return null
+    }
+    createIds.add(parsed.id)
+    parsedCreates.push({ node: change.node, position: change.position })
+  }
+  for (const change of changes.nodeDeletes) {
+    const id = change.node.id
+    const current = beforeState.nodes[id]
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    const siblings = structuralSiblingIds(beforeState.nodes, beforeState.rootNodeIds, parentId)
+    if (
+      !current ||
+      createIds.has(id) ||
+      deleteIds.has(id) ||
+      !Number.isSafeInteger(change.position) ||
+      change.position < 0 ||
+      siblings?.[change.position] !== id ||
+      !areScenePatchValuesEqual(current, change.node)
+    ) {
+      return null
+    }
+    deleteIds.add(id)
+  }
+  for (const id of createIds) {
+    if (deleteIds.has(id)) return null
+  }
+  for (const node of Object.values(beforeState.nodes)) {
+    const parentId = (node.parentId as AnyNodeId | null | undefined) ?? null
+    if (parentId && deleteIds.has(parentId) && !deleteIds.has(node.id)) return null
+  }
+
+  const nextNodes = { ...beforeState.nodes }
+  let nextRootNodeIds =
+    deleteIds.size > 0
+      ? beforeState.rootNodeIds.filter((id) => !deleteIds.has(id))
+      : beforeState.rootNodeIds
+  const changedParentIds = new Set<AnyNodeId>()
+  for (const change of changes.nodeDeletes) {
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    if (parentId && !deleteIds.has(parentId)) changedParentIds.add(parentId)
+    delete nextNodes[change.node.id]
+  }
+  for (const parentId of changedParentIds) {
+    const parent = nextNodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+    nextNodes[parentId] = {
+      ...parent,
+      children: (parent.children as AnyNodeId[]).filter((id) => !deleteIds.has(id)),
+    } as AnyNode
+  }
+
+  for (const change of parsedCreates) nextNodes[change.node.id] = change.node
+  const rootCreates: SceneNodeStructuralPatch[] = []
+  const existingParentCreates = new Map<AnyNodeId, SceneNodeStructuralPatch[]>()
+  for (const change of parsedCreates) {
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    if (!parentId) {
+      rootCreates.push(change)
+      continue
+    }
+    const parent = nextNodes[parentId]
+    if (!parent) return null
+    if (createIds.has(parentId)) {
+      if (
+        !('children' in parent) ||
+        !Array.isArray(parent.children) ||
+        parent.children[change.position] !== change.node.id
+      ) {
+        return null
+      }
+      continue
+    }
+    const placements = existingParentCreates.get(parentId) ?? []
+    placements.push(change)
+    existingParentCreates.set(parentId, placements)
+  }
+  const insertedRoots = insertSceneStructuralPlacements(nextRootNodeIds, rootCreates)
+  if (!insertedRoots) return null
+  nextRootNodeIds = insertedRoots
+  for (const [parentId, placements] of existingParentCreates) {
+    const parent = nextNodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+    const children = insertSceneStructuralPlacements(parent.children as AnyNodeId[], placements)
+    if (!children) return null
+    nextNodes[parentId] = { ...parent, children } as AnyNode
+  }
+  for (const change of parsedCreates) {
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    const siblings = structuralSiblingIds(nextNodes, nextRootNodeIds, parentId)
+    if (siblings?.[change.position] !== change.node.id) return null
+    if (!('children' in change.node && Array.isArray(change.node.children))) continue
+    for (const childId of change.node.children as AnyNodeId[]) {
+      if (nextNodes[childId]?.parentId !== change.node.id) return null
+    }
+  }
+
+  for (const { id, data, removeFields } of changes.nodeUpdates) {
+    const node = nextNodes[id]
+    if (
+      !node ||
+      createIds.has(id) ||
+      deleteIds.has(id) ||
+      updateIds.has(id) ||
+      ('id' in data && data.id !== node.id) ||
+      ('type' in data && data.type !== node.type) ||
+      ('object' in data && data.object !== node.object) ||
+      removeFields.some(
+        (field) =>
+          field === 'id' || field === 'object' || field === 'type' || Object.hasOwn(data, field),
+      )
+    ) {
+      return null
+    }
+    updateIds.add(id)
+    const candidate = { ...node, ...data } as Record<string, unknown>
+    for (const field of removeFields) delete candidate[field]
+    const validated = parseSceneOperationPatchNode(candidate)
+    if (
+      !validated ||
+      validated.id !== id ||
+      validated.type !== node.type ||
+      validated.object !== node.object
+    ) {
+      return null
+    }
+    nextNodes[id] = candidate as AnyNode
+  }
+
+  const materials =
+    changes.materialChanges.length > 0 ? { ...beforeState.materials } : beforeState.materials
+  for (const { id, material } of changes.materialChanges) {
+    if (
+      materialIds.has(id) ||
+      (material !== null && (material.id !== id || !SceneMaterial.safeParse(material).success))
+    ) {
+      return null
+    }
+    materialIds.add(id)
+    if (material === null) delete materials[id]
+    else materials[id] = material
+  }
+
+  return { materials, nodes: nextNodes, rootNodeIds: nextRootNodeIds }
+}
+
+export function applySceneOperationPatch(changes: SceneOperationPatch): boolean {
+  const beforeState = useScene.getState()
   if (
-    (changes.nodeUpdates.length === 0 && changes.materialChanges.length === 0) ||
-    hasInvalidNodeTarget ||
-    hasInvalidMaterialTarget
+    changes.nodeUpdates.length === 0 &&
+    changes.materialChanges.length === 0 &&
+    changes.nodeCreates.length === 0 &&
+    changes.nodeDeletes.length === 0
   ) {
     return false
   }
-
-  const temporalState = useScene.temporal.getState()
-  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) return false
+  if (sceneOperationPatchHasLiveConflict(beforeState, changes)) return false
+  const next = sceneOperationPatchNextState(beforeState, changes)
+  if (!next) return false
 
   const before = sceneHistorySnapshotFromState(beforeState)
-  pauseSceneHistory(useScene)
+  const shouldScopeHistoryPause =
+    useScene.temporal.getState().isTracking || getSceneHistoryPauseDepth() > 0
+  if (shouldScopeHistoryPause) pauseSceneHistory(useScene)
   try {
-    // Host-owned fields bypass the UI lock without running local mutation cascades.
-    useScene.setState((state) => {
-      const nodes = changes.nodeUpdates.length > 0 ? { ...state.nodes } : state.nodes
-      for (const { id, data, removeFields } of changes.nodeUpdates) {
-        const node = nodes[id]
-        if (!node) return {}
-        const nextNode = { ...node, ...data }
-        for (const field of removeFields) delete nextNode[field as keyof typeof nextNode]
-        nodes[id] = nextNode as AnyNode
-      }
-      const materials =
-        changes.materialChanges.length > 0 ? { ...state.materials } : state.materials
-      for (const { id, material } of changes.materialChanges) {
-        if (material === null) {
-          delete materials[id]
-        } else {
-          materials[id] = material
-        }
-      }
-      return { materials, nodes }
-    })
+    useScene.setState(next)
   } finally {
-    resumeSceneHistory(useScene)
+    if (shouldScopeHistoryPause) resumeSceneHistory(useScene)
   }
 
   const currentState = useScene.getState()
   const current = sceneHistorySnapshotFromState(currentState)
-  for (const { id } of changes.nodeUpdates) {
+  const touchedNodeIds = new Set<AnyNodeId>([
+    ...changes.nodeUpdates.map(({ id }) => id),
+    ...changes.nodeCreates.map(({ node }) => node.id),
+    ...changes.nodeDeletes.map(({ node }) => node.id),
+  ])
+  for (const id of touchedNodeIds) {
     useLiveNodeOverrides.getState().clear(id)
     useLiveTransforms.getState().clear(id)
   }
   if (areSceneSnapshotsEqual(before, current)) return false
 
-  for (const { id } of changes.nodeUpdates) {
-    currentState.markDirty(id)
+  for (const id of touchedNodeIds) {
+    if (current.nodes[id]) currentState.markDirty(id)
+    else currentState.clearDirty(id)
     const beforeParentId = before.nodes[id]?.parentId as AnyNodeId | null | undefined
     const currentParentId = current.nodes[id]?.parentId as AnyNodeId | null | undefined
     if (beforeParentId) currentState.markDirty(beforeParentId)
     if (currentParentId) currentState.markDirty(currentParentId)
+  }
+  const structuralParentIds = new Set<AnyNodeId>()
+  for (const { node } of changes.nodeCreates) {
+    if (node.parentId) structuralParentIds.add(node.parentId as AnyNodeId)
+  }
+  for (const { node } of changes.nodeDeletes) {
+    if (node.parentId) structuralParentIds.add(node.parentId as AnyNodeId)
+  }
+  for (const parentId of structuralParentIds) {
+    const parent = current.nodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) continue
+    for (const childId of parent.children) currentState.markDirty(childId as AnyNodeId)
   }
   if (changes.materialChanges.length > 0) {
     const materialRefs = new Set(changes.materialChanges.map(({ id }) => toSceneMaterialRef(id)))
@@ -1464,6 +1982,7 @@ export function applyScenePatch(changes: ScenePatch): boolean {
       if (node.parentId) currentState.markDirty(node.parentId as AnyNodeId)
     }
   }
+  for (const { node } of changes.nodeDeletes) currentState.clearDirty(node.id)
 
   notifySceneCommit({
     origin: 'host',
@@ -1471,6 +1990,14 @@ export function applyScenePatch(changes: ScenePatch): boolean {
     current,
   })
   return true
+}
+
+export function applyScenePatch(changes: ScenePatch): boolean {
+  return applySceneOperationPatch({
+    ...changes,
+    nodeCreates: [],
+    nodeDeletes: [],
+  })
 }
 
 export type ApplySceneSnapshotOptions = {

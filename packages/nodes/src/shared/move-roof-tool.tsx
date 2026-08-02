@@ -10,6 +10,7 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   resolveAlignment,
+  resolveSupportSlabPatch,
   type StairNode,
   type StairSegmentNode,
   sceneRegistry,
@@ -404,23 +405,38 @@ export const MoveRoofTool: React.FC<{
       useAlignmentGuides.getState().clear()
       wasCommitted = true
 
+      const position: [number, number, number] = [localX, movingNode.position[1], localZ]
+      const effectiveNode = {
+        ...movingNode,
+        position,
+        rotation: pendingRotation,
+      } as typeof movingNode
+      const supportPatch = isFloorPlaced
+        ? resolveSupportSlabPatch(effectiveNode, {
+            ...useScene.getState().nodes,
+            [movingNode.id]: effectiveNode,
+          })
+        : {}
+
       let committedId = movingNode.id as AnyNodeId
       if (isNew) {
         committedId =
           commitFreshPlacementSubtree(movingNode.id as AnyNodeId, {
-            position: [localX, movingNode.position[1], localZ],
+            position,
             rotation: pendingRotation,
             metadata: committedMeta,
             visible: true,
+            ...supportPatch,
           }) ?? committedId
       } else {
         // The store still holds the original values (we didn't update during drag).
         // Resume temporal and apply the final state as a single undoable step.
         useScene.temporal.getState().resume()
         useScene.getState().updateNode(movingNode.id, {
-          position: [localX, movingNode.position[1], localZ],
+          position,
           rotation: pendingRotation,
           metadata: committedMeta,
+          ...supportPatch,
         })
         useScene.temporal.getState().pause()
       }

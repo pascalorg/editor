@@ -399,6 +399,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./preview'),
 
   tool: () => import('./tool'),
   toolHints: [

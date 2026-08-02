@@ -202,6 +202,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         startLocalY,
         node.width,
         node.height,
+        nodes,
       )
 
       // One click per real position step, keyed on the SNAPPED along-wall value

@@ -1,4 +1,5 @@
-import type { WallNode } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, WallNode } from '@pascal-app/core'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
  * Default sill height (metres from the floor to the BOTTOM of a window) for a
@@ -35,7 +36,11 @@ export function wallLocalToWorld(
 }
 
 /**
- * Clamps window center position so it stays fully within wall bounds.
+ * Clamps window center position so it stays fully within wall bounds. The Y
+ * ceiling is the wall's RESOLVED top (storey plane for plane-bound walls,
+ * stored height for explicit ones, minus the elected slab base) — `nodes` is
+ * required because a plane-bound wall's top lives on its level, not on the
+ * wall record.
  */
 export function clampToWall(
   wallNode: WallNode,
@@ -43,11 +48,12 @@ export function clampToWall(
   localY: number,
   width: number,
   height: number,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): { clampedX: number; clampedY: number } {
   const dx = wallNode.end[0] - wallNode.start[0]
   const dz = wallNode.end[1] - wallNode.start[1]
   const wallLength = Math.sqrt(dx * dx + dz * dz)
-  const wallHeight = wallNode.height ?? 2.5
+  const wallHeight = resolveWallOpeningCeiling(wallNode, nodes)
 
   const clampedX = Math.max(width / 2, Math.min(wallLength - width / 2, localX))
   const clampedY = Math.max(height / 2, Math.min(wallHeight - height / 2, localY))

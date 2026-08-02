@@ -1,3 +1,4 @@
+import { DEFAULT_LEVEL_HEIGHT } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 
@@ -137,7 +138,6 @@ function buildNodes(): StudioNodes {
     metadata: {},
     children: [],
     thickness: 0.1,
-    height: 2.5,
     start: [-W, -D],
     end: [W, -D],
     frontSide: 'unknown',
@@ -153,7 +153,6 @@ function buildNodes(): StudioNodes {
     metadata: {},
     children: [],
     thickness: 0.1,
-    height: 2.5,
     start: [W, -D],
     end: [W, D],
     frontSide: 'unknown',
@@ -169,7 +168,6 @@ function buildNodes(): StudioNodes {
     metadata: {},
     children: ['door_front'],
     thickness: 0.1,
-    height: 2.5,
     start: [W, D],
     end: [-W, D],
     frontSide: 'unknown',
@@ -185,7 +183,6 @@ function buildNodes(): StudioNodes {
     metadata: {},
     children: ['window_w'],
     thickness: 0.1,
-    height: 2.5,
     start: [-W, D],
     end: [-W, -D],
     frontSide: 'unknown',
@@ -217,6 +214,7 @@ function buildNodes(): StudioNodes {
     visible: true,
     metadata: {},
     level: 0,
+    height: DEFAULT_LEVEL_HEIGHT,
     children: [...wallIds, 'zone_living'] as AnyNodeId[],
   } as unknown as AnyNode
 

@@ -3,6 +3,7 @@
 import {
   type CeilingNode,
   getMaterialPresetByRef,
+  resolveCeilingHeight,
   resolveMaterial,
   useLiveTransforms,
   useRegistry,
@@ -46,7 +47,11 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   // ceiling slot references re-tints it live.
   const sceneMaterials = useScene((s) => s.materials)
   const liveTransform = useLiveTransforms((s) => s.get(node.id))
-  const ceilingY = (node.height ?? 2.5) - 0.01 + (liveTransform?.position[1] ?? 0)
+  // Resolved height: explicit when stored, else the live level-top bound
+  // (primitive selector, so follows-mode ceilings track level-height edits
+  // and covering-slab changes without a node write).
+  const resolvedHeight = useScene((s) => resolveCeilingHeight(node, s.nodes))
+  const ceilingY = resolvedHeight - 0.01 + (liveTransform?.position[1] ?? 0)
   const position: [number, number, number] = [
     liveTransform?.position[0] ?? 0,
     ceilingY,

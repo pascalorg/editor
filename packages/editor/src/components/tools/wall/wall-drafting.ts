@@ -2,11 +2,16 @@ import {
   type AnyNode,
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
+  DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
+  GROUND_SUPPORT_ID,
   getScaledDimensions,
   type ItemNode,
+  resolveWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
+  spatialGridManager,
+  terrainSupportLift,
   useScene,
   type WallNode,
   WallNode as WallSchema,
@@ -26,6 +31,7 @@ import {
   type WallDraftSnapResult,
   type WallPlanPoint,
   type WallSnapRadii,
+  wallIdsAtSnapPoint,
 } from './wall-snap-geometry'
 
 // The pure snap geometry lives in `./wall-snap-geometry`; re-exported here so
@@ -72,7 +78,11 @@ export function snapPointToGrid(point: WallPlanPoint, step = WALL_GRID_STEP): Wa
   return [snapScalarToGrid(point[0], step), snapScalarToGrid(point[1], step)]
 }
 
-function splitWallAtPoint(wall: WallNode, splitPoint: WallPlanPoint): [WallNode, WallNode] {
+function splitWallAtPoint(
+  wall: WallNode,
+  splitPoint: WallPlanPoint,
+  nodes: ReturnType<typeof useScene.getState>['nodes'],
+): [WallNode, WallNode] {
   const { id: _id, parentId: _parentId, children, ...rest } = wall
 
   const first = WallSchema.parse({
@@ -88,7 +98,24 @@ function splitWallAtPoint(wall: WallNode, splitPoint: WallPlanPoint): [WallNode,
     children: [],
   })
 
-  return [first, second]
+  if (wall.supportSlabId !== GROUND_SUPPORT_ID || !wall.parentId) {
+    return [first, second]
+  }
+
+  const levelId = wall.parentId
+  const originalElevation =
+    (terrainSupportLift(nodes, levelId, wall.start[0], wall.start[1]) ?? 0) +
+    (wall.supportOffset ?? 0)
+  const rebase = (segment: WallNode): WallNode => {
+    const terrainElevation =
+      terrainSupportLift(nodes, levelId, segment.start[0], segment.start[1]) ?? 0
+    const supportOffset = originalElevation - terrainElevation
+    return {
+      ...segment,
+      supportOffset: Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
+    }
+  }
+  return [rebase(first), rebase(second)]
 }
 
 function pointsEqual(a: WallPlanPoint, b: WallPlanPoint, tolerance = 1e-6): boolean {
@@ -287,7 +314,7 @@ function splitWallIfNeeded(
     return { walls, point: intersection.point }
   }
 
-  const [first, second] = splitWallAtPoint(wallToSplit, intersection.point)
+  const [first, second] = splitWallAtPoint(wallToSplit, intersection.point, nodes)
   const attachmentUpdates = buildAttachmentMigrationPlan(
     wallToSplit,
     intersection.point,
@@ -393,7 +420,7 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     snapRadii,
   } = args
 
-  if (bypassSnap) return { point, snap: null }
+  if (bypassSnap) return { point, snap: null, targetWallIds: [] }
 
   // Discrete special points (corner / midpoint / crossing) are taken from the
   // raw cursor so an interim grid snap can't mask them. A corner always wins,
@@ -419,8 +446,14 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
       ignoreWallIds,
       radius: snapRadii?.wall,
     })
-    if (wallSnap) return { point: wallSnap, snap: 'wall' }
-    return { point: basePoint, snap: null }
+    if (wallSnap) {
+      return {
+        point: wallSnap,
+        snap: 'wall',
+        targetWallIds: wallIdsAtSnapPoint(wallSnap, walls, ignoreWallIds),
+      }
+    }
+    return { point: basePoint, snap: null, targetWallIds: [] }
   }
 
   // Non-magnetic modes (grid / off / angles): connectivity still sticks so a
@@ -440,9 +473,15 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     ignoreWallIds,
     radius: WALL_CONNECT_SNAP_RADIUS,
   })
-  if (connectWall) return { point: connectWall, snap: 'wall' }
+  if (connectWall) {
+    return {
+      point: connectWall,
+      snap: 'wall',
+      targetWallIds: wallIdsAtSnapPoint(connectWall, walls, ignoreWallIds),
+    }
+  }
 
-  return { point: basePoint, snap: null }
+  return { point: basePoint, snap: null, targetWallIds: [] }
 }
 
 export function snapWallDraftPoint(args: SnapWallDraftArgs): WallPlanPoint {
@@ -453,9 +492,45 @@ export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): b
   return distanceSquared(start, end) >= WALL_MIN_LENGTH * WALL_MIN_LENGTH
 }
 
+export type WallConstructionOptions = {
+  /** Pointer-decided maximum support elevation in level-local metres. */
+  supportCap?: number | null
+  /** Support source selected by the first click or inherited from a snapped wall. */
+  preferredSupportSlabId?: string | null
+  /** Frozen level-local Y shown by the draft ghost. */
+  constructionElevation?: number | null
+  /** Height shown by the draft ghost. */
+  constructionHeight?: number | null
+}
+
+export function resolveTerrainWallConstructionOptions(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  point: WallPlanPoint,
+  defaults?: Record<string, unknown>,
+): WallConstructionOptions | undefined {
+  const constructionElevation = terrainSupportLift(nodes, levelId, point[0], point[1])
+  if (constructionElevation == null) return undefined
+
+  const level = nodes[levelId]
+  const constructionHeight =
+    typeof defaults?.height === 'number'
+      ? defaults.height
+      : level?.type === 'level'
+        ? (level.height ?? DEFAULT_LEVEL_HEIGHT)
+        : DEFAULT_LEVEL_HEIGHT
+
+  return {
+    constructionElevation,
+    constructionHeight,
+    supportCap: constructionElevation,
+  }
+}
+
 export function createWallOnCurrentLevel(
   start: WallPlanPoint,
   end: WallPlanPoint,
+  options?: WallConstructionOptions,
 ): WallNode | null {
   const currentLevelId = useViewer.getState().selection.levelId
   const { createNode, createNodes, deleteNode, nodes } = useScene.getState()
@@ -541,8 +616,52 @@ export function createWallOnCurrentLevel(
     })
 
     createNode(wall, currentLevelId)
+    const createdWall = useScene.getState().nodes[wall.id]
+    if (createdWall?.type === 'wall') {
+      const terrainBase = terrainSupportLift(
+        useScene.getState().nodes,
+        currentLevelId,
+        createdWall.start[0],
+        createdWall.start[1],
+      )
+      const preferredSupportSlabId =
+        options?.preferredSupportSlabId ??
+        (options?.constructionElevation != null && terrainBase != null ? GROUND_SUPPORT_ID : null)
+      const supportPatch = resolveWallSupportSlabPatch(createdWall, useScene.getState().nodes, {
+        maxElevation: options?.supportCap ?? null,
+        preferredSlabId: preferredSupportSlabId,
+      })
+      const supportSlabId = supportPatch.supportSlabId
+      const sourceSupport = spatialGridManager.getSlabSupportForWall(
+        currentLevelId,
+        createdWall.start,
+        createdWall.end,
+        createdWall.curveOffset,
+        createdWall.thickness,
+        supportSlabId,
+        options?.supportCap ?? null,
+      )
+      const supportOffset =
+        options?.constructionElevation == null
+          ? undefined
+          : options.constructionElevation - sourceSupport.elevation
+      const preserveDraftHeight =
+        createdWall.height == null &&
+        options?.constructionHeight != null &&
+        options.constructionElevation != null &&
+        (terrainBase != null || Math.abs(options.constructionElevation) > 1e-6)
+      useScene.getState().updateNode(createdWall.id, {
+        ...supportPatch,
+        height: preserveDraftHeight
+          ? (options?.constructionHeight ?? createdWall.height)
+          : createdWall.height,
+        supportOffset:
+          supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
+      })
+    }
     sfxEmitter.emit('sfx:structure-build')
 
-    return wall
+    const committedWall = useScene.getState().nodes[wall.id]
+    return committedWall?.type === 'wall' ? committedWall : wall
   })
 }

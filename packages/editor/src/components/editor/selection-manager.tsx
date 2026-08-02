@@ -60,6 +60,7 @@ import {
 } from '../../lib/paint-scope'
 import { getHoveredRoofSegmentOutlineProxy } from '../../lib/roof-hover-outline-proxy'
 import {
+  emitCanvasNodeSelection,
   resolveCanvasSelectionNode,
   resolveNodeSelectionTarget,
   resolveSelectedIdsForNodeClick,
@@ -1365,7 +1366,7 @@ export const SelectionManager = () => {
   useEffect(() => {
     if (mode !== 'select') return
     let owns = false
-    let prevKey = ' '
+    let prevKey = '\0'
     const applyCursor = () => {
       const { selection, hoveredId } = useViewer.getState()
       const selectedIds = selection.selectedIds
@@ -1648,6 +1649,7 @@ export const SelectionManager = () => {
           modifierKeysRef.current,
           selectedIdsBeforeRouting,
         )
+        emitCanvasNodeSelection(nodeToSelect)
 
         let nextMaterialTargetHandled = false
 

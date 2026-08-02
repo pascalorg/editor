@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  emitter,
   type ItemNode,
   nodeRegistry,
   resolveSelectionProxyId,
@@ -14,6 +15,10 @@ export type SelectionModifierKeys = {
 export type NodeSelectionTarget = {
   phase: 'site' | 'structure' | 'furnish'
   structureLayer?: 'zones' | 'elements'
+}
+
+export function emitCanvasNodeSelection(node: AnyNode): void {
+  emitter.emit('selection:canvas-node-click', node)
 }
 
 function shouldBypassSelectionProxy(node: AnyNode, target: AnyNode): boolean {

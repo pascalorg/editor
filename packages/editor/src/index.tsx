@@ -26,6 +26,8 @@ export { default as Editor } from './components/editor'
 // surface uses the shorter, shell-friendly names from the unified
 // preset-system spec.
 export { BakeExporter } from './components/editor/bake-exporter'
+export { BakeThumbnail } from './components/editor/bake-thumbnail'
+export { FirstPersonControls } from './components/editor/first-person-controls'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
 // Embed surface — the editor's real in-canvas affordances, so a host can mount
 // authentic selection handles, interactive build tools, and the mover on top
@@ -80,6 +82,9 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
+export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
+export { FloorplanGeometryRenderer } from './components/editor-2d/renderers/floorplan-geometry-renderer'
 export {
   FloorplanNodePreview,
   type FloorplanNodePreviewProps,
@@ -131,7 +136,21 @@ export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
 export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
+export {
+  type HorizontalConstructionPlane,
+  publishHorizontalConstructionPlane,
+  resampleTerrainConstructionPlane,
+  resolveEventConstructionPlane,
+  resolveLevelConstructionPlane,
+} from './components/tools/shared/horizontal-construction-plane'
 export { PlacementBox } from './components/tools/shared/placement-box'
+// Pointer-decided support surface (deck top vs floor underneath) — the
+// draw tools (wall / fence) ride their grid plane and commit cap on it.
+export {
+  type PointerSupportSurface,
+  resolvePointerSupportElevation,
+  resolvePointerSupportSurface,
+} from './components/tools/shared/pointer-support-cap'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
@@ -166,7 +185,7 @@ export {
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './components/tools/stair/stair-defaults'
-export { ToolManager } from './components/tools/tool-manager'
+export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
@@ -200,12 +219,20 @@ export {
 } from './components/ui/action-menu/view-toggles'
 export { useCommandPalette } from './components/ui/command-palette'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
-export { MaterialPaintPanel } from './components/ui/controls/material-paint-panel'
-export { MaterialPicker } from './components/ui/controls/material-picker'
+export {
+  MaterialPaintPanel,
+  type MaterialPaintPanelProps,
+} from './components/ui/controls/material-paint-panel'
+export {
+  MaterialPicker,
+  type MaterialPickerProps,
+  type MaterialSourceFilter,
+} from './components/ui/controls/material-picker'
 export { MetricControl } from './components/ui/controls/metric-control'
 export { PanelSection } from './components/ui/controls/panel-section'
 export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
+export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
@@ -247,6 +274,19 @@ export {
   SnapTargetBadge,
   SnapTargetIcon,
 } from './components/ui/snap-target-badge'
+export {
+  ViewerControlsBar,
+  type ViewerControlsBarProps,
+} from './components/viewer/viewer-controls-bar'
+export {
+  ViewerSceneHeader,
+  type ViewerSceneHeaderProps,
+} from './components/viewer/viewer-scene-header'
+export {
+  WalkthroughHud,
+  type WalkthroughHudProps,
+  type WalkthroughInteract,
+} from './components/walkthrough-hud'
 export type { SaveStatus } from './hooks/use-auto-save'
 // useDragAction is the React-side glue for the registry's DragAction
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
@@ -254,6 +294,7 @@ export type { SaveStatus } from './hooks/use-auto-save'
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { useReducedMotion } from './hooks/use-reduced-motion'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
   clearPlacementSurface,
@@ -277,6 +318,17 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export {
+  clearStructuralElevationGuide,
+  collectElevationSnapTargets,
+  ELEVATION_ALIGNMENT_THRESHOLD_M,
+  type ElevationGuideSource,
+  type ElevationSnapMatch,
+  type ElevationSnapTarget,
+  publishStructuralElevationGuide,
+  resolveElevationSnapMatch,
+  resolveStructuralElevationSnap,
+} from './lib/elevation-guides'
 export {
   resolveCurrentBuildingId,
   resolveElevatorNodeSupportY,
@@ -303,6 +355,35 @@ export {
   type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
 } from './lib/floorplan'
+export type {
+  FloorplanAnnotationCategory,
+  FloorplanAnnotationVisibility,
+} from './lib/floorplan/annotation-visibility'
+export {
+  createFloorplanContextExtensions,
+  FLOORPLAN_CONTEXT_EXTENSION_KEY,
+  FLOORPLAN_GEOMETRY_METADATA_KEY,
+  FLOORPLAN_NODE_EXTENSION_KEY,
+  type FloorplanAnnotationRole,
+  type FloorplanMetricNotation,
+  type FloorplanNodeExtension,
+  type FloorplanRenderPurpose,
+  type FloorplanSchedule,
+  type FloorplanToolContext,
+  type FloorplanToolMode,
+  floorplanGeometryMetadata,
+  getFloorplanNodeExtension,
+  readFloorplanContext,
+  readFloorplanGeometryMetadata,
+  readFloorplanMetricNotationOverride,
+  withFloorplanGeometryMetadata,
+} from './lib/floorplan/floorplan-extension'
+export {
+  DEFAULT_FLOORPLAN_MODE,
+  FLOORPLAN_MODES,
+  type FloorplanMode,
+  isFloorplanToolAvailableInMode,
+} from './lib/floorplan/floorplan-mode'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {
@@ -391,6 +472,7 @@ export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { triggerSFX } from './lib/sfx-bus'
+export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export {
   clearSlabSnapFeedback,
   resolveSlabEdgeBandSnap,
@@ -417,6 +499,13 @@ export {
   type SurfacePlanSnapInput,
   type SurfacePlanSnapResult,
 } from './lib/surface-plan-snap'
+export {
+  fieldExtentForSite,
+  flattenSite,
+  resetSiteTerrain,
+  resolveFlattenTarget,
+  sculptFieldForSite,
+} from './lib/terrain-sculpt'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
@@ -432,6 +521,10 @@ export {
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
+export {
+  DRAWING_TYPE_OPTIONS,
+  default as useDrawingView,
+} from './store/use-drawing-view'
 export type {
   CaptureMode,
   FloorplanSelectionTool,
@@ -454,7 +547,10 @@ export {
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
+export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-person-hud'
+export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
+export { default as useFloorplanMode } from './store/use-floorplan-mode'
 export {
   default as useInteractionScope,
   getEditingHole,

@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   normalizeCameraPose,
   planCameraPoseApplication,
+  publishInitialCameraPose,
+  releaseCameraPoseEventSuppression,
   stepCameraPoseInterpolation,
   withCameraPoseDistance,
 } from './camera-pose'
@@ -161,6 +163,28 @@ describe('camera pose', () => {
       settled: false,
       target: [0, 0, 0],
     })
+  })
+
+  test('publishes the initial pose before any camera control update event', () => {
+    let publishCount = 0
+
+    publishInitialCameraPose(() => {
+      publishCount += 1
+    })
+
+    expect(publishCount).toBe(1)
+  })
+
+  test('publishes the settled pose when programmatic interpolation releases suppression', () => {
+    const suppression = { current: true }
+    let publishCount = 0
+
+    releaseCameraPoseEventSuppression(suppression, () => {
+      publishCount += 1
+    })
+
+    expect(suppression.current).toBe(false)
+    expect(publishCount).toBe(1)
   })
 
   test('retargets the bounded interpolation owner to the latest pose', () => {

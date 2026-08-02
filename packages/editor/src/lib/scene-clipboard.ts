@@ -2,8 +2,12 @@ import {
   AnyNode,
   type AnyNodeId,
   generateId,
+  generateSceneMaterialId,
   type LevelNode,
+  nodeRegistry,
   remapMeasurementReferences,
+  SceneMaterial,
+  type SceneMaterialId,
   type StairNode,
   useScene,
 } from '@pascal-app/core'
@@ -11,18 +15,25 @@ import { useViewer } from '@pascal-app/viewer'
 
 type ClipboardPayload = {
   copiedAt: number
+  materials: SceneMaterial[]
   nodes: AnyNode[]
   rootIds: AnyNodeId[]
 }
 
-type PasteResult = {
+export type PasteResult = {
+  createdMaterialIds: SceneMaterialId[]
   pastedIds: AnyNodeId[]
   skippedIds: AnyNodeId[]
 }
 
+const SYSTEM_CLIPBOARD_KIND = 'pascal.scene-nodes'
+const SYSTEM_CLIPBOARD_VERSION = 1
+
 const COPYABLE_ROOT_TYPES = new Set<AnyNode['type']>([
   'wall',
   'fence',
+  'door',
+  'window',
   'column',
   'item',
   'slab',
@@ -37,6 +48,7 @@ const COPYABLE_ROOT_TYPES = new Set<AnyNode['type']>([
 ])
 
 let clipboardPayload: ClipboardPayload | null = null
+let pendingSystemClipboardWrite: Promise<boolean> | null = null
 const subscribers = new Set<() => void>()
 
 function notifySubscribers() {
@@ -97,10 +109,29 @@ function hasSelectedAncestor(
   return false
 }
 
-function isLevelChildRoot(nodes: Record<AnyNodeId, AnyNode>, node: AnyNode) {
+function isClipboardRoot(
+  nodes: Record<AnyNodeId, AnyNode>,
+  node: AnyNode,
+  allowHostedOpening: boolean,
+) {
   const parentId = node.parentId as AnyNodeId | null
   if (!parentId) return true
-  return nodes[parentId]?.type === 'level'
+  const parent = nodes[parentId]
+  if (parent?.type === 'level') return true
+  if (
+    allowHostedOpening &&
+    (node.type === 'door' || node.type === 'window') &&
+    (parent?.type === 'wall' || parent?.type === 'roof-segment')
+  ) {
+    return true
+  }
+  return parent?.type === 'building' && nodeRegistry.get(node.type)?.floorplanScope === 'building'
+}
+
+function isCopyableRootType(node: AnyNode) {
+  if (COPYABLE_ROOT_TYPES.has(node.type)) return true
+  const definition = nodeRegistry.get(node.type)
+  return !!definition && definition.capabilities?.duplicable !== false
 }
 
 function getPromotedCabinetRunId(
@@ -160,14 +191,28 @@ function remapNodeReferences(
   oldId: AnyNodeId,
   targetLevel: LevelNode,
   idMap: Map<AnyNodeId, AnyNodeId>,
+  materialIdMap: Map<SceneMaterialId, SceneMaterialId>,
   rootIds: Set<AnyNodeId>,
   nodes: Record<AnyNodeId, AnyNode>,
 ) {
-  const clone = JSON.parse(JSON.stringify(node)) as AnyNode
+  const clone = remapSceneMaterialReferences(
+    JSON.parse(JSON.stringify(node)),
+    materialIdMap,
+  ) as AnyNode
   ;(clone as Record<string, unknown>).id = idMap.get(oldId)
 
   if (rootIds.has(oldId)) {
-    clone.parentId = targetLevel.id
+    const buildingId = targetLevel.parentId as AnyNodeId | null
+    clone.parentId =
+      nodeRegistry.get(node.type)?.floorplanScope === 'building' &&
+      buildingId &&
+      nodes[buildingId]?.type === 'building'
+        ? buildingId
+        : targetLevel.id
+    if (clone.type === 'door' || clone.type === 'window') {
+      delete clone.roofSegmentId
+      delete clone.roofFace
+    }
   } else if (clone.parentId && typeof clone.parentId === 'string') {
     clone.parentId = idMap.get(clone.parentId as AnyNodeId) ?? clone.parentId
   }
@@ -208,9 +253,47 @@ function remapNodeReferences(
   return AnyNode.parse(clone)
 }
 
+function remapSceneMaterialReferences(
+  value: unknown,
+  materialIdMap: Map<SceneMaterialId, SceneMaterialId>,
+): unknown {
+  if (typeof value === 'string' && value.startsWith('scene:')) {
+    const oldId = value.slice('scene:'.length) as SceneMaterialId
+    const nextId = materialIdMap.get(oldId)
+    return nextId ? `scene:${nextId}` : value
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => remapSceneMaterialReferences(entry, materialIdMap))
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        remapSceneMaterialReferences(entry, materialIdMap),
+      ]),
+    )
+  }
+  return value
+}
+
+function collectReferencedSceneMaterialIds(value: unknown, ids: Set<SceneMaterialId>) {
+  if (typeof value === 'string' && value.startsWith('scene:')) {
+    ids.add(value.slice('scene:'.length) as SceneMaterialId)
+    return
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) collectReferencedSceneMaterialIds(entry, ids)
+    return
+  }
+  if (value && typeof value === 'object') {
+    for (const entry of Object.values(value)) collectReferencedSceneMaterialIds(entry, ids)
+  }
+}
+
 function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
   const scene = useScene.getState()
   const selectedIdSet = new Set(ids)
+  const allowHostedOpening = ids.length === 1
   const promotedIds = ids.map((id) => {
     const node = scene.nodes[id]
     return node ? (getPromotedCabinetRunId(scene.nodes, node, selectedIdSet) ?? id) : id
@@ -219,8 +302,8 @@ function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
     const node = scene.nodes[id]
     return (
       node &&
-      COPYABLE_ROOT_TYPES.has(node.type) &&
-      isLevelChildRoot(scene.nodes, node) &&
+      isCopyableRootType(node) &&
+      isClipboardRoot(scene.nodes, node, allowHostedOpening) &&
       !hasSelectedAncestor(scene.nodes, id, selectedIdSet)
     )
   })
@@ -234,14 +317,97 @@ function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
     collectSubtreeIds(scene.nodes, rootId, subtreeIds)
   }
 
+  const copiedNodes = [...subtreeIds]
+    .map((id) => scene.nodes[id])
+    .filter((node): node is AnyNode => !!node)
+    .map((node) => JSON.parse(JSON.stringify(node)) as AnyNode)
+  const materialIds = new Set<SceneMaterialId>()
+  collectReferencedSceneMaterialIds(copiedNodes, materialIds)
+
   return {
     copiedAt: Date.now(),
-    nodes: [...subtreeIds]
-      .map((id) => scene.nodes[id])
-      .filter((node): node is AnyNode => !!node)
-      .map((node) => JSON.parse(JSON.stringify(node)) as AnyNode),
+    materials: [...materialIds]
+      .map((id) => scene.materials[id])
+      .filter((material): material is SceneMaterial => !!material)
+      .map((material) => JSON.parse(JSON.stringify(material)) as SceneMaterial),
+    nodes: copiedNodes,
     rootIds,
   }
+}
+
+function serializeClipboardPayload(payload: ClipboardPayload) {
+  return JSON.stringify({
+    kind: SYSTEM_CLIPBOARD_KIND,
+    version: SYSTEM_CLIPBOARD_VERSION,
+    payload,
+  })
+}
+
+function parseClipboardPayload(text: string): ClipboardPayload | null {
+  try {
+    const envelope = JSON.parse(text) as {
+      kind?: unknown
+      payload?: unknown
+      version?: unknown
+    }
+    if (
+      envelope.kind !== SYSTEM_CLIPBOARD_KIND ||
+      envelope.version !== SYSTEM_CLIPBOARD_VERSION ||
+      !envelope.payload ||
+      typeof envelope.payload !== 'object'
+    ) {
+      return null
+    }
+
+    const candidate = envelope.payload as {
+      copiedAt?: unknown
+      materials?: unknown
+      nodes?: unknown
+      rootIds?: unknown
+    }
+    if (
+      typeof candidate.copiedAt !== 'number' ||
+      !Array.isArray(candidate.nodes) ||
+      !Array.isArray(candidate.rootIds) ||
+      !candidate.rootIds.every((id) => typeof id === 'string')
+    ) {
+      return null
+    }
+
+    const nodes = candidate.nodes.map((node) => AnyNode.safeParse(node))
+    if (nodes.some((result) => !result.success)) return null
+    const materials = Array.isArray(candidate.materials)
+      ? candidate.materials.map((material) => SceneMaterial.safeParse(material))
+      : []
+    if (materials.some((result) => !result.success)) return null
+
+    const parsedNodes = nodes.filter((result) => result.success).map((result) => result.data)
+    const nodeIds = new Set(parsedNodes.map((node) => node.id))
+    const rootIds = candidate.rootIds as AnyNodeId[]
+    if (rootIds.length === 0 || rootIds.some((id) => !nodeIds.has(id))) return null
+
+    return {
+      copiedAt: candidate.copiedAt,
+      materials: materials.filter((result) => result.success).map((result) => result.data),
+      nodes: parsedNodes,
+      rootIds,
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeSystemClipboard(payload: ClipboardPayload) {
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+    pendingSystemClipboardWrite = null
+    return
+  }
+  pendingSystemClipboardWrite = navigator.clipboard
+    .writeText(serializeClipboardPayload(payload))
+    .then(
+      () => true,
+      () => false,
+    )
 }
 
 export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
@@ -251,7 +417,33 @@ export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
 
   clipboardPayload = payload
   notifySubscribers()
+  writeSystemClipboard(payload)
 
+  return true
+}
+
+export async function readEditorClipboardFromSystem() {
+  const pendingWrite = pendingSystemClipboardWrite
+  pendingSystemClipboardWrite = null
+  if (pendingWrite && !(await pendingWrite)) {
+    return hasEditorClipboard()
+  }
+
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
+    return hasEditorClipboard()
+  }
+
+  let text: string
+  try {
+    text = await navigator.clipboard.readText()
+  } catch {
+    return hasEditorClipboard()
+  }
+
+  const payload = parseClipboardPayload(text)
+  if (!payload) return false
+  clipboardPayload = payload
+  notifySubscribers()
   return true
 }
 
@@ -275,6 +467,13 @@ export function pasteEditorClipboardToLevel(targetLevelId?: AnyNodeId): PasteRes
   return applyClipboardPayloadToLevel(clipboardPayload, targetLevelId)
 }
 
+export async function pasteSystemEditorClipboardToLevel(
+  targetLevelId?: AnyNodeId,
+): Promise<PasteResult | null> {
+  if (!(await readEditorClipboardFromSystem())) return null
+  return pasteEditorClipboardToLevel(targetLevelId)
+}
+
 function applyClipboardPayloadToLevel(
   payload: ClipboardPayload,
   targetLevelId?: AnyNodeId,
@@ -284,9 +483,22 @@ function applyClipboardPayloadToLevel(
 
   const scene = useScene.getState()
   const idMap = new Map<AnyNodeId, AnyNodeId>()
+  const materialIdMap = new Map<SceneMaterialId, SceneMaterialId>()
+  const materialsToCreate: SceneMaterial[] = []
 
   for (const node of payload.nodes) {
     idMap.set(node.id as AnyNodeId, generateId(extractIdPrefix(node.id)) as AnyNodeId)
+  }
+  for (const material of payload.materials) {
+    const oldId = material.id as SceneMaterialId
+    const existing = scene.materials[oldId]
+    if (existing && JSON.stringify(existing) === JSON.stringify(material)) {
+      materialIdMap.set(oldId, oldId)
+      continue
+    }
+    const nextId = existing ? generateSceneMaterialId() : oldId
+    materialIdMap.set(oldId, nextId)
+    materialsToCreate.push({ ...material, id: nextId })
   }
 
   const rootIdSet = new Set(payload.rootIds)
@@ -296,7 +508,15 @@ function applyClipboardPayloadToLevel(
   for (const node of payload.nodes) {
     try {
       pastedNodes.push(
-        remapNodeReferences(node, node.id as AnyNodeId, targetLevel, idMap, rootIdSet, scene.nodes),
+        remapNodeReferences(
+          node,
+          node.id as AnyNodeId,
+          targetLevel,
+          idMap,
+          materialIdMap,
+          rootIdSet,
+          scene.nodes,
+        ),
       )
     } catch (error) {
       console.error('Failed to paste copied node', node.id, error)
@@ -305,9 +525,12 @@ function applyClipboardPayloadToLevel(
   }
 
   if (pastedNodes.length === 0) {
-    return { pastedIds: [], skippedIds }
+    return { createdMaterialIds: [], pastedIds: [], skippedIds }
   }
 
+  for (const material of materialsToCreate) {
+    scene.addSceneMaterial(material)
+  }
   scene.createNodes(
     pastedNodes.map((node) => ({
       node,
@@ -326,6 +549,7 @@ function applyClipboardPayloadToLevel(
   })
 
   return {
+    createdMaterialIds: materialsToCreate.map((material) => material.id as SceneMaterialId),
     pastedIds: pastedRootIds,
     skippedIds,
   }

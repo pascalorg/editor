@@ -22,22 +22,28 @@ scope is exactly one interaction at a time, and `idle` carries no payload.
 | `kind` | Payload | What |
 |---|---|---|
 | `idle` | — | Nothing in flight. The only state where selection/hover picking is meaningful. |
-| `placing` | `nodeId`, `nodeType`, `view`, `pressDrag` | Placing a fresh node (catalog/preset/build tool). `pressDrag` = gizmo press-drag (commit on release) vs click-to-place. |
-| `moving` | `nodeId`, `nodeType`, `view` | Moving an existing node. |
+| `placing` | `node`, `nodeId`, `nodeType`, `view`, `pressDrag` | Placing a fresh node (catalog/preset/build tool). `node` carries the not-yet-committed draft; `pressDrag` = gizmo press-drag (commit on release) vs click-to-place. |
+| `moving` | `node`, `nodeId`, `nodeType`, `view` | Moving an existing node. |
 | `handle-drag` | `nodeId`, `handle` | Dragging a resize/translate/rotate handle of a selected node. |
 | `drafting` | `tool` | Click-to-click drafting of a polyline/polygon kind (wall/fence/slab/…). |
-| `reshaping` | `nodeId`, `reshape`, `holeIndex?` | Reshaping a selected node's geometry. `reshape` is `curve \| hole \| endpoint \| boundary`. |
+| `reshaping` | `nodeId`, `reshape`, `driver`, `holeIndex?`, `endpoint?`, `index?`, `side?` | Reshaping a selected node's geometry. `driver` identifies the interaction body that owns preview and commit. |
 | `box-select` | — | Marquee selection drag. |
 | `painting` | — | Material paint application. |
 
-`reshaping` groups endpoint/curve/hole/boundary edits as sub-states of one scope
-(rather than four sibling kinds) — there is one node and one in-flight reshape,
-so "curving and hole-editing at once" stays unrepresentable. `view` is `'2d' | '3d'`.
+`reshaping` groups endpoint/curve/hole/boundary/control-point/tangent edits as
+sub-states of one scope — there is one node and one in-flight reshape, so
+"curving and hole-editing at once" stays unrepresentable. Its `driver` is
+`'tool' | 'floorplan'`: framework tools own tool-driven interactions, while a
+floor-plan affordance owns the complete preview/commit lifecycle of a
+floorplan-driven interaction. The driver prevents both interaction bodies from
+mounting for the same gesture. Placing and moving use `view: '2d' | '3d'`.
 
 ### Helpers
 
 - `isIdle(scope)` / `isActive(scope)` — `idle` vs anything else (`ActiveInteractionScope`).
 - `scopeNodeId(scope)` — the node a scope acts on, or `null`. `drafting`/`box-select`/`painting`/`idle` target no single existing node.
+- `isToolDrivenReshape(scope)` / `isFloorplanDrivenReshape(scope)` — narrow
+  reshape ownership so only the matching interaction body mounts.
 - `selectionEnabled(scope)` — true only while `idle`. During any active interaction the pointer belongs to that interaction's body, not to selecting a different object; the picking choke point must not route a hover/click to selection while this is false.
 
 ---
@@ -176,6 +182,10 @@ independent flag clear can't stomp an unrelated scope) to keep the scope in sync
 ## Rules
 
 - **One owner, one scope.** Only `useInteractionScope` writes the scope, and only via `begin`/`update`/`end`/`endIf`. Never reconstruct interaction state from a private combination of flags.
+- **One reshape driver.** A floorplan-driven reshape is previewed and committed
+  by its floor-plan affordance; a tool-driven reshape is owned by the framework
+  tool. Gate interaction bodies with the driver so both cannot act on one
+  gesture.
 - **`end` is atomic and payload-free.** Never leave a `nodeId`/payload behind on idle; commit-vs-revert logic belongs in the interaction body before `end`.
 - **`update` cannot change `kind`.** Switching interactions is a `begin`, not a patch.
 - **Hot-set and overlay policy are pure derivations of the scope** (and, for the hot-set, the candidate metadata). Don't branch overlay/picking behaviour on legacy flags — branch on the scope.

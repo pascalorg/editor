@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GuideNode,
   LevelNode,
@@ -938,6 +939,7 @@ const LevelsSection = memo(function LevelsSection({
   const handleAddLevel = () => {
     const newLevel = LevelNode.parse({
       level: levels.length,
+      height: DEFAULT_LEVEL_HEIGHT,
       children: [],
       parentId: building.id,
     })

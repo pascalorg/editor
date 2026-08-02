@@ -3,6 +3,7 @@ import {
   type CeilingNode,
   getEffectiveNode,
   nodeRegistry,
+  resolveCeilingHeight,
   sceneRegistry,
   useLiveTransforms,
   useScene,
@@ -44,7 +45,7 @@ export const CeilingSystem = () => {
         // the final value on commit. Mirrors WallSystem / GeometrySystem.
         const effective = getEffectiveNode(node as CeilingNode)
         const itemHoles = collectCeilingHoles(effective, nodes)
-        updateCeilingGeometry(effective, mesh, itemHoles)
+        updateCeilingGeometry(effective, mesh, itemHoles, nodes)
         clearDirty(id as AnyNodeId)
       }
       // If mesh not found, keep it dirty for next frame
@@ -88,6 +89,7 @@ function updateCeilingGeometry(
   node: CeilingNode,
   mesh: THREE.Mesh,
   extraHoles: Array<Array<[number, number]>> = [],
+  nodes: SceneNodes = useScene.getState().nodes,
 ) {
   const newGeo = generateCeilingGeometry(node, extraHoles)
 
@@ -108,7 +110,11 @@ function updateCeilingGeometry(
   const liveTransform = useLiveTransforms.getState().get(node.id)
   mesh.position.x = liveTransform?.position[0] ?? 0
   mesh.position.z = liveTransform?.position[2] ?? 0
-  mesh.position.y = (node.height ?? 2.5) - 0.01 + (liveTransform?.position[1] ?? 0) // Slight offset to avoid z-fighting with upper-level slabs
+  // Resolved height: explicit when stored, else the level-top bound — so a
+  // follows-mode ceiling re-parks under the current plane on every rebuild
+  // (level-height edits / covering-slab changes dirty-mark ceilings).
+  // Slight offset to avoid z-fighting with upper-level slabs.
+  mesh.position.y = resolveCeilingHeight(node, nodes) - 0.01 + (liveTransform?.position[1] ?? 0)
 }
 
 /**

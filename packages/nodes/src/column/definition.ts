@@ -1,10 +1,15 @@
 import {
   ColumnNode as ColumnNodeSchema,
   type ColumnNode as ColumnNodeType,
+  type GroupMoveSnapArgs,
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
-import { buildColumnFloorplan } from './floorplan'
+import {
+  collectStructuralGridAxes,
+  resolveStructuralGridSnap,
+} from '../structural-grid/coordination'
+import { buildColumnFloorplan, computeColumnFloorplanLevelData } from './floorplan'
 import { columnResizeAffordance, columnRotateAffordance } from './floorplan-affordances'
 import { columnFloorplanMoveTarget } from './floorplan-move'
 import { columnPaint } from './paint'
@@ -295,6 +300,18 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
   return handles
 }
 
+function resolveColumnStructuralGridMoveSnap({
+  candidatePosition,
+  nodes,
+  levelId,
+}: GroupMoveSnapArgs): [number, number, number] | null {
+  const snap = resolveStructuralGridSnap(
+    [candidatePosition[0], candidatePosition[2]],
+    collectStructuralGridAxes(nodes, levelId),
+  )
+  return snap ? [snap.point[0], candidatePosition[1], snap.point[1]] : null
+}
+
 /**
  * Column — Stage A registration. Wrap-export of the legacy
  * `ColumnRenderer` (no system — column geometry is computed inline in
@@ -334,7 +351,11 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
     // mode-driven snapping the overhaul standardised). 2D move keeps using
     // `floorplanMoveTarget`, which wins the 2D move dispatch.
-    movable: { axes: ['x', 'z'], gridSnap: true },
+    movable: {
+      axes: ['x', 'z'],
+      gridSnap: true,
+      groupMoveSnap: resolveColumnStructuralGridMoveSnap,
+    },
     slots: (node) => columnSlots(node as ColumnNodeType),
     paint: columnPaint,
     // Slab elevation lift via the generic `<FloorElevationSystem>` + the
@@ -374,6 +395,8 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     { key: 'Left click', label: 'Place column' },
     { key: 'Esc', label: 'Cancel' },
   ],
+  computeFloorplanLevelData: computeColumnFloorplanLevelData,
+  floorplanDependsOnSiblings: true,
   floorplan: buildColumnFloorplan,
   // 2D body move routes through this kind-specific target so the column
   // aligns by its footprint *edges* (and snaps flush to wall faces) instead

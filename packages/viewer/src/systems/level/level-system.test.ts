@@ -36,7 +36,20 @@ let viewerState = {
 let frameCallback: ((state: unknown, delta: number) => void) | null = null
 
 mock.module('@pascal-app/core', () => ({
-  getLevelHeight: (levelId: string) => (nodes[levelId]?.type === 'level' ? 2.5 : 0),
+  getLevelElevations: () => {
+    const elevations = new Map<string, { baseY: number }>()
+    const cumulativeYByBuilding = new Map<string, number>()
+    const levels = Object.values(nodes)
+      .filter((node): node is FakeLevelNode => node.type === 'level')
+      .sort((a, b) => a.level - b.level)
+
+    for (const level of levels) {
+      const baseY = (cumulativeYByBuilding.get(level.parentId) ?? 0) + level.baseElevation
+      elevations.set(level.id, { baseY })
+      cumulativeYByBuilding.set(level.parentId, baseY + 2.5)
+    }
+    return elevations
+  },
   sceneRegistry,
   useScene: {
     getState: () => ({ nodes }),

@@ -3,9 +3,11 @@ import {
   type AnyNodeId,
   type DoorNode,
   getGarageVisibleOpeningRatio,
+  getLevelElevations,
   isOperationDoorType,
   nodeRegistry,
   sceneRegistry,
+  terrainFieldOf,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
@@ -13,6 +15,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { computeSceneBoundsXZ } from '../../../lib/scene-bounds'
+import { createTerrainColliderGeometry } from './terrain-collider'
 
 const SKIPPED_MESH_NAMES = new Set(['cutout', 'collision-mesh'])
 const COLLIDER_NODE_CATEGORIES = new Set(['structure', 'furnish'])
@@ -129,10 +132,12 @@ function createLevelFallbackFloorGeometry(level: LevelNode, nodes: SceneNodes) {
 
 function collectLevelFallbackFloorGeometries(nodes: SceneNodes) {
   const geometries: THREE.BufferGeometry[] = []
+  const levelElevations = getLevelElevations(nodes)
 
   for (const levelId of sceneRegistry.byType.level!) {
     const node = nodes[levelId as AnyNodeId]
     if (node?.type !== 'level') continue
+    if (levelElevations.get(node.id)?.baseY !== 0) continue
 
     const geometry = createLevelFallbackFloorGeometry(node, nodes)
     if (geometry) geometries.push(geometry)
@@ -150,11 +155,26 @@ function collectLevelFallbackFloorGeometries(nodes: SceneNodes) {
 // is effectively unbounded (not sized to the site polygon): the ground plane must
 // keep holding the player up even after they step past the site boundary,
 // otherwise they fall below the ground plane into the void.
+//
+// A sculpted site takes the terrain path instead: the flat slab would hold the
+// player at the datum inside an excavation and bury them inside a hill. Derived
+// from the field rather than the rendered terrain mesh for the same
+// mount-timing reason as the flat slab.
 function createSiteGroundColliderGeometry(site: SiteNode, nodes: SceneNodes) {
   if (site.visible === false) return null
 
   const siteObject = sceneRegistry.nodes.get(site.id)
   if (!siteObject?.visible) return null
+
+  const field = terrainFieldOf(site)
+  if (field) {
+    const terrainGeometry = createTerrainColliderGeometry(field)
+    if (terrainGeometry) {
+      siteObject.updateWorldMatrix(true, false)
+      terrainGeometry.applyMatrix4(siteObject.matrixWorld)
+      return terrainGeometry
+    }
+  }
 
   const bounds = computeSceneBoundsXZ(nodes)
   const [centerX, centerZ] = bounds?.center ?? [0, 0]

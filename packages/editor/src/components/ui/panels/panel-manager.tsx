@@ -28,6 +28,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
+import { MultiSelectionPanel } from './multi-selection-panel'
 import { getNodeDisplay } from './node-display'
 import { resetDesktopInspectorCollapsed } from './panel-wrapper'
 import { ParametricInspector } from './parametric-inspector'
@@ -168,7 +169,13 @@ function MobilePanelLayer({
   )
 }
 
-export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.ReactNode }) {
+export function PanelManager({
+  inspectorFooter,
+  multiSelectionFooter,
+}: {
+  inspectorFooter?: React.ReactNode
+  multiSelectionFooter?: React.ReactNode
+}) {
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedZoneId = useViewer((s) => s.selection.zoneId)
@@ -235,6 +242,12 @@ export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.Reac
         onClose={() => setSelection({ zoneId: null })}
       />
     )
+  }
+
+  // Multi-selection: compact docked panel (desktop only — the mobile branch
+  // above keeps today's behavior and renders nothing for multi-selections).
+  if (selectedIds.length > 1) {
+    return <MultiSelectionPanel footer={multiSelectionFooter} />
   }
 
   return panelForType(selectedNodeType, inspectorFooter)

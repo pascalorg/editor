@@ -17,9 +17,10 @@ const ACTIVE_SCOPES: ActiveInteractionScope[] = [
   { kind: 'moving', node: mockNode('i1', 'item'), nodeId: 'i1', nodeType: 'item', view: '2d' },
   { kind: 'handle-drag', nodeId: 'w1', handle: 'height' },
   { kind: 'drafting', tool: 'wall' },
-  { kind: 'reshaping', nodeId: 's1', reshape: 'hole', holeIndex: 0 },
+  { kind: 'reshaping', nodeId: 's1', reshape: 'hole', driver: 'tool', holeIndex: 0 },
   { kind: 'box-select' },
   { kind: 'painting' },
+  { kind: 'sculpting' },
 ]
 
 describe('resolveOverlayPolicy', () => {

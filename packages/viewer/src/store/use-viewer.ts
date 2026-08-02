@@ -10,6 +10,7 @@ import type { ColorPreset, RenderShading } from '../lib/materials'
 import { SCENE_THEME_IDS } from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
+export type MetricNotation = 'meters' | 'millimeters'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -27,6 +28,10 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  /** Host-owned selection highlights rendered through the viewer's native
+   * selection paths without changing the local user's editable selection. */
+  externalSelectedIds: BaseNode['id'][]
+  setExternalSelectedIds: (ids: BaseNode['id'][]) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
@@ -79,6 +84,8 @@ type ViewerState = {
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
+  metricNotation: MetricNotation
+  setMetricNotation: (notation: MetricNotation) => void
   /** True once the user explicitly picked a unit. Until then `unit` is a
    * locale-derived default and is not persisted, so the default can keep
    * tracking the browser locale across sessions. */
@@ -149,6 +156,11 @@ type ViewerState = {
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
 
+  /** Pointer lock temporarily released mid-walkthrough (⌘/PrintScreen — OS
+   *  screenshot needs a movable cursor); clicking the canvas re-locks. */
+  walkthroughSuspended: boolean
+  setWalkthroughSuspended: (suspended: boolean) => void
+
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
 
@@ -177,6 +189,7 @@ type PersistedViewerState = Partial<
     | 'edges'
     | 'shadows'
     | 'unit'
+    | 'metricNotation'
     | 'unitExplicit'
     | 'levelMode'
     | 'wallMode'
@@ -189,6 +202,7 @@ const RENDER_SHADINGS = ['solid', 'rendered'] as const
 const COLOR_PRESETS = ['clay', 'white', 'mono', 'blueprint'] as const
 const EDGE_MODES = ['off', 'soft', 'strong'] as const
 const UNITS = ['metric', 'imperial'] as const
+const METRIC_NOTATIONS = ['meters', 'millimeters'] as const
 const LEVEL_MODES = ['stacked', 'exploded', 'solo', 'manual'] as const
 const WALL_MODES = ['up', 'cutaway', 'down', 'translucent'] as const
 
@@ -300,6 +314,7 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
     shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
     unit: pickString<ViewerState['unit']>(state.unit, UNITS, detectDefaultUnit()),
+    metricNotation: pickString<MetricNotation>(state.metricNotation, METRIC_NOTATIONS, 'meters'),
     unitExplicit:
       typeof state.unit === 'string' && UNITS.includes(state.unit as ViewerState['unit']),
     levelMode: pickString<ViewerState['levelMode']>(state.levelMode, LEVEL_MODES, 'stacked'),
@@ -314,6 +329,17 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
+      externalSelectedIds: [],
+      setExternalSelectedIds: (ids) =>
+        set((state) => {
+          if (
+            state.externalSelectedIds.length === ids.length &&
+            state.externalSelectedIds.every((id, index) => id === ids[index])
+          ) {
+            return state
+          }
+          return { externalSelectedIds: ids }
+        }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
@@ -371,8 +397,11 @@ const useViewer = create<ViewerState>()(
       setShadows: (shadows) => set({ shadows }),
 
       unit: detectDefaultUnit(),
+      metricNotation: 'meters',
       unitExplicit: false,
       setUnit: (unit) => set({ unit, unitExplicit: true }),
+      setMetricNotation: (metricNotation) =>
+        set({ unit: 'metric', metricNotation, unitExplicit: true }),
 
       levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
@@ -500,7 +529,10 @@ const useViewer = create<ViewerState>()(
       setDebugColors: (enabled) => set({ debugColors: enabled }),
 
       walkthroughMode: false,
-      setWalkthroughMode: (mode) => set({ walkthroughMode: mode }),
+      setWalkthroughMode: (mode) => set({ walkthroughMode: mode, walkthroughSuspended: false }),
+
+      walkthroughSuspended: false,
+      setWalkthroughSuspended: (suspended) => set({ walkthroughSuspended: suspended }),
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
@@ -522,6 +554,7 @@ const useViewer = create<ViewerState>()(
         edges: state.edges,
         shadows: state.shadows,
         ...(state.unitExplicit ? { unit: state.unit } : {}),
+        metricNotation: state.metricNotation,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,

@@ -9,6 +9,7 @@ export type {
   CeilingEvent,
   ChimneyEvent,
   ColumnEvent,
+  ConstructionDimensionEvent,
   DoorEvent,
   DormerEvent,
   ElevatorEvent,
@@ -34,6 +35,7 @@ export type {
   SpawnEvent,
   StairEvent,
   StairSegmentEvent,
+  StructuralGridEvent,
   WallEvent,
   WindowEvent,
   ZoneEvent,
@@ -46,21 +48,36 @@ export {
 } from './hooks/scene-registry/scene-registry'
 export {
   type FloorPlacedElevationArgs,
+  GROUND_SUPPORT_ID,
   getFloorPlacedElevation,
   getFloorPlacedFootprints,
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
 export {
+  getWallBaseElevationForNodes,
+  getWallEffectiveHeightForNodes,
+  type PointedSupportSurface,
   pointInPolygon,
+  SUPPORT_ELEVATION_EPSILON,
   spatialGridManager,
   type WallSlabSupportSegment,
 } from './hooks/spatial-grid/spatial-grid-manager'
 export {
   findLevelAncestorId,
   initSpatialGridSync,
+  markSlabChangeDependents,
   resolveBuildingForLevel,
   resolveLevelId,
 } from './hooks/spatial-grid/spatial-grid-sync'
+export {
+  type FenceSupportInput,
+  resolveFenceSupportSlabPatch,
+  resolveMovedWallSupportSlabPatch,
+  resolveSupportSlabPatch,
+  resolveWallSupportSlabPatch,
+  type SupportSlabPatch,
+  type SupportSlabPatchOptions,
+} from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
@@ -76,6 +93,7 @@ export {
   closestMeasurementFeatureBinding,
   MEASUREMENT_PLANAR_TOLERANCE,
   measurementAnchorFallback,
+  measurementAnchorReferenceNodeIds,
   measurementAngle,
   measurementArea,
   measurementAreaVector,
@@ -86,6 +104,7 @@ export {
   measurementPerimeter,
   measurementPrismVolume,
   measurementReferenceNodeIds,
+  remapMeasurementAnchors,
   remapMeasurementReferences,
 } from './lib/measurement-geometry'
 export {
@@ -114,6 +133,7 @@ export {
 export {
   type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
+  type AutoSlabPlanningContext,
   type AutoSlabSyncPlan,
   type AutoZoneSyncPlan,
   detectSpacesForLevel,
@@ -123,7 +143,6 @@ export {
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planAutoZonesForLevel,
-  projectAutoSlabsForPlan,
   resolveAutoZonePolygon,
   resumeSpaceDetection,
   type Space,
@@ -131,6 +150,51 @@ export {
   wallClosesRoom,
   wallTouchesOthers,
 } from './lib/space-detection'
+export {
+  advanceStroke,
+  type BrushSettings,
+  type BrushShape,
+  beginStroke,
+  brushHeightAt,
+  DEFAULT_BRUSH_SETTINGS,
+  detachStrokeAnchor,
+  highestOver,
+  MIN_BRUSH_RADIUS_IN_SPACINGS,
+  maxCoverage,
+  minBrushRadius,
+  RAISE_METRES_PER_STROKE,
+  sampleTarget,
+  type TerrainStroke,
+  type TerrainVerb,
+  weightAt,
+} from './lib/terrain-brush'
+export { decodeTerrainField, encodeTerrainField, isDatumField } from './lib/terrain-codec'
+export {
+  applyHeightPatch,
+  createTerrainField,
+  DEFAULT_TERRAIN_SPACING,
+  DEFAULT_TERRAIN_STEP,
+  diffToPatches,
+  flattenPatch,
+  type HeightPatch,
+  heightAt,
+  heightAtSample,
+  isFlatOver,
+  normalAt,
+  quantize,
+  sampleRangeOver,
+  slopeAt,
+  surfaceHeightAt,
+  type TerrainField,
+} from './lib/terrain-field'
+export { raycastTerrain, type TerrainHit } from './lib/terrain-raycast'
+export { commitTerrainField, terrainFieldForEdit, terrainFieldOf } from './lib/terrain-source'
+export {
+  isSiteDatum,
+  SITE_DATUM_EPSILON,
+  SITE_DATUM_Y,
+  terrainSupportLift,
+} from './lib/terrain-support'
 export {
   closestOnSegment,
   collectLevelWallSegments,
@@ -146,7 +210,9 @@ export {
 } from './lib/zone-quantities'
 export {
   getCatalogMaterialById,
+  getDynamicLibraryMaterials,
   getLibraryMaterialIdFromRef,
+  getLibraryMaterialsVersion,
   getMaterialPresetByRef,
   getMaterialsForCategory,
   getSceneMaterialIdFromRef,
@@ -157,12 +223,16 @@ export {
   type MaterialCatalogItem,
   type MaterialCategory,
   type MaterialRef,
+  type MaterialSource,
   type MaterialSurface,
   type ParsedMaterialRef,
   parseMaterialRef,
+  registerLibraryMaterials,
   SCENE_MATERIAL_REF_PREFIX,
+  subscribeLibraryMaterials,
   toLibraryMaterialRef,
   toSceneMaterialRef,
+  unregisterLibraryMaterials,
 } from './material-library'
 export type {
   FloorPlacedFootprint,
@@ -204,16 +274,23 @@ export {
   getEffectiveNode,
   type LiveNodeOverrides,
 } from './store/use-live-node-overrides'
+export {
+  default as useLiveTerrain,
+  type LiveTerrainStroke,
+} from './store/use-live-terrain'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export {
   type ApplySceneSnapshotOptions,
   acquireSceneReadOnlyLease,
+  applySceneOperationPatch,
   applyScenePatch,
   applySceneSnapshot,
   clearSceneHistory,
   default as useScene,
   type SceneMaterialPatch,
   type SceneNodePatch,
+  type SceneNodeStructuralPatch,
+  type SceneOperationPatch,
   type ScenePatch,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
@@ -245,9 +322,7 @@ export {
 } from './systems/elevator/elevator-runtime'
 export { ElevatorRuntimeSystem } from './systems/elevator/elevator-runtime-system'
 export {
-  DEFAULT_ELEVATOR_LEVEL_HEIGHT,
   type ElevatorLevelEntry,
-  getElevatorLevelHeight,
   resolveElevatorBuildingLevels,
   resolveElevatorLevels,
   resolveElevatorServiceLevelIds,
@@ -266,13 +341,21 @@ export {
   isSplineFence,
   sampleFenceSpline,
 } from './systems/fence/fence-spline'
+export { resolveSlabPlacementElevation } from './systems/slab/slab-placement'
+export {
+  clampSlabElevationForWalls,
+  getSlabElevationUpperBound,
+  type SlabElevationClamp,
+} from './systems/slab/slab-support'
 export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
+export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
+  getWallArcData,
   getWallChordFrame,
   getWallCurveFrameAt,
   getWallCurveLength,
@@ -310,6 +393,11 @@ export {
   type WallMoveLinkedWallTargetPlan,
   type WallPlanPoint,
 } from './systems/wall/wall-move'
+export {
+  MIN_WALL_HEIGHT,
+  resolveWallEffectiveHeight,
+  resolveWallTop,
+} from './systems/wall/wall-top'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'

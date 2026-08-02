@@ -106,7 +106,7 @@ export function getWallChordFrame(wall: WallCurveLike) {
   }
 }
 
-function getWallArcData(wall: WallCurveLike) {
+export function getWallArcData(wall: WallCurveLike) {
   const chord = getWallChordFrame(wall)
   const sagitta = getClampedWallCurveOffset(wall)
 

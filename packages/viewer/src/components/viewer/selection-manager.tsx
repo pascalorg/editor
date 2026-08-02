@@ -449,14 +449,17 @@ const PointerMissedHandler = ({
 
 const OutlinerSync = () => {
   const selection = useViewer((s) => s.selection)
+  const externalSelectedIds = useViewer((s) => s.externalSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const outliner = useViewer((s) => s.outliner)
+  const geometryRevision = useViewer((s) => s.geometryRevision)
   const nodes = useScene((s) => s.nodes)
 
   useEffect(() => {
+    void geometryRevision
     // Sync selected objects
     outliner.selectedObjects.length = 0
-    for (const id of selection.selectedIds) {
+    for (const id of new Set([...selection.selectedIds, ...externalSelectedIds])) {
       const node = nodes[id as AnyNodeId]
       if (node?.type === 'slab') continue
       const obj = sceneRegistry.nodes.get(id)
@@ -471,7 +474,7 @@ const OutlinerSync = () => {
       const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }
-  }, [selection, hoveredId, outliner, nodes])
+  }, [selection, externalSelectedIds, hoveredId, outliner, nodes, geometryRevision])
 
   return null
 }

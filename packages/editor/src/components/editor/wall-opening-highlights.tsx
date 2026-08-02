@@ -3,8 +3,16 @@
 import { type AnyNodeId, sceneRegistry, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
-import { BoxGeometry, type BufferGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import {
+  BoxGeometry,
+  type BufferGeometry,
+  EdgesGeometry,
+  type Group,
+  type Mesh,
+  MeshBasicMaterial,
+  Vector3,
+} from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 
@@ -41,6 +49,13 @@ const fillMaterial = new MeshBasicNodeMaterial({
   depthWrite: false,
 })
 
+// Keep the cutout in the render list for the outliner's override material
+// without letting its source material alter the normal scene pass.
+const outlineProxyMaterial = new MeshBasicMaterial({
+  colorWrite: false,
+  depthWrite: false,
+})
+
 function makeOutlineGeometry(width: number, height: number, depth: number): BufferGeometry {
   const box = new BoxGeometry(width + PAD, height + PAD, depth + PAD)
   const edges = new EdgesGeometry(box)
@@ -60,26 +75,60 @@ function makeOutlineGeometry(width: number, height: number, depth: number): Buff
  */
 export function WallOpeningHighlights() {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
+  const hoveredId = useViewer((state) => state.hoveredId)
   const { scene } = useThree()
+  const outlineProxyIds = Array.from(new Set(hoveredId ? [...selectedIds, hoveredId] : selectedIds))
 
-  if (selectedIds.length === 0) return null
+  if (selectedIds.length === 0 && !hoveredId) return null
 
-  return createPortal(
+  return (
     <>
-      {selectedIds.map((id) => (
-        <SelectionOpeningHighlights key={id} selectedId={id} />
+      {outlineProxyIds.map((id) => (
+        <OpeningOutlineProxy key={id} openingId={id} />
       ))}
-    </>,
-    scene,
+      {selectedIds.length > 0 &&
+        createPortal(
+          <>
+            {selectedIds.map((id) => (
+              <SelectionOpeningHighlights key={id} selectedId={id} />
+            ))}
+          </>,
+          scene,
+        )}
+    </>
   )
 }
 
-// Resolves a selected node into the opening highlight(s) to draw:
-//  - a selected wall → a hint over each door / window it hosts ("editable
-//    child here").
-//  - a directly-selected frameless opening (a `door` whose `openingKind` is
-//    `'opening'`) → a fill over its own cutout, so the selection reads as
-//    occupied even though the opening renders no geometry of its own.
+function OpeningOutlineProxy({ openingId }: { openingId: string }) {
+  const node = useScene((state) => state.nodes[openingId as AnyNodeId])
+  const geometryRevision = useViewer((state) => state.geometryRevision)
+  const proxyRef = useRef<Mesh | null>(null)
+  const isFramelessOpening = node?.type === 'door' && node.openingKind === 'opening'
+
+  useLayoutEffect(() => {
+    void geometryRevision
+    if (!isFramelessOpening) return
+    const root = sceneRegistry.nodes.get(openingId as AnyNodeId)
+    const proxy = root?.getObjectByName('cutout') as Mesh | undefined
+    if (!proxy) return
+
+    proxy.material = outlineProxyMaterial
+    proxy.visible = true
+    proxyRef.current = proxy
+
+    return () => {
+      proxy.visible = false
+      proxyRef.current = null
+    }
+  }, [geometryRevision, isFramelessOpening, openingId])
+
+  useFrame(() => {
+    if (proxyRef.current) proxyRef.current.visible = true
+  })
+
+  return null
+}
+
 function SelectionOpeningHighlights({ selectedId }: { selectedId: string }) {
   const node = useScene((state) => state.nodes[selectedId as AnyNodeId])
 
@@ -94,25 +143,7 @@ function SelectionOpeningHighlights({ selectedId }: { selectedId: string }) {
     )
   }
 
-  if (node?.type === 'door' && node.openingKind === 'opening') {
-    return <SelectedOpeningHighlight openingId={selectedId} parentId={node.parentId} />
-  }
-
   return null
-}
-
-// A frameless opening selected on its own. Pulls the cutout depth from its
-// host wall's thickness so the fill block matches the wall it sits in.
-function SelectedOpeningHighlight({
-  openingId,
-  parentId,
-}: {
-  openingId: string
-  parentId: string | null
-}) {
-  const parent = useScene((state) => (parentId ? state.nodes[parentId as AnyNodeId] : undefined))
-  const depth = parent?.type === 'wall' ? (parent.thickness ?? 0.1) : 0.1
-  return <OpeningHighlight depth={depth} openingId={openingId} />
 }
 
 function OpeningHighlight({ openingId, depth }: { openingId: string; depth: number }) {

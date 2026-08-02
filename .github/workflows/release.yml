@@ -16,13 +16,14 @@ on:
           - ifc-converter
           - all
       bump:
-        description: "Version bump (use 'none' to publish current version as-is)"
+        description: "Version bump (beta publishes a prerelease on the beta dist-tag)"
         required: true
         type: choice
         options:
           - patch
           - minor
           - major
+          - beta
           - none
       dry-run:
         description: "Dry run (no publish)"
@@ -63,6 +64,19 @@ jobs:
 
           bump_version() {
             local v=$1
+            if [ "$BUMP" = "beta" ]; then
+              if [[ "$v" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-beta\.([0-9]+)$ ]]; then
+                echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}-beta.$((BASH_REMATCH[4]+1))"
+                return
+              fi
+              IFS='.' read -r MAJ _ _ <<< "${v%%-*}"
+              if [ "$MAJ" -lt 1 ]; then
+                echo "1.0.0-beta.1"
+              else
+                echo "$((MAJ+1)).0.0-beta.1"
+              fi
+              return
+            fi
             IFS='.' read -r MAJ MIN PAT <<< "$v"
             if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
             if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
@@ -70,6 +84,12 @@ jobs:
             if [ "$BUMP" = "none" ]; then echo "$v"; return; fi
             echo "$MAJ.$MIN.$PAT"
           }
+
+          if [ "$BUMP" = "beta" ]; then
+            echo "NPM_TAG=beta" >> "$GITHUB_ENV"
+          else
+            echo "NPM_TAG=latest" >> "$GITHUB_ENV"
+          fi
 
           # Track new versions in shell-local vars.
           # NOTE: $GITHUB_ENV writes don't surface within the same step, so the
@@ -118,9 +138,9 @@ jobs:
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/core@$CORE_VERSION"
-            npm publish --dry-run --access public
+            npm publish --dry-run --access public --tag "$NPM_TAG"
           else
-            npm publish --access public
+            npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/core@$CORE_VERSION"
           fi
 
@@ -133,9 +153,9 @@ jobs:
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/viewer@$VIEWER_VERSION"
-            npm publish --dry-run --access public
+            npm publish --dry-run --access public --tag "$NPM_TAG"
           else
-            npm publish --access public
+            npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/viewer@$VIEWER_VERSION"
           fi
 
@@ -147,9 +167,9 @@ jobs:
         run: |
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/editor@$EDITOR_VERSION"
-            npm publish --dry-run --access public
+            npm publish --dry-run --access public --tag "$NPM_TAG"
           else
-            npm publish --access public
+            npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/editor@$EDITOR_VERSION"
           fi
 
@@ -162,9 +182,9 @@ jobs:
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/nodes@$NODES_VERSION"
-            npm publish --dry-run --access public
+            npm publish --dry-run --access public --tag "$NPM_TAG"
           else
-            npm publish --access public
+            npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/nodes@$NODES_VERSION"
           fi
 
@@ -177,9 +197,9 @@ jobs:
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/mcp@$MCP_VERSION"
-            npm publish --dry-run --access public
+            npm publish --dry-run --access public --tag "$NPM_TAG"
           else
-            npm publish --access public
+            npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/mcp@$MCP_VERSION"
           fi
 
@@ -194,9 +214,9 @@ jobs:
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
-            npm publish --dry-run --access public
+            npm publish --dry-run --access public --tag "$NPM_TAG"
           else
-            npm publish --access public
+            npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
           fi
 
@@ -238,4 +258,4 @@ jobs:
             git tag "$TAG"
           done
 
-          git push --follow-tags
+          git push origin HEAD:main $TAGS

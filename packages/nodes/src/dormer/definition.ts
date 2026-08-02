@@ -498,6 +498,7 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./preview'),
 
   tool: () => import('./tool'),
   toolHints: [

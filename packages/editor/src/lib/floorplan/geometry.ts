@@ -3,9 +3,8 @@ import type { FloorplanLineSegment, FloorplanSelectionBounds } from './types'
 
 // Baseline rotation (deg) that orients the plan-local scene "north up" on
 // screen. The on-screen floor-plan scene `<g>` is rotated by
-// `FLOORPLAN_VIEW_ROTATION_DEG + userRotation - buildingRotation`; the PDF
-// export mirrors the aligned-to-north case (user offset 0) so an export points
-// the same way as the app's north-aligned view.
+// `FLOORPLAN_VIEW_ROTATION_DEG + userRotation - buildingRotation`; PDF export
+// uses the same user rotation so its orientation matches the live plan.
 //
 // North is world −Z: with a 0 baseline a rotation-0 reference image (top =
 // −Z) reads upright in the north-aligned view, and "align north" maps to a

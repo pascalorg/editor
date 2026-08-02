@@ -10,6 +10,7 @@ import {
   isCurvedWall,
   isSplineFence,
   type LevelNode,
+  resolveFenceSupportSlabPatch,
   useLiveNodeOverrides,
   useScene,
   type WallMoveAxis,
@@ -224,11 +225,35 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         path?: [number, number][]
       }>,
     ) => {
+      // Fold the re-elected slab lift host into the same write — a fence
+      // moved onto / off an elevated deck must land on the right surface
+      // (fences run no per-frame election; `supportSlabId` IS the lift),
+      // and one updateNodes keeps the whole move a single undo step.
+      // Election runs on the committed endpoints against the pre-write
+      // store (the patch only reads the parent level + the slab grid).
+      const baselineNodes = useScene.getState().nodes
       useScene.getState().updateNodes(
-        updates.map((entry) => ({
-          id: entry.id as AnyNodeId,
-          data: { start: entry.start, end: entry.end, path: entry.path },
-        })),
+        updates.map((entry) => {
+          const fence = baselineNodes[entry.id as AnyNodeId]
+          const support =
+            fence?.type === 'fence'
+              ? resolveFenceSupportSlabPatch(
+                  {
+                    start: entry.start,
+                    end: entry.end,
+                    path: entry.path,
+                    curveOffset: (fence as FenceNode).curveOffset,
+                    thickness: (fence as FenceNode).thickness,
+                    parentId: fence.parentId,
+                  },
+                  baselineNodes,
+                )
+              : {}
+          return {
+            id: entry.id as AnyNodeId,
+            data: { start: entry.start, end: entry.end, path: entry.path, ...support },
+          }
+        }),
       )
       for (const entry of updates) {
         useScene.getState().markDirty(entry.id as AnyNodeId)

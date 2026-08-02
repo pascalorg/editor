@@ -9,7 +9,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -77,6 +77,15 @@ const SkylightTool = () => {
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
       setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      usePlacementPreview.getState().set(
+        SkylightNode.parse({
+          ...previewNode,
+          parentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: hit.segment.id,
+        }),
+        hit.segment,
+      )
       publishRoofSurfacePlacementGuides({
         roof: event.node as RoofNode,
         segment: hit.segment,
@@ -107,6 +116,8 @@ const SkylightTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [skylight.id] })
       triggerSFX('sfx:item-place')
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
       clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
@@ -119,6 +130,8 @@ const SkylightTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
       clearRoofSurfacePlacementGuides()
     }
   }, [activeBuildingId, setSelection, previewNode])
@@ -131,6 +144,8 @@ const SkylightTool = () => {
         onInvalidTarget={() => {
           setPreviewPos(null)
           setPreviewSurfaceQuat(null)
+          const placementPreview = usePlacementPreview.getState()
+          if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
           clearRoofSurfacePlacementGuides()
         }}
       />

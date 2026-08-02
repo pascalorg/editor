@@ -162,6 +162,15 @@ export function ensureKtx2Support(renderer: unknown): boolean {
   }
 }
 
+export function configureKtx2Support<T>(
+  loader: { setKTX2Loader: (ktx2: T) => unknown },
+  renderer: unknown,
+): boolean {
+  if (!ensureKtx2Support(renderer)) return false
+  loader.setKTX2Loader(ktx2Loader as unknown as T)
+  return true
+}
+
 export function isKtx2Url(url: string): boolean {
   return url.toLowerCase().endsWith('.ktx2')
 }

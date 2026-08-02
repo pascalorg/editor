@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { MeasurementFeature } from '../registry/types'
-import type { MeasurementPoint } from '../schema/nodes/measurement'
+import type { MeasurementAnchor, MeasurementPoint } from '../schema/nodes/measurement'
 import {
   areMeasurementPointsCoplanar,
   closestMeasurementFeatureBinding,
+  measurementAnchorReferenceNodeIds,
   measurementAngle,
   measurementArea,
   measurementAreaVector,
@@ -12,6 +13,7 @@ import {
   measurementNormal,
   measurementPerimeter,
   measurementPrismVolume,
+  remapMeasurementAnchors,
 } from './measurement-geometry'
 
 const expectPointCloseTo = (actual: MeasurementPoint | null, expected: MeasurementPoint) => {
@@ -133,5 +135,34 @@ describe('measurement geometry', () => {
 
     expect(measurementPrismVolume(base, [5, 7, 4])).toBeCloseTo(24)
     expect(measurementPrismVolume([...base].reverse(), [5, 7, 4])).toBeCloseTo(24)
+  })
+
+  test('remaps and collects references for arbitrary anchor strings', () => {
+    const anchors: MeasurementAnchor[] = [
+      {
+        kind: 'feature',
+        reference: { nodeId: 'wall_a', featureId: 'wall:start' },
+        fallback: [0, 0, 0],
+      },
+      [2, 0, 0],
+      {
+        kind: 'feature',
+        reference: { nodeId: 'wall_b', featureId: 'wall:end' },
+        fallback: [4, 0, 0],
+      },
+    ]
+
+    expect(measurementAnchorReferenceNodeIds(anchors)).toEqual(['wall_a', 'wall_b'])
+    const remapped = remapMeasurementAnchors(
+      anchors,
+      new Map([
+        ['wall_a', 'wall_a_copy'],
+        ['wall_b', 'wall_b_copy'],
+      ]),
+    )
+    const first = remapped[0]!
+    const last = remapped[2]!
+    expect(Array.isArray(first) ? null : first.reference.nodeId).toBe('wall_a_copy')
+    expect(Array.isArray(last) ? null : last.reference.nodeId).toBe('wall_b_copy')
   })
 })

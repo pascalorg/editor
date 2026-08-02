@@ -14,10 +14,10 @@ import { useEffect } from 'react'
  * context — wall centerlines/thickness (exterior flush offsets) and sibling
  * slab polygons (interior centerline seams) — none of which lives on the slab
  * node itself. Store updates only dirty the node that changed, so a wall
- * thickness edit or a neighbour slab add/remove/reshape would leave stale
- * slab meshes. Watch a per-level signature of those inputs and dirty every
- * slab on a level whose signature moved; `GeometrySystem` then rebuilds
- * them through `def.geometry` as usual.
+ * thickness edit, a neighbour slab add/remove/reshape, or a building transform
+ * would leave stale slab meshes. Watch a per-level signature of those inputs
+ * and dirty every slab on a level whose signature moved; `GeometrySystem` then
+ * rebuilds them through `def.geometry` as usual.
  */
 
 function levelSlabContextSignatures(nodes: Record<string, AnyNode>): Map<string, string> {
@@ -46,6 +46,15 @@ function levelSlabContextSignatures(nodes: Record<string, AnyNode>): Map<string,
         levelId,
         `s|${slab.id}|${slab.elevation ?? ''}|${slab.polygon.map(([x, z]) => `${x},${z}`).join(';')}`,
       )
+    }
+  }
+
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'building') continue
+    const transform = `${node.position.join(',')}|${node.rotation.join(',')}`
+    for (const childId of node.children) {
+      const child = nodes[childId]
+      if (child?.type === 'level') push(child.id, `b|${node.id}|${transform}`)
     }
   }
 

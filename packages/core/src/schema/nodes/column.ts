@@ -86,6 +86,8 @@ export const ColumnNode = BaseNode.extend({
   type: nodeType('column'),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
   style: ColumnStyle.default('plain'),
   crossSection: ColumnCrossSection.default('round'),
   height: z.number().positive().default(2.5),

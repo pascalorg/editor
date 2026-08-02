@@ -9,6 +9,7 @@ describe('getRecessedSlabGroundHoles', () => {
       id: 'slab_ground-holes',
       parentId,
       elevation: -0.15,
+      recessed: true,
       polygon: [
         [0, 0],
         [2, 0],
@@ -41,6 +42,23 @@ describe('getRecessedSlabGroundHoles', () => {
     const slab = SlabNode.parse({
       id: 'slab_ground-holes-raised',
       elevation: 0.15,
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 2],
+        [0, 2],
+      ],
+    })
+
+    expect(getRecessedSlabGroundHoles({ [slab.id]: slab })).toEqual([])
+  })
+
+  test('keys on the recessed flag, not the elevation sign', () => {
+    // A below-plane SOLID (deck underside) must not punch a ground hole.
+    const slab = SlabNode.parse({
+      id: 'slab_ground-holes-below-plane',
+      elevation: -0.15,
+      thickness: 0.3,
       polygon: [
         [0, 0],
         [2, 0],

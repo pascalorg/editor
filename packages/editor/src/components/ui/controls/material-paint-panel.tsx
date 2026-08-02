@@ -27,7 +27,12 @@ import { SceneMaterialList } from './scene-material-list'
  * fixed control/category header, a single scrolling catalog grid, and a fixed
  * scene-material footer (always visible, with a `+` to add a custom material).
  */
-export function MaterialPaintPanel() {
+export type MaterialPaintPanelProps = {
+  /** When provided, the catalog grid leads with a "New material" tile that invokes it. */
+  onCreateMaterialRequest?: () => void
+}
+
+export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPanelProps) {
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
   const setActivePaintMaterial = useEditor((state) => state.setActivePaintMaterial)
@@ -109,6 +114,7 @@ export function MaterialPaintPanel() {
       {/* Scrolls: category tabs (fixed inside) + catalog grid (the scroll). */}
       <div className="min-h-0 flex-1">
         <MaterialPicker
+          onCreateMaterialRequest={onCreateMaterialRequest}
           onSelectMaterialPreset={(materialPreset) => {
             setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
           }}

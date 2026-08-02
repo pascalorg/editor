@@ -43,6 +43,8 @@ export const ShelfNode = BaseNode.extend({
   children: z.array(ItemNode.shape.id).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
 
   // Dimensions (meters). Schema-level defaults intentionally reproduce
   // the v1 wall-shelf so existing v1 scenes that omit the v2-introduced

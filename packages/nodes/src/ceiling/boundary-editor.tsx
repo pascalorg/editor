@@ -1,6 +1,12 @@
 'use client'
 
-import { type CeilingNode, resolveLevelId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  type CeilingNode,
+  resolveCeilingHeight,
+  resolveLevelId,
+  useLiveNodeOverrides,
+  useScene,
+} from '@pascal-app/core'
 import {
   boundaryReshapeScope,
   clearCeilingSnapFeedback,
@@ -173,7 +179,7 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
       onVertexHoverChange={handleHandleHoverChange}
       polygon={effectiveCeiling.polygon}
       resolvePlanPoint={resolvePolygonEditorPlanPoint}
-      surfaceHeight={effectiveCeiling.height ?? 2.5}
+      surfaceHeight={resolveCeilingHeight(effectiveCeiling, useScene.getState().nodes)}
     />
   )
 }

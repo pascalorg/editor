@@ -5,7 +5,8 @@ import {
   type ItemNode as ItemNodeType,
   type NodeDefinition,
 } from '@pascal-app/core'
-import { buildItemFloorplan } from './floorplan'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemPaint } from './paint'
 import { itemParametrics } from './parametrics'
@@ -172,6 +173,11 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   schema: ItemNode,
   category: 'furnish',
   surfaceRole: 'furnishing',
+  extensions: {
+    'pascal:editor/floorplan': {
+      contextualDimensions: buildItemContextualDimensions,
+    } satisfies FloorplanNodeExtension<ItemNodeType>,
+  },
 
   // Defaults shape is cast: the schema requires a fully-typed `asset`
   // field, but in practice items are always created from the catalog
@@ -283,6 +289,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./renderer').then(({ ItemPreview }) => ({ default: ItemPreview })),
   system: {
     module: () => import('./system'),
     // Same priority as the legacy ItemSystem.

@@ -23,6 +23,8 @@ export const HvacEquipmentNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Yaw in radians.
   rotation: z.number().default(0),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
   equipmentType: z.enum(['furnace', 'air-handler', 'condenser']).default('furnace'),
   // Cabinet dimensions in meters. Defaults match a typical upflow
   // furnace cabinet (~22" × 28" footprint, ~43" tall).

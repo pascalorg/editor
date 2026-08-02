@@ -9,6 +9,7 @@ import type {
   CeilingNode,
   ChimneyNode,
   ColumnNode,
+  ConstructionDimensionNode,
   CupolaNode,
   DoorNode,
   DormerNode,
@@ -42,6 +43,7 @@ import type {
   SpawnNode,
   StairNode,
   StairSegmentNode,
+  StructuralGridNode,
   TurbineVentNode,
   WallNode,
   WindowNode,
@@ -101,10 +103,12 @@ export type SlabEvent = NodeEvent<SlabNode>
 export type SpawnEvent = NodeEvent<SpawnNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type ColumnEvent = NodeEvent<ColumnNode>
+export type ConstructionDimensionEvent = NodeEvent<ConstructionDimensionNode>
 export type RoofEvent = NodeEvent<RoofNode>
 export type RoofSegmentEvent = NodeEvent<RoofSegmentNode>
 export type StairEvent = NodeEvent<StairNode>
 export type StairSegmentEvent = NodeEvent<StairSegmentNode>
+export type StructuralGridEvent = NodeEvent<StructuralGridNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
@@ -216,7 +220,6 @@ type CameraControlEvents = {
   'camera-controls:orbit-ccw': undefined
   'camera-controls:fit-scene': CameraControlFitSceneEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
-  'camera-controls:pose': CameraPose
   'camera-controls:apply-pose': CameraPose
   'camera-controls:cancel-pose': undefined
   'camera-controls:interaction-start': undefined
@@ -272,6 +275,12 @@ type RoomPresetEvents = {
 
 type SelectionEvents = {
   /**
+   * A node click accepted by an editor canvas selection path after proxy and
+   * phase routing. Hosts can react to the user's 2D/3D selection intent
+   * without treating programmatic selection changes as canvas clicks.
+   */
+  'selection:canvas-node-click': AnyNode
+  /**
    * "Reveal this node" intent — the editor's node action menu emits it with the
    * selected node; whoever owns the node's catalog/panel (host browser, a
    * plugin's presets panel) listens and reveals it.
@@ -295,10 +304,12 @@ type EditorEvents = GridEvents &
   NodeEvents<'spawn', SpawnEvent> &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'column', ColumnEvent> &
+  NodeEvents<'construction-dimension', ConstructionDimensionEvent> &
   NodeEvents<'roof', RoofEvent> &
   NodeEvents<'roof-segment', RoofSegmentEvent> &
   NodeEvents<'stair', StairEvent> &
   NodeEvents<'stair-segment', StairSegmentEvent> &
+  NodeEvents<'structural-grid', StructuralGridEvent> &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
   NodeEvents<'scan', ScanEvent> &

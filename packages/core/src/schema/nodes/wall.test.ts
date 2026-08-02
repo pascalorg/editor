@@ -13,9 +13,29 @@ import {
   WALL_SKIRTING_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WallFaceBandConfig,
-  type WallNode,
+  WallNode,
+  type WallNode as WallNodeType,
   WallTrimConfig,
 } from './wall'
+
+describe('wall support offset', () => {
+  test('stores a finite offset without defaulting it onto ordinary walls', () => {
+    expect(WallNode.parse({ start: [0, 0], end: [4, 0] }).supportOffset).toBeUndefined()
+    expect(WallNode.parse({ start: [0, 0], end: [4, 0], supportOffset: 1.75 }).supportOffset).toBe(
+      1.75,
+    )
+    expect(
+      WallNode.safeParse({ start: [0, 0], end: [4, 0], supportOffset: Number.NaN }).success,
+    ).toBe(false)
+  })
+
+  test('stores terrain infill only when explicitly enabled', () => {
+    expect(WallNode.parse({ start: [0, 0], end: [4, 0] }).fillToTerrain).toBeUndefined()
+    expect(WallNode.parse({ start: [0, 0], end: [4, 0], fillToTerrain: true }).fillToTerrain).toBe(
+      true,
+    )
+  })
+})
 
 describe('wall face bands', () => {
   test('defaults to one band while preserving legacy enabled scenes as three bands', () => {
@@ -41,16 +61,19 @@ describe('wall face bands', () => {
     })
 
     expect(
-      getWallFaceBandConfig({
-        height: 2.5,
-        faceBands: {
-          enabled: true,
-          count: 3,
-          lowerHeight: 0.84,
-          middleHeight: 0.61,
-          upperHeight: 0.61,
+      getWallFaceBandConfig(
+        {
+          height: 2.5,
+          faceBands: {
+            enabled: true,
+            count: 3,
+            lowerHeight: 0.84,
+            middleHeight: 0.61,
+            upperHeight: 0.61,
+          },
         },
-      }),
+        2.5,
+      ),
     ).toMatchObject({
       count: 3,
       lowerTop: 0.84,
@@ -60,16 +83,19 @@ describe('wall face bands', () => {
 
   test('four bands adds an upper split below the final top band', () => {
     expect(
-      getWallFaceBandConfig({
-        height: 2.5,
-        faceBands: {
-          enabled: true,
-          count: 4,
-          lowerHeight: 0.5,
-          middleHeight: 0.6,
-          upperHeight: 0.7,
+      getWallFaceBandConfig(
+        {
+          height: 2.5,
+          faceBands: {
+            enabled: true,
+            count: 4,
+            lowerHeight: 0.5,
+            middleHeight: 0.6,
+            upperHeight: 0.7,
+          },
         },
-      }),
+        2.5,
+      ),
     ).toMatchObject({
       count: 4,
       lowerTop: 0.5,
@@ -93,7 +119,7 @@ describe('wall face bands', () => {
         lowerInterior: 'library:stale-lower',
         middleExterior: 'library:stale-middle',
       },
-    } as Pick<WallNode, 'faceBands' | 'slots'>)
+    } as Pick<WallNodeType, 'faceBands' | 'slots'>)
 
     expect(patch.faceBands).toEqual({
       enabled: true,
@@ -129,7 +155,7 @@ describe('wall face bands', () => {
           exterior: 'scene:exterior-finish',
           topInterior: 'library:stale-top',
         },
-      } as Pick<WallNode, 'faceBands' | 'slots'>,
+      } as Pick<WallNodeType, 'faceBands' | 'slots'>,
       3,
     )
 
@@ -153,7 +179,7 @@ describe('wall face bands', () => {
         middleInterior: 'library:stale-middle',
         upperExterior: 'library:stale-upper',
       },
-    } as Pick<WallNode, 'faceBands' | 'slots'>)
+    } as Pick<WallNodeType, 'faceBands' | 'slots'>)
 
     expect(patch.slots).toEqual({
       lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
@@ -181,7 +207,7 @@ describe('wall face bands', () => {
           lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
           upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
         },
-      } as Pick<WallNode, 'faceBands' | 'slots'>,
+      } as Pick<WallNodeType, 'faceBands' | 'slots'>,
       3,
     )
 
@@ -213,7 +239,7 @@ describe('wall face bands', () => {
           middleExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
           upperExterior: 'library:painted-top-exterior',
         },
-      } as Pick<WallNode, 'faceBands' | 'slots'>,
+      } as Pick<WallNodeType, 'faceBands' | 'slots'>,
       4,
     )
 

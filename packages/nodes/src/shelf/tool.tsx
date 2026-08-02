@@ -4,6 +4,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  resolveSupportSlabPatch,
   ShelfNode,
   useScene,
 } from '@pascal-app/core'
@@ -132,9 +133,14 @@ const ShelfTool = () => {
         name: 'Shelf',
         position,
         rotation: [0, 0, 0],
+        parentId: activeLevelId,
       })
-      useScene.getState().createNode(shelf, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [shelf.id] })
+      const committedShelf = ShelfNode.parse({
+        ...shelf,
+        ...resolveSupportSlabPatch(shelf, useScene.getState().nodes),
+      })
+      useScene.getState().createNode(committedShelf, activeLevelId)
+      useViewer.getState().setSelection({ selectedIds: [committedShelf.id] })
       triggerSFX('sfx:item-place')
       useAlignmentGuides.getState().clear()
       if (useEditor.getState().getContinuation('point') === 'repeat') {
