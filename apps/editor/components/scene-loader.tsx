@@ -13,7 +13,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Hammer, Layers } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
@@ -98,26 +98,26 @@ function sceneGraphSignature(graph: SceneGraphWithCollections): string {
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Light preview: solid shading pairs with `?disable=postFx` (viewer post-processing flags).
+  // Light preview: re-run when query changes (same scene, client navigation to ?disable=…).
+  // See packages/mcp/docs/layout-clearance-error-log.md pitfall L5 (editor).
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const params = new URLSearchParams(window.location.search)
-    const disable = params.get('disable') ?? ''
+    const disable = searchParams.get('disable') ?? ''
     const light =
-      disable.split(',').some((p) => p.trim() === 'postFx') || params.get('safe') === '1'
+      disable.split(',').some((p) => p.trim() === 'postFx') || searchParams.get('safe') === '1'
     if (!light) return
     try {
       useViewer.getState().setShading('solid')
     } catch {
       // Viewer store may not be ready yet on first paint.
     }
-  }, [])
+  }, [searchParams])
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
