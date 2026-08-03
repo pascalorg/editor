@@ -168,7 +168,14 @@ export {
   type TerrainVerb,
   weightAt,
 } from './lib/terrain-brush'
-export { decodeTerrainField, encodeTerrainField, isDatumField } from './lib/terrain-codec'
+export {
+  decodeHeightPatch,
+  decodeTerrainField,
+  type EncodedHeightPatch,
+  encodeHeightPatch,
+  encodeTerrainField,
+  isDatumField,
+} from './lib/terrain-codec'
 export {
   applyHeightPatch,
   createTerrainField,
@@ -188,7 +195,12 @@ export {
   type TerrainField,
 } from './lib/terrain-field'
 export { raycastTerrain, type TerrainHit } from './lib/terrain-raycast'
-export { commitTerrainField, terrainFieldForEdit, terrainFieldOf } from './lib/terrain-source'
+export {
+  commitTerrainField,
+  persistedTerrainFieldOf,
+  terrainFieldForEdit,
+  terrainFieldOf,
+} from './lib/terrain-source'
 export {
   isLevelBaseConsumer,
   isSiteDatum,

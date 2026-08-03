@@ -14,6 +14,7 @@ import {
   type HeightPatch,
   isDatumField,
   minBrushRadius,
+  persistedTerrainFieldOf,
   pointInPolygon2D,
   quantize,
   runAsSingleSceneHistoryStep,
@@ -21,7 +22,6 @@ import {
   sampleTarget,
   type TerrainField,
   type TerrainVerb,
-  terrainFieldOf,
   useLiveTerrain,
   useScene,
 } from '@pascal-app/core'
@@ -97,7 +97,7 @@ export function fieldExtentForSite(site: Pick<SiteNode, 'polygon'> | null | unde
  * here is that the tool must not have to know how to size a grid.
  */
 export function sculptFieldForSite(site: SiteNode): TerrainField {
-  return terrainFieldOf(site) ?? createTerrainField(fieldExtentForSite(site))
+  return persistedTerrainFieldOf(site) ?? createTerrainField(fieldExtentForSite(site))
 }
 
 /** Whether an XZ point belongs to the editable property footprint. */
