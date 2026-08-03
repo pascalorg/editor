@@ -37,6 +37,7 @@ import { getCeilingClampBound } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
 import { healSceneNodes } from '../utils/heal-scene-graph'
+import { removeRetiredDrawingSheetNodes } from '../utils/retired-scene-nodes'
 import * as nodeActions from './actions/node-actions'
 import {
   areSceneSnapshotsEqual,
@@ -591,26 +592,6 @@ function migrateConstructionDimension(node: Record<string, any>) {
   }
 }
 
-function removeRetiredDrawingSheets(nodes: Record<string, any>) {
-  const retiredIds = new Set(
-    Object.entries(nodes)
-      .filter(([, node]) => node?.type === 'drawing-sheet')
-      .map(([id]) => id),
-  )
-  if (retiredIds.size === 0) return
-
-  for (const id of retiredIds) delete nodes[id]
-  for (const [id, node] of Object.entries(nodes)) {
-    if (!Array.isArray(node?.children)) continue
-    const children = getStringArray(node.children)
-    if (!children.some((childId) => retiredIds.has(childId))) continue
-    nodes[id] = {
-      ...node,
-      children: children.filter((childId) => !retiredIds.has(childId)),
-    }
-  }
-}
-
 function migrateWallAssembly(node: Record<string, any>) {
   if (!Object.hasOwn(node, 'assemblyLayers')) return node
 
@@ -643,8 +624,7 @@ function migrateNodes(nodes: Record<string, any>): {
   // Repair pre-existing corruption (null children, zero-length walls) before
   // any per-type migration runs, so already-saved scenes load cleanly.
   const { nodes: healed } = healSceneNodes(nodes)
-  const patchedNodes = { ...healed } as Record<string, any>
-  removeRetiredDrawingSheets(patchedNodes)
+  const { nodes: patchedNodes } = removeRetiredDrawingSheetNodes(healed as Record<string, any>)
 
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
   // merged into the scene material map by the caller (`setScene`).

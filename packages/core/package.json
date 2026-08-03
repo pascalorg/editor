@@ -16,6 +16,11 @@
       "import": "./dist/utils/clone-scene-graph.js",
       "default": "./dist/utils/clone-scene-graph.js"
     },
+    "./scene-migrations": {
+      "types": "./dist/utils/retired-scene-nodes.d.ts",
+      "import": "./dist/utils/retired-scene-nodes.js",
+      "default": "./dist/utils/retired-scene-nodes.js"
+    },
     "./registry": {
       "types": "./dist/registry/index.d.ts",
       "import": "./dist/registry/index.js",
