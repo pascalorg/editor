@@ -96,6 +96,13 @@ function sceneGraphSignature(graph: SceneGraphWithCollections): string {
   })
 }
 
+function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
+  const disable = searchParams.get('disable') ?? ''
+  return (
+    disable.split(',').some((p) => p.trim() === 'postFx') || searchParams.get('safe') === '1'
+  )
+}
+
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -104,19 +111,20 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  /** Bumps when Light preview is clicked while already active so effects re-apply. */
+  const [lightApplyTick, setLightApplyTick] = useState(0)
 
-  // Light preview: re-run when query changes (same scene, client navigation to ?disable=…).
-  // When flags are removed, restore default shading so the render pipeline is not left stuck.
+  const lightPreview = isLightPreviewQuery(searchParams)
+
+  // Light preview: host prop disablePostFx rebuilds the pipeline; solid shading pairs with it.
+  // When flags clear, restore rendered so post-FX can come back.
   useEffect(() => {
-    const disable = searchParams.get('disable') ?? ''
-    const light =
-      disable.split(',').some((p) => p.trim() === 'postFx') || searchParams.get('safe') === '1'
     try {
-      useViewer.getState().setShading(light ? 'solid' : 'rendered')
+      useViewer.getState().setShading(lightPreview ? 'solid' : 'rendered')
     } catch {
       // Viewer store may not be ready yet on first paint.
     }
-  }, [searchParams])
+  }, [lightPreview, lightApplyTick])
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
@@ -242,12 +250,24 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         </div>
       )}
       <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
-        <Link
+        <button
+          type="button"
           className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-          href={`/scene/${meta.id}?${LIGHT_PREVIEW_QUERY}`}
+          onClick={() => {
+            // Force re-apply even if URL already has light-preview flags (toolbar may have changed shading).
+            setLightApplyTick((n) => n + 1)
+            try {
+              useViewer.getState().setShading('solid')
+            } catch {
+              // ignore
+            }
+            if (!lightPreview) {
+              router.push(`/scene/${meta.id}?${LIGHT_PREVIEW_QUERY}`)
+            }
+          }}
         >
           Light preview
-        </Link>
+        </button>
         <Link
           className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
           href="/scenes"
@@ -256,6 +276,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         </Link>
       </div>
       <Editor
+        disablePostFx={lightPreview}
         layoutVersion="v2"
         onLoad={handleLoad}
         onSave={handleSave}

@@ -190,6 +190,13 @@ export interface EditorProps {
   // Thumbnail
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 
+  /**
+   * When true, skip the viewer post-FX pipeline (same as `?disable=postFx`).
+   * Hosts use this for a stable local "light preview" without relying only on
+   * module-load URL flags or shading toggles.
+   */
+  disablePostFx?: boolean
+
   // Version preview overlays (rendered by host app)
   sidebarOverlay?: ReactNode
   viewerBanner?: ReactNode
@@ -961,6 +968,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   onThumbnailCapture,
   viewerSceneSlot,
   floorplanSceneSlot,
+  disablePostFx = false,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -973,6 +981,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
+  disablePostFx?: boolean
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
@@ -1086,6 +1095,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
           <Viewer
             defaultRender={EDITOR_DEFAULT_RENDER}
+            disablePostFx={disablePostFx}
             hoverStyles={EDITOR_HOVER_STYLES}
             onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
@@ -1131,6 +1141,7 @@ export default function Editor({
   isLoading = false,
   onLoaderChange,
   onThumbnailCapture,
+  disablePostFx = false,
   sidebarOverlay,
   viewerBanner,
   settingsPanelProps,
@@ -1331,6 +1342,7 @@ export default function Editor({
 
   const viewerCanvas = (
     <ViewerCanvas
+      disablePostFx={disablePostFx}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
