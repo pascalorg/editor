@@ -563,6 +563,7 @@ export function cutSelectionToEditorClipboard(): boolean {
     sfxEmitter.emit('sfx:structure-delete')
   }
   useScene.getState().deleteNodes(payload.rootIds)
+  removeDeletedIdsFromSessionGroups(payload.rootIds)
   useViewer.getState().setSelection({ selectedIds: [] })
   return true
 }

@@ -33,6 +33,7 @@ import {
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
+import useSessionGroups from '../../store/use-session-groups'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -1208,6 +1209,8 @@ export default function Editor({
       setIsSceneLoading(true)
       useScene.getState().unloadScene()
       useViewer.getState().resetSelection()
+      // Session groups are not scene-graph state — clear on every load/switch.
+      useSessionGroups.getState().clearGroups()
 
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()

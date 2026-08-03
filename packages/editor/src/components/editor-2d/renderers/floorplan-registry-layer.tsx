@@ -701,7 +701,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         if (endEvent.pointerId !== pointerId) return
         cleanup()
         if (!engaged) {
-          applyEntrySelection(id, true)
+          // Cmd/Ctrl+click without drag: toggle member (options object, not bare boolean).
+          applyEntrySelection(id, {
+            shouldToggle: true,
+            isolateMember: false,
+          })
         }
       }
 
