@@ -180,6 +180,72 @@ describe('migrateLegacyGraph', () => {
     const result = apiGraphSchema.safeParse(graph)
     expect(result.success).toBe(true)
   })
+
+  test('converts the late-vintage library equipment handles', () => {
+    const legacy = legacyGraph()
+    legacy.nodes.item_rack.asset.src = 'asset://rack'
+    legacy.nodes.item_lib.asset = {
+      ...legacy.nodes.item_lib.asset,
+      id: 'loaded-euro-pallet',
+      src: 'asset://loaded-euro-pallet',
+      dimensions: [0.8, 1.15, 1.2],
+    }
+    legacy.nodes.item_conv = {
+      ...structuredClone(legacy.nodes.item_rack),
+      id: 'item_conv',
+      name: 'Flat Wire Mesh Conveyor',
+      asset: { id: 'flat-wire-mesh-conveyor', src: 'asset://flat-wire-mesh-conveyor', dimensions: [7.3, 0.8, 0.6] },
+    }
+    legacy.nodes.level_c.children.push('item_conv')
+
+    const { graph, report } = migrateLegacyGraph(legacy)
+
+    expect(graph.nodes['pallet-rack_rack'].type).toBe('warehouse:pallet-rack')
+    expect(graph.nodes.pallet_lib).toMatchObject({ type: 'warehouse:pallet', preset: 'epal-1', cargo: 'carton' })
+    expect(graph.nodes['conveyor-roller_conv']).toMatchObject({
+      type: 'warehouse:conveyor-roller',
+      rollerPitch: '100',
+      rollers: 73,
+      transportHeight: 0.6,
+    })
+    expect(report.converted).toHaveLength(3)
+    expect(apiGraphSchema.safeParse(graph).success).toBe(true)
+  })
+
+  test('renames legacy warehouse id prefixes the current schema refuses', () => {
+    const legacy = legacyGraph()
+    legacy.nodes.palletrack_x = {
+      object: 'node',
+      id: 'palletrack_x',
+      type: 'warehouse:pallet-rack',
+      parentId: 'level_c',
+      visible: true,
+      metadata: {},
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+    }
+    legacy.nodes.level_c.children.push('palletrack_x')
+
+    const { graph, report } = migrateLegacyGraph(legacy)
+
+    expect(graph.nodes.palletrack_x).toBeUndefined()
+    expect(graph.nodes['pallet-rack_x'].type).toBe('warehouse:pallet-rack')
+    expect(graph.nodes.level_c.children).toContain('pallet-rack_x')
+    expect(report.renamedIds).toBe(1)
+    expect(apiGraphSchema.safeParse(graph).success).toBe(true)
+  })
+
+  test('keeps unmapped asset:// items but reports them as invisible', () => {
+    const legacy = legacyGraph()
+    legacy.nodes.item_rack.asset.src = 'asset://dispatch-packing-table'
+
+    const { graph, report } = migrateLegacyGraph(legacy)
+
+    expect(graph.nodes.item_rack.asset.src).toBe('asset://dispatch-packing-table')
+    expect(report.invisible).toEqual([
+      { id: 'item_rack', src: 'asset://dispatch-packing-table', name: 'Rack' },
+    ])
+  })
 })
 
 describe('inventory', () => {

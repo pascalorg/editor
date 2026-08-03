@@ -26,6 +26,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { apiGraphSchema, parseNodeWithDefaults } from '../apps/editor/lib/graph-schema.ts'
 
 const WAREHOUSE_PLUGIN_ID = 'ovurrsl:warehouse'
 
@@ -76,18 +77,70 @@ function stripTransient(metadata) {
  * closest visual match, and leaves every other parameter to the schema's
  * defaults.
  */
+function toPalletRack(node, notes) {
+  const [w, h, d] = effectiveDimensions(node)
+  return {
+    ...baseFields(node),
+    id: migratedId(node.id, 'pallet-rack'),
+    type: 'warehouse:pallet-rack',
+    bayClearWidth: clampWithNote(w, 0.6, 6, `${node.id} genişlik`, notes),
+    uprightHeight: clampWithNote(h, 1, 20, `${node.id} yükseklik`, notes),
+    depth: clampWithNote(d, 0.4, 2.5, `${node.id} derinlik`, notes),
+  }
+}
+
+const toPallet = (cargo) => (node) => ({
+  ...baseFields(node),
+  id: migratedId(node.id, 'pallet'),
+  type: 'warehouse:pallet',
+  preset: 'epal-1',
+  cargo,
+})
+
+/** Length is rollers × pitch; 100 mm pitch spans 2.7–20 m in whole rollers. */
+function toConveyorRoller(node, notes) {
+  const [length, , height] = effectiveDimensions(node)
+  const rollers = Math.min(200, Math.max(27, Math.round(length * 10)))
+  if (Math.abs(rollers / 10 - length) > 0.05) {
+    notes.push(`${node.id} konveyör uzunluğu ${length} m → ${rollers / 10} m (rulo adımına yuvarlandı)`)
+  }
+  return {
+    ...baseFields(node),
+    id: migratedId(node.id, 'conveyor-roller'),
+    type: 'warehouse:conveyor-roller',
+    rollerPitch: '100',
+    rollers,
+    usefulWidth: '600',
+    transportHeight: clampWithNote(height, 0.37, 3, `${node.id} taşıma yüksekliği`, notes),
+  }
+}
+
 const PROCEDURAL_CONVERTERS = {
-  'asset://procedural/rack': (node, notes) => {
-    const [w, h, d] = effectiveDimensions(node)
-    return {
-      ...baseFields(node),
-      id: migratedId(node.id, 'pallet-rack'),
-      type: 'warehouse:pallet-rack',
-      bayClearWidth: clampWithNote(w, 0.6, 6, `${node.id} genişlik`, notes),
-      uprightHeight: clampWithNote(h, 1, 20, `${node.id} yükseklik`, notes),
-      depth: clampWithNote(d, 0.4, 2.5, `${node.id} derinlik`, notes),
-    }
-  },
+  'asset://procedural/rack': toPalletRack,
+}
+
+/**
+ * The later legacy vintage stored equipment as library items whose models
+ * lived in the desktop build's own IndexedDB — unreachable from any server
+ * deployment, so these MUST be rebuilt as parametric nodes to stay visible.
+ * Handles deliberately left out (dispatch-packing-table, tote) pass through
+ * unchanged by owner decision and are listed in the report as invisible until
+ * a real model is uploaded for them.
+ */
+const LIBRARY_CONVERTERS = {
+  'asset://rack': toPalletRack,
+  'asset://euro-pallet': toPallet('none'),
+  'asset://loaded-euro-pallet': toPallet('carton'),
+  'asset://flat-wire-mesh-conveyor': toConveyorRoller,
+}
+
+/**
+ * Id prefixes the current plugin schemas no longer accept; seen on
+ * warehouse:* nodes written by the late legacy vintage (`palletrack_…`).
+ */
+const LEGACY_WAREHOUSE_ID_PREFIXES = {
+  'warehouse:pallet-rack': [['palletrack', 'pallet-rack']],
+  'warehouse:conveyor-roller': [['conveyorroller', 'conveyor-roller']],
 }
 
 function isLegacyProceduralItem(node) {
@@ -96,6 +149,21 @@ function isLegacyProceduralItem(node) {
     typeof node.asset?.src === 'string' &&
     node.asset.src.startsWith('asset://procedural/')
   )
+}
+
+function isLegacyLibraryEquipment(node) {
+  return node?.type === 'item' && typeof node.asset?.src === 'string' && node.asset.src in LIBRARY_CONVERTERS
+}
+
+/** Mutates the node's id to the current prefix; returns whether it changed. */
+function normaliseWarehouseId(node) {
+  for (const [legacy, current] of LEGACY_WAREHOUSE_ID_PREFIXES[node?.type] ?? []) {
+    if (node.id.startsWith(`${legacy}_`)) {
+      node.id = `${current}_${node.id.slice(legacy.length + 1)}`
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -113,6 +181,8 @@ export function migrateLegacyGraph(legacyGraph, { dropTransient = false } = {}) 
   const report = {
     converted: [],
     passedThrough: 0,
+    invisible: [],
+    renamedIds: 0,
     droppedTransient: [],
     repairedParentIds: 0,
     notes: [],
@@ -133,16 +203,37 @@ export function migrateLegacyGraph(legacyGraph, { dropTransient = false } = {}) 
   const unknown = []
   const idMap = new Map()
   for (const [id, node] of Object.entries(nodes)) {
-    if (!isLegacyProceduralItem(node)) {
+    let converter
+    if (isLegacyProceduralItem(node)) {
+      converter = PROCEDURAL_CONVERTERS[node.asset.src]
+      if (!converter) {
+        unknown.push({ id, src: node.asset.src, name: node.name })
+        continue
+      }
+    } else if (isLegacyLibraryEquipment(node)) {
+      converter = LIBRARY_CONVERTERS[node.asset.src]
+    } else {
+      // A plain asset:// handle resolved from the desktop build's IndexedDB —
+      // valid to keep (owner's call), but it has no model on a server.
+      if (node?.type === 'item' && node.asset?.src?.startsWith('asset://')) {
+        report.invisible.push({ id, src: node.asset.src, name: node.name })
+      }
+      const renamed = normaliseWarehouseId(node)
+      if (renamed) {
+        delete nodes[id]
+        nodes[node.id] = node
+        idMap.set(id, node.id)
+        report.renamedIds++
+      }
       report.passedThrough++
       continue
     }
-    const converter = PROCEDURAL_CONVERTERS[node.asset.src]
-    if (!converter) {
-      unknown.push({ id, src: node.asset.src, name: node.name })
-      continue
-    }
-    const migrated = converter(node, report.notes)
+    // Parse through the owning schema so every defaulted field materialises.
+    // `setScene` stores nodes verbatim, and kind systems crash on synthesised
+    // nodes that lack fields editor-created ones always carry (found the hard
+    // way: a pallet without `supportSlabId` emptied the scene on load the
+    // moment a slab stood under it).
+    const migrated = parseNodeWithDefaults(converter(node, report.notes))
     delete nodes[id]
     nodes[migrated.id] = migrated
     idMap.set(id, migrated.id)
@@ -178,7 +269,7 @@ export function migrateLegacyGraph(legacyGraph, { dropTransient = false } = {}) 
   }
 
   const graph = { nodes, rootNodeIds }
-  if (report.converted.some((c) => c.type.startsWith('warehouse:'))) {
+  if (Object.values(nodes).some((n) => typeof n?.type === 'string' && n.type.startsWith('warehouse:'))) {
     const installed = new Set(legacyGraph.installedPlugins ?? [])
     installed.add(WAREHOUSE_PLUGIN_ID)
     graph.installedPlugins = [...installed]
@@ -227,7 +318,7 @@ function openLegacyScenes(dbPath) {
     const cols = db.query(`PRAGMA table_info(${JSON.stringify(name).slice(1, -1)})`).all()
     const colNames = cols.map((c) => c.name.toLowerCase())
     const idCol = cols[colNames.indexOf('id')]
-    const graphCol = cols.find((c) => ['graph', 'data', 'json', 'content', 'scene'].includes(c.name.toLowerCase()))
+    const graphCol = cols.find((c) => /graph|json|data|content/.test(c.name.toLowerCase()))
     if (idCol && graphCol) candidates.push({ table: name, idCol: idCol.name, graphCol: graphCol.name, cols })
   }
   if (candidates.length === 0) {
@@ -287,23 +378,28 @@ function main() {
   for (const c of report.converted) console.log(`    ${c.from} → ${c.to} (${c.type})`)
   if (report.droppedTransient.length) console.log(`  atılan geçici düğümler: ${report.droppedTransient.join(', ')}`)
   if (report.repairedParentIds) console.log(`  onarılan parentId: ${report.repairedParentIds}`)
+  if (report.renamedIds) console.log(`  yeni öneke taşınan id: ${report.renamedIds}`)
+  if (report.invisible.length) {
+    const bySrc = {}
+    for (const item of report.invisible) bySrc[item.src] = (bySrc[item.src] ?? 0) + 1
+    console.log(`  UYARI — modeli sunucuda olmayan ${report.invisible.length} öğe (görünmez kalır):`)
+    for (const [src, count] of Object.entries(bySrc)) console.log(`    ${count}× ${src}`)
+  }
   for (const n of report.notes) console.log(`  not: ${n}`)
 
   // Same validation the server runs — a green migration is an accepted POST.
-  return import('../apps/editor/lib/graph-schema.ts').then(({ apiGraphSchema }) => {
-    const result = apiGraphSchema.safeParse(graph)
-    if (!result.success) {
-      console.error('\nŞema doğrulaması BAŞARISIZ — çıktı yazılmadı:')
-      for (const issue of result.error.issues) {
-        console.error(`  ${issue.path.join('.')}: ${issue.message}`)
-      }
-      process.exit(1)
+  const result = apiGraphSchema.safeParse(graph)
+  if (!result.success) {
+    console.error('\nŞema doğrulaması BAŞARISIZ — çıktı yazılmadı:')
+    for (const issue of result.error.issues) {
+      console.error(`  ${issue.path.join('.')}: ${issue.message}`)
     }
-    const body = { id: legacy.id, name: legacy.name, graph }
-    const out = args.out ?? `${legacy.id}.migrated.json`
-    fs.writeFileSync(out, JSON.stringify(body, null, 2))
-    console.log(`\nŞema doğrulaması geçti ✓ → ${path.resolve(out)}`)
-  })
+    process.exit(1)
+  }
+  const body = { id: legacy.id, name: legacy.name, graph }
+  const out = args.out ?? `${legacy.id}.migrated.json`
+  fs.writeFileSync(out, JSON.stringify(body, null, 2))
+  console.log(`\nŞema doğrulaması geçti ✓ → ${path.resolve(out)}`)
 }
 
 function readJsonScene(file) {

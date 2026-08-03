@@ -36,6 +36,25 @@ function validateNode(node: unknown): z.ZodSafeParseResult<unknown> {
   return AnyNode.safeParse(node)
 }
 
+/**
+ * Parses a node with its owning schema and returns the schema's output —
+ * i.e. with every defaulted field materialised. The editor's `setScene`
+ * stores nodes verbatim without parsing, so a hand-built node missing a
+ * defaulted field (e.g. a pallet without `supportSlabId`) reaches kind
+ * systems in a shape they never see from editor-created nodes, and crashes
+ * them. Writers that synthesise nodes outside the editor (the legacy scene
+ * migrator) run each node through this before saving.
+ */
+export function parseNodeWithDefaults(node: unknown): unknown {
+  const result = validateNode(node)
+  if (!result.success) {
+    throw new Error(
+      `node failed schema parse: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+    )
+  }
+  return result.data
+}
+
 export const apiGraphSchema = z
   .object({
     nodes: z.record(z.string(), z.unknown()),
