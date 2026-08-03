@@ -7,7 +7,7 @@
 | Editor (this codebase) | `ovurrsl/editor` — fork of `pascalorg/editor` | Commit here |
 | Console / panel | `ovurrsl/panel` | Automatic: the `sync-panel` workflow opens a PR upstream whenever `apps/editor/panel/**` or the shared routes change |
 | Warehouse plugin | `ovurrsl/plugin-warehouse` | Commit there, then pin the new sha in `apps/editor/package.json` and let the Relock workflow regenerate `bun.lock` |
-| What the server runs | `ovurrsl/Digitaltwin` | Build artifacts only — published by the deploy workflow (or a manual publish). Never commit source here; the host redeploys from it |
+| What the server runs | `ovurrsl/Digitaltwin` | Build artifacts only — published by the deploy workflow (or a manual publish). Never commit source here; the host redeploys from it. Step-by-step: `YAYINLAMA.md` |
 
 ## Pulling updates from pascalorg/editor
 
