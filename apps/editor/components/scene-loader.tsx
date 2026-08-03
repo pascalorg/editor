@@ -106,14 +106,13 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   // Light preview: re-run when query changes (same scene, client navigation to ?disable=…).
-  // See packages/mcp/docs/layout-clearance-error-log.md pitfall L5 (editor).
+  // When flags are removed, restore default shading so the render pipeline is not left stuck.
   useEffect(() => {
     const disable = searchParams.get('disable') ?? ''
     const light =
       disable.split(',').some((p) => p.trim() === 'postFx') || searchParams.get('safe') === '1'
-    if (!light) return
     try {
-      useViewer.getState().setShading('solid')
+      useViewer.getState().setShading(light ? 'solid' : 'rendered')
     } catch {
       // Viewer store may not be ready yet on first paint.
     }
