@@ -340,14 +340,23 @@ function buildRoomPlacements(
       addBack('sofa', 0.9)
       addBack('coffee-table', 2.1)
       addSide('livingroom-chair', 0.85, -sideAlongLen * 0.18)
+      // TV faces the sofa from the door wall: use door-wall axes so smart
+      // re-place nudges into the room (along wall / inward), not world X/Z.
       const doorIdx = doorWallIndex % n
       const doorStart = polygon[doorIdx]!
       const doorEnd = polygon[(doorIdx + 1) % n]!
+      const doorMidX = (doorStart[0] + doorEnd[0]) / 2
+      const doorMidZ = (doorStart[1] + doorEnd[1]) / 2
+      // Door-wall inward is opposite of "back wall" inward (into room from door).
+      const doorInX = -inX
+      const doorInZ = -inZ
       placements.push({
         assetId: 'tv-stand',
-        x: (doorStart[0] + doorEnd[0]) / 2 - inX * 0.35,
-        z: (doorStart[1] + doorEnd[1]) / 2 - inZ * 0.35,
+        x: doorMidX + doorInX * 0.35,
+        z: doorMidZ + doorInZ * 0.35,
         rotationDeg: facingRot + 180,
+        along: { x: ax, z: az },
+        inward: { x: doorInX, z: doorInZ },
       })
       break
     }
