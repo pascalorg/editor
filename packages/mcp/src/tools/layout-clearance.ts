@@ -206,8 +206,19 @@ export function findValidPlacement(args: {
     along: args.along,
     inward: args.inward,
   })
-  let lastReason: PlacementRejectReason = 'overlaps_item'
-  for (const c of candidates) {
+
+  // Prefer reporting why the **primary** pose failed (door/overlap), not the
+  // last lateral/inset candidate (often outside_bounds after large nudges).
+  let primaryReason: PlacementRejectReason | null = null
+  const reasonPriority: PlacementRejectReason[] = [
+    'blocks_door_clearance',
+    'overlaps_item',
+    'outside_bounds',
+  ]
+  let bestFailReason: PlacementRejectReason = 'overlaps_item'
+
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i]!
     const rot = (c.rotationDeg * Math.PI) / 180
     const aabb = itemPlanAabb([c.x, 0, c.z], args.dimensions, rot)
     const reason = classifyPlacement({
@@ -217,9 +228,14 @@ export function findValidPlacement(args: {
       roomBounds: args.roomBounds,
     })
     if (reason === 'ok') return { candidate: c, reason }
-    lastReason = reason
+    if (i === 0) primaryReason = reason
+    const prevRank = reasonPriority.indexOf(bestFailReason)
+    const nextRank = reasonPriority.indexOf(reason)
+    if (nextRank >= 0 && (prevRank < 0 || nextRank < prevRank)) {
+      bestFailReason = reason
+    }
   }
-  return { candidate: null, reason: lastReason }
+  return { candidate: null, reason: primaryReason ?? bestFailReason }
 }
 
 /**

@@ -195,4 +195,25 @@ describe('door-clearance', () => {
     const elsewhere = { minX: 10, maxX: 11, minZ: 10, maxZ: 11 }
     expect(keepoutCoversPlanned(elsewhere, planned)).toBe(false)
   })
+
+  test('keepoutCoversPlanned rejects glancing nearby door (L6)', () => {
+    const planned = keepoutForPolygonEdge(
+      [
+        [0, 0],
+        [5, 0],
+        [5, 4],
+        [0, 4],
+      ],
+      0,
+      { t: 0.5, width: 0.9 },
+    )!
+    // Nearby keep-out that only barely overlaps planned AABB (not same opening center)
+    const glancing = {
+      minX: planned.maxX - 0.05,
+      maxX: planned.maxX + 1,
+      minZ: planned.minZ,
+      maxZ: planned.maxZ,
+    }
+    expect(keepoutCoversPlanned(glancing, planned)).toBe(false)
+  })
 })

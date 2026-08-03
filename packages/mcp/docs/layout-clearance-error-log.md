@@ -44,6 +44,21 @@ Agents should treat skip reasons and verify issues as actionable, not ignore the
 **Rule:** Depend on search-string / `useSearchParams` for light preview shading.  
 **Test:** Manual or unit: change `?disable=postFx` without remount → solid shading applies.
 
+### L6 — Planned keep-out false coverage
+**Bug:** Any AABB overlap treated as “entrance already covered,” so a nearby door suppress this room’s planned keep-out.  
+**Rule:** `keepoutCoversPlanned` requires planned **center inside** existing keep-out and ≥50% planned area intersection.  
+**Test:** Adjacent keep-out that only glances planned must not cover; centered same-opening keep-out must cover.
+
+### L7 — Misleading placement skip reason
+**Bug:** `findValidPlacement` reported the last candidate’s reason (often `outside_bounds`).  
+**Rule:** On total failure, report the **primary** pose reject reason (prefer door/overlap over bounds).  
+**Test:** Primary hits door, all nudges OOB → skip reason is door clearance.
+
+### L8 — Light preview stuck after flag removal (apps/editor)
+**Bug:** Effect only sets solid when flags present; never restores when query cleared.  
+**Rule:** When light-preview flags absent, restore default shading (e.g. `rendered`).  
+**Test:** Navigate on → solid; navigate off → rendered (or app default).
+
 ## Pre-merge checklist
 
 - [ ] Level-scoped door + item tests green  

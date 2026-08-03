@@ -176,4 +176,19 @@ describe('layout-clearance', () => {
     const hits = findItemItemCollisions({ nodes: [a, b] as unknown as AnyNode[] })
     expect(hits.length).toBe(1)
   })
+
+  test('findValidPlacement reports primary door failure not last OOB (L7)', () => {
+    // Tiny room so lateral nudges go out of bounds; primary sits in door keep-out.
+    const found = findValidPlacement({
+      primary: { x: 1, z: 1, rotationDeg: 0 },
+      dimensions: [1, 1, 1],
+      doorKeepouts: [{ minX: 0, maxX: 2, minZ: 0, maxZ: 2 }],
+      occupied: [],
+      roomBounds: { minX: 0, maxX: 2.2, minZ: 0, maxZ: 2.2 },
+      along: { x: 1, z: 0 },
+      inward: { x: 0, z: 1 },
+    })
+    expect(found.candidate).toBeNull()
+    expect(found.reason).toBe('blocks_door_clearance')
+  })
 })

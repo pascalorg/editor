@@ -272,10 +272,34 @@ export function keepoutForPolygonEdge(
 /**
  * Whether an existing keep-out already covers this room-edge planned zone
  * (so we do not double-count a real door on that edge).
+ *
+ * Requires the planned keep-out **center** to lie inside the existing keep-out,
+ * and the existing box to cover a large fraction of the planned area.
+ * Plain AABB overlap is not enough (nearby hallway doors must not suppress
+ * this room's entrance keep-out).
  */
 export function keepoutCoversPlanned(existing: PlanAabb, planned: PlanAabb): boolean {
-  // Centers roughly align / boxes overlap substantially.
-  return aabbsOverlap(existing, planned, 0)
+  const cx = (planned.minX + planned.maxX) / 2
+  const cz = (planned.minZ + planned.maxZ) / 2
+  const centerInside =
+    cx >= existing.minX &&
+    cx <= existing.maxX &&
+    cz >= existing.minZ &&
+    cz <= existing.maxZ
+  if (!centerInside) return false
+
+  // Intersection area / planned area must be substantial (same opening, not a glancing touch).
+  const ix0 = Math.max(existing.minX, planned.minX)
+  const ix1 = Math.min(existing.maxX, planned.maxX)
+  const iz0 = Math.max(existing.minZ, planned.minZ)
+  const iz1 = Math.min(existing.maxZ, planned.maxZ)
+  if (ix1 <= ix0 || iz1 <= iz0) return false
+  const inter = (ix1 - ix0) * (iz1 - iz0)
+  const plannedArea = Math.max(
+    1e-9,
+    (planned.maxX - planned.minX) * (planned.maxZ - planned.minZ),
+  )
+  return inter / plannedArea >= 0.5
 }
 
 export function aabbFromPlan(a: PlanAabb): PlanAabb {
