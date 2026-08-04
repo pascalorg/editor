@@ -1,3 +1,4 @@
+import { mintHostPanel, mintPlugin } from '@mint/pascal-plugin'
 import {
   type AnyNodeDefinition,
   discoverPlugins,
@@ -85,6 +86,8 @@ export async function loadExternalPlugins(): Promise<void> {
 // so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
+extendPluginDiscovery(async () => [mintPlugin])
+registerEditorHostPanel(mintHostPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()
