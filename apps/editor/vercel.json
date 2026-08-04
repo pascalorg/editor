@@ -4,6 +4,5 @@
   "installCommand": "cd ../.. && npx -y bun@1.3.13 install --frozen-lockfile",
   "outputDirectory": ".next",
   "cleanUrls": true,
-  "trailingSlash": false,
-  "bunVersion": "1.x"
+  "trailingSlash": false
 }

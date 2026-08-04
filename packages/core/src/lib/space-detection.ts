@@ -31,7 +31,7 @@ import {
 } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
 import { simplifyClosedPolygon } from './polygon-geometry'
-import { terrainSupportLift } from './terrain-support'
+import { levelBaseElevationAt } from './terrain-support'
 
 type Point2D = { x: number; y: number }
 
@@ -105,11 +105,13 @@ const WALL_JUNCTION_TOLERANCE = 0.08
 // deleted) and the node is demoted to manual so user data survives.
 const ORPHAN_MERGE_COVERAGE_THRESHOLD = 0.6
 const COVERAGE_SAMPLE_STEPS = 12
+// Rewrite deadband for an existing auto surface's elevation/height: below this
+// the derived plane is the same plane and writing it would churn history.
 const ROOM_VERTICAL_PLANE_EPSILON = 1e-3
 
 // Pure planner callers omit `heightForRoom`, so auto ceilings keep their
 // height-less level-following behavior. The live room sync supplies a height
-// only when every enclosing wall agrees on one base and top plane.
+// derived from the enclosing walls' own bases and tops.
 export type AutoCeilingPlanningContext = {
   /** Stored storey height of the level being planned (floor-to-floor). */
   storeyHeight?: number
@@ -344,12 +346,56 @@ function resolveCeilingClampBound(
   return (context.storeyHeight ?? DEFAULT_LEVEL_HEIGHT) - CEILING_CLAMP_MARGIN
 }
 
-function consensusElevation(values: number[]): number | undefined {
-  if (values.length === 0 || values.some((value) => !Number.isFinite(value))) return undefined
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  if (max - min > ROOM_VERTICAL_PLANE_EPSILON) return undefined
-  return values.reduce((sum, value) => sum + value, 0) / values.length
+/**
+ * The base a boundary wall actually stands on, in level-local metres.
+ *
+ * Resolved the same way the wall renderer resolves it — the level base under
+ * the wall's own start point (sculpted ground or the flat plane), the slab
+ * election on top of that, plus the wall's stored `supportOffset`. Reading the
+ * ground for `GROUND_SUPPORT_ID` walls only is what left stamped room presets
+ * flat: `resolveWallSupportSlabPatch` writes no host at all for a wall on bare
+ * terrain, so the sentinel is a hint about pointer intent, never a precondition
+ * for standing on the ground.
+ */
+function boundaryWallBase(
+  wall: WallNode,
+  walls: WallNode[],
+  supportSlabs: readonly SlabNodeType[],
+  nodes: Record<string, any>,
+  levelId: string,
+): number {
+  const levelBase = levelBaseElevationAt(nodes, levelId, wall.start[0], wall.start[1])
+  const offset = wall.supportOffset ?? 0
+  if (wall.supportSlabId === GROUND_SUPPORT_ID) return levelBase + offset
+  return (
+    computeWallSlabSupport(wall, supportSlabs, walls, wall.supportSlabId ?? null, null, levelBase)
+      .elevation + offset
+  )
+}
+
+/**
+ * The plane an auto floor/ceiling takes when its enclosing walls disagree.
+ *
+ * `floor` takes the HIGHEST wall base and `ceiling` the LOWEST wall top —
+ * the only pair that cannot open a hole: a floor at the lowest base would
+ * leave daylight under every wall standing higher, and a ceiling at the
+ * highest top would poke out through the shortest wall. Both surfaces stay
+ * flat (a slab is one scalar elevation by schema; see `vertical-model.md`),
+ * so a room on a slope is a level room cut into the hillside — the walls on
+ * the low side extend down to meet it, which is what their `baseSegments`
+ * fill-down already does.
+ *
+ * Non-finite inputs are the one abstain: a broken graph should keep the
+ * existing placement rather than move a surface to NaN.
+ */
+function roomFloorPlane(wallBases: number[]): number | undefined {
+  if (wallBases.length === 0 || wallBases.some((value) => !Number.isFinite(value))) return undefined
+  return Math.max(...wallBases)
+}
+
+function roomCeilingPlane(wallTops: number[]): number | undefined {
+  if (wallTops.length === 0 || wallTops.some((value) => !Number.isFinite(value))) return undefined
+  return Math.min(...wallTops)
 }
 
 function autoRoomVerticalPlacements(
@@ -369,25 +415,16 @@ function autoRoomVerticalPlacements(
     })
     if (boundaryWalls.length !== space.wallIds.length) continue
 
-    const wallBases = boundaryWalls.map((wall) => {
-      const offset = wall.supportOffset ?? 0
-      if (wall.supportSlabId === GROUND_SUPPORT_ID) {
-        return (
-          (terrainSupportLift(nodes, space.levelId, wall.start[0], wall.start[1]) ?? 0) + offset
-        )
-      }
-      return (
-        computeWallSlabSupport(wall, supportSlabs, walls, wall.supportSlabId ?? null).elevation +
-        offset
-      )
-    })
-    const base = consensusElevation(wallBases)
+    const wallBases = boundaryWalls.map((wall) =>
+      boundaryWallBase(wall, walls, supportSlabs, nodes, space.levelId),
+    )
+    const base = roomFloorPlane(wallBases)
     if (base === undefined) continue
 
     const wallTops = boundaryWalls.map((wall, index) =>
       resolveWallTop(wall, storeyHeight, wallBases[index] ?? base),
     )
-    const top = consensusElevation(wallTops)
+    const top = roomCeilingPlane(wallTops)
     if (top === undefined) continue
 
     placements.set(polygonSignature(space.polygon.map(pointFromTuple)), {
@@ -837,7 +874,7 @@ function sameTuplePolygon(current: Array<[number, number]>, next: Array<[number,
   )
 }
 
-function wallGeometrySignature(wall: WallNode) {
+function wallGeometrySignature(wall: WallNode, nodes: Record<string, any>, levelId: string) {
   return [
     wall.id,
     wall.start[0].toFixed(4),
@@ -852,11 +889,36 @@ function wallGeometrySignature(wall: WallNode) {
     wall.supportSlabId ?? 'elected',
     (wall.supportOffset ?? 0).toFixed(4),
     getClampedWallCurveOffset(wall).toFixed(4),
+    // The ground under this wall, sampled at the SAME point
+    // `boundaryWallBase` samples it. Sculpting changes only `site.terrain`,
+    // so without a terrain term here every signature stays byte-identical
+    // and the sync early-exits — a room's floor and ceiling could never
+    // follow ground that moved beneath its walls.
+    //
+    // The sample, not the field, and not the resolved base: hashing the
+    // heightfield would re-trigger every level for a stroke on the far side
+    // of the lot, and resolving the full slab election would fold slab
+    // POLYGONS into the signature, which is exactly the delete/recreate
+    // feedback the comment below is about. Sampling where the placement
+    // samples means the two cannot disagree in either direction — no missed
+    // re-run, no spurious one.
+    //
+    // Granularity is per stroke, not per dab: live dabs publish to
+    // `useLiveTerrain` and never touch the scene store, so this runs once on
+    // release — inside the stroke's own `runAsSingleSceneHistoryStep`, which
+    // is what puts the moved floor and the terrain that moved it in the same
+    // undo step. Mid-drag the ground-hosted walls follow the brush while the
+    // floor waits for release; re-deriving per dab would mean a scene write
+    // per dab and a floor that jitters under the cursor.
+    levelBaseElevationAt(nodes, levelId, wall.start[0], wall.start[1]).toFixed(4),
   ].join('|')
 }
 
-function levelWallSnapshot(walls: WallNode[]) {
-  return walls.map(wallGeometrySignature).sort().join('||')
+function levelWallSnapshot(walls: WallNode[], nodes: Record<string, any>, levelId: string) {
+  return walls
+    .map((wall) => wallGeometrySignature(wall, nodes, levelId))
+    .sort()
+    .join('||')
 }
 
 function zoneGeometrySignature(zone: ZoneNodeType) {
@@ -930,7 +992,7 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
       : ''
     snapshots.set(
       levelId,
-      `${storeyKey}#${levelWallSnapshot(walls)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}`,
+      `${storeyKey}#${levelWallSnapshot(walls, nodes, levelId)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}`,
     )
   }
 

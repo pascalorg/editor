@@ -26,7 +26,7 @@
  */
 
 import { MAX_TERRAIN_SIDE, type TerrainData } from '../schema/terrain'
-import type { TerrainField } from './terrain-field'
+import type { HeightPatch, TerrainField } from './terrain-field'
 
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
@@ -78,12 +78,64 @@ function decodeBase64(text: string): Uint8Array | null {
   return bytes
 }
 
-export function encodeTerrainField(field: TerrainField): TerrainData {
-  const bytes = new Uint8Array(field.heights.length * 2)
+function encodeInt16Samples(samples: Int16Array): string {
+  const bytes = new Uint8Array(samples.length * 2)
   const view = new DataView(bytes.buffer)
-  for (let i = 0; i < field.heights.length; i++) {
-    view.setInt16(i * 2, field.heights[i] ?? 0, true)
+  for (let i = 0; i < samples.length; i++) {
+    view.setInt16(i * 2, samples[i] ?? 0, true)
   }
+  return encodeBase64(bytes)
+}
+
+function decodeInt16Samples(text: string, sampleCount: number): Int16Array | null {
+  const bytes = decodeBase64(text)
+  if (!bytes || encodeBase64(bytes) !== text || bytes.byteLength !== sampleCount * 2) return null
+
+  const samples = new Int16Array(sampleCount)
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  for (let i = 0; i < samples.length; i++) {
+    samples[i] = view.getInt16(i * 2, true)
+  }
+  return samples
+}
+
+export type EncodedHeightPatch = Omit<HeightPatch, 'heights'> & { heights: string }
+
+export function encodeHeightPatch(patch: HeightPatch): EncodedHeightPatch {
+  return { ...patch, heights: encodeInt16Samples(patch.heights) }
+}
+
+export function decodeHeightPatch(value: unknown): HeightPatch | null {
+  if (!value || typeof value !== 'object') return null
+  const patch = value as Partial<EncodedHeightPatch>
+  if (
+    !Number.isInteger(patch.col0) ||
+    !Number.isInteger(patch.row0) ||
+    !Number.isInteger(patch.cols) ||
+    !Number.isInteger(patch.rows)
+  ) {
+    return null
+  }
+  const col0 = patch.col0 as number
+  const row0 = patch.row0 as number
+  const cols = patch.cols as number
+  const rows = patch.rows as number
+  if (
+    col0 < 0 ||
+    row0 < 0 ||
+    cols < 1 ||
+    rows < 1 ||
+    col0 + cols > MAX_TERRAIN_SIDE ||
+    row0 + rows > MAX_TERRAIN_SIDE ||
+    typeof patch.heights !== 'string'
+  ) {
+    return null
+  }
+  const heights = decodeInt16Samples(patch.heights, cols * rows)
+  return heights ? { col0, row0, cols, rows, heights } : null
+}
+
+export function encodeTerrainField(field: TerrainField): TerrainData {
   return {
     type: 'heightfield',
     origin: [field.origin[0], field.origin[1]],
@@ -91,7 +143,7 @@ export function encodeTerrainField(field: TerrainField): TerrainData {
     cols: field.cols,
     rows: field.rows,
     step: field.step,
-    heights: encodeBase64(bytes),
+    heights: encodeInt16Samples(field.heights),
   }
 }
 
@@ -128,16 +180,8 @@ export function decodeTerrainField(data: unknown): TerrainField | null {
     return null
   }
 
-  const bytes = decodeBase64(d.heights)
-  if (!bytes) return null
-  if (encodeBase64(bytes) !== d.heights) return null
-  if (bytes.byteLength !== cols * rows * 2) return null
-
-  const heights = new Int16Array(cols * rows)
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  for (let i = 0; i < heights.length; i++) {
-    heights[i] = view.getInt16(i * 2, true)
-  }
+  const heights = decodeInt16Samples(d.heights, cols * rows)
+  if (!heights) return null
 
   return {
     origin: [d.origin[0] as number, d.origin[1] as number],

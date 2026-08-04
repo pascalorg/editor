@@ -79,6 +79,7 @@ export const TerrainBrushCursor: React.FC<{
   const sampling = useEditor((state) => state.terrainSampling)
   const color = brushRingColor(verb, sampling)
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
 
   const lineRef = useRef<Line>(null)
   const centerRef = useRef<Group>(null)
@@ -195,7 +196,7 @@ export const TerrainBrushCursor: React.FC<{
 
     const centerHeight = surfaceHeightAt(surface, hit.x, hit.z)
     center.position.set(hit.x, centerHeight + RING_LIFT, hit.z)
-    const heightLabel = `H ${formatMeasurement(centerHeight, unit)}`
+    const heightLabel = `H ${formatMeasurement(centerHeight, unit, metricNotation)}`
     if (heightRef.current) {
       heightRef.current.style.display = ''
       if (heightLabel !== lastHeightLabelRef.current) {

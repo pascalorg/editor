@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) 1.3+ (or Node.js 18+)
+- [Bun](https://bun.sh/) 1.3+ and Node.js 20.9+
 
 ## Quick Start
 
@@ -49,6 +49,7 @@ The editor works fully without any environment variables.
 | `bun check` | Lint and format check (Biome) |
 | `bun check:fix` | Auto-fix lint and format issues |
 | `bun check-types` | TypeScript type checking |
+| `bun run test` | Run every package's test suite |
 
 ## Contributing
 

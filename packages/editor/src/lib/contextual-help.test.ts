@@ -74,6 +74,14 @@ describe('resolveSelectModeHelpHints', () => {
       },
       { keys: ['R / T'], label: 'Rotate the selection ±45°' },
       {
+        keys: ['Cmd/Ctrl', 'G'],
+        label: 'Group selection (session only)',
+      },
+      {
+        keys: ['Cmd/Ctrl', 'Shift', 'G'],
+        label: 'Ungroup session selection',
+      },
+      {
         keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
         label: 'Add or remove objects from the selection',
         active: false,

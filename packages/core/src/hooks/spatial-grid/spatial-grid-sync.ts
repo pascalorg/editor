@@ -1,5 +1,5 @@
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
-import { isLevelAtSiteDatum } from '../../lib/terrain-support'
+import { isLevelAtSiteDatum, isLevelBaseConsumer } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, LevelNode, SiteNode, SlabNode, WallNode } from '../../schema'
 import { getLevelBelow } from '../../services/storey'
@@ -352,7 +352,19 @@ export function markTerrainSupportDependents(
     }
 
     const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
-    if (!floorPlaced) continue
+    if (!floorPlaced) {
+      // A kind whose geometry builder resolved its own origin from the ground
+      // (`ctx.levelBaseAt`) has that ground baked into its meshes, so it has to
+      // rebuild even though nothing about the node changed. This is the
+      // invalidation half of the builder seam: without it a fence keeps the
+      // hillside it was built on and floats after the next stroke. Kinds that
+      // are `floorPlaced` need no entry here — the sweep below already covers
+      // them, through a mesh transform rather than a rebuild.
+      if (isLevelBaseConsumer(node.type) && isGrade(resolveLevelId(node, nodes))) {
+        markDirty(node.id)
+      }
+      continue
+    }
     if (floorPlaced.applies && !floorPlaced.applies(node)) continue
     // Items hosted on a shelf or table inherit Y from the parent group; only
     // level-parented nodes read the ground. Mirrors the resolver's own gate.
