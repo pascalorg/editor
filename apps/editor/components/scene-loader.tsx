@@ -9,17 +9,14 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { Hammer, Layers } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
-
-/** Lighter preview path: skips post-FX and outline passes (viewer `?disable=` flags). */
-export const LIGHT_PREVIEW_QUERY = 'disable=postFx,outline'
 
 export interface SceneMeta {
   id: string
@@ -96,11 +93,14 @@ function sceneGraphSignature(graph: SceneGraphWithCollections): string {
   })
 }
 
+/**
+ * `?disable=postFx` is read at post-processing module load, so it only takes
+ * effect on a full page load. Reading it here as well lets the flag survive a
+ * client-side navigation, since `disablePostFx` is a live prop.
+ */
 function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
   const disable = searchParams.get('disable') ?? ''
-  return (
-    disable.split(',').some((p) => p.trim() === 'postFx') || searchParams.get('safe') === '1'
-  )
+  return disable.split(',').some((p) => p.trim() === 'postFx')
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
@@ -111,20 +111,8 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  /** Bumps when Light preview is clicked while already active so effects re-apply. */
-  const [lightApplyTick, setLightApplyTick] = useState(0)
 
   const lightPreview = isLightPreviewQuery(searchParams)
-
-  // Light preview: host prop disablePostFx rebuilds the pipeline; solid shading pairs with it.
-  // When flags clear, restore rendered so post-FX can come back.
-  useEffect(() => {
-    try {
-      useViewer.getState().setShading(lightPreview ? 'solid' : 'rendered')
-    } catch {
-      // Viewer store may not be ready yet on first paint.
-    }
-  }, [lightPreview, lightApplyTick])
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
@@ -251,20 +239,16 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       )}
       <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
         <button
+          aria-pressed={lightPreview}
+          className={cn(
+            'pointer-events-auto rounded-md border border-border px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur',
+            lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
+          )}
+          onClick={() =>
+            router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
+          }
+          title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
           type="button"
-          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-          onClick={() => {
-            // Force re-apply even if URL already has light-preview flags (toolbar may have changed shading).
-            setLightApplyTick((n) => n + 1)
-            try {
-              useViewer.getState().setShading('solid')
-            } catch {
-              // ignore
-            }
-            if (!lightPreview) {
-              router.push(`/scene/${meta.id}?${LIGHT_PREVIEW_QUERY}`)
-            }
-          }}
         >
           Light preview
         </button>
