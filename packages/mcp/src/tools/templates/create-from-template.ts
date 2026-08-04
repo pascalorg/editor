@@ -35,6 +35,8 @@ export const createFromTemplateOutput = {
   templateId: z.string(),
   rootNodeIds: z.array(z.string()),
   nodeCount: z.number(),
+  /** Present when `save: true` was requested but no store was attached. */
+  saveSkipped: z.boolean().optional(),
   /** Present when `save: true` (and a store was available). */
   scene: z
     .object({
