@@ -184,12 +184,15 @@ function findJunctions(walls: WallNode[]): Map<string, Junction> {
   // A T-junction can only exist where the junction point lies ON the wall
   // segment, so it must lie inside the wall's AABB. Bucketing walls by the grid
   // cells their AABB covers therefore loses nothing: the cell containing the
-  // point is always one of the cells the wall was indexed into. Result is
-  // bit-identical to the naive pass; measured 11 ms on the same geometry.
+  // point is always one of the cells the wall was indexed into. With the input
+  // ordering restored below, the result matches the naive pass exactly; measured
+  // 11 ms on the same geometry.
   const { grid, oversized } = buildJunctionGrid(walls)
+  const wallOrder = new Map(walls.map((wall, index) => [wall.id, index]))
   for (const [_key, junction] of junctions.entries()) {
     const p = junction.meetingPoint
     const cellCandidates = grid.get(cellKey(p.x, p.y))
+    const passthrough: WallNode[] = []
     for (const bucket of [cellCandidates, oversized]) {
       if (!bucket || bucket.length === 0) continue
       for (const wall of bucket) {
@@ -198,9 +201,19 @@ function findJunctions(walls: WallNode[]): Map<string, Junction> {
 
         // Check if junction point lies on this wall's segment (not at endpoints)
         if (pointOnWallSegment(junction.meetingPoint, wall)) {
-          junction.connectedWalls.push({ wall, endType: 'passthrough' })
+          passthrough.push(wall)
         }
       }
+    }
+
+    // Append in input order, not bucket order. Two collinear walls overlapping a
+    // junction tie on angle in `calculateJunctionIntersections`, so its stable
+    // sort leaves them in the order they were appended here — and an oversized
+    // wall would otherwise land after a shorter collinear neighbour it precedes
+    // in `walls`, picking the other wall's thickness for the miter.
+    passthrough.sort((a, b) => (wallOrder.get(a.id) ?? 0) - (wallOrder.get(b.id) ?? 0))
+    for (const wall of passthrough) {
+      junction.connectedWalls.push({ wall, endType: 'passthrough' })
     }
   }
 
