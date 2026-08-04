@@ -10,7 +10,6 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { computeWallSlabSupport } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
-import { layoutIssuesFromScene } from './layout-clearance'
 import {
   distance2D,
   pointInPolygon,
@@ -19,6 +18,7 @@ import {
   type Vec2,
   wallLength,
 } from './geometry'
+import { layoutIssuesFromScene } from './layout-clearance'
 import { NodeIdSchema } from './schemas'
 
 export const levelScopedInput = {

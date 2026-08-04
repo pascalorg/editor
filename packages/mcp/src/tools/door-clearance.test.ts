@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { AnyNode } from '@pascal-app/core/schema'
 import {
   aabbsOverlap,
   collectDoorKeepouts,
@@ -10,7 +11,6 @@ import {
   keepoutCoversPlanned,
   keepoutForPolygonEdge,
 } from './door-clearance'
-import type { AnyNode } from '@pascal-app/core/schema'
 
 function wall(id: string, start: [number, number], end: [number, number]) {
   return {

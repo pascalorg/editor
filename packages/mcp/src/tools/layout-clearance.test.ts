@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { AnyNode } from '@pascal-app/core/schema'
 import {
   classifyPlacement,
   findItemItemCollisions,
@@ -7,7 +8,6 @@ import {
   itemPlanAabb,
   layoutIssuesFromScene,
 } from './layout-clearance'
-import type { AnyNode } from '@pascal-app/core/schema'
 
 function item(
   id: string,
@@ -146,14 +146,7 @@ describe('layout-clearance', () => {
     const toilet = item('t', [0.7, 0, 1.95], [1, 0.9, 1], 'Toilet')
     const a = item('a', [3, 0, 4], [1.5, 1, 1.5], 'A')
     const b = item('b', [3.2, 0, 4.1], [1.5, 1, 1.5], 'B')
-    const issues = layoutIssuesFromScene([
-      level,
-      wall,
-      door,
-      toilet,
-      a,
-      b,
-    ] as unknown as AnyNode[])
+    const issues = layoutIssuesFromScene([level, wall, door, toilet, a, b] as unknown as AnyNode[])
     expect(issues.some((m) => m.includes('blocked'))).toBe(true)
     expect(issues.some((m) => m.includes('overlap'))).toBe(true)
   })

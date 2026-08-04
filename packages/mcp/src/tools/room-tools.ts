@@ -12,8 +12,9 @@ import {
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { findCatalogItem, searchCatalogItems } from './asset-catalog'
-import { ErrorCode, throwMcpError } from './errors'
 import { keepoutCoversPlanned, keepoutForPolygonEdge } from './door-clearance'
+import { ErrorCode, throwMcpError } from './errors'
+import { polygonArea, polygonBounds, type Vec2, wallLength, wallLocalXFromT } from './geometry'
 import {
   collectDoorKeepouts,
   collectOccupiedFootprints,
@@ -21,13 +22,6 @@ import {
   itemPlanAabb,
   type PlanAabb,
 } from './layout-clearance'
-import {
-  polygonArea,
-  polygonBounds,
-  type Vec2,
-  wallLength,
-  wallLocalXFromT,
-} from './geometry'
 import { publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema } from './schemas'

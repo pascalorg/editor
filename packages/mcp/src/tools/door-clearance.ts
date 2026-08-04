@@ -7,9 +7,9 @@
  * See docs/layout-clearance-error-log.md for pitfalls (levels, gap sign, scale).
  */
 
-import type { AnyNode, WallNode } from '@pascal-app/core/schema'
+import type { AnyNode } from '@pascal-app/core/schema'
 import { getScaledDimensions } from '@pascal-app/core/schema'
-import { wallLength, type Vec2 } from './geometry'
+import { type Vec2, wallLength } from './geometry'
 
 export type PlanAabb = {
   minX: number
@@ -28,6 +28,25 @@ export type DoorKeepout = {
   localX: number
 }
 
+/**
+ * Wall shape these helpers accept. Deliberately structural rather than
+ * `Pick<WallNode, …>`: `keepoutForPolygonEdge` feeds in synthetic `edge-N`
+ * segments for room edges that do not have a wall node yet, so the id cannot
+ * be the branded `wall_${string}`.
+ */
+export type WallSegmentLike = { id: string; start: Vec2; end: Vec2 }
+
+/**
+ * Door shape these helpers accept — a real `DoorNode` or a planned opening.
+ * `Pick<AnyNode, 'position' | 'width'>` does not work: those keys exist on
+ * only some members of the `AnyNode` union, so `Pick` rejects them.
+ */
+export type DoorOpeningLike = {
+  id: string
+  position?: readonly number[]
+  width?: number
+}
+
 /** Plan depth (m) cleared on each side of the wall face through the opening. */
 export const DEFAULT_DOOR_CLEAR_DEPTH = 0.65
 /** Extra half-width (m) beyond the door leaf along the wall. */
@@ -40,21 +59,13 @@ export const DEFAULT_DOOR_SIDE_PAD = 0.05
  */
 export function aabbsOverlap(a: PlanAabb, b: PlanAabb, gap = 0): boolean {
   const g = gap
-  return (
-    a.maxX + g > b.minX &&
-    a.minX - g < b.maxX &&
-    a.maxZ + g > b.minZ &&
-    a.minZ - g < b.maxZ
-  )
+  return a.maxX + g > b.minX && a.minX - g < b.maxX && a.maxZ + g > b.minZ && a.minZ - g < b.maxZ
 }
 
 /**
  * Walk parentId chain to the enclosing level id (pure; no bridge required).
  */
-export function resolveNodeLevelId(
-  nodeId: string,
-  byId: Map<string, AnyNode>,
-): string | null {
+export function resolveNodeLevelId(nodeId: string, byId: Map<string, AnyNode>): string | null {
   let current: AnyNode | undefined = byId.get(nodeId)
   const seen = new Set<string>()
   while (current) {
@@ -105,8 +116,8 @@ export function itemNodePlanAabb(node: AnyNode): PlanAabb | null {
  * on both faces so either swing side is protected.
  */
 export function doorKeepoutFromWall(
-  wall: Pick<WallNode, 'id' | 'start' | 'end'>,
-  door: Pick<AnyNode, 'id' | 'position' | 'width'> & { type?: string },
+  wall: WallSegmentLike,
+  door: DoorOpeningLike,
   options?: { clearDepth?: number; sidePad?: number; levelId?: string | null },
 ): DoorKeepout | null {
   const clearDepth = options?.clearDepth ?? DEFAULT_DOOR_CLEAR_DEPTH
@@ -164,7 +175,7 @@ export function collectDoorKeepouts(
     const wallId = node.wallId ?? node.parentId
     if (!wallId) continue
     const wall = byId.get(wallId)
-    if (!wall || wall.type !== 'wall') continue
+    if (wall?.type !== 'wall') continue
     const levelId = resolveNodeLevelId(wall.id, byId) ?? resolveNodeLevelId(node.id, byId)
     if (options?.levelId && levelId !== options.levelId) continue
     const keepout = doorKeepoutFromWall(wall, node, {
@@ -282,10 +293,7 @@ export function keepoutCoversPlanned(existing: PlanAabb, planned: PlanAabb): boo
   const cx = (planned.minX + planned.maxX) / 2
   const cz = (planned.minZ + planned.maxZ) / 2
   const centerInside =
-    cx >= existing.minX &&
-    cx <= existing.maxX &&
-    cz >= existing.minZ &&
-    cz <= existing.maxZ
+    cx >= existing.minX && cx <= existing.maxX && cz >= existing.minZ && cz <= existing.maxZ
   if (!centerInside) return false
 
   // Intersection area / planned area must be substantial (same opening, not a glancing touch).
@@ -295,10 +303,7 @@ export function keepoutCoversPlanned(existing: PlanAabb, planned: PlanAabb): boo
   const iz1 = Math.min(existing.maxZ, planned.maxZ)
   if (ix1 <= ix0 || iz1 <= iz0) return false
   const inter = (ix1 - ix0) * (iz1 - iz0)
-  const plannedArea = Math.max(
-    1e-9,
-    (planned.maxX - planned.minX) * (planned.maxZ - planned.minZ),
-  )
+  const plannedArea = Math.max(1e-9, (planned.maxX - planned.minX) * (planned.maxZ - planned.minZ))
   return inter / plannedArea >= 0.5
 }
 

@@ -11,12 +11,11 @@
 import type { AnyNode } from '@pascal-app/core/schema'
 import {
   aabbsOverlap,
-  collectDoorKeepouts,
   findBlockedDoors,
   itemNodePlanAabb,
   itemPlanAabb,
-  resolveNodeLevelId,
   type PlanAabb,
+  resolveNodeLevelId,
 } from './door-clearance'
 
 export {
@@ -25,8 +24,8 @@ export {
   findBlockedDoors,
   itemNodePlanAabb,
   itemPlanAabb,
-  resolveNodeLevelId,
   type PlanAabb,
+  resolveNodeLevelId,
 } from './door-clearance'
 
 /** Minimum free space (m) required between item footprints. */
@@ -58,7 +57,7 @@ export function collectOccupiedFootprints(
   options?: { levelId?: string; excludeIds?: Set<string>; floorOnly?: boolean },
 ): OccupiedFootprint[] {
   const list = [...nodes]
-  const byId = new Map(list.map((n) => [n.id, n] as const))
+  const byId = new Map<string, AnyNode>(list.map((n) => [n.id, n]))
   const out: OccupiedFootprint[] = []
   for (const node of list) {
     if (node.type !== 'item') continue

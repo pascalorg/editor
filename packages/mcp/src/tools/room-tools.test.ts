@@ -338,7 +338,9 @@ describe('room tools', () => {
     const bedPlaced = Object.values(bridge.getNodes()).some(
       (n) => n.type === 'item' && (n.name === 'Double Bed' || n.name === 'Single Bed'),
     )
-    const doorSkips = (parsed.skipped as string[]).filter((s) => s.includes('blocks door clearance'))
+    const doorSkips = (parsed.skipped as string[]).filter((s) =>
+      s.includes('blocks door clearance'),
+    )
     expect(bedPlaced || doorSkips.length > 0).toBe(true)
     if (bedPlaced) {
       expect(doorSkips.length).toBe(0)
