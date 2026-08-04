@@ -81,8 +81,8 @@ describe('paintScopeLabel', () => {
 function item(id: string, assetId: string): ItemNode {
   return { id, type: 'item', asset: { id: assetId } } as unknown as ItemNode
 }
-function slab(id: string, polygon: Array<[number, number]>): SlabNode {
-  return { id, type: 'slab', polygon } as unknown as SlabNode
+function slab(id: string, polygon: Array<[number, number]>, levelId = 'l1'): SlabNode {
+  return { id, type: 'slab', polygon, parentId: levelId } as unknown as SlabNode
 }
 function wall(
   id: string,
@@ -450,5 +450,61 @@ describe('resolvePaintScopeTargets', () => {
       spaces: [space],
     })
     expect(keys(result).sort()).toEqual(['inA:surface', 'inB:surface'])
+  })
+
+  it('slab room stops at the level boundary', () => {
+    // Stacked storeys share a footprint, so the upper slab's centroid sits inside
+    // the ground floor's space polygon. Painting downstairs must not reach it.
+    const ground = slab(
+      'ground',
+      [
+        [1, 1],
+        [3, 1],
+        [3, 3],
+        [1, 3],
+      ],
+      'l1',
+    )
+    const upstairs = slab(
+      'upstairs',
+      [
+        [1, 1],
+        [3, 1],
+        [3, 3],
+        [1, 3],
+      ],
+      'l2',
+    )
+    const footprint: Array<[number, number]> = [
+      [0, 0],
+      [10, 0],
+      [10, 10],
+      [0, 10],
+    ]
+    const result = resolve({
+      node: ground,
+      role: 'surface',
+      scope: 'room',
+      nodes: [ground, upstairs],
+      spaces: [
+        {
+          id: 's1',
+          levelId: 'l1',
+          polygon: footprint,
+          wallIds: [],
+          boundaryFaces: [],
+          isExterior: false,
+        },
+        {
+          id: 's2',
+          levelId: 'l2',
+          polygon: footprint,
+          wallIds: [],
+          boundaryFaces: [],
+          isExterior: false,
+        },
+      ],
+    })
+    expect(keys(result)).toEqual(['ground:surface'])
   })
 })
