@@ -153,4 +153,45 @@ describe('apply_patch', () => {
     expect(reparsed.tieSpacing).toBe(0.6)
     expect(reparsed.scaffoldRequired).toBe(true)
   })
+
+  test('AI can sequence a pour — cast order and pour fields persist', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
+
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'create', node: wall, parentId: level.id },
+          {
+            op: 'update',
+            id: wall.id,
+            data: {
+              formworkType: 'plywood',
+              castOrder: 3,
+              pourId: 'POUR-L1-A',
+              formworkMode: 'single-sided-a',
+              againstEarthSide: 'b',
+              topSurface: { kind: 'formed', slopeDeg: 15 },
+              exposureClass: 'architectural',
+              kickerMode: 'separate',
+              maxLiftHeight: 3.5,
+            },
+          },
+        ],
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    await new Promise((r) => setTimeout(r, 10))
+
+    const reparsed = WallNode.parse(JSON.parse(JSON.stringify(bridge.getNode(wall.id) as WallNode)))
+    expect(reparsed.castOrder).toBe(3)
+    expect(reparsed.pourId).toBe('POUR-L1-A')
+    expect(reparsed.formworkMode).toBe('single-sided-a')
+    expect(reparsed.againstEarthSide).toBe('b')
+    expect(reparsed.topSurface).toEqual({ kind: 'formed', slopeDeg: 15 })
+    expect(reparsed.exposureClass).toBe('architectural')
+    expect(reparsed.kickerMode).toBe('separate')
+    expect(reparsed.maxLiftHeight).toBe(3.5)
+  })
 })
