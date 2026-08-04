@@ -43,3 +43,5 @@ jobs:
 # relock: declare mysql2 where it is imported
 
 # relock: plugin-warehouse v0.1.1 (1c73ce2)
+
+# relock: plugin-warehouse v0.1.2 (49b2f16)
