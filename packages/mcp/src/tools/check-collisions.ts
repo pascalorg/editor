@@ -41,9 +41,14 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
         scoped = nodes.filter((n) => n.type !== 'item' || levelItems.has(n.id))
       }
 
+      // gap: 0 keeps this tool's contract — it reports *actual* overlap.
+      // findItemItemCollisions defaults to DEFAULT_ITEM_GAP (8cm), which is the
+      // breathing room furnish_room wants when placing new items; applied here
+      // it would report items merely standing close together as colliding.
       const found = findItemItemCollisions({
         nodes: scoped,
         levelId: levelId as string | undefined,
+        gap: 0,
       })
       const collisions = found.map((c) => ({
         aId: c.aId,
