@@ -1,8 +1,4 @@
-import {
-  planFootprintAABB,
-  planFootprintCorners,
-  type PlanAabb,
-} from '../../lib/plan-footprint'
+import { type PlanAabb, planFootprintAABB, planFootprintCorners } from '../../lib/plan-footprint'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
@@ -42,12 +38,12 @@ export {
 
 export {
   aabbsOverlapPlan,
+  type PlanAabb,
+  type PlanVec2,
   planFootprintAABB,
   planFootprintAABBForItem,
   planFootprintAABBFromCorners,
   planFootprintCorners,
-  type PlanAabb,
-  type PlanVec2,
 } from '../../lib/plan-footprint'
 
 /**

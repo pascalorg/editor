@@ -12,7 +12,7 @@
  * entirely in that frame, so the resulting guides line up with the cursor.
  */
 
-import { planFootprintAABB, type PlanAabb } from '../lib/plan-footprint'
+import { type PlanAabb, planFootprintAABB } from '../lib/plan-footprint'
 import { nodeRegistry } from '../registry'
 import type { AnyNode } from '../schema/types'
 import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
