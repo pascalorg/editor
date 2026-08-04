@@ -1,70 +1,35 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { afterEach, describe, expect, mock, test } from 'bun:test'
+import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import { sceneRegistry, useScene } from '@pascal-app/core'
+import type { Object3D } from 'three'
 
-type FakeLevelObject = {
-  position: { y: number }
-  visible: boolean
+// Only the two modules that need a renderer or a React context are mocked.
+// `@pascal-app/core` is deliberately NOT mocked: mock.module replaces a module
+// for the whole test process and Bun never restores it, so faking core here
+// breaks the other viewer suites that run after this file.
+type FrameCallback = (state: unknown, delta: number) => void
+let frameCallback: FrameCallback | null = null
+
+// Read through a function so the value is not control-flow narrowed. The
+// useFrame mock assigns frameCallback while LevelSystem() runs; TypeScript
+// cannot see through that indirection, so reading the binding directly after
+// `frameCallback = null` narrows it to `null` and types the call `never`.
+function takeFrameCallback(): FrameCallback | null {
+  return frameCallback
 }
-
-type FakeLevelNode = {
-  id: string
-  type: 'level'
-  parentId: string
-  level: number
-  baseElevation: number
-  children: []
-}
-
-type FakeBuildingNode = {
-  id: string
-  type: 'building'
-  children: string[]
-}
-
-const levelIds = new Set<string>()
-const registryNodes = new Map<string, FakeLevelObject>()
-const sceneRegistry = {
-  byType: { level: levelIds },
-  nodes: registryNodes,
-}
-let nodes: Record<string, FakeLevelNode | FakeBuildingNode> = {}
-let viewerState = {
-  levelMode: 'stacked' as 'stacked' | 'exploded' | 'solo',
-  selection: { levelId: null as string | null },
-}
-let frameCallback: ((state: unknown, delta: number) => void) | null = null
-
-mock.module('@pascal-app/core', () => ({
-  getLevelElevations: () => {
-    const elevations = new Map<string, { baseY: number }>()
-    const cumulativeYByBuilding = new Map<string, number>()
-    const levels = Object.values(nodes)
-      .filter((node): node is FakeLevelNode => node.type === 'level')
-      .sort((a, b) => a.level - b.level)
-
-    for (const level of levels) {
-      const baseY = (cumulativeYByBuilding.get(level.parentId) ?? 0) + level.baseElevation
-      elevations.set(level.id, { baseY })
-      cumulativeYByBuilding.set(level.parentId, baseY + 2.5)
-    }
-    return elevations
-  },
-  sceneRegistry,
-  useScene: {
-    getState: () => ({ nodes }),
-  },
-}))
 
 mock.module('@react-three/fiber', () => ({
-  useFrame: (callback: (state: unknown, delta: number) => void) => {
+  useFrame: (callback: FrameCallback) => {
     frameCallback = callback
   },
 }))
 
-mock.module('three/src/math/MathUtils.js', () => ({
-  lerp: (start: number, end: number, alpha: number) => start + (end - start) * alpha,
-}))
+let viewerState = {
+  levelMode: 'stacked' as 'stacked' | 'exploded' | 'solo',
+  selection: { levelId: null as string | null },
+}
 
 mock.module('../../store/use-viewer', () => ({
   default: {
@@ -77,30 +42,48 @@ const [{ LevelSystem }, { snapLevelsToTruePositions }] = await Promise.all([
   import('./level-utils'),
 ])
 
+/** Stand-in for a level's Object3D — LevelSystem only touches these fields. */
+function fakeLevelObject(): Object3D {
+  return {
+    position: { y: -100 },
+    visible: true,
+    layers: { mask: 0 },
+  } as unknown as Object3D
+}
+
 function setupLevels(baseElevations: number[]) {
   const buildingId = 'building_base-elevation-system-test'
-  const levels: FakeLevelNode[] = baseElevations.map((baseElevation, level) => ({
+  const levels = baseElevations.map((baseElevation, level) => ({
+    object: 'node',
     id: `level_base-elevation-system-${level}`,
     type: 'level',
     parentId: buildingId,
+    visible: true,
+    metadata: {},
+    children: [],
     level,
     baseElevation,
-    children: [],
+    height: 2.5,
   }))
-  const building: FakeBuildingNode = {
+  const building = {
+    object: 'node',
     id: buildingId,
     type: 'building',
+    parentId: null,
+    visible: true,
+    metadata: {},
     children: levels.map((level) => level.id),
   }
-  nodes = Object.fromEntries([building, ...levels].map((node) => [node.id, node]))
+
+  const nodes = Object.fromEntries(
+    [building, ...levels].map((node) => [node.id, node]),
+  ) as unknown as Record<AnyNodeId, AnyNode>
+  useScene.setState({ nodes })
 
   const objects = levels.map((level) => {
-    const object: FakeLevelObject = {
-      position: { y: -100 },
-      visible: true,
-    }
+    const object = fakeLevelObject()
     sceneRegistry.nodes.set(level.id, object)
-    sceneRegistry.byType.level.add(level.id)
+    sceneRegistry.byType.level!.add(level.id)
     return object
   })
 
@@ -120,14 +103,14 @@ function setLevelMode(
 function updateLevelPresentation(delta: number) {
   frameCallback = null
   LevelSystem()
-  expect(frameCallback).not.toBeNull()
-  frameCallback?.({}, delta)
+  const callback = takeFrameCallback()
+  expect(callback).not.toBeNull()
+  callback?.({}, delta)
 }
 
 afterEach(() => {
-  sceneRegistry.nodes.clear()
-  sceneRegistry.byType.level.clear()
-  nodes = {}
+  sceneRegistry.clear()
+  useScene.setState({ nodes: {} as Record<AnyNodeId, AnyNode> })
 })
 
 describe('updateLevelPresentation', () => {
