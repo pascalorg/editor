@@ -41,3 +41,5 @@ jobs:
           git push
 
 # relock: declare mysql2 where it is imported
+
+# relock: plugin-warehouse v0.1.1 (1c73ce2)
