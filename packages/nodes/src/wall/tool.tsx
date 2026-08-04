@@ -361,6 +361,7 @@ function getDraftMeasurementState(
   end: WallPlanPoint,
   walls: WallNode[],
   unit: 'metric' | 'imperial',
+  metricNotation: 'meters' | 'millimeters',
   baseY: number,
   previewHeight: number,
 ): DraftMeasurementState {
@@ -369,7 +370,7 @@ function getDraftMeasurementState(
   const length = Math.hypot(dx, dz)
   if (length < 0.01) return null
   return {
-    lengthLabel: formatLinearMeasurement(length, unit),
+    lengthLabel: formatLinearMeasurement(length, unit, metricNotation),
     lengthPosition: [
       (start[0] + end[0]) / 2,
       baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
@@ -443,6 +444,7 @@ function getBelowLevelWalls(): WallNode[] {
 
 export const WallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const activeLevelHeight = useScene((state) => {
@@ -706,6 +708,7 @@ export const WallTool: React.FC = () => {
             snappedLocal,
             walls,
             unit,
+            metricNotation,
             startingPoint.current.y,
             previewHeightRef.current,
           ),
@@ -886,7 +889,7 @@ export const WallTool: React.FC = () => {
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
     }
-  }, [unit])
+  }, [unit, metricNotation])
 
   return (
     <group>
