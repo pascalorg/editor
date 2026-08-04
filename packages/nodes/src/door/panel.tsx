@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
+import { formworkAssembliesAffectedBy } from '../formwork-assembly'
 import { OpeningDocumentationFields } from '../shared/opening-documentation-fields'
 import { scaleHandleHeight } from './door-math'
 
@@ -169,6 +170,11 @@ export default function DoorPanel() {
       const scene = useScene.getState()
       scene.dirtyNodes.add(selectedId as AnyNodeId)
       if (liveNode.parentId) scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
+      // The host wall's shutter is cut around this void and returns reveal
+      // boards into it, so resizing or moving the door re-derives its formwork.
+      for (const id of formworkAssembliesAffectedBy(selectedId as AnyNodeId, scene.nodes)) {
+        scene.dirtyNodes.add(id)
+      }
     },
     [selectedId],
   )

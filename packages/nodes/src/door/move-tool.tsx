@@ -32,6 +32,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { formworkAssembliesOnHost } from '../formwork-assembly'
 import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
@@ -203,7 +204,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     let lastRoofEvent: RoofEvent | null = null
 
     const markHostDirty = (hostId: string | null) => {
-      if (hostId) useScene.getState().dirtyNodes.add(hostId as AnyNodeId)
+      if (!hostId) return
+      const scene = useScene.getState()
+      scene.dirtyNodes.add(hostId as AnyNodeId)
+      // The wall's shutter is cut around this void, so the formwork has to be
+      // re-derived alongside the wall itself — dirtying the wall alone leaves
+      // panels spanning where the door now is.
+      for (const id of formworkAssembliesOnHost(hostId, scene.nodes)) scene.dirtyNodes.add(id)
     }
     const lastHostDirtyAt = new Map<string, number>()
     const markHostDirtyThrottled = (hostId: string | null) => {
