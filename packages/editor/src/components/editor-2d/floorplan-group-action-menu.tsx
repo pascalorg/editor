@@ -5,10 +5,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isActive } from '../../lib/interaction/scope'
-import {
-  canCreateSessionGroup,
-  selectionIntersectsSessionGroup,
-} from '../../lib/session-groups'
+import { canCreateSessionGroup, selectionIntersectsSessionGroup } from '../../lib/session-groups'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
 import useSessionGroups, {

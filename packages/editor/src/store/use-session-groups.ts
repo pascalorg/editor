@@ -1,19 +1,16 @@
 import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
-import { sfxEmitter } from '../lib/sfx-bus'
 import {
   canCreateSessionGroup,
   createSessionGroup,
   expandSessionGroupMembers,
-  pruneSessionGroups,
-  removeMembersFromSessionGroups,
+  type SessionSelectionGroup,
   selectionIntersectsSessionGroup,
   selectionMatchesSessionGroup,
-  type SessionSelectionGroup,
-  sessionGroupsEqual,
   ungroupSessionSelection,
 } from '../lib/session-groups'
+import { sfxEmitter } from '../lib/sfx-bus'
 
 type SessionGroupsState = {
   groups: SessionSelectionGroup[]
@@ -31,34 +28,16 @@ function liveNodeIdSet(): Set<string> {
   return new Set(Object.keys(useScene.getState().nodes))
 }
 
-function commitGroups(next: SessionSelectionGroup[]): boolean {
-  const prev = useSessionGroups.getState().groups
-  if (sessionGroupsEqual(prev, next)) return false
-  useSessionGroups.getState().setGroups(next)
-  return true
-}
-
-export function pruneSessionGroupsToScene(): boolean {
-  return commitGroups(pruneSessionGroups(useSessionGroups.getState().groups, liveNodeIdSet()))
-}
-
-export function removeDeletedIdsFromSessionGroups(removedIds: readonly string[]): boolean {
-  if (removedIds.length === 0) return false
-  return commitGroups(
-    removeMembersFromSessionGroups(
-      useSessionGroups.getState().groups,
-      removedIds,
-      liveNodeIdSet(),
-    ),
-  )
-}
-
+/**
+ * Membership is never rewritten when a member is deleted — every read filters
+ * against the live scene instead. Deleting a member and undoing must restore it
+ * to its group, and a destructive prune would have already dropped it (or the
+ * whole group, once it fell under the two-member floor).
+ */
 export function expandSessionSelectionForNode(nodeId: string): string[] | null {
-  const liveIds = liveNodeIdSet()
-  const pruned = pruneSessionGroups(useSessionGroups.getState().groups, liveIds)
-  commitGroups(pruned)
-  if (pruned.length === 0) return null
-  return expandSessionGroupMembers(pruned, nodeId, liveIds)
+  const groups = useSessionGroups.getState().groups
+  if (groups.length === 0) return null
+  return expandSessionGroupMembers(groups, nodeId, liveNodeIdSet())
 }
 
 /** Ctrl/Cmd+G — create session group from multi-selection. */

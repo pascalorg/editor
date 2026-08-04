@@ -7,10 +7,7 @@ import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
-import {
-  canCreateSessionGroup,
-  selectionIntersectsSessionGroup,
-} from '../../lib/session-groups'
+import { canCreateSessionGroup, selectionIntersectsSessionGroup } from '../../lib/session-groups'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
 import useSessionGroups, {

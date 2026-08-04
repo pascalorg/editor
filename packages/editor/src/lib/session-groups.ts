@@ -2,6 +2,11 @@
  * Pure helpers for editor-only session selection groups.
  * Not scene-graph nodes; not saved with the project.
  * Ctrl/Cmd+G creates, Ctrl/Cmd+Shift+G dissolves; plain click expands.
+ *
+ * Stored membership is never rewritten to drop deleted nodes — `liveIds`
+ * filtering happens on every read instead. A destructive prune would make
+ * delete-then-undo lose the restored node's group, and would drop the group
+ * outright once it fell under the two-member floor.
  */
 
 export type SessionSelectionGroup = {
@@ -54,50 +59,26 @@ function withLabel(
   }
 }
 
-export function sessionGroupsEqual(
-  a: readonly SessionSelectionGroup[],
-  b: readonly SessionSelectionGroup[],
-): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) {
-    const left = a[i]!
-    const right = b[i]!
-    if (left.id !== right.id || left.label !== right.label) return false
-    if (left.memberIds.length !== right.memberIds.length) return false
-    for (let j = 0; j < left.memberIds.length; j++) {
-      if (left.memberIds[j] !== right.memberIds[j]) return false
-    }
-  }
-  return true
+function liveMembers(group: SessionSelectionGroup, liveIds?: ReadonlySet<string> | null): string[] {
+  return uniquePreserveOrder(group.memberIds.filter((id) => isLive(id, liveIds)))
 }
 
-export function pruneSessionGroups(
+/**
+ * Read-time view: groups narrowed to their live members, dropping any that fall
+ * under two. A group below the floor is inert, not gone — deleting members never
+ * touches storage, so undo brings it back.
+ */
+export function liveSessionGroups(
   groups: readonly SessionSelectionGroup[],
   liveIds?: ReadonlySet<string> | null,
 ): SessionSelectionGroup[] {
   const next: SessionSelectionGroup[] = []
   for (const group of groups) {
-    const members = uniquePreserveOrder(group.memberIds.filter((id) => isLive(id, liveIds)))
+    const members = liveMembers(group, liveIds)
     if (members.length < 2) continue
     next.push(withLabel(group, members))
   }
   return next
-}
-
-export function removeMembersFromSessionGroups(
-  groups: readonly SessionSelectionGroup[],
-  removedIds: readonly string[],
-  liveIds?: ReadonlySet<string> | null,
-): SessionSelectionGroup[] {
-  if (removedIds.length === 0) return pruneSessionGroups(groups, liveIds)
-  const removed = new Set(removedIds)
-  const stripped = groups.map((group) =>
-    withLabel(
-      group,
-      group.memberIds.filter((id) => !removed.has(id)),
-    ),
-  )
-  return pruneSessionGroups(stripped, liveIds)
 }
 
 export function createSessionGroup(
@@ -116,20 +97,21 @@ export function createSessionGroup(
   const liveIds = options?.liveIds
   const members = uniquePreserveOrder(memberIds.filter((id) => isLive(id, liveIds)))
   if (members.length < 2) {
-    return { groups: pruneSessionGroups(groups, liveIds), created: null, alreadyGrouped: false }
+    return { groups: [...groups], created: null, alreadyGrouped: false }
   }
 
-  const pruned = pruneSessionGroups(groups, liveIds)
   const memberSet = new Set(members)
-  const exact = pruned.find(
+  const exact = liveSessionGroups(groups, liveIds).find(
     (group) =>
       group.memberIds.length === members.length && group.memberIds.every((id) => memberSet.has(id)),
   )
   if (exact) {
-    return { groups: pruned, created: exact, alreadyGrouped: true }
+    return { groups: [...groups], created: exact, alreadyGrouped: true }
   }
 
-  const kept = pruned.filter((group) => !group.memberIds.some((id) => memberSet.has(id)))
+  // Grouping a selection takes its members out of whatever group they were in,
+  // dissolving that group whole rather than leaving a remnant.
+  const kept = groups.filter((group) => !group.memberIds.some((id) => memberSet.has(id)))
   const id = (options?.idFactory ?? nextSessionGroupId)()
   const label =
     options?.labelFactory?.() ??
@@ -145,15 +127,17 @@ export function ungroupSessionSelection(
 ): { groups: SessionSelectionGroup[]; dissolved: SessionSelectionGroup[] } {
   const selected = new Set(selectedIds)
   if (selected.size === 0) {
-    return { groups: pruneSessionGroups(groups, liveIds), dissolved: [] }
+    return { groups: [...groups], dissolved: [] }
   }
 
-  const pruned = pruneSessionGroups(groups, liveIds)
   const kept: SessionSelectionGroup[] = []
   const dissolved: SessionSelectionGroup[] = []
-  for (const group of pruned) {
-    if (group.memberIds.some((id) => selected.has(id))) {
-      dissolved.push(group)
+  for (const group of groups) {
+    // Only a live-viable group is visible to the user, so only that can be
+    // dissolved. An inert one (members deleted) is left alone for undo.
+    const live = liveMembers(group, liveIds)
+    if (live.length >= 2 && live.some((id) => selected.has(id))) {
+      dissolved.push(withLabel(group, live))
     } else {
       kept.push(group)
     }
@@ -169,7 +153,7 @@ export function expandSessionGroupMembers(
   if (!nodeId) return null
   for (const group of groups) {
     if (!group.memberIds.includes(nodeId)) continue
-    const members = uniquePreserveOrder(group.memberIds.filter((id) => isLive(id, liveIds)))
+    const members = liveMembers(group, liveIds)
     if (members.length < 2) return null
     if (members[0] === nodeId) return members
     return [nodeId, ...members.filter((id) => id !== nodeId)]
@@ -186,7 +170,7 @@ export function selectionMatchesSessionGroup(
   const selected = uniquePreserveOrder(selectedIds.filter((id) => isLive(id, liveIds)))
   if (selected.length < 2) return null
   const selectedSet = new Set(selected)
-  for (const group of pruneSessionGroups(groups, liveIds)) {
+  for (const group of liveSessionGroups(groups, liveIds)) {
     if (group.memberIds.length !== selected.length) continue
     if (group.memberIds.every((id) => selectedSet.has(id))) return group
   }
@@ -200,7 +184,7 @@ export function selectionIntersectsSessionGroup(
 ): boolean {
   if (selectedIds.length === 0) return false
   const selected = new Set(selectedIds)
-  for (const group of pruneSessionGroups(groups, liveIds)) {
+  for (const group of liveSessionGroups(groups, liveIds)) {
     if (group.memberIds.some((id) => selected.has(id))) return true
   }
   return false

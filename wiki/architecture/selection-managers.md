@@ -98,8 +98,10 @@ the shortcut dialog in sync when changing selection gestures.
 
 `Ctrl/Cmd+G` / `Ctrl/Cmd+Shift+G` create and dissolve **session selection groups** in
 `use-session-groups` (not the scene graph). Plain click expands to live members via
-`expandIdsForNode` on `resolveSelectedIdsForNodeClick`. See
-[selection-groups](selection-groups.md).
+`expandIdsForNode`, threaded into all three click paths:
+`resolveSelectedIdsForNodeClick` (3D), the registry layer's `applyEntrySelection` (2D
+entries), and `resolveFloorplanBackgroundSelection` (2D background hit-test). Alt+click
+opts out. See [selection-groups](selection-groups.md).
 
 ---
 

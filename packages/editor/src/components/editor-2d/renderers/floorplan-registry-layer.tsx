@@ -84,7 +84,6 @@ import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useDrawingView from '../../../store/use-drawing-view'
 import useEditor, { isAngleSnapActive } from '../../../store/use-editor'
-import { expandSessionSelectionForNode } from '../../../store/use-session-groups'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import useInteractionScope, {
@@ -92,6 +91,7 @@ import useInteractionScope, {
   useEndpointReshape,
   useMovingNode,
 } from '../../../store/use-interaction-scope'
+import { expandSessionSelectionForNode } from '../../../store/use-session-groups'
 import { startGroupPickUp } from '../../editor/group-actions'
 import { classifyParticipant } from '../../editor/group-transform-shared'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
@@ -592,7 +592,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const applyEntrySelection = useCallback(
     (id: AnyNodeId, options: { shouldToggle: boolean; isolateMember: boolean }) => {
       const currentSelectedIds = useViewer.getState().selection.selectedIds
-      let nextSelectedIds: AnyNodeId[]
+      let nextSelectedIds: string[]
       if (options.shouldToggle) {
         nextSelectedIds = currentSelectedIds.includes(id)
           ? currentSelectedIds.filter((selectedId) => selectedId !== id)
@@ -601,7 +601,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         nextSelectedIds = [id]
       } else {
         const expanded = expandSessionSelectionForNode(id)
-        nextSelectedIds = (expanded && expanded.length > 1 ? expanded : [id]) as AnyNodeId[]
+        nextSelectedIds = expanded && expanded.length > 1 ? expanded : [id]
       }
       setSelection({ selectedIds: nextSelectedIds })
       if (nextSelectedIds.length === 1 && nextSelectedIds[0] === id) {
