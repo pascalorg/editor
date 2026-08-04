@@ -18,6 +18,7 @@ import {
   type Vec2,
   wallLength,
 } from './geometry'
+import { layoutIssuesFromScene } from './layout-clearance'
 import { NodeIdSchema } from './schemas'
 
 export const levelScopedInput = {
@@ -830,6 +831,11 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
         if (validation.errors.length > 5) {
           issues.push(`Schema: ${validation.errors.length - 5} additional validation errors`)
         }
+      }
+
+      // Door keep-outs + item–item footprint overlaps (rotation-aware).
+      for (const layoutIssue of layoutIssuesFromScene(Object.values(bridge.getNodes()))) {
+        issues.push(layoutIssue)
       }
 
       const payload = {
