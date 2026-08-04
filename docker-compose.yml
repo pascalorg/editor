@@ -8,6 +8,8 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
+      # Public editor origin used by Mint OAuth and same-origin checks.
+      MINT_PASCAL_HOST_ORIGIN: ${MINT_PASCAL_HOST_ORIGIN:-http://localhost:3000}
       # Scene database location. Without the volume below, every saved project is
       # discarded when the container is recreated.
       PASCAL_DATA_DIR: /data
