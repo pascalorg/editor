@@ -1246,6 +1246,9 @@ export default function Editor({
   // Apply preview scene when version preview mode changes
   useEffect(() => {
     if (isVersionPreviewMode && previewScene) {
+      // Drop session groups from the edit session so plain-click expand cannot
+      // pull in members that are not part of the preview graph.
+      useSessionGroups.getState().clearGroups()
       applySceneGraphToEditor(previewScene)
     }
   }, [isVersionPreviewMode, previewScene])
