@@ -1,7 +1,15 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import {
+  CASTABLE_FIELD_DOCS,
+  CastableFields,
+  SHUTTERING_FIELD_DOCS,
+  ShutteringFields,
+} from '../formwork'
 import { MaterialSchema } from '../material'
+import { ConstructionJointNode } from './construction-joint'
+import { FormworkAssemblyNode } from './formwork-assembly'
 
 export const ColumnStyle = z.enum([
   'plain',
@@ -84,6 +92,9 @@ export type ColumnSupportStyle = z.infer<typeof ColumnSupportStyle>
 export const ColumnNode = BaseNode.extend({
   id: objectId('column'),
   type: nodeType('column'),
+  children: z
+    .array(z.union([FormworkAssemblyNode.shape.id, ConstructionJointNode.shape.id]))
+    .default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
@@ -164,8 +175,11 @@ export const ColumnNode = BaseNode.extend({
   // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),
   // matching the slot model items/slab/shelf use. Absent = declared default.
   slots: z.record(z.string(), z.string()).optional(),
+  ...ShutteringFields,
+  ...CastableFields,
 }).describe(dedent`
   Column node - used to represent structural or decorative pillars/columns.
+  - children: hosted formwork assemblies and construction joints, in column-local space
   - style: visual approach such as plain, lathe-turned, carved, or cluster
   - crossSection: plan shape used by the procedural renderer
   - height/radius/width/depth: primary dimensions in meters
@@ -177,6 +191,8 @@ export const ColumnNode = BaseNode.extend({
   - baseHeight/capitalHeight: bottom and top block proportions
   - ring/flute/spiral/panel/lathe/carving fields: procedural detail controls
   - supportStyle/brace fields: vertical column or procedural support assembly
+  ${SHUTTERING_FIELD_DOCS}
+  ${CASTABLE_FIELD_DOCS}
 `)
 
 export const COLUMN_PRESETS = {

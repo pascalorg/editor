@@ -1,9 +1,16 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import {
+  CASTABLE_FIELD_DOCS,
+  CastableFields,
+  SHUTTERING_FIELD_DOCS,
+  ShutteringFields,
+} from '../formwork'
 import { MaterialSchema } from '../material'
+import { ConstructionJointNode } from './construction-joint'
 import { DoorNode } from './door'
-import { FormworkSystemNode } from './formwork-system'
+import { FormworkAssemblyNode } from './formwork-assembly'
 import { ItemNode } from './item'
 import { WindowNode } from './window'
 
@@ -174,7 +181,15 @@ export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
   children: z
-    .array(z.union([ItemNode.shape.id, DoorNode.shape.id, WindowNode.shape.id, FormworkSystemNode.shape.id]))
+    .array(
+      z.union([
+        ItemNode.shape.id,
+        DoorNode.shape.id,
+        WindowNode.shape.id,
+        FormworkAssemblyNode.shape.id,
+        ConstructionJointNode.shape.id,
+      ]),
+    )
     .default([]),
   // Legacy single-material wall finish. Read for backward compatibility only.
   material: MaterialSchema.optional(),
@@ -207,13 +222,8 @@ export const WallNode = BaseNode.extend({
   // Space detection for cutaway mode
   frontSide: z.enum(['interior', 'exterior', 'unknown']).default('unknown'),
   backSide: z.enum(['interior', 'exterior', 'unknown']).default('unknown'),
-  // Formwork/construction metadata. Populated by the construction AI layer
-  // or manually; consumed later by the (not yet built) rules engine.
-  formworkType: z.enum(['plywood', 'aluminium', 'steel-panel', 'none']).optional(),
-  shutterMaterial: z.string().trim().max(120).optional(),
-  tieSpacing: z.number().finite().positive().optional(),
-  walerSpacing: z.number().finite().positive().optional(),
-  scaffoldRequired: z.boolean().optional(),
+  ...ShutteringFields,
+  ...CastableFields,
 }).describe(
   dedent`
   Wall node - used to represent a wall in the building
@@ -226,11 +236,8 @@ export const WallNode = BaseNode.extend({
   - size: size of the wall in grid units
   - frontSide: whether the front side faces interior, exterior, or unknown
   - backSide: whether the back side faces interior, exterior, or unknown
-  - formworkType: shuttering system used to cast this wall, if any
-  - shutterMaterial: free-text material reference for the formwork face (e.g. "12mm plywood")
-  - tieSpacing: spacing between formwork ties in meters
-  - walerSpacing: spacing between walers in meters
-  - scaffoldRequired: whether scaffold access is required to erect/strip formwork
+  ${SHUTTERING_FIELD_DOCS}
+  ${CASTABLE_FIELD_DOCS}
   `,
 )
 export type WallNode = z.infer<typeof WallNode>

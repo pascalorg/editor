@@ -11,6 +11,16 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 export { CameraSchema } from './camera'
 // Collections
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
+export {
+  CastableFields,
+  ConcreteFaceSide,
+  ExposureClass,
+  FormworkMode,
+  KickerMode,
+  ShutteringFields,
+  TopSurface,
+  TopSurfaceKind,
+} from './formwork'
 export type {
   MaterialMapProperties,
   MaterialMaps,
@@ -71,6 +81,13 @@ export {
   setConstructionDimensionDrawingPresentation,
   setConstructionDimensionDrawingSuppressedSegments,
 } from './nodes/construction-dimension'
+export {
+  ConstructionJointKind,
+  ConstructionJointNode,
+  JointTreatment,
+  JointTreatmentKind,
+  WaterstopType,
+} from './nodes/construction-joint'
 export { CupolaNode } from './nodes/cupola'
 export {
   DoorNode,
@@ -115,7 +132,12 @@ export {
 } from './nodes/elevator'
 export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
-export { FormworkSystemNode } from './nodes/formwork-system'
+export {
+  FormworkAssemblyNode,
+  FormworkDesignOverrides,
+  FormworkFillerPosition,
+  FormworkPartOverride,
+} from './nodes/formwork-assembly'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export { GutterNode, GutterOutlet } from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'

@@ -6,6 +6,7 @@ import { CeilingNode } from './nodes/ceiling'
 import { ChimneyNode } from './nodes/chimney'
 import { ColumnNode } from './nodes/column'
 import { ConstructionDimensionNode } from './nodes/construction-dimension'
+import { ConstructionJointNode } from './nodes/construction-joint'
 import { CupolaNode } from './nodes/cupola'
 import { DoorNode } from './nodes/door'
 import { DormerNode } from './nodes/dormer'
@@ -17,7 +18,7 @@ import { DuctTerminalNode } from './nodes/duct-terminal'
 import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
-import { FormworkSystemNode } from './nodes/formwork-system'
+import { FormworkAssemblyNode } from './nodes/formwork-assembly'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
@@ -57,7 +58,8 @@ export const AnyNode = z.discriminatedUnion('type', [
   StructuralGridNode,
   WallNode,
   FenceNode,
-  FormworkSystemNode,
+  FormworkAssemblyNode,
+  ConstructionJointNode,
   CabinetNode,
   CabinetModuleNode,
   ItemNode,
