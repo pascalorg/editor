@@ -14,7 +14,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
-import useViewer from '../../store/use-viewer'
+import useViewer, { type WallMode } from '../../store/use-viewer'
 import {
   getMaterialsForWall,
   getSelectionHighlightMaterials,
@@ -25,10 +25,18 @@ const tmpVec = new Vector3()
 const u = new Vector3()
 const v = new Vector3()
 
-function getWallHideState(
+/**
+ * Whether a wall should be hidden or see-through for the current camera and
+ * wall mode. Pure: reads only its arguments and the mesh's world direction.
+ *
+ * Exported so hosts rendering their own layers inside `<Viewer>` can match
+ * these semantics instead of re-deriving the facing test or inferring state
+ * from the assigned material variant.
+ */
+export function getWallHideState(
   wallNode: WallNode,
   wallMesh: Mesh,
-  wallMode: string,
+  wallMode: WallMode,
   cameraDir: Vector3,
 ): boolean {
   let hideWall = wallNode.frontSide === 'interior' && wallNode.backSide === 'interior'
