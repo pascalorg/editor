@@ -19,8 +19,14 @@ export function syncDerivedStairOpenings(operations: SceneOperations): number {
 
 /**
  * Persist the bridge's current graph to the active scene and append a live
- * event for browser subscribers. No-ops when the MCP session is not currently
- * bound to a saved scene.
+ * event for browser subscribers.
+ *
+ * Throws an error when the MCP session has a SceneStore but is not bound to
+ * an active scene, so the caller (and the LLM) gets clear feedback that a
+ * scene must be loaded or created first via `load_scene` / `create_project` /
+ * `create_house_from_brief`.
+ *
+ * Silently returns when no SceneStore is attached (headless / test mode).
  */
 export async function publishLiveSceneSnapshot(
   operations: SceneOperations,
@@ -29,7 +35,15 @@ export async function publishLiveSceneSnapshot(
   syncDerivedStairOpenings(operations)
 
   const active = operations.getActiveScene()
-  if (!(active && operations.canAppendSceneEvents)) return
+
+  if (!active && operations.hasStore) {
+    throwMcpError(
+      ErrorCode.InvalidRequest,
+      'no_active_scene: call load_scene, create_project, or create_house_from_brief before using mutation tools',
+    )
+  }
+
+  if (!active || !operations.canAppendSceneEvents) return
 
   const graph = operations.exportSceneGraph()
 
