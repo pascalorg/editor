@@ -23,7 +23,6 @@ cp .env.example .env
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | No | Enables address search in the editor |
 | `PORT` | No | Dev server port (default: 3002) |
 
 The editor works fully without any environment variables.
