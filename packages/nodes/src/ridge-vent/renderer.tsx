@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   getEffectiveRoofSurfaceMaterial,
   getEffectiveSegmentSurfaceMaterial,
+  normalizeRoofSegmentTrim,
   type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
@@ -29,7 +30,7 @@ import { buildRidgeVentGeometry } from './geometry'
 
 function ridgeVentSegmentGeometryKey(segment: RoofSegmentNode | undefined): string {
   if (!segment) return 'none'
-  const trim = segment.trim
+  const trim = normalizeRoofSegmentTrim(segment)
   return [
     segment.roofType,
     segment.width,
