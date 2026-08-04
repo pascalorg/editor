@@ -510,6 +510,7 @@ function SelectedMeasurementAnnotation({ node }: { node: WallNode | ItemNode }) 
 function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
   const nodes = useScene((state) => state.nodes)
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const isNight = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const color = isNight ? '#ffffff' : '#111111'
   const shadowColor = isNight ? '#111111' : '#ffffff'
@@ -528,9 +529,9 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
     }
     return total
   }, [guide, wall])
-  const label = formatLinearMeasurement(length, unit)
+  const label = formatLinearMeasurement(length, unit, metricNotation)
   const height = useMemo(() => getWallEffectiveHeightForNodes(wall, nodes), [nodes, wall])
-  const heightLabel = `H ${formatLinearMeasurement(height, unit)}`
+  const heightLabel = `H ${formatLinearMeasurement(height, unit, metricNotation)}`
 
   if (!(guide && Number.isFinite(length) && length >= 0.01)) return null
 

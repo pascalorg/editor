@@ -377,6 +377,7 @@ function getDraftMeasurementState(
   end: FencePlanPoint,
   segments: SegmentLike[],
   unit: 'metric' | 'imperial',
+  metricNotation: 'meters' | 'millimeters',
   baseY: number,
   previewHeight: number,
   previewThickness: number,
@@ -386,7 +387,7 @@ function getDraftMeasurementState(
   const length = Math.hypot(dx, dz)
   if (length < 0.01) return null
   return {
-    lengthLabel: formatLinearMeasurement(length, unit),
+    lengthLabel: formatLinearMeasurement(length, unit, metricNotation),
     lengthPosition: [
       (start[0] + end[0]) / 2,
       baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
@@ -465,6 +466,7 @@ export const FenceTool: React.FC = () => {
 
 const StraightFenceTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   // A placed preset seeds `toolDefaults.fence` before the tool mounts, so
   // the draft preview is drawn at the preset's height / thickness rather
@@ -615,6 +617,7 @@ const StraightFenceTool: React.FC = () => {
             snappedLocal,
             getReferenceSegments(walls, fences),
             unit,
+            metricNotation,
             startingPoint.current.y,
             previewHeightRef.current,
             previewThicknessRef.current,
@@ -751,7 +754,7 @@ const StraightFenceTool: React.FC = () => {
       draftPreview.setFenceDraftStart(null)
       draftPreview.setFenceDraftEnd(null)
     }
-  }, [unit])
+  }, [unit, metricNotation])
 
   return (
     <group>

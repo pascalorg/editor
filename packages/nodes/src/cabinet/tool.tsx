@@ -256,6 +256,7 @@ function wallHitFromWallEvent(event: WallEvent): WallHit | null {
 const CabinetTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
@@ -1179,7 +1180,7 @@ const CabinetTool = () => {
       {placement.guide && <WallSnapGuide blocked={!placement.valid} guide={placement.guide} />}
       <PlacementBox
         dimensions={placementBoxDimensions}
-        measurements={{ unit }}
+        measurements={{ unit, metricNotation }}
         position={placementBoxPosition}
         rotationY={placementRotationY}
         valid={placement.valid}

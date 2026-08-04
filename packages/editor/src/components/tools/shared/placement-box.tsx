@@ -8,7 +8,11 @@ import { PlaneGeometry } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { formatLinearMeasurement, type LinearUnit } from '../../../lib/measurements'
+import {
+  formatLinearMeasurement,
+  type LinearUnit,
+  type MetricNotation,
+} from '../../../lib/measurements'
 import { createLineGeometry, getBoxEdgePoints } from './placement-box-geometry'
 
 const VALID_COLOR = 0x22_c5_5e // green-500
@@ -17,6 +21,7 @@ const MEASUREMENT_COLOR = 0x0f_17_2a
 
 type PlacementBoxMeasurements = {
   unit: LinearUnit
+  metricNotation?: MetricNotation
 }
 
 function getMeasurementGuidePoints(width: number, height: number, depth: number) {
@@ -271,15 +276,15 @@ export function PlacementBox({
         renderOrder={998}
       />
       <MeasurementPill
-        label={formatLinearMeasurement(width, measurements.unit)}
+        label={formatLinearMeasurement(width, measurements.unit, measurements.metricNotation)}
         position={[0, 0.04, depth / 2 + 0.24]}
       />
       <MeasurementPill
-        label={formatLinearMeasurement(depth, measurements.unit)}
+        label={formatLinearMeasurement(depth, measurements.unit, measurements.metricNotation)}
         position={[width / 2 + 0.24, 0.04, 0]}
       />
       <MeasurementPill
-        label={formatLinearMeasurement(height, measurements.unit)}
+        label={formatLinearMeasurement(height, measurements.unit, measurements.metricNotation)}
         position={[-width / 2 - 0.24, height / 2, -depth / 2]}
       />
     </>
