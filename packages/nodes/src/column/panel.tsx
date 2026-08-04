@@ -2,6 +2,7 @@
 
 import {
   type AnyNode,
+  type AnyNodeId,
   COLUMN_PRESETS,
   type ColumnNode,
   type ColumnPresetId,
@@ -21,6 +22,15 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
+import {
+  FormworkConstructionSection,
+  FormworkCoverageList,
+  PourLimitInput,
+  PourSequenceFields,
+  PourUnitHint,
+  TopSurfaceFields,
+  useFormworkHost,
+} from '../formwork-assembly'
 
 const SELECT_CLASS =
   'h-10 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
@@ -258,9 +268,57 @@ function shaftProfileUpdates(shaftProfile: ColumnNode['shaftProfile']): Partial<
   }
 }
 
+/**
+ * Cast sequence and pour caps for a column.
+ *
+ * Two of the wall's controls are deliberately absent. A column has no
+ * `formworkMode`: it is a closed box or a wrapped shaft, and "form one side
+ * only" describes a pilaster, which the engine already derives from the plan
+ * footprints of what it overlaps. And it has no bay length — a column is a
+ * point on the centreline, so the only cut that can divide it is a horizontal
+ * lift.
+ */
+function ColumnPourSection({
+  node,
+  onUpdate,
+  pourUnitCount,
+}: {
+  node: ColumnNode
+  onUpdate: (updates: Partial<ColumnNode>) => void
+  pourUnitCount: number
+}) {
+  return (
+    <PanelSection title="Concrete pour">
+      <PourSequenceFields node={node} onUpdate={onUpdate} />
+      <TopSurfaceFields boundedOption node={node} onUpdate={onUpdate} />
+      <div className="px-1 text-[10px] text-muted-foreground leading-snug">
+        A column is normally formed right up to the soffit above it — "Under soffit" is the usual
+        answer, and a formed top means a free-standing stub.
+      </div>
+      <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+        Pour limits
+      </div>
+      <PourLimitInput
+        hint="Clamp capacity and the pressure envelope, in meters. Blank pours the full height in one lift."
+        label="Max lift"
+        onChange={(value) => onUpdate({ maxLiftHeight: value })}
+        value={node.maxLiftHeight}
+      />
+      <PourLimitInput
+        hint="What the plant can deliver before the first concrete placed reaches initial set, in m³."
+        label="Max volume"
+        onChange={(value) => onUpdate({ maxPourVolume: value })}
+        value={node.maxPourVolume}
+      />
+      <PourUnitHint pourUnitCount={pourUnitCount} />
+    </PanelSection>
+  )
+}
+
 export default function ColumnPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
+  const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
@@ -277,6 +335,13 @@ export default function ColumnPanel() {
     },
     [selectedId, updateNode],
   )
+
+  const {
+    addFormwork: handleAddFormwork,
+    hasFormwork,
+    pourUnitCount,
+    updateConstruction: handleUpdateConstruction,
+  } = useFormworkHost(node)
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -1070,6 +1135,28 @@ export default function ColumnPanel() {
             />
           )}
         </PanelSection>
+      )}
+
+      <FormworkConstructionSection
+        addFormwork={handleAddFormwork}
+        hasFormwork={hasFormwork}
+        node={node}
+        onUpdate={handleUpdateConstruction}
+        pourUnitCount={pourUnitCount}
+        unit={unit}
+      />
+
+      {node.formworkType && node.formworkType !== 'none' && (
+        <>
+          <ColumnPourSection
+            node={node}
+            onUpdate={handleUpdateConstruction}
+            pourUnitCount={pourUnitCount}
+          />
+          <PanelSection title="Formwork coverage">
+            <FormworkCoverageList hostId={node.id as AnyNodeId} />
+          </PanelSection>
+        </>
       )}
 
       <PanelSection title="Transform">

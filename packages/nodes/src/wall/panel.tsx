@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   buildWallFaceBandCountPatch,
+  type FormworkMode,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallCurveLength,
@@ -33,14 +34,21 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
-  ToggleControl,
   triggerSFX,
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Grid3x3, Plus, Spline, Trash2 } from 'lucide-react'
+import { Plus, Spline, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
-import { buildFormworkNode } from '../formwork-system'
+import {
+  FormworkConstructionSection,
+  FormworkCoverageList,
+  PourLimitInput,
+  PourSequenceFields,
+  PourUnitHint,
+  TopSurfaceFields,
+  useFormworkHost,
+} from '../formwork-assembly'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
@@ -110,6 +118,13 @@ export default function WallPanel() {
       return false
     })
   })
+
+  const {
+    addFormwork: handleAddFormwork,
+    hasFormwork,
+    pourUnitCount,
+    updateConstruction: handleUpdateConstruction,
+  } = useFormworkHost(node)
 
   // Effective height while the wall is plane-bound (`height` absent): the
   // storey plane minus the elected slab base — what the wall currently
@@ -303,74 +318,27 @@ export default function WallPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Construction">
-        <SegmentedControl
-          onChange={(value: 'none' | 'plywood' | 'aluminium' | 'steel-panel') =>
-            handleUpdate(
-              value === 'none'
-                ? { formworkType: 'none' }
-                : {
-                    formworkType: value,
-                    shutterMaterial: node.shutterMaterial ?? value,
-                    tieSpacing: node.tieSpacing ?? 0.6,
-                    walerSpacing: node.walerSpacing ?? 0.9,
-                  },
-            )
-          }
-          options={[
-            { label: 'None', value: 'none' },
-            { label: 'Plywood', value: 'plywood' },
-            { label: 'Aluminium', value: 'aluminium' },
-            { label: 'Steel', value: 'steel-panel' },
-          ]}
-          value={node.formworkType ?? 'none'}
-        />
-        {node.formworkType && node.formworkType !== 'none' && (
-          <>
-            <SliderControl
-              label="Tie spacing"
-              max={metersToLinearUnit(2, unit)}
-              min={metersToLinearUnit(0.3, unit)}
-              onChange={(v) =>
-                handleUpdate({
-                  tieSpacing: linearControlValueToMeters(v, unit, { maxMeters: 2, minMeters: 0.3 }),
-                })
-              }
-              precision={2}
-              step={0.05}
-              unit={unitLabel}
-              value={metersToLinearUnit(node.tieSpacing ?? 0.6, unit)}
-            />
-            <SliderControl
-              label="Waler spacing"
-              max={metersToLinearUnit(2, unit)}
-              min={metersToLinearUnit(0.3, unit)}
-              onChange={(v) =>
-                handleUpdate({
-                  walerSpacing: linearControlValueToMeters(v, unit, {
-                    maxMeters: 2,
-                    minMeters: 0.3,
-                  }),
-                })
-              }
-              precision={2}
-              step={0.05}
-              unit={unitLabel}
-              value={metersToLinearUnit(node.walerSpacing ?? 0.9, unit)}
-            />
-            <ToggleControl
-              checked={node.scaffoldRequired ?? false}
-              label="Scaffold required"
-              onChange={(checked) => handleUpdate({ scaffoldRequired: checked })}
-            />
-            <ActionButton
-              icon={<Grid3x3 className="h-3.5 w-3.5" />}
-              label="Add formwork geometry"
-              onClick={() => useScene.getState().createNode(buildFormworkNode(node), node.id)}
-            />
-          </>
-        )}
-      </PanelSection>
+      <FormworkConstructionSection
+        addFormwork={handleAddFormwork}
+        hasFormwork={hasFormwork}
+        node={node}
+        onUpdate={handleUpdateConstruction}
+        pourUnitCount={pourUnitCount}
+        unit={unit}
+      />
+
+      {node.formworkType && node.formworkType !== 'none' && (
+        <>
+          <WallPourSection
+            node={node}
+            onUpdate={handleUpdateConstruction}
+            pourUnitCount={pourUnitCount}
+          />
+          <PanelSection title="Formwork coverage">
+            <FormworkCoverageList hostId={node.id as AnyNodeId} />
+          </PanelSection>
+        </>
+      )}
 
       <WallAssemblySection node={node} onUpdate={handleUpdate} unit={unit} unitLabel={unitLabel} />
 
@@ -425,6 +393,74 @@ export default function WallPanel() {
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+/**
+ * Pour sequence and face controls. These are inputs to the coverage engine,
+ * not annotations: `castOrder` decides which ends carry a stop-end, so editing
+ * it here changes the shutter on this wall *and* on its neighbours — hence
+ * `onUpdate` is the level-wide dirtying handler, not the plain one.
+ */
+function WallPourSection({
+  node,
+  onUpdate,
+  pourUnitCount,
+}: {
+  node: WallNode
+  onUpdate: (updates: Partial<WallNode>) => void
+  pourUnitCount: number
+}) {
+  return (
+    <PanelSection title="Concrete pour">
+      <PourSequenceFields node={node} onUpdate={onUpdate} />
+      <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+        Formed faces
+      </div>
+      <SegmentedControl
+        onChange={(value: FormworkMode) => onUpdate({ formworkMode: value })}
+        options={[
+          { label: 'Both', value: 'double-sided' },
+          { label: 'Front only', value: 'single-sided-a' },
+          { label: 'Back only', value: 'single-sided-b' },
+        ]}
+        value={node.formworkMode ?? 'double-sided'}
+      />
+      <TopSurfaceFields boundedOption node={node} onUpdate={onUpdate} />
+      <SegmentedControl
+        onChange={(value: 'none' | 'a' | 'b') =>
+          onUpdate({ againstEarthSide: value === 'none' ? undefined : value })
+        }
+        options={[
+          { label: 'Free both sides', value: 'none' },
+          { label: 'Earth front', value: 'a' },
+          { label: 'Earth back', value: 'b' },
+        ]}
+        value={node.againstEarthSide ?? 'none'}
+      />
+      <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+        Pour limits
+      </div>
+      <PourLimitInput
+        hint="Tie capacity and the pressure envelope, in meters. Blank pours the full height in one lift."
+        label="Max lift"
+        onChange={(value) => onUpdate({ maxLiftHeight: value })}
+        value={node.maxLiftHeight}
+      />
+      <PourLimitInput
+        hint="Shrinkage control, in meters. Water-retaining practice caps a bay at about 7.5 m."
+        label="Max bay"
+        onChange={(value) => onUpdate({ maxPourLength: value })}
+        value={node.maxPourLength}
+      />
+      <PourLimitInput
+        hint="What the plant can deliver before the first concrete placed reaches initial set, in m³."
+        label="Max volume"
+        onChange={(value) => onUpdate({ maxPourVolume: value })}
+        value={node.maxPourVolume}
+      />
+      <PourUnitHint pourUnitCount={pourUnitCount} />
+    </PanelSection>
   )
 }
 

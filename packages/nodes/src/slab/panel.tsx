@@ -1,12 +1,19 @@
 'use client'
 
-import { type AnyNode, MIN_SLAB_THICKNESS, type SlabNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  MIN_SLAB_THICKNESS,
+  type SlabNode,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
   holeEditScope,
   PanelSection,
   PanelWrapper,
+  SegmentedControl,
   SliderControl,
   triggerSFX,
   useEditingHole,
@@ -16,6 +23,15 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
+import {
+  FormworkConstructionSection,
+  FormworkCoverageList,
+  PourLimitInput,
+  PourSequenceFields,
+  PourUnitHint,
+  TopSurfaceFields,
+  useFormworkHost,
+} from '../formwork-assembly'
 import { applySlabElevationPreset, applySlabTopChange, clampSlabElevation } from './elevation-limit'
 
 /**
@@ -53,6 +69,13 @@ export function SlabPanel() {
     },
     [selectedId],
   )
+
+  const {
+    addFormwork: handleAddFormwork,
+    hasFormwork,
+    pourUnitCount,
+    updateConstruction: handleUpdateConstruction,
+  } = useFormworkHost(node)
 
   const handleElevationChange = useCallback(
     (proposed: number) => {
@@ -342,10 +365,117 @@ export function SlabPanel() {
           />
         </div>
       </PanelSection>
+      <FormworkConstructionSection
+        addFormwork={handleAddFormwork}
+        hasFormwork={hasFormwork}
+        node={node}
+        onUpdate={handleUpdateConstruction}
+        pourUnitCount={pourUnitCount}
+        unit={unit}
+      />
+
+      {node.formworkType && node.formworkType !== 'none' && (
+        <>
+          <SlabPourSection
+            node={node}
+            onUpdate={handleUpdateConstruction}
+            pourUnitCount={pourUnitCount}
+          />
+          <PanelSection title="Formwork coverage">
+            <FormworkCoverageList hostId={node.id as AnyNodeId} />
+          </PanelSection>
+        </>
+      )}
+
       <ActionGroup>
         <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
       </ActionGroup>
     </PanelWrapper>
+  )
+}
+
+/**
+ * Cast sequence, soffit falsework, and rim forms.
+ *
+ * The slab's controls diverge from the wall's in three ways, all physical. The
+ * soffit is carried on props rather than braced, so its height above the floor
+ * it stands on is the field that matters and there is no tie grid. A
+ * ground-bearing slab has no soffit form at all — it is cast on blinding —
+ * which is what `Underside` selects. And the rim is one face unless the edge is
+ * an upstand or a downstand edge beam, where concrete pushes on both sides of
+ * it.
+ *
+ * There is no bay length either: splitting a slab into bays is a polygon
+ * partition rather than a cut along a centreline, so a slab is one pour unit
+ * here.
+ */
+function SlabPourSection({
+  node,
+  onUpdate,
+  pourUnitCount,
+}: {
+  node: SlabNode
+  onUpdate: (updates: Partial<SlabNode>) => void
+  pourUnitCount: number
+}) {
+  const onGround = node.againstEarthSide === 'b'
+
+  return (
+    <PanelSection title="Concrete pour">
+      <PourSequenceFields node={node} onUpdate={onUpdate} />
+      <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+        Underside
+      </div>
+      <SegmentedControl
+        onChange={(value: 'suspended' | 'on-ground') =>
+          onUpdate({ againstEarthSide: value === 'on-ground' ? 'b' : undefined })
+        }
+        options={[
+          { label: 'Suspended', value: 'suspended' },
+          { label: 'On ground', value: 'on-ground' },
+        ]}
+        value={onGround ? 'on-ground' : 'suspended'}
+      />
+      <div className="px-1 text-[10px] text-muted-foreground leading-snug">
+        {onGround
+          ? 'Cast on blinding — no soffit form, no props, only edge forms.'
+          : 'Propped soffit deck. The soffit is the big number, not the edges.'}
+      </div>
+      {!onGround && (
+        <SliderControl
+          label="Prop height"
+          max={6}
+          min={0}
+          onChange={(value) => onUpdate({ soffitHeightAboveSupport: value })}
+          precision={2}
+          step={0.05}
+          unit="m"
+          value={node.soffitHeightAboveSupport ?? Math.max(0.5, node.elevation + 2.4)}
+        />
+      )}
+      <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+        Edge
+      </div>
+      <SegmentedControl
+        onChange={(value: '1' | '2') => onUpdate({ edgeFaceCount: value === '2' ? 2 : 1 })}
+        options={[
+          { label: 'Plain edge', value: '1' },
+          { label: 'Upstand / beam', value: '2' },
+        ]}
+        value={(node.edgeFaceCount ?? 1) === 2 ? '2' : '1'}
+      />
+      <TopSurfaceFields boundedOption={false} node={node} onUpdate={onUpdate} />
+      <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+        Pour limits
+      </div>
+      <PourLimitInput
+        hint="What the plant can deliver before the first concrete placed reaches initial set, in m³."
+        label="Max volume"
+        onChange={(value) => onUpdate({ maxPourVolume: value })}
+        value={node.maxPourVolume}
+      />
+      <PourUnitHint pourUnitCount={pourUnitCount} />
+    </PanelSection>
   )
 }
 

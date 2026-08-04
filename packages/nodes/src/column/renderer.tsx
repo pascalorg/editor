@@ -17,6 +17,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  NodeRenderer,
   type RenderShading,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
@@ -2420,6 +2421,12 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
           {...handlers}
         >
           <ColumnBody node={node} />
+
+          {/* Hosted children — the formwork assembly builds in column-local
+              space, so it has to mount inside this already-transformed group. */}
+          {(node.children ?? []).map((childId) => (
+            <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
+          ))}
         </group>
       </ColumnEdgeSoftnessContext.Provider>
     </ColumnMaterialContext.Provider>
