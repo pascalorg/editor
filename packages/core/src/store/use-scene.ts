@@ -1387,25 +1387,25 @@ const useScene: UseSceneStore = create<SceneState>()(
           return // Scene already loaded
         }
 
-        // Create hierarchy: Site → Building → Level
+        // Create hierarchy: Site → Building → Level. Parent links must be
+        // written explicitly — the schema defaults `parentId` to null, and the
+        // scene authority rejects parent/child asymmetry that the renderer
+        // happily traverses through `children`.
+        const site = SiteNode.parse({})
+        const building = BuildingNode.parse({
+          parentId: site.id,
+        })
         const level0 = LevelNode.parse({
+          parentId: building.id,
           level: 0,
           children: [],
           height: 2.5,
         })
 
-        const building = BuildingNode.parse({
-          children: [level0.id],
-        })
-
-        const site = SiteNode.parse({
-          children: [building.id],
-        })
-
         // Define all nodes flat
         const nodes: Record<AnyNodeId, AnyNode> = {
-          [site.id]: site,
-          [building.id]: building,
+          [site.id]: { ...site, children: [building.id] },
+          [building.id]: { ...building, children: [level0.id] },
           [level0.id]: level0,
         }
 
