@@ -58,12 +58,13 @@ function resolveLevelBuildingId(
  */
 // Identity-keyed memo. `nodes` is an immutable store slice, so a hit means the
 // scene has not changed since the last call. Hot callers ask once per wall per
-// frame (WallCutout), which rebuilt an identical Map 1000+ times a frame.
-let memoNodes: Record<AnyNodeId, AnyNode> | null = null
-let memoElevations: Map<string, LevelElevation> | null = null
+// frame (WallCutout), which rebuilt an identical Map 1000+ times a frame. Weakly
+// keyed so a closed project's node graph is not pinned by the memo.
+const elevationMemo = new WeakMap<object, Map<string, LevelElevation>>()
 
 export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<string, LevelElevation> {
-  if (memoNodes === nodes && memoElevations) return memoElevations
+  const memoized = elevationMemo.get(nodes)
+  if (memoized) return memoized
 
   const buildings = Object.values(nodes).filter(
     (node): node is BuildingNode => node?.type === 'building',
@@ -95,8 +96,7 @@ export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<strin
     cumulativeYByBuilding.set(entry.buildingId, baseY + entry.height)
   }
 
-  memoNodes = nodes
-  memoElevations = elevations
+  elevationMemo.set(nodes, elevations)
   return elevations
 }
 
