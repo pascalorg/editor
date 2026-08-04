@@ -1094,6 +1094,51 @@ function migrateNodes(nodes: Record<string, any>): {
     }
   }
 
+  // Pass 4: formwork-system → formwork-assembly.
+  // The rename carries the id with it, because `objectId('formwork-assembly')`
+  // is a template literal that rejects a `formwork-system_…` id — leaving the
+  // id alone would fail parse and drop the node. Renaming the key means every
+  // host's `children` entry has to be rewritten in the same pass, or the wall
+  // keeps pointing at an id that no longer exists.
+  const renamedFormwork = new Map<string, string>()
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    if (node?.type !== 'formwork-system') continue
+    const suffix = id.slice(id.indexOf('_') + 1)
+    const nextId = `formwork-assembly_${suffix}`
+    renamedFormwork.set(id, nextId)
+    delete patchedNodes[id]
+    patchedNodes[nextId] = {
+      ...node,
+      id: nextId,
+      type: 'formwork-assembly',
+      // The legacy kind carried only `panelWidth` (plus the base node fields),
+      // so every field the new kind adds is unconditionally seeded here. Scope
+      // 0/0 describes what the old kind actually was: one shutter covering the
+      // whole element in a single lift.
+      segmentIndex: 0,
+      liftIndex: 0,
+      fillerPosition: 'middle',
+      avoidedPanelIds: [],
+      designOverrides: {},
+      partOverrides: {},
+    }
+  }
+  if (renamedFormwork.size > 0) {
+    for (const [id, node] of Object.entries(patchedNodes)) {
+      const children = node?.children
+      if (!Array.isArray(children)) continue
+      let changed = false
+      const next = children.map((childId: unknown) => {
+        if (typeof childId !== 'string') return childId
+        const renamed = renamedFormwork.get(childId)
+        if (!renamed) return childId
+        changed = true
+        return renamed
+      })
+      if (changed) patchedNodes[id] = { ...node, children: next }
+    }
+  }
+
   return { nodes: patchedNodes as Record<string, AnyNode>, mintedMaterials }
 }
 
