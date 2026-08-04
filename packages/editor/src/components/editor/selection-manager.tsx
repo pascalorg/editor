@@ -77,6 +77,7 @@ import useInteractionScope, {
   useIsCurveReshape,
   useMovingNode,
 } from '../../store/use-interaction-scope'
+import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { armGroupMove3d } from './group-move-3d'
 import { classifyParticipant } from './group-transform-shared'
@@ -590,6 +591,7 @@ const computeNextIds = (
     currentSelectedIds: selectedIds,
     modifierKeys: selectionModifiersFromEvent(event, modifierKeys),
     nodeId: node.id,
+    expandIdsForNode: expandSessionSelectionForNode,
   })
 }
 
@@ -774,6 +776,7 @@ export const SelectionManager = () => {
     meta: false,
     ctrl: false,
     shift: false,
+    alt: false,
   })
   const clickHandledRef = useRef(false)
 
@@ -1192,18 +1195,21 @@ export const SelectionManager = () => {
       if (event.key === 'Meta') modifierKeysRef.current.meta = true
       if (event.key === 'Control') modifierKeysRef.current.ctrl = true
       if (event.key === 'Shift') modifierKeysRef.current.shift = true
+      if (event.key === 'Alt') modifierKeysRef.current.alt = true
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key === 'Meta') modifierKeysRef.current.meta = false
       if (event.key === 'Control') modifierKeysRef.current.ctrl = false
       if (event.key === 'Shift') modifierKeysRef.current.shift = false
+      if (event.key === 'Alt') modifierKeysRef.current.alt = false
     }
 
     const clearModifiers = () => {
       modifierKeysRef.current.meta = false
       modifierKeysRef.current.ctrl = false
       modifierKeysRef.current.shift = false
+      modifierKeysRef.current.alt = false
     }
 
     window.addEventListener('keydown', onKeyDown)
