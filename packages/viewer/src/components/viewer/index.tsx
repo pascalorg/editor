@@ -22,7 +22,7 @@ import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
-import { initializeGpuRenderer } from '../../lib/renderer-capability'
+import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
@@ -505,12 +505,15 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       dpr={[1, maxDpr]}
       frameloop="never"
       gl={
-        ((props: { canvas?: HTMLCanvasElement }) => {
+        ((props: { canvas?: HTMLCanvasElement; powerPreference?: RendererPowerPreference }) => {
           const canvas = props.canvas
           const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
           if (cached) return cached
           const promise = (async () => {
             const result = await initializeGpuRenderer({
+              // Supplying `device` makes three skip its own `requestAdapter`,
+              // so R3F's `powerPreference` only reaches the GPU if we forward it.
+              powerPreference: props.powerPreference,
               createRenderer: (backendParameters) => {
                 const renderer = new THREE.WebGPURenderer({
                   ...(props as any),
@@ -532,6 +535,12 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
             if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
             console.error('[viewer] WebGPURenderer init failed', result.error)
             setRendererInitFailed(true)
+            // Never settles on purpose. Rejecting is what produced
+            // MONOREPO-EDITOR-59: R3F awaits this inside its own configure()
+            // with no catch, so a rejection surfaces as an unhandled rejection.
+            // Resolving is worse still — R3F would call render() on a renderer
+            // that has no context. The state update above unmounts this Canvas,
+            // which is what releases the pending configure().
             return new Promise<never>(() => undefined)
           })()
           if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)

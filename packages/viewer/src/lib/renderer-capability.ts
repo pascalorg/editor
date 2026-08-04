@@ -2,6 +2,9 @@ export type RendererCapabilityCanvas = {
   getContext(contextId: 'webgl2'): unknown
 }
 
+/** Mirrors `GPUPowerPreference` without pulling WebGPU ambient types into the declaration build. */
+export type RendererPowerPreference = 'high-performance' | 'low-power'
+
 type RendererGpuAdapter = {
   features?: Iterable<string>
   requestDevice(descriptor?: { requiredFeatures?: string[] }): Promise<unknown>
@@ -42,6 +45,19 @@ function browserCanvas(): RendererCapabilityCanvas | null {
   return document.createElement('canvas')
 }
 
+/**
+ * Because we hand the device to `WebGPURenderer` ourselves, three treats it as
+ * caller-owned and never destroys it, and `Renderer.dispose()` is a no-op when
+ * `init()` failed. Any device we request and then abandon has to be released
+ * here or it counts against the browser's concurrent-device limit for the rest
+ * of the page's life.
+ */
+function releaseDevice(device: unknown) {
+  try {
+    ;(device as { destroy?: () => void } | null)?.destroy?.()
+  } catch {}
+}
+
 function withTimeout<Result>(promise: Promise<Result>, timeoutMs: number, operation: string) {
   let timeout: ReturnType<typeof setTimeout>
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -53,8 +69,11 @@ function withTimeout<Result>(promise: Promise<Result>, timeoutMs: number, operat
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeout))
 }
 
-async function requestWebGpuDevice(gpu: RendererGpu) {
-  const adapter = await gpu.requestAdapter({ featureLevel: 'compatibility' })
+async function requestWebGpuDevice(gpu: RendererGpu, powerPreference?: RendererPowerPreference) {
+  const adapter = await gpu.requestAdapter({
+    featureLevel: 'compatibility',
+    ...(powerPreference ? { powerPreference } : {}),
+  })
   if (!adapter) return null
 
   const requiredFeatures = adapter.features ? Array.from(adapter.features) : undefined
@@ -64,24 +83,27 @@ async function requestWebGpuDevice(gpu: RendererGpu) {
 export async function detectRendererCapability({
   canvas = browserCanvas(),
   gpu = browserGpu(),
+  powerPreference,
   webgpuTimeoutMs = WEBGPU_INITIALIZATION_TIMEOUT_MS,
 }: {
   canvas?: RendererCapabilityCanvas | null
   gpu?: RendererGpu | null
+  powerPreference?: RendererPowerPreference
   webgpuTimeoutMs?: number
 } = {}): Promise<RendererCapability> {
   let capabilityError: unknown
 
   if (gpu) {
+    const pending = requestWebGpuDevice(gpu, powerPreference)
     try {
-      const device = await withTimeout(
-        requestWebGpuDevice(gpu),
-        webgpuTimeoutMs,
-        'WebGPU adapter/device request',
-      )
+      const device = await withTimeout(pending, webgpuTimeoutMs, 'WebGPU adapter/device request')
       if (device) return { backend: 'webgpu', device, status: 'supported' }
     } catch (error) {
       capabilityError = error
+      // Losing the race means a device may still arrive after we have given up
+      // on it, so reclaim it. Attaching the handler only on this path keeps
+      // ownership of a device we did return unambiguous.
+      pending.then(releaseDevice).catch(() => {})
     }
   }
 
@@ -100,17 +122,20 @@ export async function detectRendererCapability({
 export async function initializeGpuRenderer<Renderer extends InitializableRenderer>({
   createRenderer,
   gpu,
+  powerPreference,
   probeCanvas = browserCanvas(),
   webgpuTimeoutMs = WEBGPU_INITIALIZATION_TIMEOUT_MS,
 }: {
   createRenderer: (parameters: RendererBackendParameters) => Renderer
   gpu?: RendererGpu | null
+  powerPreference?: RendererPowerPreference
   probeCanvas?: RendererCapabilityCanvas | null
   webgpuTimeoutMs?: number
 }): Promise<RendererInitializationResult<Renderer>> {
   const capability = await detectRendererCapability({
     canvas: probeCanvas,
     gpu,
+    powerPreference,
     webgpuTimeoutMs,
   })
   if (capability.status === 'unsupported') return capability
@@ -130,6 +155,8 @@ export async function initializeGpuRenderer<Renderer extends InitializableRender
       renderer?.dispose?.()
     } catch {}
     if (capability.backend !== 'webgpu') return { error, status: 'unsupported' }
+
+    releaseDevice(capability.device)
 
     renderer = undefined
     try {

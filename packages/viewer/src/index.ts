@@ -128,6 +128,7 @@ export {
   type RendererCapability,
   type RendererCapabilityCanvas,
   type RendererInitializationResult,
+  type RendererPowerPreference,
 } from './lib/renderer-capability'
 export {
   getSceneTheme,

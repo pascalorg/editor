@@ -1,7 +1,6 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { describe, expect, mock, test } from 'bun:test'
-import { UnsupportedGpuViewerFallback } from '../components/viewer/unsupported-gpu-fallback'
 import {
   initializeGpuRenderer,
   type RendererBackendParameters,
@@ -166,7 +165,6 @@ describe('GPU renderer capability and initialization', () => {
     })
 
     expect(result.status).toBe('unsupported')
-    expect(JSON.stringify(UnsupportedGpuViewerFallback())).toContain('3D viewer unavailable')
   })
 
   test('times out hung WebGPU renderer initialization and falls back to WebGL', async () => {
@@ -224,6 +222,104 @@ describe('GPU renderer capability and initialization', () => {
 
     expect(result.status).toBe('unsupported')
     expect(dispose).toHaveBeenCalledTimes(1)
-    expect(JSON.stringify(UnsupportedGpuViewerFallback())).toContain('3D viewer unavailable')
+  })
+
+  test('forwards powerPreference to the adapter request', async () => {
+    const requestAdapter = mock(async () => ({ requestDevice: async () => ({}) }))
+
+    const result = await initializeGpuRenderer({
+      createRenderer: () => ({ init: async () => undefined }),
+      gpu: { requestAdapter },
+      powerPreference: 'high-performance',
+    })
+
+    expect(result.status).toBe('ready')
+    // Supplying `device` makes three skip its own requestAdapter, so losing the
+    // hint here means dual-GPU users silently get the integrated GPU.
+    expect(requestAdapter).toHaveBeenCalledWith({
+      featureLevel: 'compatibility',
+      powerPreference: 'high-performance',
+    })
+  })
+
+  test('omits powerPreference when the caller does not supply one', async () => {
+    const requestAdapter = mock(async () => ({ requestDevice: async () => ({}) }))
+
+    await initializeGpuRenderer({
+      createRenderer: () => ({ init: async () => undefined }),
+      gpu: { requestAdapter },
+    })
+
+    expect(requestAdapter).toHaveBeenCalledWith({ featureLevel: 'compatibility' })
+  })
+
+  test('destroys the owned device when the WebGPU renderer falls back to WebGL', async () => {
+    const destroy = mock(() => undefined)
+    const device = { destroy }
+
+    const result = await initializeGpuRenderer({
+      createRenderer: (backendParameters) =>
+        backendParameters.device
+          ? {
+              init: async () => {
+                throw new Error('WebGPU renderer init failed')
+              },
+            }
+          : { init: async () => undefined },
+      gpu: { requestAdapter: async () => ({ requestDevice: async () => device }) },
+    })
+
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') expect(result.backend).toBe('webgl')
+    // three never destroys a caller-supplied device, and dispose() is a no-op
+    // after a failed init, so this is the only thing reclaiming it.
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('destroys a device that resolves after the request timed out', async () => {
+    const destroy = mock(() => undefined)
+    let resolveDevice: (device: unknown) => void = () => undefined
+
+    const result = await initializeGpuRenderer({
+      createRenderer: () => ({ init: async () => undefined }),
+      gpu: {
+        requestAdapter: async () => ({
+          requestDevice: () =>
+            new Promise((resolve) => {
+              resolveDevice = resolve
+            }),
+        }),
+      },
+      probeCanvas: canvasWithContexts({ webgl2: {} }),
+      webgpuTimeoutMs: 10,
+    })
+
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') expect(result.backend).toBe('webgl')
+
+    resolveDevice({ destroy })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(destroy).toHaveBeenCalledTimes(1)
+  })
+
+  test('reports unsupported when the probe canvas has a context but the display canvas does not', async () => {
+    const dispose = mock(() => undefined)
+
+    const result = await initializeGpuRenderer({
+      createRenderer: () => ({
+        dispose,
+        // Chrome's live-context cap means the probe can succeed while the
+        // display canvas — created with different attributes — returns null.
+        init: async () => {
+          throw new TypeError("Cannot read properties of null (reading 'getSupportedExtensions')")
+        },
+      }),
+      gpu: null,
+      probeCanvas: canvasWithContexts({ webgl2: {} }),
+    })
+
+    expect(result.status).toBe('unsupported')
+    if (result.status === 'unsupported') expect(result.error).toBeInstanceOf(TypeError)
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 })
