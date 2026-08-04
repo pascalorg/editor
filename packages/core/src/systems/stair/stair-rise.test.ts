@@ -169,8 +169,15 @@ describe('resolveStairTotalRise', () => {
     } as Record<string, AnyNode>
 
     expect(resolveStairTotalRise(stair, stackedNodes)).toBeCloseTo(2.9)
-    stackedNodes.level_2 = { ...upper, baseElevation: -0.4 }
-    expect(resolveStairTotalRise(stair, stackedNodes)).toBeCloseTo(2.1)
+    // A fresh record, not a mutation of `stackedNodes`: getLevelElevations
+    // memoises on the identity of the nodes object, which holds because the
+    // store always publishes a new record. Mutating in place would read the
+    // cached elevations and silently assert nothing.
+    const loweredNodes = {
+      ...stackedNodes,
+      level_2: { ...upper, baseElevation: -0.4 },
+    } as Record<string, AnyNode>
+    expect(resolveStairTotalRise(stair, loweredNodes)).toBeCloseTo(2.1)
   })
 
   it('prefers an explicit totalRise over the storey height', () => {
