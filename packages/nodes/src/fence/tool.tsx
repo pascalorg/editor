@@ -50,15 +50,7 @@ import {
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  BoxGeometry,
-  BufferGeometry,
-  type Camera,
-  DoubleSide,
-  type Group,
-  type Mesh,
-  Vector3,
-} from 'three'
+import { BufferGeometry, type Camera, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
 import {
   DraftAngleArc,
   type DraftAngleLabel,
@@ -430,16 +422,11 @@ function updateFencePreview(
   }
   mesh.visible = true
   direction.normalize()
-  const geometry = new BoxGeometry(length, previewHeight, previewThickness)
   const angle = Math.atan2(direction.z, direction.x)
 
   mesh.position.set((start.x + end.x) / 2, start.y + previewHeight / 2, (start.z + end.z) / 2)
   mesh.rotation.y = -angle
-
-  if (mesh.geometry) {
-    mesh.geometry.dispose()
-  }
-  mesh.geometry = geometry
+  mesh.scale.set(length, previewHeight, previewThickness)
 }
 
 function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
@@ -762,7 +749,7 @@ const StraightFenceTool: React.FC = () => {
       />
       <CursorSphere height={previewHeight} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={previewRef} renderOrder={1} visible={false}>
-        <shapeGeometry />
+        <boxGeometry />
         <meshBasicMaterial
           color="#ffffff"
           depthTest={false}
