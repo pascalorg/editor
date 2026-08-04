@@ -11,6 +11,40 @@ export function isSuspiciousNodeDrop(previousNodeCount: number, currentNodeCount
   return previousNodeCount > STRUCTURAL_NODE_COUNT && currentNodeCount <= STRUCTURAL_NODE_COUNT
 }
 
+/**
+ * Tracks the node count of the graph we believe is stored, which is what the
+ * accidental-wipe guard measures every write against.
+ *
+ * The distinction that matters: a graph that came from storage is authoritative
+ * and has to become the new baseline, while an edited or previewed graph must
+ * not. Seeding the baseline once at mount is not enough — the hook mounts
+ * before the scene has loaded, so it would sit at ~0 for the whole session and
+ * `isSuspiciousNodeDrop` could never fire.
+ */
+export function createStoredNodeCountTracker(initialNodeCount: number) {
+  let count = initialNodeCount
+
+  return {
+    get count() {
+      return count
+    },
+    /** A graph read from storage — it defines what "populated" means from here. */
+    trackLoadedGraph(nodeCount: number) {
+      count = nodeCount
+    },
+    /**
+     * `false` when the write would drop a populated scene to a bare scaffold,
+     * which is an accidental full deletion far more often than an intent. The
+     * caller reports the block; on `true` the write becomes the new baseline.
+     */
+    allowWrite(nodeCount: number) {
+      if (isSuspiciousNodeDrop(count, nodeCount)) return false
+      count = nodeCount
+      return true
+    },
+  }
+}
+
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
 interface UseAutoSaveOptions {
@@ -65,7 +99,9 @@ export function useAutoSave({
   // Stable subscription to scene changes
   useEffect(() => {
     let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
-    let lastNodeCount = Object.keys(useScene.getState().nodes).length
+    const storedNodeCount = createStoredNodeCountTracker(
+      Object.keys(useScene.getState().nodes).length,
+    )
     // Collections + scene materials are document-level state that persists with
     // the graph but lives outside `nodes`. Track them by reference (zustand
     // hands out a new object on every mutation) so a material edit or a
@@ -90,17 +126,15 @@ export function useAutoSave({
         installedPlugins,
       } as SceneGraph
 
-      // Guard: refuse to autosave if the scene went from populated to nearly empty.
-      // This catches accidental full deletions before they're persisted.
       const currentNodeCount = Object.keys(nodes).length
-      if (isSuspiciousNodeDrop(lastNodeCount, currentNodeCount)) {
+      const previousNodeCount = storedNodeCount.count
+      if (!storedNodeCount.allowWrite(currentNodeCount)) {
         console.warn(
-          `[autosave] Blocked: scene dropped from ${lastNodeCount} to ${currentNodeCount} nodes. Likely accidental deletion.`,
+          `[autosave] Blocked: scene dropped from ${previousNodeCount} to ${currentNodeCount} nodes. Likely accidental deletion.`,
         )
         setSaveStatus('error')
         return
       }
-      lastNodeCount = currentNodeCount
 
       isSavingRef.current = true
       pendingSaveRef.current = false
@@ -135,6 +169,7 @@ export function useAutoSave({
     const unsubscribe = useScene.subscribe((state) => {
       if (isLoadingSceneRef.current) {
         lastNodesSnapshot = JSON.stringify(state.nodes)
+        storedNodeCount.trackLoadedGraph(Object.keys(state.nodes).length)
         lastCollectionsRef = state.collections
         lastMaterialsRef = state.materials
         lastInstalledPluginsRef = state.installedPlugins
@@ -188,16 +223,16 @@ export function useAutoSave({
       if (!hasDirtyChangesRef.current) return
       const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
       const currentNodeCount = Object.keys(nodes).length
-      if (isSuspiciousNodeDrop(lastNodeCount, currentNodeCount)) {
+      const previousNodeCount = storedNodeCount.count
+      if (!storedNodeCount.allowWrite(currentNodeCount)) {
         console.warn(
-          `[autosave] Blocked unload flush: scene dropped from ${lastNodeCount} to ${currentNodeCount} nodes. Likely accidental deletion.`,
+          `[autosave] Blocked unload flush: scene dropped from ${previousNodeCount} to ${currentNodeCount} nodes. Likely accidental deletion.`,
         )
         setSaveStatus('error')
         return
       }
 
       hasDirtyChangesRef.current = false
-      lastNodeCount = currentNodeCount
       const sceneGraph = {
         nodes,
         rootNodeIds,
