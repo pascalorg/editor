@@ -26,3 +26,13 @@ jobs:
 
       - name: Type check
         run: bun run check-types
+
+      # Only the library packages — the Next app build needs runtime env vars
+      # and emits no `dist/` for the parity check below.
+      - name: Build packages
+        run: bunx turbo run build --filter='./packages/*'
+
+      # Guards against a `dist/` that the app would bundle but no source in
+      # the repo produces — see tooling/check-dist-parity.mjs.
+      - name: dist/src parity
+        run: bun run check-dist
