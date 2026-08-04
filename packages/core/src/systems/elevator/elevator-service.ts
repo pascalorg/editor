@@ -105,11 +105,15 @@ export function resolveElevatorLevels(
     ? allLevels.findIndex((level) => level.id === lastServedLevel.id)
     : -1
   const nextLevel = lastServedIndex >= 0 ? allLevels[lastServedIndex + 1] : null
-  const lastStackedLevel = allLevels[allLevels.length - 1]
-  const stackTopY = lastStackedLevel
-    ? (levelElevations.get(lastStackedLevel.id)?.baseY ?? 0) +
-      (levelElevations.get(lastStackedLevel.id)?.height ?? 0)
-    : 0
+  // Highest ceiling in the stack, not the topmost level's: a negative
+  // baseElevation on the top level can put its ceiling below the level
+  // beneath it, and a shaft top under a served level would clip the cab.
+  let stackTopY = 0
+  for (const level of allLevels) {
+    const elevation = levelElevations.get(level.id)
+    if (!elevation) continue
+    stackTopY = Math.max(stackTopY, elevation.baseY + elevation.height)
+  }
   const shaftTopY = nextLevel
     ? (levelElevations.get(nextLevel.id)?.baseY ?? stackTopY)
     : lastServedLevel
