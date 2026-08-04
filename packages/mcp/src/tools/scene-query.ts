@@ -113,7 +113,7 @@ function getDefaultLevelId(
   return (level?.id as AnyNodeId | undefined) ?? null
 }
 
-function nodesOnLevel(bridge: SceneOperations, levelId: AnyNodeId): AnyNode[] {
+export function nodesOnLevel(bridge: SceneOperations, levelId: AnyNodeId): AnyNode[] {
   return Object.values(bridge.getNodes()).filter(
     (node) => node.id !== levelId && bridge.resolveLevelId(node.id as AnyNodeId) === levelId,
   )
