@@ -24,8 +24,9 @@ cp .env.example .env
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `PORT` | No | Dev server port (default: 3002) |
+| `MINT_PASCAL_HOST_ORIGIN` | No | Public editor origin used by Mint sign-in and request checks. Set it for self-hosted deployments. |
 
-The editor works fully without any environment variables.
+Local development and the official hosted editor work without any environment variables.
 
 ## Docker
 
@@ -35,6 +36,13 @@ docker compose up -d
 
 The editor will be running at **http://localhost:3000**. Saved scenes live in
 the `pascal-data` volume, so they survive `docker compose down`.
+
+Docker defaults `MINT_PASCAL_HOST_ORIGIN` to `http://localhost:3000`. Override
+it when hosting Pascal at another origin:
+
+```bash
+MINT_PASCAL_HOST_ORIGIN=https://pascal.example.com docker compose up -d
+```
 
 Keep the container port at 3000: the `/scenes` page fetches its own API through
 a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
