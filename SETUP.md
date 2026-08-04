@@ -27,6 +27,20 @@ cp .env.example .env
 
 The editor works fully without any environment variables.
 
+## Docker
+
+```bash
+docker compose up -d
+```
+
+The editor will be running at **http://localhost:3000**. Saved scenes live in
+the `pascal-data` volume, so they survive `docker compose down`.
+
+Keep the container port at 3000: the `/scenes` page fetches its own API through
+a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
+value at build time, so remapping the port to something else makes the page
+return 500.
+
 ## Monorepo Structure
 
 ```
