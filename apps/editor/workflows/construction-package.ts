@@ -14,14 +14,14 @@ async function loadScene(sceneId: string) {
 }
 
 /**
- * Applies one free-text answer across every wall still missing formwork —
- * the durable-workflow equivalent of a single `runChatTurn`, but fanned out
- * over N walls instead of one. Runs as its own step so a Bedrock hiccup
- * retries independently of the (already-answered) human question.
+ * Applies one free-text answer across every castable element still missing
+ * formwork — the durable-workflow equivalent of a single `runChatTurn`, but
+ * fanned out over N elements instead of one. Runs as its own step so a Bedrock
+ * hiccup retries independently of the (already-answered) human question.
  */
 async function applyConstructionAnswer(
   stored: Awaited<ReturnType<typeof loadScene>>,
-  wallIds: string[],
+  elements: Array<{ id: string; kind: string }>,
   answer: string,
 ) {
   'use step'
@@ -32,18 +32,21 @@ async function applyConstructionAnswer(
     model: MODEL,
     system:
       'You are the construction AI inside the Pascal editor, running a scene-wide formwork ' +
-      'planning pass. The user has answered one clarifying question covering every wall listed ' +
-      'below. Call set_wall_construction then attach_formwork for EVERY wall id listed — do not ' +
-      'skip any, and do not invent values the answer does not cover.',
-    prompt: `Wall ids needing formwork: ${wallIds.join(', ')}\n\nUser answer: ${answer}`,
+      'planning pass. The user has answered one clarifying question covering every element ' +
+      'listed below. Call set_element_construction then attach_formwork for EVERY id listed — do ' +
+      'not skip any, and do not invent values the answer does not cover. The three kinds take ' +
+      'different shutters, so apply the answer to each in the terms that kind uses.',
+    prompt: `Elements needing formwork: ${elements
+      .map((element) => `${element.id} (${element.kind})`)
+      .join(', ')}\n\nUser answer: ${answer}`,
     tools: buildTools(stored.graph, toolCalls, () => {
       mutated = true
     }),
-    stopWhen: isStepCount(wallIds.length * 2 + 2),
+    stopWhen: isStepCount(elements.length * 2 + 2),
   })
 
   if (!mutated) {
-    throw new Error('Bedrock did not apply construction properties to any wall — retrying.')
+    throw new Error('Bedrock did not apply construction properties to any element — retrying.')
   }
 
   const store = await getSceneStore()
@@ -68,15 +71,19 @@ async function applyConstructionAnswer(
     })
   }
 
-  return { wallsUpdated: wallIds.length, toolCalls }
+  return { elementsUpdated: elements.length, toolCalls }
 }
 
+/** The kinds that get cast and therefore shuttered — the same set `chat-ai`'s tools accept. */
+const CASTABLE_TYPES = ['wall', 'column', 'slab'] as const
+type CastableNode = AnyNode & { type: (typeof CASTABLE_TYPES)[number] }
+
 /**
- * Durable, scene-wide construction planning pass: finds every wall still
- * missing formwork, asks the user ONE consolidated clarifying question,
- * then generates formwork/tie/waler geometry for all of them once answered.
+ * Durable, scene-wide construction planning pass: finds every wall, column and
+ * slab still missing formwork, asks the user ONE consolidated clarifying
+ * question, then generates the assembly for each of them once answered.
  *
- * Unlike `runChatTurn` (one request/response tool loop for one wall), this
+ * Unlike `runChatTurn` (one request/response tool loop for one element), this
  * suspends — for minutes, hours, or days — while waiting on the human
  * answer, consuming no compute in between, and resumes exactly where it
  * left off. That suspend/resume durability is the actual reason this lives
@@ -86,20 +93,29 @@ export async function planConstructionPackage(sceneId: string) {
   'use workflow'
   const stored = await loadScene(sceneId)
 
-  const wallIds = Object.values(stored.graph.nodes)
-    .filter((n): n is AnyNode & { type: 'wall' } => n.type === 'wall' && !n.formworkType)
-    .map((w) => w.id)
+  const elements = Object.values(stored.graph.nodes)
+    .filter(
+      (n): n is CastableNode =>
+        (CASTABLE_TYPES as readonly string[]).includes(n.type) &&
+        !(n as CastableNode).formworkType,
+    )
+    .map((n) => ({ id: n.id as string, kind: n.type as string }))
 
-  if (wallIds.length === 0) {
-    return { status: 'noop' as const, message: 'Every wall already has formwork configured.' }
+  if (elements.length === 0) {
+    return {
+      status: 'noop' as const,
+      message: 'Every wall, column and slab already has formwork configured.',
+    }
   }
 
   const hook = constructionQuestionHook.create({ token: sceneId })
   console.log(
-    `planConstructionPackage(${sceneId}): waiting on user answer for ${wallIds.length} wall(s): ${wallIds.join(', ')}`,
+    `planConstructionPackage(${sceneId}): waiting on user answer for ${elements.length} element(s): ${elements
+      .map((element) => `${element.id} (${element.kind})`)
+      .join(', ')}`,
   )
   const { answer } = await hook
 
-  const result = await applyConstructionAnswer(stored, wallIds, answer)
+  const result = await applyConstructionAnswer(stored, elements, answer)
   return { status: 'done' as const, ...result }
 }

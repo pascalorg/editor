@@ -23,7 +23,10 @@ async function main() {
     },
   ])
   console.log('\nTurn 1 reply:', first.reply)
-  console.log('Turn 1 tool calls:', first.toolCalls.map((c) => c.name))
+  console.log(
+    'Turn 1 tool calls:',
+    first.toolCalls.map((c) => c.name),
+  )
 
   const result = await runChatTurn(graph, [
     {
@@ -56,10 +59,15 @@ async function main() {
     process.exit(1)
   }
 
-  const formworkNodes = Object.values(graph.nodes).filter((n) => n.type === 'formwork-system')
-  console.log('formwork-system nodes attached:', formworkNodes.length, 'wall.children:', stored.children)
+  const formworkNodes = Object.values(graph.nodes).filter((n) => n.type === 'formwork-assembly')
+  console.log(
+    'formwork-assembly nodes attached:',
+    formworkNodes.length,
+    'wall.children:',
+    stored.children,
+  )
   if (formworkNodes.length === 0 && result.toolCalls.some((c) => c.name === 'attach_formwork')) {
-    console.error('\nFAIL: attach_formwork was called but no formwork-system node exists')
+    console.error('\nFAIL: attach_formwork was called but no formwork-assembly node exists')
     process.exit(1)
   }
 
