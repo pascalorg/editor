@@ -91,10 +91,7 @@ export function planFootprintAABB(
  */
 export function aabbsOverlapPlan(a: PlanAabb, b: PlanAabb, gap = 0): boolean {
   return (
-    a.maxX + gap > b.minX &&
-    a.minX - gap < b.maxX &&
-    a.maxZ + gap > b.minZ &&
-    a.minZ - gap < b.maxZ
+    a.maxX + gap > b.minX && a.minX - gap < b.maxX && a.maxZ + gap > b.minZ && a.minZ - gap < b.maxZ
   )
 }
 
