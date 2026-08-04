@@ -46,6 +46,11 @@
       "import": "./dist/hooks/spatial-grid/spatial-grid-manager.js",
       "default": "./dist/hooks/spatial-grid/spatial-grid-manager.js"
     },
+    "./plan-footprint": {
+      "types": "./dist/lib/plan-footprint.d.ts",
+      "import": "./dist/lib/plan-footprint.js",
+      "default": "./dist/lib/plan-footprint.js"
+    },
     "./wall": {
       "types": "./dist/systems/wall/wall-footprint.d.ts",
       "import": "./dist/systems/wall/wall-footprint.js",

@@ -1,3 +1,8 @@
+import {
+  planFootprintAABB,
+  planFootprintCorners,
+  type PlanAabb,
+} from '../../lib/plan-footprint'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
@@ -32,8 +37,18 @@ export {
 } from '../../systems/slab/slab-support'
 
 // ============================================================================
-// GEOMETRY HELPERS
+// GEOMETRY HELPERS (delegate to pure plan-footprint — one source with MCP/editor)
 // ============================================================================
+
+export {
+  aabbsOverlapPlan,
+  planFootprintAABB,
+  planFootprintAABBForItem,
+  planFootprintAABBFromCorners,
+  planFootprintCorners,
+  type PlanAabb,
+  type PlanVec2,
+} from '../../lib/plan-footprint'
 
 /**
  * Compute the 4 XZ footprint corners of an item given its position, dimensions, and Y rotation.
@@ -44,20 +59,7 @@ function getItemFootprint(
   rotation: [number, number, number],
   inset = 0,
 ): Array<[number, number]> {
-  const [x, , z] = position
-  const [w, , d] = dimensions
-  const yRot = rotation[1]
-  const halfW = Math.max(0, w / 2 - inset)
-  const halfD = Math.max(0, d / 2 - inset)
-  const cos = Math.cos(yRot)
-  const sin = Math.sin(yRot)
-
-  return [
-    [x + (-halfW * cos + halfD * sin), z + (-halfW * sin - halfD * cos)],
-    [x + (halfW * cos + halfD * sin), z + (halfW * sin - halfD * cos)],
-    [x + (halfW * cos - halfD * sin), z + (halfW * sin + halfD * cos)],
-    [x + (-halfW * cos - halfD * sin), z + (-halfW * sin + halfD * cos)],
-  ]
+  return planFootprintCorners(position, dimensions, rotation[1], inset)
 }
 
 /**
@@ -69,18 +71,8 @@ function footprintBoundsXZ(
   position: [number, number, number],
   dimensions: [number, number, number],
   yRot: number,
-): { minX: number; maxX: number; minZ: number; maxZ: number } {
-  const [width, , depth] = dimensions
-  const cos = Math.abs(Math.cos(yRot))
-  const sin = Math.abs(Math.sin(yRot))
-  const rotatedW = width * cos + depth * sin
-  const rotatedD = width * sin + depth * cos
-  return {
-    minX: position[0] - rotatedW / 2,
-    maxX: position[0] + rotatedW / 2,
-    minZ: position[2] - rotatedD / 2,
-    maxZ: position[2] + rotatedD / 2,
-  }
+): PlanAabb {
+  return planFootprintAABB(position, dimensions, yRot)
 }
 
 type ItemLocalBounds = {
