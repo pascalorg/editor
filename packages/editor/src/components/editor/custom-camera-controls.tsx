@@ -25,16 +25,21 @@ import {
   type CameraPoseApplicationPlan,
   normalizeCameraPose,
   planCameraPoseApplication,
+  publishInitialCameraPose,
+  releaseCameraPoseEventSuppression,
   stepCameraPoseInterpolation,
   withCameraPoseDistance,
 } from '../../lib/camera-pose'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
+import { publishCameraPose } from '../../store/camera-pose-store'
 import useEditor from '../../store/use-editor'
 import {
   useActiveHandleDrag,
   useEndpointReshape,
   useMovingNode,
 } from '../../store/use-interaction-scope'
+import { createCameraDraggingLifecycle } from './camera-dragging-lifecycle'
 
 const currentTarget = new Vector3()
 const tempBox = new Box3()
@@ -45,14 +50,9 @@ const tempSize = new Vector3()
 const tempTarget = new Vector3()
 const transitionFreezePosition = new Vector3()
 const transitionFreezeTarget = new Vector3()
-const syncTarget = new Vector3()
-const syncSpherical = new Spherical()
 const keyboardPanSpherical = new Spherical()
 const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
 const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
-const NAVIGATION_SYNC_POSITION_EPSILON = 0.001
-const NAVIGATION_SYNC_AZIMUTH_EPSILON = 0.0005
-const NAVIGATION_SYNC_VIEW_WIDTH_EPSILON = 0.001
 const KEYBOARD_PAN_VIEW_WIDTH_PER_SECOND = 0.65
 const KEYBOARD_PAN_MIN_SPEED = 2
 const KEYBOARD_PAN_MAX_SPEED = 55
@@ -61,14 +61,6 @@ type CameraPoseSnapshot = {
   mode: CameraMode
   position: [number, number, number]
   target: [number, number, number]
-}
-type NavigationCameraPoseSnapshot = {
-  target: [number, number, number]
-  azimuth: number
-  viewWidth: number
-}
-type PendingNavigationCameraPoseSnapshot = NavigationCameraPoseSnapshot & {
-  publishOnComplete: boolean
 }
 type CameraViewWidthUpdate =
   | { type: 'distance'; distance: number; viewWidth: number }
@@ -166,6 +158,10 @@ function isKeyboardPanKey(code: string): boolean {
   return code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD'
 }
 
+function hasKeyboardPanInput(state: KeyboardPanState): boolean {
+  return state.forward || state.backward || state.left || state.right
+}
+
 type CameraViewportSize = {
   width: number
   height: number
@@ -196,14 +192,6 @@ function getCameraViewWidth(camera: Camera, distance: number, size: CameraViewpo
   return Math.max(0.001, distance)
 }
 
-function getAngleDeltaRadians(a: number, b: number) {
-  return Math.atan2(Math.sin(a - b), Math.cos(a - b))
-}
-
-function nearestEquivalentRadians(angle: number, reference: number) {
-  return reference + getAngleDeltaRadians(angle, reference)
-}
-
 function clampFinite(value: number, min: number, max: number) {
   const resolvedMin = Number.isFinite(min) ? min : Number.NEGATIVE_INFINITY
   const resolvedMax = Number.isFinite(max) ? max : Number.POSITIVE_INFINITY
@@ -225,21 +213,6 @@ function clampCameraControlZoom(control: CameraControlsImpl, zoom: number) {
     zoom,
     bounds.minZoom ?? Number.NEGATIVE_INFINITY,
     bounds.maxZoom ?? Number.POSITIVE_INFINITY,
-  )
-}
-
-function isCameraAtNavigationPose(
-  pose: NavigationCameraPoseSnapshot,
-  target: Vector3,
-  azimuth: number,
-  viewWidth: number,
-) {
-  return (
-    Math.abs(pose.target[0] - target.x) < NAVIGATION_SYNC_POSITION_EPSILON &&
-    Math.abs(pose.target[1] - target.y) < NAVIGATION_SYNC_POSITION_EPSILON &&
-    Math.abs(pose.target[2] - target.z) < NAVIGATION_SYNC_POSITION_EPSILON &&
-    Math.abs(getAngleDeltaRadians(pose.azimuth, azimuth)) < NAVIGATION_SYNC_AZIMUTH_EPSILON &&
-    Math.abs(pose.viewWidth - viewWidth) < NAVIGATION_SYNC_VIEW_WIDTH_EPSILON
   )
 }
 
@@ -392,7 +365,6 @@ export const CustomCameraControls = () => {
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
-  const isFloorplanOpen = useEditor((s) => s.isFloorplanOpen)
   const selection = useViewer((s) => s.selection)
   const cameraMode = useViewer((state) => state.cameraMode)
   const isRestoringFirstPersonPose = useFirstPersonCameraPoseRestore(
@@ -402,24 +374,21 @@ export const CustomCameraControls = () => {
   )
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
-  const lastPublishedNavigationSync = useRef<NavigationCameraPoseSnapshot | null>(null)
-  const pendingFloorplanNavigationPose = useRef<PendingNavigationCameraPoseSnapshot | null>(null)
-  const lastApplied2dNavigationRevision = useRef(0)
-  const savedSmoothTimeRef = useRef<number | null>(null)
   const maxPolarAngle =
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
-  const clearPendingFloorplanNavigationPose = useCallback(() => {
-    pendingFloorplanNavigationPose.current = null
-    if (savedSmoothTimeRef.current !== null && controls.current) {
-      controls.current.smoothTime = savedSmoothTimeRef.current
-      savedSmoothTimeRef.current = null
-    }
-  }, [])
 
   const camera = useThree((state) => state.camera)
   const gl = useThree((state) => state.gl)
   const raycaster = useThree((state) => state.raycaster)
   const viewportSize = useThree((state) => state.size)
+  const cameraDraggingLifecycle = useMemo(
+    () =>
+      createCameraDraggingLifecycle({
+        setDragging: (dragging) => useViewer.getState().setCameraDragging(dragging),
+      }),
+    [],
+  )
+  useEffect(() => () => cameraDraggingLifecycle.end(), [cameraDraggingLifecycle])
   useEffect(() => {
     camera.layers.enable(EDITOR_LAYER)
     camera.layers.enable(GRID_LAYER)
@@ -444,10 +413,14 @@ export const CustomCameraControls = () => {
     }
   }, [freezeActivePoseInterpolation])
 
-  const beginLocalCameraInteraction = useCallback(() => {
-    cancelPoseApplication()
-    emitter.emit('camera-controls:interaction-start', undefined)
-  }, [cancelPoseApplication])
+  const beginLocalCameraInteraction = useCallback(
+    ({ dragging = true }: { dragging?: boolean } = {}) => {
+      cancelPoseApplication()
+      if (dragging) cameraDraggingLifecycle.begin()
+      emitter.emit('camera-controls:interaction-start', undefined)
+    },
+    [cameraDraggingLifecycle, cancelPoseApplication],
+  )
 
   const applyPendingPose = useCallback(() => {
     if (isFirstPersonMode) {
@@ -497,12 +470,10 @@ export const CustomCameraControls = () => {
       }
     }
 
-    clearPendingFloorplanNavigationPose()
     activePoseInterpolation.current = { camera, control, plan: appliedPlan }
   }, [
     camera,
     cancelPoseApplication,
-    clearPendingFloorplanNavigationPose,
     freezeActivePoseInterpolation,
     isFirstPersonMode,
     viewportSize,
@@ -567,19 +538,11 @@ export const CustomCameraControls = () => {
     if (!controls.current) return
     if (firstLoad.current) {
       firstLoad.current = false
-      clearPendingFloorplanNavigationPose()
       controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
     }
     controls.current.getTarget(currentTarget)
-    clearPendingFloorplanNavigationPose()
     controls.current.moveTo(currentTarget.x, targetY, currentTarget.z, true)
-  }, [
-    clearPendingFloorplanNavigationPose,
-    currentLevelId,
-    isPreviewMode,
-    isFirstPersonMode,
-    isRestoringFirstPersonPose,
-  ])
+  }, [currentLevelId, isPreviewMode, isFirstPersonMode, isRestoringFirstPersonPose])
 
   useEffect(() => {
     if (isFirstPersonMode || !controls.current) return
@@ -607,7 +570,6 @@ export const CustomCameraControls = () => {
       controls.current.getTarget(tempTarget)
       tempDelta.copy(tempCenter).sub(tempTarget)
 
-      clearPendingFloorplanNavigationPose()
       controls.current.setLookAt(
         tempPosition.x + tempDelta.x,
         tempPosition.y + tempDelta.y,
@@ -618,105 +580,8 @@ export const CustomCameraControls = () => {
         true,
       )
     },
-    [clearPendingFloorplanNavigationPose, isPreviewMode, isFirstPersonMode],
+    [isPreviewMode, isFirstPersonMode],
   )
-
-  useEffect(() => {
-    if (isFirstPersonMode) return
-
-    return useEditor.subscribe((state) => {
-      const pose = state.navigationSyncPose
-      if (pose?.source !== '2d' || pose.revision === lastApplied2dNavigationRevision.current) return
-
-      const control = controls.current
-      if (!control) return
-
-      lastApplied2dNavigationRevision.current = pose.revision
-      const targetAzimuth = nearestEquivalentRadians(pose.azimuth, control.azimuthAngle)
-      const viewWidthUpdate = resolveCameraViewWidthUpdate(
-        control,
-        camera,
-        pose.viewWidth,
-        viewportSize,
-      )
-      pendingFloorplanNavigationPose.current = {
-        target: [...pose.target],
-        azimuth: targetAzimuth,
-        viewWidth: viewWidthUpdate.viewWidth,
-        publishOnComplete:
-          Math.abs(viewWidthUpdate.viewWidth - pose.viewWidth) >=
-          NAVIGATION_SYNC_VIEW_WIDTH_EPSILON,
-      }
-      // Match 3D settle time to 2D exponential decay (τ=90ms). SmoothDamp's
-      // effective time constant is smoothTime/2, so smoothTime=0.18 gives
-      // τ≈90ms and visual convergence in ~350-400ms, matching the 2D panel.
-      if (savedSmoothTimeRef.current === null) {
-        savedSmoothTimeRef.current = control.smoothTime
-      }
-      control.smoothTime = 0.18
-      control.moveTo(pose.target[0], pose.target[1], pose.target[2], true)
-      control.rotateTo(targetAzimuth, control.polarAngle, true)
-      applyCameraViewWidth(control, viewWidthUpdate)
-    })
-  }, [camera, isFirstPersonMode, viewportSize])
-
-  const publishCurrentNavigationPose = useCallback(() => {
-    if (isFirstPersonMode || !controls.current) return
-
-    controls.current.getTarget(syncTarget, false)
-    controls.current.getSpherical(syncSpherical, false)
-    const viewWidth = getCameraViewWidth(camera, syncSpherical.radius, viewportSize)
-
-    const pendingFloorplanPose = pendingFloorplanNavigationPose.current
-    if (pendingFloorplanPose) {
-      // The camera is still damping toward a 2D-originated pose; do not echo
-      // intermediate 3D poses back into the floorplan.
-      if (
-        isCameraAtNavigationPose(pendingFloorplanPose, syncTarget, syncSpherical.theta, viewWidth)
-      ) {
-        lastPublishedNavigationSync.current = pendingFloorplanPose
-        clearPendingFloorplanNavigationPose()
-        if (pendingFloorplanPose.publishOnComplete) {
-          useEditor.getState().publishNavigationSyncPose({
-            source: '3d',
-            target: [
-              pendingFloorplanPose.target[0],
-              pendingFloorplanPose.target[1],
-              pendingFloorplanPose.target[2],
-            ],
-            azimuth: pendingFloorplanPose.azimuth,
-            viewWidth: pendingFloorplanPose.viewWidth,
-          })
-        }
-      }
-      return
-    }
-
-    const previous = lastPublishedNavigationSync.current
-    if (
-      previous &&
-      Math.abs(previous.target[0] - syncTarget.x) < NAVIGATION_SYNC_POSITION_EPSILON &&
-      Math.abs(previous.target[1] - syncTarget.y) < NAVIGATION_SYNC_POSITION_EPSILON &&
-      Math.abs(previous.target[2] - syncTarget.z) < NAVIGATION_SYNC_POSITION_EPSILON &&
-      Math.abs(getAngleDeltaRadians(previous.azimuth, syncSpherical.theta)) <
-        NAVIGATION_SYNC_AZIMUTH_EPSILON &&
-      Math.abs(previous.viewWidth - viewWidth) < NAVIGATION_SYNC_VIEW_WIDTH_EPSILON
-    ) {
-      return
-    }
-
-    lastPublishedNavigationSync.current = {
-      target: [syncTarget.x, syncTarget.y, syncTarget.z],
-      azimuth: syncSpherical.theta,
-      viewWidth,
-    }
-    useEditor.getState().publishNavigationSyncPose({
-      source: '3d',
-      target: [syncTarget.x, syncTarget.y, syncTarget.z],
-      azimuth: syncSpherical.theta,
-      viewWidth,
-    })
-  }, [camera, clearPendingFloorplanNavigationPose, isFirstPersonMode, viewportSize])
 
   const publishCurrentPose = useCallback(() => {
     if (isFirstPersonMode || suppressPoseEvents.current || !controls.current) return
@@ -739,27 +604,17 @@ export const CustomCameraControls = () => {
       ...(isPerspectiveCamera(camera) ? { fov: camera.fov } : {}),
     })
     if (pose) {
-      emitter.emit('camera-controls:pose', pose)
+      publishCameraPose(pose)
     }
   }, [camera, isFirstPersonMode, viewportSize])
 
   const handleCameraUpdate = useCallback(() => {
-    publishCurrentNavigationPose()
     publishCurrentPose()
-  }, [publishCurrentNavigationPose, publishCurrentPose])
+  }, [publishCurrentPose])
 
   useEffect(() => {
-    if (isFirstPersonMode || (!isFloorplanOpen && currentLevelId === null)) return
-
-    const frame = requestAnimationFrame(() => {
-      lastPublishedNavigationSync.current = null
-      publishCurrentNavigationPose()
-    })
-
-    return () => {
-      cancelAnimationFrame(frame)
-    }
-  }, [currentLevelId, isFirstPersonMode, isFloorplanOpen, publishCurrentNavigationPose])
+    publishInitialCameraPose(publishCurrentPose)
+  }, [publishCurrentPose])
 
   useFrame((_, delta) => {
     if (isFirstPersonMode || !controls.current) return
@@ -797,12 +652,12 @@ export const CustomCameraControls = () => {
         } catch {
           if (activePoseInterpolation.current === activePose) {
             activePoseInterpolation.current = null
-            suppressPoseEvents.current = false
+            releaseCameraPoseEventSuppression(suppressPoseEvents, publishCurrentPose)
           }
         }
         if (step.settled && activePoseInterpolation.current === activePose) {
           activePoseInterpolation.current = null
-          suppressPoseEvents.current = false
+          releaseCameraPoseEventSuppression(suppressPoseEvents, publishCurrentPose)
         }
       }
     }
@@ -822,7 +677,6 @@ export const CustomCameraControls = () => {
     )
     const step = (speed * Math.min(delta, 0.05)) / Math.hypot(horizontal, vertical)
 
-    clearPendingFloorplanNavigationPose()
     if (horizontal !== 0) control.truck(horizontal * step, 0, true)
     if (vertical !== 0) control.forward(vertical * step, true)
   }, 0)
@@ -845,11 +699,11 @@ export const CustomCameraControls = () => {
 
   // Touch gestures (mobile / trackpad).
   // - One finger drag    → rotate by default (much easier on a phone), but
-  //                        falls back to NONE while the user is actively
-  //                        placing/moving something OR in box-select mode,
-  //                        so the editor's pointer handlers (place tool,
-  //                        drag-to-move endpoint, marquee selection drag)
-  //                        keep priority over the camera.
+  //                        falls back to NONE while the editor owns the drag —
+  //                        placing/moving something, box-select, or a brush mode
+  //                        — so the editor's pointer handlers (place tool,
+  //                        drag-to-move endpoint, marquee selection drag, paint
+  //                        and sculpt strokes) keep priority over the camera.
   //                        In preview mode it's TOUCH_TRUCK (pan), matching
   //                        preview's left = SCREEN_PAN.
   // - Two finger pinch   → zoom + pan together (TOUCH_DOLLY_TRUCK for
@@ -864,9 +718,16 @@ export const CustomCameraControls = () => {
   const endpointReshape = useEndpointReshape()
   const activeHandleDrag = useActiveHandleDrag()
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
-  const isInteracting = Boolean(
-    tool || movingNode || endpointReshape || activeHandleDrag || isBoxSelectActive,
-  )
+  // The mode term lives in `editorOwnsOneFingerDrag` rather than in this OR: a
+  // brush mode owns the drag the way an armed tool does, but none of the
+  // transient terms notice it (entering paint or sculpt *clears* `tool`, and its
+  // scope is `painting`/`sculpting`, not `handle-drag`).
+  const isInteracting = editorOwnsOneFingerDrag({
+    mode,
+    activeGesture: Boolean(
+      tool || movingNode || endpointReshape || activeHandleDrag || isBoxSelectActive,
+    ),
+  })
   const touches = useMemo(() => {
     const twoFingerAction =
       cameraMode === 'orthographic'
@@ -975,7 +836,6 @@ export const CustomCameraControls = () => {
         ) {
           const changed = setKeyboardPanKey(keyboardPanKeys.current, event.code, true)
           if (changed) beginLocalCameraInteraction()
-          clearPendingFloorplanNavigationPose()
           event.preventDefault()
           event.stopPropagation()
         }
@@ -1007,6 +867,9 @@ export const CustomCameraControls = () => {
       if (isKeyboardPanKey(event.code)) {
         const changed = setKeyboardPanKey(keyboardPanKeys.current, event.code, false)
         if (changed) {
+          if (!hasKeyboardPanInput(keyboardPanKeys.current)) {
+            cameraDraggingLifecycle.end()
+          }
           event.preventDefault()
           event.stopPropagation()
         }
@@ -1038,7 +901,6 @@ export const CustomCameraControls = () => {
 
     const onPointerDown = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || !gl.domElement.contains(event.target)) return
-      clearPendingFloorplanNavigationPose()
       if (event.button !== 1 && !(event.button === 0 && keyState.space)) return
 
       panPointerId = event.pointerId
@@ -1048,7 +910,7 @@ export const CustomCameraControls = () => {
 
     const onWheel = () => {
       beginLocalCameraInteraction()
-      clearPendingFloorplanNavigationPose()
+      cameraDraggingLifecycle.scheduleEnd()
     }
 
     const onPointerUp = (event: PointerEvent) => {
@@ -1067,6 +929,7 @@ export const CustomCameraControls = () => {
       panPointerId = null
       panPointerButton = null
       clearNavigationCursor()
+      cameraDraggingLifecycle.end()
       updateConfig()
     }
 
@@ -1089,24 +952,27 @@ export const CustomCameraControls = () => {
       gl.domElement.removeEventListener('wheel', onWheel, true)
       clearKeyboardPanKeys()
       clearNavigationCursor()
+      cameraDraggingLifecycle.end()
     }
   }, [
     beginLocalCameraInteraction,
+    cameraDraggingLifecycle,
     cameraMode,
     gl,
     isPreviewMode,
     isFirstPersonMode,
-    clearPendingFloorplanNavigationPose,
   ])
 
-  // Cancel any in-progress 2D-origin navigation pose when the user starts
-  // dragging (right-click orbit, middle-click pan, touch). `controlstart`
-  // fires only for user pointer interactions — not for programmatic
-  // moveTo/rotateTo which emit `transitionstart` instead.
+  // `controlstart` fires only for user pointer interactions. Pointerdowns
+  // mapped to ACTION.NONE must not flag the camera as dragging because no
+  // rest/sleep event follows to clear the flag.
   const handleControlStart = useCallback(() => {
-    clearPendingFloorplanNavigationPose()
-    beginLocalCameraInteraction()
-  }, [beginLocalCameraInteraction, clearPendingFloorplanNavigationPose])
+    beginLocalCameraInteraction({
+      dragging: controls.current
+        ? controls.current.currentAction !== CameraControlsImpl.ACTION.NONE
+        : false,
+    })
+  }, [beginLocalCameraInteraction])
 
   // Preview mode: auto-navigate camera to selected node (viewer behavior)
   const previewTargetNodeId = isPreviewMode
@@ -1313,7 +1179,6 @@ export const CustomCameraControls = () => {
       if (!node?.camera) return
       const { position, target } = node.camera
 
-      clearPendingFloorplanNavigationPose()
       controls.current.setLookAt(
         position[0],
         position[1],
@@ -1334,7 +1199,6 @@ export const CustomCameraControls = () => {
       // Otherwise, go to top view (0°)
       const targetAngle = currentPolarAngle < 0.1 ? Math.PI / 4 : 0
 
-      clearPendingFloorplanNavigationPose()
       controls.current.rotatePolarTo(targetAngle, true)
     }
 
@@ -1347,7 +1211,6 @@ export const CustomCameraControls = () => {
       const rounded = Math.round(currentAzimuth / (Math.PI / 2)) * (Math.PI / 2)
       const target = rounded - Math.PI / 2
 
-      clearPendingFloorplanNavigationPose()
       controls.current.rotateTo(target, currentPolar, true)
     }
 
@@ -1360,7 +1223,6 @@ export const CustomCameraControls = () => {
       const rounded = Math.round(currentAzimuth / (Math.PI / 2)) * (Math.PI / 2)
       const target = rounded + Math.PI / 2
 
-      clearPendingFloorplanNavigationPose()
       controls.current.rotateTo(target, currentPolar, true)
     }
 
@@ -1372,7 +1234,6 @@ export const CustomCameraControls = () => {
       if (isFirstPersonMode || !controls.current || isPreviewMode) return
       if (!bounds) {
         // Restore default framing pose when no bounds were computed.
-        clearPendingFloorplanNavigationPose()
         controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
         return
       }
@@ -1383,7 +1244,6 @@ export const CustomCameraControls = () => {
       const maxExtent = Math.max(w, d)
       const distance = Math.max(maxExtent * 1.4, 15)
       const height = Math.max(maxExtent * 0.8, 10)
-      clearPendingFloorplanNavigationPose()
       controls.current.setLookAt(cx + distance * 0.7, height, cz + distance * 0.7, cx, 0, cz, true)
     }
 
@@ -1404,15 +1264,25 @@ export const CustomCameraControls = () => {
       emitter.off('camera-controls:orbit-ccw', handleOrbitCCW)
       emitter.off('camera-controls:fit-scene', handleFitScene)
     }
-  }, [clearPendingFloorplanNavigationPose, focusNode, isPreviewMode, isFirstPersonMode])
+  }, [focusNode, isPreviewMode, isFirstPersonMode])
 
   const onTransitionStart = useCallback(() => {
-    useViewer.getState().setCameraDragging(true)
-  }, [])
+    cameraDraggingLifecycle.begin()
+  }, [cameraDraggingLifecycle])
 
   const onRest = useCallback(() => {
-    useViewer.getState().setCameraDragging(false)
-  }, [])
+    cameraDraggingLifecycle.end()
+  }, [cameraDraggingLifecycle])
+
+  const onControlEnd = useCallback(() => {
+    // A mapped-button tap with zero camera movement never wakes the
+    // controls, so no rest/sleep follows — clear the dragging flag on
+    // release. While damping is still settling (`active`), rest/sleep
+    // clears it instead.
+    if (!controls.current?.active) {
+      cameraDraggingLifecycle.end()
+    }
+  }, [cameraDraggingLifecycle])
 
   // Preset capture mode frames a single subtree (often a 0.3–2m preset),
   // so the default 2m minDistance prevents the user from getting close
@@ -1434,6 +1304,7 @@ export const CustomCameraControls = () => {
       minDistance={minDistance}
       minPolarAngle={0}
       mouseButtons={mouseButtons}
+      onControlEnd={onControlEnd}
       onControlStart={handleControlStart}
       onUpdate={handleCameraUpdate}
       onRest={onRest}

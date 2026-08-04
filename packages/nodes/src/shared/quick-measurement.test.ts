@@ -46,10 +46,13 @@ describe('quick measurement reports', () => {
         ],
       ],
       elevation: 0.25,
+      thickness: 0.08,
     } as SlabNode)
 
     expect(report?.metrics.find((metric) => metric.key === 'area')?.value).toBeCloseTo(11)
     expect(report?.metrics.find((metric) => metric.key === 'perimeter')?.value).toBeCloseTo(14)
+    expect(report?.metrics.find((metric) => metric.key === 'thickness')?.value).toBeCloseTo(0.08)
+    expect(report?.anchor[1]).toBeCloseTo(0.29)
   })
 
   test('keeps zone hover quantities explicitly footprint-only', () => {

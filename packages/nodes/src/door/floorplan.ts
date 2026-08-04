@@ -5,6 +5,15 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
+import {
+  readFloorplanContext,
+  readFloorplanGeometryMetadata,
+  withFloorplanGeometryMetadata,
+} from '@pascal-app/editor'
+import {
+  buildOpeningMarkAnnotation,
+  type OpeningFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
 
 /**
@@ -36,10 +45,9 @@ import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dim
  * mounted on). Returns null when the parent isn't a wall (orphaned
  * doors during placement etc.).
  *
- * Skipped vs the full legacy for now: hinge / strike cubes (small
- * indicator squares at the rotation pivots), rounded-opening shape
- * variants, panic bar markers. Those are rare visual variations the
- * follow-up port can revisit.
+ * Swing leaves include hinge / strike indicators and panic hardware
+ * when present. Rounded and arched heads are shown as dashed overhead
+ * lines because their geometry sits above the horizontal plan cut.
  */
 export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): FloorplanGeometry | null {
   const wall = ctx.parent as WallNode | null
@@ -118,6 +126,27 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     },
   ]
 
+  if (node.openingShape !== 'rectangle') {
+    const overheadRise =
+      Math.min(width, node.openingShape === 'arch' ? node.archHeight : node.cornerRadius) * 0.2
+    const overheadSide = swingDirection === 'inward' ? 1 : -1
+    const startX = cx - dirX * halfWidth
+    const startZ = cz - dirZ * halfWidth
+    const endX = cx + dirX * halfWidth
+    const endZ = cz + dirZ * halfWidth
+    children.push({
+      kind: 'path',
+      d: `M ${startX} ${startZ} Q ${cx + perpX * overheadRise * overheadSide} ${cz + perpZ * overheadRise * overheadSide} ${endX} ${endZ}`,
+      fill: 'none',
+      stroke: accentColor,
+      strokeWidth: showSelectedChrome ? 1.4 : 1,
+      strokeOpacity: 0.8,
+      strokeDasharray: '4 3',
+      strokeLinecap: 'round',
+      vectorEffect: 'non-scaling-stroke',
+    })
+  }
+
   // Swing geometry. A leaf is drawn as a wedge fill + dashed swing arc +
   // solid leaf line. `drawSwingLeaf` emits one leaf given its hinge, the
   // closed-leaf vector (hinge → strike, whose length is the swing
@@ -187,6 +216,47 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       strokeLinecap: 'round',
       vectorEffect: 'non-scaling-stroke',
     })
+
+    const markerSize = Math.min(0.05, Math.max(0.025, radius * 0.05))
+    const markerHalf = markerSize / 2
+    const hardwareMarkers: Array<[number, number]> = [
+      [hX, hZ],
+      [closedTipX, closedTipZ],
+    ]
+    for (const [markerX, markerZ] of hardwareMarkers) {
+      children.push({
+        kind: 'rect',
+        x: markerX - markerHalf,
+        y: markerZ - markerHalf,
+        width: markerSize,
+        height: markerSize,
+        fill: fillColor,
+        stroke: accentColor,
+        strokeWidth: showSelectedChrome ? 1.4 : 1,
+        vectorEffect: 'non-scaling-stroke',
+      })
+    }
+
+    if (node.panicBar) {
+      const leafX = (tipX - hX) / radius
+      const leafZ = (tipZ - hZ) / radius
+      const barCenterX = hX + leafX * radius * 0.7
+      const barCenterZ = hZ + leafZ * radius * 0.7
+      const barHalfLength = Math.min(0.12, Math.max(0.06, depth * 0.75))
+      const barX = -leafZ * barHalfLength
+      const barZ = leafX * barHalfLength
+      children.push({
+        kind: 'line',
+        x1: barCenterX - barX,
+        y1: barCenterZ - barZ,
+        x2: barCenterX + barX,
+        y2: barCenterZ + barZ,
+        stroke: accentColor,
+        strokeWidth: showSelectedChrome ? 2.6 : 2.2,
+        strokeLinecap: 'square',
+        vectorEffect: 'non-scaling-stroke',
+      })
+    }
   }
 
   const isDoubleLeaf = node.doorType === 'double' || node.doorType === 'french'
@@ -716,13 +786,44 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   // Placement-measurement dimensions — distances to adjacent openings
   // (or wall ends) on each side. Only visible while actively moving
   // (the user clicked Move or grabbed the orange dot).
-  if (view?.moving) {
+  if (view?.moving && readFloorplanContext(ctx).automaticDimensions) {
     for (const dim of buildOpeningPlacementDimensions(node, ctx)) {
       children.push(dim)
     }
   }
 
-  return { kind: 'group', children }
+  const markAnnotation = buildOpeningMarkAnnotation(
+    node,
+    wall,
+    ctx.levelData as OpeningFloorplanLevelData | undefined,
+    {
+      preferredSide: swingSign === 1 ? -1 : 1,
+      stroke: showSelectedChrome ? '#f97316' : '#334155',
+    },
+  )
+  if (markAnnotation) children.push(markAnnotation)
+
+  return { kind: 'group', children: children.map(markDoorPlanObstacle) }
+}
+
+function markDoorPlanObstacle(geometry: FloorplanGeometry): FloorplanGeometry {
+  if (geometry.kind === 'group') {
+    const isOpeningMark = readFloorplanGeometryMetadata(geometry).annotationRole === 'opening-mark'
+    return isOpeningMark
+      ? geometry
+      : { ...geometry, children: geometry.children.map(markDoorPlanObstacle) }
+  }
+  if (
+    geometry.kind === 'path' ||
+    geometry.kind === 'polygon' ||
+    geometry.kind === 'polyline' ||
+    geometry.kind === 'rect' ||
+    geometry.kind === 'circle' ||
+    geometry.kind === 'line'
+  ) {
+    return withFloorplanGeometryMetadata(geometry, { annotationObstacle: 'bounds' })
+  }
+  return geometry
 }
 
 /**

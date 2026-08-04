@@ -1,4 +1,5 @@
 import {
+  type AnyNodeDefinition,
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
@@ -10,17 +11,21 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
+import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import {
   useControlPointReshape,
   useEditingHole,
   useEndpointReshape,
   useIsCurveReshape,
+  useIsFloorplanDrivenReshape,
+  useIsToolDrivenReshape,
   useMovingNode,
   useReshapingNode,
   useTangentReshape,
 } from '../../store/use-interaction-scope'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
+import { Elevation3DGuideLayer } from '../editor/elevation-3d-guide-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
@@ -29,6 +34,7 @@ import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
+import { TerrainSculptTool } from './site/terrain-sculpt-tool'
 import { StairTool } from './stair/stair-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
 import { ZoneTool } from './zone/zone-tool'
@@ -36,6 +42,29 @@ import { ZoneTool } from './zone/zone-tool'
 // Cache lazy tool components keyed by their loader so React.lazy isn't
 // re-invoked across renders.
 const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+const registryToolPreloadCache = new WeakMap<AnyNodeDefinition, Promise<void>>()
+
+export function preloadRegistryToolModules(tool: string | null): Promise<void> {
+  if (!tool) return Promise.resolve()
+  const def = nodeRegistry.get(tool)
+  if (!def) return Promise.resolve()
+  const cached = registryToolPreloadCache.get(def)
+  if (cached) return cached
+
+  const loaders: Array<() => Promise<unknown>> = []
+  if (def.tool) loaders.push(def.tool)
+  if (def.preview) loaders.push(def.preview)
+  if (def.renderer?.kind === 'parametric') loaders.push(def.renderer.module)
+  if (def.system) loaders.push(def.system.module)
+  if (def.parametrics?.customPanel) loaders.push(def.parametrics.customPanel)
+  if (def.parametrics?.trailingSection) loaders.push(def.parametrics.trailingSection)
+  const moveTool = def.affordanceTools?.move
+  if (moveTool) loaders.push(moveTool)
+
+  const preload = Promise.allSettled(loaders.map((loader) => loader())).then(() => undefined)
+  registryToolPreloadCache.set(def, preload)
+  return preload
+}
 
 function getRegistryTool(tool: Tool | null): ComponentType | null {
   if (!tool) return null
@@ -44,10 +73,11 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
   const cached = lazyToolCache.get(def.tool)
   if (cached) return cached
   const Comp = lazy(async () => {
-    // A placed node is selected immediately. Resolve its custom inspector with
-    // the tool so that selection cannot introduce a second async boundary.
-    const [module] = await Promise.all([def.tool!(), def.parametrics?.customPanel?.()])
-    return module as { default: ComponentType }
+    // Placement can only begin once the node's preview, committed renderer,
+    // inspector, and move contribution are warm. This keeps the click itself
+    // synchronous even under Next.js dev-time on-demand compilation.
+    await preloadRegistryToolModules(tool)
+    return def.tool!() as Promise<{ default: ComponentType }>
   })
   lazyToolCache.set(def.tool, Comp)
   return Comp
@@ -78,6 +108,8 @@ export const ToolManager: React.FC = () => {
   const controlPointReshape = useControlPointReshape()
   const tangentReshape = useTangentReshape()
   const isCurveReshape = useIsCurveReshape()
+  const isToolDrivenReshape = useIsToolDrivenReshape()
+  const isFloorplanDrivenReshape = useIsFloorplanDrivenReshape()
   const reshapingNode = useReshapingNode()
   // The endpoint affordance tool's `target` is kind-specific
   // (`{ wall | fence, endpoint }`); rebuild it from the (frozen) reshaped node +
@@ -133,9 +165,14 @@ export const ToolManager: React.FC = () => {
     | CeilingNode['id']
     | undefined
 
-  // Keep the site vertex flags available in select mode; the editor component
-  // switches to full polygon editing only after a flag activates site mode.
-  const showSiteBoundaryEditor = phase === 'site' || mode === 'select'
+  // Site boundary handles normally share one 2D/3D rule. Sculpt is the deliberate
+  // 3D exception: the brush only owns this canvas, where PolygonEditor can hand
+  // off its pointer before a boundary drag starts.
+  const sculpting = mode === 'terrain-sculpt'
+  // Sculpt keeps the 3D property controls visible. PolygonEditor marks its
+  // pointer before the canvas-level brush listener runs, and activating one
+  // exits sculpt mode before starting the boundary drag.
+  const showSiteBoundaryEditor = sculpting || siteBoundaryHandlesEnabled({ mode, phase })
 
   // A multi-selection is manipulated as one rigid group (drag / R / T), so
   // per-node reshape chrome — the slab / ceiling boundary editors' vertex and
@@ -148,6 +185,7 @@ export const ToolManager: React.FC = () => {
     mode === 'select' &&
     isSoleSelection &&
     selectedSlabId !== undefined &&
+    !isFloorplanDrivenReshape &&
     !editingSlabHoleIsManual
 
   // Show slab hole editor when editing a hole on the selected slab
@@ -155,6 +193,7 @@ export const ToolManager: React.FC = () => {
     selectedSlabId !== undefined &&
     editingHole !== null &&
     editingHole.nodeId === selectedSlabId &&
+    !isFloorplanDrivenReshape &&
     editingSlabHoleIsManual
 
   // Show ceiling boundary editor when in structure/select mode with a ceiling selected (but not editing a hole)
@@ -163,13 +202,15 @@ export const ToolManager: React.FC = () => {
     mode === 'select' &&
     isSoleSelection &&
     selectedCeilingId !== undefined &&
+    !isFloorplanDrivenReshape &&
     (!editingHole || editingHole.nodeId !== selectedCeilingId)
 
   // Show ceiling hole editor when editing a hole on the selected ceiling
   const showCeilingHoleEditor =
     selectedCeilingId !== undefined &&
     editingHole !== null &&
-    editingHole.nodeId === selectedCeilingId
+    editingHole.nodeId === selectedCeilingId &&
+    !isFloorplanDrivenReshape
 
   // Show zone boundary editor when in structure/select mode with a zone selected
   // Hide when editing a slab or ceiling to avoid overlapping handles
@@ -177,6 +218,7 @@ export const ToolManager: React.FC = () => {
     phase === 'structure' &&
     mode === 'select' &&
     selectedZoneId !== null &&
+    !isFloorplanDrivenReshape &&
     !showSlabBoundaryEditor &&
     !showCeilingBoundaryEditor
 
@@ -222,6 +264,10 @@ export const ToolManager: React.FC = () => {
     <>
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
+      {/* Terrain sculpting is a mode rather than a `tools[phase][tool]` entry —
+          it places no node — so it gets its own gate here. World-space, because
+          the ground is not building-local. */}
+      {sculpting && <TerrainSculptTool />}
       {showMover && movingNode?.type === 'building' && (
         <MoveTool onNodeMoved={handlePlacedNodeSelected} onSpawnMoved={handlePlacedNodeSelected} />
       )}
@@ -276,7 +322,8 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
-        {endpointTarget &&
+        {isToolDrivenReshape &&
+          endpointTarget &&
           reshapingNode &&
           (() => {
             const RegistryAffordance = getRegistryAffordanceTool(
@@ -289,7 +336,8 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
-        {isCurveReshape &&
+        {isToolDrivenReshape &&
+          isCurveReshape &&
           reshapingNode &&
           (() => {
             const RegistryAffordance = getRegistryAffordanceTool(reshapingNode.type, 'curve')
@@ -299,7 +347,8 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
-        {controlPointTarget &&
+        {isToolDrivenReshape &&
+          controlPointTarget &&
           (() => {
             const RegistryAffordance = getRegistryAffordanceTool('fence', 'move-control-point')
             return RegistryAffordance ? (
@@ -308,7 +357,8 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
-        {tangentTarget &&
+        {isToolDrivenReshape &&
+          tangentTarget &&
           (() => {
             const RegistryAffordance = getRegistryAffordanceTool('fence', 'move-tangent')
             return RegistryAffordance ? (
@@ -349,6 +399,9 @@ export const ToolManager: React.FC = () => {
         {/* Wall-plane proximity / sill / equal-spacing guides for openings,
             published by the door/window move tools in the same world frame. */}
         <OpeningGuides3DLayer />
+        {/* Structural Y-datum feedback for slab, ceiling, wall, and fence
+            elevation handles. Ephemeral editor chrome; never scene data. */}
+        <Elevation3DGuideLayer />
         {/* "Magnetic" beacon at the active wall-draft snap point. */}
         <WallSnapBeaconLayer />
       </group>

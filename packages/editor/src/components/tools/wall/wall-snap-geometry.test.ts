@@ -48,6 +48,14 @@ describe('findWallSpecialPointSnap', () => {
     expect(result?.snap).toBe('intersection')
     expect(result?.point[0]).toBeCloseTo(1, 6)
     expect(result?.point[1]).toBeCloseTo(0, 6)
+    expect(result?.targetWallIds).toEqual(['a', 'b'])
+  })
+
+  test('keeps every wall that shares a snapped endpoint as provenance', () => {
+    const walls = [makeWall([0, 0], [4, 0], 'a'), makeWall([0, 0], [0, 4], 'b')]
+    const result = findWallSpecialPointSnap([0.1, 0.1], walls)
+    expect(result?.point).toEqual([0, 0])
+    expect(result?.targetWallIds).toEqual(['a', 'b'])
   })
 
   test('corner wins over a midpoint when both are in range', () => {

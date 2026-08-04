@@ -4,6 +4,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   type LevelNode,
+  resolveStairTotalRise,
+  type SlabNode,
   type StairNode,
   type StairRailingMode,
   type StairSegmentNode,
@@ -35,6 +37,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { getStairDestinationUpdates } from './destination'
 
 const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
   { label: 'None', value: 'none' },
@@ -59,6 +62,10 @@ const STAIR_SLAB_OPENING_OPTIONS: { label: string; value: StairSlabOpeningMode }
   { label: 'Destination', value: 'destination' },
 ]
 
+// Slabs at least this high off the storey floor read as decks (mezzanines) —
+// lower slabs are floor coverings, never useful stair destinations.
+const DECK_DESTINATION_MIN_ELEVATION = 0.5
+
 export default function StairPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
@@ -75,6 +82,20 @@ export default function StairPanel() {
     () => (node?.type === 'stair' ? getStairLevelOptions(nodes, node) : []),
     [node, nodes],
   )
+  const candidateDecks = useMemo<SlabNode[]>(() => {
+    if (node?.type !== 'stair') return []
+    const level = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    if (level?.type !== 'level') return []
+    const decks: SlabNode[] = []
+    for (const childId of level.children) {
+      const child = nodes[childId as AnyNodeId]
+      if (child?.type !== 'slab') continue
+      if (child.id === node.deckSlabId || child.elevation >= DECK_DESTINATION_MIN_ELEVATION) {
+        decks.push(child)
+      }
+    }
+    return decks
+  }, [node, nodes])
   const segments = useScene(
     useShallow((s) => {
       if (!selectedId) return []
@@ -131,6 +152,15 @@ export default function StairPanel() {
       })
     },
     [handleUpdate],
+  )
+
+  const handleDestinationChange = useCallback(
+    (value: string) => {
+      if (!node) return
+      const target = useScene.getState().nodes[value as AnyNodeId]
+      handleUpdate(getStairDestinationUpdates(node, target, value))
+    },
+    [node, handleUpdate],
   )
 
   const getLastSegmentFillDefaults = useCallback(() => {
@@ -223,6 +253,9 @@ export default function StairPanel() {
 
   const resolvedFromLevelId = resolveStairFromLevelId(nodes, node, levels)
   const resolvedToLevelId = resolveStairToLevelId(nodes, node, resolvedFromLevelId, levels)
+  const deckNode = node.deckSlabId ? nodes[node.deckSlabId as AnyNodeId] : undefined
+  const attachedDeck = deckNode?.type === 'slab' ? deckNode : undefined
+  const resolvedRise = Math.round(resolveStairTotalRise(node, nodes) * 100) / 100
 
   return (
     <PanelWrapper
@@ -251,11 +284,13 @@ export default function StairPanel() {
 
       <PanelSection title="Opening">
         <div className="space-y-3">
-          <ToggleControl
-            checked={(node.slabOpeningMode ?? 'none') === 'destination'}
-            label="Auto Cutout"
-            onChange={handleAutoCutoutChange}
-          />
+          {attachedDeck ? null : (
+            <ToggleControl
+              checked={(node.slabOpeningMode ?? 'none') === 'destination'}
+              label="Auto Cutout"
+              onChange={handleAutoCutoutChange}
+            />
+          )}
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
@@ -276,39 +311,84 @@ export default function StairPanel() {
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-              To Level
+              To
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-foreground text-sm"
-              onChange={(event) => handleUpdate({ toLevelId: event.target.value })}
-              value={resolvedToLevelId ?? ''}
+              onChange={(event) => handleDestinationChange(event.target.value)}
+              value={attachedDeck ? attachedDeck.id : (resolvedToLevelId ?? '')}
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
                   {level.name || `Level ${level.level + 1}`}
                 </option>
               ))}
+              {candidateDecks.map((deck) => (
+                <option key={deck.id} value={deck.id}>
+                  {deck.name || 'Deck'}
+                </option>
+              ))}
             </select>
           </div>
 
-          <SegmentedControl
-            onChange={(value) => handleAutoCutoutChange(value === 'destination')}
-            options={STAIR_SLAB_OPENING_OPTIONS}
-            value={node.slabOpeningMode ?? 'none'}
-          />
-
-          {(node.slabOpeningMode ?? 'none') === 'destination' ? (
-            <MetricControl
-              label="Opening Offset"
-              max={0.5}
-              min={0}
-              onChange={(value) => handleUpdate({ openingOffset: value })}
-              precision={2}
-              step={0.01}
-              unit="m"
-              value={Math.round((node.openingOffset ?? 0) * 100) / 100}
-            />
+          {attachedDeck ? (
+            <div className="space-y-1.5">
+              <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+                Rise
+              </div>
+              <SegmentedControl
+                onChange={(value) =>
+                  handleUpdate(
+                    value === 'custom' ? { totalRise: resolvedRise } : { totalRise: undefined },
+                  )
+                }
+                options={[
+                  { label: 'Follows deck', value: 'follows' },
+                  { label: 'Custom rise', value: 'custom' },
+                ]}
+                value={node.totalRise == null ? 'follows' : 'custom'}
+              />
+              {node.totalRise == null ? (
+                <div className="px-1 text-[11px] text-muted-foreground">
+                  Currently {resolvedRise} m
+                </div>
+              ) : (
+                <MetricControl
+                  label="Rise"
+                  max={10}
+                  min={0.2}
+                  onChange={(value) => handleUpdate({ totalRise: value })}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={resolvedRise}
+                />
+              )}
+            </div>
           ) : null}
+
+          {attachedDeck ? null : (
+            <>
+              <SegmentedControl
+                onChange={(value) => handleAutoCutoutChange(value === 'destination')}
+                options={STAIR_SLAB_OPENING_OPTIONS}
+                value={node.slabOpeningMode ?? 'none'}
+              />
+
+              {(node.slabOpeningMode ?? 'none') === 'destination' ? (
+                <MetricControl
+                  label="Opening Offset"
+                  max={0.5}
+                  min={0}
+                  onChange={(value) => handleUpdate({ openingOffset: value })}
+                  precision={2}
+                  step={0.01}
+                  unit="m"
+                  value={Math.round((node.openingOffset ?? 0) * 100) / 100}
+                />
+              ) : null}
+            </>
+          )}
 
           {node.stairType === 'spiral' && (
             <>
@@ -389,7 +469,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.totalRise ?? 2.5) * 100) / 100}
+            value={Math.round(resolveStairTotalRise(node, nodes) * 100) / 100}
           />
           <MetricControl
             label="Steps"

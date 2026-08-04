@@ -17,8 +17,15 @@ import {
   buildSvgAnnularSectorPath,
   buildSvgArcPath,
   buildSvgArrowHeadPoints,
+  floorplanGeometryMetadata,
   getArcPlanPoint,
 } from '@pascal-app/editor'
+import {
+  buildStairDocumentation,
+  resolveStairPlanDirection,
+  resolveStraightStairDirectionArrow,
+  stairPlanBreakStep,
+} from './documentation'
 
 /**
  * Stage C floor-plan emitter for stair. The stair is the parent; its
@@ -105,7 +112,10 @@ export function buildStairFloorplan(
       // Tread bars — one per visible step inside the segment.
       // `buildFloorplanStairEntry` already returns the thickened
       // polygons; we emit them as filled polygons.
-      for (const treadBar of segmentEntry.treadBars) {
+      const breakStep = stairPlanBreakStep(segmentEntry.segment.stepCount)
+      for (let treadIndex = 0; treadIndex < segmentEntry.treadBars.length; treadIndex += 1) {
+        if (treadIndex + 1 >= breakStep) continue
+        const treadBar = segmentEntry.treadBars[treadIndex]!
         children.push({
           kind: 'polygon',
           points: toFloorplanPoints(treadBar),
@@ -256,10 +266,9 @@ export function buildStairFloorplan(
     const stepBase = stairType === 'spiral' ? 6 : 4
     const stepCount = Math.max(stepBase, Math.round(stair.stepCount ?? 10))
     const stepSweep = normalizedSweepAngle / stepCount
-    // For spirals only: the last ~32% of the sweep is dashed (matches
-    // the legacy `dashedFromIndex = Math.floor(stepCount * 0.68)`).
-    const dashedFromIndex = stairType === 'spiral' ? Math.floor(stepCount * 0.68) : Infinity
+    const breakStep = stairPlanBreakStep(stepCount)
     for (let index = 0; index <= stepCount; index += 1) {
+      if (index >= breakStep && index !== stepCount) continue
       const angle = sectorStartAngle + stepSweep * index
       const inner = getArcPlanPoint(stairCenter, innerRadius, angle)
       const outer = getArcPlanPoint(stairCenter, outerRadius, angle)
@@ -268,8 +277,7 @@ export function buildStairFloorplan(
       // Curved: regular stroke everywhere, but both the starting and the
       // ending step lines are bolded (matches the legacy
       // `<FloorplanStairLayer>` curved branch).
-      // Spiral: only the last step is accented + bolded; intermediate
-      // steps past `dashedFromIndex` are dashed.
+      // Spiral: only the last step is accented + bolded.
       const isEmphasised = stairType === 'spiral' ? isLast : isFirst || isLast
       const stepWidth =
         stairType === 'spiral' ? (isEmphasised ? 1.8 : 1.15) : isEmphasised ? 1.5 : 1.1
@@ -281,7 +289,6 @@ export function buildStairFloorplan(
         y2: outer.y,
         stroke: stairType === 'spiral' && isLast ? stairAccent : stairStroke,
         strokeWidth: stepWidth,
-        strokeDasharray: index >= dashedFromIndex && !isLast ? '0.1 0.08' : undefined,
         vectorEffect: 'non-scaling-stroke',
       })
     }
@@ -322,9 +329,18 @@ export function buildStairFloorplan(
     }
 
     // 6. Direction arrow — head only, at the upper end of the sweep.
-    const arrowAngle = visualSectorEndAngle - stepSweep * 0.8
+    const direction = resolveStairPlanDirection(
+      stair,
+      ctx.parent?.type === 'level' ? ctx.parent.id : stair.parentId,
+    )
+    const arrowAngle =
+      direction === 'up'
+        ? visualSectorEndAngle - stepSweep * 0.8
+        : sectorStartAngle + stepSweep * 0.8
     const arrowPoint = getArcPlanPoint(stairCenter, centerlineRadius, arrowAngle)
-    const tangentAngle = arrowAngle + (normalizedSweepAngle >= 0 ? Math.PI / 2 : -Math.PI / 2)
+    const sweepDirection = normalizedSweepAngle >= 0 ? 1 : -1
+    const tangentAngle =
+      arrowAngle + sweepDirection * (direction === 'up' ? Math.PI / 2 : -Math.PI / 2)
     const arrowSize = clamp(stair.width * (stairType === 'spiral' ? 0.18 : 0.16), 0.1, 0.18)
     const headPts = buildSvgArrowHeadPoints(arrowPoint, tangentAngle, arrowSize)
     children.push({
@@ -332,6 +348,7 @@ export function buildStairFloorplan(
       points: headPts.map((p) => [p.x, p.y] as FloorplanPoint),
       fill: stairAccent,
       stroke: 'none',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
     })
 
     // 7. Resize arrows — mirror of the 3D `CurvedStairWidthArrow`,
@@ -397,28 +414,37 @@ export function buildStairFloorplan(
   // the stair-segment chain in straight space and produces a malformed
   // polyline once the chain is laid around an arc.
   if (stairType === 'straight' && entry.arrow) {
-    if (entry.arrow.polyline.length >= 2) {
+    const direction = resolveStairPlanDirection(
+      stair,
+      ctx.parent?.type === 'level' ? ctx.parent.id : stair.parentId,
+    )
+    const directionArrow = resolveStraightStairDirectionArrow(entry, direction)
+    if (directionArrow && directionArrow.polyline.length >= 2) {
       children.push({
         kind: 'polyline',
-        points: toFloorplanPoints(entry.arrow.polyline),
+        points: toFloorplanPoints(directionArrow.polyline),
         fill: 'none',
         stroke: stairAccent,
         strokeWidth: 0.02,
         strokeLinecap: 'round',
         strokeLinejoin: 'round',
         opacity: showSelectedChrome ? 0.92 : 0.72,
+        metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
       })
     }
-    if (entry.arrow.head.length >= 3) {
+    if (directionArrow && directionArrow.head.length >= 3) {
       children.push({
         kind: 'polygon',
-        points: toFloorplanPoints(entry.arrow.head),
+        points: toFloorplanPoints(directionArrow.head),
         fill: stairAccent,
         stroke: 'none',
         opacity: showSelectedChrome ? 0.92 : 0.72,
+        metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
       })
     }
   }
+
+  children.push(...buildStairDocumentation(stair, entry, ctx))
 
   // Whole-stair rotation handle — sister to the 3D `stairRotateHandle`
   // (arc-resize, curved-arrow). 2D doesn't have a dedicated curved-arrow

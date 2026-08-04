@@ -29,7 +29,9 @@ export function BakeExporter({
         await nextFrames()
         const sceneGroup = scene.getObjectByName('scene-renderer')
         if (!sceneGroup) throw new Error('scene-renderer group not found')
-        const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes)
+        const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes, {
+          textures: 'reference',
+        })
         onComplete(buffer)
       } catch (err) {
         // The bake worker relays page console output into the job's error

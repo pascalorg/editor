@@ -6,7 +6,6 @@ import {
   type CeilingNode,
   ColumnNode,
   createSceneApi,
-  DEFAULT_WALL_HEIGHT,
   DoorNode,
   ElevatorNode,
   emitter,
@@ -15,6 +14,7 @@ import {
   getActiveRoofHeight,
   getEffectiveNode,
   getWallCurveLength,
+  getWallEffectiveHeightForNodes,
   getWallThickness,
   ItemNode,
   isCurvedWall,
@@ -27,7 +27,6 @@ import {
   runAsSingleSceneHistoryStep,
   type SlabNode,
   SpawnNode,
-  StairNode,
   StairSegmentNode,
   sceneRegistry,
   summarizeSystemFor,
@@ -47,6 +46,7 @@ import { resolveMoveActionNode } from '../../lib/direct-manipulation'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
+  prepareFreshPlacementRootDuplicate,
 } from '../../lib/fresh-planar-placement'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
@@ -54,7 +54,6 @@ import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
-import { duplicateStairSubtree } from '../../lib/stair-duplication'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, {
@@ -271,7 +270,7 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
 } {
   if (node.type === 'wall') {
     return {
-      height: node.height ?? DEFAULT_WALL_HEIGHT,
+      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes),
       length: getWallCurveLength(node),
       thickness: getWallThickness(node),
     }
@@ -295,6 +294,7 @@ export function FloatingActionMenu() {
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setSelection = useViewer((s) => s.setSelection)
   const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   // Drives the height-drag dimension pill below the menu. `activeHandleDrag`
   // flips only at drag start / end, so subscribing here is cheap — the live
   // height value is written imperatively in the useFrame below.
@@ -413,9 +413,12 @@ export function FloatingActionMenu() {
       const override = useLiveNodeOverrides.getState().overrides.get(selectedId) as
         | { height?: number }
         | undefined
-      const fallbackHeight = node.type === 'wall' ? DEFAULT_WALL_HEIGHT : FENCE_DEFAULT_HEIGHT
+      const fallbackHeight =
+        node.type === 'wall'
+          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
+          : FENCE_DEFAULT_HEIGHT
       const liveHeight = override?.height ?? node.height ?? fallbackHeight
-      pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit)}`
+      pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit, metricNotation)}`
     }
 
     const obj = sceneRegistry.nodes.get(selectedId)
@@ -527,20 +530,26 @@ export function FloatingActionMenu() {
       useScene.temporal.getState().pause()
 
       if (duplicatesAsFreshSubtree(node as AnyNode)) {
-        const draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
-        const draft = draftId ? useScene.getState().nodes[draftId] : null
-        if (draft) {
-          setMovingNode(draft as any)
-          setSelection({ selectedIds: [] })
-          return
+        let draftId: AnyNodeId | null = null
+        try {
+          draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
+          const draft = draftId ? useScene.getState().nodes[draftId] : null
+          if (draft) {
+            setMovingNode(draft as any)
+            setSelection({ selectedIds: [] })
+            return
+          }
+        } catch (error) {
+          if (draftId && useScene.getState().nodes[draftId]) {
+            useScene.getState().deleteNode(draftId)
+          }
+          console.error('Failed to duplicate node subtree', error)
         }
         useScene.temporal.getState().resume()
         return
       }
 
-      let duplicateInfo = structuredClone(node) as any
-      delete duplicateInfo.id
-      duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
+      const duplicateInfo = prepareFreshPlacementRootDuplicate(node as AnyNode) as any
 
       let duplicate: AnyNode | null = null
       try {
@@ -563,11 +572,6 @@ export function FloatingActionMenu() {
         } else if (node.type === 'roof-segment') {
           duplicateInfo.id = generateId('rseg')
           duplicate = RoofSegmentNode.parse(duplicateInfo)
-        } else if (node.type === 'stair') {
-          duplicateInfo.children = []
-          duplicateInfo.metadata = { ...duplicateInfo.metadata }
-          delete duplicateInfo.metadata?.isNew
-          duplicate = StairNode.parse(duplicateInfo)
         } else if (node.type === 'stair-segment') {
           duplicate = StairSegmentNode.parse(duplicateInfo)
         } else if (node.type === 'spawn') {
@@ -605,11 +609,7 @@ export function FloatingActionMenu() {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         } else if (duplicate.type === 'fence') {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-        } else if (
-          duplicate.type === 'roof-segment' ||
-          duplicate.type === 'stair' ||
-          duplicate.type === 'stair-segment'
-        ) {
+        } else if (duplicate.type === 'roof-segment' || duplicate.type === 'stair-segment') {
           // Add small offset to make it visible
           if ('position' in duplicate) {
             duplicate.position = [
@@ -618,13 +618,7 @@ export function FloatingActionMenu() {
               duplicate.position[2] + 1,
             ]
           }
-          if (node.type === 'stair' && duplicate.type === 'stair') {
-            duplicateStairSubtree(node.id as AnyNodeId, { mode: 'move' })
-          } else {
-            useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-          }
-
-          // Duplicate children for stair nodes
+          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         } else if (
           duplicate.type === 'item' ||
           duplicate.type === 'chimney' ||
@@ -693,12 +687,8 @@ export function FloatingActionMenu() {
           nodeRegistry.has(duplicate.type)
         ) {
           setMovingNode(duplicate as any)
-        } else if (duplicate.type === 'stair') {
-          setSelection({ selectedIds: [duplicate.id as AnyNodeId] })
         }
-        if (duplicate.type !== 'stair') {
-          setSelection({ selectedIds: [] })
-        }
+        setSelection({ selectedIds: [] })
       }
     },
     [node, setMovingNode, setSelection],
@@ -895,7 +885,7 @@ export function FloatingActionMenu() {
                 under it for duct fittings. */}
             {node && hasPorts(node.type) ? (
               <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2 flex flex-col items-center gap-1">
-                <SystemSummaryPill nodeId={node.id} unit={unit} />
+                <SystemSummaryPill metricNotation={metricNotation} nodeId={node.id} unit={unit} />
                 {hasAxisCycling(node.type) ? (
                   <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
                     <span className="font-medium text-foreground">
@@ -929,7 +919,15 @@ export function FloatingActionMenu() {
  * subscription it needs (connectivity changes when ANY joint moves) doesn't
  * re-render the always-mounted parent menu on every unrelated scene tick.
  */
-function SystemSummaryPill({ nodeId, unit }: { nodeId: AnyNodeId; unit: 'metric' | 'imperial' }) {
+function SystemSummaryPill({
+  metricNotation,
+  nodeId,
+  unit,
+}: {
+  metricNotation: 'meters' | 'millimeters'
+  nodeId: AnyNodeId
+  unit: 'metric' | 'imperial'
+}) {
   const allNodes = useScene((s) => s.nodes)
   const summary = useMemo(() => summarizeSystemFor(nodeId, allNodes), [nodeId, allNodes])
   if (!summary) return null
@@ -946,7 +944,7 @@ function SystemSummaryPill({ nodeId, unit }: { nodeId: AnyNodeId; unit: 'metric'
             ·
           </span>
           <span className="text-muted-foreground">
-            {formatMeasurement(summary.runLengthM, unit)} · {summary.runCount}{' '}
+            {formatMeasurement(summary.runLengthM, unit, metricNotation)} · {summary.runCount}{' '}
             {summary.runCount === 1 ? 'run' : 'runs'}
           </span>
         </>

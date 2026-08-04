@@ -29,6 +29,25 @@ export type GeometryContext = {
   /** Resolved parent (null for root-level nodes). */
   parent: AnyNode | null
   /**
+   * **The level base at level-local `x`/`z`** — the surface a node rests on
+   * when nothing built is under it. Sculpted ground where terrain supports this
+   * node's storey, `0` everywhere else (`levelBaseElevationAt`).
+   *
+   * This is how a pure builder that bakes its own vertical origin inherits
+   * terrain. Without it the only way to ask was to import the scene store,
+   * which a builder must not do, so every such kind hardcoded the plane
+   * `y = 0` — and stayed flat on a hillside. A kind that resolves its base
+   * through here follows the ground with nothing registered and nothing
+   * opted into; kinds whose Y comes from a parent group or from
+   * `capabilities.floorPlaced` ignore it.
+   *
+   * Populated by `<GeometrySystem>` for every `def.geometry` call. Absent for
+   * `def.floorplan` — the plan view draws no elevation — so builders shared
+   * between the two must treat it as optional rather than assume flat ground
+   * in 2D.
+   */
+  levelBaseAt?: (x: number, z: number) => number
+  /**
    * Pre-computed level-batch data, populated by the dispatcher when the
    * kind declares `def.computeLevelData` (3D) or
    * `def.computeFloorplanLevelData` (2D). Shared across every builder call
@@ -51,6 +70,8 @@ export type GeometryContext = {
    * `scene:` refs.
    */
   materials?: Record<SceneMaterialId, SceneMaterial>
+  /** Opaque host/plugin context. Core never interprets extension values. */
+  extensions?: Readonly<Record<string, unknown>>
   /**
    * Optional view state — only populated for `def.floorplan` builders. The
    * 2D floor-plan layer surfaces selection / hover here so kinds can vary
@@ -212,12 +233,18 @@ export type FloorplanPalette = {
 
 export type FloorplanPoint = readonly [x: number, y: number]
 
+export type DimensionTerminator = 'architectural-tick' | 'filled-arrow' | 'open-arrow' | 'dot'
+
+export type DimensionTextPosition = 'above' | 'centered'
+
 export type FloorplanStyle = {
   stroke?: string
   fill?: string
   strokeWidth?: number
   strokeDasharray?: string
   opacity?: number
+  /** Opaque renderer/plugin metadata. Core never interprets these values. */
+  metadata?: Readonly<Record<string, unknown>>
   /**
    * When `'non-scaling-stroke'`, the SVG renderer interprets `strokeWidth`
    * as a constant screen-pixel width regardless of viewport zoom. Maps
@@ -398,6 +425,8 @@ export type FloorplanGeometry =
        * of the floor-plan's scene rotation (default 90°).
        */
       upright?: boolean
+      /** Opaque renderer/plugin metadata. Core never interprets these values. */
+      metadata?: Readonly<Record<string, unknown>>
     }
   /**
    * Bitmap overlay — captured top-down asset thumbnail, AI-generated
@@ -426,6 +455,8 @@ export type FloorplanGeometry =
       children: FloorplanGeometry[]
       /** Optional transform applied to all children. Rotation in radians. */
       transform?: { translate?: FloorplanPoint; rotate?: number }
+      /** Opaque renderer/plugin metadata. Core never interprets these values. */
+      metadata?: Readonly<Record<string, unknown>>
     }
   /**
    * Hatched fill overlay — same polygon shape as the kind's main fill but
@@ -629,15 +660,63 @@ export type FloorplanGeometry =
       kind: 'dimension'
       start: FloorplanPoint
       end: FloorplanPoint
+      /**
+       * Optional explicit dimension-line endpoints. Use these when the
+       * measured origins sit at different depths, such as stepped facades or
+       * an exterior column row. Extension lines still originate at
+       * `start`/`end`, while the measurement is drawn between these aligned
+       * baseline points.
+       */
+      dimensionStart?: FloorplanPoint
+      dimensionEnd?: FloorplanPoint
       /** Outward-pointing unit normal — the dimension line offsets along this. */
       offsetNormal: FloorplanPoint
       /** Distance (plan units) from the edge to the dimension line. */
       offsetDistance: number
       /** How far past the offset point the extension line continues. */
       extensionOvershoot: number
+      /** Optional gap before each extension line starts. Defaults to the project/document profile. */
+      extensionStartGap?: number
+      /** Dimension-line terminator. Defaults to an architectural tick. */
+      terminator?: DimensionTerminator
+      /** Dimension text position relative to the baseline. Defaults above the line. */
+      textPosition?: DimensionTextPosition
       text: string
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
+    }
+  | {
+      kind: 'dimension-string'
+      segments: readonly {
+        start: FloorplanPoint
+        end: FloorplanPoint
+        /**
+         * Optional explicit dimension-line endpoints. Use these when the
+         * measured origins sit at different depths, such as stepped facades or
+         * an exterior column row. Extension lines still originate at
+         * `start`/`end`, while the measurement is drawn between these aligned
+         * baseline points.
+         */
+        dimensionStart?: FloorplanPoint
+        dimensionEnd?: FloorplanPoint
+        text: string
+      }[]
+      /** Outward-pointing unit normal shared by every segment in the string. */
+      offsetNormal: FloorplanPoint
+      /** Distance (plan units) from each measured origin to its dimension line. */
+      offsetDistance: number
+      /** How far past each offset point the extension line continues. */
+      extensionOvershoot: number
+      /** Optional gap before each extension line starts. Defaults to the project/document profile. */
+      extensionStartGap?: number
+      /** Dimension-line terminator shared by every segment. Defaults to an architectural tick. */
+      terminator?: DimensionTerminator
+      /** Dimension text position shared by every segment. Defaults above the line. */
+      textPosition?: DimensionTextPosition
+      /** Optional override for the line/text colour. Defaults to the palette accent. */
+      stroke?: string
+      /** Opaque renderer/plugin metadata. Core never interprets these values. */
+      metadata?: Readonly<Record<string, unknown>>
     }
 
 // ─── FloorplanAffordance ─────────────────────────────────────────────
@@ -853,6 +932,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   schemaVersion: number
   schema: S
   category: NodeCategory
+  /** Opaque host/plugin contributions. Core stores but never interprets them. */
+  extensions?: Readonly<Record<string, unknown>>
   surfaceRole?: SurfaceRole
   /**
    * Show a floor direction-triangle while placing/moving — the kind has a
@@ -889,7 +970,6 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   portConnectivityFollow?: boolean
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
-  migrate?: Record<number, (old: unknown) => unknown>
 
   capabilities: Capabilities
   relations?: Relations

@@ -1,4 +1,6 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import type { AnyNodeId, NodeDefinition } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { buildWallContextualDimensions } from './contextual-dimensions'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
@@ -32,10 +34,25 @@ import { wallSlots } from './slots'
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
-  schemaVersion: 5,
+  schemaVersion: 7,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',
+  extensions: {
+    'pascal:editor/floorplan': {
+      contextualDimensions: buildWallContextualDimensions,
+      actionMenu: {
+        canCurve: ({ node, nodes }) =>
+          !node.children.some((childId) => {
+            const child = nodes[childId as AnyNodeId]
+            if (!child) return false
+            if (child.type === 'door' || child.type === 'window') return true
+            if (child.type !== 'item') return false
+            return child.asset?.attachTo === 'wall' || child.asset?.attachTo === 'wall-side'
+          }),
+      },
+    } satisfies FloorplanNodeExtension<WallNode>,
+  },
 
   defaults: () => ({
     object: 'node',
@@ -91,6 +108,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   // auto-slab live preview, history dances). Placement is wired via
   // `def.tool`.
   tool: () => import('./tool'),
+  preview: () => import('./preview'),
   affordanceTools: {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),

@@ -5,19 +5,25 @@ import { Crosshair, MapPin } from 'lucide-react'
 import { memo } from 'react'
 import { formatAreaLabel, formatLinearMeasurement, formatVolumeLabel } from '../../lib/measurements'
 
-function formatMetric(metric: QuickMeasurementMetric, unit: 'metric' | 'imperial'): string {
+function formatMetric(
+  metric: QuickMeasurementMetric,
+  unit: 'metric' | 'imperial',
+  metricNotation: 'meters' | 'millimeters',
+): string {
   if (metric.quantity === 'area') return formatAreaLabel(metric.value, unit, 2)
   if (metric.quantity === 'volume') return formatVolumeLabel(metric.value, unit, 2)
-  return formatLinearMeasurement(metric.value, unit)
+  return formatLinearMeasurement(metric.value, unit, metricNotation)
 }
 
 export const QuickMeasurementCard = memo(function QuickMeasurementCard({
   report,
   unit,
+  metricNotation,
   lensState,
 }: {
   report: QuickMeasurementReport
   unit: 'metric' | 'imperial'
+  metricNotation: 'meters' | 'millimeters'
   lensState: 'live' | 'pinned'
 }) {
   const pinned = lensState === 'pinned'
@@ -53,7 +59,7 @@ export const QuickMeasurementCard = memo(function QuickMeasurementCard({
               <span className="truncate">{metric.label}</span>
             </div>
             <div className="mt-0.5 truncate font-mono font-medium text-xs tabular-nums">
-              {formatMetric(metric, unit)}
+              {formatMetric(metric, unit, metricNotation)}
             </div>
           </div>
         ))}

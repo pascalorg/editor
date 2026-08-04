@@ -1,24 +1,37 @@
+import { GROUND_SUPPORT_ID } from '../hooks/spatial-grid/support-host-id'
 import {
   type AnyNodeId,
   CeilingNode,
   type CeilingNode as CeilingNodeType,
+  type LevelNode,
   SlabNode,
   type SlabNode as SlabNodeType,
   type WallNode,
   ZoneNode,
   type ZoneNode as ZoneNodeType,
 } from '../schema'
+import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
+import {
+  CEILING_CLAMP_MARGIN,
+  findLevelAboveId,
+  getCeilingClampBound,
+  getLevelElevations,
+  getStoredLevelHeight,
+} from '../services/storey'
 import {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resumeSceneHistory,
 } from '../store/history-control'
+import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import {
   getClampedWallCurveOffset,
   getWallCurveFrameAt,
   isCurvedWall,
 } from '../systems/wall/wall-curve'
+import { resolveWallTop } from '../systems/wall/wall-top'
 import { simplifyClosedPolygon } from './polygon-geometry'
+import { levelBaseElevationAt } from './terrain-support'
 
 type Point2D = { x: number; y: number }
 
@@ -56,14 +69,14 @@ type DetectedRoom = {
   bbox: ReturnType<typeof bboxOf>
 }
 
-type DetectedCeilingRoom = DetectedRoom & {
-  ceilingHeight: number
-}
-
 export type AutoSlabSyncPlan = {
   create: SlabNodeType[]
   update: Array<{ id: SlabNodeType['id']; data: Partial<SlabNodeType> }>
   delete: Array<SlabNodeType['id']>
+}
+
+export type AutoSlabPlanningContext = {
+  elevationForRoom?: (polygon: Array<[number, number]>) => number | undefined
 }
 
 export type AutoCeilingSyncPlan = {
@@ -77,7 +90,6 @@ export type AutoZoneSyncPlan = {
 }
 
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
-const DEFAULT_AUTO_CEILING_HEIGHT = 2.5
 const CEILING_HEIGHT_EPSILON = 1e-6
 const ROOM_CURVE_TOLERANCE = 0.04
 const MAX_CURVE_SUBDIVISION_DEPTH = 6
@@ -93,10 +105,25 @@ const WALL_JUNCTION_TOLERANCE = 0.08
 // deleted) and the node is demoted to manual so user data survives.
 const ORPHAN_MERGE_COVERAGE_THRESHOLD = 0.6
 const COVERAGE_SAMPLE_STEPS = 12
+// Rewrite deadband for an existing auto surface's elevation/height: below this
+// the derived plane is the same plane and writing it would churn history.
+const ROOM_VERTICAL_PLANE_EPSILON = 1e-3
 
+// Pure planner callers omit `heightForRoom`, so auto ceilings keep their
+// height-less level-following behavior. The live room sync supplies a height
+// derived from the enclosing walls' own bases and tops.
 export type AutoCeilingPlanningContext = {
-  walls?: WallNode[]
-  slabs?: SlabNodeType[]
+  /** Stored storey height of the level being planned (floor-to-floor). */
+  storeyHeight?: number
+  /**
+   * Stage 3-B clamp-bound resolver for a polygon on the planned level:
+   * `min(storey plane, lowest covering-slab underside from the level
+   * above) - CEILING_CLAMP_MARGIN` (see `getCeilingClampBound`). Absent
+   * (pure-planner callers without a nodes record), the bound degrades to
+   * the plane-only `storeyHeight - CEILING_CLAMP_MARGIN`.
+   */
+  ceilingClampBound?: (polygon: Array<[number, number]>) => number
+  heightForRoom?: (polygon: Array<[number, number]>) => number | undefined
 }
 
 function pointFromTuple(point: [number, number]): Point2D {
@@ -306,61 +333,107 @@ function wallBoundsRoom(wall: WallNode, roomPolygon: Point2D[]) {
   return matchingPoints.length >= 2
 }
 
-function pointIsOnSlab(point: Point2D, slab: SlabNodeType) {
-  if (slab.polygon.length < 3) return false
-  const slabPolygon = slab.polygon.map(pointFromTuple)
-  if (!pointInPolygon(point, slabPolygon)) return false
-
-  for (const hole of slab.holes ?? []) {
-    if (hole.length >= 3 && pointInPolygon(point, hole.map(pointFromTuple))) {
-      return false
-    }
-  }
-
-  return true
-}
-
-function slabSupportsRoom(roomPolygon: Point2D[], slab: SlabNodeType) {
-  if (slab.polygon.length < 3) return false
-  if (polygonSignature(slab.polygon.map(pointFromTuple)) === polygonSignature(roomPolygon)) {
-    return true
-  }
-  return pointIsOnSlab(polygonCentroid(roomPolygon), slab)
-}
-
-function resolveRoomSlabElevation(roomPolygon: Point2D[], slabs: SlabNodeType[] = []) {
-  let maxElevation = 0
-
-  for (const slab of slabs) {
-    if (!slabSupportsRoom(roomPolygon, slab)) continue
-    maxElevation = Math.max(maxElevation, slab.elevation ?? DEFAULT_AUTO_SLAB_ELEVATION)
-  }
-
-  return maxElevation
-}
-
-function resolveRoomWallHeight(roomPolygon: Point2D[], walls: WallNode[] = []) {
-  let maxHeight = 0
-
-  for (const wall of walls) {
-    if (!wallBoundsRoom(wall, roomPolygon)) continue
-    const height = wall.height ?? DEFAULT_AUTO_CEILING_HEIGHT
-    if (Number.isFinite(height)) {
-      maxHeight = Math.max(maxHeight, height)
-    }
-  }
-
-  return maxHeight > 0 ? maxHeight : DEFAULT_AUTO_CEILING_HEIGHT
-}
-
-function resolveAutoCeilingHeight(
-  roomPolygon: Point2D[],
-  context: AutoCeilingPlanningContext = {},
+/**
+ * The clamp bound for a ceiling polygon under this planning context —
+ * the context's cross-level resolver when provided, else the plane-only
+ * `storeyHeight - CEILING_CLAMP_MARGIN` degradation.
+ */
+function resolveCeilingClampBound(
+  polygon: Array<[number, number]>,
+  context: AutoCeilingPlanningContext,
 ) {
+  if (context.ceilingClampBound) return context.ceilingClampBound(polygon)
+  return (context.storeyHeight ?? DEFAULT_LEVEL_HEIGHT) - CEILING_CLAMP_MARGIN
+}
+
+/**
+ * The base a boundary wall actually stands on, in level-local metres.
+ *
+ * Resolved the same way the wall renderer resolves it — the level base under
+ * the wall's own start point (sculpted ground or the flat plane), the slab
+ * election on top of that, plus the wall's stored `supportOffset`. Reading the
+ * ground for `GROUND_SUPPORT_ID` walls only is what left stamped room presets
+ * flat: `resolveWallSupportSlabPatch` writes no host at all for a wall on bare
+ * terrain, so the sentinel is a hint about pointer intent, never a precondition
+ * for standing on the ground.
+ */
+function boundaryWallBase(
+  wall: WallNode,
+  walls: WallNode[],
+  supportSlabs: readonly SlabNodeType[],
+  nodes: Record<string, any>,
+  levelId: string,
+): number {
+  const levelBase = levelBaseElevationAt(nodes, levelId, wall.start[0], wall.start[1])
+  const offset = wall.supportOffset ?? 0
+  if (wall.supportSlabId === GROUND_SUPPORT_ID) return levelBase + offset
   return (
-    resolveRoomSlabElevation(roomPolygon, context.slabs) +
-    resolveRoomWallHeight(roomPolygon, context.walls)
+    computeWallSlabSupport(wall, supportSlabs, walls, wall.supportSlabId ?? null, null, levelBase)
+      .elevation + offset
   )
+}
+
+/**
+ * The plane an auto floor/ceiling takes when its enclosing walls disagree.
+ *
+ * `floor` takes the HIGHEST wall base and `ceiling` the LOWEST wall top —
+ * the only pair that cannot open a hole: a floor at the lowest base would
+ * leave daylight under every wall standing higher, and a ceiling at the
+ * highest top would poke out through the shortest wall. Both surfaces stay
+ * flat (a slab is one scalar elevation by schema; see `vertical-model.md`),
+ * so a room on a slope is a level room cut into the hillside — the walls on
+ * the low side extend down to meet it, which is what their `baseSegments`
+ * fill-down already does.
+ *
+ * Non-finite inputs are the one abstain: a broken graph should keep the
+ * existing placement rather than move a surface to NaN.
+ */
+function roomFloorPlane(wallBases: number[]): number | undefined {
+  if (wallBases.length === 0 || wallBases.some((value) => !Number.isFinite(value))) return undefined
+  return Math.max(...wallBases)
+}
+
+function roomCeilingPlane(wallTops: number[]): number | undefined {
+  if (wallTops.length === 0 || wallTops.some((value) => !Number.isFinite(value))) return undefined
+  return Math.min(...wallTops)
+}
+
+function autoRoomVerticalPlacements(
+  spaces: readonly Space[],
+  walls: WallNode[],
+  supportSlabs: readonly SlabNodeType[],
+  nodes: Record<string, any>,
+  storeyHeight: number,
+) {
+  const wallsById = new Map(walls.map((wall) => [wall.id, wall]))
+  const placements = new Map<string, { slabElevation: number; ceilingHeight: number }>()
+
+  for (const space of spaces) {
+    const boundaryWalls = space.wallIds.flatMap((id) => {
+      const wall = wallsById.get(id)
+      return wall ? [wall] : []
+    })
+    if (boundaryWalls.length !== space.wallIds.length) continue
+
+    const wallBases = boundaryWalls.map((wall) =>
+      boundaryWallBase(wall, walls, supportSlabs, nodes, space.levelId),
+    )
+    const base = roomFloorPlane(wallBases)
+    if (base === undefined) continue
+
+    const wallTops = boundaryWalls.map((wall, index) =>
+      resolveWallTop(wall, storeyHeight, wallBases[index] ?? base),
+    )
+    const top = roomCeilingPlane(wallTops)
+    if (top === undefined) continue
+
+    placements.set(polygonSignature(space.polygon.map(pointFromTuple)), {
+      slabElevation: base + DEFAULT_AUTO_SLAB_ELEVATION,
+      ceilingHeight: top - CEILING_CLAMP_MARGIN,
+    })
+  }
+
+  return placements
 }
 
 function getWallDirection(wall: Pick<WallNode, 'start' | 'end'>) {
@@ -801,7 +874,7 @@ function sameTuplePolygon(current: Array<[number, number]>, next: Array<[number,
   )
 }
 
-function wallGeometrySignature(wall: WallNode) {
+function wallGeometrySignature(wall: WallNode, nodes: Record<string, any>, levelId: string) {
   return [
     wall.id,
     wall.start[0].toFixed(4),
@@ -809,13 +882,43 @@ function wallGeometrySignature(wall: WallNode) {
     wall.end[0].toFixed(4),
     wall.end[1].toFixed(4),
     (wall.thickness ?? 0.2).toFixed(4),
-    (wall.height ?? DEFAULT_AUTO_CEILING_HEIGHT).toFixed(4),
+    // Plane-bound (no stored height) is a distinct state, not a default
+    // value: it resolves to the storey plane, so it must not alias an
+    // explicit height of the same magnitude in the trigger signature.
+    wall.height == null ? 'plane' : wall.height.toFixed(4),
+    wall.supportSlabId ?? 'elected',
+    (wall.supportOffset ?? 0).toFixed(4),
     getClampedWallCurveOffset(wall).toFixed(4),
+    // The ground under this wall, sampled at the SAME point
+    // `boundaryWallBase` samples it. Sculpting changes only `site.terrain`,
+    // so without a terrain term here every signature stays byte-identical
+    // and the sync early-exits — a room's floor and ceiling could never
+    // follow ground that moved beneath its walls.
+    //
+    // The sample, not the field, and not the resolved base: hashing the
+    // heightfield would re-trigger every level for a stroke on the far side
+    // of the lot, and resolving the full slab election would fold slab
+    // POLYGONS into the signature, which is exactly the delete/recreate
+    // feedback the comment below is about. Sampling where the placement
+    // samples means the two cannot disagree in either direction — no missed
+    // re-run, no spurious one.
+    //
+    // Granularity is per stroke, not per dab: live dabs publish to
+    // `useLiveTerrain` and never touch the scene store, so this runs once on
+    // release — inside the stroke's own `runAsSingleSceneHistoryStep`, which
+    // is what puts the moved floor and the terrain that moved it in the same
+    // undo step. Mid-drag the ground-hosted walls follow the brush while the
+    // floor waits for release; re-deriving per dab would mean a scene write
+    // per dab and a floor that jitters under the cursor.
+    levelBaseElevationAt(nodes, levelId, wall.start[0], wall.start[1]).toFixed(4),
   ].join('|')
 }
 
-function levelWallSnapshot(walls: WallNode[]) {
-  return walls.map(wallGeometrySignature).sort().join('||')
+function levelWallSnapshot(walls: WallNode[], nodes: Record<string, any>, levelId: string) {
+  return walls
+    .map((wall) => wallGeometrySignature(wall, nodes, levelId))
+    .sort()
+    .join('||')
 }
 
 function zoneGeometrySignature(zone: ZoneNodeType) {
@@ -827,13 +930,24 @@ function zoneGeometrySignature(zone: ZoneNodeType) {
   ].join('|')
 }
 
-// Slabs and ceilings stay out of the trigger signature: including generated
-// surfaces caused delete/recreate feedback. Zones are included only so a newly
-// traced room footprint can adopt its enclosing walls without waiting for the
-// next remodel.
+// Slab/ceiling POLYGONS stay out of the trigger signature: including
+// generated footprints caused delete/recreate feedback. Zones are included
+// only so a newly traced room footprint can adopt its enclosing walls
+// without waiting for the next remodel. Slab ELEVATIONS and the level's
+// stored storey height ARE included — both feed the explicit-ceiling
+// re-clamp bound (the storey plane), and neither is rewritten by
+// the sync, so regeneration triggers when they change without feedback.
+// Stage 3-B adds the LEVEL-ABOVE's covering-slab undersides (elevation −
+// thickness, recessed pools excluded): a deck created, lowered, or
+// thickened above must re-run the sync below so ceilings re-clamp under
+// it. Same polygon exclusion applies — the level-above's own auto sync
+// rewrites its slab footprints, and hashing them here would re-trigger
+// this level on every remodel above.
 function levelStructureSnapshots(nodes: Record<string, any>) {
   const wallsByLevel = new Map<string, WallNode[]>()
   const zonesByLevel = new Map<string, ZoneNodeType[]>()
+  const slabElevationsByLevel = new Map<string, string[]>()
+  const coveringUndersidesByLevel = new Map<string, string[]>()
 
   for (const node of Object.values(nodes)) {
     if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
@@ -846,17 +960,39 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
       const zones = zonesByLevel.get(levelId) ?? []
       zones.push(ZoneNode.parse(node))
       zonesByLevel.set(levelId, zones)
+    } else if ((node as any).type === 'slab') {
+      const elevations = slabElevationsByLevel.get(levelId) ?? []
+      elevations.push(
+        `${(node as any).id}:${(((node as any).elevation as number | undefined) ?? DEFAULT_AUTO_SLAB_ELEVATION).toFixed(4)}`,
+      )
+      slabElevationsByLevel.set(levelId, elevations)
+      if ((node as any).recessed !== true) {
+        const undersides = coveringUndersidesByLevel.get(levelId) ?? []
+        const elevation = ((node as any).elevation as number | undefined) ?? 0.05
+        const thickness = ((node as any).thickness as number | undefined) ?? 0.05
+        undersides.push(`${(node as any).id}:${(elevation - thickness).toFixed(4)}`)
+        coveringUndersidesByLevel.set(levelId, undersides)
+      }
     }
   }
 
+  const levelElevations = getLevelElevations(nodes as Record<AnyNodeId, any>)
   const snapshots = new Map<string, string>()
   const levelIds = new Set([...wallsByLevel.keys(), ...zonesByLevel.keys()])
   for (const levelId of levelIds) {
     const walls = wallsByLevel.get(levelId) ?? []
     const zones = zonesByLevel.get(levelId) ?? []
+    const level = nodes[levelId]
+    const storeyKey =
+      level?.type === 'level' && typeof level.height === 'number' ? level.height.toFixed(4) : ''
+    const slabKey = (slabElevationsByLevel.get(levelId) ?? []).sort().join(';')
+    const aboveId = findLevelAboveId(levelId, levelElevations)
+    const aboveSlabKey = aboveId
+      ? (coveringUndersidesByLevel.get(aboveId) ?? []).sort().join(';')
+      : ''
     snapshots.set(
       levelId,
-      `${levelWallSnapshot(walls)}##${zones.map(zoneGeometrySignature).sort().join('||')}`,
+      `${storeyKey}#${levelWallSnapshot(walls, nodes, levelId)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}`,
     )
   }
 
@@ -935,6 +1071,7 @@ export function resolveAutoZonePolygon(
 export function planAutoSlabsForLevel(
   roomPolygons: Point2D[][],
   existingSlabs: SlabNodeType[],
+  context: AutoSlabPlanningContext = {},
 ): AutoSlabSyncPlan {
   const manualSlabs = existingSlabs.filter((slab) => !slab.autoFromWalls)
   const manualSignatures = new Set(
@@ -978,7 +1115,10 @@ export function planAutoSlabsForLevel(
 
   const matchedSlabIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
-  const updatesById = new Map<string, [number, number][]>()
+  const updatesById = new Map<
+    string,
+    { polygon: [number, number][]; elevation: number | undefined }
+  >()
 
   const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
   for (const entry of existingAutoMeta) {
@@ -993,7 +1133,11 @@ export function planAutoSlabsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedSlabIds.add(existing.slab.id)
-    updatesById.set(existing.slab.id, room.poly.map(pointToTuple))
+    const polygon = room.poly.map(pointToTuple)
+    updatesById.set(existing.slab.id, {
+      polygon,
+      elevation: context.elevationForRoom?.(polygon),
+    })
   })
 
   const remainingDetected = detected
@@ -1028,7 +1172,11 @@ export function planAutoSlabsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedSlabIds.add(bestMatch.entry.slab.id)
-    updatesById.set(bestMatch.entry.slab.id, room.poly.map(pointToTuple))
+    const polygon = room.poly.map(pointToTuple)
+    updatesById.set(bestMatch.entry.slab.id, {
+      polygon,
+      elevation: context.elevationForRoom?.(polygon),
+    })
   }
 
   const detectedRoomPolygons = detectedAll.map((room) => room.poly)
@@ -1051,10 +1199,17 @@ export function planAutoSlabsForLevel(
     ...existingAuto
       .filter((slab) => updatesById.has(slab.id))
       .flatMap((slab) => {
-        const polygon = updatesById.get(slab.id)
-        if (!polygon) return []
-
-        return sameTuplePolygon(slab.polygon, polygon) ? [] : [{ id: slab.id, data: { polygon } }]
+        const update = updatesById.get(slab.id)
+        if (!update) return []
+        const data: Partial<SlabNodeType> = {}
+        if (!sameTuplePolygon(slab.polygon, update.polygon)) data.polygon = update.polygon
+        if (
+          update.elevation !== undefined &&
+          Math.abs(slab.elevation - update.elevation) > ROOM_VERTICAL_PLANE_EPSILON
+        ) {
+          data.elevation = update.elevation
+        }
+        return Object.keys(data).length > 0 ? [{ id: slab.id, data }] : []
       }),
     ...slabDemotions,
   ]
@@ -1070,12 +1225,17 @@ export function planAutoSlabsForLevel(
     const name = nextAutoRoomName(plannedSlabsForNaming, 'Slab')
     plannedSlabsForNaming.push({ name })
 
+    const polygon = room.poly.map(pointToTuple)
+    const elevation = context.elevationForRoom?.(polygon)
     slabsToCreate.push(
       SlabNode.parse({
         name,
-        polygon: room.poly.map(pointToTuple),
+        polygon,
         holes: [],
-        elevation: DEFAULT_AUTO_SLAB_ELEVATION,
+        elevation:
+          elevation !== undefined && Number.isFinite(elevation)
+            ? elevation
+            : DEFAULT_AUTO_SLAB_ELEVATION,
         autoFromWalls: true,
       }),
     )
@@ -1093,8 +1253,9 @@ function syncAutoSlabsForLevel(
   roomPolygons: Point2D[][],
   existingSlabs: SlabNodeType[],
   sceneStore: any,
+  context: AutoSlabPlanningContext = {},
 ) {
-  const plan = planAutoSlabsForLevel(roomPolygons, existingSlabs)
+  const plan = planAutoSlabsForLevel(roomPolygons, existingSlabs, context)
 
   if (plan.delete.length > 0) {
     sceneStore.getState().deleteNodes(plan.delete)
@@ -1111,29 +1272,6 @@ function syncAutoSlabsForLevel(
   return plan
 }
 
-export function projectAutoSlabsForPlan(
-  existingSlabs: SlabNodeType[],
-  plan: AutoSlabSyncPlan,
-): SlabNodeType[] {
-  const slabsById = new Map(existingSlabs.map((slab) => [slab.id, slab]))
-
-  for (const id of plan.delete) {
-    slabsById.delete(id)
-  }
-
-  for (const update of plan.update) {
-    const slab = slabsById.get(update.id)
-    if (!slab) continue
-    slabsById.set(update.id, SlabNode.parse({ ...slab, ...update.data }))
-  }
-
-  for (const slab of plan.create) {
-    slabsById.set(slab.id, slab)
-  }
-
-  return [...slabsById.values()]
-}
-
 export function planAutoCeilingsForLevel(
   roomPolygons: Point2D[][],
   existingCeilings: CeilingNodeType[],
@@ -1145,7 +1283,7 @@ export function planAutoCeilingsForLevel(
   )
   const manualPolygons = manualCeilings.map((ceiling) => ceiling.polygon.map(pointFromTuple))
 
-  const detectedAll: DetectedCeilingRoom[] = roomPolygons
+  const detectedAll: DetectedRoom[] = roomPolygons
     .map((poly) => ({
       poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
         pointFromTuple,
@@ -1161,7 +1299,6 @@ export function planAutoCeilingsForLevel(
       centroid: polygonCentroid(room.poly),
       area: Math.abs(polygonArea(room.poly)),
       bbox: bboxOf(room.poly),
-      ceilingHeight: resolveAutoCeilingHeight(room.poly, context),
     }))
 
   const detected = detectedAll.filter(
@@ -1182,7 +1319,7 @@ export function planAutoCeilingsForLevel(
 
   const matchedCeilingIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
-  const updatesById = new Map<string, { polygon: [number, number][]; height: number }>()
+  const updatesById = new Map<string, { polygon: [number, number][]; height: number | undefined }>()
 
   const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
   for (const entry of existingAutoMeta) {
@@ -1197,9 +1334,10 @@ export function planAutoCeilingsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedCeilingIds.add(existing.ceiling.id)
+    const polygon = room.poly.map(pointToTuple)
     updatesById.set(existing.ceiling.id, {
-      polygon: room.poly.map(pointToTuple),
-      height: room.ceilingHeight,
+      polygon,
+      height: context.heightForRoom?.(polygon),
     })
   })
 
@@ -1235,9 +1373,10 @@ export function planAutoCeilingsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedCeilingIds.add(bestMatch.entry.ceiling.id)
+    const polygon = room.poly.map(pointToTuple)
     updatesById.set(bestMatch.entry.ceiling.id, {
-      polygon: room.poly.map(pointToTuple),
-      height: room.ceilingHeight,
+      polygon,
+      height: context.heightForRoom?.(polygon),
     })
   }
 
@@ -1255,27 +1394,42 @@ export function planAutoCeilingsForLevel(
     }
   }
 
+  // Stage 3-B reactive re-clamp (clamp-never-ask): a covering slab
+  // created, moved, or thickened on the level above can leave an EXISTING
+  // manual explicit-height ceiling poking into its solid. Clamp explicit
+  // heights down to the bound; never raise them — a user-lowered ceiling
+  // is intent, only an over-bound one is a conflict. Follows-mode
+  // ceilings (absent height) derive under the bound by construction and
+  // are skipped, so the clamp can never convert one to an explicit
+  // height.
+  const manualClamps: AutoCeilingSyncPlan['update'] = manualCeilings.flatMap((ceiling) => {
+    if (ceiling.height == null) return []
+    const bound = resolveCeilingClampBound(ceiling.polygon, context)
+    if (!Number.isFinite(bound)) return []
+    return ceiling.height > bound + CEILING_HEIGHT_EPSILON
+      ? [{ id: ceiling.id, data: { height: bound } }]
+      : []
+  })
+
   const ceilingsToUpdate = [
     ...existingAuto
       .filter((ceiling) => updatesById.has(ceiling.id))
       .flatMap((ceiling) => {
         const update = updatesById.get(ceiling.id)
         if (!update) return []
-
         const data: Partial<CeilingNodeType> = {}
-        if (!sameTuplePolygon(ceiling.polygon, update.polygon)) {
-          data.polygon = update.polygon
-        }
+        if (!sameTuplePolygon(ceiling.polygon, update.polygon)) data.polygon = update.polygon
         if (
-          Math.abs((ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT) - update.height) >
-          CEILING_HEIGHT_EPSILON
+          update.height !== undefined &&
+          (ceiling.height === undefined ||
+            Math.abs(ceiling.height - update.height) > ROOM_VERTICAL_PLANE_EPSILON)
         ) {
           data.height = update.height
         }
-
-        return Object.keys(data).length === 0 ? [] : [{ id: ceiling.id, data }]
+        return Object.keys(data).length > 0 ? [{ id: ceiling.id, data }] : []
       }),
     ...ceilingDemotions,
+    ...manualClamps,
   ]
 
   const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
@@ -1289,12 +1443,14 @@ export function planAutoCeilingsForLevel(
     const name = nextAutoRoomName(plannedCeilingsForNaming, 'Ceiling')
     plannedCeilingsForNaming.push({ name })
 
+    const polygon = room.poly.map(pointToTuple)
+    const height = context.heightForRoom?.(polygon)
     ceilingsToCreate.push(
       CeilingNode.parse({
         name,
-        polygon: room.poly.map(pointToTuple),
+        polygon,
         holes: [],
-        height: room.ceilingHeight,
+        ...(height !== undefined && Number.isFinite(height) ? { height } : {}),
         autoFromWalls: true,
       }),
     )
@@ -1401,15 +1557,36 @@ function runSpaceDetection(
       )
     }
 
+    const levelNode = nodes[levelId]
+    const storeyHeight =
+      levelNode?.type === 'level'
+        ? getStoredLevelHeight(levelNode as LevelNode)
+        : DEFAULT_LEVEL_HEIGHT
     const parsedSlabs = slabs.map((slab: any) => SlabNode.parse(slab))
-    const slabPlan = syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore)
-    const projectedSlabs = projectAutoSlabsForPlan(parsedSlabs, slabPlan)
+    const verticalPlacements = autoRoomVerticalPlacements(
+      spaces,
+      walls,
+      // A derived floor cannot be evidence for its own next elevation: that
+      // would lift unpinned walls, then lift the floor again on every pass.
+      parsedSlabs.filter((slab) => !slab.autoFromWalls),
+      nodes,
+      storeyHeight,
+    )
+    const placementFor = (polygon: Array<[number, number]>) =>
+      verticalPlacements.get(polygonSignature(polygon.map(pointFromTuple)))
+    syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore, {
+      elevationForRoom: (polygon) => placementFor(polygon)?.slabElevation,
+    })
     syncAutoCeilingsForLevel(
       levelId,
       roomPolygons,
       ceilings.map((ceiling: any) => CeilingNode.parse(ceiling)),
       sceneStore,
-      { walls, slabs: projectedSlabs },
+      {
+        storeyHeight,
+        ceilingClampBound: (polygon) => getCeilingClampBound(levelId, nodes, polygon),
+        heightForRoom: (polygon) => placementFor(polygon)?.ceilingHeight,
+      },
     )
     const zonePlan = planAutoZonesForLevel(
       spaces,

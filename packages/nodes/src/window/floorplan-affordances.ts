@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
   type WindowNode,
@@ -24,11 +25,8 @@ type WindowWidthPayload = { side: 'start' | 'end' }
  *   - `'end'`: arrow at the edge closer to `wall.end`. The wall-start
  *     edge stays fixed.
  *
- * Uses the scene-write preview pattern (writes directly to `useScene`
- * each tick): the registry layer's `effectiveNode` only merges live
- * overrides for walls, so an override-based preview wouldn't show on
- * windows. The dispatcher snapshots / pauses history at start, so
- * per-tick scene writes still collapse to one undoable entry on commit.
+ * Preview state stays in the live override store so the scene graph is
+ * written only once, when the drag commits.
  */
 export const windowWidthAffordance: FloorplanAffordance<WindowNode> = {
   start({ node, payload, nodes, initialPlanPoint }): FloorplanAffordanceSession {
@@ -76,20 +74,17 @@ export const windowWidthAffordance: FloorplanAffordance<WindowNode> = {
         const newWindowX = anchorX + growDir * (newWidth / 2)
         lastWidth = newWidth
         lastWindowX = newWindowX
-        useScene.getState().updateNodes([
-          {
-            id: windowId,
-            data: {
-              width: newWidth,
-              position: [newWindowX, initialWindowY, initialWindowZ],
-            },
-          },
-        ])
+        useLiveNodeOverrides.getState().set(windowId, {
+          width: newWidth,
+          position: [newWindowX, initialWindowY, initialWindowZ],
+        })
+        useScene.getState().markDirty(windowId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(windowId)
         useScene.getState().updateNodes([
           {
             id: windowId,

@@ -3,6 +3,7 @@ import {
   type FenceNode,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  resolveFenceSupportSlabPatch,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -179,6 +180,35 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
       // tracked change. Drop the override AFTER the scene write so
       // mid-commit reads still see the new position (override wins until
       // cleared; scene wins after).
+      // The re-elected slab lift host rides in the same write (uncapped max
+      // election — 2D has no camera ray): a fence moved onto / off an
+      // elevated deck must land on the right surface, since fences run no
+      // per-frame election (`supportSlabId` IS the lift). One updateNodes
+      // keeps the whole move a single tracked change. Election runs on the
+      // committed endpoints against the pre-write store (the patch only
+      // reads the parent level + the slab grid).
+      const baselineNodes = useScene.getState().nodes
+      const supportFor = (
+        start: PlanPoint,
+        end: PlanPoint,
+        path: PlanPoint[] | undefined,
+        id: AnyNodeId,
+      ) => {
+        const fence = baselineNodes[id]
+        return fence?.type === 'fence'
+          ? resolveFenceSupportSlabPatch(
+              {
+                start,
+                end,
+                path,
+                curveOffset: (fence as FenceNode).curveOffset,
+                thickness: (fence as FenceNode).thickness,
+                parentId: fence.parentId,
+              },
+              baselineNodes,
+            )
+          : {}
+      }
       const fenceUpdate: { id: AnyNodeId; data: Partial<FenceNode> } = isNew
         ? {
             id: fenceId,
@@ -187,9 +217,18 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
               end: lastNextEnd,
               path: lastNextPath,
               metadata: { ...originalMetadata, isNew: false },
+              ...supportFor(lastNextStart, lastNextEnd, lastNextPath, fenceId),
             } as Partial<FenceNode>,
           }
-        : { id: fenceId, data: { start: lastNextStart, end: lastNextEnd, path: lastNextPath } }
+        : {
+            id: fenceId,
+            data: {
+              start: lastNextStart,
+              end: lastNextEnd,
+              path: lastNextPath,
+              ...supportFor(lastNextStart, lastNextEnd, lastNextPath, fenceId),
+            },
+          }
       const linkedUpdates = linkedOriginals.map((l) => ({
         id: l.id,
         ...projectLinked(l, lastNextStart, lastNextEnd, lastDelta[0], lastDelta[1]),
@@ -198,7 +237,12 @@ export const fenceFloorplanMoveTarget: FloorplanMoveTarget<FenceNode> = ({ node 
         fenceUpdate,
         ...linkedUpdates.map((u) => ({
           id: u.id,
-          data: { start: u.start, end: u.end, path: u.path },
+          data: {
+            start: u.start,
+            end: u.end,
+            path: u.path,
+            ...supportFor(u.start, u.end, u.path, u.id),
+          },
         })),
       ])
       const overrides = useLiveNodeOverrides.getState()

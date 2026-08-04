@@ -35,6 +35,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
 
@@ -104,6 +105,15 @@ export default function WallPanel() {
     })
   })
 
+  // Existing plane-bound walls have no stored height. Resolve their current
+  // body height for display and materialize it if the user edits height or
+  // enables terrain infill.
+  const resolvedHeightMeters = useScene((s) => {
+    const wall = selectedId ? (s.nodes[selectedId as AnyNodeId] as WallNode | undefined) : undefined
+    if (wall?.type !== 'wall') return undefined
+    return resolveWallOpeningCeiling(wall, s.nodes)
+  })
+
   // Mirror the latest node into a ref so the slider handlers below have
   // stable identities across re-renders. Without this, every store tick
   // (one per pointermove during a slider drag) rebuilt the handler
@@ -145,6 +155,19 @@ export default function WallPanel() {
     [handleUpdate],
   )
 
+  const handleBaseModeChange = useCallback(
+    (mode: 'terrain' | 'fixed') => {
+      const n = nodeRef.current
+      if (!n) return
+      const height = n.height ?? resolveWallOpeningCeiling(n, useScene.getState().nodes)
+      handleUpdate({
+        height: Math.max(0.1, height),
+        fillToTerrain: mode === 'terrain' ? true : undefined,
+      })
+    },
+    [handleUpdate],
+  )
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
@@ -160,7 +183,8 @@ export default function WallPanel() {
 
   const length = getWallCurveLength(node)
 
-  const height = node.height ?? 2.5
+  const followsTerrain = node.fillToTerrain === true
+  const height = node.height ?? resolvedHeightMeters ?? 2.5
   const thickness = node.thickness ?? 0.1
   const curveOffset = getClampedWallCurveOffset(node)
   const maxCurveOffset = getMaxWallCurveOffset(node)
@@ -171,7 +195,7 @@ export default function WallPanel() {
   const displayCurveOffset = metersToLinearUnit(curveOffset, unit)
   const displayMaxCurveOffset = metersToLinearUnit(maxCurveOffset, unit)
   const curveOffsetLimit = Math.max(0.01, maxCurveOffset)
-  const wallHeightMeters = node.height ?? 2.5
+  const wallHeightMeters = height
 
   const skirting = { ...WALL_SKIRTING_DEFAULT, ...(node.skirting ?? {}) }
   const crown = { ...WALL_CROWN_DEFAULT, ...(node.crown ?? {}) }
@@ -213,13 +237,32 @@ export default function WallPanel() {
           unit={unitLabel}
           value={Math.round(displayHeight * 100) / 100}
         />
+        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+          Base
+        </div>
+        <SegmentedControl
+          onChange={handleBaseModeChange}
+          options={[
+            { label: 'Fixed', value: 'fixed' },
+            { label: 'Follows level', value: 'terrain' },
+          ]}
+          value={followsTerrain ? 'terrain' : 'fixed'}
+        />
+        {followsTerrain && (
+          <div className="px-1 text-[11px] text-muted-foreground">
+            Extends downward to meet the terrain. Height and top stay unchanged.
+          </div>
+        )}
         <SliderControl
           label="Thickness"
           max={metersToLinearUnit(1, unit)}
           min={metersToLinearUnit(0.05, unit)}
           onChange={(v) =>
             handleUpdate({
-              thickness: linearControlValueToMeters(v, unit, { maxMeters: 1, minMeters: 0.05 }),
+              thickness: linearControlValueToMeters(v, unit, {
+                maxMeters: 1,
+                minMeters: 0.05,
+              }),
             })
           }
           precision={3}
@@ -318,7 +361,7 @@ function WallFaceBandSection({
   unitLabel: string
   wallHeightMeters: number
 }) {
-  const bandConfig = getWallFaceBandConfig(node)
+  const bandConfig = getWallFaceBandConfig(node, wallHeightMeters)
   const bandCount = bandConfig.count
   const lowerHeight = bandConfig.lowerHeight
   const middleHeight = bandConfig.middleHeight

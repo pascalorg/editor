@@ -1,6 +1,5 @@
 import {
   type AnyNodeId,
-  DEFAULT_WALL_HEIGHT,
   getMaterialPresetByRef,
   parseMaterialRef,
   resolveMaterial,
@@ -12,6 +11,7 @@ import {
   WallNode as WallSchema,
 } from '@pascal-app/core'
 import { isSegmentLongEnough } from '@pascal-app/editor'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
  * Pure helpers shared by the 3D `MoveWallTool` and the 2D
@@ -241,7 +241,7 @@ export function buildBridgeWallPreviews(args: {
       start: [...plan.originalPoint] as WallPlanPoint,
       end: [...nextPoint] as WallPlanPoint,
       color: getWallGhostColor(plan.wall),
-      height: plan.wall.height ?? DEFAULT_WALL_HEIGHT,
+      height: resolveWallOpeningCeiling(plan.wall, useScene.getState().nodes),
     }
     previews.push({ ghost, wall })
     wallsForDuplicateCheck.push(wall)

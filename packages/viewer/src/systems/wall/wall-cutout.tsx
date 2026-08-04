@@ -2,7 +2,11 @@ import {
   type AnyNodeId,
   emitter,
   getWallFaceBandConfig,
+  getWallPlaneTop,
+  resolveLevelId,
+  resolveWallEffectiveHeight,
   sceneRegistry,
+  spatialGridManager,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -10,7 +14,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
-import useViewer from '../../store/use-viewer'
+import useViewer, { type WallMode } from '../../store/use-viewer'
 import {
   getMaterialsForWall,
   getSelectionHighlightMaterials,
@@ -21,10 +25,18 @@ const tmpVec = new Vector3()
 const u = new Vector3()
 const v = new Vector3()
 
-function getWallHideState(
+/**
+ * Whether a wall should be hidden or see-through for the current camera and
+ * wall mode. Pure: reads only its arguments and the mesh's world direction.
+ *
+ * Exported so hosts rendering their own layers inside `<Viewer>` can match
+ * these semantics instead of re-deriving the facing test or inferring state
+ * from the assigned material variant.
+ */
+export function getWallHideState(
   wallNode: WallNode,
   wallMesh: Mesh,
-  wallMode: string,
+  wallMode: WallMode,
   cameraDir: Vector3,
 ): boolean {
   let hideWall = wallNode.frontSide === 'interior' && wallNode.backSide === 'interior'
@@ -130,8 +142,22 @@ export const WallCutout = () => {
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
+        const levelId = resolveLevelId(wallNode, sceneState.nodes)
+        const support = spatialGridManager.getSlabSupportForWall(
+          levelId,
+          wallNode.start,
+          wallNode.end,
+          wallNode.curveOffset ?? 0,
+          wallNode.thickness,
+          wallNode.supportSlabId,
+        )
+        const effectiveWallHeight = resolveWallEffectiveHeight(
+          wallNode,
+          getWallPlaneTop(wallNode, levelId, sceneState.nodes),
+          support.elevation,
+        )
         const shouldSelectionHighlight =
-          isSelectionHighlighted && !getWallFaceBandConfig(wallNode).enabled
+          isSelectionHighlighted && !getWallFaceBandConfig(wallNode, effectiveWallHeight).enabled
         const materials = getMaterialsForWall(
           wallNode,
           shading,

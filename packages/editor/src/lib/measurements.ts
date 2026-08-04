@@ -1,6 +1,7 @@
 import type { MeasurementPoint } from '@pascal-app/core'
 
 export type LinearUnit = 'metric' | 'imperial'
+export type MetricNotation = 'meters' | 'millimeters'
 
 export const MEASUREMENT_ACTIVE_COLOR = '#6366f1'
 export const MEASUREMENT_DANGLING_COLOR = '#dc2626'
@@ -173,7 +174,11 @@ export function formatVolumeLabel(
   return `${cubicMetersToVolumeUnit(cubicMeters, unit).toFixed(fractionDigits)}${getVolumeUnitLabel(unit)}`
 }
 
-export function formatLinearMeasurement(meters: number, unit: LinearUnit): string {
+export function formatLinearMeasurement(
+  meters: number,
+  unit: LinearUnit,
+  metricNotation: MetricNotation = 'meters',
+): string {
   if (!Number.isFinite(meters)) return '--'
 
   const absoluteMeters = Math.abs(meters)
@@ -190,6 +195,12 @@ export function formatLinearMeasurement(meters: number, unit: LinearUnit): strin
     const sign = meters < 0 && (wholeFeet !== 0 || inches !== 0) ? '-' : ''
 
     return `${sign}${wholeFeet}'${inches}"`
+  }
+
+  if (metricNotation === 'millimeters') {
+    const roundedMillimeters = Math.round(absoluteMeters * 1000)
+    const sign = meters < 0 && roundedMillimeters !== 0 ? '-' : ''
+    return `${sign}${roundedMillimeters}mm`
   }
 
   const roundedMeters = Number.parseFloat(absoluteMeters.toFixed(2))

@@ -13,6 +13,11 @@
 //     duplicate reference renders the child twice (duplicate React keys in the
 //     2D plan, doubled hosted geometry in 3D). Same-array duplicates are
 //     collapsed too.
+//  4. A node with a null `parentId` that exactly one parent still claims via
+//     `children` (the legacy site-child flatten and the old default-scene
+//     assembler both linked children without writing `parentId`). The editor
+//     renders the chain through `children`, but the hosted scene authority
+//     validates parent/child symmetry and rejects the whole scene.
 //
 // All are also prevented at the source now; this is the load-time safety net
 // for already-saved scenes.
@@ -23,13 +28,18 @@ export interface HealSceneResult {
   nodes: Record<string, unknown>
   /** Ids of zero-length walls that were dropped. */
   droppedWallIds: string[]
-  /** Count of non-string (e.g. null) entries removed from `children` arrays. */
+  /** Count of invalid non-string (e.g. null) entries removed from `children` arrays. */
   strippedChildRefs: number
   /**
    * Count of child references removed because the child's `parentId` points at
    * a different node (stale reparent leftovers), plus same-array duplicates.
    */
   strippedStaleChildRefs: number
+  /**
+   * Ids of nodes whose null `parentId` was repaired to the one parent that
+   * still claims them via `children`.
+   */
+  repairedParentLinkNodeIds: string[]
 }
 
 function isWallLike(node: unknown): node is { start: [number, number]; end: [number, number] } {
@@ -74,26 +84,43 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
   let strippedChildRefs = 0
   let strippedStaleChildRefs = 0
 
-  // Pass 2: clean `children` arrays — drop non-string entries (the `[null]`
-  // bug), references to walls we just removed, same-array duplicates, and
-  // stale references whose child's `parentId` names a different parent.
+  // Pass 2: clean `children` arrays — drop invalid non-string entries (the
+  // `[null]` bug), references to walls we just removed, same-array duplicates,
+  // and stale references whose child's `parentId` names a different parent.
+  // Legacy sites embedded full child objects; keep those for migrateNodes to
+  // flatten after healing instead of disconnecting the entire building.
   const nodes: Record<string, unknown> = {}
   for (const [id, node] of Object.entries(kept)) {
     const children = (node as { children?: unknown })?.children
     if (Array.isArray(children)) {
       const seen = new Set<string>()
-      const cleaned = children.filter((c): c is string => {
-        if (typeof c !== 'string' || dropped.has(c)) {
+      const cleaned = children.filter((child) => {
+        const embeddedSiteChildId =
+          (node as { type?: unknown }).type === 'site' &&
+          child &&
+          typeof child === 'object' &&
+          typeof (child as { id?: unknown }).id === 'string'
+            ? (child as { id: string }).id
+            : null
+        if (embeddedSiteChildId) {
+          if (seen.has(embeddedSiteChildId)) {
+            strippedStaleChildRefs++
+            return false
+          }
+          seen.add(embeddedSiteChildId)
+          return true
+        }
+        if (typeof child !== 'string' || dropped.has(child)) {
           strippedChildRefs++
           return false
         }
-        if (seen.has(c)) {
+        if (seen.has(child)) {
           strippedStaleChildRefs++
           return false
         }
-        seen.add(c)
-        const child = kept[c] as { parentId?: unknown } | undefined
-        if (child && typeof child.parentId === 'string' && child.parentId !== id) {
+        seen.add(child)
+        const childNode = kept[child] as { parentId?: unknown } | undefined
+        if (childNode && typeof childNode.parentId === 'string' && childNode.parentId !== id) {
           strippedStaleChildRefs++
           return false
         }
@@ -107,5 +134,43 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
     nodes[id] = node
   }
 
-  return { nodes, droppedWallIds, strippedChildRefs, strippedStaleChildRefs }
+  // Pass 3: repair null parent links. A node claimed as a child by exactly one
+  // parent must point back at it; legacy writers linked `children` without
+  // writing `parentId`. Embedded legacy site children claim by their `id` so
+  // the flattened flat-map node is repaired too.
+  const claimantsByChildId = new Map<string, string[]>()
+  for (const [id, node] of Object.entries(nodes)) {
+    const children = (node as { children?: unknown })?.children
+    if (!Array.isArray(children)) continue
+    for (const child of children) {
+      const childId =
+        typeof child === 'string'
+          ? child
+          : child && typeof child === 'object' && typeof (child as { id?: unknown }).id === 'string'
+            ? (child as { id: string }).id
+            : null
+      if (!childId || !(childId in nodes)) continue
+      const claimants = claimantsByChildId.get(childId) ?? []
+      claimants.push(id)
+      claimantsByChildId.set(childId, claimants)
+    }
+  }
+
+  const repairedParentLinkNodeIds: string[] = []
+  for (const [id, node] of Object.entries(nodes)) {
+    if (!node || typeof node !== 'object') continue
+    if ((node as { parentId?: unknown }).parentId != null) continue
+    const claimants = claimantsByChildId.get(id)
+    if (claimants?.length !== 1 || claimants[0] === id) continue
+    nodes[id] = { ...(node as Record<string, unknown>), parentId: claimants[0] }
+    repairedParentLinkNodeIds.push(id)
+  }
+
+  return {
+    nodes,
+    droppedWallIds,
+    strippedChildRefs,
+    strippedStaleChildRefs,
+    repairedParentLinkNodeIds,
+  }
 }

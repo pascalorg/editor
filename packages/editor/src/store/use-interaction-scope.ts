@@ -13,6 +13,8 @@ import {
   IDLE_SCOPE,
   type InteractionScope,
   isCurveReshape,
+  isFloorplanDrivenReshape,
+  isToolDrivenReshape,
   movingNodeOf,
   reshapingNodeId,
   tangentReshapeInfo,
@@ -83,6 +85,12 @@ export const getIsCurveReshape = (): boolean => isCurveReshape(useInteractionSco
 // wall-vs-fence distinction (both now map to one `reshaping/'curve'` scope) is
 // recovered by reading the reshaped node's type from `useReshapingNode`.
 export const useIsCurveReshape = (): boolean => useInteractionScope((s) => isCurveReshape(s.scope))
+
+export const useIsToolDrivenReshape = (): boolean =>
+  useInteractionScope((s) => isToolDrivenReshape(s.scope))
+
+export const useIsFloorplanDrivenReshape = (): boolean =>
+  useInteractionScope((s) => isFloorplanDrivenReshape(s.scope))
 
 // Replaces the legacy `movingWallEndpoint` / `movingFenceEndpoint` payloads,
 // minus the node (fetch it from `useReshapingNode`).

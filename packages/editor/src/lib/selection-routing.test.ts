@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, nodeRegistry, registerNode } from '@pascal-app/core'
+import { type AnyNode, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
 import { z } from 'zod'
 import {
+  emitCanvasNodeSelection,
   resolveCanvasSelectionNode,
   resolveNodeSelectionTarget,
   resolveSelectedIdsForNodeClick,
@@ -44,6 +45,20 @@ describe('resolveSelectedIdsForNodeClick', () => {
         nodeId: 'item_1',
       }),
     ).toEqual(['wall_1'])
+  })
+})
+
+describe('emitCanvasNodeSelection', () => {
+  test('publishes the accepted canvas node once', () => {
+    const node = { id: 'wall_1', type: 'wall' } as unknown as AnyNode
+    const received: AnyNode[] = []
+    const onSelection = (selectedNode: AnyNode) => received.push(selectedNode)
+    emitter.on('selection:canvas-node-click', onSelection)
+
+    emitCanvasNodeSelection(node)
+
+    emitter.off('selection:canvas-node-click', onSelection)
+    expect(received).toEqual([node])
   })
 })
 

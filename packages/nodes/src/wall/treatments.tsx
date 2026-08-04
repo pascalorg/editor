@@ -7,6 +7,7 @@ import {
   isCurvedWall,
   type SceneMaterial,
   type SceneMaterialId,
+  useScene,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CROWN_DEFAULT,
   WALL_SKIRTING_DEFAULT,
@@ -25,6 +26,7 @@ import {
 import { memo, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries as mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 import { treatmentMiterDataForProud, type WallTreatmentLevelData } from './treatment-level-data'
 
 const CURVE_SEGMENTS = 24
@@ -502,7 +504,7 @@ export function buildTrimGeometry(
   childrenNodes: OpeningLike[],
   levelData: WallTreatmentLevelData,
 ) {
-  const wallHeight = node.height ?? 2.5
+  const wallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
   const height = trim.height
   const yBottom =
     kind === 'crown'

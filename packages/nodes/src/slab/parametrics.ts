@@ -1,4 +1,4 @@
-import type { ParametricDescriptor } from '@pascal-app/core'
+import { MIN_SLAB_THICKNESS, type ParametricDescriptor } from '@pascal-app/core'
 import type { SlabNode } from './schema'
 
 /**
@@ -15,7 +15,18 @@ export const slabParametrics: ParametricDescriptor<SlabNode> = {
   groups: [
     {
       label: 'Elevation',
-      fields: [{ key: 'elevation', kind: 'number', unit: 'm', min: -1, max: 1, step: 0.01 }],
+      fields: [
+        { key: 'elevation', kind: 'number', unit: 'm', min: -1, max: 1, step: 0.01 },
+        {
+          key: 'thickness',
+          kind: 'number',
+          unit: 'm',
+          min: MIN_SLAB_THICKNESS,
+          max: 0.5,
+          step: 0.01,
+          visibleIf: (n) => !n.recessed,
+        },
+      ],
     },
   ],
   customPanel: () => import('./panel'),

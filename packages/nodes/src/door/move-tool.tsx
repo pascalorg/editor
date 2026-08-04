@@ -227,6 +227,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         wallEvent.node.parentId ?? '',
         wallEvent.node.start,
         wallEvent.node.end,
+        wallEvent.node.curveOffset ?? 0,
+        wallEvent.node.thickness,
+        wallEvent.node.supportSlabId,
       )
 
     const hideCursor = () => {
@@ -948,6 +951,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
             hostWall.parentId ?? '',
             hostWall.start,
             hostWall.end,
+            hostWall.curveOffset ?? 0,
+            hostWall.thickness,
+            hostWall.supportSlabId,
           ),
         )
         publishPlacementSurface(

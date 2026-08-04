@@ -34,14 +34,25 @@ export {
   GlbScene,
   type GlbWalkthrough,
 } from './components/viewer/glb-scene'
-export { GlbWalkthroughController } from './components/viewer/glb-walkthrough-controller'
+export {
+  CROUCH_CAPSULE,
+  CROUCH_EYE_OFFSET,
+  CROUCH_FLOAT_HEIGHT,
+  CROUCH_RUN_SPEED,
+  CROUCH_WALK_SPEED,
+  EYE_LERP_SPEED,
+  GlbWalkthroughController,
+  STAND_CAPSULE,
+  STAND_CLEARANCE,
+  STAND_FLOAT_HEIGHT,
+  WALKTHROUGH_FOV,
+} from './components/viewer/glb-walkthrough-controller'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,
   SSGI_PARAMS,
 } from './components/viewer/post-processing'
 export { SceneEnvironment } from './components/viewer/scene-environment'
-export { WalkthroughControls } from './components/viewer/walkthrough-controls'
 export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
@@ -64,12 +75,20 @@ export {
 } from './lib/csg-utils'
 export type { EdgeMode } from './lib/edge-style'
 export {
+  computeHeroFraming,
+  DEFAULT_FRAMING_EXCLUDED_TYPES,
+  type HeroFraming,
+  heroCameraPose,
+  temporarilyHideNodeTypes,
+  unionRegisteredNodeBounds,
+} from './lib/hero-pose'
+export {
   applyIsolation,
   clearIsolation,
   collectIsolationSubtree,
   isIsolationActive,
 } from './lib/isolation'
-export { ensureKtx2Support } from './lib/ktx2-loader'
+export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
 export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
@@ -116,9 +135,36 @@ export {
   SCENE_THEMES,
   type SceneTheme,
 } from './lib/scene-themes'
+export {
+  createSnapshotPipeline,
+  type SnapshotCaptureMode,
+  type SnapshotCaptureResult,
+  type SnapshotCropRegion,
+  type SnapshotPipeline,
+  type SnapshotSize,
+  THUMBNAIL_HEIGHT,
+  THUMBNAIL_WIDTH,
+} from './lib/snapshot-pipeline'
+export {
+  buildTerrainPerimeterFillGeometry,
+  type TerrainPerimeterPoint,
+} from './lib/terrain-perimeter-fill'
+export {
+  getPascalTextureRef,
+  type PascalTextureColorSpace,
+  type PascalTextureMap,
+  type PascalTextureRef,
+  stampPascalTextureRef,
+  textureMapForSlot,
+} from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
 export { useItemLightPool } from './store/use-item-light-pool'
-export { applyCountryUnitDefault, default as useViewer } from './store/use-viewer'
+export {
+  applyCountryUnitDefault,
+  default as useViewer,
+  type MetricNotation,
+  type WallMode,
+} from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export {
   createColumnBoxGeometry,
@@ -169,10 +215,9 @@ export {
   type SurfaceFrame,
 } from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
-// Slab system follows the wall + fence re-export pattern — composed into
-// the registry-driven slab definition's `def.system`. Removed in Phase 6
-// alongside the legacy slab mount point.
-export { generateSlabGeometry, SlabSystem } from './systems/slab/slab-system'
+// Pure slab geometry generator — composed into the registry-driven slab
+// definition's `def.geometry` in `@pascal-app/nodes`.
+export { generateSlabGeometry } from './systems/slab/slab-system'
 export {
   getStairBodyMaterials,
   getStairRailingMaterial,
@@ -188,7 +233,7 @@ export {
   getOpeningCutoutBottomPadding,
   hasFlatOpeningCutoutBottom,
 } from './systems/wall/opening-cutout-geometry'
-export { WallCutout } from './systems/wall/wall-cutout'
+export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the

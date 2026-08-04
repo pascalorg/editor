@@ -20,11 +20,11 @@ describe('create_level', () => {
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
-  test('creates a level on a building', async () => {
+  test('appends a level on a building with stored height', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const result = await client.callTool({
       name: 'create_level',
-      arguments: { buildingId: building.id, elevation: 3, label: 'Second' },
+      arguments: { buildingId: building.id, elevation: 99, height: 3.1, label: 'Second' },
     })
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
@@ -32,7 +32,9 @@ describe('create_level', () => {
     const created = bridge.getNode(parsed.levelId)
     expect(created).not.toBeNull()
     expect(created!.type).toBe('level')
-    expect((created as { level: number }).level).toBe(3)
+    expect((created as { height: number; level: number }).level).toBe(1)
+    expect((created as { height: number; level: number }).height).toBe(3.1)
+    expect(created?.metadata.height).toBeUndefined()
   })
 
   test('rejects unknown building id', async () => {

@@ -46,7 +46,7 @@ export {
   DEFAULT_LEVEL_HEIGHT,
   getCeilingAt,
   getCeilingHeightAt,
-  getLevelHeight,
+  resolveCeilingHeight,
 } from './level-height'
 export {
   type AxisLock,
@@ -102,6 +102,19 @@ export {
   snapVec3ToGrid,
   snapWorldXZToBuildingLocal,
 } from './snap'
+export {
+  CEILING_CLAMP_MARGIN,
+  findLevelAboveId,
+  findLevelBelowId,
+  getCeilingClampBound,
+  getCoveringSlabUndersideAt,
+  getLevelAbove,
+  getLevelBelow,
+  getLevelElevations,
+  getStoredLevelHeight,
+  getWallPlaneTop,
+  type LevelElevation,
+} from './storey'
 export {
   buildPortComponents,
   type SystemSummary,

@@ -2,9 +2,14 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
+  applyHeightPatch,
+  BuildingNode,
   CeilingNode,
   ColumnNode,
+  createTerrainField,
   ElevatorNode,
+  encodeTerrainField,
+  flattenPatch,
   LevelNode,
   nodeRegistry,
   registerNode,
@@ -13,7 +18,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial } from 'three'
+import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { buildFirstPersonColliderWorldFromRegistry } from './build-collider-world'
 
 function registerColliderDefinition(
@@ -46,8 +51,9 @@ function mountNode(
   sceneRegistry.byType[node.type]!.add(node.id)
 }
 
-function mountRegistryGroup(node: AnyNode) {
+function mountRegistryGroup(node: AnyNode, position: [number, number, number] = [0, 0, 0]) {
   const group = new Group()
+  group.position.set(position[0], position[1], position[2])
   group.updateMatrixWorld(true)
   sceneRegistry.nodes.set(node.id, group)
   sceneRegistry.byType[node.type]!.add(node.id)
@@ -160,6 +166,34 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     world?.dispose()
   })
 
+  test('adds a fallback floor only for the lowest slab-less level in a building', () => {
+    const building = BuildingNode.parse({
+      id: 'building_test',
+      children: ['level_ground', 'level_upper'],
+    })
+    const groundLevel = LevelNode.parse({
+      id: 'level_ground',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+    })
+    const upperLevel = LevelNode.parse({
+      id: 'level_upper',
+      parentId: building.id,
+      level: 1,
+    })
+    setSceneNodes([building, groundLevel, upperLevel])
+    mountRegistryGroup(groundLevel)
+    mountRegistryGroup(upperLevel, [0, 3, 0])
+
+    const world = buildFirstPersonColliderWorldFromRegistry()
+
+    expect(world).not.toBeNull()
+    expect(world?.bounds?.min.y).toBeCloseTo(-0.08)
+    expect(world?.bounds?.max.y).toBeCloseTo(0)
+    world?.dispose()
+  })
+
   test('adds a site ground collider so a spawn on bare ground has a floor', () => {
     const site = SiteNode.parse({ id: 'site_test' })
     setSceneNodes([site])
@@ -178,5 +212,35 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     expect(world?.bounds?.min.z).toBeCloseTo(-1000)
     expect(world?.bounds?.max.z).toBeCloseTo(1000)
     world?.dispose()
+  })
+
+  test('a sculpted site walks on its terrain instead of the flat ground slab', () => {
+    const base = createTerrainField({ cols: 17, rows: 17, spacing: 1, origin: [-8, -8] })
+    const patch = flattenPatch(base, { minX: 2, minZ: 2, maxX: 5, maxZ: 5 }, 2.5)
+    const field = applyHeightPatch(base, patch as never)
+    const site = SiteNode.parse({ id: 'site_test', terrain: encodeTerrainField(field) })
+    setSceneNodes([site])
+    mountRegistryGroup(site)
+
+    const world = buildFirstPersonColliderWorldFromRegistry()
+    expect(world).not.toBeNull()
+    if (!world) return
+
+    // The hill is in the collider: a flat slab would top out at 0.
+    expect(world.bounds?.max.y).toBeCloseTo(2.5)
+    // And it still reaches past the site so stepping out does not drop the player.
+    expect(world.bounds?.min.x).toBeCloseTo(-1008)
+    expect(world.bounds?.max.x).toBeCloseTo(1008)
+
+    // What the player actually stands on, on the plateau and off it.
+    const raycaster = new Raycaster()
+    const standOn = (x: number, z: number) => {
+      raycaster.set(new Vector3(x, 500, z), new Vector3(0, -1, 0))
+      return raycaster.intersectObject(world.mesh, false)[0]?.point.y ?? null
+    }
+    expect(standOn(3, 3)).toBeCloseTo(2.5, 4)
+    expect(standOn(-3, -3)).toBeCloseTo(0, 4)
+
+    world.dispose()
   })
 })

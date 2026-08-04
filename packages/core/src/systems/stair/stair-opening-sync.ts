@@ -9,8 +9,10 @@ import type {
   StairSegmentNode,
   SurfaceHoleMetadata,
 } from '../../schema'
-import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
+import { resolveCeilingHeight } from '../../services/level-height'
+import { getLevelElevations } from '../../services/storey'
 import { computeSegmentTransforms, rotateXZ } from './stair-footprint'
+import { resolveStairTotalRise } from './stair-rise'
 
 type SegmentTransform = {
   position: [number, number, number]
@@ -463,7 +465,7 @@ function getStraightOpeningPolygonsForSurface(
   const layouts = getStraightStairLayouts(stair, nodes)
   if (layouts.length === 0) return []
 
-  const riserHeight = (stair.totalRise ?? 2.5) / Math.max(stair.stepCount ?? 10, 1)
+  const riserHeight = resolveStairTotalRise(stair, nodes) / Math.max(stair.stepCount ?? 10, 1)
   const targetThreshold = Math.max(riserHeight * 2, STRAIGHT_STAIR_TARGET_THRESHOLD_MIN)
   const openingOffset = Math.max(openingOffsetOverride ?? stair.openingOffset ?? 0, 0)
   const openingRects: AxisAlignedRect[] = []
@@ -605,17 +607,16 @@ function getTargetSlabElevationForStair(
   nodes: Record<string, AnyNode>,
 ) {
   const { fromLevelId } = getResolvedStairLevelIds(stair, nodes)
-  const fromLevel = getLevelNumber(fromLevelId, nodes)
-  const slabLevel = getLevelNumber(slabLevelId, nodes)
+  const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+  const fromElevation = fromLevelId ? elevations.get(fromLevelId) : undefined
+  const slabElevation = elevations.get(slabLevelId)
 
-  if (fromLevel === undefined || slabLevel === undefined) {
+  if (!fromElevation || !slabElevation || fromElevation.buildingId !== slabElevation.buildingId) {
     return slab.elevation ?? 0.05
   }
 
   return (
-    (slabLevel - fromLevel) * DEFAULT_WALL_HEIGHT +
-    (slab.elevation ?? 0.05) -
-    (stair.position[1] ?? 0)
+    slabElevation.baseY - fromElevation.baseY + (slab.elevation ?? 0.05) - (stair.position[1] ?? 0)
   )
 }
 
@@ -626,18 +627,21 @@ function getTargetCeilingElevationForStair(
   nodes: Record<string, AnyNode>,
 ) {
   const { fromLevelId } = getResolvedStairLevelIds(stair, nodes)
-  const fromLevel = getLevelNumber(fromLevelId, nodes)
-  const ceilingLevel = getLevelNumber(ceilingLevelId, nodes)
+  const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+  const fromElevation = fromLevelId ? elevations.get(fromLevelId) : undefined
+  const ceilingElevation = elevations.get(ceilingLevelId)
 
-  if (fromLevel === undefined || ceilingLevel === undefined) {
-    return ceiling.height ?? DEFAULT_WALL_HEIGHT
+  const ceilingHeight = resolveCeilingHeight(ceiling, nodes as Record<AnyNodeId, AnyNode>)
+
+  if (
+    !fromElevation ||
+    !ceilingElevation ||
+    fromElevation.buildingId !== ceilingElevation.buildingId
+  ) {
+    return ceilingHeight
   }
 
-  return (
-    (ceilingLevel - fromLevel) * DEFAULT_WALL_HEIGHT +
-    (ceiling.height ?? DEFAULT_WALL_HEIGHT) -
-    (stair.position[1] ?? 0)
-  )
+  return ceilingElevation.baseY - fromElevation.baseY + ceilingHeight - (stair.position[1] ?? 0)
 }
 
 function shouldApplyStairToSlab(

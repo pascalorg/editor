@@ -6,6 +6,8 @@ export {
   type SolarPanelPresetDims,
   SolarPanelPresetKey,
 } from '../solar-panel-presets'
+// Asset URL allowlist
+export { ALLOWED_ORIGINS_ENV, ALLOWED_SCHEMES, AssetUrl } from './asset-url'
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'
@@ -51,8 +53,33 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
+export {
+  CONSTRUCTION_DRAWING_TYPES,
+  ConstructionDimensionBaseline,
+  ConstructionDimensionChainMode,
+  ConstructionDimensionDatumPolicy,
+  ConstructionDimensionDrawingOverride,
+  ConstructionDimensionDrawingPresentation,
+  ConstructionDimensionImperialPrecision,
+  ConstructionDimensionMetricNotation,
+  ConstructionDimensionMode,
+  ConstructionDimensionNode,
+  ConstructionDimensionTerminator,
+  ConstructionDimensionTextPosition,
+  ConstructionDrawingType,
+  constructionDimensionRequiredAnchorCount,
+  resolveConstructionDimensionDrawingOverride,
+  resolveConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingSuppressedSegments,
+} from './nodes/construction-dimension'
 export { CupolaNode } from './nodes/cupola'
-export { DoorNode, DoorSegment } from './nodes/door'
+export {
+  DoorNode,
+  DoorSegment,
+  OpeningConstructionType,
+  OpeningDimensionReference,
+} from './nodes/door'
 export {
   DormerNode,
   type DormerSurfaceMaterialRole,
@@ -184,7 +211,7 @@ export {
   SkylightType,
   type SkylightTypePreset,
 } from './nodes/skylight'
-export { SlabNode } from './nodes/slab'
+export { MIN_SLAB_THICKNESS, SlabNode } from './nodes/slab'
 export {
   SolarPanelMaterialRole,
   SolarPanelNode,
@@ -200,6 +227,7 @@ export {
   StairType,
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
+export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { TurbineVentNode } from './nodes/turbine-vent'
 export type {
@@ -234,9 +262,15 @@ export {
   WallTreatmentSide,
   WallTrimProfile,
 } from './nodes/wall'
-export { WindowNode, WindowType } from './nodes/window'
+export {
+  WindowConstructionType,
+  WindowDimensionReference,
+  WindowNode,
+  WindowType,
+} from './nodes/window'
 export { ZoneNode } from './nodes/zone'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
+export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
 export type { AnyNodeId, AnyNodeType } from './types'
 // Union types
 export { AnyNode } from './types'

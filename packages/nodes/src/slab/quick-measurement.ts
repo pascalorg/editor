@@ -7,12 +7,13 @@ import {
 
 export function slabQuickMeasurement(node: SlabNode): QuickMeasurementReport | null {
   if (node.polygon.length < 3) return null
-  const thickness = node.elevation ?? 0.05
+  const elevation = node.elevation ?? 0.05
+  const thickness = node.thickness ?? 0.05
 
   return {
     title: node.name ?? 'Floor slab',
     kindLabel: 'Floor slab',
-    anchor: polygonReportAnchor(node.polygon, thickness + 0.04),
+    anchor: polygonReportAnchor(node.polygon, elevation + 0.04),
     metrics: [
       {
         key: 'area',

@@ -15,6 +15,7 @@
     "clean:cache": "rm -rf apps/*/.next apps/*/.swc apps/*/.turbo packages/*/.turbo tooling/*/.turbo .turbo node_modules/.cache",
     "restart": "bun kill && bun clean:cache && bun dev",
     "release": "gh workflow run release.yml -f package=all -f bump=patch",
+    "release:beta": "gh workflow run release.yml -f package=all -f bump=beta",
     "release:viewer": "gh workflow run release.yml -f package=viewer -f bump=patch",
     "release:core": "gh workflow run release.yml -f package=core -f bump=patch",
     "release:editor": "gh workflow run release.yml -f package=editor -f bump=patch",
@@ -39,6 +40,7 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@types/three": "0.184.1",
+    "react-grab": "0.1.50",
     "three": "0.185.1"
   },
   "optionalDependencies": {

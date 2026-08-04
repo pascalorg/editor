@@ -17,12 +17,13 @@ Pure logic: no rendering, no Three.js objects. They read nodes from `useScene`, 
 | System | Responsibility |
 |---|---|
 | `WallSystem` | Wall mitering, corner joints |
-| `SlabSystem` | Polygon-based floor/roof generation |
 | `CeilingSystem` | Polygon-based ceiling generation |
 | `RoofSystem` | Pitched roof shape |
 | `DoorSystem` | Placement constraints on walls |
 | `WindowSystem` | Placement constraints on walls |
 | `ItemSystem` | Item transforms, collision |
+
+Slab geometry has no dedicated system: it renders through the registry `def.geometry` (`packages/nodes/src/slab/geometry.ts`, calling the pure generators in `packages/viewer/src/systems/slab/slab-system.tsx`) with a small `def.system` for dirty tracking.
 
 ### Viewer Systems — `packages/viewer/src/systems/`
 

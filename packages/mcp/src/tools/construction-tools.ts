@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { resolveStairTotalRise } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   CeilingNode,
@@ -23,9 +24,10 @@ const RAILING_MODES = ['none', 'left', 'right', 'both'] as const
 export const createStoryShellInput = {
   levelId: NodeIdSchema,
   footprint: z.array(Vec2Schema).min(3),
-  wallHeight: measurement('length', 'm', { positive: true, description: 'Wall height.' }).default(
-    2.8,
-  ),
+  wallHeight: measurement('length', 'm', {
+    positive: true,
+    description: 'Explicit wall height override. Omit for level-plane-bound walls.',
+  }).optional(),
   wallThickness: measurement('length', 'm', {
     positive: true,
     description: 'Wall thickness.',
@@ -100,7 +102,7 @@ export const createStairBetweenLevelsInput = {
   totalRise: measurement('length', 'm', {
     positive: true,
     description: 'Total vertical rise.',
-  }).default(2.8),
+  }).optional(),
   stepCount: z.number().int().positive().default(14),
   railingMode: z.enum(RAILING_MODES).default('both'),
   destinationSlabId: NodeIdSchema.optional(),
@@ -276,7 +278,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
           start: points[i],
           end: points[(i + 1) % points.length],
           thickness: wallThickness,
-          height: wallHeight,
+          ...(wallHeight !== undefined ? { height: wallHeight } : {}),
           frontSide: 'exterior',
           backSide: 'interior',
           ...(wallMaterialPreset ? { materialPreset: wallMaterialPreset } : {}),
@@ -292,6 +294,11 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
           name: namePrefix ? `${namePrefix} Slab` : undefined,
           polygon: points,
           elevation: slabElevation,
+          // Grounded solid: underside on the level plane, so the created
+          // story slab occupies [0, slabElevation] like the legacy
+          // extrude-from-zero model.
+          thickness: Math.max(slabElevation, 0),
+          recessed: slabElevation < 0,
           ...(slabMaterialPreset ? { materialPreset: slabMaterialPreset } : {}),
           metadata: { role: 'story-slab' },
         })
@@ -301,10 +308,13 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
 
       let ceilingId: string | null = null
       if (createCeiling) {
+        // Height-less unless the caller pinned one: a new story ceiling
+        // follows the level top automatically.
+        const explicitCeilingHeight = ceilingHeight ?? wallHeight
         const ceiling = CeilingNode.parse({
           name: namePrefix ? `${namePrefix} Ceiling` : undefined,
           polygon: points,
-          height: ceilingHeight ?? wallHeight,
+          ...(explicitCeilingHeight !== undefined ? { height: explicitCeilingHeight } : {}),
           ...(ceilingMaterialPreset ? { materialPreset: ceilingMaterialPreset } : {}),
           metadata: { role: 'story-ceiling' },
         })
@@ -372,12 +382,12 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         const roofLevel = LevelNode.parse({
           name: roofLevelLabel,
           level: roofLevelElevation ?? nextLevelIndex(bridge, buildingId, referenceLevel),
+          height: roofLevelHeight ?? Math.max(wallHeight + peakHeight, 0.2),
           children: [],
           metadata: {
             role: 'roof',
             label: roofLevelLabel,
             referenceLevelId: levelId,
-            height: roofLevelHeight ?? Math.max(wallHeight + peakHeight, 0.2),
           },
         })
         targetRoofLevelId = roofLevel.id as AnyNodeId
@@ -460,15 +470,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         )
       }
 
-      const segment = StairSegmentNode.parse({
-        segmentType: 'stair',
-        width,
-        length: runLength,
-        height: totalRise,
-        stepCount,
-        ...(materialPreset ? { materialPreset } : {}),
-      })
-      const stair = StairNode.parse({
+      const stairDraft = StairNode.parse({
         name: name ?? 'Stair',
         position: position as [number, number, number],
         rotation,
@@ -478,15 +480,33 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         slabOpeningMode: 'none',
         openingOffset,
         width,
-        totalRise,
+        ...(totalRise !== undefined ? { totalRise } : {}),
         stepCount,
         railingMode,
-        children: [segment.id],
+        children: [],
         ...(materialPreset ? { materialPreset } : {}),
         metadata: {
           openingManaged: 'manual-rectangular',
         },
       })
+      const riseNodes = {
+        ...bridge.getNodes(),
+        [fromLevel.id]: {
+          ...fromLevel,
+          children: [...(fromLevel as Extract<AnyNode, { type: 'level' }>).children, stairDraft.id],
+        },
+        [stairDraft.id]: stairDraft,
+      } as Record<string, AnyNode>
+      const resolvedTotalRise = resolveStairTotalRise(stairDraft, riseNodes)
+      const segment = StairSegmentNode.parse({
+        segmentType: 'stair',
+        width,
+        length: runLength,
+        height: resolvedTotalRise,
+        stepCount,
+        ...(materialPreset ? { materialPreset } : {}),
+      })
+      const stair = { ...stairDraft, children: [segment.id] }
 
       const openingPolygon = rectangularOpening({
         position: position as [number, number, number],

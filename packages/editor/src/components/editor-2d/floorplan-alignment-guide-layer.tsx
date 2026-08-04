@@ -28,6 +28,7 @@ import { useFloorplanRender } from './floorplan-render-context'
 export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuideLayer() {
   const guides = useAlignmentGuides((s) => s.guides)
   const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   const ctx = useFloorplanRender()
 
   if (guides.length === 0) return null
@@ -61,7 +62,7 @@ export const FloorplanAlignmentGuideLayer = memo(function FloorplanAlignmentGuid
         // offset along X.
         const pillX = axis === 'x' ? midX + pillOffset : midX
         const pillZ = axis === 'z' ? midZ + pillOffset : midZ
-        const distLabel = formatMeasurement(distMeters, unit)
+        const distLabel = formatMeasurement(distMeters, unit, metricNotation)
         const charWidth = pillFontSize * 0.55
         const pillWidth = distLabel.length * charWidth + pillPadX * 2
         const pillHeight = pillFontSize + pillPadY * 2

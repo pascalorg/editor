@@ -7,10 +7,22 @@ function wallOf(start: [number, number], end: [number, number], thickness = 0.1)
   return WallNode.parse({ start, end, thickness })
 }
 
-function slabOf(polygon: Array<[number, number]>, autoFromWalls = true, elevation?: number) {
-  return SlabNode.parse(
-    elevation === undefined ? { polygon, autoFromWalls } : { polygon, autoFromWalls, elevation },
-  )
+function slabOf(
+  polygon: Array<[number, number]>,
+  autoFromWalls = true,
+  elevation?: number,
+  thickness?: number,
+) {
+  return SlabNode.parse({
+    polygon,
+    autoFromWalls,
+    ...(elevation === undefined ? {} : { elevation }),
+    // Raised ROOM FLOOR fixtures pass thickness = elevation so the slab
+    // stays grounded (underside 0) — adoption/seam rules only apply to
+    // grounded slabs; the schema-default 0.05 thickness would make an
+    // elevated fixture a floating deck.
+    ...(thickness === undefined ? {} : { thickness }),
+  })
 }
 
 function xs(polygon: Array<[number, number]>) {
@@ -398,6 +410,7 @@ describe('getRenderableSlabPolygon', () => {
       ],
       false,
       0.34,
+      0.34,
     )
     const low = slabOf(
       [
@@ -450,6 +463,7 @@ describe('getRenderableSlabPolygon', () => {
       ],
       false,
       0.4,
+      0.4,
     )
     const legacyLow = slabOf(
       [
@@ -471,8 +485,11 @@ describe('getRenderableSlabPolygon', () => {
   })
 
   test('stacked slabs are not mistaken for rooms across a wall', () => {
+    // The platform is a grounded raised floor (thickness = elevation); the
+    // floating-deck variant of this shape is covered by the adoption-gate
+    // tests below.
     const floor = slabOf(roomA, false, 0.05)
-    const platform = slabOf(roomA, false, 0.4)
+    const platform = slabOf(roomA, false, 0.4, 0.4)
     const walls = [
       wallOf([0, 0], [4, 0]),
       wallOf([4, 0], [4, 3]),
@@ -526,6 +543,7 @@ describe('getRenderableSlabPolygon', () => {
         [0, 3],
       ],
       false,
+      0.3,
       0.3,
     )
     const stepLow = slabOf(
@@ -634,6 +652,7 @@ describe('getRenderableSlabPolygon', () => {
         [0, 3],
       ],
       true,
+      0.4,
       0.4,
     )
     const low = slabOf(
@@ -781,6 +800,76 @@ describe('getRenderableSlabPolygon', () => {
 
     expect(renderedExtent - storedExtent).toBeLessThan(0.2)
     expect(longestEdge).toBeLessThan(8.4)
+  })
+})
+
+describe('grounded adoption gate', () => {
+  // Owner rule: wall adoption / per-edge extension exists so ROOM FLOORS
+  // tile with the walls standing on them. It applies only to grounded
+  // slabs (underside ≈ 0) and recessed pools; a floating deck keeps its
+  // drawn polygon exactly.
+
+  test('a floating deck near walls keeps its drawn polygon exactly', () => {
+    // Same footprint as roomA — every edge inside a wall adoption band —
+    // but floating at 1.5m: no edge may extend to a wall face.
+    const deck = slabOf(roomA, false, 1.5, 0.05)
+
+    const poly = getRenderableSlabPolygon(deck, { walls: twoRoomWalls, siblingSlabs: [] })
+
+    expect(poly).toEqual(roomA)
+  })
+
+  test('boundary case: underside 0.005 still counts as grounded and adopts', () => {
+    const nearlyGrounded = slabOf(roomA, false, 0.055, 0.05)
+
+    const poly = getRenderableSlabPolygon(nearlyGrounded, {
+      walls: [wallOf([0, 0], [4, 0])],
+      siblingSlabs: [],
+    })
+
+    expect(Math.min(...zs(poly))).toBeCloseTo(-0.05)
+  })
+
+  test('a slab floated just past the epsilon stops adopting', () => {
+    // Underside 0.02 > 0.01 epsilon — already a deck.
+    const justFloating = slabOf(roomA, false, 0.07, 0.05)
+
+    const poly = getRenderableSlabPolygon(justFloating, {
+      walls: [wallOf([0, 0], [4, 0])],
+      siblingSlabs: [],
+    })
+
+    expect(Math.min(...zs(poly))).toBeCloseTo(0)
+  })
+
+  test('a recessed pool keeps band adoption (unchanged)', () => {
+    // Recessed slabs are sunk into the ground, never floating — their
+    // negative elevation encodes depth, so the gate must not strip the
+    // wall-face extension a sunken room floor relies on.
+    const pool = SlabNode.parse({ polygon: roomA, elevation: -0.15, recessed: true })
+
+    const poly = getRenderableSlabPolygon(pool, {
+      walls: [wallOf([0, 0], [4, 0])],
+      siblingSlabs: [],
+    })
+
+    expect(Math.min(...zs(poly))).toBeCloseTo(-0.05)
+  })
+
+  test('a grounded floor ignores a floating deck sibling as a seam target', () => {
+    // Deck butted across the x=4 wall band: were it a room floor, the
+    // grounded (lower) floor would terminate at its own wall face (3.95).
+    // As a deck it is no seam partner — the floor adopts the wall's outer
+    // face (4.05) as if alone, and the deck itself stays as drawn.
+    const floor = slabOf(roomA, false, 0.05)
+    const deck = slabOf(roomB, false, 1.5, 0.05)
+    const walls = [wallOf([4, 0], [4, 3])]
+
+    const floorPoly = getRenderableSlabPolygon(floor, { walls, siblingSlabs: [deck] })
+    const deckPoly = getRenderableSlabPolygon(deck, { walls, siblingSlabs: [floor] })
+
+    expect(Math.max(...xs(floorPoly))).toBeCloseTo(4.05)
+    expect(deckPoly).toEqual(roomB)
   })
 })
 

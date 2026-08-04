@@ -32,6 +32,7 @@ import {
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import useFloorplanMode from '../../store/use-floorplan-mode'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -58,12 +59,14 @@ import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { CustomCameraControls } from './custom-camera-controls'
+import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
 import { FenceTangentLines3D } from './fence-tangent-lines-3d'
 import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
+import { FloorplanModeCoordinator } from './floorplan-mode-coordinator'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
 import { GroupFloatingActionMenu } from './group-floating-action-menu'
@@ -153,6 +156,12 @@ export interface EditorProps {
    * only while a node is selected.
    */
   inspectorFooter?: ReactNode
+  /**
+   * Docked below the multi-selection panel (v2). Hosts mount whole-selection
+   * affordances here (e.g. "Save to my catalog"); shows only while more than
+   * one node is selected.
+   */
+  multiSelectionFooter?: ReactNode
 
   /** Host-owned content mounted inside the editor's React Three Fiber scene. */
   viewerSceneSlot?: ReactNode
@@ -1031,6 +1040,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           2d / 3d / split alike) can anchor to this container's bottom-left. */}
       <div className="relative flex h-full" ref={setViewerAreaNode}>
         <QuickMeasurementHud />
+        <DeleteConfirmationDialog />
         {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
         <div
           className="relative h-full flex-shrink-0"
@@ -1108,6 +1118,7 @@ export default function Editor({
   viewerToolbarRight,
   stageOverlay,
   inspectorFooter,
+  multiSelectionFooter,
   viewerSceneSlot,
   floorplanSceneSlot,
   projectId,
@@ -1167,9 +1178,11 @@ export default function Editor({
 
   useEffect(() => {
     useViewer.getState().setProjectId(projectId ?? null)
+    useFloorplanMode.getState().setProjectId(projectId ?? null)
 
     return () => {
       useViewer.getState().setProjectId(null)
+      useFloorplanMode.getState().setProjectId(null)
     }
   }, [projectId])
 
@@ -1381,6 +1394,7 @@ export default function Editor({
 
     return (
       <>
+        <FloorplanModeCoordinator />
         {showLoader && (
           <div className="fixed inset-0 z-60">
             <SceneLoader className="bg-background" />
@@ -1412,7 +1426,10 @@ export default function Editor({
                   )}
                   {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
-                      <PanelManager inspectorFooter={inspectorFooter} />
+                      <PanelManager
+                        inspectorFooter={inspectorFooter}
+                        multiSelectionFooter={multiSelectionFooter}
+                      />
                     </div>
                   )}
                   {!isCaptureMode && (
@@ -1453,6 +1470,7 @@ export default function Editor({
 
   return (
     <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
+      <FloorplanModeCoordinator />
       {showLoader && (
         <div className="fixed inset-0 z-60">
           <SceneLoader className="bg-background" />

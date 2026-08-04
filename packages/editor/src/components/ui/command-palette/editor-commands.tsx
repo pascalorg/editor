@@ -1,7 +1,7 @@
 'use client'
 
 import type { AnyNodeId } from '@pascal-app/core'
-import { LevelNode, useScene } from '@pascal-app/core'
+import { DEFAULT_LEVEL_HEIGHT, LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
   AppWindow,
@@ -22,6 +22,7 @@ import {
   Minimize2,
   Moon,
   MousePointer2,
+  Mountain,
   Package,
   PaintBucket,
   PencilLine,
@@ -168,6 +169,17 @@ export function EditorCommands() {
             setMode('material-paint')
           }),
       },
+      {
+        id: 'editor.mode.terrain-sculpt',
+        label: 'Sculpt Terrain',
+        group: 'Scene',
+        icon: <Mountain className="h-4 w-4" />,
+        keywords: ['terrain', 'ground', 'elevation', 'sculpt', 'hill', 'slope', 'grade', 'dig'],
+        shortcut: ['G'],
+        // No `setPhase`: `setMode` moves to the site phase itself, and doing it
+        // here would set the phase twice with a mode reset in between.
+        execute: () => run(() => setMode('terrain-sculpt')),
+      },
 
       // ── Levels ───────────────────────────────────────────────────────────
       {
@@ -196,6 +208,7 @@ export function EditorCommands() {
             ).length
             const newLevel = LevelNode.parse({
               level: levelCount,
+              height: DEFAULT_LEVEL_HEIGHT,
               children: [],
               parentId: building.id,
             })

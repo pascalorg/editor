@@ -6,6 +6,7 @@ import {
   bboxCornerAnchors,
   collectAlignmentAnchors,
   DEFAULT_ANGLE_STEP,
+  type FloorplanGeometry,
   type FloorplanPalette,
   pauseSceneHistory,
   pauseSpaceDetection,
@@ -22,13 +23,16 @@ import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contex
 import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
 import { isHistoryShortcut } from '../../lib/history'
+import { formatLinearMeasurement } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
+  isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../store/use-editor'
+import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
 import {
   classifyParticipant,
@@ -44,6 +48,8 @@ import {
 } from '../editor/group-transform-shared'
 import { swallowNextClick } from '../editor/handles/use-handle-drag'
 import { useMeshSettleEpoch } from '../editor/use-mesh-settle-epoch'
+import { useFloorplanSceneRotation } from './floorplan-render-context'
+import { FloorplanDimensionRenderer } from './renderers/floorplan-dimension-renderer'
 
 // 2D sibling of the 3D body-drag group move (`group-move-3d.ts`): dragging
 // any selected element of a multi-selection slides the whole selection
@@ -441,9 +447,9 @@ export function startFloorplanGroupRotate(event: {
     let delta = angleOf([plan[0], plan[1]]) - initialAngle
     while (delta > Math.PI) delta -= 2 * Math.PI
     while (delta < -Math.PI) delta += 2 * Math.PI
-    // 15° increments by default; Shift rotates freely — the same contract
-    // as the 3D group rotate gizmo (and the HUD hint its scope surfaces).
-    if (!e.shiftKey) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
+    if (isAngleSnapActive()) {
+      delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
+    }
 
     const entries = rotateGroupPatches(starts, links, pivot, delta)
     const patchById = new Map(entries)
@@ -586,11 +592,15 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
 }) {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const levelId = useViewer((s) => s.selection.levelId)
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   const nodes = useScene((s) => s.nodes)
   const delta = useFloorplanGroupDrag((s) => s.delta)
   const liveRotation = useFloorplanGroupDrag((s) => s.rotation)
   const movingNode = useMovingNode()
   const mode = useEditor((s) => s.mode)
+  const floorplanMode = useFloorplanMode((s) => s.mode)
+  const sceneRotationDeg = useFloorplanSceneRotation()
 
   // While a selection modifier is held the box steps aside so clicks reach
   // the entries underneath (toggle membership) instead of starting a drag.
@@ -638,6 +648,27 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   const pad = 6 * unitsPerPixel
   const stroke = palette?.selectedStroke ?? '#3b82f6'
   const interactive = !modifierHeld && !!onPointerDown
+  const dimensionOffset = pad + 0.28
+  const widthDimension = {
+    kind: 'dimension',
+    start: [box.x, box.z + box.depth],
+    end: [box.x + box.width, box.z + box.depth],
+    offsetNormal: [0, 1],
+    offsetDistance: dimensionOffset,
+    extensionOvershoot: 0.08,
+    text: formatLinearMeasurement(box.width, unit, metricNotation),
+    stroke,
+  } satisfies Extract<FloorplanGeometry, { kind: 'dimension' }>
+  const depthDimension = {
+    kind: 'dimension',
+    start: [box.x + box.width, box.z],
+    end: [box.x + box.width, box.z + box.depth],
+    offsetNormal: [1, 0],
+    offsetDistance: dimensionOffset,
+    extensionOvershoot: 0.08,
+    text: formatLinearMeasurement(box.depth, unit, metricNotation),
+    stroke,
+  } satisfies Extract<FloorplanGeometry, { kind: 'dimension' }>
   // Mid-gesture the box rides the live delta (group move) or spins around the
   // rotation pivot (corner rotate) — SVG rotate() is degrees around a plan
   // point, and positive matches the atan2 x→z sense on the y-down plan.
@@ -664,6 +695,18 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
         x={box.x - pad}
         y={box.z - pad}
       />
+      {floorplanMode === 'default' ? (
+        <g pointerEvents="none">
+          <FloorplanDimensionRenderer
+            geometry={widthDimension}
+            sceneRotationDeg={sceneRotationDeg}
+          />
+          <FloorplanDimensionRenderer
+            geometry={depthDimension}
+            sceneRotationDeg={sceneRotationDeg}
+          />
+        </g>
+      ) : null}
       {/* Corner rotate handles — the 2D counterpart of the 3D rotate gizmo:
           drag a corner to spin the group (15° steps, Shift = free). */}
       {interactive && onRotatePointerDown
