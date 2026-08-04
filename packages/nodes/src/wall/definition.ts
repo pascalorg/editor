@@ -89,7 +89,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   relations: {
-    hosts: ['door', 'window', 'item', 'formwork-system'],
+    hosts: ['door', 'window', 'item', 'formwork-assembly', 'construction-joint'],
     affectsSpatial: ['slab', 'ceiling', 'zone'],
     linkedBy: 'endpoint-match',
     cascadeDelete: 'descendants',

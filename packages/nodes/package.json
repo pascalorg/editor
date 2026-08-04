@@ -11,10 +11,15 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./formwork-system": {
-      "types": "./dist/formwork-system/index.d.ts",
-      "import": "./dist/formwork-system/index.js",
-      "default": "./dist/formwork-system/index.js"
+    "./construction-joint": {
+      "types": "./dist/construction-joint/index.d.ts",
+      "import": "./dist/construction-joint/index.js",
+      "default": "./dist/construction-joint/index.js"
+    },
+    "./formwork-assembly": {
+      "types": "./dist/formwork-assembly/index.d.ts",
+      "import": "./dist/formwork-assembly/index.js",
+      "default": "./dist/formwork-assembly/index.js"
     }
   },
   "files": [

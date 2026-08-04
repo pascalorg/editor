@@ -152,6 +152,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     parentId: null,
     visible: true,
     metadata: {},
+    children: [],
     polygon: [],
     holes: [],
     holeMetadata: [],

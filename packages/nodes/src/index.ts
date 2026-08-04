@@ -6,6 +6,7 @@ import { ceilingDefinition } from './ceiling'
 import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
 import { constructionDimensionDefinition } from './construction-dimension'
+import { constructionJointDefinition } from './construction-joint'
 import { cupolaDefinition } from './cupola'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
@@ -17,7 +18,7 @@ import { ductTerminalDefinition } from './duct-terminal'
 import { elevatorDefinition } from './elevator'
 import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
-import { buildFormworkNode, formworkSystemDefinition } from './formwork-system'
+import { formworkAssemblyDefinition } from './formwork-assembly'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
@@ -72,7 +73,8 @@ export const builtinPlugin: Plugin = {
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
-    formworkSystemDefinition as unknown as AnyNodeDefinition,
+    formworkAssemblyDefinition as unknown as AnyNodeDefinition,
+    constructionJointDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
     doorDefinition as unknown as AnyNodeDefinition,
@@ -139,6 +141,7 @@ export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
 export { constructionDimensionDefinition } from './construction-dimension'
+export { buildSolverJointNodes, constructionJointDefinition } from './construction-joint'
 export { cupolaDefinition } from './cupola'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
@@ -150,7 +153,13 @@ export { ductTerminalDefinition } from './duct-terminal'
 export { elevatorDefinition } from './elevator'
 export { eyebrowVentDefinition } from './eyebrow-vent'
 export { fenceDefinition } from './fence'
-export { buildFormworkNode, formworkSystemDefinition } from './formwork-system'
+export {
+  buildFormworkNode,
+  buildFormworkNodes,
+  type CastableHostNode,
+  formworkAssemblyDefinition,
+  pourUnitsForHost,
+} from './formwork-assembly'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'
