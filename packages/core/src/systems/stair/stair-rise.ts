@@ -1,7 +1,7 @@
 import { getFloorStackedPosition } from '../../hooks/spatial-grid/floor-placed-elevation'
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
-import { getStoredLevelHeight } from '../../services/storey'
+import { getLevelFloorToFloorHeight } from '../../services/storey'
 
 export function resolveStairTotalRise(stair: StairNode, nodes: Record<string, AnyNode>): number {
   if (stair.totalRise !== undefined) return stair.totalRise
@@ -33,7 +33,9 @@ export function resolveStairTotalRise(stair: StairNode, nodes: Record<string, An
     }
   }
 
-  return level?.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
+  return level?.type === 'level'
+    ? getLevelFloorToFloorHeight(level.id, nodes as Record<AnyNodeId, AnyNode>)
+    : DEFAULT_LEVEL_HEIGHT
 }
 
 const RISE_SYNC_EPSILON = 1e-4

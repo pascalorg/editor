@@ -108,6 +108,18 @@ describe('scene vertical model migration', () => {
     expect('height' in (nodes.wall_b as WallResult)).toBe(false)
   })
 
+  test('materializes a finite zero base elevation for legacy levels', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a']),
+      level_a: level('level_a', 'building_a', 0, []),
+    })
+
+    const baseElevation = (nodes.level_a as LevelResult).baseElevation
+    expect(baseElevation).toBe(0)
+    expect(Number.isNaN(baseElevation)).toBe(false)
+  })
+
   test('hole pattern: walls within 0.20 of the plane become plane-bound', () => {
     const nodes = loadScene({
       site_test: site(['building_a']),

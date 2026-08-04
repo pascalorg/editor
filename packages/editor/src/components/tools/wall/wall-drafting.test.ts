@@ -168,6 +168,7 @@ describe('createWallOnCurrentLevel', () => {
       metadata: {},
       children: [],
       level: 0,
+      baseElevation: 0,
       height: 3,
     } as AnyNode
     const nodes = Object.fromEntries([site, building, level].map((node) => [node.id, node]))
