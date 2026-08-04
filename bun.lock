@@ -292,6 +292,7 @@
         "zustand": "^5",
       },
       "devDependencies": {
+        "@pascal-app/core": "^1.0.0-beta.4",
         "@pascal/typescript-config": "*",
         "@types/node": "^22",
         "@types/react": "^19.2.2",
