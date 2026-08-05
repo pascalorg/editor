@@ -135,6 +135,18 @@ function duplexWithMissingSpaceNameScene() {
   return duplexWithMissingSpaceName
 }
 
+const longRoomNumber = 'ROOM-NUMBER-THAT-IS-LONGER-THAN-THIRTY-TWO-CHARACTERS'
+let duplexWithLongRoomNumber: Promise<PascalSceneGraph> | undefined
+function duplexWithLongRoomNumberScene() {
+  duplexWithLongRoomNumber ??= convertFixture('01-duplex.ifc', (source) =>
+    source.replace(
+      /(#157= IFCSPACE\('[^']+',#41,)'A102'/,
+      (_match, prefix: string) => `${prefix}'${longRoomNumber}'`,
+    ),
+  )
+  return duplexWithLongRoomNumber
+}
+
 describe('IFC imported mesh conversion', () => {
   test('keeps millimetre mesh geometry aligned with native walls', async () => {
     const scene = await openHouseScene()
@@ -228,5 +240,18 @@ describe('IFC imported mesh conversion', () => {
         (node) => node.type === 'imported-mesh' && metadata(node).ifcType === 'IFCSTAIRFLIGHT',
       ),
     ).toHaveLength(0)
+  }, 30_000)
+
+  test('keeps a zone when its IFC room number exceeds the Pascal limit', async () => {
+    const scene = await duplexWithLongRoomNumberScene()
+    const zones = Object.values(scene.nodes).filter(
+      (node): node is ZoneNode => node.type === 'zone',
+    )
+    const changedZone = zones.find((zone) => metadata(zone).expressID === 157)
+
+    expect(zones).toHaveLength(21)
+    expect(changedZone).toBeDefined()
+    expect(changedZone!.roomNumber).toBe('')
+    expect(metadata(changedZone!).ifcName).toBe(longRoomNumber)
   }, 30_000)
 })

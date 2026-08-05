@@ -2262,6 +2262,9 @@ export async function convertIfcToPascal(
 
         const spaceName = space.Name?.value
         const longName = space.LongName?.value
+        const roomNumberCandidate =
+          longName && spaceName !== longName ? (spaceName ?? '').trim() : ''
+        const roomNumber = roomNumberCandidate.length <= 32 ? roomNumberCandidate : ''
         const nodeId = generateId('zone')
         const zone = tryParse(ZoneNode, 'zone', {
           object: 'node',
@@ -2272,13 +2275,14 @@ export async function convertIfcToPascal(
           visible: true,
           polygon,
           spaceRole: 'room',
-          roomNumber: longName && spaceName !== longName ? (spaceName ?? '') : '',
+          roomNumber,
           ceilingHeight: Math.max(0.1, ceilingHeight),
           metadata: buildMetadata({
             ifcType: 'IFCSPACE',
             expressID: spaceExpressId,
             globalId: space.GlobalId?.value,
             predefinedType: space.PredefinedType?.value,
+            ifcName: spaceName,
             footprintApproximated: footprintApproximated || undefined,
           }),
         })
