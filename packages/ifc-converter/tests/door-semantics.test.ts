@@ -33,6 +33,17 @@ describe('IFC door semantics', () => {
     })
   })
 
+  it('preserves single- and double-leaf folding operations', () => {
+    expect(doorStyleFromIfcOperation('FOLDING_TO_LEFT')).toMatchObject({
+      doorType: 'folding',
+      leafCount: 1,
+    })
+    expect(doorStyleFromIfcOperation('DOUBLE_DOOR_FOLDING')).toMatchObject({
+      doorType: 'folding',
+      leafCount: 2,
+    })
+  })
+
   it('turns a glazed double hinged door into a French door', () => {
     const style = doorStyleFromIfcOperation('DOUBLE_DOOR_SINGLE_SWING')
     const glazing = doorGlazingStyle(door(style), 0.75)

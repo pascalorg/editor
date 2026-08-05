@@ -31,7 +31,7 @@ export function doorStyleFromIfcOperation(operationType: unknown): DoorStyle {
   if (operation.includes('FOLDING')) {
     return {
       doorType: 'folding',
-      leafCount: 2,
+      leafCount,
     }
   }
 
