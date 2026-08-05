@@ -1,7 +1,7 @@
 import { fail, handler, ok, parseBody } from '@panel/lib/api'
 import { type MfaVerifyResponse, mfaVerifySchema } from '@panel/lib/api-contract'
 import { audit } from '@panel/lib/auth/audit'
-import { clearFailures, registerFailure } from '@panel/lib/auth/lockout'
+import { clearFailures, readLockState, registerFailure } from '@panel/lib/auth/lockout'
 import { clearMfaPending, getSession } from '@panel/lib/auth/session'
 import { confirmEnrolment, isEnrolled, verifyTotp } from '@panel/lib/auth/totp'
 import { exec } from '@panel/lib/db'
@@ -31,6 +31,17 @@ export const POST = handler(async (request: Request) => {
 
   const session = await getSession({ touch: false })
   if (!session) return fail('unauthenticated', 'err.sessionExpired')
+
+  // The lock is consulted BEFORE the code is checked. Consulting it only on the
+  // failure path — which is what this route used to do — means a locked account
+  // still has its code verified, and a correct guess clears the failures and
+  // signs in: the lock counted misses and announced itself without ever
+  // refusing anyone. The comment above promises the attacker gets no unlimited
+  // guesses at the second factor; this is the line that keeps that promise.
+  const gate = await readLockState(session.userId)
+  if (gate.locked) {
+    return fail('account_locked', 'err.locked', { retryAfterSeconds: gate.retryAfterSeconds })
+  }
 
   const enrolling = !(await isEnrolled(session.userId))
 
