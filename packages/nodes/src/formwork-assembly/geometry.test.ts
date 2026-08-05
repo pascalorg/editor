@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { GeometryContext, WallNode } from '@pascal-app/core'
+import type { GeometryContext, SlabNode, WallNode } from '@pascal-app/core'
 import { DOKA_FRAMAX_XLIFE } from '@pascal-app/core/formwork'
 import type { Group } from 'three'
 import { buildFormworkGeometry } from './geometry'
@@ -890,5 +890,116 @@ describe('wall tie and waler chain', () => {
       'tie-',
     ).map((row) => row.y)
     expect(seen).not.toEqual(plain)
+  })
+})
+
+function makeSlab(overrides: Record<string, unknown> = {}): SlabNode {
+  return {
+    object: 'node',
+    id: 'slab_test',
+    type: 'slab',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    polygon: [
+      [0, 0],
+      [6, 0],
+      [6, 4],
+      [0, 4],
+    ],
+    holes: [],
+    holeMetadata: [],
+    elevation: 3,
+    thickness: 0.2,
+    recessed: false,
+    autoFromWalls: false,
+    formworkType: 'plywood',
+    soffitHeightAboveSupport: 3,
+    ...overrides,
+  } as unknown as SlabNode
+}
+
+function slabNode(node: FormworkAssemblyNode): FormworkAssemblyNode {
+  return { ...node, parentId: 'slab_test' }
+}
+
+function buildSlab(overrides: Record<string, unknown> = {}): Group {
+  const ctx = { parent: makeSlab(overrides) } as unknown as GeometryContext
+  return buildFormworkGeometry(slabNode(makeNode()), ctx)
+}
+
+const named = (group: Group, prefix: string) =>
+  group.children.filter((c) => c.name.startsWith(prefix))
+
+describe('slab falsework', () => {
+  test('decks the soffit, joists it, bearers it and props it', () => {
+    const group = buildSlab()
+    expect(named(group, 'panel-soffit-').length).toBeGreaterThan(0)
+    expect(named(group, 'waler-joist-').length).toBeGreaterThan(0)
+    // The layer a prop actually stands under. A deck with joists straight onto prop
+    // heads is a deck missing its primary beams.
+    expect(named(group, 'waler-bearer-').length).toBeGreaterThan(0)
+    expect(named(group, 'prop-').length).toBeGreaterThan(0)
+  })
+
+  test('the prop grid tightens as the slab thickens', () => {
+    // The whole point of solving the chain rather than assuming a spacing: a 450 mm
+    // slab is more than twice the load of a 150 mm one and cannot take the same grid.
+    const thin = named(buildSlab({ thickness: 0.15 }), 'prop-').length
+    const thick = named(buildSlab({ thickness: 0.45 }), 'prop-').length
+    expect(thick).toBeGreaterThan(thin)
+  })
+
+  test('joists never open past the deck spacing the sheathing allows', () => {
+    const zs = named(buildSlab({ thickness: 0.45 }), 'waler-joist-')
+      .map((j) => j.position.z)
+      .sort((a, b) => a - b)
+    expect(zs.length).toBeGreaterThan(1)
+    for (let i = 1; i < zs.length; i++) {
+      // Rounded up into equal bays, so every bay is at or inside the limit — never
+      // widened to make the division come out.
+      expect((zs[i] as number) - (zs[i - 1] as number)).toBeLessThanOrEqual(0.6 + 1e-6)
+    }
+  })
+
+  test('props reach the rim, where the deck edge needs bearing most', () => {
+    const xs = named(buildSlab(), 'prop-').map((p) => p.position.x)
+    // A half-open ray cast reports false exactly on the boundary; a grid built on
+    // one silently leaves the far edge of every deck unpropped.
+    expect(Math.min(...xs)).toBeCloseTo(0, 6)
+    expect(Math.max(...xs)).toBeCloseTo(6, 6)
+  })
+
+  test('a stated joist spacing is honoured rather than quietly retightened', () => {
+    // 0.9 m is well past what 18 mm ply spans under this load, but a crew setting out
+    // to a stated module has to find the drawing agreeing with it. The overload is
+    // reported by the design, not fixed behind the drawing.
+    const zs = named(buildSlab({ walerSpacing: 0.9 }), 'waler-joist-')
+      .map((j) => j.position.z)
+      .sort((a, b) => a - b)
+    expect((zs[1] as number) - (zs[0] as number)).toBeCloseTo(0.8, 6)
+  })
+
+  test('a slab cast on ground takes no deck', () => {
+    const group = buildSlab({ formworkMode: 'none' })
+    expect(group.children.length).toBe(0)
+  })
+
+  test('holes are not decked or propped through', () => {
+    const solid = buildSlab()
+    const holed = buildSlab({
+      holes: [
+        [
+          [2, 1],
+          [4, 1],
+          [4, 3],
+          [2, 3],
+        ],
+      ],
+    })
+    expect(named(holed, 'panel-soffit-').length).toBeLessThan(named(solid, 'panel-soffit-').length)
+    // And the hole gets edge forms of its own — concrete pushes on its rim too.
+    expect(named(holed, 'panel-hole-0-').length).toBeGreaterThan(0)
   })
 })

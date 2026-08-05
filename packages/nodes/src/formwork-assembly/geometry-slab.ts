@@ -1,5 +1,6 @@
 import type { SlabNode } from '@pascal-app/core/schema'
 import { BoxGeometry, Group, Mesh, type MeshStandardMaterial } from 'three'
+import { slabPourDesign } from './design'
 import {
   type FormworkScope,
   PANEL_GAP,
@@ -21,14 +22,21 @@ import type { FormworkAssemblyNode } from './schema'
  * props, so the parts are props and bearers, and the soffit — not the sides —
  * is the big number in the bill.
  *
+ * The spacings are not chosen here. `falseworkDesign` solves the chain — load →
+ * sheathing → joists → bearers → props — and this places what it returns, the way
+ * the column builder places `clampSchedule`'s rows. It matters that the chain is
+ * ordered: the joist centres *are* the deck's allowable span, so a builder that
+ * picked its own spacing would be drawing members checked against a load none of
+ * them carries. It also means the grid tightens with slab thickness on its own,
+ * which a pair of constants cannot do.
+ *
  * Built in level-space X/Z, because a slab has no `position` of its own and its
  * polygon is already in level coordinates. Y is the soffit level: the solid
  * occupies `[elevation − thickness, elevation]`, so the deck sits just under
  * `elevation − thickness`.
  */
 
-/** Prop grid spacing, m — the default falsework layout under a decked soffit. */
-const PROP_SPACING = 1.2
+/** Deck sheet width, m — the module boards are cut from, not a structural span. */
 const DECK_BAY = 0.6
 
 interface Point {
@@ -52,6 +60,23 @@ function boundsOf(points: Point[]): { minX: number; maxX: number; minZ: number; 
     maxZ = Math.max(maxZ, p.z)
   }
   return { minX, maxX, minZ, maxZ }
+}
+
+/**
+ * Member lines across a run of `spanM`, at no more than `spacingM` apart.
+ *
+ * Both ends carry a line and the interior is divided into equal bays — but the bay
+ * count is rounded *up*, so the actual pitch comes out at or below the spacing the
+ * check allowed. Rounding to the nearest count is the tempting version and it is
+ * wrong in one direction: a 2.5 m run at a 0.6 m limit rounds to 4 bays of 0.625 m,
+ * over capacity on every bay, where 5 bays of 0.5 m is merely one member dearer.
+ */
+function stations(startM: number, spanM: number, spacingM: number): number[] {
+  if (!(spanM > 0)) return [startM]
+  if (!(spacingM > 0)) return [startM, startM + spanM]
+  const bays = Math.max(1, Math.ceil(spanM / spacingM - 1e-9))
+  const step = spanM / bays
+  return Array.from({ length: bays + 1 }, (_, i) => startM + i * step)
 }
 
 /** Even-odd ray cast — the deck and prop grids are clipped to the real outline, not its bounding box. */
@@ -88,10 +113,28 @@ export function buildSlabFormwork(
   const inSlab = (x: number, z: number) =>
     contains(outline, x, z) && !holes.some((hole) => contains(hole, x, z))
 
+  // Falsework lines sit *on* the rim — the edge of a deck is where it most needs
+  // bearing — and an even-odd ray cast is half-open, so a station exactly on the
+  // boundary reads as outside and the whole far edge of the grid goes unpropped.
+  // So a member counts as needed if any point within a millimetre of its station is
+  // over concrete. A millimetre is finer than any real setting-out tolerance and far
+  // coarser than the boundary case being rescued.
+  const NUDGE = 1e-3
+  const nearSlab = (x: number, z: number) =>
+    inSlab(x, z) ||
+    inSlab(x + NUDGE, z + NUDGE) ||
+    inSlab(x - NUDGE, z - NUDGE) ||
+    inSlab(x + NUDGE, z - NUDGE) ||
+    inSlab(x - NUDGE, z + NUDGE)
+
   // Decking: boards running in X, split into bays across Z, each trimmed to
   // the part of the bay that is over concrete. A slab cast on ground takes no
   // deck at all, which is why this reads the solver rather than the polygon.
   if (isFormed('soffit')) {
+    // Solved once and shared with the design report: a panel printing its own chain
+    // could disagree with the falsework on screen.
+    const { design: falsework, soffitHeightM } = slabPourDesign(slab)
+
     const panelWidth = node.panelWidth || DECK_BAY
     const zCount = Math.max(1, Math.ceil((bounds.maxZ - bounds.minZ) / panelWidth))
     const zStep = (bounds.maxZ - bounds.minZ) / zCount
@@ -112,39 +155,48 @@ export function buildSlabFormwork(
       }
     }
 
-    // Bearers under the deck, then props off the floor below. `walerSpacing`
-    // names the joist centres and `tieSpacing` the bearer centres — the slab
-    // reading of the same two fields a wall uses for walers and ties.
-    const joistSpacing = slab.walerSpacing ?? 0.4
+    // Joists run in X directly under the deck, at the centres the sheathing check
+    // allowed. Stations are laid on the solved spacing from `minZ` rather than
+    // divided evenly into the bounding box: the spacing is a capacity limit, and
+    // rounding a bay up to make the division come out widens it past what the deck
+    // can span. The last bay comes out short instead, which is how a deck is built.
+    const spanZ = bounds.maxZ - bounds.minZ
+    const spanX = bounds.maxX - bounds.minX
     const joistY = deckY - PANEL_THICKNESS / 2 - WALER_HEIGHT / 2
-    const joistCount = Math.max(1, Math.round((bounds.maxZ - bounds.minZ) / joistSpacing))
-    for (let i = 0; i <= joistCount; i++) {
-      const z = bounds.minZ + (i / joistCount) * (bounds.maxZ - bounds.minZ)
+    const joistZs = stations(bounds.minZ, spanZ, falsework.joist.adoptedM)
+    for (const [i, z] of joistZs.entries()) {
       const midX = (bounds.minX + bounds.maxX) / 2
-      if (!inSlab(midX, Math.min(z + 1e-3, bounds.maxZ - 1e-3))) continue
-      const joist = new Mesh(
-        new BoxGeometry(bounds.maxX - bounds.minX, WALER_HEIGHT, WALER_DEPTH),
-        walerMaterial,
-      )
+      if (!nearSlab(midX, z)) continue
+      const joist = new Mesh(new BoxGeometry(spanX, WALER_HEIGHT, WALER_DEPTH), walerMaterial)
       joist.name = `waler-joist-${i}`
       joist.position.set(midX, joistY, z)
       group.add(joist)
     }
 
-    // Props stand from the floor the deck is erected off. Without a stated
-    // soffit height there is no floor to reach, so a nominal storey is used —
-    // the length is the estimator's number, and it lives on the node.
-    const propSpacing = slab.tieSpacing ?? PROP_SPACING
-    const propTop = joistY - WALER_HEIGHT / 2
-    const propLength = slab.soffitHeightAboveSupport ?? Math.max(0.5, slab.elevation + 2.4)
+    // Bearers cross under the joists in Z, carrying them to the props. This is the
+    // layer the props actually stand under — a joist bears on a bearer, not on a
+    // prop head — so it is what sets the prop grid's other dimension.
+    const bearerY = joistY - WALER_HEIGHT / 2 - WALER_HEIGHT / 2
+    const bearerXs = stations(bounds.minX, spanX, falsework.bearer.adoptedM)
+    for (const [i, x] of bearerXs.entries()) {
+      const midZ = (bounds.minZ + bounds.maxZ) / 2
+      if (!nearSlab(x, midZ)) continue
+      const bearer = new Mesh(new BoxGeometry(WALER_DEPTH, WALER_HEIGHT, spanZ), walerMaterial)
+      bearer.name = `waler-bearer-${i}`
+      bearer.position.set(x, bearerY, midZ)
+      group.add(bearer)
+    }
+
+    // Props stand under the bearers at the solved pitch along each one, from the
+    // floor the deck is erected off. The grid is bearer spacing one way and prop
+    // pitch the other, which is the tributary cell the prop was checked against.
+    const propTop = bearerY - WALER_HEIGHT / 2
+    const propLength = Math.max(0, propTop - (slab.elevation - slab.thickness - soffitHeightM))
     const propY = propTop - propLength / 2
-    const xProps = Math.max(1, Math.round((bounds.maxX - bounds.minX) / propSpacing))
-    const zProps = Math.max(1, Math.round((bounds.maxZ - bounds.minZ) / propSpacing))
-    for (let xi = 0; xi <= xProps; xi++) {
-      for (let zi = 0; zi <= zProps; zi++) {
-        const x = bounds.minX + (xi / xProps) * (bounds.maxX - bounds.minX)
-        const z = bounds.minZ + (zi / zProps) * (bounds.maxZ - bounds.minZ)
-        if (!inSlab(x, z)) continue
+    const propZs = stations(bounds.minZ, spanZ, falsework.propSpacing.adoptedM)
+    for (const [xi, x] of bearerXs.entries()) {
+      for (const [zi, z] of propZs.entries()) {
+        if (!nearSlab(x, z)) continue
         const prop = new Mesh(
           new BoxGeometry(SCAFFOLD_POST_SIZE, propLength, SCAFFOLD_POST_SIZE),
           scaffoldMaterial,
