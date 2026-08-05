@@ -357,8 +357,13 @@ function calculateJunctionIntersections(
     }
   }
 
-  // Sort by outgoing angle
-  processedWalls.sort((a, b) => a.angle - b.angle)
+  // Sort by outgoing angle, then by wall ID so equal-angle walls produce the
+  // same pairing regardless of scene iteration order.
+  processedWalls.sort((a, b) => {
+    const angleOrder = a.angle - b.angle
+    if (angleOrder !== 0) return angleOrder
+    return a.wallId < b.wallId ? -1 : a.wallId > b.wallId ? 1 : 0
+  })
 
   const wallIntersections = new Map<string, { left?: Point2D; right?: Point2D }>()
   const n = processedWalls.length
