@@ -14,6 +14,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
@@ -71,26 +72,13 @@ interface SceneLoaderProps {
   meta: SceneMeta
 }
 
-type SceneGraphWithCollections = SceneGraph & {
-  collections?: Record<string, unknown>
-}
-
 interface LiveSceneEvent {
   eventId: number
   sceneId: string
   version: number
   kind: string
   createdAt: string
-  graph: SceneGraphWithCollections
-}
-
-function sceneGraphSignature(graph: SceneGraphWithCollections): string {
-  return JSON.stringify({
-    nodes: graph.nodes,
-    rootNodeIds: graph.rootNodeIds,
-    collections: graph.collections,
-    installedPlugins: graph.installedPlugins,
-  })
+  graph: PersistedSceneGraph
 }
 
 /**
