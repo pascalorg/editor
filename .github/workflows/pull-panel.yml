@@ -69,8 +69,19 @@ jobs:
         if: steps.token.outputs.available == 'true'
         id: pull
         run: |
+          # `tee` would otherwise report its own exit status and swallow a
+          # crashed sync — the default shell here is `bash -e`, not `-eo
+          # pipefail`.
+          set -o pipefail
           node scripts/sync-panel.mjs --panel panel-upstream --pull | tee pull.log
-          if [ -z "$(git status --porcelain)" ]; then
+
+          # Scoped to exactly the paths the commit below stages. A bare
+          # `git status --porcelain` is never empty in this job: `pull.log` and
+          # the `panel-upstream/` checkout are both untracked and neither is
+          # ignored. Unscoped, `changed` is therefore always true, and every
+          # hourly run where the console did not move would reach `git commit`
+          # with nothing staged and go red.
+          if [ -z "$(git status --porcelain -- 'apps/editor/panel' 'apps/editor/app/(panel)' 'apps/editor/app/api')" ]; then
             echo 'changed=false' >> "$GITHUB_OUTPUT"
           else
             echo 'changed=true' >> "$GITHUB_OUTPUT"
