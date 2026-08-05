@@ -7,7 +7,6 @@ import {
   type ElementCorner,
   type ElementCoverage,
   FACE_REASON_LABELS,
-  type FaceRole,
   type FormworkFace,
   faceBandLabel,
   type OpeningMeasurement,
@@ -19,6 +18,7 @@ import {
 import { cn, formatAreaLabel, formatLinearMeasurement, formatVolumeLabel } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
+import { FACE_ORDER, FACE_ROLE_LABELS } from './face-labels'
 
 /**
  * Per-face coverage readout, shared by the wall, column and slab panels and the
@@ -32,39 +32,6 @@ import { useMemo } from 'react'
  * the lower one's top is a joint, not a finished surface — and a single merged
  * figure would hide exactly the faces the split created.
  */
-
-const FACE_ROLE_LABELS: Record<FaceRole, string> = {
-  'side-a': 'Front face',
-  'side-b': 'Back face',
-  'end-start': 'Start end',
-  'end-end': 'Far end',
-  top: 'Top',
-  bottom: 'Bottom',
-  'column-face-1': 'Face 1',
-  'column-face-2': 'Face 2',
-  'column-face-3': 'Face 3',
-  'column-face-4': 'Face 4',
-  shaft: 'Shaft',
-  soffit: 'Soffit',
-  edge: 'Edge',
-}
-
-/** Vertical faces first, then the horizontal ones — the order they are erected in. */
-const FACE_ORDER: FaceRole[] = [
-  'side-a',
-  'side-b',
-  'end-start',
-  'end-end',
-  'column-face-1',
-  'column-face-2',
-  'column-face-3',
-  'column-face-4',
-  'shaft',
-  'edge',
-  'soffit',
-  'top',
-  'bottom',
-]
 
 function nodeLabel(node: AnyNode): string {
   return (node as { name?: string }).name?.trim() || node.type

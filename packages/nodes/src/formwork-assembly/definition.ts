@@ -1,21 +1,31 @@
 import type { NodeDefinition } from '@pascal-app/core/registry'
+import type { FormworkAssemblyNode as FormworkAssemblyNodeType } from '@pascal-app/core/schema'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { buildFormworkAssemblyFloorplan } from './floorplan'
 import { buildFormworkGeometry } from './geometry'
 import { formworkAssemblyParametrics } from './parametrics'
+import { buildFormworkFloorplanSchedule } from './schedule'
 import { FormworkAssemblyNode } from './schema'
 
 /**
  * One formwork assembly — the shutter for a single (element × segment × lift).
- * Three-checkbox model: `geometry` only, no renderer/tool/floorplan — same
- * shape as fence/shelf. Never placed by hand (`presentation.hidden: true`);
- * created by `buildFormworkNode()` (see attach.ts) from the wall, column or slab
- * panel's "Add formwork geometry" button or the AI chat tool. See
- * `wiki/formwork-system-plan.md`.
+ * `geometry` for the 3D shutter, `floorplan` for its plan symbol, and a
+ * `schedule` contribution so the shuttered area reaches the drawing set. Never
+ * placed by hand (`presentation.hidden: true`); created by `buildFormworkNode()`
+ * (see attach.ts) from the wall, column or slab panel's "Add formwork geometry"
+ * button or the AI chat tool. See `wiki/formwork-system-plan.md`.
  */
 export const formworkAssemblyDefinition: NodeDefinition<typeof FormworkAssemblyNode> = {
   kind: 'formwork-assembly',
   schemaVersion: 2,
   category: 'structure',
   schema: FormworkAssemblyNode,
+
+  extensions: {
+    'pascal:editor/floorplan': {
+      schedule: buildFormworkFloorplanSchedule,
+    } satisfies FloorplanNodeExtension<FormworkAssemblyNodeType>,
+  },
 
   defaults: () => ({
     object: 'node',
@@ -41,6 +51,7 @@ export const formworkAssemblyDefinition: NodeDefinition<typeof FormworkAssemblyN
   },
 
   geometry: buildFormworkGeometry,
+  floorplan: buildFormworkAssemblyFloorplan,
   // No `geometryKey`: every geometry input except `panelWidth` lives outside
   // this node — on the host (`formworkType`, `tieSpacing`, `walerSpacing`,
   // `scaffoldRequired`, its own dimensions, `castOrder`, `pourId`,
