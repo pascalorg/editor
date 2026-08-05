@@ -208,12 +208,26 @@ function wallHeightCompatible(a: WallSegment, b: WallSegment) {
   return Math.abs(a.height - b.height) <= WALL_HEIGHT_TOLERANCE
 }
 
+function wallMaterialSignature(segment: WallSegment): string | null {
+  const metadata = segment.wall.metadata as
+    | { material?: unknown; materialLayers?: unknown }
+    | undefined
+  const material = typeof metadata?.material === 'string' ? metadata.material : null
+  const layers = Array.isArray(metadata?.materialLayers)
+    ? metadata.materialLayers.map((layer) => {
+        const value = layer as { name?: unknown; thickness?: unknown }
+        return [
+          typeof value.name === 'string' ? value.name : null,
+          typeof value.thickness === 'number' ? value.thickness : null,
+        ]
+      })
+    : []
+  if (material === null && layers.length === 0) return null
+  return JSON.stringify({ material, layers })
+}
+
 function wallMaterialCompatible(a: WallSegment, b: WallSegment) {
-  const materialA = (a.wall.metadata as { material?: unknown } | undefined)?.material
-  const materialB = (b.wall.metadata as { material?: unknown } | undefined)?.material
-  const nameA = typeof materialA === 'string' ? materialA : null
-  const nameB = typeof materialB === 'string' ? materialB : null
-  return nameA === nameB
+  return wallMaterialSignature(a) === wallMaterialSignature(b)
 }
 
 function wallIntervalsCompatible(a: WallSegment, b: WallSegment, maxJoinGap: number) {
