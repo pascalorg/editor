@@ -79,6 +79,21 @@ describe('wall miter boundary sides', () => {
   })
 })
 
+describe('deterministic junction ordering', () => {
+  test('same wall set produces the same miter data regardless of input order', () => {
+    const thickWall = (id: string, thickness: number, end: [number, number]) =>
+      ({ ...wall(id, [0, 0], end), thickness }) as WallNode
+    const wide = thickWall('wide', 0.6, [4, 0])
+    const narrow = thickWall('narrow', 0.2, [4, 0])
+    const branch = thickWall('branch', 0.4, [0, 4])
+
+    const forward = calculateLevelMiters([wide, narrow, branch]).junctionData.get('0,0')
+    const reversed = calculateLevelMiters([narrow, wide, branch]).junctionData.get('0,0')
+
+    expect(forward).toEqual(reversed)
+  })
+})
+
 describe('junction grid prefilter', () => {
   function thickWall(
     id: string,
