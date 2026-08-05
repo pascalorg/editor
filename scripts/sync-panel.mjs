@@ -64,21 +64,45 @@ const ROUTES = [
  * standalone console two rail entries whose fetches 404, and `console-tabs.ts`
  * is what registers them.
  *
+ * `tab-content.tsx` joins them because it imports both tabs and switches on
+ * their names: holding the tabs back while pushing their only caller is what
+ * turns a missing feature into a repository that does not compile.
+ *
+ * `api/health/route.ts` is the same shape one layer down — the editor's copy
+ * reaches for `@/lib/auth/db` and `@/lib/scene-store-server`, neither of which
+ * exists upstream.
+ *
  * The cost of holding `console-tabs.ts` back is that changes to the SHARED
  * tabs' metadata no longer reach upstream either. That is the price of a file
  * that must legitimately differ between the two deployments; splitting the list
  * into a base the console owns and an extension the editor adds would remove
  * the conflict properly, and is the real fix when someone has the appetite.
+ *
+ * Every entry here was found by running `tsc --noEmit` in a checkout of
+ * ovurrsl/panel with the sync applied. The test suite passed with all of them
+ * still missing, so the type checker is the only thing that catches this class
+ * of breakage — keep using it when this list changes.
  */
 const EDITOR_OWNED = new Set([
   'src/app/layout.tsx',
   'src/app/page.tsx',
+  'src/app/api/health/route.ts',
   'src/lib/console-tabs.ts',
+  'src/components/console/tab-content.tsx',
   'src/components/console/scenes-tab.tsx',
   'src/components/console/guides-tab.tsx',
 ])
 
 const SYNCABLE = /\.(ts|tsx|css|sql)$/
+
+/**
+ * Tests do not cross. The two repositories run different runners — this one is
+ * on `bun:test`, the console is on vitest — so a test file pushed upstream is
+ * one vitest cannot execute and `tsc` cannot resolve (`Cannot find module
+ * 'bun:test'`). The console's own suite lives in `tests/`, outside every
+ * mapping in this file, so nothing here can reach it either way.
+ */
+const TEST_FILE = /\.(test|spec)\.[jt]sx?$/
 
 function files(root) {
   if (!existsSync(root)) return []
@@ -87,7 +111,7 @@ function files(root) {
   for (const entry of readdirSync(root)) {
     const path = join(root, entry)
     if (statSync(path).isDirectory()) out.push(...files(path))
-    else if (SYNCABLE.test(entry)) out.push(path)
+    else if (SYNCABLE.test(entry) && !TEST_FILE.test(entry)) out.push(path)
   }
   return out
 }
