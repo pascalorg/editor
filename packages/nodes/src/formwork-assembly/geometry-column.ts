@@ -1,17 +1,8 @@
-import {
-  COLUMN_FORMS,
-  type ColumnFormType,
-  clampSchedule,
-  columnFormSizeMm,
-  DEFAULT_PRESSURE_STANDARD_ID,
-  DIN_MAX_RISE_RATE_MH,
-  pressureEnvelope,
-  verticalElementKind,
-} from '@pascal-app/core/formwork'
+import { columnFormSizeMm } from '@pascal-app/core/formwork'
 import type { ColumnNode } from '@pascal-app/core/schema'
 import { BoxGeometry, Group, Mesh, type MeshStandardMaterial } from 'three'
+import { columnPourDesign } from './design'
 import {
-  COLUMN_KICKER_M,
   type FormworkScope,
   PANEL_GAP,
   PANEL_THICKNESS,
@@ -48,13 +39,6 @@ import type { FormworkAssemblyNode } from './schema'
  * the coverage solver computes would apply the rotation twice.
  */
 
-/** Facets each cross-section is shuttered with. A tube reads as many short arcs. */
-const SHAFT_FACETS: Partial<Record<ColumnNode['crossSection'], number>> = {
-  round: 24,
-  octagonal: 8,
-  'sixteen-sided': 16,
-}
-
 /**
  * The four box-form faces, in the corner order `columnOutline` walks so an edge
  * index maps to the face role the solver classified. Edge `i` runs from outline
@@ -67,33 +51,6 @@ const BOX_FACES = [
   { role: 'column-face-3', axis: 'z', sign: 1 },
   { role: 'column-face-4', axis: 'x', sign: -1 },
 ] as const
-
-/**
- * The rate the schedule is designed to, m/h.
- *
- * Nothing in the scene graph carries a rise rate yet, and a column is not poured
- * at a rate anybody meters: it is filled in one continuous operation, commonly in
- * minutes. So the schedule is designed to the fastest rate its code covers, which
- * is the conservative reading and — for any ordinary column height — lands on the
- * full fluid head, exactly as ACI directs for columns (design.md §2.7 step 1).
- * A slower rate is a saving a project can only claim by stating one.
- */
-const DESIGN_RISE_RATE_MH = DIN_MAX_RISE_RATE_MH
-
-/** DIN's own reference temperature, so no correction is applied unasked. */
-const DESIGN_CONCRETE_TEMPERATURE_C = 20
-
-/**
- * The form this section is boxed in. The dedicated column form comes first and
- * the panel arrangement second, so a section inside both is formed by the part
- * made for it; a section only the wider-reaching arrangement takes gets that.
- * Neither reaching means a bespoke box, and the schedule says so rather than
- * being derived against a clamp that cannot close.
- */
-function columnForm(sideMm: number, heightMm: number): ColumnFormType | undefined {
-  const reaching = COLUMN_FORMS.filter((form) => columnFormSizeMm(form, sideMm) !== undefined)
-  return reaching.find((form) => heightMm <= form.maxHeightMm) ?? reaching[0]
-}
 
 /**
  * The panels across one face. A column form is *set* to a size rather than
@@ -142,50 +99,15 @@ export function buildColumnFormwork(
   // no margin at the top — only at the base, where the form lands on the kicker
   // cast to locate it. At a lift joint there is no kicker: the concrete below is
   // this same column, and the form stands on it.
-  const kickerM = baseY <= 1e-6 && column.kickerMode !== 'kickerless' ? COLUMN_KICKER_M : 0
+  // Solved once and shared with the design report: a panel printing its own
+  // schedule could disagree with the clamps on screen.
+  const { facets, form, kickerM, schedule } = columnPourDesign(column, unit)
   const formBottom = baseY + kickerM
   const formHeight = topY - formBottom
   if (formHeight <= 0) return group
   const centreY = formBottom + formHeight / 2
 
   const panelWidth = node.panelWidth || 0.6
-  const facets = SHAFT_FACETS[column.crossSection]
-
-  const liftHeightM = topY - baseY
-  const planDimensionsM =
-    facets !== undefined ? [column.radius * 2, column.radius * 2] : [column.width, column.depth]
-  // The side a yoke has to span, and the one a clamp is selected on.
-  const sideM = Math.max(...planDimensionsM)
-  // A wrapped shaft is banded in hoop tension rather than closed by a clamp set,
-  // and no form or band in the catalog answers for one — so it is scheduled off
-  // the pressure and the practical limits alone.
-  const form = facets !== undefined ? undefined : columnForm(sideM * 1000, liftHeightM * 1000)
-  const schedule = clampSchedule({
-    liftHeightM,
-    sideM,
-    kickerM,
-    // No mix or placement data has a home on the element yet, so the envelope is
-    // the code's default one for this geometry rather than this pour's.
-    envelope: pressureEnvelope(
-      DEFAULT_PRESSURE_STANDARD_ID,
-      {},
-      {
-        riseRateMH: DESIGN_RISE_RATE_MH,
-        concreteTemperatureC: DESIGN_CONCRETE_TEMPERATURE_C,
-        pourHeightM: liftHeightM,
-        // Read off the plan rather than assumed: a vertical element with a plan
-        // dimension over 2 m is a wall by the code's own definition, whatever the
-        // node is called, and it takes the wall equations.
-        elementKind: verticalElementKind(planDimensionsM),
-        vibration: 'internal',
-      },
-    ),
-    form,
-    // A spacing the job has stated is used as given. The pressure is then reported
-    // against it rather than used to choose it, and an overload it causes is a
-    // warning on the schedule rather than a silently retightened row.
-    uniformSpacingM: column.tieSpacing,
-  })
   // The schedule sets out from the pour base; the meshes are placed in the
   // column's own space, which starts at the element base.
   const clampYs = schedule.rows.map((row) => baseY + row.elevationMm / 1000)
