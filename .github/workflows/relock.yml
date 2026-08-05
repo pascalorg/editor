@@ -4,13 +4,18 @@ name: Relock
 # branch it was dispatched on. The lockfile records the sha512 of each GitHub
 # tarball, and only a machine that can reach the real api.github.com can
 # compute those — a sandboxed environment cannot, so it delegates to this.
-# Dispatch needs the file on the default branch, which this branch is not —
-# so it fires on edits to itself instead. Its own bun.lock push cannot loop:
-# it does not match the path filter, and GITHUB_TOKEN pushes start no runs.
+#
+# It used to fire on edits to ITSELF, because dispatch needs the file on the
+# default branch and the integration branch was not it. Now it is, so the hack
+# is gone and this is dispatched like anything else. The trailing marker
+# comments below are what remains of it — kept as a record of which relocks
+# were run that way, not as a mechanism.
+#
+# Routine plugin bumps no longer come here: `bump-plugin.yml` moves the pin and
+# relocks in one job. This is for the rest — a dependency added or changed by
+# hand, or a lockfile that drifted.
 on:
-  push:
-    branches: [claude/incele-nq4heb]
-    paths: ['.github/workflows/relock.yml']
+  workflow_dispatch:
 
 permissions:
   contents: write

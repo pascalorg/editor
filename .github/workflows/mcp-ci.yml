@@ -2,7 +2,7 @@ name: mcp-ci
 
 on:
   push:
-    branches: [main]
+    branches: [integration]
     paths:
       - 'packages/mcp/**'
       - 'packages/core/**'

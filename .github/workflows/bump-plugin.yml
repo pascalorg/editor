@@ -38,7 +38,7 @@ jobs:
       # variable to move it; the fallback is the branch it is today.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ vars.INTEGRATION_BRANCH || 'claude/incele-nq4heb' }}
+          ref: ${{ vars.INTEGRATION_BRANCH || 'integration' }}
 
       - name: Compare the pin with the plugin's head
         id: compare
@@ -101,4 +101,4 @@ jobs:
         run: |
           gh workflow run deploy-bundle.yml \
             --repo "$GITHUB_REPOSITORY" \
-            --ref "${{ vars.INTEGRATION_BRANCH || 'claude/incele-nq4heb' }}"
+            --ref "${{ vars.INTEGRATION_BRANCH || 'integration' }}"
