@@ -120,3 +120,55 @@ describe('applyWallBatchGroups', () => {
     expect(groupsOf(batch.geometry)).toEqual([[0, 6, 0]])
   })
 })
+
+/**
+ * The guard for the merge itself: these numbers must not follow the wall count.
+ * Drop the batching and every wall goes back to owning its own draw range, so
+ * the run and group counts below jump from three to a thousand and this fails.
+ */
+describe('draw call budget', () => {
+  const MATERIALS = [0, 1, 2]
+
+  function floor(wallCount: number): WallBatchSource[] {
+    return Array.from({ length: wallCount }, (_, index) =>
+      source(`wall_${index}`, MATERIALS, 0, index * 4),
+    )
+  }
+
+  test('holds one draw range per material however many walls the floor has', () => {
+    for (const wallCount of [1, 10, 100, 1000]) {
+      const batch = buildWallBatch(floor(wallCount))
+      if (!batch) throw new Error('batch expected')
+
+      expect(batch.runs.length).toBe(MATERIALS.length)
+      expect(batch.geometry.groups.length).toBe(MATERIALS.length)
+      expect(batch.runs[0]?.slices.length).toBe(wallCount)
+    }
+  })
+
+  test('keeps every wall addressable inside the collapsed ranges', () => {
+    const batch = buildWallBatch(floor(1000))
+    if (!batch) throw new Error('batch expected')
+
+    for (const run of batch.runs) {
+      expect(new Set(run.slices.map((slice) => slice.nodeId)).size).toBe(1000)
+      expect(run.count).toBe(3000)
+    }
+  })
+
+  test('spends draw ranges on the holes, not on the floor', () => {
+    const batch = buildWallBatch(floor(1000))
+    if (!batch) throw new Error('batch expected')
+    const positions = batch.geometry.getAttribute('position')
+
+    applyWallBatchGroups(batch, new Set(['wall_500']))
+    expect(batch.geometry.groups.length).toBe(MATERIALS.length * 2)
+
+    applyWallBatchGroups(batch, new Set(['wall_100', 'wall_500', 'wall_900']))
+    expect(batch.geometry.groups.length).toBe(MATERIALS.length * 4)
+
+    applyWallBatchGroups(batch, new Set())
+    expect(batch.geometry.groups.length).toBe(MATERIALS.length)
+    expect(batch.geometry.getAttribute('position')).toBe(positions)
+  })
+})
