@@ -27,6 +27,9 @@ concurrency:
 
 permissions:
   contents: write
+  # To hand off to the deploy. A push made with GITHUB_TOKEN starts no runs, so
+  # without this the console would land on the branch and stop there.
+  actions: write
 
 jobs:
   pull:
@@ -96,3 +99,16 @@ jobs:
           git add 'apps/editor/panel' 'apps/editor/app/(panel)' 'apps/editor/app/api'
           git commit -m "$(printf 'chore(panel): pull the console\n\n%s' "$(cat pull.log)")"
           git push
+
+      # Handed off explicitly, because the push above cannot do it: a push made
+      # with GITHUB_TOKEN starts no workflow runs. Without this the console
+      # lands on the branch and the site never rebuilds — the chain would look
+      # wired and quietly stop one step short.
+      - name: Build and publish
+        if: steps.token.outputs.available == 'true' && steps.pull.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run deploy-bundle.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "${{ vars.INTEGRATION_BRANCH || 'claude/incele-nq4heb' }}"
