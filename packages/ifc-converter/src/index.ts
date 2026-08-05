@@ -639,7 +639,6 @@ function extractImportedMeshPrimitives(
   unitFactor: number,
   originOffset: number[],
   levelElevation: number,
-  toPascalPoint: PascalPointTransform,
   swapYZ: boolean,
 ): ImportedMeshPrimitiveValue[] {
   let flatMesh: {
@@ -695,14 +694,11 @@ function extractImportedMeshPrimitives(
                 world[1]! - originOffset[2]! * unitFactor - levelElevation,
                 -(world[2]! + originOffset[1]! * unitFactor),
               ]
-            : toPascalPoint(
-                [
-                  world[0]! - originOffset[0]! * unitFactor,
-                  world[1]! - originOffset[1]! * unitFactor,
-                  world[2]! - originOffset[2]! * unitFactor,
-                ],
-                levelElevation,
-              )
+            : [
+                world[0]! - originOffset[0]! * unitFactor,
+                -(world[2]! + originOffset[1]! * unitFactor),
+                world[1]! - originOffset[2]! * unitFactor - levelElevation,
+              ]
           positions.push(...mappedPosition.map(roundMeshPosition))
 
           const nx = vertices[vertex + 3]!
@@ -715,7 +711,7 @@ function extractImportedMeshPrimitives(
           ]
           const mappedNormal = swapYZ
             ? [worldNormal[0]!, worldNormal[1]!, -worldNormal[2]!]
-            : worldNormal
+            : [worldNormal[0]!, -worldNormal[2]!, worldNormal[1]!]
           const normalLength = Math.hypot(...mappedNormal) || 1
           normals.push(
             roundMeshNormal(mappedNormal[0]! / normalLength),
@@ -753,11 +749,18 @@ function extractImportedMeshPrimitives(
   return primitives
 }
 
-function meshFootprint(primitives: ImportedMeshPrimitiveValue[]): [number, number][] | null {
+function meshFootprint(
+  primitives: ImportedMeshPrimitiveValue[],
+  swapYZ: boolean,
+): [number, number][] | null {
   const unique = new Map<string, [number, number]>()
+  const secondPlanAxis = swapYZ ? 2 : 1
   for (const primitive of primitives) {
     for (let i = 0; i + 2 < primitive.positions.length; i += 3) {
-      const point: [number, number] = [primitive.positions[i]!, primitive.positions[i + 2]!]
+      const point: [number, number] = [
+        primitive.positions[i]!,
+        primitive.positions[i + secondPlanAxis]!,
+      ]
       unique.set(`${point[0].toFixed(5)}:${point[1].toFixed(5)}`, point)
     }
   }
@@ -1058,7 +1061,6 @@ export async function convertIfcToPascal(
       unitFactor,
       originOffset,
       elementLevelElevation(expressId),
-      toPascalPoint,
       opts.swapYZ,
     )
     importedPrimitivesByExpressId.set(expressId, primitives)
@@ -2250,7 +2252,7 @@ export async function convertIfcToPascal(
           /* mesh fallback below */
         }
         if (!polygon) {
-          polygon = meshFootprint(primitives)
+          polygon = meshFootprint(primitives, opts.swapYZ)
           footprintApproximated = polygon !== null
         }
         if (!polygon || polygon.length < 3) continue

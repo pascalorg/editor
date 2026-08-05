@@ -2,19 +2,23 @@ import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { AnyNode, ImportedMeshNode, WallNode } from '@pascal-app/core'
-import { convertIfcToPascal, type PascalSceneGraph } from '../src'
+import { type ConversionOptions, convertIfcToPascal, type PascalSceneGraph } from '../src'
 
 const fixturesDirectory = fileURLToPath(
   new URL('../../../apps/ifc-converter/public/test-ifc-files/', import.meta.url),
 )
 const wasmPath = fileURLToPath(new URL('../../../node_modules/web-ifc/', import.meta.url))
 
-async function convertFixture(name: string, transform?: (source: string) => string) {
+async function convertFixture(
+  name: string,
+  transform?: (source: string) => string,
+  options?: ConversionOptions,
+) {
   const source = await readFile(`${fixturesDirectory}${name}`)
   const data = transform
     ? new TextEncoder().encode(transform(new TextDecoder().decode(source)))
     : source
-  return convertIfcToPascal(data, undefined, { simplify: false, wasmPath })
+  return convertIfcToPascal(data, undefined, { simplify: false, wasmPath, ...options })
 }
 
 function metadata(node: AnyNode): Record<string, unknown> {
@@ -29,7 +33,7 @@ function importedMeshes(scene: PascalSceneGraph): ImportedMeshNode[] {
 
 type PlanBounds = { minX: number; maxX: number; minZ: number; maxZ: number }
 
-function importedMeshPlanBounds(meshes: ImportedMeshNode[]): PlanBounds {
+function importedMeshPlanBounds(meshes: ImportedMeshNode[], secondPlanAxis = 2): PlanBounds {
   const bounds: PlanBounds = {
     minX: Number.POSITIVE_INFINITY,
     maxX: Number.NEGATIVE_INFINITY,
@@ -41,8 +45,8 @@ function importedMeshPlanBounds(meshes: ImportedMeshNode[]): PlanBounds {
       for (let index = 0; index + 2 < primitive.positions.length; index += 3) {
         bounds.minX = Math.min(bounds.minX, primitive.positions[index]!)
         bounds.maxX = Math.max(bounds.maxX, primitive.positions[index]!)
-        bounds.minZ = Math.min(bounds.minZ, primitive.positions[index + 2]!)
-        bounds.maxZ = Math.max(bounds.maxZ, primitive.positions[index + 2]!)
+        bounds.minZ = Math.min(bounds.minZ, primitive.positions[index + secondPlanAxis]!)
+        bounds.maxZ = Math.max(bounds.maxZ, primitive.positions[index + secondPlanAxis]!)
       }
     }
   }
@@ -76,6 +80,14 @@ function openHouseScene() {
   return openHouse
 }
 
+let openHouseWithoutAxisSwap: Promise<PascalSceneGraph> | undefined
+function openHouseWithoutAxisSwapScene() {
+  openHouseWithoutAxisSwap ??= convertFixture('04-ifc-open-house.ifc', undefined, {
+    swapYZ: false,
+  })
+  return openHouseWithoutAxisSwap
+}
+
 let duplexWithMissingSpaceName: Promise<PascalSceneGraph> | undefined
 function duplexWithMissingSpaceNameScene() {
   duplexWithMissingSpaceName ??= convertFixture('01-duplex.ifc', (source) =>
@@ -95,6 +107,17 @@ describe('IFC imported mesh conversion', () => {
 
     expect(meshBounds.maxX - meshBounds.minX).toBeGreaterThan(9)
     expect(meshBounds.maxZ - meshBounds.minZ).toBeGreaterThan(5)
+    expect(Math.abs(meshBounds.minX - nativeBounds.minX)).toBeLessThan(1)
+    expect(Math.abs(meshBounds.maxX - nativeBounds.maxX)).toBeLessThan(1)
+    expect(Math.abs(meshBounds.minZ - nativeBounds.minZ)).toBeLessThan(1)
+    expect(Math.abs(meshBounds.maxZ - nativeBounds.maxZ)).toBeLessThan(1)
+  }, 30_000)
+
+  test('keeps flat meshes aligned when STEP axis swapping is disabled', async () => {
+    const scene = await openHouseWithoutAxisSwapScene()
+    const meshBounds = importedMeshPlanBounds(importedMeshes(scene), 1)
+    const nativeBounds = wallPlanBounds(scene)
+
     expect(Math.abs(meshBounds.minX - nativeBounds.minX)).toBeLessThan(1)
     expect(Math.abs(meshBounds.maxX - nativeBounds.maxX)).toBeLessThan(1)
     expect(Math.abs(meshBounds.minZ - nativeBounds.minZ)).toBeLessThan(1)
