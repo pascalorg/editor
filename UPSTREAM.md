@@ -57,6 +57,7 @@ scaffold under `.github/deploy/`.
 
 | File | Rule when it conflicts |
 |---|---|
+| `AGENTS.md` (and its `CLAUDE.md` / `GEMINI.md` / copilot symlinks) | Keep our fork block at the top, take upstream's body below it. The block is delimited by `FORK BLOCK` / `END FORK BLOCK` comments and says which branch to work on — without it an agent reads instructions written for `pascalorg/editor` and commits to `main`. |
 | `apps/editor/app/page.tsx` | Keep ours. Upstream's root page is the editor composition; ours is the session router. Upstream's changes to the editor composition belong in `apps/editor/components/editor-app.tsx` — port them there by hand. |
 | `apps/editor/components/editor-app.tsx` | Ours only (upstream has no such file), but it is a moved copy of upstream's old `app/page.tsx` — apply upstream's `app/page.tsx` improvements here. |
 | `apps/editor/app/layout.tsx` | Merge both; keep the `export const dynamic = 'force-dynamic'` block (the host's CDN caches static HTML across deploys and serves dead assets without it). |
