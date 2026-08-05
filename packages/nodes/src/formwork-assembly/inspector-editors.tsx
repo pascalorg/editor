@@ -4,6 +4,7 @@ import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import type { CastableHostNode } from './attach'
 import { FormworkCoverageList } from './coverage-summary'
+import { FormworkDesignReport } from './design-report'
 import { SPACING_LABELS } from './host-controls'
 import type { FormworkAssemblyNode } from './schema'
 
@@ -80,6 +81,25 @@ export function FormworkHostSummary({ node }: { node: FormworkAssemblyNode }) {
         Select host {host.type}
       </button>
     </div>
+  )
+}
+
+/**
+ * What this shutter was designed against, member by member. Scoped to the
+ * assembly's own pour unit: the design is a function of the head, so the base lift
+ * of a stack and the one above it are genuinely different shutters and reporting
+ * either one's numbers against both would understate the base.
+ *
+ * The host's spacing fields say only `calculated` or `stated`. This is where a
+ * stated spacing that fails its own check says so.
+ */
+export function FormworkDesignSummary({ node }: { node: FormworkAssemblyNode }) {
+  return (
+    <FormworkDesignReport
+      hostId={node.parentId as AnyNodeId | undefined}
+      scope={{ segmentIndex: node.segmentIndex, liftIndex: node.liftIndex }}
+      systemId={node.systemId}
+    />
   )
 }
 

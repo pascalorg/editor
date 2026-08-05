@@ -6,6 +6,7 @@ export {
 } from './attach'
 export { FormworkCoverageList } from './coverage-summary'
 export { formworkAssemblyDefinition } from './definition'
+export { FormworkDesignReport } from './design-report'
 export { formworkAssembliesAffectedBy, formworkAssembliesOnHost } from './dirty-scope'
 export { buildFormworkGeometry } from './geometry'
 export {

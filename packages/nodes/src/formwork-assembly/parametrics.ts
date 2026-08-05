@@ -1,6 +1,7 @@
 import type { ParametricDescriptor } from '@pascal-app/core'
 import {
   FormworkCoverageSummary,
+  FormworkDesignSummary,
   FormworkHostSummary,
   FormworkScopeSummary,
 } from './inspector-editors'
@@ -38,6 +39,12 @@ export const formworkAssemblyParametrics: ParametricDescriptor<FormworkAssemblyN
     {
       label: 'Host construction',
       fields: [{ key: 'hostSummary', kind: 'custom', component: FormworkHostSummary }],
+    },
+    // Design before coverage: the design says whether the shutter stands up, and
+    // coverage says how much of it there is. A spacing over capacity is a stop.
+    {
+      label: 'Design',
+      fields: [{ key: 'design', kind: 'custom', component: FormworkDesignSummary }],
     },
     {
       label: 'Coverage',

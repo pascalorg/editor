@@ -43,6 +43,7 @@ import { useCallback, useMemo, useRef } from 'react'
 import {
   FormworkConstructionSection,
   FormworkCoverageList,
+  FormworkDesignReport,
   PourLimitInput,
   PourSequenceFields,
   PourUnitHint,
@@ -334,6 +335,9 @@ export default function WallPanel() {
             onUpdate={handleUpdateConstruction}
             pourUnitCount={pourUnitCount}
           />
+          <PanelSection title="Formwork design">
+            <FormworkDesignReport hostId={node.id as AnyNodeId} />
+          </PanelSection>
           <PanelSection title="Formwork coverage">
             <FormworkCoverageList hostId={node.id as AnyNodeId} />
           </PanelSection>
