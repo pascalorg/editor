@@ -483,7 +483,22 @@ const WALL_PROGRESSIVE_TIME_BUDGET_MS = 8
 let lastWallDirtyAtMs = 0
 const pendingAdjacentByLevel = new Map<string, Set<string>>()
 
-function getPendingAdjacentCount() {
+// Walls whose geometry this system replaced since the last drain.
+//
+// The store's dirty mark is cleared the moment a wall is rebuilt, so anything
+// running later in the same frame would never see it. This is that same
+// signal, held until a consumer picks it up. Neighbours rebuilt by the
+// trailing-edge flush land here too — those never carry a dirty mark at all.
+const rebuiltWalls = new Set<string>()
+
+/** Moves every rebuild notice collected so far into `into`. */
+export function drainRebuiltWalls(into: Set<string>): void {
+  for (const wallId of rebuiltWalls) into.add(wallId)
+  rebuiltWalls.clear()
+}
+
+/** Rebuilds this system still owes — neighbours deferred during a drag. */
+export function getPendingWallRebuildCount(): number {
   let count = 0
   for (const ids of pendingAdjacentByLevel.values()) {
     count += ids.size
@@ -575,6 +590,7 @@ export const WallSystem = () => {
         if (mesh) {
           updateWallGeometry(wallId, miterData)
           clearDirty(wallId as AnyNodeId)
+          rebuiltWalls.add(wallId)
           rebuiltWallIds.add(wallId)
           rebuiltWallsThisFrame += 1
         }
@@ -605,7 +621,7 @@ export const WallSystem = () => {
     // their correct miter joins.
     const quiet = !hasDirtyWalls && now - lastWallDirtyAtMs >= DRAG_FLUSH_MS
     if (quiet && pendingAdjacentByLevel.size > 0) {
-      const pendingCount = getPendingAdjacentCount()
+      const pendingCount = getPendingWallRebuildCount()
       const useProgressiveAdjacentRebuilds = pendingCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
       let rebuiltAdjacentThisFrame = 0
       const adjacentFrameStartedAt = performance.now()
@@ -628,7 +644,10 @@ export const WallSystem = () => {
           }
 
           const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
-          if (mesh) updateWallGeometry(wallId, miterData)
+          if (mesh) {
+            updateWallGeometry(wallId, miterData)
+            rebuiltWalls.add(wallId)
+          }
           pendingIds.delete(wallId)
           rebuiltAdjacentThisFrame += 1
         }
