@@ -70,14 +70,26 @@ function wallPlanBounds(scene: PascalSceneGraph): PlanBounds {
   )
 }
 
-const openHouse = convertFixture('04-ifc-open-house.ifc')
-const duplexWithMissingSpaceName = convertFixture('01-duplex.ifc', (source) =>
-  source.replace(/(#157= IFCSPACE\('[^']+',#41,)'A102'/, (_match, prefix: string) => `${prefix}$`),
-)
+let openHouse: Promise<PascalSceneGraph> | undefined
+function openHouseScene() {
+  openHouse ??= convertFixture('04-ifc-open-house.ifc')
+  return openHouse
+}
+
+let duplexWithMissingSpaceName: Promise<PascalSceneGraph> | undefined
+function duplexWithMissingSpaceNameScene() {
+  duplexWithMissingSpaceName ??= convertFixture('01-duplex.ifc', (source) =>
+    source.replace(
+      /(#157= IFCSPACE\('[^']+',#41,)'A102'/,
+      (_match, prefix: string) => `${prefix}$`,
+    ),
+  )
+  return duplexWithMissingSpaceName
+}
 
 describe('IFC imported mesh conversion', () => {
   test('keeps millimetre mesh geometry aligned with native walls', async () => {
-    const scene = await openHouse
+    const scene = await openHouseScene()
     const meshBounds = importedMeshPlanBounds(importedMeshes(scene))
     const nativeBounds = wallPlanBounds(scene)
 
@@ -90,7 +102,7 @@ describe('IFC imported mesh conversion', () => {
   }, 30_000)
 
   test('preserves roof slabs as imported geometry when a mesh is available', async () => {
-    const scene = await openHouse
+    const scene = await openHouseScene()
     const roofSlabs = importedMeshes(scene).filter(
       (node) =>
         metadata(node).ifcType === 'IFCSLAB' &&
@@ -101,7 +113,7 @@ describe('IFC imported mesh conversion', () => {
   }, 30_000)
 
   test('rounds serialized positions and normals to the storage precision', async () => {
-    const scene = await openHouse
+    const scene = await openHouseScene()
     for (const mesh of importedMeshes(scene)) {
       for (const primitive of mesh.primitives) {
         for (const value of primitive.positions) {
@@ -115,7 +127,7 @@ describe('IFC imported mesh conversion', () => {
   }, 30_000)
 
   test('claims stair flights and continues after a space with no Name', async () => {
-    const scene = await duplexWithMissingSpaceName
+    const scene = await duplexWithMissingSpaceNameScene()
     const nodes = Object.values(scene.nodes)
 
     expect(nodes.filter((node) => node.type === 'zone')).toHaveLength(21)
