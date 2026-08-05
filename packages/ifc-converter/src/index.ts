@@ -2257,10 +2257,11 @@ export async function convertIfcToPascal(
         }
         if (!polygon || polygon.length < 3) continue
         if (primitives.length > 0) {
-          const ys = primitives.flatMap((primitive) =>
-            primitive.positions.filter((_, index) => index % 3 === 1),
+          const heightAxis = opts.swapYZ ? 1 : 2
+          const heights = primitives.flatMap((primitive) =>
+            primitive.positions.filter((_, index) => index % 3 === heightAxis),
           )
-          if (ys.length > 0) ceilingHeight = Math.max(...ys) - Math.min(...ys)
+          if (heights.length > 0) ceilingHeight = Math.max(...heights) - Math.min(...heights)
         }
 
         const spaceName = space.Name?.value

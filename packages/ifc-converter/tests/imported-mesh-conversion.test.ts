@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import type { AnyNode, ImportedMeshNode, WallNode } from '@pascal-app/core'
+import type { AnyNode, ImportedMeshNode, WallNode, ZoneNode } from '@pascal-app/core'
 import { type ConversionOptions, convertIfcToPascal, type PascalSceneGraph } from '../src'
 
 const fixturesDirectory = fileURLToPath(
@@ -88,6 +88,20 @@ function openHouseWithoutAxisSwapScene() {
   return openHouseWithoutAxisSwap
 }
 
+let duplex: Promise<PascalSceneGraph> | undefined
+function duplexScene() {
+  duplex ??= convertFixture('01-duplex.ifc')
+  return duplex
+}
+
+let duplexWithoutAxisSwap: Promise<PascalSceneGraph> | undefined
+function duplexWithoutAxisSwapScene() {
+  duplexWithoutAxisSwap ??= convertFixture('01-duplex.ifc', undefined, {
+    swapYZ: false,
+  })
+  return duplexWithoutAxisSwap
+}
+
 let duplexWithMissingSpaceName: Promise<PascalSceneGraph> | undefined
 function duplexWithMissingSpaceNameScene() {
   duplexWithMissingSpaceName ??= convertFixture('01-duplex.ifc', (source) =>
@@ -122,6 +136,28 @@ describe('IFC imported mesh conversion', () => {
     expect(Math.abs(meshBounds.maxX - nativeBounds.maxX)).toBeLessThan(1)
     expect(Math.abs(meshBounds.minZ - nativeBounds.minZ)).toBeLessThan(1)
     expect(Math.abs(meshBounds.maxZ - nativeBounds.maxZ)).toBeLessThan(1)
+  }, 30_000)
+
+  test('keeps mesh-derived room heights stable when STEP axis swapping is disabled', async () => {
+    const [defaultScene, unswappedScene] = await Promise.all([
+      duplexScene(),
+      duplexWithoutAxisSwapScene(),
+    ])
+    const defaultZones = Object.values(defaultScene.nodes).filter(
+      (node): node is ZoneNode => node.type === 'zone',
+    )
+    const unswappedZonesByExpressId = new Map(
+      Object.values(unswappedScene.nodes)
+        .filter((node): node is ZoneNode => node.type === 'zone')
+        .map((zone) => [metadata(zone).expressID, zone]),
+    )
+
+    expect(defaultZones.length).toBeGreaterThan(0)
+    for (const zone of defaultZones) {
+      const unswappedZone = unswappedZonesByExpressId.get(metadata(zone).expressID)
+      expect(unswappedZone).toBeDefined()
+      expect(Math.abs(zone.ceilingHeight - unswappedZone!.ceilingHeight)).toBeLessThan(0.001)
+    }
   }, 30_000)
 
   test('preserves roof slabs as imported geometry when a mesh is available', async () => {
