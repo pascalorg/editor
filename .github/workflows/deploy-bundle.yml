@@ -6,7 +6,7 @@ name: Deploy bundle
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [integration]
     paths:
       - 'apps/editor/**'
       - 'packages/**'
