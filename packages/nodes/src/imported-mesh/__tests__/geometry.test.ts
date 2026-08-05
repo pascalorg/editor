@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { ImportedMeshNode } from '@pascal-app/core'
 import type { Mesh } from 'three'
+import { importedMeshDefinition } from '../definition'
 import { buildImportedMeshGeometry } from '../geometry'
 
 describe('buildImportedMeshGeometry', () => {
@@ -21,5 +22,11 @@ describe('buildImportedMeshGeometry', () => {
     const mesh = group.children[0] as Mesh
     expect(mesh.geometry.getAttribute('position').count).toBe(3)
     expect(mesh.geometry.index?.count).toBe(3)
+  })
+
+  test('is selectable and deletable but not movable', () => {
+    expect(importedMeshDefinition.capabilities.selectable).toBeDefined()
+    expect(importedMeshDefinition.capabilities.deletable).toBe(true)
+    expect('movable' in importedMeshDefinition.capabilities).toBe(false)
   })
 })

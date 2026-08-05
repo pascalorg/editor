@@ -21,7 +21,6 @@ export const importedMeshDefinition: NodeDefinition<typeof ImportedMeshNode> = {
   }),
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    movable: { axes: ['x', 'y', 'z'], gridSnap: true },
     duplicable: true,
     deletable: true,
     presettable: false,

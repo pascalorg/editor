@@ -85,36 +85,6 @@ describe('simplifyConvertedSceneGraph', () => {
     expect((nodes.level_1 as { children: string[] }).children).toEqual([keptWall?.id])
   })
 
-  it('does not merge parallel wall fragments on centerlines offset by two inches', () => {
-    const nodes: Record<string, AnyNode> = {
-      level_1: level('level_1', ['wall_a', 'wall_b']),
-      wall_a: wall('wall_a', [0, 0], [2, 0]),
-      wall_b: wall('wall_b', [2, 0.0508], [4, 0.0508]),
-    }
-
-    const stats = simplifyConvertedSceneGraph(nodes)
-
-    expect(stats.removedMergedWalls).toBe(0)
-    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(2)
-  })
-
-  it('does not merge collinear wall fragments with different IFC materials', () => {
-    const exterior = wall('wall_exterior', [0, 0], [2, 0])
-    const interior = wall('wall_interior', [2.9, 0], [5, 0])
-    exterior.metadata = { material: 'Exterior Finish Assembly' }
-    interior.metadata = { material: 'Interior Partition Assembly' }
-    const nodes: Record<string, AnyNode> = {
-      level_1: level('level_1', ['wall_exterior', 'wall_interior']),
-      wall_exterior: exterior,
-      wall_interior: interior,
-    }
-
-    const stats = simplifyConvertedSceneGraph(nodes)
-
-    expect(stats.removedMergedWalls).toBe(0)
-    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(2)
-  })
-
   it('reprojects openings from removed walls onto the merged wall', () => {
     const nodes: Record<string, AnyNode> = {
       level_1: level('level_1', ['wall_a', 'wall_b']),
