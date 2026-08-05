@@ -1,6 +1,33 @@
 # Formwork implementation status
 
-What's left to ship, organized by plan phase.
+What's left to ship, organized by plan phase. Measured against the master plan at
+`~/.claude/plans/currently-see-the-formwork-cozy-sky.md`.
+
+## Completion at a glance
+
+**~45% of line items, but the engine is far ahead of the product surface** — see the caveats below, which matter more than the number.
+
+| Phase | Complete | State |
+|---|---|---|
+| **P0** Honest baseline | 100% | The reported one-sided bug is fixed at its root |
+| **P1** Coverage engine | 88% | Only gap: solver phases exist as modules, not wired into one pipeline |
+| **P2** Catalog + real layout | 50% | Packing/stacking/tie-grids done; `gangs.ts`, parts model, part inspector not started |
+| **P3** Structural design | 89% | Wall chain closed and the design report renders it; rated-pressure wiring remains |
+| **P4** Quantities, BOM, exports | 25% | Floorplan + schedule done; no BOM, no CSV, no project rollup |
+| **P5** Cut optimisation | 0% | `layout/cut-optimiser.ts` does not exist |
+| **P6** Sequencing + schedule | 25% | Lifts/segments/units exist; no striking times, no set counting |
+| **P7** Validation, clashes, cost | 0% | No `validate/`, no `cost/` |
+| **P8** AI + drawings | 0% | 5 chat tools against the plan's ~25; no MCP formwork tools |
+
+Counting partials as half: **18 done, 7 partial, 17 not started → 48%**. The solver pipeline scores separately at **5 of 13 phases done, 4 partial → 58%**.
+
+**Three reasons that count overstates progress.** Recorded because the percentage will otherwise be read as a schedule.
+
+1. **The remaining phases are the expensive ones.** P5 (guillotine placer with SA over piece order) and P7 (invariant suite + clash passes) are each larger than several completed phases combined, and P8 is ~20 tools across two surfaces. Line-item counting treats "CSV export" and "cut optimisation" as one row each.
+2. **No `solve.ts` exists.** Every engine piece is a standalone library the geometry builders call directly. The plan's central abstraction — `(scene, settings, catalog) → FormworkSolution` — has no implementation, and phase 12 is what most of P4/P7/P8 consume. A structural gap, not a line item.
+3. **The parts model is unbuilt.** Deterministic marks, part picking and the part inspector (plan §5.3) block the parts table, the BOM, the cut sheet, and every "click a waler and read its utilisation" feature. One ❌ row carrying a lot of downstream weight.
+
+**The fair characterisation: the engine is roughly two-thirds there, the product surface roughly a quarter.** Everything that *computes* — pressure, the beam core, both design chains, coverage, layout, measurement — is largely done and tested. Everything that *presents or exports* what is computed is mostly not: no BOM, no cut sheet, no validation report, no parts table, AI parity around 20%. The design report is the first of those to land, and it is the one that made the rest of the engine legible: the chain can now be read on screen rather than taken on faith.
 
 ## Plan phases (P0–P8)
 
@@ -9,29 +36,33 @@ What's left to ship, organized by plan phase.
 | **P0** Honest baseline | Reference docs → `wiki/formwork/reference/` | ✅ Done | `design.md`, `products.md`, `coverage.md`, `README.md` committed |
 | | `dist`/`src` divergence guard | ✅ Done | `tooling/check-dist-parity.mjs` + CI step; `packages/nodes` deliberately left out of `transpilePackages` in favour of the parity check |
 | | `geometryKey` contract | ✅ Done | Dropped from `definition.ts:44` |
-| | Guard the formwork button | ✅ Done | `host-controls.tsx:238` disables on `hasFormwork` |
+| | Guard the formwork button | ✅ Done | `host-controls.tsx:231` disables on `hasFormwork` |
 | **P1** Coverage engine | Castable fields, `formwork-assembly` + `construction-joint` kinds, migration | ✅ Done | `schema/formwork.ts`, both node kinds, `use-scene.ts:1097` pass 4 |
 | | Solver phases 0–7 as libraries | 🟡 Partial | Elements/junctions/faces/trim/openings/banding/pours all exist as modules; **not** wired into one pipeline — see solver table |
 | | Measurement standards as strategies | ✅ Done | IS 1200, NRM2, HKSMM4, CESMM4, POMI (last two need clause text — open item 5) |
 | | Faces + reasons in inspector | ✅ Done | `coverage-summary.tsx` via `parametrics.customPanel` |
-| **P2** Catalog + real layout | Catalog schemas + seed | 🟡 Partial | Doka Framax (verified), PERI TRIO (secondary), column forms/clamps, sheet stock. **Missing:** `props-eurex`, `timber-h20`, `mivan-generic`, `plyform-apa` |
+| **P2** Catalog + real layout | Catalog schemas + seed | 🟡 Partial | Doka Framax (verified), PERI TRIO (secondary), column forms/clamps, sheet stock, plus `props-eurex` + `timber-h20` + APA Plyform (verified) via `catalog/falsework.ts`. **Missing:** `mivan-generic`, full `plyform-apa` grade set |
 | | Corner-first packing, stacking, height compensation, tie grids on real holes | ✅ Done | `strip-pack`, `courses`, `stack`, `tie-grid`, `junction-fit` |
 | | Column clamp schedule | ✅ Done | `clamp-schedule.ts` + `geometry-column.ts` consuming it (this session) |
-| | **Slab spacings still invented** | ❌ Not started | `geometry-slab.ts:118,137` — `walerSpacing ?? 0.4`, `tieSpacing ?? 1.2`, even bbox division. Last builder on made-up numbers |
+| | Slab falsework off the design chain | ✅ Done | `geometry-slab.ts` consumes `falseworkDesign()`; bearers now drawn (were missing entirely), grid tightens with thickness, rim stations no longer culled by the half-open ray cast |
 | | `layout/gangs.ts` | ❌ Not started | Gang grouping, pick weight, lifting points, crane-capacity split-and-re-layout |
 | | Parts model + marks | ❌ Not started | `schema/formwork/parts.ts`, deterministic marks stable across recomputes |
 | | Part picking + part inspector | ❌ Not started | Depends on the parts model |
 | **P3** Structural design | Pressure engine | 🟡 Partial | ACI 347, DIN 18218, CIRIA 108, BS 5975 shortcut all land with validity gates and warnings. Coefficients unverified (open items 1, 2) |
-| | Continuous-beam core; sheathing/joist/waler/tie/bracing chain | ❌ Not started | No `design/` directory. Only the clamp check exists |
+| | Continuous-beam core | ✅ Done | `design/beam.ts` — 1/2/3-span coefficients, bending/shear/deflection, span count iterated not assumed. Reproduces APA Example 2 at 412 psf bending |
+| | ACI §2.2.1 vertical loads | ✅ Done | `design/vertical-load.ts` — dead+live vs the 4.8/6.0 kPa floor, live floor 2.4/3.6 |
+| | Falsework chain (deck→joist→bearer→prop) | ✅ Done | `design/falsework.ts` + `catalog/falsework.ts` (sheathing, H20/H16, Eurex prop tables looked up not interpolated) |
+| | Wall member chain (sheathing/joist/waler/tie/bracing under lateral pressure) | ✅ Done | `design/wall.ts` solves the ordered chain (p → sheathing → studs → walers → ties → bracing), closing the walers and re-solving where the tie force exceeds the hardware rather than just adding ties. `geometry-wall.ts` consumes it: tie rows graded up the lift, walers on the tie rows because a tie has to bear on one. On a drilled panel system the design is what the factory grid is checked against, not what places it |
 | | Rated-pressure path + inverse `v_max` solve | 🟡 Partial | `maxRiseRateMH()` exists for ACI + DIN; not wired to a panel rating check |
-| | Calculated vs adopted spacing, utilisations, design report | ❌ Not started | |
-| | APA `n_studs < 3` point-load branch | ❌ Not started | |
+| | Calculated vs adopted spacing, utilisations | ✅ Done | `MemberDesign` carries both plus `governedBy`, `utilisation`, `cappedBy`, `stated` |
+| | Design report | ✅ Done | `formwork-assembly/design-report.tsx` renders the whole chain per kind — adopted beside calculated, which check governed, utilisation graded amber past 85 % and red past 100 %, `cappedBy`, every warning, and a stated spacing that fails its own check saying so in as many words. Mounted in all three host panels and, scoped to its own pour unit, in the assembly inspector. `design.ts` grew `liftHeightM` and the column's `envelope`/`designPressureKnM2` so the report reads the same solve the builders place, rather than repeating it |
+| | APA `n_studs < 3` point-load branch | ✅ Done | Bending only — `M/√factor` against uniform shear and deflection — so a shear-governed H20 waler is not cut for an effect it does not have. The warning names which governed, because at wall line loads the correction usually changes nothing and reporting a reduction that wasn't applied is worse than silence |
 | **P4** Quantities, BOM, exports | Takeoff with banding | 🟡 Partial | `bandFace()` works per face; no project-level rollup |
 | | BOM (owned/hired, weights, rental duration) | ❌ Not started | No `cost/` directory |
 | | CSV export | ❌ Not started | Net new |
-| | `floorplan` extension + `schedule()` | ❌ Not started | **Formwork is invisible in plan view and in the PDF pipeline** |
+| | `floorplan` extension + `schedule()` | ✅ Done | `formwork-assembly/floorplan.ts` (shutter lines off each formed face, deck wash, hole edge forms) + `schedule.ts` (FORMWORK SCHEDULE, one row per pour unit, unformed faces with reasons). Both read `resolveFormworkScope`, so plan and 3D cannot disagree |
 | | Parts table + BOM panels | ❌ Not started | |
-| | `FormworkProjectSettings` dialog | ❌ Not started | Blocks the rise-rate/temperature constants currently hardcoded in `geometry-column.ts:81,84` |
+| | `FormworkProjectSettings` dialog | ❌ Not started | Blocks `designEnvelope`'s hardcoded rise rate and temperature (`geometry-shared.ts:87,90`), now shared by the wall chain and the column schedule so neither can be designed to a different pour than the other. Also blocks the wall chain's `sheathingId`/`beamId`/`statedStudSpacingM`/`tieId`, which have no schema home |
 | **P5** Cut optimisation | Guillotine placer, SA, kerf/grain/trim, offcut policy, set-covering, cut-sheet view | ❌ Not started | `SAW_KERF_MM` and `SHEET_STOCK` are seeded; `layout/cut-optimiser.ts` doesn't exist |
 | **P6** Sequencing + schedule | Lifts + zones fully driven | 🟡 Partial | `pours/lifts.ts`, `segments.ts`, `units.ts`, `joints.ts` exist; joint-elevation snapping has no schema home |
 | | Degree-day / maturity strike times | ❌ Not started | |
@@ -57,7 +88,7 @@ What's left to ship, organized by plan phase.
 | 5 Trim | ✅ | `coverage/trim.ts` + corner ownership + `trim.test.ts` |
 | 6 Openings | ✅ | Deductions, thresholds, reveals (3-side door), audit trail. Box-out node not emitted |
 | 7 Banding | ✅ | `measurement/banding.ts` |
-| 8 Pressure/design/layout | 🟡 | Pressure ✅, clamp schedule ✅, panel layout ✅, tie grid ✅ (takes a scalar, not an envelope — needs graded-at-base). Member design chain ❌ |
+| 8 Pressure/design/layout | ✅ | Pressure ✅, clamp schedule ✅, panel layout ✅, drilled tie grid ✅, wall member chain ✅ — graded at the base, and `verticalElementKind` reads a wide "column" as a wall off the plan rather than off the node type. The design is now also readable: `design.ts` is the single solve, and the report prints it. Remaining: the rated-pressure path is not wired to a panel rating check |
 | 9 Clashes | ❌ | Ties×rebar, ties×openings, ties×waterstops, panels×intersections, props×slab-below, scaffold×boundary |
 | 10 Schedule | ❌ | Commit windows, max-clique set counting, separate panel/prop inventories |
 | 11 Validate | ❌ | The 20-line assertion suite — the highest-value output |
@@ -81,8 +112,20 @@ What's left to ship, organized by plan phase.
 
 ## Verification (§11) status
 
-19 test files, 413 formwork tests passing. The golden-file scene tests are the gap — the plan's headline case (*single freestanding wall → 4 formed faces*) is covered in `geometry.test.ts`, but the worked-example suites (APA Example 2, the DIN calculator probes, CIRIA's 53.86, the HKSMM4 opening cases) exist only in `pressure.test.ts` partially; the ACI metric/imperial *must-disagree* test and the property test *`sum(trimmed) === trueWrappedArea` over random wall networks* are not written.
+Core: 1193 tests passing across 91 files (17 formwork files, 427 formwork tests). Nodes: 990 passing across 118 files, including 12 in `formwork-assembly/floorplan.test.ts` — among them the two sign checks that catch a shutter drawn inside its own pour or against the wrong face of a wall, both of which are invisible on a symmetric test wall. Repo: 3112 passing across 352 files.
+
+`formwork-assembly/design.test.ts` covers the shared solve the report and the builders both read — 15 tests over the three pour designs. Two of them were written asserting the wrong thing and are worth recording, because both mistakes are the kind a reader of the report would also make. The run sets `tieSpacing.spans` (the waler's own continuity), not `waler.spans` (the stud's, which runs vertically over the lift height) — and a bay cut short allows a *wider* tie spacing, not a narrower one, because one span is stronger in shear than three and shear is what governs a waler at these loads. And the base clamp row is not the hardest worked: it shares its tributary band with the kicker, which is exactly why omitting the kicker fails a column form at its foot.
+
+The wall chain's geometry tests pin the two things a constant cannot do: the grid tightens on its own with the lift height (a 2.4 m lift gets three rows at 300 mm centres, a 4 m lift six rows at 250 mm), and a drilled system's ties land on the factory grid with the walers following them rather than the solved spacing. Both were verified against the builder's actual output rather than asserted from the arithmetic.
+
+**APA Example 2 now reproduces**: 412 psf bending against the published 412. Shear reads 647 psf and deflection 387 psf against the published 714 and 370 — APA deducts support width from the clear span where this solves on centre-to-centre, so the two bracket the published pair rather than matching it. Recorded here because the gap is a definition, not an error, and someone will otherwise "fix" it.
+
+Still the gap: the DIN calculator probes, CIRIA's 53.86, the HKSMM4 opening cases, the ACI metric/imperial *must-disagree* test, and the property test *`sum(trimmed) === trueWrappedArea` over random wall networks*.
 
 ## Shortest path to the next visible win
 
-**`geometry-slab.ts` off invented spacings** (the only builder still guessing), then the **`floorplan` extension + `schedule()`** — that one is cheap and makes formwork appear in plan view and in the existing PDF export with no editor changes.
+**`FormworkProjectSettings`** — and the design report is what makes it urgent rather than tidy.
+
+The report now prints the pressure envelope, names the standard it came from, and quotes the governing equation. Every one of those figures is derived from a rise rate and a concrete temperature that are hardcoded constants (`geometry-shared.ts:87,90`), shared by the wall chain and the column schedule so at least they cannot disagree with each other — but a user reading `95.6 kN/m²` on screen has no way to see that it assumes 2 m/h at 20 °C, and no way to say otherwise. A visible number the user cannot govern is worse than a hidden one: it invites trust it has not earned. The same dialog is the schema home the wall chain's `sheathingId`/`beamId`/`statedStudSpacingM`/`tieId` are waiting on, and the pour settings (`ConcreteMix`, `Placement`) that DIN and CIRIA both need before their coefficients can be checked against anything.
+
+After that the **parts model** (plan §5.3) is the one structural gap with the most downstream weight — it blocks the parts table, the BOM, the cut sheet, and "click a waler and read its own utilisation", which is the natural next step from a report that currently speaks per member type rather than per part.
