@@ -121,18 +121,77 @@ function toUpstream(source) {
   return source.replace(/@panel\//g, '@/')
 }
 
-function plan(panelRoot) {
+/**
+ * Reapply it.
+ *
+ * The forward rewrite is LOSSY: `@panel/x` and a literal `@/x` both leave as
+ * `@/x`, so this direction cannot tell them apart and turns every `@/` into
+ * `@panel/`. That is correct for a console file, where `@/` can only mean the
+ * console's own `src`, and it constrains the vendored copy: a synced file under
+ * `apps/editor/panel/` must never contain a bare `@/`, in an import OR in
+ * prose. One did — a comment naming `@/lib/escape-layers` — and it would have
+ * ping-ponged forever, each direction "fixing" what the other just wrote.
+ *
+ * That mistake has a signature worth knowing: `--check` says in sync one way
+ * and names a file the other way. If you see it, the file has a bare `@/`.
+ */
+function toVendored(source) {
+  return source.replace(/@\//g, '@panel/')
+}
+
+/**
+ * The pairs to walk, for one direction.
+ *
+ * Pull inverts the same tables rather than declaring its own, so the two
+ * directions cannot drift apart — a mapping added for one is a mapping the
+ * other gets for free.
+ *
+ * Inverting is not a swap, because the console's tree nests where the editor's
+ * does not: `src/app/api` and `src/app/globals.css` both live INSIDE `src/app`.
+ * Walking `src/app` naively would drag the console's endpoints into
+ * `app/(panel)/api/` and its stylesheet into `app/(panel)/globals.css`, both
+ * wrong and both silent. Longest source path first, and the first pair to claim
+ * a file keeps it.
+ *
+ * `create` is dropped on pull, i.e. every pair creates. Its `false` on `ROUTES`
+ * protects the CONSOLE from receiving editor-only routes; the mirror risk —
+ * the editor receiving a console route it does not have — is not a risk but
+ * the entire point, since a new console endpoint is exactly what the editor
+ * needs to pick up.
+ */
+function pairsFor(pull) {
+  const declared = [...LIBRARY, ...ROUTES]
+  if (!pull) return declared.map(([from, to, create]) => ({ from, to, create }))
+  return declared
+    .map(([from, to]) => ({ from: to, to: from, create: true }))
+    .sort((a, b) => b.from.length - a.from.length)
+}
+
+function plan(panelRoot, pull) {
   const actions = []
-  for (const [from, to, create] of [...LIBRARY, ...ROUTES]) {
-    const source = join(EDITOR, from)
+  const claimed = new Set()
+  const sourceRoot = pull ? panelRoot : EDITOR
+  const destRoot = pull ? EDITOR : panelRoot
+
+  for (const { from, to, create } of pairsFor(pull)) {
+    const source = join(sourceRoot, from)
     const isFile = existsSync(source) && statSync(source).isFile()
     for (const file of files(source)) {
       const rel = isFile ? '' : relative(source, file)
+      const origin = isFile ? from : join(from, rel)
+      // A file the console owns can be reached by two pairs; the longer one
+      // already took it.
+      if (claimed.has(origin)) continue
+      claimed.add(origin)
       const target = isFile ? to : join(to, rel)
-      if (EDITOR_OWNED.has(target)) continue
-      const absolute = join(panelRoot, target)
+      // `EDITOR_OWNED` holds console-side paths, so it is the origin on pull
+      // and the target on push. Either way it means the same thing: the
+      // editor's copy is the authority and must not be written over.
+      if (EDITOR_OWNED.has(pull ? origin : target)) continue
+      const absolute = join(destRoot, target)
       if (!create && !existsSync(absolute)) continue
-      const next = toUpstream(readFileSync(file, 'utf8'))
+      const body = readFileSync(file, 'utf8')
+      const next = pull ? toVendored(body) : toUpstream(body)
       const current = existsSync(absolute) ? readFileSync(absolute, 'utf8') : null
       if (current === next) continue
       actions.push({ target, absolute, next, kind: current === null ? 'new' : 'changed' })
@@ -144,9 +203,10 @@ function plan(panelRoot) {
 const args = process.argv.slice(2)
 const panelRoot = args[args.indexOf('--panel') + 1]
 const checkOnly = args.includes('--check')
+const pull = args.includes('--pull')
 
 if (!panelRoot || panelRoot.startsWith('--')) {
-  console.error('usage: node scripts/sync-panel.mjs --panel <path> [--check]')
+  console.error('usage: node scripts/sync-panel.mjs --panel <path> [--pull] [--check]')
   process.exit(2)
 }
 if (!existsSync(join(panelRoot, 'src/lib'))) {
@@ -154,10 +214,10 @@ if (!existsSync(join(panelRoot, 'src/lib'))) {
   process.exit(2)
 }
 
-const actions = plan(panelRoot)
+const actions = plan(panelRoot, pull)
 
 if (actions.length === 0) {
-  console.log('panel is in sync — nothing to push')
+  console.log(pull ? 'the vendored copy is current — nothing to pull' : 'panel is in sync — nothing to push')
   process.exit(0)
 }
 
@@ -167,7 +227,11 @@ for (const action of actions) {
 console.log(`\n${actions.length} file(s)`)
 
 if (checkOnly) {
-  console.error('\nthe console copy has moved ahead of its repository; run the sync')
+  console.error(
+    pull
+      ? '\nthe console has moved ahead of the vendored copy; run the sync'
+      : '\nthe console copy has moved ahead of its repository; run the sync',
+  )
   process.exit(1)
 }
 

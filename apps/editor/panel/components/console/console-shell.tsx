@@ -127,7 +127,7 @@ export function ConsoleShell({
   /**
    * Escape chain: menu → command palette → drawer → dialog → inline edit. Only
    * the topmost layer closes per press. Ordering comes from the layer stack in
-   * `@/lib/escape-layers` — mounting order is nesting order, so no layer has to
+   * `@panel/lib/escape-layers` — mounting order is nesting order, so no layer has to
    * know what sits above it.
    */
   const closeNav = useCallback(() => setNavOpen(false), [])
