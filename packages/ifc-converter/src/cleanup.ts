@@ -199,11 +199,21 @@ function toWallSegment(wall: WallNode): WallSegment | null {
 }
 
 function wallLineTolerance(a: WallSegment, b: WallSegment) {
-  return Math.max(0.06, Math.min(0.14, Math.max(a.thickness, b.thickness) * 0.5))
+  // Fragments must share essentially the same centerline. A tolerance based on
+  // half the wall thickness can collapse adjacent walls whose faces merely meet.
+  return Math.max(0.005, Math.min(0.025, Math.max(a.thickness, b.thickness) * 0.1))
 }
 
 function wallHeightCompatible(a: WallSegment, b: WallSegment) {
   return Math.abs(a.height - b.height) <= WALL_HEIGHT_TOLERANCE
+}
+
+function wallMaterialCompatible(a: WallSegment, b: WallSegment) {
+  const materialA = (a.wall.metadata as { material?: unknown } | undefined)?.material
+  const materialB = (b.wall.metadata as { material?: unknown } | undefined)?.material
+  const nameA = typeof materialA === 'string' ? materialA : null
+  const nameB = typeof materialB === 'string' ? materialB : null
+  return nameA === nameB
 }
 
 function wallIntervalsCompatible(a: WallSegment, b: WallSegment, maxJoinGap: number) {
@@ -220,6 +230,7 @@ function wallsCanMerge(a: WallSegment, b: WallSegment, maxJoinGap: number) {
   if (Math.abs(a.angleBucket - b.angleBucket) > 1) return false
   if (Math.abs(a.offset - b.offset) > wallLineTolerance(a, b)) return false
   if (!wallHeightCompatible(a, b)) return false
+  if (!wallMaterialCompatible(a, b)) return false
   return wallIntervalsCompatible(a, b, maxJoinGap)
 }
 
