@@ -132,6 +132,9 @@ describe('IFC imported mesh conversion', () => {
 
     expect(nodes.filter((node) => node.type === 'zone')).toHaveLength(21)
     expect(
+      nodes.some((node) => node.type === 'zone' && metadata(node).footprintApproximated === true),
+    ).toBe(true)
+    expect(
       nodes.filter(
         (node) => node.type === 'imported-mesh' && metadata(node).ifcType === 'IFCSTAIRFLIGHT',
       ),

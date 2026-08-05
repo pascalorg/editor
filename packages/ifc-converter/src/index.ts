@@ -22,6 +22,7 @@ import { customAlphabet } from 'nanoid'
 import * as WebIFC from 'web-ifc'
 import { type IfcConversionSimplificationOptions, simplifyConvertedSceneGraph } from './cleanup'
 import { doorGlazingStyle, doorStyleFromIfcOperation } from './door-semantics'
+import { selectStoreyForElevation } from './storey-semantics'
 
 export type {
   IfcConversionSimplificationOptions,
@@ -1019,15 +1020,12 @@ export async function convertIfcToPascal(
         }
         return false
       })
-      .sort(
-        (a, b) =>
-          (storeyElevationByExpressId.get(a) ?? 0) - (storeyElevationByExpressId.get(b) ?? 0),
-      )
+      .map((candidate) => ({
+        expressId: candidate,
+        elevation: storeyElevationByExpressId.get(candidate) ?? 0,
+      }))
 
-    const atOrBelow = candidates.filter(
-      (candidate) => (storeyElevationByExpressId.get(candidate) ?? 0) <= elementElevation + 0.1,
-    )
-    return atOrBelow.at(-1) ?? candidates.at(-1) ?? null
+    return selectStoreyForElevation(candidates, elementElevation)
   }
 
   function resolveElementParent(expressId: number): string | null {
@@ -2222,6 +2220,7 @@ export async function convertIfcToPascal(
         const parentNodeId = resolveElementParent(spaceExpressId)
         const primitives = importedMeshPrimitivesFor(spaceExpressId)
         let polygon: [number, number][] | null = null
+        let footprintApproximated = false
         let ceilingHeight = DEFAULT_LEVEL_HEIGHT
         try {
           const worldMat = space.ObjectPlacement?.value
@@ -2250,7 +2249,10 @@ export async function convertIfcToPascal(
         } catch {
           /* mesh fallback below */
         }
-        polygon ??= meshFootprint(primitives)
+        if (!polygon) {
+          polygon = meshFootprint(primitives)
+          footprintApproximated = polygon !== null
+        }
         if (!polygon || polygon.length < 3) continue
         if (primitives.length > 0) {
           const ys = primitives.flatMap((primitive) =>
@@ -2278,6 +2280,7 @@ export async function convertIfcToPascal(
             expressID: spaceExpressId,
             globalId: space.GlobalId?.value,
             predefinedType: space.PredefinedType?.value,
+            footprintApproximated: footprintApproximated || undefined,
           }),
         })
         expressIdToNodeId.set(spaceExpressId, nodeId)
