@@ -1,3 +1,39 @@
+<!-- FORK BLOCK — ovurrsl/editor only. Upstream has no equivalent, so it
+     conflicts on every merge. Keep this block, take upstream's body below it.
+     The rule is recorded in UPSTREAM.md. -->
+
+> ## ⚠️ You are in `ovurrsl/editor`, a fork. Read this before anything else.
+>
+> Everything below this block is upstream's own instructions, written for
+> `pascalorg/editor`. They are accurate about the code and silent about this
+> fork. These four facts are the ones that cause damage when unknown:
+>
+> 1. **The default branch is `integration`, and that is where you work.** It
+>    carries ~130 commits upstream does not have, and the production bundle is
+>    built from it.
+> 2. **Never commit to `main`.** It is a byte-for-byte mirror of
+>    `pascalorg/editor`, and being a pure mirror is the only reason taking
+>    upstream never conflicts. `mirror-upstream` refuses to force over local
+>    commits, so a commit here does not get erased — it jams the mirror until
+>    somebody moves it by hand.
+> 3. **Three things flow in here automatically** and you should not do their
+>    work by hand: the warehouse plugin pin (`bump-plugin`, hourly), the console
+>    from `ovurrsl/panel` (`pull-panel`, hourly), and upstream itself
+>    (`mirror-upstream`, daily, which opens a pull request rather than merging).
+> 4. **`apps/editor/panel/**` is vendored, not authored here.** Its home is
+>    `ovurrsl/panel`. Editing it here is overwritten by the next hourly pull —
+>    change it there instead.
+>
+> **`OTOMASYON.md`** is the whole picture in plain language: what runs when,
+> which secret each workflow needs, and where to look when a link goes quiet.
+> **`UPSTREAM.md`** is the per-file rule for merging upstream.
+>
+> One more, because it is invisible until it bites: **a push made with
+> `GITHUB_TOKEN` starts no workflow runs.** Any workflow that pushes and expects
+> a build must dispatch it explicitly.
+
+<!-- END FORK BLOCK -->
+
 # Agent Instructions — `pascalorg/editor`
 
 Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the standalone editor app. Consumed both as npm packages and (in `pascalorg/private-editor`) as a git submodule.
