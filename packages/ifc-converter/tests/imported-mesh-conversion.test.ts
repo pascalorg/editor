@@ -227,7 +227,7 @@ describe('IFC imported mesh conversion', () => {
     }
   }, 30_000)
 
-  test('claims stair flights and continues after a space with no Name', async () => {
+  test('preserves stair flight meshes and continues after a space with no Name', async () => {
     const scene = await duplexWithMissingSpaceNameScene()
     const nodes = Object.values(scene.nodes)
 
@@ -235,11 +235,12 @@ describe('IFC imported mesh conversion', () => {
     expect(
       nodes.some((node) => node.type === 'zone' && metadata(node).footprintApproximated === true),
     ).toBe(true)
+    expect(nodes.filter((node) => node.type === 'stair')).toHaveLength(0)
     expect(
       nodes.filter(
         (node) => node.type === 'imported-mesh' && metadata(node).ifcType === 'IFCSTAIRFLIGHT',
       ),
-    ).toHaveLength(0)
+    ).toHaveLength(2)
   }, 30_000)
 
   test('keeps a zone when its IFC room number exceeds the Pascal limit', async () => {

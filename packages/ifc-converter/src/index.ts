@@ -13,7 +13,6 @@ import {
   RoofNode,
   SiteNode,
   SlabNode,
-  StairNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -1892,127 +1891,6 @@ export async function convertIfcToPascal(
 
     nodes[nodeId] = slabNode
 
-    attachNodeToGraph(nodeId, parentNodeId)
-  }
-
-  // Process stairs
-  const stairFlightExpressIds = new Set<number>()
-  const stairFlights = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCSTAIRFLIGHT)
-  for (let i = 0; i < stairFlights.size(); i++) stairFlightExpressIds.add(stairFlights.get(i))
-
-  function claimStairFlightDescendants(stairExpressId: number, stairNodeId: string) {
-    const pending = [...(childrenMap.get(stairExpressId) ?? [])]
-    const visited = new Set<number>()
-    while (pending.length > 0) {
-      const descendant = pending.pop()!
-      if (visited.has(descendant)) continue
-      visited.add(descendant)
-      if (stairFlightExpressIds.has(descendant)) {
-        expressIdToNodeId.set(descendant, stairNodeId)
-      }
-      pending.push(...(childrenMap.get(descendant) ?? []))
-    }
-  }
-
-  const stairs = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCSTAIR)
-  for (let i = 0; i < stairs.size(); i++) {
-    const stairExpressID = stairs.get(i)
-    if (expressIdToNodeId.has(stairExpressID)) continue
-
-    const stair = ifcApi.GetLine(modelID, stairExpressID)
-    const nodeId = generateId('stair')
-    expressIdToNodeId.set(stairExpressID, nodeId)
-    claimStairFlightDescendants(stairExpressID, nodeId)
-
-    const parentNodeId = resolveElementParent(stairExpressID)
-
-    let position: [number, number, number] = [0, 0, 0]
-    let boundingBox: [number, number, number] | undefined
-
-    try {
-      const worldMat = stair.ObjectPlacement?.value
-        ? resolveWorldTransform(ifcApi, modelID, stair.ObjectPlacement.value)
-        : identity()
-      const s = worldToScene(transformPoint3(worldMat, [0, 0, 0]))
-      position = toPascalPoint(s, elementLevelElevation(stairExpressID))
-
-      // Try stair's own body first
-      const body = getBodyExtrusionData(ifcApi, modelID, stair)
-      if (body.xDim && body.yDim && body.depth) {
-        boundingBox = opts.swapYZ
-          ? [body.xDim * unitFactor, body.depth * unitFactor, body.yDim * unitFactor]
-          : [body.xDim * unitFactor, body.yDim * unitFactor, body.depth * unitFactor]
-      }
-
-      // If no body, try to derive from stair flight children
-      if (!boundingBox) {
-        const stairChildren = childrenMap.get(stairExpressID) ?? []
-        for (const childId of stairChildren) {
-          try {
-            const child = ifcApi.GetLine(modelID, childId)
-            // Check for NumberOfRisers / RiserHeight / TreadLength
-            const nRisers = child.NumberOfRisers?.value ?? child.NumberOfRiser?.value
-            const riserHeight = child.RiserHeight?.value
-            const treadLength = child.TreadLength?.value
-            if (nRisers && riserHeight && treadLength) {
-              const totalHeight = nRisers * riserHeight * unitFactor
-              const totalRun = (nRisers - 1) * treadLength * unitFactor
-              const width = 1.0 // Default stair width
-              const flightBody = getBodyExtrusionData(ifcApi, modelID, child)
-              const stairWidth = flightBody.yDim ? flightBody.yDim * unitFactor : width
-              boundingBox = opts.swapYZ
-                ? [totalRun || 1, totalHeight, stairWidth]
-                : [totalRun || 1, stairWidth, totalHeight]
-              break
-            }
-            // Fallback: try flight body extrusion
-            const flightBody = getBodyExtrusionData(ifcApi, modelID, child)
-            if (flightBody.xDim && flightBody.yDim && flightBody.depth) {
-              boundingBox = opts.swapYZ
-                ? [
-                    flightBody.xDim * unitFactor,
-                    flightBody.depth * unitFactor,
-                    flightBody.yDim * unitFactor,
-                  ]
-                : [
-                    flightBody.xDim * unitFactor,
-                    flightBody.yDim * unitFactor,
-                    flightBody.depth * unitFactor,
-                  ]
-              break
-            }
-          } catch {
-            /* skip child */
-          }
-        }
-      }
-    } catch {
-      /* keep defaults */
-    }
-
-    const stairNode = tryParse(StairNode, 'stair', {
-      object: 'node',
-      id: nodeId,
-      type: 'stair',
-      name: stair.Name?.value || `Stair ${i + 1}`,
-      parentId: parentNodeId || null,
-      visible: true,
-      position,
-      children: [],
-      // TODO(ifc-fix): Pascal StairNode is parametric (segments / treads /
-      // risers). The converter only knows the bounding box right now;
-      // keep it in metadata until we map IFC stairs onto the parametric
-      // shape (or extend StairNode with a raw-geometry escape hatch).
-      metadata: buildMetadata({
-        ifcType: 'IFCSTAIR',
-        expressID: stairExpressID,
-        globalId: stair.GlobalId?.value,
-        predefinedType: stair.PredefinedType?.value,
-        boundingBox,
-      }),
-    })
-
-    nodes[nodeId] = stairNode
     attachNodeToGraph(nodeId, parentNodeId)
   }
 

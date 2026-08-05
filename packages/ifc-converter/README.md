@@ -8,8 +8,9 @@ No DOM, no React. The UI lives in `apps/ifc-converter`.
 
 Native Pascal nodes are produced when the converter can recover the required
 parameters for sites, buildings, levels, walls, doors, windows, slabs, columns,
-and IFC spaces (as room zones). IFC stairs and roofs retain Pascal hierarchy and
-source metadata, but are not yet a complete parametric conversion. Beams,
+and IFC spaces (as room zones). IFC stair flights are retained as exact imported
+meshes; roofs retain Pascal hierarchy and source metadata but are not yet a
+complete parametric conversion. Beams,
 railings, coverings, furnishings, proxies, curtain walls, plates, members,
 footings, and elements whose native parameters cannot be recovered are retained
 as selectable `imported-mesh` nodes using their IFC triangle geometry and color.
