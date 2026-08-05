@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Preserve custom scene materials across save, load, clone, fork, and live sync. Materials were dropped at every persistence boundary, so a scene reopened with default surfaces. Collections were dropped on MCP import for the same reason.
+
 ## 1.0.0-beta.1 (2026-07-30)
 
 The first Pascal Editor 1.0 beta. Relative to

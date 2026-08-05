@@ -1,4 +1,4 @@
-import { AnyNode, AssetUrl, BaseNode } from '@pascal-app/core/schema'
+import { AnyNode, AssetUrl, BaseNode, SceneMaterial } from '@pascal-app/core/schema'
 import { z } from 'zod'
 
 /**
@@ -100,6 +100,15 @@ export const apiGraphSchema = z
     nodes: z.record(z.string(), z.unknown()),
     rootNodeIds: z.array(z.string()),
     collections: z.unknown().optional(),
+    // `unknown` here, validated in `superRefine` below — the same split the
+    // nodes get, and for the same reason: the routes persist this schema's
+    // *output*, so a validating shape would also rewrite what gets stored.
+    // `SceneMaterial` injects `MaterialProperties` defaults and drops unknown
+    // keys, which would make every save silently normalize the caller's
+    // palette. Materials still have to be checked, because they carry texture
+    // URLs that `MaterialSchema` routes through `AssetUrl` — this schema is
+    // where that allowlist is enforced.
+    materials: z.record(z.string(), z.unknown()).optional(),
     installedPlugins: z.array(z.string().min(1)).optional(),
   })
   .superRefine((value, ctx) => {
@@ -108,6 +117,18 @@ export const apiGraphSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['nodes', nodeId, ...issue.path],
+          message: issue.message,
+        })
+      }
+    }
+
+    for (const [materialId, material] of Object.entries(value.materials ?? {})) {
+      const res = SceneMaterial.safeParse(material)
+      if (res.success) continue
+      for (const issue of res.error.issues) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['materials', materialId, ...issue.path],
           message: issue.message,
         })
       }
