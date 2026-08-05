@@ -1,4 +1,10 @@
-import { type FormworkSystem, permissiblePressureKnM2, type TieType } from '../catalog'
+import {
+  type FormworkSystem,
+  governingCapacity,
+  permissiblePressureKnM2,
+  type TieType,
+  tieForThickness,
+} from '../catalog'
 import type { Course } from './stack'
 import type { StripPack } from './strip-pack'
 
@@ -86,39 +92,6 @@ export interface TieGridOptions {
   kind?: 'wall' | 'column'
   /** Overrides the system's own practical cap, mm. */
   maxSpacingMm?: number
-}
-
-/**
- * The capacity that governs, and the part that sets it. A DW 15 rod rated 20 kN
- * bearing on a bracket rated 15 kN fails at 15, so the rod's own figure is the
- * wrong one to check against — and naming the part is what lets someone swap it.
- */
-export function governingCapacity(tie: TieType): { capacityKn: number; component: string } {
-  let capacityKn = tie.capacityKn
-  let component = tie.label
-  for (const [part, rating] of Object.entries(tie.componentCapacitiesKn ?? {})) {
-    if (rating < capacityKn) {
-      capacityKn = rating
-      component = part
-    }
-  }
-  return { capacityKn, component }
-}
-
-/**
- * The strongest tie in the system that reaches this wall. A tie with no stated
- * range reaches anything — it is a through-rod cut to length.
- */
-export function tieForThickness(
-  system: FormworkSystem,
-  wallThicknessMm: number,
-): TieType | undefined {
-  const fits = system.ties.filter(
-    (tie) =>
-      !tie.wallRangeMm ||
-      (wallThicknessMm >= tie.wallRangeMm.minMm && wallThicknessMm <= tie.wallRangeMm.maxMm),
-  )
-  return fits.sort((a, b) => governingCapacity(b).capacityKn - governingCapacity(a).capacityKn)[0]
 }
 
 /** One drilled hole, in run coordinates. */

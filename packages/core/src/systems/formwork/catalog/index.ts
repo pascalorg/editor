@@ -61,6 +61,7 @@ export {
   type FillerType,
   type FormworkSystem,
   fillerForGap,
+  governingCapacity,
   type PanelType,
   type PermissiblePressure,
   panelHeightsMm,
@@ -69,5 +70,6 @@ export {
   type SheetStock,
   type TieHoleGrid,
   type TieType,
+  tieForThickness,
   type Verification,
 } from './types'

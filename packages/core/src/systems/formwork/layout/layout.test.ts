@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test'
-import { DOKA_FRAMAX_XLIFE, PERI_TRIO } from '../catalog'
+import { DOKA_FRAMAX_XLIFE, governingCapacity, PERI_TRIO, tieForThickness } from '../catalog'
 import { courseJointsMm, stackCourses } from './stack'
 import { bespokePieces, jointStationsMm, packStrip, type StripPack } from './strip-pack'
-import { governingCapacity, tieForThickness, tieGrid } from './tie-grid'
+import { tieGrid } from './tie-grid'
 
 /**
  * The packer's job is not to fill a length — any greedy loop does that. It is to

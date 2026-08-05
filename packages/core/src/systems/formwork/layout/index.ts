@@ -37,14 +37,12 @@ export {
 } from './strip-pack'
 export {
   type CourseLayout,
-  governingCapacity,
   type Tie,
   type TieGrid,
   type TieGridOptions,
   type TieHole,
   type TieWarning,
   type TieWarningKind,
-  tieForThickness,
   tieGrid,
   tieHoles,
 } from './tie-grid'
