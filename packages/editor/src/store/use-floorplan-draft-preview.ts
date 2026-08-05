@@ -40,6 +40,10 @@ type FloorplanDraftPreviewState = {
   wallDraftStart: WallPlanPoint | null
   fenceDraftStart: WallPlanPoint | null
   roofDraftStart: WallPlanPoint | null
+  /** Exact length entered for the active wall draft, stored in metres. */
+  wallDraftLengthMeters: number | null
+  /** Raw text for the active wall length field; bare values follow the unit toggle. */
+  wallDraftLengthInput: string
   polygonDraftType: FloorplanPolygonDraftType | null
   polygonDraftPoints: WallPlanPoint[]
   /** Set the snapped cursor point. No-ops (skips the store update, so
@@ -54,6 +58,7 @@ type FloorplanDraftPreviewState = {
   setWallDraftStart(point: WallPlanPoint | null): void
   setFenceDraftStart(point: WallPlanPoint | null): void
   setRoofDraftStart(point: WallPlanPoint | null): void
+  setWallDraftLength(input: string, meters: number | null): void
   setPolygonDraft(type: FloorplanPolygonDraftType | null, points: readonly WallPlanPoint[]): void
   reset(): void
 }
@@ -94,6 +99,8 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
   wallDraftStart: null,
   fenceDraftStart: null,
   roofDraftStart: null,
+  wallDraftLengthMeters: null,
+  wallDraftLengthInput: '',
   polygonDraftType: null,
   polygonDraftPoints: [],
   setCursorPoint: (point) =>
@@ -116,6 +123,12 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
   setWallDraftStart: (point) => set(setPlanPointField('wallDraftStart', point)),
   setFenceDraftStart: (point) => set(setPlanPointField('fenceDraftStart', point)),
   setRoofDraftStart: (point) => set(setPlanPointField('roofDraftStart', point)),
+  setWallDraftLength: (input, meters) =>
+    set((state) =>
+      state.wallDraftLengthInput === input && state.wallDraftLengthMeters === meters
+        ? state
+        : { wallDraftLengthInput: input, wallDraftLengthMeters: meters },
+    ),
   setPolygonDraft: (type, points) =>
     set((state) =>
       state.polygonDraftType === type && planPointsEqual(state.polygonDraftPoints, points)
@@ -132,6 +145,8 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
       state.wallDraftStart === null &&
       state.fenceDraftStart === null &&
       state.roofDraftStart === null &&
+      state.wallDraftLengthMeters === null &&
+      state.wallDraftLengthInput === '' &&
       state.polygonDraftType === null &&
       state.polygonDraftPoints.length === 0
         ? state
@@ -144,6 +159,8 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
             wallDraftStart: null,
             fenceDraftStart: null,
             roofDraftStart: null,
+            wallDraftLengthMeters: null,
+            wallDraftLengthInput: '',
             polygonDraftType: null,
             polygonDraftPoints: [],
           },

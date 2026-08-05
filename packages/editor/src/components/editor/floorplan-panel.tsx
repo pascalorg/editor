@@ -182,8 +182,10 @@ import {
 } from '../tools/stair/stair-defaults'
 import {
   chainEndJoinsExistingWall,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
+  parseWallDraftLength,
   resolveTerrainWallConstructionOptions,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
@@ -2374,6 +2376,9 @@ type DraftWallMeasurement = {
 }
 
 function FloorplanDraftWallMeasurement({
+  lengthInput,
+  lengthInputError,
+  onLengthInputChange,
   measurement,
   measurementStroke,
   labelBackground,
@@ -2381,6 +2386,9 @@ function FloorplanDraftWallMeasurement({
   sceneRotationDeg,
   unitsPerPixel,
 }: {
+  lengthInput: string
+  lengthInputError: boolean
+  onLengthInputChange: (value: string) => void
   measurement: DraftWallMeasurement
   measurementStroke: string
   labelBackground: string
@@ -2415,7 +2423,8 @@ function FloorplanDraftWallMeasurement({
   const cx = measurement.midpoint[0] + perpX * offset
   const cy = measurement.midpoint[1] + perpY * offset
 
-  const lengthTextWidth = measurement.lengthLabel.length * upx * 6.2
+  const lengthTextWidth =
+    Math.max(measurement.lengthLabel.length, lengthInput.length, 8) * upx * 6.2
   const lengthPlateW = lengthTextWidth + padX * 2
   const lengthPlateH = fontSize + padY * 2
 
@@ -2437,18 +2446,46 @@ function FloorplanDraftWallMeasurement({
           x={-lengthPlateW / 2}
           y={-lengthPlateH / 2}
         />
-        <text
-          dominantBaseline="middle"
-          fill={labelText}
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fontSize={fontSize}
-          fontWeight={600}
-          textAnchor="middle"
-          x={0}
-          y={0}
+        <foreignObject
+          aria-label="Wall length input"
+          height={lengthPlateH}
+          overflow="visible"
+          pointerEvents="auto"
+          width={lengthPlateW}
+          x={-lengthPlateW / 2}
+          y={-lengthPlateH / 2}
         >
-          {measurement.lengthLabel}
-        </text>
+          <div
+            className="flex h-full w-full items-center"
+            onClick={(event) => {
+              event.stopPropagation()
+              event.nativeEvent.stopImmediatePropagation()
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation()
+              event.nativeEvent.stopImmediatePropagation()
+            }}
+          >
+            <input
+              aria-invalid={lengthInputError}
+              aria-label="Wall length"
+              className={cn(
+                'h-full w-full rounded border bg-transparent px-1 text-center font-mono font-semibold outline-none',
+                lengthInputError ? 'border-red-400/80' : 'border-transparent',
+              )}
+              inputMode="text"
+              onChange={(event) => onLengthInputChange(event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
+              placeholder={measurement.lengthLabel}
+              style={{ color: labelText, fontSize, textShadow: `0 0 3px ${labelBg}` }}
+              title={
+                lengthInputError ? 'Enter a positive wall length, such as 3m or 5\'11".' : undefined
+              }
+              type="text"
+              value={lengthInput}
+            />
+          </div>
+        </foreignObject>
       </g>
 
       {measurement.angleLabels.map((arc) => {
@@ -4717,6 +4754,18 @@ function FloorplanLinearDraftLayer({
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
+  const wallDraftLengthInput = useFloorplanDraftPreview((s) => s.wallDraftLengthInput)
+  const wallDraftLengthMeters = useFloorplanDraftPreview((s) => s.wallDraftLengthMeters)
+  const wallDraftLengthInputError =
+    wallDraftLengthInput.trim().length > 0 && wallDraftLengthMeters === null
+
+  useEffect(() => {
+    const draftPreview = useFloorplanDraftPreview.getState()
+    draftPreview.setWallDraftLength(
+      draftPreview.wallDraftLengthInput,
+      parseWallDraftLength(draftPreview.wallDraftLengthInput, unit),
+    )
+  }, [unit])
 
   const draftPolygon = useMemo(() => {
     if (
@@ -4935,6 +4984,13 @@ function FloorplanLinearDraftLayer({
         <FloorplanDraftWallMeasurement
           labelBackground={isDark ? '#0f172a' : '#ffffff'}
           labelText={isDark ? '#e2e8f0' : '#171717'}
+          lengthInput={wallDraftLengthInput}
+          lengthInputError={wallDraftLengthInputError}
+          onLengthInputChange={(value) =>
+            useFloorplanDraftPreview
+              .getState()
+              .setWallDraftLength(value, parseWallDraftLength(value, unit))
+          }
           measurement={draftWallMeasurement}
           measurementStroke={measurementStroke}
           sceneRotationDeg={sceneRotationDeg}
@@ -7845,6 +7901,7 @@ export function FloorplanPanel({
     wallConstructionOptionsRef.current = undefined
     wallChainWallIdsRef.current = []
     setDraftEnd(null)
+    useFloorplanDraftPreview.getState().setWallDraftLength('', null)
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
   const clearFencePlacementDraft = useCallback(() => {
@@ -9493,9 +9550,19 @@ export function FloorplanPanel({
           applySnap: isMagneticSnapActive() && !wallAngleSnap,
         })
       }
+      const exactLengthMeters = draftStart
+        ? useFloorplanDraftPreview.getState().wallDraftLengthMeters
+        : null
+      if (draftStart) {
+        snappedPoint = constrainWallDraftLength(draftStart, snappedPoint, exactLengthMeters)
+      }
       useWallSnapIndicator
         .getState()
-        .set(wallSnap.snap ? { x: snappedPoint[0], z: snappedPoint[1], kind: wallSnap.snap } : null)
+        .set(
+          wallSnap.snap && exactLengthMeters == null
+            ? { x: snappedPoint[0], z: snappedPoint[1], kind: wallSnap.snap }
+            : null,
+        )
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
       // tracks the cursor. The local draftEnd update below is what
@@ -9749,11 +9816,14 @@ export function FloorplanPanel({
         setDraftStart(point)
         setWallChainFirstVertex(point)
         setDraftEnd(point)
+        useFloorplanDraftPreview.getState().setWallDraftLength('', null)
         setCursorPoint(point)
         return
       }
 
-      if (!isSegmentLongEnough(draftStart, point)) {
+      const exactLengthMeters = useFloorplanDraftPreview.getState().wallDraftLengthMeters
+      const placementPoint = constrainWallDraftLength(draftStart, point, exactLengthMeters)
+      if (!isSegmentLongEnough(draftStart, placementPoint)) {
         return
       }
 
@@ -9776,7 +9846,7 @@ export function FloorplanPanel({
       if (viewIs2DOnly) {
         createdWall = createWallOnCurrentLevel(
           draftStart,
-          point,
+          placementPoint,
           wallConstructionOptionsRef.current,
         )
       }
@@ -9791,7 +9861,7 @@ export function FloorplanPanel({
       const publishedNextStart = useSegmentDraftChain.getState().wall
       const nextStart: WallPlanPoint = createdWall
         ? (createdWall.end as WallPlanPoint)
-        : (publishedNextStart ?? point)
+        : (publishedNextStart ?? placementPoint)
 
       if (
         useEditor.getState().getContinuation('wall') === 'single' ||
@@ -9834,6 +9904,7 @@ export function FloorplanPanel({
 
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
+      useFloorplanDraftPreview.getState().setWallDraftLength('', null)
       setCursorPoint(nextStart)
     },
     [

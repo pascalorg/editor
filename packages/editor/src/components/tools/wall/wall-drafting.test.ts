@@ -18,7 +18,9 @@ import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
+  parseWallDraftLength,
   resolveEndpointWallSplit,
   resolveTerrainWallConstructionOptions,
   snapWallDraftPointDetailed,
@@ -261,6 +263,21 @@ describe('createWallOnCurrentLevel', () => {
 
     expect(created).not.toBeNull()
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
+  })
+})
+
+describe('wall draft length input', () => {
+  test('constrains the endpoint without changing the pointer heading', () => {
+    expect(constrainWallDraftLength([0, 0], [3, 4], 2)).toEqual([1.2, 1.6])
+    expect(constrainWallDraftLength([0, 0], [3, 4], null)).toEqual([3, 4])
+  })
+
+  test('parses bare values in the active unit and preserves explicit units', () => {
+    expect(parseWallDraftLength('2', 'metric')).toBe(2)
+    expect(parseWallDraftLength('5', 'imperial')).toBeCloseTo(1.524, 6)
+    expect(parseWallDraftLength('180cm', 'imperial')).toBeCloseTo(1.8, 6)
+    expect(parseWallDraftLength('5\'11"', 'imperial')).toBeCloseTo(1.8034, 6)
+    expect(parseWallDraftLength('not a length', 'metric')).toBeNull()
   })
 })
 

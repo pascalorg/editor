@@ -7,7 +7,7 @@ import {
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { Html } from '@react-three/drei'
-import { useMemo } from 'react'
+import { type ChangeEvent, type KeyboardEvent, useMemo } from 'react'
 import { BufferGeometry, Vector3 } from 'three'
 
 /**
@@ -248,6 +248,64 @@ export function DraftMeasurementLabel({
       >
         {label}
       </div>
+    </Html>
+  )
+}
+
+export function DraftMeasurementInput({
+  backgroundColor,
+  color,
+  invalid,
+  label,
+  onChange,
+  placeholder,
+  position,
+  shadowColor,
+  value,
+}: {
+  backgroundColor: string
+  color: string
+  invalid: boolean
+  label: string
+  onChange: (value: string) => void
+  placeholder: string
+  position: [number, number, number]
+  shadowColor: string
+  value: string
+}) {
+  const stopPropagation = (event: { stopPropagation: () => void; nativeEvent?: Event }) => {
+    event.stopPropagation()
+    event.nativeEvent?.stopImmediatePropagation()
+  }
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value)
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => event.stopPropagation()
+
+  return (
+    <Html
+      center
+      position={position}
+      style={{ pointerEvents: 'auto', userSelect: 'auto' }}
+      zIndexRange={[100, 0]}
+    >
+      <input
+        aria-invalid={invalid}
+        aria-label={label}
+        className="h-7 min-w-[76px] rounded border bg-background/95 px-1.5 text-center font-mono text-[13px] font-semibold outline-none"
+        onChange={handleChange}
+        onClick={stopPropagation}
+        onKeyDown={handleKeyDown}
+        onPointerDown={stopPropagation}
+        placeholder={placeholder}
+        style={{
+          backgroundColor,
+          borderColor: invalid ? '#f87171' : `${color}99`,
+          color,
+          textShadow: `-1px -1px 0 ${shadowColor}, 1px -1px 0 ${shadowColor}, -1px 1px 0 ${shadowColor}, 1px 1px 0 ${shadowColor}`,
+        }}
+        title={invalid ? 'Enter a positive wall length, such as 3m or 5\'11".' : undefined}
+        type="text"
+        value={value}
+      />
     </Html>
   )
 }
