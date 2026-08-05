@@ -88,6 +88,28 @@ function openHouseWithoutAxisSwapScene() {
   return openHouseWithoutAxisSwap
 }
 
+let openHouseWithoutStorey: Promise<PascalSceneGraph> | undefined
+function openHouseWithoutStoreyScene() {
+  openHouseWithoutStorey ??= convertFixture('04-ifc-open-house.ifc', (source) =>
+    source.replace('IFCBUILDINGSTOREY(', 'IFCBUILDINGELEMENTPROXY('),
+  )
+  return openHouseWithoutStorey
+}
+
+function reachableNodeIds(scene: PascalSceneGraph): Set<string> {
+  const reachable = new Set<string>()
+  const visit = (nodeId: string) => {
+    if (reachable.has(nodeId)) return
+    reachable.add(nodeId)
+    const node = scene.nodes[nodeId]
+    if (node && 'children' in node) {
+      for (const childId of node.children) visit(childId)
+    }
+  }
+  for (const rootNodeId of scene.rootNodeIds) visit(rootNodeId)
+  return reachable
+}
+
 let duplex: Promise<PascalSceneGraph> | undefined
 function duplexScene() {
   duplex ??= convertFixture('01-duplex.ifc')
@@ -158,6 +180,14 @@ describe('IFC imported mesh conversion', () => {
       expect(unswappedZone).toBeDefined()
       expect(Math.abs(zone.ceilingHeight - unswappedZone!.ceilingHeight)).toBeLessThan(0.001)
     }
+  }, 30_000)
+
+  test('keeps converted nodes reachable when the IFC has no building storey', async () => {
+    const scene = await openHouseWithoutStoreyScene()
+
+    expect(Object.values(scene.nodes).filter((node) => node.type === 'level')).toHaveLength(0)
+    expect(importedMeshes(scene).length).toBeGreaterThan(0)
+    expect(reachableNodeIds(scene).size).toBe(Object.keys(scene.nodes).length)
   }, 30_000)
 
   test('preserves roof slabs as imported geometry when a mesh is available', async () => {

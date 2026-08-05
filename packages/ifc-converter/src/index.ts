@@ -881,6 +881,16 @@ export async function convertIfcToPascal(
   const nodes: Record<string, PascalNode> = {}
   const rootNodeIds: string[] = []
 
+  function attachNodeToGraph(nodeId: string, parentNodeId: string | null | undefined) {
+    const parent = parentNodeId ? nodes[parentNodeId] : undefined
+    const children = parent && 'children' in parent ? (parent.children as string[]) : undefined
+    if (children) {
+      children.push(nodeId)
+      return
+    }
+    rootNodeIds.push(nodeId)
+  }
+
   // Maps to track relationships
   const parentMap = new Map<number, number>()
   const childrenMap = new Map<number, number[]>()
@@ -1143,9 +1153,7 @@ export async function convertIfcToPascal(
 
     nodes[nodeId] = buildingNode
 
-    if (parentNodeId && nodes[parentNodeId]) {
-      ;(nodes[parentNodeId] as any).children?.push(nodeId)
-    }
+    attachNodeToGraph(nodeId, parentNodeId)
   }
 
   progress('Processing levels...', 50)
@@ -1196,9 +1204,7 @@ export async function convertIfcToPascal(
 
     nodes[nodeId] = levelNode
 
-    if (parentNodeId && nodes[parentNodeId]) {
-      ;(nodes[parentNodeId] as any).children?.push(nodeId)
-    }
+    attachNodeToGraph(nodeId, parentNodeId)
   }
 
   // Pascal stacks levels from their stored heights. Match those heights to
@@ -1425,9 +1431,7 @@ export async function convertIfcToPascal(
 
       nodes[nodeId] = wallNode
 
-      if (parentNodeId && nodes[parentNodeId]) {
-        ;(nodes[parentNodeId] as any).children?.push(nodeId)
-      }
+      attachNodeToGraph(nodeId, parentNodeId)
     }
   }
 
@@ -1888,9 +1892,7 @@ export async function convertIfcToPascal(
 
     nodes[nodeId] = slabNode
 
-    if (parentNodeId && nodes[parentNodeId]) {
-      ;(nodes[parentNodeId] as any).children?.push(nodeId)
-    }
+    attachNodeToGraph(nodeId, parentNodeId)
   }
 
   // Process stairs
@@ -2011,9 +2013,7 @@ export async function convertIfcToPascal(
     })
 
     nodes[nodeId] = stairNode
-    if (parentNodeId && nodes[parentNodeId]) {
-      ;(nodes[parentNodeId] as any).children?.push(nodeId)
-    }
+    attachNodeToGraph(nodeId, parentNodeId)
   }
 
   // Process roofs
@@ -2100,9 +2100,7 @@ export async function convertIfcToPascal(
     })
 
     nodes[nodeId] = roofNode
-    if (parentNodeId && nodes[parentNodeId]) {
-      ;(nodes[parentNodeId] as any).children?.push(nodeId)
-    }
+    attachNodeToGraph(nodeId, parentNodeId)
   }
 
   // Process columns
@@ -2203,9 +2201,7 @@ export async function convertIfcToPascal(
       })
 
       nodes[nodeId] = columnNode
-      if (parentNodeId && nodes[parentNodeId]) {
-        ;(nodes[parentNodeId] as any).children?.push(nodeId)
-      }
+      attachNodeToGraph(nodeId, parentNodeId)
     }
   }
 
@@ -2288,9 +2284,7 @@ export async function convertIfcToPascal(
         })
         expressIdToNodeId.set(spaceExpressId, nodeId)
         nodes[nodeId] = zone
-        if (parentNodeId && nodes[parentNodeId]) {
-          ;(nodes[parentNodeId] as { children?: string[] }).children?.push(nodeId)
-        }
+        attachNodeToGraph(nodeId, parentNodeId)
         importedSpaceCount++
       } catch {
         /* skip malformed space */
@@ -2364,9 +2358,7 @@ export async function convertIfcToPascal(
       })
       expressIdToNodeId.set(expressId, nodeId)
       nodes[nodeId] = importedMesh
-      if (parentNodeId && nodes[parentNodeId]) {
-        ;(nodes[parentNodeId] as { children?: string[] }).children?.push(nodeId)
-      }
+      attachNodeToGraph(nodeId, parentNodeId)
       importedMeshCount++
     }
   }
