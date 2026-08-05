@@ -26,6 +26,16 @@ export function FormworkScopeSummary({ node }: { node: FormworkAssemblyNode }) {
 }
 
 /**
+ * A spacing the job has fixed, or the fact that it has not. An unstated spacing is
+ * solved from the pour — it varies up the lift and with the panel system's drilling —
+ * so printing a figure here would name one row of a graded grid as if it were the
+ * whole schedule.
+ */
+function stated(spacingM: number | undefined): string {
+  return spacingM === undefined ? 'calculated' : `${spacingM.toFixed(2)} m (stated)`
+}
+
+/**
  * Read-only summary of the host element's construction fields. The assembly owns
  * its scope, layout, and overrides; the concrete's own properties
  * (formworkType/tieSpacing/walerSpacing/scaffoldRequired, cast order, pour id)
@@ -54,8 +64,8 @@ export function FormworkHostSummary({ node }: { node: FormworkAssemblyNode }) {
       <SummaryRow label="Host" value={host.type} />
       <SummaryRow label="Formwork type" value={host.formworkType ?? 'none'} />
       <SummaryRow label="Mode" value={host.formworkMode ?? 'double-sided'} />
-      <SummaryRow label={labels.tie} value={`${(host.tieSpacing ?? 0.6).toFixed(2)} m`} />
-      <SummaryRow label={labels.waler} value={`${(host.walerSpacing ?? 0.9).toFixed(2)} m`} />
+      <SummaryRow label={labels.tie} value={stated(host.tieSpacing)} />
+      <SummaryRow label={labels.waler} value={stated(host.walerSpacing)} />
       <SummaryRow label="Scaffold" value={host.scaffoldRequired ? 'Required' : 'Not required'} />
       <SummaryRow
         label="Cast order"

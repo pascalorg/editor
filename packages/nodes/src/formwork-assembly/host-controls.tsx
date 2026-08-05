@@ -70,6 +70,16 @@ export const SPACING_LABELS: Record<CastableHostNode['type'], { tie: string; wal
   slab: { tie: 'Bearer spacing', waler: 'Joist spacing' },
 }
 
+/**
+ * Where the slider starts when a job first takes a spacing off the calculation.
+ * Not a default: an unstated spacing is solved from the pour rather than assumed,
+ * so these are only the figures the trade reaches for when overriding one.
+ */
+const SPACING_SEED_M = { tie: 0.6, waler: 0.9 } as const
+
+const SPACING_MIN_M = 0.3
+const SPACING_MAX_M = 2
+
 const MONOLITHIC_HINT: Record<CastableHostNode['type'], string> = {
   wall: 'Walls sharing a pour ID are cast monolithically — no joint, no stop-end between them.',
   column:
@@ -182,12 +192,7 @@ export function FormworkConstructionSection({
           onUpdate(
             value === 'none'
               ? { formworkType: 'none' }
-              : {
-                  formworkType: value,
-                  shutterMaterial: node.shutterMaterial ?? value,
-                  tieSpacing: node.tieSpacing ?? 0.6,
-                  walerSpacing: node.walerSpacing ?? 0.9,
-                },
+              : { formworkType: value, shutterMaterial: node.shutterMaterial ?? value },
           )
         }
         options={[
@@ -200,33 +205,21 @@ export function FormworkConstructionSection({
       />
       {formed && (
         <>
-          <SliderControl
+          <SpacingOverride
             label={labels.tie}
-            max={metersToLinearUnit(2, unit)}
-            min={metersToLinearUnit(0.3, unit)}
-            onChange={(v) =>
-              onUpdate({
-                tieSpacing: linearControlValueToMeters(v, unit, { maxMeters: 2, minMeters: 0.3 }),
-              })
-            }
-            precision={2}
-            step={0.05}
-            unit={unitLabel}
-            value={metersToLinearUnit(node.tieSpacing ?? 0.6, unit)}
+            onChange={(spacingM) => onUpdate({ tieSpacing: spacingM })}
+            seedM={SPACING_SEED_M.tie}
+            unit={unit}
+            unitLabel={unitLabel}
+            value={node.tieSpacing}
           />
-          <SliderControl
+          <SpacingOverride
             label={labels.waler}
-            max={metersToLinearUnit(2, unit)}
-            min={metersToLinearUnit(0.3, unit)}
-            onChange={(v) =>
-              onUpdate({
-                walerSpacing: linearControlValueToMeters(v, unit, { maxMeters: 2, minMeters: 0.3 }),
-              })
-            }
-            precision={2}
-            step={0.05}
-            unit={unitLabel}
-            value={metersToLinearUnit(node.walerSpacing ?? 0.9, unit)}
+            onChange={(spacingM) => onUpdate({ walerSpacing: spacingM })}
+            seedM={SPACING_SEED_M.waler}
+            unit={unit}
+            unitLabel={unitLabel}
+            value={node.walerSpacing}
           />
           <ToggleControl
             checked={node.scaffoldRequired ?? false}
@@ -249,6 +242,65 @@ export function FormworkConstructionSection({
         </>
       )}
     </PanelSection>
+  )
+}
+
+/**
+ * A spacing the job is fixing, or the calculation's own.
+ *
+ * Unset is the normal state and not a missing value: `wallDesign` and its siblings
+ * solve the spacing from the pour, and the answer is graded up the lift — tight at
+ * the base where the head is, opening out above — so no single slider position
+ * describes it. Stating one is an instruction to use that figure and report the
+ * utilisation against it, which is why it has to be possible to hand back.
+ */
+function SpacingOverride({
+  label,
+  onChange,
+  seedM,
+  unit,
+  unitLabel,
+  value,
+}: {
+  label: string
+  onChange: (spacingM: number | undefined) => void
+  seedM: number
+  unit: 'metric' | 'imperial'
+  unitLabel: string
+  value: number | undefined
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center justify-between px-1 text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <button
+          className="rounded px-1 text-[10px] text-foreground/70 hover:bg-accent/40"
+          onClick={() => onChange(value === undefined ? seedM : undefined)}
+          type="button"
+        >
+          {value === undefined ? 'Calculated — override' : 'Stated — use calculated'}
+        </button>
+      </div>
+      {value !== undefined && (
+        <SliderControl
+          label={label}
+          max={metersToLinearUnit(SPACING_MAX_M, unit)}
+          min={metersToLinearUnit(SPACING_MIN_M, unit)}
+          onChange={(v) =>
+            onChange(
+              linearControlValueToMeters(v, unit, {
+                maxMeters: SPACING_MAX_M,
+                minMeters: SPACING_MIN_M,
+              }),
+            )
+          }
+          precision={2}
+          step={0.05}
+          unit={unitLabel}
+          value={metersToLinearUnit(value, unit)}
+        />
+      )}
+    </div>
   )
 }
 
