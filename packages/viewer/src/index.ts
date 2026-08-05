@@ -89,7 +89,14 @@ export {
   isIsolationActive,
 } from './lib/isolation'
 export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
-export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
+export {
+  BATCHED_LAYER,
+  GRID_LAYER,
+  OVERLAY_LAYER,
+  SCENE_LAYER,
+  setSurfaceRaycastLayers,
+  ZONE_LAYER,
+} from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
   BLUEPRINT_PALETTE,
@@ -234,6 +241,7 @@ export {
   getOpeningCutoutBottomPadding,
   hasFlatOpeningCutoutBottom,
 } from './systems/wall/opening-cutout-geometry'
+export { WallBatchSystem } from './systems/wall/wall-batch-system'
 export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall

@@ -2,7 +2,7 @@
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import * as THREE from 'three'
-import { OVERLAY_LAYER, SCENE_LAYER, SHADOW_ONLY_LAYER } from './layers'
+import { BATCHED_LAYER, OVERLAY_LAYER, SCENE_LAYER, SHADOW_ONLY_LAYER } from './layers'
 import { hideFromScene, showInScene } from './scene-visibility'
 
 function sceneObject(): THREE.Object3D {
@@ -50,6 +50,34 @@ describe('scene visibility', () => {
 
     expect(obj.layers.isEnabled(SHADOW_ONLY_LAYER)).toBe(true)
     expect(obj.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  })
+
+  test('the batch outranks solo, and leaving solo does not un-sew the wall', () => {
+    const obj = sceneObject()
+
+    hideFromScene(obj, 'batched')
+    hideFromScene(obj, 'shadow-only')
+    expect(obj.layers.isEnabled(BATCHED_LAYER)).toBe(true)
+    expect(obj.layers.isEnabled(SHADOW_ONLY_LAYER)).toBe(false)
+
+    showInScene(obj, 'shadow-only')
+    expect(obj.layers.isEnabled(BATCHED_LAYER)).toBe(true)
+    expect(obj.layers.isEnabled(SCENE_LAYER)).toBe(false)
+
+    showInScene(obj, 'batched')
+    expect(obj.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  })
+
+  test('dropping the batch under solo leaves the wall casting shadows', () => {
+    const obj = sceneObject()
+
+    hideFromScene(obj, 'shadow-only')
+    hideFromScene(obj, 'batched')
+    showInScene(obj, 'batched')
+
+    expect(obj.layers.isEnabled(SHADOW_ONLY_LAYER)).toBe(true)
+    expect(obj.layers.isEnabled(SCENE_LAYER)).toBe(false)
+    expect(obj.layers.isEnabled(BATCHED_LAYER)).toBe(false)
   })
 
   test('re-hiding for a reason already held changes nothing', () => {

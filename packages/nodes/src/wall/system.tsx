@@ -1,7 +1,7 @@
 'use client'
 
 import { type AnyNodeId, useLiveNodeOverrides, useScene, type WallNode } from '@pascal-app/core'
-import { WallCutout, WallSystem } from '@pascal-app/viewer'
+import { WallBatchSystem, WallCutout, WallSystem } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { buildWallTreatmentLevelData, useWallTreatmentLevelData } from './treatment-level-data'
 import { wallTreatmentProudOffsets } from './treatments'
@@ -49,6 +49,9 @@ const WallTreatmentMiterSystem = () => {
  *    bulk of the wall runtime (~820 lines in viewer).
  *  - **`WallCutout`** — cutaway-mode hide/show logic based on camera
  *    direction and `frontSide` / `backSide` interior/exterior tags.
+ *  - **`WallBatchSystem`** — once a level stops changing, sews its opaque
+ *    walls into one mesh per material set so a floor costs a handful of
+ *    draw calls instead of one per wall face run.
  */
 const WallSystems = () => {
   return (
@@ -56,6 +59,7 @@ const WallSystems = () => {
       <WallTreatmentMiterSystem />
       <WallSystem />
       <WallCutout />
+      <WallBatchSystem />
     </>
   )
 }
