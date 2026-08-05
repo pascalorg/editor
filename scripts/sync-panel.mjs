@@ -47,11 +47,36 @@ const ROUTES = [
 ]
 
 /**
- * Route files the console cannot use: they exist upstream but the editor's
- * copies are deliberately different, because the editor owns the shell and
- * bridges identity into its own session type.
+ * Files the console cannot use, by destination path.
+ *
+ * Two groups, for two different reasons.
+ *
+ * The shell (`layout.tsx`, `page.tsx`) exists upstream but the editor's copies
+ * are deliberately different, because the editor owns the shell and bridges
+ * identity into its own session type.
+ *
+ * The scenes and guides tabs are integration-only. Their backing endpoints
+ * cannot exist upstream: `/api/guides` imports the editor's own
+ * `@/lib/guides-content` and `@/lib/scene-api-security`, and `/api/admin/scenes`
+ * reads a `scenes` table that no migration in this set creates — the console's
+ * schema only carries `sites.scene_id`. `ROUTES` already declines to push those
+ * endpoints (create-new is `false` there), so syncing the tabs would give the
+ * standalone console two rail entries whose fetches 404, and `console-tabs.ts`
+ * is what registers them.
+ *
+ * The cost of holding `console-tabs.ts` back is that changes to the SHARED
+ * tabs' metadata no longer reach upstream either. That is the price of a file
+ * that must legitimately differ between the two deployments; splitting the list
+ * into a base the console owns and an extension the editor adds would remove
+ * the conflict properly, and is the real fix when someone has the appetite.
  */
-const EDITOR_OWNED = new Set(['src/app/layout.tsx', 'src/app/page.tsx'])
+const EDITOR_OWNED = new Set([
+  'src/app/layout.tsx',
+  'src/app/page.tsx',
+  'src/lib/console-tabs.ts',
+  'src/components/console/scenes-tab.tsx',
+  'src/components/console/guides-tab.tsx',
+])
 
 const SYNCABLE = /\.(ts|tsx|css|sql)$/
 
