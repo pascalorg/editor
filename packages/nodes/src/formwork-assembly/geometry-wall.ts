@@ -1,7 +1,8 @@
+import type { WallDesign } from '@pascal-app/core/formwork'
 import type { WallNode } from '@pascal-app/core/schema'
 import { BoxGeometry, Group, Mesh, type MeshStandardMaterial } from 'three'
+import { wallPourDesign } from './design'
 import {
-  assemblySystem,
   type CornerRun,
   cornerPartName,
   cornerRuns,
@@ -34,6 +35,21 @@ import type { FormworkAssemblyNode } from './schema'
  * inside every opening, bulkheads at the formed ends, and — when
  * `scaffoldRequired` — working scaffold standing off each face, so the assembly
  * matches an actual site erection rather than a decorative front skin.
+ *
+ * The spacings are not chosen here. `wallDesign` solves the lateral chain —
+ * pressure → sheathing → studs → walers → ties — and this places what it returns,
+ * as the slab builder places `falseworkDesign` and the column builder
+ * `clampSchedule`. That the chain is ordered is the point: the waler centres *are*
+ * the studs' allowable span and the tie centres are the walers', so a builder
+ * picking its own spacings would draw members checked against a load none of them
+ * carries. It also means the grid tightens with the pour rate and the lift height
+ * on its own, which a pair of constants cannot do.
+ *
+ * The tie *rows* come from the design and are graded — wider where there is less
+ * head — but on a catalogued panel system the tie *stations* do not: the frames
+ * leave the factory drilled, and a rod passes only where a hole on one skin meets a
+ * hole on the other. There the design is what the drilled grid is checked against
+ * rather than what places it, which is why both paths exist below.
  *
  * Built in the local space `[0, wallLength]` along X that `WallRenderer` and
  * `WallSystem` already establish — see `attach.ts`. No transform applied here.
@@ -173,14 +189,21 @@ const HOLE_TOLERANCE = 0.002
  * On a panel system this is not a spacing: the frames leave the factory drilled, so
  * a rod passes only where a hole on one skin meets a hole on the other. Asking for a
  * tie at 600 mm when the panel is drilled at 575 and 2125 draws steel through a
- * steel frame. So the two faces' hole sets are intersected, and the wall's own
- * `tieSpacing` is used only for a conventional shutter, where the carpenter drills
- * the ply where the calculation asks.
+ * steel frame. So the two faces' hole sets are intersected, and the design's own
+ * spacing is used only for a conventional shutter, where the carpenter drills the
+ * ply where the calculation asks.
+ *
+ * On that conventional path the rows come off the design graded: the base row is
+ * tied at what the tie hardware and the waler's bending allow under the full head,
+ * and the rows above open out as the head falls. Dividing the run into equal bays at
+ * each row's spacing rather than stepping along it keeps the layout symmetrical, the
+ * way APA sets one out, and puts a tie on each end of the run where the shutter is
+ * levered hardest.
  */
 function tieStations(
   planByFace: ReadonlyMap<'a' | 'b', FacePlan>,
-  wall: WallNode,
-  extent: { spanStart: number; spanEnd: number; formBottom: number; formTop: number },
+  design: WallDesign,
+  extent: { spanStart: number; spanEnd: number; baseY: number; formTop: number },
 ): Array<{ x: number; y: number }> {
   const a = planByFace.get('a')?.holes ?? []
   const b = planByFace.get('b')?.holes ?? []
@@ -197,16 +220,17 @@ function tieStations(
       .sort((first, second) => first.y - second.y || first.x - second.x)
   }
 
-  const spacing = wall.tieSpacing ?? 0.6
   const span = extent.spanEnd - extent.spanStart
-  const rows = Math.max(1, Math.floor((extent.formTop - extent.formBottom) / spacing) + 1)
-  const cols = Math.max(1, Math.round(span / spacing))
   const out: Array<{ x: number; y: number }> = []
-  for (let row = 0; row < rows; row++) {
-    const y = extent.formBottom + row * spacing
+  for (const row of design.rows) {
+    const y = extent.baseY + row.elevationMm / 1000
     if (y > extent.formTop) continue
-    for (let col = 0; col <= cols; col++) {
-      out.push({ x: extent.spanStart + (col / cols) * span, y })
+    // Rounded up, so the pitch set out comes in at or below what the row allowed. To
+    // the nearest instead would put a 3 m run at 0.9 m centres on three bays of 1 m,
+    // over capacity on every one of them.
+    const bays = Math.max(1, Math.ceil(span / (row.horizontalSpacingMm / 1000) - 1e-9))
+    for (let col = 0; col <= bays; col++) {
+      out.push({ x: extent.spanStart + (col / bays) * span, y })
     }
   }
   return out
@@ -281,10 +305,6 @@ export function buildWallFormwork(
     openings.push({ id: opening.id as string, left, right, bottom, top })
   }
 
-  // Corner units, placed before the panels because the panel run starts clear of
-  // them: an outside leg wraps the neighbouring core and so is longer than the
-  // inside leg it pairs with. Only the owner's unit is billed, but both walls
-  // draw their own leg — the hardware lands on both faces.
   // An outside leg reaches past the element's own end, because it wraps the core
   // it turns onto and that core is outside this wall's footprint. So the element
   // end does not bound the leg; only a pour cut inside the wall does.
@@ -297,7 +317,9 @@ export function buildWallFormwork(
   // A wall stands off a kicker cast with the slab, so the shutter starts at its
   // top. At a lift joint there is no kicker — the concrete below is the wall.
   const kickerM = baseY <= 1e-6 ? KICKER_M : 0
-  const system = assemblySystem(node)
+  // The lateral chain for this pour, solved once and shared with the design report:
+  // a panel that printed its own solve could disagree with the shutter on screen.
+  const { design, system } = wallPourDesign(wall, unit, node.systemId)
   for (const { face } of SIDES) {
     cornerRunsByFace.set(face, cornerRuns(corners, face))
   }
@@ -464,9 +486,8 @@ export function buildWallFormwork(
   //
   // Where the panels come from a catalog the stations are not a spacing at all:
   // the frames are drilled, and a rod passes only where a hole on one skin lines up
-  // with a hole on the other. The wall's own `tieSpacing` is what a conventional
-  // shutter gets, because there the carpenter drills the ply where the calculation
-  // asks.
+  // with a hole on the other. The solved grid is what a conventional shutter gets,
+  // because there the carpenter drills the ply where the calculation asks.
   const bothSidesFormed = isFormed('side-a') && isFormed('side-b')
   // A through-tie needs a panel on both faces, so any corner on either face
   // rules the station out.
@@ -482,36 +503,42 @@ export function buildWallFormwork(
     !openings.some((o) => x > o.left && x < o.right && y > o.bottom && y < o.top) &&
     !blockedRuns.some((run) => x > run.lo && x < run.hi)
 
-  if (bothSidesFormed) {
-    for (const [index, station] of tieStations(planByFace, wall, {
-      spanStart,
-      spanEnd,
-      formBottom,
-      formTop,
-    }).entries()) {
-      if (!passable(station.x, station.y)) continue
-      const tie = new Mesh(
-        new BoxGeometry(TIE_SIZE, TIE_SIZE, thickness + PANEL_THICKNESS * 2),
-        tieMaterial,
-      )
-      tie.name = `tie-${index}`
-      tie.position.set(station.x, station.y, 0)
-      group.add(tie)
-    }
+  const stations = bothSidesFormed
+    ? tieStations(planByFace, design, { spanStart, spanEnd, baseY, formTop })
+    : []
+  for (const [index, station] of stations.entries()) {
+    if (!passable(station.x, station.y)) continue
+    const tie = new Mesh(
+      new BoxGeometry(TIE_SIZE, TIE_SIZE, thickness + PANEL_THICKNESS * 2),
+      tieMaterial,
+    )
+    tie.name = `tie-${index}`
+    tie.position.set(station.x, station.y, 0)
+    group.add(tie)
   }
 
   // Walers (waling beams) on both faces, backing the panels so ties bear
   // on a beam rather than the plywood/steel skin directly. A waler backs a panel
   // run, so a corner unit interrupts it: the unit brings its own backing, and a
   // beam running over it would stand off the skin by the unit's own depth.
-  const walerSpacing = wall.walerSpacing ?? 0.9
-  const walerRows = Math.max(1, Math.floor((formTop - formBottom) / walerSpacing) + 1)
+  //
+  // A tie has to bear on a waler, so where there are ties the tie rows *are* the
+  // waler rows — on a drilled panel system that is the factory's grid rather than
+  // the solved spacing, and a beam set out on the solved spacing beside it would
+  // leave every rod bearing on the skin. A face with no ties through it (the formed
+  // side of a single-sided pour) takes the solved spacing, which is the only figure
+  // there is for it.
+  const walerYs = new Set(stations.map((station) => station.y))
+  if (walerYs.size === 0) {
+    for (const row of design.rows) {
+      const y = baseY + row.elevationMm / 1000
+      if (y <= formTop) walerYs.add(y)
+    }
+  }
   for (const { side, sign, role, face } of SIDES) {
     if (!isFormed(role)) continue
     const walerZ = sign * (faceOffset + PANEL_THICKNESS / 2 + WALER_DEPTH / 2)
-    for (let row = 0; row < walerRows; row++) {
-      const y = formBottom + row * walerSpacing
-      if (y > formTop) continue
+    for (const [row, y] of [...walerYs].sort((a, b) => a - b).entries()) {
       let index = 0
       for (const run of panelRunsByFace.get(face) ?? []) {
         const runLength = run.hi - run.lo

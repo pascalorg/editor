@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { GeometryContext, WallNode } from '@pascal-app/core'
+import { DOKA_FRAMAX_XLIFE } from '@pascal-app/core/formwork'
+import type { Group } from 'three'
 import { buildFormworkGeometry } from './geometry'
 import type { FormworkAssemblyNode } from './schema'
 
@@ -25,7 +27,7 @@ function makeWall(overrides: Partial<WallNode> = {}): WallNode {
   } as WallNode
 }
 
-function makeNode(scope: { segmentIndex?: number; liftIndex?: number } = {}): FormworkAssemblyNode {
+function makeNode(overrides: Partial<FormworkAssemblyNode> = {}): FormworkAssemblyNode {
   return {
     object: 'node',
     id: 'formwork-assembly_test',
@@ -37,8 +39,9 @@ function makeNode(scope: { segmentIndex?: number; liftIndex?: number } = {}): Fo
     position: [0, 0, 0],
     rotation: [0, 0, 0],
     panelWidth: 0.6,
-    segmentIndex: scope.segmentIndex ?? 0,
-    liftIndex: scope.liftIndex ?? 0,
+    segmentIndex: 0,
+    liftIndex: 0,
+    ...overrides,
   } as FormworkAssemblyNode
 }
 
@@ -762,5 +765,130 @@ describe('segment-scoped assemblies', () => {
     )
     const firstPanels = first.children.filter((c) => c.name.startsWith('panel-front-'))
     expect(Math.max(...firstPanels.map((p) => p.position.x))).toBeLessThan(15)
+  })
+})
+
+/**
+ * The tie and waler grid is solved, not assumed. `wallDesign` runs the lateral
+ * chain — pressure → sheathing → studs → walers → ties — where each member's
+ * allowable span is the next one's load, so the grid follows from the pour instead
+ * of from a pair of constants that cannot know the lift height.
+ */
+describe('wall tie and waler chain', () => {
+  /**
+   * A carpenter's shutter: the yard supplies none of the catalog panels, so the face
+   * is boarded with ply cut on site. This is the path where the solved grid actually
+   * places the ties, because there the crew drills the sheathing where the
+   * calculation asks rather than where a factory already drilled it.
+   */
+  const conventional = () =>
+    makeNode({ avoidedPanelIds: DOKA_FRAMAX_XLIFE.panels.map((panel) => panel.id) })
+
+  /** Unstated spacings, so the design chooses them rather than reporting against them. */
+  const unstated = (overrides: Partial<WallNode> = {}) =>
+    makeWall({
+      parentId: 'level_test',
+      tieSpacing: undefined,
+      walerSpacing: undefined,
+      ...overrides,
+    } as Partial<WallNode>)
+
+  const at = (n: number) => Number(n.toFixed(3))
+  const build = (wall: WallNode, node: FormworkAssemblyNode) =>
+    buildFormworkGeometry(node, makeLevelCtx(wall))
+  const rowsOf = (group: Group, prefix: string) => {
+    const members = group.children.filter((c) => c.name.startsWith(prefix))
+    const ys = [...new Set(members.map((m) => at(m.position.y)))].sort((a, b) => a - b)
+    return ys.map((y) => ({
+      y,
+      xs: members
+        .filter((m) => at(m.position.y) === y)
+        .map((m) => at(m.position.x))
+        .sort((a, b) => a - b),
+    }))
+  }
+  const pitch = (row: { xs: number[] }) => at((row.xs[1] as number) - (row.xs[0] as number))
+
+  test('grades the rows: tightest at the base, opening out as the head falls', () => {
+    const rows = rowsOf(build(unstated(), conventional()), 'tie-')
+    expect(rows.length).toBeGreaterThan(1)
+    // The bottom row stands on the kicker, and is tied at what the hardware and the
+    // waler's bending take under the full head.
+    expect(rows[0]?.y).toBeCloseTo(0.1, 6)
+    expect(pitch(rows[0] as { xs: number[] })).toBeCloseTo(0.3, 6)
+    expect(pitch(rows.at(-1) as { xs: number[] })).toBeGreaterThan(
+      pitch(rows[0] as { xs: number[] }),
+    )
+  })
+
+  test('the grid tightens with the lift height on its own', () => {
+    // The whole reason for running the chain rather than assuming a spacing. A 4 m
+    // lift carries more head than a 2.4 m one at every elevation, and no constant
+    // pair of spacings can answer both.
+    const short = rowsOf(build(unstated(), conventional()), 'tie-')
+    const tall = rowsOf(build(unstated({ height: 4 }), conventional()), 'tie-')
+    expect(tall.length).toBeGreaterThan(short.length)
+    expect(pitch(tall[0] as { xs: number[] })).toBeLessThan(pitch(short[0] as { xs: number[] }))
+  })
+
+  test('divides each row into whole bays, so no bay exceeds what it allowed', () => {
+    // Rounded up rather than to nearest: a 3 m run at 0.9 m centres rounded to
+    // nearest is three bays of 1 m, over capacity on every one of them.
+    for (const row of rowsOf(build(unstated({ height: 4 }), conventional()), 'tie-')) {
+      expect(row.xs[0]).toBeCloseTo(0, 6)
+      expect(row.xs.at(-1)).toBeCloseTo(3, 6)
+      for (let i = 1; i < row.xs.length; i++) {
+        expect((row.xs[i] as number) - (row.xs[i - 1] as number)).toBeCloseTo(pitch(row), 6)
+      }
+    }
+  })
+
+  test('a stated spacing is used as given rather than quietly retightened', () => {
+    // 0.6 m is looser than the 0.3 m the base row solves to, but a crew that has set
+    // out to a stated module has to find the drawing agreeing with it. The overload
+    // is the design's warning to report, not the builder's to fix behind the drawing.
+    const rows = rowsOf(build(makeWall({ parentId: 'level_test' }), conventional()), 'tie-')
+    expect(rows.map((row) => row.y)).toEqual([0.1, 1, 1.9])
+    for (const row of rows) expect(pitch(row)).toBeCloseTo(0.6, 6)
+  })
+
+  test('a drilled panel system ties where holes meet, not on the solved pitch', () => {
+    // Framax leaves the factory drilled, so a rod passes only where a hole on one
+    // skin lines up with a hole on the other. Asking for a tie at the calculated
+    // elevation would draw steel through a steel frame.
+    const drilled = rowsOf(build(unstated(), makeNode()), 'tie-')
+    const solved = rowsOf(build(unstated(), conventional()), 'tie-')
+    expect(drilled.map((row) => row.y)).toEqual([0.775, 2.125])
+    expect(drilled.map((row) => row.y)).not.toEqual(solved.map((row) => row.y))
+  })
+
+  test('walers land on the tie rows, because a tie has to bear on one', () => {
+    // On the drilled system that means the factory's grid rather than the solved
+    // spacing — a beam set out on the solved spacing beside it would leave every rod
+    // bearing on the panel skin.
+    const group = build(unstated(), makeNode())
+    const ties = rowsOf(group, 'tie-').map((row) => row.y)
+    expect(rowsOf(group, 'waler-front-').map((row) => row.y)).toEqual(ties)
+    expect(rowsOf(group, 'waler-back-').map((row) => row.y)).toEqual(ties)
+  })
+
+  test('a single-sided pour has no ties, so its walers take the solved rows', () => {
+    const wall = unstated({ formworkMode: 'single-sided-a' } as Partial<WallNode>)
+    const group = build(wall, makeNode())
+    expect(group.children.some((c) => c.name.startsWith('tie-'))).toBe(false)
+    expect(rowsOf(group, 'waler-front-').map((row) => row.y)).toEqual(
+      rowsOf(build(unstated(), conventional()), 'tie-').map((row) => row.y),
+    )
+  })
+
+  test('architectural concrete is designed to a stiffer deflection limit', () => {
+    // Visible concrete is read for its finish, so the sheathing takes l/360 and an
+    // absolute cap rather than structural l/270 — which moves the rows above it.
+    const plain = rowsOf(build(unstated(), conventional()), 'tie-').map((row) => row.y)
+    const seen = rowsOf(
+      build(unstated({ exposureClass: 'architectural' } as Partial<WallNode>), conventional()),
+      'tie-',
+    ).map((row) => row.y)
+    expect(seen).not.toEqual(plain)
   })
 })

@@ -7,6 +7,8 @@ import {
   DEFAULT_FORMWORK_SYSTEM_ID,
   DEFAULT_INSIDE_CORNER_LEG_M,
   DEFAULT_KICKER_MM,
+  DEFAULT_PRESSURE_STANDARD_ID,
+  DIN_MAX_RISE_RATE_MH,
   type ElementCorner,
   type FaceRole,
   type FormworkSystem,
@@ -17,9 +19,12 @@ import {
   hardCutsForElement,
   layOutFace,
   type PourUnit,
+  type PressureEnvelope,
   pourUnitsForElement,
+  pressureEnvelope,
   type StripPiece,
   tieHoles,
+  verticalElementKind,
 } from '@pascal-app/core/formwork'
 import type { GeometryContext } from '@pascal-app/core/registry'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
@@ -69,6 +74,48 @@ export const SCAFFOLD_LIFT = 2.0 // ledger row spacing up the wall
 export const SCAFFOLD_POST_SIZE = 0.05
 export const SCAFFOLD_LEDGER_SIZE = 0.045
 export const SCAFFOLD_BRACE_SIZE = 0.035
+
+/**
+ * The rate the shutter is designed to, m/h.
+ *
+ * Nothing in the scene graph carries a rise rate yet, so the design is taken at the
+ * fastest rate its code covers. That is the conservative reading, and for an
+ * ordinary lift it lands on or near the full fluid head — a slower pour is a saving
+ * a project can only claim by stating one, which is what `FormworkProjectSettings`
+ * will be for.
+ */
+const DESIGN_RISE_RATE_MH = DIN_MAX_RISE_RATE_MH
+
+/** DIN's own reference temperature, so no correction is applied unasked. */
+const DESIGN_CONCRETE_TEMPERATURE_C = 20
+
+/**
+ * The pressure this pour is designed against.
+ *
+ * Both the wall chain and the column schedule need one, and they must not differ:
+ * a column classified as a wall by `verticalElementKind` takes the wall equations,
+ * and a wall shuttered next to it takes the same code, mix and temperature or the
+ * two shutters on either side of a junction are designed to different pours.
+ */
+export function designEnvelope(
+  liftHeightM: number,
+  planDimensionsM: readonly number[],
+): PressureEnvelope {
+  return pressureEnvelope(
+    DEFAULT_PRESSURE_STANDARD_ID,
+    {},
+    {
+      riseRateMH: DESIGN_RISE_RATE_MH,
+      concreteTemperatureC: DESIGN_CONCRETE_TEMPERATURE_C,
+      pourHeightM: liftHeightM,
+      // Read off the plan rather than assumed: a vertical element with a plan
+      // dimension over 2 m is a wall by the code's own definition, whatever the node
+      // is called, and it takes the wall equations.
+      elementKind: verticalElementKind(planDimensionsM),
+      vibration: 'internal',
+    },
+  )
+}
 
 export const tieMaterial = new MeshStandardMaterial({ color: '#4a4a4a' }) // steel tie
 export const walerMaterial = new MeshStandardMaterial({ color: '#6b4a2f' }) // timber waler
@@ -216,9 +263,13 @@ export function cornerRuns(corners: readonly ElementCorner[], face: 'a' | 'b'): 
  * The catalog system this assembly builds from. Named on the node where the job
  * has chosen one; the shipped default otherwise, so a scene that has never opened
  * the formwork settings still lays out real panels rather than an invented module.
+ *
+ * Takes the id rather than the node because the design report resolves the same
+ * system without an assembly in hand — it reports on a host whose shutter has not
+ * been generated yet.
  */
-export function assemblySystem(node: FormworkAssemblyNode): FormworkSystem | undefined {
-  return formworkSystem(node.systemId ?? DEFAULT_FORMWORK_SYSTEM_ID)
+export function assemblySystem(systemId: string | undefined): FormworkSystem | undefined {
+  return formworkSystem(systemId ?? DEFAULT_FORMWORK_SYSTEM_ID)
 }
 
 /** One piece as it is set: a span along the element inside one course. */
