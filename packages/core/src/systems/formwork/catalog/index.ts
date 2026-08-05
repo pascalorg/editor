@@ -37,6 +37,32 @@ export {
   FRAMAX_OUTSIDE_CORNER_PRESSURE_KN_M2,
   FRAMAX_SURFACE_CLASS,
 } from './doka-framax'
+export {
+  beamLengthForSpanMm,
+  DEFAULT_FALSEWORK_BEAM_ID,
+  DEFAULT_PROP_ID,
+  DEFAULT_SHEATHING_ID,
+  EUREX_20,
+  EUREX_30,
+  FALSEWORK_BEAMS,
+  type FalseworkBeamType,
+  FILM_FACED_PLY_18MM,
+  FILM_FACED_PLY_21MM,
+  falseworkBeam,
+  H16_BEAM,
+  H20_BEAM,
+  PLYFORM_CLASS_I_19MM,
+  PLYFORM_STRUCTURAL_I_19MM,
+  PROP_TYPES,
+  type PropCapacityRow,
+  type PropType,
+  propCapacityKn,
+  propType,
+  SHEATHING_TYPES,
+  type SheathingDirection,
+  type SheathingType,
+  sheathingType,
+} from './falsework'
 export { type CornerFit, fitCorner, legLengthM, unfittableCorners } from './junction-fit'
 export { PERI_TRIO, TRIO_PRACTICAL_PRESSURE_KN_M2 } from './peri-trio'
 export {
