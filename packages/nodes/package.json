@@ -20,6 +20,11 @@
       "types": "./dist/formwork-assembly/index.d.ts",
       "import": "./dist/formwork-assembly/index.js",
       "default": "./dist/formwork-assembly/index.js"
+    },
+    "./formwork-project-settings": {
+      "types": "./dist/formwork-project-settings/index.d.ts",
+      "import": "./dist/formwork-project-settings/index.js",
+      "default": "./dist/formwork-project-settings/index.js"
     }
   },
   "files": [

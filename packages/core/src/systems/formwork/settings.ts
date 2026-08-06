@@ -79,9 +79,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
  * defaults an explicitly empty node does — the two are not distinguishable to
  * the engine, and should not be.
  */
-export function formworkSettings(
-  node: FormworkProjectSettingsNode | undefined,
-): FormworkSettings {
+export function formworkSettings(node: FormworkProjectSettingsNode | undefined): FormworkSettings {
   if (!node) return DEFAULT_FORMWORK_SETTINGS
   const placement = node.placement ?? {}
   return {
@@ -127,4 +125,72 @@ export function findFormworkSettingsNode(
 /** The scene's resolved settings, found and resolved in one step. */
 export function formworkSettingsFor(nodes: Iterable<AnyNode>): FormworkSettings {
   return formworkSettings(findFormworkSettingsNode(nodes))
+}
+
+/** The sub-objects a settings patch can address. */
+export type FormworkSettingsGroup =
+  | 'concrete'
+  | 'placement'
+  | 'falseworkLoads'
+  | 'bracing'
+  | 'parts'
+
+/**
+ * Merge a patch into one of the settings sub-objects, returning the value to write
+ * to that key — a merged object, or `undefined` when the group has emptied.
+ *
+ * This is pure and lives in core because two write paths need the same answer and
+ * must not each have their own: the panel edits the live store while the chat tools
+ * edit a plain `SceneGraph` on the server, and a disagreement between them about
+ * what "unstated" means is a disagreement about whether the design report says
+ * "assumed" or "project" — the one distinction the settings node exists to carry.
+ *
+ * `undefined` in the patch means "hand this field back to the default", so the key
+ * is deleted rather than stored holding `undefined`. An emptied group returns
+ * `undefined` rather than `{}`, because a stated empty group and an absent one are
+ * the same claim and only one of them should be representable.
+ *
+ * The merge is deliberately one level deep. `concrete.cement` is a second level and
+ * has its own helper — a generic deep merge would silently reach into it and there
+ * would be no way to clear a nested object at all.
+ */
+export function mergeFormworkSettingsGroup<G extends FormworkSettingsGroup>(
+  current: FormworkProjectSettingsNode[G],
+  patch: Partial<NonNullable<FormworkProjectSettingsNode[G]>>,
+): FormworkProjectSettingsNode[G] | undefined {
+  const merged: Record<string, unknown> = { ...(current ?? {}) }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete merged[key]
+    else merged[key] = value
+  }
+  return Object.keys(merged).length > 0
+    ? (merged as NonNullable<FormworkProjectSettingsNode[G]>)
+    : undefined
+}
+
+/**
+ * Merge a patch into `concrete.cement`, returning the whole `concrete` value.
+ *
+ * The binder is a sub-object of a sub-object, which the one-level merge cannot
+ * reach: routing it through there writes `cement: { retarder: undefined }`, and an
+ * object holding only undefined keys survives as a *stated* empty binder — a claim
+ * the project never made. So the second level is merged here, an emptied spec is
+ * removed the way an emptied group is, and a stated sibling like a unit weight
+ * survives it.
+ */
+export function mergeFormworkCement(
+  current: FormworkProjectSettingsNode['concrete'],
+  patch: Partial<NonNullable<NonNullable<FormworkProjectSettingsNode['concrete']>['cement']>>,
+): FormworkProjectSettingsNode['concrete'] | undefined {
+  const cement: Record<string, unknown> = { ...(current?.cement ?? {}) }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete cement[key]
+    else cement[key] = value
+  }
+  const merged: Record<string, unknown> = { ...(current ?? {}) }
+  if (Object.keys(cement).length > 0) merged.cement = cement
+  else delete merged.cement
+  return Object.keys(merged).length > 0
+    ? (merged as NonNullable<FormworkProjectSettingsNode['concrete']>)
+    : undefined
 }

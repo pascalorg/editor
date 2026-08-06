@@ -62,9 +62,11 @@ export {
 } from './aci-347'
 export { bsShortcutPressure, ciriaC2, ciriaK, ciriaPressure } from './ciria-108'
 export {
+  DIN_DEFAULT_REFERENCE_TEMPERATURE_C,
   DIN_MAX_POUR_HEIGHT_M,
   DIN_MAX_RISE_RATE_MH,
   DIN_PRESSURE_CEILING_KN_M2,
+  DIN_REFERENCE_SETTING_H,
   dinCharacteristicKnM2,
   dinMaxRiseRateMH,
   dinPressure,

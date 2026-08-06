@@ -53,7 +53,13 @@ const SETTING_SLOPE: Partial<Record<ConsistencyClass, number>> = {
   F4: 0.14,
 }
 
-const REFERENCE_SETTING_H = 5
+/**
+ * `tE` when the job has not declared one, hours. Exported so a settings panel can
+ * present the figure it is designing to as DIN's reference rather than as a blank
+ * field — an unstated setting time still lands in the formula, and offering an
+ * empty box for it hides which number the pressure came from.
+ */
+export const DIN_REFERENCE_SETTING_H = 5
 
 /**
  * `TRef` when the job has not declared one. 20 °C is the reference temperature the
@@ -61,7 +67,7 @@ const REFERENCE_SETTING_H = 5
  * run against — the reference's F3 sample reaching 59.8 kN/m² at 10 °C is a 10 °C
  * delta, which only holds from 20.
  */
-const DEFAULT_REFERENCE_TEMPERATURE_C = 20
+export const DIN_DEFAULT_REFERENCE_TEMPERATURE_C = 20
 
 /** Colder than TRef costs more on a flowable mix than on a vibrated one. */
 const TEMPERATURE_SLOPE_WARMER = 0.03
@@ -87,7 +93,7 @@ function isFlowable(consistency: ConsistencyClass): boolean {
  */
 function scaleFactor(mix: ConcreteMix, placement: Placement): number {
   const consistency = consistencyClassOf(mix)
-  const reference = mix.referenceTemperatureC ?? DEFAULT_REFERENCE_TEMPERATURE_C
+  const reference = mix.referenceTemperatureC ?? DIN_DEFAULT_REFERENCE_TEMPERATURE_C
   const delta = reference - placement.concreteTemperatureC
   const slope =
     delta <= 0
@@ -102,14 +108,16 @@ function scaleFactor(mix: ConcreteMix, placement: Placement): number {
 export function dinCharacteristicKnM2(mix: ConcreteMix, placement: Placement): number {
   const consistency = consistencyClassOf(mix)
   const { a, b } = BASE[consistency]
-  const setting = mix.endOfSettingH ?? REFERENCE_SETTING_H
+  const setting = mix.endOfSettingH ?? DIN_REFERENCE_SETTING_H
   const scale = scaleFactor(mix, placement)
   const slope = SETTING_SLOPE[consistency]
   if (slope !== undefined) {
-    return scale * (a + b * placement.riseRateMH) * (1 + slope * (setting - REFERENCE_SETTING_H))
+    return (
+      scale * (a + b * placement.riseRateMH) * (1 + slope * (setting - DIN_REFERENCE_SETTING_H))
+    )
   }
   // Flowable and SCC: the correction multiplies the rate term only.
-  return scale * (a + b * placement.riseRateMH * (setting / REFERENCE_SETTING_H))
+  return scale * (a + b * placement.riseRateMH * (setting / DIN_REFERENCE_SETTING_H))
 }
 
 function scopeWarnings(mix: ConcreteMix, placement: Placement): PressureWarning[] {
@@ -209,13 +217,13 @@ export function dinMaxRiseRateMH(
 ): number | undefined {
   const consistency = consistencyClassOf(mix)
   const { a, b } = BASE[consistency]
-  const setting = mix.endOfSettingH ?? REFERENCE_SETTING_H
+  const setting = mix.endOfSettingH ?? DIN_REFERENCE_SETTING_H
   const scale = scaleFactor(mix, placement)
   const slope = SETTING_SLOPE[consistency]
   const rate =
     slope !== undefined
-      ? (permissibleKnM2 / (scale * (1 + slope * (setting - REFERENCE_SETTING_H))) - a) / b
-      : (permissibleKnM2 / scale - a) / (b * (setting / REFERENCE_SETTING_H))
+      ? (permissibleKnM2 / (scale * (1 + slope * (setting - DIN_REFERENCE_SETTING_H))) - a) / b
+      : (permissibleKnM2 / scale - a) / (b * (setting / DIN_REFERENCE_SETTING_H))
   if (!Number.isFinite(rate) || rate <= 0) return undefined
   return Math.min(rate, DIN_MAX_RISE_RATE_MH)
 }

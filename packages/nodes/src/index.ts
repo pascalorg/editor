@@ -162,7 +162,13 @@ export {
   formworkAssemblyDefinition,
   pourUnitsForHost,
 } from './formwork-assembly'
-export { formworkProjectSettingsDefinition } from './formwork-project-settings'
+export {
+  FormworkSettingsPanel,
+  formworkProjectSettingsDefinition,
+  formworkSettingsHostPanel,
+  useFormworkSettingsNode,
+  useFormworkSettingsWriter,
+} from './formwork-project-settings'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'

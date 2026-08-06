@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
+import { formworkSettingsHostPanel } from '@pascal-app/nodes/formwork-project-settings'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
@@ -85,6 +86,11 @@ export async function loadExternalPlugins(): Promise<void> {
 // so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
+
+// The formwork settings node is hidden and unselectable, so its editor cannot be an
+// inspector — the pour has to be reachable before the first shutter exists, since it
+// is what that shutter will be designed to. No `pluginId`: it ships with the product.
+registerEditorHostPanel(formworkSettingsHostPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()
