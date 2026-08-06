@@ -10,6 +10,20 @@ A 3D building editor built with React Three Fiber and WebGPU.
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
+## Run the Editor Locally
+
+When `@pascal-app/cli` is available on npm, Node.js 22.13 or newer can create a
+persistent local Pascal installation without cloning this repository:
+
+```bash
+npx @pascal-app/cli editor
+```
+
+The CLI starts the editor in the background at `http://pascal.localhost:<port>` and
+keeps projects in `~/.pascal/data/pascal.db`. See [Run Pascal
+locally](https://editor.pascal.app/docs/developers/local-editor) for pnpm/Bun commands,
+lifecycle management, updates, storage paths, and troubleshooting.
+
 ## Using Published Packages
 
 The viewer runtime and built-in node definitions are separate packages. Install the full built-in
@@ -31,7 +45,8 @@ See the [`@pascal-app/viewer` quick start](packages/viewer/README.md#usage) for 
 
 ## Repository Architecture
 
-This is a Turborepo monorepo with four main runtime packages:
+This is a Turborepo monorepo with the reusable editor packages, the standalone app,
+and the CLI that distributes it:
 
 ```
 editor/
@@ -42,6 +57,7 @@ editor/
 │   ├── viewer/          # 3D rendering runtime and shared systems
 │   ├── editor/          # Editing tools and UI components
 │   ├── nodes/           # Built-in node definitions, renderers, and systems
+│   ├── cli/             # Persistent local editor installer and process manager
 │   └── ui/              # Shared UI components
 ```
 
@@ -53,6 +69,7 @@ editor/
 | **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing |
 | **@pascal-app/editor** | Editing tools, panels, selection, and direct-manipulation UI |
 | **@pascal-app/nodes** | Built-in registry plugin with node definitions, renderers, geometry, and systems |
+| **@pascal-app/cli** | Installs and manages a versioned standalone editor runtime and persistent local data |
 | **apps/editor** | Standalone Next.js host for the editor packages |
 
 The **viewer** renders the scene with sensible defaults. The **editor** extends it with interactive tools, selection management, and editing capabilities.

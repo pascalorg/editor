@@ -1,6 +1,14 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
 
+const appDirectory = path.dirname(fileURLToPath(import.meta.url))
+const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
+
 const nextConfig: NextConfig = {
+  ...(portableBuild
+    ? { output: 'standalone' as const, outputFileTracingRoot: path.join(appDirectory, '../..') }
+    : {}),
   logging: {
     browserToTerminal: true,
   },
@@ -42,7 +50,9 @@ const nextConfig: NextConfig = {
     },
   },
   images: {
-    unoptimized: process.env.NEXT_PUBLIC_ASSETS_CDN_URL?.startsWith('http://localhost') ?? false,
+    unoptimized:
+      portableBuild ||
+      (process.env.NEXT_PUBLIC_ASSETS_CDN_URL?.startsWith('http://localhost') ?? false),
     remotePatterns: [
       {
         protocol: 'https',

@@ -49,6 +49,24 @@ a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
 value at build time, so remapping the port to something else makes the page
 return 500.
 
+## CLI-managed editor
+
+When `@pascal-app/cli` is available on npm, Node.js 22.13 or newer can install a
+persistent local runtime, start it in the background, and open it in the browser
+without a repository checkout:
+
+```bash
+npx @pascal-app/cli editor
+```
+
+Use `npx @pascal-app/cli doctor` to check the runtime, storage, and process state. Saved
+scenes live in `~/.pascal/data/pascal.db` independently from installed runtime versions.
+The CLI retains old runtime versions for rollback and warns after more than three have
+accumulated. It also replaces a damaged copy of its bundled runtime on the next start;
+neither operation modifies the data directory.
+The complete command and storage reference is in [Run Pascal
+locally](https://editor.pascal.app/docs/developers/local-editor).
+
 ## Monorepo Structure
 
 ```
