@@ -52,4 +52,6 @@ install plugin code from GitHub or npm. Linux and Windows support is not verifie
 
 See the full [CLI guide](https://editor.pascal.app/docs/developers/local-editor) for
 commands, updates, storage paths, security behavior, current platform coverage, and
-troubleshooting.
+troubleshooting. Plugin publishers can use the separate
+[plugin authoring guide](https://editor.pascal.app/docs/developers/plugins) for the
+manifest, node, panel, host-integration, privacy, and testing contracts.
