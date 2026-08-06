@@ -3,6 +3,7 @@ export {
   composeTransform,
   emitArc,
   emitBulge,
+  emitEllipse,
   emitLine,
   IDENTITY,
   insertTransform,
@@ -17,6 +18,13 @@ export {
   fromUnderlayBuffer,
   toUnderlayBuffer,
 } from './serialize'
+export {
+  evaluateSpline,
+  flattenSpline,
+  isEvaluable,
+  type SplineDefinition,
+  type SplinePoint,
+} from './spline'
 export type {
   CadBounds,
   CadDrawing,

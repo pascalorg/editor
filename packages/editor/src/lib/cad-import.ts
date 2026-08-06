@@ -25,7 +25,7 @@ export type CadImportLayer = {
 }
 
 export type CadImportWarning = {
-  code: 'unitless' | 'skipped-entities' | 'scattered-content' | 'empty'
+  code: 'unitless' | 'implausible-units' | 'skipped-entities' | 'scattered-content' | 'empty'
   message: string
 }
 
@@ -42,6 +42,8 @@ export type CadUnitSuggestion = {
   heightMeters: number
   /** True for the interpretation that yields a building-shaped result. */
   likely: boolean
+  /** True for the unit the file's `$INSUNITS` header claims. */
+  declared: boolean
 }
 
 export type CadImportAnalysis = {
@@ -86,6 +88,9 @@ export function suggestUnits(underlay: CadUnderlay): CadUnitSuggestion[] {
     widthMeters: width * candidate.metersPerUnit,
     heightMeters: height * candidate.metersPerUnit,
     likely: false,
+    declared:
+      underlay.metersPerUnit !== null &&
+      Math.abs(candidate.metersPerUnit - underlay.metersPerUnit) < 1e-12,
   }))
 
   // The longest side is the honest test: a plan can be a thin strip, but a
@@ -149,10 +154,24 @@ export function analyzeCadDrawing(
     })
   }
 
+  const unitSuggestions = segmentCount > 0 ? suggestUnits(underlay) : []
+  const likely = unitSuggestions.find((s) => s.likely)
+
   if (underlay.metersPerUnit === null && segmentCount > 0) {
     warnings.push({
       code: 'unitless',
       message: 'The drawing declares no units. Pick the one that gives a sensible size.',
+    })
+  } else if (likely && !likely.declared) {
+    // A file can declare the wrong unit — a plan drawn in centimetres and saved
+    // as millimetres imports ten times too big, and the header gives no hint.
+    // The extent does: say what the declared unit implies and what would fit.
+    const declared = unitSuggestions.find((s) => s.declared)
+    warnings.push({
+      code: 'implausible-units',
+      message: declared
+        ? `The file says ${declared.label.toLowerCase()}, which makes this drawing ${formatExtent(declared.widthMeters)} across. ${likely.label} would make it ${formatExtent(likely.widthMeters)}.`
+        : 'The unit this file declares gives an implausible size for a building.',
     })
   }
 
@@ -165,7 +184,7 @@ export function analyzeCadDrawing(
       .join(', ')
     warnings.push({
       code: 'skipped-entities',
-      message: `${skippedTotal.toLocaleString()} entities were not imported (${types}). Splines, text and hatches are not drawn.`,
+      message: `${skippedTotal.toLocaleString()} entities were not imported (${types}). Text, hatches and dimensions are annotation and are not drawn.`,
     })
   }
 
@@ -189,7 +208,7 @@ export function analyzeCadDrawing(
     layers,
     segmentCount,
     metersPerUnit: underlay.metersPerUnit,
-    unitSuggestions: underlay.metersPerUnit === null ? suggestUnits(underlay) : [],
+    unitSuggestions,
     skippedTypes: drawing.stats.skippedTypes,
     warnings,
   }
@@ -261,6 +280,18 @@ export async function commitCadImport({
 
 function extentArea(bounds: { minX: number; minY: number; maxX: number; maxY: number }): number {
   return Math.max(0, bounds.maxX - bounds.minX) * Math.max(0, bounds.maxY - bounds.minY)
+}
+
+/**
+ * A length in the unit that reads naturally at its size — the point of these
+ * strings is to make a wrong unit obvious at a glance, and "30000 m" says it
+ * less loudly than "30 km".
+ */
+export function formatExtent(meters: number): string {
+  if (meters >= 10_000) return `${(meters / 1000).toFixed(0)} km`
+  if (meters >= 1) return `${meters.toFixed(1)} m`
+  if (meters >= 0.01) return `${(meters * 100).toFixed(1)} cm`
+  return `${(meters * 1000).toFixed(1)} mm`
 }
 
 export function stripExtension(fileName: string): string {

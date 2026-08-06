@@ -108,12 +108,43 @@ describe('layer summary', () => {
 })
 
 describe('units', () => {
-  test('takes the declared unit and asks nothing', () => {
+  test('takes the declared unit as the default', () => {
     const analysis = analyze(dxf({ insunits: 4, entities: building(1000) }))
 
     expect(analysis.metersPerUnit).toBe(0.001)
-    expect(analysis.unitSuggestions).toEqual([])
     expect(analysis.warnings.map((w) => w.code)).not.toContain('unitless')
+    expect(analysis.unitSuggestions.find((s) => s.declared)?.label).toBe('Millimetres')
+  })
+
+  test('offers the picker even when the file declares a unit', () => {
+    // A file can be wrong. Hiding the control behind "no units declared" left
+    // the common case — a centimetre plan saved as millimetres — with no way
+    // out but a re-import.
+    const analysis = analyze(dxf({ insunits: 4, entities: building(1000) }))
+
+    expect(analysis.unitSuggestions.length).toBeGreaterThan(1)
+    expect(analysis.unitSuggestions.filter((s) => s.declared)).toHaveLength(1)
+  })
+
+  test('flags a declared unit that gives an implausible size', () => {
+    // Drawn at centimetre magnitudes but declared as millimetres: the drawing
+    // is really 30 m across and would import as 300 m.
+    const analysis = analyze(dxf({ insunits: 4, entities: building(100) }))
+
+    const warning = analysis.warnings.find((w) => w.code === 'implausible-units')
+    expect(warning?.message).toContain('Centimetres')
+    expect(analysis.unitSuggestions.find((s) => s.likely)?.label).toBe('Centimetres')
+    expect(analysis.unitSuggestions.find((s) => s.declared)?.label).toBe('Millimetres')
+  })
+
+  test('stays quiet when the declared unit is the plausible one', () => {
+    const analysis = analyze(dxf({ insunits: 4, entities: building(1000) }))
+    expect(analysis.warnings.map((w) => w.code)).not.toContain('implausible-units')
+  })
+
+  test('marks nothing as declared for a unitless drawing', () => {
+    const analysis = analyze(dxf({ entities: building(1000) }))
+    expect(analysis.unitSuggestions.some((s) => s.declared)).toBe(false)
   })
 
   test('asks when the drawing declares none', () => {
@@ -165,18 +196,23 @@ describe('units', () => {
 
 describe('warnings', () => {
   test('reports entity types it could not draw, with counts', () => {
-    const spline = pair(0, 'SPLINE') + pair(8, 'ARAC') + pair(10, 0) + pair(20, 0)
-    const analysis = analyze(dxf({ insunits: 4, entities: building(1000) + spline + spline }))
+    // Text, hatches and dimensions are annotation, not geometry — the parser
+    // draws every curve type but has nothing to draw for these.
+    const hatch = pair(0, 'HATCH') + pair(8, 'ARK_Bitki') + pair(10, 0) + pair(20, 0)
+    const analysis = analyze(dxf({ insunits: 4, entities: building(1000) + hatch + hatch }))
 
     const warning = analysis.warnings.find((w) => w.code === 'skipped-entities')
-    expect(warning?.message).toContain('2 SPLINE')
-    expect(analysis.skippedTypes.SPLINE).toBe(2)
+    expect(warning?.message).toContain('2 HATCH')
+    expect(analysis.skippedTypes.HATCH).toBe(2)
   })
 
   test('flags a drawing whose extent dwarfs its content', () => {
-    // A building plus one stray far away — the multi-sheet / forgotten-entity
-    // shape that real files have.
-    const entities = building(1000) + line('STRAY', -400_000, 0, -399_000, 0)
+    // Enough strays to read as a second cluster rather than a rounding error,
+    // which is what a real multi-sheet layout looks like.
+    let entities = building(1000)
+    for (let i = 0; i < 20; i++) {
+      entities += line('STRAY', -400_000 + i * 100, 0, -400_000 + i * 100, 5000)
+    }
     const analysis = analyze(dxf({ insunits: 4, entities }))
 
     expect(analysis.warnings.map((w) => w.code)).toContain('scattered-content')

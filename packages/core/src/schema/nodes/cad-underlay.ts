@@ -17,16 +17,22 @@ export const CadUnderlayLayerState = z.object({
 export type CadUnderlayLayerState = z.infer<typeof CadUnderlayLayerState>
 
 /**
- * A two-point measurement the user took across a known dimension to derive
- * `scale`, kept so the calibration can be reviewed and redone rather than
- * being a one-way computation. Mirrors `GuideScaleReference`.
+ * The correction the user applied to a drawing whose declared scale was wrong
+ * or absent: they measured something of known size and said what it should
+ * have been. Kept so the calibration can be reviewed and redone rather than
+ * being a one-way computation.
+ *
+ * Both lengths are in metres *as the drawing read at the time*, which is what
+ * makes the record replayable — the ratio is the whole correction.
  */
 export const CadUnderlayCalibration = z.object({
-  start: z.tuple([z.number(), z.number()]),
-  end: z.tuple([z.number(), z.number()]),
-  realLengthMeters: z.number().positive(),
-  measuredLengthUnits: z.number().positive(),
-  label: z.string(),
+  /** What the drawing measured before the correction. */
+  measuredMeters: z.number().positive(),
+  /** What it should have measured. */
+  actualMeters: z.number().positive(),
+  /** Scale in force before the correction, so it can be undone exactly. */
+  previousScale: z.number().positive(),
+  label: z.string().default(''),
 })
 export type CadUnderlayCalibration = z.infer<typeof CadUnderlayCalibration>
 

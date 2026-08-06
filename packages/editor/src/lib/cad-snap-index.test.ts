@@ -130,6 +130,34 @@ describe('spatial index', () => {
   })
 })
 
+describe('endpointsWithin', () => {
+  test('returns every distinct corner inside the radius', () => {
+    const shape = index([0, 0, 1, 0], [1, 0, 1, 1])
+    const found = shape.endpointsWithin(0.5, 0.5, 2, 10)
+
+    expect(found).toHaveLength(3)
+  })
+
+  test('collapses the coincident corners polylines are full of', () => {
+    // Two segments meeting at (1,0) contribute that point twice.
+    const joined = index([0, 0, 1, 0], [1, 0, 2, 0])
+    const found = joined.endpointsWithin(1, 0, 0.1, 10)
+
+    expect(found).toEqual([[1, 0]])
+  })
+
+  test('excludes corners outside the radius', () => {
+    const spread = index([0, 0, 1, 0], [10, 10, 11, 10])
+    expect(spread.endpointsWithin(0, 0, 2, 10)).toHaveLength(2)
+  })
+
+  test('stops at the cap rather than returning a whole dense drawing', () => {
+    const many: [number, number, number, number][] = []
+    for (let i = 0; i < 200; i++) many.push([i * 0.01, 0, i * 0.01, 0.5])
+    expect(index(...many).endpointsWithin(1, 0.25, 5, 12)).toHaveLength(12)
+  })
+})
+
 describe('findCadSnap priority', () => {
   test('prefers a corner over a crossing when both are in range', () => {
     // A line ending exactly where two others cross: the corner must win, the

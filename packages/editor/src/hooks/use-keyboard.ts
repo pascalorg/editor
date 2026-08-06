@@ -261,6 +261,20 @@ export const useKeyboard = ({
         return
       }
 
+      // Wall justification: which part of the wall the drawn line is. Only
+      // meaningful while the wall tool is active, so it does not steal the key
+      // from anything else.
+      if (
+        (e.key === 'j' || e.key === 'J') &&
+        !(e.repeat || e.metaKey || e.ctrlKey || e.altKey) &&
+        useEditor.getState().tool === 'wall'
+      ) {
+        e.preventDefault()
+        useEditor.getState().cycleWallAlignment()
+        sfxEmitter.emit('sfx:grid-snap')
+        return
+      }
+
       if (e.key === 'Shift' && !e.repeat && isSnappingCycleContext()) {
         // Cycle the global snapping mode (grid → lines → angles → off).
         // `'off'` is the snap bypass now, so Shift no longer holds-to-bypass.

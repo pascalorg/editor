@@ -12,7 +12,7 @@ kullanıcı altlığa snap ederek modeli kendi çizer.
 |---|---|
 | Görünüm | 2D plan **ve** 3D — `wiki/architecture/tools.md` paritesi gereği ikisi aynı PR'da |
 | Snap kapsamı | Tüm çizim araçları (duvar, çit, döşeme/zone poligonu, kolon/item, ölçüm, merdiven, asansör) |
-| Format | DXF önce (saf client-side), DWG sonra (sunucu tarafı `dwg2dxf`) |
+| Format | **Yalnızca DXF.** DWG kapsam dışı — dönüşümü kullanıcı yapar (bkz. Faz 5) |
 
 ---
 
@@ -165,7 +165,8 @@ BLOCK/INSERT, DEFPOINTS):
 DXF ASCII düz bir (kod, değer) akışı, ve çıktıyı doğrudan flat typed array'e
 yazabiliyoruz — üçüncü parti çözümlerin ara nesne ağacı bizim için saf kayıp.
 
-DWG yolu kararı değişmedi: sunucu tarafı `dwg2dxf` (Faz 5).
+DWG için o zamanki plan sunucu tarafı `dwg2dxf`'ti; sonradan kapsam dışı
+bırakıldı (Faz 5).
 
 ### Faz 1 — `packages/cad-import` ✅ tamamlandı
 ```
@@ -331,9 +332,22 @@ Tarayıcıda canlı akış: diyaloğun gerçek render'ı, `createNode` sonrası 
 görünürlük, kilitlilik, soğuk sahne açılışı. Kod yolları testli ama editör
 açılıp denenmedi.
 
-### Faz 3.5 — kalibrasyon (birimsiz çizimler için)
-İki nokta ölç → gerçek uzunluk gir → `scale` ve `calibration` yaz. Kalibrasyon
-açıkken `locked` geçici olarak düşer.
+### Faz 3.5 — kalibrasyon ✅ tamamlandı
+
+`lib/cad-calibration.ts` + altlık panelinde "Scale" bölümü. 11 test.
+
+**Nokta seçimi yeniden yazılmadı.** Plan `floorplan-panel.tsx` içindeki guide
+kalibrasyon akışını (9000+ satırlık monolit) taklit etmeyi öngörüyordu. Gerek
+kalmadı: Faz 4'ten sonra **ölçüm aracı zaten altlığa snap ediyor**. Kullanıcı
+bilinen bir mesafeyi normal yoldan ölçer, panele sadece "olması gereken"i
+girer. Kalibrasyon böylece saf aritmetiğe indi ve ölçüm aracının ileride
+kazanacağı her snap iyileştirmesini bedavaya devralıyor.
+
+`scale = scale × (actual / measured)`. Kayıt `previousScale` taşıyor, yani
+"Revert" düğmesi kalibrasyonu birebir geri alıyor.
+
+Doğrulama, gerçek hataları eliyor: sıfır/negatif, 10.000×'ten büyük oran
+(mm↔m 1000×, inç↔m 39× — hepsi içeride kalıyor) ve fark yokken kayıt yazmama.
 
 ### Faz 4 — Snap entegrasyonu ⏳ duvar tamam, diğer araçlar bekliyor
 
@@ -387,33 +401,103 @@ filtresinin 10× kazancı Bulgu 3'ü doğruluyor.
 
 #### Bağlanan araçlar
 
-- ✅ Duvar çizimi 3D (`wall/tool.tsx`, 3 çağrı noktası)
-- ✅ Duvar çizimi 2D (`wall/floorplan-affordances.ts`) — parite
-- ✅ Duvar uç noktası taşıma (`wall/move-endpoint-tool.tsx`)
+| Giriş noktası | Kapsadığı araçlar |
+|---|---|
+| `wall-drafting.ts` | Duvar çizimi 3D (3 çağrı) + 2D + uç nokta taşıma |
+| `surface-plan-snap.ts` — **tek satır** | Döşeme, tavan, zone, çatı poligonları (çizim + köşe/kenar düzenleme), ölçüm, aks çizgisi, kot çizgisi |
+| `fence-drafting.ts` | Çit çizimi 3D (3 çağrı) + 2D uç nokta |
+| `shared/floor-placement.ts` | Kolon, raf, spawn yerleştirme |
+| `stair-tool.tsx`, `elevator-tool.tsx` | Merdiven, asansör |
 
-#### Bağlanmayan araçlar
+En büyük kaldıraç `resolveSurfacePlanPointSnap` oldu: zaten
+`snapWallDraftPointDetailed` çağırıyor ve `levelId` taşıyordu, yani `cadLevelId:
+input.levelId` tek satırı yedi aracı birden 2D ve 3D'de kapsadı. Tüketicilerin
+hepsinin `levelId` geçtiği tek tek doğrulandı.
 
-Çit, döşeme/zone poligonu, kolon/item yerleştirme, merdiven, asansör, ölçüm —
-ve alignment anchor tarafı.
+Yerleştirme araçlarında CAD, hizalama dürtmesini bastırıyor — aksi halde node
+az önce oturduğu çizgiden geri kaydırılırdı. Kılavuzlar yine gösteriliyor,
+sadece çekim iptal.
 
-Kalanların çoğu bugün **hiç manyetik snap içermiyor**, sadece `snapPointToGrid`
-çağırıyor. Onlara CAD eklemek, CAD'den bağımsız yeni bir davranış eklemek
-demek; her biri kendi 2D/3D parite kontrolünü ve testini istiyor. Artık desen
-kurulu ve tek fonksiyon çağrısına indi, ama araç başına ayrı iş.
+#### Sonradan kapatılan iki boşluk
 
-### Faz 5 — DWG desteği
-- `apps/editor/app/api/cad/convert/route.ts` → sunucuda `dwg2dxf` → aynı client
-  boru hattı
-- Dockerfile'a `libredwg-tools`
-- **Lisans:** LibreDWG GPL-3.0. Ayrı bir binary olarak çalıştırılır, npm
-  paketlerine linklenmez — repo MIT kalır
-- Boyut limiti, timeout, temp dosya temizliği, upload doğrulaması
-  (`packages/mcp/src/lib/safe-fetch.ts` deseni)
+**Yerleştirme beacon'ı** — `shared/cad-placement-beacon.ts`. Kolon/raf/spawn
+hiç beacon yayınlamıyordu; CAD snap'i node'u sessizce oynatınca hata gibi
+görünüyordu. Kolonda beacon, pozisyonu ezebilen aks-çizgisi snap'inin
+*sonrasında* yayınlanıyor — node'un artık olmadığı yerde duran bir beacon,
+hiç olmamasından kötü.
 
-### Faz 6 — Cila
-- Ölçüm aracının CAD'e snap etmesi
-- Altlık opaklık/renk kontrolleri, birden fazla altlık, seviye başına altlık
-- MCP tool (`import_cad`)
+**Alignment anchor'ları** — `collectCadAlignmentAnchors`. Çizim köşeleri artık
+hizalama havuzuna giriyor, yani snap yarıçapına girmediğin bir çizim
+özelliğiyle hizalanabiliyorsun. Core'a dokunulmadı: `collectAlignmentAnchors`
+sahne grafiğini geziyor, altlık geometrisi ise kasten orada değil — merge
+editor tarafında.
+
+Sınırlar ölçümle belirlendi. 4 m / 120 anchor penceresi gerçek dosyada pointer
+başına **531 µs**'ye mal oluyordu — snap sorgusunun üç katı, bir konfor
+özelliği için. 2 m / 64'te **231 µs** ve hâlâ ~40 anchor dönüyor.
+
+### Faz 5 — DWG desteği ❌ iptal
+
+Kapsam dışı bırakıldı: DXF yeterli. DWG'si olan kullanıcı dönüşümü kendi yapar
+(LibreDWG `dwg2dxf`, ODA File Converter veya AutoCAD export). Faz 2.5'te AC1032
+bir dosyanın `dwg2dxf` ile sorunsuz çevrildiği doğrulanmıştı — yani yol açık,
+sadece biz taşımıyoruz.
+
+Bunun sonucu: `.dxf` dosya seçicide tek kabul edilen uzantı, ve GPL lisanslı
+LibreDWG hiçbir şekilde dağıtıma girmiyor.
+
+### Faz 6 ✅ tamamlandı
+
+#### SPLINE + ELLIPSE
+
+`src/spline.ts` — de Boor değerlendirmesi (rasyonel NURBS dahil) ve sapmaya
+göre uyarlanabilir bölme. Düzgün örnekleme ya keskin dönüşü kaçırır ya da
+neredeyse düz bir koşuya binlerce segment harcar; CAD dosyaları ikisini de aynı
+entity'de barındırıyor.
+
+ELLIPSE, major ekseni merkeze göre bir *vektör* olarak sakladığı için kendi
+dönüşünü taşır; `start`/`end` açı değil parametredir.
+
+Gerçek dosyada: atlanan **6.615 → 2.028** (%69 azalma), kalanların hepsi
+anotasyon (MTEXT, TEXT, HATCH, DIMENSION, WIPEOUT). Segment 146k → 187k,
+asset 2,52 → 3,21 MB, parse 174 → 292 ms. Arabalar, ağaçlar ve oval masalar
+render'da doğru çıkıyor — de Boor'da hata olsa arabalar çöp olurdu.
+
+Bozuk knot vektörü olan spline kontrol poligonuna düşüyor: gerçek dosyalarda
+var, ve kaba bir kontur düşürülmüş entity'den iyidir.
+
+#### `read_cad_drawing` MCP tool'u — `import_cad` değil
+
+Editörde çizim kilitli bir altlık: insanın üzerinden geçtiği referans, hassasiyeti
+snap sağlıyor. Ajan bunların hiçbirini yapmıyor — koordinatı doğrudan yazıyor ve
+göremediği kilitli bir altlık işine yaramıyor. Ayrıca MCP headless çalışıyor;
+`saveAsset`/IndexedDB oradaki asset yolunda yok.
+
+Ajanda eksik olan şey editördeki kullanıcının sağladığı **yargı**: hangi katman
+duvar, hangisi park etmiş araba. Bu bir okuma problemi, geometri problemi değil —
+ve dil modelinin güçlü, geometrik sezginin zayıf olduğu yer tam olarak burası.
+Faz 0'da otomatik duvar çıkarımını elemiştik; bu, o problemi çözmüyor, sahibini
+değiştiriyor.
+
+Tool önce özet döner (katmanlar ağırlığa göre sıralı, birimler, extent, atlananlar),
+sonra istenen katmanların çizgilerini **metre cinsinden** verir; ajan `create_wall`'ı
+kendi çağırır. Gerçek dosyada iki çağrı: `ARK_Duvar_Dış` + `ARK_Duvar_İç` → 1.444
+segment, kırpılmadan. 8 test.
+
+#### Yol boyunca çıkan iki hata
+
+**1. Kaçak tek sembol değil, ikinci bir kümeymiş.** Splineları çizmeye başlayınca
+`ARK_Araç` 38.708 → 76.489 segment oldu ve 130 m soldaki "kaçak" aslında ciddi bir
+içerik kümesi çıktı. Yüzdelik kırpma bir kümeyi ayıklayamaz; orijin yine iki kümenin
+arasına düştü. Çözüm: boşluk tabanlı kümeleme — aralık, kendi genişliğinin %20'sinden
+büyükse ayır ve kalabalık tarafı tut. Sonra yüzdelik kırpma kalan tekil kaçakları temizler.
+
+**2. Kümeleme uç noktalar üzerinde yapılınca her dikdörtgen bina bozuluyordu.**
+Paralel dikey çizgilerle çizilmiş bir bina yalnızca iki farklı uç-nokta Y'sine
+sahiptir — bu, üst üste duran iki ayrı çizimden ayırt edilemez, ve bölücü binanın
+yarısını atıyordu. Gerçek dosyada Y çeşitliliği olduğu için görünmedi; testte
+yakalandı. Kümeleme artık segment **orta noktaları** üzerinde; extent ise hayatta
+kalan segmentlerin uç noktalarından (duvar ortasından değil, ucundan ölçülür).
 
 ---
 

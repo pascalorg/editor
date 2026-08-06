@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, Ruler, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { CadImportAnalysis } from '../../../lib/cad-import'
+import { type CadImportAnalysis, formatExtent } from '../../../lib/cad-import'
 import { cn } from '../../../lib/utils'
 import { Button } from '../primitives/button'
 import {
@@ -31,13 +31,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatExtent(meters: number): string {
-  if (meters >= 10_000) return `${(meters / 1000).toFixed(0)} km`
-  if (meters >= 1) return `${meters.toFixed(1)} m`
-  if (meters >= 0.01) return `${(meters * 100).toFixed(1)} cm`
-  return `${(meters * 1000).toFixed(1)} mm`
 }
 
 export function ImportCadDialog({ analysis, error, busy, onCancel, onConfirm }: Props) {
@@ -125,6 +118,11 @@ export function ImportCadDialog({ analysis, error, busy, onCancel, onConfirm }: 
                 <Ruler className="size-3.5" />
                 Drawing units
               </div>
+              <p className="border-b px-3 py-2 text-muted-foreground text-xs leading-snug">
+                {analysis.metersPerUnit === null
+                  ? 'This drawing declares no units. Pick the one that gives a sensible size.'
+                  : 'Files often declare the wrong unit — a plan drawn in centimetres and saved as millimetres imports ten times too big. Check the size below before importing.'}
+              </p>
               <div className="p-2">
                 <div className="grid grid-cols-1 gap-1">
                   {analysis.unitSuggestions.map((suggestion) => (
@@ -141,7 +139,12 @@ export function ImportCadDialog({ analysis, error, busy, onCancel, onConfirm }: 
                     >
                       <span className="flex items-center gap-2">
                         {suggestion.label}
-                        {suggestion.likely && (
+                        {suggestion.declared && (
+                          <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground">
+                            in file
+                          </span>
+                        )}
+                        {suggestion.likely && !suggestion.declared && (
                           <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-[10px] text-emerald-700">
                             likely
                           </span>

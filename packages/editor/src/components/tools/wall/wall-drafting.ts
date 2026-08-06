@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
   DEFAULT_LEVEL_HEIGHT,
+  DEFAULT_WALL_THICKNESS,
   type DoorNode,
   GROUND_SUPPORT_ID,
   getScaledDimensions,
@@ -26,6 +27,7 @@ import {
   distanceSquared,
   findWallSnapTarget,
   findWallSpecialPointSnap,
+  offsetWallLineForAlignment,
   projectPointOntoWall,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
@@ -40,8 +42,12 @@ import {
 export {
   chainEndJoinsExistingWall,
   findWallSnapTarget,
+  nextWallAlignment,
+  offsetWallLineForAlignment,
+  WALL_ALIGNMENTS,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
+  type WallAlignment,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
@@ -600,8 +606,26 @@ export function createWallOnCurrentLevel(
     (node): node is WallNode => node?.type === 'wall' && node.parentId === currentLevelId,
   )
 
-  let resolvedStart = start
-  let resolvedEnd = end
+  // Justification is applied BEFORE the corner-join / split resolution, so the
+  // joins are computed between the centrelines that will actually exist. Doing
+  // it afterwards would resolve a connection and then slide the wall off it.
+  const alignment = useEditor.getState().wallAlignment
+  // `ToolDefaults` is an untyped bag seeded from whichever preset was placed,
+  // so the thickness has to be checked rather than trusted.
+  const presetThickness = useEditor.getState().toolDefaults.wall?.thickness
+  const draftThickness =
+    typeof presetThickness === 'number' && presetThickness > 0
+      ? presetThickness
+      : DEFAULT_WALL_THICKNESS
+  const [alignedStart, alignedEnd] = offsetWallLineForAlignment(
+    start,
+    end,
+    draftThickness,
+    alignment,
+  )
+
+  let resolvedStart = alignedStart
+  let resolvedEnd = alignedEnd
 
   // The corner-join / wall-split resolution follows the snapping mode like the
   // draft preview does: magnetic ('lines') keeps the generous join radius,

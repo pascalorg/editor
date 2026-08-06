@@ -21,6 +21,7 @@ import {
 import useAlignmentGuides from '../store/use-alignment-guides'
 import { isMagneticSnapActive } from '../store/use-editor'
 import useWallSnapIndicator from '../store/use-wall-snap-indicator'
+import { collectCadAlignmentAnchors } from './cad-snap-source'
 import { resolveAlignmentForFloorplanView } from './world-grid-snap'
 
 const SURFACE_SNAP_MOVING_ID = '__surface_snap__'
@@ -219,9 +220,15 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
   }
 
   const movingId = input.movingId ?? SURFACE_SNAP_MOVING_ID
-  const allCandidates =
-    input.candidates ??
-    collectAlignmentAnchors(nodes, input.excludeId ?? movingId, input.levelId ?? null)
+  // Underlay corners join the anchor pool so you can line a vertex up with a
+  // drawing feature you are not close enough to snap onto. They come from the
+  // editor side because core's collector walks the scene graph, and underlay
+  // geometry deliberately is not in it.
+  const allCandidates = [
+    ...(input.candidates ??
+      collectAlignmentAnchors(nodes, input.excludeId ?? movingId, input.levelId ?? null)),
+    ...collectCadAlignmentAnchors(input.levelId, basePoint),
+  ]
 
   // In non-magnetic modes nothing pulls the point onto a guide, so restrict
   // alignment to anchors already within connect distance — a corner then reads

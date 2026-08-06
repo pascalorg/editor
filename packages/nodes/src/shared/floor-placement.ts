@@ -117,6 +117,9 @@ export function resolveAlignedFloorPlacement({
   return {
     position: [ax, 0, az] as [number, number, number],
     guides: result?.guides ?? [],
+    // Reported rather than published here so the caller keeps one owner for
+    // the beacon's lifecycle — the same shape `guides` already has.
+    cadSnap: cad,
   }
 }
 

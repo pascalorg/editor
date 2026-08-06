@@ -23,6 +23,7 @@ import {
   getWallChordFrame,
   getWallCurveLength,
   getWallPlanFootprint,
+  getWallThickness,
   type ItemNode,
   isCurvedWall,
   type LevelNode,
@@ -184,6 +185,7 @@ import {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
+  offsetWallLineForAlignment,
   resolveTerrainWallConstructionOptions,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
@@ -4714,6 +4716,7 @@ function FloorplanLinearDraftLayer({
   sceneRotationDeg: number
 }) {
   const metricNotation = useViewer((state) => state.metricNotation)
+  const wallAlignment = useEditor((s) => s.wallAlignment)
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
@@ -4729,10 +4732,20 @@ function FloorplanLinearDraftLayer({
     ) {
       return null
     }
-    const draftWall = getSharedFloorplanWall(buildDraftWall(levelId, wallDraftStart, wallDraftEnd))
+    // The ghost has to show where the wall will land. With face justification
+    // that is half a thickness off the line being traced, and the whole reason
+    // to justify is to put the wall exactly against a drawn line — a preview on
+    // the wrong one defeats it.
+    const [ghostStart, ghostEnd] = offsetWallLineForAlignment(
+      wallDraftStart,
+      wallDraftEnd,
+      getWallThickness(buildDraftWall(levelId, wallDraftStart, wallDraftEnd)),
+      wallAlignment,
+    )
+    const draftWall = getSharedFloorplanWall(buildDraftWall(levelId, ghostStart, ghostEnd))
     // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
-  }, [levelId, wallDraftStart, wallDraftEnd])
+  }, [levelId, wallDraftStart, wallDraftEnd, wallAlignment])
 
   const draftPolygonPoints = useMemo(() => {
     if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
@@ -9478,6 +9491,8 @@ export function FloorplanPanel({
         start: draftStart ?? undefined,
         angleSnap: wallAngleSnap,
         magnetic: isMagneticSnapActive(),
+        // 2D↔3D parity: the underlay is snappable while drawing here too.
+        cadLevelId: levelId ?? null,
       })
       const wallSnapped = wallSnap.point
       // Locked onto existing geometry (corner / midpoint / crossing / edge) →
@@ -9493,9 +9508,16 @@ export function FloorplanPanel({
           applySnap: isMagneticSnapActive() && !wallAngleSnap,
         })
       }
-      useWallSnapIndicator
-        .getState()
-        .set(wallSnap.snap ? { x: snappedPoint[0], z: snappedPoint[1], kind: wallSnap.snap } : null)
+      useWallSnapIndicator.getState().set(
+        wallSnap.snap
+          ? {
+              x: snappedPoint[0],
+              z: snappedPoint[1],
+              kind: wallSnap.snap,
+              ...(wallSnap.source ? { source: wallSnap.source } : {}),
+            }
+          : null,
+      )
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
       // tracks the cursor. The local draftEnd update below is what

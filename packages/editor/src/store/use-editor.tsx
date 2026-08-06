@@ -39,6 +39,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { nextWallAlignment, type WallAlignment } from '../components/tools/wall/wall-snap-geometry'
 import {
   CONTINUATION_PROFILES,
   type ContinuationContext,
@@ -292,6 +293,15 @@ type EditorState = {
    * own entry on deactivation so a later manual draw isn't poisoned.
    */
   toolDefaults: Partial<Record<Tool, ToolDefaults>>
+  /**
+   * Which part of a drafted wall the drawn line is: its centreline (the
+   * original behaviour) or one of its faces. Face justification exists for
+   * tracing — a CAD drawing shows wall faces, so a centreline drawn over a
+   * traced face lands half a thickness out.
+   */
+  wallAlignment: WallAlignment
+  setWallAlignment: (alignment: WallAlignment) => void
+  cycleWallAlignment: () => void
   setToolDefaults: (tool: Tool, defaults: ToolDefaults | null) => void
   lastMeasurementKind: CreatableMeasurementKind
   setLastMeasurementKind: (kind: CreatableMeasurementKind) => void
@@ -1031,6 +1041,10 @@ const useEditor = create<EditorState>()(
       tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
       setTool: (tool) => set({ tool }),
       toolDefaults: {},
+      wallAlignment: 'center',
+      setWallAlignment: (wallAlignment) => set({ wallAlignment }),
+      cycleWallAlignment: () =>
+        set((state) => ({ wallAlignment: nextWallAlignment(state.wallAlignment) })),
       setToolDefaults: (tool, defaults) =>
         set((state) => {
           const next = { ...state.toolDefaults }

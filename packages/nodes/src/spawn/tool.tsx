@@ -23,6 +23,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group } from 'three'
+import { publishCadBeacon } from '../shared/cad-placement-beacon'
 import {
   getLevelLocalSnappedPosition,
   resolveAlignedFloorPlacement,
@@ -76,7 +77,7 @@ const SpawnTool = () => {
         setCursorVisible(true)
       }
 
-      const { position, guides } = resolveAlignedFloorPlacement({
+      const { position, guides, cadSnap } = resolveAlignedFloorPlacement({
         node: previewNode,
         rawX: event.localPosition[0],
         rawZ: event.localPosition[2],
@@ -87,6 +88,7 @@ const SpawnTool = () => {
         bypassGrid: !isGridSnapActive(),
         cadLevelId: activeLevelId ?? null,
       })
+      publishCadBeacon(cadSnap)
       useAlignmentGuides.getState().set(guides)
 
       const visualPosition = getFloorStackPreviewPosition({
@@ -164,6 +166,7 @@ const SpawnTool = () => {
       triggerSFX('sfx:structure-build')
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
       useAlignmentGuides.getState().clear()
+      publishCadBeacon(null)
       usePlacementPreview.getState().clear()
       useEditor.getState().setTool(null)
       useEditor.getState().setMode('select')
@@ -210,6 +213,7 @@ const SpawnTool = () => {
       emitter.off('grid:click', onGridClick)
       window.removeEventListener('keydown', onKeyDown, true)
       useAlignmentGuides.getState().clear()
+      publishCadBeacon(null)
       usePlacementPreview.getState().clear()
     }
   }, [activeLevelId, previewNode])

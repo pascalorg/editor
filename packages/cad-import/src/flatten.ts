@@ -223,6 +223,61 @@ export function emitArc(
 }
 
 /**
+ * An ellipse or elliptical arc.
+ *
+ * DXF stores the major axis as a vector from the centre and the minor axis as
+ * a ratio of it, so the ellipse carries its own rotation — there is no separate
+ * angle to apply. `start` and `end` are parameters, not angles: the point at
+ * parameter t is `centre + major·cos t + minor·sin t`, which only coincides
+ * with the geometric angle on a circle.
+ */
+export function emitEllipse(
+  sink: SegmentSink,
+  layer: number,
+  cx: number,
+  cy: number,
+  majorX: number,
+  majorY: number,
+  ratio: number,
+  start: number,
+  end: number,
+  tolerance: Tolerance,
+  t: Transform2D,
+): void {
+  const majorLength = Math.hypot(majorX, majorY)
+  if (!(majorLength > 0)) return
+
+  const minorX = -majorY * ratio
+  const minorY = majorX * ratio
+
+  let sweep = end - start
+  while (sweep <= 0) sweep += TAU
+  if (sweep > TAU) sweep = TAU
+
+  // Tessellate against the larger semi-axis: budget for the tightest part of
+  // the curve, or a flat ellipse reads as a polygon at its ends.
+  const scaled = majorLength * Math.max(1, Math.abs(ratio)) * transformScale(t)
+  const steps = arcStepCount(scaled, sweep, resolveTolerance(tolerance, scaled))
+  if (steps === 0) return
+
+  const at = (param: number): [number, number] => {
+    const cos = Math.cos(param)
+    const sin = Math.sin(param)
+    return apply(t, cx + majorX * cos + minorX * sin, cy + majorY * cos + minorY * sin)
+  }
+
+  let [px, py] = at(start)
+  for (let i = 1; i <= steps; i++) {
+    const [qx, qy] = at(start + (sweep * i) / steps)
+    sink.push(px, py, qx, qy, layer)
+    px = qx
+    py = qy
+  }
+}
+
+const TAU = Math.PI * 2
+
+/**
  * A polyline segment carrying a bulge — DXF's way of storing a circular arc
  * between two vertices. `bulge` is tan(Δ/4) of the included angle, signed:
  * positive sweeps counter-clockwise.

@@ -66,10 +66,10 @@ describe('entities', () => {
   })
 
   it('reports unsupported entity types instead of dropping them silently', () => {
-    const spline = pair(0, 'SPLINE') + pair(8, '0') + pair(10, 0) + pair(20, 0)
-    const drawing = parseDxf(dxf(entities(line('0', 0, 0, 1, 1) + spline)))
+    const hatch = pair(0, 'HATCH') + pair(8, '0') + pair(10, 0) + pair(20, 0)
+    const drawing = parseDxf(dxf(entities(line('0', 0, 0, 1, 1) + hatch)))
 
-    expect(drawing.stats.skippedTypes.SPLINE).toBe(1)
+    expect(drawing.stats.skippedTypes.HATCH).toBe(1)
     expect(drawing.stats.segmentCount).toBe(1)
   })
 })

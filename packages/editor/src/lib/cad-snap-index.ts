@@ -154,6 +154,38 @@ export class CadSnapIndex {
     return best
   }
 
+  /**
+   * Every distinct endpoint within `radius`, capped at `max`.
+   *
+   * Feeds the alignment guides, which need a *set* of anchors rather than the
+   * single nearest one. Both bounds matter: a real drawing has hundreds of
+   * thousands of endpoints, and handing them all to the alignment resolver
+   * would make a linear pass over the whole drawing on every pointer move.
+   */
+  endpointsWithin(x: number, y: number, radius: number, max: number): [number, number][] {
+    const radiusSquared = radius * radius
+    const seen = new Set<string>()
+    const out: [number, number][] = []
+
+    for (const index of this.candidates(x, y, radius)) {
+      const [x1, y1, x2, y2] = this.segmentAt(index)
+      for (const [px, py] of [
+        [x1, y1],
+        [x2, y2],
+      ] as const) {
+        if ((px - x) ** 2 + (py - y) ** 2 > radiusSquared) continue
+        // Drawings are full of coincident endpoints — every polyline corner is
+        // two of them. Rounding to a millimetre collapses those to one anchor.
+        const key = `${Math.round(px * 1000)}:${Math.round(py * 1000)}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push([px, py])
+        if (out.length >= max) return out
+      }
+    }
+    return out
+  }
+
   nearestMidpoint(x: number, y: number, radius: number): [number, number] | null {
     let best: [number, number] | null = null
     let bestDist = radius * radius

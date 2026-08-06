@@ -51,23 +51,19 @@ type UnderlayManifest = {
  */
 const CONTENT_TRIM = 0.005
 
-/** Points sampled for the trimmed extent. Enough for a stable percentile. */
+/** Segments sampled for the analysis. Enough for a stable percentile. */
 const CONTENT_SAMPLE_CAP = 200_000
 
 /**
- * Below this many points, trim nothing: a percentage of a handful of points
- * rounds to zero anyway, and a drawing that small has no strays worth
- * protecting against — you can see all of it at once and drag it where you
- * want it.
+ * Below this many segments, neither pass runs: a percentage of a handful
+ * rounds to zero anyway, "a gap wider than a fifth of the span" describes any
+ * two of them, and a drawing that small has no strays worth protecting
+ * against — you can see all of it at once and drag it where you want it.
  */
-const MIN_POINTS_FOR_TRIM = 100
+const MIN_SEGMENTS_FOR_ANALYSIS = 50
 
-/**
- * Floor on the trim, in points. A stray *segment* contributes two points and a
- * stray block contributes many, so a one-point floor would leave the other end
- * of the very entity it was meant to discard still setting the extent.
- */
-const MIN_TRIM_POINTS = 4
+/** Floor on the trim, so one forgotten entity cannot set the extent. */
+const MIN_TRIM_SEGMENTS = 2
 
 /**
  * The drawing's extent with stray outliers trimmed away.
@@ -87,35 +83,128 @@ const MIN_TRIM_POINTS = 4
 export function contentBounds(segments: Float64Array, segmentCount: number): CadBounds {
   if (segmentCount === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 }
 
-  const pointCount = segmentCount * 2
-  const stride = Math.max(1, Math.ceil(pointCount / CONTENT_SAMPLE_CAP))
-  const sampleCount = Math.ceil(pointCount / stride)
+  const stride = Math.max(1, Math.ceil(segmentCount / CONTENT_SAMPLE_CAP))
+  const sampleCount = Math.ceil(segmentCount / stride)
 
-  const xs = new Float64Array(sampleCount)
-  const ys = new Float64Array(sampleCount)
+  // Cluster on segment MIDPOINTS, not endpoints.
+  //
+  // Endpoints misrepresent where geometry is. A rectangular building drawn as
+  // parallel vertical lines has exactly two distinct endpoint Y values — one
+  // per end — which is indistinguishable from two drawings stacked far apart,
+  // and the split would throw half the building away. Every one of those lines
+  // has its midpoint in the middle, so midpoints see the single cluster there
+  // actually is.
+  const midX = new Float64Array(sampleCount)
+  const midY = new Float64Array(sampleCount)
   let written = 0
-  for (let point = 0; point < pointCount; point += stride) {
-    xs[written] = segments[point * 2]!
-    ys[written] = segments[point * 2 + 1]!
+  for (let i = 0; i < segmentCount; i += stride) {
+    midX[written] = (segments[i * 4]! + segments[i * 4 + 2]!) / 2
+    midY[written] = (segments[i * 4 + 1]! + segments[i * 4 + 3]!) / 2
     written++
   }
 
-  const sampledX = xs.subarray(0, written).sort()
-  const sampledY = ys.subarray(0, written).sort()
+  const [coreMinX, coreMaxX] = dominantRange(midX.subarray(0, written).sort())
+  const [coreMinY, coreMaxY] = dominantRange(midY.subarray(0, written).sort())
 
-  const trim =
-    written >= MIN_POINTS_FOR_TRIM
-      ? Math.max(MIN_TRIM_POINTS, Math.round(written * CONTENT_TRIM))
-      : 0
-  const low = trim
-  const high = written - 1 - trim
+  // The extent is then how far the surviving segments actually reach — their
+  // endpoints, so a wall is measured end to end rather than from its middle.
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
 
-  return {
-    minX: sampledX[low]!,
-    maxX: sampledX[high]!,
-    minY: sampledY[low]!,
-    maxY: sampledY[high]!,
+  for (let i = 0; i < segmentCount; i++) {
+    const cx = (segments[i * 4]! + segments[i * 4 + 2]!) / 2
+    const cy = (segments[i * 4 + 1]! + segments[i * 4 + 3]!) / 2
+    if (cx < coreMinX || cx > coreMaxX || cy < coreMinY || cy > coreMaxY) continue
+
+    for (const offset of [0, 2] as const) {
+      const x = segments[i * 4 + offset]!
+      const y = segments[i * 4 + offset + 1]!
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
   }
+
+  // Nothing survived — only reachable when sampling missed the core entirely.
+  // The full extent is a truthful answer; a collapsed one is not.
+  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : fullBounds(segments, segmentCount)
+}
+
+function fullBounds(segments: Float64Array, segmentCount: number): CadBounds {
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  for (let i = 0; i < segmentCount * 4; i += 2) {
+    const x = segments[i]!
+    const y = segments[i + 1]!
+    if (x < minX) minX = x
+    if (x > maxX) maxX = x
+    if (y < minY) minY = y
+    if (y > maxY) maxY = y
+  }
+  return { minX, minY, maxX, maxY }
+}
+
+/**
+ * A gap this large, relative to the span it sits in, reads as empty space
+ * between separate drawings rather than a hole in one of them. Sheets in a
+ * model-space layout are set well apart; rooms in a plan are not.
+ */
+const CLUSTER_GAP_FRACTION = 0.2
+
+/** Bound on the split loop — a layout has sheets, not hundreds of them. */
+const MAX_CLUSTER_SPLITS = 8
+
+/**
+ * The range along one axis that holds the drawing's main body.
+ *
+ * Percentile trimming alone is not enough. It handles a handful of strays, but
+ * a real file is often a *layout*: several sheets side by side in model space,
+ * with real geometry in each. Trimming half a percent off a drawing whose left
+ * fifth is a separate sheet leaves the range — and so the scene origin —
+ * sitting in the empty space between them.
+ *
+ * So first split on genuine gaps and keep the busier side, then trim the
+ * survivors. Both passes are needed: the split finds the right sheet, the trim
+ * cleans up the odd forgotten entity inside it.
+ */
+function dominantRange(sorted: Float64Array): [number, number] {
+  let low = 0
+  let high = sorted.length - 1
+
+  if (sorted.length < MIN_SEGMENTS_FOR_ANALYSIS) return [sorted[low]!, sorted[high]!]
+
+  for (let iteration = 0; iteration < MAX_CLUSTER_SPLITS; iteration++) {
+    const span = sorted[high]! - sorted[low]!
+    if (!(span > 0)) break
+
+    let gapAt = -1
+    let gapSize = 0
+    for (let i = low; i < high; i++) {
+      const gap = sorted[i + 1]! - sorted[i]!
+      if (gap > gapSize) {
+        gapSize = gap
+        gapAt = i
+      }
+    }
+    if (gapAt < 0 || gapSize < span * CLUSTER_GAP_FRACTION) break
+
+    // Keep whichever side of the gap holds more of the drawing.
+    if (gapAt - low >= high - (gapAt + 1)) high = gapAt
+    else low = gapAt + 1
+  }
+
+  const remaining = high - low + 1
+  const trim =
+    remaining >= MIN_SEGMENTS_FOR_ANALYSIS
+      ? Math.max(MIN_TRIM_SEGMENTS, Math.round(remaining * CONTENT_TRIM))
+      : 0
+
+  return [sorted[low + trim]!, sorted[high - trim]!]
 }
 
 /**

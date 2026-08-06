@@ -164,3 +164,59 @@ export function segmentAt(
 ): [number, number, number, number] {
   return [segments[i * 4]!, segments[i * 4 + 1]!, segments[i * 4 + 2]!, segments[i * 4 + 3]!]
 }
+
+export function ellipse(
+  layer: string,
+  cx: number,
+  cy: number,
+  majorX: number,
+  majorY: number,
+  ratio: number,
+  startParam = 0,
+  endParam = Math.PI * 2,
+): string {
+  return (
+    pair(0, 'ELLIPSE') +
+    pair(8, layer) +
+    pair(10, cx) +
+    pair(20, cy) +
+    pair(30, 0) +
+    pair(11, majorX) +
+    pair(21, majorY) +
+    pair(31, 0) +
+    pair(40, ratio) +
+    pair(41, startParam) +
+    pair(42, endParam)
+  )
+}
+
+export function spline(
+  layer: string,
+  controlPoints: [number, number][],
+  {
+    degree = 3,
+    knots,
+    weights,
+    closed = false,
+  }: { degree?: number; knots?: number[]; weights?: number[]; closed?: boolean } = {},
+): string {
+  // A clamped uniform knot vector, which is what almost every writer emits.
+  const resolvedKnots =
+    knots ??
+    (() => {
+      const n = controlPoints.length
+      const interior = n - degree - 1
+      const out: number[] = []
+      for (let i = 0; i <= degree; i++) out.push(0)
+      for (let i = 1; i <= interior; i++) out.push(i / (interior + 1))
+      for (let i = 0; i <= degree; i++) out.push(1)
+      return out
+    })()
+
+  let body = pair(0, 'SPLINE') + pair(8, layer) + pair(70, closed ? 1 : 0) + pair(71, degree)
+  body += pair(72, resolvedKnots.length) + pair(73, controlPoints.length)
+  for (const knot of resolvedKnots) body += pair(40, knot)
+  if (weights) for (const weight of weights) body += pair(41, weight)
+  for (const [x, y] of controlPoints) body += pair(10, x) + pair(20, y) + pair(30, 0)
+  return body
+}

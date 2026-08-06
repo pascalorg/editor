@@ -17,6 +17,7 @@ import { registerGetScene } from './get-scene'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerPlaceItem } from './place-item'
+import { registerReadCadDrawing } from './read-cad-drawing'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
@@ -56,6 +57,7 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerRedo(server, operations)
   registerExportJson(server, operations)
   registerExportGlb(server, operations)
+  registerReadCadDrawing(server)
   registerValidateScene(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)

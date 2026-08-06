@@ -191,14 +191,18 @@ export {
   createWallOnCurrentLevel,
   getSegmentGridStep,
   isSegmentLongEnough,
+  nextWallAlignment,
+  offsetWallLineForAlignment,
   resolveEndpointWallSplit,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
+  WALL_ALIGNMENTS,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_GRID_STEP,
   WALL_JOIN_SNAP_RADIUS,
+  type WallAlignment,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
@@ -310,6 +314,15 @@ export {
   publishPlacementSurface,
 } from './lib/active-placement-surface'
 export {
+  type CalibrationInput,
+  type CalibrationProblem,
+  type CalibrationResult,
+  calibrationProblemMessage,
+  computeCalibration,
+  revertCalibration,
+  validateCalibration,
+} from './lib/cad-calibration'
+export {
   analyzeCadDrawing,
   analyzeCadFile,
   type CadImportAnalysis,
@@ -317,6 +330,7 @@ export {
   type CadImportWarning,
   type CadUnitSuggestion,
   commitCadImport,
+  formatExtent,
   suggestUnits,
 } from './lib/cad-import'
 export {

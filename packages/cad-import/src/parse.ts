@@ -2,6 +2,7 @@ import {
   composeTransform,
   emitArc,
   emitBulge,
+  emitEllipse,
   emitLine,
   IDENTITY,
   insertTransform,
@@ -9,6 +10,7 @@ import {
   type Tolerance,
   type Transform2D,
 } from './flatten'
+import { flattenSpline, type SplineDefinition } from './spline'
 import type { CadDrawing, CadLayer, CadParseOptions, CadParseStats } from './types'
 import { resolveUnits } from './units'
 
@@ -34,17 +36,20 @@ const DEFAULT_RELATIVE_TOLERANCE = 0.002
  * `stats.skippedTypes` so the import UI can tell the user what was dropped
  * rather than silently losing part of their drawing.
  */
-type EntityType = 'LINE' | 'ARC' | 'CIRCLE' | 'LWPOLYLINE' | 'POLYLINE' | 'VERTEX' | 'INSERT'
-
 const GEOMETRY_TYPES = new Set<string>([
   'LINE',
   'ARC',
   'CIRCLE',
+  'ELLIPSE',
+  'SPLINE',
   'LWPOLYLINE',
   'POLYLINE',
   'VERTEX',
   'INSERT',
 ])
+
+/** Entities whose 10/20 codes repeat to build a point list. */
+const POINT_LIST_TYPES = new Set<string>(['LWPOLYLINE', 'SPLINE'])
 
 type Vertex = { x: number; y: number; bulge: number }
 
@@ -75,6 +80,10 @@ type EntityAccumulator = {
   /** Extrusion Z. -1 means the entity is defined in a mirrored OCS. */
   extrusionZ: number
   vertices: Vertex[]
+  /** SPLINE only: knot vector, rational weights, and curve degree. */
+  knots: number[]
+  weights: number[]
+  degree: number
 }
 
 function newAccumulator(): EntityAccumulator {
@@ -96,6 +105,9 @@ function newAccumulator(): EntityAccumulator {
     closed: false,
     extrusionZ: 1,
     vertices: [],
+    knots: [],
+    weights: [],
+    degree: 3,
   }
 }
 
@@ -117,10 +129,26 @@ function resetAccumulator(acc: EntityAccumulator, type: string): void {
   acc.closed = false
   acc.extrusionZ = 1
   acc.vertices = []
+  acc.knots = []
+  acc.weights = []
+  acc.degree = 3
+}
+
+function controlPolygonLength(points: readonly (readonly [number, number])[]): number {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1])
+  }
+  return total
 }
 
 function cloneAccumulator(acc: EntityAccumulator): EntityAccumulator {
-  return { ...acc, vertices: acc.vertices.map((v) => ({ ...v })) }
+  return {
+    ...acc,
+    vertices: acc.vertices.map((v) => ({ ...v })),
+    knots: [...acc.knots],
+    weights: [...acc.weights],
+  }
 }
 
 type Block = {
@@ -220,6 +248,53 @@ export function parseDxf(source: string, options: CadParseOptions = {}): CadDraw
         let sweep = end - start
         while (sweep <= 0) sweep += TAU
         emitArc(sink, layer, entity.x1, entity.y1, entity.radius, start, sweep, arcTolerance, local)
+        return
+      }
+
+      case 'ELLIPSE':
+        emitEllipse(
+          sink,
+          layer,
+          entity.x1,
+          entity.y1,
+          // The major axis is stored as a vector RELATIVE to the centre.
+          entity.x2,
+          entity.y2,
+          entity.radius,
+          entity.startAngle,
+          entity.endAngle,
+          arcTolerance,
+          local,
+        )
+        return
+
+      case 'SPLINE': {
+        const spline: SplineDefinition = {
+          controlPoints: entity.vertices.map((v) => [v.x, v.y] as const),
+          weights: entity.weights,
+          knots: entity.knots,
+          degree: entity.degree,
+          closed: entity.closed,
+        }
+        if (spline.controlPoints.length < 2) return
+
+        // Splines carry no radius, so a relative tolerance has nothing to be
+        // relative to; fall back to the control polygon's own scale.
+        const budget =
+          arcTolerance.absolute ??
+          controlPolygonLength(spline.controlPoints) * arcTolerance.relative
+
+        const points = flattenSpline(spline, Math.max(budget, 1e-9))
+        for (let i = 0; i < points.length - 1; i++) {
+          const a = points[i]!
+          const b = points[i + 1]!
+          emitLine(sink, layer, a[0], a[1], b[0], b[1], local)
+        }
+        if (entity.closed && points.length > 2) {
+          const first = points[0]!
+          const last = points[points.length - 1]!
+          emitLine(sink, layer, last[0], last[1], first[0], first[1], local)
+        }
         return
       }
 
@@ -446,7 +521,7 @@ export function parseDxf(source: string, options: CadParseOptions = {}): CadDraw
         continue
       case 10: {
         const x = Number.parseFloat(value)
-        if (accumulator.type === 'LWPOLYLINE') {
+        if (POINT_LIST_TYPES.has(accumulator.type)) {
           vertexX = x
           hasVertexX = true
         } else if (accumulator.type === 'BLOCK' && currentBlock) {
@@ -458,7 +533,7 @@ export function parseDxf(source: string, options: CadParseOptions = {}): CadDraw
       }
       case 20: {
         const y = Number.parseFloat(value)
-        if (accumulator.type === 'LWPOLYLINE') {
+        if (POINT_LIST_TYPES.has(accumulator.type)) {
           if (hasVertexX) {
             accumulator.vertices.push({ x: vertexX, y, bulge: 0 })
             hasVertexX = false
@@ -477,14 +552,21 @@ export function parseDxf(source: string, options: CadParseOptions = {}): CadDraw
         accumulator.y2 = Number.parseFloat(value)
         continue
       case 40:
-        accumulator.radius = Number.parseFloat(value)
+        // Overloaded: a knot for SPLINE, the minor/major ratio for ELLIPSE,
+        // the radius for ARC and CIRCLE.
+        if (accumulator.type === 'SPLINE') accumulator.knots.push(Number.parseFloat(value))
+        else accumulator.radius = Number.parseFloat(value)
         continue
       case 41:
-        accumulator.scaleX = Number.parseFloat(value)
+        if (accumulator.type === 'SPLINE') accumulator.weights.push(Number.parseFloat(value))
+        else if (accumulator.type === 'ELLIPSE') accumulator.startAngle = Number.parseFloat(value)
+        else accumulator.scaleX = Number.parseFloat(value)
         continue
       case 42: {
         const bulge = Number.parseFloat(value)
-        if (accumulator.type === 'LWPOLYLINE') {
+        if (accumulator.type === 'ELLIPSE') {
+          accumulator.endAngle = bulge
+        } else if (accumulator.type === 'LWPOLYLINE') {
           // A bulge belongs to the vertex it follows.
           const last = accumulator.vertices[accumulator.vertices.length - 1]
           if (last) last.bulge = bulge
@@ -510,6 +592,9 @@ export function parseDxf(source: string, options: CadParseOptions = {}): CadDraw
           if (colorIndex < 0) pendingLayer.visible = false
         }
         continue
+      case 71:
+        if (accumulator.type === 'SPLINE') accumulator.degree = Number.parseInt(value, 10)
+        continue
       case 70:
         if (headerVar === '$INSUNITS') {
           insunits = Number.parseInt(value, 10)
@@ -517,7 +602,11 @@ export function parseDxf(source: string, options: CadParseOptions = {}): CadDraw
         } else if (pendingLayer) {
           // Bit 1 = frozen.
           if ((Number.parseInt(value, 10) & 1) !== 0) pendingLayer.visible = false
-        } else if (accumulator.type === 'LWPOLYLINE' || accumulator.type === 'POLYLINE') {
+        } else if (
+          accumulator.type === 'LWPOLYLINE' ||
+          accumulator.type === 'POLYLINE' ||
+          accumulator.type === 'SPLINE'
+        ) {
           accumulator.closed = (Number.parseInt(value, 10) & 1) !== 0
         }
         continue

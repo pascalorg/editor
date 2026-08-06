@@ -95,7 +95,7 @@ describe('underlay buffer', () => {
 
   it('trims a modest drawing too, not only a huge one', () => {
     // 60 segments — far too few for a 0.5% trim to round to anything, so this
-    // exercises the point floor rather than the percentage.
+    // exercises the segment floor rather than the percentage.
     let body = ''
     for (let i = 0; i < 60; i++) body += line('DUVAR', i * 10, 0, i * 10, 200)
     body += line('STRAY', -50_000, 0, -49_000, 0)
@@ -103,6 +103,68 @@ describe('underlay buffer', () => {
     const underlay = fromUnderlayBuffer(toUnderlayBuffer(parseDxf(dxf(entities(body)))))
 
     expect(underlay.contentBounds.minX).toBeGreaterThan(underlay.bounds.minX + 40_000)
+  })
+
+  it('picks the busier sheet when a drawing is a layout of several', () => {
+    // The shape a real production file turns out to have: model space holding
+    // more than one drawing side by side. A percentile trim cannot help —
+    // both sides are real geometry — and centring between them would put the
+    // scene origin in the empty gap.
+    let body = ''
+    for (let i = 0; i < 400; i++) body += line('DUVAR', 60_000 + i * 10, 0, 60_000 + i * 10, 5000)
+    for (let i = 0; i < 80; i++) body += line('DUVAR', -40_000 + i * 10, 0, -40_000 + i * 10, 5000)
+
+    const underlay = fromUnderlayBuffer(
+      toUnderlayBuffer(parseDxf(dxf(header({ $INSUNITS: [70, 4] }), entities(body)))),
+    )
+
+    // Origin lands on the big sheet, not between the two.
+    expect(underlay.origin[0]).toBeGreaterThan(55_000)
+    // …and the content extent describes that sheet, not the pair.
+    expect(underlay.contentBounds.maxX - underlay.contentBounds.minX).toBeLessThan(10_000)
+    // The smaller sheet is still drawn, just not in charge.
+    expect(underlay.bounds.minX).toBeLessThan(-90_000)
+  })
+
+  it('does not mistake the two ends of parallel lines for two drawings', () => {
+    // A rectangle drawn as vertical lines has exactly two distinct endpoint Y
+    // values. Clustering on endpoints reads that as two far-apart drawings and
+    // discards half the building — which is most buildings.
+    let body = ''
+    for (let i = 0; i < 120; i++) body += line('DUVAR', i * 250, 0, i * 250, 20_000)
+
+    const underlay = fromUnderlayBuffer(
+      toUnderlayBuffer(parseDxf(dxf(header({ $INSUNITS: [70, 4] }), entities(body)))),
+    )
+
+    expect(underlay.contentBounds.maxY - underlay.contentBounds.minY).toBeGreaterThan(19_000)
+    expect(underlay.contentBounds.maxX - underlay.contentBounds.minX).toBeGreaterThan(28_000)
+  })
+
+  it('measures surviving walls end to end, not from their middles', () => {
+    let body = ''
+    for (let i = 0; i < 120; i++) body += line('DUVAR', i * 250, 0, i * 250, 20_000)
+
+    const underlay = fromUnderlayBuffer(
+      toUnderlayBuffer(parseDxf(dxf(header({ $INSUNITS: [70, 4] }), entities(body)))),
+    )
+
+    // Half of 20,000 would be the answer if the extent came from midpoints.
+    expect(underlay.contentBounds.maxY - underlay.contentBounds.minY).toBeCloseTo(20_000, -1)
+  })
+
+  it('does not split a drawing that merely has a courtyard in it', () => {
+    // A gap has to be large relative to the whole span before it reads as
+    // separate sheets; an internal void must not fool it.
+    let body = ''
+    for (let i = 0; i < 200; i++) body += line('DUVAR', i * 10, 0, i * 10, 5000)
+    for (let i = 0; i < 200; i++) body += line('DUVAR', 2400 + i * 10, 0, 2400 + i * 10, 5000)
+
+    const underlay = fromUnderlayBuffer(
+      toUnderlayBuffer(parseDxf(dxf(header({ $INSUNITS: [70, 4] }), entities(body)))),
+    )
+
+    expect(underlay.contentBounds.maxX - underlay.contentBounds.minX).toBeGreaterThan(3500)
   })
 
   it('reports an unrecognised buffer instead of decoding garbage', () => {

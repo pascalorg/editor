@@ -1,5 +1,5 @@
 import type { AnyNodeId, NodeDefinition } from '@pascal-app/core'
-import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { type FloorplanNodeExtension, useEditor } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
@@ -149,6 +149,31 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Set wall start / end' },
+    {
+      key: 'J',
+      label: 'Justify',
+      // A live chip rather than a static key row: which side the wall grows on
+      // is invisible until you draw, and the whole reason to justify is to put
+      // the wall against a line you can see — the HUD has to say which side is
+      // armed before the click, not after.
+      chip: {
+        subscribe: (onChange) => useEditor.subscribe(onChange),
+        value: () => useEditor.getState().wallAlignment,
+        cycle: () => useEditor.getState().cycleWallAlignment(),
+        labels: {
+          center: 'Justify: Centre',
+          left: 'Justify: Left',
+          right: 'Justify: Right',
+        },
+        icons: {
+          center: 'lucide:align-center-horizontal',
+          left: 'lucide:align-start-horizontal',
+          right: 'lucide:align-end-horizontal',
+        },
+        tooltip:
+          'Which part of the wall the drawn line is — its centre or one of its faces. Click or press J to cycle.',
+      },
+    },
     { key: 'Esc', label: 'Cancel' },
   ],
 

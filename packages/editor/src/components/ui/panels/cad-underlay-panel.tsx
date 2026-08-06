@@ -1,12 +1,20 @@
 'use client'
 
 import { type AnyNodeId, type CadUnderlayNode, useScene } from '@pascal-app/core'
-import { Eye, EyeOff, Lock, Trash2, Unlock } from 'lucide-react'
-import { useMemo } from 'react'
+import { Eye, EyeOff, Lock, RotateCcw, Ruler, Trash2, Unlock } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useCadUnderlayRevision } from '../../../hooks/use-cad-underlay-revision'
+import {
+  calibrationProblemMessage,
+  computeCalibration,
+  revertCalibration,
+  validateCalibration,
+} from '../../../lib/cad-calibration'
+import { formatExtent, suggestUnits } from '../../../lib/cad-import'
 import { getCadUnderlay, getCadUnderlayError } from '../../../lib/cad-underlay-cache'
 import { cn } from '../../../lib/utils'
 import { ActionButton, ActionGroup } from '../controls/action-button'
+import { MetricControl } from '../controls/metric-control'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
 import { PanelWrapper } from './panel-wrapper'
@@ -19,6 +27,8 @@ type Props = {
 export function CadUnderlayPanel({ node, onClose }: Props) {
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
+  const [measured, setMeasured] = useState(0)
+  const [actual, setActual] = useState(0)
 
   useCadUnderlayRevision()
   const loaded = getCadUnderlay(node.url)
@@ -49,6 +59,16 @@ export function CadUnderlayPanel({ node, onClose }: Props) {
   const toggleLayer = (name: string, visible: boolean) => {
     update({ layers: { ...node.layers, [name]: { ...node.layers[name], visible: !visible } } })
   }
+
+  // The same picker the import dialog offers, so a unit chosen wrongly at
+  // import — or declared wrongly by the file — is one click to fix rather than
+  // a re-import.
+  const unitOptions = useMemo(() => (loaded ? suggestUnits(loaded.underlay) : []), [loaded])
+
+  const calibrationProblem = validateCalibration({
+    measuredMeters: measured,
+    actualMeters: actual,
+  })
 
   const extent = loaded
     ? {
@@ -133,6 +153,102 @@ export function CadUnderlayPanel({ node, onClose }: Props) {
               </span>
             </div>
           </div>
+        )}
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Scale">
+        {unitOptions.length > 0 && (
+          <>
+            <p className="px-0.5 text-muted-foreground text-xs leading-snug">
+              If the drawing came in at the wrong size, its unit is usually why — a plan drawn in
+              centimetres and saved as millimetres arrives ten times too big.
+            </p>
+            <div className="grid grid-cols-1 gap-0.5">
+              {unitOptions.map((option) => (
+                <button
+                  className={cn(
+                    'flex items-center justify-between rounded px-2 py-1 text-left text-xs transition-colors',
+                    Math.abs(option.metersPerUnit - node.scale) < 1e-12
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-accent/40',
+                  )}
+                  key={option.label}
+                  onClick={() => update({ scale: option.metersPerUnit })}
+                  type="button"
+                >
+                  <span>{option.label}</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {formatExtent(option.widthMeters)} × {formatExtent(option.heightMeters)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        <p className="px-0.5 text-muted-foreground text-xs leading-snug">
+          For anything a unit change cannot fix, measure a known dimension with the measurement
+          tool — it snaps to the underlay — then enter what it should be.
+        </p>
+
+        <MetricControl
+          label="Measured"
+          min={0}
+          onChange={setMeasured}
+          precision={3}
+          step={0.01}
+          unit="m"
+          value={measured}
+        />
+        <MetricControl
+          label="Should be"
+          min={0}
+          onChange={setActual}
+          precision={3}
+          step={0.01}
+          unit="m"
+          value={actual}
+        />
+
+        {calibrationProblem && measured > 0 && actual > 0 && (
+          <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1.5 text-amber-700 text-xs dark:text-amber-300">
+            {calibrationProblemMessage(calibrationProblem)}
+          </div>
+        )}
+
+        <ActionGroup>
+          <ActionButton
+            disabled={calibrationProblem !== null}
+            icon={<Ruler className="h-3.5 w-3.5" />}
+            label="Apply"
+            onClick={() => {
+              const result = computeCalibration({
+                currentScale: node.scale,
+                measuredMeters: measured,
+                actualMeters: actual,
+              })
+              if (!result) return
+              update({ scale: result.scale, calibration: result.calibration })
+              setMeasured(0)
+              setActual(0)
+            }}
+          />
+          {node.calibration && (
+            <ActionButton
+              icon={<RotateCcw className="h-3.5 w-3.5" />}
+              label="Revert"
+              onClick={() =>
+                update({ scale: revertCalibration(node.calibration!), calibration: null })
+              }
+            />
+          )}
+        </ActionGroup>
+
+        {node.calibration && (
+          <p className="px-0.5 text-muted-foreground text-xs leading-snug">
+            Calibrated: {node.calibration.measuredMeters.toFixed(3)} m read as{' '}
+            {node.calibration.actualMeters.toFixed(3)} m.
+          </p>
         )}
       </PanelSection>
 
