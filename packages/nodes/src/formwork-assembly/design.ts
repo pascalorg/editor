@@ -5,6 +5,7 @@ import {
   clampSchedule,
   columnFormSizeMm,
   type FalseworkDesign,
+  type FormworkSettings,
   type FormworkSystem,
   falseworkDesign,
   type PourUnit,
@@ -17,8 +18,8 @@ import type { ColumnNode, SlabNode, WallNode } from '@pascal-app/core/schema'
 import { assemblySystem, COLUMN_KICKER_M, designEnvelope } from './geometry-shared'
 
 /**
- * The structural design of one pour, solved from the element and its pour unit
- * alone.
+ * The structural design of one pour, solved from the element, its pour unit and
+ * the project's pour settings.
  *
  * It lives apart from the geometry builders because two surfaces need the same
  * answer and only one of them has a `GeometryContext`. The builders place what the
@@ -27,7 +28,14 @@ import { assemblySystem, COLUMN_KICKER_M, designEnvelope } from './geometry-shar
  * disagree about the tie spacing of the same wall, so there is one function per
  * kind and both callers use it.
  *
- * Everything here is derived from the host node and the `PourUnit`, and nothing
+ * `FormworkSettings` is a required argument rather than an optional one for the
+ * same reason. It carries the rise rate, the temperature and the mix that the
+ * pressure is a function of, and a signature that let a caller omit it would let
+ * one surface design to the project's pour and the other to a default — which is
+ * exactly the disagreement the single solve exists to prevent. `formworkSettings`
+ * turns an absent settings node into the defaults, so there is always one to pass.
+ *
+ * Everything else is derived from the host node and the `PourUnit`, and nothing
  * from the scene graph, so the report does not need to resolve neighbours to
  * repeat the design. Which *faces* are formed does need the neighbours, and that
  * stays in `resolveFormworkScope`.
@@ -77,6 +85,7 @@ export interface WallPourDesign {
  * a bay cut short by a joint has fewer spans and so a shorter allowable one.
  */
 export function wallPourDesign(
+  settings: FormworkSettings,
   wall: WallNode,
   unit: PourUnit | undefined,
   systemId: string | undefined,
@@ -87,17 +96,20 @@ export function wallPourDesign(
   const topY = unit?.topElevation ?? wall.height ?? 2.4
   const spanStart = unit?.startAlong ?? 0
   const spanEnd = unit?.endAlong ?? wallLength
-  const system = assemblySystem(systemId)
+  const system = assemblySystem(settings, systemId)
   const liftHeightM = topY - baseY
   return {
     system,
     liftHeightM,
     design: wallDesign({
-      envelope: designEnvelope(liftHeightM, [wallLength, thickness]),
+      envelope: designEnvelope(settings, liftHeightM, [wallLength, thickness]),
       liftHeightM,
       runM: spanEnd - spanStart,
       wallThicknessMm: thickness * 1000,
       system,
+      sheathingId: settings.parts.sheathingId,
+      beamId: settings.parts.beamId,
+      doubledWalers: settings.parts.doubledWalers,
       // Visible concrete is read for its finish, so the sheathing takes the tighter
       // `l/360` plus absolute cap rather than general structural `l/270`.
       architectural: wall.exposureClass === 'architectural',
@@ -106,6 +118,11 @@ export function wallPourDesign(
       // under a crew that has already set out to the stated module.
       statedWalerSpacingM: wall.walerSpacing,
       statedTieSpacingM: wall.tieSpacing,
+      windPressureKpa: settings.bracing.windPressureKpa,
+      formDeadLoadKnM: settings.bracing.formDeadLoadKnM,
+      rakerSpacingM: settings.bracing.rakerSpacingM,
+      rakerAngleDeg: settings.bracing.rakerAngleDeg,
+      guyWires: settings.bracing.guyWires,
     }),
   }
 }
@@ -136,7 +153,11 @@ export interface ColumnPourDesign {
  * covers is also the honest one — ACI directs the full fluid head for columns
  * anyway (design.md §2.7 step 1).
  */
-export function columnPourDesign(column: ColumnNode, unit: PourUnit | undefined): ColumnPourDesign {
+export function columnPourDesign(
+  settings: FormworkSettings,
+  column: ColumnNode,
+  unit: PourUnit | undefined,
+): ColumnPourDesign {
   const baseY = unit?.baseElevation ?? 0
   const topY = unit?.topElevation ?? column.height
   // A column is formed right up to the soffit above it, so there is no margin at the
@@ -152,7 +173,7 @@ export function columnPourDesign(column: ColumnNode, unit: PourUnit | undefined)
   // and no form or band in the catalog answers for one — so it is scheduled off
   // the pressure and the practical limits alone.
   const form = facets !== undefined ? undefined : columnForm(sideM * 1000, liftHeightM * 1000)
-  const envelope = designEnvelope(liftHeightM, planDimensionsM)
+  const envelope = designEnvelope(settings, liftHeightM, planDimensionsM)
   return {
     facets,
     form,
@@ -188,7 +209,7 @@ export interface SlabPourDesign {
  * own weight, which is a function of thickness alone, so a slab cast in bays has
  * the same falsework in every one of them.
  */
-export function slabPourDesign(slab: SlabNode): SlabPourDesign {
+export function slabPourDesign(settings: FormworkSettings, slab: SlabNode): SlabPourDesign {
   // The prop reaches from the floor below to the underside of the bearers, so it is
   // the height the falsework is designed at as well as the length drawn.
   const soffitHeightM =
@@ -198,6 +219,16 @@ export function slabPourDesign(slab: SlabNode): SlabPourDesign {
     design: falseworkDesign({
       slabThicknessM: slab.thickness,
       soffitHeightM,
+      // A deck is loaded by the concrete's weight rather than by its head, so it
+      // reads the mix's unit weight and none of the pressure settings.
+      unitWeightKnM3: settings.concrete.unitWeightKnM3,
+      formworkSelfWeightKpa: settings.falseworkLoads.formworkSelfWeightKpa,
+      rebarKnM3: settings.falseworkLoads.rebarKnM3,
+      liveLoadKpa: settings.falseworkLoads.liveLoadKpa,
+      motorizedCarts: settings.falseworkLoads.motorizedCarts,
+      sheathingId: settings.parts.sheathingId,
+      beamId: settings.parts.beamId,
+      propId: settings.parts.propId,
       // A visible soffit is read for its finish, so it takes the tighter `l/360`
       // plus absolute cap rather than general structural `l/270`.
       architectural: slab.exposureClass === 'architectural',

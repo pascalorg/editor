@@ -326,3 +326,11 @@ export {
   unitWeightKnM3,
   verticalElementKind,
 } from './pressure'
+export {
+  DEFAULT_CONCRETE_TEMPERATURE_C,
+  DEFAULT_FORMWORK_SETTINGS,
+  findFormworkSettingsNode,
+  type FormworkSettings,
+  formworkSettings,
+  formworkSettingsFor,
+} from './settings'

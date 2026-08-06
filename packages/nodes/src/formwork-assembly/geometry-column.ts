@@ -88,7 +88,7 @@ export function buildColumnFormwork(
   material: MeshStandardMaterial,
 ): Group {
   const group = new Group()
-  const { unit, isFormed } = scope
+  const { unit, isFormed, settings } = scope
 
   const height = column.height
   const baseY = unit?.baseElevation ?? 0
@@ -101,7 +101,7 @@ export function buildColumnFormwork(
   // this same column, and the form stands on it.
   // Solved once and shared with the design report: a panel printing its own
   // schedule could disagree with the clamps on screen.
-  const { facets, form, kickerM, schedule } = columnPourDesign(column, unit)
+  const { facets, form, kickerM, schedule } = columnPourDesign(settings, column, unit)
   const formBottom = baseY + kickerM
   const formHeight = topY - formBottom
   if (formHeight <= 0) return group

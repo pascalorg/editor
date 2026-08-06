@@ -23,6 +23,7 @@ import type {
   EyebrowVentNode,
   FenceNode,
   FormworkAssemblyNode,
+  FormworkProjectSettingsNode,
   GuideNode,
   GutterNode,
   HvacEquipmentNode,
@@ -96,6 +97,7 @@ export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
 export type FormworkAssemblyEvent = NodeEvent<FormworkAssemblyNode>
 export type ConstructionJointEvent = NodeEvent<ConstructionJointNode>
+export type FormworkProjectSettingsEvent = NodeEvent<FormworkProjectSettingsNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
@@ -299,6 +301,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'formwork-assembly', FormworkAssemblyEvent> &
   NodeEvents<'construction-joint', ConstructionJointEvent> &
+  NodeEvents<'formwork-settings', FormworkProjectSettingsEvent> &
   NodeEvents<'cabinet', CabinetEvent> &
   NodeEvents<'cabinet-module', CabinetModuleEvent> &
   NodeEvents<'item', ItemEvent> &

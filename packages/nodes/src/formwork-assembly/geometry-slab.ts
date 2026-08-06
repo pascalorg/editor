@@ -97,7 +97,7 @@ export function buildSlabFormwork(
   material: MeshStandardMaterial,
 ): Group {
   const group = new Group()
-  const { isFormed } = scope
+  const { isFormed, settings } = scope
 
   const outline = polygonOf(slab)
   if (outline.length < 3 || slab.thickness <= 0) return group
@@ -133,7 +133,7 @@ export function buildSlabFormwork(
   if (isFormed('soffit')) {
     // Solved once and shared with the design report: a panel printing its own chain
     // could disagree with the falsework on screen.
-    const { design: falsework, soffitHeightM } = slabPourDesign(slab)
+    const { design: falsework, soffitHeightM } = slabPourDesign(settings, slab)
 
     const panelWidth = node.panelWidth || DECK_BAY
     const zCount = Math.max(1, Math.ceil((bounds.maxZ - bounds.minZ) / panelWidth))

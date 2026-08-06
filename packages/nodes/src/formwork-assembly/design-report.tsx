@@ -4,6 +4,8 @@ import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
 import {
   type ClampRow,
   type ColumnClampType,
+  type FormworkSettings,
+  formworkSettingsFor,
   hardCutsForElement,
   type MemberDesign,
   type PourUnit,
@@ -71,27 +73,35 @@ function mm(meters: number, unit: UnitSystem): string {
 const CASTABLE_TYPES = ['wall', 'column', 'slab'] as const
 
 /**
- * The host and how it is split. The scope is applied outside the memo, the way
- * `useHostCoverage` does it: the assembly inspector builds a fresh scope object on
- * every render, so memoising on it would recompute the split anyway while looking
- * as though it did not.
+ * The host, how it is split, and the pour the project designs to. The scope is
+ * applied outside the memo, the way `useHostCoverage` does it: the assembly
+ * inspector builds a fresh scope object on every render, so memoising on it would
+ * recompute the split anyway while looking as though it did not.
+ *
+ * The settings come from the same scene read rather than from a second hook,
+ * because the report must be sized on the pour the 3D shutter was built to — a
+ * report resolving them separately could lag a settings edit by a render and
+ * print a spacing the model does not have.
  */
 function useHostPours(hostId: AnyNodeId | undefined): {
   host: CastableHostNode | undefined
   units: PourUnit[]
+  settings: FormworkSettings
 } {
   const nodes = useScene((s) => s.nodes)
 
   return useMemo(() => {
+    const settings = formworkSettingsFor(Object.values(nodes))
     const candidate = hostId ? nodes[hostId] : undefined
     if (!candidate || !(CASTABLE_TYPES as readonly string[]).includes(candidate.type)) {
-      return { host: undefined, units: [] }
+      return { host: undefined, units: [], settings }
     }
     const host = candidate as CastableHostNode
     const element = toCastableElement(host as AnyNode)
-    if (!element) return { host, units: [] }
+    if (!element) return { host, units: [], settings }
     return {
       host,
+      settings,
       units: pourUnitsForElement(
         element,
         {},
@@ -113,7 +123,7 @@ export function FormworkDesignReport({
   systemId?: string
 }) {
   const unitSystem = useViewer((s) => s.unit)
-  const { host, units } = useHostPours(hostId)
+  const { host, units, settings } = useHostPours(hostId)
 
   if (!host) {
     return (
@@ -166,30 +176,38 @@ export function FormworkDesignReport({
         </div>
       )}
       {host.type === 'wall' ? (
-        <WallReport systemId={systemId} unit={unit} unitSystem={unitSystem} wall={host} />
+        <WallReport
+          settings={settings}
+          systemId={systemId}
+          unit={unit}
+          unitSystem={unitSystem}
+          wall={host}
+        />
       ) : host.type === 'column' ? (
-        <ColumnReport column={host} unit={unit} unitSystem={unitSystem} />
+        <ColumnReport column={host} settings={settings} unit={unit} unitSystem={unitSystem} />
       ) : (
-        <SlabReport slab={host} unitSystem={unitSystem} />
+        <SlabReport settings={settings} slab={host} unitSystem={unitSystem} />
       )}
     </>
   )
 }
 
 function WallReport({
+  settings,
   systemId,
   unit,
   unitSystem,
   wall,
 }: {
+  settings: FormworkSettings
   systemId: string | undefined
   unit: PourUnit | undefined
   unitSystem: UnitSystem
   wall: Extract<CastableHostNode, { type: 'wall' }>
 }) {
   const { design, liftHeightM } = useMemo(
-    () => wallPourDesign(wall, unit, systemId),
-    [wall, unit, systemId],
+    () => wallPourDesign(settings, wall, unit, systemId),
+    [settings, wall, unit, systemId],
   )
 
   return (
@@ -198,6 +216,7 @@ function WallReport({
         designPressureKnM2={design.designPressureKnM2}
         envelope={design.envelope}
         liftHeightM={liftHeightM}
+        settings={settings}
         unitSystem={unitSystem}
       />
 
@@ -284,16 +303,18 @@ function WallReport({
 
 function ColumnReport({
   column,
+  settings,
   unit,
   unitSystem,
 }: {
   column: Extract<CastableHostNode, { type: 'column' }>
+  settings: FormworkSettings
   unit: PourUnit | undefined
   unitSystem: UnitSystem
 }) {
   const { designPressureKnM2, envelope, facets, form, liftHeightM, schedule, sideM } = useMemo(
-    () => columnPourDesign(column, unit),
-    [column, unit],
+    () => columnPourDesign(settings, column, unit),
+    [settings, column, unit],
   )
 
   return (
@@ -302,6 +323,7 @@ function ColumnReport({
         designPressureKnM2={designPressureKnM2}
         envelope={envelope}
         liftHeightM={liftHeightM}
+        settings={settings}
         unitSystem={unitSystem}
       />
 
@@ -369,13 +391,18 @@ function clampNote(
 }
 
 function SlabReport({
+  settings,
   slab,
   unitSystem,
 }: {
+  settings: FormworkSettings
   slab: Extract<CastableHostNode, { type: 'slab' }>
   unitSystem: UnitSystem
 }) {
-  const { design, soffitHeightM } = useMemo(() => slabPourDesign(slab), [slab])
+  const { design, soffitHeightM } = useMemo(
+    () => slabPourDesign(settings, slab),
+    [settings, slab],
+  )
   const propOver =
     design.propCapacityKn !== undefined && design.propLoadKn > design.propCapacityKn + 1e-6
 
@@ -453,13 +480,18 @@ function EnvelopeSection({
   designPressureKnM2,
   envelope,
   liftHeightM,
+  settings,
   unitSystem,
 }: {
   designPressureKnM2: number
   envelope: PressureEnvelope
   liftHeightM: number
+  settings: FormworkSettings
   unitSystem: UnitSystem
 }) {
+  const placement = settings.stated?.placement
+  const assumedRate = placement?.riseRateMH === undefined
+  const assumedTemperature = placement?.concreteTemperatureC === undefined
   // Where the ramp reaches `maxKnM2` is most of the difference between the codes,
   // and it is worth hundreds of millimetres of tie spacing — so it is shown rather
   // than folded into the one scalar the members were sized on. A break at or below
@@ -487,6 +519,30 @@ function EnvelopeSection({
         {formatLinearMeasurement(liftHeightM, unitSystem)} of pour.
       </Note>
       <Note>{envelope.governingEquation}</Note>
+      {/* The rate and the temperature are most of the answer, and until a project
+          states them the figure above is derived from a default — so it says which
+          of the two it is. A number the reader cannot trace back to a decision
+          invites trust it has not earned. */}
+      <Readout
+        label="Rate of rise"
+        value={`${settings.riseRateMH} m/h`}
+        value2={assumedRate ? 'assumed' : 'project'}
+      />
+      <Readout
+        label="Concrete at"
+        value={`${settings.concreteTemperatureC} °C`}
+        value2={assumedTemperature ? 'assumed' : 'project'}
+      />
+      {(assumedRate || assumedTemperature) && (
+        <Note>
+          {assumedRate && assumedTemperature
+            ? 'Both are the conservative default rather than this project’s pour.'
+            : assumedRate
+              ? 'The rate is the conservative default — the fastest the code covers.'
+              : 'The temperature is DIN’s reference, so no correction was applied.'}{' '}
+          Set the pour in the formwork settings to design to it.
+        </Note>
+      )}
       {envelope.warnings.map((warning) => (
         <WarningLine key={warning.kind + warning.message} message={warning.message} />
       ))}

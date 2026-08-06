@@ -272,7 +272,7 @@ export function buildWallFormwork(
   material: MeshStandardMaterial,
 ): Group {
   const group = new Group()
-  const { element, unit, isFormed, corners } = scope
+  const { element, unit, isFormed, corners, settings } = scope
 
   const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
   if (wallLength <= 0) return group
@@ -319,7 +319,7 @@ export function buildWallFormwork(
   const kickerM = baseY <= 1e-6 ? KICKER_M : 0
   // The lateral chain for this pour, solved once and shared with the design report:
   // a panel that printed its own solve could disagree with the shutter on screen.
-  const { design, system } = wallPourDesign(wall, unit, node.systemId)
+  const { design, system } = wallPourDesign(settings, wall, unit, node.systemId)
   for (const { face } of SIDES) {
     cornerRunsByFace.set(face, cornerRuns(corners, face))
   }

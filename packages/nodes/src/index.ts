@@ -19,6 +19,7 @@ import { elevatorDefinition } from './elevator'
 import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
 import { formworkAssemblyDefinition } from './formwork-assembly'
+import { formworkProjectSettingsDefinition } from './formwork-project-settings'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
@@ -74,6 +75,7 @@ export const builtinPlugin: Plugin = {
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
     formworkAssemblyDefinition as unknown as AnyNodeDefinition,
+    formworkProjectSettingsDefinition as unknown as AnyNodeDefinition,
     constructionJointDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
@@ -160,6 +162,7 @@ export {
   formworkAssemblyDefinition,
   pourUnitsForHost,
 } from './formwork-assembly'
+export { formworkProjectSettingsDefinition } from './formwork-project-settings'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'

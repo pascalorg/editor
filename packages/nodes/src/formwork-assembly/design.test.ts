@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { ColumnNode, SlabNode, WallNode } from '@pascal-app/core'
-import type { PourUnit } from '@pascal-app/core/formwork'
+import {
+  DEFAULT_FORMWORK_SETTINGS,
+  type FormworkSettings,
+  formworkSettings,
+  type PourUnit,
+} from '@pascal-app/core/formwork'
+import type { FormworkProjectSettingsNode } from '@pascal-app/core/schema'
 import { columnPourDesign, slabPourDesign, wallPourDesign } from './design'
 
 /**
@@ -10,6 +16,11 @@ import { columnPourDesign, slabPourDesign, wallPourDesign } from './design'
  * pour unit rather than the element sets the head, that a stated spacing survives
  * to the panel and reports its overload, and that every figure the report prints is
  * actually populated.
+ *
+ * The settings are threaded through too, and for the same reason: a field the
+ * dialog writes but no design function reads is a control that appears to work.
+ * Each group below therefore asserts that stating something in the project
+ * settings *moves* the answer, not merely that it is accepted.
  */
 
 function makeWall(overrides: Partial<WallNode> = {}): WallNode {
@@ -91,9 +102,30 @@ function makeUnit(overrides: Partial<PourUnit> = {}): PourUnit {
   } as PourUnit
 }
 
+/** Settings as they arrive from a real scene: resolved off a node, not hand-built. */
+function makeSettings(overrides: Partial<FormworkProjectSettingsNode> = {}): FormworkSettings {
+  return formworkSettings({
+    object: 'node',
+    id: 'formwork-settings_test',
+    type: 'formwork-settings',
+    parentId: 'site_test',
+    visible: true,
+    metadata: {},
+    children: [],
+    ...overrides,
+  } as FormworkProjectSettingsNode)
+}
+
+const DEFAULTS = DEFAULT_FORMWORK_SETTINGS
+
 describe('wallPourDesign', () => {
   test('reports every figure the design report prints', () => {
-    const { design, liftHeightM, system } = wallPourDesign(makeWall(), undefined, undefined)
+    const { design, liftHeightM, system } = wallPourDesign(
+      DEFAULTS,
+      makeWall(),
+      undefined,
+      undefined,
+    )
 
     expect(liftHeightM).toBe(3)
     expect(system).toBeDefined()
@@ -113,9 +145,9 @@ describe('wallPourDesign', () => {
 
   test('the pour unit sets the head, not the element', () => {
     const wall = makeWall({ height: 9 })
-    const whole = wallPourDesign(wall, undefined, undefined)
+    const whole = wallPourDesign(DEFAULTS, wall, undefined, undefined)
     // The base lift of a 9 m wall split into three: same wall, a third of the head.
-    const lift = wallPourDesign(wall, makeUnit({ topElevation: 3 }), undefined)
+    const lift = wallPourDesign(DEFAULTS, wall, makeUnit({ topElevation: 3 }), undefined)
 
     expect(whole.liftHeightM).toBe(9)
     expect(lift.liftHeightM).toBe(3)
@@ -128,8 +160,8 @@ describe('wallPourDesign', () => {
     // count follows the run. The stud runs vertically and takes the lift height.
     const wall = makeWall({ height: 1.2, thickness: 0.15 })
     const unit = makeUnit({ topElevation: 1.2 })
-    const full = wallPourDesign(wall, unit, undefined)
-    const bay = wallPourDesign(wall, { ...unit, endAlong: 1.2 }, undefined)
+    const full = wallPourDesign(DEFAULTS, wall, unit, undefined)
+    const bay = wallPourDesign(DEFAULTS, wall, { ...unit, endAlong: 1.2 }, undefined)
 
     expect(full.design.tieSpacing.spans).toBe(3)
     expect(bay.design.tieSpacing.spans).toBe(1)
@@ -141,7 +173,7 @@ describe('wallPourDesign', () => {
 
   test('a stated spacing is adopted as given and its overload is reported', () => {
     // Wide enough that the check cannot possibly allow it at this head.
-    const { design } = wallPourDesign(makeWall({ tieSpacing: 2 }), undefined, undefined)
+    const { design } = wallPourDesign(DEFAULTS, makeWall({ tieSpacing: 2 }), undefined, undefined)
 
     expect(design.tieSpacing.adoptedM).toBe(2)
     expect(design.tieSpacing.stated).toBe(true)
@@ -150,8 +182,9 @@ describe('wallPourDesign', () => {
   })
 
   test('architectural exposure tightens the deflection limit', () => {
-    const structural = wallPourDesign(makeWall(), undefined, undefined)
+    const structural = wallPourDesign(DEFAULTS, makeWall(), undefined, undefined)
     const architectural = wallPourDesign(
+      DEFAULTS,
       makeWall({ exposureClass: 'architectural' }),
       undefined,
       undefined,
@@ -161,10 +194,108 @@ describe('wallPourDesign', () => {
   })
 })
 
+describe('the project settings reach the wall chain', () => {
+  test('a slower pour than the default earns a lower pressure', () => {
+    // The default is the fastest rate DIN covers, which on a 3 m lift returns more
+    // than the fluid head and is capped by it. Stating the real rate is how a project
+    // claims the saving — and if this ever stops moving, the dialog is decorative.
+    const fast = wallPourDesign(DEFAULTS, makeWall(), undefined, undefined)
+    const slow = wallPourDesign(
+      makeSettings({ placement: { riseRateMH: 2 } }),
+      makeWall(),
+      undefined,
+      undefined,
+    )
+
+    expect(slow.design.designPressureKnM2).toBeLessThan(fast.design.designPressureKnM2)
+  })
+
+  test('cold concrete costs more, because it sets later', () => {
+    // Only visible where the formula governs rather than the fluid head, which is why
+    // this is asserted at a stated rate rather than at the default.
+    const warm = makeSettings({ placement: { riseRateMH: 2, concreteTemperatureC: 20 } })
+    const cold = makeSettings({ placement: { riseRateMH: 2, concreteTemperatureC: 10 } })
+
+    expect(
+      wallPourDesign(cold, makeWall(), undefined, undefined).design.designPressureKnM2,
+    ).toBeGreaterThan(wallPourDesign(warm, makeWall(), undefined, undefined).design.designPressureKnM2)
+  })
+
+  test('the stated standard is the one the envelope is derived under', () => {
+    const aci = wallPourDesign(
+      makeSettings({ pressureStandard: 'ACI_347' }),
+      makeWall(),
+      undefined,
+      undefined,
+    )
+
+    expect(DEFAULTS.pressureStandard).toBe('DIN_18218')
+    expect(aci.design.envelope.standard).toBe('ACI_347')
+  })
+
+  test('a flowable mix pushes harder than a stiff one at the same rate', () => {
+    const stiff = makeSettings({
+      placement: { riseRateMH: 2 },
+      concrete: { consistencyClass: 'F1' },
+    })
+    const flowable = makeSettings({
+      placement: { riseRateMH: 2 },
+      concrete: { consistencyClass: 'F5' },
+    })
+
+    expect(
+      wallPourDesign(flowable, makeWall(), undefined, undefined).design.designPressureKnM2,
+    ).toBeGreaterThan(
+      wallPourDesign(stiff, makeWall(), undefined, undefined).design.designPressureKnM2,
+    )
+  })
+
+  test('doubled walers halve what each member bends under, so the ties open out', () => {
+    // `tieSpacing` is the waler's own allowable span, so pairing the walers is the one
+    // parts setting whose effect lands on it directly.
+    const single = wallPourDesign(DEFAULTS, makeWall(), undefined, undefined)
+    const doubled = wallPourDesign(
+      makeSettings({ parts: { doubledWalers: true } }),
+      makeWall(),
+      undefined,
+      undefined,
+    )
+
+    expect(doubled.design.tieSpacing.calculatedM).toBeGreaterThan(
+      single.design.tieSpacing.calculatedM,
+    )
+  })
+
+  test('the bracing settings are the bracing check’s inputs', () => {
+    const exposed = wallPourDesign(
+      makeSettings({ bracing: { windPressureKpa: 2.5 } }),
+      makeWall(),
+      undefined,
+      undefined,
+    )
+    const sheltered = wallPourDesign(DEFAULTS, makeWall(), undefined, undefined)
+
+    expect(exposed.design.bracing.rakerForceKn).toBeGreaterThan(
+      sheltered.design.bracing.rakerForceKn,
+    )
+  })
+
+  test('the resolved settings carry what the project actually stated', () => {
+    // The report tells an assumption from a decision off `stated`, and it cannot be
+    // recovered by comparing against the default: a project that deliberately states
+    // DIN's maximum rate is not assuming it.
+    expect(DEFAULTS.stated).toBeUndefined()
+    expect(makeSettings().stated?.placement).toBeUndefined()
+    expect(
+      makeSettings({ placement: { riseRateMH: 7 } }).stated?.placement?.riseRateMH,
+    ).toBe(7)
+  })
+})
+
 describe('columnPourDesign', () => {
   test('reports the envelope the schedule was graded off', () => {
     const { designPressureKnM2, envelope, facets, form, liftHeightM, schedule, sideM } =
-      columnPourDesign(makeColumn(), undefined)
+      columnPourDesign(DEFAULTS, makeColumn(), undefined)
 
     expect(facets).toBeUndefined() // square — boxed, not wrapped
     expect(form).toBeDefined()
@@ -177,7 +308,7 @@ describe('columnPourDesign', () => {
   })
 
   test('clamp rows open out going up, because the head falls off', () => {
-    const { schedule } = columnPourDesign(makeColumn({ height: 4 }), undefined)
+    const { schedule } = columnPourDesign(DEFAULTS, makeColumn({ height: 4 }), undefined)
     // The closing row at the pour top sits at zero head, so it is not part of the
     // graded run and carries no force.
     const graded = schedule.rows.filter((row) => row.governedBy !== 'pour-top')
@@ -194,7 +325,7 @@ describe('columnPourDesign', () => {
   })
 
   test('the kicker relieves the base row, so the worst row is the one above it', () => {
-    const { schedule } = columnPourDesign(makeColumn({ height: 4 }), undefined)
+    const { schedule } = columnPourDesign(DEFAULTS, makeColumn({ height: 4 }), undefined)
     const forces = schedule.rows.map((row) => row.forceKn)
 
     // The base clamp shares the band below it with the kicker rather than carrying all
@@ -204,6 +335,7 @@ describe('columnPourDesign', () => {
 
   test('a round section is wrapped and banded rather than boxed', () => {
     const { facets, form, schedule } = columnPourDesign(
+      DEFAULTS,
       makeColumn({ crossSection: 'round', radius: 0.25 }),
       undefined,
     )
@@ -215,8 +347,9 @@ describe('columnPourDesign', () => {
 
   test('the kicker is only at the base of the element, not at a lift joint', () => {
     const column = makeColumn({ height: 6 })
-    const base = columnPourDesign(column, makeUnit({ topElevation: 3 }))
+    const base = columnPourDesign(DEFAULTS, column, makeUnit({ topElevation: 3 }))
     const upper = columnPourDesign(
+      DEFAULTS,
       column,
       makeUnit({ baseElevation: 3, topElevation: 6, liftIndex: 1, hasJointBelow: true }),
     )
@@ -226,14 +359,30 @@ describe('columnPourDesign', () => {
   })
 
   test('kickerless is honoured at the element base', () => {
-    const { kickerM } = columnPourDesign(makeColumn({ kickerMode: 'kickerless' }), undefined)
+    const { kickerM } = columnPourDesign(
+      DEFAULTS,
+      makeColumn({ kickerMode: 'kickerless' }),
+      undefined,
+    )
     expect(kickerM).toBe(0)
+  })
+
+  test('a slower pour opens the clamp schedule out', () => {
+    const fast = columnPourDesign(DEFAULTS, makeColumn({ height: 4 }), undefined)
+    const slow = columnPourDesign(
+      makeSettings({ placement: { riseRateMH: 2 } }),
+      makeColumn({ height: 4 }),
+      undefined,
+    )
+
+    expect(slow.designPressureKnM2).toBeLessThan(fast.designPressureKnM2)
+    expect(slow.schedule.rows.length).toBeLessThanOrEqual(fast.schedule.rows.length)
   })
 })
 
 describe('slabPourDesign', () => {
   test('reports every figure the design report prints', () => {
-    const { design, soffitHeightM } = slabPourDesign(makeSlab())
+    const { design, soffitHeightM } = slabPourDesign(DEFAULTS, makeSlab())
 
     expect(soffitHeightM).toBeGreaterThan(0)
     expect(design.load.totalKpa).toBeGreaterThan(0)
@@ -246,21 +395,50 @@ describe('slabPourDesign', () => {
   })
 
   test('a thicker slab tightens the grid on its own', () => {
-    const thin = slabPourDesign(makeSlab({ thickness: 0.15 }))
-    const thick = slabPourDesign(makeSlab({ thickness: 0.4 }))
+    const thin = slabPourDesign(DEFAULTS, makeSlab({ thickness: 0.15 }))
+    const thick = slabPourDesign(DEFAULTS, makeSlab({ thickness: 0.4 }))
 
     expect(thick.design.load.totalKpa).toBeGreaterThan(thin.design.load.totalKpa)
     expect(thick.design.joist.adoptedM).toBeLessThanOrEqual(thin.design.joist.adoptedM)
   })
 
   test('a stated joist spacing is adopted as given', () => {
-    const { design } = slabPourDesign(makeSlab({ walerSpacing: 1.5 }))
+    const { design } = slabPourDesign(DEFAULTS, makeSlab({ walerSpacing: 1.5 }))
 
     expect(design.joist.adoptedM).toBe(1.5)
     expect(design.joist.stated).toBe(true)
   })
 
   test('the stated soffit height is used in preference to the assumed storey', () => {
-    expect(slabPourDesign(makeSlab({ soffitHeightAboveSupport: 4.2 })).soffitHeightM).toBe(4.2)
+    expect(slabPourDesign(DEFAULTS, makeSlab({ soffitHeightAboveSupport: 4.2 })).soffitHeightM).toBe(
+      4.2,
+    )
+  })
+
+  test('the project’s deck loads are what the falsework carries', () => {
+    // A deck reads none of the pressure settings, so `falseworkLoads` is the only way
+    // a project can move a soffit design — and every field here is one the dialog
+    // offers.
+    const nominal = slabPourDesign(DEFAULTS, makeSlab())
+    const loaded = slabPourDesign(
+      makeSettings({ falseworkLoads: { liveLoadKpa: 6, motorizedCarts: true } }),
+      makeSlab(),
+    )
+
+    expect(loaded.design.load.liveKpa).toBe(6)
+    expect(loaded.design.load.totalKpa).toBeGreaterThan(nominal.design.load.totalKpa)
+    expect(loaded.design.joist.adoptedM).toBeLessThanOrEqual(nominal.design.joist.adoptedM)
+  })
+
+  test('the mix’s unit weight reaches the deck, and none of the pressure settings do', () => {
+    const heavy = slabPourDesign(makeSettings({ concrete: { unitWeightKnM3: 30 } }), makeSlab())
+    // A rate of rise is a lateral-pressure input; a soffit is loaded by weight, so
+    // stating one must leave the deck design exactly where it was.
+    const poured = slabPourDesign(makeSettings({ placement: { riseRateMH: 1 } }), makeSlab())
+
+    expect(heavy.design.load.deadKpa).toBeGreaterThan(
+      slabPourDesign(DEFAULTS, makeSlab()).design.load.deadKpa,
+    )
+    expect(poured.design.load.totalKpa).toBe(slabPourDesign(DEFAULTS, makeSlab()).design.load.totalKpa)
   })
 })

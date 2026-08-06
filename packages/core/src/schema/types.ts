@@ -19,6 +19,7 @@ import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
 import { FormworkAssemblyNode } from './nodes/formwork-assembly'
+import { FormworkProjectSettingsNode } from './nodes/formwork-project-settings'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
@@ -59,6 +60,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   WallNode,
   FenceNode,
   FormworkAssemblyNode,
+  FormworkProjectSettingsNode,
   ConstructionJointNode,
   CabinetNode,
   CabinetModuleNode,
