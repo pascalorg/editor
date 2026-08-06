@@ -22,6 +22,7 @@
     "release:editor": "gh workflow run release.yml -f package=editor -f bump=patch",
     "release:nodes": "gh workflow run release.yml -f package=nodes -f bump=patch",
     "release:mcp": "gh workflow run release.yml -f package=mcp -f bump=patch",
+    "release:cli": "gh workflow run release.yml -f package=cli -f bump=patch",
     "release:minor": "gh workflow run release.yml -f package=all -f bump=minor",
     "release:major": "gh workflow run release.yml -f package=all -f bump=major"
   },
