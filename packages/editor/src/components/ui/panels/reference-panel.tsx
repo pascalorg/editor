@@ -2,6 +2,7 @@
 
 import {
   type AnyNode,
+  type CadUnderlayNode,
   type GuideNode,
   loadAssetUrl,
   type ScanNode,
@@ -27,9 +28,10 @@ import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { SliderControl } from '../controls/slider-control'
+import { CadUnderlayPanel } from './cad-underlay-panel'
 import { PanelWrapper } from './panel-wrapper'
 
-type ReferenceNode = ScanNode | GuideNode
+type ReferenceNode = ScanNode | GuideNode | CadUnderlayNode
 
 function getScaleStatus(guide: GuideNode, scaleReferenceVisible: boolean) {
   const reference = guide.scaleReference
@@ -161,6 +163,13 @@ export function ReferencePanel() {
       cancelled = true
     }
   }, [node])
+
+  // A CAD underlay shares the reference slot but nothing else: no image to
+  // replace, no scale reference, and a layer list instead. It gets its own
+  // panel rather than a pile of conditionals in this one.
+  if (node?.type === 'cad-underlay') {
+    return <CadUnderlayPanel node={node} onClose={handleClose} />
+  }
 
   if (!node || (node.type !== 'scan' && node.type !== 'guide')) return null
 

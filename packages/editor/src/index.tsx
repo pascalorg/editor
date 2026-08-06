@@ -234,8 +234,13 @@ export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
+export {
+  ImportCadDialog,
+  type ImportCadResult,
+} from './components/ui/dialogs/import-cad-dialog'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
+export { CadUnderlayPanel } from './components/ui/panels/cad-underlay-panel'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
 // Phase 5 Stage E — kinds with bespoke editors (slab holes list,
@@ -288,6 +293,8 @@ export {
   type WalkthroughInteract,
 } from './components/walkthrough-hud'
 export type { SaveStatus } from './hooks/use-auto-save'
+export { useCadImport } from './hooks/use-cad-import'
+export { useCadUnderlayRevision } from './hooks/use-cad-underlay-revision'
 // useDragAction is the React-side glue for the registry's DragAction
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
 // can express their affordances declaratively in their own folder.
@@ -302,6 +309,48 @@ export {
   type PlacementSurface,
   publishPlacementSurface,
 } from './lib/active-placement-surface'
+export {
+  analyzeCadDrawing,
+  analyzeCadFile,
+  type CadImportAnalysis,
+  type CadImportLayer,
+  type CadImportWarning,
+  type CadUnitSuggestion,
+  commitCadImport,
+  suggestUnits,
+} from './lib/cad-import'
+export {
+  buildCadSnapIndex,
+  CAD_SNAP_RADII,
+  CadSnapIndex,
+  type CadSnapKind,
+  type CadSnapRadii,
+  type CadSnapResult,
+  findCadSnap,
+} from './lib/cad-snap-index'
+export {
+  findCadSnapOnLevel,
+  hasCadUnderlay,
+  releaseCadSnapIndex,
+  resolveLevelIdForNode,
+} from './lib/cad-snap-source'
+export {
+  buildLoadedUnderlay,
+  getCadUnderlay,
+  getCadUnderlayError,
+  getCadUnderlayRevision,
+  type LoadedCadUnderlay,
+  loadCadUnderlay,
+  primeCadUnderlay,
+  releaseCadUnderlay,
+  subscribeToCadUnderlays,
+} from './lib/cad-underlay-cache'
+export {
+  CAD_UNDERLAY_DEFAULT_COLOR,
+  cadUnderlayOpacity,
+  type ResolvedCadLayer,
+  resolveCadLayers,
+} from './lib/cad-underlay-layers'
 export {
   CEILING_ALIGNMENT_THRESHOLD_M,
   type CeilingPlanSnapInput,

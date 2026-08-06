@@ -39,6 +39,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useCadUnderlayRevision } from '../../../hooks/use-cad-underlay-revision'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
 import {
@@ -434,6 +435,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const nodes = useScene((s) => s.nodes)
   const installedPlugins = useScene((s) => s.installedPlugins)
   const movingNode = useMovingNode()
+  // A kind whose `def.floorplan` reads asynchronously-loaded data returns
+  // nothing on the first pass. This brings the plan back once that data
+  // lands — without it a reopened scene shows no CAD underlay until an
+  // unrelated edit forces a rebuild.
+  useCadUnderlayRevision()
   // When a building is being moved, its explicit selection may be
   // cleared as part of the move handoff. Fall back to the
   // mid-drag building id so the dimmed floor keeps rendering

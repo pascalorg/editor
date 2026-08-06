@@ -2,6 +2,7 @@ import z from 'zod'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
 import { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
+import { CadUnderlayNode } from './nodes/cad-underlay'
 import { CeilingNode } from './nodes/ceiling'
 import { ChimneyNode } from './nodes/chimney'
 import { ColumnNode } from './nodes/column'
@@ -68,6 +69,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   StairSegmentNode,
   ScanNode,
   GuideNode,
+  CadUnderlayNode,
   MeasurementNode,
   SpawnNode,
   WindowNode,

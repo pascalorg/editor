@@ -22,6 +22,10 @@ import { useFloorplanRender } from './floorplan-render-context'
  */
 const COLOR = '#6366f1' // indigo-500 — matches the 3D beacon
 const ENDPOINT_COLOR = '#22c55e' // green-500 — corner (endpoint) snap accent
+// A CAD underlay is reference material, not the model, and catching one has a
+// different consequence: nothing joins, nothing splits. Amber says so without
+// changing the glyph, which still means what it always meant.
+const CAD_COLOR = '#f59e0b' // amber-500
 
 export const FloorplanSnapBeaconLayer = memo(function FloorplanSnapBeaconLayer() {
   const point = useWallSnapIndicator((s) => s.point)
@@ -33,15 +37,26 @@ export const FloorplanSnapBeaconLayer = memo(function FloorplanSnapBeaconLayer()
   const m = 6 * upp // base half-size of the glyph in world meters
   const stroke = 1.5 * upp
 
+  const fromCad = point.source === 'cad'
+
   return (
     <g pointerEvents="none">
-      <SnapMarker color={COLOR} kind={point.kind} m={m} stroke={stroke} x={point.x} z={point.z} />
+      <SnapMarker
+        color={fromCad ? CAD_COLOR : COLOR}
+        endpointColor={fromCad ? CAD_COLOR : ENDPOINT_COLOR}
+        kind={point.kind}
+        m={m}
+        stroke={stroke}
+        x={point.x}
+        z={point.z}
+      />
     </g>
   )
 })
 
 function SnapMarker({
   color,
+  endpointColor,
   kind,
   m,
   stroke,
@@ -49,6 +64,7 @@ function SnapMarker({
   z,
 }: {
   color: string
+  endpointColor: string
   kind: WallSnapKind
   m: number
   stroke: number
@@ -56,7 +72,7 @@ function SnapMarker({
   z: number
 }) {
   if (kind === 'endpoint') {
-    return <rect fill={ENDPOINT_COLOR} height={m * 2} width={m * 2} x={x - m} y={z - m} />
+    return <rect fill={endpointColor} height={m * 2} width={m * 2} x={x - m} y={z - m} />
   }
   if (kind === 'midpoint') {
     const t = m * 1.3

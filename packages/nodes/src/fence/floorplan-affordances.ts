@@ -293,6 +293,8 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
           angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()) as FencePlanPoint,
+          // 2D↔3D parity with the fence draw tool.
+          cadLevelId: parentId,
         })
         // Figma-style alignment on the dragged endpoint — snaps it onto
         // another object's edge / wall face and publishes a guide, matching

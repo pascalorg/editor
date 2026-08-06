@@ -453,8 +453,20 @@ export type FloorplanGeometry =
   | {
       kind: 'group'
       children: FloorplanGeometry[]
-      /** Optional transform applied to all children. Rotation in radians. */
-      transform?: { translate?: FloorplanPoint; rotate?: number }
+      /**
+       * Optional transform applied to all children. Rotation in radians.
+       * Composed in SVG order — `translate` then `rotate` then `scale` — so
+       * children are authored in their own local space.
+       *
+       * `scale` exists for kinds whose child coordinates are not in plan
+       * metres and would be expensive to convert eagerly (the CAD underlay's
+       * path data is in drawing units, and rebuilding it on every calibration
+       * tick would mean regenerating a string with hundreds of thousands of
+       * commands). Note that it scales stroke widths too — pair it with
+       * `vectorEffect: 'non-scaling-stroke'` on children that want a
+       * screen-constant hairline.
+       */
+      transform?: { translate?: FloorplanPoint; rotate?: number; scale?: number }
       /** Opaque renderer/plugin metadata. Core never interprets these values. */
       metadata?: Readonly<Record<string, unknown>>
     }

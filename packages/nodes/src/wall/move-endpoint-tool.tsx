@@ -29,6 +29,7 @@ import {
   MeasurementPill,
   markToolCancelConsumed,
   resolveEndpointWallSplit,
+  resolveLevelIdForNode,
   snapWallDraftPointDetailed,
   triggerSFX,
   useAlignmentGuides,
@@ -400,6 +401,9 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         start: fixedPoint,
         angleSnap: isAngleSnapActive(),
         magnetic: isMagneticSnapActive(),
+        // Nudging an existing wall onto the traced line is the same job as
+        // drawing it there in the first place.
+        cadLevelId: resolveLevelIdForNode(nodeId as AnyNodeId),
       })
       const snappedPoint = snapResult.point
 

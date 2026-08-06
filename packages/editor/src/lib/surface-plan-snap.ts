@@ -183,17 +183,24 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
     magnetic,
     snapRadii: input.snapRadii ?? SURFACE_WALL_SNAP_RADII,
     gridSnap: fallbackPoint ? () => fallbackPoint : undefined,
+    // Every surface kind that draws or reshapes a polygon comes through here —
+    // slab, ceiling, zone, roof — so tracing a room outline off an imported
+    // drawing works for all of them from this one line, in 2D and 3D alike.
+    cadLevelId: input.levelId,
   })
 
   if (wallSnap.snap) {
+    // A CAD snap has no wall behind it, so highlighting is skipped rather than
+    // hunting for a wall that produced a point no wall produced.
     const wallIds =
-      input.highlightWalls === false
+      input.highlightWalls === false || wallSnap.source === 'cad'
         ? []
         : findSnapSourceWallIds(wallSnap.point, wallSnap.snap, walls)
     useWallSnapIndicator.getState().set({
       x: wallSnap.point[0],
       z: wallSnap.point[1],
       kind: wallSnap.snap,
+      ...(wallSnap.source ? { source: wallSnap.source } : {}),
       ...(wallIds.length > 0 ? { wallIds } : {}),
     })
     useAlignmentGuides.getState().clear()

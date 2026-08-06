@@ -31,6 +31,13 @@ export type WallDraftSnapResult = {
    * whether the target is allowed to transfer its construction plane.
    */
   targetWallIds: string[]
+  /**
+   * Where the geometry came from. `'cad'` means an imported reference drawing
+   * rather than anything in the model — the beacon colours it differently, and
+   * it never carries `targetWallIds`, so nothing downstream can mistake a
+   * traced line for a wall to join or split.
+   */
+  source?: 'wall' | 'cad'
 }
 
 export const WALL_JOIN_SNAP_RADIUS = 0.35

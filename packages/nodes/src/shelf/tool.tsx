@@ -91,6 +91,7 @@ const ShelfTool = () => {
         showAlignment: isAlignmentGuideActive(),
         applyAlignmentSnap: isMagneticSnapActive(),
         bypassGrid: !isGridSnapActive(),
+        cadLevelId: activeLevelId ?? null,
       })
       useAlignmentGuides.getState().set(guides)
 

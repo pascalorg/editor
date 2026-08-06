@@ -11,6 +11,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { findCadSnapOnLevel } from '../../../lib/cad-snap-source'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import {
@@ -145,6 +146,8 @@ export function snapFenceDraftPoint(args: {
    * endpoint snap precedence is preserved.
    */
   gridSnap?: (point: FencePlanPoint) => FencePlanPoint
+  /** Level whose CAD underlays the draft may snap to. See `snapWallDraftPointDetailed`. */
+  cadLevelId?: string | null
 }): FencePlanPoint {
   const {
     point,
@@ -157,6 +160,7 @@ export function snapFenceDraftPoint(args: {
     magnetic = true,
     step,
     gridSnap,
+    cadLevelId,
   } = args
   if (bypassSnap) return point
 
@@ -169,7 +173,9 @@ export function snapFenceDraftPoint(args: {
   if (start && angleSnap) {
     const rawTarget =
       magnetic &&
-      (findFenceSnapTarget(point, fences, ignoreFenceIds) ?? findWallSnapTarget(point, walls))
+      (findFenceSnapTarget(point, fences, ignoreFenceIds) ??
+        findWallSnapTarget(point, walls) ??
+        findCadSnapOnLevel(cadLevelId, point)?.point)
     if (rawTarget) return rawTarget
   }
 
@@ -185,7 +191,15 @@ export function snapFenceDraftPoint(args: {
   if (!magnetic) return basePoint
 
   const fenceSnapTarget = findFenceSnapTarget(basePoint, fences, ignoreFenceIds)
-  return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint
+  // The underlay is the last magnetic candidate, after existing fences and
+  // walls — built geometry outranks the drawing it was traced from, same
+  // ordering the wall tool uses.
+  return (
+    fenceSnapTarget ??
+    findWallSnapTarget(basePoint, walls) ??
+    findCadSnapOnLevel(cadLevelId, point)?.point ??
+    basePoint
+  )
 }
 
 export type FenceCommitOptions = {

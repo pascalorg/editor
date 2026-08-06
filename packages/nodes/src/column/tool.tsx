@@ -100,6 +100,7 @@ const ColumnTool = () => {
         showAlignment: isAlignmentGuideActive(),
         applyAlignmentSnap: isMagneticSnapActive(),
         bypassGrid: !isGridSnapActive(),
+        cadLevelId: activeLevelId ?? null,
       })
       const structuralSnap =
         isGridSnapActive() || isMagneticSnapActive()

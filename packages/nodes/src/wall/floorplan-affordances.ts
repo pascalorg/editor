@@ -19,6 +19,7 @@ import {
   isMagneticSnapActive,
   isSegmentLongEnough,
   resolveEndpointWallSplit,
+  resolveLevelIdForNode,
   snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
@@ -213,6 +214,8 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()),
+          // 2D↔3D parity: the underlay is snappable from the floor plan too.
+          cadLevelId: resolveLevelIdForNode(node.id),
         })
         // Figma-style alignment on the dragged corner — snaps it onto another
         // object's edge / wall face and publishes a guide. The guide is

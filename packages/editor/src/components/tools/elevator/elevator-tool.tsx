@@ -11,9 +11,9 @@ import {
 } from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { findCadSnapOnLevel } from '../../../lib/cad-snap-source'
 import { resolveCurrentBuildingId, resolveElevatorSupportY } from '../../../lib/elevator-support'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-
 import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
@@ -181,6 +181,14 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
       bypass: boolean,
       applySnap: boolean,
     ): [number, number] => {
+      // The CAD underlay is checked from the RAW cursor and outranks both the
+      // grid and the alignment nudge: a drawing line is an explicit target,
+      // where alignment is a convenience.
+      const cad = bypass ? null : findCadSnapOnLevel(levelId, [rawX, rawZ])
+      if (cad) {
+        useAlignmentGuides.getState().clear()
+        return cad.point
+      }
       if (bypass || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return [gridX, gridZ]

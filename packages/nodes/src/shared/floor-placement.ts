@@ -9,6 +9,7 @@ import {
   sceneRegistry,
   snapPointToGrid,
 } from '@pascal-app/core'
+import { findCadSnapOnLevel } from '@pascal-app/editor'
 import { Vector3 } from 'three'
 
 export const FLOOR_PLACEMENT_ALIGNMENT_THRESHOLD_M = 0.08
@@ -39,6 +40,14 @@ type FloorPlacementAlignmentArgs = {
   applyAlignmentSnap?: boolean
   bypassGrid?: boolean
   rotationY?: number
+  /**
+   * Level whose CAD underlays the placement may snap to. Omit to ignore them.
+   *
+   * Placing a column on the column mark the drawing already shows is the same
+   * job as tracing a wall along its line, so the underlay outranks the grid
+   * here too.
+   */
+  cadLevelId?: string | null
 }
 
 const worldVector = new Vector3()
@@ -77,8 +86,14 @@ export function resolveAlignedFloorPlacement({
   applyAlignmentSnap = true,
   bypassGrid = false,
   rotationY = 0,
+  cadLevelId,
 }: FloorPlacementAlignmentArgs) {
-  const [sx, sz] = bypassGrid ? [rawX, rawZ] : snapPointToGrid([rawX, rawZ], gridStep)
+  const cad = bypassGrid ? null : findCadSnapOnLevel(cadLevelId, [rawX, rawZ])
+  const [sx, sz] = cad
+    ? cad.point
+    : bypassGrid
+      ? [rawX, rawZ]
+      : snapPointToGrid([rawX, rawZ], gridStep)
   let ax = sx
   let az = sz
 
@@ -91,7 +106,10 @@ export function resolveAlignedFloorPlacement({
         })
       : null
 
-  if (result?.snap && applyAlignmentSnap) {
+  // An alignment nudge on top of a CAD snap would walk the node straight back
+  // off the line it was just placed on. Guides still show; only the pull is
+  // suppressed, the same way the explicit snap wins elsewhere.
+  if (result?.snap && applyAlignmentSnap && !cad) {
     ax += result.snap.dx
     az += result.snap.dz
   }

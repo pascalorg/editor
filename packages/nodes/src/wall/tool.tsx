@@ -655,17 +655,21 @@ export const WallTool: React.FC = () => {
         start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
         angleSnap: angleLocked,
         magnetic: isMagneticSnapActive(),
+        cadLevelId: useViewer.getState().selection.levelId ?? null,
       })
       gridPosition = alignPoint(snapResult.point, { applySnap: !angleLocked })
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
-      useWallSnapIndicator
-        .getState()
-        .set(
-          snapResult.snap
-            ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
-            : null,
-        )
+      useWallSnapIndicator.getState().set(
+        snapResult.snap
+          ? {
+              x: gridPosition[0],
+              z: gridPosition[1],
+              kind: snapResult.snap,
+              source: snapResult.source,
+            }
+          : null,
+      )
 
       if (buildingState.current === 1) {
         const snappedLocal = gridPosition
@@ -744,6 +748,7 @@ export const WallTool: React.FC = () => {
           point: localClick,
           walls: snapWalls,
           magnetic: isMagneticSnapActive(),
+          cadLevelId: useViewer.getState().selection.levelId ?? null,
         })
         const snappedStart = alignPoint(snapResult.point)
         const resolvedPlane =
@@ -783,6 +788,7 @@ export const WallTool: React.FC = () => {
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
+            cadLevelId: useViewer.getState().selection.levelId ?? null,
           }).point,
           { applySnap: !angleLocked },
         )
