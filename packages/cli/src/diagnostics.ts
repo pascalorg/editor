@@ -56,12 +56,29 @@ export async function runDoctor(paths: PascalPaths): Promise<DiagnosticCheck[]> 
     })
     checks.push({
       id: 'editor',
-      status: status.healthy ? 'pass' : status.running ? 'fail' : 'warn',
-      message: status.healthy
+      status: status.components.editor.healthy
+        ? 'pass'
+        : status.components.editor.running
+          ? 'fail'
+          : 'warn',
+      message: status.components.editor.healthy
         ? `Healthy at ${status.state?.url}`
-        : status.running
+        : status.components.editor.running
           ? 'A recorded editor process is running but unhealthy.'
           : 'The editor is stopped.',
+    })
+    checks.push({
+      id: 'mcp',
+      status: status.components.mcp.healthy
+        ? 'pass'
+        : status.components.mcp.running
+          ? 'fail'
+          : 'warn',
+      message: status.components.mcp.healthy
+        ? `MCP is healthy on loopback port ${status.state?.mcp?.port}.`
+        : status.components.mcp.running
+          ? 'The managed MCP process is running but unhealthy.'
+          : 'MCP is stopped with the editor.',
     })
     const runtimeVersions = (await readdir(paths.runtime, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))

@@ -58,7 +58,10 @@ background, and open it in the browser without a repository checkout:
 npx @pascal-app/cli editor
 ```
 
-Use `npx @pascal-app/cli doctor` to check the runtime, storage, and process state. Saved
+The command starts the editor and its authenticated local MCP service together. Configure
+an agent to launch `pascal mcp connect`; for example, run `pascal mcp setup codex`.
+
+Use `npx @pascal-app/cli doctor` to check the runtime, storage, editor, and MCP state. Saved
 scenes live in `~/.pascal/data/pascal.db` independently from installed runtime versions.
 The CLI retains old runtime versions for rollback and warns after more than three have
 accumulated. It also replaces a damaged copy of its bundled runtime on the next start;

@@ -4,6 +4,8 @@ import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const packageDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const smokeRoot = await mkdtemp(path.join(os.tmpdir(), 'pascal-cli-smoke-'))
@@ -84,6 +86,40 @@ try {
     undefined,
     smokeEnvironment,
   )
+  const mcpTransport = new StdioClientTransport({
+    command: process.execPath,
+    args: [smokeExecutable, 'mcp', 'connect'],
+    env: smokeEnvironment as Record<string, string>,
+    stderr: 'pipe',
+  })
+  const mcpClient = new Client({ name: 'pascal-cli-smoke', version: '0.0.0' })
+  try {
+    await mcpClient.connect(mcpTransport)
+    const tools = await mcpClient.listTools()
+    if (!tools.tools.some((tool) => tool.name === 'save_scene')) {
+      throw new Error('managed MCP did not expose save_scene')
+    }
+    const saved = await mcpClient.callTool({
+      name: 'save_scene',
+      arguments: { id: 'smoke-project', name: 'Smoke project' },
+    })
+    if (saved.isError) throw new Error(`managed MCP save_scene failed: ${JSON.stringify(saved)}`)
+  } finally {
+    await mcpClient.close()
+  }
+  const resumed = JSON.parse(
+    (
+      await run(
+        process.execPath,
+        [smokeExecutable, 'resume', 'Smoke project', '--json'],
+        undefined,
+        smokeEnvironment,
+      )
+    ).stdout,
+  ) as { project: { id: string }; url: string }
+  if (resumed.project.id !== 'smoke-project' || !resumed.url.endsWith('/scene/smoke-project')) {
+    throw new Error('CLI project resume did not resolve the MCP-saved project')
+  }
   await run(process.execPath, [smokeExecutable, 'doctor', '--json'], undefined, smokeEnvironment)
   await run(process.execPath, [smokeExecutable, 'stop', '--json'], undefined, smokeEnvironment)
   smokeExecutable = null

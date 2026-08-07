@@ -19,6 +19,15 @@ describe('command parsing', () => {
     expect(result.stdout).toContain('npm install --global @pascal-app/cli')
   })
 
+  test('shows focused help for MCP commands', async () => {
+    const result = await runCli('mcp', '--help')
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('pascal mcp setup codex')
+    expect(result.stdout).toContain('dynamic loopback port')
+    expect(result.stdout).not.toContain('pascal plugin list')
+  })
+
   test('rejects a partially numeric port', async () => {
     const result = await runCli('editor', '--port', '3000junk', '--no-open', '--json')
 
@@ -42,6 +51,22 @@ describe('command parsing', () => {
 
   test('reports unknown options as command errors', async () => {
     const result = await runCli('project', 'list', '--unknown', '--json')
+
+    expect(result.exitCode).toBe(2)
+    expect(JSON.parse(result.stderr)).toMatchObject({ error: 'invalid_option' })
+  })
+
+  test('prints stable local MCP client configuration', async () => {
+    const result = await runCli('mcp', 'config', '--json')
+
+    expect(result.exitCode).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual({
+      mcpServers: { pascal: { command: 'pascal', args: ['mcp', 'connect'] } },
+    })
+  })
+
+  test('rejects unsupported automatic MCP client setup', async () => {
+    const result = await runCli('mcp', 'setup', 'cursor', '--json')
 
     expect(result.exitCode).toBe(2)
     expect(JSON.parse(result.stderr)).toMatchObject({ error: 'invalid_option' })

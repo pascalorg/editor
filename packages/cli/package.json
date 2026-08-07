@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/cli",
   "version": "0.1.4",
-  "description": "Run and manage the open-source Pascal 3D building editor locally from your terminal",
+  "description": "Run the open-source Pascal 3D editor, local projects, and MCP agent tools from your terminal",
   "type": "module",
   "bin": {
     "pascal": "dist/bin/pascal.js"
@@ -34,6 +34,9 @@
     "@types/node": "^22.19.20",
     "typescript": "6.0.3"
   },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
   "engines": {
     "node": ">=22.13.0"
   },
@@ -47,7 +50,9 @@
     "cad",
     "bim",
     "local-first",
-    "cli"
+    "cli",
+    "mcp",
+    "ai-agents"
   ],
   "repository": {
     "type": "git",

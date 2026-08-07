@@ -20,10 +20,11 @@ cloning this repository:
 npx @pascal-app/cli editor
 ```
 
-The CLI starts the editor in the background at `http://pascal.localhost:<port>` and
-keeps projects in `~/.pascal/data/pascal.db`. See [Run Pascal
-locally](https://editor.pascal.app/docs/developers/local-editor) for pnpm/Bun commands,
-lifecycle management, updates, storage paths, and troubleshooting.
+The CLI starts the editor and an authenticated MCP service in the background, selects
+collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. Configure
+an agent to launch `pascal mcp connect`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
+for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
+troubleshooting.
 
 ## Using Published Packages
 
