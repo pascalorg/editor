@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
 import { openBrowser } from '../browser.js'
+import { installGlobalPascalCommand, isNpxInvocation } from '../command-install.js'
 import { collectInfo, runDoctor } from '../diagnostics.js'
 import {
   activateEditorRuntime,
@@ -22,7 +23,11 @@ import { version } from '../version.js'
 
 const HELP = `Pascal — local 3D editor
 
-RUN WITHOUT INSTALLING:
+FIRST RUN:
+  npx @pascal-app/cli editor
+  Starts the editor and installs the shorter "pascal" command interactively.
+
+RUN A COMMAND THROUGH NPX:
   npx @pascal-app/cli <command>
 
 ENABLE THE SHORT GLOBAL COMMAND:
@@ -115,6 +120,22 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
   }
   progress?.stop()
   if (values.open && !values['no-open']) openBrowser(result.state.url)
+  const npxInvocation = isNpxInvocation()
+  let commandInstalled = false
+  if (npxInvocation && !values.json && process.stdin.isTTY && process.stderr.isTTY) {
+    progress?.start('Installing the pascal command')
+    commandInstalled = await installGlobalPascalCommand(version)
+    if (commandInstalled) {
+      progress?.succeed('pascal command installed')
+    } else {
+      progress?.stop()
+      process.stderr.write(
+        '! The editor is ready, but npm could not install the pascal command globally.\n',
+      )
+    }
+  }
+  const useShortCommand = !npxInvocation || commandInstalled
+  const commandPrefix = useShortCommand ? 'pascal' : 'npx @pascal-app/cli'
   output(
     values.json,
     { ...result.state, alreadyRunning: result.alreadyRunning },
@@ -124,13 +145,17 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
         : `Pascal is ready at ${result.state.url}`,
       `Projects stay in ${paths.data}`,
       '',
-      'Manage it with npx:',
-      '  npx @pascal-app/cli status        Check the local editor',
-      '  npx @pascal-app/cli logs --follow Follow editor logs',
-      '  npx @pascal-app/cli stop          Stop the background process',
-      '',
-      'To enable the shorter "pascal" command in your shell:',
-      '  npm install --global @pascal-app/cli',
+      `Manage it with ${useShortCommand ? 'pascal' : 'npx'}:`,
+      `  ${commandPrefix} status        Check the local editor`,
+      `  ${commandPrefix} logs --follow Follow editor logs`,
+      `  ${commandPrefix} stop          Stop the background process`,
+      ...(useShortCommand
+        ? []
+        : [
+            '',
+            'To install the shorter "pascal" command:',
+            '  npm install --global @pascal-app/cli',
+          ]),
     ].join('\n'),
   )
   if (result.child) {
