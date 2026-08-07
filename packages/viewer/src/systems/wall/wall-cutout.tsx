@@ -64,8 +64,6 @@ export const WallCutout = () => {
   const lastNumberOfWalls = useRef(0)
   const lastHighlightKey = useRef('')
   const lastWallAppearanceKey = useRef('')
-  /** Identity of the nodes record the appearance key was last derived from. */
-  const lastAppearanceNodes = useRef<unknown>(null)
   const lastTextures = useRef(useViewer.getState().textures)
   const lastColorPreset = useRef(useViewer.getState().colorPreset)
   const lastSceneTheme = useRef(useViewer.getState().sceneTheme)
@@ -97,28 +95,14 @@ export const WallCutout = () => {
         ? hoveredId
         : null
     const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${deleteHoveredWallId ?? ''}`
-    // The appearance key exists to catch material/faceBand edits, and those
-    // can only arrive through a scene write — which replaces `nodes` — or a
-    // shading flip, which has its own ref below. Rebuilding the key on every
-    // frame (a map + hash + JSON.stringify per wall) was measurable on
-    // plugin-heavy scenes, so it is re-derived only when the nodes record's
-    // identity moves and reused verbatim in between (fork patch, 2026-08-07).
-    let wallAppearanceKey = lastWallAppearanceKey.current
-    if (
-      sceneState.nodes !== lastAppearanceNodes.current ||
-      lastShading.current !== shading ||
-      sceneRegistry.byType.wall!.size !== lastNumberOfWalls.current
-    ) {
-      lastAppearanceNodes.current = sceneState.nodes
-      wallAppearanceKey = Array.from(sceneRegistry.byType.wall!)
-        .sort()
-        .map((wallId) => {
-          const wallNode = sceneState.nodes[wallId as WallNode['id']]
-          if (wallNode?.type !== 'wall') return `${wallId}:missing`
-          return `${wallId}:${getWallMaterialHash(wallNode, shading, sceneState.materials)}:${JSON.stringify(wallNode.faceBands ?? null)}`
-        })
-        .join('|')
-    }
+    const wallAppearanceKey = Array.from(sceneRegistry.byType.wall!)
+      .sort()
+      .map((wallId) => {
+        const wallNode = sceneState.nodes[wallId as WallNode['id']]
+        if (wallNode?.type !== 'wall') return `${wallId}:missing`
+        return `${wallId}:${getWallMaterialHash(wallNode, shading, sceneState.materials)}:${JSON.stringify(wallNode.faceBands ?? null)}`
+      })
+      .join('|')
 
     const distanceMoved = currentCameraPosition.distanceTo(lastCameraPosition.current)
     const directionChanged = tmpVec.distanceTo(lastCameraTarget.current)
