@@ -68,6 +68,7 @@ scaffold under `.github/deploy/`.
 | `apps/editor/next.config.ts` | Merge both; keep `serverExternalPackages: ['@node-rs/argon2']` and the standalone/output settings. |
 | `apps/editor/package.json`, `bun.lock`, `biome.jsonc` | Merge both, and keep the `@ovurrsl/plugin-warehouse` pin — upstream has no such dependency, so a wholesale "take theirs" silently removes the warehouse racks. After changing dependencies by hand, dispatch the Relock workflow from the Actions tab to regenerate `bun.lock` on a real runner. |
 | `apps/editor/lib/bootstrap.ts`, `apps/ifc-converter/next-env.d.ts`, root `package.json`, `packages/mcp/src/storage/sqlite-scene-store.ts`, `packages/viewer/src/components/viewer/index.tsx` | No rule written yet — these conflicted in the beta.4 trial merge. Decide, then record the rule here so the next merge is cheaper. |
+| `packages/viewer/src/systems/wall/wall-cutout.tsx` | **Fork perf fix (2026-08-07):** the slab-support / plane-top chain runs only for highlighted walls, behind `resolveSelectionHighlight`'s thunk. Measured at roughly half of frame CPU on a warehouse-scale scene, spent on walls whose answer was discarded. Keep the thunk when merging; it is being proposed upstream, so take upstream's version if they fix it themselves. |
 
 After any upstream merge: `bun run check && bun run check-types`, build, and
 let CI plus the deploy workflow's boot smoke tests confirm nothing broke
