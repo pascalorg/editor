@@ -13,6 +13,7 @@ import {
   revealBatchedWall,
   type WallBatch,
 } from '../../lib/wall-batch'
+import useViewer, { type WallMode } from '../../store/use-viewer'
 import { drainRebuiltWalls, getPendingWallRebuildCount } from './wall-system'
 
 // A level's walls are merged only once they stop changing. Below this many
@@ -103,6 +104,43 @@ function toCandidate(nodeId: string, node: WallNode): Candidate | null {
   if (materials.some((material) => material.transparent)) return null
 
   return { nodeId, mesh, materials }
+}
+
+/**
+ * Whether a level's walls may be merged at all right now.
+ *
+ * The merged mesh captures one material set when it is sewn and nothing
+ * re-reads it, so batching is only sound while every batched wall's materials
+ * hold still. That is true in one wall mode. `cutaway` re-assigns materials
+ * from the camera's facing test as the view turns, `down` makes every wall
+ * see-through and `translucent` does the same by definition — in all three the
+ * merged copy would keep drawing walls the cutaway pass has since turned to
+ * glass. Isolation is the other stand-down: it hides the level root the merged
+ * mesh hangs off, which would leave a focused batched wall drawn by nobody.
+ */
+export function canBatchWalls(wallMode: WallMode, isolationActive: boolean): boolean {
+  return !isolationActive && wallMode === 'up'
+}
+
+/**
+ * Walls the cutaway pass is currently tinting — a selection or a delete hover.
+ *
+ * It paints them by swapping the materials on the wall's own mesh, which the
+ * merged mesh does not follow, so a lit wall goes back to drawing itself. There
+ * are only ever a handful, and a handful of extra draw calls is what the tint
+ * costs.
+ */
+function collectTintedWalls(wallIds: ReadonlySet<string>): string[] {
+  const viewer = useViewer.getState()
+  const tinted: string[] = []
+
+  for (const id of viewer.selection.selectedIds) if (wallIds.has(id)) tinted.push(id)
+  for (const id of viewer.previewSelectedIds) if (wallIds.has(id)) tinted.push(id)
+
+  const hovered = viewer.hoverHighlightMode === 'delete' ? viewer.hoveredId : null
+  if (hovered && wallIds.has(hovered)) tinted.push(hovered)
+
+  return tinted
 }
 
 function materialSetKey(materials: readonly Material[]): string {
@@ -269,6 +307,18 @@ function runBatchFrame(
   }
   changedWalls.clear()
 
+  // A tinted wall paints itself through materials the merged mesh never reads,
+  // so it goes back to drawing its own geometry for as long as it is lit. It
+  // stays out afterwards: one wall short of a batch is not worth re-sewing a
+  // floor over, and the level's own re-merge threshold decides when it is.
+  for (const nodeId of collectTintedWalls(wallIds)) {
+    if (!batchByNode.has(nodeId)) continue
+    const record = batchByNode.get(nodeId)
+    if (record) staleLevels.add(record.levelId)
+    releaseWall(nodeId)
+    changed = true
+  }
+
   // A wall that left the scene carries no mark of its own — deleting one
   // dirties the neighbours it re-mitres, not the node that went away. The
   // wall count moving is the cheap tell that the batch needs reconciling.
@@ -282,18 +332,19 @@ function runBatchFrame(
     }
   }
 
-  // Isolation hides everything outside the focused subtree, and a level's
-  // merged mesh hangs off the level root — so it goes dark with everything
-  // else. A focused wall that the batch had sewn in would then be drawn by
-  // nobody: its own mesh is silent, its stand-in is hidden. Rather than teach
-  // the filter about merged geometry, the batch stands down for as long as the
-  // filter is up and sews the floors back together once it lifts.
-  const isolated = isIsolationActive()
-  if (isolated !== batchingSuspended) {
-    batchingSuspended = isolated
+  // Two things make merging unsound, and both are handled the same way: the
+  // batch stands down for as long as they hold, and sews the floors back
+  // together once they lift. Isolation hides everything outside the focused
+  // subtree, and a level's merged mesh hangs off the level root — so it goes
+  // dark with everything else, leaving a focused batched wall drawn by nobody.
+  // Every wall mode but `up` re-assigns wall materials the merged mesh does not
+  // follow. See `canBatchWalls`.
+  const suspended = !canBatchWalls(useViewer.getState().wallMode, isIsolationActive())
+  if (suspended !== batchingSuspended) {
+    batchingSuspended = suspended
     for (const levelId of [...batchesByLevel.keys()]) disposeLevelBatches(levelId)
     staleLevels.clear()
-    if (!isolated) {
+    if (!suspended) {
       for (const levelId of sceneRegistry.byType.level ?? EMPTY_IDS) staleLevels.add(levelId)
     }
     changed = true
