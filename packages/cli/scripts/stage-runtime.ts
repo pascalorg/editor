@@ -74,7 +74,8 @@ async function removeUnusedSharp(root: string): Promise<void> {
   let entries: string[] = []
   try {
     entries = await readdir(bunModules)
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     return
   }
   await Promise.all(
@@ -89,7 +90,14 @@ async function removeUnusedSharp(root: string): Promise<void> {
 async function flattenBunNodeModules(root: string): Promise<void> {
   const nodeModules = path.join(root, 'node_modules')
   const bunNodeModules = path.join(nodeModules, '.bun/node_modules')
-  for (const entry of await readdir(bunNodeModules, { withFileTypes: true })) {
+  let entries
+  try {
+    entries = await readdir(bunNodeModules, { withFileTypes: true })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    return
+  }
+  for (const entry of entries) {
     if (entry.name.startsWith('@') && entry.isDirectory()) {
       const scope = path.join(bunNodeModules, entry.name)
       for (const packageEntry of await readdir(scope, { withFileTypes: true })) {
