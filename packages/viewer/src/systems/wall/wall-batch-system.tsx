@@ -4,6 +4,7 @@ import { type AnyNodeId, sceneRegistry, useScene, type WallNode } from '@pascal-
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Material, Matrix4, Mesh, type Object3D } from 'three'
+import { isIsolationActive } from '../../lib/isolation'
 import { SCENE_LAYER } from '../../lib/layers'
 import {
   applyWallBatchGroups,
@@ -36,6 +37,7 @@ const changedWalls = new Set<string>()
 const EMPTY_IDS: ReadonlySet<string> = new Set()
 let knownWallCount = -1
 let lastWallChangeAtMs = 0
+let batchingSuspended = false
 
 /**
  * Batched walls are drawn by the merged mesh but still picked, measured and
@@ -221,6 +223,7 @@ export const WallBatchSystem = () => {
       changedWalls.clear()
       staleLevels.clear()
       knownWallCount = -1
+      batchingSuspended = false
     },
     [],
   )
@@ -277,6 +280,27 @@ function runBatchFrame(
       releaseWall(nodeId)
       changed = true
     }
+  }
+
+  // Isolation hides everything outside the focused subtree, and a level's
+  // merged mesh hangs off the level root — so it goes dark with everything
+  // else. A focused wall that the batch had sewn in would then be drawn by
+  // nobody: its own mesh is silent, its stand-in is hidden. Rather than teach
+  // the filter about merged geometry, the batch stands down for as long as the
+  // filter is up and sews the floors back together once it lifts.
+  const isolated = isIsolationActive()
+  if (isolated !== batchingSuspended) {
+    batchingSuspended = isolated
+    for (const levelId of [...batchesByLevel.keys()]) disposeLevelBatches(levelId)
+    staleLevels.clear()
+    if (!isolated) {
+      for (const levelId of sceneRegistry.byType.level ?? EMPTY_IDS) staleLevels.add(levelId)
+    }
+    changed = true
+  }
+  if (batchingSuspended) {
+    staleLevels.clear()
+    return
   }
 
   const now = performance.now()
