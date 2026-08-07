@@ -24,9 +24,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
 import {
+  FormworkBom,
   FormworkConstructionSection,
   FormworkCoverageList,
   FormworkDesignReport,
+  FormworkPartsList,
   PourLimitInput,
   PourSequenceFields,
   PourUnitHint,
@@ -387,6 +389,12 @@ export function SlabPanel() {
           </PanelSection>
           <PanelSection title="Formwork coverage">
             <FormworkCoverageList hostId={node.id as AnyNodeId} />
+          </PanelSection>
+          <PanelSection title="Formwork parts">
+            <FormworkPartsList hostId={node.id as AnyNodeId} />
+          </PanelSection>
+          <PanelSection title="Formwork bill of materials">
+            <FormworkBom hostId={node.id as AnyNodeId} />
           </PanelSection>
         </>
       )}

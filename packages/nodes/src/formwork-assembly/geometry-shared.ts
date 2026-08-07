@@ -9,6 +9,7 @@ import {
   DEFAULT_KICKER_MM,
   type ElementCorner,
   type FaceRole,
+  type FormworkFace,
   type FormworkSettings,
   type FormworkSystem,
   findAbutments,
@@ -199,6 +200,8 @@ export interface FormworkScope {
   unit: PourUnit | undefined
   /** Which faces actually need forming — a function of cast order, not a constant. */
   isFormed: (role: FaceRole) => boolean
+  /** The classified face itself, for the properties a shutter part has to carry. */
+  faceOf: (role: FaceRole) => FormworkFace | undefined
   /** Corner units this shutter's faces turn onto, formed and unformed alike. */
   corners: ElementCorner[]
   /** The pour the project designs to, so every shutter is sized against one set of inputs. */
@@ -446,10 +449,12 @@ export function resolveFormworkScope(
     pourUnit: unit,
   })
   const formed = new Set(coverage.faces.filter((f) => f.formed).map((f) => f.role))
+  const byRole = new Map(coverage.faces.map((face) => [face.role, face]))
   return {
     element,
     unit,
     isFormed: (role: FaceRole) => formed.has(role),
+    faceOf: (role: FaceRole) => byRole.get(role),
     corners: coverage.corners,
     settings: resolveFormworkSettings(host, ctx),
   }

@@ -1,9 +1,12 @@
 import type { ParametricDescriptor } from '@pascal-app/core'
 import {
+  FormworkBomSummary,
   FormworkCoverageSummary,
   FormworkDesignSummary,
   FormworkHostSummary,
+  FormworkPartsSummary,
   FormworkScopeSummary,
+  FormworkSelectedPart,
 } from './inspector-editors'
 import type { FormworkAssemblyNode } from './schema'
 
@@ -49,6 +52,22 @@ export const formworkAssemblyParametrics: ParametricDescriptor<FormworkAssemblyN
     {
       label: 'Coverage',
       fields: [{ key: 'coverage', kind: 'custom', component: FormworkCoverageSummary }],
+    },
+    // The selected part before the list it came from, because the click that fills it
+    // happens in the viewport: a person clicks a panel on the shutter and looks at the
+    // panel, and having to scroll past every other panel to reach it is the wrong way
+    // round. The list is the index; this is the page it opens to.
+    {
+      label: 'Selected part',
+      fields: [{ key: 'selectedPart', kind: 'custom', component: FormworkSelectedPart }],
+    },
+    {
+      label: 'Parts',
+      fields: [{ key: 'parts', kind: 'custom', component: FormworkPartsSummary }],
+    },
+    {
+      label: 'Bill of materials',
+      fields: [{ key: 'bom', kind: 'custom', component: FormworkBomSummary }],
     },
   ],
 }

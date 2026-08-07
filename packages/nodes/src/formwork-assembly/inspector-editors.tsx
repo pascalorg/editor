@@ -6,6 +6,8 @@ import type { CastableHostNode } from './attach'
 import { FormworkCoverageList } from './coverage-summary'
 import { FormworkDesignReport } from './design-report'
 import { SPACING_LABELS } from './host-controls'
+import { FormworkPartInspector } from './part-inspector'
+import { FormworkBom, FormworkPartsList } from './parts-summary'
 import type { FormworkAssemblyNode } from './schema'
 
 /**
@@ -112,6 +114,54 @@ export function FormworkDesignSummary({ node }: { node: FormworkAssemblyNode }) 
 export function FormworkCoverageSummary({ node }: { node: FormworkAssemblyNode }) {
   return (
     <FormworkCoverageList
+      hostId={node.parentId as AnyNodeId | undefined}
+      scope={{ segmentIndex: node.segmentIndex, liftIndex: node.liftIndex }}
+    />
+  )
+}
+
+/**
+ * The one part being looked at. Scoped to this assembly, so a click on the shutter
+ * next door does not repoint this panel — the store is keyed by assembly id for the
+ * same reason.
+ *
+ * `onUpdate` is the inspector's own, which is what makes a substitution one undo step:
+ * the patch goes through `parametrics.derive` and out in a single `updateNodes` call,
+ * and that same call dirties the assembly so the shutter rebuilds with the part
+ * omitted or swapped.
+ */
+export function FormworkSelectedPart({
+  node,
+  onUpdate,
+}: {
+  node: FormworkAssemblyNode
+  onUpdate: (patch: Partial<FormworkAssemblyNode>) => void
+}) {
+  return <FormworkPartInspector node={node} onUpdate={onUpdate} />
+}
+
+/**
+ * Every part of this shutter, grouped by the face it is set out on. Scoped to the
+ * assembly's own pour: a lift's parts are the lift's, and merging two lifts' panel
+ * lists would produce a table no shutter on site matches.
+ */
+export function FormworkPartsSummary({ node }: { node: FormworkAssemblyNode }) {
+  return (
+    <FormworkPartsList
+      hostId={node.parentId as AnyNodeId | undefined}
+      scope={{ segmentIndex: node.segmentIndex, liftIndex: node.liftIndex }}
+    />
+  )
+}
+
+/**
+ * What to order for this shutter. Scoped like the parts list, so the figure is what
+ * this pour needs standing at once — the host element's own panel is where the whole
+ * element's order is totalled.
+ */
+export function FormworkBomSummary({ node }: { node: FormworkAssemblyNode }) {
+  return (
+    <FormworkBom
       hostId={node.parentId as AnyNodeId | undefined}
       scope={{ segmentIndex: node.segmentIndex, liftIndex: node.liftIndex }}
     />

@@ -6,6 +6,7 @@ import { buildColumnFormwork } from './geometry-column'
 import { panelMaterial, resolveFormworkScope } from './geometry-shared'
 import { buildSlabFormwork } from './geometry-slab'
 import { buildWallFormwork } from './geometry-wall'
+import type { BuiltFormwork } from './parts'
 import type { FormworkAssemblyNode } from './schema'
 
 /**
@@ -25,20 +26,32 @@ import type { FormworkAssemblyNode } from './schema'
  * built inside that unit's extents. A 9 m wall capped at 3 m lifts therefore
  * gets three shutters stacked up it, each with its own tie grid, rather than
  * one impossible 9 m one.
+ *
+ * A build produces geometry *and* the parts it is made of, from one pass — see
+ * `parts.ts` for why they cannot be derived separately. The registry's geometry hook
+ * wants only the group and the panels want only the parts, so both go through
+ * `buildFormwork` and neither has its own enumeration.
  */
-export function buildFormworkGeometry(node: FormworkAssemblyNode, ctx: GeometryContext): Group {
+export function buildFormwork(
+  node: FormworkAssemblyNode,
+  ctx: GeometryContext,
+): BuiltFormwork | null {
   const host = ctx.parent as AnyNode | null
-  if (!host) return new Group()
-  if (host.type !== 'wall' && host.type !== 'column' && host.type !== 'slab') return new Group()
+  if (!host) return null
+  if (host.type !== 'wall' && host.type !== 'column' && host.type !== 'slab') return null
 
   const castable = host as CastableHostNode
-  if (!castable.formworkType || castable.formworkType === 'none') return new Group()
+  if (!castable.formworkType || castable.formworkType === 'none') return null
 
   const scope = resolveFormworkScope(castable, node, ctx)
-  if (!scope) return new Group()
+  if (!scope) return null
   const material = panelMaterial(castable)
 
   if (host.type === 'column') return buildColumnFormwork(host as ColumnNode, node, scope, material)
   if (host.type === 'slab') return buildSlabFormwork(host as SlabNode, node, scope, material)
   return buildWallFormwork(host as WallNode, node, scope, material)
+}
+
+export function buildFormworkGeometry(node: FormworkAssemblyNode, ctx: GeometryContext): Group {
+  return buildFormwork(node, ctx)?.group ?? new Group()
 }

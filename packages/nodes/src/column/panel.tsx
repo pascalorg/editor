@@ -23,9 +23,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import {
+  FormworkBom,
   FormworkConstructionSection,
   FormworkCoverageList,
   FormworkDesignReport,
+  FormworkPartsList,
   PourLimitInput,
   PourSequenceFields,
   PourUnitHint,
@@ -1159,6 +1161,12 @@ export default function ColumnPanel() {
           </PanelSection>
           <PanelSection title="Formwork coverage">
             <FormworkCoverageList hostId={node.id as AnyNodeId} />
+          </PanelSection>
+          <PanelSection title="Formwork parts">
+            <FormworkPartsList hostId={node.id as AnyNodeId} />
+          </PanelSection>
+          <PanelSection title="Formwork bill of materials">
+            <FormworkBom hostId={node.id as AnyNodeId} />
           </PanelSection>
         </>
       )}

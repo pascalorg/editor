@@ -28,6 +28,18 @@ export {
   MAX_PROP_SPACING_M,
 } from './falsework'
 export {
+  DEFAULT_FORMWORK_SELF_WEIGHT_KPA,
+  DEFAULT_REBAR_KN_M3,
+  MIN_COMBINED_CARTS_KPA,
+  MIN_COMBINED_KPA,
+  MIN_LIVE_LOAD_CARTS_KPA,
+  MIN_LIVE_LOAD_KPA,
+  type VerticalLoad,
+  type VerticalLoadGoverning,
+  type VerticalLoadInput,
+  verticalLoad,
+} from './vertical-load'
+export {
   BRACE_DEAD_LOAD_FRACTION,
   type BraceDesign,
   braceDesign,
@@ -47,15 +59,3 @@ export {
   type WallWarningKind,
   wallDesign,
 } from './wall'
-export {
-  DEFAULT_FORMWORK_SELF_WEIGHT_KPA,
-  DEFAULT_REBAR_KN_M3,
-  MIN_COMBINED_CARTS_KPA,
-  MIN_COMBINED_KPA,
-  MIN_LIVE_LOAD_CARTS_KPA,
-  MIN_LIVE_LOAD_KPA,
-  type VerticalLoad,
-  type VerticalLoadGoverning,
-  type VerticalLoadInput,
-  verticalLoad,
-} from './vertical-load'

@@ -4,6 +4,7 @@ import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildFormworkAssemblyFloorplan } from './floorplan'
 import { buildFormworkGeometry } from './geometry'
 import { formworkAssemblyParametrics } from './parametrics'
+import { formworkPartSceneAction } from './scene-action'
 import { buildFormworkFloorplanSchedule } from './schedule'
 import { FormworkAssemblyNode } from './schema'
 
@@ -48,6 +49,9 @@ export const formworkAssemblyDefinition: NodeDefinition<typeof FormworkAssemblyN
     selectable: { hitVolume: 'bbox' },
     duplicable: false,
     deletable: true,
+    // Clicking a waler picks that waler *and* still selects the shutter — see
+    // `scene-action.ts` for why `activate` deliberately does not consume the click.
+    sceneAction: formworkPartSceneAction,
   },
 
   geometry: buildFormworkGeometry,

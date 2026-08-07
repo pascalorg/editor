@@ -1,20 +1,36 @@
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import {
+  ADJUSTABLE_COLUMN_CLAMPS,
+  bomLines,
+  bomWeightKg,
+  COLUMN_FORMS,
   DEFAULT_FORMWORK_SETTINGS,
+  duplicateMarks,
   FALSEWORK_BEAMS,
   FORMWORK_SYSTEMS,
   type FormworkSettingsGroup,
   findFormworkSettingsNode,
   formworkSettings,
   mergeFormworkCement,
+  mergeFormworkPartOverride,
   mergeFormworkSettingsGroup,
+  orphanedOverrides,
+  overUtilisedParts,
   PROP_TYPES,
+  partByMark,
+  partLabel,
   SHEATHING_TYPES,
+  SHEET_STOCK,
+  worstUtilisation,
 } from '@pascal-app/core/formwork'
 import type { AnyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint'
-import { buildFormworkNodes, pourUnitsForHost } from '@pascal-app/nodes/formwork-assembly'
+import {
+  buildFormworkNodes,
+  pourUnitsForHost,
+  solveShuttersForHost,
+} from '@pascal-app/nodes/formwork-assembly'
 import { generateText, isStepCount, type ModelMessage, tool } from 'ai'
 import { z } from 'zod'
 
@@ -57,7 +73,19 @@ export const SYSTEM_PROMPT =
   'should say so rather than present it as one. Write them with set_formwork_settings, and ask for ' +
   'the rate of rise, the temperature and the code rather than guessing — the entire design hangs ' +
   'off those three. Changing them invalidates every assembly already in the scene, so say how many ' +
-  'and offer to re-run attach_formwork on those elements. Keep replies short.'
+  'and offer to re-run attach_formwork on those elements. ' +
+  'A shutter is made of individual parts, and inspect_formwork_parts is the only figure that ' +
+  'agrees with what the user can see: the parts come out of the same pass that draws the 3D ' +
+  'shutter, so never count panels, ties or props from the spacings yourself. Every part has a mark ' +
+  'derived from its own position, so a mark stays put when the scene is re-solved and you can ' +
+  'quote one to the user. Say whether a weight total is complete — several catalog entries publish ' +
+  'a range rather than a figure, and a total missing those is not the lifting weight of the set. ' +
+  'A part beyond capacity is a stop, not a note: do not present a bill for a shutter that does not ' +
+  'stand up. set_formwork_part records the two decisions a yard actually makes about a solved ' +
+  'layout — substitute this item, or leave it off the order because it is already on site. It ' +
+  'cannot change a size or a spacing; those are outputs, and to change them you change the design ' +
+  'inputs and re-solve. Ask before substituting, because a panel from another manufacturer will ' +
+  'not line up with this system’s tie holes. Keep replies short.'
 
 const bedrock = createAmazonBedrock({ region: process.env.AWS_REGION ?? 'us-east-1' })
 
@@ -271,6 +299,30 @@ const PART_SETTINGS_SCHEMA = z.object({
     .optional()
     .describe('walers paired either side of the tie, which usually opens the tie spacing'),
 })
+
+/**
+ * Every catalog id a part could legitimately be substituted for.
+ *
+ * One flat set rather than a per-kind list, because the check here is only "does this
+ * name a real product" — whether a beam is a sensible stand-in for a beam is the
+ * substitution list the panel offers, and the model is told in the tool description to
+ * match like for like. A tighter check on the server would reject the legitimate case
+ * where a column form stands in for a wall panel on a blade.
+ */
+const CATALOG_IDS = new Set<string>([
+  ...Object.values(FORMWORK_SYSTEMS).flatMap((system) => [
+    ...system.panels.map((entry) => entry.id),
+    ...system.corners.map((entry) => entry.id),
+    ...system.fillers.map((entry) => entry.id),
+    ...system.ties.map((entry) => entry.id),
+  ]),
+  ...ADJUSTABLE_COLUMN_CLAMPS.map((entry) => entry.id),
+  ...COLUMN_FORMS.map((entry) => entry.id),
+  ...SHEATHING_IDS,
+  ...BEAM_IDS,
+  ...PROP_IDS,
+  ...SHEET_STOCK.map((entry) => entry.id),
+])
 
 /** The first part id that names nothing in the catalog, as the error the model reads back. */
 function unknownPartId(patch: z.infer<typeof PART_SETTINGS_SCHEMA>): string | undefined {
@@ -660,6 +712,173 @@ export function buildTools(
         return stale === 0
           ? summary
           : `${summary}. ${stale} existing ${stale === 1 ? 'assembly was' : 'assemblies were'} built against the old pour — call attach_formwork again on those elements or the shutters and the report will disagree.`
+      },
+    }),
+    inspect_formwork_parts: tool({
+      description:
+        "What a wall, column or slab's shutter is actually made of, and the bill of materials for it. Every part carries a mark derived from its own position (P-A-1-01800 is the panel on face A, first course, 1800 mm along), so a mark is a stable handle you can quote to the user and pass to set_formwork_part. Read this before answering any question about panel counts, tie counts, prop counts, weights or what to order — the parts are solved from the same pass that draws the 3D shutter, so this is the only figure that agrees with what the user sees. Reports the hardest-worked part and anything beyond capacity: a bill for a shutter that does not stand up is not an order to place. Call attach_formwork first if the element has no shutter yet.",
+      inputSchema: z.object({
+        elementId: z.string(),
+        kind: z
+          .string()
+          .max(40)
+          .optional()
+          .describe(
+            'restrict the part list to one kind — panel, filler, corner, stop-end, waler, joist, tie, ply-piece, prop, brace, accessory, consumable. The bill always covers everything; this only trims the itemised list',
+          ),
+      }),
+      execute: async ({ elementId, kind }) => {
+        toolCalls.push({ name: 'inspect_formwork_parts', input: { elementId, kind } })
+        const element = castableOrError(elementId)
+        if (typeof element === 'string') return element
+        const shutters = solveShuttersForHost(
+          element as unknown as Parameters<typeof solveShuttersForHost>[0],
+          graph.nodes as unknown as Record<string, AnyNode>,
+        )
+        if (shutters.length === 0) {
+          return `Error: ${elementId} has no formwork assembly, so there are no parts. Call set_element_construction then attach_formwork first.`
+        }
+        const every = shutters.flatMap((shutter) => shutter.parts)
+        const over = overUtilisedParts(every)
+        const worst = worstUtilisation(every)
+        const lines = bomLines(every)
+        const weight = bomWeightKg(lines)
+        return JSON.stringify({
+          kind: element.type,
+          shutters: shutters.map((shutter) => ({
+            assemblyId: shutter.assembly.id,
+            segment: shutter.assembly.segmentIndex,
+            lift: shutter.assembly.liftIndex,
+            partCount: shutter.parts.length,
+            // Trimmed by kind because a 6 m slab deck is hundreds of sheets and
+            // props, and a full dump of them crowds out the bill underneath.
+            parts: (kind ? shutter.parts.filter((part) => part.kind === kind) : shutter.parts).map(
+              (part) => ({
+                mark: part.mark,
+                kind: part.kind,
+                label: partLabel(part),
+                description: part.description,
+                catalogId: part.catalogId ?? null,
+                provenance: part.provenance,
+                weightKg: part.weightKg ?? null,
+                utilisation: part.structure ? round(part.structure.utilisation) : null,
+                governingCheck: part.structure?.governingCheck ?? null,
+                omittedFromOrder: part.omitted === true,
+                note: part.note ?? null,
+              }),
+            ),
+          })),
+          // Grouped for ordering rather than per shutter: a wall cast in three
+          // lifts is one delivery of the same panels.
+          bom: lines.map((line) => ({
+            description: line.description,
+            catalogId: line.catalogId ?? null,
+            provenance: line.provenance,
+            quantity: line.quantity,
+            unit: line.unit,
+            totalWeightKg: line.totalWeightKg === undefined ? null : round(line.totalWeightKg),
+            marks: line.marks,
+          })),
+          totalWeightKg: round(weight.totalKg),
+          // False means some part has no published weight, so the total is the sum of
+          // the ones that do. Do not quote it as the lifting weight of the set.
+          totalWeightComplete: weight.complete,
+          hardestWorked: worst
+            ? {
+                mark: worst.part.mark,
+                utilisation: round(worst.utilisation),
+                governingCheck: worst.part.structure?.governingCheck ?? null,
+              }
+            : null,
+          beyondCapacity: over.map((part) => ({
+            mark: part.mark,
+            utilisation: round(part.structure?.utilisation ?? 0),
+            governingCheck: part.structure?.governingCheck ?? null,
+          })),
+          duplicateMarks: duplicateMarks(every),
+          staleEdits: shutters.flatMap((shutter) =>
+            orphanedOverrides(shutter.parts, shutter.assembly.partOverrides).map((mark) => ({
+              assemblyId: shutter.assembly.id,
+              mark,
+            })),
+          ),
+        })
+      },
+    }),
+    set_formwork_part: tool({
+      description:
+        "Record a decision about one part of a shutter: substitute a different catalog item for it, or leave it off the order because it is already on site. Identify the part by the mark inspect_formwork_parts reported. These are the two things a yard actually changes about a solved layout, and they are recorded against the mark rather than against the solve, so they survive the wall being re-solved. You cannot edit a size, a length, a spacing or a utilisation — those are outputs of the design, and a panel width typed over the top of one produces a bill that does not fit the wall. Pass false or null to clear a field. Ask before substituting: a panel from another manufacturer's system will not line up with this system's tie holes.",
+      inputSchema: z.object({
+        elementId: z.string(),
+        mark: z
+          .string()
+          .max(120)
+          .describe("the part's mark, e.g. P-A-1-01800 — from inspect_formwork_parts"),
+        catalogId: z
+          .string()
+          .max(120)
+          .nullable()
+          .optional()
+          .describe(
+            'the catalog item to use instead. Must be an id that exists in the catalog, and must be the same sort of thing as the part it replaces — a prop for a prop, a beam for a beam',
+          ),
+        omitted: z
+          .boolean()
+          .nullable()
+          .optional()
+          .describe(
+            'true leaves the part off the bill and off the weight total. The 3D shutter still draws it, because it is still in the shutter — somebody else supplied it',
+          ),
+        note: z
+          .string()
+          .max(500)
+          .nullable()
+          .optional()
+          .describe('why, so the decision is on the drawing rather than only in this conversation'),
+      }),
+      execute: async ({ catalogId, elementId, mark, note, omitted }) => {
+        toolCalls.push({
+          name: 'set_formwork_part',
+          input: { catalogId, elementId, mark, note, omitted },
+        })
+        if (catalogId === undefined && omitted === undefined && note === undefined) {
+          return 'Error: nothing to set — pass catalogId, omitted or note'
+        }
+        if (typeof catalogId === 'string' && !CATALOG_IDS.has(catalogId)) {
+          return `Error: no catalog item "${catalogId}". Read inspect_formwork_settings for the systems in scope, or pass null to go back to what the layout solved.`
+        }
+        const element = castableOrError(elementId)
+        if (typeof element === 'string') return element
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        const shutters = solveShuttersForHost(
+          element as unknown as Parameters<typeof solveShuttersForHost>[0],
+          nodes,
+        )
+        // Resolved against the live solve rather than written blind, so a mark the
+        // model misremembered is refused instead of becoming a stale edit nobody
+        // asked for.
+        const target = shutters.find((shutter) => partByMark(shutter.parts, mark) !== undefined)
+        if (!target) {
+          const known = shutters.flatMap((shutter) => shutter.parts.map((part) => part.mark))
+          return known.length === 0
+            ? `Error: ${elementId} has no formwork assembly, so there is no part ${mark}. Call attach_formwork first.`
+            : `Error: no part ${mark} on ${elementId}. Call inspect_formwork_parts for the marks this shutter actually has (${known.length} parts).`
+        }
+        const assembly = nodes[target.assembly.id as string] as unknown as Record<string, unknown>
+        assembly.partOverrides = mergeFormworkPartOverride(
+          assembly.partOverrides as never,
+          mark,
+          toPatch({ catalogId, omitted, note }) as never,
+        )
+        onMutate()
+        const part = partByMark(target.parts, mark)
+        const said: string[] = []
+        if (catalogId !== undefined) {
+          said.push(catalogId === null ? 'substitution cleared' : `now ${catalogId}`)
+        }
+        if (omitted !== undefined) said.push(omitted ? 'left off the order' : 'back on the order')
+        if (note !== undefined) said.push(note === null ? 'note cleared' : 'note recorded')
+        return `ok — ${partLabel(part as never)} ${mark}: ${said.join(', ')}`
       },
     }),
     inspect_pour_units: tool({

@@ -218,7 +218,9 @@ describe('the project settings reach the wall chain', () => {
 
     expect(
       wallPourDesign(cold, makeWall(), undefined, undefined).design.designPressureKnM2,
-    ).toBeGreaterThan(wallPourDesign(warm, makeWall(), undefined, undefined).design.designPressureKnM2)
+    ).toBeGreaterThan(
+      wallPourDesign(warm, makeWall(), undefined, undefined).design.designPressureKnM2,
+    )
   })
 
   test('the stated standard is the one the envelope is derived under', () => {
@@ -286,9 +288,7 @@ describe('the project settings reach the wall chain', () => {
     // DIN's maximum rate is not assuming it.
     expect(DEFAULTS.stated).toBeUndefined()
     expect(makeSettings().stated?.placement).toBeUndefined()
-    expect(
-      makeSettings({ placement: { riseRateMH: 7 } }).stated?.placement?.riseRateMH,
-    ).toBe(7)
+    expect(makeSettings({ placement: { riseRateMH: 7 } }).stated?.placement?.riseRateMH).toBe(7)
   })
 })
 
@@ -410,9 +410,9 @@ describe('slabPourDesign', () => {
   })
 
   test('the stated soffit height is used in preference to the assumed storey', () => {
-    expect(slabPourDesign(DEFAULTS, makeSlab({ soffitHeightAboveSupport: 4.2 })).soffitHeightM).toBe(
-      4.2,
-    )
+    expect(
+      slabPourDesign(DEFAULTS, makeSlab({ soffitHeightAboveSupport: 4.2 })).soffitHeightM,
+    ).toBe(4.2)
   })
 
   test('the project’s deck loads are what the falsework carries', () => {
@@ -439,6 +439,8 @@ describe('slabPourDesign', () => {
     expect(heavy.design.load.deadKpa).toBeGreaterThan(
       slabPourDesign(DEFAULTS, makeSlab()).design.load.deadKpa,
     )
-    expect(poured.design.load.totalKpa).toBe(slabPourDesign(DEFAULTS, makeSlab()).design.load.totalKpa)
+    expect(poured.design.load.totalKpa).toBe(
+      slabPourDesign(DEFAULTS, makeSlab()).design.load.totalKpa,
+    )
   })
 })

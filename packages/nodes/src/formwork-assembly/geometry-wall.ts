@@ -1,4 +1,10 @@
-import type { WallDesign } from '@pascal-app/core/formwork'
+import {
+  type FormworkPartSpec,
+  type FormworkSystem,
+  fitCorner,
+  governingCapacity,
+  type WallDesign,
+} from '@pascal-app/core/formwork'
 import type { WallNode } from '@pascal-app/core/schema'
 import { BoxGeometry, Group, Mesh, type MeshStandardMaterial } from 'three'
 import { wallPourDesign } from './design'
@@ -27,6 +33,7 @@ import {
   WALER_HEIGHT,
   walerMaterial,
 } from './geometry-shared'
+import { type BuiltFormwork, collectParts, type PartCollector } from './parts'
 import type { FormworkAssemblyNode } from './schema'
 
 /**
@@ -68,7 +75,7 @@ const SIDES: Array<{
 
 /** Vertical post + horizontal ledgers + one diagonal brace per bay, standing off from `faceZ` along +/-Z by `sign`. */
 function buildScaffoldSide(
-  group: Group,
+  parts: PartCollector,
   side: Side,
   sign: 1 | -1,
   spanStart: number,
@@ -93,7 +100,7 @@ function buildScaffoldSide(
     )
     post.name = `scaffold-post-${side}-${i}`
     post.position.set(x, baseY + height / 2, scaffoldZ)
-    group.add(post)
+    parts.add(post)
   }
 
   const ledgerRows = Math.max(1, Math.floor(height / SCAFFOLD_LIFT))
@@ -108,7 +115,7 @@ function buildScaffoldSide(
       )
       ledger.name = `scaffold-ledger-${side}-${row}-${i}`
       ledger.position.set((xa + xb) / 2, y, scaffoldZ)
-      group.add(ledger)
+      parts.add(ledger)
 
       // One diagonal brace per bay, base-to-top, alternating direction so
       // adjacent bays cross-brace like a real erected frame.
@@ -122,7 +129,7 @@ function buildScaffoldSide(
       brace.name = `scaffold-brace-${side}-${i}`
       brace.position.set((xa + xb) / 2, baseY + braceRise / 2, scaffoldZ)
       brace.rotation.z = sign * Math.atan2(braceRise, dx)
-      group.add(brace)
+      parts.add(brace)
     }
   }
 }
@@ -180,8 +187,131 @@ function pieceKindName(piece: PlannedPiece['piece']): string {
   return piece.kind === 'panel' ? 'panel' : piece.kind === 'filler' ? 'filler' : 'cut'
 }
 
+/**
+ * A corner unit as a billable part.
+ *
+ * `owned` is the field that stops a building's corners being ordered twice. Both
+ * walls at a junction draw their own leg because the hardware lands on both faces,
+ * and exactly one of them buys the unit — `ElementCorner.owns` decides which, and
+ * `cornerPartName` already carries the same distinction into the mesh name.
+ *
+ * A junction the system sweeps no unit for is cut to fit on site. That is `bespoke`
+ * with no catalog id, which is the honest answer: there is no article number to order
+ * and the legs are whatever the carpenter cuts them to.
+ */
+function cornerSpec(
+  run: CornerRun,
+  system: FormworkSystem | undefined,
+  face: 'side-a' | 'side-b',
+  heightM: number,
+): FormworkPartSpec {
+  const { entry } = run
+  const fit = system ? fitCorner(system, entry.corner, heightM * 1000) : undefined
+  const legLengthsMm: [number, number] = fit
+    ? [fit.legLengthsM[0] * 1000, fit.legLengthsM[1] * 1000]
+    : [(run.leg.hi - run.leg.lo) * 1000, (run.leg.hi - run.leg.lo) * 1000]
+  return {
+    kind: 'corner',
+    locus: {
+      on: 'run',
+      face,
+      stationMm: entry.leg.alongM * 1000,
+      towardEnd: entry.leg.towardEnd,
+    },
+    ...(fit ? { catalogId: fit.corner.id } : {}),
+    description: fit
+      ? fit.corner.label
+      : `Cut-to-fit ${entry.corner.side} corner, ${Math.round(entry.corner.angleDeg)}°`,
+    provenance: fit ? 'standard' : 'bespoke',
+    ...(fit ? { weightKg: fit.corner.weightKg } : {}),
+    side: entry.corner.side,
+    heightMm: heightM * 1000,
+    legLengthsMm,
+    owned: entry.owns,
+  }
+}
+
+/**
+ * One shutter piece as a billable part.
+ *
+ * The three kinds are three different lines on a bill and two different processes on
+ * site. A panel is hired stock with an item number and a weight; a filler is a
+ * catalog make-up piece, except where the system's answer is a profile plus a board,
+ * which is what `madeFrom: 'site-cut'` means and why that case is `bespoke` even
+ * though it has a catalog id; a cut board is carpentry, has no id, and belongs on a
+ * cut list rather than an order. Collapsing them would put a 137 mm site-cut board
+ * on the same line as a hired 1200 panel.
+ *
+ * `heightMm` comes from the piece itself where the catalog states it, not from the
+ * band the openings left: a panel cut around a door is still a whole panel off the
+ * rack. A cut board is the opposite — its height *is* the band, because that is what
+ * somebody saws.
+ */
+function pieceSpec(
+  piece: PlannedPiece['piece'],
+  locus: Extract<FormworkPartSpec['locus'], { on: 'run' }>,
+  bandHeightMm: number,
+): FormworkPartSpec {
+  if (piece.kind === 'panel') {
+    return {
+      kind: 'panel',
+      locus,
+      catalogId: piece.panel.id,
+      description: piece.panel.label,
+      provenance: 'standard',
+      weightKg: piece.panel.weightKg,
+      widthMm: piece.panel.widthMm,
+      heightMm: piece.panel.heightMm,
+      frameDepthMm: piece.panel.frameDepthMm,
+      tieHoleCount: piece.panel.tieHoles.levelsMm.length * piece.panel.tieHoles.columnsMm.length,
+    }
+  }
+  if (piece.kind === 'filler') {
+    return {
+      kind: 'filler',
+      locus,
+      catalogId: piece.filler.id,
+      description: piece.filler.label,
+      provenance: piece.filler.madeFrom === 'site-cut' ? 'bespoke' : 'standard',
+      weightKg: piece.filler.weightKg,
+      widthMm: piece.widthMm,
+      heightMm: piece.filler.heightMm,
+      madeFrom: piece.filler.madeFrom,
+    }
+  }
+  return {
+    kind: 'ply-piece',
+    locus,
+    description: `Cut board ${Math.round(piece.widthMm)} × ${Math.round(bandHeightMm)} mm`,
+    provenance: 'bespoke',
+    use: 'cut-board',
+    widthMm: piece.widthMm,
+    heightMm: bandHeightMm,
+  }
+}
+
 /** Two holes this close are the same hole — a millimetre of float in the frames. */
 const HOLE_TOLERANCE = 0.002
+
+/**
+ * The design row a station at `elevationMm` belongs to — the nearest one, because a
+ * drilled hole sits where the factory put it and the graded rows the chain solved are
+ * a different set of elevations. A tie takes the force of the row it is nearest to
+ * rather than of the row it exactly matches, which is what a crew reading a schedule
+ * does with a hole between two lines.
+ */
+function rowAt(design: WallDesign, elevationMm: number): WallDesign['rows'][number] | undefined {
+  let nearest: WallDesign['rows'][number] | undefined
+  let best = Number.POSITIVE_INFINITY
+  for (const row of design.rows) {
+    const distance = Math.abs(row.elevationMm - elevationMm)
+    if (distance < best) {
+      best = distance
+      nearest = row
+    }
+  }
+  return nearest
+}
 
 /**
  * Where a through-tie can actually pass.
@@ -270,12 +400,13 @@ export function buildWallFormwork(
   node: FormworkAssemblyNode,
   scope: FormworkScope,
   material: MeshStandardMaterial,
-): Group {
+): BuiltFormwork {
   const group = new Group()
-  const { element, unit, isFormed, corners, settings } = scope
+  const parts = collectParts(group, node)
+  const { element, unit, isFormed, faceOf, corners, settings } = scope
 
   const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-  if (wallLength <= 0) return group
+  if (wallLength <= 0) return parts.finish()
   const height = wall.height ?? 2.4
   const thickness = wall.thickness ?? 0.15
   const faceOffset = thickness / 2 + PANEL_THICKNESS / 2
@@ -285,7 +416,7 @@ export function buildWallFormwork(
   const baseY = unit?.baseElevation ?? 0
   const topY = unit?.topElevation ?? height
   const spanLength = spanEnd - spanStart
-  if (spanLength <= 0 || topY - baseY <= 0) return group
+  if (spanLength <= 0 || topY - baseY <= 0) return parts.finish()
 
   // Openings clipped to this unit: one straddling a lift joint is formed by
   // both shutters, each carrying only the part of the void in its own pour.
@@ -354,7 +485,7 @@ export function buildWallFormwork(
   const coursed = planByFace.get('a') ?? planByFace.get('b')
   const formBottom = coursed?.courses[0]?.baseM ?? baseY + kickerM
   const formTop = coursed?.courses.at(-1)?.topM ?? topY
-  if (formTop - formBottom <= 0) return group
+  if (formTop - formBottom <= 0) return parts.finish()
 
   // Corner units, placed before the panels because the panel run starts clear of
   // them: an outside leg wraps the neighbouring core and so is longer than the
@@ -372,7 +503,7 @@ export function buildWallFormwork(
       )
       leg.name = `${cornerPartName(run.entry)}-${index}-${side}`
       leg.position.set((lo + hi) / 2, (formBottom + formTop) / 2, sign * faceOffset)
-      group.add(leg)
+      parts.emit(cornerSpec(run, system, role, formTop - formBottom), leg)
     }
   }
 
@@ -388,6 +519,7 @@ export function buildWallFormwork(
       for (const [index, { lo, hi, piece }] of course.pieces.entries()) {
         const bands = subtractOpenings(course.baseM, course.topM, lo, hi, openings)
         const stem = `${pieceKindName(piece)}-${side}-c${courseIndex}-${index}`
+        let firstBandMark = ''
         for (const [b, band] of bands.entries()) {
           const bandHeight = band.hi - band.lo
           if (bandHeight <= PANEL_GAP) continue
@@ -397,7 +529,30 @@ export function buildWallFormwork(
           )
           board.name = bands.length > 1 ? `${stem}-${b}` : stem
           board.position.set((lo + hi) / 2, (band.lo + band.hi) / 2, sign * faceOffset)
-          group.add(board)
+          // A panel the openings split into bands is still one panel off the rack, so
+          // the part is emitted once and the bands are only how it is drawn. A cut
+          // board is the opposite: each band is a separate board somebody saws, and
+          // the elevation in its locus is what keeps the two marks apart.
+          const banded = piece.kind === 'cut' && bands.length > 1
+          if (b === 0 || banded) {
+            const mark = parts.emit(
+              pieceSpec(
+                piece,
+                {
+                  on: 'run',
+                  face: role,
+                  courseIndex,
+                  stationMm: (lo - spanStart) * 1000,
+                  ...(banded ? { elevationMm: (band.lo - baseY) * 1000 } : {}),
+                },
+                bandHeight * 1000,
+              ),
+              board,
+            )
+            firstBandMark = mark
+          } else {
+            parts.tag(firstBandMark, board)
+          }
         }
       }
     }
@@ -456,7 +611,21 @@ export function buildWallFormwork(
       const board = new Mesh(new BoxGeometry(reveal.w, reveal.h, thickness), material)
       board.name = `box-out-${opening.id}-${reveal.name}`
       board.position.set(reveal.x, reveal.y, 0)
-      group.add(board)
+      // A reveal is boarded across the wall's full thickness, so its width is the
+      // core and its length is the side of the void it returns. Bespoke by nature:
+      // a box-out is made for one opening and struck in pieces.
+      parts.emit(
+        {
+          kind: 'ply-piece',
+          locus: { on: 'opening', openingId: opening.id, reveal: reveal.name },
+          description: `Box-out ${reveal.name}, ${Math.round(Math.max(reveal.w, reveal.h) * 1000)} mm`,
+          provenance: 'bespoke',
+          use: 'box-out',
+          widthMm: thickness * 1000,
+          heightMm: Math.max(reveal.w, reveal.h) * 1000,
+        },
+        board,
+      )
     }
   }
 
@@ -476,7 +645,22 @@ export function buildWallFormwork(
     )
     plate.name = stopEnd.name
     plate.position.set(stopEnd.x, (formBottom + formTop) / 2, 0)
-    group.add(plate)
+    // Starter bars through a bulkhead are the reason a stop-end is never a plain
+    // plate: every bar is a hole cut and sealed, and it is the labour rather than the
+    // board that a bulkhead costs. The coverage solver already knows which ends are
+    // penetrated, so the part carries it rather than re-deriving it.
+    const penetrated = faceOf(stopEnd.role)?.starterPenetrations === true
+    parts.emit(
+      {
+        kind: 'stop-end',
+        locus: { on: 'end', end: stopEnd.role === 'end-start' ? 'start' : 'end' },
+        description: `Bulkhead ${Math.round(thickness * 1000)} mm wide`,
+        provenance: 'bespoke',
+        areaSqM: (formTop - formBottom) * thickness,
+        ...(penetrated ? { starterPenetrations: true as const } : {}),
+      },
+      plate,
+    )
   }
 
   // Through-ties clamp both faces together — one member spans the full wall
@@ -506,6 +690,11 @@ export function buildWallFormwork(
   const stations = bothSidesFormed
     ? tieStations(planByFace, design, { spanStart, spanEnd, baseY, formTop })
     : []
+  // What a tie is checked against — the rod or the bracket it bears on, whichever
+  // ran out first. Off the catalog where the design found a tie, so the part reports
+  // the same component the design report prints.
+  const tieCapacity = design.tie ? governingCapacity(design.tie) : undefined
+  const tieLengthMm = (thickness + PANEL_THICKNESS * 2) * 1000
   for (const [index, station] of stations.entries()) {
     if (!passable(station.x, station.y)) continue
     const tie = new Mesh(
@@ -514,7 +703,39 @@ export function buildWallFormwork(
     )
     tie.name = `tie-${index}`
     tie.position.set(station.x, station.y, 0)
-    group.add(tie)
+    // The row this station belongs to carries the force, so the part's utilisation is
+    // the design's own arithmetic rather than a second calculation off the geometry.
+    const row = rowAt(design, (station.y - baseY) * 1000)
+    const forceKn = row?.forceKn ?? 0
+    parts.emit(
+      {
+        kind: 'tie',
+        locus: {
+          on: 'elevation',
+          elevationMm: (station.y - baseY) * 1000,
+          stationMm: (station.x - spanStart) * 1000,
+        },
+        ...(design.tie ? { catalogId: design.tie.id } : {}),
+        description: design.tie
+          ? `${design.tie.label}, ${Math.round(tieLengthMm)} mm`
+          : `Through-tie ${Math.round(tieLengthMm)} mm`,
+        provenance: design.tie ? 'standard' : 'bespoke',
+        ...(design.tie ? { weightKg: design.tie.weightKg } : {}),
+        lengthMm: tieLengthMm,
+        forceKn,
+        capacityKn: design.tieCapacityKn,
+        capacityComponent: tieCapacity?.component ?? design.tieCapacityComponent,
+        ...(design.tieCapacityKn > 0
+          ? {
+              structure: {
+                utilisation: forceKn / design.tieCapacityKn,
+                governingCheck: design.tieCapacityComponent,
+              },
+            }
+          : {}),
+      },
+      tie,
+    )
   }
 
   // Walers (waling beams) on both faces, backing the panels so ties bear
@@ -545,8 +766,67 @@ export function buildWallFormwork(
         const waler = new Mesh(new BoxGeometry(runLength, WALER_HEIGHT, WALER_DEPTH), walerMaterial)
         waler.name = `waler-${side}-${row}-${index}`
         waler.position.set((run.lo + run.hi) / 2, y, walerZ)
-        group.add(waler)
+        // The waler's utilisation is the design's, at the spacing that was adopted —
+        // which is the figure a stated spacing gets reported against, so a waler the
+        // job fixed too wide reads over 1.0 here rather than being silently retightened.
+        parts.emit(
+          {
+            kind: 'waler',
+            locus: {
+              on: 'elevation',
+              face: role,
+              elevationMm: (y - baseY) * 1000,
+              stationMm: (run.lo - spanStart) * 1000,
+            },
+            ...(design.beam ? { catalogId: design.beam.id } : {}),
+            description: design.beam
+              ? `${design.beam.label}, ${Math.round(runLength * 1000)} mm`
+              : `Waler ${Math.round(runLength * 1000)} mm`,
+            provenance: design.beam ? 'standard' : 'bespoke',
+            ...(design.beam ? { weightKg: design.beam.kgPerM * runLength } : {}),
+            member: 'waler',
+            lengthMm: runLength * 1000,
+            structure: {
+              utilisation: design.waler.utilisation,
+              governingCheck: design.waler.governedBy,
+            },
+          },
+          waler,
+        )
         index++
+      }
+    }
+  }
+
+  // Rakers: what holds the form on line. A wall form is not braced against the
+  // concrete — the ties do that — so these are counted rather than drawn: they stand
+  // out into the working area at an angle the design chose, and drawing them would
+  // put timber through the scaffold on the same face. `braceDesign` gives the force
+  // and the anchor uplift, which is what the part is for.
+  //
+  // On the braced face only where the pour is single-sided, and on both faces
+  // otherwise, because a form has to resist wind from either side and a guy takes
+  // tension only. The count is the run over the raker spacing, rounded up: the end of
+  // a run is where a form is levered hardest.
+  const bracing = design.bracing
+  if (bracing.rakerSpacingM > 0) {
+    const lines = bracing.bothSidesRequired ? SIDES : SIDES.slice(0, 1)
+    for (const { role } of lines) {
+      if (!isFormed(role)) continue
+      const count = Math.max(1, Math.ceil(spanLength / bracing.rakerSpacingM))
+      for (let i = 0; i <= count; i++) {
+        const stationM = spanStart + (i / count) * spanLength
+        const lengthM =
+          bracing.connectionHeightM / Math.sin((bracing.rakerAngleDeg * Math.PI) / 180)
+        parts.emit({
+          kind: 'brace',
+          locus: { on: 'run', face: role, stationMm: (stationM - spanStart) * 1000 },
+          description: `Raker at ${Math.round(bracing.rakerAngleDeg)}°, ${Math.round(lengthM * 1000)} mm`,
+          provenance: 'bespoke',
+          lengthMm: lengthM * 1000,
+          forceKn: bracing.rakerForceKn,
+          anchorUpliftKn: bracing.anchorUpliftKn,
+        })
       }
     }
   }
@@ -557,9 +837,9 @@ export function buildWallFormwork(
     for (const { side, sign, role } of SIDES) {
       if (!isFormed(role)) continue
       const scaffoldZ = sign * (faceOffset + PANEL_THICKNESS / 2 + WALER_DEPTH + SCAFFOLD_STANDOFF)
-      buildScaffoldSide(group, side, sign, spanStart, spanEnd, baseY, topY, scaffoldZ)
+      buildScaffoldSide(parts, side, sign, spanStart, spanEnd, baseY, topY, scaffoldZ)
     }
   }
 
-  return group
+  return parts.finish()
 }

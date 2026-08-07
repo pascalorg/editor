@@ -8,7 +8,7 @@ export { FormworkCoverageList } from './coverage-summary'
 export { formworkAssemblyDefinition } from './definition'
 export { FormworkDesignReport } from './design-report'
 export { formworkAssembliesAffectedBy, formworkAssembliesOnHost } from './dirty-scope'
-export { buildFormworkGeometry } from './geometry'
+export { buildFormwork, buildFormworkGeometry } from './geometry'
 export {
   FormworkConstructionSection,
   type HostConstructionUpdate,
@@ -19,4 +19,6 @@ export {
   TopSurfaceFields,
   useFormworkHost,
 } from './host-controls'
+export { FormworkBom, FormworkPartsList } from './parts-summary'
 export { FormworkAssemblyNode } from './schema'
+export { type SolvedShutter, solveShuttersForHost } from './solve'

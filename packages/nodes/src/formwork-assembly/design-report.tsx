@@ -21,6 +21,15 @@ import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import type { CastableHostNode } from './attach'
 import { columnPourDesign, slabPourDesign, wallPourDesign } from './design'
+import {
+  mm,
+  Note,
+  Readout,
+  Section,
+  type UnitSystem,
+  utilisationClass,
+  WarningLine,
+} from './report-ui'
 
 /**
  * The design report: what the shutter was sized against, what each member came out
@@ -49,25 +58,6 @@ const GOVERNING_LABELS: Record<SpanGoverning, string> = {
   bending: 'bending',
   shear: 'shear',
   deflection: 'deflection',
-}
-
-type UnitSystem = 'metric' | 'imperial'
-
-/**
- * Where a member's utilisation stops being comfortable. Over 1.0 is over capacity
- * and always red; the amber band below it is the range where a small change in the
- * pour — a faster rise, a colder morning — puts it over.
- */
-const UTILISATION_TIGHT = 0.85
-
-function utilisationClass(value: number): string {
-  if (value > 1 + 1e-6) return 'text-red-400'
-  if (value >= UTILISATION_TIGHT) return 'text-amber-500'
-  return 'text-foreground/90'
-}
-
-function mm(meters: number, unit: UnitSystem): string {
-  return formatLinearMeasurement(meters, unit, 'millimeters')
 }
 
 const CASTABLE_TYPES = ['wall', 'column', 'slab'] as const
@@ -399,10 +389,7 @@ function SlabReport({
   slab: Extract<CastableHostNode, { type: 'slab' }>
   unitSystem: UnitSystem
 }) {
-  const { design, soffitHeightM } = useMemo(
-    () => slabPourDesign(settings, slab),
-    [settings, slab],
-  )
+  const { design, soffitHeightM } = useMemo(() => slabPourDesign(settings, slab), [settings, slab])
   const propOver =
     design.propCapacityKn !== undefined && design.propLoadKn > design.propCapacityKn + 1e-6
 
@@ -684,47 +671,4 @@ function Warnings({ warnings }: { warnings: ReadonlyArray<{ kind: string; messag
       ))}
     </div>
   )
-}
-
-function WarningLine({ message }: { message: string }) {
-  return <div className="text-[10px] text-amber-500 leading-snug">{message}</div>
-}
-
-function Section({ children, title }: { children: React.ReactNode; title: string }) {
-  return (
-    <div className="space-y-1 rounded-md border border-border/40 px-2 py-1.5">
-      <div className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-        {title}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function Readout({
-  label,
-  value,
-  value2,
-  warn,
-}: {
-  label: string
-  value: string
-  value2?: string
-  warn?: boolean
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-2 text-[11px]">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="flex items-baseline gap-1.5">
-        {value2 && <span className="text-[10px] text-muted-foreground/70">{value2}</span>}
-        <span className={cn('font-mono', warn ? 'text-red-400' : 'text-foreground/90')}>
-          {value}
-        </span>
-      </span>
-    </div>
-  )
-}
-
-function Note({ children }: { children: React.ReactNode }) {
-  return <div className="text-[10px] text-muted-foreground/80 leading-snug">{children}</div>
 }
