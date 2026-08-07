@@ -31,6 +31,56 @@ type BatchRecord = {
   nodeIds: string[]
 }
 
+/**
+ * The inputs that re-make every wall's materials without touching a single
+ * node.
+ *
+ * A wall whose own definition changes is marked dirty and leaves its batch on
+ * that signal. These four do not go through a node at all — they are viewer
+ * toggles and the scene's material library — yet the cutaway pass rebuilds
+ * every wall's material set from them, so a merged mesh holding the old set
+ * would keep a whole floor looking the way it did before the switch. They
+ * change only when someone deliberately flips a switch, so re-sewing the
+ * scene on them is cheap.
+ */
+type AppearanceInputs = {
+  shading: unknown
+  textures: unknown
+  colorPreset: unknown
+  sceneTheme: unknown
+  materials: object | null
+}
+
+const lastAppearance: AppearanceInputs = {
+  shading: undefined,
+  textures: undefined,
+  colorPreset: undefined,
+  sceneTheme: undefined,
+  materials: null,
+}
+
+function appearanceChanged(): boolean {
+  const viewer = useViewer.getState()
+  const materials = useScene.getState().materials as object
+
+  if (
+    lastAppearance.shading === viewer.shading &&
+    lastAppearance.textures === viewer.textures &&
+    lastAppearance.colorPreset === viewer.colorPreset &&
+    lastAppearance.sceneTheme === viewer.sceneTheme &&
+    lastAppearance.materials === materials
+  ) {
+    return false
+  }
+
+  lastAppearance.shading = viewer.shading
+  lastAppearance.textures = viewer.textures
+  lastAppearance.colorPreset = viewer.colorPreset
+  lastAppearance.sceneTheme = viewer.sceneTheme
+  lastAppearance.materials = materials
+  return true
+}
+
 const batchesByLevel = new Map<string, BatchRecord[]>()
 const batchByNode = new Map<string, BatchRecord>()
 const staleLevels = new Set<string>()
@@ -262,6 +312,11 @@ export const WallBatchSystem = () => {
       staleLevels.clear()
       knownWallCount = -1
       batchingSuspended = false
+      lastAppearance.shading = undefined
+      lastAppearance.textures = undefined
+      lastAppearance.colorPreset = undefined
+      lastAppearance.sceneTheme = undefined
+      lastAppearance.materials = null
     },
     [],
   )
@@ -316,6 +371,15 @@ function runBatchFrame(
     const record = batchByNode.get(nodeId)
     if (record) staleLevels.add(record.levelId)
     releaseWall(nodeId)
+    changed = true
+  }
+
+  // A theme, texture or material-library switch re-makes every wall's
+  // materials without marking a single node, so the merged copies have to be
+  // sewn again from the new ones. See `appearanceChanged`.
+  if (appearanceChanged()) {
+    for (const levelId of [...batchesByLevel.keys()]) disposeLevelBatches(levelId)
+    for (const levelId of sceneRegistry.byType.level ?? EMPTY_IDS) staleLevels.add(levelId)
     changed = true
   }
 
