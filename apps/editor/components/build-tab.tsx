@@ -1,6 +1,6 @@
 'use client'
 
-import { nodeRegistry } from '@pascal-app/core'
+import { isNodeKindEnabled, nodeRegistry, useScene } from '@pascal-app/core'
 import {
   type FloorplanMode,
   getFloorplanNodeExtension,
@@ -78,7 +78,10 @@ const BASE_BUILD_TYPES: BuildType[] = [
   { id: 'terrain', label: 'Terrain', iconSrc: '/icons/mesh.webp', mode: 'terrain-sculpt' },
 ]
 
-function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
+function collectBuildTypes(
+  floorplanMode: FloorplanMode,
+  installedPlugins: readonly string[],
+): BuildType[] {
   const baseKinds = new Set(BASE_BUILD_TYPES.flatMap((type) => (type.kind ? [type.kind] : [])))
   const tools = BASE_BUILD_TYPES.filter((type) => type.kind).map((type, index) => ({
     ...type,
@@ -90,6 +93,10 @@ function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
     const extension = getFloorplanNodeExtension(definition)
     if (
       baseKinds.has(kind) ||
+      // Plugin kinds only when the project actually has the plugin — the
+      // registry holds every registered kind, installed or not, and an
+      // uninstalled kind's tile would place nodes nothing can render.
+      !isNodeKindEnabled(kind, installedPlugins) ||
       !extension?.tool ||
       !isFloorplanToolAvailableInMode(extension.availableModes, floorplanMode) ||
       !presentation ||
@@ -209,7 +216,11 @@ export function BuildTab() {
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
-  const buildTypes = useMemo(() => collectBuildTypes(floorplanMode), [floorplanMode])
+  const installedPlugins = useScene((s) => s.installedPlugins)
+  const buildTypes = useMemo(
+    () => collectBuildTypes(floorplanMode, installedPlugins),
+    [floorplanMode, installedPlugins],
+  )
 
   // The fitting / follow tools are armed from a segment's panel, not a grid
   // tile — keep the segment tile lit so the panel (and the way back) stays
