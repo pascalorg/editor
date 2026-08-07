@@ -16,7 +16,7 @@
     "@iconify/react": "^6.0.2",
     "@node-rs/argon2": "^2.0.2",
     "@number-flow/react": "^0.6.0",
-    "@ovurrsl/plugin-warehouse": "git+https://github.com/ovurrsl/plugin-warehouse.git#c4197828da7dcb9230d6bb5dc8b83f6f1a50746b",
+    "@ovurrsl/plugin-warehouse": "git+https://github.com/ovurrsl/plugin-warehouse.git#67064b860c28d72bccf56f51c51688d9282e564c",
     "@pascal-app/core": "*",
     "@pascal-app/editor": "*",
     "@pascal-app/ifc-converter": "*",
