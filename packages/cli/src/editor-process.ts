@@ -41,7 +41,18 @@ export interface StartEditorOptions {
   port?: number
   foreground?: boolean
   sourceDirectory?: string
+  onProgress?: (event: EditorStartProgress) => void
 }
+
+export type EditorStartProgress =
+  | { step: 'storage-ready'; dataDirectory: string }
+  | { step: 'runtime-installing' }
+  | { step: 'runtime-ready'; version: string; installed: boolean }
+  | { step: 'port-ready'; port: number; preferredPort: number }
+  | { step: 'process-starting'; port: number }
+  | { step: 'health-checking'; port: number }
+  | { step: 'ready'; port: number }
+  | { step: 'already-running'; port: number }
 
 export interface StartEditorResult {
   state: EditorState
@@ -85,6 +96,8 @@ export async function startEditor(options: StartEditorOptions): Promise<StartEdi
 
 async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEditorResult> {
   await ensurePascalDirectories(options.paths)
+  options.onProgress?.({ step: 'storage-ready', dataDirectory: options.paths.data })
+  let installedRuntime = false
   let currentStatus: EditorStatus
   try {
     currentStatus = await getEditorStatus(options.paths)
@@ -92,10 +105,13 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
     if (!(error instanceof CliError) || error.code !== 'invalid_runtime') throw error
     await stopEditorUnlocked(options.paths, { force: true })
     await rm(options.paths.currentRuntime, { force: true })
+    options.onProgress?.({ step: 'runtime-installing' })
     await installBundledRuntime(options.paths, options.sourceDirectory)
+    installedRuntime = true
     currentStatus = await getEditorStatus(options.paths)
   }
   if (currentStatus.healthy && currentStatus.state) {
+    options.onProgress?.({ step: 'already-running', port: currentStatus.state.port })
     return { state: currentStatus.state, alreadyRunning: true }
   }
   if (currentStatus.running && currentStatus.state) {
@@ -108,11 +124,20 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
 
   let runtime = await readActiveRuntime(options.paths)
   if (!runtime) {
+    options.onProgress?.({ step: 'runtime-installing' })
     runtime = await installBundledRuntime(options.paths, options.sourceDirectory)
+    installedRuntime = true
   }
+  options.onProgress?.({
+    step: 'runtime-ready',
+    version: runtime.version,
+    installed: installedRuntime,
+  })
   const manifest = await readRuntimeManifest(runtime.directory)
   const serverPath = path.resolve(runtime.directory, manifest.entrypoint)
-  const port = await findAvailablePort(options.port ?? 3000)
+  const preferredPort = options.port ?? 0
+  const port = await findAvailablePort(preferredPort)
+  options.onProgress?.({ step: 'port-ready', port, preferredPort })
   const instanceId = randomUUID()
   const state: EditorState = {
     schemaVersion: 1,
@@ -141,6 +166,7 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
   const logDescriptor = options.foreground
     ? undefined
     : openSync(options.paths.editorLog, 'a', 0o600)
+  options.onProgress?.({ step: 'process-starting', port })
   const child = spawn(nodeBinary, [serverPath], {
     cwd: path.dirname(serverPath),
     env: environment,
@@ -155,7 +181,9 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
     state.pid = child.pid
     await writeJsonFile(options.paths.state, state)
     if (!options.foreground) child.unref()
+    options.onProgress?.({ step: 'health-checking', port })
     await waitForHealth(state, 30_000)
+    options.onProgress?.({ step: 'ready', port })
   } catch (error) {
     if (child.pid) await terminateProcess(child.pid)
     await rm(options.paths.state, { force: true })
@@ -347,32 +375,48 @@ export async function followLog(filePath: string): Promise<never> {
 }
 
 export async function checkHealth(state: EditorState): Promise<boolean> {
+  return (await probeHealth(state)) === 'healthy'
+}
+
+async function probeHealth(state: EditorState): Promise<'healthy' | 'foreign' | 'unreachable'> {
   try {
     const response = await fetch(`http://127.0.0.1:${state.port}/api/health`, {
       signal: AbortSignal.timeout(1_000),
     })
-    if (!response.ok) return false
-    const body = (await response.json()) as {
+    if (!response.ok) return 'foreign'
+    let body: {
       status?: string
       app?: string
       version?: string
       instanceId?: string
     }
-    return (
-      body.status === 'ok' &&
+    try {
+      body = (await response.json()) as typeof body
+    } catch {
+      return 'foreign'
+    }
+    return body.status === 'ok' &&
       body.app === 'editor' &&
       body.version === state.version &&
       body.instanceId === state.instanceId
-    )
+      ? 'healthy'
+      : 'foreign'
   } catch {
-    return false
+    return 'unreachable'
   }
 }
 
 export async function waitForHealth(state: EditorState, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    if (await checkHealth(state)) return
+    const health = await probeHealth(state)
+    if (health === 'healthy') return
+    if (health === 'foreign') {
+      throw new CliError(
+        'port_conflict',
+        `Port ${state.port} is responding as another application. Run Pascal again to choose another port, or pass --port <n>.`,
+      )
+    }
     if (!isProcessRunning(state.pid)) {
       throw new CliError('start_failed', 'The Pascal editor exited before becoming healthy.')
     }
@@ -396,12 +440,29 @@ async function findAvailablePort(preferredPort: number): Promise<number> {
     throw new CliError('invalid_port', `Invalid port: ${preferredPort}`)
   }
   if (preferredPort === 0) return probePort(0)
-  for (let port = preferredPort; port < Math.min(preferredPort + 20, 65_536); port += 1) {
+  if (!(await isPortAcceptingConnections(preferredPort))) {
     try {
-      return await probePort(port)
+      return await probePort(preferredPort)
     } catch {}
   }
-  throw new CliError('port_unavailable', `No available port found from ${preferredPort}.`)
+  return probePort(0)
+}
+
+async function isPortAcceptingConnections(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port })
+    let settled = false
+    const finish = (result: boolean) => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      resolve(result)
+    }
+    socket.setTimeout(250)
+    socket.once('connect', () => finish(true))
+    socket.once('timeout', () => finish(false))
+    socket.once('error', () => finish(false))
+  })
 }
 
 async function probePort(port: number): Promise<number> {

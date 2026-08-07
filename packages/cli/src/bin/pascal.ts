@@ -5,6 +5,7 @@ import { openBrowser } from '../browser.js'
 import { collectInfo, runDoctor } from '../diagnostics.js'
 import {
   activateEditorRuntime,
+  type EditorStartProgress,
   followLog,
   getEditorStatus,
   readLogTail,
@@ -16,6 +17,7 @@ import { CliError, toCliError } from '../errors.js'
 import { readJsonFile } from '../json-files.js'
 import { resolvePascalPaths } from '../paths.js'
 import { installBundledRuntime } from '../runtime.js'
+import { TerminalProgress } from '../terminal-progress.js'
 import { version } from '../version.js'
 
 const HELP = `Pascal — local 3D editor
@@ -90,20 +92,88 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
   })
   if (values.help) return print(HELP)
   const port = parseIntegerOption(values.port, 'port')
-  const result = await startEditor({ paths, port, foreground: values.foreground })
+  const progress = values.json ? undefined : new TerminalProgress()
+  let installedRuntime = false
+  progress?.start('Preparing your local Pascal editor')
+  let result: Awaited<ReturnType<typeof startEditor>>
+  try {
+    result = await startEditor({
+      paths,
+      port,
+      foreground: values.foreground,
+      onProgress: progress
+        ? (event) => {
+            if (event.step === 'runtime-installing') installedRuntime = true
+            reportStartProgress(progress, event)
+          }
+        : undefined,
+    })
+  } catch (error) {
+    progress?.stop()
+    throw error
+  }
+  progress?.stop()
   if (values.open && !values['no-open']) openBrowser(result.state.url)
   output(
     values.json,
     { ...result.state, alreadyRunning: result.alreadyRunning },
     result.alreadyRunning
       ? `Pascal is already running at ${result.state.url}`
-      : `Pascal is running at ${result.state.url}`,
+      : installedRuntime
+        ? [
+            `Pascal is ready at ${result.state.url}`,
+            `Projects stay in ${paths.data}`,
+            '',
+            'Next steps:',
+            '  npx @pascal-app/cli status        Check the local editor',
+            '  npx @pascal-app/cli logs --follow Follow editor logs',
+            '  npx @pascal-app/cli stop          Stop the background process',
+          ].join('\n')
+        : `Pascal is running at ${result.state.url}`,
   )
   if (result.child) {
     const exitCode = await new Promise<number>((resolve) =>
       result.child?.once('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0))),
     )
     process.exitCode = exitCode
+  }
+}
+
+function reportStartProgress(progress: TerminalProgress, event: EditorStartProgress): void {
+  switch (event.step) {
+    case 'storage-ready':
+      progress.succeed(`Local data directory ready at ${event.dataDirectory}`)
+      return
+    case 'runtime-installing':
+      progress.start('Installing the editor runtime')
+      return
+    case 'runtime-ready':
+      progress.succeed(
+        event.installed
+          ? `Editor runtime ${event.version} installed`
+          : `Editor runtime ${event.version} ready`,
+      )
+      return
+    case 'port-ready':
+      progress.succeed(
+        event.preferredPort === 0
+          ? `Local port ${event.port} selected automatically`
+          : event.port === event.preferredPort
+            ? `Local port ${event.port} is available`
+            : `Port ${event.preferredPort} is busy; using ${event.port} instead`,
+      )
+      return
+    case 'process-starting':
+      progress.start(`Starting Pascal on port ${event.port}`)
+      return
+    case 'health-checking':
+      progress.update('Checking that the editor is ready')
+      return
+    case 'ready':
+      progress.succeed('Pascal Editor is ready')
+      return
+    case 'already-running':
+      progress.succeed(`Pascal is already running on port ${event.port}`)
   }
 }
 

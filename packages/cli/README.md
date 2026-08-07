@@ -11,9 +11,9 @@ from your terminal—without cloning or building the Pascal repository.
 npx @pascal-app/cli editor
 ```
 
-The first run installs a versioned editor runtime, starts it in the background on
-your computer, waits for it to become healthy, and opens it at
-`http://pascal.localhost:<port>`. Your projects are stored separately from the
+The first run walks through local storage, runtime installation, automatic port
+selection, process startup, and a health check with live terminal feedback. It then
+opens `http://pascal.localhost:<port>`. Your projects are stored separately from the
 runtime, so updating the CLI does not replace your work.
 
 ## Why use the CLI?
@@ -58,6 +58,9 @@ pascal editor
 
 Use `--no-open` on a headless machine. Use `--foreground` when a process supervisor
 should own the editor or when you want logs attached to the current terminal.
+Pascal asks the operating system for an available loopback port by default, so it does
+not compete with other local development servers. Pass `--port <n>` to request a
+specific port; if it is occupied, Pascal reports that and safely selects another one.
 
 ```bash
 npx @pascal-app/cli editor --no-open

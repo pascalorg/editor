@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -7,6 +8,7 @@ import {
   getEditorStatus,
   startEditor,
   stopEditor,
+  waitForHealth,
 } from './editor-process.js'
 import { resolvePascalPaths } from './paths.js'
 import { installBundledRuntime, readActiveRuntime } from './runtime.js'
@@ -37,7 +39,7 @@ describe('managed runtime', () => {
     await mkdir(paths.data, { recursive: true })
     await writeFile(paths.database, 'persistent')
 
-    const started = await startEditor({ paths, port: 0, sourceDirectory: source })
+    const started = await startEditor({ paths, sourceDirectory: source })
     expect(started.alreadyRunning).toBe(false)
     expect((await getEditorStatus(paths)).healthy).toBe(true)
     expect((await startEditor({ paths, sourceDirectory: source })).alreadyRunning).toBe(true)
@@ -60,6 +62,70 @@ describe('managed runtime', () => {
     expect(first.state.pid).toBe(second.state.pid)
     expect([first.alreadyRunning, second.alreadyRunning].sort()).toEqual([false, true])
     await stopEditor(paths)
+  })
+
+  test('falls back to an automatic port when the requested port is occupied', async () => {
+    const root = await temporaryRoot()
+    const source = await fakeRuntime(root, '1.2.3')
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    const foreignServer = http.createServer((_request, response) => response.end('foreign'))
+    await new Promise<void>((resolve, reject) => {
+      foreignServer.once('error', reject)
+      foreignServer.listen({ host: '127.0.0.1', port: 0 }, resolve)
+    })
+    const address = foreignServer.address()
+    if (!address || typeof address === 'string') throw new Error('foreign server has no TCP port')
+
+    try {
+      const started = await startEditor({
+        paths,
+        port: address.port,
+        sourceDirectory: source,
+      })
+
+      expect(started.state.port).not.toBe(address.port)
+      expect((await getEditorStatus(paths)).healthy).toBe(true)
+      await stopEditor(paths)
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        foreignServer.close((error) => (error ? reject(error) : resolve())),
+      )
+    }
+  })
+
+  test('reports a foreign health responder without waiting for the timeout', async () => {
+    const foreignServer = http.createServer((_request, response) => response.end('not Pascal'))
+    await new Promise<void>((resolve, reject) => {
+      foreignServer.once('error', reject)
+      foreignServer.listen({ host: '127.0.0.1', port: 0 }, resolve)
+    })
+    const address = foreignServer.address()
+    if (!address || typeof address === 'string') throw new Error('foreign server has no TCP port')
+
+    try {
+      const startedAt = Date.now()
+      await expect(
+        waitForHealth(
+          {
+            schemaVersion: 1,
+            pid: process.pid,
+            version: '1.2.3',
+            port: address.port,
+            host: '127.0.0.1',
+            url: `http://pascal.localhost:${address.port}`,
+            instanceId: 'expected-instance',
+            runtimeDirectory: '/tmp/pascal-test-runtime',
+            startedAt: new Date().toISOString(),
+          },
+          5_000,
+        ),
+      ).rejects.toMatchObject({ code: 'port_conflict' })
+      expect(Date.now() - startedAt).toBeLessThan(1_000)
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        foreignServer.close((error) => (error ? reject(error) : resolve())),
+      )
+    }
   })
 
   test('reclaims an install lock whose owner is gone', async () => {
