@@ -51,9 +51,8 @@ return 500.
 
 ## CLI-managed editor
 
-When `@pascal-app/cli` is available on npm, Node.js 22.13 or newer can install a
-persistent local runtime, start it in the background, and open it in the browser
-without a repository checkout:
+Node.js 22.13 or newer can install a persistent local runtime, start it in the
+background, and open it in the browser without a repository checkout:
 
 ```bash
 npx @pascal-app/cli editor

@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/cli",
   "version": "0.1.0",
-  "description": "Install and manage a local Pascal editor",
+  "description": "Run and manage the open-source Pascal 3D building editor locally from your terminal",
   "type": "module",
   "bin": {
     "pascal": "dist/bin/pascal.js"
@@ -40,8 +40,13 @@
   "keywords": [
     "pascal",
     "editor",
+    "3d-editor",
     "3d",
     "architecture",
+    "building-design",
+    "cad",
+    "bim",
+    "local-first",
     "cli"
   ],
   "repository": {
@@ -50,6 +55,14 @@
     "directory": "packages/cli"
   },
   "license": "MIT",
+  "author": {
+    "name": "Pascal",
+    "email": "open@pascal.app",
+    "url": "https://pascal.app"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "homepage": "https://editor.pascal.app/docs/developers/local-editor",
   "bugs": "https://github.com/pascalorg/editor/issues"
 }
