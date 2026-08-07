@@ -73,10 +73,10 @@ try {
     smokeEnvironment,
   )
   if (
-    !humanStart.stdout.includes('npx @pascal-app/cli status') ||
-    !humanStart.stdout.includes('npm install --global @pascal-app/cli')
+    !humanStart.stdout.includes('pascal status') ||
+    humanStart.stdout.includes('npm install --global @pascal-app/cli')
   ) {
-    throw new Error('human start output did not explain transient and global commands')
+    throw new Error('direct CLI start output did not use the persistent pascal command')
   }
   await run(
     process.execPath,
