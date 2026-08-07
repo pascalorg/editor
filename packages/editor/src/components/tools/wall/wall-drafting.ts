@@ -18,6 +18,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { parseMeasurement } from '../../../lib/measurement-parser'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
@@ -54,6 +55,45 @@ export const WALL_MIN_LENGTH = 0.01
 // sliver segment a hair longer than `WALL_MIN_LENGTH` that no snap radius
 // can ever target again.
 const WALL_SPLIT_ENDPOINT_EPSILON = 0.02
+
+/**
+ * Keep an exact-length wall draft on the pointer's current heading. Snapping
+ * still determines the heading, while the explicit input owns the distance.
+ */
+export function constrainWallDraftLength(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  lengthMeters: number | null,
+): WallPlanPoint {
+  if (!(lengthMeters != null && Number.isFinite(lengthMeters) && lengthMeters > 0)) {
+    return end
+  }
+
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const headingLength = Math.hypot(dx, dz)
+  if (headingLength < 1e-6) return end
+
+  return [
+    start[0] + (dx / headingLength) * lengthMeters,
+    start[1] + (dz / headingLength) * lengthMeters,
+  ]
+}
+
+/**
+ * Parse a wall draft's free-text length into the editor's canonical metres.
+ * Bare values use the active display unit; explicit suffixes always win.
+ */
+export function parseWallDraftLength(raw: string, unit: 'metric' | 'imperial'): number | null {
+  const bareUnit = unit === 'imperial' ? 'ft' : 'm'
+  const parsed = parseMeasurement(
+    raw,
+    { kind: 'length', unitId: 'm' },
+    { bareUnit, system: unit === 'imperial' ? 'us' : 'metric' },
+  )
+
+  return parsed != null && parsed >= WALL_MIN_LENGTH ? parsed : null
+}
 
 type WallSplitIntersection = {
   /** `null` = snap-only outcome: resolve to `point` but split no wall. */

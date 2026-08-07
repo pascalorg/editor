@@ -33,6 +33,22 @@ describe('live draft preview stores', () => {
     unsubscribe()
   })
 
+  test('keeps exact wall length input and parsed metres together, then resets both', () => {
+    useFloorplanDraftPreview.getState().setWallDraftLength('180cm', 1.8)
+
+    expect(useFloorplanDraftPreview.getState()).toMatchObject({
+      wallDraftLengthInput: '180cm',
+      wallDraftLengthMeters: 1.8,
+    })
+
+    useFloorplanDraftPreview.getState().reset()
+
+    expect(useFloorplanDraftPreview.getState()).toMatchObject({
+      wallDraftLengthInput: '',
+      wallDraftLengthMeters: null,
+    })
+  })
+
   test('publishes stair point and rotation atomically', () => {
     let changes = 0
     const unsubscribe = useStairBuildPreview.subscribe(() => {

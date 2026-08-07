@@ -21,6 +21,7 @@ import {
   CursorSphere,
   chainEndJoinsExistingWall,
   clearPlacementSurface,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
@@ -33,6 +34,7 @@ import {
   isAngleSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  parseWallDraftLength,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
   resampleTerrainConstructionPlane,
@@ -59,6 +61,7 @@ import {
   type DraftAngleLabel,
   type DraftAxisGuideState,
   DraftAxisGuides,
+  DraftMeasurementInput,
   DraftMeasurementLabel,
   getNearestAxisAngleLabel,
 } from '../shared/draft-axis-guides'
@@ -483,12 +486,29 @@ export const WallTool: React.FC = () => {
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
+  const draftLengthInput = useFloorplanDraftPreview((state) => state.wallDraftLengthInput)
+  const draftLengthMeters = useFloorplanDraftPreview((state) => state.wallDraftLengthMeters)
+  const draftLengthInvalid = draftLengthInput.trim().length > 0 && draftLengthMeters === null
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
 
   // Clear preset-seeded defaults on deactivation so a later manual wall draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
+  useEffect(
+    () => () => {
+      useEditor.getState().setToolDefaults('wall', null)
+      useFloorplanDraftPreview.getState().setWallDraftLength('', null)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    const draftPreview = useFloorplanDraftPreview.getState()
+    draftPreview.setWallDraftLength(
+      draftPreview.wallDraftLengthInput,
+      parseWallDraftLength(draftPreview.wallDraftLengthInput, unit),
+    )
+  }, [unit])
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
@@ -609,6 +629,7 @@ export const WallTool: React.FC = () => {
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
+      draftPreview.setWallDraftLength('', null)
       if (wallPreviewRef.current) {
         wallPreviewRef.current.visible = false
       }
@@ -657,12 +678,23 @@ export const WallTool: React.FC = () => {
         magnetic: isMagneticSnapActive(),
       })
       gridPosition = alignPoint(snapResult.point, { applySnap: !angleLocked })
+      const exactLengthMeters =
+        buildingState.current === 1
+          ? useFloorplanDraftPreview.getState().wallDraftLengthMeters
+          : null
+      if (buildingState.current === 1) {
+        gridPosition = constrainWallDraftLength(
+          [startingPoint.current.x, startingPoint.current.z],
+          gridPosition,
+          exactLengthMeters,
+        )
+      }
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
       useWallSnapIndicator
         .getState()
         .set(
-          snapResult.snap
+          snapResult.snap && exactLengthMeters == null
             ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
             : null,
         )
@@ -763,6 +795,7 @@ export const WallTool: React.FC = () => {
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setWallDraftStart(snappedStart)
         draftPreview.setWallDraftEnd(snappedStart)
+        draftPreview.setWallDraftLength('', null)
         setAxisGuide({
           origin: snappedStart,
           endOrigin: null,
@@ -776,7 +809,7 @@ export const WallTool: React.FC = () => {
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const angleLocked = isAngleSnapActive()
-        const snappedEnd = alignPoint(
+        let snappedEnd = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
             walls: snapWalls,
@@ -785,6 +818,11 @@ export const WallTool: React.FC = () => {
             magnetic: isMagneticSnapActive(),
           }).point,
           { applySnap: !angleLocked },
+        )
+        snappedEnd = constrainWallDraftLength(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedEnd,
+          useFloorplanDraftPreview.getState().wallDraftLengthMeters,
         )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
@@ -848,6 +886,7 @@ export const WallTool: React.FC = () => {
         draftPreview.setWallDraftEnd(null)
         draftPreview.setWallDraftStart(nextStart)
         draftPreview.setWallDraftEnd(nextStart)
+        draftPreview.setWallDraftLength('', null)
         cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
         setAxisGuide({
@@ -912,11 +951,20 @@ export const WallTool: React.FC = () => {
       </mesh>
       {draftMeasurement && (
         <>
-          <DraftMeasurementLabel
+          <DraftMeasurementInput
+            backgroundColor={isDark ? '#0f172af2' : '#fffffff2'}
             color={measurementColor}
-            label={draftMeasurement.lengthLabel}
+            invalid={draftLengthInvalid}
+            label="Wall length"
+            onChange={(value) =>
+              useFloorplanDraftPreview
+                .getState()
+                .setWallDraftLength(value, parseWallDraftLength(value, unit))
+            }
+            placeholder={draftMeasurement.lengthLabel}
             position={draftMeasurement.lengthPosition}
             shadowColor={measurementShadowColor}
+            value={draftLengthInput}
           />
           {draftMeasurement.angleLabels.map((angleLabel) => (
             <group key={angleLabel.id}>
