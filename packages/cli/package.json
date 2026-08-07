@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Run and manage the open-source Pascal 3D building editor locally from your terminal",
   "type": "module",
   "bin": {
