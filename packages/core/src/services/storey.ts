@@ -76,9 +76,7 @@ export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<strin
   return elevations
 }
 
-function computeLevelElevations(
-  nodes: Record<AnyNodeId, AnyNode>,
-): Map<string, LevelElevation> {
+function computeLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<string, LevelElevation> {
   const buildings = Object.values(nodes).filter(
     (node): node is BuildingNode => node?.type === 'building',
   )
