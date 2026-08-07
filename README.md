@@ -5,6 +5,7 @@ A 3D building editor built with React Three Fiber and WebGPU.
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![npm @pascal-app/core](https://img.shields.io/npm/v/@pascal-app/core?label=%40pascal-app%2Fcore)](https://www.npmjs.com/package/@pascal-app/core)
 [![npm @pascal-app/viewer](https://img.shields.io/npm/v/@pascal-app/viewer?label=%40pascal-app%2Fviewer)](https://www.npmjs.com/package/@pascal-app/viewer)
+[![npm @pascal-app/cli](https://img.shields.io/npm/v/@pascal-app/cli?label=%40pascal-app%2Fcli)](https://www.npmjs.com/package/@pascal-app/cli)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/XRKsDcpqgS)
 [![X (Twitter)](https://img.shields.io/badge/follow-%40pascal__app-black?logo=x&logoColor=white)](https://x.com/pascal_app)
 
@@ -12,8 +13,8 @@ https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
 ## Run the Editor Locally
 
-When `@pascal-app/cli` is available on npm, Node.js 22.13 or newer can create a
-persistent local Pascal installation without cloning this repository:
+Node.js 22.13 or newer can create a persistent local Pascal installation without
+cloning this repository:
 
 ```bash
 npx @pascal-app/cli editor
@@ -58,6 +59,7 @@ editor/
 │   ├── editor/          # Editing tools and UI components
 │   ├── nodes/           # Built-in node definitions, renderers, and systems
 │   ├── cli/             # Persistent local editor installer and process manager
+│   ├── mcp/             # Model Context Protocol server and scene storage
 │   └── ui/              # Shared UI components
 ```
 
@@ -70,6 +72,7 @@ editor/
 | **@pascal-app/editor** | Editing tools, panels, selection, and direct-manipulation UI |
 | **@pascal-app/nodes** | Built-in registry plugin with node definitions, renderers, geometry, and systems |
 | **@pascal-app/cli** | Installs and manages a versioned standalone editor runtime and persistent local data |
+| **@pascal-app/mcp** | Exposes scene tools, resources, prompts, and local storage to MCP-compatible AI hosts |
 | **apps/editor** | Standalone Next.js host for the editor packages |
 
 The **viewer** renders the scene with sensible defaults. The **editor** extends it with interactive tools, selection management, and editing capabilities.

@@ -3,6 +3,11 @@
 Model Context Protocol server for the Pascal 3D editor. Drives the
 `@pascal-app/core` scene graph from any MCP-compatible AI host.
 
+For the hosted Pascal MCP endpoint and copy-ready setup for Claude Code, Codex,
+Cursor, and OpenClaw, read [Connect an AI agent](https://editor.pascal.app/docs/developers/mcp).
+The hosted endpoint edits projects in a Pascal account; this package is the
+open-source, local server for custom hosts and local scene storage.
+
 The server runs headlessly in Bun with no browser, WebGPU, React, or external
 database service. It exposes the same scene mutations used by the editor UI
 (create walls, place items, cut openings, undo, etc.) as MCP tools, resources,
