@@ -152,7 +152,12 @@ function getObjectScreenHull(
 function isObjectVisible(object: Object3D): boolean {
   let current: Object3D | null = object
   while (current) {
-    if (!current.visible) return false
+    // An object may be `visible = false` because an instancing pool draws it
+    // on its behalf — the node is on screen, just not through this subtree.
+    // Such proxies stamp `userData.hiddenForInstancing` (the warehouse
+    // plugin's collective pools are the first user) and stay marquee-
+    // selectable; a plain hide — user toggle, hidden level — still filters.
+    if (!current.visible && current.userData.hiddenForInstancing !== true) return false
     current = current.parent
   }
   return true

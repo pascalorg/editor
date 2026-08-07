@@ -1,6 +1,7 @@
 'use client'
 
-import type { AssetInput } from '@pascal-app/core'
+import { type AssetInput, isNodeKindEnabled, nodeRegistry, useScene } from '@pascal-app/core'
+import { Icon } from '@iconify/react'
 import NextImage from 'next/image'
 import { useEffect, useState } from 'react'
 import { triggerSFX } from '../../../../../lib/sfx-bus'
@@ -13,6 +14,40 @@ import { ItemCatalog } from '../../../item-catalog/item-catalog'
 import { type FunctionTreeNode, FunctionTreePanel } from './function-tree-panel'
 
 const PLACEMENT_TAGS = new Set(['floor', 'wall', 'ceiling', 'countertop'])
+
+/**
+ * Registry kinds that belong in the Furnish palette, next to the item
+ * categories: `presentation.paletteSection === 'furnish'`, not hidden, and —
+ * unlike the Build tab's historical gap — only when the contributing plugin
+ * is actually installed in this project (`isNodeKindEnabled`). This is what
+ * `paletteSection: 'furnish'` had always promised and nothing consumed:
+ * plugin equipment (warehouse racking, conveyors) was reachable only through
+ * the plugin's own rail panel.
+ */
+function collectFurnishKinds(installedPlugins: readonly string[]) {
+  const kinds: Array<{
+    kind: string
+    label: string
+    icon: NonNullable<ReturnType<typeof nodeRegistry.get>>['presentation'] extends
+      | { icon: infer I }
+      | undefined
+      ? I
+      : never
+    paletteOrder: number
+  }> = []
+  for (const [kind, definition] of nodeRegistry.entries()) {
+    const presentation = definition.presentation
+    if (!presentation || presentation.hidden || presentation.paletteSection !== 'furnish') continue
+    if (!isNodeKindEnabled(kind, installedPlugins)) continue
+    kinds.push({
+      kind,
+      label: presentation.label,
+      icon: presentation.icon,
+      paletteOrder: presentation.paletteOrder ?? Number.MAX_SAFE_INTEGER,
+    })
+  }
+  return kinds.sort((a, b) => a.paletteOrder - b.paletteOrder)
+}
 
 export function ItemsPanel({
   items,
@@ -103,6 +138,9 @@ function LegacyItemsPanel({
   const setMode = useEditor((s) => s.setMode)
   const setTool = useEditor((s) => s.setTool)
   const setCatalogCategory = useEditor((s) => s.setCatalogCategory)
+  const activeTool = useEditor((s) => s.tool)
+  const installedPlugins = useScene((s) => s.installedPlugins)
+  const furnishKinds = collectFurnishKinds(installedPlugins)
 
   const [activePlacementTag, setActivePlacementTag] = useState<string | null>(null)
   const [activeFunctionalTag, setActiveFunctionalTag] = useState<string | null>(null)
@@ -222,6 +260,59 @@ function LegacyItemsPanel({
                 width={28}
               />
               <span className="font-medium text-[10px] leading-none">{cat.label}</span>
+            </button>
+          )
+        })}
+        {/* Registry kinds contributed to the furnish palette (plugins).
+            Arming works exactly the way plugin catalog panels arm placement:
+            the tool is the kind string, and build mode makes it live. */}
+        {furnishKinds.map((entry) => {
+          const isActive = activeTool === entry.kind
+          return (
+            <button
+              className={cn(
+                'flex shrink-0 flex-col items-center gap-1 rounded-xl px-3 py-2 transition-colors',
+                isActive
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground',
+              )}
+              key={entry.kind}
+              onClick={() => {
+                triggerSFX('sfx:menu-click')
+                ;(setTool as (value: string) => void)(entry.kind)
+                if (mode !== 'build') setMode('build')
+              }}
+              onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+              type="button"
+            >
+              {entry.icon.kind === 'iconify' ? (
+                <Icon
+                  className={cn('size-7', !isActive && 'opacity-60 grayscale')}
+                  icon={entry.icon.name}
+                />
+              ) : entry.icon.kind === 'url' ? (
+                <NextImage
+                  alt={entry.label}
+                  className={cn('size-7 object-contain', !isActive && 'opacity-60 grayscale')}
+                  height={28}
+                  src={entry.icon.src}
+                  width={28}
+                />
+              ) : entry.icon.kind === 'svg' ? (
+                <svg
+                  aria-hidden
+                  className={cn('size-7', !isActive && 'opacity-60')}
+                  fill="currentColor"
+                  viewBox={entry.icon.viewBox}
+                >
+                  <path d={entry.icon.path} />
+                </svg>
+              ) : (
+                // `component` icons are lazy modules; a palette tile is not
+                // worth an async load, so they get a neutral placeholder.
+                <span aria-hidden className="size-7 rounded bg-muted" />
+              )}
+              <span className="font-medium text-[10px] leading-none">{entry.label}</span>
             </button>
           )
         })}

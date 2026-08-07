@@ -55,8 +55,30 @@ function resolveLevelBuildingId(
  * Levels with no resolvable building share one legacy stack from 0.
  *
  * Pure — operates on the serialized nodes record only.
+ *
+ * Memoised on the `nodes` record's identity. The scene store replaces the
+ * record on every write, so identity means "nothing has changed" — the same
+ * invariant the spatial grid's `levelWallsCache` already leans on. The reason
+ * this must not be recomputed per call is scale, and it was measured, not
+ * guessed: the wall systems re-derive this map for EVERY WALL on every
+ * camera-move refresh, and each derivation walks the entire node table twice.
+ * A plugin-heavy warehouse scene holds tens of thousands of nodes, so one
+ * camera orbit spent ~35% of frame CPU inside this function rebuilding an
+ * answer that had not changed (fork measurement, 2026-08-07, Chrome traces).
  */
+const levelElevationsCache = new WeakMap<object, Map<string, LevelElevation>>()
+
 export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<string, LevelElevation> {
+  const cached = levelElevationsCache.get(nodes)
+  if (cached) return cached
+  const elevations = computeLevelElevations(nodes)
+  levelElevationsCache.set(nodes, elevations)
+  return elevations
+}
+
+function computeLevelElevations(
+  nodes: Record<AnyNodeId, AnyNode>,
+): Map<string, LevelElevation> {
   const buildings = Object.values(nodes).filter(
     (node): node is BuildingNode => node?.type === 'building',
   )
