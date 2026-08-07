@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Run the open-source Pascal 3D editor, local projects, and MCP agent tools from your terminal",
   "type": "module",
   "bin": {
