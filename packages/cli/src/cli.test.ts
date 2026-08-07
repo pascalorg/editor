@@ -15,6 +15,8 @@ describe('command parsing', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('pascal editor')
+    expect(result.stdout).toContain('npx @pascal-app/cli <command>')
+    expect(result.stdout).toContain('npm install --global @pascal-app/cli')
   })
 
   test('rejects a partially numeric port', async () => {

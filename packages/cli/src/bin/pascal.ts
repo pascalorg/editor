@@ -22,6 +22,13 @@ import { version } from '../version.js'
 
 const HELP = `Pascal — local 3D editor
 
+RUN WITHOUT INSTALLING:
+  npx @pascal-app/cli <command>
+
+ENABLE THE SHORT GLOBAL COMMAND:
+  npm install --global @pascal-app/cli
+  pascal <command>
+
 USAGE:
   pascal editor [--foreground] [--no-open] [--port <n>]
   pascal start [--foreground] [--port <n>]
@@ -93,7 +100,6 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
   if (values.help) return print(HELP)
   const port = parseIntegerOption(values.port, 'port')
   const progress = values.json ? undefined : new TerminalProgress()
-  let installedRuntime = false
   progress?.start('Preparing your local Pascal editor')
   let result: Awaited<ReturnType<typeof startEditor>>
   try {
@@ -101,12 +107,7 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
       paths,
       port,
       foreground: values.foreground,
-      onProgress: progress
-        ? (event) => {
-            if (event.step === 'runtime-installing') installedRuntime = true
-            reportStartProgress(progress, event)
-          }
-        : undefined,
+      onProgress: progress ? (event) => reportStartProgress(progress, event) : undefined,
     })
   } catch (error) {
     progress?.stop()
@@ -117,19 +118,20 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
   output(
     values.json,
     { ...result.state, alreadyRunning: result.alreadyRunning },
-    result.alreadyRunning
-      ? `Pascal is already running at ${result.state.url}`
-      : installedRuntime
-        ? [
-            `Pascal is ready at ${result.state.url}`,
-            `Projects stay in ${paths.data}`,
-            '',
-            'Next steps:',
-            '  npx @pascal-app/cli status        Check the local editor',
-            '  npx @pascal-app/cli logs --follow Follow editor logs',
-            '  npx @pascal-app/cli stop          Stop the background process',
-          ].join('\n')
-        : `Pascal is running at ${result.state.url}`,
+    [
+      result.alreadyRunning
+        ? `Pascal is already running at ${result.state.url}`
+        : `Pascal is ready at ${result.state.url}`,
+      `Projects stay in ${paths.data}`,
+      '',
+      'Manage it with npx:',
+      '  npx @pascal-app/cli status        Check the local editor',
+      '  npx @pascal-app/cli logs --follow Follow editor logs',
+      '  npx @pascal-app/cli stop          Stop the background process',
+      '',
+      'To enable the shorter "pascal" command in your shell:',
+      '  npm install --global @pascal-app/cli',
+    ].join('\n'),
   )
   if (result.child) {
     const exitCode = await new Promise<number>((resolve) =>

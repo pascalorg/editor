@@ -11,6 +11,11 @@ from your terminal—without cloning or building the Pascal repository.
 npx @pascal-app/cli editor
 ```
 
+`npx` makes the CLI available for that invocation only; it does not add a permanent
+`pascal` command to your shell. Continue to prefix commands with
+`npx @pascal-app/cli`, or use the optional global installation below when you want the
+shorter command.
+
 The first run walks through local storage, runtime installation, automatic port
 selection, process startup, and a health check with live terminal feedback. It then
 opens `http://pascal.localhost:<port>`. Your projects are stored separately from the
@@ -55,6 +60,10 @@ Or install the `pascal` command globally:
 npm install --global @pascal-app/cli
 pascal editor
 ```
+
+After a global installation, `pascal status`, `pascal logs --follow`, and the other
+commands work directly in new terminal sessions. A prior `npx` invocation alone does
+not install this shortcut.
 
 Use `--no-open` on a headless machine. Use `--foreground` when a process supervisor
 should own the editor or when you want logs attached to the current terminal.

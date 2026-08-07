@@ -66,6 +66,18 @@ try {
   ) {
     throw new Error('a repeated editor command did not reuse the managed process')
   }
+  const humanStart = await run(
+    process.execPath,
+    [smokeExecutable, 'editor', '--no-open'],
+    undefined,
+    smokeEnvironment,
+  )
+  if (
+    !humanStart.stdout.includes('npx @pascal-app/cli status') ||
+    !humanStart.stdout.includes('npm install --global @pascal-app/cli')
+  ) {
+    throw new Error('human start output did not explain transient and global commands')
+  }
   await run(
     process.execPath,
     [smokeExecutable, 'project', 'list', '--json'],
