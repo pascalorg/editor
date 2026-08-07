@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
+import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +9,10 @@ const packageDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url
 const smokeRoot = await mkdtemp(path.join(os.tmpdir(), 'pascal-cli-smoke-'))
 let tarballPath: string | null = null
 let smokeExecutable: string | null = null
+const defaultPortBlocker = http.createServer((_request, response) => {
+  response.setHeader('content-type', 'application/json')
+  response.end(JSON.stringify({ status: 'ok', app: 'foreign' }))
+})
 const smokeEnvironment = {
   ...process.env,
   PASCAL_HOME: path.join(smokeRoot, 'home'),
@@ -15,6 +20,7 @@ const smokeEnvironment = {
 }
 
 try {
+  await listen(defaultPortBlocker)
   const pack = await run('npm', ['pack', '--json', '--ignore-scripts'], packageDirectory)
   const packResult = JSON.parse(pack.stdout) as
     | Array<PackedArtifact>
@@ -32,12 +38,13 @@ try {
     (
       await run(
         process.execPath,
-        [smokeExecutable, 'editor', '--no-open', '--port', '0', '--json'],
+        [smokeExecutable, 'editor', '--no-open', '--json'],
         undefined,
         smokeEnvironment,
       )
     ).stdout,
   ) as { pid: number; port: number; url: string }
+  if (started.port === 3000) throw new Error('editor reused the occupied default port')
   const rootResponse = await fetch(`http://127.0.0.1:${started.port}/`)
   if (!rootResponse.ok) throw new Error(`editor root returned ${rootResponse.status}`)
   const scenesResponse = await fetch(`${started.url}/scenes`)
@@ -73,6 +80,7 @@ try {
     `Packed runtime smoke passed (${formatMb(artifact.size)} MB compressed, ${formatMb(artifact.unpackedSize)} MB unpacked, ${artifact.entryCount} files).`,
   )
 } finally {
+  await close(defaultPortBlocker)
   if (smokeExecutable) {
     await run(
       process.execPath,
@@ -83,6 +91,22 @@ try {
   }
   if (tarballPath) await rm(tarballPath, { force: true })
   await rm(smokeRoot, { recursive: true, force: true })
+}
+
+async function listen(server: http.Server): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', (error: NodeJS.ErrnoException) =>
+      error.code === 'EADDRINUSE' ? resolve() : reject(error),
+    )
+    server.listen({ host: '::', port: 3000, ipv6Only: false }, resolve)
+  })
+}
+
+async function close(server: http.Server): Promise<void> {
+  if (!server.listening) return
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  )
 }
 
 interface PackedArtifact {
