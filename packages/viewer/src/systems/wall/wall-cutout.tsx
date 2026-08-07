@@ -55,6 +55,33 @@ function sameMaterialArray(a: Material | Material[], b: Material[]): boolean {
   return Array.isArray(a) && a.length === b.length && a.every((material, i) => material === b[i])
 }
 
+/**
+ * Whether a wall should draw with the selection-highlight materials.
+ *
+ * A face-banded wall paints its own highlight, so a highlighted wall asks
+ * whether bands are enabled — and that question needs the wall's effective
+ * height, which is why the height arrives as a thunk rather than a value.
+ *
+ * The thunk is the whole point. Deriving that height means asking the spatial
+ * grid for the wall's slab support (which rebuilds the level's wall list and
+ * re-derives every slab polygon) and asking `getWallPlaneTop` for the storey
+ * plane (which walks the entire node record twice, per call). The refresh
+ * around this runs over EVERY wall in the scene up to about eight times a
+ * second while the camera moves, so on a large scene those two calls measured
+ * as roughly half of frame CPU — and for a wall that is not highlighted the
+ * answer was discarded, because the old expression ANDed it with the same
+ * flag this function returns early on. Passing a value instead of a thunk
+ * silently restores that cost with no visible change in behaviour.
+ */
+export function resolveSelectionHighlight(
+  wall: WallNode,
+  isSelectionHighlighted: boolean,
+  effectiveWallHeight: () => number,
+): boolean {
+  if (!isSelectionHighlighted) return false
+  return !getWallFaceBandConfig(wall, effectiveWallHeight()).enabled
+}
+
 export const WallCutout = () => {
   const lastCameraPosition = useRef(new Vector3())
   const lastCameraTarget = useRef(new Vector3())
@@ -134,22 +161,26 @@ export const WallCutout = () => {
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
-        const levelId = resolveLevelId(wallNode, sceneState.nodes)
-        const support = spatialGridManager.getSlabSupportForWall(
-          levelId,
-          wallNode.start,
-          wallNode.end,
-          wallNode.curveOffset ?? 0,
-          wallNode.thickness,
-          wallNode.supportSlabId,
-        )
-        const effectiveWallHeight = resolveWallEffectiveHeight(
+        const shouldSelectionHighlight = resolveSelectionHighlight(
           wallNode,
-          getWallPlaneTop(wallNode, levelId, sceneState.nodes),
-          support.elevation,
+          isSelectionHighlighted,
+          () => {
+            const levelId = resolveLevelId(wallNode, sceneState.nodes)
+            const support = spatialGridManager.getSlabSupportForWall(
+              levelId,
+              wallNode.start,
+              wallNode.end,
+              wallNode.curveOffset ?? 0,
+              wallNode.thickness,
+              wallNode.supportSlabId,
+            )
+            return resolveWallEffectiveHeight(
+              wallNode,
+              getWallPlaneTop(wallNode, levelId, sceneState.nodes),
+              support.elevation,
+            )
+          },
         )
-        const shouldSelectionHighlight =
-          isSelectionHighlighted && !getWallFaceBandConfig(wallNode, effectiveWallHeight).enabled
         const materials = getMaterialsForWall(
           wallNode,
           shading,
