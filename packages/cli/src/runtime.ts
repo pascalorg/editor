@@ -10,7 +10,9 @@ export interface RuntimeManifest {
   schemaVersion: 1
   version: string
   entrypoint: string
+  mcpEntrypoint: string
   healthPath: string
+  mcpHealthPath: string
 }
 
 export interface ActiveRuntime {
@@ -42,7 +44,9 @@ export async function readRuntimeManifest(directory: string): Promise<RuntimeMan
     manifest?.schemaVersion !== 1 ||
     typeof manifest.version !== 'string' ||
     typeof manifest.entrypoint !== 'string' ||
-    typeof manifest.healthPath !== 'string'
+    typeof manifest.mcpEntrypoint !== 'string' ||
+    typeof manifest.healthPath !== 'string' ||
+    typeof manifest.mcpHealthPath !== 'string'
   ) {
     throw new CliError('invalid_runtime', `Invalid Pascal runtime at ${directory}.`)
   }
@@ -50,13 +54,22 @@ export async function readRuntimeManifest(directory: string): Promise<RuntimeMan
     throw new CliError('invalid_runtime', `Invalid runtime version: ${manifest.version}`)
   }
   const entrypoint = path.resolve(directory, manifest.entrypoint)
-  if (!entrypoint.startsWith(`${path.resolve(directory)}${path.sep}`)) {
-    throw new CliError('invalid_runtime', 'Runtime entrypoint escapes its installation directory.')
+  const mcpEntrypoint = path.resolve(directory, manifest.mcpEntrypoint)
+  if (
+    !entrypoint.startsWith(`${path.resolve(directory)}${path.sep}`) ||
+    !mcpEntrypoint.startsWith(`${path.resolve(directory)}${path.sep}`)
+  ) {
+    throw new CliError('invalid_runtime', 'Runtime entrypoints escape the installation directory.')
   }
   try {
     if (!(await stat(entrypoint)).isFile()) throw new Error('not a file')
   } catch {
     throw new CliError('invalid_runtime', `Runtime entrypoint is missing: ${entrypoint}`)
+  }
+  try {
+    if (!(await stat(mcpEntrypoint)).isFile()) throw new Error('not a file')
+  } catch {
+    throw new CliError('invalid_runtime', `MCP runtime entrypoint is missing: ${mcpEntrypoint}`)
   }
   return manifest
 }

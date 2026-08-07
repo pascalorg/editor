@@ -156,7 +156,8 @@ function rowToMeta(row: SceneRow): SceneMeta {
 }
 
 function editorUrlForScene(id: string): string {
-  return `/editor/${id}`
+  const origin = process.env.PASCAL_EDITOR_ORIGIN?.replace(/\/$/, '')
+  return origin ? `${origin}/scene/${encodeURIComponent(id)}` : `/editor/${id}`
 }
 
 function hashGraphJson(graphJson: string): string {

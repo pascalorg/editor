@@ -246,6 +246,28 @@ describe('managed runtime', () => {
     await stopEditor(paths)
   })
 
+  test('upgrades a running editor state that predates managed MCP', async () => {
+    const root = await temporaryRoot()
+    const firstSource = await fakeRuntime(root, '1.2.3')
+    const secondSource = await fakeRuntime(root, '2.0.0')
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    const started = await startEditor({ paths, sourceDirectory: firstSource })
+    const oldMcpPid = started.state.mcp?.pid
+    if (!oldMcpPid) throw new Error('test MCP did not start')
+    process.kill(oldMcpPid, 'SIGTERM')
+    await waitUntilStopped(oldMcpPid)
+    const legacyState = { ...started.state, mcp: undefined }
+    await writeFile(paths.state, `${JSON.stringify(legacyState, null, 2)}\n`)
+    await rm(paths.mcpToken, { force: true })
+    const candidate = await installBundledRuntime(paths, secondSource, { activate: false })
+
+    const result = await activateEditorRuntime(paths, candidate)
+
+    expect(result.restarted).toBe(true)
+    expect((await getEditorStatus(paths)).healthy).toBe(true)
+    await stopEditor(paths)
+  })
+
   test('health-checks an update without leaving a stopped editor running', async () => {
     const root = await temporaryRoot()
     const firstSource = await fakeRuntime(root, '1.2.3')
@@ -271,17 +293,34 @@ async function temporaryRoot(): Promise<string> {
   return root
 }
 
+async function waitUntilStopped(pid: number): Promise<void> {
+  const deadline = Date.now() + 2_000
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0)
+    } catch {
+      return
+    }
+    await Bun.sleep(20)
+  }
+  throw new Error(`process ${pid} did not stop`)
+}
+
 async function fakeRuntime(root: string, version: string, healthy = true): Promise<string> {
   const runtime = path.join(root, `source-${version}`)
   const app = path.join(runtime, 'apps/editor')
+  const services = path.join(runtime, 'services')
   await mkdir(app, { recursive: true })
+  await mkdir(services, { recursive: true })
   await writeFile(
     path.join(runtime, 'runtime-manifest.json'),
     JSON.stringify({
       schemaVersion: 1,
       version,
       entrypoint: 'apps/editor/server.js',
+      mcpEntrypoint: 'services/pascal-mcp.mjs',
       healthPath: '/api/health',
+      mcpHealthPath: '/health',
     }),
   )
   await writeFile(
@@ -306,6 +345,32 @@ server.listen(Number(process.env.PORT), process.env.HOSTNAME)
 process.on('SIGTERM', () => server.close(() => process.exit(0)))
 `
       : 'process.exit(1)\n',
+  )
+  await writeFile(
+    path.join(services, 'pascal-mcp.mjs'),
+    `import http from 'node:http'
+const token = process.env.PASCAL_MCP_HTTP_TOKEN
+const server = http.createServer((request, response) => {
+  if (request.headers.authorization !== \`Bearer \${token}\`) {
+    response.writeHead(401).end()
+    return
+  }
+  response.setHeader('content-type', 'application/json')
+  if (request.url === '/health') {
+    response.end(JSON.stringify({
+      status: 'ok',
+      app: 'mcp',
+      version: process.env.PASCAL_RUNTIME_VERSION,
+      instanceId: process.env.PASCAL_INSTANCE_ID,
+    }))
+    return
+  }
+  response.writeHead(404).end('{}')
+})
+const portIndex = process.argv.indexOf('--port')
+server.listen(Number(process.argv[portIndex + 1]), '127.0.0.1')
+process.on('SIGTERM', () => server.close(() => process.exit(0)))
+`,
   )
   return runtime
 }

@@ -8,47 +8,63 @@ Cursor, and OpenClaw, read [Connect an AI agent](https://editor.pascal.app/docs/
 The hosted endpoint edits projects in a Pascal account; this package is the
 open-source, local server for custom hosts and local scene storage.
 
-The server runs headlessly in Bun with no browser, WebGPU, React, or external
-database service. It exposes the same scene mutations used by the editor UI
-(create walls, place items, cut openings, undo, etc.) as MCP tools, resources,
-and prompts.
+The server runs headlessly in Node.js 22.13 or newer or Bun, with no browser,
+WebGPU, React, or external database service. It exposes the same scene mutations used
+by the editor UI (create walls, place items, cut openings, undo, etc.) as MCP tools,
+resources, and prompts.
 
-## Install
+## Recommended local setup
+
+For a local editor and MCP that share projects automatically, install the Pascal CLI:
+
+```bash
+npx @pascal-app/cli editor
+pascal mcp setup codex
+```
+
+`pascal editor` starts the editor and an authenticated MCP service together.
+`pascal mcp connect` is a stable stdio connector that discovers the dynamic loopback
+port, so MCP client configuration contains neither a changing port nor a secret.
+
+Use this package directly when embedding the MCP server, supplying a custom store, or
+running MCP without the Pascal editor.
+
+## Install the package directly
 
 ```bash
 bun add @pascal-app/mcp
 ```
 
-`@pascal-app/core` is a peer dependency; Bun workspaces resolve it automatically.
-The MCP CLI is intended to run with Bun. When the storage package is consumed by
-the Next.js editor server, it opens the same local database through Node's
-built-in SQLite driver.
+`@pascal-app/core` is a peer dependency. The local store uses Bun SQLite under Bun and
+Node's built-in SQLite driver under Node.js.
 
 ## Quick start
 
 Launch the server over stdio in one line:
 
 ```bash
-bunx pascal-mcp
+bunx @pascal-app/mcp
+# or
+npm exec --package=@pascal-app/mcp -- pascal-mcp
 ```
 
 Load an initial scene from disk:
 
 ```bash
-pascal-mcp --stdio --scene ./my-scene.json
+bunx @pascal-app/mcp --stdio --scene ./my-scene.json
 ```
 
 Expose it over loopback HTTP:
 
 ```bash
-pascal-mcp --http --port 8787
+bunx @pascal-app/mcp --http --port 8787
 ```
 
 Binding a non-loopback host requires a bearer token:
 
 ```bash
 PASCAL_MCP_HTTP_TOKEN="$(openssl rand -hex 32)" \
-  pascal-mcp --http --host 0.0.0.0 --port 8787 --cors-origin https://editor.example
+  bunx @pascal-app/mcp --http --host 0.0.0.0 --port 8787 --cors-origin https://editor.example
 ```
 
 ## Local scene storage
@@ -94,7 +110,10 @@ another MCP process saved a newer version first, the MCP tool returns
 `live_sync_version_conflict`; reload the scene with `load_scene` before
 continuing.
 
-## Claude Desktop config
+## Managed CLI client configuration
+
+The recommended JSON configuration for Claude Desktop, Cursor, and compatible clients
+is:
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
@@ -103,25 +122,19 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 {
   "mcpServers": {
     "pascal": {
-      "command": "bunx",
-      "args": ["pascal-mcp"],
-      "env": {
-        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
-      }
+      "command": "pascal",
+      "args": ["mcp", "connect"]
     }
   }
 }
 ```
 
-If `bunx` is not on your PATH, point `command` at the absolute path to `bun`
-and pass the built `dist/bin/pascal-mcp.js` file as the first arg.
-
-## Claude Code config
+### Claude Code
 
 Via the CLI:
 
 ```bash
-claude mcp add pascal bunx pascal-mcp
+pascal mcp setup claude
 ```
 
 Or add to `.mcp.json` at the repo root:
@@ -130,24 +143,21 @@ Or add to `.mcp.json` at the repo root:
 {
   "mcpServers": {
     "pascal": {
-      "command": "bunx",
-      "args": ["pascal-mcp"],
-      "env": {
-        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
-      }
+      "command": "pascal",
+      "args": ["mcp", "connect"]
     }
   }
 }
 ```
 
-For local workspace testing before publish, build first and point Claude Code at
-the built binary:
+For package-development testing without the managed CLI, build first and point Claude
+Code at the built binary:
 
 ```json
 {
   "mcpServers": {
     "pascal": {
-      "command": "bun",
+      "command": "node",
       "args": ["/absolute/path/to/editor/packages/mcp/dist/bin/pascal-mcp.js"],
       "env": {
         "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
@@ -157,12 +167,12 @@ the built binary:
 }
 ```
 
-## Codex CLI config
+### Codex CLI
 
 Via the CLI:
 
 ```bash
-codex mcp add pascal --env PASCAL_DATA_DIR="$HOME/.pascal/data" -- bunx pascal-mcp
+pascal mcp setup codex
 ```
 
 For local workspace testing before publish:
@@ -171,21 +181,21 @@ For local workspace testing before publish:
 bun run --cwd packages/mcp build
 codex mcp add pascal-dev \
   --env PASCAL_DATA_DIR="$HOME/.pascal/data" \
-  -- bun "$PWD/packages/mcp/dist/bin/pascal-mcp.js"
+  -- node "$PWD/packages/mcp/dist/bin/pascal-mcp.js"
 ```
 
 This writes an entry like this to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.pascal-dev]
-command = "bun"
+command = "node"
 args = ["/absolute/path/to/editor/packages/mcp/dist/bin/pascal-mcp.js"]
 
 [mcp_servers.pascal-dev.env]
 PASCAL_DATA_DIR = "/Users/you/.pascal/data"
 ```
 
-## Cursor config
+### Cursor config
 
 In Cursor settings (`settings.json`):
 
@@ -193,11 +203,8 @@ In Cursor settings (`settings.json`):
 {
   "mcp.servers": {
     "pascal": {
-      "command": "bunx",
-      "args": ["pascal-mcp"],
-      "env": {
-        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
-      }
+      "command": "pascal",
+      "args": ["mcp", "connect"]
     }
   }
 }
@@ -205,7 +212,7 @@ In Cursor settings (`settings.json`):
 
 ## Programmatic use
 
-Embed the server in your own Bun process using the in-memory transport. The
+Embed the server in your own Node.js or Bun process using the in-memory transport. The
 example below runs a full client/server pair inside a single script — useful
 for agent frameworks and tests.
 
@@ -277,7 +284,7 @@ external-coordinate gotcha — lives in
 [`examples/coordinate-conventions-demo.md`](./examples/coordinate-conventions-demo.md)
 and [`examples/coordinate-conventions-demo.json`](./examples/coordinate-conventions-demo.json).
 Load the JSON with
-`pascal-mcp --stdio --scene examples/coordinate-conventions-demo.json`.
+`bunx @pascal-app/mcp --stdio --scene examples/coordinate-conventions-demo.json`.
 
 **Example — a 6 × 4 m slab rotated 30° about its first corner** (coordinates
 rounded to 3 dp; sides ≈ 6 m / 4 m; not axis-aligned, so the mapping is

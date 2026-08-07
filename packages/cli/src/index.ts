@@ -5,6 +5,7 @@ export {
   type EditorStatus,
   ensurePascalDirectories,
   getEditorStatus,
+  type McpState,
   type RuntimeActivationResult,
   restartEditor,
   type StopEditorOptions,

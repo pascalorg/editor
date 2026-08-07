@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { chmod, cp, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,6 +31,7 @@ await cp(
   path.join(outputDirectory, 'apps/editor/.next/static'),
   { recursive: true, force: true },
 )
+await bundleMcpServer(outputDirectory, packageJson.version)
 
 await removeUnusedSharp(outputDirectory)
 await flattenBunNodeModules(outputDirectory)
@@ -47,7 +49,9 @@ await writeFile(
       schemaVersion: 1,
       version: packageJson.version,
       entrypoint: 'apps/editor/server.js',
+      mcpEntrypoint: 'services/pascal-mcp.mjs',
       healthPath: '/api/health',
+      mcpHealthPath: '/health',
     },
     null,
     2,
@@ -55,6 +59,36 @@ await writeFile(
 )
 
 console.log(`Staged Pascal editor runtime ${packageJson.version} at ${outputDirectory}`)
+
+async function bundleMcpServer(runtimeDirectory: string, version: string): Promise<void> {
+  const output = path.join(runtimeDirectory, 'services/pascal-mcp.mjs')
+  await mkdir(path.dirname(output), { recursive: true })
+  const child = spawn(
+    process.execPath,
+    [
+      'build',
+      path.join(repositoryRoot, 'packages/mcp/src/bin/pascal-mcp.ts'),
+      '--outfile',
+      output,
+      '--target',
+      'node',
+      '--format',
+      'esm',
+      '--define',
+      `process.env.PASCAL_MCP_VERSION=${JSON.stringify(version)}`,
+    ],
+    { stdio: ['ignore', 'ignore', 'pipe'] },
+  )
+  const stderr: Buffer[] = []
+  child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    child.once('error', reject)
+    child.once('exit', (code) => resolve(code ?? 1))
+  })
+  if (exitCode !== 0) {
+    throw new Error(`Unable to bundle the Pascal MCP server: ${Buffer.concat(stderr).toString()}`)
+  }
+}
 
 async function assertFile(filePath: string): Promise<void> {
   try {

@@ -13,6 +13,7 @@ export interface PascalPaths {
   pluginLock: string
   database: string
   editorLog: string
+  mcpToken: string
 }
 
 export function resolvePascalPaths(environment: NodeJS.ProcessEnv = process.env): PascalPaths {
@@ -29,5 +30,6 @@ export function resolvePascalPaths(environment: NodeJS.ProcessEnv = process.env)
     pluginLock: path.join(root, 'pascal.plugins.lock'),
     database: path.join(root, 'data/pascal.db'),
     editorLog: path.join(root, 'logs/editor.log'),
+    mcpToken: path.join(root, 'run/mcp-token'),
   }
 }
