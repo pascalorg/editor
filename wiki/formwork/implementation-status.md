@@ -13,13 +13,15 @@ What's left to ship, organized by plan phase. Measured against the master plan a
 | **P1** Coverage engine | 88% | Only gap: solver phases exist as modules, not wired into one pipeline |
 | **P2** Catalog + real layout | 79% | Packing/stacking/tie-grids, parts model and part inspector done; `gangs.ts` remains |
 | **P3** Structural design | 89% | Wall chain closed and the design report renders it; rated-pressure wiring remains |
-| **P4** Quantities, BOM, exports | 86% | Parts table, BOM panels, project/level rollup and CSV export all done off the parts model; no rental/owned split, no cost |
+| **P4** Quantities, BOM, exports | 94% | Parts table, BOM panels, project/level rollup and CSV export all done off the parts model; no rental/owned split, no cost |
 | **P5** Cut optimisation | 0% | `layout/cut-optimiser.ts` does not exist |
 | **P6** Sequencing + schedule | 25% | Lifts/segments/units exist; no striking times, no set counting |
-| **P7** Validation, clashes, cost | 42% | `validate/` lands with 15 invariants, a panel and a chat tool run it, and the first clash pass (ties × openings) is one of them; five clash passes remain, no `cost/` |
+| **P7** Validation, clashes, cost | 42% | `validate/` lands with 15 invariants, a panel and two AI surfaces run it, and the first clash pass (ties × openings) is one of them; five clash passes remain, no `cost/` |
 | **P8** AI + drawings | 20% | 11 chat tools and the first 2 MCP tools against the plan's ~25 on each surface |
 
-Counting partials as half: **25 done, 9 partial, 9 not started → 69%**, and the invariant suite is now reachable from both surfaces rather than from code alone. The solver pipeline scores separately at **5 of 13 phases done, 6 partial → 65%**.
+Counting partials as half: **26 done, 9 partial, 9 not started → 69%**, and the invariant suite is now reachable from all three surfaces rather than from code alone. The solver pipeline scores separately at **5 of 13 phases done, 7 partial → 65%**.
+
+The per-phase percentages above are **not** all strict row arithmetic, and the two places they diverge are deliberate. P7 reads 42% against a row count of 17%, because its one partial row carries 15 invariants and a clash pass and counting that as half a row of three understates it by more than the rounding hides. P8 reads 20% against 13%, on tool count across the two surfaces rather than on its four rows. Everywhere else the number is `(done + partial/2) / rows`.
 
 **Three reasons that count overstates progress.** Recorded because the percentage will otherwise be read as a schedule.
 
