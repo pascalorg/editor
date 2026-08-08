@@ -21,12 +21,9 @@ import {
   hardCutsForElement,
   layOutFace,
   type PourUnit,
-  type PressureEnvelope,
   pourUnitsForElement,
-  pressureEnvelope,
   type StripPiece,
   tieHoles,
-  verticalElementKind,
 } from '@pascal-app/core/formwork'
 import type { GeometryContext } from '@pascal-app/core/registry'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
@@ -76,33 +73,6 @@ export const SCAFFOLD_LIFT = 2.0 // ledger row spacing up the wall
 export const SCAFFOLD_POST_SIZE = 0.05
 export const SCAFFOLD_LEDGER_SIZE = 0.045
 export const SCAFFOLD_BRACE_SIZE = 0.035
-
-/**
- * The pressure this pour is designed against.
- *
- * Both the wall chain and the column schedule need one, and they must not differ:
- * a column classified as a wall by `verticalElementKind` takes the wall equations,
- * and a wall shuttered next to it takes the same code, mix and temperature or the
- * two shutters on either side of a junction are designed to different pours. That
- * is why the settings arrive as one resolved object rather than as loose arguments
- * each caller assembles.
- */
-export function designEnvelope(
-  settings: FormworkSettings,
-  liftHeightM: number,
-  planDimensionsM: readonly number[],
-): PressureEnvelope {
-  return pressureEnvelope(settings.pressureStandard, settings.concrete, {
-    ...settings.placement,
-    riseRateMH: settings.riseRateMH,
-    concreteTemperatureC: settings.concreteTemperatureC,
-    pourHeightM: liftHeightM,
-    // Read off the plan rather than assumed: a vertical element with a plan
-    // dimension over 2 m is a wall by the code's own definition, whatever the node
-    // is called, and it takes the wall equations.
-    elementKind: verticalElementKind(planDimensionsM),
-  })
-}
 
 export const tieMaterial = new MeshStandardMaterial({ color: '#4a4a4a' }) // steel tie
 export const walerMaterial = new MeshStandardMaterial({ color: '#6b4a2f' }) // timber waler

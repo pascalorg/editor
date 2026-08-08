@@ -17,6 +17,7 @@ export {
   spanCountForRun,
   utilisation,
 } from './beam'
+export { designEnvelope } from './envelope'
 export {
   FALSEWORK_MODULE_M,
   type FalseworkDesign,

@@ -153,6 +153,7 @@ export {
   DEFLECTION_LUMBER,
   DEFLECTION_STRUCTURAL,
   type DeflectionLimit,
+  designEnvelope,
   FALSEWORK_MODULE_M,
   type FalseworkDesign,
   type FalseworkOptions,
@@ -363,3 +364,14 @@ export {
   mergeFormworkCement,
   mergeFormworkSettingsGroup,
 } from './settings'
+export {
+  type Finding,
+  type FindingSeverity,
+  failingElementIds,
+  INVARIANT_LABELS,
+  type InvariantId,
+  type ValidateOptions,
+  type ValidationReport,
+  validateFormwork,
+  validationSummary,
+} from './validate'

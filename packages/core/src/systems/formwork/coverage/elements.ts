@@ -5,7 +5,7 @@ import type { WallNode } from '../../../schema/nodes/wall'
 import { getWallAssemblyThickness } from '../../../schema/nodes/wall'
 import type { WindowNode } from '../../../schema/nodes/window'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
-import type { FormworkMode, TopSurface } from '../../../schema/formwork'
+import type { ExposureClass, FormworkMode, TopSurface } from '../../../schema/formwork'
 
 /** Every castable kind carries `ShutteringFields`, so one reading serves all. */
 type ShutteredNode = { formworkType?: 'plywood' | 'aluminium' | 'steel-panel' | 'none' }
@@ -105,6 +105,13 @@ export interface CastableElement {
   formworkMode: FormworkMode
   againstEarthSide?: 'a' | 'b'
   topSurface: TopSurface
+  /**
+   * What the finished face has to be, which is a formwork input and not a
+   * finishing note: architectural work makes the joint and tie-hole grid the
+   * thing being designed, and water-retaining work makes every joint a
+   * watertightness question rather than a convenience.
+   */
+  exposureClass?: ExposureClass
   /** Per-element pour caps. Each overrides the project limit when tighter. */
   maxLiftHeight?: number
   maxPourLength?: number
@@ -247,6 +254,7 @@ export function toCastableElement(
       formworkMode: wall.formworkMode ?? 'double-sided',
       againstEarthSide: wall.againstEarthSide,
       topSurface: wall.topSurface ?? { kind: 'open', slopeDeg: 0 },
+      exposureClass: wall.exposureClass,
       maxLiftHeight: wall.maxLiftHeight,
       maxPourLength: wall.maxPourLength,
       maxPourVolume: wall.maxPourVolume,
@@ -289,6 +297,7 @@ export function toCastableElement(
       formworkMode: column.formworkMode ?? 'double-sided',
       againstEarthSide: column.againstEarthSide,
       topSurface: column.topSurface ?? { kind: 'open', slopeDeg: 0 },
+      exposureClass: column.exposureClass,
       maxLiftHeight: column.maxLiftHeight,
       maxPourLength: column.maxPourLength,
       maxPourVolume: column.maxPourVolume,
@@ -327,6 +336,7 @@ export function toCastableElement(
       formworkMode: slab.formworkMode ?? 'double-sided',
       againstEarthSide: slab.againstEarthSide,
       topSurface: slab.topSurface ?? { kind: 'open', slopeDeg: 0 },
+      exposureClass: slab.exposureClass,
       maxLiftHeight: slab.maxLiftHeight,
       maxPourLength: slab.maxPourLength,
       maxPourVolume: slab.maxPourVolume,

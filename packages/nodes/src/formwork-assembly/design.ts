@@ -4,6 +4,7 @@ import {
   type ColumnFormType,
   clampSchedule,
   columnFormSizeMm,
+  designEnvelope,
   type FalseworkDesign,
   type FormworkSettings,
   type FormworkSystem,
@@ -15,7 +16,7 @@ import {
   wallDesign,
 } from '@pascal-app/core/formwork'
 import type { ColumnNode, SlabNode, WallNode } from '@pascal-app/core/schema'
-import { assemblySystem, COLUMN_KICKER_M, designEnvelope } from './geometry-shared'
+import { assemblySystem, COLUMN_KICKER_M } from './geometry-shared'
 
 /**
  * The structural design of one pour, solved from the element, its pour unit and
