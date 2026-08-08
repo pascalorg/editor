@@ -601,6 +601,160 @@ describe('code envelope', () => {
   })
 })
 
+describe('ties around openings', () => {
+  /**
+   * A 6 m Framax face over a 3 m lift, which is what the catalog actually produces:
+   * 2700 + 600 + 2700 panels, drilled at 1.35, 3.00 and 4.65 m along and at 0.775
+   * and 2.125 m up. Those are the only places a rod passes, so a band of concrete
+   * that contains none of them is a band with no tie in it — and the numbers are the
+   * layout's rather than the test's, so a catalog change is a test failure rather
+   * than a check that quietly stops describing the wall.
+   */
+  const field = (fromM = 0, toM = 6) => ({
+    fromM,
+    toM,
+    holes: [1.35, 3.0, 4.65]
+      .filter((alongM) => alongM >= fromM && alongM <= toM)
+      .flatMap((alongM) => [
+        { alongM, elevationM: 0.775 },
+        { alongM, elevationM: 2.125 },
+      ]),
+  })
+  const fieldsFor = (w: { id: string }, ...entries: ReturnType<typeof field>[]) =>
+    new Map([[w.id as AnyNodeId, entries.length > 0 ? entries : [field()]]])
+  const opening = (wallId: string, along: number, width: number, centreY = 1.5, height = 2.4) =>
+    WindowNode.parse({ wallId, parentId: wallId, position: [along, centreY, 0], width, height })
+
+  it('fires on a pier between an opening and the wall end with no hole in it', () => {
+    // A window from 0.8 to 5.6 m leaves 800 mm at the start and 400 mm at the end.
+    // Every drilled station is inside the void, so both bands are untied — and the
+    // wall builder already drops those ties, silently, which is why nothing else
+    // reports this.
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 3.2, 4.8)
+    const report = validateFormwork([w, window] as AnyNode[], { tieFields: fieldsFor(w) })
+    const found = report.findings.filter((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')
+    expect(found.length).toBe(2)
+    expect(found[0]?.severity).toBe('warning')
+  })
+
+  it('names the wall and the opening, and the width somebody has to strut', () => {
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 3.2, 4.8)
+    const finding = validateFormwork([w, window] as AnyNode[], {
+      tieFields: fieldsFor(w),
+    }).findings.find((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')
+    expect(finding?.elementIds).toEqual([w.id, window.id] as AnyNodeId[])
+    expect(finding?.message).toContain('800 mm')
+    expect(finding?.message).toContain('strut')
+  })
+
+  it('says nothing about a band a drilled hole falls in', () => {
+    // A 1.2 m window centred at 3 m leaves 2.4 m either side, and 1.35 and 4.65 are
+    // both in concrete. This is the ordinary case, and it has to stay silent or the
+    // check fires on every wall with a window in it.
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 3.0, 1.2)
+    const report = validateFormwork([w, window] as AnyNode[], { tieFields: fieldsFor(w) })
+    expect(report.findings.some((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')).toBe(false)
+  })
+
+  it('leaves a nib too narrow to tie to the carpenter, not to the report', () => {
+    // A window from 0.2 to 5.8 m leaves 200 mm at each end, and a nib that narrow is
+    // strutted form to form. Reporting it would put a finding on every wall whose
+    // opening lands near its end.
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 3.0, 5.6)
+    const report = validateFormwork([w, window] as AnyNode[], { tieFields: fieldsFor(w) })
+    expect(report.findings.some((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')).toBe(false)
+  })
+
+  it('cuts only the rows the opening crosses, not every row', () => {
+    // A 1 m window centred at 0.6 m spans 0.1–1.1 m. It cuts the row at 0.775 m and
+    // leaves the one at 2.125 m whole, so the pier beside it is short of one tie
+    // rather than of both — and a check that cut every row would say two.
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 3.0, 4.8, 0.6, 1.0)
+    const finding = validateFormwork([w, window] as AnyNode[], {
+      tieFields: fieldsFor(w),
+    }).findings.find((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')
+    expect(finding?.message).toContain('the row at 0.78 m')
+    expect(finding?.message).not.toContain('tie rows')
+  })
+
+  it('reports one band once, however many rows it fails on', () => {
+    // A full-height opening fails the pier beside it at every course. Four findings
+    // about one 800 mm band reads as four problems.
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 3.2, 4.8)
+    const found = validateFormwork([w, window] as AnyNode[], {
+      tieFields: fieldsFor(w),
+    }).findings.filter((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')
+    const bands = found.map((f) => f.locus?.alongM)
+    expect(new Set(bands).size).toBe(bands.length)
+    expect(found.some((f) => f.message.includes('2 tie rows'))).toBe(true)
+  })
+
+  it('puts the locus at the lowest failing row, where the pressure is worst', () => {
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 3.2, 4.8)
+    const finding = validateFormwork([w, window] as AnyNode[], {
+      tieFields: fieldsFor(w),
+    }).findings.find((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')
+    expect(finding?.locus?.elevationM).toBeCloseTo(0.775, 6)
+  })
+
+  it('is silent on a band bounded only by the shutter’s own ends', () => {
+    // That is `tieGrid`'s `untied-stretch`, and it is a different fault with a
+    // different fix. Reported here too it would be one problem in two lists.
+    const w = wall({ end: [6, 0], height: 3 })
+    const report = validateFormwork([w] as AnyNode[], {
+      tieFields: new Map([[w.id as AnyNodeId, [{ fromM: 0, toM: 6, holes: [] }]]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')).toBe(false)
+  })
+
+  it('says nothing about a conventional shutter, which is bored to suit', () => {
+    // No drilled grid means no fixed stations to fall between: the carpenter bores
+    // the ply beside the opening, so the band is tied by asking for it.
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 3.2, 4.8)
+    const report = validateFormwork([w, window] as AnyNode[], {
+      tieFields: new Map([[w.id as AnyNodeId, [{ fromM: 0, toM: 6, holes: [] }]]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')).toBe(false)
+  })
+
+  it('reads each stretch on its own, not the element merged', () => {
+    // Two pour segments meeting at 3 m. The 800 mm at 0–0.8 m is untied in the first
+    // segment's field and the second segment's holes are nowhere near it — merged,
+    // 3.00 would be read as tying a band it is not over.
+    const w = wall({ end: [6, 0], height: 3 })
+    const window = opening(w.id, 1.9, 2.2)
+    const report = validateFormwork([w, window] as AnyNode[], {
+      tieFields: fieldsFor(w, field(0, 3), field(3, 6)),
+    })
+    const found = report.findings.filter((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')
+    expect(found.length).toBe(1)
+    expect(found[0]?.message).toContain('0.00 to 0.80 m')
+  })
+
+  it('declares itself unrun when no tie fields are passed', () => {
+    const w = wall({ end: [6, 0], height: 3 })
+    const report = validateFormwork([w, opening(w.id, 3.2, 4.8)] as AnyNode[])
+    expect(report.findings.some((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')).toBe(false)
+    expect(report.notChecked.some((entry) => entry.invariant === 'OPENING_LEAVES_TIE_GAP')).toBe(
+      true,
+    )
+  })
+
+  it('is silent on a wall with no openings at all', () => {
+    const w = wall({ end: [6, 0], height: 3 })
+    const report = validateFormwork([w] as AnyNode[], { tieFields: fieldsFor(w) })
+    expect(report.findings.some((f) => f.invariant === 'OPENING_LEAVES_TIE_GAP')).toBe(false)
+  })
+})
+
 describe('the report', () => {
   it('scopes to one level when asked', () => {
     const levelA = 'level-a'

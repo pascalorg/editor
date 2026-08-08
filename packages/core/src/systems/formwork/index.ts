@@ -370,6 +370,7 @@ export {
   failingElementIds,
   INVARIANT_LABELS,
   type InvariantId,
+  type TieField,
   type ValidateOptions,
   type ValidationReport,
   validateFormwork,

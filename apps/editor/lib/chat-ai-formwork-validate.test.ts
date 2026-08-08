@@ -41,6 +41,81 @@ interface ValidationReply {
   notChecked: Array<{ invariant: string; needs: string }>
 }
 
+/**
+ * A wall with a window in it, already shuttered in 2.70 m panels.
+ *
+ * Built as nodes rather than through `attach_formwork`, because the panel width is
+ * the whole condition and no tool sets it: 2.70 m panels are drilled at 1.35 and
+ * 4.65 m along, so a window from 0.8 to 5.6 m puts every station in the void and
+ * leaves the pier at each end with no tie. At the 0.6 m default the holes come every
+ * 300 mm and there is nothing to report.
+ */
+function walledWithOpening(): ToolMap {
+  const graph = {
+    nodes: {
+      level_1: {
+        object: 'node',
+        id: 'level_1',
+        type: 'level',
+        parentId: null,
+        visible: true,
+        metadata: {},
+        children: ['wall_1'],
+        elevation: 0,
+        height: 6,
+        level: 0,
+      },
+      wall_1: {
+        object: 'node',
+        id: 'wall_1',
+        type: 'wall',
+        parentId: 'level_1',
+        visible: true,
+        metadata: {},
+        children: ['window_1', 'formwork-assembly_1'],
+        start: [0, 0],
+        end: [6, 0],
+        thickness: 0.25,
+        height: 3,
+        frontSide: 'unknown',
+        backSide: 'unknown',
+        formworkType: 'steel-panel',
+      },
+      window_1: {
+        object: 'node',
+        id: 'window_1',
+        type: 'window',
+        parentId: 'wall_1',
+        wallId: 'wall_1',
+        visible: true,
+        metadata: {},
+        children: [],
+        position: [3.2, 1.5, 0],
+        width: 4.8,
+        height: 2.4,
+      },
+      'formwork-assembly_1': {
+        object: 'node',
+        id: 'formwork-assembly_1',
+        type: 'formwork-assembly',
+        parentId: 'wall_1',
+        visible: true,
+        metadata: {},
+        children: [],
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        panelWidth: 2.7,
+        fillerPosition: 'middle',
+        segmentIndex: 0,
+        liftIndex: 0,
+        partOverrides: {},
+      },
+    },
+    rootNodeIds: ['level_1'],
+  } as unknown as SceneGraph
+  return buildTools(graph, [], () => {})
+}
+
 /** Two levels, so a level scope can be wrong in either direction. */
 function scene(): { graph: SceneGraph; tools: ToolMap } {
   const wall = (id: string, parentId: string, y: number, thickness = 0.25) => ({
@@ -234,6 +309,32 @@ describe('validate_formwork', () => {
 
     expect(reply).toStartWith('Error:')
     expect(reply).toContain('list_castable_elements')
+  })
+
+  test('reports a pier an opening leaves with no tie, and where to strut it', async () => {
+    // The model cannot derive this from anything else it can ask for. The shutter
+    // drops the ties that land in the void — correctly — and neither the parts list
+    // nor the takeoff records what dropping them left untied.
+    const tools = walledWithOpening()
+
+    const reply = await validate(tools)
+
+    const gap = reply.findings.find((finding) => finding.invariant === 'OPENING_LEAVES_TIE_GAP')
+    expect(gap?.severity).toBe('warning')
+    expect(gap?.elementIds).toEqual(['wall_1', 'window_1'])
+    expect(gap?.message).toContain('800 mm')
+    expect(gap?.message).toContain('strut')
+    expect(gap?.locus?.elevationM).toBeCloseTo(0.775, 6)
+  })
+
+  test('the clash check is unchecked until something is shuttered', async () => {
+    // Where a tie can pass is a property of the drilled frames, so a wall nobody has
+    // formed has no grid to be short of. Absent from the list it would read as passed.
+    const { tools } = scene()
+
+    const bare = await validate(tools, { levelId: 'level_1' })
+
+    expect(bare.notChecked.map((entry) => entry.invariant)).toContain('OPENING_LEAVES_TIE_GAP')
   })
 
   test('an empty scope is not an empty pass', async () => {

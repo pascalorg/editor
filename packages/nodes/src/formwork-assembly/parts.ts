@@ -6,6 +6,7 @@ import {
   type PressureEnvelope,
   partMark,
   type StripPack,
+  type TieField,
 } from '@pascal-app/core/formwork'
 import type { Group, Mesh } from 'three'
 import type { FormworkAssemblyNode } from './schema'
@@ -84,6 +85,21 @@ export interface ShutterEvidence {
    * against hardware that is not on the wall.
    */
   system?: FormworkSystem
+  /**
+   * Where a tie could pass, over each stretch the panels form — for the ties ×
+   * openings clash.
+   *
+   * Recorded *before* the openings take stations away, because the loss is what the
+   * check is about: the builder drops a tie landing in a void, correctly, and the
+   * band of concrete that leaves untied is reported by nothing the parts list
+   * carries. The emitted ties cannot answer it — a tie never drawn has no part —
+   * and the hole grid can.
+   *
+   * One entry per panelled stretch, so a corner unit's blocked stretch is not in
+   * any of them: the unit ties through its own holes on the catalog's spacing, and
+   * a band under it is not short of a tie the panels would have brought.
+   */
+  tieFields?: TieField[]
 }
 
 export interface BuiltFormwork {
@@ -111,6 +127,7 @@ export function collectParts(group: Group, node: FormworkAssemblyNode): PartColl
       if (more.packs) found.packs.push(...more.packs)
       if (more.envelope) found.envelope = more.envelope
       if (more.system) found.system = more.system
+      if (more.tieFields) found.tieFields = [...(found.tieFields ?? []), ...more.tieFields]
     },
     emit(spec, mesh) {
       const mark = partMark(spec)

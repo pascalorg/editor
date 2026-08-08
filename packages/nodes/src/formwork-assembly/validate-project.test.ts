@@ -8,16 +8,21 @@ import { validateProjectFormwork } from './validate-project'
  * The scene validated against the layout it actually has.
  *
  * `invariants.test.ts` covers the checks. This covers the wiring, and the wiring is
- * where the interesting failures are: three of the fourteen invariants are about a
- * packed run, a pressure solve and a catalog system, none of which exist in the node
- * graph, so they only run if the evidence reaches them from the build. The two ways
- * that goes wrong are silent in both directions — an invariant reported as `notChecked`
- * when the data was right there, and an invariant run against another element's
- * hardware.
+ * where the interesting failures are: four of the fifteen invariants are about a
+ * packed run, a pressure solve, a catalog system and a drilled hole grid, none of
+ * which exist in the node graph, so they only run if the evidence reaches them from
+ * the build. The two ways that goes wrong are silent in both directions — an
+ * invariant reported as `notChecked` when the data was right there, and an invariant
+ * run against another element's hardware.
  */
 
-/** The three checks that only run on evidence out of a build. */
-const LAYOUT_CHECKS = ['UNFORMABLE_STRIP', 'DESIGN_OUTSIDE_CODE_ENVELOPE', 'WALL_OUTSIDE_TIE_RANGE']
+/** The four checks that only run on evidence out of a build. */
+const LAYOUT_CHECKS = [
+  'UNFORMABLE_STRIP',
+  'DESIGN_OUTSIDE_CODE_ENVELOPE',
+  'WALL_OUTSIDE_TIE_RANGE',
+  'OPENING_LEAVES_TIE_GAP',
+]
 
 function makeWall(id: string, overrides: Partial<WallNode> = {}): WallNode {
   return {
@@ -83,6 +88,30 @@ function makeSlab(id: string, overrides: Partial<SlabNode> = {}): SlabNode {
   } as unknown as SlabNode
 }
 
+/** A void in a wall, on the wall-child convention every opening tool writes. */
+function makeWindow(
+  id: string,
+  wallId: string,
+  along: number,
+  width: number,
+  centreY = 1.5,
+  height = 2.4,
+): AnyNode {
+  return {
+    object: 'node',
+    id,
+    type: 'window',
+    parentId: wallId,
+    wallId,
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [along, centreY, 0],
+    width,
+    height,
+  } as unknown as AnyNode
+}
+
 function makeAssembly(
   id: string,
   hostId: string,
@@ -109,9 +138,13 @@ function makeAssembly(
 }
 
 function sceneOf(
-  ...members: Array<WallNode | ColumnNode | SlabNode | FormworkAssemblyNode>
+  ...members: Array<WallNode | ColumnNode | SlabNode | FormworkAssemblyNode | AnyNode>
 ): Record<string, AnyNode> {
-  const hosts = members.filter((node) => node.type !== 'formwork-assembly')
+  // Assemblies and openings hang off their host, so only the castable kinds are the
+  // level's children.
+  const hosts = members.filter(
+    (node) => node.type === 'wall' || node.type === 'column' || node.type === 'slab',
+  )
   const nodes: Record<string, AnyNode> = {
     level_1: {
       object: 'node',
@@ -142,8 +175,8 @@ describe('validateProjectFormwork', () => {
     expect(validation.shutteredIds).toEqual([])
   })
 
-  test('the layout, pressure and tie checks run once an element is shuttered', () => {
-    // The reason the module exists. On nodes alone all three come back unchecked, and
+  test('the layout, pressure, tie and clash checks run once an element is shuttered', () => {
+    // The reason the module exists. On nodes alone all four come back unchecked, and
     // a report that omits them silently reads as a wall that passed them.
     const wall = makeWall('wall_1')
 
@@ -239,6 +272,73 @@ describe('validateProjectFormwork', () => {
     const shutter = solveProjectFormwork(nodes).elements[0]?.shutters[0]
 
     expect(shutter?.evidence.packs).toHaveLength(1)
+  })
+
+  test('the tie field is what the wall was drilled to, over the stretch it forms', () => {
+    // The check is only as good as the stations, and the stations have to be the ones
+    // the shutter drew ties at — a second intersection of the two skins' holes would
+    // be a second grid, and the wall builder's is the one on screen.
+    const nodes = sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1'))
+
+    const fields = solveProjectFormwork(nodes).elements[0]?.shutters[0]?.evidence.tieFields ?? []
+
+    expect(fields).toHaveLength(1)
+    expect(fields[0]?.fromM).toBeCloseTo(0, 6)
+    expect(fields[0]?.toM).toBeCloseTo(6, 6)
+    expect(fields[0]?.holes.length).toBeGreaterThan(0)
+  })
+
+  test('the field keeps the stations an opening blocks, which is the point of it', () => {
+    // The builder drops a tie landing in a void and the band that leaves untied is the
+    // finding, so a field filtered to the ties actually drawn could never report it.
+    const nodes = sceneOf(
+      makeWall('wall_1', { height: 3 }),
+      makeWindow('window_1', 'wall_1', 3.2, 4.8),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+
+    const field = solveProjectFormwork(nodes).elements[0]?.shutters[0]?.evidence.tieFields?.[0]
+
+    expect(field?.holes.some((hole) => hole.alongM > 0.8 && hole.alongM < 5.6)).toBe(true)
+  })
+
+  test('a pier an opening leaves with no drilled hole is reported', () => {
+    // 2.70 m panels drilled at 1.35 and 4.65 m along: a window from 0.8 to 5.6 m puts
+    // every station in the void, so the 800 mm pier at the start is untied. Nothing
+    // else in the product says so — the shutter simply draws no tie there.
+    const nodes = sceneOf(
+      makeWall('wall_1', { height: 3 }),
+      makeWindow('window_1', 'wall_1', 3.2, 4.8),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, {
+        panelWidth: 2.7,
+      } as Partial<FormworkAssemblyNode>),
+    )
+
+    const found = validateProjectFormwork(nodes).report.findings.filter(
+      (finding) => finding.invariant === 'OPENING_LEAVES_TIE_GAP',
+    )
+
+    expect(found.map((finding) => finding.elementIds)).toContainEqual(['wall_1', 'window_1'])
+    expect(found[0]?.message).toContain('800 mm')
+  })
+
+  test('the same wall in narrow panels is tied, because narrow panels drill oftener', () => {
+    // The check has to move with the layout rather than with the wall: 600 mm panels
+    // bring a hole every 300 mm, so the pier the 2.70 m panels left untied is tied.
+    // A check keyed on the opening alone would fault both.
+    const nodes = sceneOf(
+      makeWall('wall_1', { height: 3 }),
+      makeWindow('window_1', 'wall_1', 3.2, 4.8),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, {
+        panelWidth: 0.6,
+      } as Partial<FormworkAssemblyNode>),
+    )
+
+    const found = validateProjectFormwork(nodes).report.findings.filter(
+      (finding) => finding.invariant === 'OPENING_LEAVES_TIE_GAP',
+    )
+
+    expect(found).toEqual([])
   })
 
   test('a column carries an envelope and no pack, which is what it has', () => {

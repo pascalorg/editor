@@ -9,5 +9,6 @@ export {
   type FindingSeverity,
   INVARIANT_LABELS,
   type InvariantId,
+  type TieField,
   type ValidationReport,
 } from './types'

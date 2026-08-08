@@ -1,7 +1,11 @@
 import type { ConstructionJointNode } from '../../../schema/nodes/construction-joint'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
 import { type FormworkSystem, fitCorner, tieForThickness } from '../catalog'
-import { type CastableElement, collectCastableElements } from '../coverage/elements'
+import {
+  type CastableElement,
+  collectCastableElements,
+  type ElementOpening,
+} from '../coverage/elements'
 import { classifyElementFaces } from '../coverage/faces'
 import {
   type Abutment,
@@ -15,7 +19,7 @@ import { splitIntoLifts } from '../pours/lifts'
 import type { PourLimits, PourUnit } from '../pours/types'
 import { hardCutsForElement, pourUnitsForElement } from '../pours/units'
 import type { PressureEnvelope } from '../pressure'
-import type { Finding, InvariantId, ValidationReport } from './types'
+import type { Finding, InvariantId, TieField, ValidationReport } from './types'
 
 /**
  * The assertion suite — solver phase 11, and the plan calls it the highest-value
@@ -42,6 +46,30 @@ const SYMMETRY_TOLERANCE_MM = 5
 
 /** A lift joint further than this from a permitted elevation was not snapped, m. */
 const JOINT_SNAP_REPORT_TOLERANCE = 1e-6
+
+/**
+ * Narrower than this and an untied band is not a finding, mm.
+ *
+ * Not a tolerance — a site fact. The two forms either side of a nib this narrow are
+ * strutted directly against each other, which is what a carpenter does with a 200 mm
+ * pier between a door jamb and a wall end, and reporting it as an untied stretch
+ * would put a finding on every wall whose opening lands near its end.
+ */
+const MIN_TIED_BAND_MM = 300
+
+/** Along-run positions within this are the same station, m. */
+const STATION_TOLERANCE_M = 1e-6
+
+/**
+ * Tie holes within this of each other are one row, m.
+ *
+ * Rows have to be grouped rather than compared exactly. Two runs on one face can be
+ * packed with different panel widths, and a narrow panel is drilled at its own
+ * levels, so the same physical row arrives as two elevations a millimetre apart.
+ * Split, each half carries only some of the row's stations — and a band tied by a
+ * station in the other half reads as untied.
+ */
+const ROW_TOLERANCE_M = 0.02
 
 export interface ValidateOptions {
   /** Scope to one level's elements. Absent sweeps every castable element given. */
@@ -76,6 +104,15 @@ export interface ValidateOptions {
   packs?: Map<AnyNodeId, readonly StripPack[]>
   /** Per-element design envelopes, for the code-envelope check. Same reasoning. */
   envelopes?: Map<AnyNodeId, PressureEnvelope>
+  /**
+   * Where a tie can pass on each shutter, for the ties × openings clash.
+   *
+   * One field per shutter rather than one per element, because the stations are
+   * only meaningful over the stretch that shutter forms: a pour unit's holes say
+   * nothing about the stretch the next unit covers, and merging them would report
+   * a band as tied by a hole in a different pour.
+   */
+  tieFields?: Map<AnyNodeId, readonly TieField[]>
 }
 
 function finding(
@@ -482,6 +519,139 @@ function openingsAcrossLiftJoints(
   return out
 }
 
+/** A stretch of one tie row with concrete in it, and what bounds it. */
+interface TiedBand {
+  loM: number
+  hiM: number
+  /** The openings whose jambs cut it out. Empty where only the shutter ends bound it. */
+  byIds: AnyNodeId[]
+}
+
+/**
+ * The stretches of one tie row that are concrete rather than void.
+ *
+ * Only the openings crossing this elevation cut it: a door head at 2.1 m takes
+ * nothing out of the row at 2.7 m, and treating every opening as a full-height cut
+ * is how a wall with a low window gets reported as untied at the top.
+ */
+function bandsAlongRow(
+  field: TieField,
+  openings: readonly ElementOpening[],
+  elevationM: number,
+): TiedBand[] {
+  let bands: TiedBand[] = [{ loM: field.fromM, hiM: field.toM, byIds: [] }]
+  for (const opening of openings) {
+    const bottom = opening.centreY - opening.height / 2
+    const top = opening.centreY + opening.height / 2
+    if (elevationM <= bottom || elevationM >= top) continue
+    const left = opening.along - opening.width / 2
+    const right = opening.along + opening.width / 2
+    const next: TiedBand[] = []
+    for (const band of bands) {
+      if (right <= band.loM || left >= band.hiM) {
+        next.push(band)
+        continue
+      }
+      if (left > band.loM) {
+        next.push({ loM: band.loM, hiM: left, byIds: [...band.byIds, opening.id] })
+      }
+      if (right < band.hiM) {
+        next.push({ loM: right, hiM: band.hiM, byIds: [...band.byIds, opening.id] })
+      }
+    }
+    bands = next
+  }
+  return bands
+}
+
+/** The holes grouped into rows: each row's elevation, and every station on it. */
+function tieRows(holes: TieField['holes']): Array<[number, number[]]> {
+  const rows: Array<{ elevationM: number; stations: number[] }> = []
+  for (const hole of [...holes].sort((a, b) => a.elevationM - b.elevationM)) {
+    const row = rows.at(-1)
+    if (row && hole.elevationM - row.elevationM <= ROW_TOLERANCE_M) row.stations.push(hole.alongM)
+    else rows.push({ elevationM: hole.elevationM, stations: [hole.alongM] })
+  }
+  return rows.map((row) => [row.elevationM, row.stations])
+}
+
+/**
+ * A band of concrete beside an opening with no tie able to pass through it —
+ * phase 9's ties × openings clash, and the one clash pass whose two inputs the
+ * project already solves.
+ *
+ * The clash itself is not the finding, and that distinction is the whole design.
+ * A rod through a void is drawn nowhere: the wall builder already drops those
+ * stations, because a tie landing in an opening has nothing to bear on. So
+ * asserting "a tie hits a window" would report a condition the model never
+ * produces, while the consequence of dropping them — a pier or a head band with
+ * no tie left in it — is reported by nothing at all. That is what blows out: the
+ * band is loaded on both faces, and on a panel system there is no hole to add,
+ * because the frames arrive drilled. The fix is a strut through the box-out or a
+ * strongback spanning the opening, and either is a decision somebody makes rather
+ * than one a layout makes for them — hence a warning.
+ *
+ * Bounded at both ends, because neither half is visible alone: the tie grid knows
+ * where the holes are and nothing about the voids, and the coverage pass knows the
+ * voids and nothing about a drilled frame. `untied-stretch` in `tieGrid` is the
+ * neighbouring case with no opening in it, so a band bounded only by the shutter's
+ * own ends is left to that check rather than reported twice here.
+ *
+ * One finding per band and not per row. A full-height window beside a pier fails
+ * the pier at every course, and four findings about one 250 mm band reads as four
+ * problems; the rows are counted in the message and the lowest is the locus,
+ * because pressure is worst at the bottom of the pour.
+ */
+function tiesAroundOpenings(
+  elements: readonly CastableElement[],
+  fields: ReadonlyMap<AnyNodeId, readonly TieField[]>,
+): Finding[] {
+  const out: Finding[] = []
+  for (const element of elements) {
+    if (element.openings.length === 0) continue
+    const label = new Map(element.openings.map((opening) => [opening.id, opening.kind]))
+    for (const field of fields.get(element.id) ?? []) {
+      // No drilled grid: a conventional shutter is bored where the calculation asks,
+      // so there is no fixed set of stations a band can fall between.
+      if (field.holes.length === 0) continue
+      const failed = new Map<string, { band: TiedBand; elevations: number[] }>()
+      for (const [elevationM, stations] of tieRows(field.holes)) {
+        for (const band of bandsAlongRow(field, element.openings, elevationM)) {
+          if ((band.hiM - band.loM) * 1000 < MIN_TIED_BAND_MM) continue
+          if (band.byIds.length === 0) continue
+          const tied = stations.some(
+            (alongM) =>
+              alongM > band.loM - STATION_TOLERANCE_M && alongM < band.hiM + STATION_TOLERANCE_M,
+          )
+          if (tied) continue
+          const key = `${band.loM.toFixed(4)}:${band.hiM.toFixed(4)}`
+          const entry = failed.get(key)
+          if (entry) entry.elevations.push(elevationM)
+          else failed.set(key, { band, elevations: [elevationM] })
+        }
+      }
+
+      for (const { band, elevations } of failed.values()) {
+        const widthMm = (band.hiM - band.loM) * 1000
+        const lowest = Math.min(...elevations)
+        const named = [...new Set(band.byIds)]
+          .map((id) => `${label.get(id) ?? 'opening'} ${id}`)
+          .join(' and ')
+        out.push(
+          finding(
+            'OPENING_LEAVES_TIE_GAP',
+            'warning',
+            [element.id, ...new Set(band.byIds)],
+            `${element.id}: the ${widthMm.toFixed(0)} mm of wall from ${band.loM.toFixed(2)} to ${band.hiM.toFixed(2)} m, beside ${named}, has no drilled hole a tie passes through on ${elevations.length === 1 ? `the row at ${lowest.toFixed(2)} m` : `${elevations.length} tie rows`}. The frames arrive drilled, so there is no tie to add here — strut the two forms across the box-out, or back them with a strongback spanning the opening.`,
+            { alongM: (band.loM + band.hiM) / 2, elevationM: lowest },
+          ),
+        )
+      }
+    }
+  }
+  return out
+}
+
 /**
  * A junction angle no hinged unit sweeps.
  *
@@ -771,7 +941,12 @@ function codeEnvelopes(envelopes: ReadonlyMap<AnyNodeId, PressureEnvelope>): Fin
  * suite that never had rebar geometry is the most misleading sentence this
  * feature could print.
  */
-function unavailable(hasPacks: boolean, hasEnvelopes: boolean, hasSystem: boolean) {
+function unavailable(
+  hasPacks: boolean,
+  hasEnvelopes: boolean,
+  hasSystem: boolean,
+  hasTieFields: boolean,
+) {
   const out: ValidationReport['notChecked'] = [
     { invariant: 'TIES_THROUGH_REBAR', needs: 'rebar geometry — no reinforcement is modelled' },
     {
@@ -811,6 +986,13 @@ function unavailable(hasPacks: boolean, hasEnvelopes: boolean, hasSystem: boolea
         'the catalog system each element is formed in — pass `systems` to check tie reach and corner fit',
     })
   }
+  if (!hasTieFields) {
+    out.push({
+      invariant: 'OPENING_LEAVES_TIE_GAP',
+      needs:
+        'the stations a tie passes on each shutter — pass `tieFields` from the same layout that drew the ties',
+    })
+  }
   return out
 }
 
@@ -842,6 +1024,7 @@ export function validateFormwork(
   const packs = options.packs ?? new Map<AnyNodeId, readonly StripPack[]>()
   const envelopes = options.envelopes ?? new Map<AnyNodeId, PressureEnvelope>()
   const systems = options.systems ?? new Map<AnyNodeId, FormworkSystem>()
+  const tieFields = options.tieFields ?? new Map<AnyNodeId, readonly TieField[]>()
 
   // Neighbours are the whole level, not the scope: an element outside a selection
   // still buries the face of one inside it, and a junction check that only saw
@@ -867,6 +1050,7 @@ export function validateFormwork(
     ...architecturalSymmetry(scoped, packs),
     ...codeEnvelopes(envelopes),
     ...tieReach(scoped, systems),
+    ...tiesAroundOpenings(scoped, tieFields),
     ...junctionFit(scoped, systems),
   ]
 
@@ -885,7 +1069,12 @@ export function validateFormwork(
     errorCount: findings.filter((entry) => entry.severity === 'error').length,
     warningCount: findings.filter((entry) => entry.severity === 'warning').length,
     elementIds: scoped.map((element) => element.id).sort(),
-    notChecked: unavailable(packs.size > 0, envelopes.size > 0, systems.size > 0),
+    notChecked: unavailable(
+      packs.size > 0,
+      envelopes.size > 0,
+      systems.size > 0,
+      tieFields.size > 0,
+    ),
   }
 }
 

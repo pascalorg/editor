@@ -2,6 +2,7 @@ import type {
   FormworkSystem,
   PressureEnvelope,
   StripPack,
+  TieField,
   ValidationReport,
 } from '@pascal-app/core/formwork'
 import { validateFormwork } from '@pascal-app/core/formwork'
@@ -12,11 +13,12 @@ import { solveProjectFormwork } from './solve-project'
 /**
  * The scene, validated — with the evidence the shutters were actually built from.
  *
- * `validateFormwork` can run on nodes alone, and three of its fourteen invariants
- * come back `notChecked` when it does: an unformable strip is a property of the
- * packed run, a code-envelope breach a property of the pressure solve, and a tie
- * that reaches nothing a property of the catalog system. None of those survive into
- * the node graph, so a validator handed only nodes cannot see them.
+ * `validateFormwork` can run on nodes alone, and four of its fifteen invariants come
+ * back `notChecked` when it does: an unformable strip is a property of the packed
+ * run, a code-envelope breach a property of the pressure solve, a tie that reaches
+ * nothing a property of the catalog system, and a band beside an opening with no tie
+ * in it a property of where the frames were drilled. None of those survive into the
+ * node graph, so a validator handed only nodes cannot see them.
  *
  * It could re-derive them. That is the option this module exists to avoid. Packing
  * the runs a second time inside the validator would produce a second layout of every
@@ -27,8 +29,8 @@ import { solveProjectFormwork } from './solve-project'
  * pack and the envelope come *out* of that build as `ShutterEvidence`.
  *
  * Which means a scope with no shutters yet is validated on its nodes alone and says
- * so. That is the honest answer rather than a degraded one: those three invariants
- * are about a layout, and an element nobody has formed has no layout to fault.
+ * so. That is the honest answer rather than a degraded one: those four invariants are
+ * about a layout, and an element nobody has formed has no layout to fault.
  */
 
 export interface ProjectValidation {
@@ -54,6 +56,7 @@ export function validateProjectFormwork(
   const packs = new Map<AnyNodeId, readonly StripPack[]>()
   const envelopes = new Map<AnyNodeId, PressureEnvelope>()
   const systems = new Map<AnyNodeId, FormworkSystem>()
+  const tieFields = new Map<AnyNodeId, readonly TieField[]>()
   for (const element of solution.elements) {
     const id = element.host.id as AnyNodeId
     // Every shutter on the element, not one of them. A 9 m wall in three lifts is
@@ -72,6 +75,13 @@ export function validateProjectFormwork(
     // rather than whatever the project defaults to.
     const system = element.shutters.find((shutter) => shutter.evidence.system)?.evidence.system
     if (system) systems.set(id, system)
+    // Every shutter's fields, and all of them: each one covers only the stretch it
+    // forms, so a lift or a segment left out is a stretch reported as unexamined
+    // where it was examined, and one merged across shutters is a band called tied by
+    // a hole in a different pour. The check reads them as the separate stretches
+    // they are, so concatenating is not merging.
+    const fields = element.shutters.flatMap((shutter) => shutter.evidence.tieFields ?? [])
+    if (fields.length > 0) tieFields.set(id, fields)
   }
 
   return {
@@ -81,6 +91,7 @@ export function validateProjectFormwork(
       packs,
       envelopes,
       systems,
+      tieFields,
     }),
     shutteredIds: solution.elements.map((element) => element.host.id as AnyNodeId),
   }

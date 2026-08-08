@@ -697,6 +697,36 @@ export function buildWallFormwork(
   const stations = bothSidesFormed
     ? tieStations(planByFace, design, { spanStart, spanEnd, baseY, formTop })
     : []
+
+  // Where a tie *could* pass, for the ties × openings clash — recorded before
+  // `passable` drops the ones the voids block, because the band that dropping them
+  // leaves untied is the finding and a tie never drawn leaves no part behind.
+  //
+  // Only on a drilled system. A conventional shutter is bored where the calculation
+  // asks, so a band beside an opening is tied by asking for a tie there, and there
+  // is no fixed grid for it to fall between.
+  const drilled =
+    bothSidesFormed &&
+    (planByFace.get('a')?.holes.length ?? 0) > 0 &&
+    (planByFace.get('b')?.holes.length ?? 0) > 0
+  if (drilled) {
+    // Both faces' corner runs, so each stretch is one the panels form on *both*
+    // skins. A corner unit ties through its own holes on the catalog's spacing, and
+    // a band under it is not short of a tie the panels would have brought.
+    parts.evidence({
+      tieFields: panelRuns(spanStart, spanEnd, [
+        ...(cornerRunsByFace.get('a') ?? []),
+        ...(cornerRunsByFace.get('b') ?? []),
+      ]).map((run) => ({
+        fromM: run.lo,
+        toM: run.hi,
+        holes: stations
+          .filter((station) => station.x >= run.lo && station.x <= run.hi)
+          .map((station) => ({ alongM: station.x, elevationM: station.y })),
+      })),
+    })
+  }
+
   // What a tie is checked against — the rod or the bracket it bears on, whichever
   // ran out first. Off the catalog where the design found a tie, so the part reports
   // the same component the design report prints.

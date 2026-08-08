@@ -59,6 +59,39 @@ export type InvariantId =
   | 'POUR_VOLUME_OVER_SUPPLY'
   /** A code boundary condition the design is outside — slump, rate, height. */
   | 'DESIGN_OUTSIDE_CODE_ENVELOPE'
+  /** An opening leaving a stretch of a tie row with no tie able to pass. */
+  | 'OPENING_LEAVES_TIE_GAP'
+
+/**
+ * One stretch a through-tie could pass over, and the stations at which it can.
+ *
+ * The extent is carried with the stations because it is what makes a missing one
+ * mean anything: "nothing between 4.1 and 4.3 m" is a defect inside the stretch
+ * this field covers and says nothing whatever about the stretch beside it.
+ *
+ * A stretch rather than a whole element, and a whole shutter, because both bound
+ * the answer. A pour unit forms part of a wall, so its stations say nothing about
+ * the next unit's; and a corner unit interrupts the panel run, ties through its own
+ * holes on the catalog's spacing, and is not short of a tie the panels would have
+ * brought. Merging either would report a band as tied by hardware that is not over
+ * it, or untied where the corner unit ties it.
+ */
+export interface TieField {
+  /** The stretch this field answers for, m along the element from its start. */
+  fromM: number
+  toM: number
+  /**
+   * Stations a rod passes — on a panel system the two skins' drilled holes
+   * intersected, m along the element and m above its base — before the openings
+   * take any away.
+   *
+   * Unfiltered deliberately. The openings are the validator's own input, and
+   * removing the stations they block here would hide exactly the loss it asserts
+   * about. Empty on a conventional shutter: the carpenter bores the ply where the
+   * calculation asks, so there is no fixed grid a band can be short of.
+   */
+  holes: ReadonlyArray<{ alongM: number; elevationM: number }>
+}
 
 export interface Finding {
   invariant: InvariantId
@@ -119,4 +152,5 @@ export const INVARIANT_LABELS: Record<InvariantId, string> = {
   LIFT_JOINT_OFF_PERMITTED_ELEVATION: 'Lift joint not on a permitted elevation',
   POUR_VOLUME_OVER_SUPPLY: 'Pour volume over the supply limit',
   DESIGN_OUTSIDE_CODE_ENVELOPE: 'Design outside the code’s validated envelope',
+  OPENING_LEAVES_TIE_GAP: 'Opening leaves a stretch with no tie',
 }
