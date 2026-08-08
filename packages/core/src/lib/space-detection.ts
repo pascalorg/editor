@@ -2427,6 +2427,11 @@ export function initSpaceDetectionSync(
     adoptSceneBaseline(commit.current.nodes)
   })
 
+  // Keep reconciliation in this synchronous store subscription. Zundo emits
+  // the originating local SceneCommit only after subscribers return, so the
+  // history-paused derived writes below join that commit's current snapshot
+  // and undo step. Running from subscribeSceneCommits would cross the snapshot
+  // boundary, and the paused writes would emit no replacement commit.
   const unsubscribe = sceneStore.subscribe((state: any) => {
     if (isProcessing) return
     if (getSceneHistoryPauseDepth() > 0) return

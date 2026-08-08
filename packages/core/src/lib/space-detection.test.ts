@@ -3,7 +3,8 @@ import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode, ZoneNode } fr
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
-import { runWithSceneCommitNodeIds } from '../store/history-control'
+import { runWithSceneCommitNodeIds, type SceneCommit, subscribeSceneCommits } from '../store/history-control'
+import useScene, { clearSceneHistory } from '../store/use-scene'
 import {
   detectSpacesForLevel,
   initSpaceDetectionSync,
@@ -16,6 +17,16 @@ import {
 } from './space-detection'
 import { encodeTerrainField } from './terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from './terrain-field'
+
+type RafFn = (callback: (time: number) => void) => number
+;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= (
+  callback,
+) => {
+  callback(0)
+  return 0
+}
+;(globalThis as unknown as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame ??=
+  () => {}
 
 const square: Array<[number, number]> = [
   [0, 0],
@@ -44,6 +55,114 @@ function slab(elevation: number) {
     autoFromWalls: true,
   })
 }
+
+describe('space detection scene commit boundary', () => {
+  test('includes room reconciliation in the closing wall commit and undo step', () => {
+    const buildingId = 'building_space_commit' as AnyNodeId
+    const levelId = 'level_space_commit' as AnyNodeId
+    const walls = [
+      WallNode.parse({
+        id: 'wall_space_commit_bottom',
+        parentId: levelId,
+        start: [0, 0],
+        end: [4, 0],
+      }),
+      WallNode.parse({
+        id: 'wall_space_commit_right',
+        parentId: levelId,
+        start: [4, 0],
+        end: [4, 3],
+      }),
+      WallNode.parse({
+        id: 'wall_space_commit_top',
+        parentId: levelId,
+        start: [4, 3],
+        end: [0, 3],
+      }),
+      WallNode.parse({
+        id: 'wall_space_commit_left',
+        parentId: levelId,
+        start: [0, 3],
+        end: [0, 0],
+      }),
+    ]
+    const initialWalls = walls.slice(0, 3)
+    const building = BuildingNode.parse({
+      id: buildingId,
+      children: [levelId],
+    })
+    const level = LevelNode.parse({
+      id: levelId,
+      parentId: buildingId,
+      children: initialWalls.map((wall) => wall.id),
+      level: 0,
+      height: 2.5,
+    })
+    const initialNodes = Object.fromEntries(
+      [building, level, ...initialWalls].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+
+    // The real singleton is required to exercise zundo's commit snapshot boundary.
+    const previousSceneState = useScene.getState()
+    useScene.setState({
+      nodes: initialNodes,
+      rootNodeIds: [buildingId],
+      dirtyNodes: new Set<AnyNodeId>(),
+      collections: {},
+      materials: {},
+      installedPlugins: [],
+      readOnly: false,
+    } as never)
+    clearSceneHistory()
+
+    const commits: SceneCommit[] = []
+    const stopDetection = initSpaceDetectionSync(useScene, createEditorStoreStub())
+    const stopCommits = subscribeSceneCommits((commit) => commits.push(commit))
+
+    try {
+      const closingWall = walls[3]!
+      useScene.getState().createNode(closingWall, levelId)
+
+      const liveNodes = useScene.getState().nodes
+      const autoSlab = Object.values(liveNodes).find(
+        (node): node is SlabNode => node.type === 'slab' && node.autoFromWalls,
+      )
+      const autoCeiling = Object.values(liveNodes).find(
+        (node): node is CeilingNode => node.type === 'ceiling' && node.autoFromWalls,
+      )
+      expect(autoSlab).toBeDefined()
+      expect(autoCeiling).toBeDefined()
+
+      const localCommits = commits.filter((commit) => commit.origin === 'local')
+      expect(localCommits).toHaveLength(1)
+      const currentNodes = localCommits[0]!.current.nodes
+      expect(Object.keys(currentNodes).sort()).toEqual(Object.keys(liveNodes).sort())
+
+      const committedLevel = currentNodes[levelId] as LevelNode
+      expect(committedLevel.children).toEqual(
+        expect.arrayContaining([closingWall.id, autoSlab!.id, autoCeiling!.id]),
+      )
+      for (const wall of walls) {
+        const committedWall = currentNodes[wall.id] as WallNode
+        expect(committedWall.frontSide).toBe('interior')
+        expect(committedWall.backSide).toBe('exterior')
+      }
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+
+      useScene.temporal.getState().undo()
+
+      const undoneNodes = useScene.getState().nodes
+      expect(undoneNodes[closingWall.id]).toBeUndefined()
+      expect(undoneNodes[autoSlab!.id]).toBeUndefined()
+      expect(undoneNodes[autoCeiling!.id]).toBeUndefined()
+    } finally {
+      stopCommits()
+      stopDetection()
+      useScene.setState(previousSceneState, true)
+      clearSceneHistory()
+    }
+  })
+})
 
 describe('planAutoCeilingsForLevel', () => {
   test('creates auto ceilings height-less so they follow the level top', () => {
