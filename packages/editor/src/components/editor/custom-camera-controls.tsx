@@ -1298,6 +1298,8 @@ export const CustomCameraControls = () => {
 
   return (
     <CameraControls
+      dollyToCursor
+      dollySpeed={0.75}
       makeDefault
       maxDistance={100}
       maxPolarAngle={maxPolarAngle}
