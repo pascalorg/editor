@@ -27,8 +27,11 @@ import {
 import type { AnyNode, FormworkAssemblyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint'
 import {
+  castableHostIds,
   pourUnitsForHost,
+  projectFormworkCaveats,
   reconcileFormworkNodes,
+  solveProjectFormwork,
   solveShuttersForHost,
 } from '@pascal-app/nodes/formwork-assembly'
 import { generateText, isStepCount, type ModelMessage, tool } from 'ai'
@@ -86,7 +89,17 @@ export const SYSTEM_PROMPT =
   'quote one to the user. Say whether a weight total is complete — several catalog entries publish ' +
   'a range rather than a figure, and a total missing those is not the lifting weight of the set. ' +
   'A part beyond capacity is a stop, not a note: do not present a bill for a shutter that does not ' +
-  'stand up. set_formwork_part records the two decisions a yard actually makes about a solved ' +
+  'stand up. ' +
+  'One element is rarely the question. A yard orders the formwork for a floor, not for a wall, and ' +
+  'two per-element bills cannot be added together afterwards — the same panel type on two walls is ' +
+  'one line on a delivery note. So for anything about a level, a project, a total weight or what to ' +
+  'order, call inspect_project_formwork once rather than inspect_formwork_parts per element, and ' +
+  'scope it with levelId when the user means a floor. It also names the elements in scope with no ' +
+  'shutter at all, which is the usual reason a total is lower than expected and is invisible in a ' +
+  'bill of what exists. Its caveats are the same warnings the user sees in the Takeoff panel: lead ' +
+  'with them, because each one means every figure under it is short or long in a way none of the ' +
+  'figures reveal. ' +
+  'set_formwork_part records the two decisions a yard actually makes about a solved ' +
   'layout — substitute this item, or leave it off the order because it is already on site. It ' +
   'cannot change a size or a spacing; those are outputs, and to change them you change the design ' +
   'inputs and re-solve. Ask before substituting, because a panel from another manufacturer will ' +
@@ -904,6 +917,65 @@ export function buildTools(
           // looks perfectly reasonable on its own.
           coversWholeElement: coverageCaveat(elementId) === undefined,
           coverageCaveat: coverageCaveat(elementId) ?? null,
+        })
+      },
+    }),
+    inspect_project_formwork: tool({
+      description:
+        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show.',
+      inputSchema: z.object({
+        levelId: z
+          .string()
+          .optional()
+          .describe('a level id to bill one level; omit for the whole scene'),
+        elementIds: z
+          .array(z.string())
+          .max(500)
+          .optional()
+          .describe('bill only these elements — for a selection the user named'),
+      }),
+      execute: async ({ elementIds, levelId }) => {
+        toolCalls.push({ name: 'inspect_project_formwork', input: { elementIds, levelId } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        if (levelId !== undefined && nodes[levelId]?.type !== 'level') {
+          return `Error: no level with id ${levelId}. Call list_castable_elements and read the parentId of the elements you mean.`
+        }
+        const solution = solveProjectFormwork(nodes, { hostIds: elementIds, parentId: levelId })
+        const scoped = new Set(castableHostIds(nodes, { hostIds: elementIds, parentId: levelId }))
+        const shuttered = new Set(solution.elements.map((element) => element.host.id as string))
+        return JSON.stringify({
+          scope: levelId ?? (elementIds ? 'the elements named' : 'whole scene'),
+          elementCount: solution.elements.length,
+          shutterCount: solution.shutterCount,
+          elements: solution.elements.map((element) => ({
+            id: element.host.id,
+            kind: element.host.type,
+            shutters: element.shutters.length,
+            pourUnits: element.pourUnitCount,
+            coversWholePour: element.coversWholePour,
+          })),
+          // Named rather than omitted. An element in scope with no shutter is the
+          // most likely reason a total is lower than the user expects, and it is
+          // invisible in a bill that only lists what exists.
+          unshuttered: [...scoped].filter((id) => !shuttered.has(id as string)),
+          bom: solution.bom.map((line) => ({
+            description: line.description,
+            catalogId: line.catalogId ?? null,
+            provenance: line.provenance,
+            quantity: line.quantity,
+            unit: line.unit,
+            totalWeightKg: line.totalWeightKg === undefined ? null : round(line.totalWeightKg),
+          })),
+          totalWeightKg: round(solution.totalWeightKg),
+          totalWeightComplete: solution.totalWeightComplete,
+          beyondCapacity: solution.beyondCapacityMarks.map((part) => ({
+            elementId: part.hostId,
+            mark: part.mark,
+            utilisation: round(part.utilisation),
+          })),
+          // The same words the takeoff panel and the CSV use, so a user comparing
+          // the three is not left working out whether they are one fault or three.
+          caveats: projectFormworkCaveats(solution),
         })
       },
     }),

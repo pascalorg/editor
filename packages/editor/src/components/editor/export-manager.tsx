@@ -7,6 +7,7 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import { downloadBlob } from '../../lib/download'
 import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
@@ -103,13 +104,4 @@ export function ExportManager() {
   }, [scene, setExportScene])
 
   return null
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
 }

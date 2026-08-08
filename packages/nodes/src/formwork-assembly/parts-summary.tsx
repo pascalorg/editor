@@ -2,6 +2,8 @@
 
 import { type AnyNodeId, useScene } from '@pascal-app/core'
 import {
+  bomCsv,
+  bomCsvFilename,
   bomLines,
   bomWeightKg,
   duplicateMarks,
@@ -13,8 +15,9 @@ import {
   partLabel,
   worstUtilisation,
 } from '@pascal-app/core/formwork'
-import { cn } from '@pascal-app/editor'
+import { ActionButton, cn, downloadText } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
+import { Download } from 'lucide-react'
 import { useMemo } from 'react'
 import type { CastableHostNode } from './attach'
 import { FACE_ORDER, FACE_ROLE_LABELS } from './face-labels'
@@ -448,6 +451,24 @@ export function FormworkBom({
           lifting weight of the set.
         </Note>
       )}
+      {/* The same `lines` the table above renders, so the file and the screen cannot
+          disagree — and the same serialiser the project takeoff uses, so an element's
+          bill and the job's are the same document at two scopes. */}
+      <ActionButton
+        icon={<Download className="h-3.5 w-3.5" />}
+        label="Download CSV"
+        onClick={() => {
+          const subject = `${host?.type ?? 'element'} ${hostId ?? ''}`.trim()
+          const isoDate = new Date().toISOString().slice(0, 10)
+          downloadText(
+            bomCsv(lines, { subject, shutterCount: shown.length }),
+            bomCsvFilename(subject, isoDate),
+          )
+        }}
+      />
+      <Note>
+        This element only. The Takeoff panel bills a whole level or the whole project as one order.
+      </Note>
     </div>
   )
 }

@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
+import { formworkTakeoffHostPanel } from '@pascal-app/nodes/formwork-assembly'
 import { formworkSettingsHostPanel } from '@pascal-app/nodes/formwork-project-settings'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
@@ -91,6 +92,12 @@ registerEditorHostPanel(treesHostPanel)
 // inspector — the pour has to be reachable before the first shutter exists, since it
 // is what that shutter will be designed to. No `pluginId`: it ships with the product.
 registerEditorHostPanel(formworkSettingsHostPanel)
+
+// The takeoff's subject is a scope — the whole project or one level — and neither is
+// a node that can be selected, so it cannot be an inspector either. It sits beside
+// the settings: one is the pour every shutter is designed to, the other what that
+// design adds up to across the job.
+registerEditorHostPanel(formworkTakeoffHostPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()

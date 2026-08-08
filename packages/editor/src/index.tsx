@@ -310,6 +310,7 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export { downloadBlob, downloadText } from './lib/download'
 export {
   resolveCurrentBuildingId,
   resolveElevatorNodeSupportY,
