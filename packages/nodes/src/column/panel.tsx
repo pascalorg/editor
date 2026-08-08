@@ -343,6 +343,7 @@ export default function ColumnPanel() {
     addFormwork: handleAddFormwork,
     hasFormwork,
     pourUnitCount,
+    shutterCount,
     updateConstruction: handleUpdateConstruction,
   } = useFormworkHost(node)
 
@@ -1146,6 +1147,7 @@ export default function ColumnPanel() {
         node={node}
         onUpdate={handleUpdateConstruction}
         pourUnitCount={pourUnitCount}
+        shutterCount={shutterCount}
         unit={unit}
       />
 

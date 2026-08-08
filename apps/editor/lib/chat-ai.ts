@@ -24,11 +24,11 @@ import {
   SHEET_STOCK,
   worstUtilisation,
 } from '@pascal-app/core/formwork'
-import type { AnyNode } from '@pascal-app/core/schema'
+import type { AnyNode, FormworkAssemblyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint'
 import {
-  buildFormworkNodes,
   pourUnitsForHost,
+  reconcileFormworkNodes,
   solveShuttersForHost,
 } from '@pascal-app/nodes/formwork-assembly'
 import { generateText, isStepCount, type ModelMessage, tool } from 'ai'
@@ -72,8 +72,13 @@ export const SYSTEM_PROMPT =
   'pressure derived from an assumed 7 m/h at 20 °C is not a number the job has agreed to, and you ' +
   'should say so rather than present it as one. Write them with set_formwork_settings, and ask for ' +
   'the rate of rise, the temperature and the code rather than guessing — the entire design hangs ' +
-  'off those three. Changing them invalidates every assembly already in the scene, so say how many ' +
-  'and offer to re-run attach_formwork on those elements. ' +
+  'off those three. Changing them re-designs every shutter in the scene on its own, so do not ' +
+  'offer to regenerate anything — just re-read the parts before repeating a figure you already ' +
+  'quoted. What does need a follow-up is set_pour_limits: it changes how many shutters an element ' +
+  'needs without building them, so call attach_formwork afterwards. Until you do, the element is ' +
+  'cast in more pours than it is formed for and every quantity you read is short by the ' +
+  'difference — inspect_formwork_parts reports this as coverageCaveat, and if it is set, lead with ' +
+  'it rather than with the bill. ' +
   'A shutter is made of individual parts, and inspect_formwork_parts is the only figure that ' +
   'agrees with what the user can see: the parts come out of the same pass that draws the 3D ' +
   'shutter, so never count panels, ties or props from the spacings yourself. Every part has a mark ' +
@@ -425,15 +430,52 @@ export function buildTools(
   }
 
   /**
-   * How many shutters this settings change re-sizes.
+   * How many shutters a settings change re-designs.
    *
-   * Reported rather than acted on: the assemblies in the graph were built against the
-   * old pour and are now stale, and the model has to be told so it offers to
-   * regenerate them. Silently leaving them is how a project ends up with a report
-   * quoting one rate of rise and 3D shutters built to another.
+   * Counted so the reply can say what the change reached, not so anything is
+   * rebuilt: a shutter's parts and its design report are both solved from the
+   * settings at the moment they are read, so the new pour is already in every
+   * figure. The number is there because a settings change that reports nothing
+   * reads as a settings change that did nothing.
    */
-  const staleAssemblyCount = (): number =>
+  const scenewideShutterCount = (): number =>
     (Object.values(graph.nodes) as AnyNode[]).filter((n) => n.type === 'formwork-assembly').length
+
+  /** This host's shutters, by `parentId` — the relation, not the child list. */
+  const shuttersOnHost = (hostId: string): FormworkAssemblyNode[] =>
+    (Object.values(graph.nodes) as AnyNode[])
+      .filter((n) => n.type === 'formwork-assembly' && n.parentId === hostId)
+      .map((n) => n as unknown as FormworkAssemblyNode)
+
+  /**
+   * Whether this element's shutters still match how it is cast, in words the
+   * model can pass on.
+   *
+   * A pour limit decides how many shutters an element needs, and changing one
+   * does not build or remove any: a 9 m wall shuttered as one pour and then
+   * capped at 3 m lifts is cast in three and formed in one, so its takeoff is
+   * two-thirds short with nothing on screen to say so. Silence here is the
+   * failure — the numbers all look reasonable, they are just for less wall than
+   * the element has.
+   */
+  const shutterMismatch = (elementId: string, unitCount: number): string | undefined => {
+    const shutters = shuttersOnHost(elementId).length
+    if (shutters === 0 || shutters === unitCount) return undefined
+    return shutters < unitCount
+      ? `${shutters} of the ${unitCount} ${unitCount === 1 ? 'pour is' : 'pours are'} shuttered, so the takeoff is short by the rest — call attach_formwork on ${elementId} to shutter ${unitCount - shutters === 1 ? 'the other one' : `the other ${unitCount - shutters}`}`
+      : `${shutters} shutters for ${unitCount} ${unitCount === 1 ? 'pour' : 'pours'} — call attach_formwork on ${elementId} to remove the ${shutters - unitCount} that ${shutters - unitCount === 1 ? 'forms a pour unit' : 'form pour units'} this element no longer has`
+  }
+
+  /** The same check for a read tool, which has to work out the unit count itself. */
+  const coverageCaveat = (elementId: string): string | undefined => {
+    const element = graph.nodes[elementId as keyof typeof graph.nodes] as AnyNode | undefined
+    if (!isCastable(element)) return undefined
+    const units = pourUnitsForHost(
+      element as unknown as Parameters<typeof pourUnitsForHost>[0],
+      Object.values(graph.nodes) as AnyNode[],
+    )
+    return shutterMismatch(elementId, Math.max(1, units.length))
+  }
 
   return {
     list_castable_elements: tool({
@@ -525,19 +567,33 @@ export function buildTools(
     }),
     attach_formwork: tool({
       description:
-        "Generate the full formwork assembly for a wall, column or slab, built for that kind: two tied faces for a wall, a clamped box or wrapped shaft for a column, a propped soffit deck plus edge forms for a slab. Only the faces the pour sequence actually leaves exposed are formed. An element with a lift cap or an expansion joint gets one assembly per pour unit, since each is erected, poured and struck separately. Call this after set_element_construction once formworkType is not 'none' — the user wants to see the formwork, not just set the properties.",
+        "Generate or update the formwork for a wall, column or slab, built for that kind: two tied faces for a wall, a clamped box or wrapped shaft for a column, a propped soffit deck plus edge forms for a slab. Only the faces the pour sequence actually leaves exposed are formed. An element with a lift cap or an expansion joint gets one assembly per pour unit, since each is erected, poured and struck separately. Call this after set_element_construction once formworkType is not 'none' — the user wants to see the formwork, not just set the properties. Safe to call again on an element that is already shuttered: it reconciles rather than duplicating, so a pour unit that still exists keeps its existing shutter and every per-part decision on it, only genuinely new pour units are built, and shutters whose pour unit has gone are removed. Call it again after any change to the pour limits, and read back what it reports — if it says decisions were discarded, tell the user which.",
       inputSchema: z.object({ elementId: z.string() }),
       execute: async ({ elementId }) => {
         toolCalls.push({ name: 'attach_formwork', input: { elementId } })
         const element = castableOrError(elementId)
         if (typeof element === 'string') return element
-        const levelNodes = Object.values(graph.nodes) as AnyNode[]
-        const host = element as unknown as Parameters<typeof buildFormworkNodes>[0]
-        const assemblies = buildFormworkNodes(host, levelNodes)
-        if (assemblies.length === 0) {
+        if (element.formworkType === undefined || element.formworkType === 'none') {
           return `Error: ${elementId} has no formworkType set, so nothing is formed. Call set_element_construction first.`
         }
-        for (const assembly of assemblies) {
+        const levelNodes = Object.values(graph.nodes) as AnyNode[]
+        const host = element as unknown as Parameters<typeof reconcileFormworkNodes>[0]
+        // Reconciled, not appended. Called twice this used to leave two copies of
+        // every shutter — a doubled bill, duplicate marks, and a part somebody had
+        // marked "already on site" quietly re-ordered on the copy. And a settings
+        // change tells the model to call it again, so the second call is the
+        // expected case rather than the mistake.
+        const existing = shuttersOnHost(elementId)
+        const { create, keep, orphan } = reconcileFormworkNodes(host, existing, levelNodes)
+        const discarded = orphan.reduce(
+          (total, assembly) => total + Object.keys(assembly.partOverrides ?? {}).length,
+          0,
+        )
+        for (const assembly of orphan) {
+          delete graph.nodes[assembly.id as keyof typeof graph.nodes]
+          element.children = (element.children ?? []).filter((id) => id !== assembly.id)
+        }
+        for (const assembly of create) {
           graph.nodes[assembly.id as keyof typeof graph.nodes] = assembly as unknown as AnyNode
           element.children = [...(element.children ?? []), assembly.id]
         }
@@ -555,13 +611,36 @@ export function buildTools(
           if (level) level.children = [...(level.children ?? []), joint.id]
         }
         onMutate()
-        if (assemblies.length === 1) return 'ok'
-        return `ok — ${assemblies.length} assemblies, one per pour unit, and ${joints.length} construction ${joints.length === 1 ? 'joint' : 'joints'} between them`
+
+        const total = keep.length + create.length
+        if (existing.length === 0) {
+          return total === 1
+            ? 'ok'
+            : `ok — ${total} assemblies, one per pour unit, and ${joints.length} construction ${joints.length === 1 ? 'joint' : 'joints'} between them`
+        }
+        if (create.length === 0 && orphan.length === 0) {
+          return `ok — already shuttered to match the pour: ${total} ${total === 1 ? 'assembly' : 'assemblies'}, unchanged. Every part decision on ${total === 1 ? 'it' : 'them'} is intact.`
+        }
+        const parts = [`now ${total} ${total === 1 ? 'assembly' : 'assemblies'}, one per pour unit`]
+        if (create.length > 0) parts.push(`${create.length} added`)
+        if (keep.length > 0) {
+          parts.push(
+            `${keep.length} kept with ${keep.length === 1 ? 'its' : 'their'} part decisions`,
+          )
+        }
+        if (orphan.length > 0) {
+          // Named, and the lost overrides counted. The model has to be able to
+          // tell the user what the rebuild cost them, because nothing else will.
+          parts.push(
+            `${orphan.length} removed as ${orphan.length === 1 ? 'its pour unit' : 'their pour units'} no longer ${orphan.length === 1 ? 'exists' : 'exist'}${discarded > 0 ? `, discarding ${discarded} part ${discarded === 1 ? 'decision' : 'decisions'} recorded on ${orphan.length === 1 ? 'it' : 'them'} — say so` : ''}`,
+          )
+        }
+        return `ok — ${parts.join('; ')}`
       },
     }),
     set_pour_limits: tool({
       description:
-        'Set the pour limits that split a wall or column into separately cast units. maxLiftHeight splits it vertically (a 9 m wall capped at 3 m is poured in three lifts); maxPourLength splits it along its length for shrinkage control (water-retaining practice caps a bay at about 7.5 m); maxPourVolume splits it by what the batch plant can deliver before the first concrete reaches initial set. A slab is one pour unit, so only maxLiftHeight is meaningful on it and it cannot slice a slab through its thickness. Each split unit needs its own shutter, so call attach_formwork after changing these. Pass null to clear a limit. Ask the engineer for these values rather than guessing — they come from tie capacity, the pressure envelope, and the supply rate.',
+        'Set the pour limits that split a wall or column into separately cast units. maxLiftHeight splits it vertically (a 9 m wall capped at 3 m is poured in three lifts); maxPourLength splits it along its length for shrinkage control (water-retaining practice caps a bay at about 7.5 m); maxPourVolume splits it by what the batch plant can deliver before the first concrete reaches initial set. A slab is one pour unit, so only maxLiftHeight is meaningful on it and it cannot slice a slab through its thickness. Each split unit needs its own shutter and changing a limit does not build them, so on an already-shuttered element you must call attach_formwork afterwards — until you do, the element is cast in more pours than it is formed for and its takeoff is short by the difference. Pass null to clear a limit. Ask the engineer for these values rather than guessing — they come from tie capacity, the pressure envelope, and the supply rate.',
       inputSchema: z.object({
         elementId: z.string(),
         maxLiftHeight: z.number().positive().nullable().optional().describe('meters'),
@@ -582,9 +661,12 @@ export function buildTools(
           element as unknown as Parameters<typeof pourUnitsForHost>[0],
           Object.values(graph.nodes) as AnyNode[],
         )
-        return units.length <= 1
-          ? 'ok — cast in one pour'
-          : `ok — cast in ${units.length} pours: ${describeUnits(units)}`
+        const summary =
+          units.length <= 1
+            ? 'ok — cast in one pour'
+            : `ok — cast in ${units.length} pours: ${describeUnits(units)}`
+        const mismatch = shutterMismatch(elementId, Math.max(1, units.length))
+        return mismatch === undefined ? summary : `${summary}. ${mismatch}`
       },
     }),
     inspect_formwork_settings: tool({
@@ -627,13 +709,13 @@ export function buildTools(
             pressureStandard: DEFAULT_FORMWORK_SETTINGS.pressureStandard,
             measurementStandard: DEFAULT_FORMWORK_SETTINGS.measurementStandard,
           },
-          shuttersAffectedByAChange: staleAssemblyCount(),
+          shuttersAffectedByAChange: scenewideShutterCount(),
         })
       },
     }),
     set_formwork_settings: tool({
       description:
-        'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. Every existing formwork assembly was built against the old pour, so after changing these call attach_formwork again on the affected elements or the 3D shutters and the design report will disagree. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off.',
+        'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off.',
       inputSchema: z.object({
         pressureStandard: z
           .enum(['ACI_347', 'DIN_18218', 'CIRIA_108', 'BS_5975_SHORTCUT'])
@@ -706,12 +788,17 @@ export function buildTools(
         }
         onMutate()
 
-        const stale = staleAssemblyCount()
+        const stale = scenewideShutterCount()
         const resolved = formworkSettings(node as never)
         const summary = `ok — ${changed.join(', ')} set; the scene now designs to ${resolved.riseRateMH} m/h at ${resolved.concreteTemperatureC} °C under ${resolved.pressureStandard}`
+        // Re-solved on read, not on write: the parts and the design report both
+        // solve from the settings each time they are asked, so there is nothing to
+        // regenerate. This used to tell the model to call attach_formwork again,
+        // which was unnecessary *and* destructive once shutters carried per-part
+        // decisions — the re-attach discarded them to rebuild what had not changed.
         return stale === 0
           ? summary
-          : `${summary}. ${stale} existing ${stale === 1 ? 'assembly was' : 'assemblies were'} built against the old pour — call attach_formwork again on those elements or the shutters and the report will disagree.`
+          : `${summary}, and ${stale === 1 ? 'the existing shutter is' : `all ${stale} existing shutters are`} re-designed to it — nothing to regenerate. Re-read inspect_formwork_parts if you have already quoted a spacing or a count.`
       },
     }),
     inspect_formwork_parts: tool({
@@ -795,13 +882,28 @@ export function buildTools(
             utilisation: round(part.structure?.utilisation ?? 0),
             governingCheck: part.structure?.governingCheck ?? null,
           })),
-          duplicateMarks: duplicateMarks(every),
+          // Per shutter, the way the parts panel checks it. A mark's station and
+          // elevation are measured within its own pour unit, so lift 0 and lift 1
+          // of one wall share every mark by design — flattened, a correctly
+          // shuttered three-lift wall reports every part it has as a clash, and a
+          // clash list that is always full is one nobody reads.
+          duplicateMarks: shutters.flatMap((shutter) =>
+            duplicateMarks(shutter.parts).map((mark) => ({
+              assemblyId: shutter.assembly.id,
+              mark,
+            })),
+          ),
           staleEdits: shutters.flatMap((shutter) =>
             orphanedOverrides(shutter.parts, shutter.assembly.partOverrides).map((mark) => ({
               assemblyId: shutter.assembly.id,
               mark,
             })),
           ),
+          // The one caveat that invalidates everything above it. A bill for four of
+          // an element's twelve pours is not a small error, and every figure in it
+          // looks perfectly reasonable on its own.
+          coversWholeElement: coverageCaveat(elementId) === undefined,
+          coverageCaveat: coverageCaveat(elementId) ?? null,
         })
       },
     }),

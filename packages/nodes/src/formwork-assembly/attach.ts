@@ -99,3 +99,97 @@ export function pourUnitsForHost(host: CastableHostNode, levelNodes: AnyNode[] =
   if (!element) return []
   return pourUnitsForElement(element, {}, hardCutsForElement(host.id as AnyNodeId, levelNodes))
 }
+
+/** A pour unit's identity: what makes two shutters the same shutter. */
+const scopeKey = (segmentIndex: number, liftIndex: number) => `${segmentIndex}:${liftIndex}`
+
+export interface FormworkReconciliation {
+  /** Assemblies whose pour unit still exists. Untouched — same id, same overrides. */
+  keep: FormworkAssemblyNode[]
+  /** Pour units with no assembly yet. Newly built, so new ids. */
+  create: FormworkAssemblyNode[]
+  /**
+   * Assemblies whose pour unit no longer exists, and the duplicates of ones that
+   * do. Every per-part decision recorded on these dies with them, so a caller
+   * that deletes them silently is discarding somebody's work.
+   */
+  orphan: FormworkAssemblyNode[]
+}
+
+/**
+ * What this host's shutters should be, against what they currently are.
+ *
+ * The reason this is not just "build them again" is that a shutter is a place a
+ * person keeps decisions. `partOverrides` says which panel the yard is actually
+ * sending and which prop is already on site, keyed by mark, and rebuilding the
+ * assembly from scratch throws all of it away. So a pour unit that still exists
+ * keeps the node it already has, id and overrides intact; only genuinely new
+ * units are built.
+ *
+ * The three outcomes exist because a pour can change in three directions and
+ * they are not symmetrical. Capping a 9 m wall at 3 m lifts *adds* two shutters
+ * to a scene that had one — and until this existed, nothing added them: the AI
+ * appended a second copy of lift 0 and the panel's button was disabled, so the
+ * wall reported three pours and billed for one. Removing the cap *orphans* two,
+ * and that is a deletion of recorded work, which is why they are returned rather
+ * than dropped. And re-running the whole thing when nothing moved must be a
+ * no-op, or the routine that repairs a scene is the routine that corrupts it.
+ *
+ * Duplicates already in the scene reconcile down to one, so this heals a graph
+ * that the un-guarded append left with two lift 0s. The survivor is the one
+ * carrying the most overrides: between two otherwise identical shutters, the one
+ * somebody has edited is the one that holds information.
+ */
+export function reconcileFormworkNodes(
+  host: CastableHostNode,
+  existing: readonly FormworkAssemblyNode[],
+  levelNodes: AnyNode[] = [],
+): FormworkReconciliation {
+  const units = pourUnitsForHost(host, levelNodes)
+  const wanted = new Map<string, { segmentIndex: number; liftIndex: number }>()
+  if (units.length === 0) {
+    // Same fallback as `buildFormworkNodes`: a host the splitter cannot read is
+    // still formed as one pour rather than left with nothing to select.
+    wanted.set(scopeKey(0, 0), { segmentIndex: 0, liftIndex: 0 })
+  } else {
+    for (const unit of units) {
+      wanted.set(scopeKey(unit.segmentIndex, unit.liftIndex), {
+        segmentIndex: unit.segmentIndex,
+        liftIndex: unit.liftIndex,
+      })
+    }
+  }
+
+  const overrideCount = (assembly: FormworkAssemblyNode) =>
+    Object.keys(assembly.partOverrides ?? {}).length
+
+  const keep: FormworkAssemblyNode[] = []
+  const orphan: FormworkAssemblyNode[] = []
+  const claimed = new Map<string, FormworkAssemblyNode>()
+  for (const assembly of existing) {
+    const key = scopeKey(assembly.segmentIndex, assembly.liftIndex)
+    if (!wanted.has(key)) {
+      orphan.push(assembly)
+      continue
+    }
+    const sitting = claimed.get(key)
+    if (!sitting) {
+      claimed.set(key, assembly)
+      continue
+    }
+    if (overrideCount(assembly) > overrideCount(sitting)) {
+      claimed.set(key, assembly)
+      orphan.push(sitting)
+    } else {
+      orphan.push(assembly)
+    }
+  }
+
+  const create: FormworkAssemblyNode[] = []
+  for (const [key, scope] of wanted) {
+    const sitting = claimed.get(key)
+    if (sitting) keep.push(sitting)
+    else create.push(assemblyFor(host, scope.segmentIndex, scope.liftIndex))
+  }
+  return { keep, create, orphan }
+}

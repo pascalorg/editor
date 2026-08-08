@@ -2,7 +2,9 @@ export {
   buildFormworkNode,
   buildFormworkNodes,
   type CastableHostNode,
+  type FormworkReconciliation,
   pourUnitsForHost,
+  reconcileFormworkNodes,
 } from './attach'
 export { FormworkCoverageList } from './coverage-summary'
 export { formworkAssemblyDefinition } from './definition'

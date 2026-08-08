@@ -275,15 +275,15 @@ describe('set_formwork_settings — the reply', () => {
     expect(reply).toContain('ACI_347')
   })
 
-  test('says nothing about stale shutters when there are none', async () => {
+  test('says nothing about existing shutters when there are none', async () => {
     const { tools } = scene()
 
     const reply = await set(tools, { placement: { riseRateMH: 2 } })
 
-    expect(reply).not.toContain('attach_formwork')
+    expect(reply).not.toContain('shutter')
   })
 
-  test('counts the assemblies the change invalidates', async () => {
+  test('counts the shutters the change reaches, and does not ask for a re-attach', async () => {
     const { graph, tools } = scene()
     for (const id of ['formwork-assembly_1', 'formwork-assembly_2']) {
       ;(graph.nodes as Record<string, unknown>)[id] = {
@@ -296,8 +296,11 @@ describe('set_formwork_settings — the reply', () => {
 
     const reply = await set(tools, { placement: { riseRateMH: 2 } })
 
-    expect(reply).toContain('2 existing assemblies were built against the old pour')
-    expect(reply).toContain('attach_formwork')
+    expect(reply).toContain('all 2 existing shutters are')
+    // This used to say "call attach_formwork" — the shutters are re-designed on
+    // read, so the re-attach bought nothing and cost every part decision on them.
+    expect(reply).not.toContain('attach_formwork')
+    expect(reply).toContain('nothing to regenerate')
   })
 })
 

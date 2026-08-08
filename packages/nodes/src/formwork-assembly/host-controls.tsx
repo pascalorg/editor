@@ -21,8 +21,9 @@ import {
 import { Grid3x3 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { buildSolverJointNodes } from '../construction-joint'
-import { buildFormworkNodes, type CastableHostNode, pourUnitsForHost } from './attach'
-import { formworkAssembliesAffectedBy } from './dirty-scope'
+import { type CastableHostNode, pourUnitsForHost, reconcileFormworkNodes } from './attach'
+import { formworkAssembliesAffectedBy, formworkAssembliesOnHost } from './dirty-scope'
+import type { FormworkAssemblyNode } from './schema'
 
 /**
  * The shuttering and pour controls a wall, a column and a slab all need, in one
@@ -101,19 +102,20 @@ export function useFormworkHost<T extends CastableHostNode>(
 ): {
   hasFormwork: boolean
   pourUnitCount: number
+  shutterCount: number
   updateConstruction: (updates: Partial<T>) => void
   addFormwork: () => void
 } {
   const hostId = node?.id as AnyNodeId | undefined
 
-  // One assembly per pour unit, and never twice — the button used to stack a
-  // new node on every click, leaving N identical shutters z-fighting inside the
-  // element.
-  const hasFormwork = useScene((s) =>
-    (hostId ? ((s.nodes[hostId] as { children?: string[] } | undefined)?.children ?? []) : []).some(
-      (childId) => s.nodes[childId as AnyNodeId]?.type === 'formwork-assembly',
-    ),
+  // Read by `parentId` rather than off `host.children`, the same way
+  // `dirty-scope.ts` does: a scene that lost a child entry still has the
+  // assembly, and a shutter this misses is a shutter the button offers to
+  // build a second copy of.
+  const shutterCount = useScene((s) =>
+    hostId ? formworkAssembliesOnHost(hostId as string, s.nodes).length : 0,
   )
+  const hasFormwork = shutterCount > 0
 
   // How many shutters the button will create. An element split into lifts or
   // bays gets one per pour unit, and six assemblies appearing from one click is
@@ -142,22 +144,37 @@ export function useFormworkHost<T extends CastableHostNode>(
   // real construction joint with roughening and starters attached. Joints are
   // level children, hence the whole node map. One undo step, because a Ctrl-Z
   // that left the joints behind would strand work with nothing to build it.
+  //
+  // Reconciled rather than appended, and so callable on a host that already has
+  // shutters. That is the whole point: capping a wall at 3 m lifts turns one
+  // pour unit into three, and the button used to be disabled at exactly that
+  // moment — the wall said "cast in 3 pours" and carried one shutter, billing a
+  // third of its own formwork with nothing on screen to say so. An existing
+  // shutter whose pour unit survives is left completely alone, because it is
+  // where the yard's per-part decisions live.
   const addFormwork = useCallback(() => {
     const n = nodeRef.current
     if (!n) return
     runAsSingleSceneHistoryStep(useScene, () => {
       const scene = useScene.getState()
       const levelNodes = Object.values(scene.nodes)
-      for (const assembly of buildFormworkNodes(n, levelNodes)) {
-        scene.createNode(assembly, n.id)
-      }
+      const existing = formworkAssembliesOnHost(n.id as string, scene.nodes)
+        .map((id) => scene.nodes[id] as unknown as FormworkAssemblyNode)
+        .filter(Boolean)
+      const { create, keep, orphan } = reconcileFormworkNodes(n, existing, levelNodes)
+      for (const assembly of create) scene.createNode(assembly, n.id)
+      for (const assembly of orphan) scene.deleteNode(assembly.id as AnyNodeId)
+      // The survivors were built against the old split, so their geometry is
+      // stale even though their nodes are not: lift 0 of a wall that just gained
+      // a 3 m cap now covers a third of the height it did.
+      for (const assembly of keep) scene.markDirty(assembly.id as AnyNodeId)
       for (const joint of buildSolverJointNodes(n, levelNodes)) {
         scene.createNode(joint, (joint.parentId as AnyNodeId | null) ?? undefined)
       }
     })
   }, [])
 
-  return { hasFormwork, pourUnitCount, updateConstruction, addFormwork }
+  return { hasFormwork, pourUnitCount, shutterCount, updateConstruction, addFormwork }
 }
 
 /**
@@ -166,12 +183,32 @@ export function useFormworkHost<T extends CastableHostNode>(
  * the user's behalf, so a column left at "None" is reported as unformed rather
  * than quietly given a box.
  */
+/**
+ * What the button is about to do, said before it is pressed.
+ *
+ * "Add" and "rebuild" are different enough to name: the second one deletes the
+ * shutters whose pour unit has gone, and every per-part decision on them.
+ */
+function formworkButtonLabel(shutterCount: number, pourUnitCount: number): string {
+  if (shutterCount === 0) {
+    return pourUnitCount === 1
+      ? 'Add formwork geometry'
+      : `Add formwork — ${pourUnitCount} shutters`
+  }
+  if (shutterCount === pourUnitCount) return 'Formwork geometry added'
+  const missing = pourUnitCount - shutterCount
+  return missing > 0
+    ? `Shutter the other ${missing} ${missing === 1 ? 'pour' : 'pours'}`
+    : `Rebuild — ${pourUnitCount} ${pourUnitCount === 1 ? 'shutter' : 'shutters'}, not ${shutterCount}`
+}
+
 export function FormworkConstructionSection({
   addFormwork,
   hasFormwork,
   node,
   onUpdate,
   pourUnitCount,
+  shutterCount,
   unit,
 }: {
   addFormwork: () => void
@@ -179,6 +216,7 @@ export function FormworkConstructionSection({
   node: CastableHostNode
   onUpdate: (updates: HostConstructionUpdate) => void
   pourUnitCount: number
+  shutterCount: number
   unit: 'metric' | 'imperial'
 }) {
   const labels = SPACING_LABELS[node.type]
@@ -228,17 +266,21 @@ export function FormworkConstructionSection({
           />
           <ActionButton
             className="disabled:pointer-events-none disabled:opacity-50"
-            disabled={hasFormwork}
+            // Disabled only when the shutters already match the pour. A host
+            // whose split has moved needs this button most, and disabling it
+            // there was how a wall came to report three pours and carry one.
+            disabled={hasFormwork && shutterCount === pourUnitCount}
             icon={<Grid3x3 className="h-3.5 w-3.5" />}
-            label={
-              hasFormwork
-                ? 'Formwork geometry added'
-                : pourUnitCount === 1
-                  ? 'Add formwork geometry'
-                  : `Add formwork — ${pourUnitCount} shutters`
-            }
+            label={formworkButtonLabel(shutterCount, pourUnitCount)}
             onClick={addFormwork}
           />
+          {hasFormwork && shutterCount !== pourUnitCount && (
+            <span className="px-1 text-[10px] text-amber-500/90 leading-snug">
+              {shutterCount < pourUnitCount
+                ? `The pour is cast in ${pourUnitCount} but only ${shutterCount} ${shutterCount === 1 ? 'is' : 'are'} shuttered, so the takeoff is short by the difference.`
+                : `${shutterCount - pourUnitCount} ${shutterCount - pourUnitCount === 1 ? 'shutter forms' : 'shutters form'} a pour this element no longer has. Rebuilding removes ${shutterCount - pourUnitCount === 1 ? 'it' : 'them'} — and any part decisions recorded on ${shutterCount - pourUnitCount === 1 ? 'it' : 'them'}.`}
+            </span>
+          )}
         </>
       )}
     </PanelSection>

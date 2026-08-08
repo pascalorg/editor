@@ -126,6 +126,7 @@ export default function WallPanel() {
     addFormwork: handleAddFormwork,
     hasFormwork,
     pourUnitCount,
+    shutterCount,
     updateConstruction: handleUpdateConstruction,
   } = useFormworkHost(node)
 
@@ -327,6 +328,7 @@ export default function WallPanel() {
         node={node}
         onUpdate={handleUpdateConstruction}
         pourUnitCount={pourUnitCount}
+        shutterCount={shutterCount}
         unit={unit}
       />
 

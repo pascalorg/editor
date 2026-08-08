@@ -77,6 +77,7 @@ export function SlabPanel() {
     addFormwork: handleAddFormwork,
     hasFormwork,
     pourUnitCount,
+    shutterCount,
     updateConstruction: handleUpdateConstruction,
   } = useFormworkHost(node)
 
@@ -374,6 +375,7 @@ export function SlabPanel() {
         node={node}
         onUpdate={handleUpdateConstruction}
         pourUnitCount={pourUnitCount}
+        shutterCount={shutterCount}
         unit={unit}
       />
 
