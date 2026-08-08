@@ -1,0 +1,30 @@
+/**
+ * The solve, without the panels — for a caller with no DOM.
+ *
+ * `index.ts` exports the same two functions, and importing them from there costs
+ * React, `@pascal-app/viewer`, `@pascal-app/editor`, `lucide-react` and `zustand`,
+ * because the barrel also carries the inspector, the takeoff panel and the design
+ * report. That is the right shape for the editor and the wrong one for a server: the
+ * MCP process renders nothing, and an install of it should not resolve a UI stack to
+ * answer whether a wall can be tied.
+ *
+ * So this entry point exists to be *narrow*, and `headless.test.ts` asserts that it
+ * stays narrow — the chain behind it may import the core's formwork engine, the node
+ * schemas, the geometry context and `three`, and nothing else. `three` is here
+ * because the part collector reads marks off meshes the builders emit; the meshes are
+ * discarded, and the classes construct fine outside a browser.
+ *
+ * It is not a second implementation of anything. Every symbol is the one the panels
+ * and the editor's own AI call, re-exported, because a server answering a question
+ * differently from the screen is the failure this whole layer is arranged against.
+ */
+
+export {
+  castableHostIds,
+  type ProjectFormwork,
+  type ProjectFormworkScope,
+  projectFormworkCaveats,
+  type SolvedElement,
+  solveProjectFormwork,
+} from './solve-project'
+export { type ProjectValidation, validateProjectFormwork } from './validate-project'

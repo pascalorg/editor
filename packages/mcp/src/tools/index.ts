@@ -12,6 +12,7 @@ import { registerDuplicateLevel } from './duplicate-level'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
 import { registerFindNodes } from './find-nodes'
+import { registerFormworkTools } from './formwork'
 import { registerGetNode } from './get-node'
 import { registerGetScene } from './get-scene'
 import { registerMeasure } from './measure'
@@ -58,6 +59,7 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerExportGlb(server, operations)
   registerValidateScene(server, operations)
   registerCheckCollisions(server, operations)
+  registerFormworkTools(server, operations)
   registerTemplateTools(server, operations)
   if (operations.hasStore) {
     registerSceneLifecycleTools(server, operations)

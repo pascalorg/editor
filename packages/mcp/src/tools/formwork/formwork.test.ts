@@ -1,0 +1,393 @@
+import { beforeEach, describe, expect, test } from 'bun:test'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { validationSummary } from '@pascal-app/core/formwork'
+import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import { validateProjectFormwork } from '@pascal-app/nodes/formwork-assembly/headless'
+import { SceneBridge } from '../../bridge/scene-bridge'
+import { registerFormworkTools } from './index'
+
+/**
+ * The formwork questions, asked from outside the editor.
+ *
+ * Three things are being asserted, and none of them is the arithmetic — `invariants.test.ts`
+ * and `validate-project.test.ts` own that. First, that the solve runs at all in this
+ * process: it reaches `three` and the geometry builders, and the MCP server has no DOM,
+ * so a chain that had picked up a renderer would throw here rather than answer. Second,
+ * that the answers are the *same* answers — a server telling a yard something the user's
+ * own screen does not say is worse than a server that declines. Third, that a scope the
+ * caller got wrong is refused, because "nothing wrong on level_9" is a sentence a model
+ * will produce about a level that does not exist.
+ */
+
+interface Reply {
+  scope: string
+  elementCount: number
+  errorCount: number
+  warningCount: number
+  findings: Array<{
+    invariant: string
+    severity: 'error' | 'warning'
+    elementIds: string[]
+    message: string
+    locus: { alongM?: number; elevationM?: number } | null
+  }>
+  summary: string[]
+  shutteredIds: string[]
+  notChecked: Array<{ invariant: string; needs: string }>
+}
+
+interface BillReply {
+  scope: string
+  elementCount: number
+  shutterCount: number
+  elements: Array<{ id: string; kind: string; shutters: number; coversWholePour: boolean }>
+  unshuttered: string[]
+  bom: Array<{ description: string; quantity: number; unit: string; totalWeightKg: number | null }>
+  totalWeightKg: number
+  totalWeightComplete: boolean
+  caveats: string[]
+}
+
+/**
+ * A wall with a window, shuttered in 2.70 m panels.
+ *
+ * The panel width is the whole condition: 2.70 m panels are drilled at 1.35 and 4.65 m
+ * along, so a window from 0.8 to 5.6 m puts every station in the void and leaves the
+ * 800 mm pier at each end untied. At the 0.6 m default the holes come every 300 mm and
+ * there is nothing to report. Built as raw nodes because no tool sets the panel width.
+ */
+function walledWithOpening(): Record<string, unknown> {
+  return {
+    level_1: {
+      object: 'node',
+      id: 'level_1',
+      type: 'level',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['wall_1'],
+      elevation: 0,
+      height: 6,
+      level: 0,
+    },
+    wall_1: {
+      object: 'node',
+      id: 'wall_1',
+      type: 'wall',
+      parentId: 'level_1',
+      visible: true,
+      metadata: {},
+      children: ['window_1', 'formwork-assembly_1'],
+      start: [0, 0],
+      end: [6, 0],
+      thickness: 0.25,
+      height: 3,
+      frontSide: 'unknown',
+      backSide: 'unknown',
+      formworkType: 'steel-panel',
+    },
+    window_1: {
+      object: 'node',
+      id: 'window_1',
+      type: 'window',
+      parentId: 'wall_1',
+      wallId: 'wall_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      position: [3.2, 1.5, 0],
+      width: 4.8,
+      height: 2.4,
+    },
+    'formwork-assembly_1': {
+      object: 'node',
+      id: 'formwork-assembly_1',
+      type: 'formwork-assembly',
+      parentId: 'wall_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      panelWidth: 2.7,
+      fillerPosition: 'middle',
+      segmentIndex: 0,
+      liftIndex: 0,
+      partOverrides: {},
+    },
+  }
+}
+
+/**
+ * Two levels, one wall thicker than any tie assembly reaches, one wall unshuttered.
+ *
+ * Enough for a level scope to be wrong in either direction, and for the difference
+ * between "in scope" and "had a layout to check" to be visible.
+ */
+function twoLevels(): Record<string, unknown> {
+  const wall = (id: string, parentId: string, y: number, thickness = 0.25, formed = true) => ({
+    object: 'node',
+    id,
+    type: 'wall',
+    parentId,
+    visible: true,
+    metadata: {},
+    children: formed ? [`formwork-assembly_${id}`] : [],
+    start: [0, y],
+    end: [6, y],
+    thickness,
+    height: 6,
+    frontSide: 'unknown',
+    backSide: 'unknown',
+    formworkType: 'steel-panel',
+  })
+  const assembly = (hostId: string) => ({
+    object: 'node',
+    id: `formwork-assembly_${hostId}`,
+    type: 'formwork-assembly',
+    parentId: hostId,
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    panelWidth: 0.6,
+    fillerPosition: 'middle',
+    segmentIndex: 0,
+    liftIndex: 0,
+    partOverrides: {},
+  })
+  return {
+    site_1: {
+      object: 'node',
+      id: 'site_1',
+      type: 'site',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['building_1'],
+    },
+    building_1: {
+      object: 'node',
+      id: 'building_1',
+      type: 'building',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: ['level_1', 'level_2'],
+    },
+    level_1: {
+      object: 'node',
+      id: 'level_1',
+      type: 'level',
+      parentId: 'building_1',
+      visible: true,
+      metadata: {},
+      children: ['wall_1', 'wall_2'],
+      elevation: 0,
+      height: 6,
+      level: 0,
+    },
+    level_2: {
+      object: 'node',
+      id: 'level_2',
+      type: 'level',
+      parentId: 'building_1',
+      visible: true,
+      metadata: {},
+      children: ['wall_3'],
+      elevation: 6,
+      height: 6,
+      level: 1,
+    },
+    wall_1: wall('wall_1', 'level_1', 0),
+    'formwork-assembly_wall_1': assembly('wall_1'),
+    // Thicker than any system tie assembly reaches, and nobody has formed it — so it
+    // is in scope, has no layout, and is the reason `shutteredIds` is a separate list.
+    wall_2: wall('wall_2', 'level_1', 4, 1.4, false),
+    wall_3: wall('wall_3', 'level_2', 0),
+    'formwork-assembly_wall_3': assembly('wall_3'),
+  }
+}
+
+describe('the formwork MCP tools', () => {
+  let client: Client
+  let bridge: SceneBridge
+
+  const load = (nodes: Record<string, unknown>) => {
+    const roots = Object.values(nodes)
+      .filter((node) => (node as { parentId: string | null }).parentId === null)
+      .map((node) => (node as { id: string }).id)
+    bridge.setScene(nodes as unknown as Record<AnyNodeId, AnyNode>, roots as unknown as AnyNodeId[])
+  }
+
+  const call = async <T>(name: string, args: Record<string, unknown> = {}): Promise<T> => {
+    const result = await client.callTool({ name, arguments: args })
+    return JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0]?.text ?? 'null',
+    ) as T
+  }
+
+  beforeEach(async () => {
+    bridge = new SceneBridge()
+    bridge.setScene({}, [])
+    const server = new McpServer({ name: 'test', version: '0.0.0' })
+    registerFormworkTools(server, bridge)
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    client = new Client({ name: 'test-client', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  })
+
+  test('both tools are registered, so an agent can find them', async () => {
+    const { tools } = await client.listTools()
+
+    expect(tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['inspect_project_formwork', 'validate_formwork']),
+    )
+  })
+
+  test('solves a wall in a process with no DOM, and bills it', async () => {
+    // The claim the headless entry point makes. The solve reaches `three` and the
+    // geometry builders; a chain that had picked up a renderer would throw here.
+    expect(typeof document).toBe('undefined')
+    load(walledWithOpening())
+
+    const reply = await call<BillReply>('inspect_project_formwork')
+
+    expect(reply.elementCount).toBe(1)
+    expect(reply.bom.length).toBeGreaterThan(0)
+    expect(reply.totalWeightKg).toBeGreaterThan(0)
+    expect(reply.elements[0]?.id).toBe('wall_1')
+  })
+
+  test('names the elements in scope that nobody has formed', async () => {
+    // Omitted, an unformed wall makes a floor look like a floor that needs nothing —
+    // and it is the most likely reason a total is lower than the caller expects.
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.elements.map((element) => element.id)).toEqual(['wall_1'])
+    expect(reply.unshuttered).toEqual(['wall_2'])
+  })
+
+  test('bills one level and does not carry the floor above', async () => {
+    load(twoLevels())
+
+    const ground = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const whole = await call<BillReply>('inspect_project_formwork')
+
+    expect(ground.elements.map((element) => element.id)).toEqual(['wall_1'])
+    expect(whole.elements.map((element) => element.id)).toEqual(['wall_1', 'wall_3'])
+    expect(whole.totalWeightKg).toBeGreaterThan(ground.totalWeightKg)
+  })
+
+  test('reports a pier an opening leaves with no tie, and where to strut it', async () => {
+    // The finding no other tool can produce. The shutter drops the ties landing in the
+    // void — correctly — and neither the parts list nor the takeoff records what
+    // dropping them left untied, so an agent holding the whole scene cannot derive it.
+    load(walledWithOpening())
+
+    const reply = await call<Reply>('validate_formwork')
+
+    const gap = reply.findings.find((finding) => finding.invariant === 'OPENING_LEAVES_TIE_GAP')
+    expect(gap?.severity).toBe('warning')
+    expect(gap?.elementIds).toEqual(['wall_1', 'window_1'])
+    expect(gap?.message).toContain('800 mm')
+    expect(gap?.message).toContain('strut')
+    expect(gap?.locus?.elevationM).toBeCloseTo(0.775, 6)
+  })
+
+  test('keeps the two severities apart rather than reporting one count', async () => {
+    // An error is something the crew cannot do and a warning is an exception somebody
+    // signs. Summed, the reader cannot tell which they are looking at.
+    load(walledWithOpening())
+
+    const reply = await call<Reply>('validate_formwork')
+
+    expect(reply.errorCount + reply.warningCount).toBe(reply.findings.length)
+    expect(reply.findings.filter((f) => f.severity === 'error')).toHaveLength(reply.errorCount)
+    expect(reply.findings.filter((f) => f.severity === 'warning')).toHaveLength(reply.warningCount)
+  })
+
+  test('the sentences are the ones the panel and the chat both print', async () => {
+    // The reason this tool is thin over a shared module rather than its own summariser.
+    // Three phrasings of one fault is how a user comes to believe there are three.
+    const nodes = walledWithOpening()
+    load(nodes)
+
+    const reply = await call<Reply>('validate_formwork')
+    const onScreen = validationSummary(
+      validateProjectFormwork(nodes as unknown as Record<string, AnyNode>).report,
+    )
+
+    expect(reply.summary).toEqual(onScreen)
+  })
+
+  test('says which assertions could not run here', async () => {
+    // A report of failures alone reads as a clean bill of health for everything it
+    // never examined — rebar clashes and crane capacity among them.
+    load(twoLevels())
+
+    const reply = await call<Reply>('validate_formwork', { levelId: 'level_1' })
+
+    expect(reply.notChecked.map((entry) => entry.invariant)).toContain('TIES_THROUGH_REBAR')
+    for (const entry of reply.notChecked) expect(entry.needs.length).toBeGreaterThan(0)
+  })
+
+  test('names which elements had a layout to check at all', async () => {
+    // Two walls in scope, one formed. A pass over the unformed one is not a pass: four
+    // of the assertions are properties of a layout it does not have.
+    load(twoLevels())
+
+    const reply = await call<Reply>('validate_formwork', { levelId: 'level_1' })
+
+    expect(reply.elementCount).toBe(2)
+    expect(reply.shutteredIds).toEqual(['wall_1'])
+  })
+
+  test('checks only the elements named when given a selection', async () => {
+    load(twoLevels())
+
+    const reply = await call<Reply>('validate_formwork', { elementIds: ['wall_1'] })
+
+    expect(reply.shutteredIds).toEqual(['wall_1'])
+    expect(reply.findings.flatMap((finding) => finding.elementIds)).not.toContain('wall_3')
+  })
+
+  test('an empty selection is an empty scope, not the whole scene', async () => {
+    load(twoLevels())
+
+    const reply = await call<Reply>('validate_formwork', { elementIds: [] })
+
+    expect(reply.findings).toEqual([])
+    expect(reply.summary.join(' ')).toContain('Nothing in this scope to check.')
+  })
+
+  test('both tools refuse a level that does not exist', async () => {
+    // Scoped to a typo, the honest answer is indistinguishable from a floor that
+    // passed — and it is the answer a model will repeat to the user as reassurance.
+    load(twoLevels())
+
+    for (const name of ['validate_formwork', 'inspect_project_formwork']) {
+      const result = await client.callTool({ name, arguments: { levelId: 'level_9' } })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
+      expect(text).toContain('no level with id level_9')
+      expect(text).toContain('list_levels')
+    }
+  })
+
+  test('an empty scene answers rather than throwing', async () => {
+    const bill = await call<BillReply>('inspect_project_formwork')
+    const validation = await call<Reply>('validate_formwork')
+
+    expect(bill.bom).toEqual([])
+    expect(bill.elementCount).toBe(0)
+    expect(validation.findings).toEqual([])
+    expect(validation.summary.join(' ')).toContain('Nothing in this scope to check.')
+  })
+})
