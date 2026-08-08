@@ -444,7 +444,7 @@ export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-dup
 // placement coordinator's roof-wall strategy.
 export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
 export type { SceneGraph } from './lib/scene'
-export { applySceneGraphToEditor } from './lib/scene'
+export { applyAgentSceneGraphToEditor, applySceneGraphToEditor } from './lib/scene'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'

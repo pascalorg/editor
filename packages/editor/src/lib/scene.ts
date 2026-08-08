@@ -4,6 +4,7 @@ import {
   clearSceneHistory,
   nodeRegistry,
   resolveLevelId,
+  runAsSingleSceneHistoryStep,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -382,7 +383,7 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
   )
 }
 
-export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
+function writeSceneGraphToStore(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   if (hasUsableSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
@@ -396,12 +397,51 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
     useScene.getState().clearScene()
     useScene.getState().setInstalledPlugins(defaultInstalledPlugins, { explicit: false })
   }
+}
+
+export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
+  writeSceneGraphToStore(sceneGraph)
 
   // The loaded scene is the undo floor. Loading records history entries of
   // its own (`unloadScene` + `setScene`/`clearScene` are tracked writes), so
   // without this reset a few Ctrl+Z presses could step past the load into the
   // pre-load — often empty — state and wipe the whole project.
   clearSceneHistory()
+
+  syncEditorSelectionFromCurrentScene()
+}
+
+/**
+ * Apply a graph an agent produced, as one undoable step.
+ *
+ * `applySceneGraphToEditor` is for a *load*, where clearing history is right:
+ * there is nothing before a load worth stepping back to. An AI edit is the
+ * opposite — the state before it is the user's own work, and it is the single
+ * thing they are most likely to want back. Routing an agent's result through
+ * the load path wiped the history it should have been appended to, so "undo
+ * what the AI just did" was unreachable and every edit preceding it was gone
+ * too.
+ *
+ * The step is collapsed rather than merely tracked, because the write is not
+ * always one write: a graph that came back empty takes the `clearScene` path,
+ * which is two tracked writes, and two entries mean the user presses Ctrl+Z
+ * twice to undo one action — which reads as the first press having failed.
+ * `runAsSingleSceneHistoryStep` keeps the first and drops the rest, and drops
+ * all of them if the snapshot is unchanged: an agent that only *read* the
+ * scene must not consume an undo slot the user then spends on nothing.
+ *
+ * Selection is resynced because ids the user had selected may no longer exist,
+ * but the editor's phase/tool are deliberately left alone — the user is still
+ * standing where they were, and an AI reply is not a reason to move them.
+ *
+ * Callers: the live-scene event listener, for every event it accepts. A genuine
+ * load — mount, project switch, version preview — goes through
+ * `applySceneGraphToEditor` instead, and all three are inside `<Editor>`.
+ */
+export function applyAgentSceneGraphToEditor(sceneGraph: SceneGraph) {
+  runAsSingleSceneHistoryStep(useScene, () => {
+    writeSceneGraphToStore(sceneGraph)
+  })
 
   syncEditorSelectionFromCurrentScene()
 }

@@ -4,7 +4,7 @@
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
 import {
-  applySceneGraphToEditor,
+  applyAgentSceneGraphToEditor,
   Editor,
   type SceneGraph,
   type SidebarTab,
@@ -179,7 +179,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       versionRef.current = payload.version
       lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
       suppressRemoteSaveUntilRef.current = Date.now() + 2500
-      applySceneGraphToEditor(payload.graph)
+      // Every event on this channel is *this* scene at a higher version — the
+      // two guards above discard anything else — so it is an edit to what the
+      // user is looking at and belongs in their undo history. That covers the
+      // chat route's `ai_chat`, the construction workflow, and every MCP
+      // mutation tool, each of which publishes under its own tool name; keying
+      // on an allowlist of kinds would silently drop the undo for the next tool
+      // added. `applySceneGraphToEditor` clears history and stays for genuine
+      // loads — mount, project switch, version preview — which `<Editor>` owns.
+      applyAgentSceneGraphToEditor(payload.graph)
       setConflict(false)
       setSaveError(null)
     })
