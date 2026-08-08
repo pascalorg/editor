@@ -46,10 +46,27 @@ const JOINT_SNAP_REPORT_TOLERANCE = 1e-6
 export interface ValidateOptions {
   /** Scope to one level's elements. Absent sweeps every castable element given. */
   parentId?: AnyNodeId
+  /**
+   * Scope to a named set — a selection. Absent sweeps whatever `parentId` leaves.
+   *
+   * An empty array is an empty scope, not an absent one: asked about nothing, the
+   * report has to say nothing was checked rather than report the whole scene, which
+   * reads as findings about elements the caller never asked about.
+   */
+  elementIds?: readonly AnyNodeId[]
   /** Project pour limits, so the lift split matches what the shutters were built to. */
   limits?: PourLimits
-  /** The catalog system, for the corner-fit and tie-reach checks. */
-  system?: FormworkSystem
+  /**
+   * The catalog system each element is formed in, for the corner-fit and tie-reach
+   * checks.
+   *
+   * Per element rather than one for the scope, because `systemId` is a field on the
+   * assembly: a job can form one wall in Framax and the next in TRIO, and checking
+   * wall B's thickness against wall A's catalog is a check against hardware that is
+   * not on the wall. An element absent from the map is not checked — it has no
+   * system, so there is no tie range it could be outside of.
+   */
+  systems?: Map<AnyNodeId, FormworkSystem>
   /**
    * Per-element packed runs, when the caller has them. The layout checks are
    * skipped rather than re-solved without these: packing a run here would be a
@@ -326,10 +343,15 @@ function layoutFindings(packs: ReadonlyMap<AnyNodeId, readonly StripPack[]>): Fi
  * all is the error: nothing in the system holds the two skins together, and
  * laying out panels anyway produces a shutter that opens under pressure.
  */
-function tieReach(elements: readonly CastableElement[], system: FormworkSystem): Finding[] {
+function tieReach(
+  elements: readonly CastableElement[],
+  systems: ReadonlyMap<AnyNodeId, FormworkSystem>,
+): Finding[] {
   const out: Finding[] = []
-  const ranged = system.ties.filter((tie) => tie.wallRangeMm)
   for (const element of elements) {
+    const system = systems.get(element.id)
+    if (!system) continue
+    const ranged = system.ties.filter((tie) => tie.wallRangeMm)
     if (element.kind !== 'wall') continue
     if (!element.formworkEnabled || element.formworkMode === 'none') continue
     // Single-sided work is tied back to an anchor, not through the wall, so the
@@ -469,20 +491,34 @@ function openingsAcrossLiftJoints(
  * quietly substitutes a catalog corner for one is short by the labour that
  * actually builds it.
  */
-function junctionFit(elements: readonly CastableElement[], system: FormworkSystem): Finding[] {
+function junctionFit(
+  elements: readonly CastableElement[],
+  systems: ReadonlyMap<AnyNodeId, FormworkSystem>,
+): Finding[] {
   const out: Finding[] = []
   const scoped = new Set(elements.map((element) => element.id))
   for (const junction of findJunctions([...elements])) {
+    const ids = junction.elementIds.filter((id) => scoped.has(id))
+    if (ids.length === 0) continue
+    // A corner unit is one piece of hardware spanning both walls, so it has to
+    // come out of a catalog they share. Where the two are formed in different
+    // systems, every candidate is checked and the corner is only faulted when
+    // none of them turns it — a unit from either side is still a unit somebody
+    // has, and reporting a bespoke corner because the *first* system cannot
+    // sweep it would send a carpenter to a junction the yard can close.
+    const candidates = [
+      ...new Set(junction.elementIds.map((id) => systems.get(id)).filter(Boolean)),
+    ] as FormworkSystem[]
+    if (candidates.length === 0) continue
     for (const corner of junction.corners) {
-      if (fitCorner(system, corner)) continue
-      const ids = junction.elementIds.filter((id) => scoped.has(id))
-      if (ids.length === 0) continue
+      if (candidates.some((system) => fitCorner(system, corner))) continue
+      const named = candidates.map((system) => system.label).join(' or ')
       out.push(
         finding(
           'JUNCTION_ANGLE_UNFITTABLE',
           'warning',
           ids,
-          `${ids.join(' and ')} meet at ${corner.angleDeg.toFixed(0)}°, which no ${corner.side} corner unit in ${system.label} sweeps. This is a bespoke timber corner — a carpenter's item, not a catalog one.`,
+          `${ids.join(' and ')} meet at ${corner.angleDeg.toFixed(0)}°, which no ${corner.side} corner unit in ${named} sweeps. This is a bespoke timber corner — a carpenter's item, not a catalog one.`,
         ),
       )
     }
@@ -771,7 +807,8 @@ function unavailable(hasPacks: boolean, hasEnvelopes: boolean, hasSystem: boolea
   if (!hasSystem) {
     out.push({
       invariant: 'WALL_OUTSIDE_TIE_RANGE',
-      needs: 'the catalog system — pass `system` to check tie reach and corner fit',
+      needs:
+        'the catalog system each element is formed in — pass `systems` to check tie reach and corner fit',
     })
   }
   return out
@@ -794,13 +831,17 @@ export function validateFormwork(
 ): ValidationReport {
   const all = collectCastableElements([...nodes])
   const byId = new Map(nodes.map((node) => [node.id as AnyNodeId, node]))
-  const scoped = options.parentId
-    ? all.filter((element) => byId.get(element.id)?.parentId === options.parentId)
-    : all
+  const named = options.elementIds ? new Set(options.elementIds) : undefined
+  const scoped = all.filter(
+    (element) =>
+      (named === undefined || named.has(element.id)) &&
+      (options.parentId === undefined || byId.get(element.id)?.parentId === options.parentId),
+  )
 
   const limits = options.limits ?? {}
   const packs = options.packs ?? new Map<AnyNodeId, readonly StripPack[]>()
   const envelopes = options.envelopes ?? new Map<AnyNodeId, PressureEnvelope>()
+  const systems = options.systems ?? new Map<AnyNodeId, FormworkSystem>()
 
   // Neighbours are the whole level, not the scope: an element outside a selection
   // still buries the face of one inside it, and a junction check that only saw
@@ -825,8 +866,8 @@ export function validateFormwork(
     ...layoutFindings(packs),
     ...architecturalSymmetry(scoped, packs),
     ...codeEnvelopes(envelopes),
-    ...(options.system ? tieReach(scoped, options.system) : []),
-    ...(options.system ? junctionFit(scoped, options.system) : []),
+    ...tieReach(scoped, systems),
+    ...junctionFit(scoped, systems),
   ]
 
   // Errors first, then by element, so the list reads in the order somebody would
@@ -844,7 +885,7 @@ export function validateFormwork(
     errorCount: findings.filter((entry) => entry.severity === 'error').length,
     warningCount: findings.filter((entry) => entry.severity === 'warning').length,
     elementIds: scoped.map((element) => element.id).sort(),
-    notChecked: unavailable(packs.size > 0, envelopes.size > 0, options.system !== undefined),
+    notChecked: unavailable(packs.size > 0, envelopes.size > 0, systems.size > 0),
   }
 }
 

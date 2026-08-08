@@ -478,6 +478,13 @@ export function buildWallFormwork(
     })
     if (plan) planByFace.set(face, plan)
   }
+  // Both skins are packed identically by rule 3, so one face's runs are the whole
+  // layout evidence; taking both would report every open strip twice.
+  parts.evidence({
+    packs: (planByFace.get('a') ?? planByFace.get('b'))?.packs ?? [],
+    envelope: design.envelope,
+    system,
+  })
 
   // Every face is coursed off the same lift, so the shutter's own extent is one
   // figure: the base of the bottom course to the top of the top one, which stands

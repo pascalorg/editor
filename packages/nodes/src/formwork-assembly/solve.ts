@@ -4,14 +4,24 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import type { CastableHostNode } from './attach'
 import { formworkAssembliesOnHost } from './dirty-scope'
 import { buildFormwork } from './geometry'
+import type { ShutterEvidence } from './parts'
 import type { FormworkAssemblyNode } from './schema'
 
 /**
- * One shutter, solved: the assembly and the parts it is made of.
+ * One shutter, solved: the assembly, the parts it is made of, and what it was
+ * designed from.
  */
 export interface SolvedShutter {
   assembly: FormworkAssemblyNode
   parts: FormworkPart[]
+  /**
+   * The pack and the envelope behind the parts, for the validator.
+   *
+   * Carried rather than re-derived for the same reason the parts are: a validator
+   * that packed the runs itself would be a second layout, and two layouts of one
+   * face disagree about which run has the open strip the first time either changes.
+   */
+  evidence: ShutterEvidence
 }
 
 /**
@@ -45,7 +55,7 @@ export function solveShuttersForHost(
     const assembly = nodes[assemblyId] as unknown as FormworkAssemblyNode | undefined
     if (!assembly) continue
     const built = buildFormwork(assembly, ctx)
-    if (built) shutters.push({ assembly, parts: built.parts })
+    if (built) shutters.push({ assembly, parts: built.parts, evidence: built.evidence })
   }
   return shutters.sort(
     (a, b) =>

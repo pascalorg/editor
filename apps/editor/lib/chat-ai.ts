@@ -22,6 +22,7 @@ import {
   partLabel,
   SHEATHING_TYPES,
   SHEET_STOCK,
+  validationSummary,
   worstUtilisation,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, FormworkAssemblyNode } from '@pascal-app/core/schema'
@@ -33,6 +34,7 @@ import {
   reconcileFormworkNodes,
   solveProjectFormwork,
   solveShuttersForHost,
+  validateProjectFormwork,
 } from '@pascal-app/nodes/formwork-assembly'
 import { generateText, isStepCount, type ModelMessage, tool } from 'ai'
 import { z } from 'zod'
@@ -99,6 +101,16 @@ export const SYSTEM_PROMPT =
   'bill of what exists. Its caveats are the same warnings the user sees in the Takeoff panel: lead ' +
   'with them, because each one means every figure under it is short or long in a way none of the ' +
   'figures reveal. ' +
+  'A bill being right does not make the shutter buildable, and the two have almost no ' +
+  'overlap in what makes them wrong. validate_formwork answers the second question: cycles ' +
+  'in the cast order, runs with a stretch no panel closes, walls no tie in the system reaches, ' +
+  'corners no hinged unit sweeps, pours over what one delivery can supply. Run it before you ' +
+  'present a takeoff as something to order, and keep its two severities apart — an error is a ' +
+  'thing the crew cannot do, a warning is an exception somebody has to sign, and one merged ' +
+  'count of both tells the reader neither. Report its notChecked as well: several assertions ' +
+  'need data this scene has no schema for, and a list of failures with the unchecked ones ' +
+  'silently absent is how a user comes to believe the shutter was compared against rebar it ' +
+  'was never compared to. ' +
   'set_formwork_part records the two decisions a yard actually makes about a solved ' +
   'layout — substitute this item, or leave it off the order because it is already on site. It ' +
   'cannot change a size or a spacing; those are outputs, and to change them you change the design ' +
@@ -976,6 +988,56 @@ export function buildTools(
           // The same words the takeoff panel and the CSV use, so a user comparing
           // the three is not left working out whether they are one fault or three.
           caveats: projectFormworkCaveats(solution),
+        })
+      },
+    }),
+    validate_formwork: tool({
+      description:
+        'Whether the formwork in scope can actually be built. This is a different question from what it costs: a bill can total correctly for a shutter nobody can erect, and almost nothing that makes a bill wrong is what makes a shutter unbuildable. It checks cast-order cycles, single-sided pours with no earlier anchor, formed areas that do not sum to the wrapped area, runs with a stretch no panel or filler closes, make-up pieces too narrow to fix, walls no tie in the system reaches, asymmetric tie grids on architectural faces, openings crossing a lift joint, junction angles no hinged unit sweeps, bridged expansion joints, waterstop runs that do not close, lift joints off a permitted elevation, pours over the supply limit, and designs outside the code envelope. Scope it with levelId for a floor, or leave it off for the whole scene. Two things to do with the result rather than summarise it away: errors are things the crew cannot do and warnings are exceptions somebody has to sign, so never merge the two counts; and notChecked lists assertions that could not run here — say so, because a report of failures alone reads as a clean bill of health for everything it never examined. Run this before presenting a takeoff as an order.',
+      inputSchema: z.object({
+        levelId: z
+          .string()
+          .optional()
+          .describe('a level id to check one level; omit for the whole scene'),
+        elementIds: z
+          .array(z.string())
+          .max(500)
+          .optional()
+          .describe('check only these elements — for a selection the user named'),
+      }),
+      execute: async ({ elementIds, levelId }) => {
+        toolCalls.push({ name: 'validate_formwork', input: { elementIds, levelId } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        // Refused rather than reported as an empty floor, for the reason
+        // inspect_project_formwork refuses one: "nothing wrong on level_9" is a
+        // sentence the model will happily produce about a level that does not exist.
+        if (levelId !== undefined && nodes[levelId]?.type !== 'level') {
+          return `Error: no level with id ${levelId}. Call list_castable_elements and read the parentId of the elements you mean.`
+        }
+        const { report, shutteredIds } = validateProjectFormwork(nodes, {
+          hostIds: elementIds,
+          parentId: levelId,
+        })
+        return JSON.stringify({
+          scope: levelId ?? (elementIds ? 'the elements named' : 'whole scene'),
+          elementCount: report.elementIds.length,
+          errorCount: report.errorCount,
+          warningCount: report.warningCount,
+          findings: report.findings.map((finding) => ({
+            invariant: finding.invariant,
+            severity: finding.severity,
+            elementIds: finding.elementIds,
+            message: finding.message,
+            locus: finding.locus ?? null,
+          })),
+          // The same sentences the Buildability panel prints, so a user comparing the
+          // two is not left working out whether they are one fault or two.
+          summary: validationSummary(report),
+          // Which elements had a layout to check at all. Three of the assertions are
+          // about a packed run and a pressure solve, and an element nobody has formed
+          // has neither — a pass over it is not a pass.
+          shutteredIds,
+          notChecked: report.notChecked,
         })
       },
     }),

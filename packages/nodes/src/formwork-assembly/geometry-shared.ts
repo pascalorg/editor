@@ -22,6 +22,7 @@ import {
   layOutFace,
   type PourUnit,
   pourUnitsForElement,
+  type StripPack,
   type StripPiece,
   tieHoles,
 } from '@pascal-app/core/formwork'
@@ -279,6 +280,16 @@ export interface FacePlan {
   courses: PlannedCourse[]
   /** Drilled tie holes: m along the element, m elevation, both absolute. */
   holes: Array<{ alongM: number; elevationM: number }>
+  /**
+   * The packed runs this plan came out of, one per face run.
+   *
+   * Kept because a pack answers questions the plan cannot. `unfilledMm` is a
+   * stretch of concrete nothing closes, and once the plan has substituted a cut
+   * board for the whole run — which is what a carpenter does with it — the open
+   * width is no longer anywhere in the pieces. Empty on a conventional plan,
+   * where there is no catalog pack to report.
+   */
+  packs: StripPack[]
 }
 
 /**
@@ -309,6 +320,7 @@ function conventionalPlan(
   return {
     courses: [{ baseM: lift.baseM + lift.kickerM, topM: lift.baseM + lift.heightM, pieces }],
     holes: [],
+    packs: [],
   }
 }
 
@@ -387,7 +399,14 @@ export function planFace(
       pieces,
     })
   }
-  return { courses, holes }
+  // The base course's pack per run, not every course's: the stations are shared up
+  // the wall by rule 3, so the courses above are the same division at another
+  // height and reporting each of them would multiply one open strip by the stack.
+  return {
+    courses,
+    holes,
+    packs: layouts.flatMap((layout) => (layout.courses[0] ? [layout.courses[0].pack] : [])),
+  }
 }
 
 /** How a corner leg is named, so a BOM can count units without re-deriving them. */

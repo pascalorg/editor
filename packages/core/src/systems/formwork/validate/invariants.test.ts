@@ -438,10 +438,14 @@ describe('pour volume against supply', () => {
 describe('tie reach and corner fit', () => {
   const system = formworkSystem('doka-framax-xlife')
   if (!system) throw new Error('the Framax catalog is missing')
+  const trio = formworkSystem('peri-trio')
+  if (!trio) throw new Error('the TRIO catalog is missing')
+  const formedIn = (...nodes: Array<{ id: string }>) =>
+    new Map(nodes.map((node) => [node.id as AnyNodeId, system]))
 
   it('accepts an ordinary 200 mm wall', () => {
     const w = wall({ thickness: 0.2 })
-    const report = validateFormwork([w] as AnyNode[], { system })
+    const report = validateFormwork([w] as AnyNode[], { systems: formedIn(w) })
     expect(report.findings.some((f) => f.invariant === 'WALL_OUTSIDE_TIE_RANGE')).toBe(false)
   })
 
@@ -450,7 +454,7 @@ describe('tie reach and corner fit', () => {
     // range at all, because rod is cut to length. So a 2.5 m wall is tieable, and
     // what changes is the item and the labour rather than whether it stands up.
     const w = wall({ thickness: 2.5 })
-    const report = validateFormwork([w] as AnyNode[], { system })
+    const report = validateFormwork([w] as AnyNode[], { systems: formedIn(w) })
     const finding = report.findings.find((f) => f.invariant === 'WALL_OUTSIDE_TIE_RANGE')
     expect(finding?.severity).toBe('warning')
     expect(finding?.message).toContain('2500')
@@ -459,14 +463,29 @@ describe('tie reach and corner fit', () => {
 
   it('says nothing about a single-sided wall, which is not tied through', () => {
     const w = wall({ thickness: 2.5, formworkMode: 'single-sided-a', againstEarthSide: 'b' })
-    const report = validateFormwork([w] as AnyNode[], { system })
+    const report = validateFormwork([w] as AnyNode[], { systems: formedIn(w) })
     expect(report.findings.some((f) => f.invariant === 'WALL_OUTSIDE_TIE_RANGE')).toBe(false)
+  })
+
+  it('checks each wall against its own system, not the first one it saw', () => {
+    // The whole reason `systems` is a map. Both walls are 2.5 m thick, and only the
+    // one carrying a system is checked — a scope-wide system would have faulted the
+    // unformed wall against a catalog that is not on it.
+    const framax = wall({ start: [0, 0], end: [5, 0], thickness: 2.5 })
+    const unformed = wall({ start: [0, 9], end: [5, 9], thickness: 2.5 })
+    const report = validateFormwork([framax, unformed] as AnyNode[], {
+      systems: new Map([[framax.id as AnyNodeId, system]]),
+    })
+    const faulted = report.findings
+      .filter((f) => f.invariant === 'WALL_OUTSIDE_TIE_RANGE')
+      .flatMap((f) => f.elementIds)
+    expect(faulted).toEqual([framax.id as AnyNodeId])
   })
 
   it('accepts a right-angle corner, which every system turns', () => {
     const a = wall({ start: [0, 0], end: [5, 0], castOrder: 1, pourId: 'P1' })
     const b = wall({ start: [5, 0], end: [5, 5], castOrder: 1, pourId: 'P1' })
-    const report = validateFormwork([a, b] as AnyNode[], { system })
+    const report = validateFormwork([a, b] as AnyNode[], { systems: formedIn(a, b) })
     expect(report.findings.some((f) => f.invariant === 'JUNCTION_ANGLE_UNFITTABLE')).toBe(false)
   })
 
@@ -475,7 +494,7 @@ describe('tie reach and corner fit', () => {
     // item and not a finding.
     const a = wall({ start: [0, 0], end: [5, 0], castOrder: 1, pourId: 'P1' })
     const b = wall({ start: [5, 0], end: [8, 4], castOrder: 1, pourId: 'P1' })
-    const report = validateFormwork([a, b] as AnyNode[], { system })
+    const report = validateFormwork([a, b] as AnyNode[], { systems: formedIn(a, b) })
     expect(report.findings.some((f) => f.invariant === 'JUNCTION_ANGLE_UNFITTABLE')).toBe(false)
   })
 
@@ -484,11 +503,28 @@ describe('tie reach and corner fit', () => {
     // turns it and the corner is site-built timber.
     const a = wall({ start: [0, 0], end: [5, 0], castOrder: 1, pourId: 'P1' })
     const b = wall({ start: [5, 0], end: [2, 3], castOrder: 1, pourId: 'P1' })
-    const report = validateFormwork([a, b] as AnyNode[], { system })
+    const report = validateFormwork([a, b] as AnyNode[], { systems: formedIn(a, b) })
     const finding = report.findings.find((f) => f.invariant === 'JUNCTION_ANGLE_UNFITTABLE')
     expect(finding?.severity).toBe('warning')
     expect(finding?.elementIds.length).toBe(2)
     expect(finding?.message).toContain('45')
+  })
+
+  it('names both catalogs where the two walls are formed in different systems', () => {
+    // A corner unit spans both walls, so it may come from either yard's stock. The
+    // fault is only real when neither turns it, and the message has to say which
+    // two were tried or the reader cannot check the claim.
+    const a = wall({ start: [0, 0], end: [5, 0], castOrder: 1, pourId: 'P1' })
+    const b = wall({ start: [5, 0], end: [2, 3], castOrder: 1, pourId: 'P1' })
+    const report = validateFormwork([a, b] as AnyNode[], {
+      systems: new Map([
+        [a.id as AnyNodeId, system],
+        [b.id as AnyNodeId, trio],
+      ]),
+    })
+    const finding = report.findings.find((f) => f.invariant === 'JUNCTION_ANGLE_UNFITTABLE')
+    expect(finding?.message).toContain(system.label)
+    expect(finding?.message).toContain(trio.label)
   })
 
   it('skips both checks when no system is passed, and says so', () => {
@@ -577,6 +613,28 @@ describe('the report', () => {
     expect(validateFormwork([a, b] as AnyNode[]).elementIds.length).toBe(2)
   })
 
+  it('scopes to a named selection, and reads an empty one as empty', () => {
+    // An empty array asked about nothing. Treating it as absent would report findings
+    // about the whole scene to a caller who named no elements at all.
+    const a = wall()
+    const b = wall({ start: [0, 10], end: [5, 10] })
+    expect(
+      validateFormwork([a, b] as AnyNode[], { elementIds: [a.id as AnyNodeId] }).elementIds,
+    ).toEqual([a.id as AnyNodeId])
+    expect(validateFormwork([a, b] as AnyNode[], { elementIds: [] }).elementIds).toEqual([])
+  })
+
+  it('intersects a selection with a level rather than choosing one of them', () => {
+    const levelA = 'level-a'
+    const a = wall({ parentId: levelA })
+    const upstairs = wall({ start: [0, 10], end: [5, 10], parentId: 'level-b' })
+    const report = validateFormwork([a, upstairs] as AnyNode[], {
+      parentId: levelA,
+      elementIds: [a.id as AnyNodeId, upstairs.id as AnyNodeId],
+    })
+    expect(report.elementIds).toEqual([a.id as AnyNodeId])
+  })
+
   it('sorts errors before warnings', () => {
     const system = formworkSystem('doka-framax-xlife')
     if (!system) throw new Error('the Framax catalog is missing')
@@ -590,7 +648,12 @@ describe('the report', () => {
       formworkMode: 'single-sided-a',
     })
     const acute = wall({ start: [5, 0], end: [2, 3], castOrder: 1, pourId: 'P1' })
-    const report = validateFormwork([single, acute] as AnyNode[], { system })
+    const report = validateFormwork([single, acute] as AnyNode[], {
+      systems: new Map([
+        [single.id as AnyNodeId, system],
+        [acute.id as AnyNodeId, system],
+      ]),
+    })
     const severities = report.findings.map((f) => f.severity)
     expect(report.errorCount).toBeGreaterThan(0)
     expect(report.warningCount).toBeGreaterThan(0)
@@ -638,7 +701,12 @@ describe('the report', () => {
     if (!system) throw new Error('the Framax catalog is missing')
     const a = wall({ start: [0, 0], end: [5, 0], castOrder: 1, pourId: 'P1' })
     const b = wall({ start: [5, 0], end: [2, 3], castOrder: 1, pourId: 'P1' })
-    const report = validateFormwork([a, b] as AnyNode[], { system })
+    const report = validateFormwork([a, b] as AnyNode[], {
+      systems: new Map([
+        [a.id as AnyNodeId, system],
+        [b.id as AnyNodeId, system],
+      ]),
+    })
     expect(report.warningCount).toBeGreaterThan(0)
     expect(report.errorCount).toBe(0)
     expect(failingElementIds(report)).toEqual([])

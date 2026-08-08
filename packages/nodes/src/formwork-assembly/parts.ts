@@ -2,7 +2,10 @@ import {
   applyPartOverrides,
   type FormworkPart,
   type FormworkPartSpec,
+  type FormworkSystem,
+  type PressureEnvelope,
   partMark,
+  type StripPack,
 } from '@pascal-app/core/formwork'
 import type { Group, Mesh } from 'three'
 import type { FormworkAssemblyNode } from './schema'
@@ -36,6 +39,17 @@ export interface PartCollector {
   /** Adds a part, and the mesh that draws it where it has one. Returns the mark. */
   emit: (spec: FormworkPartSpec, mesh?: Mesh) => string
   /**
+   * Records what the shutter was designed *from*, for the validator.
+   *
+   * Three of the invariants cannot run on a parts list: an unformable strip is a
+   * property of the pack, a code-envelope breach is a property of the pressure
+   * solve, and neither survives into the marks. They are carried out of the build
+   * for the same reason the parts are — a validator that re-packed the runs itself
+   * would be a second layout, and the first thing a second layout does is disagree
+   * with the one on screen about which run has the open strip.
+   */
+  evidence: (found: Partial<ShutterEvidence>) => void
+  /**
    * Adds another mesh drawing a part already emitted. One part is not always one
    * box: a panel crossed by a window is drawn as a band under the sill and a band
    * over the head, and it is still one panel off the rack. Both bands carry the one
@@ -48,10 +62,35 @@ export interface PartCollector {
   finish: () => BuiltFormwork
 }
 
+/**
+ * What the shutter was designed from, as far as the validator needs it.
+ *
+ * Not the design — the report already prints that, off `design.ts`. This is the
+ * subset an invariant asserts against and which the parts list does not preserve:
+ * the packed runs behind the panel marks, and the pressure envelope behind the
+ * member sizes.
+ */
+export interface ShutterEvidence {
+  /** Every face run packed for this pour, in the order the faces were laid out. */
+  packs: StripPack[]
+  /** The envelope the members were sized on, where the kind has one. */
+  envelope?: PressureEnvelope
+  /**
+   * The catalog system the panels and ties came from, where one answered.
+   *
+   * Recorded per shutter and not read from the settings, because `systemId` is a
+   * field on the assembly: one wall on a job can be formed in Framax and the next
+   * in TRIO, and a tie-reach check run against the wrong one of those is a check
+   * against hardware that is not on the wall.
+   */
+  system?: FormworkSystem
+}
+
 export interface BuiltFormwork {
   group: Group
   /** Every part of this shutter, marked, with the assembly's overrides applied. */
   parts: FormworkPart[]
+  evidence: ShutterEvidence
 }
 
 /**
@@ -66,7 +105,13 @@ export interface BuiltFormwork {
  */
 export function collectParts(group: Group, node: FormworkAssemblyNode): PartCollector {
   const parts: FormworkPart[] = []
+  const found: ShutterEvidence = { packs: [] }
   return {
+    evidence(more) {
+      if (more.packs) found.packs.push(...more.packs)
+      if (more.envelope) found.envelope = more.envelope
+      if (more.system) found.system = more.system
+    },
     emit(spec, mesh) {
       const mark = partMark(spec)
       parts.push({ ...spec, mark })
@@ -84,7 +129,7 @@ export function collectParts(group: Group, node: FormworkAssemblyNode): PartColl
       group.add(mesh)
     },
     finish() {
-      return { group, parts: applyPartOverrides(parts, node.partOverrides) }
+      return { group, parts: applyPartOverrides(parts, node.partOverrides), evidence: found }
     },
   }
 }

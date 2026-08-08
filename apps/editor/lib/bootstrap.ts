@@ -8,7 +8,10 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
-import { formworkTakeoffHostPanel } from '@pascal-app/nodes/formwork-assembly'
+import {
+  formworkTakeoffHostPanel,
+  formworkValidationHostPanel,
+} from '@pascal-app/nodes/formwork-assembly'
 import { formworkSettingsHostPanel } from '@pascal-app/nodes/formwork-project-settings'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
@@ -98,6 +101,11 @@ registerEditorHostPanel(formworkSettingsHostPanel)
 // the settings: one is the pour every shutter is designed to, the other what that
 // design adds up to across the job.
 registerEditorHostPanel(formworkTakeoffHostPanel)
+
+// And beside the takeoff, whether what it orders can be erected. Same scope, same
+// reason it is not an inspector — and separate from the takeoff because a bill that
+// totals correctly and a shutter that stands up are two different assertions.
+registerEditorHostPanel(formworkValidationHostPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()

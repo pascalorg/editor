@@ -168,6 +168,9 @@ export function buildColumnFormwork(
   // schedule could disagree with the clamps on screen.
   const design = columnPourDesign(settings, column, unit)
   const { facets, form, kickerM, schedule } = design
+  // A column is boxed rather than packed from a run, so there are no strip packs to
+  // carry — the envelope is the whole of what an invariant can assert against here.
+  parts.evidence({ envelope: design.envelope })
   const formBottom = baseY + kickerM
   const formHeight = topY - formBottom
   if (formHeight <= 0) return parts.finish()

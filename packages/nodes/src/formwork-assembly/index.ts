@@ -41,3 +41,6 @@ export {
 } from './takeoff'
 export { formworkTakeoffHostPanel } from './takeoff-host-panel'
 export { FormworkTakeoffPanel } from './takeoff-panel'
+export { type ProjectValidation, validateProjectFormwork } from './validate-project'
+export { formworkValidationHostPanel } from './validation-host-panel'
+export { FormworkValidationPanel } from './validation-panel'
