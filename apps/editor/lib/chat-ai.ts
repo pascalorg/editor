@@ -26,7 +26,7 @@ import {
   worstUtilisation,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, FormworkAssemblyNode } from '@pascal-app/core/schema'
-import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint'
+import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint/headless'
 import {
   castableHostIds,
   pourUnitsForHost,
@@ -35,7 +35,7 @@ import {
   solveProjectFormwork,
   solveShuttersForHost,
   validateProjectFormwork,
-} from '@pascal-app/nodes/formwork-assembly'
+} from '@pascal-app/nodes/formwork-assembly/headless'
 import { generateText, isStepCount, type ModelMessage, tool } from 'ai'
 import { z } from 'zod'
 

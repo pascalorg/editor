@@ -9,6 +9,7 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the stand
 | `packages/core` | Scene graph, node schemas, stores, event bus, core systems — pure logic, no Three.js |
 | `packages/viewer` | Standalone 3D canvas: renderers, viewer systems, presentation state |
 | `packages/editor` | Editor UI components reused by the standalone app and embedders |
+| `packages/nodes` | Built-in node bundles — one folder per kind (schema, geometry, panels, solver) |
 | `packages/mcp` | MCP server and scene storage adapters |
 | `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools |
 
@@ -42,6 +43,22 @@ Read the relevant page in `wiki/architecture/` **before** writing code. The page
 ## When reviewing a PR
 
 Invoke the `review-architecture` skill (`.agents/skills/review-architecture/SKILL.md`). It loads the required architecture pages, fetches the diff, classifies each new file by layer, and reports findings grouped by severity.
+
+## Before you call a change done
+
+Run all four. `check-types` and `bun test` pass on code `next build` rejects, so the build is not redundant with them:
+
+| Command | Catches |
+|---|---|
+| `bun run check-types` | Types across all packages |
+| `bun test` | Behaviour |
+| `bunx biome check --write` | Format and lint |
+| `bun run build` | Server/client boundary violations, and stale `dist/` |
+
+Two consequences worth knowing before you write the code:
+
+- **Cross-package tests read `dist/`, not `src/`.** `@pascal-app/*` resolves to compiled output, so a change in `packages/core` is invisible to a `packages/nodes` test until you build. `tooling/check-dist-parity.mjs` is the gate.
+- **Anything reachable from `apps/editor/app/api/**/route.ts` is a Server Component.** A React client hook anywhere in that import graph fails `next build`. Reach pure functions through a narrow entry point (`@pascal-app/nodes/<kind>/headless`) rather than a barrel that also exports a panel; `apps/editor/lib/server-imports.test.ts` enforces this.
 
 ## Operating rules
 

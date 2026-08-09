@@ -16,6 +16,11 @@
       "import": "./dist/construction-joint/index.js",
       "default": "./dist/construction-joint/index.js"
     },
+    "./construction-joint/headless": {
+      "types": "./dist/construction-joint/headless.d.ts",
+      "import": "./dist/construction-joint/headless.js",
+      "default": "./dist/construction-joint/headless.js"
+    },
     "./formwork-assembly": {
       "types": "./dist/formwork-assembly/index.d.ts",
       "import": "./dist/formwork-assembly/index.js",

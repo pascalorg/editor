@@ -1,12 +1,14 @@
 /**
  * The solve, without the panels — for a caller with no DOM.
  *
- * `index.ts` exports the same two functions, and importing them from there costs
- * React, `@pascal-app/viewer`, `@pascal-app/editor`, `lucide-react` and `zustand`,
- * because the barrel also carries the inspector, the takeoff panel and the design
- * report. That is the right shape for the editor and the wrong one for a server: the
- * MCP process renders nothing, and an install of it should not resolve a UI stack to
- * answer whether a wall can be tied.
+ * `index.ts` exports the same symbols, and importing them from there costs React,
+ * `@pascal-app/viewer`, `@pascal-app/editor`, `lucide-react` and `zustand`, because
+ * the barrel also carries the inspector, the takeoff panel and the design report. That
+ * is the right shape for the editor and the wrong one for a server: the MCP process
+ * renders nothing, and an install of it should not resolve a UI stack to answer
+ * whether a wall can be tied. Next is stricter than that — a Route Handler is a Server
+ * Component, so the barrel's `useEffect` is a *build failure* there rather than a
+ * weight problem, which is why the chat route imports this file too.
  *
  * So this entry point exists to be *narrow*, and `headless.test.ts` asserts that it
  * stays narrow — the chain behind it may import the core's formwork engine, the node
@@ -19,6 +21,13 @@
  * differently from the screen is the failure this whole layer is arranged against.
  */
 
+export {
+  type CastableHostNode,
+  type FormworkReconciliation,
+  pourUnitsForHost,
+  reconcileFormworkNodes,
+} from './attach'
+export { type SolvedShutter, solveShuttersForHost } from './solve'
 export {
   castableHostIds,
   type ProjectFormwork,
