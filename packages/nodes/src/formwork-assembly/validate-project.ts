@@ -13,7 +13,7 @@ import { solveProjectFormwork } from './solve-project'
 /**
  * The scene, validated — with the evidence the shutters were actually built from.
  *
- * `validateFormwork` can run on nodes alone, and four of its fifteen invariants come
+ * `validateFormwork` can run on nodes alone, and four of its seventeen invariants come
  * back `notChecked` when it does: an unformable strip is a property of the packed
  * run, a code-envelope breach a property of the pressure solve, a tie that reaches
  * nothing a property of the catalog system, and a band beside an opening with no tie

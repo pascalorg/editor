@@ -21,9 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 2 formwork tools, the first on this surface: `inspect_project_formwork` (the
   bill for a scope — panel/tie/prop lines, total weight, elements nobody has
   formed yet, and the caveats that invalidate the figures) and
-  `validate_formwork` (whether that formwork can be erected — 15 invariants
-  over the solved layout, pressure envelope, catalog system and drilled tie
-  grid). Neither answer is derivable from the scene graph, so before this an
+  `validate_formwork` (whether that formwork can be erected — 17 invariants
+  over the solved layout, pressure envelope, catalog system, drilled tie grid
+  and corner hardware). Neither answer is derivable from the scene graph, so before this an
   external agent could read a whole project and not ask either question.
   Read-only: the formwork mutations write through the store and want the
   live-snapshot publish path.

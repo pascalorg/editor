@@ -303,3 +303,33 @@ export function cornerLegLength(
     ? insideCornerLeg
     : outsideCornerLeg(insideCornerLeg, leg.turnsOntoThicknessM)
 }
+
+/**
+ * Where one corner unit's leg lands on its face — m along the element, lo first.
+ *
+ * `legLengthM` is the fitted leg where the system sweeps a unit for the angle and
+ * `cornerLegLength` where it does not, and the caller resolves that because only it
+ * knows the system. What is shared is the *placement*, and it has two subtleties
+ * that are wrong in opposite directions if either is dropped: the leg runs from the
+ * junction toward the element's end or back toward its start (`towardEnd`), and it
+ * starts at the corner of the *concrete* rather than the centreline point — half the
+ * neighbour's core, added for an inside unit and subtracted for an outside one. That
+ * offset is what makes an outside leg's first joint land at the same station as its
+ * inside counterpart's, so a tie between the two skins passes through square.
+ *
+ * Shared rather than derived twice. The geometry builder places the unit and the
+ * validator asks whether two of them collide; computed separately, the check and the
+ * thing it checks drift, which is the failure the parts model exists to prevent one
+ * layer down.
+ */
+export function cornerLegExtent(
+  corner: JunctionCorner,
+  leg: CornerLeg,
+  legLengthM: number,
+): { lo: number; hi: number } {
+  const direction = leg.towardEnd ? 1 : -1
+  const inset = (corner.side === 'inside' ? 1 : -1) * direction * leg.turnsOntoThicknessM
+  const from = leg.alongM + inset / 2
+  const to = from + direction * legLengthM
+  return { lo: Math.min(from, to), hi: Math.max(from, to) }
+}

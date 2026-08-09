@@ -2,6 +2,7 @@ import {
   type CastableElement,
   classifyElementFaces,
   collectCastableElements,
+  cornerLegExtent,
   cornerLegLength,
   DEFAULT_COLUMN_KICKER_MM,
   DEFAULT_FORMWORK_SYSTEM_ID,
@@ -202,17 +203,12 @@ export interface CornerRun {
  * layout rule is to place the corners first and let the make-up piece land
  * mid-run, so a panel starting at the corner point overlaps the unit.
  *
- * A leg is measured from the corner of the *concrete*, which is the neighbour's
- * face rather than the junction's centreline point — the inner face for an inside
- * unit, the outer face for an outside one. Half the neighbour's core either way,
- * and that offset is exactly what makes an outside leg's first joint land at the
- * same station along the wall as its inside counterpart's, so a tie between them
- * passes through square. Placing both from the centreline instead staggers the
- * two skins by the wall thickness.
- *
- * Ends are not enough to place these. A junction landing mid-run on a wall's face
- * — the spine of a T — puts two units on the same face at the same point, running
- * opposite ways, which is what `towardEnd` records.
+ * Where the leg lands is `cornerLegExtent` in core, shared with the validator that
+ * asks whether two of them collide — see its note on why the offset from the
+ * concrete corner rather than the centreline is what keeps the two skins' joints
+ * opposite each other. What is decided here is the leg *length*: the catalog's
+ * fitted leg where the system sweeps a unit for the angle, and the derived length
+ * where it does not, because that one is cut to fit on site.
  */
 export function cornerRuns(corners: readonly ElementCorner[], face: 'a' | 'b'): CornerRun[] {
   const out: CornerRun[] = []
@@ -227,12 +223,7 @@ export function cornerRuns(corners: readonly ElementCorner[], face: 'a' | 'b'): 
     const length =
       fit?.legLengthsM[legIndex] ??
       cornerLegLength(entry.corner, entry.leg, DEFAULT_INSIDE_CORNER_LEG_M)
-    const direction = entry.leg.towardEnd ? 1 : -1
-    const inset =
-      (entry.corner.side === 'inside' ? 1 : -1) * direction * entry.leg.turnsOntoThicknessM
-    const from = entry.leg.alongM + inset / 2
-    const to = from + direction * length
-    const leg = { lo: Math.min(from, to), hi: Math.max(from, to) }
+    const leg = cornerLegExtent(entry.corner, entry.leg, length)
     out.push({
       entry,
       leg,

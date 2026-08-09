@@ -755,6 +755,220 @@ describe('ties around openings', () => {
   })
 })
 
+describe('corner units against each other, and against openings', () => {
+  const system = formworkSystem('doka-framax-xlife')
+  if (!system) throw new Error('the Framax catalog is missing')
+
+  /**
+   * A U — a link wall with a return at each end, all one pour, so every corner is
+   * formed out of corner units rather than closed with a bulkhead.
+   *
+   * Framax turns a right angle on a 300 mm inside leg and wraps the 200 mm core on
+   * a 500 mm outside one, so whatever the link's length its face `a` carries 600 mm
+   * of corner unit and its face `b` carries 1000 mm. Both figures are the catalog's,
+   * so a catalog change is a test failure rather than a check that quietly stops
+   * describing the wall.
+   */
+  const u = (linkM: number) => {
+    const link = wall({ start: [0, 0], end: [linkM, 0], castOrder: 1, pourId: 'P1' })
+    const left = wall({ start: [0, 0], end: [0, 3], castOrder: 1, pourId: 'P1' })
+    const right = wall({ start: [linkM, 0], end: [linkM, 3], castOrder: 1, pourId: 'P1' })
+    return { link, left, right, nodes: [link, left, right] as AnyNode[] }
+  }
+  const inSystem = (nodes: AnyNode[]) =>
+    new Map(nodes.map((node) => [(node as { id: string }).id as AnyNodeId, system]))
+  const overlaps = (nodes: AnyNode[], link: { id: string }) =>
+    validateFormwork(nodes, { systems: inSystem(nodes) }).findings.filter(
+      (f) => f.invariant === 'CORNER_UNITS_OVERLAP' && f.elementIds[0] === (link.id as AnyNodeId),
+    )
+
+  it('says nothing about a link wall with room for both units', () => {
+    // 1.4 m leaves 400 mm of panel run between the outside legs and 800 mm between
+    // the inside ones. This is the ordinary case and has to stay silent, or the
+    // check fires on every wall between two returns.
+    const { link, nodes } = u(1.4)
+    expect(overlaps(nodes, link)).toEqual([])
+  })
+
+  it('fires when the two units reach into the same stretch of one face', () => {
+    // 700 mm: the inside legs run 0.1–0.4 and 0.3–0.6, so 100 mm of concrete is
+    // claimed twice. Nothing downstream notices — `panelRuns` subtracts each
+    // blocked stretch in turn, so an overlap just leaves less run, and the takeoff
+    // stays self-consistent while listing two units for a wall with room for one.
+    const { link, nodes } = u(0.7)
+    const face = overlaps(nodes, link).find((f) => f.message.includes('face a'))
+    expect(face?.severity).toBe('warning')
+    expect(face?.message).toContain('100 mm')
+    expect(face?.message).toContain('notch one back')
+    expect(face?.locus?.alongM).toBeCloseTo(0.35, 5)
+  })
+
+  it('reports each face separately, because the outside leg is the longer one', () => {
+    // The same 700 mm wall is two different problems on its two skins: face `a`
+    // needs 600 mm and has 700, so its units can be notched back; face `b` needs
+    // 1000 and there is no run left between them at all. One finding averaged over
+    // both faces would name a stretch that is on neither.
+    const { link, nodes } = u(0.7)
+    const found = overlaps(nodes, link)
+    expect(found.length).toBe(2)
+    expect(found.map((f) => f.severity).sort()).toEqual(['error', 'warning'])
+    const outside = found.find((f) => f.severity === 'error')
+    expect(outside?.message).toContain('face b')
+    expect(outside?.message).toContain('1000 mm')
+    expect(outside?.message).toContain('one bespoke box')
+  })
+
+  it('escalates to an error once the legs want more face than there is', () => {
+    // 500 mm, and the inside legs alone need 600. There is no stretch between them
+    // to notch back to, so this is not a unit to trim — the return is too short to
+    // form out of corner units at all.
+    const { link, nodes } = u(0.5)
+    const found = overlaps(nodes, link)
+    expect(found.length).toBe(2)
+    expect(found.every((f) => f.severity === 'error')).toBe(true)
+    expect(found[0]?.message).toContain('500 mm long')
+  })
+
+  it('names the walls whose units these are, not just the wall between them', () => {
+    // The decision is about hardware spanning three walls, and a finding naming only
+    // the link sends the reader to a wall whose own geometry is unremarkable.
+    const { link, left, right, nodes } = u(0.6)
+    const found = overlaps(nodes, link)
+    expect(found[0]?.elementIds).toEqual([link.id, left.id, right.id] as AnyNodeId[])
+  })
+
+  it('accepts two legs that meet exactly, which is a fit and not a clash', () => {
+    // 800 mm: the face `a` legs run 0.1–0.4 and 0.4–0.7 and share a line, which is the
+    // intended geometry on a return exactly twice the leg length.
+    const { link, nodes } = u(0.8)
+    expect(overlaps(nodes, link).some((f) => f.message.includes('face a'))).toBe(false)
+  })
+
+  it('does not fault a millimetre, which is one joint on site', () => {
+    // 799 mm, so the face `a` legs cross by 1 mm. Two panel edges that close are one
+    // joint whichever side of the line the drawing put them, and a check without a
+    // tolerance reports every wall dimensioned a millimetre off a round number.
+    const { link, nodes } = u(0.799)
+    expect(overlaps(nodes, link).some((f) => f.message.includes('face a'))).toBe(false)
+  })
+
+  it('says nothing where the returns are cast later and the ends get stop-ends', () => {
+    // The same 500 mm link, sequenced instead of monolithic. Its ends are free when it
+    // is poured, so they are closed with bulkheads and there is no corner unit at
+    // either — checking the legs a monolithic pour would have had reports hardware
+    // nobody sets.
+    const { link, left, right } = u(0.5)
+    const nodes = [
+      link,
+      wall({ ...left, castOrder: 2, pourId: 'P2' }),
+      wall({ ...right, castOrder: 3, pourId: 'P3' }),
+    ] as AnyNode[]
+    expect(overlaps(nodes, link)).toEqual([])
+  })
+
+  it('says nothing about an L, where each face carries one unit', () => {
+    const a = wall({ start: [0, 0], end: [5, 0], castOrder: 1, pourId: 'P1' })
+    const b = wall({ start: [0, 0], end: [0, 5], castOrder: 1, pourId: 'P1' })
+    const nodes = [a, b] as AnyNode[]
+    expect(fired(nodes, 'CORNER_UNITS_OVERLAP')).toBe(false)
+    expect(
+      validateFormwork(nodes, { systems: inSystem(nodes) }).findings.some(
+        (f) => f.invariant === 'CORNER_UNITS_OVERLAP',
+      ),
+    ).toBe(false)
+  })
+
+  it('checks the same short return with no system named at all', () => {
+    // Which is why neither check appears in `notChecked`. Both shipped catalogs turn
+    // a right angle on the same 300 mm leg, so the fallback is the figure they agree
+    // on rather than a guess, and a scene that has never opened the formwork settings
+    // is told its 500 mm return is unformable just the same.
+    const { link, nodes } = u(0.5)
+    const found = validateFormwork(nodes).findings.filter(
+      (f) => f.invariant === 'CORNER_UNITS_OVERLAP' && f.elementIds[0] === (link.id as AnyNodeId),
+    )
+    expect(found.length).toBe(2)
+    expect(found.every((f) => f.severity === 'error')).toBe(true)
+    const report = validateFormwork(nodes)
+    expect(report.notChecked.some((entry) => entry.invariant === 'CORNER_UNITS_OVERLAP')).toBe(
+      false,
+    )
+    expect(
+      report.notChecked.some((entry) => entry.invariant === 'OPENING_INSIDE_CORNER_UNIT'),
+    ).toBe(false)
+  })
+
+  it('fires when an opening jamb lands inside a corner unit', () => {
+    // A 600 mm window centred at 600 mm has its near jamb at 300 mm, and the unit at
+    // that end of the wall runs to 400. There is no panel joint there to move: the
+    // box-out has to be cut into a framed unit.
+    const { link, nodes } = u(3)
+    const window = WindowNode.parse({
+      wallId: link.id,
+      parentId: link.id,
+      position: [0.6, 1.5, 0],
+      width: 0.6,
+      height: 1.2,
+    })
+    const found = validateFormwork([...nodes, window] as AnyNode[], {
+      systems: inSystem(nodes),
+    }).findings.filter((f) => f.invariant === 'OPENING_INSIDE_CORNER_UNIT')
+    expect(found.length).toBe(2)
+    expect(found[0]?.severity).toBe('warning')
+    expect(found[0]?.elementIds).toEqual([link.id, window.id] as AnyNodeId[])
+    expect(found[0]?.message).toContain('cut into the unit')
+    expect(found.map((f) => f.locus?.alongM)).toEqual([0.6, 0.6])
+  })
+
+  it('reports the face whose unit the jamb is actually in', () => {
+    // The outside leg reaches 100 mm past the junction centreline and the inside one
+    // starts 100 mm short of it, so a jamb at 50 mm is inside the outer unit and clear
+    // of the inner. Reporting both would claim hardware to modify that is not there.
+    const { link, nodes } = u(3)
+    const window = WindowNode.parse({
+      wallId: link.id,
+      parentId: link.id,
+      position: [0.35, 1.5, 0],
+      width: 0.6,
+      height: 1.2,
+    })
+    const found = validateFormwork([...nodes, window] as AnyNode[], {
+      systems: inSystem(nodes),
+    }).findings.filter((f) => f.invariant === 'OPENING_INSIDE_CORNER_UNIT')
+    expect(found.length).toBe(1)
+    expect(found[0]?.message).toContain('face b')
+  })
+
+  it('leaves an opening merely near a corner alone', () => {
+    // Jambs at 450 and 1050 mm, against units ending at 400. An opening 50 mm off a
+    // corner unit is the ordinary case — it forms with a filler — and a check using a
+    // comfort distance instead of the overlap would fault walls the crew forms daily.
+    const { link, nodes } = u(3)
+    const window = WindowNode.parse({
+      wallId: link.id,
+      parentId: link.id,
+      position: [0.75, 1.5, 0],
+      width: 0.6,
+      height: 1.2,
+    })
+    const report = validateFormwork([...nodes, window] as AnyNode[], { systems: inSystem(nodes) })
+    expect(report.findings.some((f) => f.invariant === 'OPENING_INSIDE_CORNER_UNIT')).toBe(false)
+  })
+
+  it('leaves an opening in the middle of the wall alone', () => {
+    const { link, nodes } = u(3)
+    const window = WindowNode.parse({
+      wallId: link.id,
+      parentId: link.id,
+      position: [1.5, 1.5, 0],
+      width: 0.6,
+      height: 1.2,
+    })
+    const report = validateFormwork([...nodes, window] as AnyNode[], { systems: inSystem(nodes) })
+    expect(report.findings.some((f) => f.invariant === 'OPENING_INSIDE_CORNER_UNIT')).toBe(false)
+  })
+})
+
 describe('the report', () => {
   it('scopes to one level when asked', () => {
     const levelA = 'level-a'

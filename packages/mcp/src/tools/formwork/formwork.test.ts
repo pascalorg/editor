@@ -121,6 +121,51 @@ function walledWithOpening(): Record<string, unknown> {
 }
 
 /**
+ * A U — a 500 mm link wall with a return at each end, all one pour.
+ *
+ * Both ends take a corner unit, and on a 250 mm wall the outside legs want 550 mm each
+ * of a 500 mm face. Raw nodes again, because `pourId` is what makes the junctions
+ * monolithic and so corner-unit work rather than a bulkhead, and no tool sets it.
+ */
+function shortReturn(): Record<string, unknown> {
+  const wall = (id: string, start: [number, number], end: [number, number]) => ({
+    object: 'node',
+    id,
+    type: 'wall',
+    parentId: 'level_1',
+    visible: true,
+    metadata: {},
+    children: [],
+    start,
+    end,
+    thickness: 0.25,
+    height: 3,
+    frontSide: 'unknown',
+    backSide: 'unknown',
+    formworkType: 'steel-panel',
+    castOrder: 1,
+    pourId: 'P1',
+  })
+  return {
+    level_1: {
+      object: 'node',
+      id: 'level_1',
+      type: 'level',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['link', 'left', 'right'],
+      elevation: 0,
+      height: 6,
+      level: 0,
+    },
+    link: wall('link', [0, 0], [0.5, 0]),
+    left: wall('left', [0, 0], [0, 3]),
+    right: wall('right', [0.5, 0], [0.5, 3]),
+  }
+}
+
+/**
  * Two levels, one wall thicker than any tie assembly reaches, one wall unshuttered.
  *
  * Enough for a level scope to be wrong in either direction, and for the difference
@@ -298,6 +343,22 @@ describe('the formwork MCP tools', () => {
     expect(gap?.message).toContain('800 mm')
     expect(gap?.message).toContain('strut')
     expect(gap?.locus?.elevationM).toBeCloseTo(0.775, 6)
+  })
+
+  test('reports a return too short for the corner units it needs', async () => {
+    // The other finding no tool can derive. The takeoff bills two corner units and
+    // every figure in it is self-consistent, because the panel run between them is
+    // measured as though both fit; an agent reading the bill sees a wall that costs
+    // what it should and cannot be built.
+    load(shortReturn())
+
+    const reply = await call<Reply>('validate_formwork')
+
+    const clash = reply.findings.find((finding) => finding.invariant === 'CORNER_UNITS_OVERLAP')
+    expect(clash?.severity).toBe('error')
+    expect(clash?.elementIds).toContain('link')
+    expect(clash?.message).toContain('500 mm long')
+    expect(clash?.message).toContain('bespoke box')
   })
 
   test('keeps the two severities apart rather than reporting one count', async () => {

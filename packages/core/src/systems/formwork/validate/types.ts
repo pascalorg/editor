@@ -61,6 +61,10 @@ export type InvariantId =
   | 'DESIGN_OUTSIDE_CODE_ENVELOPE'
   /** An opening leaving a stretch of a tie row with no tie able to pass. */
   | 'OPENING_LEAVES_TIE_GAP'
+  /** Two corner units on one face claiming the same stretch of it. */
+  | 'CORNER_UNITS_OVERLAP'
+  /** An opening jamb inside the stretch a corner unit occupies. */
+  | 'OPENING_INSIDE_CORNER_UNIT'
 
 /**
  * One stretch a through-tie could pass over, and the stations at which it can.
@@ -153,4 +157,6 @@ export const INVARIANT_LABELS: Record<InvariantId, string> = {
   POUR_VOLUME_OVER_SUPPLY: 'Pour volume over the supply limit',
   DESIGN_OUTSIDE_CODE_ENVELOPE: 'Design outside the code’s validated envelope',
   OPENING_LEAVES_TIE_GAP: 'Opening leaves a stretch with no tie',
+  CORNER_UNITS_OVERLAP: 'Two corner units claim the same stretch of face',
+  OPENING_INSIDE_CORNER_UNIT: 'Opening jamb falls inside a corner unit',
 }

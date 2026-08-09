@@ -338,7 +338,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `verify_scene` | High-level layout check with validation status, per-level counts, empty levels and practical issues. | — | `{ valid, levels[], issues, hasIssues }` |
 | `check_collisions` | Find overlapping items and out-of-bounds placements. | `{ levelId? }` | `{ collisions: { aId, bId, kind }[] }` |
 | `inspect_project_formwork` | The formwork a scope needs, as one bill: panel/tie/prop lines, total weight, elements nobody has formed yet, and the caveats that invalidate the figures. | `{ levelId?, elementIds? }` | `{ elements[], unshuttered[], bom[], totalWeightKg, totalWeightComplete, beyondCapacity[], caveats[] }` |
-| `validate_formwork` | Whether the formwork in scope can be erected — 15 invariants over the solved layout, pressure envelope, catalog system and drilled tie grid. | `{ levelId?, elementIds? }` | `{ errorCount, warningCount, findings[], summary[], shutteredIds[], notChecked[] }` |
+| `validate_formwork` | Whether the formwork in scope can be erected — 17 invariants over the solved layout, pressure envelope, catalog system, drilled tie grid and corner hardware. | `{ levelId?, elementIds? }` | `{ errorCount, warningCount, findings[], summary[], shutteredIds[], notChecked[] }` |
 | `analyze_floorplan_image` | Vision tool: extract walls, rooms, and approximate dimensions from a floorplan image. | `{ image, scaleHint? }` | `{ walls, rooms, approximateDimensions, confidence }` |
 | `analyze_room_photo` | Vision tool: extract approximate dimensions and fixtures from a room photo. | `{ image }` | `{ approximateDimensions, identifiedFixtures, identifiedWindows }` |
 

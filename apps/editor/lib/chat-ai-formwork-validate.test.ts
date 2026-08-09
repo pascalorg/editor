@@ -116,6 +116,56 @@ function walledWithOpening(): ToolMap {
   return buildTools(graph, [], () => {})
 }
 
+/**
+ * A U — a 500 mm link wall between two returns, all one pour.
+ *
+ * Raw nodes for the same reason: `pourId` is what makes the junctions monolithic, and
+ * so corner-unit work rather than a bulkhead at each end, and no tool sets it. On a
+ * 250 mm wall each outside leg wraps to 550 mm, so the two want 1100 mm of a 500 mm
+ * face — which the bill records as two corner units and a shorter panel run.
+ */
+function shortReturn(): { graph: SceneGraph; tools: ToolMap } {
+  const wall = (id: string, start: [number, number], end: [number, number]) => ({
+    object: 'node',
+    id,
+    type: 'wall',
+    parentId: 'level_1',
+    visible: true,
+    metadata: {},
+    children: [],
+    start,
+    end,
+    thickness: 0.25,
+    height: 3,
+    frontSide: 'unknown',
+    backSide: 'unknown',
+    formworkType: 'steel-panel',
+    castOrder: 1,
+    pourId: 'P1',
+  })
+  const graph = {
+    nodes: {
+      level_1: {
+        object: 'node',
+        id: 'level_1',
+        type: 'level',
+        parentId: null,
+        visible: true,
+        metadata: {},
+        children: ['link', 'left', 'right'],
+        elevation: 0,
+        height: 6,
+        level: 0,
+      },
+      link: wall('link', [0, 0], [0.5, 0]),
+      left: wall('left', [0, 0], [0, 3]),
+      right: wall('right', [0.5, 0], [0.5, 3]),
+    },
+    rootNodeIds: ['level_1'],
+  } as unknown as SceneGraph
+  return { graph, tools: buildTools(graph, [], () => {}) }
+}
+
 /** Two levels, so a level scope can be wrong in either direction. */
 function scene(): { graph: SceneGraph; tools: ToolMap } {
   const wall = (id: string, parentId: string, y: number, thickness = 0.25) => ({
@@ -325,6 +375,38 @@ describe('validate_formwork', () => {
     expect(gap?.message).toContain('800 mm')
     expect(gap?.message).toContain('strut')
     expect(gap?.locus?.elevationM).toBeCloseTo(0.775, 6)
+  })
+
+  test('reports a return too short for two corner units, and names the length', async () => {
+    // The other thing the model cannot derive. The takeoff bills both units and every
+    // figure in it is self-consistent — `panelRuns` subtracts each blocked stretch in
+    // turn, so an overlap leaves less run rather than an open one — so an agent
+    // reading the bill sees a wall that costs what it should and cannot be built.
+    const { tools } = shortReturn()
+
+    const reply = await validate(tools)
+
+    const clash = reply.findings.find((finding) => finding.invariant === 'CORNER_UNITS_OVERLAP')
+    expect(clash?.severity).toBe('error')
+    expect(clash?.elementIds).toContain('link')
+    expect(clash?.message).toContain('500 mm long')
+    expect(clash?.message).toContain('bespoke box')
+  })
+
+  test('the corner clash is reported on a scene nobody has shuttered', async () => {
+    // Unlike the tie gap below. A corner leg length comes from the catalog and, absent
+    // one, from the figure both shipped systems agree on — so this answer is available
+    // before any shutter exists, and telling the model to go and form something first
+    // would send it after evidence it does not need.
+    const { tools } = shortReturn()
+
+    const reply = await validate(tools)
+
+    expect(reply.shutteredIds).toEqual([])
+    expect(reply.findings.some((finding) => finding.invariant === 'CORNER_UNITS_OVERLAP')).toBe(
+      true,
+    )
+    expect(reply.notChecked.map((entry) => entry.invariant)).not.toContain('CORNER_UNITS_OVERLAP')
   })
 
   test('the clash check is unchecked until something is shuttered', async () => {

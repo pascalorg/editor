@@ -102,6 +102,7 @@ export {
 export {
   type Abutment,
   type AbutmentMap,
+  cornerLegExtent,
   cornerLegLength,
   DEFAULT_INSIDE_CORNER_LEG_M,
   findAbutments,

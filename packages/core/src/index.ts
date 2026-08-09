@@ -346,6 +346,7 @@ export {
   columnStackCount,
   consistencyClassOf,
   cornerForAngle,
+  cornerLegExtent,
   cornerLegLength,
   cornerLegsMm,
   courseJointsMm,

@@ -5,15 +5,19 @@ import {
   type CastableElement,
   collectCastableElements,
   type ElementOpening,
+  elementLength,
 } from '../coverage/elements'
 import { classifyElementFaces } from '../coverage/faces'
 import {
   type Abutment,
   type AbutmentMap,
+  cornerLegExtent,
+  cornerLegLength,
+  DEFAULT_INSIDE_CORNER_LEG_M,
   findAbutments,
   findJunctions,
 } from '../coverage/junctions'
-import type { ElementCoverage } from '../coverage/types'
+import type { ElementCorner, ElementCoverage } from '../coverage/types'
 import { MIN_WORKABLE_PIECE_MM, type StripPack } from '../layout/strip-pack'
 import { splitIntoLifts } from '../pours/lifts'
 import type { PourLimits, PourUnit } from '../pours/types'
@@ -59,6 +63,17 @@ const MIN_TIED_BAND_MM = 300
 
 /** Along-run positions within this are the same station, m. */
 const STATION_TOLERANCE_M = 1e-6
+
+/**
+ * Two corner legs sharing less than this are touching, not clashing, m.
+ *
+ * 2 mm, matching `JOINT_TOLERANCE_MM` — the width at which the layout already calls
+ * two panel edges one joint. Legs that meet exactly are the *intended* geometry on a
+ * return exactly twice the leg length, and a millimetre past that is a wall drawn to
+ * a dimension nobody sets out to: two panel edges 1 mm apart are one joint on site,
+ * and reporting it would put a finding on a wall the crew forms without noticing.
+ */
+const LEG_OVERLAP_TOLERANCE_M = 0.002
 
 /**
  * Tie holes within this of each other are one row, m.
@@ -697,6 +712,169 @@ function junctionFit(
 }
 
 /**
+ * Where every formed corner unit's leg lands on this element, per face.
+ *
+ * The leg length is resolved exactly as the geometry builder resolves it — the
+ * catalog's fitted leg where the system sweeps a unit for the angle, the derived
+ * length where it does not — and the placement comes from `cornerLegExtent`, which
+ * both share. A check that recomputed either would eventually disagree with the
+ * shutter it is checking.
+ *
+ * Unformed corners are skipped: `formed` is monolithic-only, and every other case
+ * already has a bulkhead at that point rather than a corner unit, so a leg there is
+ * hardware nobody sets.
+ */
+function cornerLegsByFace(
+  coverage: ElementCoverage,
+  system: FormworkSystem | undefined,
+): Map<'a' | 'b', Array<{ corner: ElementCorner; lo: number; hi: number }>> {
+  const out = new Map<'a' | 'b', Array<{ corner: ElementCorner; lo: number; hi: number }>>()
+  for (const entry of coverage.corners) {
+    if (!entry.formed) continue
+    const fit = system ? fitCorner(system, entry.corner) : undefined
+    const legIndex = entry.corner.legs.indexOf(entry.leg) === 1 ? 1 : 0
+    const length =
+      fit?.legLengthsM[legIndex] ??
+      cornerLegLength(entry.corner, entry.leg, DEFAULT_INSIDE_CORNER_LEG_M)
+    const extent = cornerLegExtent(entry.corner, entry.leg, length)
+    const face = entry.leg.face
+    const held = out.get(face)
+    const record = { corner: entry, ...extent }
+    if (held) held.push(record)
+    else out.set(face, [record])
+  }
+  for (const legs of out.values()) legs.sort((a, b) => a.lo - b.lo)
+  return out
+}
+
+/**
+ * Two corner units on one face reaching into the same stretch of it — phase 9's
+ * panels × intersections clash, in the form the geometry cannot report.
+ *
+ * A wall between two returns carries a unit at each end, and each leg eats inward
+ * from its own junction. Below about twice the leg length the two claim overlapping
+ * concrete, and at the limit they are the same stretch. What makes this worth a
+ * check rather than a note is that nothing downstream notices: `panelRuns` subtracts
+ * each blocked stretch in turn, so an overlap simply leaves less run for panels, and
+ * a run that disappears entirely produces no pack — hence no `unfilledMm`, no
+ * `UNFORMABLE_STRIP`, and a bill with two corner units on a wall that has room for
+ * one. Every number in the takeoff is self-consistent; the wall is not buildable as
+ * drawn.
+ *
+ * The fix is a decision, not a layout: notch one unit, or form the short return as
+ * a single bespoke box. So it is a warning, except where the legs need more of the
+ * face than the face has — there, the concrete between them has no form at all.
+ *
+ * Reported per face, because the two skins genuinely differ. An outside leg is
+ * longer than its inside counterpart by the wall thickness, so a link wall can be
+ * fine on its inner face and clash on its outer one, and one finding averaged over
+ * both would name the wrong stretch.
+ */
+function cornerUnitOverlaps(
+  elements: readonly CastableElement[],
+  coverages: ReadonlyMap<AnyNodeId, ElementCoverage>,
+  systems: ReadonlyMap<AnyNodeId, FormworkSystem>,
+): Finding[] {
+  const out: Finding[] = []
+  for (const element of elements) {
+    const coverage = coverages.get(element.id)
+    if (!coverage) continue
+    const length = elementLength(element)
+    for (const [face, legs] of cornerLegsByFace(coverage, systems.get(element.id))) {
+      for (let i = 1; i < legs.length; i++) {
+        const before = legs[i - 1] as (typeof legs)[number]
+        const after = legs[i] as (typeof legs)[number]
+        const overlapM = before.hi - after.lo
+        if (overlapM <= LEG_OVERLAP_TOLERANCE_M) continue
+        // Both legs off one face longer than the face itself: there is no stretch
+        // between them to notch back to, so this is not a unit to trim but a return
+        // too short to form out of corner units at all.
+        const needed = legs.reduce((sum, leg) => sum + (leg.hi - leg.lo), 0)
+        const unformable = needed > length + LEG_OVERLAP_TOLERANCE_M
+        const others = [
+          ...new Set(
+            [before, after].flatMap((leg) =>
+              leg.corner.corner.legs
+                .map((candidate) => candidate.elementId)
+                .filter((id) => id !== element.id),
+            ),
+          ),
+        ]
+        out.push(
+          finding(
+            'CORNER_UNITS_OVERLAP',
+            unformable ? 'error' : 'warning',
+            [element.id, ...others],
+            unformable
+              ? `${element.id} is ${(length * 1000).toFixed(0)} mm long and its face ${face} corner units need ${(needed * 1000).toFixed(0)} mm of it. There is no run left between them — form this return as one bespoke box rather than out of two corner units.`
+              : `${element.id}: the face ${face} corner units at ${before.corner.leg.alongM.toFixed(2)} and ${after.corner.leg.alongM.toFixed(2)} m overlap by ${(overlapM * 1000).toFixed(0)} mm, both reaching into the wall from ${after.lo.toFixed(2)} to ${before.hi.toFixed(2)} m. Two units cannot occupy one stretch — notch one back, or form the return as a single unit. The panel run between them is measured as though both fit.`,
+            { alongM: (after.lo + before.hi) / 2 },
+          ),
+        )
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * An opening whose jamb falls inside the stretch a corner unit occupies — the
+ * plan's "opening too near a corner → custom".
+ *
+ * A corner unit is one rigid piece of steel with the frame already on it. An
+ * opening reaching into it cannot be boxed out by moving a panel joint, because
+ * there is no joint there to move: the box-out has to be cut into the unit itself,
+ * which is a modification to hired plant somebody has to authorise, or the corner
+ * is built bespoke in timber.
+ *
+ * A jamb *inside* the leg and not merely near it, because near is the ordinary
+ * case — an opening 400 mm off a corner is normal and forms with a filler. The
+ * geometry that cannot be built is the overlap, and using a comfort distance
+ * instead would fault walls the crew forms every day.
+ *
+ * A warning: both answers are buildable, and which one applies depends on whether
+ * the plant is owned or hired, which no field here records.
+ */
+function openingsInsideCornerUnits(
+  elements: readonly CastableElement[],
+  coverages: ReadonlyMap<AnyNodeId, ElementCoverage>,
+  systems: ReadonlyMap<AnyNodeId, FormworkSystem>,
+): Finding[] {
+  const out: Finding[] = []
+  for (const element of elements) {
+    if (element.openings.length === 0) continue
+    const coverage = coverages.get(element.id)
+    if (!coverage) continue
+    const byFace = cornerLegsByFace(coverage, systems.get(element.id))
+    for (const opening of element.openings) {
+      const jambs = [opening.along - opening.width / 2, opening.along + opening.width / 2]
+      // One finding per opening per face. An opening reaching into the units at
+      // both ends of a short return is two distinct pieces of hardware to modify,
+      // but a jamb inside one unit is one problem however many jambs are in it.
+      for (const [face, legs] of byFace) {
+        const hit = legs.find((leg) =>
+          jambs.some(
+            (jamb) =>
+              jamb > leg.lo + LEG_OVERLAP_TOLERANCE_M && jamb < leg.hi - LEG_OVERLAP_TOLERANCE_M,
+          ),
+        )
+        if (!hit) continue
+        out.push(
+          finding(
+            'OPENING_INSIDE_CORNER_UNIT',
+            'warning',
+            [element.id, opening.id],
+            `${element.id}: ${opening.kind} ${opening.id} spans ${jambs[0]?.toFixed(2)} to ${jambs[1]?.toFixed(2)} m, reaching into the face ${face} corner unit that runs from ${hit.lo.toFixed(2)} to ${hit.hi.toFixed(2)} m. A corner unit arrives framed, so the box-out has to be cut into the unit — a modification to plant, not a panel joint to move — or the corner built bespoke in timber.`,
+            { alongM: opening.along },
+          ),
+        )
+      }
+    }
+  }
+  return out
+}
+
+/**
  * An expansion joint a single pour crosses.
  *
  * The two sides of an expansion joint are structurally independent, so concrete
@@ -1052,6 +1230,8 @@ export function validateFormwork(
     ...tieReach(scoped, systems),
     ...tiesAroundOpenings(scoped, tieFields),
     ...junctionFit(scoped, systems),
+    ...cornerUnitOverlaps(scoped, coverages, systems),
+    ...openingsInsideCornerUnits(scoped, coverages, systems),
   ]
 
   // Errors first, then by element, so the list reads in the order somebody would

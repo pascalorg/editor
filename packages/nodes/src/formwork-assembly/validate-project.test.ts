@@ -8,7 +8,7 @@ import { validateProjectFormwork } from './validate-project'
  * The scene validated against the layout it actually has.
  *
  * `invariants.test.ts` covers the checks. This covers the wiring, and the wiring is
- * where the interesting failures are: four of the fifteen invariants are about a
+ * where the interesting failures are: four of the seventeen invariants are about a
  * packed run, a pressure solve, a catalog system and a drilled hole grid, none of
  * which exist in the node graph, so they only run if the evidence reaches them from
  * the build. The two ways that goes wrong are silent in both directions — an
@@ -339,6 +339,43 @@ describe('validateProjectFormwork', () => {
     )
 
     expect(found).toEqual([])
+  })
+
+  test('a link wall too short for two corner units is reported through the solve', () => {
+    // 500 mm between two returns, all one pour, so both ends take a corner unit and
+    // the units want 600 mm of the inner face. Nothing else in the product says so:
+    // `panelRuns` subtracts each blocked stretch in turn, so an overlap leaves less
+    // run rather than an open one, and the takeoff bills two units for a wall with
+    // room for one while every figure in it stays self-consistent.
+    const nodes = sceneOf(
+      makeWall('link', { start: [0, 0], end: [0.5, 0], castOrder: 1, pourId: 'P1' }),
+      makeWall('left', { start: [0, 0], end: [0, 3], castOrder: 1, pourId: 'P1' }),
+      makeWall('right', { start: [0.5, 0], end: [0.5, 3], castOrder: 1, pourId: 'P1' }),
+      makeAssembly('formwork-assembly_1', 'link'),
+    )
+
+    const found = validateProjectFormwork(nodes).report.findings.filter(
+      (finding) => finding.invariant === 'CORNER_UNITS_OVERLAP' && finding.elementIds[0] === 'link',
+    )
+
+    expect(found.length).toBe(2)
+    expect(found.every((finding) => finding.severity === 'error')).toBe(true)
+    // The link first, because it is the wall the clash is on, and then both returns:
+    // the hardware spans three walls, and a finding naming only the link sends the
+    // reader to a wall whose own geometry is unremarkable.
+    expect(found[0]?.elementIds[0]).toBe('link')
+    expect([...(found[0]?.elementIds ?? [])].sort()).toEqual(['left', 'link', 'right'])
+  })
+
+  test('the corner checks run on nodes alone, so they are never listed as unchecked', () => {
+    // Unlike the four above. Both shipped catalogs turn a right angle on the same
+    // 300 mm leg, so an element nobody has shuttered still has a leg length to check
+    // against — and listing these as unchecked would tell the reader to go and form
+    // something before the answer is available, when it already is.
+    const missing = unchecked(sceneOf(makeWall('wall_1')))
+
+    expect(missing).not.toContain('CORNER_UNITS_OVERLAP')
+    expect(missing).not.toContain('OPENING_INSIDE_CORNER_UNIT')
   })
 
   test('a column carries an envelope and no pack, which is what it has', () => {
