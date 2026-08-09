@@ -152,6 +152,17 @@ describe('set_formwork_settings — unset stays unset', () => {
     expect(settings()?.placement).toBeUndefined()
   })
 
+  test('curing merges and unstates like any other group', async () => {
+    const { tools, settings } = scene()
+
+    await set(tools, { curing: { surfaceTemperatureC: 5 } })
+    await set(tools, { curing: { shoresRemain: true } })
+    expect(settings()?.curing).toEqual({ surfaceTemperatureC: 5, shoresRemain: true })
+
+    await set(tools, { curing: { surfaceTemperatureC: null, shoresRemain: null } })
+    expect(settings()?.curing).toBeUndefined()
+  })
+
   test('null unstates a top-level standard', async () => {
     const { tools, settings } = scene()
 
@@ -424,6 +435,35 @@ describe('inspect_formwork_settings', () => {
 
     await set(tools, { ownedStock: { 'doka-framax-panel-588104500': null } })
     expect(JSON.parse(await inspect(tools)).resolved.ownedStock).toEqual({})
+  })
+
+  test('reports curing as unstated rather than resolving a default into it', async () => {
+    // Against the rule every pressure input follows, deliberately. The striking tables
+    // print their own conservative column and name what they took in hire.assumed, so a
+    // resolved number here would arrive indistinguishable from one the job stated.
+    const { tools } = scene()
+
+    const report = JSON.parse(await inspect(tools))
+
+    expect(report.resolved.curing).toEqual({})
+    expect(report.assumedDefaults.surfaceTemperatureC).toBeUndefined()
+  })
+
+  test('the curing temperature is a separate answer from the placing one', async () => {
+    // The parity this pair exists for, and the field most likely to be conflated: the
+    // two move the design in opposite directions, so a model that wrote one for the
+    // other would be wrong for one of the two answers whatever value it had.
+    const { tools } = scene()
+
+    await set(tools, {
+      placement: { concreteTemperatureC: 25 },
+      curing: { surfaceTemperatureC: 5, shoresRemain: true },
+    })
+    const report = JSON.parse(await inspect(tools))
+
+    expect(report.stated.curing).toEqual({ surfaceTemperatureC: 5, shoresRemain: true })
+    expect(report.stated.placement).toEqual({ concreteTemperatureC: 25 })
+    expect(report.resolved.concreteTemperatureC).toBe(25)
   })
 
   test('does not create the node, so reading is not a decision', async () => {

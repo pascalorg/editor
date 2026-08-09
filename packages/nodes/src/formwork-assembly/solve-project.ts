@@ -1,10 +1,15 @@
-import type { BomLine, BomSupply } from '@pascal-app/core/formwork'
+import type { BomHire, BomLine, BomSupply, StrikeTarget } from '@pascal-app/core/formwork'
 import {
+  bomHire,
   bomLines,
   bomSupply,
   bomWeightKg,
   formworkSettingsFor,
+  isSubstitutedStrikingStandard,
   overUtilisedParts,
+  strikeTargetForPartKind,
+  strikingInputFor,
+  strikingStandardFor,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { type CastableHostNode, pourUnitsForHost } from './attach'
@@ -64,6 +69,25 @@ export interface ProjectFormwork {
    * fills the answer in makes a claim on the project's behalf.
    */
   supply?: BomSupply
+  /**
+   * How long each line is held, under the striking table the project's own code
+   * family publishes — the other factor a hire charge needs.
+   *
+   * Always present, unlike `supply`, and the asymmetry is deliberate: ownership is a
+   * fact about the yard that silence says nothing about, while a strike period is a
+   * consequence of the code the project is already designed under. Unstated curing
+   * inputs are named in `hire.assumed` rather than withholding the answer.
+   */
+  hire: BomHire
+  /**
+   * True where the striking table came from a different code family than the pressure
+   * standard, because the project's own family publishes none.
+   *
+   * Only DIN, whose family answers removal in EN 13670 §5.5 rather than in DIN 18218.
+   * Falling to BS 8110's formulas is the right answer and it is a substitution across
+   * families rather than a match, which is a thing to say out loud.
+   */
+  strikingStandardSubstituted: boolean
   /** Elements formed for fewer or more pours than they are cast in. */
   incomplete: SolvedElement[]
   /** Parts working beyond capacity anywhere in scope. A bill for these is not an order. */
@@ -139,7 +163,37 @@ export function solveProjectFormwork(
   )
   const bom = bomLines(everyPart)
   const weight = bomWeightKg(bom)
-  const ownedStock = formworkSettingsFor(allNodes).ownedStock
+  const settings = formworkSettingsFor(allNodes)
+
+  // Mark → what that mark is struck as, which is the only join between a striking
+  // table and a bill. Built here because this is the layer that knows a part's host:
+  // core's `strikeTargetForPartKind` can say a prop under a slab is a shore and a prop
+  // against a wall is a raker, and it cannot tell them apart on its own.
+  //
+  // A list per mark rather than one target, because `bomLines` groups across hosts and
+  // a mark is unique within a shutter rather than across a project — `duplicateMarks`
+  // exists for that. Collapsing to one would silently keep whichever element sorted
+  // last; accumulating makes the line `mixed`, which is the honest answer.
+  const targetsByMark = new Map<string, Set<StrikeTarget>>()
+  for (const element of elements) {
+    const hostKind = element.host.type as 'wall' | 'column' | 'slab'
+    for (const shutter of element.shutters) {
+      for (const part of shutter.parts) {
+        if (part.omitted) continue
+        const target = strikeTargetForPartKind(part.kind, hostKind)
+        if (target === undefined) continue
+        const existing = targetsByMark.get(part.mark)
+        if (existing) existing.add(target)
+        else targetsByMark.set(part.mark, new Set([target]))
+      }
+    }
+  }
+  const hire = bomHire(
+    bom,
+    (mark) => [...(targetsByMark.get(mark) ?? [])],
+    strikingStandardFor(settings.pressureStandard),
+    strikingInputFor(settings),
+  )
 
   const beyondCapacityMarks = elements.flatMap((element) =>
     overUtilisedParts(element.shutters.flatMap((shutter) => shutter.parts)).map((part) => ({
@@ -154,7 +208,9 @@ export function solveProjectFormwork(
     bom,
     totalWeightKg: weight.totalKg,
     totalWeightComplete: weight.complete,
-    ...(ownedStock ? { supply: bomSupply(bom, ownedStock) } : {}),
+    ...(settings.ownedStock ? { supply: bomSupply(bom, settings.ownedStock) } : {}),
+    hire,
+    strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
     shutterCount: elements.reduce((total, element) => total + element.shutters.length, 0),
@@ -201,6 +257,19 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
     out.push(
       `${count} hired ${count === 1 ? 'part is' : 'parts are'} drilled or cut for this pour — expect a recharge at list price, not a hire charge.`,
     )
+  }
+  if (solution.strikingStandardSubstituted) {
+    out.push(
+      'DIN 18218 publishes no striking periods, so the hire durations below are BS 8110 Table 6.2’s — a substitution across code families, not this project’s own code.',
+    )
+  }
+  // Verbatim from the striking solve rather than rephrased here, so a figure and the
+  // reason it may be wrong travel together. The accumulator warning is the one that
+  // matters most: under ACI these are qualifying hours above 10 °C, so a reader who
+  // takes "4 days" off a cold-spring programme strikes early.
+  for (const warning of solution.hire.warnings) out.push(warning.message)
+  for (const entry of solution.hire.mixedLines) {
+    out.push(`${entry.line.description}: ${entry.mixed?.message}`)
   }
   return out
 }

@@ -105,3 +105,33 @@ describe('formworkSettings owned stock', () => {
     expect(formworkSettings(node({ stock: {} })).ownedStock).toBeUndefined()
   })
 })
+
+describe('formworkSettings curing', () => {
+  it('leaves every field unstated rather than resolving a default into it', () => {
+    // Against the rule the pressure inputs follow, and deliberately. The striking tables
+    // print their own conservative column and report what they took in `assumed`, so a
+    // number resolved here would arrive indistinguishable from one the job stated.
+    expect(formworkSettings(node()).curing).toEqual({})
+    expect(DEFAULT_FORMWORK_SETTINGS.curing).toEqual({})
+  })
+
+  it('passes the curing temperature through without touching the placing one', () => {
+    // The two move the design in opposite directions — a colder mix pushes harder, a
+    // colder cure holds longer — so a resolver that read one for the other would be
+    // wrong for one of the two answers whichever value it held.
+    const resolved = formworkSettings(
+      node({ placement: { concreteTemperatureC: 25 }, curing: { surfaceTemperatureC: 5 } }),
+    )
+
+    expect(resolved.curing.surfaceTemperatureC).toBe(5)
+    expect(resolved.concreteTemperatureC).toBe(25)
+  })
+
+  it('passes the two strike-shortening flags through', () => {
+    const resolved = formworkSettings(
+      node({ curing: { highEarlyStrength: true, shoresRemain: true } }),
+    )
+
+    expect(resolved.curing).toEqual({ highEarlyStrength: true, shoresRemain: true })
+  })
+})

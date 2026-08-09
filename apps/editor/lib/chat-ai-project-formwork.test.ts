@@ -40,9 +40,20 @@ interface ProjectReport {
     fromOwnStock?: number
     toHire?: number
     consumed?: number
+    daysHeld: number | null
+    struckAs: string | null
+    mixedPeriods?: string[]
   }>
   totalWeightKg: number
   totalWeightComplete: boolean
+  hire: {
+    standard: string
+    basis: string
+    longestDaysHeld: number
+    periods: Array<{ struckAs: string; days: number; governingRule: string }>
+    assumed: string[]
+    substitutedFromAnotherCodeFamily: boolean
+  }
   supply?: {
     fromOwnStock: number
     toHire: number
@@ -374,6 +385,92 @@ describe('inspect_project_formwork', () => {
     const solved = await project(tools, { elementIds: ['wall_1'] })
 
     expect(solved.caveats.some((c) => c.includes('not a total'))).toBe(true)
+  })
+
+  test('reports how long every line is held, and which part is not struck at all', async () => {
+    // The second factor a hire charge needs, and the one the model would otherwise
+    // invent. Unlike the supply split it is always answered, because a strike period is
+    // a consequence of the code the project is already designed under.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.hire.longestDaysHeld).toBeGreaterThan(0)
+    const panel = solved.bom.find((row) => row.catalogId !== null)
+    expect(panel?.struckAs).toBe('vertical-form')
+    expect(panel?.daysHeld).toBeGreaterThan(0)
+    // Null rather than 0 — a tie is cut off inside the wall, and a 0 reads as plant
+    // returned the same day, which is a figure the model would multiply.
+    const notStruck = solved.bom.filter((row) => row.daysHeld === null)
+    expect(notStruck.length).toBeGreaterThan(0)
+    expect(notStruck.every((row) => row.struckAs === null)).toBe(true)
+    // And the code's own default column is named rather than presented as the job's
+    // decision — nobody stated a curing temperature here.
+    expect(solved.hire.assumed.some((entry) => entry.includes('No curing surface'))).toBe(true)
+  })
+
+  test('says which clock the periods are on, and names what the code assumed', async () => {
+    // The failure that turns a correct figure into a missed date: under ACI these are
+    // cumulative hours above 10 °C, so a model reporting calendar days strikes early.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    await call(tools, 'set_formwork_settings', { pressureStandard: 'ACI_347' })
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.hire.basis).toBe('qualifying-time')
+    expect(solved.hire.substitutedFromAnotherCodeFamily).toBe(false)
+    expect(solved.caveats.some((c) => c.includes('above 10 °C'))).toBe(true)
+    // A flat 12 h with no lookup behind it, so nothing was assumed to reach it — ACI's
+    // assumptions are the soffit table's bands, and a wall never touches them.
+    expect(solved.hire.assumed).toEqual([])
+    expect(solved.hire.periods[0]?.governingRule).toContain('§3.7.2.3')
+  })
+
+  test('the shipped default says its periods came from another code family', async () => {
+    // DIN publishes no striking table at all — its family answers removal in EN 13670,
+    // which is uncovered. Falling to BS 8110 is right, and it is a substitution.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.hire.standard).toBe('BS_8110')
+    expect(solved.hire.substitutedFromAnotherCodeFamily).toBe(true)
+    expect(solved.caveats.some((c) => c.includes('DIN 18218 publishes no striking periods'))).toBe(
+      true,
+    )
+  })
+
+  test('the curing temperature the project records lengthens the periods', async () => {
+    // The write half of the parity, end to end: the model can state a January cure and
+    // see the hire lengthen, and the assumption it replaced disappears.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const assumed = await project(tools, { elementIds: ['wall_1'] })
+
+    await call(tools, 'set_formwork_settings', { curing: { surfaceTemperatureC: 5 } })
+    const cold = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(cold.hire.longestDaysHeld).toBeGreaterThan(assumed.hire.longestDaysHeld)
+    expect(assumed.hire.assumed.some((entry) => entry.includes('No curing surface'))).toBe(true)
+    expect(cold.hire.assumed.some((entry) => entry.includes('No curing surface'))).toBe(false)
+  })
+
+  test('the period sits on the line it belongs to, in the bill’s own order', async () => {
+    // Indexed positionally against the bill, like the supply split — out of step, every
+    // duration is attributed to the wrong description and nothing reveals it.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    for (const row of solved.bom) {
+      expect(row.daysHeld === null).toBe(row.struckAs === null)
+      if (row.daysHeld !== null)
+        expect(row.daysHeld).toBeLessThanOrEqual(solved.hire.longestDaysHeld)
+    }
   })
 
   test('the element rows and the scope counts agree with each other', async () => {

@@ -48,6 +48,17 @@ export interface FormworkSettings {
   concrete: NonNullable<FormworkProjectSettingsNode['concrete']>
   /** How the pour is done, less the two fields each element supplies itself. */
   placement: Omit<Placement, 'pourHeightM' | 'elementKind' | 'riseRateMH' | 'concreteTemperatureC'>
+  /**
+   * How the concrete is cured, which is what the striking time is taken from.
+   *
+   * Unstated fields are left unstated rather than defaulted, unlike the pressure
+   * inputs beside them, and the difference is that the striking tables default
+   * themselves: BS 8110 prints a "16 °C and above" column and ACI a longest span
+   * band, so `strikingTime` takes the table's own conservative end and names it in
+   * `assumed`. A number resolved here would arrive at the same figure and lose the
+   * only thing that distinguishes it from a project that stated it.
+   */
+  curing: NonNullable<FormworkProjectSettingsNode['curing']>
   falseworkLoads: NonNullable<FormworkProjectSettingsNode['falseworkLoads']>
   bracing: NonNullable<FormworkProjectSettingsNode['bracing']>
   parts: NonNullable<FormworkProjectSettingsNode['parts']>
@@ -78,6 +89,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   stated: undefined,
   concrete: {},
   placement: { vibration: 'internal' },
+  curing: {},
   falseworkLoads: {},
   bracing: {},
   parts: {},
@@ -113,6 +125,7 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
         ? { pumpedFromBase: placement.pumpedFromBase }
         : {}),
     },
+    curing: node.curing ?? {},
     falseworkLoads: node.falseworkLoads ?? {},
     bracing: node.bracing ?? {},
     parts: node.parts ?? {},
@@ -146,6 +159,7 @@ export function formworkSettingsFor(nodes: Iterable<AnyNode>): FormworkSettings 
 export type FormworkSettingsGroup =
   | 'concrete'
   | 'placement'
+  | 'curing'
   | 'falseworkLoads'
   | 'bracing'
   | 'parts'

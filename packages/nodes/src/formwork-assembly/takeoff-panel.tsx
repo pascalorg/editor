@@ -1,5 +1,6 @@
 'use client'
 
+import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from '@pascal-app/core/formwork'
 import { ActionButton, downloadText, PanelSection } from '@pascal-app/editor'
 import { Download } from 'lucide-react'
 import { useState } from 'react'
@@ -24,6 +25,16 @@ import { takeoffCsv, useProjectFormwork, useTakeoffLevels } from './takeoff'
  * would be a document nobody could reproduce.
  */
 
+/**
+ * A period in the unit it is read in.
+ *
+ * A vertical form comes off in 12 hours and props stay ten days, and "0.5 d" is a
+ * figure a crew has to convert before it can act on it.
+ */
+function heldFor(hours: number): string {
+  return hours < 24 ? `${hours.toFixed(hours < 10 ? 1 : 0)} h` : `${(hours / 24).toFixed(1)} d`
+}
+
 export function FormworkTakeoffPanel() {
   const levels = useTakeoffLevels()
   const [levelId, setLevelId] = useState<string | undefined>(undefined)
@@ -37,6 +48,7 @@ export function FormworkTakeoffPanel() {
   // Keyed by the line object rather than by a composed string, because it is the same
   // object: `bomSupply` was handed `solution.bom` and returns entries pointing at it.
   const supplyByLine = new Map(supply?.lines.map((entry) => [entry.line, entry]))
+  const hireByLine = new Map(solution.hire.lines.map((entry) => [entry.line, entry]))
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -129,11 +141,33 @@ export function FormworkTakeoffPanel() {
                 )}
               </Section>
             )}
+            <Section title="Held for">
+              {solution.hire.periods.map((period) => (
+                <Readout
+                  key={period.target}
+                  label={STRIKE_TARGET_LABELS[period.target]}
+                  value={heldFor(period.hours)}
+                  value2={period.basis === 'calendar' ? undefined : 'above 10 °C'}
+                />
+              ))}
+              <Note>
+                {STRIKING_STANDARD_LABELS[solution.hire.standard]}. The set is tied up for the
+                longest of these, not their sum — the props holding one slab do not shorten the
+                props holding the next.
+              </Note>
+              {/* An assumption is not a caveat: the tables publish their own conservative
+                  column, so there is always an answer. What the reader needs is which
+                  figures the job chose and which the code chose for it. */}
+              {solution.hire.assumed.map((assumption) => (
+                <Note key={assumption.kind}>{assumption.message}</Note>
+              ))}
+            </Section>
             <Section
               title={`${solution.bom.length} ${solution.bom.length === 1 ? 'line' : 'lines'}`}
             >
               {solution.bom.map((line) => {
                 const split = supplyByLine.get(line)
+                const held = hireByLine.get(line)
                 return (
                   <div
                     className="space-y-0.5 border-border/30 border-t pt-1 first:border-t-0 first:pt-0"
@@ -167,6 +201,14 @@ export function FormworkTakeoffPanel() {
                         {split.ownedQuantity > 0 && `${split.ownedQuantity} off own stock · `}
                         hire {split.hiredQuantity}
                         {split.hiredModifiedQuantity > 0 && ', altered here'}
+                      </div>
+                    )}
+                    {held?.hours !== undefined && (
+                      <div className="text-[10px] text-muted-foreground">
+                        held {heldFor(held.hours)}
+                        {held.mixed === undefined
+                          ? ''
+                          : ' · mixed with a shorter period, longest shown'}
                       </div>
                     )}
                   </div>

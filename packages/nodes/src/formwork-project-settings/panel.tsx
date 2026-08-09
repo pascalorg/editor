@@ -1,8 +1,10 @@
 'use client'
 
 import {
+  ACI_HALVED_FLOOR_DAYS,
   ACI_SLUMP_LIMIT_MM,
   ACI_VIBRATION_DEPTH_LIMIT_M,
+  BS_TEMPERATURE_CAP_C,
   type ConsistencyClass,
   DEFAULT_CONCRETE_TEMPERATURE_C,
   DEFAULT_DENSITY_KG_M3,
@@ -24,6 +26,7 @@ import {
   type MeasurementStandardId,
   MIN_LIVE_LOAD_CARTS_KPA,
   MIN_LIVE_LOAD_KPA,
+  MIN_QUALIFYING_TEMPERATURE_C,
   MIN_WIND_PRESSURE_KPA,
   PRESSURE_STANDARD_IDS,
   PRESSURE_STANDARD_LABELS,
@@ -55,9 +58,9 @@ import { useFormworkSettingsNode, useFormworkSettingsWriter } from './use-formwo
  * It is a host panel rather than an inspector because the settings node is not
  * selectable: one per scene, no geometry, nothing to click in the viewport. The
  * grouping follows the schema, and each group states which part of the design it
- * moves — the concrete and the placement set the lateral pressure, the soffit loads
- * set the deck, the bracing sets the rakers, and the parts decide what every
- * spacing is a spacing *of*.
+ * moves — the concrete and the placement set the lateral pressure, the curing sets
+ * how long the set is held, the soffit loads set the deck, the bracing sets the
+ * rakers, and the parts decide what every spacing is a spacing *of*.
  *
  * Every field can be left alone, and that is the design rather than a convenience.
  * The shipped defaults are the conservative reading — DIN's fastest covered rise
@@ -117,6 +120,7 @@ export function FormworkSettingsPanel() {
     useFormworkSettingsWriter()
   const concrete = node?.concrete ?? {}
   const placement = node?.placement ?? {}
+  const curing = node?.curing ?? {}
   const loads = node?.falseworkLoads ?? {}
   const bracing = node?.bracing ?? {}
   const parts = node?.parts ?? {}
@@ -201,6 +205,40 @@ export function FormworkSettingsPanel() {
           label="Pumped from base"
           onChange={(value) => setGroupField('placement', { pumpedFromBase: value })}
           value={placement.pumpedFromBase}
+        />
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Curing">
+        <GroupNote>
+          What happens after the pour, which sets how long the formwork stays on rather than how
+          strong it has to be. The temperature here is a different question from the one above and
+          runs the opposite way: a colder mix pushes <em>harder</em>, a colder cure holds{' '}
+          <em>longer</em>.
+        </GroupNote>
+        <OptionalNumberField
+          assumed={String(BS_TEMPERATURE_CAP_C)}
+          hint={`The concrete's surface while it cures — not the placing temperature above. Warmer than ${BS_TEMPERATURE_CAP_C} °C buys nothing, because BS 8110 caps the benefit there, and below ${MIN_QUALIFYING_TEMPERATURE_C} °C every period has to be lengthened.`}
+          label="Cures at"
+          max={60}
+          min={-20}
+          onChange={(value) => setGroupField('curing', { surfaceTemperatureC: value })}
+          step={1}
+          unit="°C"
+          value={curing.surfaceTemperatureC}
+        />
+        <OptionalToggleField
+          assumed="no"
+          hint="Both codes permit a shorter period and neither says how much shorter, so this shortens nothing here — it reports that the reduction is available for the engineer to approve."
+          label="High early strength"
+          onChange={(value) => setGroupField('curing', { highEarlyStrength: value })}
+          value={curing.highEarlyStrength}
+        />
+        <OptionalToggleField
+          assumed="no"
+          hint={`A drophead or early-strip system, where the soffit form comes away and leaves its props standing. ACI 347's footnote ‡ halves the form's period, floored at ${ACI_HALVED_FLOOR_DAYS} days — the clause the whole drophead market exists on.`}
+          label="Form leaves props"
+          onChange={(value) => setGroupField('curing', { shoresRemain: value })}
+          value={curing.shoresRemain}
         />
       </PanelSection>
 

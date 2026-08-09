@@ -143,6 +143,7 @@ export {
   CementSpecSettings,
   ConcreteMixSettings,
   ConsistencyClassChoice,
+  CuringSettings,
   FalseworkLoadSettings,
   FormworkPartSettings,
   FormworkProjectSettingsNode,

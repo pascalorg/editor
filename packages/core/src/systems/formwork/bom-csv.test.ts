@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type BomLine, bomCsv, bomCsvFilename, bomSupply } from './index'
+import { type BomLine, bomCsv, bomCsvFilename, bomHire, bomSupply } from './index'
 
 /**
  * The bill as a file.
@@ -237,6 +237,140 @@ describe('bomCsv', () => {
       })
 
       expect(rows(csv)).toContain('Owned, not used here,prop-eurex-20')
+    })
+  })
+
+  describe('how long the line is held', () => {
+    test('is left out of the header entirely where the caller solved no periods', () => {
+      // An element-scope export has no project settings to read, and two blank columns
+      // headed "Days held" read as plant nobody keeps.
+      const csv = bomCsv([line()], { subject: 'Project' })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header).not.toContain('Days held')
+      expect(header.split(',')).toHaveLength(9)
+    })
+
+    test('follows the quantity, in days and with what it is struck as', () => {
+      const lines = [line({ quantity: 26 })]
+      const hire = bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 })
+      const csv = bomCsv(lines, { subject: 'Project', hire })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header.split(',').slice(5, 8)).toEqual(['Quantity', 'Days held', 'Struck as'])
+      // 250/(16 + 10) = 9.62 d, and the cell says which row of the table that is.
+      expect(dataRows(csv)[0]).toContain(',26,9.62,Props to a slab,no,')
+    })
+
+    test('names the standard before any period, so 10 days is not read as the wrong clock', () => {
+      // ACI counts only hours above 10 °C. A programme written off the wrong clock
+      // strikes early in a cold spring, and nothing in the numbers themselves says so.
+      const lines = [line()]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        hire: bomHire(lines, () => ['slab-props'], 'ACI_347', {}),
+      })
+
+      expect(rows(csv).some((row) => row.startsWith('Striking standard,'))).toBe(true)
+      expect(rows(csv).some((row) => row.includes('cumulative time above 10 °C'))).toBe(true)
+    })
+
+    test('lists each distinct period with the clause that governs it', () => {
+      const lines = [line({ quantity: 26 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        hire: bomHire(lines, () => ['slab-props', 'vertical-form'], 'BS_8110', {
+          temperatureC: 16,
+        }),
+      })
+
+      // `includes` rather than `startsWith`, because the vertical row's own label
+      // contains a comma and is therefore a quoted cell.
+      const periods = rows(csv).filter((row) => row.includes('Period —'))
+      expect(periods).toHaveLength(2)
+      expect(periods.some((row) => row.includes('250/(t + 10)'))).toBe(true)
+      expect(periods.some((row) => row.includes('300/(t + 10)'))).toBe(true)
+    })
+
+    test('an assumed input is an ASSUMED row, not an INCOMPLETE one', () => {
+      // The tables print their own conservative column, so an unstated temperature is
+      // still an answer. It is a different claim from one the job made, and this row is
+      // the only thing that says which.
+      const lines = [line()]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        hire: bomHire(lines, () => ['slab-props'], 'BS_8110', {}),
+      })
+
+      expect(rows(csv).some((row) => row.startsWith('ASSUMED,'))).toBe(true)
+      expect(rows(csv).some((row) => row.startsWith('INCOMPLETE,'))).toBe(false)
+    })
+
+    test('a part nothing strikes says so rather than reading zero days', () => {
+      // A tie is cut off inside the wall and a drum of release agent is gone. A 0 prices
+      // spent material as plant returned the same day, and a spreadsheet multiplies it.
+      const lines = [line({ kind: 'tie', description: 'Tie rod', quantity: 40 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        hire: bomHire(lines, () => [], 'BS_8110', {}),
+      })
+
+      expect(dataRows(csv)[0]).toContain(',40,,not struck,no,')
+    })
+
+    test('a line spanning two periods shows the longest and says it is mixed', () => {
+      // The case the module is built around: the same catalog id props a slab and rakes
+      // a wall, and `bomLines` groups them because a delivery note does.
+      const lines = [line({ quantity: 26 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        hire: bomHire(
+          lines,
+          (mark) => (mark === 'P-A-1-00000' ? ['slab-props'] : ['vertical-form']),
+          'BS_8110',
+          { temperatureC: 16 },
+        ),
+      })
+
+      expect(dataRows(csv)[0]).toContain('Props to a slab (mixed — longest shown)')
+    })
+
+    test('the total row is the longest period, never a sum of the column', () => {
+      // The arithmetic a spreadsheet does to any column of days. Summed, this bill's
+      // plant is on hire for longer than the job runs.
+      const lines = [line({ quantity: 26 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        hire: bomHire(lines, () => ['slab-props', 'vertical-form'], 'BS_8110', {
+          temperatureC: 16,
+        }),
+      })
+
+      const total = rows(csv).find((row) => row.includes('TOTAL')) as string
+      expect(total).toContain(',26,9.62,"longest, not a total",')
+    })
+
+    test('sits between the supply split and the unit, in the header and the rows alike', () => {
+      // Out of step by one column, every figure below the fold answers the wrong
+      // question — and the file still opens.
+      const lines = [line({ quantity: 26 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        supply: bomSupply(lines, { 'framax-2700-900': 20 }),
+        hire: bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 }),
+      })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header.split(',').slice(5, 12)).toEqual([
+        'Quantity',
+        'From own stock',
+        'To hire',
+        'Consumed',
+        'Days held',
+        'Struck as',
+        'Unit',
+      ])
+      expect(dataRows(csv)[0]).toContain(',26,20,6,0,9.62,Props to a slab,no,')
     })
   })
 })

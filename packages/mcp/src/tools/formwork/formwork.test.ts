@@ -53,9 +53,20 @@ interface BillReply {
     fromOwnStock?: number
     toHire?: number
     consumed?: number
+    daysHeld: number | null
+    struckAs: string | null
+    mixedPeriods?: string[]
   }>
   totalWeightKg: number
   totalWeightComplete: boolean
+  hire: {
+    standard: string
+    basis: string
+    longestDaysHeld: number
+    periods: Array<{ struckAs: string; days: number; governingRule: string }>
+    assumed: string[]
+    substitutedFromAnotherCodeFamily: boolean
+  }
   supply?: {
     fromOwnStock: number
     toHire: number
@@ -279,6 +290,14 @@ function withStock(
   nodes: Record<string, unknown>,
   owned: Record<string, number>,
 ): Record<string, unknown> {
+  return withSettings(nodes, { stock: { owned } })
+}
+
+/** The settings node, for the groups a bill reads other than the rack. */
+function withSettings(
+  nodes: Record<string, unknown>,
+  settings: Record<string, unknown>,
+): Record<string, unknown> {
   return {
     ...nodes,
     'formwork-settings_1': {
@@ -289,7 +308,7 @@ function withStock(
       visible: true,
       metadata: {},
       children: [],
-      stock: { owned },
+      ...settings,
     },
   }
 }
@@ -508,6 +527,60 @@ describe('the formwork MCP tools', () => {
     // A type the bill never draws on, named rather than dropped.
     expect(reply.supply?.ownedNotUsedHere).toEqual(['eurex-20-top'])
     expect(reply.caveats.some((caveat) => caveat.includes('not a total'))).toBe(true)
+  })
+
+  test('every line says how long it is held, and always answers', async () => {
+    // Unlike the supply split, which is absent until a rack is recorded. A strike period
+    // is a consequence of the code the project is already designed under, so silence
+    // about the curing inputs names an assumption rather than withholding the answer.
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.supply).toBeUndefined()
+    expect(reply.hire.longestDaysHeld).toBeGreaterThan(0)
+    expect(reply.hire.assumed.length).toBeGreaterThan(0)
+    const panel = reply.bom.find((line) => line.catalogId !== null)
+    expect(panel?.struckAs).toBe('vertical-form')
+    // Null rather than 0 for a part nothing strikes — a 0 reads as plant returned the
+    // same day, and it is a figure a model will multiply by a rate.
+    const notStruck = reply.bom.filter((line) => line.daysHeld === null)
+    expect(notStruck.length).toBeGreaterThan(0)
+    expect(notStruck.every((line) => line.struckAs === null)).toBe(true)
+  })
+
+  test('says which clock its periods are on, and when they came from another family', async () => {
+    // The shipped default is DIN, which publishes no striking table — its family answers
+    // removal in EN 13670. Falling to BS 8110 is right and it is a substitution.
+    load(twoLevels())
+    const din = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(din.hire.standard).toBe('BS_8110')
+    expect(din.hire.basis).toBe('calendar')
+    expect(din.hire.substitutedFromAnotherCodeFamily).toBe(true)
+    expect(din.caveats.some((caveat) => caveat.includes('publishes no striking periods'))).toBe(
+      true,
+    )
+
+    load(withSettings(twoLevels(), { pressureStandard: 'ACI_347' }))
+    const aci = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    // Cumulative hours above 10 °C, not calendar days. A programme written off the wrong
+    // clock strikes early in a cold spring, and only this field says which it is.
+    expect(aci.hire.basis).toBe('qualifying-time')
+    expect(aci.hire.substitutedFromAnotherCodeFamily).toBe(false)
+    expect(aci.caveats.some((caveat) => caveat.includes('above 10 °C'))).toBe(true)
+  })
+
+  test('a recorded curing temperature lengthens the hire and drops the assumption', async () => {
+    load(twoLevels())
+    const assumed = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    load(withSettings(twoLevels(), { curing: { surfaceTemperatureC: 5 } }))
+    const cold = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(cold.hire.longestDaysHeld).toBeGreaterThan(assumed.hire.longestDaysHeld)
+    expect(cold.hire.assumed.some((entry) => entry.includes('No curing surface'))).toBe(false)
   })
 
   test('an empty scene answers rather than throwing', async () => {

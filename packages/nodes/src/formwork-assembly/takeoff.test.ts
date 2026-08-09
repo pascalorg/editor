@@ -162,7 +162,63 @@ describe('takeoffCsv', () => {
 
     const line = solution.bom[0]
     expect(line).toBeDefined()
-    expect(text).toContain(`,${line?.quantity},${line?.unit},`)
+    expect(text).toContain(`,${line?.quantity},`)
+    expect(text).toContain(`,${line?.unit},`)
+  })
+
+  test('every line says how long it is held, and a tie says it is not struck at all', () => {
+    // The second factor a hire charge needs, and the one that is only reachable here:
+    // the period is per thing-struck and a bill line is per catalog id, so nothing in
+    // the serialiser or the solver alone can produce this column.
+    const solution = solveProjectFormwork(
+      sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1')),
+    )
+
+    const { text } = takeoffCsv(solution, 'Project')
+
+    const header = text.split('\n').find((row) => row.startsWith('Mark count,')) as string
+    expect(header).toContain('Days held,Struck as')
+    expect(text).toContain('Vertical form to a wall, column or beam side')
+    // A tie is cut off inside the wall. A 0 would price it as plant returned same-day.
+    expect(text.split('\n').find((row) => row.startsWith('40,tie'))).toContain(',not struck,')
+  })
+
+  test('a DIN project says its periods came from another code family', () => {
+    // The shipped default is DIN, which publishes no striking table at all — its family
+    // answers removal in EN 13670. Every figure in the column is BS 8110's, and only
+    // this row says so.
+    const solution = solveProjectFormwork(
+      sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1')),
+    )
+
+    const { text } = takeoffCsv(solution, 'Project')
+
+    expect(text).toContain('DIN 18218 publishes no striking periods')
+    expect(text).toContain('Striking standard,BS 8110')
+  })
+
+  test('the curing temperature the project stated lengthens the period in the file', () => {
+    // The end of the chain the `curing` group exists for: a January cure is a longer
+    // hire, and the file is where somebody acts on it.
+    const scene = sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1'))
+    const warm = solveProjectFormwork(scene)
+    const cold = solveProjectFormwork({
+      ...scene,
+      'formwork-settings_1': {
+        object: 'node',
+        id: 'formwork-settings_1',
+        type: 'formwork-settings',
+        parentId: 'site_1',
+        visible: true,
+        metadata: {},
+        children: [],
+        curing: { surfaceTemperatureC: 5 },
+      } as unknown as AnyNode,
+    })
+
+    expect(cold.hire.longestHours).toBeGreaterThan(warm.hire.longestHours)
+    // And the assumption is gone, because the job answered the question.
+    expect(takeoffCsv(cold, 'Project').text).not.toContain('No curing surface temperature')
   })
 
   test('the owned/hired split reaches the file, columns and all', () => {

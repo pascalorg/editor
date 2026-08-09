@@ -45,13 +45,7 @@ export const PressureStandardChoice = z.enum([
 export type PressureStandardChoice = z.infer<typeof PressureStandardChoice>
 
 /** The contract's measurement rules — what the client actually pays for. */
-export const MeasurementStandardChoice = z.enum([
-  'IS_1200_5',
-  'NRM2',
-  'HKSMM4',
-  'CESMM4',
-  'POMI',
-])
+export const MeasurementStandardChoice = z.enum(['IS_1200_5', 'NRM2', 'HKSMM4', 'CESMM4', 'POMI'])
 export type MeasurementStandardChoice = z.infer<typeof MeasurementStandardChoice>
 
 /**
@@ -221,6 +215,41 @@ export const FormworkStockSettings = z.object({
 })
 export type FormworkStockSettings = z.infer<typeof FormworkStockSettings>
 
+/**
+ * How the concrete is cured, which is what decides when the form comes off.
+ *
+ * A separate group from `placement` rather than three more fields in it, because it
+ * is a different half of the pour: `placement` is what happens while the concrete
+ * goes in and `curing` is what happens after it stops. The distinction is not
+ * cosmetic — the two halves take *different temperatures*, and folding them together
+ * is how a January pour gets July's strike time.
+ *
+ * `surfaceTemperatureC` is the concrete's surface while it cures, which is BS 8110
+ * Table 6.2's `t`. It is deliberately not derived from `placement.concreteTemperatureC`:
+ * that is the mix as it arrives, and concrete placed at 20 °C into a form standing in
+ * 4 °C air does not cure at 20. Worse, the two move the design in *opposite*
+ * directions — a colder mix raises the pressure the form is built for, and a colder
+ * cure lengthens the time it is held — so a single field would make one of the two
+ * answers wrong whichever value it held.
+ */
+export const CuringSettings = z.object({
+  /** Concrete surface temperature while it cures, °C. Not the placing temperature. */
+  surfaceTemperatureC: z.number().finite().min(-20).max(60).optional(),
+  /**
+   * High-early-strength concrete. Both codes permit a shorter period and neither
+   * attaches a factor to it, so this shortens nothing — it reports that the reduction
+   * is there for the engineer to approve.
+   */
+  highEarlyStrength: z.boolean().optional(),
+  /**
+   * The soffit form comes away without disturbing the props — a drophead or
+   * early-strip system. ACI 347 footnote ‡ halves the form's period, floored at 3
+   * days, and this is the clause the whole drophead market exists on.
+   */
+  shoresRemain: z.boolean().optional(),
+})
+export type CuringSettings = z.infer<typeof CuringSettings>
+
 export const FormworkProjectSettingsNode = BaseNode.extend({
   id: objectId('formwork-settings'),
   type: nodeType('formwork-settings'),
@@ -230,6 +259,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   measurementStandard: MeasurementStandardChoice.optional(),
   concrete: ConcreteMixSettings.optional(),
   placement: PlacementSettings.optional(),
+  curing: CuringSettings.optional(),
   falseworkLoads: FalseworkLoadSettings.optional(),
   bracing: BracingSettings.optional(),
   parts: FormworkPartSettings.optional(),
@@ -241,6 +271,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - measurementStandard: the contract's quantity rules (IS 1200, NRM2, HKSMM4, CESMM4, POMI)
   - concrete: the mix — density/unit weight, consistency class, slump, cement blend, admixtures, setting time
   - placement: how the pour is done — rate of rise, concrete temperature, vibration, pumped from base
+  - curing: what happens after the pour, which sets the striking time — surface temperature while curing (NOT the placing temperature), high-early-strength concrete, whether the soffit form leaves its props behind
   - falseworkLoads: soffit dead and live loads beyond the concrete itself, each raised to the ACI floor
   - bracing: wind, form weight and raker geometry for wall forms
   - parts: catalog ids for the panel system, sheathing, beam section and prop

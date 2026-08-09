@@ -1,3 +1,5 @@
+import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
+import type { BomHire, HireLine } from './hire'
 import type { BomLine } from './parts'
 import type { BomSupply, SupplyLine } from './supply'
 
@@ -40,6 +42,16 @@ export interface BomCsvScope {
    * question is not asked in the header unless there is an answer to it.
    */
   supply?: BomSupply
+  /**
+   * How long each line is held, where the caller has solved it.
+   *
+   * Optional here even though `ProjectFormwork.hire` never is, because this
+   * serialiser also takes a bare list of lines from a caller with no project settings
+   * to read — an element-scope export. Where it is given, it adds one column and a
+   * preamble row naming the standard, so a reader can tell 10 calendar days from 10
+   * qualifying days above 10 °C without opening the code.
+   */
+  hire?: BomHire
 }
 
 /**
@@ -76,6 +88,15 @@ const HEADER = [
  * against 20 owned is two numbers, and the row a yard acts on says both.
  */
 const SUPPLY_HEADER = ['From own stock', 'To hire', 'Consumed'] as const
+
+/**
+ * How long the line is held, and as what.
+ *
+ * Two columns because the number alone is not actionable: 10 days is the answer for
+ * the props under a slab and 4 for the deck over them, and a reader who cannot see
+ * which is which has no way to check the figure against the drawing.
+ */
+const HIRE_HEADER = ['Days held', 'Struck as'] as const
 
 /**
  * Why a line's parts are what they are, in the yard's terms rather than the type's.
@@ -128,6 +149,29 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
     // figure from the tonnage on site and it is the one a hire desk quotes from.
     rows.push(['On hire kg', round2(supply.hiredWeightKg)].join(','))
   }
+  const hire = scope.hire
+  if (hire) {
+    // Which clock, before any period below it. Under ACI these are cumulative hours
+    // above 10 °C rather than calendar days, and a programme written off the wrong one
+    // strikes early in a cold spring.
+    rows.push(['Striking standard', cell(STRIKING_STANDARD_LABELS[hire.standard])].join(','))
+    rows.push(['Longest period held d', round2(hire.longestHours / 24)].join(','))
+    for (const period of hire.periods) {
+      rows.push(
+        [
+          cell(`Period — ${STRIKE_TARGET_LABELS[period.target]}`),
+          round2(period.days),
+          cell(period.governingRule),
+        ].join(','),
+      )
+    }
+    for (const assumption of hire.assumed) {
+      // An assumed input is not a caveat about the bill, so it is not an INCOMPLETE row
+      // — but a period taken from a table's own default column is a different claim
+      // from one the job stated, and only this row says which.
+      rows.push(['ASSUMED', cell(assumption.message)].join(','))
+    }
+  }
   if (supply && supply.unusedOwnedIds.length > 0) {
     // Plant the project owns and this scope never asks for. Nothing in the lines below
     // can say so, because a line the bill does not contain has no row.
@@ -146,10 +190,33 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       : [entry.ownedQuantity, entry.hiredQuantity, entry.consumedQuantity]
   }
 
+  const byHire = new Map<BomLine, HireLine>((hire?.lines ?? []).map((entry) => [entry.line, entry]))
+  const hireCells = (line: BomLine): Array<string | number> => {
+    if (!hire) return []
+    const entry = byHire.get(line)
+    if (entry?.hours === undefined) {
+      // A tie is cut off in the wall and a drum of release agent is gone. A 0 here
+      // would price spent material as plant returned the same day, and a spreadsheet
+      // would multiply it.
+      return ['', 'not struck']
+    }
+    return [
+      round2(entry.hours / 24),
+      cell(
+        entry.mixed
+          ? `${STRIKE_TARGET_LABELS[entry.striking?.target as never]} (mixed — longest shown)`
+          : STRIKE_TARGET_LABELS[entry.striking?.target as never],
+      ),
+    ]
+  }
+
   rows.push(
-    supply
-      ? [...HEADER.slice(0, 6), ...SUPPLY_HEADER, ...HEADER.slice(6)].join(',')
-      : HEADER.join(','),
+    [
+      ...HEADER.slice(0, 6),
+      ...(supply ? SUPPLY_HEADER : []),
+      ...(hire ? HIRE_HEADER : []),
+      ...HEADER.slice(6),
+    ].join(','),
   )
   let totalKg = 0
   let everyLineWeighed = lines.length > 0
@@ -165,6 +232,7 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
         cell(CONDITION_LABELS[line.provenance]),
         line.quantity,
         ...supplyCells(line),
+        ...hireCells(line),
         cell(line.unit),
         line.totalWeightKg === undefined ? '' : round2(line.totalWeightKg),
         cell(line.marks.join(' ')),
@@ -189,6 +257,10 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       '',
       lines.reduce((sum, line) => sum + line.quantity, 0),
       ...(supply ? [supply.ownedQuantity, supply.hiredQuantity, supply.consumedQuantity] : []),
+      // The longest period rather than a sum of the column above. A set comes free when
+      // the last of it does, and adding periods together produces a hire longer than
+      // the job — which is the arithmetic a spreadsheet does to any column of days.
+      ...(hire ? [round2(hire.longestHours / 24), cell('longest, not a total')] : []),
       '',
       lines.length === 0 ? '' : round2(totalKg),
       '',

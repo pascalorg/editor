@@ -255,6 +255,32 @@ const PLACEMENT_SETTINGS_SCHEMA = z.object({
     ),
 })
 
+const CURING_SETTINGS_SCHEMA = z.object({
+  surfaceTemperatureC: z
+    .number()
+    .min(-20)
+    .max(60)
+    .nullable()
+    .optional()
+    .describe(
+      'concrete surface temperature while it cures, °C — BS 8110 Table 6.2’s t. NOT placement.concreteTemperatureC, which is the mix as it arrives: concrete placed at 20 °C into a form standing in 4 °C air does not cure at 20, and the two move the design opposite ways — a colder mix raises the pressure, a colder cure lengthens the hold',
+    ),
+  highEarlyStrength: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      'both codes permit a shorter period and neither attaches a factor to it, so this shortens nothing — it reports that the reduction is the engineer’s to approve',
+    ),
+  shoresRemain: z
+    .boolean()
+    .nullable()
+    .optional()
+    .describe(
+      'the soffit form comes away without disturbing the props — a drophead or early-strip system. ACI 347 footnote ‡ halves the form’s period, floored at 3 days; the props themselves are never halved',
+    ),
+})
+
 const FALSEWORK_LOAD_SETTINGS_SCHEMA = z.object({
   formworkSelfWeightKpa: z.number().min(0).max(10).nullable().optional(),
   rebarKnM3: z.number().min(0).max(10).nullable().optional(),
@@ -739,6 +765,11 @@ export function buildTools(
             concreteTemperatureC: resolved.concreteTemperatureC,
             concrete: resolved.concrete,
             placement: resolved.placement,
+            // Unstated fields are left unstated here rather than defaulted, unlike the
+            // pressure inputs above, because the striking tables publish their own
+            // conservative column — see `hire.assumed` on inspect_project_formwork,
+            // which names what the code supplied.
+            curing: resolved.curing,
             falseworkLoads: resolved.falseworkLoads,
             bracing: resolved.bracing,
             parts: resolved.parts,
@@ -755,6 +786,7 @@ export function buildTools(
                 measurementStandard: node.measurementStandard ?? null,
                 concrete: node.concrete ?? null,
                 placement: node.placement ?? null,
+                curing: node.curing ?? null,
                 falseworkLoads: node.falseworkLoads ?? null,
                 bracing: node.bracing ?? null,
                 parts: node.parts ?? null,
@@ -792,6 +824,9 @@ export function buildTools(
           'the binder, asked as what it is rather than as the coefficient it implies',
         ),
         placement: PLACEMENT_SETTINGS_SCHEMA.optional(),
+        curing: CURING_SETTINGS_SCHEMA.optional().describe(
+          'what happens after the pour, which decides when the form comes off and therefore how long every hired part is held. Its temperature is the curing surface, not the placing temperature in placement',
+        ),
         falseworkLoads: FALSEWORK_LOAD_SETTINGS_SCHEMA.optional().describe(
           "what a soffit carries beyond the concrete itself; each is raised to ACI §2.2.1's floor",
         ),
@@ -982,7 +1017,7 @@ export function buildTools(
     }),
     inspect_project_formwork: tool({
       description:
-        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire — record it with set_formwork_settings ownedStock. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock.',
+        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire — record it with set_formwork_settings ownedStock. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate, because no price is recorded anywhere in this model. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied — record the real ones with set_formwork_settings curing.',
       inputSchema: z.object({
         levelId: z
           .string()
@@ -1020,6 +1055,7 @@ export function buildTools(
           unshuttered: [...scoped].filter((id) => !shuttered.has(id as string)),
           bom: solution.bom.map((line, index) => {
             const split = solution.supply?.lines[index]
+            const held = solution.hire.lines[index]
             return {
               description: line.description,
               catalogId: line.catalogId ?? null,
@@ -1037,6 +1073,12 @@ export function buildTools(
                     consumed: split.consumedQuantity,
                   }
                 : {}),
+              // Null rather than 0 for a part nothing strikes: a tie is cut off inside
+              // the wall and a drum of release agent is gone, and a 0 invites the model
+              // to report it as plant returned the same day.
+              daysHeld: held?.hours === undefined ? null : round(held.hours / 24),
+              struckAs: held?.striking === undefined ? null : held.striking.target,
+              ...(held?.mixed ? { mixedPeriods: held.mixed.targets } : {}),
             }
           }),
           totalWeightKg: round(solution.totalWeightKg),
@@ -1058,6 +1100,20 @@ export function buildTools(
                 },
               }
             : {}),
+          // Never a total. A set is tied up for its slowest release, and a model handed a
+          // column of days will otherwise add them and quote a hire longer than the job.
+          hire: {
+            standard: solution.hire.standard,
+            basis: solution.hire.basis,
+            longestDaysHeld: round(solution.hire.longestHours / 24),
+            periods: solution.hire.periods.map((period) => ({
+              struckAs: period.target,
+              days: round(period.days),
+              governingRule: period.governingRule,
+            })),
+            assumed: solution.hire.assumed.map((entry) => entry.message),
+            substitutedFromAnotherCodeFamily: solution.strikingStandardSubstituted,
+          },
           beyondCapacity: solution.beyondCapacityMarks.map((part) => ({
             elementId: part.hostId,
             mark: part.mark,

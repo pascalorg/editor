@@ -82,6 +82,7 @@ export function takeoffCsv(
       shutterCount: solution.shutterCount,
       caveats: projectFormworkCaveats(solution),
       ...(solution.supply ? { supply: solution.supply } : {}),
+      hire: solution.hire,
     }),
   }
 }

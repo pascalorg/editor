@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, ColumnNode, WallNode } from '@pascal-app/core'
+import type { AnyNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core'
 import type { FormworkAssemblyNode } from './schema'
 import { projectFormworkCaveats, solveProjectFormwork } from './solve-project'
 
@@ -55,6 +55,32 @@ function makeColumn(id: string, overrides: Partial<ColumnNode> = {}): ColumnNode
   } as ColumnNode
 }
 
+function makeSlab(id: string, overrides: Partial<SlabNode> = {}): SlabNode {
+  return {
+    object: 'node',
+    id,
+    type: 'slab',
+    parentId: 'level_1',
+    visible: true,
+    metadata: {},
+    children: [],
+    polygon: [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ],
+    holes: [],
+    holeMetadata: [],
+    elevation: 3,
+    thickness: 0.2,
+    recessed: false,
+    autoFromWalls: false,
+    formworkType: 'plywood',
+    ...overrides,
+  } as SlabNode
+}
+
 function makeAssembly(
   id: string,
   hostId: string,
@@ -83,7 +109,7 @@ function makeAssembly(
 
 /** A level holding whatever is passed, which is what face classification reads. */
 function sceneOf(
-  ...members: Array<WallNode | ColumnNode | FormworkAssemblyNode>
+  ...members: Array<WallNode | ColumnNode | SlabNode | FormworkAssemblyNode>
 ): Record<string, AnyNode> {
   const hosts = members.filter((node) => node.type !== 'formwork-assembly')
   const nodes: Record<string, AnyNode> = {
@@ -119,6 +145,26 @@ function withStock(
       metadata: {},
       children: [],
       ...(stock ? { stock } : {}),
+    } as unknown as AnyNode,
+  }
+}
+
+/** The pour after it is placed, which is what a strike period is taken from. */
+function withCuring(
+  nodes: Record<string, AnyNode>,
+  settings: Record<string, unknown>,
+): Record<string, AnyNode> {
+  return {
+    ...nodes,
+    'formwork-settings_1': {
+      object: 'node',
+      id: 'formwork-settings_1',
+      type: 'formwork-settings',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      ...settings,
     } as unknown as AnyNode,
   }
 }
@@ -353,6 +399,166 @@ describe('the owned/hired split', () => {
     )
 
     expect(solution.supply?.unusedOwnedIds).toEqual(['eurex-20-top'])
+  })
+})
+
+describe('how long the bill is held', () => {
+  test('is always answered, unlike the owned/hired split', () => {
+    // The asymmetry is the point. Ownership is a fact about the yard and silence about
+    // it says nothing; a strike period is a consequence of the code the project is
+    // already designed under, so there is always an answer and what nobody stated is
+    // named in `assumed` instead.
+    const solution = solveProjectFormwork(steelWallScene())
+
+    expect(solution.supply).toBeUndefined()
+    expect(solution.hire.longestHours).toBeGreaterThan(0)
+    expect(solution.hire.assumed.map((entry) => entry.kind)).toContain('temperature')
+  })
+
+  test('a wall’s parts are struck as vertical form, its ties not at all', () => {
+    // The join this file is the only place to test: core knows a prop under a slab is a
+    // shore and a prop against a wall is a raker, and it cannot tell them apart without
+    // the host — which only this layer has.
+    const solution = solveProjectFormwork(steelWallScene())
+    const byKind = new Map(solution.hire.lines.map((entry) => [entry.line.kind, entry]))
+
+    expect(byKind.get('panel')?.striking?.target).toBe('vertical-form')
+    expect(byKind.get('brace')?.striking?.target).toBe('vertical-form')
+    // Cut off inside the wall. A 0 would price spent material as plant returned the
+    // same day, and it would enter the longest-period comparison as an answer.
+    expect(byKind.get('tie')?.hours).toBeUndefined()
+    expect(solution.hire.complete).toBe(false)
+  })
+
+  test('a slab’s deck and the props under it are two periods, not one', () => {
+    // The 2.5× gap the whole drophead market exists on — 100/(t+10) for the soffit form
+    // against 250/(t+10) for the shores. A per-element period averages it away and
+    // prices the panels for the props' time.
+    const solution = solveProjectFormwork(
+      sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0)),
+    )
+    const targets = solution.hire.periods.map((period) => period.target)
+
+    expect(targets).toContain('slab-props')
+    expect(targets).toContain('slab-soffit-form')
+    // Longest first, so a readout leads with when the last of the set comes free.
+    expect(targets[0]).toBe('slab-props')
+  })
+
+  test('the period is the slowest release across the scope, never a sum', () => {
+    // The props holding one slab do not shorten the props holding the next, so adding
+    // periods produces a hire longer than the job. This is the figure a planner reads.
+    const solution = solveProjectFormwork(
+      sceneOf(
+        makeSlab('slab_1'),
+        makeAssembly('formwork-assembly_1', 'slab_1', 0, 0),
+        makeWall('wall_1'),
+        makeAssembly('formwork-assembly_2', 'wall_1', 0, 0),
+      ),
+    )
+
+    expect(solution.hire.longestHours).toBe(
+      Math.max(...solution.hire.periods.map((period) => period.hours)),
+    )
+    expect(solution.hire.longestHours).toBeLessThan(
+      solution.hire.periods.reduce((sum, period) => sum + period.hours, 0),
+    )
+  })
+
+  test('the curing temperature lengthens every period, and the placing one does not', () => {
+    // The two halves of a pour take different temperatures and they move the design in
+    // opposite directions: a colder mix pushes harder, a colder cure holds longer. One
+    // field would be wrong for one of the two answers whichever value it held.
+    const scene = steelWallScene()
+    const assumed = solveProjectFormwork(scene).hire.longestHours
+    const cold = solveProjectFormwork(withCuring(scene, { curing: { surfaceTemperatureC: 5 } }))
+    const coldMix = solveProjectFormwork(
+      withCuring(scene, { placement: { concreteTemperatureC: 5 } }),
+    )
+
+    expect(cold.hire.longestHours).toBeGreaterThan(assumed)
+    expect(coldMix.hire.longestHours).toBe(assumed)
+    expect(cold.hire.assumed.map((entry) => entry.kind)).not.toContain('temperature')
+  })
+
+  test('a drophead halves the soffit form’s period and leaves the props alone', () => {
+    // ACI footnote ‡, which needs the pressure code on ACI too — the two families do not
+    // share a striking table, and this is the one clause that reads `shoresRemain`.
+    const scene = sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0))
+    const plain = solveProjectFormwork(withCuring(scene, { pressureStandard: 'ACI_347' }))
+    const drophead = solveProjectFormwork(
+      withCuring(scene, { pressureStandard: 'ACI_347', curing: { shoresRemain: true } }),
+    )
+
+    const formOf = (solution: typeof plain) =>
+      solution.hire.periods.find((period) => period.target === 'slab-soffit-form')?.hours as number
+    const propsOf = (solution: typeof plain) =>
+      solution.hire.periods.find((period) => period.target === 'slab-props')?.hours as number
+
+    expect(formOf(drophead)).toBeLessThan(formOf(plain))
+    expect(propsOf(drophead)).toBe(propsOf(plain))
+  })
+
+  test('an ACI project’s periods are qualifying hours, not calendar days', () => {
+    // The failure that turns a correct figure into a missed date. ACI counts only time
+    // above 10 °C and the days need not be consecutive, so 4 ACI days can be a fortnight
+    // in a cold spring.
+    const aci = solveProjectFormwork(withCuring(steelWallScene(), { pressureStandard: 'ACI_347' }))
+    const bs = solveProjectFormwork(withCuring(steelWallScene(), { pressureStandard: 'BS_8110' }))
+
+    expect(aci.hire.basis).toBe('qualifying-time')
+    expect(bs.hire.basis).toBe('calendar')
+    expect(aci.hire.warnings.map((warning) => warning.kind)).toContain(
+      'qualifying-time-not-calendar',
+    )
+  })
+
+  test('a DIN project is told its periods came from another code family', () => {
+    // DIN publishes no striking table at all — its family answers removal in EN 13670,
+    // which is uncovered here. Falling to BS 8110 is right and it is a substitution.
+    const din = solveProjectFormwork(
+      withCuring(steelWallScene(), { pressureStandard: 'DIN_18218' }),
+    )
+
+    expect(din.hire.standard).toBe('BS_8110')
+    expect(din.strikingStandardSubstituted).toBe(true)
+    expect(solveProjectFormwork(steelWallScene()).strikingStandardSubstituted).toBe(true)
+    expect(
+      solveProjectFormwork(withCuring(steelWallScene(), { pressureStandard: 'BS_8110' }))
+        .strikingStandardSubstituted,
+    ).toBe(false)
+  })
+
+  test('the hire sits beside the bill line it is about, in the bill’s own order', () => {
+    // Read positionally by the panel, the CSV and both AI tools.
+    const solution = solveProjectFormwork(steelWallScene())
+
+    expect(solution.hire.lines.map((entry) => entry.line)).toEqual(solution.bom)
+  })
+
+  test('an omitted part is out of both passes, so no period describes one', () => {
+    // `bomLines` drops an omitted part from the quantity *and* from the marks, and the
+    // target map is built off the same filter. Filtered in one place and not the other,
+    // a line every mark of which was omitted would still report a period.
+    const plain = solveProjectFormwork(steelWallScene())
+    const braces = plain.elements[0]?.shutters[0]?.parts.filter(
+      (part) => part.kind === 'brace',
+    ) as Array<{ mark: string }>
+    expect(braces.length).toBeGreaterThan(0)
+
+    const solution = solveProjectFormwork(
+      sceneOf(
+        makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+        makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, {
+          partOverrides: Object.fromEntries(
+            braces.map((part) => [part.mark, { omitted: true }]),
+          ) as FormworkAssemblyNode['partOverrides'],
+        } as Partial<FormworkAssemblyNode>),
+      ),
+    )
+
+    expect(solution.bom.some((line) => line.kind === 'brace')).toBe(false)
+    expect(solution.hire.lines.some((entry) => entry.line.kind === 'brace')).toBe(false)
   })
 })
 

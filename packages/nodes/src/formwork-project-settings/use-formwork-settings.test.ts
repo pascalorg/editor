@@ -192,6 +192,17 @@ describe('formwork settings write — unset stays unset', () => {
 
     expect(settings()?.placement).toBeUndefined()
   })
+
+  test('curing is a group of its own, and writing it leaves the placing temperature alone', () => {
+    // The two temperatures are separate fields because they move the design in opposite
+    // directions: a colder mix pushes harder, a colder cure holds longer. A write that
+    // touched both would be wrong for one of the two answers whatever it wrote.
+    setFormworkSettingsGroupField('placement', { concreteTemperatureC: 25 })
+    setFormworkSettingsGroupField('curing', { surfaceTemperatureC: 5 })
+
+    expect(settings()?.curing).toEqual({ surfaceTemperatureC: 5 })
+    expect(settings()?.placement).toEqual({ concreteTemperatureC: 25 })
+  })
 })
 
 describe('formwork settings write — cement, the second nesting level', () => {

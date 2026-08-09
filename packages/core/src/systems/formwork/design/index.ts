@@ -29,6 +29,28 @@ export {
   MAX_PROP_SPACING_M,
 } from './falsework'
 export {
+  ACI_HALVED_FLOOR_DAYS,
+  ACI_VERTICAL_FORM_H,
+  BS_TEMPERATURE_CAP_C,
+  isSubstitutedStrikingStandard,
+  MIN_CURING_TEMPERATURE_C,
+  MIN_QUALIFYING_TEMPERATURE_C,
+  STRIKE_TARGET_LABELS,
+  STRIKING_STANDARD_IDS,
+  STRIKING_STANDARD_LABELS,
+  type StrikeTarget,
+  type StrikingAssumption,
+  type StrikingAssumptionKind,
+  type StrikingInput,
+  type StrikingStandardId,
+  type StrikingTime,
+  type StrikingWarning,
+  type StrikingWarningKind,
+  strikeTargetForPartKind,
+  strikingStandardFor,
+  strikingTime,
+} from './striking'
+export {
   DEFAULT_FORMWORK_SELF_WEIGHT_KPA,
   DEFAULT_REBAR_KN_M3,
   MIN_COMBINED_CARTS_KPA,
