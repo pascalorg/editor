@@ -459,14 +459,24 @@ function formatNumericValue(value: number) {
   return String(value)
 }
 
-function numericSanitizeIssuesToMessage(issues: NumericSanitizeIssue[]): string {
-  return issues
-    .map((issue) => {
-      const path = issue.path.map(String).join('.') || '<root>'
-      const to = issue.to === undefined ? '' : ` -> ${formatNumericValue(issue.to)}`
-      return `${path}: ${formatNumericValue(issue.from)} ${issue.action}${to}`
-    })
-    .join('; ')
+export function numericSanitizeIssuesToMessage(
+  issues: NumericSanitizeIssue[] | null | undefined,
+): string {
+  if (!Array.isArray(issues)) return ''
+
+  try {
+    return issues
+      .map((issue) => {
+        const path = Array.isArray(issue?.path)
+          ? issue.path.map(String).join('.') || '<root>'
+          : '<unknown>'
+        const to = issue?.to === undefined ? '' : ` -> ${formatNumericValue(issue.to)}`
+        return `${path}: ${formatNumericValue(issue?.from)} ${issue?.action ?? 'sanitized'}${to}`
+      })
+      .join('; ')
+  } catch {
+    return '<diagnostic unavailable>'
+  }
 }
 
 function warnSanitizedNodeMutation(
@@ -474,11 +484,18 @@ function warnSanitizedNodeMutation(
   nodeId: AnyNodeId,
   issues: NumericSanitizeIssue[],
 ) {
-  console.warn(
-    `[Scene] Sanitized invalid numeric node ${mutation}`,
-    nodeId,
-    numericSanitizeIssuesToMessage(issues),
-  )
+  let message = '<diagnostic unavailable>'
+  try {
+    message = numericSanitizeIssuesToMessage(issues)
+  } catch {
+    // Reporting must never interrupt a node mutation.
+  }
+
+  try {
+    console.warn(`[Scene] Sanitized invalid numeric node ${mutation}`, nodeId, message)
+  } catch {
+    // A broken diagnostic sink must not interrupt a node mutation either.
+  }
 }
 
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
