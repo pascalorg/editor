@@ -245,6 +245,28 @@ describe('pascal://agent-guide', () => {
     }
   })
 
+  test('says the two things a formwork answer is silently wrong about', async () => {
+    // Both failures produce a complete, plausible, unflagged number: an unshuttered
+    // element drops out of a bill that then reads as finished, and a stated formworkType
+    // with no attach behind it leaves a project believing it specified a wall it holds no
+    // shutter for. Neither shows up in the figures, so the guide has to name them.
+    const pair = await spinUp(registerAgentGuide)
+    try {
+      const res = await pair.client.readResource({ uri: 'pascal://agent-guide' })
+      const text = (res.contents[0] as { text?: string }).text ?? ''
+      expect(text).toContain('list_castable_elements')
+      expect(text).toContain('unshuttered')
+      expect(text).toContain('set_element_construction')
+      expect(text).toContain('attach_formwork')
+      // The pour pair, and the per-unit volume that must not be added up.
+      expect(text).toContain('set_pour_limits')
+      expect(text).toContain('inspect_pour_units')
+      expect(text).toContain('totalVolumeCuM')
+    } finally {
+      await pair.close()
+    }
+  })
+
   test('keeps the legacy agent guide URI as an alias', async () => {
     const pair = await spinUp(registerAgentGuide)
     try {

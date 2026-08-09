@@ -1,8 +1,15 @@
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import {
+  ATTACH_FORMWORK_DESCRIPTION,
+  applyConstructionPatch,
   applyFormworkPartPatch,
   applyFormworkSettingsPatch,
+  applyPourLimitsPatch,
+  castableElementSummary,
+  constructionPatchInput,
+  describeFormworkReconciliation,
+  describePourSplit,
   findFormworkSettingsNode,
   formworkPartPatchInput,
   formworkPartsQueryInput,
@@ -11,11 +18,18 @@ import {
   formworkSettingsReport,
   INSPECT_FORMWORK_PARTS_DESCRIPTION,
   INSPECT_FORMWORK_SETTINGS_DESCRIPTION,
+  INSPECT_POUR_UNITS_DESCRIPTION,
+  LIST_CASTABLE_ELEMENTS_DESCRIPTION,
   noFormworkAssembly,
+  noFormworkTypeSet,
+  POUR_CUT_REASON_LABELS,
   partByMark,
   partLabel,
+  pourLimitsPatchInput,
+  SET_ELEMENT_CONSTRUCTION_DESCRIPTION,
   SET_FORMWORK_PART_DESCRIPTION,
   SET_FORMWORK_SETTINGS_DESCRIPTION,
+  SET_POUR_LIMITS_DESCRIPTION,
   unknownPartMark,
   validationSummary,
 } from '@pascal-app/core/formwork'
@@ -242,102 +256,51 @@ export function buildTools(
 
   return {
     list_castable_elements: tool({
-      description:
-        'List every wall, column and slab in the current scene with its dimensions, pour sequence and current construction properties. An element with no formworkType is not shuttered yet.',
+      description: LIST_CASTABLE_ELEMENTS_DESCRIPTION,
       inputSchema: z.object({}),
       execute: async () => {
         toolCalls.push({ name: 'list_castable_elements', input: {} })
-        const elements = (Object.values(graph.nodes) as AnyNode[]).filter(isCastable).map((n) => ({
-          id: n.id,
-          kind: n.type,
-          // Only the fields that describe the element's extent — a wall runs
-          // between two points, a column stands at one, a slab is a polygon.
-          ...(n.type === 'wall'
-            ? { start: n.start, end: n.end, thickness: n.thickness, height: n.height }
-            : n.type === 'column'
-              ? {
-                  position: n.position,
-                  crossSection: n.crossSection,
-                  width: n.width,
-                  depth: n.depth,
-                  radius: n.radius,
-                  height: n.height,
-                }
-              : {
-                  polygon: n.polygon,
-                  holes: n.holes,
-                  elevation: n.elevation,
-                  thickness: n.thickness,
-                  edgeFaceCount: n.edgeFaceCount,
-                  soffitHeightAboveSupport: n.soffitHeightAboveSupport,
-                }),
-          formworkType: n.formworkType,
-          shutterMaterial: n.shutterMaterial,
-          tieSpacing: n.tieSpacing,
-          walerSpacing: n.walerSpacing,
-          scaffoldRequired: n.scaffoldRequired,
-          castOrder: n.castOrder,
-          formworkMode: n.formworkMode,
-        }))
+        // Core's summary, shared with the MCP surface: a field visible to one AI and
+        // hidden from the other is a decision the second one asks the user to restate.
+        const elements = (Object.values(graph.nodes) as AnyNode[])
+          .filter(isCastable)
+          .map((node) => castableElementSummary(node))
         return JSON.stringify(elements)
       },
     }),
     set_element_construction: tool({
-      description:
-        'Set formwork/construction properties on one wall, column or slab in the current scene. tieSpacing and walerSpacing are read per kind: on a wall they are the through-tie and waler centres, on a column the clamp/yoke spacing, and on a slab the bearer/prop and joist centres. Nothing is formed until formworkType names a system.',
-      inputSchema: z.object({
-        elementId: z.string(),
-        formworkType: z.enum(['plywood', 'aluminium', 'steel-panel', 'none']).optional(),
-        shutterMaterial: z.string().optional(),
-        tieSpacing: z.number().describe('meters').optional(),
-        walerSpacing: z.number().describe('meters').optional(),
-        scaffoldRequired: z.boolean().optional(),
-        castOrder: z
-          .number()
-          .int()
-          .optional()
-          .describe(
-            'pour sequence rank — a face butting an element cast earlier is not formed, so this changes the shutter',
-          ),
-        edgeFaceCount: z
-          .number()
-          .int()
-          .min(1)
-          .max(2)
-          .optional()
-          .describe('slabs only: 2 for an upstand or downstand edge beam'),
-        soffitHeightAboveSupport: z
-          .number()
-          .nonnegative()
-          .optional()
-          .describe('slabs only: soffit height above the floor the props stand on, meters'),
-      }),
-      execute: async ({ elementId, ...rest }) => {
-        toolCalls.push({ name: 'set_element_construction', input: { elementId, ...rest } })
+      description: SET_ELEMENT_CONSTRUCTION_DESCRIPTION,
+      inputSchema: z.object(constructionPatchInput),
+      execute: async ({ elementId, ...fields }) => {
+        toolCalls.push({ name: 'set_element_construction', input: { elementId, ...fields } })
         const element = castableOrError(elementId)
         if (typeof element === 'string') return element
-        const slabOnly = ['edgeFaceCount', 'soffitHeightAboveSupport']
-        const rejected = slabOnly.filter(
-          (key) => rest[key as keyof typeof rest] !== undefined && element.type !== 'slab',
-        )
-        if (rejected.length > 0) {
-          return `Error: ${rejected.join(' and ')} ${rejected.length === 1 ? 'applies' : 'apply'} to slabs only, and ${elementId} is a ${element.type}`
+        const result = applyConstructionPatch(element.type, element.formworkType, fields, elementId)
+        if (result.error !== undefined) return result.error
+        for (const [key, value] of Object.entries(result.writes)) {
+          // An explicit `undefined` deletes rather than stores: an unstated spacing is
+          // what encodes "solve this from the pour", so a key holding undefined would
+          // serialise as a stated null.
+          if (value === undefined) delete (element as Record<string, unknown>)[key]
+          else (element as Record<string, unknown>)[key] = value
         }
-        Object.assign(element, rest)
         onMutate()
-        return 'ok'
+        // Naming a system builds nothing, so the reply names the call that does. Without
+        // it the project believes it specified a steel-panel wall and holds no shutter.
+        return result.formingTurnedOn && shuttersOnHost(elementId).length === 0
+          ? `ok — ${result.changed.join(', ')}. Nothing is built yet: call attach_formwork on ${elementId} to raise the shutter.`
+          : `ok — ${result.changed.join(', ')}`
       },
     }),
     attach_formwork: tool({
-      description:
-        "Generate or update the formwork for a wall, column or slab, built for that kind: two tied faces for a wall, a clamped box or wrapped shaft for a column, a propped soffit deck plus edge forms for a slab. Only the faces the pour sequence actually leaves exposed are formed. An element with a lift cap or an expansion joint gets one assembly per pour unit, since each is erected, poured and struck separately. Call this after set_element_construction once formworkType is not 'none' — the user wants to see the formwork, not just set the properties. Safe to call again on an element that is already shuttered: it reconciles rather than duplicating, so a pour unit that still exists keeps its existing shutter and every per-part decision on it, only genuinely new pour units are built, and shutters whose pour unit has gone are removed. Call it again after any change to the pour limits, and read back what it reports — if it says decisions were discarded, tell the user which.",
+      description: ATTACH_FORMWORK_DESCRIPTION,
       inputSchema: z.object({ elementId: z.string() }),
       execute: async ({ elementId }) => {
         toolCalls.push({ name: 'attach_formwork', input: { elementId } })
         const element = castableOrError(elementId)
         if (typeof element === 'string') return element
         if (element.formworkType === undefined || element.formworkType === 'none') {
-          return `Error: ${elementId} has no formworkType set, so nothing is formed. Call set_element_construction first.`
+          return noFormworkTypeSet(elementId)
         }
         const levelNodes = Object.values(graph.nodes) as AnyNode[]
         const host = element as unknown as Parameters<typeof reconcileFormworkNodes>[0]
@@ -375,48 +338,34 @@ export function buildTools(
         }
         onMutate()
 
-        const total = keep.length + create.length
-        if (existing.length === 0) {
-          return total === 1
-            ? 'ok'
-            : `ok — ${total} assemblies, one per pour unit, and ${joints.length} construction ${joints.length === 1 ? 'joint' : 'joints'} between them`
-        }
-        if (create.length === 0 && orphan.length === 0) {
-          return `ok — already shuttered to match the pour: ${total} ${total === 1 ? 'assembly' : 'assemblies'}, unchanged. Every part decision on ${total === 1 ? 'it' : 'them'} is intact.`
-        }
-        const parts = [`now ${total} ${total === 1 ? 'assembly' : 'assemblies'}, one per pour unit`]
-        if (create.length > 0) parts.push(`${create.length} added`)
-        if (keep.length > 0) {
-          parts.push(
-            `${keep.length} kept with ${keep.length === 1 ? 'its' : 'their'} part decisions`,
-          )
-        }
-        if (orphan.length > 0) {
-          // Named, and the lost overrides counted. The model has to be able to
-          // tell the user what the rebuild cost them, because nothing else will.
-          parts.push(
-            `${orphan.length} removed as ${orphan.length === 1 ? 'its pour unit' : 'their pour units'} no longer ${orphan.length === 1 ? 'exists' : 'exist'}${discarded > 0 ? `, discarding ${discarded} part ${discarded === 1 ? 'decision' : 'decisions'} recorded on ${orphan.length === 1 ? 'it' : 'them'} — say so` : ''}`,
-          )
-        }
-        return `ok — ${parts.join('; ')}`
+        // Core's sentence, shared with the MCP surface: a rebuild reported there and
+        // re-read here has to describe the same rebuild the same way, and a
+        // discarded-decision count phrased two ways is a user believing two different
+        // things were lost.
+        return describeFormworkReconciliation({
+          existing: existing.length,
+          keep: keep.length,
+          create: create.length,
+          orphan: orphan.length,
+          discardedPartDecisions: discarded,
+          joints: joints.length,
+        })
       },
     }),
     set_pour_limits: tool({
-      description:
-        'Set the pour limits that split a wall or column into separately cast units. maxLiftHeight splits it vertically (a 9 m wall capped at 3 m is poured in three lifts); maxPourLength splits it along its length for shrinkage control (water-retaining practice caps a bay at about 7.5 m); maxPourVolume splits it by what the batch plant can deliver before the first concrete reaches initial set. A slab is one pour unit, so only maxLiftHeight is meaningful on it and it cannot slice a slab through its thickness. Each split unit needs its own shutter and changing a limit does not build them, so on an already-shuttered element you must call attach_formwork afterwards — until you do, the element is cast in more pours than it is formed for and its takeoff is short by the difference. Pass null to clear a limit. Ask the engineer for these values rather than guessing — they come from tie capacity, the pressure envelope, and the supply rate.',
-      inputSchema: z.object({
-        elementId: z.string(),
-        maxLiftHeight: z.number().positive().nullable().optional().describe('meters'),
-        maxPourLength: z.number().positive().nullable().optional().describe('meters'),
-        maxPourVolume: z.number().positive().nullable().optional().describe('cubic meters'),
-      }),
+      description: SET_POUR_LIMITS_DESCRIPTION,
+      inputSchema: z.object(pourLimitsPatchInput),
       execute: async ({ elementId, ...limits }) => {
         toolCalls.push({ name: 'set_pour_limits', input: { elementId, ...limits } })
         const element = castableOrError(elementId)
         if (typeof element === 'string') return element
-        for (const [key, value] of Object.entries(limits)) {
-          if (value === undefined) continue
-          if (value === null) delete (element as Record<string, unknown>)[key]
+        const result = applyPourLimitsPatch(element.type, limits)
+        if (result.error !== undefined) return result.error
+        for (const [key, value] of Object.entries(result.writes)) {
+          // An explicit `undefined` deletes rather than stores: an absent cap is what
+          // encodes "this element has no limit", so a key holding undefined would
+          // serialise as a stated null.
+          if (value === undefined) delete (element as Record<string, unknown>)[key]
           else (element as Record<string, unknown>)[key] = value
         }
         onMutate()
@@ -424,12 +373,10 @@ export function buildTools(
           element as unknown as Parameters<typeof pourUnitsForHost>[0],
           Object.values(graph.nodes) as AnyNode[],
         )
-        const summary =
-          units.length <= 1
-            ? 'ok — cast in one pour'
-            : `ok — cast in ${units.length} pours: ${describeUnits(units)}`
         const mismatch = shutterMismatch(elementId, Math.max(1, units.length))
-        return mismatch === undefined ? summary : `${summary}. ${mismatch}`
+        return [`ok — ${describePourSplit(units)}`, result.caveat, mismatch]
+          .filter(Boolean)
+          .join('. ')
       },
     }),
     inspect_formwork_settings: tool({
@@ -698,8 +645,7 @@ export function buildTools(
       },
     }),
     inspect_pour_units: tool({
-      description:
-        "How a wall, column or slab will be split into separately cast pour units, and why each cut exists. Use this to explain a formwork layout: each unit is one shutter erected, poured and struck on its own, so the unit count is the shutter count and each cut between them is a construction joint. Also reports each unit's concrete volume.",
+      description: INSPECT_POUR_UNITS_DESCRIPTION,
       inputSchema: z.object({ elementId: z.string() }),
       execute: async ({ elementId }) => {
         toolCalls.push({ name: 'inspect_pour_units', input: { elementId } })
@@ -716,6 +662,12 @@ export function buildTools(
             maxPourLength: element.maxPourLength ?? null,
             maxPourVolume: element.maxPourVolume ?? null,
           },
+          pourUnitCount: Math.max(1, units.length),
+          shutterCount: shuttersOnHost(elementId).length,
+          // Per unit is the constraint — that is what one delivery has to supply before
+          // the first concrete placed sets. The total is separate so neither has to be
+          // derived by adding figures that must not be added.
+          totalVolumeCuM: round(units.reduce((sum, unit) => sum + unit.volumeCuM, 0)),
           units: units.map((unit) => ({
             segment: unit.segmentIndex,
             lift: unit.liftIndex,
@@ -725,9 +677,16 @@ export function buildTools(
             topElevation: round(unit.topElevation),
             volumeCuM: round(unit.volumeCuM),
             bearsOnLiftBelow: unit.hasJointBelow,
-            startCutReason: unit.startCutReason ?? null,
-            endCutReason: unit.endCutReason ?? null,
+            // Core's labels rather than the enum names, so the two AI surfaces explain
+            // one joint in one sentence.
+            startCut:
+              unit.startCutReason === undefined
+                ? null
+                : POUR_CUT_REASON_LABELS[unit.startCutReason],
+            endCut:
+              unit.endCutReason === undefined ? null : POUR_CUT_REASON_LABELS[unit.endCutReason],
           })),
+          coverageCaveat: shutterMismatch(elementId, Math.max(1, units.length)) ?? null,
         })
       },
     }),
@@ -736,17 +695,6 @@ export function buildTools(
 
 function round(value: number): number {
   return Math.round(value * 1000) / 1000
-}
-
-/** A one-line summary an LLM can read back to the user without re-deriving it. */
-function describeUnits(units: ReturnType<typeof pourUnitsForHost>): string {
-  const segments = new Set(units.map((unit) => unit.segmentIndex)).size
-  const lifts = new Set(units.map((unit) => unit.liftIndex)).size
-  const parts: string[] = []
-  if (segments > 1) parts.push(`${segments} bays along it`)
-  if (lifts > 1) parts.push(`${lifts} lifts up it`)
-  const volume = units.reduce((sum, unit) => sum + unit.volumeCuM, 0)
-  return `${parts.join(' × ')}, ${round(volume)} m³ total`
 }
 
 /** Runs one user turn through Bedrock with tool access to the given scene graph. Mutates `graph` in place. */

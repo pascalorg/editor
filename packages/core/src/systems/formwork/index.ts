@@ -76,6 +76,19 @@ export {
   type Verification,
 } from './catalog'
 export {
+  applyConstructionPatch,
+  type CastableElementSummary,
+  type ConstructionPatch,
+  ConstructionPatch as ConstructionPatchSchema,
+  type ConstructionPatchResult,
+  castableElementSummary,
+  constructionPatchInput,
+  INSPECT_POUR_UNITS_DESCRIPTION,
+  LIST_CASTABLE_ELEMENTS_DESCRIPTION,
+  SET_ELEMENT_CONSTRUCTION_DESCRIPTION,
+  slabOnlyFields,
+} from './construction-patch'
+export {
   type CastableElement,
   type CastableKind,
   collectCastableElements,
@@ -323,6 +336,19 @@ export {
   withoutPartOverrides,
   worstUtilisation,
 } from './parts'
+export {
+  ATTACH_FORMWORK_DESCRIPTION,
+  applyPourLimitsPatch,
+  describeFormworkReconciliation,
+  describePourSplit,
+  type FormworkReconciliationCounts,
+  noFormworkTypeSet,
+  type PourLimitsPatch,
+  PourLimitsPatch as PourLimitsPatchSchema,
+  type PourLimitsPatchResult,
+  pourLimitsPatchInput,
+  SET_POUR_LIMITS_DESCRIPTION,
+} from './pour-patch'
 export {
   type HardCut,
   hardCutsForElement,

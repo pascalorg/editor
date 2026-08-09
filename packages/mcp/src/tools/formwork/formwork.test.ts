@@ -285,6 +285,116 @@ function twoLevels(): Record<string, unknown> {
   }
 }
 
+/**
+ * A 9 m wall with nothing formed on it — tall enough that a lift cap splits it.
+ *
+ * `null` leaves `formworkType` off the node entirely, which is one of the two ways an
+ * element says nobody has chosen a system for it.
+ */
+function tallWall(formworkType: string | null = 'steel-panel'): Record<string, unknown> {
+  return {
+    site_1: {
+      object: 'node',
+      id: 'site_1',
+      type: 'site',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['building_1'],
+    },
+    building_1: {
+      object: 'node',
+      id: 'building_1',
+      type: 'building',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: ['level_1'],
+    },
+    level_1: {
+      object: 'node',
+      id: 'level_1',
+      type: 'level',
+      parentId: 'building_1',
+      visible: true,
+      metadata: {},
+      children: ['wall_1'],
+      elevation: 0,
+      height: 9,
+      level: 0,
+    },
+    wall_1: {
+      object: 'node',
+      id: 'wall_1',
+      type: 'wall',
+      parentId: 'level_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      start: [0, 0],
+      end: [6, 0],
+      thickness: 0.25,
+      height: 9,
+      frontSide: 'unknown',
+      backSide: 'unknown',
+      ...(formworkType === null ? {} : { formworkType }),
+    },
+  }
+}
+
+/** A slab and a column beside a wall, for the reads and writes that branch on kind. */
+function threeKinds(): Record<string, unknown> {
+  return {
+    ...tallWall(null),
+    level_1: {
+      object: 'node',
+      id: 'level_1',
+      type: 'level',
+      parentId: 'building_1',
+      visible: true,
+      metadata: {},
+      children: ['wall_1', 'column_1', 'slab_1'],
+      elevation: 0,
+      height: 9,
+      level: 0,
+    },
+    column_1: {
+      object: 'node',
+      id: 'column_1',
+      type: 'column',
+      parentId: 'level_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      position: [3, 0, 2],
+      crossSection: 'square',
+      width: 0.4,
+      depth: 0.4,
+      radius: 0.2,
+      height: 9,
+      formworkType: 'steel-panel',
+    },
+    slab_1: {
+      object: 'node',
+      id: 'slab_1',
+      type: 'slab',
+      parentId: 'level_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 5],
+        [0, 5],
+      ],
+      holes: [],
+      elevation: 9,
+      thickness: 0.25,
+    },
+  }
+}
+
 /** The project's recorded rack, which is what the bill splits owned from hired against. */
 function withStock(
   nodes: Record<string, unknown>,
@@ -346,12 +456,17 @@ describe('the formwork MCP tools', () => {
 
     expect(tools.map((tool) => tool.name)).toEqual(
       expect.arrayContaining([
+        'list_castable_elements',
+        'set_element_construction',
         'inspect_project_formwork',
         'validate_formwork',
         'inspect_formwork_settings',
         'set_formwork_settings',
         'inspect_formwork_parts',
         'set_formwork_part',
+        'set_pour_limits',
+        'inspect_pour_units',
+        'attach_formwork',
       ]),
     )
   })
@@ -1018,6 +1133,603 @@ describe('the formwork MCP tools', () => {
       // One shutter for two pour units, so every figure above is short by the other lift.
       expect(reply.coversWholeElement).toBe(false)
       expect(reply.coverageCaveat).toContain('attach_formwork')
+    })
+  })
+
+  /**
+   * How the element is cast, and the shutters that follow from it.
+   *
+   * The pure reconciliation is `attach.test.ts`', the words are `pour-patch.test.ts`', and
+   * the chat surface's equivalents are `chat-ai-formwork-reattach.test.ts`. What only this
+   * layer can get wrong is the *graph*: whether a re-attach through the store leaves one
+   * shutter or two, whether the child list survives, and whether a rebuild that fails
+   * halfway leaves an element formed for nothing. Every assertion is on quantities and on
+   * the words of the reply, because neither failure raises an error and both produce
+   * output that reads as entirely reasonable.
+   */
+  describe('the pour pair', () => {
+    interface AttachReply {
+      elementId: string
+      assemblyIds: string[]
+      added: number
+      kept: number
+      removed: number
+      discardedPartDecisions: number
+      joints: number
+      message: string
+    }
+    interface LimitsReply {
+      kind: string
+      changed: string[]
+      pourUnitCount: number
+      shutterCount: number
+      coverageCaveat: string | null
+      message: string
+    }
+    interface PartsShape {
+      shutters: Array<{ assemblyId: string; partCount: number; parts: Array<{ mark: string }> }>
+      totalWeightKg: number
+      duplicateMarks: Array<{ assemblyId: string; mark: string }>
+      coversWholeElement: boolean
+      coverageCaveat: string | null
+    }
+
+    const graphNodes = () => Object.values(bridge.getNodes()) as unknown as AnyNode[]
+    const assemblies = () => graphNodes().filter((node) => node.type === 'formwork-assembly')
+    const joints = () => graphNodes().filter((node) => node.type === 'construction-joint')
+    const parts = () => call<PartsShape>('inspect_formwork_parts', { elementId: 'wall_1' })
+
+    test('shutters an element nobody has formed, and says nothing about keeping anything', async () => {
+      load(tallWall())
+
+      const reply = await call<AttachReply>('attach_formwork', { elementId: 'wall_1' })
+
+      expect(assemblies()).toHaveLength(1)
+      expect(reply.added).toBe(1)
+      expect(reply.assemblyIds).toHaveLength(1)
+      expect(reply.message).toBe('ok')
+    })
+
+    test('parents each shutter to the element, so a reload rebuilds the tree', async () => {
+      // The store maintains the child list; a shutter missing from it is one that appears
+      // in the outliner and nowhere else.
+      load(tallWall())
+
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const wall = bridge.getNodes()['wall_1' as AnyNodeId] as unknown as { children: string[] }
+      expect(wall.children).toEqual(assemblies().map((node) => node.id))
+    })
+
+    test.each([
+      null,
+      'none',
+    ])('an element whose formworkType is %p is sent to set_element_construction', async (formworkType) => {
+      // Nothing is shuttered on the user's behalf. An attach that picked a system would
+      // put a bill on the job nobody specified. `none` is a stated decision to cast
+      // against something else, so it is refused as firmly as an absent field.
+      load(tallWall(formworkType))
+
+      const result = await client.callTool({
+        name: 'attach_formwork',
+        arguments: { elementId: 'wall_1' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain(
+        'set_element_construction',
+      )
+      expect(assemblies()).toHaveLength(0)
+    })
+
+    test('called twice, adds no second copy and does not double the bill', async () => {
+      // What an append cost: every mark twice, the weight doubled, and a purchase order
+      // for two shutters where the wall needs one. A settings change tells the agent to
+      // come back here, so the second call is the expected case rather than the mistake.
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      const before = await parts()
+
+      const reply = await call<AttachReply>('attach_formwork', { elementId: 'wall_1' })
+      const after = await parts()
+
+      expect(assemblies()).toHaveLength(1)
+      expect(after.shutters).toHaveLength(1)
+      expect(after.shutters[0]?.partCount).toBe(before.shutters[0]?.partCount ?? 0)
+      expect(after.totalWeightKg).toBeCloseTo(before.totalWeightKg, 6)
+      expect(after.duplicateMarks).toEqual([])
+      expect(reply.message).toContain('unchanged')
+      expect(reply.message).toContain('intact')
+    })
+
+    test('a re-attach keeps the same node, so every per-part decision survives', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      const id = assemblies()[0]?.id as string
+      const mark = (await parts()).shutters[0]?.parts[0]?.mark as string
+      await call('set_formwork_part', { elementId: 'wall_1', mark, omitted: true })
+
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      expect(assemblies()[0]?.id).toBe(id)
+      // The decision the yard recorded. A rebuild here re-orders a part somebody said was
+      // already on site.
+      expect(
+        (assemblies()[0] as unknown as { partOverrides: Record<string, unknown> }).partOverrides,
+      ).toEqual({ [mark]: { omitted: true } })
+    })
+
+    test('a pour limit is reported as leaving the element short, not just as a split', async () => {
+      // The whole hazard in one assertion. Without the caveat the reply is "cast in 3
+      // pours" and the agent quotes a one-third takeoff as the wall's.
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<LimitsReply>('set_pour_limits', {
+        elementId: 'wall_1',
+        maxLiftHeight: 3,
+      })
+
+      expect(reply.changed).toEqual(['maxLiftHeight 3 m'])
+      expect(reply.pourUnitCount).toBe(3)
+      expect(reply.shutterCount).toBe(1)
+      expect(reply.message).toContain('cast in 3 pours')
+      expect(reply.message).toContain('1 of the 3 pours are shuttered')
+      expect(reply.coverageCaveat).toContain('attach_formwork')
+    })
+
+    test('says nothing about coverage on an element nobody has formed', async () => {
+      // That element needs a shutter at all, which is attach_formwork's own sentence —
+      // and two remedies in one reply is one too many to choose between.
+      load(tallWall())
+
+      const reply = await call<LimitsReply>('set_pour_limits', {
+        elementId: 'wall_1',
+        maxLiftHeight: 3,
+      })
+
+      expect(reply.pourUnitCount).toBe(3)
+      expect(reply.coverageCaveat).toBeNull()
+      expect(reply.message).not.toContain('attach_formwork')
+    })
+
+    test('re-attaching after a cap builds the missing shutters, keeps the survivor, and joints them', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      const id = assemblies()[0]?.id as string
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+
+      const reply = await call<AttachReply>('attach_formwork', { elementId: 'wall_1' })
+
+      expect(assemblies()).toHaveLength(3)
+      expect(assemblies().map((node) => node.id)).toContain(id)
+      expect(reply.added).toBe(2)
+      expect(reply.kept).toBe(1)
+      expect(reply.message).toContain('2 added')
+      expect(reply.message).toContain('1 kept')
+      // Two cuts between three lifts, each a roughened face with starters through it. A
+      // split that emitted no joint would leave that work unbilled and unselectable.
+      expect(joints()).toHaveLength(2)
+      expect(joints().every((node) => node.parentId === 'level_1')).toBe(true)
+    })
+
+    test('a second re-attach does not stack another set of joints', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<AttachReply>('attach_formwork', { elementId: 'wall_1' })
+
+      expect(joints()).toHaveLength(2)
+      expect(reply.joints).toBe(0)
+    })
+
+    test('re-attaching raises the takeoff to the whole element and clears the caveat', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      const oneLift = await parts()
+
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      await call('attach_formwork', { elementId: 'wall_1' })
+      const threeLifts = await parts()
+
+      expect(threeLifts.shutters).toHaveLength(3)
+      // Three lifts of a 9 m wall form more than one 9 m pour's worth: each is struck and
+      // re-erected, and each gets its own stop-ends.
+      expect(threeLifts.totalWeightKg).toBeGreaterThan(oneLift.totalWeightKg)
+      // A mark is a position within its own pour unit, so the lifts share marks by design.
+      expect(threeLifts.duplicateMarks).toEqual([])
+      expect(threeLifts.coversWholeElement).toBe(true)
+      expect(threeLifts.coverageCaveat).toBeNull()
+    })
+
+    test('clearing the cap removes the orphaned shutters and names what it cost', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      await call('attach_formwork', { elementId: 'wall_1' })
+      // A decision recorded on a lift that is about to stop existing.
+      const upper = assemblies().find(
+        (node) => (node as unknown as { liftIndex: number }).liftIndex === 2,
+      )?.id as AnyNodeId
+      bridge.updateNode(upper, { partOverrides: { 'P-A-1-00000': { omitted: true } } } as never)
+
+      const limits = await call<LimitsReply>('set_pour_limits', {
+        elementId: 'wall_1',
+        maxLiftHeight: null,
+      })
+      const reply = await call<AttachReply>('attach_formwork', { elementId: 'wall_1' })
+
+      expect(limits.changed).toEqual(['maxLiftHeight cleared'])
+      // The other direction of the same fault: three shutters for one pour.
+      expect(limits.coverageCaveat).toContain('3 shutters for 1 pour')
+      expect(assemblies()).toHaveLength(1)
+      expect(reply.removed).toBe(2)
+      expect(reply.discardedPartDecisions).toBe(1)
+      // Counted and handed to the model, because deleting recorded work silently is the
+      // one thing a repair routine must not do.
+      expect(reply.message).toContain('2 removed')
+      expect(reply.message).toContain('discarding 1 part decision')
+      expect(reply.message).toContain('say so')
+    })
+
+    test('a rebuild leaves no stale child entry behind', async () => {
+      // The deletes and the creates go through one patch, so the wall's child list has to
+      // come out matching the shutters that exist — a stale id is a shutter in the tree
+      // with nothing to render.
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: null })
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const wall = bridge.getNodes()['wall_1' as AnyNodeId] as unknown as { children: string[] }
+      expect(wall.children).toEqual(assemblies().map((node) => node.id))
+    })
+
+    test('a limit on a slab is recorded and reported as not splitting it', async () => {
+      // The schema takes all three fields on a slab and the splitter reads none of them,
+      // so a plain "ok" here reads as a slab about to be poured in bays.
+      load({
+        level_1: {
+          object: 'node',
+          id: 'level_1',
+          type: 'level',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          children: ['slab_1'],
+          elevation: 0,
+          height: 3,
+          level: 0,
+        },
+        slab_1: {
+          object: 'node',
+          id: 'slab_1',
+          type: 'slab',
+          parentId: 'level_1',
+          visible: true,
+          metadata: {},
+          children: [],
+          polygon: [
+            [0, 0],
+            [6, 0],
+            [6, 5],
+            [0, 5],
+          ],
+          elevation: 3,
+          thickness: 0.25,
+          formworkType: 'plywood',
+        },
+      })
+
+      const reply = await call<LimitsReply>('set_pour_limits', {
+        elementId: 'slab_1',
+        maxLiftHeight: 0.1,
+      })
+
+      expect(reply.pourUnitCount).toBe(1)
+      expect(reply.message).toContain('one pour')
+      expect(
+        (bridge.getNodes()['slab_1' as AnyNodeId] as unknown as { maxLiftHeight?: number })
+          .maxLiftHeight,
+      ).toBe(0.1)
+    })
+
+    test('a call that states no limit is refused rather than answered "ok"', async () => {
+      load(tallWall())
+
+      const result = await client.callTool({
+        name: 'set_pour_limits',
+        arguments: { elementId: 'wall_1' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('nothing to set')
+    })
+
+    test('a level id is refused as not castable by both tools', async () => {
+      load(twoLevels())
+
+      const limits = await client.callTool({
+        name: 'set_pour_limits',
+        arguments: { elementId: 'level_1', maxLiftHeight: 3 },
+      })
+      const attach = await client.callTool({
+        name: 'attach_formwork',
+        arguments: { elementId: 'level_1' },
+      })
+
+      expect(limits.isError).toBe(true)
+      expect(attach.isError).toBe(true)
+      expect((attach.content as Array<{ text: string }>)[0]?.text).toContain('wall, column or slab')
+    })
+  })
+
+  /**
+   * The elements, how each is built, and how each will be cast — the three reads and the
+   * one write everything above is solved from.
+   *
+   * `construction-patch.test.ts` owns the write contract. What is asserted here is what
+   * only this layer can get wrong: that a field the editor's AI can see is not missing
+   * from the MCP list, that an unstate reaches the store as a deletion rather than a
+   * stored null, and that a `formworkType` written with nothing built behind it is
+   * reported as outstanding rather than as "ok" — the one failure on this surface that
+   * produces no error, no empty result and no shutter.
+   */
+  describe('the elements, and how they are built', () => {
+    interface ListReply {
+      scope: string
+      elementCount: number
+      shutteredCount: number
+      unshuttered: string[]
+      elements: Array<Record<string, unknown>>
+    }
+    interface ConstructionReply {
+      kind: string
+      changed: string[]
+      shutterCount: number
+      formworkOutstanding: boolean
+      message: string
+    }
+    interface UnitsReply {
+      kind: string
+      limits: { maxLiftHeight: number | null; maxPourLength: number | null }
+      pourUnitCount: number
+      shutterCount: number
+      totalVolumeCuM: number
+      units: Array<{
+        segment: number
+        lift: number
+        baseElevation: number
+        topElevation: number
+        volumeCuM: number
+        bearsOnLiftBelow: boolean
+        startCut: string | null
+        endCut: string | null
+      }>
+      coverageCaveat: string | null
+      message: string
+    }
+
+    const wall = (nodes: Record<string, unknown> = {}) =>
+      bridge.getNodes()['wall_1' as AnyNodeId] as unknown as Record<string, unknown> & typeof nodes
+
+    test('lists each kind with the extent its concrete is placed over', async () => {
+      // A wall runs between two points, a column stands at one, a slab is a polygon. One
+      // shape for all three would describe two of them wrongly.
+      load(threeKinds())
+
+      const reply = await call<ListReply>('list_castable_elements')
+
+      expect(reply.elementCount).toBe(3)
+      const byId = new Map(reply.elements.map((element) => [element.id as string, element]))
+      expect(byId.get('wall_1')).toMatchObject({ kind: 'wall', start: [0, 0], end: [6, 0] })
+      expect(byId.get('column_1')).toMatchObject({ kind: 'column', position: [3, 0, 2] })
+      expect(byId.get('slab_1')).toMatchObject({ kind: 'slab', thickness: 0.25 })
+      expect(byId.get('slab_1')?.polygon).toHaveLength(4)
+    })
+
+    test('names the elements a bill will silently leave out', async () => {
+      // The field that earns the tool. An unformed element is absent from every bill, and
+      // a bill of what exists reads as complete — so a floor short by three walls totals
+      // cleanly with nothing in the figures to show it.
+      load(threeKinds())
+
+      const reply = await call<ListReply>('list_castable_elements')
+
+      expect(reply.unshuttered).toEqual(['column_1', 'slab_1', 'wall_1'])
+      expect(reply.shutteredCount).toBe(0)
+
+      await call('attach_formwork', { elementId: 'column_1' })
+      const after = await call<ListReply>('list_castable_elements')
+
+      expect(after.unshuttered).toEqual(['slab_1', 'wall_1'])
+      expect(after.shutteredCount).toBe(1)
+    })
+
+    test('carries every construction field, so neither AI has to ask the user to restate one', async () => {
+      load(threeKinds())
+      await call('set_element_construction', {
+        elementId: 'wall_1',
+        formworkType: 'steel-panel',
+        castOrder: 3,
+        exposureClass: 'water-retaining',
+        tieSpacing: 0.45,
+      })
+
+      const reply = await call<ListReply>('list_castable_elements')
+      const element = reply.elements.find((entry) => entry.id === 'wall_1')
+
+      expect(element).toMatchObject({
+        formworkType: 'steel-panel',
+        castOrder: 3,
+        exposureClass: 'water-retaining',
+        tieSpacing: 0.45,
+      })
+    })
+
+    test('scopes the list to one level, because a pour is planned per floor', async () => {
+      load(twoLevels())
+
+      const ground = await call<ListReply>('list_castable_elements', { levelId: 'level_1' })
+      const whole = await call<ListReply>('list_castable_elements')
+
+      expect(ground.elements.map((element) => element.id)).toEqual(['wall_1', 'wall_2'])
+      expect(whole.elements.map((element) => element.id)).toEqual(['wall_1', 'wall_2', 'wall_3'])
+    })
+
+    test('a level id nobody has is refused rather than answered as an empty floor', async () => {
+      load(twoLevels())
+
+      const result = await client.callTool({
+        name: 'list_castable_elements',
+        arguments: { levelId: 'level_9' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('level_9')
+    })
+
+    test('writes the construction fields, and tells the agent nothing is built yet', async () => {
+      // The most likely failure on this surface is this call succeeding: a correct
+      // formworkType, reported ok, and no attach behind it — a project that believes it
+      // specified a steel-panel wall and holds no shutter and no bill.
+      load(tallWall(null))
+
+      const reply = await call<ConstructionReply>('set_element_construction', {
+        elementId: 'wall_1',
+        formworkType: 'steel-panel',
+        castOrder: 2,
+      })
+
+      expect(wall().formworkType).toBe('steel-panel')
+      expect(wall().castOrder).toBe(2)
+      expect(reply.formworkOutstanding).toBe(true)
+      expect(reply.message).toContain('attach_formwork')
+    })
+
+    test('says nothing about a build once the shutter exists', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<ConstructionReply>('set_element_construction', {
+        elementId: 'wall_1',
+        castOrder: 4,
+      })
+
+      expect(reply.formworkOutstanding).toBe(false)
+      expect(reply.shutterCount).toBe(1)
+      expect(reply.message).not.toContain('attach_formwork')
+    })
+
+    test('null unstates a field rather than storing a null', async () => {
+      // An unstated spacing is what encodes "solve this from the pour". Stored as null it
+      // would read as a stated figure of nothing.
+      load(tallWall())
+      await call('set_element_construction', { elementId: 'wall_1', tieSpacing: 0.45 })
+
+      await call('set_element_construction', { elementId: 'wall_1', tieSpacing: null })
+
+      expect('tieSpacing' in wall()).toBe(false)
+    })
+
+    test('a slab-only field on a wall is refused, and nothing is written', async () => {
+      // Dropped silently it would be a decision the user believes was recorded.
+      load(tallWall())
+
+      const result = await client.callTool({
+        name: 'set_element_construction',
+        arguments: { elementId: 'wall_1', formworkType: 'plywood', edgeFaceCount: 2 },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('slabs only')
+      // The whole call is refused, so the field beside it does not land either.
+      expect(wall().formworkType).toBe('steel-panel')
+    })
+
+    test('reports the split, why each cut is there, and what one delivery has to supply', async () => {
+      load(tallWall())
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+
+      const reply = await call<UnitsReply>('inspect_pour_units', { elementId: 'wall_1' })
+
+      expect(reply.pourUnitCount).toBe(3)
+      expect(reply.units.map((unit) => unit.lift)).toEqual([0, 1, 2])
+      expect(reply.units[0]).toMatchObject({ baseElevation: 0, topElevation: 3 })
+      // A lift joint is horizontal, so it is not a cut along the centreline: the elevations
+      // and the cap it was solved from are what answer "why is there a joint at 3 m".
+      expect(reply.units[0]?.endCut).toBeNull()
+      expect(reply.limits.maxLiftHeight).toBe(3)
+      expect(reply.units[0]?.bearsOnLiftBelow).toBe(false)
+      expect(reply.units[1]?.bearsOnLiftBelow).toBe(true)
+      expect(reply.message).toContain('3 lifts up it')
+      // Per unit, because that is what the plant delivers before the first concrete sets.
+      // 6 × 0.25 × 3 per lift, and the total is the wall.
+      expect(reply.units[0]?.volumeCuM).toBeCloseTo(4.5, 6)
+      expect(reply.totalVolumeCuM).toBeCloseTo(13.5, 6)
+    })
+
+    test('gives a plan cut core’s sentence rather than the enum name', async () => {
+      // An MCP host has no system prompt to translate MAX_POUR_LENGTH with, so the reason
+      // has to arrive already readable or the joint gets reported as a code.
+      load(tallWall())
+      await call('set_pour_limits', { elementId: 'wall_1', maxPourLength: 2.5 })
+
+      const reply = await call<UnitsReply>('inspect_pour_units', { elementId: 'wall_1' })
+
+      expect(reply.pourUnitCount).toBe(3)
+      expect(reply.units[0]?.startCut).toBeNull()
+      expect(reply.units[0]?.endCut).toBe('Split for shrinkage control — over the max pour length')
+      expect(reply.units[1]?.startCut).toBe(reply.units[0]?.endCut)
+      expect(reply.units[2]?.endCut).toBeNull()
+    })
+
+    test('an unsplit element is one unit with no cut reasons to give', async () => {
+      load(tallWall())
+
+      const reply = await call<UnitsReply>('inspect_pour_units', { elementId: 'wall_1' })
+
+      expect(reply.pourUnitCount).toBe(1)
+      expect(reply.limits).toEqual({
+        maxLiftHeight: null,
+        maxPourLength: null,
+        maxPourVolume: null,
+      })
+      expect(reply.units[0]?.startCut).toBeNull()
+      expect(reply.units[0]?.endCut).toBeNull()
+      expect(reply.message).toContain('cast in one pour')
+    })
+
+    test('reports an element formed for fewer pours than it is cast in', async () => {
+      // The same fault the parts read and the limit write report, in the same words:
+      // three readings of one short takeoff is how a user comes to believe there are
+      // three problems.
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+
+      const reply = await call<UnitsReply>('inspect_pour_units', { elementId: 'wall_1' })
+
+      expect(reply.shutterCount).toBe(1)
+      expect(reply.coverageCaveat).toContain('attach_formwork')
+      expect(reply.message).toContain('1 of the 3 pours are shuttered')
+    })
+
+    test('a slab is one pour unit whatever limits are set on it', async () => {
+      // Both splits cut along a centreline and a slab has none. The limit is recorded,
+      // and reporting a split here would be a slab about to be poured in bays.
+      load(threeKinds())
+      await call('set_pour_limits', { elementId: 'slab_1', maxPourLength: 2 })
+
+      const reply = await call<UnitsReply>('inspect_pour_units', { elementId: 'slab_1' })
+
+      expect(reply.pourUnitCount).toBe(1)
+      expect(reply.units).toHaveLength(1)
     })
   })
 })
