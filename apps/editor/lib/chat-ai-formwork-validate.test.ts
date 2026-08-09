@@ -166,6 +166,82 @@ function shortReturn(): { graph: SceneGraph; tools: ToolMap } {
   return { graph, tools: buildTools(graph, [], () => {}) }
 }
 
+/**
+ * A wall with a pour break carrying a waterstop, shuttered in 2.70 m panels.
+ *
+ * Nodes again, and for two reasons this time. The panel width is half the condition —
+ * 2.70 m panels drill at 1.35 / 3.00 / 4.65 m along, and the bar sits on the middle
+ * one. The other half is that a *construction* joint is a soft partition, so the pour
+ * is not cut at it and the drilled grid crosses it; at an expansion joint the shutter
+ * stops there and there is no hole over the bar to find. No tool writes either.
+ */
+function walledWithWaterstop(): ToolMap {
+  const graph = {
+    nodes: {
+      level_1: {
+        object: 'node',
+        id: 'level_1',
+        type: 'level',
+        parentId: null,
+        visible: true,
+        metadata: {},
+        children: ['wall_1'],
+        elevation: 0,
+        height: 6,
+        level: 0,
+      },
+      wall_1: {
+        object: 'node',
+        id: 'wall_1',
+        type: 'wall',
+        parentId: 'level_1',
+        visible: true,
+        metadata: {},
+        children: ['formwork-assembly_1'],
+        start: [0, 0],
+        end: [6, 0],
+        thickness: 0.25,
+        height: 3,
+        frontSide: 'unknown',
+        backSide: 'unknown',
+        formworkType: 'steel-panel',
+      },
+      joint_1: {
+        object: 'node',
+        id: 'joint_1',
+        type: 'construction-joint',
+        parentId: 'level_1',
+        visible: true,
+        metadata: {},
+        children: [],
+        kind: 'construction',
+        elementIds: ['wall_1'],
+        along: 3,
+        treatments: [{ kind: 'waterstop', waterstopType: 'pvc-central' }],
+        solverPlaced: false,
+      },
+      'formwork-assembly_1': {
+        object: 'node',
+        id: 'formwork-assembly_1',
+        type: 'formwork-assembly',
+        parentId: 'wall_1',
+        visible: true,
+        metadata: {},
+        children: [],
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        panelWidth: 2.7,
+        fillerPosition: 'middle',
+        segmentIndex: 0,
+        liftIndex: 0,
+        partOverrides: {},
+      },
+    },
+    rootNodeIds: ['level_1'],
+  } as unknown as SceneGraph
+  return buildTools(graph, [], () => {})
+}
+
 /** Two levels, so a level scope can be wrong in either direction. */
 function scene(): { graph: SceneGraph; tools: ToolMap } {
   const wall = (id: string, parentId: string, y: number, thickness = 0.25) => ({
@@ -375,6 +451,25 @@ describe('validate_formwork', () => {
     expect(gap?.message).toContain('800 mm')
     expect(gap?.message).toContain('strut')
     expect(gap?.locus?.elevationM).toBeCloseTo(0.775, 6)
+  })
+
+  test('reports a tie drilled through a waterstop, and the two ways out of it', async () => {
+    // The one clash where every other answer the model can ask for says the wall is
+    // fine: the tie is inside capacity, the run closes, the bill totals. A model
+    // reading the takeoff would present an order for a tank that leaks at one hole.
+    const tools = walledWithWaterstop()
+
+    const reply = await validate(tools)
+
+    const clash = reply.findings.find((finding) => finding.invariant === 'TIE_THROUGH_WATERSTOP')
+    expect(clash?.severity).toBe('error')
+    expect(clash?.elementIds).toEqual(['wall_1', 'joint_1'])
+    expect(clash?.message).toContain('200 mm PVC waterstop')
+    // Both fixes, because the model will otherwise offer the first one it reads and a
+    // yard that cannot move the joint needs to hear about the watertight assembly.
+    expect(clash?.message).toContain('Move the joint')
+    expect(clash?.message).toContain('taper tie')
+    expect(clash?.locus?.alongM).toBeCloseTo(3, 6)
   })
 
   test('reports a return too short for two corner units, and names the length', async () => {

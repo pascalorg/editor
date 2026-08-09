@@ -21,12 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 2 formwork tools, the first on this surface: `inspect_project_formwork` (the
   bill for a scope — panel/tie/prop lines, total weight, elements nobody has
   formed yet, and the caveats that invalidate the figures) and
-  `validate_formwork` (whether that formwork can be erected — 17 invariants
+  `validate_formwork` (whether that formwork can be erected — 18 invariants
   over the solved layout, pressure envelope, catalog system, drilled tie grid
   and corner hardware). Neither answer is derivable from the scene graph, so before this an
   external agent could read a whole project and not ask either question.
   Read-only: the formwork mutations write through the store and want the
   live-snapshot publish path.
+- `width` on a construction joint's waterstop treatment, in meters, writable
+  through `apply_patch`. A width rather than a note because it decides where a
+  tie may pass: PVC bar is sold in 150 / 200 / 250 mm and a hydrophilic strip is
+  nearer 25 mm, so the stretch a tie has to stay clear of differs by an order of
+  magnitude between two treatments the field would otherwise describe
+  identically. Absent, `validate_formwork` falls back to the standard width for
+  the `waterstopType`.
 - A `## Formwork` section in the agent guide resource. MCP gives a server no
   system prompt, so the reasoning the editor's own AI is told — that formwork
   is a different model from the building, that the two severity counts must

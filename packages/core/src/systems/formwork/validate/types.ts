@@ -53,6 +53,8 @@ export type InvariantId =
   | 'EXPANSION_JOINT_BRIDGED'
   /** A waterstop run that does not close across the pours it separates. */
   | 'WATERSTOP_RUN_NOT_CLOSED'
+  /** A drilled tie hole inside the width of a waterstop — a hole through the seal. */
+  | 'TIE_THROUGH_WATERSTOP'
   /** A lift joint that did not land on a permitted elevation. */
   | 'LIFT_JOINT_OFF_PERMITTED_ELEVATION'
   /** A pour unit's volume over what one delivery can supply before initial set. */
@@ -153,6 +155,7 @@ export const INVARIANT_LABELS: Record<InvariantId, string> = {
   JUNCTION_ANGLE_UNFITTABLE: 'Junction angle needs a bespoke corner',
   EXPANSION_JOINT_BRIDGED: 'Expansion joint bridged by one pour',
   WATERSTOP_RUN_NOT_CLOSED: 'Waterstop run does not close',
+  TIE_THROUGH_WATERSTOP: 'A tie passes through the waterstop',
   LIFT_JOINT_OFF_PERMITTED_ELEVATION: 'Lift joint not on a permitted elevation',
   POUR_VOLUME_OVER_SUPPLY: 'Pour volume over the supply limit',
   DESIGN_OUTSIDE_CODE_ENVELOPE: 'Design outside the code’s validated envelope',

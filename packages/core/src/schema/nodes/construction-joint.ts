@@ -62,6 +62,16 @@ export const JointTreatment = z.object({
   waterstopType: WaterstopType.optional(),
   /** Shear key / filler board depth into the section, in meters. */
   depth: z.number().finite().nonnegative().optional(),
+  /**
+   * Waterstop treatments only: the bar's width across the joint, in meters.
+   *
+   * A width rather than a note because it decides where a tie may pass. PVC bar is
+   * sold in 150 / 200 / 250 mm widths and a hydrophilic strip is nearer 25 mm, so
+   * the stretch a tie has to stay clear of differs by an order of magnitude between
+   * two treatments the same field would otherwise describe identically. Absent
+   * falls back to the standard width for the `waterstopType`.
+   */
+  width: z.number().finite().positive().optional(),
   note: z.string().trim().max(500).optional(),
 })
 export type JointTreatment = z.infer<typeof JointTreatment>
@@ -103,6 +113,7 @@ export const ConstructionJointNode = BaseNode.extend({
   - elevation: for a horizontal lift joint, height above the host's base in meters
   - along: for a vertical pour break inside one element, distance along its centreline from the start, in meters
   - treatments: roughening, shear key, starter bars, waterstop, bonding agent, filler board, slip membrane, crack inducer — each changes the stop-end that forms the joint
+  - a waterstop treatment also takes waterstopType (pvc-central | pvc-surface | hydrophilic) and width, the bar's width across the joint in meters — a tie drilled within that width of the joint puts a hole through the seal
   - solverPlaced: true when the solver chose this position and may move it; false means a fixed constraint
   `,
 )

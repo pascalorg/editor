@@ -8,7 +8,7 @@ import { validateProjectFormwork } from './validate-project'
  * The scene validated against the layout it actually has.
  *
  * `invariants.test.ts` covers the checks. This covers the wiring, and the wiring is
- * where the interesting failures are: four of the seventeen invariants are about a
+ * where the interesting failures are: five of the eighteen invariants are about a
  * packed run, a pressure solve, a catalog system and a drilled hole grid, none of
  * which exist in the node graph, so they only run if the evidence reaches them from
  * the build. The two ways that goes wrong are silent in both directions — an
@@ -16,12 +16,13 @@ import { validateProjectFormwork } from './validate-project'
  * run against another element's hardware.
  */
 
-/** The four checks that only run on evidence out of a build. */
+/** The five checks that only run on evidence out of a build. */
 const LAYOUT_CHECKS = [
   'UNFORMABLE_STRIP',
   'DESIGN_OUTSIDE_CODE_ENVELOPE',
   'WALL_OUTSIDE_TIE_RANGE',
   'OPENING_LEAVES_TIE_GAP',
+  'TIE_THROUGH_WATERSTOP',
 ]
 
 function makeWall(id: string, overrides: Partial<WallNode> = {}): WallNode {
@@ -109,6 +110,24 @@ function makeWindow(
     position: [along, centreY, 0],
     width,
     height,
+  } as unknown as AnyNode
+}
+
+/** A vertical pour break inside one wall, carrying a waterstop at `along`. */
+function makeJoint(id: string, elementId: string, along: number): AnyNode {
+  return {
+    object: 'node',
+    id,
+    type: 'construction-joint',
+    parentId: 'level_1',
+    visible: true,
+    metadata: {},
+    children: [],
+    kind: 'construction',
+    elementIds: [elementId],
+    along,
+    treatments: [{ kind: 'waterstop', waterstopType: 'pvc-central' }],
+    solverPlaced: false,
   } as unknown as AnyNode
 }
 
@@ -365,6 +384,50 @@ describe('validateProjectFormwork', () => {
     // reader to a wall whose own geometry is unremarkable.
     expect(found[0]?.elementIds[0]).toBe('link')
     expect([...(found[0]?.elementIds ?? [])].sort()).toEqual(['left', 'link', 'right'])
+  })
+
+  test('a waterstop the drilled tie grid crosses is reported through the solve', () => {
+    // The clash is only reachable because a construction joint is a *soft* partition:
+    // `hardCutsForElement` cuts a pour on expansion and isolation joints alone, so the
+    // panel run crosses this one and carries its drilled holes across with it. 2.70 m
+    // panels drill at 1.35 / 3.00 / 4.65 m along, and a 200 mm bar centred on 3.00
+    // spans 2.90–3.10 — a rod straight through the seal. Nothing else in the product
+    // says so: the tie is inside capacity, the run closes, and the takeoff bills a
+    // waterstop and a tie row that cannot both be built.
+    const nodes = sceneOf(
+      makeWall('wall_1', { height: 3 }),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, {
+        panelWidth: 2.7,
+      } as Partial<FormworkAssemblyNode>),
+      makeJoint('joint_1', 'wall_1', 3),
+    )
+
+    const found = validateProjectFormwork(nodes).report.findings.filter(
+      (finding) => finding.invariant === 'TIE_THROUGH_WATERSTOP',
+    )
+
+    expect(found.map((finding) => finding.elementIds)).toEqual([['wall_1', 'joint_1']])
+    expect(found[0]?.severity).toBe('error')
+    expect(found[0]?.message).toContain('200 mm PVC waterstop')
+  })
+
+  test('the same bar between two tie columns is silent, because the holes miss it', () => {
+    // The check has to move with where the frames were drilled rather than with the
+    // joint: 2.20 m along is 850 mm clear of the nearest hole. A check keyed on the
+    // joint alone would fault a wall a carpenter can build as drawn.
+    const nodes = sceneOf(
+      makeWall('wall_1', { height: 3 }),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, {
+        panelWidth: 2.7,
+      } as Partial<FormworkAssemblyNode>),
+      makeJoint('joint_1', 'wall_1', 2.2),
+    )
+
+    const found = validateProjectFormwork(nodes).report.findings.filter(
+      (finding) => finding.invariant === 'TIE_THROUGH_WATERSTOP',
+    )
+
+    expect(found).toEqual([])
   })
 
   test('the corner checks run on nodes alone, so they are never listed as unchecked', () => {

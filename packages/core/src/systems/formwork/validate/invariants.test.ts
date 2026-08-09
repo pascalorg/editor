@@ -331,6 +331,210 @@ describe('waterstop runs', () => {
   })
 })
 
+describe('ties through waterstops', () => {
+  /**
+   * The same 6 m Framax face `ties around openings` uses: drilled at 1.35, 3.00 and
+   * 4.65 m along, and at 0.775 and 2.125 m up. Those are the catalog's own positions
+   * rather than the test's, so a catalog change is a test failure rather than a check
+   * that quietly stops describing the wall.
+   *
+   * The grid crossing a construction joint at all is the premise of the check:
+   * `hardCutsForElement` cuts a pour on `expansion` and `isolation` only, so a
+   * construction joint is not a shutter boundary and the run — with its holes — goes
+   * straight over it.
+   */
+  const field = (fromM = 0, toM = 6) => ({
+    fromM,
+    toM,
+    holes: [1.35, 3.0, 4.65]
+      .filter((alongM) => alongM >= fromM && alongM <= toM)
+      .flatMap((alongM) => [
+        { alongM, elevationM: 0.775 },
+        { alongM, elevationM: 2.125 },
+      ]),
+  })
+  const fieldsFor = (w: { id: string }, ...entries: ReturnType<typeof field>[]) =>
+    new Map([[w.id as AnyNodeId, entries.length > 0 ? entries : [field()]]])
+  /** A pour break inside one wall, carrying a bar at `along`. */
+  const break_ = (
+    elementId: string,
+    along: number,
+    treatment: Record<string, unknown> = { kind: 'waterstop', waterstopType: 'pvc-central' },
+  ) =>
+    ConstructionJointNode.parse({
+      kind: 'construction',
+      elementIds: [elementId],
+      along,
+      treatments: [treatment],
+    })
+  const found = (nodes: AnyNode[], fields: ReturnType<typeof fieldsFor>) =>
+    validateFormwork(nodes, { tieFields: fields }).findings.filter(
+      (f) => f.invariant === 'TIE_THROUGH_WATERSTOP',
+    )
+
+  it('fires when a drilled hole falls inside the bar', () => {
+    // A 200 mm central bar at 3.00 m spans 2.90–3.10, and the middle panel column is
+    // drilled at exactly 3.00. Every other check passes on this wall: the tie is
+    // inside capacity, the run packs, and the waterstop run closes — the seal has a
+    // rod through it and nothing else in the feature says so.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const joint = break_(w.id, 3.0)
+    const hits = found([w, joint] as AnyNode[], fieldsFor(w))
+    expect(hits.length).toBe(1)
+    expect(hits[0]?.severity).toBe('error')
+  })
+
+  it('says nothing about a bar set out clear of the tie columns', () => {
+    // 2.20 m: the bar spans 2.10–2.30 and the nearest holes are at 1.35 and 3.00.
+    // This is the ordinary case and has to stay silent, or the check fires on every
+    // water-retaining wall with a pour break in it.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    expect(found([w, break_(w.id, 2.2)] as AnyNode[], fieldsFor(w))).toEqual([])
+  })
+
+  it('reads the bar’s own width, so a hydrophilic strip clears what PVC does not', () => {
+    // A 25 mm strip at 2.96 m spans 2.9475–2.9725 and misses the hole at 3.00; a
+    // 200 mm PVC bar at the same station spans 2.86–3.06 and catches it. Same joint,
+    // same grid, and the treatment is the whole difference.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const strip = break_(w.id, 2.96, { kind: 'waterstop', waterstopType: 'hydrophilic' })
+    const pvc = break_(w.id, 2.96, { kind: 'waterstop', waterstopType: 'pvc-central' })
+    expect(found([w, strip] as AnyNode[], fieldsFor(w))).toEqual([])
+    expect(found([w, pvc] as AnyNode[], fieldsFor(w)).length).toBe(1)
+  })
+
+  it('honours a stated width over the type’s default', () => {
+    // A 500 mm bar at 2.8 m reaches 2.55–3.05 and catches the hole at 3.00, where the
+    // 200 mm default spans 2.70–2.90 and clears it. A width nobody can override is a
+    // check that passes the wide section somebody actually specified.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const wide = break_(w.id, 2.8, {
+      kind: 'waterstop',
+      waterstopType: 'pvc-central',
+      width: 0.5,
+    })
+    expect(found([w, break_(w.id, 2.8)] as AnyNode[], fieldsFor(w))).toEqual([])
+    expect(found([w, wide] as AnyNode[], fieldsFor(w)).length).toBe(1)
+  })
+
+  it('counts a vertical bar’s crossings once, and names how many', () => {
+    // A bar at a pour break is crossed by every row of the grid. Two findings about
+    // one bar reads as two problems, so the rows are counted in the message.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const hits = found([w, break_(w.id, 3.0)] as AnyNode[], fieldsFor(w))
+    expect(hits.length).toBe(1)
+    expect(hits[0]?.message).toContain('2 drilled tie holes fall')
+  })
+
+  it('catches a horizontal bar at a lift joint against the row elevations', () => {
+    // A lift joint carries `elevation` rather than `along`, so the bar runs across the
+    // wall and it is the hole *elevations* it has to clear. 0.775 m is a drilled row,
+    // so a bar there is crossed by all three columns.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const lift = ConstructionJointNode.parse({
+      kind: 'construction',
+      elementIds: [w.id],
+      elevation: 0.775,
+      treatments: [{ kind: 'waterstop', waterstopType: 'pvc-central' }],
+    })
+    const hits = found([w, lift] as AnyNode[], fieldsFor(w))
+    expect(hits.length).toBe(1)
+    expect(hits[0]?.message).toContain('3 drilled tie holes fall')
+    expect(hits[0]?.message).toContain('lift joint at 0.78 m')
+  })
+
+  it('names the wall and the joint, so a panel can select both', () => {
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const joint = break_(w.id, 3.0)
+    const hits = found([w, joint] as AnyNode[], fieldsFor(w))
+    expect(hits[0]?.elementIds).toEqual([w.id, joint.id] as AnyNodeId[])
+  })
+
+  it('puts the locus on the bar, not on one of the holes crossing it', () => {
+    // The fix is to the joint or the tie assembly, and both are about the bar. A
+    // locus on a crossing would send the reader to one hole of several — so the bar
+    // is offset from the hole here, or the two loci are the same number and the
+    // assertion cannot tell them apart.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const hits = found([w, break_(w.id, 2.95)] as AnyNode[], fieldsFor(w))
+    expect(hits.length).toBe(1)
+    expect(hits[0]?.locus?.alongM).toBeCloseTo(2.95, 6)
+  })
+
+  it('says nothing about a joint carrying no waterstop', () => {
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const rough = break_(w.id, 3.0, { kind: 'roughening' })
+    expect(found([w, rough] as AnyNode[], fieldsFor(w))).toEqual([])
+  })
+
+  it('says nothing about an injectable hose, which is sealed by grout after the pour', () => {
+    // `WATERSTOP_RUN_NOT_CLOSED` accepts a hose as the other way a joint is sealed,
+    // and it has to be excluded here for the same reason it is accepted there: a hose
+    // is a tube injected once the concrete has set, so a tie beside it is a tie
+    // beside a tube rather than a rod through an unbroken bar.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const hose = break_(w.id, 3.0, { kind: 'injectable-hose' })
+    expect(found([w, hose] as AnyNode[], fieldsFor(w))).toEqual([])
+  })
+
+  it('says nothing about a joint between two elements', () => {
+    // The bar there sits at the plane where the two meet, and the panels stop at that
+    // plane — there is no drilled hole over it. A check that treated the interface as
+    // a station inside either wall would compare the grid against a bar that is not
+    // in it.
+    const a = wall({ start: [0, 0], end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const b = wall({ start: [6, 0], end: [12, 0], height: 3 })
+    const between = ConstructionJointNode.parse({
+      kind: 'construction',
+      elementIds: [a.id, b.id],
+      along: 3.0,
+      treatments: [{ kind: 'waterstop', waterstopType: 'pvc-central' }],
+    })
+    expect(found([a, b, between] as AnyNode[], fieldsFor(a))).toEqual([])
+  })
+
+  it('says nothing about a conventional shutter, which is bored clear of the bar', () => {
+    // No drilled grid means no fixed station a bar can be under: the carpenter bores
+    // the ply where the calculation asks, and clear of the waterstop.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const fields = new Map([[w.id as AnyNodeId, [{ fromM: 0, toM: 6, holes: [] }]]])
+    expect(found([w, break_(w.id, 3.0)] as AnyNode[], fields)).toEqual([])
+  })
+
+  it('reads each stretch on its own, so a hole in another pour is not over the bar', () => {
+    // Two segments meeting at 3 m, each with its own field. The bar at 4.65 m is in
+    // the second, and the first segment's holes stop at 1.35 — merged, the stations
+    // would still be compared against the right axis, but a field for a stretch the
+    // bar is not in must contribute nothing.
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const hits = found([w, break_(w.id, 4.65)] as AnyNode[], fieldsFor(w, field(0, 3)))
+    expect(hits).toEqual([])
+  })
+
+  it('fires on a wall that is not water-retaining, because the bar is the spec', () => {
+    // Unlike `WATERSTOP_RUN_NOT_CLOSED`, which asks about a water-retaining envelope,
+    // this asks about a bar somebody has actually specified. A basement wall with a
+    // waterstop at a pour break leaks through a tie hole whatever its exposure class
+    // says, and gating on the class would pass every joint detailed without one.
+    const w = wall({ end: [6, 0], height: 3 })
+    expect(found([w, break_(w.id, 3.0)] as AnyNode[], fieldsFor(w)).length).toBe(1)
+  })
+
+  it('declares itself unrun when no tie fields are passed', () => {
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    const report = validateFormwork([w, break_(w.id, 3.0)] as AnyNode[])
+    expect(report.findings.some((f) => f.invariant === 'TIE_THROUGH_WATERSTOP')).toBe(false)
+    expect(report.notChecked.some((entry) => entry.invariant === 'TIE_THROUGH_WATERSTOP')).toBe(
+      true,
+    )
+  })
+
+  it('is silent on a wall with no joints at all', () => {
+    const w = wall({ end: [6, 0], height: 3, exposureClass: 'water-retaining' })
+    expect(found([w] as AnyNode[], fieldsFor(w))).toEqual([])
+  })
+})
+
 describe('lift joints against permitted elevations', () => {
   it('is silent when the project states none', () => {
     const w = wall({ height: 6 })

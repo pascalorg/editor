@@ -13,12 +13,13 @@ import { solveProjectFormwork } from './solve-project'
 /**
  * The scene, validated — with the evidence the shutters were actually built from.
  *
- * `validateFormwork` can run on nodes alone, and four of its seventeen invariants come
+ * `validateFormwork` can run on nodes alone, and five of its eighteen invariants come
  * back `notChecked` when it does: an unformable strip is a property of the packed
  * run, a code-envelope breach a property of the pressure solve, a tie that reaches
  * nothing a property of the catalog system, and a band beside an opening with no tie
- * in it a property of where the frames were drilled. None of those survive into the
- * node graph, so a validator handed only nodes cannot see them.
+ * in it — like a waterstop with a drilled tie hole in it — a property of where the
+ * frames were drilled. None of those survive into the node graph, so a validator
+ * handed only nodes cannot see them.
  *
  * It could re-derive them. That is the option this module exists to avoid. Packing
  * the runs a second time inside the validator would produce a second layout of every
@@ -29,7 +30,7 @@ import { solveProjectFormwork } from './solve-project'
  * pack and the envelope come *out* of that build as `ShutterEvidence`.
  *
  * Which means a scope with no shutters yet is validated on its nodes alone and says
- * so. That is the honest answer rather than a degraded one: those four invariants are
+ * so. That is the honest answer rather than a degraded one: those five invariants are
  * about a layout, and an element nobody has formed has no layout to fault.
  */
 

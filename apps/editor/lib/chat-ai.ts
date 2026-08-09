@@ -104,8 +104,8 @@ export const SYSTEM_PROMPT =
   'A bill being right does not make the shutter buildable, and the two have almost no ' +
   'overlap in what makes them wrong. validate_formwork answers the second question: cycles ' +
   'in the cast order, runs with a stretch no panel closes, walls no tie in the system reaches, ' +
-  'piers beside an opening no drilled tie hole falls in, corners no hinged unit sweeps, pours ' +
-  'over what one delivery can supply. Run it before you ' +
+  'piers beside an opening no drilled tie hole falls in, corners no hinged unit sweeps, ties ' +
+  'drilled through a waterstop, pours over what one delivery can supply. Run it before you ' +
   'present a takeoff as something to order, and keep its two severities apart — an error is a ' +
   'thing the crew cannot do, a warning is an exception somebody has to sign, and one merged ' +
   'count of both tells the reader neither. Report its notChecked as well: several assertions ' +
@@ -994,7 +994,7 @@ export function buildTools(
     }),
     validate_formwork: tool({
       description:
-        'Whether the formwork in scope can actually be built. This is a different question from what it costs: a bill can total correctly for a shutter nobody can erect, and almost nothing that makes a bill wrong is what makes a shutter unbuildable. It checks cast-order cycles, single-sided pours with no earlier anchor, formed areas that do not sum to the wrapped area, runs with a stretch no panel or filler closes, make-up pieces too narrow to fix, walls no tie in the system reaches, piers and head bands beside an opening that no drilled tie hole falls in, asymmetric tie grids on architectural faces, openings crossing a lift joint, junction angles no hinged unit sweeps, bridged expansion joints, waterstop runs that do not close, lift joints off a permitted elevation, pours over the supply limit, and designs outside the code envelope. Scope it with levelId for a floor, or leave it off for the whole scene. Two things to do with the result rather than summarise it away: errors are things the crew cannot do and warnings are exceptions somebody has to sign, so never merge the two counts; and notChecked lists assertions that could not run here — say so, because a report of failures alone reads as a clean bill of health for everything it never examined. Run this before presenting a takeoff as an order.',
+        'Whether the formwork in scope can actually be built. This is a different question from what it costs: a bill can total correctly for a shutter nobody can erect, and almost nothing that makes a bill wrong is what makes a shutter unbuildable. It checks cast-order cycles, single-sided pours with no earlier anchor, formed areas that do not sum to the wrapped area, runs with a stretch no panel or filler closes, make-up pieces too narrow to fix, walls no tie in the system reaches, piers and head bands beside an opening that no drilled tie hole falls in, asymmetric tie grids on architectural faces, openings crossing a lift joint, junction angles no hinged unit sweeps, bridged expansion joints, waterstop runs that do not close, drilled tie holes falling inside the width of a waterstop, lift joints off a permitted elevation, pours over the supply limit, and designs outside the code envelope. Scope it with levelId for a floor, or leave it off for the whole scene. Two things to do with the result rather than summarise it away: errors are things the crew cannot do and warnings are exceptions somebody has to sign, so never merge the two counts; and notChecked lists assertions that could not run here — say so, because a report of failures alone reads as a clean bill of health for everything it never examined. Run this before presenting a takeoff as an order.',
       inputSchema: z.object({
         levelId: z
           .string()

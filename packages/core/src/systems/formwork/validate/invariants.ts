@@ -1,4 +1,4 @@
-import type { ConstructionJointNode } from '../../../schema/nodes/construction-joint'
+import type { ConstructionJointNode, WaterstopType } from '../../../schema/nodes/construction-joint'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
 import { type FormworkSystem, fitCorner, tieForThickness } from '../catalog'
 import {
@@ -85,6 +85,22 @@ const LEG_OVERLAP_TOLERANCE_M = 0.002
  * station in the other half reads as untied.
  */
 const ROW_TOLERANCE_M = 0.02
+
+/**
+ * How wide a waterstop is across the joint when nobody has said, m.
+ *
+ * A default per type rather than one figure, because the range across the three is
+ * an order of magnitude and the clearance a tie needs is the width itself. PVC bar
+ * is sold in 150 / 200 / 250 mm and 200 is the common central section; an external
+ * surface bar is wider because it is bonded either side of the joint rather than
+ * cast through it; a hydrophilic strip is a 20–25 mm section swelling against the
+ * substrate. `coverage.md` §1.3, and `JointTreatment.width` overrides any of them.
+ */
+const WATERSTOP_WIDTHS_M: Record<WaterstopType, number> = {
+  'pvc-central': 0.2,
+  'pvc-surface': 0.25,
+  hydrophilic: 0.025,
+}
 
 export interface ValidateOptions {
   /** Scope to one level's elements. Absent sweeps every castable element given. */
@@ -998,6 +1014,148 @@ function waterstopRuns(elements: readonly CastableElement[], nodes: readonly Any
   return out
 }
 
+/** The stretch of one element a waterstop occupies, and which joint puts it there. */
+interface WaterstopBand {
+  joint: ConstructionJointNode
+  /** `'along'` for a vertical bar at a pour break, `'elevation'` for a horizontal one. */
+  axis: 'along' | 'elevation'
+  /** The station, m, and the half-width a tie has to clear it by. */
+  centreM: number
+  halfWidthM: number
+  type: WaterstopType | undefined
+}
+
+/**
+ * Every waterstop in the scope, as the band of element it blocks.
+ *
+ * A joint with no station is not a band. `elementIds.length > 1` is an interface
+ * between two elements, and the bar there sits at the plane where they meet rather
+ * than at a station inside either one — the panels stop at that plane, so no drilled
+ * hole is over it and there is nothing to compare. The bar that a tie can be drilled
+ * through is the one *inside* an element, which is exactly the joint carrying
+ * `along` or `elevation`.
+ */
+function waterstopBands(
+  elementId: AnyNodeId,
+  joints: readonly ConstructionJointNode[],
+): WaterstopBand[] {
+  const out: WaterstopBand[] = []
+  for (const joint of joints) {
+    if (!joint.elementIds.includes(elementId)) continue
+    if (joint.elementIds.length > 1) continue
+    for (const treatment of joint.treatments) {
+      // Waterstops only, so an `injectable-hose` on the same joint is not a band: it
+      // is a tube cast against the joint face and grouted after the pour, so the seal
+      // is made later and by injection rather than by the bar being unbroken.
+      if (treatment.kind !== 'waterstop') continue
+      const width =
+        treatment.width ??
+        (treatment.waterstopType ? WATERSTOP_WIDTHS_M[treatment.waterstopType] : undefined) ??
+        WATERSTOP_WIDTHS_M['pvc-central']
+      const axis = joint.along !== undefined ? 'along' : 'elevation'
+      const centreM = joint.along ?? joint.elevation
+      if (centreM === undefined) continue
+      out.push({
+        joint,
+        axis,
+        centreM,
+        halfWidthM: width / 2,
+        type: treatment.waterstopType,
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * A drilled tie hole inside the width of a waterstop — phase 9's ties × waterstops
+ * clash.
+ *
+ * A rod through the bar is a hole straight through the water seal, and the hole is
+ * the one defect in this feature that passes every other check: the tie is inside
+ * its capacity, the band it ties is tied, the run packs, and the waterstop run
+ * closes — `WATERSTOP_RUN_NOT_CLOSED` asks whether every joint *carries* a bar and
+ * cannot ask whether the bar it carries is intact. The wall is watertight on the
+ * drawing and leaks at one tie.
+ *
+ * What makes it reachable rather than theoretical is which joints split a pour.
+ * `hardCutsForElement` cuts on `expansion` and `isolation` only, because a
+ * construction joint is a soft partition the solver may move. So a construction
+ * joint carrying a waterstop is *not* a shutter boundary: the panel run crosses it,
+ * and the drilled grid crosses it with the run. Nothing between the joint and the
+ * frame's holes negotiates, and neither knows about the other.
+ *
+ * An error, not a warning, and this is the one place in the suite where a warning
+ * would be wrong for a reason about the trade rather than the geometry. The other
+ * clashes have a site answer somebody chooses — strut the box-out, notch the unit.
+ * Here the fix is upstream of the shutter: the bar moves, the tie moves, or the tie
+ * becomes a watertight one (a taper tie or a DK cone, plugged and patched, which the
+ * catalog flags `watertight` and which costs three to five times a plain tie point).
+ * Proceeding is not an exception somebody signs; it is a leak nobody sees until the
+ * tank is filled.
+ *
+ * One finding per waterstop and not per hole. A vertical bar at a pour break is
+ * crossed by every row of a drilled grid, and eight findings about one bar reads as
+ * eight problems; the count is in the message and the locus is the joint.
+ */
+function tiesThroughWaterstops(
+  elements: readonly CastableElement[],
+  nodes: readonly AnyNode[],
+  fields: ReadonlyMap<AnyNodeId, readonly TieField[]>,
+): Finding[] {
+  const out: Finding[] = []
+  const joints = nodes.filter(
+    (node): node is ConstructionJointNode => node.type === 'construction-joint',
+  )
+  for (const element of elements) {
+    const bands = waterstopBands(element.id, joints)
+    if (bands.length === 0) continue
+    for (const band of bands) {
+      const lo = band.centreM - band.halfWidthM
+      const hi = band.centreM + band.halfWidthM
+      const hit: Array<{ alongM: number; elevationM: number }> = []
+      for (const field of fields.get(element.id) ?? []) {
+        // No drilled grid: a conventional shutter is bored where the calculation
+        // asks, and a carpenter setting out a wall with a waterstop in it bores
+        // clear of the bar. There is no fixed station to fault.
+        if (field.holes.length === 0) continue
+        for (const hole of field.holes) {
+          const station = band.axis === 'along' ? hole.alongM : hole.elevationM
+          if (station <= lo || station >= hi) continue
+          hit.push(hole)
+        }
+      }
+      if (hit.length === 0) continue
+      const nearest = hit.reduce(
+        (best, hole) => {
+          const station = (h: typeof hole) => (band.axis === 'along' ? h.alongM : h.elevationM)
+          return Math.abs(station(hole) - band.centreM) < Math.abs(station(best) - band.centreM)
+            ? hole
+            : best
+        },
+        hit[0] as (typeof hit)[number],
+      )
+      const named = band.type === 'hydrophilic' ? 'hydrophilic strip' : 'PVC waterstop'
+      const where =
+        band.axis === 'along'
+          ? `the pour break at ${band.centreM.toFixed(2)} m along`
+          : `the lift joint at ${band.centreM.toFixed(2)} m`
+      out.push(
+        finding(
+          'TIE_THROUGH_WATERSTOP',
+          'error',
+          [element.id, band.joint.id as AnyNodeId],
+          `${element.id}: ${hit.length} drilled tie ${hit.length === 1 ? 'hole falls' : 'holes fall'} within the ${(band.halfWidthM * 2 * 1000).toFixed(0)} mm ${named} at ${where} — the nearest at ${nearest.alongM.toFixed(2)} m along, ${nearest.elevationM.toFixed(2)} m up. A rod through the bar is a hole through the water seal, and every other check passes: the tie is inside capacity and the run closes. Move the joint clear of the tie row, or tie this pour with a watertight assembly — a taper tie or a sealed cone, plugged and patched.`,
+          band.axis === 'along'
+            ? { alongM: band.centreM, elevationM: nearest.elevationM }
+            : { alongM: nearest.alongM, elevationM: band.centreM },
+        ),
+      )
+    }
+  }
+  return out
+}
+
 /**
  * A lift joint that did not reach a permitted elevation.
  *
@@ -1170,6 +1328,11 @@ function unavailable(
       needs:
         'the stations a tie passes on each shutter — pass `tieFields` from the same layout that drew the ties',
     })
+    out.push({
+      invariant: 'TIE_THROUGH_WATERSTOP',
+      needs:
+        'the same drilled stations — a waterstop with no tie grid over it is a bar nothing has been compared to',
+    })
   }
   return out
 }
@@ -1222,6 +1385,7 @@ export function validateFormwork(
     ...openingsAcrossLiftJoints(scoped, limits),
     ...expansionJointsBridged(scoped, nodes, limits),
     ...waterstopRuns(scoped, nodes),
+    ...tiesThroughWaterstops(scoped, nodes, tieFields),
     ...liftJointElevations(scoped, limits),
     ...pourVolumes(units, scoped, limits),
     ...layoutFindings(packs),
