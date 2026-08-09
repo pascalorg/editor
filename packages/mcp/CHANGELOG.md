@@ -36,6 +36,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `@pascal-app/nodes/formwork-assembly/headless` entry point so the server
   takes the solve without React, `@pascal-app/viewer` or `@pascal-app/editor`.
 
+### Fixed
+
+- `SqliteSceneStore` no longer drags the importing project into a bundler's
+  file trace. Its constructor resolves a database path chosen at runtime from
+  the environment, and a `path.resolve` over a value the tracer cannot see
+  through reads as "this module may open anything" — so a Next route importing
+  the store traced 912 files and 85.7 MB, 81.2 MB of it the app's own 3D
+  assets. Marked `/*turbopackIgnore: true*/`, since the path genuinely points
+  outside the project: 158 files and 3.0 MB.
+
 ## [0.3.2] - 2026-07-17
 
 ### Added

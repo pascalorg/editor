@@ -53,12 +53,13 @@ Run all four. `check-types` and `bun test` pass on code `next build` rejects, so
 | `bun run check-types` | Types across all packages |
 | `bun test` | Behaviour |
 | `bunx biome check --write` | Format and lint |
-| `bun run build` | Server/client boundary violations, and stale `dist/` |
+| `bun run build` | Server/client boundary violations, stale `dist/`, and file-tracing warnings |
 
 Two consequences worth knowing before you write the code:
 
 - **Cross-package tests read `dist/`, not `src/`.** `@pascal-app/*` resolves to compiled output, so a change in `packages/core` is invisible to a `packages/nodes` test until you build. `tooling/check-dist-parity.mjs` is the gate.
 - **Anything reachable from `apps/editor/app/api/**/route.ts` is a Server Component.** A React client hook anywhere in that import graph fails `next build`. Reach pure functions through a narrow entry point (`@pascal-app/nodes/<kind>/headless`) rather than a barrel that also exports a panel; `apps/editor/lib/server-imports.test.ts` enforces this.
+- **Read `next build`'s warnings, not just its errors.** "Encountered unexpected file in NFT list" means a `path.*` or `fs.*` call over a value the tracer cannot see through made it bundle the whole project into a route. Scope the path statically, or mark it `/*turbopackIgnore: true*/` when it genuinely points outside the project.
 
 ## Operating rules
 

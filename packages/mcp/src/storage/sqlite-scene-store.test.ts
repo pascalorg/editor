@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -74,6 +75,23 @@ describe('resolveDefaultDatabasePath', () => {
     expect(resolveDefaultDatabasePath({}).endsWith(path.join('.pascal', 'data', 'pascal.db'))).toBe(
       true,
     )
+  })
+})
+
+describe('the file-tracing hint on the constructor', () => {
+  test('survives into the emitted dist, because a bundler is the only reader', () => {
+    // A comment that does real work, and the only kind of comment `tsc` may drop
+    // without any test noticing. `path.resolve` over a runtime value tells Next's
+    // build-time tracer this module might open anything, so it traced the whole
+    // project into every Route Handler importing the store — 81 MB of `public/`
+    // glTF and KTX2 in each one. Removing the hint, or setting `removeComments`,
+    // restores that silently: the build still succeeds and only the deploy is fat.
+    const emitted = readFileSync(
+      path.join(import.meta.dir, '../../dist/storage/sqlite-scene-store.js'),
+      'utf8',
+    )
+
+    expect(emitted).toContain('/*turbopackIgnore: true*/')
   })
 })
 

@@ -284,7 +284,16 @@ export class SqliteSceneStore implements SceneStore {
 
   constructor(opts: SqliteSceneStoreOptions = {}) {
     const env = opts.env ?? process.env
-    this.databasePath = path.resolve(opts.databasePath ?? resolveDefaultDatabasePath(env))
+    // The comment is load-bearing, and only for bundlers. Next traces a Route Handler's
+    // filesystem reach at build time, and a `path.resolve` over a value it cannot see
+    // through reads as "this module may open anything" — so it traced the whole project
+    // into every route that imports the store, 81 MB of `public/` glTF and KTX2 among
+    // it, and said so as six NFT warnings. The path resolved here is a database outside
+    // the project, chosen at runtime from the environment, so there is nothing for the
+    // trace to find and nothing lost by telling it not to look.
+    this.databasePath = path.resolve(
+      /*turbopackIgnore: true*/ opts.databasePath ?? resolveDefaultDatabasePath(env),
+    )
     this.maxSceneBytes = resolveMaxSceneBytes(env, opts.maxSceneBytes)
   }
 
