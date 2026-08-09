@@ -30,6 +30,7 @@ import {
   PROP_TYPES,
   type PressureStandardId,
   SHEATHING_TYPES,
+  STOCKABLE_CATALOG_PARTS,
 } from '@pascal-app/core/formwork'
 import { ActionButton, PanelSection } from '@pascal-app/editor'
 import { RotateCcw } from 'lucide-react'
@@ -38,6 +39,7 @@ import {
   OptionalNumberField,
   OptionalSelectField,
   OptionalToggleField,
+  StockRackField,
 } from './settings-fields'
 import { useFormworkSettingsNode, useFormworkSettingsWriter } from './use-formwork-settings'
 
@@ -111,7 +113,8 @@ function labelFor(options: ReadonlyArray<{ label: string; value: string }>, id: 
 
 export function FormworkSettingsPanel() {
   const node = useFormworkSettingsNode()
-  const { setField, setGroupField, setCementField, clearAll } = useFormworkSettingsWriter()
+  const { setField, setGroupField, setCementField, setOwnedStock, clearOwnedStock, clearAll } =
+    useFormworkSettingsWriter()
   const concrete = node?.concrete ?? {}
   const placement = node?.placement ?? {}
   const loads = node?.falseworkLoads ?? {}
@@ -481,6 +484,21 @@ export function FormworkSettingsPanel() {
           label="Doubled walers"
           onChange={(value) => setGroupField('parts', { doubledWalers: value })}
           value={parts.doubledWalers}
+        />
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Owned stock">
+        <GroupNote>
+          What the yard already holds, by catalog id — the takeoff draws on these before it hires.
+          It is a count rather than a yes/no because ownership is a pool: owning 200 of a panel and
+          needing 260 hires 60. The split is per scope, since the same panels serve the next pour
+          once stripped, so two levels' owned figures are not a total.
+        </GroupNote>
+        <StockRackField
+          onClear={clearOwnedStock}
+          onSet={(catalogId, quantity) => setOwnedStock({ [catalogId]: quantity })}
+          options={STOCKABLE_CATALOG_PARTS}
+          owned={node?.stock?.owned}
         />
       </PanelSection>
 

@@ -7,6 +7,7 @@ import {
   type Placement,
   type PressureStandardId,
 } from './pressure'
+import type { OwnedStock } from './supply'
 
 /**
  * The project's pour settings, resolved — one place where "not stated" becomes a
@@ -50,6 +51,18 @@ export interface FormworkSettings {
   falseworkLoads: NonNullable<FormworkProjectSettingsNode['falseworkLoads']>
   bracing: NonNullable<FormworkProjectSettingsNode['bracing']>
   parts: NonNullable<FormworkProjectSettingsNode['parts']>
+  /**
+   * What the yard owns, or `undefined` where nobody has said.
+   *
+   * The one resolved field that is deliberately *not* defaulted, against the rule
+   * every other field here follows. A default of `{}` would be the claim "owns
+   * nothing", and that is a claim with a consequence — the whole bill on hire — that
+   * no unconfigured project has made. An empty record reaching here means the project
+   * stated it, and a costing pass may act on it; `undefined` means the takeoff reports
+   * no split at all. Same reasoning as the validator's `notChecked`: an answer nobody
+   * supplied the input for is not an answer with a convenient value.
+   */
+  ownedStock: OwnedStock | undefined
 }
 
 /**
@@ -68,6 +81,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   falseworkLoads: {},
   bracing: {},
   parts: {},
+  ownedStock: undefined,
 }
 
 /**
@@ -102,6 +116,7 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
     falseworkLoads: node.falseworkLoads ?? {},
     bracing: node.bracing ?? {},
     parts: node.parts ?? {},
+    ownedStock: node.stock?.owned,
   }
 }
 
@@ -134,6 +149,7 @@ export type FormworkSettingsGroup =
   | 'falseworkLoads'
   | 'bracing'
   | 'parts'
+  | 'stock'
 
 /**
  * Merge a patch into one of the settings sub-objects, returning the value to write
@@ -193,4 +209,37 @@ export function mergeFormworkCement(
   return Object.keys(merged).length > 0
     ? (merged as NonNullable<FormworkProjectSettingsNode['concrete']>)
     : undefined
+}
+
+/**
+ * Merge owned quantities into `stock.owned`, returning the whole `stock` value.
+ *
+ * A second level like the binder, and it cannot go through the one-level merge for a
+ * worse reason than the binder's: there, the wrong path writes a stated-empty object;
+ * here it would replace the entire rack. `{ owned: { 'panel-a': 200 } }` handed to the
+ * generic merge overwrites the `owned` key wholesale, so recording one panel type
+ * silently forgets every other type the yard owns — and a stock list is edited one
+ * line at a time, which is exactly the case that would lose it.
+ *
+ * `undefined` against an id removes it, which is how the yard says it no longer owns
+ * that type. A zero is kept: "owns none of this" is a fact a yard states about a type
+ * it has run out of, and folding it into absence loses the distinction the whole group
+ * is built on.
+ *
+ * An emptied `owned` leaves `stock: {}` rather than deleting the group. That looks
+ * inconsistent with `mergeFormworkCement` and is the point: a project that has removed
+ * every line from its rack has *stated* it owns nothing, and dropping the group back to
+ * absent would turn that statement into "nobody has said" and put the whole bill back
+ * on hire. The caller clears the group by patching `stock` itself.
+ */
+export function mergeFormworkOwnedStock(
+  current: FormworkProjectSettingsNode['stock'],
+  patch: Readonly<Record<string, number | undefined>>,
+): NonNullable<FormworkProjectSettingsNode['stock']> {
+  const owned: Record<string, number> = { ...(current?.owned ?? {}) }
+  for (const [catalogId, quantity] of Object.entries(patch)) {
+    if (quantity === undefined) delete owned[catalogId]
+    else owned[catalogId] = quantity
+  }
+  return { owned }
 }

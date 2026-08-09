@@ -146,6 +146,7 @@ export {
   FalseworkLoadSettings,
   FormworkPartSettings,
   FormworkProjectSettingsNode,
+  FormworkStockSettings,
   MeasurementStandardChoice,
   PlacementSettings,
   PressureStandardChoice,

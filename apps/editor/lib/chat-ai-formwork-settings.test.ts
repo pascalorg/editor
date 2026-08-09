@@ -261,6 +261,78 @@ describe('set_formwork_settings — parts come from the catalog', () => {
   })
 })
 
+describe('set_formwork_settings — the yard’s own rack', () => {
+  const PANEL = 'doka-framax-panel-588104500'
+  const OTHER = 'doka-framax-panel-588223500'
+
+  test('a second type merges instead of replacing the rack', async () => {
+    // The failure `mergeFormworkOwnedStock` exists for: the group merge replaces
+    // `owned` wholesale, so recording one panel type would forget the rest of the yard.
+    const { tools, settings } = scene()
+
+    await set(tools, { ownedStock: { [PANEL]: 200 } })
+    await set(tools, { ownedStock: { [OTHER]: 40 } })
+
+    expect(settings()?.stock).toEqual({ owned: { [PANEL]: 200, [OTHER]: 40 } })
+  })
+
+  test('null removes one type without touching the others', async () => {
+    const { tools, settings } = scene()
+
+    await set(tools, { ownedStock: { [PANEL]: 200, [OTHER]: 40 } })
+    await set(tools, { ownedStock: { [PANEL]: null } })
+
+    expect(settings()?.stock).toEqual({ owned: { [OTHER]: 40 } })
+  })
+
+  test('a stated zero is kept, because owning none of a type is a fact', async () => {
+    const { tools, settings } = scene()
+
+    await set(tools, { ownedStock: { [PANEL]: 0 } })
+
+    expect(settings()?.stock).toEqual({ owned: { [PANEL]: 0 } })
+  })
+
+  test('an emptied rack stays stated rather than reverting to nobody having said', async () => {
+    // Unlike every other group here. A project that removed its last line has said it
+    // owns nothing and its bill prices as hire; an absent group shows no split at all.
+    const { tools, settings } = scene()
+
+    await set(tools, { ownedStock: { [PANEL]: 200 } })
+    await set(tools, { ownedStock: { [PANEL]: null } })
+
+    expect(settings()?.stock).toEqual({ owned: {} })
+  })
+
+  test('an id that names nothing is refused, since stock against it can never match a line', async () => {
+    const { tools, settings } = scene()
+
+    const reply = await set(tools, { ownedStock: { 'doka-framax-panel-90x270': 200 } })
+
+    expect(reply).toStartWith('Error:')
+    expect(settings()).toBeUndefined()
+  })
+
+  test('a rack write on its own is a real call, not an empty one', async () => {
+    const { tools, mutations } = scene()
+
+    const reply = await set(tools, { ownedStock: { [PANEL]: 200 } })
+
+    expect(reply).not.toStartWith('Error:')
+    expect(mutations()).toBe(1)
+  })
+
+  test('the rack does not disturb a stated design input', async () => {
+    const { tools, settings } = scene()
+
+    await set(tools, { placement: { riseRateMH: 2 } })
+    await set(tools, { ownedStock: { [PANEL]: 200 } })
+
+    expect(settings()?.placement).toEqual({ riseRateMH: 2 })
+    expect(settings()?.stock).toEqual({ owned: { [PANEL]: 200 } })
+  })
+})
+
 describe('set_formwork_settings — the reply', () => {
   test('names the pour the scene now designs to', async () => {
     const { tools } = scene()
@@ -329,6 +401,29 @@ describe('inspect_formwork_settings', () => {
     // Stated nothing about the temperature, so it is still an assumption.
     expect(report.stated.placement.concreteTemperatureC).toBeUndefined()
     expect(report.resolved.concreteTemperatureC).toBe(report.assumedDefaults.concreteTemperatureC)
+  })
+
+  test('an unrecorded rack reads as null, not as a yard that owns nothing', async () => {
+    // The one thing the model must not conclude from a missing rack.
+    const { tools } = scene()
+
+    await set(tools, { placement: { riseRateMH: 2 } })
+    const report = JSON.parse(await inspect(tools))
+
+    expect(report.resolved.ownedStock).toBeNull()
+    expect(report.stated.stock).toBeNull()
+  })
+
+  test('reports the rack the project recorded, empty or not', async () => {
+    const { tools } = scene()
+
+    await set(tools, { ownedStock: { 'doka-framax-panel-588104500': 200 } })
+    expect(JSON.parse(await inspect(tools)).resolved.ownedStock).toEqual({
+      'doka-framax-panel-588104500': 200,
+    })
+
+    await set(tools, { ownedStock: { 'doka-framax-panel-588104500': null } })
+    expect(JSON.parse(await inspect(tools)).resolved.ownedStock).toEqual({})
   })
 
   test('does not create the node, so reading is not a decision', async () => {

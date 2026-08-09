@@ -27,6 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   external agent could read a whole project and not ask either question.
   Read-only: the formwork mutations write through the store and want the
   live-snapshot publish path.
+- The owned/hired split on `inspect_project_formwork`: every bill line gains
+  `fromOwnStock` / `toHire` / `consumed`, and a `supply` object totals them and
+  adds `hiredAlteredHere`, `hiredWeightKg` and `ownedNotUsedHere`. Present only
+  where the project has recorded a rack — `formwork-settings.stock.owned`,
+  writable through `apply_patch` as a record of catalog id to quantity. Absent
+  where it has not, deliberately: a project that has never said what it owns has
+  not said its formwork is all on hire, and a split of zeros is a claim on its
+  behalf. Two facts the tool description now carries because both read wrongly
+  otherwise — the split is per scope, since the same owned panels serve the next
+  pour once stripped, so two levels' owned figures are not a total; and a hired
+  panel this pour drills comes back holed and is recharged at list price rather
+  than charged as hire.
 - `width` on a construction joint's waterstop treatment, in meters, writable
   through `apply_patch`. A width rather than a note because it decides where a
   tie may pass: PVC bar is sold in 150 / 200 / 250 mm and a hydrophilic strip is

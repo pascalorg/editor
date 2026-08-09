@@ -73,6 +73,26 @@ function sceneOf(...members: Array<WallNode | FormworkAssemblyNode>): Record<str
   return nodes
 }
 
+/** The project settings node, which is where the yard's own rack is recorded. */
+function withStock(
+  nodes: Record<string, AnyNode>,
+  owned: Record<string, number>,
+): Record<string, AnyNode> {
+  return {
+    ...nodes,
+    'formwork-settings_1': {
+      object: 'node',
+      id: 'formwork-settings_1',
+      type: 'formwork-settings',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      stock: { owned },
+    } as unknown as AnyNode,
+  }
+}
+
 describe('takeoffCsv', () => {
   test('names the scope it was taken at, in the file and in the filename', () => {
     const solution = solveProjectFormwork(
@@ -143,5 +163,33 @@ describe('takeoffCsv', () => {
     const line = solution.bom[0]
     expect(line).toBeDefined()
     expect(text).toContain(`,${line?.quantity},${line?.unit},`)
+  })
+
+  test('the owned/hired split reaches the file, columns and all', () => {
+    const scene = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+    const plain = solveProjectFormwork(scene)
+    const panel = plain.bom.find((row) => row.catalogId !== undefined)
+    const solution = solveProjectFormwork(withStock(scene, { [panel?.catalogId as string]: 4 }))
+
+    const { text } = takeoffCsv(solution, 'Project')
+
+    const header = text.split('\n').find((row) => row.startsWith('Mark count,')) as string
+    expect(header).toContain('From own stock,To hire,Consumed')
+    expect(text).toContain(`,${panel?.quantity},4,${(panel?.quantity ?? 0) - 4},0,`)
+  })
+
+  test('a file taken with no rack recorded has no hire columns to misread', () => {
+    // A column of blanks under "Hire" is the most confident wrong answer this file
+    // could give, so the columns are absent rather than empty.
+    const solution = solveProjectFormwork(
+      sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1')),
+    )
+
+    const { text } = takeoffCsv(solution, 'Project')
+
+    expect(text).not.toContain('To hire')
   })
 })

@@ -32,9 +32,25 @@ interface ProjectReport {
     coversWholePour: boolean
   }>
   unshuttered: string[]
-  bom: Array<{ description: string; quantity: number; totalWeightKg: number | null }>
+  bom: Array<{
+    description: string
+    catalogId: string | null
+    quantity: number
+    totalWeightKg: number | null
+    fromOwnStock?: number
+    toHire?: number
+    consumed?: number
+  }>
   totalWeightKg: number
   totalWeightComplete: boolean
+  supply?: {
+    fromOwnStock: number
+    toHire: number
+    consumed: number
+    hiredAlteredHere: number
+    hiredWeightKg: number | null
+    ownedNotUsedHere: string[]
+  }
   beyondCapacity: Array<{ elementId: string; mark: string }>
   caveats: string[]
 }
@@ -284,6 +300,80 @@ describe('inspect_project_formwork', () => {
     expect(solved.caveats.some((c) => c.includes('no published weight'))).toBe(
       !solved.totalWeightComplete,
     )
+  })
+
+  test('reports no owned/hired split until the project records a rack', async () => {
+    // Absent, not a split of zeros. A bill reading "everything on hire" is a claim
+    // about the yard the project never made.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.supply).toBeUndefined()
+    expect(solved.bom.every((row) => row.toHire === undefined)).toBe(true)
+  })
+
+  test('splits every line and the whole bill once the rack is recorded', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as { catalogId: string }
+
+    await call(tools, 'set_formwork_settings', {
+      ownedStock: { [panel.catalogId]: 4, 'eurex-20-top': 50 },
+    })
+    const after = await project(tools, { elementIds: ['wall_1'] })
+
+    const line = after.bom.find((row) => row.catalogId === panel.catalogId)
+    expect(line?.fromOwnStock).toBe(4)
+    expect(line?.toHire).toBe((line?.quantity ?? 0) - 4)
+    expect(after.supply?.fromOwnStock).toBe(4)
+    expect(after.supply?.toHire).toBeGreaterThan(0)
+    // A type the bill never draws on, named rather than dropped — the model can tell
+    // the yard what it is holding for this pour and not using.
+    expect(after.supply?.ownedNotUsedHere).toEqual(['eurex-20-top'])
+  })
+
+  test('the split sits on the line it belongs to, not on whichever line is nearby', async () => {
+    // Indexed positionally against the bill, so a mismatch puts every figure against
+    // the wrong description and nothing in the report reveals it.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    await call(tools, 'set_formwork_settings', { ownedStock: {} })
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    for (const row of solved.bom) {
+      expect((row.fromOwnStock ?? 0) + (row.toHire ?? 0) + (row.consumed ?? 0)).toBe(row.quantity)
+      // Nothing off a catalog goes back on a rack, so it is consumed whatever is owned.
+      if (row.catalogId === null) expect(row.consumed).toBe(row.quantity)
+    }
+  })
+
+  test('a rack recorded as empty prices the bill as hire, and says the split is per scope', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    await call(tools, 'set_formwork_settings', { ownedStock: {} })
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.supply?.fromOwnStock).toBe(0)
+    expect(solved.supply?.toHire).toBeGreaterThan(0)
+    // Nothing came off the rack, so there is no per-scope figure to warn about.
+    expect(solved.caveats.some((c) => c.includes('not a total'))).toBe(false)
+  })
+
+  test('warns that two levels’ owned figures cannot be added', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as { catalogId: string }
+    await call(tools, 'set_formwork_settings', { ownedStock: { [panel.catalogId]: 4 } })
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.caveats.some((c) => c.includes('not a total'))).toBe(true)
   })
 
   test('the element rows and the scope counts agree with each other', async () => {

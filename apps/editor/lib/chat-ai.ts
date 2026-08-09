@@ -1,10 +1,8 @@
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import {
-  ADJUSTABLE_COLUMN_CLAMPS,
   bomLines,
   bomWeightKg,
-  COLUMN_FORMS,
   DEFAULT_FORMWORK_SETTINGS,
   duplicateMarks,
   FALSEWORK_BEAMS,
@@ -13,6 +11,7 @@ import {
   findFormworkSettingsNode,
   formworkSettings,
   mergeFormworkCement,
+  mergeFormworkOwnedStock,
   mergeFormworkPartOverride,
   mergeFormworkSettingsGroup,
   orphanedOverrides,
@@ -21,7 +20,7 @@ import {
   partByMark,
   partLabel,
   SHEATHING_TYPES,
-  SHEET_STOCK,
+  STOCKABLE_CATALOG_PARTS,
   validationSummary,
   worstUtilisation,
 } from '@pascal-app/core/formwork'
@@ -101,6 +100,16 @@ export const SYSTEM_PROMPT =
   'bill of what exists. Its caveats are the same warnings the user sees in the Takeoff panel: lead ' +
   'with them, because each one means every figure under it is short or long in a way none of the ' +
   'figures reveal. ' +
+  'What a bill costs depends on whose formwork it is, and that is a question the scene cannot ' +
+  'answer until somebody records the yard’s stock with set_formwork_settings ownedStock. Do that ' +
+  'when the user talks about hire, and never assume either way in the meantime: a project that has ' +
+  'recorded nothing has not said its formwork is all hired, so report the split as unavailable ' +
+  'rather than as everything on hire. Once it is recorded, the answer per line is a split rather ' +
+  'than a label, because ownership is a pool — owning 200 of a panel and needing 260 hires 60. Two ' +
+  'things about it are counterintuitive and worth saying out loud: the split is per scope, since ' +
+  'the same owned panels serve the next pour once stripped, so two levels’ owned figures must not ' +
+  'be added; and a hired panel this pour drills is recharged at list rather than charged as hire, ' +
+  'which is the one figure in a bill that costs money without appearing as a cost. ' +
   'A bill being right does not make the shutter buildable, and the two have almost no ' +
   'overlap in what makes them wrong. validate_formwork answers the second question: cycles ' +
   'in the cast order, runs with a stretch no panel closes, walls no tie in the system reaches, ' +
@@ -334,26 +343,44 @@ const PART_SETTINGS_SCHEMA = z.object({
 /**
  * Every catalog id a part could legitimately be substituted for.
  *
- * One flat set rather than a per-kind list, because the check here is only "does this
- * name a real product" — whether a beam is a sensible stand-in for a beam is the
- * substitution list the panel offers, and the model is told in the tool description to
- * match like for like. A tighter check on the server would reject the legitimate case
- * where a column form stands in for a wall panel on a blade.
+ * Core's list rather than one composed here, because the settings panel's stock editor
+ * offers the same set and two hand-built copies would agree on the day they were written
+ * and diverge the first time a system joined the catalog. One flat set rather than a
+ * per-kind list, because the check is only "does this name a real product" — whether a
+ * beam is a sensible stand-in for a beam is the substitution list the panel offers, and
+ * a tighter check here would reject the legitimate case where a column form stands in
+ * for a wall panel on a blade.
  */
-const CATALOG_IDS = new Set<string>([
-  ...Object.values(FORMWORK_SYSTEMS).flatMap((system) => [
-    ...system.panels.map((entry) => entry.id),
-    ...system.corners.map((entry) => entry.id),
-    ...system.fillers.map((entry) => entry.id),
-    ...system.ties.map((entry) => entry.id),
-  ]),
-  ...ADJUSTABLE_COLUMN_CLAMPS.map((entry) => entry.id),
-  ...COLUMN_FORMS.map((entry) => entry.id),
-  ...SHEATHING_IDS,
-  ...BEAM_IDS,
-  ...PROP_IDS,
-  ...SHEET_STOCK.map((entry) => entry.id),
-])
+const CATALOG_IDS = new Set<string>(STOCKABLE_CATALOG_PARTS.map((part) => part.id))
+
+/**
+ * What the yard owns, keyed by catalog id.
+ *
+ * A record rather than a fixed shape because the keys are the catalog, and it is the
+ * one settings group where the model supplies the field names. Validated against
+ * `CATALOG_IDS` on the way in for a sharper reason than the part ids are: an id that
+ * names nothing can never be matched by a bill line, so "we own 200 of those" would be
+ * accepted, stored, and silently make no difference to a single quantity.
+ */
+const STOCK_SETTINGS_SCHEMA = z.record(
+  z.string().max(120),
+  z
+    .number()
+    .int()
+    .nonnegative()
+    .nullable()
+    .describe('how many the yard owns; 0 means owns none of this type, null removes the entry'),
+)
+
+/** The first stock id that names nothing in the catalog. */
+function unknownStockId(patch: z.infer<typeof STOCK_SETTINGS_SCHEMA>): string | undefined {
+  for (const catalogId of Object.keys(patch)) {
+    if (!CATALOG_IDS.has(catalogId)) {
+      return `Error: no catalog id "${catalogId}" — a stock entry that matches no part would be stored and change nothing. Read inspect_project_formwork for the ids this job's bill actually uses.`
+    }
+  }
+  return undefined
+}
 
 /** The first part id that names nothing in the catalog, as the error the model reads back. */
 function unknownPartId(patch: z.infer<typeof PART_SETTINGS_SCHEMA>): string | undefined {
@@ -697,7 +724,7 @@ export function buildTools(
     }),
     inspect_formwork_settings: tool({
       description:
-        'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. One settings record per scene, so this takes no arguments.',
+        'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports ownedStock, what the yard owns by catalog id, which is not a design input but is what the takeoff splits owned from hired against — null there means nobody has recorded a rack, which is not the same as a yard that owns nothing. One settings record per scene, so this takes no arguments.',
       inputSchema: z.object({}),
       execute: async () => {
         toolCalls.push({ name: 'inspect_formwork_settings', input: {} })
@@ -715,6 +742,10 @@ export function buildTools(
             falseworkLoads: resolved.falseworkLoads,
             bracing: resolved.bracing,
             parts: resolved.parts,
+            // Null rather than an empty rack, and the two are different answers: null
+            // is nobody having said, so the takeoff shows no owned/hired split at all,
+            // where `{}` is a yard that has recorded owning nothing.
+            ownedStock: resolved.ownedStock ?? null,
           },
           // Only what the project actually said. Anything absent here but present
           // above is the shipped conservative default, not a decision.
@@ -727,6 +758,7 @@ export function buildTools(
                 falseworkLoads: node.falseworkLoads ?? null,
                 bracing: node.bracing ?? null,
                 parts: node.parts ?? null,
+                stock: node.stock ?? null,
               }
             : null,
           assumedDefaults: {
@@ -769,15 +801,22 @@ export function buildTools(
         parts: PART_SETTINGS_SCHEMA.optional().describe(
           'the catalog parts the design resolves against, which decide what every solved spacing is a spacing of',
         ),
+        ownedStock: STOCK_SETTINGS_SCHEMA.optional().describe(
+          'how many of each catalog id the yard owns, keyed by id — a bill draws on these before it hires. Merged into what is already recorded, so pass only the types you are changing; null against an id removes it. Until a project records this, the takeoff reports no owned/hired split at all rather than putting the whole bill on hire',
+        ),
       }),
-      execute: async ({ cement, ...groups }) => {
-        toolCalls.push({ name: 'set_formwork_settings', input: { cement, ...groups } })
+      execute: async ({ cement, ownedStock, ...groups }) => {
+        toolCalls.push({ name: 'set_formwork_settings', input: { cement, ownedStock, ...groups } })
         const stated = Object.entries(groups).filter(([, value]) => value !== undefined)
-        if (stated.length === 0 && cement === undefined) {
+        if (stated.length === 0 && cement === undefined && ownedStock === undefined) {
           return 'Error: nothing to set — pass at least one field'
         }
         if (groups.parts) {
           const bad = unknownPartId(groups.parts)
+          if (bad) return bad
+        }
+        if (ownedStock) {
+          const bad = unknownStockId(ownedStock)
           if (bad) return bad
         }
         const node = settingsNodeOrError()
@@ -811,6 +850,14 @@ export function buildTools(
           if (merged === undefined) delete node.concrete
           else node.concrete = merged
           changed.push('cement')
+        }
+        if (ownedStock !== undefined) {
+          // Its own helper rather than the group merge, which would replace the whole
+          // rack: recording one panel type would forget every other type the yard owns.
+          // And no `undefined` branch — an emptied rack stays stated, because a project
+          // that removed every line has said it owns nothing.
+          node.stock = mergeFormworkOwnedStock(node.stock as never, toPatch(ownedStock) as never)
+          changed.push('ownedStock')
         }
         onMutate()
 
@@ -935,7 +982,7 @@ export function buildTools(
     }),
     inspect_project_formwork: tool({
       description:
-        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show.',
+        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire — record it with set_formwork_settings ownedStock. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock.',
       inputSchema: z.object({
         levelId: z
           .string()
@@ -971,16 +1018,46 @@ export function buildTools(
           // most likely reason a total is lower than the user expects, and it is
           // invisible in a bill that only lists what exists.
           unshuttered: [...scoped].filter((id) => !shuttered.has(id as string)),
-          bom: solution.bom.map((line) => ({
-            description: line.description,
-            catalogId: line.catalogId ?? null,
-            provenance: line.provenance,
-            quantity: line.quantity,
-            unit: line.unit,
-            totalWeightKg: line.totalWeightKg === undefined ? null : round(line.totalWeightKg),
-          })),
+          bom: solution.bom.map((line, index) => {
+            const split = solution.supply?.lines[index]
+            return {
+              description: line.description,
+              catalogId: line.catalogId ?? null,
+              provenance: line.provenance,
+              quantity: line.quantity,
+              unit: line.unit,
+              totalWeightKg: line.totalWeightKg === undefined ? null : round(line.totalWeightKg),
+              // Per line and only where there is a rack, so an absent field is "nobody
+              // said what this project owns" rather than "nothing to hire". Indexed
+              // because `bomSupply` returns the bill's own order.
+              ...(split
+                ? {
+                    fromOwnStock: split.ownedQuantity,
+                    toHire: split.hiredQuantity,
+                    consumed: split.consumedQuantity,
+                  }
+                : {}),
+            }
+          }),
           totalWeightKg: round(solution.totalWeightKg),
           totalWeightComplete: solution.totalWeightComplete,
+          // Absent where the project has recorded no stock, and the model is told in the
+          // tool description to say so rather than to treat the bill as all on hire.
+          ...(solution.supply
+            ? {
+                supply: {
+                  fromOwnStock: solution.supply.ownedQuantity,
+                  toHire: solution.supply.hiredQuantity,
+                  consumed: solution.supply.consumedQuantity,
+                  hiredAlteredHere: solution.supply.hiredModifiedQuantity,
+                  hiredWeightKg:
+                    solution.supply.hiredWeightKg === undefined
+                      ? null
+                      : round(solution.supply.hiredWeightKg),
+                  ownedNotUsedHere: solution.supply.unusedOwnedIds,
+                },
+              }
+            : {}),
           beyondCapacity: solution.beyondCapacityMarks.map((part) => ({
             elementId: part.hostId,
             mark: part.mark,

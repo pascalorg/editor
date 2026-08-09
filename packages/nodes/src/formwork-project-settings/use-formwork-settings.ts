@@ -9,6 +9,7 @@ import {
   findFormworkSettingsNode,
   generateId,
   mergeFormworkCement,
+  mergeFormworkOwnedStock,
   mergeFormworkSettingsGroup,
   runAsSingleSceneHistoryStep,
   useScene,
@@ -139,6 +140,26 @@ export function setFormworkCementField(patch: Partial<CementSpecSettings>): void
   )
 }
 
+/**
+ * Record what the yard owns of one or more catalog ids. `undefined` removes an id.
+ *
+ * The rack is edited one line at a time, which is the case the group merge would lose:
+ * it replaces `owned` wholesale, so adding a panel type would forget the rest of the
+ * yard. And unlike every other write here, an emptied rack is *kept* as `stock: {}` —
+ * a project that has removed every line has stated it owns nothing, which is an answer,
+ * where an absent group means nobody has said and the takeoff shows no split at all.
+ */
+export function setFormworkOwnedStock(patch: Record<string, number | undefined>): void {
+  writeFormworkSettings(
+    (node) => ({ stock: mergeFormworkOwnedStock(node.stock, patch) }) as Partial<AnyNode>,
+  )
+}
+
+/** Drops the rack back to unstated, which is not the same as recording a rack of nothing. */
+export function clearFormworkOwnedStock(): void {
+  writeFormworkSettings(() => ({ stock: undefined }) as Partial<AnyNode>)
+}
+
 /** Hands the whole project back to the shipped defaults. */
 export function clearFormworkSettings(): void {
   writeFormworkSettings(
@@ -151,6 +172,7 @@ export function clearFormworkSettings(): void {
         falseworkLoads: undefined,
         bracing: undefined,
         parts: undefined,
+        stock: undefined,
       }) as Partial<AnyNode>,
   )
 }
@@ -163,6 +185,8 @@ export function useFormworkSettingsWriter(): {
   setField: typeof setFormworkSettingsField
   setGroupField: typeof setFormworkSettingsGroupField
   setCementField: typeof setFormworkCementField
+  setOwnedStock: typeof setFormworkOwnedStock
+  clearOwnedStock: typeof clearFormworkOwnedStock
   clearAll: typeof clearFormworkSettings
 } {
   return useMemo(
@@ -170,6 +194,8 @@ export function useFormworkSettingsWriter(): {
       setField: setFormworkSettingsField,
       setGroupField: setFormworkSettingsGroupField,
       setCementField: setFormworkCementField,
+      setOwnedStock: setFormworkOwnedStock,
+      clearOwnedStock: clearFormworkOwnedStock,
       clearAll: clearFormworkSettings,
     }),
     [],

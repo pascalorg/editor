@@ -191,6 +191,36 @@ export const FormworkPartSettings = z.object({
 })
 export type FormworkPartSettings = z.infer<typeof FormworkPartSettings>
 
+/**
+ * What the yard owns, by catalog id — the stock a bill draws on before it hires.
+ *
+ * A project decision like everything else here, and for the sharpest version of the
+ * usual reason: ownership is not a property of a wall. The same 200 panels serve every
+ * shutter in the model in turn, so a copy per element would let two walls each believe
+ * they had the whole rack.
+ *
+ * A count per id rather than a boolean per type, because ownership is a *pool*. A yard
+ * that owns 200 of a panel and needs 260 hires 60, and a flag would put all 260 on
+ * hire the moment the job outgrew the rack by one.
+ *
+ * The group being **absent** and being **empty** are different claims, which is why
+ * this is optional and its own group rather than a field defaulting to `{}`. Empty
+ * means the project has said it owns nothing — a real answer a costing pass can use.
+ * Absent means nobody has said, and the takeoff leaves the split off entirely rather
+ * than reporting a whole bill on hire that the project never claimed. Same
+ * distinction the design report draws between "assumed" and "project".
+ */
+export const FormworkStockSettings = z.object({
+  /**
+   * Owned quantity per catalog id — `{ 'framax-xlife-0.60x2.70': 200 }`.
+   *
+   * Integers because a rack holds whole panels, and non-negative because "owns −3" is
+   * a shortage rather than a stock level and belongs to the schedule, not here.
+   */
+  owned: z.record(z.string().trim().max(120), z.number().int().nonnegative()).optional(),
+})
+export type FormworkStockSettings = z.infer<typeof FormworkStockSettings>
+
 export const FormworkProjectSettingsNode = BaseNode.extend({
   id: objectId('formwork-settings'),
   type: nodeType('formwork-settings'),
@@ -203,6 +233,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   falseworkLoads: FalseworkLoadSettings.optional(),
   bracing: BracingSettings.optional(),
   parts: FormworkPartSettings.optional(),
+  stock: FormworkStockSettings.optional(),
 }).describe(
   dedent`
   Formwork project settings - the pour every shutter in the scene is designed against. One per scene.
@@ -213,6 +244,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - falseworkLoads: soffit dead and live loads beyond the concrete itself, each raised to the ACI floor
   - bracing: wind, form weight and raker geometry for wall forms
   - parts: catalog ids for the panel system, sheathing, beam section and prop
+  - stock.owned: how many of each catalog id the yard owns, by id; a bill draws on these before it hires. Absent means nobody has said what the project owns, and the takeoff reports no owned/hired split at all rather than putting the whole bill on hire
   `,
 )
 export type FormworkProjectSettingsNode = z.infer<typeof FormworkProjectSettingsNode>

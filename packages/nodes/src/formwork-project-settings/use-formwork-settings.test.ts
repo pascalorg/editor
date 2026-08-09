@@ -11,8 +11,10 @@ import type { AnyNodeDefinition } from '@pascal-app/core/registry'
 import { formworkAssemblyDefinition } from '../formwork-assembly'
 import { formworkProjectSettingsDefinition } from './definition'
 import {
+  clearFormworkOwnedStock,
   clearFormworkSettings,
   setFormworkCementField,
+  setFormworkOwnedStock,
   setFormworkSettingsField,
   setFormworkSettingsGroupField,
 } from './use-formwork-settings'
@@ -227,6 +229,53 @@ describe('formwork settings write — cement, the second nesting level', () => {
   })
 })
 
+describe('formwork settings write — the yard’s own rack', () => {
+  beforeEach(seedScene)
+
+  const PANEL = 'doka-framax-panel-588104500'
+  const OTHER = 'doka-framax-panel-588223500'
+
+  test('a second type is added rather than replacing the rack', () => {
+    // The reason `mergeFormworkOwnedStock` exists rather than the group merge, which
+    // replaces `owned` wholesale — recording one panel type would forget the yard.
+    setFormworkOwnedStock({ [PANEL]: 200 })
+    setFormworkOwnedStock({ [OTHER]: 40 })
+
+    expect(settings()?.stock).toEqual({ owned: { [PANEL]: 200, [OTHER]: 40 } })
+  })
+
+  test('a stated zero is kept, because owning none of a type is a fact about it', () => {
+    setFormworkOwnedStock({ [PANEL]: 0 })
+
+    expect(settings()?.stock).toEqual({ owned: { [PANEL]: 0 } })
+  })
+
+  test('removing the last line leaves a rack of nothing, which is still an answer', () => {
+    // Every other group here reverts to unstated when emptied. This one must not: a
+    // recorded empty rack prices the whole bill as hire, where an absent one shows no
+    // split at all.
+    setFormworkOwnedStock({ [PANEL]: 200 })
+    setFormworkOwnedStock({ [PANEL]: undefined })
+
+    expect(settings()?.stock).toEqual({ owned: {} })
+  })
+
+  test('clearing the rack is the separate, explicit way back to unstated', () => {
+    setFormworkOwnedStock({ [PANEL]: 200 })
+
+    clearFormworkOwnedStock()
+
+    expect(settings()?.stock).toBeUndefined()
+  })
+
+  test('a rack write leaves a stated design input alone', () => {
+    setFormworkSettingsGroupField('placement', { riseRateMH: 2.5 })
+    setFormworkOwnedStock({ [PANEL]: 200 })
+
+    expect(settings()?.placement).toEqual({ riseRateMH: 2.5 })
+  })
+})
+
 describe('formwork settings write — reset', () => {
   beforeEach(seedScene)
 
@@ -235,6 +284,7 @@ describe('formwork settings write — reset', () => {
     setFormworkSettingsGroupField('placement', { riseRateMH: 2.5 })
     setFormworkSettingsGroupField('parts', { doubledWalers: true })
     setFormworkCementField({ retarder: true })
+    setFormworkOwnedStock({ 'doka-framax-panel-588104500': 200 })
 
     clearFormworkSettings()
 
@@ -244,6 +294,7 @@ describe('formwork settings write — reset', () => {
     expect(node?.placement).toBeUndefined()
     expect(node?.parts).toBeUndefined()
     expect(node?.concrete).toBeUndefined()
+    expect(node?.stock).toBeUndefined()
   })
 
   test('a reset still dirties the assemblies it re-sizes', () => {

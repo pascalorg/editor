@@ -33,6 +33,10 @@ export function FormworkTakeoffPanel() {
   const solution = useProjectFormwork({ levelId: scopedLevel?.id })
   const caveats = projectFormworkCaveats(solution)
   const subject = scopedLevel ? scopedLevel.label : 'Whole project'
+  const supply = solution.supply
+  // Keyed by the line object rather than by a composed string, because it is the same
+  // object: `bomSupply` was handed `solution.bom` and returns entries pointing at it.
+  const supplyByLine = new Map(supply?.lines.map((entry) => [entry.line, entry]))
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -95,36 +99,79 @@ export function FormworkTakeoffPanel() {
                 value2={solution.totalWeightComplete ? undefined : 'part of the set'}
               />
             </Section>
+            {supply === undefined ? (
+              <Note>
+                No owned stock recorded, so this bill says nothing about what is hired. Enter what
+                the yard owns in the project's formwork settings and every line splits.
+              </Note>
+            ) : (
+              <Section title="Supply">
+                <Readout label="From own stock" value={String(supply.ownedQuantity)} />
+                <Readout
+                  label="To hire"
+                  value={String(supply.hiredQuantity)}
+                  value2={
+                    supply.hiredWeightKg === undefined
+                      ? undefined
+                      : `${supply.hiredWeightKg.toFixed(0)} kg held`
+                  }
+                />
+                <Readout label="Consumed" value={String(supply.consumedQuantity)} />
+                {supply.hiredModifiedQuantity > 0 && (
+                  <Readout
+                    label="Hired, altered here"
+                    value={String(supply.hiredModifiedQuantity)}
+                    value2="recharged at list"
+                  />
+                )}
+                {supply.unusedOwnedIds.length > 0 && (
+                  <Note>Owned and not used in this scope: {supply.unusedOwnedIds.join(', ')}.</Note>
+                )}
+              </Section>
+            )}
             <Section
               title={`${solution.bom.length} ${solution.bom.length === 1 ? 'line' : 'lines'}`}
             >
-              {solution.bom.map((line) => (
-                <div
-                  className="space-y-0.5 border-border/30 border-t pt-1 first:border-t-0 first:pt-0"
-                  key={`${line.kind}-${line.catalogId ?? ''}-${line.description}-${line.provenance}`}
-                >
-                  <div className="flex items-baseline justify-between gap-2 text-[11px]">
-                    <span className="min-w-0 flex-1 truncate text-foreground/90">
-                      {line.description}
-                    </span>
-                    <span className="shrink-0 font-mono text-foreground">
-                      {line.quantity}
-                      {line.unit === 'no' ? '' : ` ${line.unit}`}
-                    </span>
+              {solution.bom.map((line) => {
+                const split = supplyByLine.get(line)
+                return (
+                  <div
+                    className="space-y-0.5 border-border/30 border-t pt-1 first:border-t-0 first:pt-0"
+                    key={`${line.kind}-${line.catalogId ?? ''}-${line.description}-${line.provenance}`}
+                  >
+                    <div className="flex items-baseline justify-between gap-2 text-[11px]">
+                      <span className="min-w-0 flex-1 truncate text-foreground/90">
+                        {line.description}
+                      </span>
+                      <span className="shrink-0 font-mono text-foreground">
+                        {line.quantity}
+                        {line.unit === 'no' ? '' : ` ${line.unit}`}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-2 text-[10px] text-muted-foreground">
+                      <span className="min-w-0 flex-1 truncate">
+                        {line.catalogId ?? 'made on site'}
+                        {line.provenance === 'standard' ? '' : ` · ${line.provenance}`}
+                      </span>
+                      <span className="shrink-0 font-mono">
+                        {line.totalWeightKg === undefined
+                          ? 'weight not stated'
+                          : `${line.totalWeightKg.toFixed(0)} kg`}
+                      </span>
+                    </div>
+                    {/* Only where the line is actually split. "26 · own 26 · hire 0" is
+                        noise on every line of a job that owns everything, and it is the
+                        exceptions a buyer is reading this list for. */}
+                    {split !== undefined && split.hiredQuantity > 0 && (
+                      <div className="text-[10px] text-muted-foreground">
+                        {split.ownedQuantity > 0 && `${split.ownedQuantity} off own stock · `}
+                        hire {split.hiredQuantity}
+                        {split.hiredModifiedQuantity > 0 && ', altered here'}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-baseline justify-between gap-2 text-[10px] text-muted-foreground">
-                    <span className="min-w-0 flex-1 truncate">
-                      {line.catalogId ?? 'made on site'}
-                      {line.provenance === 'standard' ? '' : ` · ${line.provenance}`}
-                    </span>
-                    <span className="shrink-0 font-mono">
-                      {line.totalWeightKg === undefined
-                        ? 'weight not stated'
-                        : `${line.totalWeightKg.toFixed(0)} kg`}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </Section>
           </div>
         )}

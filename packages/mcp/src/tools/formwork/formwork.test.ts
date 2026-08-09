@@ -44,9 +44,26 @@ interface BillReply {
   shutterCount: number
   elements: Array<{ id: string; kind: string; shutters: number; coversWholePour: boolean }>
   unshuttered: string[]
-  bom: Array<{ description: string; quantity: number; unit: string; totalWeightKg: number | null }>
+  bom: Array<{
+    description: string
+    catalogId: string | null
+    quantity: number
+    unit: string
+    totalWeightKg: number | null
+    fromOwnStock?: number
+    toHire?: number
+    consumed?: number
+  }>
   totalWeightKg: number
   totalWeightComplete: boolean
+  supply?: {
+    fromOwnStock: number
+    toHire: number
+    consumed: number
+    hiredAlteredHere: number
+    hiredWeightKg: number | null
+    ownedNotUsedHere: string[]
+  }
   caveats: string[]
 }
 
@@ -257,6 +274,26 @@ function twoLevels(): Record<string, unknown> {
   }
 }
 
+/** The project's recorded rack, which is what the bill splits owned from hired against. */
+function withStock(
+  nodes: Record<string, unknown>,
+  owned: Record<string, number>,
+): Record<string, unknown> {
+  return {
+    ...nodes,
+    'formwork-settings_1': {
+      object: 'node',
+      id: 'formwork-settings_1',
+      type: 'formwork-settings',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      stock: { owned },
+    },
+  }
+}
+
 describe('the formwork MCP tools', () => {
   let client: Client
   let bridge: SceneBridge
@@ -440,6 +477,37 @@ describe('the formwork MCP tools', () => {
       expect(text).toContain('no level with id level_9')
       expect(text).toContain('list_levels')
     }
+  })
+
+  test('reports no owned/hired split until the project records a rack', async () => {
+    // Absent, not a split of zeros. A bill reading "everything on hire" is a claim
+    // about the yard that nobody made, and a model given zeros will repeat it.
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.supply).toBeUndefined()
+    expect(reply.bom.every((line) => line.toHire === undefined)).toBe(true)
+  })
+
+  test('splits each line and the whole bill once the rack is recorded', async () => {
+    load(twoLevels())
+    const plain = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const panel = plain.bom.find((line) => line.catalogId !== null) as {
+      catalogId: string
+      quantity: number
+    }
+    load(withStock(twoLevels(), { [panel.catalogId]: 4, 'eurex-20-top': 50 }))
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    const line = reply.bom.find((row) => row.catalogId === panel.catalogId)
+    expect(line?.fromOwnStock).toBe(4)
+    expect(line?.toHire).toBe(panel.quantity - 4)
+    expect(reply.supply?.fromOwnStock).toBe(4)
+    // A type the bill never draws on, named rather than dropped.
+    expect(reply.supply?.ownedNotUsedHere).toEqual(['eurex-20-top'])
+    expect(reply.caveats.some((caveat) => caveat.includes('not a total'))).toBe(true)
   })
 
   test('an empty scene answers rather than throwing', async () => {

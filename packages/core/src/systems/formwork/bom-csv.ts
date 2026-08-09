@@ -1,4 +1,5 @@
 import type { BomLine } from './parts'
+import type { BomSupply, SupplyLine } from './supply'
 
 /**
  * A bill of materials as a file somebody can open.
@@ -30,6 +31,15 @@ export interface BomCsvScope {
    * only in the UI that produced it.
    */
   caveats?: readonly string[]
+  /**
+   * Where the parts come from, where the project has said what it owns.
+   *
+   * Absent leaves the three columns off the file entirely rather than emptying them.
+   * A blank cell in a spreadsheet is read as nothing to hire, and a column of blanks
+   * under "Hire" is the most confident wrong answer this file could give — so the
+   * question is not asked in the header unless there is an answer to it.
+   */
+  supply?: BomSupply
 }
 
 /**
@@ -58,6 +68,14 @@ const HEADER = [
   'Weight kg',
   'Marks',
 ] as const
+
+/**
+ * Where the quantity comes from, following the quantity when the project has a rack.
+ *
+ * Three columns rather than one label because a line is normally split — 26 needed
+ * against 20 owned is two numbers, and the row a yard acts on says both.
+ */
+const SUPPLY_HEADER = ['From own stock', 'To hire', 'Consumed'] as const
 
 /**
  * Why a line's parts are what they are, in the yard's terms rather than the type's.
@@ -97,9 +115,42 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
   for (const caveat of scope.caveats ?? []) {
     rows.push(['INCOMPLETE', cell(caveat)].join(','))
   }
+  const supply = scope.supply
+  if (supply && supply.hiredModifiedQuantity > 0) {
+    // A cell rather than only the prose caveat, because this is the figure a quantity
+    // surveyor prices and prose is not something a spreadsheet can multiply.
+    rows.push(
+      ['Hired parts altered here — recharged at list', supply.hiredModifiedQuantity].join(','),
+    )
+  }
+  if (supply && supply.hiredWeightKg !== undefined) {
+    // A hire is charged against what is held, so the tonnage on hire is a different
+    // figure from the tonnage on site and it is the one a hire desk quotes from.
+    rows.push(['On hire kg', round2(supply.hiredWeightKg)].join(','))
+  }
+  if (supply && supply.unusedOwnedIds.length > 0) {
+    // Plant the project owns and this scope never asks for. Nothing in the lines below
+    // can say so, because a line the bill does not contain has no row.
+    rows.push(['Owned, not used here', cell(supply.unusedOwnedIds.join(' '))].join(','))
+  }
   rows.push('')
 
-  rows.push(HEADER.join(','))
+  const bySupply = new Map<BomLine, SupplyLine>(
+    (supply?.lines ?? []).map((entry) => [entry.line, entry]),
+  )
+  const supplyCells = (line: BomLine): Array<string | number> => {
+    if (!supply) return []
+    const entry = bySupply.get(line)
+    return entry === undefined
+      ? ['', '', '']
+      : [entry.ownedQuantity, entry.hiredQuantity, entry.consumedQuantity]
+  }
+
+  rows.push(
+    supply
+      ? [...HEADER.slice(0, 6), ...SUPPLY_HEADER, ...HEADER.slice(6)].join(',')
+      : HEADER.join(','),
+  )
   let totalKg = 0
   let everyLineWeighed = lines.length > 0
   for (const line of lines) {
@@ -113,6 +164,7 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
         cell(line.catalogId),
         cell(CONDITION_LABELS[line.provenance]),
         line.quantity,
+        ...supplyCells(line),
         cell(line.unit),
         line.totalWeightKg === undefined ? '' : round2(line.totalWeightKg),
         cell(line.marks.join(' ')),
@@ -136,6 +188,7 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       '',
       '',
       lines.reduce((sum, line) => sum + line.quantity, 0),
+      ...(supply ? [supply.ownedQuantity, supply.hiredQuantity, supply.consumedQuantity] : []),
       '',
       lines.length === 0 ? '' : round2(totalKg),
       '',

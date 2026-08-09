@@ -103,6 +103,36 @@ function sceneOf(
   return nodes
 }
 
+/** The project settings node, parented to a site the scope never looks at. */
+function withStock(
+  nodes: Record<string, AnyNode>,
+  stock: { owned?: Record<string, number> } | undefined,
+): Record<string, AnyNode> {
+  return {
+    ...nodes,
+    'formwork-settings_1': {
+      object: 'node',
+      id: 'formwork-settings_1',
+      type: 'formwork-settings',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      ...(stock ? { stock } : {}),
+    } as unknown as AnyNode,
+  }
+}
+
+/** The panel type a plain steel-panel wall bills 20 of, so a rack can half-cover it. */
+const PANEL_ID = 'doka-framax-panel-588104500'
+
+function steelWallScene(): Record<string, AnyNode> {
+  return sceneOf(
+    makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+    makeAssembly('formwork-assembly_1', 'wall_1', 0, 0),
+  )
+}
+
 describe('solveProjectFormwork', () => {
   test('an empty scene bills nothing rather than throwing', () => {
     const solution = solveProjectFormwork({})
@@ -270,6 +300,62 @@ describe('solveProjectFormwork', () => {
   })
 })
 
+describe('the owned/hired split', () => {
+  test('a project that has said nothing about its rack gets no split at all', () => {
+    // Not a split of zeros. A bill reading "everything on hire" is a claim about the
+    // yard, and nobody made it — same distinction the report draws between an
+    // assumption and a project decision.
+    expect(solveProjectFormwork(steelWallScene()).supply).toBeUndefined()
+    expect(solveProjectFormwork(withStock(steelWallScene(), undefined)).supply).toBeUndefined()
+  })
+
+  test('a rack recorded as empty is an answer, and prices the bill as hire', () => {
+    const solution = solveProjectFormwork(withStock(steelWallScene(), { owned: {} }))
+
+    expect(solution.supply).toBeDefined()
+    expect(solution.supply?.ownedQuantity).toBe(0)
+    expect(solution.supply?.hiredQuantity).toBeGreaterThan(0)
+  })
+
+  test('the rack is spent against the bill, and the shortfall is hired', () => {
+    const full = solveProjectFormwork(steelWallScene())
+    const billed = full.bom.find((line) => line.catalogId === PANEL_ID)?.quantity as number
+    expect(billed).toBeGreaterThan(4)
+
+    const solution = solveProjectFormwork(withStock(steelWallScene(), { owned: { [PANEL_ID]: 4 } }))
+    const split = solution.supply?.lines.find((entry) => entry.line.catalogId === PANEL_ID)
+
+    expect(split?.ownedQuantity).toBe(4)
+    expect(split?.hiredQuantity).toBe(billed - 4)
+  })
+
+  test('the split sits beside the bill line it is about, in the bill’s own order', () => {
+    // The panel reads them positionally; a supply array in the engine's allocation
+    // order would put every figure against the wrong description.
+    const solution = solveProjectFormwork(withStock(steelWallScene(), { owned: { [PANEL_ID]: 4 } }))
+
+    expect(solution.supply?.lines.map((entry) => entry.line)).toEqual(solution.bom)
+  })
+
+  test('bespoke lines are consumed rather than hired, whatever the yard owns', () => {
+    const solution = solveProjectFormwork(withStock(steelWallScene(), { owned: { [PANEL_ID]: 4 } }))
+    const bespoke = solution.bom.filter((line) => line.provenance === 'bespoke')
+    expect(bespoke.length).toBeGreaterThan(0)
+
+    expect(solution.supply?.consumedQuantity).toBe(
+      bespoke.reduce((total, line) => total + line.quantity, 0),
+    )
+  })
+
+  test('a stated id the bill never draws on is named, not silently ignored', () => {
+    const solution = solveProjectFormwork(
+      withStock(steelWallScene(), { owned: { [PANEL_ID]: 4, 'eurex-20-top': 50 } }),
+    )
+
+    expect(solution.supply?.unusedOwnedIds).toEqual(['eurex-20-top'])
+  })
+})
+
 describe('projectFormworkCaveats', () => {
   test('says nothing about a complete takeoff', () => {
     const wall = makeWall('wall_1')
@@ -318,5 +404,38 @@ describe('projectFormworkCaveats', () => {
     expect(caveats.some((c) => c.includes('no published weight'))).toBe(
       !solution.totalWeightComplete,
     )
+  })
+
+  test('warns that two scopes’ owned figures are not a total', () => {
+    // The one way this split is read wrongly: it is right per level and adding two
+    // levels double-counts a rack that serves both in sequence.
+    const solution = solveProjectFormwork(withStock(steelWallScene(), { owned: { [PANEL_ID]: 4 } }))
+
+    expect(projectFormworkCaveats(solution).some((c) => c.includes('not a total'))).toBe(true)
+  })
+
+  test('says nothing about scopes where the rack covered none of the bill', () => {
+    const solution = solveProjectFormwork(withStock(steelWallScene(), { owned: {} }))
+
+    expect(projectFormworkCaveats(solution).some((c) => c.includes('not a total'))).toBe(false)
+  })
+
+  test('calls out hired stock this pour alters as a recharge, not a hire charge', () => {
+    // A substituted panel is `modified`, and a hire company's panel returned altered
+    // is billed at list — a purchase nobody decided to make.
+    const plain = solveProjectFormwork(steelWallScene())
+    const mark = plain.elements[0]?.shutters[0]?.parts.find((part) => part.kind === 'panel')
+      ?.mark as string
+    const edited = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, {
+        partOverrides: { [mark]: { catalogId: 'peri-trio-panel-tr-240' } },
+      } as Partial<FormworkAssemblyNode>),
+    )
+
+    const solution = solveProjectFormwork(withStock(edited, { owned: {} }))
+
+    expect(solution.supply?.hiredModifiedQuantity).toBe(1)
+    expect(projectFormworkCaveats(solution).some((c) => c.includes('recharge at list'))).toBe(true)
   })
 })

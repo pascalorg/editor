@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type BomLine, bomCsv, bomCsvFilename } from './index'
+import { type BomLine, bomCsv, bomCsvFilename, bomSupply } from './index'
 
 /**
  * The bill as a file.
@@ -155,6 +155,89 @@ describe('bomCsv', () => {
 
     expect(rows(csv)).toContain('Elements,12')
     expect(rows(csv)).toContain('Pours,20')
+  })
+
+  describe('the owned/hired split', () => {
+    test('is left out of the header entirely where the project has no rack', () => {
+      // Not emptied — omitted. A column headed "To hire" full of blank cells is read as
+      // nothing to hire, which is the most confident wrong answer this file could give.
+      const csv = bomCsv([line()], { subject: 'Project' })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header).not.toContain('To hire')
+      expect(header.split(',')).toHaveLength(9)
+    })
+
+    test('splits the quantity across three columns after it', () => {
+      const lines = [line({ quantity: 26 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        supply: bomSupply(lines, { 'framax-2700-900': 20 }),
+      })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header.split(',').slice(5, 9)).toEqual([
+        'Quantity',
+        'From own stock',
+        'To hire',
+        'Consumed',
+      ])
+      expect(dataRows(csv)[0]).toContain(',26,20,6,0,no,')
+    })
+
+    test('the total row splits too, in the same columns', () => {
+      // The row a spreadsheet sums. Out of step with the header by one column, every
+      // figure below the fold is attributed to the wrong question.
+      const lines = [line({ quantity: 26 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        supply: bomSupply(lines, { 'framax-2700-900': 20 }),
+      })
+
+      const total = rows(csv).find((row) => row.includes('TOTAL')) as string
+      expect(total.split(',').slice(5, 9)).toEqual(['26', '20', '6', '0'])
+    })
+
+    test('prices the hire against the weight held, not the weight on site', () => {
+      const lines = [line({ quantity: 4, totalWeightKg: 268.4 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        supply: bomSupply(lines, { 'framax-2700-900': 2 }),
+      })
+
+      expect(rows(csv)).toContain('On hire kg,134.2')
+      // And the line's own weight column is still the whole line — the two figures
+      // answer different questions and one must not overwrite the other.
+      expect(dataRows(csv)[0]).toContain('268.4')
+    })
+
+    test('withholds the hire weight where a hired line has no published weight', () => {
+      const lines = [line({ totalWeightKg: undefined })]
+      const csv = bomCsv(lines, { subject: 'Project', supply: bomSupply(lines, {}) })
+
+      expect(rows(csv).some((row) => row.startsWith('On hire kg'))).toBe(false)
+    })
+
+    test('calls out hired parts this pour alters, as a number and not only as prose', () => {
+      // What a quantity surveyor prices. A hire charge and a recharge at list for a
+      // drilled panel are the same cell to every other figure in the file.
+      const lines = [line({ provenance: 'modified', quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', supply: bomSupply(lines, {}) })
+
+      expect(rows(csv)).toContain('Hired parts altered here — recharged at list,4')
+    })
+
+    test('names owned stock this scope never draws on', () => {
+      // Plant the project is holding and this bill never asks for. No row below can say
+      // so, because a line the bill does not contain has no row.
+      const lines = [line()]
+      const csv = bomCsv(lines, {
+        subject: 'Level 1',
+        supply: bomSupply(lines, { 'framax-2700-900': 4, 'prop-eurex-20': 300 }),
+      })
+
+      expect(rows(csv)).toContain('Owned, not used here,prop-eurex-20')
+    })
   })
 })
 

@@ -1,5 +1,11 @@
-import type { BomLine } from '@pascal-app/core/formwork'
-import { bomLines, bomWeightKg, overUtilisedParts } from '@pascal-app/core/formwork'
+import type { BomLine, BomSupply } from '@pascal-app/core/formwork'
+import {
+  bomLines,
+  bomSupply,
+  bomWeightKg,
+  formworkSettingsFor,
+  overUtilisedParts,
+} from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { type CastableHostNode, pourUnitsForHost } from './attach'
 import { type SolvedShutter, solveShuttersForHost } from './solve'
@@ -49,6 +55,15 @@ export interface ProjectFormwork {
   totalWeightKg: number
   /** False where any line has no published weight — do not quote the total as a lifting weight. */
   totalWeightComplete: boolean
+  /**
+   * The bill split into what the yard owns and what it hires, or absent.
+   *
+   * Absent means nobody has recorded a rack, and that is the whole reason it is
+   * optional rather than a split with zeros in it: a project that has said nothing
+   * about what it owns has not said its formwork is all on hire, and a takeoff that
+   * fills the answer in makes a claim on the project's behalf.
+   */
+  supply?: BomSupply
   /** Elements formed for fewer or more pours than they are cast in. */
   incomplete: SolvedElement[]
   /** Parts working beyond capacity anywhere in scope. A bill for these is not an order. */
@@ -124,6 +139,7 @@ export function solveProjectFormwork(
   )
   const bom = bomLines(everyPart)
   const weight = bomWeightKg(bom)
+  const ownedStock = formworkSettingsFor(allNodes).ownedStock
 
   const beyondCapacityMarks = elements.flatMap((element) =>
     overUtilisedParts(element.shutters.flatMap((shutter) => shutter.parts)).map((part) => ({
@@ -138,6 +154,7 @@ export function solveProjectFormwork(
     bom,
     totalWeightKg: weight.totalKg,
     totalWeightComplete: weight.complete,
+    ...(ownedStock ? { supply: bomSupply(bom, ownedStock) } : {}),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
     shutterCount: elements.reduce((total, element) => total + element.shutters.length, 0),
@@ -172,6 +189,17 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   if (!solution.totalWeightComplete && solution.bom.length > 0) {
     out.push(
       'Some parts have no published weight, so the total is the sum of those that do — not the lifting weight of the set.',
+    )
+  }
+  if (solution.supply && solution.supply.ownedQuantity > 0) {
+    out.push(
+      'The owned/hired split is for this scope alone. The same owned stock serves the next pour once it is stripped, so two scopes’ owned figures are not a total.',
+    )
+  }
+  if (solution.supply && solution.supply.hiredModifiedQuantity > 0) {
+    const count = solution.supply.hiredModifiedQuantity
+    out.push(
+      `${count} hired ${count === 1 ? 'part is' : 'parts are'} drilled or cut for this pour — expect a recharge at list price, not a hire charge.`,
     )
   }
   return out

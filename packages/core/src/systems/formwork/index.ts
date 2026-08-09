@@ -40,6 +40,7 @@ export {
   governingCapacity,
   H16_BEAM,
   H20_BEAM,
+  isStockableCatalogId,
   legLengthM,
   type PanelType,
   PERI_TRIO,
@@ -63,6 +64,8 @@ export {
   type SheetStock,
   STEEL_PANEL_FORMLINING_REUSES,
   STEEL_PANEL_FRAME_REUSES,
+  STOCKABLE_CATALOG_PARTS,
+  type StockableCatalogPart,
   sheathingType,
   sheetStock,
   type TieHoleGrid,
@@ -363,8 +366,16 @@ export {
   formworkSettings,
   formworkSettingsFor,
   mergeFormworkCement,
+  mergeFormworkOwnedStock,
   mergeFormworkSettingsGroup,
 } from './settings'
+export {
+  type BomSupply,
+  bomSupply,
+  type OwnedStock,
+  type PartSupply,
+  type SupplyLine,
+} from './supply'
 export {
   type Finding,
   type FindingSeverity,

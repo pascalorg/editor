@@ -192,3 +192,126 @@ export function OptionalToggleField({
 export function GroupNote({ children }: { children: React.ReactNode }) {
   return <p className="px-1 pb-1 text-[10px] text-muted-foreground/70 leading-snug">{children}</p>
 }
+
+/**
+ * What the yard owns, one catalog line at a time.
+ *
+ * Not an `OptionalNumberField` per catalog id, and the reason is the shape of the
+ * answer rather than the length of the list. There are hundreds of ownable parts and a
+ * yard owns a handful of them, so a field per id would be a wall of blanks in which
+ * "assumed" is the answer everywhere and the four lines that matter are invisible. A
+ * rack is a list somebody adds to.
+ *
+ * Recorded and *empty* is a real answer — "we own nothing, price it all as hire" — so
+ * removing the last line does not clear the group. `onClear` is the separate, explicit
+ * way back to unstated, which is why it is a button of its own rather than a side
+ * effect of emptying the list.
+ */
+export function StockRackField({
+  onClear,
+  onSet,
+  options,
+  owned,
+}: {
+  /** Back to unstated, which is not the same as a recorded rack of nothing. */
+  onClear: () => void
+  /** `undefined` removes the id. */
+  onSet: (catalogId: string, quantity: number | undefined) => void
+  options: ReadonlyArray<{ id: string; label: string; family: string }>
+  /** `undefined` where the project has recorded no rack at all. */
+  owned: Readonly<Record<string, number>> | undefined
+}) {
+  const addId = useId()
+  const byId = new Map(options.map((option) => [option.id, option]))
+  const lines = Object.entries(owned ?? {}).sort(([a], [b]) =>
+    (byId.get(a)?.label ?? a).localeCompare(byId.get(b)?.label ?? b),
+  )
+  const families = [...new Set(options.map((option) => option.family))]
+
+  return (
+    <div className="flex flex-col gap-1 px-1 text-xs">
+      {owned === undefined ? (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          Nothing recorded, so the takeoff shows no owned/hired split at all — not a bill of
+          everything on hire. Add a line to state what the yard holds.
+        </p>
+      ) : lines.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          Recorded as owning nothing, so the whole bill prices as hire. That is a stated answer;
+          reset below to go back to nobody having said.
+        </p>
+      ) : null}
+
+      {lines.map(([catalogId, quantity]) => (
+        <div className="flex items-center gap-2" key={catalogId}>
+          <span className="min-w-0 flex-1 truncate text-muted-foreground" title={catalogId}>
+            {byId.get(catalogId)?.label ?? catalogId}
+          </span>
+          <input
+            aria-label={`Owned quantity, ${byId.get(catalogId)?.label ?? catalogId}`}
+            className="h-7 w-16 shrink-0 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-right font-mono outline-none"
+            defaultValue={quantity}
+            key={`${catalogId}-${quantity}`}
+            min={0}
+            onBlur={(event) => {
+              const raw = event.currentTarget.value.trim()
+              const parsed = Number.parseInt(raw, 10)
+              // A blank box removes the line; a 0 is kept, because "we own none of
+              // these" is a fact about a type the yard has run out of.
+              if (raw === '' || !Number.isFinite(parsed) || parsed < 0) onSet(catalogId, undefined)
+              else onSet(catalogId, parsed)
+            }}
+            step={1}
+            type="number"
+          />
+          <button
+            className="shrink-0 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            onClick={() => onSet(catalogId, undefined)}
+            type="button"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+
+      <label className="flex items-center gap-2" htmlFor={addId}>
+        <span className="shrink-0 text-muted-foreground">Add</span>
+        <select
+          className="h-7 min-w-0 flex-1 rounded-md border border-border/50 bg-[#232325] px-1.5 text-foreground outline-none"
+          id={addId}
+          onChange={(event) => {
+            const catalogId = event.target.value
+            event.currentTarget.value = ''
+            // 1 rather than 0, because adding a line is the act of saying the yard has
+            // some of these — a new line reading 0 would state the opposite.
+            if (catalogId) onSet(catalogId, 1)
+          }}
+          value=""
+        >
+          <option value="">Choose a part…</option>
+          {families.map((family) => (
+            <optgroup key={family} label={family}>
+              {options
+                .filter((option) => option.family === family && !(option.id in (owned ?? {})))
+                .map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+
+      {owned !== undefined && (
+        <button
+          className="self-start rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={onClear}
+          type="button"
+        >
+          Back to nobody having said
+        </button>
+      )}
+    </div>
+  )
+}

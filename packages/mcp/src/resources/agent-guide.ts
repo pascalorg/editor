@@ -48,6 +48,7 @@ export const AGENT_GUIDE = [
   '- Neither answer can be derived from the scene graph. Both are properties of a solved panel layout, a pressure calculation and a drilled tie grid, and none of those is a node — so do not attempt either from `get_scene`.',
   '- Never merge `errorCount` and `warningCount`: an error is something the crew cannot do, a warning is an exception somebody has to sign.',
   '- Always report `notChecked` and `caveats`. A list of failures alone reads as a clean bill of health for everything that was never examined, and a caveat means every figure under it is wrong in a way the figures cannot show.',
+  '- `supply` on the bill is the owned/hired split, and it is absent where nobody has recorded what the yard owns — say that rather than implying the whole bill is on hire. The split covers one scope only, because the same owned panels serve the next pour once stripped, so never add two levels’ owned figures; and `hiredAlteredHere` is a recharge at list price, not a hire charge.',
   '- Run `validate_formwork` before presenting a takeoff as an order.',
   '',
   '## Required Final Checks',
