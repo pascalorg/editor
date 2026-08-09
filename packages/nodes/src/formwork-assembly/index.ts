@@ -21,6 +21,15 @@ export {
   TopSurfaceFields,
   useFormworkHost,
 } from './host-controls'
+export {
+  coverageCaveatForHost,
+  type FormworkPartsReport,
+  formworkCoverageCaveat,
+  formworkPartsReport,
+  type ReportedBomLine,
+  type ReportedPart,
+  type ReportedShutter,
+} from './parts-report'
 export { FormworkBom, FormworkPartsList } from './parts-summary'
 export { FormworkAssemblyNode } from './schema'
 export { type SolvedShutter, solveShuttersForHost } from './solve'

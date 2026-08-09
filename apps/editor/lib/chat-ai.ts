@@ -1,29 +1,30 @@
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import {
+  applyFormworkPartPatch,
   applyFormworkSettingsPatch,
-  bomLines,
-  bomWeightKg,
-  duplicateMarks,
   findFormworkSettingsNode,
+  formworkPartPatchInput,
+  formworkPartsQueryInput,
   formworkSettings,
   formworkSettingsPatchInput,
   formworkSettingsReport,
+  INSPECT_FORMWORK_PARTS_DESCRIPTION,
   INSPECT_FORMWORK_SETTINGS_DESCRIPTION,
-  mergeFormworkPartOverride,
-  orphanedOverrides,
-  overUtilisedParts,
+  noFormworkAssembly,
   partByMark,
   partLabel,
+  SET_FORMWORK_PART_DESCRIPTION,
   SET_FORMWORK_SETTINGS_DESCRIPTION,
-  STOCKABLE_CATALOG_PARTS,
+  unknownPartMark,
   validationSummary,
-  worstUtilisation,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, FormworkAssemblyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint/headless'
 import {
   castableHostIds,
+  formworkCoverageCaveat,
+  formworkPartsReport,
   pourUnitsForHost,
   projectFormworkCaveats,
   reconcileFormworkNodes,
@@ -139,36 +140,6 @@ export type ChatResult = {
 /** The kinds that get cast and therefore shuttered. Everything else has no formwork to speak of. */
 const CASTABLE_TYPES = ['wall', 'column', 'slab'] as const
 
-/**
- * Every catalog item a solved part could be substituted for.
- *
- * Core's list rather than one composed here, because the settings panel's stock editor
- * offers the same set and two hand-built copies would agree on the day they were written
- * and diverge the first time a system joined the catalog. One flat set rather than a
- * per-kind list, because the check is only "does this name a real product" — whether a
- * beam is a sensible stand-in for a beam is the substitution list the panel offers, and
- * a tighter check here would reject the legitimate case where a column form stands in
- * for a wall panel on a blade.
- *
- * Validated even though a bad id does not fail loudly — that is the reason. The design
- * chain falls back to its default part, so a hallucinated `peri-h20` would leave the
- * project believing it had specified a beam while every span was solved against another.
- */
-const CATALOG_IDS = new Set<string>(STOCKABLE_CATALOG_PARTS.map((part) => part.id))
-
-/**
- * `null` from the model means "unstate this", which the merge helpers spell as
- * `undefined`. An absent key means "leave it alone", so the two cannot be collapsed.
- */
-function toPatch<T extends object>(input: T): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(input)) {
-    if (value === undefined) continue
-    out[key] = value === null ? undefined : value
-  }
-  return out
-}
-
 type CastableType = (typeof CASTABLE_TYPES)[number]
 type CastableGraphNode = AnyNode & { type: CastableType }
 
@@ -262,31 +233,12 @@ export function buildTools(
    * Whether this element's shutters still match how it is cast, in words the
    * model can pass on.
    *
-   * A pour limit decides how many shutters an element needs, and changing one
-   * does not build or remove any: a 9 m wall shuttered as one pour and then
-   * capped at 3 m lifts is cast in three and formed in one, so its takeoff is
-   * two-thirds short with nothing on screen to say so. Silence here is the
-   * failure — the numbers all look reasonable, they are just for less wall than
-   * the element has.
+   * The sentence is shared with the MCP surface, because a pour limit changed there
+   * and read back here has to be reported as the same fault: two phrasings of one
+   * short takeoff is how a user comes to believe there are two.
    */
-  const shutterMismatch = (elementId: string, unitCount: number): string | undefined => {
-    const shutters = shuttersOnHost(elementId).length
-    if (shutters === 0 || shutters === unitCount) return undefined
-    return shutters < unitCount
-      ? `${shutters} of the ${unitCount} ${unitCount === 1 ? 'pour is' : 'pours are'} shuttered, so the takeoff is short by the rest — call attach_formwork on ${elementId} to shutter ${unitCount - shutters === 1 ? 'the other one' : `the other ${unitCount - shutters}`}`
-      : `${shutters} shutters for ${unitCount} ${unitCount === 1 ? 'pour' : 'pours'} — call attach_formwork on ${elementId} to remove the ${shutters - unitCount} that ${shutters - unitCount === 1 ? 'forms a pour unit' : 'form pour units'} this element no longer has`
-  }
-
-  /** The same check for a read tool, which has to work out the unit count itself. */
-  const coverageCaveat = (elementId: string): string | undefined => {
-    const element = graph.nodes[elementId as keyof typeof graph.nodes] as AnyNode | undefined
-    if (!isCastable(element)) return undefined
-    const units = pourUnitsForHost(
-      element as unknown as Parameters<typeof pourUnitsForHost>[0],
-      Object.values(graph.nodes) as AnyNode[],
-    )
-    return shutterMismatch(elementId, Math.max(1, units.length))
-  }
+  const shutterMismatch = (elementId: string, unitCount: number): string | undefined =>
+    formworkCoverageCaveat(elementId, shuttersOnHost(elementId).length, unitCount)
 
   return {
     list_castable_elements: tool({
@@ -529,109 +481,21 @@ export function buildTools(
       },
     }),
     inspect_formwork_parts: tool({
-      description:
-        "What a wall, column or slab's shutter is actually made of, and the bill of materials for it. Every part carries a mark derived from its own position (P-A-1-01800 is the panel on face A, first course, 1800 mm along), so a mark is a stable handle you can quote to the user and pass to set_formwork_part. Read this before answering any question about panel counts, tie counts, prop counts, weights or what to order — the parts are solved from the same pass that draws the 3D shutter, so this is the only figure that agrees with what the user sees. Reports the hardest-worked part and anything beyond capacity: a bill for a shutter that does not stand up is not an order to place. Call attach_formwork first if the element has no shutter yet.",
-      inputSchema: z.object({
-        elementId: z.string(),
-        kind: z
-          .string()
-          .max(40)
-          .optional()
-          .describe(
-            'restrict the part list to one kind — panel, filler, corner, stop-end, waler, joist, tie, ply-piece, prop, brace, accessory, consumable. The bill always covers everything; this only trims the itemised list',
-          ),
-      }),
+      description: INSPECT_FORMWORK_PARTS_DESCRIPTION,
+      inputSchema: z.object(formworkPartsQueryInput),
       execute: async ({ elementId, kind }) => {
         toolCalls.push({ name: 'inspect_formwork_parts', input: { elementId, kind } })
         const element = castableOrError(elementId)
         if (typeof element === 'string') return element
-        const shutters = solveShuttersForHost(
-          element as unknown as Parameters<typeof solveShuttersForHost>[0],
+        const report = formworkPartsReport(
+          element as unknown as Parameters<typeof formworkPartsReport>[0],
           graph.nodes as unknown as Record<string, AnyNode>,
+          { kind },
         )
-        if (shutters.length === 0) {
-          return `Error: ${elementId} has no formwork assembly, so there are no parts. Call set_element_construction then attach_formwork first.`
-        }
-        const every = shutters.flatMap((shutter) => shutter.parts)
-        const over = overUtilisedParts(every)
-        const worst = worstUtilisation(every)
-        const lines = bomLines(every)
-        const weight = bomWeightKg(lines)
-        return JSON.stringify({
-          kind: element.type,
-          shutters: shutters.map((shutter) => ({
-            assemblyId: shutter.assembly.id,
-            segment: shutter.assembly.segmentIndex,
-            lift: shutter.assembly.liftIndex,
-            partCount: shutter.parts.length,
-            // Trimmed by kind because a 6 m slab deck is hundreds of sheets and
-            // props, and a full dump of them crowds out the bill underneath.
-            parts: (kind ? shutter.parts.filter((part) => part.kind === kind) : shutter.parts).map(
-              (part) => ({
-                mark: part.mark,
-                kind: part.kind,
-                label: partLabel(part),
-                description: part.description,
-                catalogId: part.catalogId ?? null,
-                provenance: part.provenance,
-                weightKg: part.weightKg ?? null,
-                utilisation: part.structure ? round(part.structure.utilisation) : null,
-                governingCheck: part.structure?.governingCheck ?? null,
-                omittedFromOrder: part.omitted === true,
-                note: part.note ?? null,
-              }),
-            ),
-          })),
-          // Grouped for ordering rather than per shutter: a wall cast in three
-          // lifts is one delivery of the same panels.
-          bom: lines.map((line) => ({
-            description: line.description,
-            catalogId: line.catalogId ?? null,
-            provenance: line.provenance,
-            quantity: line.quantity,
-            unit: line.unit,
-            totalWeightKg: line.totalWeightKg === undefined ? null : round(line.totalWeightKg),
-            marks: line.marks,
-          })),
-          totalWeightKg: round(weight.totalKg),
-          // False means some part has no published weight, so the total is the sum of
-          // the ones that do. Do not quote it as the lifting weight of the set.
-          totalWeightComplete: weight.complete,
-          hardestWorked: worst
-            ? {
-                mark: worst.part.mark,
-                utilisation: round(worst.utilisation),
-                governingCheck: worst.part.structure?.governingCheck ?? null,
-              }
-            : null,
-          beyondCapacity: over.map((part) => ({
-            mark: part.mark,
-            utilisation: round(part.structure?.utilisation ?? 0),
-            governingCheck: part.structure?.governingCheck ?? null,
-          })),
-          // Per shutter, the way the parts panel checks it. A mark's station and
-          // elevation are measured within its own pour unit, so lift 0 and lift 1
-          // of one wall share every mark by design — flattened, a correctly
-          // shuttered three-lift wall reports every part it has as a clash, and a
-          // clash list that is always full is one nobody reads.
-          duplicateMarks: shutters.flatMap((shutter) =>
-            duplicateMarks(shutter.parts).map((mark) => ({
-              assemblyId: shutter.assembly.id,
-              mark,
-            })),
-          ),
-          staleEdits: shutters.flatMap((shutter) =>
-            orphanedOverrides(shutter.parts, shutter.assembly.partOverrides).map((mark) => ({
-              assemblyId: shutter.assembly.id,
-              mark,
-            })),
-          ),
-          // The one caveat that invalidates everything above it. A bill for four of
-          // an element's twelve pours is not a small error, and every figure in it
-          // looks perfectly reasonable on its own.
-          coversWholeElement: coverageCaveat(elementId) === undefined,
-          coverageCaveat: coverageCaveat(elementId) ?? null,
-        })
+        // Refused rather than answered with an empty bill: a bill of nothing reads as
+        // an element that needs nothing, which is the opposite of one awaiting a shutter.
+        if (!report) return noFormworkAssembly(elementId)
+        return JSON.stringify(report)
       },
     }),
     inspect_project_formwork: tool({
@@ -795,47 +659,13 @@ export function buildTools(
       },
     }),
     set_formwork_part: tool({
-      description:
-        "Record a decision about one part of a shutter: substitute a different catalog item for it, or leave it off the order because it is already on site. Identify the part by the mark inspect_formwork_parts reported. These are the two things a yard actually changes about a solved layout, and they are recorded against the mark rather than against the solve, so they survive the wall being re-solved. You cannot edit a size, a length, a spacing or a utilisation — those are outputs of the design, and a panel width typed over the top of one produces a bill that does not fit the wall. Pass false or null to clear a field. Ask before substituting: a panel from another manufacturer's system will not line up with this system's tie holes.",
-      inputSchema: z.object({
-        elementId: z.string(),
-        mark: z
-          .string()
-          .max(120)
-          .describe("the part's mark, e.g. P-A-1-01800 — from inspect_formwork_parts"),
-        catalogId: z
-          .string()
-          .max(120)
-          .nullable()
-          .optional()
-          .describe(
-            'the catalog item to use instead. Must be an id that exists in the catalog, and must be the same sort of thing as the part it replaces — a prop for a prop, a beam for a beam',
-          ),
-        omitted: z
-          .boolean()
-          .nullable()
-          .optional()
-          .describe(
-            'true leaves the part off the bill and off the weight total. The 3D shutter still draws it, because it is still in the shutter — somebody else supplied it',
-          ),
-        note: z
-          .string()
-          .max(500)
-          .nullable()
-          .optional()
-          .describe('why, so the decision is on the drawing rather than only in this conversation'),
-      }),
+      description: SET_FORMWORK_PART_DESCRIPTION,
+      inputSchema: z.object(formworkPartPatchInput),
       execute: async ({ catalogId, elementId, mark, note, omitted }) => {
         toolCalls.push({
           name: 'set_formwork_part',
           input: { catalogId, elementId, mark, note, omitted },
         })
-        if (catalogId === undefined && omitted === undefined && note === undefined) {
-          return 'Error: nothing to set — pass catalogId, omitted or note'
-        }
-        if (typeof catalogId === 'string' && !CATALOG_IDS.has(catalogId)) {
-          return `Error: no catalog item "${catalogId}". Read inspect_formwork_settings for the systems in scope, or pass null to go back to what the layout solved.`
-        }
         const element = castableOrError(elementId)
         if (typeof element === 'string') return element
         const nodes = graph.nodes as unknown as Record<string, AnyNode>
@@ -848,26 +678,23 @@ export function buildTools(
         // asked for.
         const target = shutters.find((shutter) => partByMark(shutter.parts, mark) !== undefined)
         if (!target) {
-          const known = shutters.flatMap((shutter) => shutter.parts.map((part) => part.mark))
-          return known.length === 0
-            ? `Error: ${elementId} has no formwork assembly, so there is no part ${mark}. Call attach_formwork first.`
-            : `Error: no part ${mark} on ${elementId}. Call inspect_formwork_parts for the marks this shutter actually has (${known.length} parts).`
+          const known = shutters.reduce((total, shutter) => total + shutter.parts.length, 0)
+          return known === 0
+            ? noFormworkAssembly(elementId, mark)
+            : unknownPartMark(elementId, mark, known)
         }
-        const assembly = nodes[target.assembly.id as string] as unknown as Record<string, unknown>
-        assembly.partOverrides = mergeFormworkPartOverride(
-          assembly.partOverrides as never,
+        const result = applyFormworkPartPatch(target.assembly.partOverrides, {
+          catalogId,
           mark,
-          toPatch({ catalogId, omitted, note }) as never,
-        )
+          note,
+          omitted,
+        })
+        if (result.error !== undefined) return result.error
+        const assembly = nodes[target.assembly.id as string] as unknown as Record<string, unknown>
+        assembly.partOverrides = result.overrides
         onMutate()
         const part = partByMark(target.parts, mark)
-        const said: string[] = []
-        if (catalogId !== undefined) {
-          said.push(catalogId === null ? 'substitution cleared' : `now ${catalogId}`)
-        }
-        if (omitted !== undefined) said.push(omitted ? 'left off the order' : 'back on the order')
-        if (note !== undefined) said.push(note === null ? 'note cleared' : 'note recorded')
-        return `ok — ${partLabel(part as never)} ${mark}: ${said.join(', ')}`
+        return `ok — ${partLabel(part as never)} ${mark}: ${result.recorded.join(', ')}`
       },
     }),
     inspect_pour_units: tool({

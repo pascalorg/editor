@@ -341,7 +341,7 @@ describe('the formwork MCP tools', () => {
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
   })
 
-  test('all four tools are registered, so an agent can find them', async () => {
+  test('every formwork tool is registered, so an agent can find them', async () => {
     const { tools } = await client.listTools()
 
     expect(tools.map((tool) => tool.name)).toEqual(
@@ -350,6 +350,8 @@ describe('the formwork MCP tools', () => {
         'validate_formwork',
         'inspect_formwork_settings',
         'set_formwork_settings',
+        'inspect_formwork_parts',
+        'set_formwork_part',
       ]),
     )
   })
@@ -767,6 +769,255 @@ describe('the formwork MCP tools', () => {
       expect(reply.bom.find((row) => row.catalogId === panel.catalogId)?.toHire).toBe(
         panel.quantity - 4,
       )
+    })
+  })
+
+  /**
+   * One shutter, part by part — and the write that needs a solve before it can refuse.
+   *
+   * The report shape is `parts-report.test.ts`' and the merge is `part-patch.test.ts`',
+   * both shared with the editor's chat tools. What only this layer can get wrong is the
+   * resolution: `partOverrides` is keyed by mark and takes any string, so a mark the model
+   * misremembered writes cleanly here and then lives in the project as a stale edit against
+   * a part nobody touched. Every refusal below is asserted to have written nothing.
+   */
+  describe('the parts pair', () => {
+    interface PartsReply {
+      kind: string
+      shutters: Array<{
+        assemblyId: string
+        segment: number
+        lift: number
+        partCount: number
+        parts: Array<{
+          mark: string
+          kind: string
+          label: string
+          catalogId: string | null
+          weightKg: number | null
+          omittedFromOrder: boolean
+          note: string | null
+        }>
+      }>
+      bom: Array<{
+        description: string
+        catalogId: string | null
+        quantity: number
+        marks: string[]
+      }>
+      totalWeightKg: number
+      duplicateMarks: Array<{ assemblyId: string; mark: string }>
+      staleEdits: Array<{ assemblyId: string; mark: string }>
+      coversWholeElement: boolean
+      coverageCaveat: string | null
+    }
+    interface PartWriteReply {
+      mark: string
+      assemblyId: string
+      part: string
+      recorded: string[]
+      message: string
+    }
+
+    const overrides = (assemblyId = 'formwork-assembly_1') =>
+      (bridge.getNodes() as unknown as Record<string, { partOverrides?: Record<string, unknown> }>)[
+        assemblyId
+      ]?.partOverrides ?? {}
+
+    const firstPanel = async () => {
+      const reply = await call<PartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+      const part = reply.shutters[0]?.parts.find((entry) => entry.kind === 'panel')
+      if (!part) throw new Error('no panel solved')
+      return { part, reply }
+    }
+
+    test('solves a wall in a process with no DOM and reports its marks', async () => {
+      expect(typeof document).toBe('undefined')
+      load(walledWithOpening())
+
+      const reply = await call<PartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+
+      expect(reply.kind).toBe('wall')
+      expect(reply.shutters[0]?.partCount).toBeGreaterThan(0)
+      expect(reply.shutters[0]?.parts.every((part) => part.mark.length > 0)).toBe(true)
+      expect(reply.bom.length).toBeGreaterThan(0)
+      expect(reply.totalWeightKg).toBeGreaterThan(0)
+      // A single-lift wall is wholly covered, and every mark in it is distinct.
+      expect(reply.coversWholeElement).toBe(true)
+      expect(reply.duplicateMarks).toEqual([])
+      expect(reply.staleEdits).toEqual([])
+    })
+
+    test('the kind filter trims the list and leaves the bill whole', async () => {
+      // Presentational, and only that: a filtered `partCount` or `bom` is how a model
+      // comes to quote twelve parts for a wall that has ninety.
+      load(walledWithOpening())
+
+      const all = await call<PartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+      const panels = await call<PartsReply>('inspect_formwork_parts', {
+        elementId: 'wall_1',
+        kind: 'panel',
+      })
+
+      expect(panels.shutters[0]?.parts.length).toBeGreaterThan(0)
+      expect(panels.shutters[0]?.parts.every((part) => part.kind === 'panel')).toBe(true)
+      expect(panels.shutters[0]?.parts.length).toBeLessThan(all.shutters[0]?.parts.length ?? 0)
+      expect(panels.shutters[0]?.partCount).toBe(all.shutters[0]?.partCount)
+      expect(panels.bom).toEqual(all.bom)
+      expect(panels.totalWeightKg).toBe(all.totalWeightKg)
+    })
+
+    test('an unshuttered element is sent to attach_formwork, not answered with an empty bill', async () => {
+      load(twoLevels())
+
+      const read = await client.callTool({
+        name: 'inspect_formwork_parts',
+        arguments: { elementId: 'wall_2' },
+      })
+      const write = await client.callTool({
+        name: 'set_formwork_part',
+        arguments: { elementId: 'wall_2', mark: 'P-A-1-00300', omitted: true },
+      })
+
+      expect(read.isError).toBe(true)
+      expect((read.content as Array<{ text: string }>)[0]?.text).toContain('attach_formwork')
+      expect(write.isError).toBe(true)
+      expect((write.content as Array<{ text: string }>)[0]?.text).toContain('attach_formwork')
+    })
+
+    test('a level id is refused as not castable rather than as unshuttered', async () => {
+      // The id most plausibly wrong is a real one — `list_castable_elements` reports a
+      // wall's parentId beside it — and "call attach_formwork on level_1" is a dead end.
+      load(twoLevels())
+
+      const result = await client.callTool({
+        name: 'inspect_formwork_parts',
+        arguments: { elementId: 'level_1' },
+      })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as Array<{ text: string }>)[0]?.text ?? ''
+      expect(text).toContain('wall, column or slab')
+      expect(text).not.toContain('attach_formwork')
+    })
+
+    test('a mark this shutter does not have is refused, and writes nothing', async () => {
+      load(walledWithOpening())
+
+      const result = await client.callTool({
+        name: 'set_formwork_part',
+        arguments: { elementId: 'wall_1', mark: 'P-Z-9-99999', omitted: true },
+      })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as Array<{ text: string }>)[0]?.text ?? ''
+      expect(text).toContain('inspect_formwork_parts')
+      expect(overrides()).toEqual({})
+    })
+
+    test('a catalog id that names nothing is refused, and writes nothing', async () => {
+      load(walledWithOpening())
+      const { part } = await firstPanel()
+
+      const result = await client.callTool({
+        name: 'set_formwork_part',
+        arguments: { elementId: 'wall_1', mark: part.mark, catalogId: 'peri-tr-240' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('peri-tr-240')
+      expect(overrides()).toEqual({})
+    })
+
+    test('an omitted part leaves the bill and the weight, and stays in the shutter', async () => {
+      load(walledWithOpening())
+      const { part, reply: before } = await firstPanel()
+
+      const write = await call<PartWriteReply>('set_formwork_part', {
+        elementId: 'wall_1',
+        mark: part.mark,
+        omitted: true,
+        note: 'already on site',
+      })
+      const after = await call<PartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+
+      expect(write.recorded).toEqual(['left off the order', 'note recorded'])
+      expect(after.bom.flatMap((line) => line.marks)).not.toContain(part.mark)
+      expect(after.totalWeightKg).toBeLessThan(before.totalWeightKg)
+      // Still erected, still drawn — somebody else supplied it. So the count holds.
+      expect(after.shutters[0]?.partCount).toBe(before.shutters[0]?.partCount)
+      const kept = after.shutters[0]?.parts.find((entry) => entry.mark === part.mark)
+      expect(kept?.omittedFromOrder).toBe(true)
+      expect(kept?.note).toBe('already on site')
+    })
+
+    test('two edits to one mark merge rather than replace', async () => {
+      load(walledWithOpening())
+      const { part } = await firstPanel()
+
+      await call('set_formwork_part', { elementId: 'wall_1', mark: part.mark, omitted: true })
+      await call('set_formwork_part', {
+        elementId: 'wall_1',
+        mark: part.mark,
+        note: 'hired elsewhere',
+      })
+      const after = await call<PartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+
+      const kept = after.shutters[0]?.parts.find((entry) => entry.mark === part.mark)
+      expect(kept?.omittedFromOrder).toBe(true)
+      expect(kept?.note).toBe('hired elsewhere')
+    })
+
+    test('clearing the last field leaves no stale edit behind', async () => {
+      // An emptied record is still a key against a mark, and `staleEdits` reads every key
+      // it cannot resolve as somebody's forgotten decision.
+      load(walledWithOpening())
+      const { part } = await firstPanel()
+
+      await call('set_formwork_part', { elementId: 'wall_1', mark: part.mark, omitted: true })
+      await call('set_formwork_part', { elementId: 'wall_1', mark: part.mark, omitted: false })
+      const after = await call<PartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+
+      expect(overrides()).toEqual({})
+      expect(after.staleEdits).toEqual([])
+      expect(
+        after.shutters[0]?.parts.find((entry) => entry.mark === part.mark)?.omittedFromOrder,
+      ).toBe(false)
+    })
+
+    test('a substitution reaches the bill the other tools quote', async () => {
+      // The parity claim for this pair: a decision recorded here is not an annotation, it
+      // is what the yard is told to order.
+      load(walledWithOpening())
+      const { part } = await firstPanel()
+      const substitute = 'eurex-20-top'
+
+      await call('set_formwork_part', {
+        elementId: 'wall_1',
+        mark: part.mark,
+        catalogId: substitute,
+      })
+      const after = await call<PartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+
+      expect(after.shutters[0]?.parts.find((entry) => entry.mark === part.mark)?.catalogId).toBe(
+        substitute,
+      )
+      expect(after.bom.some((line) => line.catalogId === substitute)).toBe(true)
+    })
+
+    test('a wall in several lifts shares marks between them without reporting a clash', async () => {
+      // A mark's station and elevation are measured within its own pour unit, so lift 0
+      // and lift 1 legitimately share every mark. Flattened, a correct wall reports every
+      // part it has as a duplicate.
+      load(walledWithOpening())
+      bridge.updateNode('wall_1' as AnyNodeId, { maxLiftHeight: 1.5 } as Partial<AnyNode>)
+
+      const reply = await call<PartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+
+      expect(reply.duplicateMarks).toEqual([])
+      // One shutter for two pour units, so every figure above is short by the other lift.
+      expect(reply.coversWholeElement).toBe(false)
+      expect(reply.coverageCaveat).toContain('attach_formwork')
     })
   })
 })

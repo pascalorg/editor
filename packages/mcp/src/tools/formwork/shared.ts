@@ -1,4 +1,5 @@
 import type { AnyNode } from '@pascal-app/core/schema'
+import type { CastableHostNode } from '@pascal-app/nodes/formwork-assembly/headless'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { NodeIdSchema } from '../schemas'
@@ -17,10 +18,16 @@ export const formworkScopeInput = {
   elementIds: z.array(NodeIdSchema).max(500).optional(),
 }
 
-export function textResult<T extends Record<string, unknown>>(payload: T) {
+/**
+ * The cast is to `Record<string, unknown>` because the SDK's `structuredContent` demands an
+ * index signature, and a payload described by a named interface — as the shared reports in
+ * `@pascal-app/nodes` are — has none. Declaring those shapes twice to satisfy it is how the
+ * MCP reply comes to disagree with the panel it was extracted from.
+ */
+export function textResult<T extends object>(payload: T) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
-    structuredContent: payload,
+    structuredContent: payload as Record<string, unknown>,
   }
 }
 
@@ -85,6 +92,29 @@ export function noSuchLevel(levelId: string) {
     `no level with id ${levelId}. Call list_levels and read the id of the level you mean.`,
   )
 }
+
+/**
+ * The element a parts question is about, or the refusal to hand back.
+ *
+ * A shape check rather than an id lookup, because the id the caller most plausibly gets
+ * wrong is a real one: `list_castable_elements` reports a wall's `parentId` alongside it,
+ * and a level asked for its parts would otherwise solve to nothing and report "no
+ * formwork assembly" — sending the agent to `attach_formwork` on a floor.
+ */
+export function castableOrRefusal(
+  nodes: Record<string, AnyNode>,
+  elementId: string,
+): CastableHostNode | ReturnType<typeof refusal> {
+  const node = nodes[elementId]
+  if (node === undefined || !CASTABLE_TYPES.includes(node.type)) {
+    return refusal(
+      `Error: no wall, column or slab with id ${elementId}. Call find_nodes with type wall, column or slab and read the id you mean.`,
+    )
+  }
+  return node as CastableHostNode
+}
+
+const CASTABLE_TYPES: readonly string[] = ['wall', 'column', 'slab']
 
 export function round(value: number): number {
   return Math.round(value * 1000) / 1000

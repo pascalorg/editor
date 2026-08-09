@@ -236,6 +236,10 @@ describe('pascal://agent-guide', () => {
       expect(text).toContain('curing.surfaceTemperatureC')
       expect(text).toContain('placement.concreteTemperatureC')
       expect(text).toContain('notChecked')
+      // The parts pair, and the one thing a mark is for: naming a part to the write.
+      expect(text).toContain('inspect_formwork_parts')
+      expect(text).toContain('set_formwork_part')
+      expect(text).toContain('P-A-1-01800')
     } finally {
       await pair.close()
     }

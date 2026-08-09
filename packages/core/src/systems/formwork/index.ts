@@ -289,6 +289,18 @@ export {
   type WidthBandRule,
 } from './measurement'
 export {
+  applyFormworkPartPatch,
+  type FormworkPartPatch,
+  FormworkPartPatch as FormworkPartPatchSchema,
+  type FormworkPartPatchResult,
+  formworkPartPatchInput,
+  formworkPartsQueryInput,
+  INSPECT_FORMWORK_PARTS_DESCRIPTION,
+  noFormworkAssembly,
+  SET_FORMWORK_PART_DESCRIPTION,
+  unknownPartMark,
+} from './part-patch'
+export {
   applyPartOverrides,
   type BomLine,
   bomLines,

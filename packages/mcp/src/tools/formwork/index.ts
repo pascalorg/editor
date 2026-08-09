@@ -1,7 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../../operations'
+import { registerInspectFormworkParts } from './inspect-formwork-parts'
 import { registerInspectFormworkSettings } from './inspect-formwork-settings'
 import { registerInspectProjectFormwork } from './inspect-project-formwork'
+import { registerSetFormworkPart } from './set-formwork-part'
 import { registerSetFormworkSettings } from './set-formwork-settings'
 import { registerValidateFormwork } from './validate-formwork'
 
@@ -37,17 +39,31 @@ import { registerValidateFormwork } from './validate-formwork'
  * design report says "assumed" or "project" — the one distinction the settings node
  * exists to carry.
  *
- * Still absent: `attach_formwork` and `set_formwork_part`, which mutate a solved layout
- * rather than the project's inputs, and `set_pour_limits`.
+ * ## Why the parts pair comes next, and what is different about it
+ *
+ * The settings pair states the project's *inputs*; this one records a decision about an
+ * *output*. That makes it the first write here whose input cannot be checked against a
+ * schema: a mark names a position in a layout that exists nowhere in the scene graph, so
+ * `set_formwork_part` has to solve the element and look before it can refuse. Reading
+ * the marks is half of it — a bill line says 34 panels and a substitution is made about
+ * one of them, so `inspect_formwork_parts` is the only read from which the write can be
+ * called at all, and shipping one without the other leaves an agent guessing handles.
+ *
+ * Still absent: `attach_formwork`, which builds the layout rather than editing it, and
+ * `set_pour_limits`, which decides how many of them there are.
  */
 export function registerFormworkTools(server: McpServer, operations: SceneOperations): void {
   registerInspectProjectFormwork(server, operations)
   registerValidateFormwork(server, operations)
   registerInspectFormworkSettings(server, operations)
   registerSetFormworkSettings(server, operations)
+  registerInspectFormworkParts(server, operations)
+  registerSetFormworkPart(server, operations)
 }
 
+export { inspectFormworkPartsOutput } from './inspect-formwork-parts'
 export { inspectFormworkSettingsOutput } from './inspect-formwork-settings'
 export { inspectProjectFormworkOutput } from './inspect-project-formwork'
+export { setFormworkPartOutput } from './set-formwork-part'
 export { setFormworkSettingsOutput } from './set-formwork-settings'
 export { validateFormworkOutput } from './validate-formwork'

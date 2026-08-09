@@ -27,6 +27,15 @@ export {
   pourUnitsForHost,
   reconcileFormworkNodes,
 } from './attach'
+export {
+  coverageCaveatForHost,
+  type FormworkPartsReport,
+  formworkCoverageCaveat,
+  formworkPartsReport,
+  type ReportedBomLine,
+  type ReportedPart,
+  type ReportedShutter,
+} from './parts-report'
 export { type SolvedShutter, solveShuttersForHost } from './solve'
 export {
   castableHostIds,
