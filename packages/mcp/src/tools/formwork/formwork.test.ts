@@ -341,11 +341,16 @@ describe('the formwork MCP tools', () => {
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
   })
 
-  test('both tools are registered, so an agent can find them', async () => {
+  test('all four tools are registered, so an agent can find them', async () => {
     const { tools } = await client.listTools()
 
     expect(tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(['inspect_project_formwork', 'validate_formwork']),
+      expect.arrayContaining([
+        'inspect_project_formwork',
+        'validate_formwork',
+        'inspect_formwork_settings',
+        'set_formwork_settings',
+      ]),
     )
   })
 
@@ -591,5 +596,177 @@ describe('the formwork MCP tools', () => {
     expect(bill.elementCount).toBe(0)
     expect(validation.findings).toEqual([])
     expect(validation.summary.join(' ')).toContain('Nothing in this scope to check.')
+  })
+
+  /**
+   * The pour, stated and read back from outside the editor.
+   *
+   * The merge behaviour itself belongs to `settings-patch.test.ts` in core, which owns
+   * the shared contract; what is asserted here is what only this layer can get wrong —
+   * that the node lands where the loader will not sweep it, that a refusal leaves the
+   * project having stated nothing, and that a figure written through this surface
+   * actually reaches the bill the other three tools quote.
+   */
+  describe('the project settings pair', () => {
+    interface SettingsReply {
+      anythingStated: boolean
+      resolved: { riseRateMH: number; concreteTemperatureC: number; pressureStandard: string }
+      stated: { placement?: Record<string, number>; curing?: Record<string, number> } | null
+      assumedDefaults: { riseRateMH: number; concreteTemperatureC: number }
+      shuttersAffectedByAChange: number
+    }
+    interface WriteReply {
+      changed: string[]
+      designsTo: { riseRateMH: number; concreteTemperatureC: number; pressureStandard: string }
+      shuttersReDesigned: number
+      message: string
+    }
+
+    const settingsNodes = () =>
+      Object.values(bridge.getNodes()).filter(
+        (node) => (node as { type: string }).type === 'formwork-settings',
+      )
+
+    test('an untouched scene reads as assumed, and reading is not a decision', async () => {
+      load(twoLevels())
+
+      const reply = await call<SettingsReply>('inspect_formwork_settings')
+
+      expect(reply.anythingStated).toBe(false)
+      expect(reply.stated).toBeNull()
+      expect(reply.resolved.riseRateMH).toBe(reply.assumedDefaults.riseRateMH)
+      // The count is what a write would reach, so the caller can say so before writing.
+      expect(reply.shuttersAffectedByAChange).toBe(2)
+      expect(settingsNodes()).toHaveLength(0)
+    })
+
+    test('a stated pour comes back stated, on a node parented to the site', async () => {
+      load(twoLevels())
+
+      const write = await call<WriteReply>('set_formwork_settings', {
+        placement: { riseRateMH: 2, concreteTemperatureC: 15 },
+        pressureStandard: 'ACI_347',
+      })
+      const reply = await call<SettingsReply>('inspect_formwork_settings')
+
+      expect(write.changed).toEqual(expect.arrayContaining(['placement', 'pressureStandard']))
+      expect(write.designsTo).toEqual({
+        riseRateMH: 2,
+        concreteTemperatureC: 15,
+        pressureStandard: 'ACI_347',
+      })
+      expect(reply.stated?.placement).toEqual({ riseRateMH: 2, concreteTemperatureC: 15 })
+      // Unparented, the store's loader sweeps it: the pour survives the reply and is gone
+      // on the next load, silently back to the shipped defaults.
+      const node = settingsNodes()[0] as { parentId: string }
+      expect(node.parentId).toBe('site_1')
+    })
+
+    test('a second write reuses the node rather than making a rival', async () => {
+      load(twoLevels())
+
+      await call('set_formwork_settings', { placement: { riseRateMH: 2 } })
+      await call('set_formwork_settings', { curing: { surfaceTemperatureC: 5 } })
+
+      expect(settingsNodes()).toHaveLength(1)
+    })
+
+    test('null hands a figure back to the default rather than storing it', async () => {
+      load(twoLevels())
+
+      await call('set_formwork_settings', { placement: { riseRateMH: 2 } })
+      await call('set_formwork_settings', { placement: { riseRateMH: null } })
+      const reply = await call<SettingsReply>('inspect_formwork_settings')
+
+      expect(reply.stated?.placement).toBeNull()
+      expect(reply.resolved.riseRateMH).toBe(reply.assumedDefaults.riseRateMH)
+    })
+
+    test('a scene with no site is refused rather than given an orphan', async () => {
+      // `walledWithOpening` is rooted at a level, so there is nowhere the node would
+      // survive a reload. Written anyway, it is a pour the project appears to have
+      // stated and has not.
+      load(walledWithOpening())
+
+      const result = await client.callTool({
+        name: 'set_formwork_settings',
+        arguments: { placement: { riseRateMH: 2 } },
+      })
+
+      expect(result.isError).toBe(true)
+      expect(settingsNodes()).toHaveLength(0)
+    })
+
+    test('a catalog id that names nothing is refused, and states nothing', async () => {
+      // The refusal is the point: a bad id does not fail loudly downstream — the design
+      // chain falls back to its own default part, so the project would believe it had
+      // specified a beam while every span was solved against another.
+      load(twoLevels())
+
+      const result = await client.callTool({
+        name: 'set_formwork_settings',
+        arguments: { parts: { beamId: 'peri-h20' } },
+      })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
+      expect(text).toContain('peri-h20')
+      expect(settingsNodes()).toHaveLength(0)
+    })
+
+    test('an empty call is refused rather than creating an empty record', async () => {
+      load(twoLevels())
+
+      const result = await client.callTool({ name: 'set_formwork_settings', arguments: {} })
+
+      expect(result.isError).toBe(true)
+      expect(settingsNodes()).toHaveLength(0)
+    })
+
+    test('the reply counts the shutters it re-designed and asks for no re-attach', async () => {
+      load(twoLevels())
+
+      const write = await call<WriteReply>('set_formwork_settings', {
+        placement: { riseRateMH: 2 },
+      })
+
+      expect(write.shuttersReDesigned).toBe(2)
+      expect(write.message).toContain('nothing to regenerate')
+      // A re-attach would rebuild what had not changed and discard every per-part
+      // decision on the shutters to do it.
+      expect(write.message).not.toContain('attach_formwork')
+    })
+
+    test('a pour stated here reaches the bill the other tools quote', async () => {
+      // The parity claim, and the reason this pair was not deferred: without it every
+      // figure this surface returned was designed against a default nothing could change.
+      // A colder cure lengthens the hold, so the hire period is where it shows.
+      load(twoLevels())
+      const assumed = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+      await call('set_formwork_settings', { curing: { surfaceTemperatureC: 5 } })
+      const cold = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+      expect(cold.hire.longestDaysHeld).toBeGreaterThan(assumed.hire.longestDaysHeld)
+      expect(cold.hire.assumed.some((entry) => entry.includes('No curing surface'))).toBe(false)
+    })
+
+    test('a rack stated here is what the bill splits owned from hired against', async () => {
+      load(twoLevels())
+      const plain = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+      const panel = plain.bom.find((line) => line.catalogId !== null) as {
+        catalogId: string
+        quantity: number
+      }
+      expect(plain.supply).toBeUndefined()
+
+      await call('set_formwork_settings', { ownedStock: { [panel.catalogId]: 4 } })
+      const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+      expect(reply.supply?.fromOwnStock).toBe(4)
+      expect(reply.bom.find((row) => row.catalogId === panel.catalogId)?.toHire).toBe(
+        panel.quantity - 4,
+      )
+    })
   })
 })

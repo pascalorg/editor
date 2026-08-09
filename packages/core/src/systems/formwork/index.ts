@@ -391,6 +391,17 @@ export {
   mergeFormworkSettingsGroup,
 } from './settings'
 export {
+  applyFormworkSettingsPatch,
+  type FormworkSettingsPatch,
+  FormworkSettingsPatch as FormworkSettingsPatchSchema,
+  type FormworkSettingsPatchResult,
+  type FormworkSettingsReport,
+  formworkSettingsPatchInput,
+  formworkSettingsReport,
+  INSPECT_FORMWORK_SETTINGS_DESCRIPTION,
+  SET_FORMWORK_SETTINGS_DESCRIPTION,
+} from './settings-patch'
+export {
   type BomSupply,
   bomSupply,
   type OwnedStock,

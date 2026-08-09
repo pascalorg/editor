@@ -37,18 +37,53 @@ export function sceneNodes(bridge: SceneOperations): Record<string, AnyNode> {
 }
 
 /**
- * Refused rather than reported as an empty level.
+ * The scene as a list, for the finders that scan it by type.
  *
- * "Nothing wrong on level_9" is a sentence a model will happily produce about a level
- * that does not exist, and a clean report on a typo is indistinguishable from a clean
- * report on a floor. `isError` so an SDK client sees a failure rather than a result.
+ * `sceneNodes` returns the map the solver wants; this is the same graph in the shape
+ * `findFormworkSettingsNode` and its kin take. Both read the whole graph, because the
+ * settings node is parented to the site and is therefore outside any level scope.
  */
-export function noSuchLevel(levelId: string) {
-  const message = `no level with id ${levelId}. Call list_levels and read the id of the level you mean.`
+export function sceneNodeList(bridge: SceneOperations): AnyNode[] {
+  return Object.values(bridge.getNodes()) as unknown as AnyNode[]
+}
+
+/**
+ * How many shutters a settings change re-designs.
+ *
+ * Reported so a reply can say what the change reached, not so anything is rebuilt: a
+ * shutter's parts and its design report are both solved from the settings at the moment
+ * they are read, so the new pour is already in every figure. The number is there because
+ * a settings change that reports nothing reads as a settings change that did nothing.
+ */
+export function formworkAssemblyCount(nodes: readonly AnyNode[]): number {
+  return nodes.filter((node) => node.type === 'formwork-assembly').length
+}
+
+/**
+ * A refusal the model reads back, rather than a thrown tool failure.
+ *
+ * The message is the point: "no beamId peri-h20, pick one of …" is a sentence an agent
+ * can act on, where an exception arrives as a failed call with no catalog in it. `isError`
+ * so an SDK client still sees a failure rather than a result.
+ */
+export function refusal(message: string) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify({ error: message }) }],
     isError: true as const,
   }
+}
+
+/**
+ * Refused rather than reported as an empty level.
+ *
+ * "Nothing wrong on level_9" is a sentence a model will happily produce about a level
+ * that does not exist, and a clean report on a typo is indistinguishable from a clean
+ * report on a floor.
+ */
+export function noSuchLevel(levelId: string) {
+  return refusal(
+    `no level with id ${levelId}. Call list_levels and read the id of the level you mean.`,
+  )
 }
 
 export function round(value: number): number {

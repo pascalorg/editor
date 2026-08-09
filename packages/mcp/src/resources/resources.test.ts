@@ -221,6 +221,26 @@ describe('pascal://agent-guide', () => {
     }
   })
 
+  test('carries the formwork reasoning an MCP host gives no system prompt for', async () => {
+    // The chat surface states this in `SYSTEM_PROMPT`; a host hands a server nothing,
+    // so the guide is the only place it can be said. Without it a model holding a scene
+    // graph infers a takeoff from wall areas, and quotes a spacing designed to a pour
+    // nobody chose as though the job had agreed to it.
+    const pair = await spinUp(registerAgentGuide)
+    try {
+      const res = await pair.client.readResource({ uri: 'pascal://agent-guide' })
+      const text = (res.contents[0] as { text?: string }).text ?? ''
+      expect(text).toContain('inspect_formwork_settings')
+      expect(text).toContain('set_formwork_settings')
+      // The two temperatures, which move the design in opposite directions.
+      expect(text).toContain('curing.surfaceTemperatureC')
+      expect(text).toContain('placement.concreteTemperatureC')
+      expect(text).toContain('notChecked')
+    } finally {
+      await pair.close()
+    }
+  })
+
   test('keeps the legacy agent guide URI as an alias', async () => {
     const pair = await spinUp(registerAgentGuide)
     try {

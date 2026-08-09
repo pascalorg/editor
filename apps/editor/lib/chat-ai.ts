@@ -1,25 +1,21 @@
 import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import {
+  applyFormworkSettingsPatch,
   bomLines,
   bomWeightKg,
-  DEFAULT_FORMWORK_SETTINGS,
   duplicateMarks,
-  FALSEWORK_BEAMS,
-  FORMWORK_SYSTEMS,
-  type FormworkSettingsGroup,
   findFormworkSettingsNode,
   formworkSettings,
-  mergeFormworkCement,
-  mergeFormworkOwnedStock,
+  formworkSettingsPatchInput,
+  formworkSettingsReport,
+  INSPECT_FORMWORK_SETTINGS_DESCRIPTION,
   mergeFormworkPartOverride,
-  mergeFormworkSettingsGroup,
   orphanedOverrides,
   overUtilisedParts,
-  PROP_TYPES,
   partByMark,
   partLabel,
-  SHEATHING_TYPES,
+  SET_FORMWORK_SETTINGS_DESCRIPTION,
   STOCKABLE_CATALOG_PARTS,
   validationSummary,
   worstUtilisation,
@@ -144,230 +140,7 @@ export type ChatResult = {
 const CASTABLE_TYPES = ['wall', 'column', 'slab'] as const
 
 /**
- * Schemas for the project settings groups, mirroring the node's own bounds.
- *
- * `.nullable()` throughout, and null means "hand this field back to the shipped
- * default" — the same three-state contract the panel's controls carry. A model that
- * could only set values would be able to state a figure and never retract it, and the
- * design report's "assumed" versus "project" distinction would decay to "project"
- * across a conversation.
- */
-const CONCRETE_SETTINGS_SCHEMA = z.object({
-  densityKgM3: z.number().positive().max(5000).nullable().optional().describe("ACI's w, kg/m³"),
-  unitWeightKnM3: z
-    .number()
-    .positive()
-    .max(50)
-    .nullable()
-    .optional()
-    .describe("DIN's and CIRIA's γc, kN/m³"),
-  consistencyClass: z
-    .enum(['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'SCC'])
-    .nullable()
-    .optional()
-    .describe(
-      "DIN's consistency class. Sets both the constant and the slope on the rise rate. Use SCC here for self-compacting concrete rather than setting a separate flag",
-    ),
-  slumpMm: z
-    .number()
-    .min(0)
-    .max(300)
-    .nullable()
-    .optional()
-    .describe("over 175 mm ACI's special-case formulas do not apply and the fluid head governs"),
-  endOfSettingH: z
-    .number()
-    .positive()
-    .max(48)
-    .nullable()
-    .optional()
-    .describe("DIN's tE. A later set raises the pressure, it does not lower it"),
-  referenceTemperatureC: z.number().min(-20).max(60).nullable().optional().describe("DIN's TRef"),
-  ciriaC2: z
-    .number()
-    .positive()
-    .max(10)
-    .nullable()
-    .optional()
-    .describe("CIRIA's C2, overriding what the binder implies"),
-})
-
-const CEMENT_SETTINGS_SCHEMA = z.object({
-  slagFraction: z
-    .number()
-    .min(0)
-    .max(1)
-    .nullable()
-    .optional()
-    .describe("fraction of binder replaced by ggbs; over 0.70 is ACI's high blend"),
-  flyAshFraction: z
-    .number()
-    .min(0)
-    .max(1)
-    .nullable()
-    .optional()
-    .describe('fraction replaced by fly ash; over 0.40 is the high blend'),
-  retarder: z.boolean().nullable().optional(),
-  superplasticizer: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe(
-      "asked separately from retarder because ACI's Table 2.2 footnote counts a high-range water reducer that delays setting as one — worth 20 % of the pressure",
-    ),
-})
-
-const PLACEMENT_SETTINGS_SCHEMA = z.object({
-  riseRateMH: z
-    .number()
-    .positive()
-    .max(50)
-    .nullable()
-    .optional()
-    .describe('rate of rise, m/h — the pump rate over the plan area, not the truck rate'),
-  concreteTemperatureC: z
-    .number()
-    .min(-10)
-    .max(50)
-    .nullable()
-    .optional()
-    .describe("the concrete's temperature at placing, not the air's"),
-  vibration: z
-    .enum(['internal', 'external', 'none'])
-    .nullable()
-    .optional()
-    .describe(
-      'external vibration falls outside both codes and the pressure jumps to the fluid head',
-    ),
-  vibratorImmersionDepthM: z
-    .number()
-    .positive()
-    .max(10)
-    .nullable()
-    .optional()
-    .describe("poker depth, m; past 1.2 m ACI's special cases are void"),
-  pumpedFromBase: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe(
-      'base-pumped is the full fluid head plus 25 % surge — roughly double a top-placed pour',
-    ),
-})
-
-const CURING_SETTINGS_SCHEMA = z.object({
-  surfaceTemperatureC: z
-    .number()
-    .min(-20)
-    .max(60)
-    .nullable()
-    .optional()
-    .describe(
-      'concrete surface temperature while it cures, °C — BS 8110 Table 6.2’s t. NOT placement.concreteTemperatureC, which is the mix as it arrives: concrete placed at 20 °C into a form standing in 4 °C air does not cure at 20, and the two move the design opposite ways — a colder mix raises the pressure, a colder cure lengthens the hold',
-    ),
-  highEarlyStrength: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe(
-      'both codes permit a shorter period and neither attaches a factor to it, so this shortens nothing — it reports that the reduction is the engineer’s to approve',
-    ),
-  shoresRemain: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe(
-      'the soffit form comes away without disturbing the props — a drophead or early-strip system. ACI 347 footnote ‡ halves the form’s period, floored at 3 days; the props themselves are never halved',
-    ),
-})
-
-const FALSEWORK_LOAD_SETTINGS_SCHEMA = z.object({
-  formworkSelfWeightKpa: z.number().min(0).max(10).nullable().optional(),
-  rebarKnM3: z.number().min(0).max(10).nullable().optional(),
-  liveLoadKpa: z
-    .number()
-    .min(0)
-    .max(50)
-    .nullable()
-    .optional()
-    .describe(
-      "raised to ACI §2.2.1's floor if stated lower, so a small figure cannot design below the code",
-    ),
-  motorizedCarts: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe('powered buggies raise both the live-load floor and the combined minimum'),
-})
-
-const BRACING_SETTINGS_SCHEMA = z.object({
-  windPressureKpa: z.number().min(0).max(10).nullable().optional(),
-  formDeadLoadKnM: z
-    .number()
-    .min(0)
-    .max(100)
-    .nullable()
-    .optional()
-    .describe("weight of the form the bracing holds, per metre of wall — ACI's 2 % term"),
-  rakerSpacingM: z.number().positive().max(20).nullable().optional(),
-  rakerAngleDeg: z.number().min(5).max(85).nullable().optional(),
-  guyWires: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe('a guy takes tension only and needs a partner opposite; a raker takes both'),
-})
-
-/**
- * The catalog ids each part field accepts, listed in the schema so the model picks
- * from the shipped catalog rather than inventing a plausible product code.
- *
- * Validated again on the way in even so. An id that resolves to nothing does not
- * fail loudly — the design chain falls back to its default part — so a hallucinated
- * `peri-h20` would leave the project believing it had specified a beam while every
- * span was solved against another one.
- */
-const SYSTEM_IDS = Object.keys(FORMWORK_SYSTEMS)
-const SHEATHING_IDS = SHEATHING_TYPES.map((entry) => entry.id)
-const BEAM_IDS = FALSEWORK_BEAMS.map((entry) => entry.id)
-const PROP_IDS = PROP_TYPES.map((entry) => entry.id)
-
-const PART_SETTINGS_SCHEMA = z.object({
-  systemId: z
-    .string()
-    .max(120)
-    .nullable()
-    .optional()
-    .describe(`panel system for wall and column forms; one of: ${SYSTEM_IDS.join(', ')}`),
-  sheathingId: z
-    .string()
-    .max(120)
-    .nullable()
-    .optional()
-    .describe(`face material — ply or panel formlining; one of: ${SHEATHING_IDS.join(', ')}`),
-  beamId: z
-    .string()
-    .max(120)
-    .nullable()
-    .optional()
-    .describe(
-      `the section used for studs, walers, joists and bearers alike; one of: ${BEAM_IDS.join(', ')}`,
-    ),
-  propId: z
-    .string()
-    .max(120)
-    .nullable()
-    .optional()
-    .describe(`one of: ${PROP_IDS.join(', ')}`),
-  doubledWalers: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe('walers paired either side of the tie, which usually opens the tie spacing'),
-})
-
-/**
- * Every catalog id a part could legitimately be substituted for.
+ * Every catalog item a solved part could be substituted for.
  *
  * Core's list rather than one composed here, because the settings panel's stock editor
  * offers the same set and two hand-built copies would agree on the day they were written
@@ -376,54 +149,12 @@ const PART_SETTINGS_SCHEMA = z.object({
  * beam is a sensible stand-in for a beam is the substitution list the panel offers, and
  * a tighter check here would reject the legitimate case where a column form stands in
  * for a wall panel on a blade.
+ *
+ * Validated even though a bad id does not fail loudly — that is the reason. The design
+ * chain falls back to its default part, so a hallucinated `peri-h20` would leave the
+ * project believing it had specified a beam while every span was solved against another.
  */
 const CATALOG_IDS = new Set<string>(STOCKABLE_CATALOG_PARTS.map((part) => part.id))
-
-/**
- * What the yard owns, keyed by catalog id.
- *
- * A record rather than a fixed shape because the keys are the catalog, and it is the
- * one settings group where the model supplies the field names. Validated against
- * `CATALOG_IDS` on the way in for a sharper reason than the part ids are: an id that
- * names nothing can never be matched by a bill line, so "we own 200 of those" would be
- * accepted, stored, and silently make no difference to a single quantity.
- */
-const STOCK_SETTINGS_SCHEMA = z.record(
-  z.string().max(120),
-  z
-    .number()
-    .int()
-    .nonnegative()
-    .nullable()
-    .describe('how many the yard owns; 0 means owns none of this type, null removes the entry'),
-)
-
-/** The first stock id that names nothing in the catalog. */
-function unknownStockId(patch: z.infer<typeof STOCK_SETTINGS_SCHEMA>): string | undefined {
-  for (const catalogId of Object.keys(patch)) {
-    if (!CATALOG_IDS.has(catalogId)) {
-      return `Error: no catalog id "${catalogId}" — a stock entry that matches no part would be stored and change nothing. Read inspect_project_formwork for the ids this job's bill actually uses.`
-    }
-  }
-  return undefined
-}
-
-/** The first part id that names nothing in the catalog, as the error the model reads back. */
-function unknownPartId(patch: z.infer<typeof PART_SETTINGS_SCHEMA>): string | undefined {
-  const checks: Array<[keyof typeof patch, readonly string[]]> = [
-    ['systemId', SYSTEM_IDS],
-    ['sheathingId', SHEATHING_IDS],
-    ['beamId', BEAM_IDS],
-    ['propId', PROP_IDS],
-  ]
-  for (const [key, ids] of checks) {
-    const value = patch[key]
-    if (typeof value === 'string' && !ids.includes(value)) {
-      return `Error: no ${key} "${value}" in the catalog. Pick one of: ${ids.join(', ')}`
-    }
-  }
-  return undefined
-}
 
 /**
  * `null` from the model means "unstate this", which the merge helpers spell as
@@ -437,6 +168,7 @@ function toPatch<T extends object>(input: T): Record<string, unknown> {
   }
   return out
 }
+
 type CastableType = (typeof CASTABLE_TYPES)[number]
 type CastableGraphNode = AnyNode & { type: CastableType }
 
@@ -749,156 +481,43 @@ export function buildTools(
       },
     }),
     inspect_formwork_settings: tool({
-      description:
-        'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports ownedStock, what the yard owns by catalog id, which is not a design input but is what the takeoff splits owned from hired against — null there means nobody has recorded a rack, which is not the same as a yard that owns nothing. One settings record per scene, so this takes no arguments.',
+      description: INSPECT_FORMWORK_SETTINGS_DESCRIPTION,
       inputSchema: z.object({}),
       execute: async () => {
         toolCalls.push({ name: 'inspect_formwork_settings', input: {} })
         const node = findFormworkSettingsNode(Object.values(graph.nodes) as AnyNode[])
-        const resolved = formworkSettings(node)
         return JSON.stringify({
-          anythingStated: node !== undefined,
-          resolved: {
-            pressureStandard: resolved.pressureStandard,
-            measurementStandard: resolved.measurementStandard,
-            riseRateMH: resolved.riseRateMH,
-            concreteTemperatureC: resolved.concreteTemperatureC,
-            concrete: resolved.concrete,
-            placement: resolved.placement,
-            // Unstated fields are left unstated here rather than defaulted, unlike the
-            // pressure inputs above, because the striking tables publish their own
-            // conservative column — see `hire.assumed` on inspect_project_formwork,
-            // which names what the code supplied.
-            curing: resolved.curing,
-            falseworkLoads: resolved.falseworkLoads,
-            bracing: resolved.bracing,
-            parts: resolved.parts,
-            // Null rather than an empty rack, and the two are different answers: null
-            // is nobody having said, so the takeoff shows no owned/hired split at all,
-            // where `{}` is a yard that has recorded owning nothing.
-            ownedStock: resolved.ownedStock ?? null,
-          },
-          // Only what the project actually said. Anything absent here but present
-          // above is the shipped conservative default, not a decision.
-          stated: node
-            ? {
-                pressureStandard: node.pressureStandard ?? null,
-                measurementStandard: node.measurementStandard ?? null,
-                concrete: node.concrete ?? null,
-                placement: node.placement ?? null,
-                curing: node.curing ?? null,
-                falseworkLoads: node.falseworkLoads ?? null,
-                bracing: node.bracing ?? null,
-                parts: node.parts ?? null,
-                stock: node.stock ?? null,
-              }
-            : null,
-          assumedDefaults: {
-            riseRateMH: DEFAULT_FORMWORK_SETTINGS.riseRateMH,
-            concreteTemperatureC: DEFAULT_FORMWORK_SETTINGS.concreteTemperatureC,
-            pressureStandard: DEFAULT_FORMWORK_SETTINGS.pressureStandard,
-            measurementStandard: DEFAULT_FORMWORK_SETTINGS.measurementStandard,
-          },
+          ...formworkSettingsReport(node),
           shuttersAffectedByAChange: scenewideShutterCount(),
         })
       },
     }),
     set_formwork_settings: tool({
-      description:
-        'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off.',
-      inputSchema: z.object({
-        pressureStandard: z
-          .enum(['ACI_347', 'DIN_18218', 'CIRIA_108', 'BS_5975_SHORTCUT'])
-          .nullable()
-          .optional()
-          .describe(
-            'which code derives the fresh-concrete pressure. Follows the contract and the engineer of record — the catalog panels publish their permissible pressures against DIN, and a rating certified under one standard is not a check against another',
-          ),
-        measurementStandard: z
-          .enum(['IS_1200_5', 'NRM2', 'HKSMM4', 'CESMM4', 'POMI'])
-          .nullable()
-          .optional()
-          .describe("the contract's quantity rules — what the client actually pays for"),
-        concrete: CONCRETE_SETTINGS_SCHEMA.optional(),
-        cement: CEMENT_SETTINGS_SCHEMA.optional().describe(
-          'the binder, asked as what it is rather than as the coefficient it implies',
-        ),
-        placement: PLACEMENT_SETTINGS_SCHEMA.optional(),
-        curing: CURING_SETTINGS_SCHEMA.optional().describe(
-          'what happens after the pour, which decides when the form comes off and therefore how long every hired part is held. Its temperature is the curing surface, not the placing temperature in placement',
-        ),
-        falseworkLoads: FALSEWORK_LOAD_SETTINGS_SCHEMA.optional().describe(
-          "what a soffit carries beyond the concrete itself; each is raised to ACI §2.2.1's floor",
-        ),
-        bracing: BRACING_SETTINGS_SCHEMA.optional().describe(
-          'wall forms are braced against wind and impact, not against the concrete — the ties do that',
-        ),
-        parts: PART_SETTINGS_SCHEMA.optional().describe(
-          'the catalog parts the design resolves against, which decide what every solved spacing is a spacing of',
-        ),
-        ownedStock: STOCK_SETTINGS_SCHEMA.optional().describe(
-          'how many of each catalog id the yard owns, keyed by id — a bill draws on these before it hires. Merged into what is already recorded, so pass only the types you are changing; null against an id removes it. Until a project records this, the takeoff reports no owned/hired split at all rather than putting the whole bill on hire',
-        ),
-      }),
-      execute: async ({ cement, ownedStock, ...groups }) => {
-        toolCalls.push({ name: 'set_formwork_settings', input: { cement, ownedStock, ...groups } })
-        const stated = Object.entries(groups).filter(([, value]) => value !== undefined)
-        if (stated.length === 0 && cement === undefined && ownedStock === undefined) {
-          return 'Error: nothing to set — pass at least one field'
-        }
-        if (groups.parts) {
-          const bad = unknownPartId(groups.parts)
-          if (bad) return bad
-        }
-        if (ownedStock) {
-          const bad = unknownStockId(ownedStock)
-          if (bad) return bad
-        }
+      description: SET_FORMWORK_SETTINGS_DESCRIPTION,
+      inputSchema: z.object(formworkSettingsPatchInput),
+      execute: async (patch) => {
+        toolCalls.push({ name: 'set_formwork_settings', input: patch })
+        const existing = findFormworkSettingsNode(Object.values(graph.nodes) as AnyNode[])
+        // Validated before the node is created, so a refused call leaves a project that
+        // has stated nothing still stating nothing.
+        const result = applyFormworkSettingsPatch(existing, patch)
+        if (result.error !== undefined) return result.error
+
         const node = settingsNodeOrError()
         if (typeof node === 'string') return node
 
-        const changed: string[] = []
-        for (const [key, value] of stated) {
-          if (key === 'pressureStandard' || key === 'measurementStandard') {
-            // A top-level enum: null unstates it the same way a group field's does.
-            if (value === null) delete node[key]
-            else node[key] = value
-            changed.push(key)
-            continue
-          }
-          const group = key as FormworkSettingsGroup
-          const patch = toPatch(value as object)
-          if (group === 'concrete' && 'consistencyClass' in patch) {
-            // `consistencyClassOf` reports SCC whenever `selfCompacting` is set, so the
-            // two are one fact and the schema asks for it once. The flag is what the
-            // codes actually branch on — ACI has no SCC provisions and reads only this
-            // — so an F class left beside a stale flag would be ignored entirely.
-            patch.selfCompacting = patch.consistencyClass === 'SCC' ? true : undefined
-          }
-          const merged = mergeFormworkSettingsGroup(node[group] as never, patch as never)
-          if (merged === undefined) delete node[group]
-          else node[group] = merged
-          changed.push(group)
-        }
-        if (cement !== undefined) {
-          const merged = mergeFormworkCement(node.concrete as never, toPatch(cement) as never)
-          if (merged === undefined) delete node.concrete
-          else node.concrete = merged
-          changed.push('cement')
-        }
-        if (ownedStock !== undefined) {
-          // Its own helper rather than the group merge, which would replace the whole
-          // rack: recording one panel type would forget every other type the yard owns.
-          // And no `undefined` branch — an emptied rack stays stated, because a project
-          // that removed every line has said it owns nothing.
-          node.stock = mergeFormworkOwnedStock(node.stock as never, toPatch(ownedStock) as never)
-          changed.push('ownedStock')
+        for (const [key, value] of Object.entries(result.writes)) {
+          // An explicit `undefined` deletes rather than stores, the same contract the
+          // store's `updateNode` honours: an optional field's absence is what encodes
+          // "unstated", and a key holding undefined would serialise as a stated null.
+          if (value === undefined) delete node[key]
+          else node[key] = value
         }
         onMutate()
 
         const stale = scenewideShutterCount()
         const resolved = formworkSettings(node as never)
-        const summary = `ok — ${changed.join(', ')} set; the scene now designs to ${resolved.riseRateMH} m/h at ${resolved.concreteTemperatureC} °C under ${resolved.pressureStandard}`
+        const summary = `ok — ${result.changed.join(', ')} set; the scene now designs to ${resolved.riseRateMH} m/h at ${resolved.concreteTemperatureC} °C under ${resolved.pressureStandard}`
         // Re-solved on read, not on write: the parts and the design report both
         // solve from the settings each time they are asked, so there is nothing to
         // regenerate. This used to tell the model to call attach_formwork again,
