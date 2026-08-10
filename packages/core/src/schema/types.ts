@@ -7,6 +7,7 @@ import { ChimneyNode } from './nodes/chimney'
 import { ColumnNode } from './nodes/column'
 import { ConstructionDimensionNode } from './nodes/construction-dimension'
 import { CupolaNode } from './nodes/cupola'
+import { CustomMeshNode } from './nodes/custom-mesh'
 import { DoorNode } from './nodes/door'
 import { DormerNode } from './nodes/dormer'
 import { DownspoutNode } from './nodes/downspout'
@@ -52,6 +53,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   LevelNode,
   ColumnNode,
   ConstructionDimensionNode,
+  CustomMeshNode,
   StructuralGridNode,
   WallNode,
   FenceNode,

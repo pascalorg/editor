@@ -7,6 +7,7 @@ import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
 import { constructionDimensionDefinition } from './construction-dimension'
 import { cupolaDefinition } from './cupola'
+import { customMeshDefinition } from './custom-mesh/definition'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
 import { downspoutDefinition } from './downspout'
@@ -67,6 +68,7 @@ export const builtinPlugin: Plugin = {
   nodes: [
     // Stage E-complete (full registry path)
     shelfDefinition as unknown as AnyNodeDefinition,
+    customMeshDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
@@ -136,6 +138,15 @@ export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
 export { constructionDimensionDefinition } from './construction-dimension'
 export { cupolaDefinition } from './cupola'
+export {
+  applyCustomMeshCommand,
+  type CustomMeshCommand,
+  type CustomMeshCommandResult,
+  type CustomMeshSelection,
+  customMeshFaceCentroid,
+  customMeshFaceNormal,
+} from './custom-mesh/commands'
+export { customMeshDefinition } from './custom-mesh/definition'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
 export { downspoutDefinition } from './downspout'

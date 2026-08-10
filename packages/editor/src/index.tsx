@@ -397,6 +397,7 @@ export {
   curveReshapeScope,
   endpointReshapeScope,
   holeEditScope,
+  meshEditScope,
   movingNodeOf,
   scopeNodeId,
 } from './lib/interaction/scope'

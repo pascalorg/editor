@@ -75,6 +75,16 @@ export {
 } from './nodes/construction-dimension'
 export { CupolaNode } from './nodes/cupola'
 export {
+  CustomMeshEdge,
+  CustomMeshFace,
+  CustomMeshNode,
+  CustomMeshTopology,
+  type CustomMeshTopologyIssue,
+  CustomMeshVertex,
+  createBoxCustomMeshTopology,
+  inspectCustomMeshTopology,
+} from './nodes/custom-mesh'
+export {
   DoorNode,
   DoorSegment,
   OpeningConstructionType,

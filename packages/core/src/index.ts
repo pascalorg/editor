@@ -10,6 +10,7 @@ export type {
   ChimneyEvent,
   ColumnEvent,
   ConstructionDimensionEvent,
+  CustomMeshEvent,
   DoorEvent,
   DormerEvent,
   ElevatorEvent,
