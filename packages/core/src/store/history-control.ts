@@ -18,6 +18,7 @@ export type SceneCommit = {
   origin: SceneCommitOrigin
   before: SceneSnapshot
   current: SceneSnapshot
+  changedNodeIds?: ReadonlySet<AnyNodeId>
 }
 
 export type SceneCommitListener = (commit: SceneCommit) => void
@@ -43,6 +44,47 @@ type TemporalHistoryStoreLike<TPastState> = {
 const sceneCommitListeners = new Set<SceneCommitListener>()
 let sceneCommitTransactionDepth = 0
 let pendingSceneCommit: SceneCommit | null = null
+const sceneCommitNodeIdScopes: Set<AnyNodeId>[] = []
+
+function mergedNodeIds(
+  left: ReadonlySet<AnyNodeId> | undefined,
+  right: ReadonlySet<AnyNodeId> | undefined,
+) {
+  if (!(left || right)) return undefined
+  return new Set<AnyNodeId>([...(left ?? []), ...(right ?? [])])
+}
+
+export function activeSceneCommitNodeIds(): ReadonlySet<AnyNodeId> | undefined {
+  if (sceneCommitNodeIdScopes.length === 0) return undefined
+  const ids = new Set<AnyNodeId>()
+  for (const scope of sceneCommitNodeIdScopes) {
+    for (const id of scope) ids.add(id)
+  }
+  return ids
+}
+
+export function addActiveSceneCommitNodeIds(nodeIds: Iterable<AnyNodeId>): void {
+  const scope = sceneCommitNodeIdScopes.at(-1)
+  if (!scope) return
+  for (const id of nodeIds) scope.add(id)
+}
+
+export function runWithSceneCommitNodeIds<TResult>(
+  nodeIds: Iterable<AnyNodeId>,
+  run: () => TResult,
+): TResult {
+  const scope = new Set(nodeIds)
+  sceneCommitNodeIdScopes.push(scope)
+  try {
+    return run()
+  } finally {
+    sceneCommitNodeIdScopes.pop()
+    const parentScope = sceneCommitNodeIdScopes.at(-1)
+    if (parentScope) {
+      for (const id of scope) parentScope.add(id)
+    }
+  }
+}
 
 function areSemanticValuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true
@@ -98,21 +140,29 @@ function emitSceneCommit(commit: SceneCommit): void {
 
 export function notifySceneCommit(commit: SceneCommit): void {
   if (areSceneSnapshotsEqual(commit.before, commit.current)) return
+  const contextualCommit = {
+    ...commit,
+    changedNodeIds: mergedNodeIds(commit.changedNodeIds, activeSceneCommitNodeIds()),
+  }
 
   if (sceneCommitTransactionDepth > 0) {
     if (pendingSceneCommit) {
       pendingSceneCommit = {
         origin: pendingSceneCommit.origin,
         before: pendingSceneCommit.before,
-        current: commit.current,
+        current: contextualCommit.current,
+        changedNodeIds: mergedNodeIds(
+          pendingSceneCommit.changedNodeIds,
+          contextualCommit.changedNodeIds,
+        ),
       }
     } else {
-      pendingSceneCommit = commit
+      pendingSceneCommit = contextualCommit
     }
     return
   }
 
-  emitSceneCommit(commit)
+  emitSceneCommit(contextualCommit)
 }
 
 function beginSceneCommitTransaction(): void {

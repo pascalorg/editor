@@ -15,10 +15,12 @@ import {
   CEILING_CLAMP_MARGIN,
   findLevelAboveId,
   getCeilingClampBound,
+  getLevelBelow,
   getLevelElevations,
   getStoredLevelHeight,
 } from '../services/storey'
 import {
+  activeSceneCommitNodeIds,
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resumeSceneHistory,
@@ -48,6 +50,18 @@ export type Space = {
   wallIds: Array<WallNode['id']>
   boundaryFaces: SpaceBoundaryFace[]
   isExterior: boolean
+}
+
+export type SpaceTopologyReconcileEvent = {
+  levelId: string
+  strategy: 'indexed' | 'fallback'
+  examinedWallIds: string[]
+  affectedBeforeRoomCount: number
+  affectedCurrentRoomCount: number
+}
+
+export type SpaceDetectionSyncOptions = {
+  onTopologyReconcile?: (event: SpaceTopologyReconcileEvent) => void
 }
 
 type ExtractedRoom = {
@@ -1314,6 +1328,15 @@ function buildSpace(levelId: string, room: ExtractedRoom): Space {
 
 type RoomSurface = SlabNodeType | CeilingNodeType
 
+function surfaceTouchesRooms(surface: RoomSurface, rooms: ExtractedRoom[]) {
+  const polygon = surface.polygon.map(pointFromTuple)
+  return rooms.some(
+    (room) =>
+      polygonCoverageRatio(polygon, [room.polygon]) > 0 ||
+      polygonCoverageRatio(room.polygon, [polygon]) > 0,
+  )
+}
+
 function roomsAreRelated(beforeRoom: ExtractedRoom, currentRoom: ExtractedRoom) {
   const beforeIds = new Set(beforeRoom.boundaryFaces.map((boundary) => boundary.wallId))
   const currentIds = new Set(currentRoom.boundaryFaces.map((boundary) => boundary.wallId))
@@ -1372,6 +1395,336 @@ function detectedRoomsByLevel(nodes: Record<string, any>) {
   return new Map(
     [...wallsByLevel].map(([levelId, walls]) => [levelId, extractRooms(walls)] as const),
   )
+}
+
+type SceneNodes = Record<string, any>
+
+function levelChildren(nodes: SceneNodes, levelId: string) {
+  const level = nodes[levelId]
+  if (level?.type !== 'level') return []
+  return level.children.flatMap((id: string) => {
+    const node = nodes[id]
+    return node ? [node] : []
+  })
+}
+
+function wallsForLevel(nodes: SceneNodes, levelId: string) {
+  return levelChildren(nodes, levelId).filter(
+    (node: any): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+  )
+}
+
+function changedWallIdsByLevel(
+  before: SceneNodes,
+  current: SceneNodes,
+  candidateIds?: ReadonlySet<AnyNodeId>,
+) {
+  const changes = new Map<string, Set<string>>()
+  const wallIds = new Set<string>(candidateIds)
+  if (!candidateIds) {
+    for (const node of Object.values(before)) {
+      if (node?.type === 'wall') wallIds.add(node.id)
+    }
+    for (const node of Object.values(current)) {
+      if (node?.type === 'wall') wallIds.add(node.id)
+    }
+  }
+
+  const markChanged = (levelId: string | null | undefined, wallId: string) => {
+    if (!levelId) return
+    const ids = changes.get(levelId) ?? new Set<string>()
+    ids.add(wallId)
+    changes.set(levelId, ids)
+  }
+
+  for (const wallId of wallIds) {
+    const previous = before[wallId]?.type === 'wall' ? (before[wallId] as WallNode) : null
+    const next = current[wallId]?.type === 'wall' ? (current[wallId] as WallNode) : null
+    if (previous === next) continue
+    markChanged(previous?.parentId, wallId)
+    markChanged(next?.parentId, wallId)
+  }
+
+  return changes
+}
+
+function descendantLevelIds(nodes: SceneNodes, rootId: string) {
+  const levelIds = new Set<string>()
+  const queue = [rootId]
+  const visited = new Set<string>()
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    if (visited.has(id)) continue
+    visited.add(id)
+    const node = nodes[id]
+    if (!node) continue
+    if (node.type === 'level') levelIds.add(node.id)
+    if ('children' in node && Array.isArray(node.children)) queue.push(...node.children)
+  }
+  return levelIds
+}
+
+function fallbackLevelIdsForCandidates(
+  before: SceneNodes,
+  current: SceneNodes,
+  candidateIds: ReadonlySet<AnyNodeId>,
+) {
+  const levelIds = new Set<string>()
+  const addLevelAndLower = (levelId: string | null | undefined, nodes: SceneNodes) => {
+    if (!levelId) return
+    levelIds.add(levelId)
+    const lower = getLevelBelow(levelId, nodes)
+    if (lower) levelIds.add(lower.id)
+  }
+
+  for (const id of candidateIds) {
+    for (const nodes of [before, current]) {
+      const node = nodes[id]
+      if (!node) continue
+      if (node.type === 'level' || node.type === 'building' || node.type === 'site') {
+        for (const levelId of descendantLevelIds(nodes, node.id)) levelIds.add(levelId)
+      } else if (node.type === 'slab') {
+        addLevelAndLower(node.parentId, nodes)
+      } else if (node.type === 'zone') {
+        if (node.parentId) levelIds.add(node.parentId)
+      }
+    }
+  }
+  return levelIds
+}
+
+const TOPOLOGY_INDEX_CELL_SIZE = 2
+const TOPOLOGY_INDEX_QUERY_MARGIN = WALL_JUNCTION_TOLERANCE + 0.02
+
+type IndexedLevelTopology = {
+  walls: Map<string, WallNode>
+  rooms: ExtractedRoom[]
+  wallIdsByCell: Map<string, Set<string>>
+  cellKeysByWallId: Map<string, string[]>
+}
+
+type IndexedTopologyDelta = {
+  strategy: SpaceTopologyReconcileEvent['strategy']
+  beforeRooms: ExtractedRoom[]
+  currentRooms: ExtractedRoom[]
+  allCurrentRooms: ExtractedRoom[]
+  previousWalls: WallNode[]
+  currentWalls: WallNode[]
+  examinedWallIds: string[]
+}
+
+function expandedBbox(box: ReturnType<typeof bboxOf>, margin: number) {
+  return {
+    minX: box.minX - margin,
+    minY: box.minY - margin,
+    maxX: box.maxX + margin,
+    maxY: box.maxY + margin,
+  }
+}
+
+function wallBbox(wall: WallNode) {
+  return bboxOf(sampleWallPointsForRoomDetection(wall))
+}
+
+function cellKeysForBbox(box: ReturnType<typeof bboxOf>) {
+  const keys: string[] = []
+  for (
+    let x = Math.floor(box.minX / TOPOLOGY_INDEX_CELL_SIZE);
+    x <= Math.floor(box.maxX / TOPOLOGY_INDEX_CELL_SIZE);
+    x += 1
+  ) {
+    for (
+      let y = Math.floor(box.minY / TOPOLOGY_INDEX_CELL_SIZE);
+      y <= Math.floor(box.maxY / TOPOLOGY_INDEX_CELL_SIZE);
+      y += 1
+    ) {
+      keys.push(`${x},${y}`)
+    }
+  }
+  return keys
+}
+
+function removeIndexedWall(level: IndexedLevelTopology, wallId: string) {
+  for (const key of level.cellKeysByWallId.get(wallId) ?? []) {
+    const ids = level.wallIdsByCell.get(key)
+    ids?.delete(wallId)
+    if (ids?.size === 0) level.wallIdsByCell.delete(key)
+  }
+  level.cellKeysByWallId.delete(wallId)
+  level.walls.delete(wallId)
+}
+
+function setIndexedWall(level: IndexedLevelTopology, wall: WallNode) {
+  removeIndexedWall(level, wall.id)
+  level.walls.set(wall.id, wall)
+  const keys = cellKeysForBbox(expandedBbox(wallBbox(wall), TOPOLOGY_INDEX_QUERY_MARGIN))
+  level.cellKeysByWallId.set(wall.id, keys)
+  for (const key of keys) {
+    const ids = level.wallIdsByCell.get(key) ?? new Set<string>()
+    ids.add(wall.id)
+    level.wallIdsByCell.set(key, ids)
+  }
+}
+
+function createIndexedLevelTopology(walls: WallNode[]): IndexedLevelTopology {
+  const level: IndexedLevelTopology = {
+    walls: new Map(),
+    rooms: extractRooms(walls),
+    wallIdsByCell: new Map(),
+    cellKeysByWallId: new Map(),
+  }
+  for (const wall of walls) setIndexedWall(level, wall)
+  return level
+}
+
+function queryIndexedWalls(level: IndexedLevelTopology, wall: WallNode) {
+  const ids = new Set<string>()
+  for (const key of cellKeysForBbox(expandedBbox(wallBbox(wall), TOPOLOGY_INDEX_QUERY_MARGIN))) {
+    for (const id of level.wallIdsByCell.get(key) ?? []) ids.add(id)
+  }
+  return ids
+}
+
+function wallsTouchForTopology(left: WallNode, right: WallNode) {
+  const leftPoints = sampleWallPointsForRoomDetection(left).map(pointToTuple)
+  const rightPoints = sampleWallPointsForRoomDetection(right).map(pointToTuple)
+  const touchesPolyline = (points: Array<[number, number]>, other: Array<[number, number]>) => {
+    const endpoints = [points[0], points.at(-1)].filter((point): point is [number, number] =>
+      Boolean(point),
+    )
+    for (const endpoint of endpoints) {
+      for (let index = 0; index < other.length - 1; index += 1) {
+        if (
+          distanceToSegment(endpoint, other[index]!, other[index + 1]!) <= WALL_JUNCTION_TOLERANCE
+        ) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+  return touchesPolyline(leftPoints, rightPoints) || touchesPolyline(rightPoints, leftPoints)
+}
+
+function connectedWallIds(level: IndexedLevelTopology, seedIds: Iterable<string>) {
+  const connected = new Set<string>()
+  const queue = [...seedIds]
+  while (queue.length > 0) {
+    const wallId = queue.pop()!
+    if (connected.has(wallId)) continue
+    const wall = level.walls.get(wallId)
+    if (!wall) continue
+    connected.add(wallId)
+    for (const neighborId of queryIndexedWalls(level, wall)) {
+      if (connected.has(neighborId)) continue
+      const neighbor = level.walls.get(neighborId)
+      if (neighbor && wallsTouchForTopology(wall, neighbor)) queue.push(neighborId)
+    }
+  }
+  return connected
+}
+
+function roomUsesAnyWall(room: ExtractedRoom, wallIds: ReadonlySet<string>) {
+  return room.boundaryFaces.some((boundary) => wallIds.has(boundary.wallId))
+}
+
+function sameIndexedWall(left: WallNode | undefined, right: WallNode | undefined) {
+  if (!(left && right)) return left === right
+  return (
+    left.parentId === right.parentId &&
+    left.start[0] === right.start[0] &&
+    left.start[1] === right.start[1] &&
+    left.end[0] === right.end[0] &&
+    left.end[1] === right.end[1] &&
+    getClampedWallCurveOffset(left) === getClampedWallCurveOffset(right)
+  )
+}
+
+class RoomTopologyIndex {
+  private readonly levels = new Map<string, IndexedLevelTopology>()
+
+  rebuild(nodes: SceneNodes) {
+    this.levels.clear()
+    const wallsByLevel = new Map<string, WallNode[]>()
+    for (const node of Object.values(nodes)) {
+      if (node?.type !== 'wall' || !node.parentId) continue
+      const walls = wallsByLevel.get(node.parentId) ?? []
+      walls.push(node)
+      wallsByLevel.set(node.parentId, walls)
+    }
+    for (const [levelId, walls] of wallsByLevel) {
+      this.levels.set(levelId, createIndexedLevelTopology(walls))
+    }
+  }
+
+  rebuildLevel(levelId: string, nodes: SceneNodes) {
+    const level = createIndexedLevelTopology(wallsForLevel(nodes, levelId))
+    this.levels.set(levelId, level)
+    return level
+  }
+
+  applyWallDelta(
+    levelId: string,
+    changedWallIds: ReadonlySet<string>,
+    beforeNodes: SceneNodes,
+    currentNodes: SceneNodes,
+  ): IndexedTopologyDelta {
+    let strategy: IndexedTopologyDelta['strategy'] = 'indexed'
+    let level = this.levels.get(levelId)
+    if (!level) {
+      level = this.rebuildLevel(levelId, beforeNodes)
+      strategy = 'fallback'
+    }
+    for (const wallId of changedWallIds) {
+      const cached = level.walls.get(wallId)
+      const previous = beforeNodes[wallId]
+      const previousWall =
+        previous?.type === 'wall' && previous.parentId === levelId ? previous : undefined
+      if (!sameIndexedWall(cached, previousWall)) {
+        level = this.rebuildLevel(levelId, beforeNodes)
+        strategy = 'fallback'
+        break
+      }
+    }
+
+    const beforeComponentIds = connectedWallIds(level, changedWallIds)
+    for (const wallId of changedWallIds) {
+      const current = currentNodes[wallId]
+      if (current?.type === 'wall' && current.parentId === levelId) setIndexedWall(level, current)
+      else removeIndexedWall(level, wallId)
+    }
+    const currentSeedIds = new Set<string>(changedWallIds)
+    for (const wallId of beforeComponentIds) {
+      if (level.walls.has(wallId)) currentSeedIds.add(wallId)
+    }
+    const currentComponentIds = connectedWallIds(level, currentSeedIds)
+    const examinedIds = new Set([...changedWallIds, ...beforeComponentIds, ...currentComponentIds])
+    const beforeRooms = level.rooms.filter((room) => roomUsesAnyWall(room, examinedIds))
+    const previousWalls = [...examinedIds].flatMap((wallId) => {
+      const node = beforeNodes[wallId]
+      return node?.type === 'wall' && node.parentId === levelId ? [node as WallNode] : []
+    })
+    const currentWalls = [...examinedIds].flatMap((wallId) => {
+      const node = currentNodes[wallId]
+      return node?.type === 'wall' && node.parentId === levelId ? [node as WallNode] : []
+    })
+    const currentRooms = extractRooms(currentWalls)
+    const allCurrentRooms = [
+      ...level.rooms.filter((room) => !roomUsesAnyWall(room, examinedIds)),
+      ...currentRooms,
+    ]
+    level.rooms = allCurrentRooms
+
+    return {
+      strategy,
+      beforeRooms,
+      currentRooms,
+      allCurrentRooms,
+      previousWalls,
+      currentWalls,
+      examinedWallIds: [...examinedIds].sort(),
+    }
+  }
 }
 
 function sameStringSet(a: readonly string[], b: readonly string[]) {
@@ -1435,6 +1788,7 @@ export function planAutoSlabsForLevel(
   roomPolygons: Point2D[][],
   existingSlabs: SlabNodeType[],
   context: AutoSlabPlanningContext = {},
+  namingSlabs: Array<{ name?: string }> = existingSlabs,
 ): AutoSlabSyncPlan {
   const manualSlabs = existingSlabs.filter((slab) => !slab.autoFromWalls)
   const manualSignatures = new Set(
@@ -1644,7 +1998,7 @@ export function planAutoSlabsForLevel(
     ...slabDemotions,
   ]
 
-  const plannedSlabsForNaming: Array<{ name?: string }> = [...existingSlabs]
+  const plannedSlabsForNaming: Array<{ name?: string }> = [...namingSlabs]
   const slabsToCreate: SlabNodeType[] = []
   for (let index = 0; index < detected.length; index += 1) {
     if (matchedDetectedIdx.has(index)) continue
@@ -1698,8 +2052,9 @@ function syncAutoSlabsForLevel(
   existingSlabs: SlabNodeType[],
   sceneStore: any,
   context: AutoSlabPlanningContext = {},
+  namingSlabs: Array<{ name?: string }> = existingSlabs,
 ) {
-  const plan = planAutoSlabsForLevel(roomPolygons, existingSlabs, context)
+  const plan = planAutoSlabsForLevel(roomPolygons, existingSlabs, context, namingSlabs)
 
   if (plan.delete.length > 0) {
     sceneStore.getState().deleteNodes(plan.delete)
@@ -1720,6 +2075,7 @@ export function planAutoCeilingsForLevel(
   roomPolygons: Point2D[][],
   existingCeilings: CeilingNodeType[],
   context: AutoCeilingPlanningContext = {},
+  namingCeilings: Array<{ name?: string }> = existingCeilings,
 ): AutoCeilingSyncPlan {
   const manualCeilings = existingCeilings.filter((ceiling) => !ceiling.autoFromWalls)
   const manualSignatures = new Set(
@@ -1977,7 +2333,7 @@ export function planAutoCeilingsForLevel(
     ...manualClamps,
   ]
 
-  const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
+  const plannedCeilingsForNaming: Array<{ name?: string }> = [...namingCeilings]
   const ceilingsToCreate: CeilingNodeType[] = []
   for (let index = 0; index < detected.length; index += 1) {
     if (matchedDetectedIdx.has(index)) continue
@@ -2029,8 +2385,9 @@ function syncAutoCeilingsForLevel(
   existingCeilings: CeilingNodeType[],
   sceneStore: any,
   context: AutoCeilingPlanningContext = {},
+  namingCeilings: Array<{ name?: string }> = existingCeilings,
 ) {
-  const plan = planAutoCeilingsForLevel(roomPolygons, existingCeilings, context)
+  const plan = planAutoCeilingsForLevel(roomPolygons, existingCeilings, context, namingCeilings)
 
   if (plan.update.length > 0) {
     sceneStore.getState().updateNodes(plan.update)
@@ -2093,19 +2450,13 @@ function runSpaceDetection(
   }
 
   for (const levelId of levelIds) {
-    const walls = Object.values(nodes).filter(
+    const children = levelChildren(nodes, levelId)
+    const walls = children.filter(
       (node: any): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
     )
-
-    const slabs = Object.values(nodes).filter(
-      (node: any) => node?.type === 'slab' && node.parentId === levelId,
-    )
-    const ceilings = Object.values(nodes).filter(
-      (node: any) => node?.type === 'ceiling' && node.parentId === levelId,
-    )
-    const zones = Object.values(nodes).filter(
-      (node: any) => node?.type === 'zone' && node.parentId === levelId,
-    )
+    const slabs = children.filter((node: any) => node?.type === 'slab')
+    const ceilings = children.filter((node: any) => node?.type === 'ceiling')
+    const zones = children.filter((node: any) => node?.type === 'zone')
 
     const { wallUpdates, spaces, rooms } = detectSpacesFromWalls(levelId, walls)
 
@@ -2131,8 +2482,10 @@ function runSpaceDetection(
       levelNode?.type === 'level'
         ? getStoredLevelHeight(levelNode as LevelNode)
         : DEFAULT_LEVEL_HEIGHT
-    const parsedSlabs = slabs.map((slab: any) => SlabNode.parse(slab))
-    const parsedCeilings = ceilings.map((ceiling: any) => CeilingNode.parse(ceiling))
+    const parsedSlabs: SlabNodeType[] = slabs.map((slab: any) => SlabNode.parse(slab))
+    const parsedCeilings: CeilingNodeType[] = ceilings.map((ceiling: any) =>
+      CeilingNode.parse(ceiling),
+    )
     const previousRooms = previousRoomsByLevel.get(levelId) ?? []
     const slabRooms = roomsEligibleForAutoSurface(previousRooms, rooms, parsedSlabs)
     const ceilingRooms = roomsEligibleForAutoSurface(previousRooms, rooms, parsedCeilings)
@@ -2145,11 +2498,12 @@ function runSpaceDetection(
       nodes,
       storeyHeight,
     )
-    const previousWalls = Object.values(previousNodes).filter(
+    const previousChildren = levelChildren(previousNodes, levelId)
+    const previousWalls = previousChildren.filter(
       (node: any): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
     )
-    const previousSlabs = Object.values(previousNodes)
-      .filter((node: any) => node?.type === 'slab' && node.parentId === levelId)
+    const previousSlabs: SlabNodeType[] = previousChildren
+      .filter((node: any) => node?.type === 'slab')
       .map((slab: any) => SlabNode.parse(slab))
     const previousLevelNode = previousNodes[levelId]
     const previousStoreyHeight =
@@ -2211,6 +2565,152 @@ function runSpaceDetection(
   editorStore.getState().setSpaces(nextSpaces)
 }
 
+function runIndexedSpaceDetection(
+  levelId: string,
+  topologyDelta: IndexedTopologyDelta,
+  sceneStore: any,
+  editorStore: any,
+  nodes: SceneNodes,
+  previousNodes: SceneNodes,
+) {
+  const { updateNodes } = sceneStore.getState()
+  const allRoomPolygons = topologyDelta.allCurrentRooms.map((room) => room.polygon)
+  const changedWallUpdates = topologyDelta.currentWalls
+    .map((wall) => ({
+      wallId: wall.id,
+      ...resolveWallSurfaceSides(wall, allRoomPolygons),
+    }))
+    .filter((update) => {
+      const wall = nodes[update.wallId]
+      return (
+        wall?.type === 'wall' &&
+        (wall.frontSide !== update.frontSide || wall.backSide !== update.backSide)
+      )
+    })
+  if (changedWallUpdates.length > 0) {
+    updateNodes(
+      changedWallUpdates.map((update) => ({
+        id: update.wallId,
+        data: { frontSide: update.frontSide, backSide: update.backSide },
+      })),
+    )
+  }
+
+  const scopedRooms = [...topologyDelta.beforeRooms, ...topologyDelta.currentRooms]
+  if (scopedRooms.length > 0) {
+    const unaffectedRooms = topologyDelta.allCurrentRooms.filter(
+      (room) => !topologyDelta.currentRooms.includes(room),
+    )
+    const currentChildren = levelChildren(nodes, levelId)
+    const allSlabs: SlabNodeType[] = currentChildren
+      .filter((node: any): node is SlabNodeType => node.type === 'slab')
+      .map((slab: SlabNodeType) => SlabNode.parse(slab))
+    const allCeilings: CeilingNodeType[] = currentChildren
+      .filter((node: any): node is CeilingNodeType => node.type === 'ceiling')
+      .map((ceiling: CeilingNodeType) => CeilingNode.parse(ceiling))
+    const slabs = allSlabs.filter(
+      (slab) =>
+        surfaceTouchesRooms(slab, scopedRooms) &&
+        (!slab.autoFromWalls || !surfaceTouchesRooms(slab, unaffectedRooms)),
+    )
+    const ceilings = allCeilings.filter(
+      (ceiling) =>
+        surfaceTouchesRooms(ceiling, scopedRooms) &&
+        (!ceiling.autoFromWalls || !surfaceTouchesRooms(ceiling, unaffectedRooms)),
+    )
+    const slabRooms = roomsEligibleForAutoSurface(
+      topologyDelta.beforeRooms,
+      topologyDelta.currentRooms,
+      slabs,
+    )
+    const ceilingRooms = roomsEligibleForAutoSurface(
+      topologyDelta.beforeRooms,
+      topologyDelta.currentRooms,
+      ceilings,
+    )
+    const levelNode = nodes[levelId]
+    const storeyHeight =
+      levelNode?.type === 'level'
+        ? getStoredLevelHeight(levelNode as LevelNode)
+        : DEFAULT_LEVEL_HEIGHT
+    const currentSpaces = topologyDelta.currentRooms.map((room) => buildSpace(levelId, room))
+    const verticalPlacements = autoRoomVerticalPlacements(
+      currentSpaces,
+      topologyDelta.currentWalls,
+      allSlabs.filter((slab) => !slab.autoFromWalls),
+      nodes,
+      storeyHeight,
+    )
+    const previousChildren = levelChildren(previousNodes, levelId)
+    const previousSlabs: SlabNodeType[] = previousChildren
+      .filter((node: any): node is SlabNodeType => node.type === 'slab')
+      .map((slab: SlabNodeType) => SlabNode.parse(slab))
+    const previousLevelNode = previousNodes[levelId]
+    const previousStoreyHeight =
+      previousLevelNode?.type === 'level'
+        ? getStoredLevelHeight(previousLevelNode as LevelNode)
+        : DEFAULT_LEVEL_HEIGHT
+    const previousSpaces = topologyDelta.beforeRooms.map((room) => buildSpace(levelId, room))
+    const previousVerticalPlacements = autoRoomVerticalPlacements(
+      previousSpaces,
+      topologyDelta.previousWalls,
+      previousSlabs.filter((slab) => !slab.autoFromWalls),
+      previousNodes,
+      previousStoreyHeight,
+    )
+    const placementFor = (polygon: Array<[number, number]>) =>
+      verticalPlacements.get(polygonSignature(polygon.map(pointFromTuple)))
+    const previousPlacementFor = (polygon: Array<[number, number]>) =>
+      previousVerticalPlacements.get(polygonSignature(polygon.map(pointFromTuple)))
+
+    syncAutoSlabsForLevel(
+      levelId,
+      slabRooms.map((room) => room.polygon),
+      slabs,
+      sceneStore,
+      {
+        elevationForRoom: (polygon) => placementFor(polygon)?.slabElevation,
+        previousElevationForRoom: (polygon) => previousPlacementFor(polygon)?.slabElevation,
+      },
+      allSlabs,
+    )
+    syncAutoCeilingsForLevel(
+      levelId,
+      ceilingRooms.map((room) => room.polygon),
+      ceilings,
+      sceneStore,
+      {
+        storeyHeight,
+        ceilingClampBound: (polygon) => getCeilingClampBound(levelId, nodes, polygon),
+        heightForRoom: (polygon) => placementFor(polygon)?.ceilingHeight,
+        previousHeightForRoom: (polygon) => previousPlacementFor(polygon)?.ceilingHeight,
+        childPosition: (childId) => {
+          const child = nodes[childId]
+          return child && Array.isArray(child.position)
+            ? [child.position[0], child.position[2]]
+            : undefined
+        },
+      },
+      allCeilings,
+    )
+  }
+
+  const spaces = topologyDelta.allCurrentRooms.map((room) => buildSpace(levelId, room))
+  const zones: ZoneNodeType[] = levelChildren(nodes, levelId)
+    .filter((node: any): node is ZoneNodeType => node.type === 'zone')
+    .map((zone: ZoneNodeType) => ZoneNode.parse(zone))
+  const zonePlan = planAutoZonesForLevel(spaces, zones)
+  if (zonePlan.update.length > 0) updateNodes(zonePlan.update)
+
+  const existingSpaces = editorStore.getState().spaces as Record<string, Space>
+  const nextSpaces: Record<string, Space> = {}
+  for (const [spaceId, space] of Object.entries(existingSpaces)) {
+    if (space.levelId !== levelId) nextSpaces[spaceId] = space
+  }
+  for (const space of spaces) nextSpaces[space.id] = space
+  editorStore.getState().setSpaces(nextSpaces)
+}
+
 // Refcount of outstanding pause requests, matching the pauseSceneHistory
 // pattern. The community editor flips this off while the AI is actively
 // mutating the scene so the wall-driven auto slab/ceiling sync doesn't race
@@ -2234,13 +2734,19 @@ export function isSpaceDetectionPaused(): boolean {
   return spaceDetectionPauseDepth > 0
 }
 
-export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () => void {
+export function initSpaceDetectionSync(
+  sceneStore: any,
+  editorStore: any,
+  options: SpaceDetectionSyncOptions = {},
+): () => void {
   // Baseline from whatever is already in the store. Detection reacts to wall
   // edits made IN-SESSION (create / move / delete); it must not re-litigate a
   // scene that merely loaded — rerunning on hydration resurrected auto slabs
   // the user had deleted in an earlier session.
-  const previousSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
-  const previousRoomsByLevel = detectedRoomsByLevel(sceneStore.getState().nodes)
+  const initialNodes = sceneStore.getState().nodes
+  const previousRoomsByLevel = detectedRoomsByLevel(initialNodes)
+  const topologyIndex = new RoomTopologyIndex()
+  topologyIndex.rebuild(initialNodes)
   let previousNodes = sceneStore.getState().nodes
   let isProcessing = false
 
@@ -2249,37 +2755,91 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
     if (getSceneHistoryPauseDepth() > 0) return
 
     const nodes = state.nodes
-    const currentSnapshots = levelStructureSnapshots(nodes)
+    const candidateIds = activeSceneCommitNodeIds()
 
     // Paused: roll the snapshot forward so we don't backfill (and re-duplicate)
     // every paused change once detection resumes. Whatever the AI built while
     // paused becomes the new baseline; only future changes will reconcile.
     if (spaceDetectionPauseDepth > 0) {
-      previousSnapshots.clear()
-      for (const [levelId, snapshot] of currentSnapshots.entries()) {
-        previousSnapshots.set(levelId, snapshot)
-      }
+      topologyIndex.rebuild(nodes)
+      const currentRoomsByLevel = detectedRoomsByLevel(nodes)
+      previousRoomsByLevel.clear()
+      for (const [levelId, rooms] of currentRoomsByLevel) previousRoomsByLevel.set(levelId, rooms)
       previousNodes = nodes
       return
     }
 
+    const changedWalls = changedWallIdsByLevel(previousNodes, nodes, candidateIds)
+    if (candidateIds && changedWalls.size > 0) {
+      const fallbackLevels = fallbackLevelIdsForCandidates(previousNodes, nodes, candidateIds)
+      for (const levelId of changedWalls.keys()) fallbackLevels.delete(levelId)
+      isProcessing = true
+      pauseSceneHistory(sceneStore)
+      try {
+        for (const [levelId, wallIds] of changedWalls) {
+          const topologyDelta = topologyIndex.applyWallDelta(levelId, wallIds, previousNodes, nodes)
+          runIndexedSpaceDetection(
+            levelId,
+            topologyDelta,
+            sceneStore,
+            editorStore,
+            nodes,
+            previousNodes,
+          )
+          previousRoomsByLevel.set(levelId, topologyDelta.allCurrentRooms)
+          options.onTopologyReconcile?.({
+            levelId,
+            strategy: topologyDelta.strategy,
+            examinedWallIds: topologyDelta.examinedWallIds,
+            affectedBeforeRoomCount: topologyDelta.beforeRooms.length,
+            affectedCurrentRoomCount: topologyDelta.currentRooms.length,
+          })
+        }
+        if (fallbackLevels.size > 0) {
+          runSpaceDetection(
+            [...fallbackLevels],
+            sceneStore,
+            editorStore,
+            sceneStore.getState().nodes,
+            previousNodes,
+            previousRoomsByLevel,
+          )
+          const liveNodes = sceneStore.getState().nodes
+          for (const levelId of fallbackLevels) topologyIndex.rebuildLevel(levelId, liveNodes)
+        }
+      } finally {
+        resumeSceneHistory(sceneStore)
+        previousNodes = sceneStore.getState().nodes
+        isProcessing = false
+      }
+      return
+    }
+
     const levelsToUpdate = new Set<string>()
-    for (const levelId of new Set([...previousSnapshots.keys(), ...currentSnapshots.keys()])) {
-      // First sight of a level is a hydration baseline, not a wall edit —
-      // `setScene` delivers a loaded scene as one atomic update, and a level's
-      // first wall can't close a room anyway. Record it (below) and only
-      // react to subsequent changes.
-      const previous = previousSnapshots.get(levelId)
-      if (previous === undefined) continue
-      if (previous !== (currentSnapshots.get(levelId) ?? '')) {
+    if (candidateIds) {
+      for (const levelId of fallbackLevelIdsForCandidates(previousNodes, nodes, candidateIds)) {
         levelsToUpdate.add(levelId)
+      }
+    } else {
+      const previousSnapshots = levelStructureSnapshots(previousNodes)
+      const currentSnapshots = levelStructureSnapshots(nodes)
+      for (const levelId of new Set([...previousSnapshots.keys(), ...currentSnapshots.keys()])) {
+        // First sight of a level is a hydration baseline, not a wall edit —
+        // `setScene` delivers a loaded scene as one atomic update, and a level's
+        // first wall can't close a room anyway. Record it (below) and only
+        // react to subsequent changes.
+        const previous = previousSnapshots.get(levelId)
+        if (previous === undefined) continue
+        if (previous !== (currentSnapshots.get(levelId) ?? '')) {
+          levelsToUpdate.add(levelId)
+        }
       }
     }
 
     if (levelsToUpdate.size === 0) {
-      previousSnapshots.clear()
-      for (const [levelId, snapshot] of currentSnapshots.entries()) {
-        previousSnapshots.set(levelId, snapshot)
+      if (candidateIds) {
+        previousNodes = nodes
+        return
       }
       const currentRoomsByLevel = detectedRoomsByLevel(nodes)
       previousRoomsByLevel.clear()
@@ -2303,12 +2863,9 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
       )
     } finally {
       resumeSceneHistory(sceneStore)
-      previousSnapshots.clear()
-      const postRunSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
-      for (const [levelId, snapshot] of postRunSnapshots.entries()) {
-        previousSnapshots.set(levelId, snapshot)
-      }
-      previousNodes = sceneStore.getState().nodes
+      const liveNodes = sceneStore.getState().nodes
+      for (const levelId of levelsToUpdate) topologyIndex.rebuildLevel(levelId, liveNodes)
+      previousNodes = liveNodes
       isProcessing = false
     }
   })

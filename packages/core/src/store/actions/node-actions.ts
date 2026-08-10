@@ -12,6 +12,7 @@ import {
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
+import { addActiveSceneCommitNodeIds } from '../history-control'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
@@ -959,6 +960,8 @@ export const applyNodeChangesAction = (
       delete nextNodes[id]
     }
 
+    addActiveSceneCommitNodeIds([...allIdsToDelete, ...nodesToMarkDirty, ...parentsToMarkDirty])
+
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
@@ -1037,6 +1040,12 @@ export const updateNodesAction = (
         }
       }
     }
+
+    addActiveSceneCommitNodeIds([
+      ...updates.map(({ id }) => id),
+      ...parentsToUpdate,
+      ...extraNodesToUpdate,
+    ])
 
     return { nodes: nextNodes }
   })
@@ -1203,6 +1212,8 @@ export const deleteNodesAction = (
       // 4. Delete the node itself
       delete nextNodes[id]
     }
+
+    addActiveSceneCommitNodeIds([...allIds, ...parentsToMarkDirty, ...nodesToMarkDirty])
 
     return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
   })

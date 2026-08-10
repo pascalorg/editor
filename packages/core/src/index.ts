@@ -147,6 +147,8 @@ export {
   resumeSpaceDetection,
   type Space,
   type SpaceBoundaryFace,
+  type SpaceDetectionSyncOptions,
+  type SpaceTopologyReconcileEvent,
   wallClosesRoom,
   wallTouchesOthers,
 } from './lib/space-detection'

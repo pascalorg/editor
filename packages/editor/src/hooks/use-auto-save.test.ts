@@ -1,5 +1,45 @@
 import { describe, expect, test } from 'bun:test'
-import { createStoredNodeCountTracker, isSuspiciousNodeDrop } from './use-auto-save'
+import {
+  createStoredNodeCountTracker,
+  isSuspiciousNodeDrop,
+  shouldFlushOnExit,
+} from './use-auto-save'
+
+describe('shouldFlushOnExit', () => {
+  test('does not flush a dirty empty store while the authoritative scene is loading', () => {
+    expect(
+      shouldFlushOnExit({
+        hasDirtyChanges: true,
+        isLoadingScene: true,
+        isVersionPreviewMode: false,
+      }),
+    ).toBe(false)
+  })
+
+  test('flushes settled dirty edits but not clean or preview state', () => {
+    expect(
+      shouldFlushOnExit({
+        hasDirtyChanges: true,
+        isLoadingScene: false,
+        isVersionPreviewMode: false,
+      }),
+    ).toBe(true)
+    expect(
+      shouldFlushOnExit({
+        hasDirtyChanges: false,
+        isLoadingScene: false,
+        isVersionPreviewMode: false,
+      }),
+    ).toBe(false)
+    expect(
+      shouldFlushOnExit({
+        hasDirtyChanges: true,
+        isLoadingScene: false,
+        isVersionPreviewMode: true,
+      }),
+    ).toBe(false)
+  })
+})
 
 describe('isSuspiciousNodeDrop', () => {
   test('blocks populated scenes from being flushed as empty skeletons', () => {

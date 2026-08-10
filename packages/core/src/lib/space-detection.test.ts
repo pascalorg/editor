@@ -3,6 +3,7 @@ import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode, ZoneNode } fr
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
+import { runWithSceneCommitNodeIds } from '../store/history-control'
 import {
   detectSpacesForLevel,
   initSpaceDetectionSync,
@@ -10,6 +11,7 @@ import {
   planAutoSlabsForLevel,
   planAutoZonesForLevel,
   resolveAutoZonePolygon,
+  type SpaceTopologyReconcileEvent,
   wallClosesRoom,
 } from './space-detection'
 import { encodeTerrainField } from './terrain-codec'
@@ -642,6 +644,56 @@ function createEditorStoreStub() {
 }
 
 describe('live room topology reconciliation', () => {
+  test('reconciles only the connected wall component while preserving other rooms', () => {
+    const levelId = 'level_component_scope'
+    const leftWalls = squareWalls().map((wall, index) =>
+      WallNode.parse({
+        ...wall,
+        id: `wall_component_left_${index}`,
+        parentId: levelId,
+      }),
+    )
+    const rightWalls = squareWalls().map((wall, index) =>
+      WallNode.parse({
+        ...wall,
+        id: `wall_component_right_${index}`,
+        parentId: levelId,
+        start: [wall.start[0] + 20, wall.start[1]],
+        end: [wall.end[0] + 20, wall.end[1]],
+      }),
+    )
+    const level = LevelNode.parse({
+      id: levelId,
+      level: 0,
+      children: [...leftWalls, ...rightWalls].map((wall) => wall.id),
+    })
+    const initialNodes = Object.fromEntries(
+      [level, ...leftWalls, ...rightWalls].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const sceneStore = createSceneStoreStub(initialNodes)
+    const editorStore = createEditorStoreStub()
+    const events: Array<{ strategy: string; examinedWallIds: string[] }> = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
+
+    try {
+      runWithSceneCommitNodeIds([leftWalls[0]!.id], () => {
+        sceneStore.setNodes({
+          ...sceneStore.getState().nodes,
+          [leftWalls[0]!.id]: { ...leftWalls[0], height: 2.7 } as WallNode,
+        })
+      })
+
+      expect(Object.values(editorStore.getState().spaces)).toHaveLength(2)
+      expect(events).toHaveLength(1)
+      expect(events[0]?.strategy).toBe('indexed')
+      expect(new Set(events[0]?.examinedWallIds)).toEqual(new Set(leftWalls.map((wall) => wall.id)))
+    } finally {
+      unsubscribe()
+    }
+  })
+
   test('preserves customized surfaces through repeated room split and merge cycles', () => {
     const walls = squareWalls().map((wall, index) => ({
       ...wall,
@@ -673,7 +725,10 @@ describe('live room topology reconciliation', () => {
     ) as Record<string, AnyNode>
     const sceneStore = createSceneStoreStub(initialNodes)
     const editorStore = createEditorStoreStub()
-    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore)
+    const events: SpaceTopologyReconcileEvent[] = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
 
     try {
       sceneStore.setNodes({
@@ -706,13 +761,15 @@ describe('live room topology reconciliation', () => {
         end: [2, 3],
         height: 2.5,
       })
-      sceneStore.setNodes({
-        ...current,
-        [divider.id]: divider,
-        [level.id]: {
-          ...current[level.id],
-          children: [...((current[level.id] as LevelNode).children ?? []), divider.id],
-        } as LevelNode,
+      runWithSceneCommitNodeIds([divider.id, level.id], () => {
+        sceneStore.setNodes({
+          ...current,
+          [divider.id]: divider,
+          [level.id]: {
+            ...current[level.id],
+            children: [...((current[level.id] as LevelNode).children ?? []), divider.id],
+          } as LevelNode,
+        })
       })
 
       const nodes = Object.values(sceneStore.getState().nodes)
@@ -748,12 +805,14 @@ describe('live room topology reconciliation', () => {
 
       const { [divider.id]: _divider, ...withoutDivider } = sceneStore.getState().nodes
       const splitLevel = withoutDivider[level.id] as LevelNode
-      sceneStore.setNodes({
-        ...withoutDivider,
-        [level.id]: {
-          ...splitLevel,
-          children: splitLevel.children.filter((id) => id !== divider.id),
-        } as LevelNode,
+      runWithSceneCommitNodeIds([divider.id, level.id], () => {
+        sceneStore.setNodes({
+          ...withoutDivider,
+          [level.id]: {
+            ...splitLevel,
+            children: splitLevel.children.filter((id) => id !== divider.id),
+          } as LevelNode,
+        })
       })
 
       const mergedNodes = Object.values(sceneStore.getState().nodes)
@@ -781,13 +840,15 @@ describe('live room topology reconciliation', () => {
       })
 
       const mergedLevel = sceneStore.getState().nodes[level.id] as LevelNode
-      sceneStore.setNodes({
-        ...sceneStore.getState().nodes,
-        [divider.id]: divider,
-        [level.id]: {
-          ...mergedLevel,
-          children: [...mergedLevel.children, divider.id],
-        } as LevelNode,
+      runWithSceneCommitNodeIds([divider.id, level.id], () => {
+        sceneStore.setNodes({
+          ...sceneStore.getState().nodes,
+          [divider.id]: divider,
+          [level.id]: {
+            ...mergedLevel,
+            children: [...mergedLevel.children, divider.id],
+          } as LevelNode,
+        })
       })
 
       const resplitNodes = Object.values(sceneStore.getState().nodes)
@@ -798,6 +859,7 @@ describe('live room topology reconciliation', () => {
       expect(
         resplitNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
       ).toHaveLength(2)
+      expect(events.map((event) => event.strategy)).toEqual(['indexed', 'indexed', 'indexed'])
     } finally {
       unsubscribe()
     }
@@ -865,7 +927,10 @@ describe('live room topology reconciliation', () => {
     ) as Record<string, AnyNode>
     const sceneStore = createSceneStoreStub(initialNodes)
     const editorStore = createEditorStoreStub()
-    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore)
+    const events: SpaceTopologyReconcileEvent[] = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
 
     try {
       const closingWall = WallNode.parse({
@@ -874,16 +939,407 @@ describe('live room topology reconciliation', () => {
         start: [4, 3],
         end: [6, 3],
       })
-      sceneStore.setNodes({
-        ...sceneStore.getState().nodes,
-        [closingWall.id]: closingWall,
-        [level.id]: { ...level, children: [...level.children, closingWall.id] } as LevelNode,
+      runWithSceneCommitNodeIds([closingWall.id, level.id], () => {
+        sceneStore.setNodes({
+          ...sceneStore.getState().nodes,
+          [closingWall.id]: closingWall,
+          [level.id]: { ...level, children: [...level.children, closingWall.id] } as LevelNode,
+        })
       })
 
       const nodes = Object.values(sceneStore.getState().nodes)
       expect(Object.values(editorStore.getState().spaces)).toHaveLength(3)
       expect(nodes.filter((node) => node.type === 'slab' && node.autoFromWalls)).toHaveLength(3)
       expect(nodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls)).toHaveLength(3)
+      expect(events).toHaveLength(1)
+      expect(events[0]?.strategy).toBe('indexed')
+      expect(events[0]?.examinedWallIds).toHaveLength(10)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('reconciles every slab when one compound wall edit creates four rooms', () => {
+    const levelId = 'level_compound_rooms'
+    const initialWalls = [
+      WallNode.parse({
+        id: 'wall_compound_north',
+        parentId: levelId,
+        start: [-4, -3],
+        end: [4, -3],
+      }),
+      WallNode.parse({ id: 'wall_compound_east', parentId: levelId, start: [4, -3], end: [4, 3] }),
+      WallNode.parse({ id: 'wall_compound_south', parentId: levelId, start: [4, 3], end: [-4, 3] }),
+      WallNode.parse({
+        id: 'wall_compound_west',
+        parentId: levelId,
+        start: [-4, 3],
+        end: [-4, -3],
+      }),
+    ]
+    const autoSlab = SlabNode.parse({
+      id: 'slab_compound',
+      parentId: levelId,
+      polygon: [
+        [-4, -3],
+        [4, -3],
+        [4, 3],
+        [-4, 3],
+      ],
+      elevation: 0.2,
+      thickness: 0.12,
+      slots: { surface: 'library:wood-floorplank1' },
+      autoFromWalls: true,
+    })
+    const autoCeiling = CeilingNode.parse({
+      id: 'ceiling_compound',
+      parentId: levelId,
+      polygon: autoSlab.polygon,
+      height: 2.55,
+      slots: { surface: 'library:concrete-polished' },
+      autoFromWalls: true,
+    })
+    const level = LevelNode.parse({
+      id: levelId,
+      level: 0,
+      height: 2.8,
+      children: [...initialWalls.map((wall) => wall.id), autoSlab.id, autoCeiling.id],
+    })
+    const sceneStore = createSceneStoreStub(
+      Object.fromEntries(
+        [level, ...initialWalls, autoSlab, autoCeiling].map((node) => [node.id, node]),
+      ) as Record<string, AnyNode>,
+    )
+    const editorStore = createEditorStoreStub()
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore)
+
+    const finalWalls = [
+      initialWalls[1]!,
+      initialWalls[3]!,
+      WallNode.parse({
+        id: 'wall_compound_north_left',
+        parentId: levelId,
+        start: [-4, -3],
+        end: [0, -3],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_north_mid',
+        parentId: levelId,
+        start: [0, -3],
+        end: [1, -3],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_north_right',
+        parentId: levelId,
+        start: [1, -3],
+        end: [4, -3],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_south_right',
+        parentId: levelId,
+        start: [4, 3],
+        end: [1, 3],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_south_mid',
+        parentId: levelId,
+        start: [1, 3],
+        end: [0, 3],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_south_left',
+        parentId: levelId,
+        start: [0, 3],
+        end: [-4, 3],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_diagonal_lower',
+        parentId: levelId,
+        start: [0, -3],
+        end: [1, 0],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_diagonal_upper',
+        parentId: levelId,
+        start: [1, 0],
+        end: [0, 3],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_divider_lower',
+        parentId: levelId,
+        start: [1, -3],
+        end: [1, 0],
+      }),
+      WallNode.parse({
+        id: 'wall_compound_divider_upper',
+        parentId: levelId,
+        start: [1, 0],
+        end: [1, 3],
+      }),
+    ]
+
+    try {
+      const nextLevel = {
+        ...level,
+        children: [...finalWalls.map((wall) => wall.id), autoSlab.id, autoCeiling.id],
+      } as LevelNode
+      const nextNodes = Object.fromEntries(
+        [nextLevel, ...finalWalls, autoSlab, autoCeiling].map((node) => [node.id, node]),
+      ) as Record<string, AnyNode>
+      const changedIds = [
+        level.id,
+        initialWalls[0]!.id,
+        initialWalls[2]!.id,
+        ...finalWalls.map((wall) => wall.id),
+      ]
+
+      runWithSceneCommitNodeIds(changedIds, () => sceneStore.setNodes(nextNodes))
+
+      const reconciled = Object.values(sceneStore.getState().nodes)
+      expect(Object.values(editorStore.getState().spaces)).toHaveLength(4)
+      expect(reconciled.filter((node) => node.type === 'slab' && node.autoFromWalls)).toHaveLength(
+        4,
+      )
+      expect(
+        reconciled.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
+      ).toHaveLength(4)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('matches the full detector when an existing wall extends to close a second room', () => {
+    const levelId = 'level_indexed_extension'
+    const walls = [
+      WallNode.parse({
+        id: 'wall_extension_bottom',
+        parentId: levelId,
+        start: [0, 0],
+        end: [8, 0],
+      }),
+      WallNode.parse({ id: 'wall_extension_top', parentId: levelId, start: [4, 3], end: [0, 3] }),
+      WallNode.parse({ id: 'wall_extension_left', parentId: levelId, start: [0, 3], end: [0, 0] }),
+      WallNode.parse({
+        id: 'wall_extension_divider',
+        parentId: levelId,
+        start: [4, 0],
+        end: [4, 3],
+      }),
+      WallNode.parse({ id: 'wall_extension_right', parentId: levelId, start: [8, 0], end: [8, 3] }),
+    ]
+    const level = LevelNode.parse({
+      id: levelId,
+      level: 0,
+      children: walls.map((wall) => wall.id),
+    })
+    const initialNodes = Object.fromEntries(
+      [level, ...walls].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const sceneStore = createSceneStoreStub(initialNodes)
+    const editorStore = createEditorStoreStub()
+    const events: SpaceTopologyReconcileEvent[] = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
+
+    try {
+      const extendedTop = { ...walls[1]!, start: [8, 3] as [number, number] }
+      runWithSceneCommitNodeIds([extendedTop.id], () => {
+        sceneStore.setNodes({
+          ...sceneStore.getState().nodes,
+          [extendedTop.id]: extendedTop,
+        })
+      })
+
+      const liveWalls = Object.values(sceneStore.getState().nodes).filter(
+        (node): node is WallNode => node.type === 'wall' && node.parentId === levelId,
+      )
+      const oracle = detectSpacesForLevel(levelId, liveWalls).spaces
+      const indexed = Object.values(editorStore.getState().spaces)
+      expect(indexed.map((space: any) => space.id).sort()).toEqual(
+        oracle.map((space) => space.id).sort(),
+      )
+      expect(indexed).toHaveLength(2)
+      expect(events).toHaveLength(1)
+      expect(events[0]?.strategy).toBe('indexed')
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('matches the full detector through an indexed split, move, and merge sequence', () => {
+    const levelId = 'level_indexed_sequence'
+    const leftWalls = squareWalls().map((wall, index) =>
+      WallNode.parse({ ...wall, id: `wall_sequence_left_${index}`, parentId: levelId }),
+    )
+    const rightWalls = squareWalls().map((wall, index) =>
+      WallNode.parse({
+        ...wall,
+        id: `wall_sequence_right_${index}`,
+        parentId: levelId,
+        start: [wall.start[0] + 20, wall.start[1]],
+        end: [wall.end[0] + 20, wall.end[1]],
+      }),
+    )
+    const level = LevelNode.parse({
+      id: levelId,
+      level: 0,
+      children: [...leftWalls, ...rightWalls].map((wall) => wall.id),
+    })
+    const initialNodes = Object.fromEntries(
+      [level, ...leftWalls, ...rightWalls].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const sceneStore = createSceneStoreStub(initialNodes)
+    const editorStore = createEditorStoreStub()
+    const events: SpaceTopologyReconcileEvent[] = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
+    const assertMatchesOracle = () => {
+      const liveWalls = Object.values(sceneStore.getState().nodes).filter(
+        (node): node is WallNode => node.type === 'wall' && node.parentId === levelId,
+      )
+      expect(
+        Object.values(editorStore.getState().spaces)
+          .map((space: any) => space.id)
+          .sort(),
+      ).toEqual(
+        detectSpacesForLevel(levelId, liveWalls)
+          .spaces.map((space) => space.id)
+          .sort(),
+      )
+    }
+
+    try {
+      const divider = WallNode.parse({
+        id: 'wall_sequence_divider',
+        parentId: levelId,
+        start: [2, 0],
+        end: [2, 3],
+      })
+      runWithSceneCommitNodeIds([divider.id, level.id], () => {
+        const nodes = sceneStore.getState().nodes
+        sceneStore.setNodes({
+          ...nodes,
+          [divider.id]: divider,
+          [level.id]: {
+            ...nodes[level.id],
+            children: [...(nodes[level.id] as LevelNode).children, divider.id],
+          } as LevelNode,
+        })
+      })
+      assertMatchesOracle()
+
+      runWithSceneCommitNodeIds([divider.id], () => {
+        sceneStore.setNodes({
+          ...sceneStore.getState().nodes,
+          [divider.id]: { ...divider, start: [3, 0], end: [3, 3] } as WallNode,
+        })
+      })
+      assertMatchesOracle()
+
+      runWithSceneCommitNodeIds([divider.id, level.id], () => {
+        const nodes = sceneStore.getState().nodes
+        const { [divider.id]: _divider, ...withoutDivider } = nodes
+        sceneStore.setNodes({
+          ...withoutDivider,
+          [level.id]: {
+            ...withoutDivider[level.id],
+            children: (withoutDivider[level.id] as LevelNode).children.filter(
+              (id) => id !== divider.id,
+            ),
+          } as LevelNode,
+        })
+      })
+      assertMatchesOracle()
+
+      const rightWallIds = new Set(rightWalls.map((wall) => wall.id))
+      expect(events).toHaveLength(3)
+      expect(
+        events.every((event) => event.examinedWallIds.every((id) => !rightWallIds.has(id))),
+      ).toBe(true)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('clears indexed rooms when their entire level is cascade-deleted', () => {
+    const levelId = 'level_indexed_delete'
+    const walls = squareWalls().map((wall, index) =>
+      WallNode.parse({ ...wall, id: `wall_indexed_delete_${index}`, parentId: levelId }),
+    )
+    const level = LevelNode.parse({
+      id: levelId,
+      level: 0,
+      children: walls.map((wall) => wall.id),
+    })
+    const initialNodes = Object.fromEntries(
+      [level, ...walls].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const sceneStore = createSceneStoreStub(initialNodes)
+    const editorStore = createEditorStoreStub()
+    const events: SpaceTopologyReconcileEvent[] = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
+
+    try {
+      runWithSceneCommitNodeIds([walls[0]!.id], () => {
+        sceneStore.setNodes({
+          ...sceneStore.getState().nodes,
+          [walls[0]!.id]: { ...walls[0], height: 2.7 } as WallNode,
+        })
+      })
+      expect(Object.values(editorStore.getState().spaces)).toHaveLength(1)
+
+      const ids = Object.keys(sceneStore.getState().nodes) as AnyNodeId[]
+      runWithSceneCommitNodeIds(ids, () => sceneStore.setNodes({}))
+
+      expect(Object.values(editorStore.getState().spaces)).toHaveLength(0)
+      expect(events.at(-1)).toMatchObject({
+        strategy: 'indexed',
+        affectedBeforeRoomCount: 1,
+        affectedCurrentRoomCount: 0,
+      })
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('falls back safely when a local wall edit targets a level absent from the index', () => {
+    const levelId = 'level_indexed_fallback'
+    const walls = squareWalls().map((wall, index) =>
+      WallNode.parse({ ...wall, id: `wall_indexed_fallback_${index}`, parentId: levelId }),
+    )
+    const level = LevelNode.parse({
+      id: levelId,
+      level: 0,
+      children: walls.map((wall) => wall.id),
+    })
+    const sceneStore = createSceneStoreStub({})
+    const editorStore = createEditorStoreStub()
+    const events: SpaceTopologyReconcileEvent[] = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
+
+    try {
+      runWithSceneCommitNodeIds([level.id, ...walls.map((wall) => wall.id)], () => {
+        sceneStore.setNodes(
+          Object.fromEntries([level, ...walls].map((node) => [node.id, node])) as Record<
+            string,
+            AnyNode
+          >,
+        )
+      })
+
+      expect(Object.values(editorStore.getState().spaces)).toHaveLength(1)
+      expect(events).toHaveLength(1)
+      expect(events[0]).toMatchObject({
+        strategy: 'fallback',
+        affectedBeforeRoomCount: 0,
+        affectedCurrentRoomCount: 1,
+      })
     } finally {
       unsubscribe()
     }
@@ -1035,13 +1491,15 @@ describe('raised auto-room surfaces', () => {
       const current = sceneStore.getState().nodes
       const level = current.level_0 as LevelNode
       const closingWall = walls[3]!
-      sceneStore.setNodes({
-        ...current,
-        [closingWall.id]: closingWall,
-        level_0: {
-          ...level,
-          children: [...level.children, closingWall.id],
-        } as LevelNode,
+      runWithSceneCommitNodeIds([closingWall.id, level.id], () => {
+        sceneStore.setNodes({
+          ...current,
+          [closingWall.id]: closingWall,
+          level_0: {
+            ...level,
+            children: [...level.children, closingWall.id],
+          } as LevelNode,
+        })
       })
 
       const generated = Object.values(sceneStore.getState().nodes)
@@ -1060,7 +1518,10 @@ describe('raised auto-room surfaces', () => {
       for (const wall of walls) {
         raisedAgain[wall.id] = { ...raisedAgain[wall.id], supportOffset: 0.8 } as AnyNode
       }
-      sceneStore.setNodes(raisedAgain)
+      runWithSceneCommitNodeIds(
+        walls.map((wall) => wall.id),
+        () => sceneStore.setNodes(raisedAgain),
+      )
 
       const reconciled = Object.values(sceneStore.getState().nodes)
       const reconciledSlab = reconciled.find(
@@ -1276,24 +1737,31 @@ describe('space lifecycle reconciliation', () => {
     ) as Record<string, AnyNode>
     const sceneStore = createSceneStoreStub(initialNodes)
     const editorStore = createEditorStoreStub()
-    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore)
+    const events: SpaceTopologyReconcileEvent[] = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
 
     try {
-      sceneStore.setNodes({
-        ...sceneStore.getState().nodes,
-        [walls[0]!.id]: { ...walls[0], height: 2.7 } as WallNode,
+      runWithSceneCommitNodeIds([walls[0]!.id], () => {
+        sceneStore.setNodes({
+          ...sceneStore.getState().nodes,
+          [walls[0]!.id]: { ...walls[0], height: 2.7 } as WallNode,
+        })
       })
       expect(Object.values(editorStore.getState().spaces)).toHaveLength(1)
 
       const current = sceneStore.getState().nodes
       const deletedWall = walls[3]!
       const { [deletedWall.id]: _deleted, ...withoutWall } = current
-      sceneStore.setNodes({
-        ...withoutWall,
-        [level.id]: {
-          ...withoutWall[level.id],
-          children: level.children.filter((id) => id !== deletedWall.id),
-        } as LevelNode,
+      runWithSceneCommitNodeIds([deletedWall.id, level.id], () => {
+        sceneStore.setNodes({
+          ...withoutWall,
+          [level.id]: {
+            ...withoutWall[level.id],
+            children: level.children.filter((id) => id !== deletedWall.id),
+          } as LevelNode,
+        })
       })
 
       expect(Object.values(editorStore.getState().spaces)).toHaveLength(0)
@@ -1302,6 +1770,7 @@ describe('space lifecycle reconciliation', () => {
           (space as { wallIds?: string[] }).wallIds?.includes(deletedWall.id),
         ),
       ).toBe(false)
+      expect(events.map((event) => event.strategy)).toEqual(['indexed', 'indexed'])
     } finally {
       unsubscribe()
     }
