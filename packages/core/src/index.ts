@@ -147,8 +147,6 @@ export {
   resumeSpaceDetection,
   type Space,
   type SpaceBoundaryFace,
-  type SpaceDetectionSyncOptions,
-  type SpaceTopologyReconcileEvent,
   wallClosesRoom,
   wallTouchesOthers,
 } from './lib/space-detection'
@@ -418,12 +416,6 @@ export {
 export {
   planWallInsertion,
   planWallSplitAtPoint,
-  type WallInsertionPlan,
-  type WallInsertionResult,
-  type WallPointSplitPlan,
-  type WallPointSplitResult,
-  type WallTopologyChanges,
-  type WallTopologyRejection,
 } from './systems/wall/wall-topology'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'

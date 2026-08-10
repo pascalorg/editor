@@ -24,6 +24,7 @@ import {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resumeSceneHistory,
+  subscribeSceneCommits,
 } from '../store/history-control'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import {
@@ -33,6 +34,11 @@ import {
 } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
 import { simplifyClosedPolygon } from './polygon-geometry'
+import {
+  distanceToSegment,
+  type IndexedTopologyDelta,
+  RoomTopologyIndex,
+} from './room-topology-index'
 import { levelBaseElevationAt } from './terrain-support'
 
 type Point2D = { x: number; y: number }
@@ -1408,12 +1414,6 @@ function levelChildren(nodes: SceneNodes, levelId: string) {
   })
 }
 
-function wallsForLevel(nodes: SceneNodes, levelId: string) {
-  return levelChildren(nodes, levelId).filter(
-    (node: any): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
-  )
-}
-
 function changedWallIdsByLevel(
   before: SceneNodes,
   current: SceneNodes,
@@ -1493,244 +1493,176 @@ function fallbackLevelIdsForCandidates(
   return levelIds
 }
 
-const TOPOLOGY_INDEX_CELL_SIZE = 2
-const TOPOLOGY_INDEX_QUERY_MARGIN = WALL_JUNCTION_TOLERANCE + 0.02
-
-type IndexedLevelTopology = {
-  walls: Map<string, WallNode>
-  rooms: ExtractedRoom[]
-  wallIdsByCell: Map<string, Set<string>>
-  cellKeysByWallId: Map<string, string[]>
-}
-
-type IndexedTopologyDelta = {
-  strategy: SpaceTopologyReconcileEvent['strategy']
-  beforeRooms: ExtractedRoom[]
-  currentRooms: ExtractedRoom[]
-  allCurrentRooms: ExtractedRoom[]
-  previousWalls: WallNode[]
-  currentWalls: WallNode[]
-  examinedWallIds: string[]
-}
-
-function expandedBbox(box: ReturnType<typeof bboxOf>, margin: number) {
-  return {
-    minX: box.minX - margin,
-    minY: box.minY - margin,
-    maxX: box.maxX + margin,
-    maxY: box.maxY + margin,
-  }
-}
-
-function wallBbox(wall: WallNode) {
-  return bboxOf(sampleWallPointsForRoomDetection(wall))
-}
-
-function cellKeysForBbox(box: ReturnType<typeof bboxOf>) {
-  const keys: string[] = []
-  for (
-    let x = Math.floor(box.minX / TOPOLOGY_INDEX_CELL_SIZE);
-    x <= Math.floor(box.maxX / TOPOLOGY_INDEX_CELL_SIZE);
-    x += 1
-  ) {
-    for (
-      let y = Math.floor(box.minY / TOPOLOGY_INDEX_CELL_SIZE);
-      y <= Math.floor(box.maxY / TOPOLOGY_INDEX_CELL_SIZE);
-      y += 1
-    ) {
-      keys.push(`${x},${y}`)
-    }
-  }
-  return keys
-}
-
-function removeIndexedWall(level: IndexedLevelTopology, wallId: string) {
-  for (const key of level.cellKeysByWallId.get(wallId) ?? []) {
-    const ids = level.wallIdsByCell.get(key)
-    ids?.delete(wallId)
-    if (ids?.size === 0) level.wallIdsByCell.delete(key)
-  }
-  level.cellKeysByWallId.delete(wallId)
-  level.walls.delete(wallId)
-}
-
-function setIndexedWall(level: IndexedLevelTopology, wall: WallNode) {
-  removeIndexedWall(level, wall.id)
-  level.walls.set(wall.id, wall)
-  const keys = cellKeysForBbox(expandedBbox(wallBbox(wall), TOPOLOGY_INDEX_QUERY_MARGIN))
-  level.cellKeysByWallId.set(wall.id, keys)
-  for (const key of keys) {
-    const ids = level.wallIdsByCell.get(key) ?? new Set<string>()
-    ids.add(wall.id)
-    level.wallIdsByCell.set(key, ids)
-  }
-}
-
-function createIndexedLevelTopology(walls: WallNode[]): IndexedLevelTopology {
-  const level: IndexedLevelTopology = {
-    walls: new Map(),
-    rooms: extractRooms(walls),
-    wallIdsByCell: new Map(),
-    cellKeysByWallId: new Map(),
-  }
-  for (const wall of walls) setIndexedWall(level, wall)
-  return level
-}
-
-function queryIndexedWalls(level: IndexedLevelTopology, wall: WallNode) {
-  const ids = new Set<string>()
-  for (const key of cellKeysForBbox(expandedBbox(wallBbox(wall), TOPOLOGY_INDEX_QUERY_MARGIN))) {
-    for (const id of level.wallIdsByCell.get(key) ?? []) ids.add(id)
-  }
-  return ids
-}
-
-function wallsTouchForTopology(left: WallNode, right: WallNode) {
-  const leftPoints = sampleWallPointsForRoomDetection(left).map(pointToTuple)
-  const rightPoints = sampleWallPointsForRoomDetection(right).map(pointToTuple)
-  const touchesPolyline = (points: Array<[number, number]>, other: Array<[number, number]>) => {
-    const endpoints = [points[0], points.at(-1)].filter((point): point is [number, number] =>
-      Boolean(point),
-    )
-    for (const endpoint of endpoints) {
-      for (let index = 0; index < other.length - 1; index += 1) {
-        if (
-          distanceToSegment(endpoint, other[index]!, other[index + 1]!) <= WALL_JUNCTION_TOLERANCE
-        ) {
-          return true
-        }
-      }
-    }
-    return false
-  }
-  return touchesPolyline(leftPoints, rightPoints) || touchesPolyline(rightPoints, leftPoints)
-}
-
-function connectedWallIds(level: IndexedLevelTopology, seedIds: Iterable<string>) {
-  const connected = new Set<string>()
-  const queue = [...seedIds]
-  while (queue.length > 0) {
-    const wallId = queue.pop()!
-    if (connected.has(wallId)) continue
-    const wall = level.walls.get(wallId)
-    if (!wall) continue
-    connected.add(wallId)
-    for (const neighborId of queryIndexedWalls(level, wall)) {
-      if (connected.has(neighborId)) continue
-      const neighbor = level.walls.get(neighborId)
-      if (neighbor && wallsTouchForTopology(wall, neighbor)) queue.push(neighborId)
-    }
-  }
-  return connected
-}
-
-function roomUsesAnyWall(room: ExtractedRoom, wallIds: ReadonlySet<string>) {
-  return room.boundaryFaces.some((boundary) => wallIds.has(boundary.wallId))
-}
-
-function sameIndexedWall(left: WallNode | undefined, right: WallNode | undefined) {
-  if (!(left && right)) return left === right
-  return (
-    left.parentId === right.parentId &&
-    left.start[0] === right.start[0] &&
-    left.start[1] === right.start[1] &&
-    left.end[0] === right.end[0] &&
-    left.end[1] === right.end[1] &&
-    getClampedWallCurveOffset(left) === getClampedWallCurveOffset(right)
-  )
-}
-
-class RoomTopologyIndex {
-  private readonly levels = new Map<string, IndexedLevelTopology>()
-
-  rebuild(nodes: SceneNodes) {
-    this.levels.clear()
-    const wallsByLevel = new Map<string, WallNode[]>()
-    for (const node of Object.values(nodes)) {
-      if (node?.type !== 'wall' || !node.parentId) continue
-      const walls = wallsByLevel.get(node.parentId) ?? []
-      walls.push(node)
-      wallsByLevel.set(node.parentId, walls)
-    }
-    for (const [levelId, walls] of wallsByLevel) {
-      this.levels.set(levelId, createIndexedLevelTopology(walls))
-    }
-  }
-
-  rebuildLevel(levelId: string, nodes: SceneNodes) {
-    const level = createIndexedLevelTopology(wallsForLevel(nodes, levelId))
-    this.levels.set(levelId, level)
-    return level
-  }
-
-  applyWallDelta(
-    levelId: string,
-    changedWallIds: ReadonlySet<string>,
-    beforeNodes: SceneNodes,
-    currentNodes: SceneNodes,
-  ): IndexedTopologyDelta {
-    let strategy: IndexedTopologyDelta['strategy'] = 'indexed'
-    let level = this.levels.get(levelId)
-    if (!level) {
-      level = this.rebuildLevel(levelId, beforeNodes)
-      strategy = 'fallback'
-    }
-    for (const wallId of changedWallIds) {
-      const cached = level.walls.get(wallId)
-      const previous = beforeNodes[wallId]
-      const previousWall =
-        previous?.type === 'wall' && previous.parentId === levelId ? previous : undefined
-      if (!sameIndexedWall(cached, previousWall)) {
-        level = this.rebuildLevel(levelId, beforeNodes)
-        strategy = 'fallback'
-        break
-      }
-    }
-
-    const beforeComponentIds = connectedWallIds(level, changedWallIds)
-    for (const wallId of changedWallIds) {
-      const current = currentNodes[wallId]
-      if (current?.type === 'wall' && current.parentId === levelId) setIndexedWall(level, current)
-      else removeIndexedWall(level, wallId)
-    }
-    const currentSeedIds = new Set<string>(changedWallIds)
-    for (const wallId of beforeComponentIds) {
-      if (level.walls.has(wallId)) currentSeedIds.add(wallId)
-    }
-    const currentComponentIds = connectedWallIds(level, currentSeedIds)
-    const examinedIds = new Set([...changedWallIds, ...beforeComponentIds, ...currentComponentIds])
-    const beforeRooms = level.rooms.filter((room) => roomUsesAnyWall(room, examinedIds))
-    const previousWalls = [...examinedIds].flatMap((wallId) => {
-      const node = beforeNodes[wallId]
-      return node?.type === 'wall' && node.parentId === levelId ? [node as WallNode] : []
-    })
-    const currentWalls = [...examinedIds].flatMap((wallId) => {
-      const node = currentNodes[wallId]
-      return node?.type === 'wall' && node.parentId === levelId ? [node as WallNode] : []
-    })
-    const currentRooms = extractRooms(currentWalls)
-    const allCurrentRooms = [
-      ...level.rooms.filter((room) => !roomUsesAnyWall(room, examinedIds)),
-      ...currentRooms,
-    ]
-    level.rooms = allCurrentRooms
-
-    return {
-      strategy,
-      beforeRooms,
-      currentRooms,
-      allCurrentRooms,
-      previousWalls,
-      currentWalls,
-      examinedWallIds: [...examinedIds].sort(),
-    }
-  }
-}
-
 function sameStringSet(a: readonly string[], b: readonly string[]) {
   if (a.length !== b.length) return false
   const right = new Set(b)
   return a.every((value) => right.has(value))
+}
+
+type AutoSurfaceMatch<TSurface extends RoomSurface> = {
+  detectedAll: DetectedRoom[]
+  detected: DetectedRoom[]
+  existingAuto: TSurface[]
+  compatibleMergesByRoomIndex: Map<number, TSurface[]>
+  matchedDetectedIndices: Set<number>
+  roomIndexBySurfaceId: Map<string, number>
+  sourceSurfaceIdByRoomIndex: Map<number, string>
+  polygonBySurfaceId: Map<string, Array<[number, number]>>
+  delete: Array<TSurface['id']>
+  demote: Array<{ id: TSurface['id']; data: Partial<TSurface> }>
+}
+
+function matchAutoSurfaces<TSurface extends RoomSurface>(
+  roomPolygons: Point2D[][],
+  existingSurfaces: TSurface[],
+  mergeSettingsSignature: (surface: TSurface) => string,
+): AutoSurfaceMatch<TSurface> {
+  const manualSurfaces = existingSurfaces.filter((surface) => !surface.autoFromWalls)
+  const manualSignatures = new Set(
+    manualSurfaces.map((surface) => polygonSignature(surface.polygon.map(pointFromTuple))),
+  )
+  const manualPolygons = manualSurfaces.map((surface) => surface.polygon.map(pointFromTuple))
+  const detectedAll: DetectedRoom[] = roomPolygons
+    .map((poly) => ({
+      poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
+        pointFromTuple,
+      ),
+      sig: '',
+      centroid: { x: 0, y: 0 },
+      area: 0,
+      bbox: bboxOf([]),
+    }))
+    .map((room) => ({
+      ...room,
+      sig: polygonSignature(room.poly),
+      centroid: polygonCentroid(room.poly),
+      area: Math.abs(polygonArea(room.poly)),
+      bbox: bboxOf(room.poly),
+    }))
+  const detected = detectedAll.filter(
+    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
+  )
+  const existingAuto = existingSurfaces.filter((surface) => surface.autoFromWalls)
+  const metadata = existingAuto.map((surface) => {
+    const poly = surface.polygon.map(pointFromTuple)
+    return {
+      surface,
+      sig: polygonSignature(poly),
+      centroid: polygonCentroid(poly),
+      area: Math.abs(polygonArea(poly)),
+      bbox: bboxOf(poly),
+    }
+  })
+
+  const conflictingSurfaceIds = new Set<string>()
+  const conflictingRoomIndices = new Set<number>()
+  const compatibleMergesByRoomIndex = new Map<number, TSurface[]>()
+  detected.forEach((room, roomIndex) => {
+    const contributors = existingAuto.filter(
+      (surface) =>
+        polygonCoverageRatio(surface.polygon.map(pointFromTuple), [room.poly]) >=
+        ORPHAN_MERGE_COVERAGE_THRESHOLD,
+    )
+    if (contributors.length < 2) return
+    if (new Set(contributors.map(mergeSettingsSignature)).size > 1) {
+      conflictingRoomIndices.add(roomIndex)
+      for (const surface of contributors) conflictingSurfaceIds.add(surface.id)
+      return
+    }
+    compatibleMergesByRoomIndex.set(roomIndex, contributors)
+  })
+
+  const matchedSurfaceIds = new Set<string>()
+  const matchedDetectedIndices = new Set<number>()
+  const roomIndexBySurfaceId = new Map<string, number>()
+  const sourceSurfaceIdByRoomIndex = new Map<number, string>()
+  const polygonBySurfaceId = new Map<string, Array<[number, number]>>()
+  const autoBySignature = new Map<string, Array<(typeof metadata)[number]>>()
+  for (const entry of metadata) {
+    const bucket = autoBySignature.get(entry.sig) ?? []
+    bucket.push(entry)
+    autoBySignature.set(entry.sig, bucket)
+  }
+
+  detected.forEach((room, index) => {
+    if (conflictingRoomIndices.has(index)) {
+      matchedDetectedIndices.add(index)
+      return
+    }
+    const existing = autoBySignature.get(room.sig)?.shift()
+    if (!existing) return
+    matchedDetectedIndices.add(index)
+    matchedSurfaceIds.add(existing.surface.id)
+    roomIndexBySurfaceId.set(existing.surface.id, index)
+    sourceSurfaceIdByRoomIndex.set(index, existing.surface.id)
+    polygonBySurfaceId.set(existing.surface.id, room.poly.map(pointToTuple))
+  })
+
+  const remainingDetected = detected
+    .map((room, index) => ({ room, index }))
+    .filter(({ index }) => !matchedDetectedIndices.has(index))
+    .sort((left, right) => right.room.area - left.room.area)
+  const remainingAuto = metadata.filter((entry) => !matchedSurfaceIds.has(entry.surface.id))
+
+  for (const { room, index } of remainingDetected) {
+    let bestMatch: { entry: (typeof remainingAuto)[number]; score: number } | null = null
+    for (const entry of remainingAuto) {
+      if (matchedSurfaceIds.has(entry.surface.id)) continue
+      const distance = Math.hypot(
+        room.centroid.x - entry.centroid.x,
+        room.centroid.y - entry.centroid.y,
+      )
+      const areaRatio = entry.area > 1e-6 ? room.area / entry.area : 999
+      const areaPenalty = Math.abs(Math.log(Math.max(1e-6, areaRatio)))
+      if (bboxOverlapArea(room.bbox, entry.bbox) <= 0.0001 && distance > 1.5) continue
+      const score = distance + areaPenalty * 0.35
+      if (!bestMatch || score < bestMatch.score) bestMatch = { entry, score }
+    }
+    if (!bestMatch) continue
+    matchedDetectedIndices.add(index)
+    matchedSurfaceIds.add(bestMatch.entry.surface.id)
+    roomIndexBySurfaceId.set(bestMatch.entry.surface.id, index)
+    sourceSurfaceIdByRoomIndex.set(index, bestMatch.entry.surface.id)
+    polygonBySurfaceId.set(bestMatch.entry.surface.id, room.poly.map(pointToTuple))
+  }
+
+  detected.forEach((room, index) => {
+    if (sourceSurfaceIdByRoomIndex.has(index)) return
+    let bestSource: { id: string; coverage: number } | null = null
+    for (const entry of metadata) {
+      const coverage = polygonCoverageRatio(room.poly, [entry.surface.polygon.map(pointFromTuple)])
+      if (coverage <= 0 || (bestSource && coverage <= bestSource.coverage)) continue
+      bestSource = { id: entry.surface.id, coverage }
+    }
+    if (bestSource) sourceSurfaceIdByRoomIndex.set(index, bestSource.id)
+  })
+
+  const detectedRoomPolygons = detectedAll.map((room) => room.poly)
+  const deleted: Array<TSurface['id']> = []
+  const demote: AutoSurfaceMatch<TSurface>['demote'] = []
+  for (const surface of existingAuto) {
+    if (polygonBySurfaceId.has(surface.id)) continue
+    if (conflictingSurfaceIds.has(surface.id)) {
+      demote.push({ id: surface.id, data: { autoFromWalls: false } as Partial<TSurface> })
+      continue
+    }
+    const coverage = polygonCoverageRatio(surface.polygon.map(pointFromTuple), detectedRoomPolygons)
+    if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) deleted.push(surface.id)
+    else demote.push({ id: surface.id, data: { autoFromWalls: false } as Partial<TSurface> })
+  }
+
+  return {
+    detectedAll,
+    detected,
+    existingAuto,
+    compatibleMergesByRoomIndex,
+    matchedDetectedIndices,
+    roomIndexBySurfaceId,
+    sourceSurfaceIdByRoomIndex,
+    polygonBySurfaceId,
+    delete: deleted,
+    demote,
+  }
 }
 
 export function planAutoZonesForLevel(
@@ -1790,170 +1722,28 @@ export function planAutoSlabsForLevel(
   context: AutoSlabPlanningContext = {},
   namingSlabs: Array<{ name?: string }> = existingSlabs,
 ): AutoSlabSyncPlan {
-  const manualSlabs = existingSlabs.filter((slab) => !slab.autoFromWalls)
-  const manualSignatures = new Set(
-    manualSlabs.map((slab) => polygonSignature(slab.polygon.map(pointFromTuple))),
-  )
-  const manualPolygons = manualSlabs.map((slab) => slab.polygon.map(pointFromTuple))
-
-  const detectedAll: DetectedRoom[] = roomPolygons
-    .map((poly) => ({
-      poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
-        pointFromTuple,
-      ),
-      sig: '',
-      centroid: { x: 0, y: 0 },
-      area: 0,
-      bbox: bboxOf([]),
-    }))
-    .map((room) => ({
-      ...room,
-      sig: polygonSignature(room.poly),
-      centroid: polygonCentroid(room.poly),
-      area: Math.abs(polygonArea(room.poly)),
-      bbox: bboxOf(room.poly),
-    }))
-
-  const detected = detectedAll.filter(
-    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
-  )
-
-  const existingAuto = existingSlabs.filter((slab) => slab.autoFromWalls)
-  const existingAutoMeta = existingAuto.map((slab) => {
-    const poly = slab.polygon.map(pointFromTuple)
-    return {
-      slab,
-      sig: polygonSignature(poly),
-      centroid: polygonCentroid(poly),
-      area: Math.abs(polygonArea(poly)),
-      bbox: bboxOf(poly),
-    }
-  })
-
-  const conflictingMergeSlabIds = new Set<string>()
-  const conflictingMergeRoomIndices = new Set<number>()
-  const compatibleMergeSlabsByRoomIndex = new Map<number, SlabNodeType[]>()
-  detected.forEach((room, roomIndex) => {
-    const contributors = existingAuto.filter(
-      (slab) =>
-        polygonCoverageRatio(slab.polygon.map(pointFromTuple), [room.poly]) >=
-        ORPHAN_MERGE_COVERAGE_THRESHOLD,
-    )
-    if (contributors.length < 2) return
-    if (new Set(contributors.map(slabMergeSettingsSignature)).size > 1) {
-      conflictingMergeRoomIndices.add(roomIndex)
-      for (const slab of contributors) conflictingMergeSlabIds.add(slab.id)
-      return
-    }
-    compatibleMergeSlabsByRoomIndex.set(roomIndex, contributors)
-  })
-
-  const matchedSlabIds = new Set<string>()
-  const matchedDetectedIdx = new Set<number>()
-  const roomIndexBySlabId = new Map<string, number>()
-  const sourceSlabIdByRoomIndex = new Map<number, string>()
+  const match = matchAutoSurfaces(roomPolygons, existingSlabs, slabMergeSettingsSignature)
+  const {
+    detected,
+    existingAuto,
+    compatibleMergesByRoomIndex: compatibleMergeSlabsByRoomIndex,
+    matchedDetectedIndices: matchedDetectedIdx,
+    roomIndexBySurfaceId: roomIndexBySlabId,
+    sourceSurfaceIdByRoomIndex: sourceSlabIdByRoomIndex,
+    delete: slabsToDelete,
+    demote: slabDemotions,
+  } = match
   const updatesById = new Map<
     string,
     { polygon: [number, number][]; elevation: number | undefined }
   >()
-
-  const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
-  for (const entry of existingAutoMeta) {
-    const bucket = autoBySignature.get(entry.sig) ?? []
-    bucket.push(entry)
-    autoBySignature.set(entry.sig, bucket)
-  }
-
-  detected.forEach((room, index) => {
-    if (conflictingMergeRoomIndices.has(index)) {
-      matchedDetectedIdx.add(index)
-      return
-    }
-    const existing = autoBySignature.get(room.sig)?.shift()
-    if (!existing) return
-
-    matchedDetectedIdx.add(index)
-    matchedSlabIds.add(existing.slab.id)
-    roomIndexBySlabId.set(existing.slab.id, index)
-    sourceSlabIdByRoomIndex.set(index, existing.slab.id)
-    const polygon = room.poly.map(pointToTuple)
-    updatesById.set(existing.slab.id, {
-      polygon,
-      elevation: slabElevationForReconciledRoom(existing.slab, polygon, context),
-    })
-  })
-
-  const remainingDetected = detected
-    .map((room, index) => ({ room, index }))
-    .filter(({ index }) => !matchedDetectedIdx.has(index))
-    .sort((a, b) => b.room.area - a.room.area)
-
-  const remainingAuto = existingAutoMeta.filter((entry) => !matchedSlabIds.has(entry.slab.id))
-
-  for (const { room, index } of remainingDetected) {
-    let bestMatch: { entry: (typeof remainingAuto)[number]; score: number } | null = null
-
-    for (const entry of remainingAuto) {
-      if (matchedSlabIds.has(entry.slab.id)) continue
-
-      const dx = room.centroid.x - entry.centroid.x
-      const dy = room.centroid.y - entry.centroid.y
-      const dist = Math.hypot(dx, dy)
-      const areaRatio = entry.area > 1e-6 ? room.area / entry.area : 999
-      const areaPenalty = Math.abs(Math.log(Math.max(1e-6, areaRatio)))
-      const overlap = bboxOverlapArea(room.bbox, entry.bbox)
-
-      if (overlap <= 0.0001 && dist > 1.5) continue
-
-      const score = dist + areaPenalty * 0.35
-      if (!bestMatch || score < bestMatch.score) {
-        bestMatch = { entry, score }
-      }
-    }
-
-    if (!bestMatch) continue
-
-    matchedDetectedIdx.add(index)
-    matchedSlabIds.add(bestMatch.entry.slab.id)
-    roomIndexBySlabId.set(bestMatch.entry.slab.id, index)
-    sourceSlabIdByRoomIndex.set(index, bestMatch.entry.slab.id)
-    const polygon = room.poly.map(pointToTuple)
-    updatesById.set(bestMatch.entry.slab.id, {
-      polygon,
-      elevation: slabElevationForReconciledRoom(bestMatch.entry.slab, polygon, context),
-    })
-  }
-
-  detected.forEach((room, index) => {
-    if (sourceSlabIdByRoomIndex.has(index)) return
-    let bestSource: { id: string; coverage: number } | null = null
-    for (const entry of existingAutoMeta) {
-      const coverage = polygonCoverageRatio(room.poly, [entry.slab.polygon.map(pointFromTuple)])
-      if (coverage <= 0 || (bestSource && coverage <= bestSource.coverage)) continue
-      bestSource = { id: entry.slab.id, coverage }
-    }
-    if (bestSource) sourceSlabIdByRoomIndex.set(index, bestSource.id)
-  })
-
-  const detectedRoomPolygons = detectedAll.map((room) => room.poly)
-  const slabsToDelete: Array<SlabNodeType['id']> = []
-  const slabDemotions: AutoSlabSyncPlan['update'] = []
   for (const slab of existingAuto) {
-    if (updatesById.has(slab.id)) continue
-
-    if (conflictingMergeSlabIds.has(slab.id)) {
-      slabDemotions.push({ id: slab.id, data: { autoFromWalls: false } })
-      continue
-    }
-
-    const coverage = polygonCoverageRatio(slab.polygon.map(pointFromTuple), detectedRoomPolygons)
-    if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
-      slabsToDelete.push(slab.id)
-    } else {
-      // Render offsets derive from level context at geometry build time, so
-      // demotion leaves the stored polygon untouched (same as ceilings).
-      slabDemotions.push({ id: slab.id, data: { autoFromWalls: false } })
-    }
+    const polygon = match.polygonBySurfaceId.get(slab.id)
+    if (!polygon) continue
+    updatesById.set(slab.id, {
+      polygon,
+      elevation: slabElevationForReconciledRoom(slab, polygon, context),
+    })
   }
 
   const openingAssignmentsBySlabId = new Map<string, ReturnType<typeof partitionSurfaceOpenings>>()
@@ -2078,164 +1868,25 @@ export function planAutoCeilingsForLevel(
   namingCeilings: Array<{ name?: string }> = existingCeilings,
 ): AutoCeilingSyncPlan {
   const manualCeilings = existingCeilings.filter((ceiling) => !ceiling.autoFromWalls)
-  const manualSignatures = new Set(
-    manualCeilings.map((ceiling) => polygonSignature(ceiling.polygon.map(pointFromTuple))),
-  )
-  const manualPolygons = manualCeilings.map((ceiling) => ceiling.polygon.map(pointFromTuple))
-
-  const detectedAll: DetectedRoom[] = roomPolygons
-    .map((poly) => ({
-      poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
-        pointFromTuple,
-      ),
-      sig: '',
-      centroid: { x: 0, y: 0 },
-      area: 0,
-      bbox: bboxOf([]),
-    }))
-    .map((room) => ({
-      ...room,
-      sig: polygonSignature(room.poly),
-      centroid: polygonCentroid(room.poly),
-      area: Math.abs(polygonArea(room.poly)),
-      bbox: bboxOf(room.poly),
-    }))
-
-  const detected = detectedAll.filter(
-    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
-  )
-
-  const existingAuto = existingCeilings.filter((ceiling) => ceiling.autoFromWalls)
-  const existingAutoMeta = existingAuto.map((ceiling) => {
-    const poly = ceiling.polygon.map(pointFromTuple)
-    return {
-      ceiling,
-      sig: polygonSignature(poly),
-      centroid: polygonCentroid(poly),
-      area: Math.abs(polygonArea(poly)),
-      bbox: bboxOf(poly),
-    }
-  })
-
-  const conflictingMergeCeilingIds = new Set<string>()
-  const conflictingMergeRoomIndices = new Set<number>()
-  const compatibleMergeCeilingsByRoomIndex = new Map<number, CeilingNodeType[]>()
-  detected.forEach((room, roomIndex) => {
-    const contributors = existingAuto.filter(
-      (ceiling) =>
-        polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), [room.poly]) >=
-        ORPHAN_MERGE_COVERAGE_THRESHOLD,
-    )
-    if (contributors.length < 2) return
-    if (new Set(contributors.map(ceilingMergeSettingsSignature)).size > 1) {
-      conflictingMergeRoomIndices.add(roomIndex)
-      for (const ceiling of contributors) conflictingMergeCeilingIds.add(ceiling.id)
-      return
-    }
-    compatibleMergeCeilingsByRoomIndex.set(roomIndex, contributors)
-  })
-
-  const matchedCeilingIds = new Set<string>()
-  const matchedDetectedIdx = new Set<number>()
-  const roomIndexByCeilingId = new Map<string, number>()
-  const sourceCeilingIdByRoomIndex = new Map<number, string>()
+  const match = matchAutoSurfaces(roomPolygons, existingCeilings, ceilingMergeSettingsSignature)
+  const {
+    detected,
+    existingAuto,
+    compatibleMergesByRoomIndex: compatibleMergeCeilingsByRoomIndex,
+    matchedDetectedIndices: matchedDetectedIdx,
+    roomIndexBySurfaceId: roomIndexByCeilingId,
+    sourceSurfaceIdByRoomIndex: sourceCeilingIdByRoomIndex,
+    delete: ceilingsToDelete,
+    demote: ceilingDemotions,
+  } = match
   const updatesById = new Map<string, { polygon: [number, number][]; height: number | undefined }>()
-
-  const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
-  for (const entry of existingAutoMeta) {
-    const bucket = autoBySignature.get(entry.sig) ?? []
-    bucket.push(entry)
-    autoBySignature.set(entry.sig, bucket)
-  }
-
-  detected.forEach((room, index) => {
-    if (conflictingMergeRoomIndices.has(index)) {
-      matchedDetectedIdx.add(index)
-      return
-    }
-    const existing = autoBySignature.get(room.sig)?.shift()
-    if (!existing) return
-
-    matchedDetectedIdx.add(index)
-    matchedCeilingIds.add(existing.ceiling.id)
-    roomIndexByCeilingId.set(existing.ceiling.id, index)
-    sourceCeilingIdByRoomIndex.set(index, existing.ceiling.id)
-    const polygon = room.poly.map(pointToTuple)
-    updatesById.set(existing.ceiling.id, {
-      polygon,
-      height: ceilingHeightForReconciledRoom(existing.ceiling, polygon, context),
-    })
-  })
-
-  const remainingDetected = detected
-    .map((room, index) => ({ room, index }))
-    .filter(({ index }) => !matchedDetectedIdx.has(index))
-    .sort((a, b) => b.room.area - a.room.area)
-
-  const remainingAuto = existingAutoMeta.filter((entry) => !matchedCeilingIds.has(entry.ceiling.id))
-
-  for (const { room, index } of remainingDetected) {
-    let bestMatch: { entry: (typeof remainingAuto)[number]; score: number } | null = null
-
-    for (const entry of remainingAuto) {
-      if (matchedCeilingIds.has(entry.ceiling.id)) continue
-
-      const dx = room.centroid.x - entry.centroid.x
-      const dy = room.centroid.y - entry.centroid.y
-      const dist = Math.hypot(dx, dy)
-      const areaRatio = entry.area > 1e-6 ? room.area / entry.area : 999
-      const areaPenalty = Math.abs(Math.log(Math.max(1e-6, areaRatio)))
-      const overlap = bboxOverlapArea(room.bbox, entry.bbox)
-
-      if (overlap <= 0.0001 && dist > 1.5) continue
-
-      const score = dist + areaPenalty * 0.35
-      if (!bestMatch || score < bestMatch.score) {
-        bestMatch = { entry, score }
-      }
-    }
-
-    if (!bestMatch) continue
-
-    matchedDetectedIdx.add(index)
-    matchedCeilingIds.add(bestMatch.entry.ceiling.id)
-    roomIndexByCeilingId.set(bestMatch.entry.ceiling.id, index)
-    sourceCeilingIdByRoomIndex.set(index, bestMatch.entry.ceiling.id)
-    const polygon = room.poly.map(pointToTuple)
-    updatesById.set(bestMatch.entry.ceiling.id, {
-      polygon,
-      height: ceilingHeightForReconciledRoom(bestMatch.entry.ceiling, polygon, context),
-    })
-  }
-
-  detected.forEach((room, index) => {
-    if (sourceCeilingIdByRoomIndex.has(index)) return
-    let bestSource: { id: string; coverage: number } | null = null
-    for (const entry of existingAutoMeta) {
-      const coverage = polygonCoverageRatio(room.poly, [entry.ceiling.polygon.map(pointFromTuple)])
-      if (coverage <= 0 || (bestSource && coverage <= bestSource.coverage)) continue
-      bestSource = { id: entry.ceiling.id, coverage }
-    }
-    if (bestSource) sourceCeilingIdByRoomIndex.set(index, bestSource.id)
-  })
-
-  const detectedRoomPolygons = detectedAll.map((room) => room.poly)
-  const ceilingsToDelete: Array<CeilingNodeType['id']> = []
-  const ceilingDemotions: AutoCeilingSyncPlan['update'] = []
   for (const ceiling of existingAuto) {
-    if (updatesById.has(ceiling.id)) continue
-
-    if (conflictingMergeCeilingIds.has(ceiling.id)) {
-      ceilingDemotions.push({ id: ceiling.id, data: { autoFromWalls: false } })
-      continue
-    }
-
-    const coverage = polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), detectedRoomPolygons)
-    if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
-      ceilingsToDelete.push(ceiling.id)
-    } else {
-      ceilingDemotions.push({ id: ceiling.id, data: { autoFromWalls: false } })
-    }
+    const polygon = match.polygonBySurfaceId.get(ceiling.id)
+    if (!polygon) continue
+    updatesById.set(ceiling.id, {
+      polygon,
+      height: ceilingHeightForReconciledRoom(ceiling, polygon, context),
+    })
   }
 
   // Stage 3-B reactive re-clamp (clamp-never-ask): a covering slab
@@ -2567,7 +2218,7 @@ function runSpaceDetection(
 
 function runIndexedSpaceDetection(
   levelId: string,
-  topologyDelta: IndexedTopologyDelta,
+  topologyDelta: IndexedTopologyDelta<ExtractedRoom>,
   sceneStore: any,
   editorStore: any,
   nodes: SceneNodes,
@@ -2744,11 +2395,37 @@ export function initSpaceDetectionSync(
   // scene that merely loaded — rerunning on hydration resurrected auto slabs
   // the user had deleted in an earlier session.
   const initialNodes = sceneStore.getState().nodes
-  const previousRoomsByLevel = detectedRoomsByLevel(initialNodes)
-  const topologyIndex = new RoomTopologyIndex()
-  topologyIndex.rebuild(initialNodes)
-  let previousNodes = sceneStore.getState().nodes
+  const previousRoomsByLevel = new Map<string, ExtractedRoom[]>()
+  const topologyIndex = new RoomTopologyIndex<ExtractedRoom>({
+    detectRooms: extractRooms,
+    sampleWall: (wall) => sampleWallPointsForRoomDetection(wall).map(pointToTuple),
+    junctionTolerance: WALL_JUNCTION_TOLERANCE,
+  })
+  let previousNodes = initialNodes
   let isProcessing = false
+
+  const adoptSceneBaseline = (nodes: SceneNodes) => {
+    topologyIndex.rebuild(nodes)
+    const roomsByLevel = detectedRoomsByLevel(nodes)
+    previousRoomsByLevel.clear()
+    const spaces: Record<string, Space> = {}
+    for (const [levelId, rooms] of roomsByLevel) {
+      previousRoomsByLevel.set(levelId, rooms)
+      for (const room of rooms) {
+        const space = buildSpace(levelId, room)
+        spaces[space.id] = space
+      }
+    }
+    editorStore.getState().setSpaces(spaces)
+    previousNodes = nodes
+  }
+
+  adoptSceneBaseline(initialNodes)
+
+  const unsubscribeCommits = subscribeSceneCommits((commit) => {
+    if (commit.origin === 'local') return
+    adoptSceneBaseline(commit.current.nodes)
+  })
 
   const unsubscribe = sceneStore.subscribe((state: any) => {
     if (isProcessing) return
@@ -2761,11 +2438,7 @@ export function initSpaceDetectionSync(
     // every paused change once detection resumes. Whatever the AI built while
     // paused becomes the new baseline; only future changes will reconcile.
     if (spaceDetectionPauseDepth > 0) {
-      topologyIndex.rebuild(nodes)
-      const currentRoomsByLevel = detectedRoomsByLevel(nodes)
-      previousRoomsByLevel.clear()
-      for (const [levelId, rooms] of currentRoomsByLevel) previousRoomsByLevel.set(levelId, rooms)
-      previousNodes = nodes
+      adoptSceneBaseline(nodes)
       return
     }
 
@@ -2870,7 +2543,10 @@ export function initSpaceDetectionSync(
     }
   })
 
-  return unsubscribe
+  return () => {
+    unsubscribe()
+    unsubscribeCommits()
+  }
 }
 
 export function wallTouchesOthers(wall: WallNode, otherWalls: WallNode[]): boolean {
@@ -2890,28 +2566,4 @@ export function wallTouchesOthers(wall: WallNode, otherWalls: WallNode[]): boole
   }
 
   return false
-}
-
-function distanceToSegment(
-  point: [number, number],
-  segStart: [number, number],
-  segEnd: [number, number],
-) {
-  const [px, py] = point
-  const [x1, y1] = segStart
-  const [x2, y2] = segEnd
-
-  const dx = x2 - x1
-  const dy = y2 - y1
-  const lenSq = dx * dx + dy * dy
-
-  if (lenSq < 0.0001) {
-    return Math.hypot(px - x1, py - y1)
-  }
-
-  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq))
-  const projX = x1 + t * dx
-  const projY = y1 + t * dy
-
-  return Math.hypot(px - projX, py - projY)
 }

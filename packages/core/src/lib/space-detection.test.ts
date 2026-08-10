@@ -643,6 +643,57 @@ function createEditorStoreStub() {
   return { getState: () => state }
 }
 
+function canonicalRing(points: Array<[number, number]>) {
+  if (points.length === 0) return points
+  const candidates: Array<Array<[number, number]>> = []
+  for (const ring of [points, [...points].reverse()]) {
+    for (let index = 0; index < ring.length; index += 1) {
+      candidates.push([...ring.slice(index), ...ring.slice(0, index)])
+    }
+  }
+  return candidates.sort((left, right) =>
+    JSON.stringify(left).localeCompare(JSON.stringify(right)),
+  )[0]!
+}
+
+function topologyOutcome(nodes: Record<string, AnyNode>, spaces: Record<string, unknown>) {
+  const comparableSpaces = Object.values(spaces)
+    .map((space: any) => ({
+      id: space.id,
+      polygon: canonicalRing(space.polygon),
+      wallIds: [...space.wallIds].sort(),
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id))
+  const comparableSurfaces = Object.values(nodes)
+    .filter(
+      (node): node is SlabNode | CeilingNode =>
+        (node.type === 'slab' || node.type === 'ceiling') && node.autoFromWalls,
+    )
+    .map((surface) => ({
+      type: surface.type,
+      polygon: canonicalRing(surface.polygon),
+      holes: surface.holes
+        .map(canonicalRing)
+        .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+      holeMetadata: surface.holeMetadata,
+      visible: surface.visible,
+      slots: surface.slots,
+      material: surface.material,
+      materialPreset: surface.materialPreset,
+      ...(surface.type === 'slab'
+        ? {
+            elevation: surface.elevation,
+            thickness: surface.thickness,
+            recessed: surface.recessed,
+            recessedRimElevation: surface.recessedRimElevation,
+            fillToTerrain: surface.fillToTerrain,
+          }
+        : { height: surface.height, childCount: surface.children.length }),
+    }))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
+  return { spaces: comparableSpaces, surfaces: comparableSurfaces }
+}
+
 describe('live room topology reconciliation', () => {
   test('reconciles only the connected wall component while preserving other rooms', () => {
     const levelId = 'level_component_scope'
@@ -1167,7 +1218,7 @@ describe('live room topology reconciliation', () => {
     }
   })
 
-  test('matches the full detector through an indexed split, move, and merge sequence', () => {
+  test('matches full reconciliation for spaces and surfaces through split, move, and merge', () => {
     const levelId = 'level_indexed_sequence'
     const leftWalls = squareWalls().map((wall, index) =>
       WallNode.parse({ ...wall, id: `wall_sequence_left_${index}`, parentId: levelId }),
@@ -1181,33 +1232,80 @@ describe('live room topology reconciliation', () => {
         end: [wall.end[0] + 20, wall.end[1]],
       }),
     )
+    const leftSlab = SlabNode.parse({
+      id: 'slab_sequence_left',
+      parentId: levelId,
+      polygon: square,
+      holes: [
+        [
+          [1.5, 1],
+          [2.5, 1],
+          [2.5, 2],
+          [1.5, 2],
+        ],
+      ],
+      holeMetadata: [{ source: 'stair', stairId: 'stair_sequence' }],
+      elevation: 0.42,
+      thickness: 0.18,
+      slots: { surface: 'library:wood-floorplank1' },
+      autoFromWalls: true,
+    })
+    const leftCeiling = CeilingNode.parse({
+      id: 'ceiling_sequence_left',
+      parentId: levelId,
+      polygon: square,
+      height: 2.1,
+      slots: { surface: 'library:concrete-polished' },
+      autoFromWalls: true,
+    })
+    const rightPolygon = square.map(([x, y]) => [x + 20, y] as [number, number])
+    const rightSlab = SlabNode.parse({
+      id: 'slab_sequence_right',
+      parentId: levelId,
+      polygon: rightPolygon,
+      elevation: 0.1,
+      autoFromWalls: true,
+    })
+    const rightCeiling = CeilingNode.parse({
+      id: 'ceiling_sequence_right',
+      parentId: levelId,
+      polygon: rightPolygon,
+      height: 2.4,
+      autoFromWalls: true,
+    })
+    const surfaces = [leftSlab, leftCeiling, rightSlab, rightCeiling]
     const level = LevelNode.parse({
       id: levelId,
       level: 0,
-      children: [...leftWalls, ...rightWalls].map((wall) => wall.id),
+      children: [
+        ...[...leftWalls, ...rightWalls].map((wall) => wall.id),
+        ...surfaces.map((surface) => surface.id),
+      ],
     })
     const initialNodes = Object.fromEntries(
-      [level, ...leftWalls, ...rightWalls].map((node) => [node.id, node]),
+      [level, ...leftWalls, ...rightWalls, ...surfaces].map((node) => [node.id, node]),
     ) as Record<string, AnyNode>
-    const sceneStore = createSceneStoreStub(initialNodes)
-    const editorStore = createEditorStoreStub()
+    const indexedStore = createSceneStoreStub(initialNodes)
+    const indexedEditor = createEditorStoreStub()
+    const fullStore = createSceneStoreStub(initialNodes)
+    const fullEditor = createEditorStoreStub()
     const events: SpaceTopologyReconcileEvent[] = []
-    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+    const unsubscribeIndexed = initSpaceDetectionSync(indexedStore, indexedEditor, {
       onTopologyReconcile: (event) => events.push(event),
     })
-    const assertMatchesOracle = () => {
-      const liveWalls = Object.values(sceneStore.getState().nodes).filter(
-        (node): node is WallNode => node.type === 'wall' && node.parentId === levelId,
-      )
+    const unsubscribeFull = initSpaceDetectionSync(fullStore, fullEditor)
+    const assertEquivalent = () => {
       expect(
-        Object.values(editorStore.getState().spaces)
-          .map((space: any) => space.id)
-          .sort(),
-      ).toEqual(
-        detectSpacesForLevel(levelId, liveWalls)
-          .spaces.map((space) => space.id)
-          .sort(),
-      )
+        topologyOutcome(indexedStore.getState().nodes, indexedEditor.getState().spaces),
+      ).toEqual(topologyOutcome(fullStore.getState().nodes, fullEditor.getState().spaces))
+    }
+    const applyToBoth = (
+      changedIds: AnyNodeId[],
+      mutation: (store: ReturnType<typeof createSceneStoreStub>) => void,
+    ) => {
+      runWithSceneCommitNodeIds(changedIds, () => mutation(indexedStore))
+      mutation(fullStore)
+      assertEquivalent()
     }
 
     try {
@@ -1217,9 +1315,9 @@ describe('live room topology reconciliation', () => {
         start: [2, 0],
         end: [2, 3],
       })
-      runWithSceneCommitNodeIds([divider.id, level.id], () => {
-        const nodes = sceneStore.getState().nodes
-        sceneStore.setNodes({
+      applyToBoth([divider.id, level.id], (store) => {
+        const nodes = store.getState().nodes
+        store.setNodes({
           ...nodes,
           [divider.id]: divider,
           [level.id]: {
@@ -1228,20 +1326,18 @@ describe('live room topology reconciliation', () => {
           } as LevelNode,
         })
       })
-      assertMatchesOracle()
 
-      runWithSceneCommitNodeIds([divider.id], () => {
-        sceneStore.setNodes({
-          ...sceneStore.getState().nodes,
+      applyToBoth([divider.id], (store) => {
+        store.setNodes({
+          ...store.getState().nodes,
           [divider.id]: { ...divider, start: [3, 0], end: [3, 3] } as WallNode,
         })
       })
-      assertMatchesOracle()
 
-      runWithSceneCommitNodeIds([divider.id, level.id], () => {
-        const nodes = sceneStore.getState().nodes
+      applyToBoth([divider.id, level.id], (store) => {
+        const nodes = store.getState().nodes
         const { [divider.id]: _divider, ...withoutDivider } = nodes
-        sceneStore.setNodes({
+        store.setNodes({
           ...withoutDivider,
           [level.id]: {
             ...withoutDivider[level.id],
@@ -1251,7 +1347,6 @@ describe('live room topology reconciliation', () => {
           } as LevelNode,
         })
       })
-      assertMatchesOracle()
 
       const rightWallIds = new Set(rightWalls.map((wall) => wall.id))
       expect(events).toHaveLength(3)
@@ -1259,7 +1354,73 @@ describe('live room topology reconciliation', () => {
         events.every((event) => event.examinedWallIds.every((id) => !rightWallIds.has(id))),
       ).toBe(true)
     } finally {
-      unsubscribe()
+      unsubscribeIndexed()
+      unsubscribeFull()
+    }
+  })
+
+  test('matches full reconciliation when a curved room boundary changes', () => {
+    const levelId = 'level_indexed_curve'
+    const walls = [
+      WallNode.parse({ id: 'wall_curve_bottom', parentId: levelId, start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ id: 'wall_curve_right', parentId: levelId, start: [4, 0], end: [4, 3] }),
+      WallNode.parse({
+        id: 'wall_curve_top',
+        parentId: levelId,
+        start: [4, 3],
+        end: [0, 3],
+        curveOffset: 0.5,
+      }),
+      WallNode.parse({ id: 'wall_curve_left', parentId: levelId, start: [0, 3], end: [0, 0] }),
+    ]
+    const initialRoom = detectSpacesForLevel(levelId, walls).spaces[0]
+    expect(initialRoom).toBeDefined()
+    const slab = SlabNode.parse({
+      id: 'slab_curve',
+      parentId: levelId,
+      polygon: initialRoom!.polygon,
+      elevation: 0.3,
+      autoFromWalls: true,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_curve',
+      parentId: levelId,
+      polygon: initialRoom!.polygon,
+      height: 2.2,
+      autoFromWalls: true,
+    })
+    const level = LevelNode.parse({
+      id: levelId,
+      level: 0,
+      children: [...walls.map((wall) => wall.id), slab.id, ceiling.id],
+    })
+    const initialNodes = Object.fromEntries(
+      [level, ...walls, slab, ceiling].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const indexedStore = createSceneStoreStub(initialNodes)
+    const indexedEditor = createEditorStoreStub()
+    const fullStore = createSceneStoreStub(initialNodes)
+    const fullEditor = createEditorStoreStub()
+    const unsubscribeIndexed = initSpaceDetectionSync(indexedStore, indexedEditor)
+    const unsubscribeFull = initSpaceDetectionSync(fullStore, fullEditor)
+    const curvedWall = walls[2]!
+    const updateCurve = (store: ReturnType<typeof createSceneStoreStub>) => {
+      store.setNodes({
+        ...store.getState().nodes,
+        [curvedWall.id]: { ...curvedWall, curveOffset: 1 } as WallNode,
+      })
+    }
+
+    try {
+      runWithSceneCommitNodeIds([curvedWall.id], () => updateCurve(indexedStore))
+      updateCurve(fullStore)
+
+      expect(
+        topologyOutcome(indexedStore.getState().nodes, indexedEditor.getState().spaces),
+      ).toEqual(topologyOutcome(fullStore.getState().nodes, fullEditor.getState().spaces))
+    } finally {
+      unsubscribeIndexed()
+      unsubscribeFull()
     }
   })
 

@@ -301,7 +301,7 @@ describe('scene commit boundary', () => {
         },
       }),
     }
-    const stopDetection = initSpaceDetectionSync(useScene, editorStore)
+    let stopDetection = initSpaceDetectionSync(useScene, editorStore)
     const commits: SceneCommit[] = []
     unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
 
@@ -348,14 +348,34 @@ describe('scene commit boundary', () => {
       stopDetection()
       unsubscribe()
       unsubscribe = () => {}
+      spaces = {}
       useScene.setState({
         ...commit.before,
         dirtyNodes: new Set<AnyNodeId>(),
         readOnly: false,
       } as never)
       clearSceneHistory()
+      stopDetection = initSpaceDetectionSync(useScene, editorStore)
       expect(applySceneOperationPatch(operationPatch)).toBe(true)
       expect(areSceneSnapshotsEqual(commit.current, currentSnapshot())).toBe(true)
+      expect(Object.values(spaces)).toHaveLength(1)
+
+      const divider = WallNode.parse({
+        id: 'wall_commit_divider',
+        parentId: LEVEL_ID,
+        start: [2, 0],
+        end: [2, 4],
+      })
+      useScene.getState().createNode(divider, LEVEL_ID)
+
+      const receiverNodes = Object.values(useScene.getState().nodes)
+      expect(Object.values(spaces)).toHaveLength(2)
+      expect(
+        receiverNodes.filter((node) => node.type === 'slab' && node.autoFromWalls),
+      ).toHaveLength(2)
+      expect(
+        receiverNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
+      ).toHaveLength(2)
     } finally {
       stopDetection()
     }

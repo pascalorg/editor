@@ -47,18 +47,6 @@ export function createStoredNodeCountTracker(initialNodeCount: number) {
 
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
-export function shouldFlushOnExit({
-  hasDirtyChanges,
-  isLoadingScene,
-  isVersionPreviewMode,
-}: {
-  hasDirtyChanges: boolean
-  isLoadingScene: boolean
-  isVersionPreviewMode: boolean
-}) {
-  return hasDirtyChanges && !isLoadingScene && !isVersionPreviewMode
-}
-
 interface UseAutoSaveOptions {
   onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   onDirty?: () => void
@@ -80,7 +68,7 @@ export function useAutoSave({
 }: UseAutoSaveOptions): { isLoadingSceneRef: MutableRefObject<boolean> } {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
-  const isLoadingSceneRef = useRef(true)
+  const isLoadingSceneRef = useRef(false)
   const pendingSaveRef = useRef(false)
   const executeSaveRef = useRef<(() => Promise<void>) | null>(null)
   const hasDirtyChangesRef = useRef(false)
@@ -232,15 +220,7 @@ export function useAutoSave({
     // would otherwise drop the change entirely. `pagehide` fires in cases
     // (mobile Safari, bfcache) where `beforeunload` does not.
     function flushOnExit() {
-      if (
-        !shouldFlushOnExit({
-          hasDirtyChanges: hasDirtyChangesRef.current,
-          isLoadingScene: isLoadingSceneRef.current,
-          isVersionPreviewMode: isVersionPreviewModeRef.current,
-        })
-      ) {
-        return
-      }
+      if (!hasDirtyChangesRef.current) return
       const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
       const currentNodeCount = Object.keys(nodes).length
       const previousNodeCount = storedNodeCount.count

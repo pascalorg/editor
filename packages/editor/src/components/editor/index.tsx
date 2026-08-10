@@ -1229,10 +1229,8 @@ export default function Editor({
         if (!cancelled) {
           setIsSceneLoading(false)
           setHasLoadedInitialScene(true)
-          queueMicrotask(() => {
-            if (!cancelled) {
-              isLoadingSceneRef.current = false
-            }
+          requestAnimationFrame(() => {
+            isLoadingSceneRef.current = false
           })
         }
       }
