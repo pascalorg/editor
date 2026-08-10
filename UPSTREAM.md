@@ -80,3 +80,88 @@ scaffold under `.github/deploy/`.
 After any upstream merge: `bun run check && bun run check-types`, build, and
 let CI plus the deploy workflow's boot smoke tests confirm nothing broke
 before publishing to `ovurrsl/Digitaltwin`.
+
+---
+
+## Before you publish: keep a way back
+
+Tag or branch the commit the **currently live** deploy was built from, and push
+it, before merging anything large. The live sha is the `head_sha` of the last
+successful `Deploy bundle` run — not the head of `integration`, which usually
+sits ahead of it.
+
+```sh
+LIVE=$(…head_sha of the last successful Deploy bundle run…)
+git branch rollback/$(date +%F)-pre-upstream "$LIVE"
+git push origin refs/heads/rollback/$(date +%F)-pre-upstream
+```
+
+Push it as `refs/heads/…` explicitly. A branch and a tag of the same name make
+the short refspec ambiguous and the push is refused.
+
+Rolling back is then:
+
+```sh
+git checkout integration
+git reset --hard rollback/<the one you made>
+git push --force-with-lease origin integration
+# then run `Deploy bundle` by hand from the Actions tab
+```
+
+The database is **not** covered by this. Scenes live in MySQL, so a rollback
+returns the code and leaves the data where it is — which is what you want for a
+bad build, and no help at all for a bad migration.
+
+---
+
+## Log of upstream takes
+
+One entry per merge. The point is not history for its own sake: it records what
+was *decided* and what bit us, so the next take is cheaper than this one was.
+
+### 2026-08-10 — beta.2 → beta.5, 56 commits
+
+**Why it was 56 and not a handful.** `mirror-upstream` had been failing every
+night since 7 August and nobody noticed, because nothing user-visible breaks
+when the mirror stops — the editor keeps building from a frozen `main`. See the
+`MIRROR_TOKEN` note in `OTOMASYON.md`. **Check that the mirror is green before
+assuming you are up to date.**
+
+**What we gained that we actually wanted:** the `materials` persistence fix
+(below), the per-level base-elevation control, webp snapshot encoding, and the
+GPU-capability refactor with its tests.
+
+**The bug this merge uncovered, and the one worth remembering.** Upstream's
+`#597` found that `materials` was never named in the persistence schemas.
+`z.object()` strips what it does not name, so every custom surface was silently
+deleted on save — no error, no log, and the scene reopens looking merely
+"reset". Our fork had the same hole in two places, and one of them was missing
+`installedPlugins` as well, so a warehouse scene forgot which pack it needed.
+
+The general rule that falls out of it: **in `apps/editor/lib/graph-schema.ts`
+and `packages/mcp/src/storage/scene-store-shared.ts`, the field list IS the set
+of things that survive a save.** A field missing there is not a validation
+error, it is deletion. Treat any upstream change to those two files as
+load-bearing.
+
+**Two traps in the tooling, both fixed here:**
+
+- `Relock` pinned bun `1.3.0` while CI installed with `1.3.14`. A lockfile
+  written by the older bun is rewritten by the newer one, and
+  `--frozen-lockfile` turns that into a failed build — a relock producing a
+  lockfile CI then rejects. Keep the two pinned to the same version as
+  `packageManager`.
+- The lockfile would not **converge**: two relocks in a row each rewrote it.
+  `postcss` is a transitive dependency of both Next and Tailwind at different
+  patch versions, and with nothing pinning it, bun broke the tie differently on
+  every run. `--frozen-lockfile` can never pass against an oscillating
+  lockfile, however many times you relock. Fixed by pinning `postcss` in the
+  root `overrides`, next to `next` and `three`, which are there for the same
+  reason. **If a frozen-lockfile failure survives a relock, suspect
+  oscillation rather than staleness** — run the relock twice and diff.
+
+**A mistake worth not repeating:** upstream's `graph-schema.test.ts` was merged
+alongside ours, but upstream's suite tests upstream's implementation — including
+an asset-URL allowlist our fork's version does not implement. Merging their
+tests while keeping our implementation fails in CI. Either port the behaviour or
+keep only the tests that match what the file actually does.
