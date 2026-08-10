@@ -1300,7 +1300,8 @@ function unavailable(
     },
     {
       invariant: 'SET_COUNT_SHORTAGE',
-      needs: 'commit windows and an inventory — solver phase 10',
+      needs:
+        'a peak compared against the yard’s own rack — `sets.ts` counts the peak, and nothing yet asks whether the project owns it',
     },
   ]
   if (!hasPacks) {

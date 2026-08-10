@@ -427,6 +427,7 @@ export {
   verticalElementKind,
 } from './pressure'
 export {
+  calendarDayNumber,
   type FormworkSchedule,
   formworkSchedule,
   formworkScheduleCaveats,
@@ -448,6 +449,17 @@ export {
   SET_POUR_DATE_DESCRIPTION,
   unknownAssembly,
 } from './schedule-patch'
+export {
+  type FormworkSetCount,
+  formworkSetCaveats,
+  formworkSetCount,
+  type PourQuantities,
+  SET_COUNT_COVERAGE_THRESHOLD,
+  SET_COUNT_GAP_LABELS,
+  type SetCountGap,
+  type SetKindPeak,
+  type SetPeak,
+} from './sets'
 export {
   DEFAULT_CONCRETE_TEMPERATURE_C,
   DEFAULT_FORMWORK_SETTINGS,
@@ -475,6 +487,7 @@ export {
 export {
   type BomSupply,
   bomSupply,
+  isReturnableLine,
   type OwnedStock,
   type PartSupply,
   type SupplyLine,

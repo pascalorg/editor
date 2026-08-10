@@ -8,6 +8,7 @@ import {
   scheduleInPourOrder,
   scheduleOccupancyDays,
 } from './schedule'
+import { type FormworkSetCount, SET_COUNT_GAP_LABELS } from './sets'
 import type { BomSupply, SupplyLine } from './supply'
 
 /**
@@ -79,6 +80,15 @@ export interface BomCsvScope {
    * where a row means a pour rather than a product.
    */
   schedule?: FormworkSchedule
+  /**
+   * How many of each thing the job needs at once, where the programme supports counting.
+   *
+   * A preamble block for the same reason the dates are, and one more: a peak is not a
+   * property of a line at all. A line's quantity is what passes through the job and a peak is
+   * what stands on one day, so a "Peak" cell beside a quantity of 400 would invite the
+   * subtraction — and 400 less a peak of 100 is not 300 of anything.
+   */
+  sets?: FormworkSetCount
 }
 
 /**
@@ -316,6 +326,73 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
         ].join(','),
       )
     }
+  }
+  const sets = scope.sets
+  if (sets && sets.peaks.length > 0) {
+    // Labelled as the order rather than as a peak, because the distinction from the
+    // quantity column below is the entire content of this block: a bill of 400 panels with a
+    // peak of 100 is an order for 100, and a reader who takes the bill's figure buys four
+    // times what the job needs.
+    rows.push(
+      [
+        'MOST NEEDED AT ONCE',
+        cell(
+          'What to own or hire. The quantities in the lines below are what passes through the job; these are what stand at the same time, so these are the order',
+        ),
+      ].join(','),
+    )
+    if (sets.peakConcurrentOn !== undefined) {
+      rows.push(
+        ['Pours at once', sets.peakConcurrentPours, cell(`on ${sets.peakConcurrentOn}`)].join(','),
+      )
+    }
+    rows.push(
+      ['Item', 'Catalog id', 'Most at once', 'Needed from', 'Fitted in total', 'Reuses'].join(','),
+    )
+    for (const peak of sets.peaks) {
+      rows.push(
+        [
+          cell(peak.description),
+          cell(peak.catalogId),
+          peak.peakQuantity,
+          cell(peak.peakOn),
+          peak.totalFitted,
+          // One decimal: a reuse factor is a ratio nobody orders by, and it is read as
+          // "about eight times" rather than checked to the third place.
+          peak.reuseFactor.toFixed(1),
+        ].join(','),
+      )
+    }
+    for (const kind of sets.kinds) {
+      rows.push(['Rack —', cell(kind.label), kind.peakQuantity].join(','))
+    }
+    if (sets.countedPours < sets.totalPours) {
+      // INCOMPLETE for the same reason the programme's row is, and with more force: these
+      // figures can only be low, and a low order is one somebody places.
+      rows.push(
+        [
+          'INCOMPLETE',
+          cell(
+            `${sets.totalPours - sets.countedPours} of ${sets.totalPours} pours are not in this sweep, so every figure above is a floor — the real peak is this or higher`,
+          ),
+        ].join(','),
+      )
+    }
+    for (const gap of sets.gaps.filter((entry) => entry !== 'partial-programme')) {
+      rows.push(['INCOMPLETE', cell(SET_COUNT_GAP_LABELS[gap])].join(','))
+    }
+  } else if (schedule) {
+    // The refusal in the file, not only in the UI that made it. A reader comparing this
+    // export against one that has the block is owed the reason it is missing, and "too few
+    // pours are dated" is a thing they can act on.
+    rows.push(
+      [
+        'NO SET COUNT',
+        cell(
+          `${schedule.scheduledCount} of ${schedule.pours.length} pours are dated, which is too few to sweep. A set count over part of a programme comes out low, so there is none here rather than a small one`,
+        ),
+      ].join(','),
+    )
   }
   if (supply && supply.unusedOwnedIds.length > 0) {
     // Plant the project owns and this scope never asks for. Nothing in the lines below

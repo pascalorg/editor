@@ -6,7 +6,10 @@ import {
   bomCsvFilename,
   bomHire,
   bomSupply,
+  type FormworkSetCount,
   formworkSchedule,
+  formworkSetCount,
+  type StrikeTarget,
   strikingTime,
 } from './index'
 
@@ -34,6 +37,8 @@ function line(overrides: Partial<BomLine> = {}): BomLine {
     ...overrides,
   }
 }
+
+const period = (target: StrikeTarget) => strikingTime('BS_8110', { target, temperatureC: 16 })
 
 const rows = (csv: string): string[] => csv.trimEnd().split('\n')
 const dataRows = (csv: string): string[] => {
@@ -625,6 +630,128 @@ describe('bomCsv', () => {
       expect(rows(csv).indexOf(flag)).toBeLessThan(
         rows(csv).findIndex((row) => row.startsWith('Pour — ')),
       )
+    })
+  })
+
+  describe('how many to own or hire', () => {
+    const twoPours = (secondAt: string) =>
+      formworkSchedule(
+        [
+          { id: 'fwasm_a', pourAt: '2026-03-02', striking: [period('slab-props')] },
+          { id: 'fwasm_b', pourAt: secondAt, striking: [period('slab-props')] },
+        ],
+        { erectionLeadDays: 1, returnLeadDays: 1 },
+      )
+    const perPour = (quantity: number) =>
+      ['fwasm_a', 'fwasm_b'].map((id) => ({
+        id,
+        quantities: [
+          {
+            catalogId: 'framax-2700-900',
+            kind: 'panel' as const,
+            description: 'Framax Xlife 2700 × 900',
+            quantity,
+            target: 'slab-props' as const,
+          },
+        ],
+      }))
+
+    test('the peak goes in the preamble, because it is not a property of a line', () => {
+      // A line's quantity is what passes through the job and a peak is what stands on one
+      // day. Side by side in one row they invite a subtraction, and 8 less a peak of 4 is
+      // not 4 of anything — the same panels are counted again when they are refitted.
+      const schedule = twoPours('2026-04-02')
+      const sets = formworkSetCount(schedule, perPour(4)) as FormworkSetCount
+      const csv = bomCsv([line({ quantity: 8 })], { subject: 'Project', schedule, sets })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header).not.toContain('Most at once')
+      expect(rows(csv).some((row) => row.startsWith('MOST NEEDED AT ONCE,'))).toBe(true)
+      // The peak is 4 against the bill's 8, with the reuse figure that explains the gap.
+      expect(rows(csv)).toContain('Framax Xlife 2700 × 900,framax-2700-900,4,2026-03-01,8,2.0')
+    })
+
+    test('the block says it is the order, so the bill’s own quantity is not read as one', () => {
+      const schedule = twoPours('2026-04-02')
+      const sets = formworkSetCount(schedule, perPour(4)) as FormworkSetCount
+      const csv = bomCsv([line({ quantity: 8 })], { subject: 'Project', schedule, sets })
+
+      const banner = rows(csv).find((row) => row.startsWith('MOST NEEDED AT ONCE,')) as string
+      expect(banner).toContain('these are the order')
+    })
+
+    test('the per-kind rack row is a sum of the ids, not a second sweep of them', () => {
+      const schedule = twoPours('2026-03-02')
+      const sets = formworkSetCount(schedule, perPour(4)) as FormworkSetCount
+      const csv = bomCsv([line({ quantity: 8 })], { subject: 'Project', schedule, sets })
+
+      // Both pours on one day, so the rack needs both sets — and the row is the kind's
+      // label rather than a catalog id, because a rack is what a yard stacks together.
+      expect(rows(csv)).toContain('Rack —,Panel,8')
+    })
+
+    test('a refused count says why in the file, not only in the UI that made it', () => {
+      // The absence is the one thing in this file a reader cannot interpret: an export with
+      // no money means no rates, and an export with a programme and no set count looks
+      // like a bug unless the file says otherwise.
+      const schedule = formworkSchedule(
+        [
+          { id: 'fwasm_a', pourAt: '2026-03-02', striking: [period('slab-props')] },
+          { id: 'fwasm_b', striking: [period('slab-props')] },
+        ],
+        { erectionLeadDays: 1, returnLeadDays: 1 },
+      )
+      expect(formworkSetCount(schedule, perPour(4))).toBeUndefined()
+
+      const csv = bomCsv([line()], { subject: 'Project', schedule })
+
+      const row = rows(csv).find((entry) => entry.startsWith('NO SET COUNT,')) as string
+      expect(row).toContain('1 of 2 pours are dated')
+      expect(row).toContain('comes out low')
+    })
+
+    test('an unprogrammed export carries neither the block nor the refusal', () => {
+      const csv = bomCsv([line()], { subject: 'Project' })
+
+      expect(rows(csv).some((row) => row.startsWith('MOST NEEDED AT ONCE,'))).toBe(false)
+      expect(rows(csv).some((row) => row.startsWith('NO SET COUNT,'))).toBe(false)
+    })
+
+    test('a partial sweep is an INCOMPLETE row, because a floor read as a peak under-orders', () => {
+      const pours = [
+        ...Array.from({ length: 19 }, (_, index) => ({
+          id: `d${index}`,
+          pourAt: `2026-03-${String(index + 2).padStart(2, '0')}`,
+          striking: [period('vertical-form')],
+        })),
+        { id: 'undated', striking: [period('vertical-form')] },
+      ]
+      const schedule = formworkSchedule(pours, { erectionLeadDays: 1, returnLeadDays: 1 })
+      const sets = formworkSetCount(
+        schedule,
+        pours.map((pour) => ({
+          id: pour.id,
+          quantities: [
+            {
+              catalogId: 'framax-2700-900',
+              kind: 'panel' as const,
+              description: 'Framax Xlife 2700 × 900',
+              quantity: 4,
+              target: 'vertical-form' as const,
+            },
+          ],
+        })),
+      ) as FormworkSetCount
+      const csv = bomCsv([line()], { subject: 'Project', schedule, sets })
+
+      expect(
+        rows(csv).some(
+          (row) =>
+            row.startsWith('INCOMPLETE,') &&
+            row.includes('1 of 20 pours are not in this sweep') &&
+            row.includes('floor'),
+        ),
+      ).toBe(true)
     })
   })
 })

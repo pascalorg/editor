@@ -782,6 +782,116 @@ describe('when the pours happen', () => {
   })
 })
 
+describe('how many sets the job needs', () => {
+  /** Two lifts of one wall, dated as the caller asks. */
+  function twoLifts(
+    first: Partial<FormworkAssemblyNode>,
+    second: Partial<FormworkAssemblyNode>,
+  ): Record<string, AnyNode> {
+    return sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, first),
+      makeAssembly('formwork-assembly_2', 'wall_1', 0, 1, second),
+    )
+  }
+
+  const leads = {
+    pressureStandard: 'BS_8110',
+    schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+  } as const
+
+  test('an unprogrammed project gets no count, because there is nothing to sweep', () => {
+    expect(solveProjectFormwork(steelWallScene()).sets).toBeUndefined()
+  })
+
+  test('two lifts a week apart share one set, so the peak is under the bill', () => {
+    // The whole point of the count. The bill is both lifts' panels because that is what
+    // passes through the job; the peak is one lift's, because the first lift's panels are
+    // struck and back on the rack before the second needs them.
+    const solution = solveProjectFormwork(
+      withSettings(twoLifts({ pourAt: '2026-03-02' }, { pourAt: '2026-03-16' }), leads),
+    )
+
+    const peak = solution.sets?.peaks[0]
+    expect(peak).toBeDefined()
+    expect(peak?.peakQuantity).toBeLessThan(peak?.totalFitted as number)
+    expect(peak?.reuseFactor).toBe(2)
+    expect(solution.sets?.peakConcurrentPours).toBe(1)
+    expect(solution.sets?.coverage).toBe(1)
+  })
+
+  test('two lifts on one day need both sets, and the peak equals the bill', () => {
+    const solution = solveProjectFormwork(
+      withSettings(twoLifts({ pourAt: '2026-03-02' }, { pourAt: '2026-03-02' }), leads),
+    )
+
+    const peak = solution.sets?.peaks[0]
+    expect(peak?.peakQuantity).toBe(peak?.totalFitted)
+    expect(peak?.reuseFactor).toBe(1)
+    expect(solution.sets?.peakConcurrentPours).toBe(2)
+    expect(peak?.peakPourIds).toEqual(['formwork-assembly_1', 'formwork-assembly_2'])
+  })
+
+  test('a peak is quantities of a catalog id, so it is traceable to the bill’s own lines', () => {
+    const solution = solveProjectFormwork(
+      withSettings(twoLifts({ pourAt: '2026-03-02' }, { pourAt: '2026-03-02' }), leads),
+    )
+
+    for (const peak of solution.sets?.peaks ?? []) {
+      const line = solution.bom.find((entry) => entry.catalogId === peak.catalogId)
+      expect(line).toBeDefined()
+      // The bill is the whole scope and the peak is a moment in it, so a peak can never
+      // exceed the bill — if it did, the sweep would be counting stock the job never had.
+      expect(peak.peakQuantity).toBeLessThanOrEqual(line?.quantity as number)
+    }
+  })
+
+  test('half a programme is refused rather than counted low, and the caveat says why', () => {
+    // One lift of two dated is 50 %, under the 90 % threshold. The sweep would report one
+    // lift's worth as the job's peak — a plausible number, and half the answer.
+    const solution = solveProjectFormwork(
+      withSettings(twoLifts({ pourAt: '2026-03-02' }, {}), leads),
+    )
+
+    expect(solution.schedule).toBeDefined()
+    expect(solution.sets).toBeUndefined()
+    expect(projectFormworkCaveats(solution).some((line) => line.includes('No set count'))).toBe(
+      true,
+    )
+  })
+
+  test('an unprogrammed project is not told twice that it has no count', () => {
+    // The schedule's own absence already says nothing is dated. Repeating it as a set-count
+    // refusal would make one missing input read as two problems.
+    const caveats = projectFormworkCaveats(solveProjectFormwork(steelWallScene()))
+
+    expect(caveats.some((line) => line.includes('No set count'))).toBe(false)
+  })
+
+  test('a cut board is not counted as reused, because a board is cut once', () => {
+    // Timber formwork puts bespoke ply and cut boards in the bill. They are made for the
+    // pour and go in a skip, so they are not stock a set is counted out of — reported as
+    // reused they would say one board serves both lifts.
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', { formworkType: 'timber' } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_2', 'wall_1', 0, 1, { pourAt: '2026-03-16' }),
+        ),
+        leads,
+      ),
+    )
+
+    const bespokeIds = new Set(
+      solution.bom.filter((line) => line.provenance === 'bespoke').map((line) => line.catalogId),
+    )
+    for (const peak of solution.sets?.peaks ?? []) {
+      expect(bespokeIds.has(peak.catalogId)).toBe(false)
+    }
+  })
+})
+
 describe('projectFormworkCaveats', () => {
   test('says nothing about a complete takeoff', () => {
     const wall = makeWall('wall_1')

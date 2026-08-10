@@ -4,6 +4,8 @@ import type {
   BomLine,
   BomSupply,
   FormworkSchedule,
+  FormworkSetCount,
+  PourQuantities,
   SchedulablePour,
   StrikeTarget,
   StrikingTime,
@@ -17,7 +19,10 @@ import {
   bomWeightKg,
   formworkSchedule,
   formworkScheduleCaveats,
+  formworkSetCaveats,
+  formworkSetCount,
   formworkSettingsFor,
+  isReturnableLine,
   isSubstitutedStrikingStandard,
   overUtilisedParts,
   strikeTargetForPartKind,
@@ -113,6 +118,21 @@ export interface ProjectFormwork {
    * printed beside geometry that is actually derived.
    */
   schedule?: FormworkSchedule
+  /**
+   * How many of each thing the job needs to own or hire, or absent where the programme
+   * cannot support the question.
+   *
+   * The figure the whole commercial chain has been working towards, and the last one to
+   * arrive because it is the only one that needs *two* answers at once: the bill says what a
+   * pour needs standing, and the programme says which pours stand at the same time. Neither
+   * alone is a set count.
+   *
+   * Absent for a stronger reason than `cost` or `schedule` are. Those are absent because an
+   * input is missing and their own output shows it — an unpriced bill has no money in it. A
+   * set count off a partial programme is a *plausible small number*, so below the coverage
+   * threshold there is no count rather than a low one. See `sets.ts`.
+   */
+  sets?: FormworkSetCount
   /**
    * True where the striking table came from a different code family than the pressure
    * standard, because the project's own family publishes none.
@@ -251,9 +271,15 @@ export function solveProjectFormwork(
   const periods = new Map<StrikeTarget, StrikingTime>(
     hire.periods.map((time) => [time.target, time]),
   )
-  const pours: SchedulablePour[] = elements.flatMap((element) => {
+  const pours: SchedulablePour[] = []
+  // The same walk builds the per-pour quantities the set count needs. Per shutter rather
+  // than off `bom`, and that is the whole reason this cannot be done from the project bill:
+  // a bill line is one catalog id across every pour in scope, so it has no pour to belong to
+  // and a sweep over it would find one interval covering the job.
+  const pourQuantities: PourQuantities[] = []
+  for (const element of elements) {
     const hostKind = element.host.type as 'wall' | 'column' | 'slab'
-    return element.shutters.map((shutter) => {
+    for (const shutter of element.shutters) {
       const targets = new Set<StrikeTarget>()
       for (const part of shutter.parts) {
         if (part.omitted) continue
@@ -263,18 +289,45 @@ export function solveProjectFormwork(
       const striking = [...targets]
         .map((target) => periods.get(target))
         .filter((time): time is StrikingTime => time !== undefined)
-      return {
-        id: shutter.assembly.id as string,
+      const id = shutter.assembly.id as string
+      pours.push({
+        id,
         ...(shutter.assembly.pourAt === undefined ? {} : { pourAt: shutter.assembly.pourAt }),
         striking,
-      }
-    })
-  })
+      })
+      // Through `bomLines` rather than counting parts directly, so a shutter's quantities are
+      // the same arithmetic as the bill's — a consumable is measured in its own unit and a
+      // part can stand for more than one item, and `partQuantity` is where that lives.
+      //
+      // Only returnable lines: a cut board is made for this pour and a drum of release agent
+      // is used up in it, and neither is stock a set is counted out of. Reported as reused
+      // they would say a board serves five pours.
+      pourQuantities.push({
+        id,
+        quantities: bomLines(shutter.parts)
+          .filter(isReturnableLine)
+          .map((line) => {
+            const target = strikeTargetForPartKind(line.kind, hostKind)
+            return {
+              catalogId: line.catalogId as string,
+              kind: line.kind,
+              description: line.description,
+              quantity: line.quantity,
+              ...(target === undefined ? {} : { target }),
+            }
+          }),
+      })
+    }
+  }
   // Absent where nothing is dated, rather than a programme of empty rows: a takeoff for a
   // project nobody has programmed should carry no calendar at all, the same way it carries
   // no money until a rate exists.
   const schedule = formworkSchedule(pours, settings.schedule)
   const anyDated = schedule.scheduledCount > 0
+  // Off the schedule rather than beside it, so a peak cannot fall on a day the programme
+  // above it does not have. Absent where the programme is too partial to sweep, which is the
+  // module's own refusal rather than a condition tested here.
+  const sets = anyDated ? formworkSetCount(schedule, pourQuantities) : undefined
 
   return {
     elements,
@@ -289,6 +342,7 @@ export function solveProjectFormwork(
     // said it owns none of this, which is a different claim from having said nothing.
     ...(settings.rates ? { cost: bomCost(bom, settings.rates, hire, supply) } : {}),
     ...(anyDated ? { schedule } : {}),
+    ...(sets ? { sets } : {}),
     strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
@@ -358,6 +412,18 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   // ACI the strike dates are the earliest the forms could come off rather than the dates,
   // and a reader who takes a cold-spring programme off a summer calculation strikes early.
   if (solution.schedule) out.push(...formworkScheduleCaveats(solution.schedule))
+  if (solution.sets) out.push(...formworkSetCaveats(solution.sets))
+  // The refusal said out loud, because a reader who has seen a set count on one takeoff and
+  // sees none on this one is owed the reason. Only where there is a programme at all: a
+  // project that has dated nothing is already told that by the schedule's own absence, and
+  // repeating it here would make one missing input read as two problems.
+  else if (solution.schedule) {
+    const dated = solution.schedule.scheduledCount
+    const total = solution.schedule.pours.length
+    out.push(
+      `No set count: ${dated} of ${total} pours are dated, which is too few to sweep. Counting sets over part of a programme reports a peak the job never has, and it comes out low — so there is no figure here rather than a small one. Date the remaining pours to get it.`,
+    )
+  }
   return out
 }
 

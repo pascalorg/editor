@@ -102,6 +102,23 @@ interface ProjectReport {
       strikes: Array<{ struckAs: string; date: string }>
     }>
   }
+  sets?: {
+    poursAtOnce: number
+    poursAtOnceOn: string | null
+    countedPours: number
+    totalPours: number
+    items: Array<{
+      description: string
+      catalogId: string
+      mostAtOnce: number
+      neededFrom: string
+      fittedInTotal: number
+      reuses: number
+    }>
+    rack: Array<{ kind: string; mostAtOnce: number }>
+    gaps: string[]
+  }
+  noSetCountBecause?: string
   beyondCapacity: Array<{ elementId: string; mark: string }>
   caveats: string[]
 }
@@ -776,5 +793,99 @@ describe('set_pour_date', () => {
     expect(solved.schedule?.pours[0]?.pourAt).toBe('2026-03-02')
     expect(solved.schedule?.pours.at(-1)?.pourAt).toBeNull()
     expect(solved.caveats.some((c) => c.includes('1 of 2 pours have no date'))).toBe(true)
+  })
+})
+
+/**
+ * How many sets the job needs — the question the bill is the wrong scope for.
+ *
+ * `sets.test.ts` owns the sweep. What only this surface can get wrong is what the model is
+ * handed: that the same two walls poured a fortnight apart and poured on one day produce
+ * different orders off an identical bill, that a programme too partial to sweep produces no
+ * count *and* a stated reason, and that an unprogrammed project produces neither — an
+ * absent count with no reason beside a present programme is the one shape here the model
+ * would report as a fault rather than as a missing input.
+ */
+describe('the set count', () => {
+  const shutterIds = (graph: SceneGraph): string[] =>
+    Object.values(graph.nodes as unknown as Record<string, { id: string; type: string }>)
+      .filter((node) => node.type === 'formwork-assembly')
+      .map((node) => node.id)
+
+  const twoDatedWalls = async (dates: [string, string]) => {
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    await shutter(tools, 'wall_2')
+    await call(tools, 'set_formwork_settings', { schedule: { returnLeadDays: 3 } })
+    const ids = shutterIds(graph)
+    for (const [index, id] of ids.entries())
+      await call(tools, 'set_pour_date', { assemblyId: id, pourAt: dates[index] as string })
+    return await project(tools, { levelId: 'level_1' })
+  }
+
+  test('two walls a fortnight apart share one set, so the order is half the bill', async () => {
+    // The reason the module exists. What passes through the job is two walls' worth of
+    // panels and what somebody buys is one wall's worth, used twice.
+    const solved = await twoDatedWalls(['2026-03-02', '2026-03-16'])
+
+    expect(solved.sets?.countedPours).toBe(2)
+    expect(solved.sets?.gaps).toEqual([])
+    // Nothing is standing on the same day as anything else, so no peak exceeds one wall.
+    expect(solved.sets?.poursAtOnce).toBe(1)
+    const panel = solved.sets?.items.find((item) => item.reuses > 1)
+    expect(panel?.reuses).toBeCloseTo(2, 1)
+    expect(panel?.mostAtOnce).toBe((panel?.fittedInTotal ?? 0) / 2)
+    expect(panel?.neededFrom).toBe('2026-03-02')
+  })
+
+  test('the same two walls poured on one day need both sets, and the count is the bill', async () => {
+    // Identical geometry, identical bill, twice the order — which is the whole claim, and
+    // it is only visible by holding the bill still and moving the dates.
+    const apart = await twoDatedWalls(['2026-03-02', '2026-03-16'])
+    const together = await twoDatedWalls(['2026-03-02', '2026-03-02'])
+
+    expect(together.sets?.poursAtOnce).toBe(2)
+    for (const item of together.sets?.items ?? []) {
+      // Nothing is reused, so every peak is the line's whole quantity — the count is the
+      // bill, said out loud rather than left as two matching numbers on different panels.
+      const line = together.bom.find((row) => row.catalogId === item.catalogId)
+      expect(item.mostAtOnce).toBe(line?.quantity)
+      expect(item.reuses).toBe(1)
+    }
+    const panel = apart.sets?.items.find((item) => item.reuses > 1) as { catalogId: string }
+    const same = together.sets?.items.find((item) => item.catalogId === panel.catalogId)
+    expect(same?.mostAtOnce).toBeGreaterThan(
+      apart.sets?.items.find((item) => item.catalogId === panel.catalogId)?.mostAtOnce ?? 0,
+    )
+  })
+
+  test('one date in two pours gets no count, and the reason it has none', async () => {
+    // A sweep over half a programme reports a peak of one set, and one set is what a reader
+    // orders. So there is deliberately no figure, and the reason travels as a field.
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    await shutter(tools, 'wall_2')
+    const [id] = shutterIds(graph)
+    await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-03-02' })
+
+    const solved = await project(tools, { levelId: 'level_1' })
+
+    expect(solved.schedule).toBeDefined()
+    expect(solved.sets).toBeUndefined()
+    expect(solved.noSetCountBecause).toContain('1 of 2')
+    expect(solved.caveats.some((c) => c.startsWith('No set count'))).toBe(true)
+  })
+
+  test('an unprogrammed project gets neither a count nor a reason', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { levelId: 'level_1' })
+
+    // Nothing is missing that the answer does not already show: there is no programme, and
+    // a set count is a statement about dates.
+    expect(solved.schedule).toBeUndefined()
+    expect(solved.sets).toBeUndefined()
+    expect(solved.noSetCountBecause).toBeUndefined()
   })
 })

@@ -157,8 +157,13 @@ const MS_PER_DAY = 86_400_000
  * to a day nobody entered. UTC throughout because these are civil dates with no time in
  * them — parsing them in a local zone shifts every date in the programme by one day for
  * half the world.
+ *
+ * Exported for the set sweep, which orders and differences the very dates this module
+ * produced. A second parser there would be a second place to get 2026-02-30 wrong, and a
+ * sweep that disagreed with the programme above it about which day a pour falls on would
+ * report a peak on a day no pour happens.
  */
-function toDayNumber(date: string): number | undefined {
+export function calendarDayNumber(date: string): number | undefined {
   const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
   if (!parts) return undefined
   const [year, month, day] = [Number(parts[1]), Number(parts[2]), Number(parts[3])]
@@ -181,7 +186,7 @@ function toDayNumber(date: string): number | undefined {
  * programme was ever computed from.
  */
 export function isCalendarDate(date: string): boolean {
-  return toDayNumber(date) !== undefined
+  return calendarDayNumber(date) !== undefined
 }
 
 /** Days since the epoch → `YYYY-MM-DD`. */
@@ -191,7 +196,7 @@ function toDateString(dayNumber: number): string {
 
 /** A date shifted by whole days, or `undefined` if the input was not a date. */
 function shiftDays(date: string, days: number): string | undefined {
-  const start = toDayNumber(date)
+  const start = calendarDayNumber(date)
   if (start === undefined) return undefined
   return toDateString(start + days)
 }
@@ -324,8 +329,8 @@ export function scheduleOccupancyDays(schedule: FormworkSchedule): number | unde
   const start = schedule.firstErectAt ?? schedule.firstPourAt
   const end = schedule.lastReleaseAt ?? schedule.lastStrikeAt ?? schedule.lastPourAt
   if (start === undefined || end === undefined) return undefined
-  const from = toDayNumber(start)
-  const to = toDayNumber(end)
+  const from = calendarDayNumber(start)
+  const to = calendarDayNumber(end)
   if (from === undefined || to === undefined) return undefined
   // Inclusive of both ends: a pour erected and struck on one day occupies that day, and a
   // difference of zero would report a set that was never on site.

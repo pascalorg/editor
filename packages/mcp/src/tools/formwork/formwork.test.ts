@@ -115,6 +115,23 @@ interface BillReply {
       strikes: Array<{ struckAs: string; date: string }>
     }>
   }
+  sets?: {
+    poursAtOnce: number
+    poursAtOnceOn: string | null
+    countedPours: number
+    totalPours: number
+    items: Array<{
+      description: string
+      catalogId: string
+      mostAtOnce: number
+      neededFrom: string
+      fittedInTotal: number
+      reuses: number
+    }>
+    rack: Array<{ kind: string; mostAtOnce: number }>
+    gaps: string[]
+  }
+  noSetCountBecause?: string
   caveats: string[]
 }
 
@@ -1782,6 +1799,103 @@ describe('the formwork MCP tools', () => {
       // the job — which is what a sort over a sentinel does.
       expect(reply.schedule?.pours[0]?.pourAt).toBe('2026-03-02')
       expect(reply.schedule?.pours.at(-1)?.pourAt).toBeNull()
+    })
+  })
+
+  /**
+   * How many sets to own or hire — the answer the bill cannot give.
+   *
+   * `sets.test.ts` owns the sweep and `solve-project.test.ts` owns the wiring. What only
+   * this layer can get wrong is what a model is handed: that `mostAtOnce` never exceeds the
+   * bill quantity it will be read beside, that a programme too partial to sweep produces no
+   * count *and* a stated reason, and that an unprogrammed project produces neither — an
+   * absent count with no reason beside a present programme is the one shape here a model
+   * reads as a fault in the tool rather than as a missing input.
+   */
+  describe('how many sets to own or hire', () => {
+    const shutterIds = async (): Promise<string[]> => {
+      await call('attach_formwork', { elementId: 'wall_1' })
+      return (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+        .filter((node) => node.type === 'formwork-assembly')
+        .map((node) => node.id as string)
+    }
+    const dated = () => withSettings(tallWall(), { schedule: { returnLeadDays: 3 } })
+
+    test('one pour needs its whole bill at once, and the count says so', async () => {
+      load(dated())
+      const [id] = await shutterIds()
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      expect(reply.sets?.poursAtOnce).toBe(1)
+      expect(reply.sets?.countedPours).toBe(reply.sets?.totalPours)
+      expect(reply.sets?.gaps).toEqual([])
+      // A single pour reuses nothing, so the count *is* the bill — and every peak is a
+      // quantity the reader can find on the line above it rather than a larger number the
+      // bill cannot account for.
+      for (const item of reply.sets?.items ?? []) {
+        const line = reply.bom.find((entry) => entry.catalogId === item.catalogId)
+        expect(item.mostAtOnce).toBeLessThanOrEqual(line?.quantity ?? 0)
+        expect(item.reuses).toBe(1)
+      }
+      expect(reply.sets?.rack.length).toBeGreaterThan(0)
+    })
+
+    test('three lifts a fortnight apart share one set, so the order is a third of the bill', async () => {
+      // The whole reason the module exists: what passes through the job is three lifts of
+      // panels and what somebody buys is one lift's worth, used three times.
+      load(dated())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      const ids = await shutterIds()
+      for (const [index, id] of ids.entries()) {
+        await call('set_pour_date', {
+          assemblyId: id,
+          pourAt: `2026-03-${String(2 + index * 14).padStart(2, '0')}`,
+        })
+      }
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      expect(ids).toHaveLength(3)
+      expect(reply.sets?.countedPours).toBe(3)
+      // No two lifts are standing on the same day, so no peak is higher than one lift.
+      expect(reply.sets?.poursAtOnce).toBe(1)
+      const panel = reply.sets?.items.find((item) => item.reuses > 1)
+      expect(panel).toBeDefined()
+      expect(panel?.mostAtOnce).toBeLessThan(panel?.fittedInTotal ?? 0)
+    })
+
+    test('one date in three pours gets no count, and the reason it has none', async () => {
+      // A sweep over a third of the programme reports a peak of one set, and one set is
+      // what a reader orders. So there is deliberately no figure — and the reason travels
+      // as a field, because an absent count beside a present programme reads as a bug.
+      load(dated())
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      const ids = await shutterIds()
+      await call('set_pour_date', { assemblyId: ids[0] as string, pourAt: '2026-03-02' })
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      expect(reply.schedule).toBeDefined()
+      expect(reply.sets).toBeUndefined()
+      expect(reply.noSetCountBecause).toContain('1 of 3')
+      expect(reply.caveats.some((caveat) => caveat.startsWith('No set count'))).toBe(true)
+    })
+
+    test('an unprogrammed project gets neither a count nor a reason', async () => {
+      load(dated())
+      await shutterIds()
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      // Nothing is missing that the answer does not already show: there is no programme,
+      // and a count is a statement about dates.
+      expect(reply.schedule).toBeUndefined()
+      expect(reply.sets).toBeUndefined()
+      expect(reply.noSetCountBecause).toBeUndefined()
     })
   })
 

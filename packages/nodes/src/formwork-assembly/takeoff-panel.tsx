@@ -62,6 +62,7 @@ export function FormworkTakeoffPanel() {
   const money = (value: number) => formatMoney(value, cost?.currency)
   const schedule = solution.schedule
   const occupancy = schedule === undefined ? undefined : scheduleOccupancyDays(schedule)
+  const sets = solution.sets
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -207,13 +208,17 @@ export function FormworkTakeoffPanel() {
                   value={money(cost.totalCost)}
                   value2={cost.complete ? undefined : 'a floor, not a price'}
                 />
-                {/* The omission named rather than priced at zero. An owned panel is a
-                    sunk asset amortising over a reuse count nothing here records, and a
-                    total that quietly priced it at nothing makes owning formwork free. */}
+                {/* The omission named rather than priced at zero: a total that quietly
+                    priced an owned panel at nothing makes owning formwork free. The reuse
+                    count is no longer missing where the pours are dated, so the note points
+                    at it rather than repeating that nothing tracks it. */}
                 {cost.ownedQuantityExcluded > 0 && (
                   <Note>
                     {cost.ownedQuantityExcluded} parts come off the yard's own rack and are not
-                    priced — a sunk asset, amortising over reuses this model does not track.
+                    priced — a sunk asset, amortising over its uses.{' '}
+                    {sets === undefined
+                      ? 'Date the pours and the set count below gives the reuse figure to amortise over.'
+                      : 'The reuse figures below are what it amortises over; the rate to apply to them is a commercial decision nothing here holds.'}
                   </Note>
                 )}
                 {cost.gaps.map((gap) => (
@@ -280,6 +285,68 @@ export function FormworkTakeoffPanel() {
                 ))}
               </Section>
             )}
+            {/* The order, and it is the last section because it is the one to act on: every
+                figure above says what passes through the job and this says what to buy. Only
+                where the programme can carry it — the refusal is a Note rather than an empty
+                section, because a heading with nothing under it reads as a job that needs
+                nothing at once. */}
+            {sets === undefined
+              ? schedule !== undefined && (
+                  <Note>
+                    No set count: {schedule.scheduledCount} of {schedule.pours.length} pours are
+                    dated, which is too few to sweep. Counting sets over part of a programme reports
+                    a peak the job never has, and it comes out low — so there is no figure rather
+                    than a small one. Date the rest of the pours to get it.
+                  </Note>
+                )
+              : sets.peaks.length > 0 && (
+                  <Section title="Most needed at once">
+                    <Note>
+                      What to own or hire. The line quantities below are what passes through the
+                      job; these stand at the same time.
+                    </Note>
+                    {sets.peakConcurrentOn !== undefined && (
+                      <Readout
+                        label="Pours at once"
+                        value={String(sets.peakConcurrentPours)}
+                        value2={`peak on ${sets.peakConcurrentOn}`}
+                      />
+                    )}
+                    {sets.kinds.map((kind) => (
+                      <Readout
+                        key={kind.kind}
+                        label={kind.label}
+                        value={String(kind.peakQuantity)}
+                        value2="to rack"
+                      />
+                    ))}
+                    {/* Per catalog id under the per-kind rollup, because the rollup is what to
+                        rack and this is what to order. The reuse figure is the one that decides
+                        owning against hiring: eight uses amortises a purchase, one does not. */}
+                    {sets.peaks.map((peak) => (
+                      <div
+                        className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
+                        key={peak.catalogId}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                          {peak.description}
+                        </span>
+                        <span className="shrink-0 font-mono text-muted-foreground">
+                          {peak.peakQuantity} × {peak.reuseFactor.toFixed(1)} uses
+                        </span>
+                      </div>
+                    ))}
+                    {sets.countedPours < sets.totalPours && (
+                      <WarningLine
+                        message={`${sets.totalPours - sets.countedPours} of ${sets.totalPours} pours are not in this sweep, so every figure here is a floor. An undated pour cannot reduce an overlap, so the real peak is this or higher.`}
+                      />
+                    )}
+                    <Note>
+                      A set is counted free from its release date, so back-to-back pours share one
+                      set with no slack. A gang cannot strike, clean and refit the same day.
+                    </Note>
+                  </Section>
+                )}
             <Section
               title={`${solution.bom.length} ${solution.bom.length === 1 ? 'line' : 'lines'}`}
             >

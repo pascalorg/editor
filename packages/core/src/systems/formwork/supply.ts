@@ -97,6 +97,19 @@ export interface BomSupply {
 }
 
 /**
+ * Whether a line's parts come back to a rack at all.
+ *
+ * A bespoke part was made for this pour, a consumable is used up in it, and a part with no
+ * catalog id is nothing a yard stocks by number — none of the three returns, whatever the
+ * project owns. Exported because the set count needs exactly this rule and a second copy of
+ * it would be a second thing to fix: a cut board counted as poolable stock would be reported
+ * as reused, and a board is cut once.
+ */
+export function isReturnableLine(line: BomLine): boolean {
+  return line.provenance !== 'bespoke' && line.kind !== 'consumable' && line.catalogId !== undefined
+}
+
+/**
  * Which lines draw on the pool first.
  *
  * Altered stock before untouched stock, and it is a cost decision rather than a tidy
@@ -135,9 +148,7 @@ export function bomSupply(lines: readonly BomLine[], owned: OwnedStock): BomSupp
   for (const line of ordered) {
     // Made for this pour, or used up in it: there is no rack it came off and none it
     // goes back to, whatever the yard owns.
-    const returnable =
-      line.provenance !== 'bespoke' && line.kind !== 'consumable' && line.catalogId !== undefined
-    if (!returnable) {
+    if (!isReturnableLine(line)) {
       split.set(line, {
         line,
         ownedQuantity: 0,
