@@ -67,6 +67,8 @@ export type InvariantId =
   | 'CORNER_UNITS_OVERLAP'
   /** An opening jamb inside the stretch a corner unit occupies. */
   | 'OPENING_INSIDE_CORNER_UNIT'
+  /** Concurrent pours need more of a part at once than the yard owns or has hired. */
+  | 'SET_COUNT_SHORTAGE'
 
 /**
  * One stretch a through-tie could pass over, and the stations at which it can.
@@ -162,4 +164,5 @@ export const INVARIANT_LABELS: Record<InvariantId, string> = {
   OPENING_LEAVES_TIE_GAP: 'Opening leaves a stretch with no tie',
   CORNER_UNITS_OVERLAP: 'Two corner units claim the same stretch of face',
   OPENING_INSIDE_CORNER_UNIT: 'Opening jamb falls inside a corner unit',
+  SET_COUNT_SHORTAGE: 'More needed at once than the yard owns',
 }

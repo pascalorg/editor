@@ -169,11 +169,11 @@ describe('bomCost', () => {
     expect(cost.complete).toBe(true)
   })
 
-  it('excludes owned stock from the total and says how much it excluded', () => {
-    // Not a cost of zero. An owned panel is a sunk asset amortising over a reuse count
-    // nothing in this model records, so pricing it at nothing would make owning
-    // formwork look free and pricing it at a guess would be the untraceable figure
-    // this module exists to avoid.
+  it('charges owned stock at the project’s own hire rate, outside the total', () => {
+    // Owning formwork is not free, and this used to report it as costing nothing at all.
+    // £200 at 3 %/month is £6/month; 10 panels held a month is £60 of the yard's own
+    // plant consumed by this job — real enough to charge internally, and not cash, so it
+    // stays out of the total a tender is built from.
     const bom = [line({ quantity: 10 })]
 
     const cost = bomCost(
@@ -185,9 +185,67 @@ describe('bomCost', () => {
       }),
     )
 
+    expect(cost.ownedCost).toBeCloseTo(60, 6)
     expect(cost.totalCost).toBe(0)
-    expect(cost.ownedQuantityExcluded).toBe(10)
+    expect(cost.ownedQuantityExcluded).toBe(0)
     expect(cost.complete).toBe(true)
+  })
+
+  it('does not apply the minimum hire period to the yard’s own stock', () => {
+    // A minimum period is a term of an agreement with a hire company. A yard does not
+    // charge itself a penalty for striking early, so the internal recharge is the days
+    // held — where the same line on hire would be charged for the full 28.
+    const bom = [line({ quantity: 10 })]
+    const table = rates({ minHireDays: 28 })
+
+    const owned = bomCost(
+      bom,
+      table,
+      heldFor(bom, 2 * 24),
+      bomSupply(bom, { 'framax-0.60x2.70': 10 }),
+    )
+    const hired = bomCost(bom, table, heldFor(bom, 2 * 24), bomSupply(bom, {}))
+
+    expect(owned.ownedCost).toBeCloseTo(6 * (2 / 30) * 10, 6)
+    expect(hired.hireCost).toBeCloseTo(6 * (28 / 30) * 10, 6)
+    expect(hired.linesAtMinimum).toHaveLength(1)
+    expect(owned.linesAtMinimum).toEqual([])
+  })
+
+  it('reports owned parts it could not charge, rather than passing them as charged', () => {
+    // A rack with a list price and no hire rate has nothing to charge an internal recharge
+    // at. Those parts are in this job at nothing, and a zero `ownedQuantityExcluded` has to
+    // keep meaning "the recharge is complete".
+    const bom = [line({ quantity: 10 })]
+
+    const cost = bomCost(
+      bom,
+      rates({ byCatalogId: { 'framax-0.60x2.70': { purchasePerUnit: 200 } } }),
+      heldFor(bom, 30 * 24),
+      bomSupply(bom, { 'framax-0.60x2.70': 10 }),
+    )
+
+    expect(cost.ownedCost).toBe(0)
+    expect(cost.ownedQuantityExcluded).toBe(10)
+    expect(cost.gaps).toContain('no-rental-rate')
+    expect(cost.complete).toBe(false)
+  })
+
+  it('charges a part-owned line on both sides, at the same rate', () => {
+    // 4 owned and 6 hired, held a month: £24 internally and £36 in cash. The split is
+    // `bomSupply`'s and the rate is one table, so the two cannot disagree about the part.
+    const bom = [line({ quantity: 10 })]
+
+    const cost = bomCost(
+      bom,
+      rates(),
+      heldFor(bom, 30 * 24),
+      bomSupply(bom, { 'framax-0.60x2.70': 4 }),
+    )
+
+    expect(cost.ownedCost).toBeCloseTo(24, 6)
+    expect(cost.hireCost).toBeCloseTo(36, 6)
+    expect(cost.totalCost).toBeCloseTo(36, 6)
   })
 
   it('hires everything returnable where no rack is recorded', () => {

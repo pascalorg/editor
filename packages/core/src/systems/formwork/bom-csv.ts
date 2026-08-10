@@ -1,3 +1,4 @@
+import { ACQUIRE_GAP_LABELS, ACQUIRE_VERDICT_LABELS, type FormworkAcquisition } from './acquire'
 import { type BomCost, COST_GAP_LABELS, type CostLine } from './cost'
 import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
 import type { BomHire, HireLine } from './hire'
@@ -89,6 +90,16 @@ export interface BomCsvScope {
    * subtraction — and 400 less a peak of 100 is not 300 of anything.
    */
   sets?: FormworkSetCount
+  /**
+   * What the yard has to go out and get, where a peak and a rack both exist.
+   *
+   * A preamble block for the sets' reason and one of its own: this is the block most likely
+   * to be read against a column it must not be read against. "To hire" splits the bill and
+   * this compares the rack against the peak day, so on a sequential programme the shortfall
+   * is a fraction of the hired quantity — and a reader who takes the larger figure orders
+   * several times what the job needs at once.
+   */
+  acquisition?: FormworkAcquisition
 }
 
 /**
@@ -152,6 +163,9 @@ const costHeader = (currency: string | undefined): string[] => {
     `Recharge ${money}`,
     `Purchase ${money}`,
     `Line ${money}`,
+    // After the line total rather than before it, so a reader summing leftward across the
+    // money columns reaches the total without this in it. It is an internal recharge.
+    `Own stock ${money} (not in line)`,
     'Cost gap',
   ]
 }
@@ -257,11 +271,21 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
         round2(cost.totalCost),
       ].join(','),
     )
+    if (cost.ownedCost > 0) {
+      // Below the total and labelled as outside it, because a spreadsheet reader adds
+      // adjacent money columns. This is the yard's own plant charged at the yard's own
+      // rate — a recharge between two parts of one business rather than cash spent.
+      rows.push(
+        ['Own stock at internal hire rate — not in the total', round2(cost.ownedCost)].join(','),
+      )
+    }
     if (cost.ownedQuantityExcluded > 0) {
-      // Named as excluded rather than priced at zero. An owned panel is a sunk asset
-      // amortising over a reuse count nothing in this model records, and a spreadsheet
-      // cannot tell a zero that means free from a zero that means unanswered.
-      rows.push(['Owned parts excluded from cost', cost.ownedQuantityExcluded].join(','))
+      // A zero here has to keep meaning "the internal recharge is complete", so this counts
+      // only the owned parts with no rate to charge them at — which appear in this job at
+      // nothing, and a spreadsheet cannot tell that zero from one that means free.
+      rows.push(
+        ['Owned parts that could not be charged at all', cost.ownedQuantityExcluded].join(','),
+      )
     }
     if (cost.linesAtMinimum.length > 0) {
       rows.push(['Lines charged at the minimum hire period', cost.linesAtMinimum.length].join(','))
@@ -394,6 +418,89 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       ].join(','),
     )
   }
+  const acquisition = scope.acquisition
+  if (acquisition && acquisition.lines.length > 0) {
+    rows.push('')
+    // Named against the hired quantity in the columns below rather than against the peak
+    // above, because that is the number a reader has already taken off this file: the split
+    // spends the rack line by line, this compares the rack against the one day it is most
+    // wanted, and on a sequential programme the two differ several-fold.
+    rows.push(
+      [
+        'TO ACQUIRE',
+        cell(
+          'What the peak needs over what the yard owns. Not the “To hire” column below, which splits the whole bill — on pours that run in sequence the same sets serve them all and this list is far shorter',
+        ),
+      ].join(','),
+    )
+    const money = acquisition.currency === undefined ? '' : ` ${acquisition.currency}`
+    rows.push(
+      [
+        'Item',
+        'Catalog id',
+        'Most at once',
+        'Owned',
+        'Short by',
+        'On site by',
+        'Days committed',
+        'In use',
+        `Hire${money}`,
+        `Buy${money}`,
+        'Pays back over (jobs)',
+        'Verdict',
+      ].join(','),
+    )
+    const round1 = (value: number) => Math.round(value * 10) / 10
+    for (const line of acquisition.lines) {
+      rows.push(
+        [
+          cell(line.description),
+          cell(line.catalogId),
+          line.peakQuantity,
+          line.ownedQuantity,
+          line.shortfall,
+          // Only on a line that is actually short: a date beside a zero shortfall reads as
+          // a delivery somebody has to make.
+          cell(line.shortfall > 0 ? line.peakOn : ''),
+          line.committedDays,
+          `${Math.round(line.utilisation * 100)}%`,
+          line.hireCost === undefined ? '' : round2(line.hireCost),
+          line.purchaseCost === undefined ? '' : round2(line.purchaseCost),
+          // The payback rather than the verdict alone, in its own column, because it is the
+          // figure a reader settles against their own order book.
+          line.paybackJobs === undefined ? '' : round1(line.paybackJobs),
+          cell(
+            line.verdict === undefined
+              ? line.gaps.map((gap) => ACQUIRE_GAP_LABELS[gap]).join('; ')
+              : ACQUIRE_VERDICT_LABELS[line.verdict],
+          ),
+        ].join(','),
+      )
+    }
+    rows.push(['Short in total', '', '', '', acquisition.shortfallQuantity].join(','))
+    if (acquisition.hireCost > 0 || acquisition.purchaseCost > 0) {
+      // The two courses side by side and never differenced. A subtraction here would print a
+      // saving, and buying is not a saving: the money is spent on the day.
+      rows.push(
+        [
+          cell(
+            acquisition.complete
+              ? 'Whole shortfall, hired against bought'
+              : 'Whole shortfall, hired against bought — both are floors',
+          ),
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          round2(acquisition.hireCost),
+          round2(acquisition.purchaseCost),
+        ].join(','),
+      )
+    }
+  }
   if (supply && supply.unusedOwnedIds.length > 0) {
     // Plant the project owns and this scope never asks for. Nothing in the lines below
     // can say so, because a line the bill does not contain has no row.
@@ -436,7 +543,7 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
   const costCells = (line: BomLine): Array<string | number> => {
     if (!cost) return []
     const entry = byCost.get(line)
-    if (entry === undefined) return ['', '', '', '', '', '']
+    if (entry === undefined) return ['', '', '', '', '', '', '']
     const money = (value: number | undefined) => (value === undefined ? '' : round2(value))
     return [
       entry.chargedDays === undefined
@@ -450,6 +557,7 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       money(entry.rechargeCost),
       money(entry.consumedCost),
       money(entry.totalCost),
+      money(entry.ownedCost),
       cell(entry.gaps.map((gap) => COST_GAP_LABELS[gap]).join('; ')),
     ]
   }
@@ -517,6 +625,7 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
             round2(cost.rechargeCost),
             round2(cost.consumedCost),
             round2(cost.totalCost),
+            round2(cost.ownedCost),
             cell(cost.complete ? '' : 'a floor — some lines unpriced'),
           ]
         : []),

@@ -7,8 +7,10 @@ import {
   bomHire,
   bomSupply,
   type FormworkSetCount,
+  formworkAcquisition,
   formworkSchedule,
   formworkSetCount,
+  type RateTable,
   type StrikeTarget,
   strikingTime,
 } from './index'
@@ -435,9 +437,10 @@ describe('bomCsv', () => {
       const lines = [line({ quantity: 4 })]
       const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines) })
 
-      expect(dataRows(csv)[0]).toContain(',4,9.62,7.69,,,7.69,,no,')
+      // The own-stock cell is empty: no rack recorded, so nothing on this line is owned.
+      expect(dataRows(csv)[0]).toContain(',4,9.62,7.69,,,7.69,,,no,')
       const total = rows(csv).find((row) => row.startsWith(',TOTAL,')) as string
-      expect(total).toContain(',7.69,0,0,7.69,')
+      expect(total).toContain(',7.69,0,0,7.69,0,')
     })
 
     test('marks the charged period as the minimum where the minimum bit', () => {
@@ -469,20 +472,44 @@ describe('bomCsv', () => {
       expect(rows(csv).some((row) => row.startsWith('UNPRICED,'))).toBe(true)
     })
 
-    test('names the owned quantity it excluded rather than pricing it at zero', () => {
-      // An owned panel is a sunk asset amortising over a reuse count nothing here
-      // records, and a spreadsheet cannot tell a zero that means free from a zero that
-      // means unanswered.
+    test('charges own stock at the internal rate and keeps it out of the total', () => {
+      // Owning formwork is not free, and this file used to say it cost nothing. The row
+      // has to sit outside the total and say so, because a spreadsheet reader adds
+      // adjacent money columns without reading the labels.
+      const lines = [line({ quantity: 4 })]
+      const supply = bomSupply(lines, { 'framax-2700-900': 4 })
+      const hire = bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 })
+      const cost = bomCost(lines, RATES, hire, supply)
+      const csv = bomCsv(lines, { subject: 'Project', supply, cost })
+
+      expect(cost.ownedCost).toBeGreaterThan(0)
+      expect(rows(csv)).toContain(
+        `Own stock at internal hire rate — not in the total,${cost.ownedCost.toFixed(2)}`,
+      )
+      expect(rows(csv)).toContain('TOTAL COST,0')
+      // Complete, so nothing went uncharged — the old row must not appear.
+      expect(rows(csv).some((row) => row.startsWith('Owned parts that could not'))).toBe(false)
+    })
+
+    test('names the owned parts it could not charge at all, rather than pricing them at zero', () => {
+      // A rack with a list price and no hire rate has nothing to charge an internal
+      // recharge at, and a spreadsheet cannot tell a zero that means free from a zero
+      // that means unanswered.
       const lines = [line({ quantity: 4 })]
       const supply = bomSupply(lines, { 'framax-2700-900': 4 })
       const hire = bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 })
       const csv = bomCsv(lines, {
         subject: 'Project',
         supply,
-        cost: bomCost(lines, RATES, hire, supply),
+        cost: bomCost(
+          lines,
+          { currency: 'GBP', byCatalogId: { 'framax-2700-900': { purchasePerUnit: 200 } } },
+          hire,
+          supply,
+        ),
       })
 
-      expect(rows(csv)).toContain('Owned parts excluded from cost,4')
+      expect(rows(csv)).toContain('Owned parts that could not be charged at all,4')
     })
 
     test('sits between the hire period and the unit, in the header and the rows alike', () => {
@@ -499,7 +526,7 @@ describe('bomCsv', () => {
       })
 
       const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
-      expect(header.split(',').slice(5, 18)).toEqual([
+      expect(header.split(',').slice(5, 19)).toEqual([
         'Quantity',
         'From own stock',
         'To hire',
@@ -511,10 +538,12 @@ describe('bomCsv', () => {
         'Recharge cost GBP',
         'Purchase cost GBP',
         'Line cost GBP',
+        // After the line total, so a reader summing leftward reaches a total without it.
+        'Own stock cost GBP (not in line)',
         'Cost gap',
         'Unit',
       ])
-      expect(dataRows(csv)[0]).toContain(',4,0,4,0,9.62,Props to a slab,9.62,7.69,,,7.69,,no,')
+      expect(dataRows(csv)[0]).toContain(',4,0,4,0,9.62,Props to a slab,9.62,7.69,,,7.69,,,no,')
     })
 
     test('leaves the total row’s charged-days cell blank, because periods do not total', () => {
@@ -752,6 +781,116 @@ describe('bomCsv', () => {
             row.includes('floor'),
         ),
       ).toBe(true)
+    })
+  })
+
+  describe('what to go out and get', () => {
+    const twoPours = (secondAt: string) =>
+      formworkSchedule(
+        [
+          { id: 'fwasm_a', pourAt: '2026-03-02', striking: [period('vertical-form')] },
+          { id: 'fwasm_b', pourAt: secondAt, striking: [period('vertical-form')] },
+        ],
+        { erectionLeadDays: 1, returnLeadDays: 1 },
+      )
+    const perPour = (quantity: number) =>
+      ['fwasm_a', 'fwasm_b'].map((id) => ({
+        id,
+        quantities: [
+          {
+            catalogId: 'framax-2700-900',
+            kind: 'panel' as const,
+            description: 'Framax Xlife 2700 × 900',
+            quantity,
+            target: 'vertical-form' as const,
+          },
+        ],
+      }))
+
+    /** Sequential pours, so the same set serves both and the peak is one pour's worth. */
+    const sequential = (owned: number, rates?: RateTable) => {
+      const schedule = twoPours('2026-04-02')
+      const sets = formworkSetCount(schedule, perPour(4)) as FormworkSetCount
+      const acquisition = formworkAcquisition(sets, { 'framax-2700-900': owned }, rates)
+      return bomCsv([line({ quantity: 8 })], { subject: 'Project', schedule, sets, acquisition })
+    }
+
+    test('the shortfall is the peak against the rack, and says it is not the hire column', () => {
+      // The claim that makes this block worth having and the one thing a reader can get
+      // wrong from the file alone: the bill hires 7 of its 8 and only 3 have to be got.
+      const csv = sequential(1)
+
+      const banner = rows(csv).find((row) => row.startsWith('TO ACQUIRE,')) as string
+      expect(banner).toContain('Not the “To hire” column below')
+      expect(rows(csv)).toContain(
+        'Framax Xlife 2700 × 900,framax-2700-900,4,1,3,2026-03-01,34,18%,,,,',
+      )
+      expect(rows(csv)).toContain('Short in total,,,,3')
+    })
+
+    test('a rack covering the peak carries no date and nothing to acquire', () => {
+      // A delivery date beside a zero shortfall is a delivery somebody has to make.
+      const csv = sequential(10)
+
+      expect(rows(csv)).toContain('Framax Xlife 2700 × 900,framax-2700-900,4,10,0,,34,18%,,,,')
+      expect(rows(csv)).toContain('Short in total,,,,0')
+    })
+
+    test('the payback gets its own column, so the verdict is not the only figure', () => {
+      const csv = sequential(1, {
+        currency: 'GBP',
+        byCatalogId: { 'framax-2700-900': { purchasePerUnit: 210, rentalPercentPerMonth: 3 } },
+      })
+
+      // `Owned` in the prefix, because the set-count block above has its own `Item,Catalog
+      // id,Most at once,` header and matching that one would assert nothing.
+      const header = rows(csv).find((row) =>
+        row.startsWith('Item,Catalog id,Most at once,Owned'),
+      ) as string
+      expect(header).toContain('Pays back over (jobs)')
+      expect(header).toContain('Hire GBP')
+      const row = rows(csv).find((entry) =>
+        entry.startsWith('Framax Xlife 2700 × 900,framax-2700-900,4,1,3,'),
+      ) as string
+      // 3 panels at 3 % of £210 a month over the 34 days committed, against £630 to buy
+      // them — so a purchase pays back over 29 jobs like this one, and the verdict alone
+      // would not have said that.
+      expect(row).toContain('21.42,630,29.4')
+      expect(row).toContain('Cheaper to hire for this job')
+    })
+
+    test('the two courses are printed side by side and never differenced', () => {
+      // A subtraction here would print a saving, and buying is not a saving — the money is
+      // spent on the day rather than saved over a job that has not happened.
+      const csv = sequential(1, {
+        currency: 'GBP',
+        byCatalogId: { 'framax-2700-900': { purchasePerUnit: 210, rentalPercentPerMonth: 3 } },
+      })
+
+      const row = rows(csv).find((entry) =>
+        entry.startsWith('"Whole shortfall, hired against bought'),
+      ) as string
+      expect(row).toContain('21.42,630')
+      expect(rows(csv).some((entry) => entry.toLowerCase().includes('saving'))).toBe(false)
+    })
+
+    test('an unpriced shortfall says which rate is missing rather than reading as free', () => {
+      const csv = sequential(1, { byCatalogId: {} })
+
+      const row = rows(csv).find((entry) =>
+        entry.startsWith('Framax Xlife 2700 × 900,framax-2700-900,4,1,3,'),
+      ) as string
+      expect(row).toContain('No rate recorded for this part')
+      // No verdict off no rates: "hire" printed there is a recommendation nobody made.
+      expect(row).not.toContain('Cheaper to hire')
+    })
+
+    test('no rack recorded leaves the block off the file entirely', () => {
+      const schedule = twoPours('2026-04-02')
+      const sets = formworkSetCount(schedule, perPour(4)) as FormworkSetCount
+      const csv = bomCsv([line({ quantity: 8 })], { subject: 'Project', schedule, sets })
+
+      expect(rows(csv).some((row) => row.startsWith('TO ACQUIRE,'))).toBe(false)
     })
   })
 })

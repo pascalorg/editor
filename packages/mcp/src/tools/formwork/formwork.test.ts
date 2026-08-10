@@ -62,6 +62,7 @@ interface BillReply {
     rechargeCost?: number
     purchaseCost?: number
     lineCost?: number
+    ownStockCost?: number
     costGaps?: string[]
   }>
   totalWeightKg: number
@@ -88,6 +89,7 @@ interface BillReply {
     recharge: number
     purchase: number
     total: number
+    ownStock: number
     complete: boolean
     linesAtMinimumHirePeriod: number
     ownedQuantityExcluded: number
@@ -132,6 +134,32 @@ interface BillReply {
     gaps: string[]
   }
   noSetCountBecause?: string
+  acquire?: {
+    currency: string | null
+    shortfallQuantity: number
+    hireTheShortfall: number
+    buyTheShortfall: number
+    complete: boolean
+    items: Array<{
+      description: string
+      catalogId: string
+      mostAtOnce: number
+      neededBy: string
+      owned: number
+      shortBy: number
+      spare: number
+      daysCommitted: number
+      inUseFraction: number
+      poursCausingThePeak: string[]
+      hireCost?: number
+      purchaseCost?: number
+      cheaperOverThisJob?: string
+      paysBackOverJobs?: number
+      gaps?: string[]
+    }>
+    gaps: string[]
+  }
+  noAcquisitionBecause?: string
   caveats: string[]
 }
 
@@ -1896,6 +1924,135 @@ describe('the formwork MCP tools', () => {
       expect(reply.schedule).toBeUndefined()
       expect(reply.sets).toBeUndefined()
       expect(reply.noSetCountBecause).toBeUndefined()
+    })
+  })
+
+  /**
+   * What to go out and get, and whether to buy it.
+   *
+   * `acquire.test.ts` owns the arithmetic and `solve-project.test.ts` the wiring. What only
+   * this layer can get wrong is what an agent is handed: a shortfall it cannot tell apart
+   * from `toHire`, a verdict with no payback beside it, and — the shape that reads as a bug —
+   * an absent block beside a present peak with nothing saying which input is missing.
+   */
+  describe('what to acquire', () => {
+    /** Three lifts a fortnight apart, so one set serves all three, plus whatever settings. */
+    const sequential = async (settings: Record<string, unknown>): Promise<BillReply> => {
+      load(withSettings(tallWall(), { schedule: { returnLeadDays: 3 }, ...settings }))
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      // Re-attached, because the lift height is what splits the wall into three pours and
+      // the shutters built before it was set are one.
+      await call('attach_formwork', { elementId: 'wall_1' })
+      const ids = (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+        .filter((node) => node.type === 'formwork-assembly')
+        .map((node) => node.id as string)
+      for (const [index, id] of ids.entries()) {
+        await call('set_pour_date', {
+          assemblyId: id,
+          pourAt: `2026-03-${String(2 + index * 14).padStart(2, '0')}`,
+        })
+      }
+      return await call<BillReply>('inspect_project_formwork')
+    }
+
+    test('the shortfall is the peak over the rack, well under the bill’s hired quantity', async () => {
+      // The error this block exists to prevent. Three lifts pass their panels through the
+      // job and only one lift's stand at once, so an agent quoting `toHire` as an order has
+      // quoted one three times too big.
+      const empty = await sequential({ stock: { owned: {} } })
+      const panel = empty.sets?.items.find((item) => item.reuses > 1) as { catalogId: string }
+      const reply = await sequential({ stock: { owned: { [panel.catalogId]: 4 } } })
+
+      const line = reply.acquire?.items.find((item) => item.catalogId === panel.catalogId)
+      const hired = reply.bom.find((entry) => entry.catalogId === panel.catalogId)?.toHire as number
+      expect(line?.owned).toBe(4)
+      expect(line?.shortBy).toBe((line?.mostAtOnce as number) - 4)
+      expect(line?.shortBy).toBeLessThan(hired)
+      expect(line?.poursCausingThePeak.length).toBeGreaterThan(0)
+      expect(reply.acquire?.shortfallQuantity).toBeGreaterThan(0)
+    })
+
+    test('a rack covering the peak leaves spare, and spare is not a saving', async () => {
+      const empty = await sequential({ stock: { owned: {} } })
+      const panel = empty.sets?.items.find((item) => item.reuses > 1) as { catalogId: string }
+      const reply = await sequential({ stock: { owned: { [panel.catalogId]: 500 } } })
+
+      const line = reply.acquire?.items.find((item) => item.catalogId === panel.catalogId)
+      expect(line?.shortBy).toBe(0)
+      expect(line?.spare).toBeGreaterThan(0)
+      expect(reply.caveats.some((c) => c.includes('spare capacity for another job'))).toBe(true)
+    })
+
+    test('a verdict never arrives without the payback that makes it arguable', async () => {
+      const empty = await sequential({ stock: { owned: {} } })
+      const panel = empty.sets?.items.find((item) => item.reuses > 1) as { catalogId: string }
+      const reply = await sequential({
+        stock: { owned: { [panel.catalogId]: 4 } },
+        rates: {
+          currency: 'GBP',
+          byCatalogId: { [panel.catalogId]: { purchasePerUnit: 210, rentalPercentPerMonth: 3 } },
+        },
+      })
+
+      const line = reply.acquire?.items.find((item) => item.catalogId === panel.catalogId)
+      expect(reply.acquire?.currency).toBe('GBP')
+      // Hire wins on one job at a trade rate, however many times the set is refitted: hire
+      // is per unit per month, so uses do not enter the comparison at all.
+      expect(line?.cheaperOverThisJob).toBe('hire')
+      expect(line?.paysBackOverJobs).toBeGreaterThan(1)
+      expect(reply.acquire?.buyTheShortfall).toBeGreaterThan(
+        reply.acquire?.hireTheShortfall as number,
+      )
+    })
+
+    test('a shortfall with no rate carries no verdict, rather than a default one', async () => {
+      const empty = await sequential({ stock: { owned: {} } })
+      const panel = empty.sets?.items.find((item) => item.reuses > 1) as { catalogId: string }
+      const reply = await sequential({ stock: { owned: { [panel.catalogId]: 4 } } })
+
+      const line = reply.acquire?.items.find((item) => item.catalogId === panel.catalogId)
+      expect(line?.shortBy).toBeGreaterThan(0)
+      expect(line?.cheaperOverThisJob).toBeUndefined()
+      expect(line?.paysBackOverJobs).toBeUndefined()
+    })
+
+    test('a peak with no rack names the missing input rather than reading as a fault', async () => {
+      const reply = await sequential({})
+
+      expect(reply.sets).toBeDefined()
+      expect(reply.acquire).toBeUndefined()
+      expect(reply.noAcquisitionBecause).toContain('ownedStock')
+      expect(reply.caveats.some((c) => c.includes('what to buy or hire'))).toBe(true)
+    })
+
+    test('a rack with no programme is told about the dates once, not about two absences', async () => {
+      load(withStock(tallWall(), {}))
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      expect(reply.sets).toBeUndefined()
+      expect(reply.acquire).toBeUndefined()
+      expect(reply.noAcquisitionBecause).toBeUndefined()
+      expect(reply.caveats.some((c) => c.includes('what to buy or hire'))).toBe(false)
+    })
+
+    test('the yard’s own rack is charged beside the total, never inside it', async () => {
+      const empty = await sequential({ stock: { owned: {} } })
+      const panel = empty.sets?.items.find((item) => item.reuses > 1) as { catalogId: string }
+      const reply = await sequential({
+        stock: { owned: { [panel.catalogId]: 4 } },
+        rates: { byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } } },
+      })
+
+      expect(reply.cost?.ownStock).toBeGreaterThan(0)
+      // The claim the field's name makes, and the one an agent must not undo by adding them.
+      expect(reply.cost?.total).toBe(reply.cost?.hire)
+      expect(reply.bom.find((e) => e.catalogId === panel.catalogId)?.ownStockCost).toBeGreaterThan(
+        0,
+      )
+      expect(reply.cost?.excludes.some((line) => line.includes('internal recharge'))).toBe(true)
     })
   })
 

@@ -24,14 +24,24 @@ import type { BomSupply, SupplyLine } from './supply'
  * drilled work, and the third is fixed by the design. They are reported apart and
  * totalled as well, because a total is what a tender needs.
  *
- * Owned stock is deliberately absent from all three. A panel the yard already holds is
- * a sunk asset amortising over its life, and pricing it here needs a reuse count per
- * *panel type* which nothing in the catalog carries — `SheetStock.expectedReuses` exists
- * for sheets and `PanelType` has no equivalent. `ownedQuantity` is reported so a reader
- * can see what is excluded, which is the honest version of that gap: a total that
- * quietly priced owned panels at zero would make owning them look free, and one that
- * priced them at a guessed reuse count would be the untraceable figure this module is
- * written to avoid.
+ * ## Owned stock is charged, and it is charged as an internal hire rather than amortised
+ *
+ * A panel the yard already holds used to be absent from all three, on the grounds that
+ * pricing a sunk asset needs a life in uses that nothing in the catalog carries. That gap
+ * is real and is still open: `SheetStock.expectedReuses` exists for sheets, `PanelType`
+ * has no equivalent, and the set count's `reuseFactor` does not close it — that figure is
+ * how many times *this job* fits a panel, which says nothing about how many fittings the
+ * panel has left. An amortisation off it would divide a list price by the wrong number.
+ *
+ * But excluding owned stock made owning formwork look free, which is the more misleading of
+ * the two errors. So an owned part is charged at what the project itself says hiring one
+ * costs, for the period the line is held: an internal hire, the way a plant department
+ * recharges its own sites. That needs no life and no invented figure — it is the project's
+ * stated rate against a period this engine already derived.
+ *
+ * It is deliberately **not** in `totalCost`, because it is not money leaving the business.
+ * A tender wants the cash, and an internal costing wants both; putting them in one total
+ * would produce a figure that is neither.
  *
  * ## The minimum hire period is most of the answer on a fast cycle
  *
@@ -105,7 +115,15 @@ export interface CostLine {
   rechargeCost?: number
   /** Purchase of what is spent — bespoke pieces and consumables. */
   consumedCost?: number
-  /** The three above, where any of them priced. */
+  /**
+   * What the yard's own stock on this line is worth holding, at the project's hire rate.
+   *
+   * An internal recharge rather than a cash cost, and outside `totalCost` for that reason.
+   * The figure that answers "what did using our own plant on this job cost us" — which is
+   * not zero, and was reported as nothing at all until this existed.
+   */
+  ownedCost?: number
+  /** Hire, recharge and consumed. Deliberately without `ownedCost` — that is not cash. */
   totalCost?: number
   /**
    * The days actually charged, which is `minHireDays` where the period is shorter.
@@ -126,18 +144,28 @@ export interface BomCost {
   hireCost: number
   rechargeCost: number
   consumedCost: number
-  /** The three above. Not a project cost: no labour, transport, finance or owned asset. */
+  /** The three above. Not a project cost: no labour, transport or finance. */
   totalCost: number
+  /**
+   * The yard's own stock, charged at the project's own hire rate for the period held.
+   *
+   * Outside `totalCost` on purpose: it is a recharge between two parts of one business
+   * rather than money spent. `totalCost + ownedCost` is what the job consumed in plant;
+   * `totalCost` is what it costs to deliver. A tender needs the second and a post-job
+   * costing needs both, and a single figure would serve neither.
+   */
+  ownedCost: number
   /**
    * Lines whose charge is the minimum period rather than the time held — where holding
    * the set longer costs nothing and striking sooner saves nothing.
    */
   linesAtMinimum: CostLine[]
   /**
-   * Quantity the project owns and this total therefore excludes.
+   * Quantity the project owns that still could not be charged at all.
    *
-   * Not a cost of zero. Owned formwork is a sunk asset amortising over a reuse count
-   * nothing in this model carries, so it is named as excluded rather than priced.
+   * Was every owned part, when owned stock was excluded wholesale. Now only the ones with
+   * no hire rate to charge them at — so a zero here means the internal recharge is complete
+   * rather than that the yard owns nothing.
    */
   ownedQuantityExcluded: number
   /**
@@ -208,17 +236,19 @@ export function bomCost(
       return { line, gaps: ['no-rate'] }
     }
 
+    const ownedQuantity = split?.ownedQuantity ?? 0
+    const monthly = monthlyRate(rate)
+    // A line nothing strikes has no period — a tie cast into the wall. It is not
+    // hired for zero days, it is not hired: `bomSupply` already put ties on the hired
+    // side by catalog id, and the honest reading is that a part never recovered is
+    // spent. Charging it as a same-day hire is the error the null in `HireLine.hours`
+    // exists to prevent.
+    const days = held?.hours === undefined ? undefined : held.hours / 24
+
     let hireCost: number | undefined
     let chargedDays: number | undefined
     let atMinimumPeriod: true | undefined
     if (hiredQuantity > 0) {
-      const monthly = monthlyRate(rate)
-      // A line nothing strikes has no period — a tie cast into the wall. It is not
-      // hired for zero days, it is not hired: `bomSupply` already put ties on the hired
-      // side by catalog id, and the honest reading is that a part never recovered is
-      // spent. Charging it as a same-day hire is the error the null in `HireLine.hours`
-      // exists to prevent.
-      const days = held?.hours === undefined ? undefined : held.hours / 24
       if (monthly === undefined) gaps.push('no-rental-rate')
       else if (days === undefined) gaps.push('hired-but-never-struck')
       else {
@@ -227,6 +257,17 @@ export function bomCost(
         if (chargedDays > days) atMinimumPeriod = true
         hireCost = monthly * (chargedDays / DAYS_PER_MONTH) * hiredQuantity
       }
+    }
+
+    // The yard's own parts, at the project's own hire rate for the period they are held —
+    // an internal recharge. No minimum period: that is a term of an agreement with a hire
+    // company, and a yard does not charge itself a penalty for striking early. A line with
+    // no period is left uncharged for the same reason a hired one is.
+    let ownedCost: number | undefined
+    if (ownedQuantity > 0) {
+      if (monthly === undefined) gaps.push('no-rental-rate')
+      else if (days === undefined) gaps.push('hired-but-never-struck')
+      else ownedCost = monthly * (days / DAYS_PER_MONTH) * ownedQuantity
     }
 
     let rechargeCost: number | undefined
@@ -249,6 +290,7 @@ export function bomCost(
       ...(hireCost === undefined ? {} : { hireCost }),
       ...(rechargeCost === undefined ? {} : { rechargeCost }),
       ...(consumedCost === undefined ? {} : { consumedCost }),
+      ...(ownedCost === undefined ? {} : { ownedCost }),
       ...(priced.length > 0 ? { totalCost: priced.reduce((a, b) => a + b, 0) } : {}),
       ...(chargedDays === undefined ? {} : { chargedDays }),
       ...(atMinimumPeriod ? { atMinimumPeriod } : {}),
@@ -259,11 +301,16 @@ export function bomCost(
   let hireCost = 0
   let rechargeCost = 0
   let consumedCost = 0
+  let ownedCost = 0
+  let ownedQuantityExcluded = 0
   const gaps = new Set<CostGap>()
   for (const entry of costLines) {
     hireCost += entry.hireCost ?? 0
     rechargeCost += entry.rechargeCost ?? 0
     consumedCost += entry.consumedCost ?? 0
+    ownedCost += entry.ownedCost ?? 0
+    const owned = bySupply.get(entry.line)?.ownedQuantity ?? 0
+    if (owned > 0 && entry.ownedCost === undefined) ownedQuantityExcluded += owned
     for (const gap of entry.gaps) gaps.add(gap)
   }
 
@@ -274,8 +321,9 @@ export function bomCost(
     rechargeCost,
     consumedCost,
     totalCost: hireCost + rechargeCost + consumedCost,
+    ownedCost,
     linesAtMinimum: costLines.filter((entry) => entry.atMinimumPeriod),
-    ownedQuantityExcluded: supply?.ownedQuantity ?? 0,
+    ownedQuantityExcluded,
     complete: gaps.size === 0,
     gaps: [...gaps],
   }
@@ -336,9 +384,14 @@ export function bomCostCaveats(cost: BomCost): string[] {
   out.push(
     'This is what the formwork costs to hold: hire, recharges and what is spent. It is not the cost of forming the job — there is no labour, no transport and no finance in it, and labour is normally the largest of those.',
   )
+  if (cost.ownedCost > 0) {
+    out.push(
+      `${formatMoney(cost.ownedCost, cost.currency)} of that is the yard's own stock, charged at the project's own hire rate for the period held, and it is not in the total. It is an internal recharge rather than money leaving the business — real enough that using owned plant is not free, and not cash a tender can be built on.`,
+    )
+  }
   if (cost.ownedQuantityExcluded > 0) {
     out.push(
-      `${cost.ownedQuantityExcluded} parts come off the yard's own rack and are not priced here. Owned formwork is a sunk asset amortising over its reuses, and nothing in this model records how many reuses a panel type has left.`,
+      `${cost.ownedQuantityExcluded} parts off the yard's own rack could not be charged at all, because there is no hire rate to charge them at or nothing strikes them. Those parts appear in this job at nothing, which makes owning them look free.`,
     )
   }
   if (!cost.complete) {

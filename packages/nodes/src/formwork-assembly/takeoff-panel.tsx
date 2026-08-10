@@ -63,6 +63,7 @@ export function FormworkTakeoffPanel() {
   const schedule = solution.schedule
   const occupancy = schedule === undefined ? undefined : scheduleOccupancyDays(schedule)
   const sets = solution.sets
+  const acquisition = solution.acquisition
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -208,17 +209,29 @@ export function FormworkTakeoffPanel() {
                   value={money(cost.totalCost)}
                   value2={cost.complete ? undefined : 'a floor, not a price'}
                 />
-                {/* The omission named rather than priced at zero: a total that quietly
-                    priced an owned panel at nothing makes owning formwork free. The reuse
-                    count is no longer missing where the pours are dated, so the note points
-                    at it rather than repeating that nothing tracks it. */}
+                {/* Beside the total rather than inside it, and that is the whole claim: the
+                    total is what this job spends, and the yard's own rack is not spent. Shown
+                    at all because a rack priced at nothing makes owning formwork free, which
+                    is what a reader concludes from a total that quietly leaves it out. */}
+                {cost.ownedCost > 0 && (
+                  <>
+                    <Readout
+                      label="Own stock"
+                      value={money(cost.ownedCost)}
+                      value2="not in the total"
+                    />
+                    <Note>
+                      What the yard's own rack would earn over the days this job holds it, at the
+                      project's own hire rate — an internal recharge rather than cash. Not
+                      amortisation: there is no panel life here to spread a purchase over.
+                    </Note>
+                  </>
+                )}
                 {cost.ownedQuantityExcluded > 0 && (
                   <Note>
-                    {cost.ownedQuantityExcluded} parts come off the yard's own rack and are not
-                    priced — a sunk asset, amortising over its uses.{' '}
-                    {sets === undefined
-                      ? 'Date the pours and the set count below gives the reuse figure to amortise over.'
-                      : 'The reuse figures below are what it amortises over; the rate to apply to them is a commercial decision nothing here holds.'}
+                    {cost.ownedQuantityExcluded} parts off the rack could not be charged at all — no
+                    hire rate to charge them at, or nothing strikes them. Those are in this job at
+                    nothing.
                   </Note>
                 )}
                 {cost.gaps.map((gap) => (
@@ -321,8 +334,9 @@ export function FormworkTakeoffPanel() {
                       />
                     ))}
                     {/* Per catalog id under the per-kind rollup, because the rollup is what to
-                        rack and this is what to order. The reuse figure is the one that decides
-                        owning against hiring: eight uses amortises a purchase, one does not. */}
+                        rack and this is what to order. The reuse figure is here to be read
+                        against the peak — it is how hard the job works each set, and it is
+                        deliberately not the buy-or-hire argument: see the section below. */}
                     {sets.peaks.map((peak) => (
                       <div
                         className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
@@ -344,6 +358,69 @@ export function FormworkTakeoffPanel() {
                     <Note>
                       A set is counted free from its release date, so back-to-back pours share one
                       set with no slack. A gang cannot strike, clean and refit the same day.
+                    </Note>
+                  </Section>
+                )}
+            {/* Last, because it is the only section that says what to *do*: everything above
+                says what the job needs and this says what is missing from the rack. Absent
+                until both the programme and the rack exist, and each absence gets its own
+                sentence — a peak with nothing to compare it against is a rack nobody has
+                recorded, which is a different fix from a programme nobody has dated. */}
+            {acquisition === undefined
+              ? sets !== undefined && (
+                  <Note>
+                    Nothing here says what to buy or hire: the peak above is what stands at once,
+                    and no rack is recorded to compare it against. That is not a yard that owns
+                    nothing — enter what it owns in the project's formwork settings and the
+                    shortfall follows.
+                  </Note>
+                )
+              : acquisition.lines.length > 0 && (
+                  <Section title="To acquire">
+                    <Readout
+                      label="Short of the peak"
+                      value={String(acquisition.shortfallQuantity)}
+                      value2={
+                        acquisition.shortfallQuantity === 0
+                          ? 'the rack covers it'
+                          : 'parts, across ids'
+                      }
+                    />
+                    {acquisition.shortfallQuantity > 0 && acquisition.hireCost > 0 && (
+                      <Readout
+                        label="Hire vs buy"
+                        value={`${money(acquisition.hireCost)} / ${money(acquisition.purchaseCost)}`}
+                        value2={acquisition.complete ? undefined : 'both are floors'}
+                      />
+                    )}
+                    {/* The payback beside the verdict, never the verdict alone: "hire" is the
+                        answer on almost any single job, and the number is what a yard settles
+                        against its own order book. */}
+                    {acquisition.shortfalls.map((line) => (
+                      <div
+                        className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
+                        key={line.catalogId}
+                      >
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                          {line.description}
+                        </span>
+                        <span className="shrink-0 font-mono text-muted-foreground">
+                          {line.shortfall} by {line.peakOn}
+                          {line.paybackJobs === undefined
+                            ? ''
+                            : ` · ${line.verdict}, pays back over ${line.paybackJobs.toFixed(1)} jobs`}
+                        </span>
+                      </div>
+                    ))}
+                    {/* The list's own caveats are printed once at the top of the panel with
+                        every other warning, so what belongs here is the one sentence that
+                        stops the column above being misread. */}
+                    <Note>
+                      Short of the peak, not short of the bill — a job whose pours run in sequence
+                      reuses its sets, so this is normally far under the hired quantity in the lines
+                      below. Read the payback rather than the verdict: hire is cheaper than buying
+                      on almost any single job, and the number is what a yard settles against its
+                      own order book.
                     </Note>
                   </Section>
                 )}

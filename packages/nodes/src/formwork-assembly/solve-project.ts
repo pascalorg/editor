@@ -3,6 +3,7 @@ import type {
   BomHire,
   BomLine,
   BomSupply,
+  FormworkAcquisition,
   FormworkSchedule,
   FormworkSetCount,
   PourQuantities,
@@ -11,12 +12,14 @@ import type {
   StrikingTime,
 } from '@pascal-app/core/formwork'
 import {
+  acquireCaveats,
   bomCost,
   bomCostCaveats,
   bomHire,
   bomLines,
   bomSupply,
   bomWeightKg,
+  formworkAcquisition,
   formworkSchedule,
   formworkScheduleCaveats,
   formworkSetCaveats,
@@ -133,6 +136,16 @@ export interface ProjectFormwork {
    * threshold there is no count rather than a low one. See `sets.ts`.
    */
   sets?: FormworkSetCount
+  /**
+   * What the yard has to go out and get, and whether to buy it or hire it.
+   *
+   * Present only where `sets` and `supply` both are, which makes it the *second* field
+   * derived from other fields of this same solution rather than from the scene — and the
+   * first whose absence has two unrelated causes. No count means no peak to compare; no
+   * rack recorded means nothing to compare against, and neither is a yard that owns
+   * nothing. Both silences are carried to the surfaces as reasons rather than gaps.
+   */
+  acquisition?: FormworkAcquisition
   /**
    * True where the striking table came from a different code family than the pressure
    * standard, because the project's own family publishes none.
@@ -328,6 +341,13 @@ export function solveProjectFormwork(
   // above it does not have. Absent where the programme is too partial to sweep, which is the
   // module's own refusal rather than a condition tested here.
   const sets = anyDated ? formworkSetCount(schedule, pourQuantities) : undefined
+  // Both inputs are the solution's own, so this cannot disagree with the peak printed above
+  // it — and `ownedStock` rather than `supply` because the acquisition compares against the
+  // rack itself, while the split has already spent it line by line.
+  const acquisition =
+    sets && settings.ownedStock
+      ? formworkAcquisition(sets, settings.ownedStock, settings.rates)
+      : undefined
 
   return {
     elements,
@@ -343,6 +363,7 @@ export function solveProjectFormwork(
     ...(settings.rates ? { cost: bomCost(bom, settings.rates, hire, supply) } : {}),
     ...(anyDated ? { schedule } : {}),
     ...(sets ? { sets } : {}),
+    ...(acquisition ? { acquisition } : {}),
     strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
@@ -422,6 +443,16 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
     const total = solution.schedule.pours.length
     out.push(
       `No set count: ${dated} of ${total} pours are dated, which is too few to sweep. Counting sets over part of a programme reports a peak the job never has, and it comes out low — so there is no figure here rather than a small one. Date the remaining pours to get it.`,
+    )
+  }
+  if (solution.acquisition) out.push(...acquireCaveats(solution.acquisition))
+  // The other half of the same refusal, and it needs its own sentence because the remedy is
+  // different: a set count with nothing to compare it against is a rack nobody has recorded,
+  // not a programme nobody has dated. Only where there *is* a count, so a project missing
+  // both inputs is told about the dates once rather than about two separate absences.
+  else if (solution.sets) {
+    out.push(
+      'Nothing here says what to buy or hire: the peak above is what the job needs at once, and no rack is recorded to compare it against. That is not a yard that owns nothing — record what it owns with set_formwork_settings ownedStock and the shortfall follows.',
     )
   }
   return out

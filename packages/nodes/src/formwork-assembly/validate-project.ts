@@ -13,13 +13,15 @@ import { solveProjectFormwork } from './solve-project'
 /**
  * The scene, validated — with the evidence the shutters were actually built from.
  *
- * `validateFormwork` can run on nodes alone, and five of its eighteen invariants come
+ * `validateFormwork` can run on nodes alone, and six of its nineteen invariants come
  * back `notChecked` when it does: an unformable strip is a property of the packed
  * run, a code-envelope breach a property of the pressure solve, a tie that reaches
  * nothing a property of the catalog system, and a band beside an opening with no tie
  * in it — like a waterstop with a drilled tie hole in it — a property of where the
- * frames were drilled. None of those survive into the node graph, so a validator
- * handed only nodes cannot see them.
+ * frames were drilled. The sixth is not a property of a layout at all: a set-count
+ * shortage is a peak against the yard's rack, which needs the programme and the bill
+ * together. None of them survive into the node graph, so a validator handed only
+ * nodes cannot see them.
  *
  * It could re-derive them. That is the option this module exists to avoid. Packing
  * the runs a second time inside the validator would produce a second layout of every
@@ -30,8 +32,11 @@ import { solveProjectFormwork } from './solve-project'
  * pack and the envelope come *out* of that build as `ShutterEvidence`.
  *
  * Which means a scope with no shutters yet is validated on its nodes alone and says
- * so. That is the honest answer rather than a degraded one: those five invariants are
- * about a layout, and an element nobody has formed has no layout to fault.
+ * so. That is the honest answer rather than a degraded one: five of the six are about
+ * a layout, and an element nobody has formed has no layout to fault. The shortage is
+ * the exception and its silence has three unrelated causes — no pour dated, no rack
+ * recorded, or a programme too partial to sweep — so it names the inputs rather than
+ * a cause it cannot distinguish.
  */
 
 export interface ProjectValidation {
@@ -58,8 +63,16 @@ export function validateProjectFormwork(
   const envelopes = new Map<AnyNodeId, PressureEnvelope>()
   const systems = new Map<AnyNodeId, FormworkSystem>()
   const tieFields = new Map<AnyNodeId, readonly TieField[]>()
+  // A shortage names a catalog id and the pours that overlap on it, and a pour id is an
+  // assembly id — which the validator never sees, because it reads castable elements. This
+  // is the only layer that holds both, the same reason `bomHire`'s `targetsByMark` is built
+  // here rather than in core.
+  const elementIdByPourId = new Map<string, AnyNodeId>()
   for (const element of solution.elements) {
     const id = element.host.id as AnyNodeId
+    for (const shutter of element.shutters) {
+      elementIdByPourId.set(shutter.assembly.id as string, id)
+    }
     // Every shutter on the element, not one of them. A 9 m wall in three lifts is
     // three packs, and the open strip may be in any of them — taking only the first
     // would check the base lift and report a pass for the two above it.
@@ -93,6 +106,11 @@ export function validateProjectFormwork(
       envelopes,
       systems,
       tieFields,
+      // The solve's own acquisition, not a second one. Absent for three unrelated reasons —
+      // no pour dated, no rack recorded, or a programme too partial to sweep — and the check
+      // reports itself unavailable for all three rather than reading a scene as stocked.
+      ...(solution.acquisition === undefined ? {} : { acquisition: solution.acquisition }),
+      elementIdByPourId,
     }),
     shutteredIds: solution.elements.map((element) => element.host.id as AnyNodeId),
   }

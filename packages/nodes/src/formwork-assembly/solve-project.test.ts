@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core'
+import type { FormworkAcquisition } from '@pascal-app/core/formwork'
+import { acquireCaveats } from '@pascal-app/core/formwork'
 import type { FormworkAssemblyNode } from './schema'
 import { projectFormworkCaveats, solveProjectFormwork } from './solve-project'
 
@@ -611,10 +613,11 @@ describe('what the bill costs to hold', () => {
     expect(solution.cost?.lines.map((entry) => entry.line)).toEqual(solution.bom)
   })
 
-  test('the yard’s own panels are excluded from the total, not priced at zero', () => {
-    // A sunk asset amortising over a reuse count nothing in the model carries. Priced at
-    // zero it would make owning formwork free, which is the conclusion a reader draws
-    // from a total that quietly includes it.
+  test('the yard’s own panels are charged as an internal hire, outside the total', () => {
+    // Priced at zero they would make owning formwork free, which is what a reader concludes
+    // from a total that quietly includes them. Charged at the project's own rate for the
+    // period held, they cost what the plant department would recharge the site — and stay
+    // out of `totalCost`, which is cash this job spends.
     const solution = solveProjectFormwork(
       withSettings(steelWallScene(), {
         stock: { owned: { [PANEL_ID]: 4 } },
@@ -622,11 +625,23 @@ describe('what the bill costs to hold', () => {
       }),
     )
 
-    expect(solution.cost?.ownedQuantityExcluded).toBe(4)
     const panel = solution.cost?.lines.find((entry) => entry.line.catalogId === PANEL_ID)
+    expect(panel?.ownedCost).toBeGreaterThan(0)
+    expect(solution.cost?.ownedCost).toBeGreaterThan(0)
+    // Nothing left uncharged, so the zero means the recharge is complete rather than that
+    // the yard owns nothing.
+    expect(solution.cost?.ownedQuantityExcluded).toBe(0)
     const billed = solution.bom.find((line) => line.catalogId === PANEL_ID)?.quantity as number
-    // Charged on the hired remainder only, so the figure moves with the rack.
+    // The hire side is charged on the hired remainder only, so the figure moves with the rack.
     expect(panel?.hireCost).toBeLessThan((billed * 10 * (panel?.chargedDays ?? 0)) / 30)
+    // The claim the field's name makes: the total is the sum of the lines' own totals, and
+    // the internal recharge is beside it rather than inside it.
+    const summed = (solution.cost?.lines ?? []).reduce(
+      (sum, entry) => sum + (entry.totalCost ?? 0),
+      0,
+    )
+    expect(solution.cost?.totalCost).toBeCloseTo(summed, 6)
+    expect(solution.cost?.totalCost).toBeLessThan(summed + (solution.cost?.ownedCost ?? 0))
   })
 
   test('a minimum hire period charges the term rather than the time held, and says so', () => {
@@ -889,6 +904,112 @@ describe('how many sets the job needs', () => {
     for (const peak of solution.sets?.peaks ?? []) {
       expect(bespokeIds.has(peak.catalogId)).toBe(false)
     }
+  })
+})
+
+describe('what the job has to go out and get', () => {
+  /** Two lifts of one wall a fortnight apart, so the same set serves both. */
+  function sequential(settings: Record<string, unknown>): Record<string, AnyNode> {
+    return withSettings(
+      sceneOf(
+        makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+        makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+        makeAssembly('formwork-assembly_2', 'wall_1', 0, 1, { pourAt: '2026-03-16' }),
+      ),
+      {
+        pressureStandard: 'BS_8110',
+        schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+        ...settings,
+      },
+    )
+  }
+
+  test('the acquisition list is the peak against the rack, not the bill against it', () => {
+    // The whole reason this exists. Both lifts pass 20 panels through the job and the rack
+    // holds 4, so the split hires 16 — but only 10 stand at once, so 6 have to be acquired.
+    // Quoting the split's 16 as an order is the error, and it is nearly 3x here.
+    const solution = solveProjectFormwork(sequential({ stock: { owned: { [PANEL_ID]: 4 } } }))
+    const panel = solution.acquisition?.lines.find((line) => line.catalogId === PANEL_ID)
+    const hired = solution.supply?.lines.find((entry) => entry.line.catalogId === PANEL_ID)
+
+    expect(panel?.ownedQuantity).toBe(4)
+    expect(panel?.shortfall).toBe((panel?.peakQuantity as number) - 4)
+    expect(panel?.shortfall).toBeLessThan(hired?.hiredQuantity as number)
+    expect(panel?.reuseFactor).toBe(2)
+  })
+
+  test('a rack that covers the peak has nothing to acquire, however large the bill', () => {
+    const solution = solveProjectFormwork(sequential({ stock: { owned: { [PANEL_ID]: 500 } } }))
+    const panel = solution.acquisition?.lines.find((line) => line.catalogId === PANEL_ID)
+
+    expect(panel?.shortfall).toBe(0)
+    expect(panel?.surplus).toBeGreaterThan(0)
+    expect(solution.acquisition?.shortfalls.some((line) => line.catalogId === PANEL_ID)).toBe(false)
+  })
+
+  test('a shortfall is reported unpriced, because it is useful before any rate exists', () => {
+    const solution = solveProjectFormwork(sequential({ stock: { owned: { [PANEL_ID]: 4 } } }))
+    const panel = solution.acquisition?.lines.find((line) => line.catalogId === PANEL_ID)
+
+    expect(solution.acquisition?.shortfallQuantity).toBeGreaterThan(0)
+    expect(panel?.hireCost).toBeUndefined()
+    // No verdict at all rather than a default one: "hire" printed off no rates is a
+    // recommendation nobody made.
+    expect(panel?.verdict).toBeUndefined()
+    expect(panel?.paybackJobs).toBeUndefined()
+  })
+
+  test('rates put a payback beside the verdict, and hire wins over one job’s span', () => {
+    const solution = solveProjectFormwork(
+      sequential({
+        stock: { owned: { [PANEL_ID]: 4 } },
+        rates: {
+          currency: 'GBP',
+          byCatalogId: { [PANEL_ID]: { purchasePerUnit: 210, rentalPercentPerMonth: 3 } },
+        },
+      }),
+    )
+    const panel = solution.acquisition?.lines.find((line) => line.catalogId === PANEL_ID)
+
+    expect(solution.acquisition?.currency).toBe('GBP')
+    expect(panel?.verdict).toBe('hire')
+    // The figure that makes the verdict arguable: many jobs like this one before the
+    // purchase pays back, which is a question about an order book rather than this job.
+    expect(panel?.paybackJobs).toBeGreaterThan(1)
+    expect(solution.acquisition?.purchaseCost).toBeGreaterThan(
+      solution.acquisition?.hireCost as number,
+    )
+  })
+
+  test('a rack with no programme gets no acquisition, and is told about the dates once', () => {
+    // Two inputs missing must not read as two problems. The schedule's own absence already
+    // says nothing is dated, so the rack half stays quiet.
+    const solution = solveProjectFormwork(withStock(steelWallScene(), { owned: { [PANEL_ID]: 4 } }))
+    const caveats = projectFormworkCaveats(solution)
+
+    expect(solution.acquisition).toBeUndefined()
+    expect(caveats.some((line) => line.includes('what to buy or hire'))).toBe(false)
+  })
+
+  test('a programme with no rack says so, rather than implying the yard owns nothing', () => {
+    const solution = solveProjectFormwork(sequential({}))
+    const caveats = projectFormworkCaveats(solution)
+
+    expect(solution.sets).toBeDefined()
+    expect(solution.acquisition).toBeUndefined()
+    expect(caveats.some((line) => line.includes('what to buy or hire'))).toBe(true)
+    expect(caveats.some((line) => line.includes('ownedStock'))).toBe(true)
+  })
+
+  test('the acquisition’s own caveats are carried verbatim, so all three surfaces warn alike', () => {
+    const solution = solveProjectFormwork(sequential({ stock: { owned: { [PANEL_ID]: 4 } } }))
+    const caveats = projectFormworkCaveats(solution)
+
+    expect(caveats).toEqual(
+      expect.arrayContaining(acquireCaveats(solution.acquisition as FormworkAcquisition)),
+    )
+    // And not the absence sentence beside them, which would be the same fact twice.
+    expect(caveats.some((line) => line.includes('no rack is recorded'))).toBe(false)
   })
 })
 

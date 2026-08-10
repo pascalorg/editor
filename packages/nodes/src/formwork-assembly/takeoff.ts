@@ -86,6 +86,7 @@ export function takeoffCsv(
       ...(solution.cost ? { cost: solution.cost } : {}),
       ...(solution.schedule ? { schedule: solution.schedule } : {}),
       ...(solution.sets ? { sets: solution.sets } : {}),
+      ...(solution.acquisition ? { acquisition: solution.acquisition } : {}),
     }),
   }
 }

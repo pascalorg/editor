@@ -1,3 +1,13 @@
+export {
+  ACQUIRE_GAP_LABELS,
+  ACQUIRE_VERDICT_LABELS,
+  type AcquireGap,
+  type AcquireLine,
+  type AcquireVerdict,
+  acquireCaveats,
+  type FormworkAcquisition,
+  formworkAcquisition,
+} from './acquire'
 export { type BomCsvScope, bomCsv, bomCsvFilename } from './bom-csv'
 export {
   ADJUSTABLE_COLUMN_CLAMPS,

@@ -5,6 +5,7 @@ import { SlabNode } from '../../../schema/nodes/slab'
 import { WallNode } from '../../../schema/nodes/wall'
 import { WindowNode } from '../../../schema/nodes/window'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
+import type { AcquireLine, FormworkAcquisition } from '../acquire'
 import { formworkSystem } from '../catalog'
 import { packStrip } from '../layout/strip-pack'
 import { pressureEnvelope } from '../pressure'
@@ -1170,6 +1171,109 @@ describe('corner units against each other, and against openings', () => {
     })
     const report = validateFormwork([...nodes, window] as AnyNode[], { systems: inSystem(nodes) })
     expect(report.findings.some((f) => f.invariant === 'OPENING_INSIDE_CORNER_UNIT')).toBe(false)
+  })
+})
+
+describe('set count shortage', () => {
+  /**
+   * The check's input, built by hand rather than from a real solve.
+   *
+   * `formworkAcquisition` is tested against real programmes in `acquire.test.ts`; what is
+   * left to get wrong here is the join — which elements a shortfall names, and whether a
+   * scope that excludes them still reports it against something.
+   */
+  const acquisition = (
+    over: Partial<AcquireLine> & { peakPourIds: string[] },
+  ): FormworkAcquisition => {
+    const line: AcquireLine = {
+      catalogId: 'PANEL_1200',
+      kind: 'panel',
+      description: '1200 mm panel',
+      peakQuantity: 180,
+      peakOn: '2026-03-02',
+      ownedQuantity: 100,
+      shortfall: 80,
+      surplus: 0,
+      reuseFactor: 2,
+      committedDays: 30,
+      utilisation: 0.5,
+      gaps: [],
+      ...over,
+    }
+    return {
+      lines: [line],
+      shortfalls: line.shortfall > 0 ? [line] : [],
+      surpluses: line.surplus > 0 ? [line] : [],
+      shortfallQuantity: line.shortfall,
+      hireCost: 0,
+      purchaseCost: 0,
+      complete: true,
+      gaps: [],
+    }
+  }
+
+  it('is not checked at all until a count and a rack both exist', () => {
+    // Three different silences reach this — no dates, no rack, or a programme too partial
+    // to sweep — and a scene with any of them must not read as adequately stocked.
+    const report = validateFormwork([wall()] as AnyNode[])
+    const entry = report.notChecked.find((e) => e.invariant === 'SET_COUNT_SHORTAGE')
+    expect(entry?.needs).toContain('ownedStock')
+  })
+
+  it('names the overlapping pours’ elements, and stops declaring itself unavailable', () => {
+    const a = wall({ start: [0, 0], end: [5, 0] })
+    const b = wall({ start: [0, 10], end: [5, 10] })
+    const report = validateFormwork([a, b] as AnyNode[], {
+      acquisition: acquisition({ peakPourIds: ['pour-a', 'pour-b'] }),
+      elementIdByPourId: new Map([
+        ['pour-a', a.id as AnyNodeId],
+        ['pour-b', b.id as AnyNodeId],
+      ]),
+    })
+
+    const found = report.findings.find((f) => f.invariant === 'SET_COUNT_SHORTAGE')
+    expect(found?.elementIds).toEqual([a.id, b.id].sort())
+    // A purchase order rather than an unbuildable shutter: the forms stand up fine.
+    expect(found?.severity).toBe('warning')
+    expect(found?.message).toContain('80 more have to be on site')
+    // Both remedies, because acquiring is not the only one.
+    expect(found?.message).toContain('moving one of those pours')
+    expect(report.notChecked.some((e) => e.invariant === 'SET_COUNT_SHORTAGE')).toBe(false)
+  })
+
+  it('says nothing where the rack covers the peak', () => {
+    const a = wall()
+    const report = validateFormwork([a] as AnyNode[], {
+      acquisition: acquisition({ peakPourIds: ['pour-a'], ownedQuantity: 200, shortfall: 0 }),
+      elementIdByPourId: new Map([['pour-a', a.id as AnyNodeId]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'SET_COUNT_SHORTAGE')).toBe(false)
+    // Checked and clean, so it is not unavailable either.
+    expect(report.notChecked.some((e) => e.invariant === 'SET_COUNT_SHORTAGE')).toBe(false)
+  })
+
+  it('drops a shortage whose pours are all outside the scope rather than re-pointing it', () => {
+    // The peak is a fact about the whole programme and a scope is a subset of it. Pinning
+    // the finding on an element that is not in the overlap sends the reader to the wrong wall.
+    const inScope = wall({ start: [0, 0], end: [5, 0] })
+    const elsewhere = wall({ start: [0, 10], end: [5, 10] })
+    const report = validateFormwork([inScope, elsewhere] as AnyNode[], {
+      elementIds: [inScope.id as AnyNodeId],
+      acquisition: acquisition({ peakPourIds: ['pour-b'] }),
+      elementIdByPourId: new Map([['pour-b', elsewhere.id as AnyNodeId]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'SET_COUNT_SHORTAGE')).toBe(false)
+  })
+
+  it('reports a shortage in the summary alongside the geometric warnings', () => {
+    const a = wall()
+    const summary = validationSummary(
+      validateFormwork([a] as AnyNode[], {
+        acquisition: acquisition({ peakPourIds: ['pour-a'] }),
+        elementIdByPourId: new Map([['pour-a', a.id as AnyNodeId]]),
+      }),
+    )
+    expect(summary.some((entry) => entry.includes('80 more have to be on site'))).toBe(true)
   })
 })
 

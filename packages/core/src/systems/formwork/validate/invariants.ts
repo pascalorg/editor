@@ -1,5 +1,6 @@
 import type { ConstructionJointNode, WaterstopType } from '../../../schema/nodes/construction-joint'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
+import type { FormworkAcquisition } from '../acquire'
 import { type FormworkSystem, fitCorner, tieForThickness } from '../catalog'
 import {
   type CastableElement,
@@ -144,6 +145,27 @@ export interface ValidateOptions {
    * a band as tied by a hole in a different pour.
    */
   tieFields?: Map<AnyNodeId, readonly TieField[]>
+  /**
+   * What the programme needs at once against what the yard owns, for the shortage check.
+   *
+   * The only input here that is a *derived solution* rather than scene data, and it is
+   * passed rather than computed for the reason the packs and envelopes are: deriving it
+   * would mean a second set count, and a validator that disagreed with the takeoff about
+   * how many panels are short would be worse than one that stayed quiet.
+   *
+   * Absent for three different reasons — no dates, no rack recorded, or a programme too
+   * partial to sweep — and all three are honest silences, so the check declares itself
+   * unavailable rather than reporting a scene as adequately stocked.
+   */
+  acquisition?: FormworkAcquisition
+  /**
+   * Which element each pour id belongs to, so a shortage can name what to look at.
+   *
+   * A shortfall has no element of its own: it is a property of a catalog id across the
+   * pours that overlap. The map is the caller's because the pour ids are assembly ids and
+   * this module never sees assemblies.
+   */
+  elementIdByPourId?: ReadonlyMap<string, AnyNodeId>
 }
 
 function finding(
@@ -1270,6 +1292,54 @@ function codeEnvelopes(envelopes: ReadonlyMap<AnyNodeId, PressureEnvelope>): Fin
 }
 
 /**
+ * A part the concurrent pours need more of than the yard owns.
+ *
+ * The last of the plan's assertions to have had no input, and the one whose absence was
+ * hardest to see: every other unavailable check is about geometry nobody has modelled, and
+ * this one was about arithmetic that had simply never been done. The set count made the
+ * peak available and `formworkAcquisition` compares it against the rack, so what is left
+ * here is to say it in the validator's own voice — beside the clashes, where somebody
+ * reviewing buildability will meet it, rather than only in a takeoff they may not open.
+ *
+ * A warning rather than an error, and the distinction is this suite's own: an error is
+ * something nobody can erect as specified, and a shortage is a purchase order. The shutter
+ * is buildable; the programme is not fundable yet. Two remedies, both named — acquire the
+ * difference, or move one of the overlapping pours, which is why the finding carries them.
+ *
+ * Only the pours in scope, because the peak is a fact about the whole programme and the
+ * elements a caller asked about are a subset. A finding is dropped rather than re-pointed
+ * where none of its pours is in scope: reporting it against an element that is not part of
+ * the overlap sends the reader to the wrong wall.
+ */
+function setShortages(
+  acquisition: FormworkAcquisition,
+  elementIdByPourId: ReadonlyMap<string, AnyNodeId>,
+  scoped: ReadonlySet<AnyNodeId>,
+): Finding[] {
+  const out: Finding[] = []
+  for (const line of acquisition.shortfalls) {
+    const elementIds = [
+      ...new Set(
+        line.peakPourIds
+          .map((pourId) => elementIdByPourId.get(pourId))
+          .filter((id): id is AnyNodeId => id !== undefined && scoped.has(id)),
+      ),
+    ].sort()
+    if (elementIds.length === 0) continue
+    const pours = line.peakPourIds.length
+    out.push(
+      finding(
+        'SET_COUNT_SHORTAGE',
+        'warning',
+        elementIds,
+        `${line.description}: ${pours} ${pours === 1 ? 'pour needs' : 'pours need'} ${line.peakQuantity} at once on ${line.peakOn} and the yard owns ${line.ownedQuantity}, so ${line.shortfall} more have to be on site by then. Acquiring them is one answer and moving one of those pours out of the overlap is the other.`,
+      ),
+    )
+  }
+  return out
+}
+
+/**
  * The assertions this scene cannot make, and what each one would need.
  *
  * Declared rather than omitted. A report that lists only what it checked reads as
@@ -1282,6 +1352,7 @@ function unavailable(
   hasEnvelopes: boolean,
   hasSystem: boolean,
   hasTieFields: boolean,
+  hasAcquisition: boolean,
 ) {
   const out: ValidationReport['notChecked'] = [
     { invariant: 'TIES_THROUGH_REBAR', needs: 'rebar geometry — no reinforcement is modelled' },
@@ -1298,12 +1369,18 @@ function unavailable(
       invariant: 'CURVE_RADIUS_BELOW_SYSTEM_MINIMUM',
       needs: 'a minimum radius per system — the catalogs carry no such field',
     },
-    {
+  ]
+  if (!hasAcquisition) {
+    // Three different silences reach here — no pour dates, no rack recorded, or a programme
+    // too partial to sweep — and none of them can be told apart from this side. Naming the
+    // input rather than the cause is the honest version: whichever it is, the remedy is to
+    // give the takeoff enough to answer, and this check speaks the moment it can.
+    out.push({
       invariant: 'SET_COUNT_SHORTAGE',
       needs:
-        'a peak compared against the yard’s own rack — `sets.ts` counts the peak, and nothing yet asks whether the project owns it',
-    },
-  ]
+        'a set count against the yard’s rack — date the pours and record `ownedStock`, and the takeoff’s own peak is compared here',
+    })
+  }
   if (!hasPacks) {
     out.push({
       invariant: 'UNFORMABLE_STRIP',
@@ -1397,6 +1474,13 @@ export function validateFormwork(
     ...junctionFit(scoped, systems),
     ...cornerUnitOverlaps(scoped, coverages, systems),
     ...openingsInsideCornerUnits(scoped, coverages, systems),
+    ...(options.acquisition === undefined
+      ? []
+      : setShortages(
+          options.acquisition,
+          options.elementIdByPourId ?? new Map(),
+          new Set(scoped.map((element) => element.id)),
+        )),
   ]
 
   // Errors first, then by element, so the list reads in the order somebody would
@@ -1419,6 +1503,7 @@ export function validateFormwork(
       envelopes.size > 0,
       systems.size > 0,
       tieFields.size > 0,
+      options.acquisition !== undefined,
     ),
   }
 }

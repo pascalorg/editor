@@ -248,4 +248,50 @@ describe('takeoffCsv', () => {
 
     expect(text).not.toContain('To hire')
   })
+
+  test('the acquisition list reaches the file, and is smaller than the hired quantity', () => {
+    // The one join in this file where two figures the reader can see disagree by design:
+    // the split spends the rack line by line and the shortfall compares it against the peak
+    // day, so a sequential programme hires more than it acquires.
+    const scene = {
+      ...sceneOf(
+        makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+        makeAssembly('formwork-assembly_1', 'wall_1', 0),
+        makeAssembly('formwork-assembly_2', 'wall_1', 1),
+      ),
+    }
+    const dated = Object.fromEntries(
+      Object.entries(scene).map(([id, node]) => [
+        id,
+        node.type === 'formwork-assembly'
+          ? ({
+              ...node,
+              pourAt: id.endsWith('_1') ? '2026-03-02' : '2026-04-13',
+            } as unknown as AnyNode)
+          : node,
+      ]),
+    )
+    const plain = solveProjectFormwork(dated)
+    const panel = plain.bom.find((row) => row.kind === 'panel')
+    const solution = solveProjectFormwork(withStock(dated, { [panel?.catalogId as string]: 2 }))
+
+    const { text } = takeoffCsv(solution, 'Project')
+    const line = solution.acquisition?.lines.find((entry) => entry.catalogId === panel?.catalogId)
+    const hired = solution.supply?.lines.find((entry) => entry.line.catalogId === panel?.catalogId)
+
+    expect(text).toContain('TO ACQUIRE')
+    expect(text).toContain(`Short in total,,,,${solution.acquisition?.shortfallQuantity}`)
+    expect(line?.shortfall).toBeLessThan(hired?.hiredQuantity as number)
+  })
+
+  test('a programme with no rack carries no acquisition block', () => {
+    const solution = solveProjectFormwork(
+      sceneOf(
+        makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+        makeAssembly('formwork-assembly_1', 'wall_1'),
+      ),
+    )
+
+    expect(takeoffCsv(solution, 'Project').text).not.toContain('TO ACQUIRE')
+  })
 })

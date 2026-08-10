@@ -106,6 +106,28 @@ export interface SetPeak {
    * hire — one use is a hire every time.
    */
   reuseFactor: number
+  /** `YYYY-MM-DD` — the first day any of this item is committed anywhere in the scope. */
+  committedFrom: string
+  /** `YYYY-MM-DD` — the last day any of it is still held. */
+  committedTo: string
+  /**
+   * `committedFrom` to `committedTo` inclusive, days — what a hire desk charges for.
+   *
+   * Not the sum of the item's strike periods, and the difference is the point: a set used
+   * on five pours a week apart is held two days each time and *on site* for five weeks. The
+   * yard invoices the five weeks. Summing the periods gives ten days and is the single
+   * easiest way to under-price a reused set by 70 %.
+   */
+  committedDays: number
+  /**
+   * Quantity × days held, summed over every fitting — the work the item actually does.
+   *
+   * Against `peakQuantity × committedDays`, which is what holding the peak for the whole
+   * span costs, this is how busy the set is kept. A low ratio is a programme with gaps in
+   * it rather than a design fault, and it is the figure that says whether hiring the peak
+   * for the span is being paid for idle plant.
+   */
+  fittedUnitDays: number
 }
 
 /** A kind's rack: the sum of its catalog ids' peaks. */
@@ -377,6 +399,8 @@ export function formworkSetCount(
     const { peak, on, ids } = peakOver(held)
     if (peak === 0 || on === undefined) continue
     const totalFitted = held.reduce((sum, entry) => sum + entry.quantity, 0)
+    const from = held.reduce((first, entry) => Math.min(first, entry.interval.from), Infinity)
+    const to = held.reduce((last, entry) => Math.max(last, entry.interval.to), -Infinity)
     peaks.push({
       catalogId,
       kind: record.kind,
@@ -386,6 +410,13 @@ export function formworkSetCount(
       peakPourIds: ids,
       totalFitted,
       reuseFactor: totalFitted / peak,
+      committedFrom: toDateString(from),
+      committedTo: toDateString(to),
+      committedDays: to - from + 1,
+      fittedUnitDays: held.reduce(
+        (sum, entry) => sum + entry.quantity * (entry.interval.to - entry.interval.from + 1),
+        0,
+      ),
     })
   }
   peaks.sort((a, b) => b.peakQuantity - a.peakQuantity || a.catalogId.localeCompare(b.catalogId))

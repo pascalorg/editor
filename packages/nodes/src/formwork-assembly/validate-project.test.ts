@@ -8,12 +8,12 @@ import { validateProjectFormwork } from './validate-project'
  * The scene validated against the layout it actually has.
  *
  * `invariants.test.ts` covers the checks. This covers the wiring, and the wiring is
- * where the interesting failures are: five of the eighteen invariants are about a
- * packed run, a pressure solve, a catalog system and a drilled hole grid, none of
- * which exist in the node graph, so they only run if the evidence reaches them from
- * the build. The two ways that goes wrong are silent in both directions — an
- * invariant reported as `notChecked` when the data was right there, and an invariant
- * run against another element's hardware.
+ * where the interesting failures are: six of the nineteen invariants are about a
+ * packed run, a pressure solve, a catalog system, a drilled hole grid or the
+ * programme's own peak, none of which exist in the node graph, so they only run if the
+ * evidence reaches them from the build. The two ways that goes wrong are silent in
+ * both directions — an invariant reported as `notChecked` when the data was right
+ * there, and an invariant run against another element's hardware.
  */
 
 /** The five checks that only run on evidence out of a build. */
@@ -507,5 +507,139 @@ describe('validateProjectFormwork', () => {
 
     expect(unchecked(nodes)).toContain('TIES_THROUGH_REBAR')
     expect(unchecked(nodes)).toContain('GANG_WEIGHT_OVER_CRANE_CAPACITY')
+  })
+})
+
+describe('the shortage check, which needs the takeoff rather than the layout', () => {
+  /** The panel type a plain steel-panel wall bills, so a small rack under-covers a peak. */
+  const PANEL_ID = 'doka-framax-panel-588104500'
+
+  /** The project settings node, parented to a site the scope never looks at. */
+  function withSettings(
+    nodes: Record<string, AnyNode>,
+    settings: Record<string, unknown>,
+  ): Record<string, AnyNode> {
+    return {
+      ...nodes,
+      'formwork-settings_1': {
+        object: 'node',
+        id: 'formwork-settings_1',
+        type: 'formwork-settings',
+        parentId: 'site_1',
+        visible: true,
+        metadata: {},
+        children: [],
+        pressureStandard: 'BS_8110',
+        schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+        ...settings,
+      } as unknown as AnyNode,
+    }
+  }
+
+  /** Two walls poured on one day, so their panels stand at the same time. */
+  function concurrent(settings: Record<string, unknown>): Record<string, AnyNode> {
+    return withSettings(
+      sceneOf(
+        makeWall('wall_1'),
+        makeWall('wall_2', { start: [0, 10], end: [6, 10] }),
+        makeAssembly('formwork-assembly_1', 'wall_1', 0, { pourAt: '2026-03-02' }),
+        makeAssembly('formwork-assembly_2', 'wall_2', 0, { pourAt: '2026-03-02' }),
+      ),
+      settings,
+    )
+  }
+
+  test('the peak against the rack reaches the validator, and names both walls', () => {
+    // The join this module is for, on the one check whose evidence is a *solution* rather
+    // than a layout. Computed here a second time it could disagree with the takeoff about
+    // how many panels are short, which is worse than staying quiet.
+    const nodes = concurrent({ stock: { owned: { [PANEL_ID]: 4 } } })
+    const validation = validateProjectFormwork(nodes)
+
+    const found = validation.report.findings.find(
+      (finding) => finding.invariant === 'SET_COUNT_SHORTAGE',
+    )
+    expect(found?.elementIds).toEqual(['wall_1', 'wall_2'])
+    expect(found?.severity).toBe('warning')
+    expect(unchecked(nodes)).not.toContain('SET_COUNT_SHORTAGE')
+  })
+
+  /**
+   * A rack holding exactly what this programme's peaks ask for.
+   *
+   * Read off the solve rather than hand-listed, because a shortage is per catalog id and a
+   * steel-panel wall peaks on ties, walers and props as well as panels — a rack of panels
+   * alone leaves every other id short, which is a real finding and not the one under test.
+   */
+  function rackFor(nodes: Record<string, AnyNode>): Record<string, number> {
+    const peaks = solveProjectFormwork(nodes).sets?.peaks ?? []
+    return Object.fromEntries(peaks.map((peak) => [peak.catalogId, peak.peakQuantity]))
+  }
+
+  test('a rack that covers the peak is checked and clean, not unchecked', () => {
+    const nodes = concurrent({ stock: { owned: rackFor(concurrent({})) } })
+
+    expect(
+      validateProjectFormwork(nodes).report.findings.some(
+        (finding) => finding.invariant === 'SET_COUNT_SHORTAGE',
+      ),
+    ).toBe(false)
+    expect(unchecked(nodes)).not.toContain('SET_COUNT_SHORTAGE')
+  })
+
+  test('sequential pours share their sets, so a one-pour rack is short of nothing', () => {
+    // The claim the module rests on, asserted through the validator: the bill is identical
+    // in both scenes and only the dates move. A rack sized to the sequential peak covers
+    // the whole job when the pours run a fortnight apart, and half of it when they do not.
+    const sequential = (stock: Record<string, number>) =>
+      withSettings(
+        sceneOf(
+          makeWall('wall_1'),
+          makeWall('wall_2', { start: [0, 10], end: [6, 10] }),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_2', 'wall_2', 0, { pourAt: '2026-04-13' }),
+        ),
+        { stock: { owned: stock } },
+      )
+    const rack = rackFor(sequential({}))
+
+    const shortage = (scene: Record<string, AnyNode>) =>
+      validateProjectFormwork(scene).report.findings.some(
+        (finding) => finding.invariant === 'SET_COUNT_SHORTAGE',
+      )
+    expect(shortage(sequential(rack))).toBe(false)
+    expect(shortage(concurrent({ stock: { owned: rack } }))).toBe(true)
+  })
+
+  test('no rack recorded is unchecked, not stocked', () => {
+    // A project that has never opened the settings has not said it owns nothing, and the
+    // check has to say it could not run rather than report the peak as covered.
+    expect(unchecked(concurrent({}))).toContain('SET_COUNT_SHORTAGE')
+  })
+
+  test('an undated programme is unchecked for the same reason, and says which inputs', () => {
+    const nodes = withSettings(
+      sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1')),
+      { stock: { owned: { [PANEL_ID]: 4 } } },
+    )
+    const entry = validateProjectFormwork(nodes).report.notChecked.find(
+      (item) => item.invariant === 'SET_COUNT_SHORTAGE',
+    )
+
+    expect(entry?.needs).toContain('ownedStock')
+    expect(entry?.needs).toContain('date the pours')
+  })
+
+  test('a scope excluding the overlapping pours drops the shortage rather than re-pointing it', () => {
+    // The peak is a fact about the whole programme; a scope is a subset. Pinned on an
+    // element outside the overlap it would send the reader to the wrong wall.
+    const nodes = concurrent({ stock: { owned: { [PANEL_ID]: 4 } } })
+    const scoped = validateProjectFormwork(nodes, { hostIds: ['wall_1'] })
+
+    // In scope the shortage still names only what the caller asked about.
+    expect(
+      scoped.report.findings.find((finding) => finding.invariant === 'SET_COUNT_SHORTAGE')
+        ?.elementIds,
+    ).toEqual(['wall_1'])
   })
 })
