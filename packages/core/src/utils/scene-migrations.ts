@@ -7,3 +7,7 @@ export {
   type RetiredSceneNodeMigration,
   removeRetiredDrawingSheetNodes,
 } from './retired-scene-nodes'
+export {
+  migrateVerticalSceneNodes,
+  type VerticalSceneMigration,
+} from './vertical-scene-migration'
