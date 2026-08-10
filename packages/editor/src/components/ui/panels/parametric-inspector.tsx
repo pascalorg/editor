@@ -15,6 +15,7 @@ import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { resolveMoveActionNode } from '../../../lib/direct-manipulation'
+import { resolveNodeDisplayName } from '../../../lib/node-display-name'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
@@ -56,6 +57,20 @@ export function ParametricInspector({
   // a drag re-renders the entire panel + every field + every SliderControl.
   // Per-field subscriptions live on FieldRenderer below.
   const nodeType = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
+
+  // Same fallback chain the scene tree uses, and for the same reason: a kind
+  // whose chips differ only in their fields — a low rack against a pallet rack
+  // — has ONE `presentation.label`, so the header named the kind and never the
+  // product. Reading it here is what makes `def.tree.label` reach the surface
+  // a user actually looks at while editing.
+  //
+  // Selected out as a STRING, not a node: the type subscription above is
+  // deliberately primitive so slider drags don't re-render the panel and every
+  // field with it. A string keeps that property — it changes when the name
+  // changes and stays put for the thousand updates of a drag.
+  const nodeTitle = useScene((s) =>
+    resolveNodeDisplayName(selectedId ? s.nodes[selectedId] : undefined, s.nodes),
+  )
 
   const def = nodeType ? nodeRegistry.get(nodeType) : undefined
   const parametrics = def?.parametrics
@@ -140,7 +155,7 @@ export function ParametricInspector({
   }
 
   const presentation = def.presentation
-  const title = presentation?.label ?? nodeType ?? ''
+  const title = nodeTitle
   const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false

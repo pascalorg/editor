@@ -4,6 +4,7 @@ import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { resolveNodeDisplayName } from '../../../../../lib/node-display-name'
 import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import { InlineRenameInput } from './inline-rename-input'
 import {
@@ -45,7 +46,6 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
   const setHoveredId = useViewer((state) => state.setHoveredId)
 
   const presentation = node ? nodeRegistry.get(node.type)?.presentation : undefined
-  const tree = node ? nodeRegistry.get(node.type)?.tree : undefined
   const icon = presentation?.icon
   const iconSrc = icon?.kind === 'url' ? icon.src : '/icons/roof.webp'
   const iconElement =
@@ -61,8 +61,7 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
       />
     )
   const snapTarget = resolveNodeSnapTarget(node)
-  const defaultName =
-    node ? tree?.label?.(node, useScene.getState().nodes) || node.name || presentation?.label || 'Node' : 'Node'
+  const defaultName = resolveNodeDisplayName(node, useScene.getState().nodes) || 'Node'
   const hasChildren = children.length > 0
 
   useEffect(() => {

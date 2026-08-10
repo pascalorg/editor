@@ -320,6 +320,31 @@ export class MergedOutlineNode extends TempNode {
 
     _rendererState = RendererUtils.resetRendererAndSceneState(renderer, scene, _rendererState)
 
+    /**
+     * Stop the nested passes below from walking the whole scene graph again.
+     *
+     * Each `renderer.render(scene, camera)` here begins with
+     * `if (scene.matrixWorldAutoUpdate === true) scene.updateMatrixWorld()`
+     * (`Renderer.js`), so the depth pass and both mask passes each recompute
+     * every world matrix in the scene. They cannot have changed: this runs
+     * from `updateBefore` *during* an outer render whose own walk already
+     * completed, the passes share that render's camera, and nothing between
+     * them writes a transform — `_buildCache` and the render-object overrides
+     * only read.
+     *
+     * `RendererUtils.resetSceneState` saves and clears `background`,
+     * `backgroundNode` and `overrideMaterial`, but not this flag, so it is
+     * saved and restored by hand on both exit paths.
+     *
+     * Measured on a 3,991-node scene (2026-08-07 camera-movement trace):
+     * `updateMatrixWorld` was 17.3% of samples with 99.9% of it called from
+     * `_renderScene`, and 42.2% of the trace sat inside a nested render — the
+     * largest single item in the profile, ahead of anything the scene's own
+     * geometry costs.
+     */
+    const sceneMatrixWorldAutoUpdate = scene.matrixWorldAutoUpdate
+    scene.matrixWorldAutoUpdate = false
+
     const size = renderer.getDrawingBufferSize(_size)
     this.setSize(size.width, size.height)
 
@@ -337,6 +362,7 @@ export class MergedOutlineNode extends TempNode {
     }
 
     if (!hasAny) {
+      scene.matrixWorldAutoUpdate = sceneMatrixWorldAutoUpdate
       RendererUtils.restoreRendererAndSceneState(renderer, scene, _rendererState)
       return
     }
@@ -406,6 +432,7 @@ export class MergedOutlineNode extends TempNode {
     if (hasPrimary) this._runEdgePipeline(renderer, 'A')
     if (hasSecondary) this._runEdgePipeline(renderer, 'B')
 
+    scene.matrixWorldAutoUpdate = sceneMatrixWorldAutoUpdate
     RendererUtils.restoreRendererAndSceneState(renderer, scene, _rendererState)
   }
 
