@@ -3,15 +3,7 @@
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
-import {
-  applySceneGraphToEditor,
-  Editor,
-  type SceneGraph,
-  type SidebarTab,
-  useEditor,
-} from '@pascal-app/editor'
-import { Hammer, Layers } from 'lucide-react'
-import Image from 'next/image'
+import { applySceneGraphToEditor, Editor, type SceneGraph, useEditor } from '@pascal-app/editor'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -19,7 +11,6 @@ import { AccountSettingsSection } from '@/components/account-settings-section'
 import { useSession } from '@/components/auth/session-provider'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
-import { BuildTab } from './build-tab'
 import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
