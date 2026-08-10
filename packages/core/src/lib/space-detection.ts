@@ -77,12 +77,14 @@ export type AutoSlabSyncPlan = {
 
 export type AutoSlabPlanningContext = {
   elevationForRoom?: (polygon: Array<[number, number]>) => number | undefined
+  previousElevationForRoom?: (polygon: Array<[number, number]>) => number | undefined
 }
 
 export type AutoCeilingSyncPlan = {
   create: CeilingNodeType[]
   update: Array<{ id: CeilingNodeType['id']; data: Partial<CeilingNodeType> }>
   delete: Array<CeilingNodeType['id']>
+  reparent: Array<{ id: AnyNodeId; parentId: CeilingNodeType['id'] }>
 }
 
 export type AutoZoneSyncPlan = {
@@ -124,6 +126,8 @@ export type AutoCeilingPlanningContext = {
    */
   ceilingClampBound?: (polygon: Array<[number, number]>) => number
   heightForRoom?: (polygon: Array<[number, number]>) => number | undefined
+  previousHeightForRoom?: (polygon: Array<[number, number]>) => number | undefined
+  childPosition?: (childId: AnyNodeId) => [number, number] | undefined
 }
 
 function pointFromTuple(point: [number, number]): Point2D {
@@ -874,6 +878,303 @@ function sameTuplePolygon(current: Array<[number, number]>, next: Array<[number,
   )
 }
 
+function sameTuplePolygons(
+  current: Array<Array<[number, number]>>,
+  next: Array<Array<[number, number]>>,
+) {
+  return (
+    current.length === next.length &&
+    current.every((polygon, index) => {
+      const nextPolygon = next[index]
+      return nextPolygon ? sameTuplePolygon(polygon, nextPolygon) : false
+    })
+  )
+}
+
+type SurfaceWithOpenings = {
+  holes: Array<Array<[number, number]>>
+  holeMetadata: SlabNodeType['holeMetadata']
+}
+
+function crossProduct(a: Point2D, b: Point2D, c: Point2D) {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+}
+
+function lineIntersection(start: Point2D, end: Point2D, clipStart: Point2D, clipEnd: Point2D) {
+  const segment = { x: end.x - start.x, y: end.y - start.y }
+  const clip = { x: clipEnd.x - clipStart.x, y: clipEnd.y - clipStart.y }
+  const denominator = segment.x * clip.y - segment.y * clip.x
+  if (Math.abs(denominator) < 1e-9) return end
+  const offset = { x: clipStart.x - start.x, y: clipStart.y - start.y }
+  const t = (offset.x * clip.y - offset.y * clip.x) / denominator
+  return { x: start.x + segment.x * t, y: start.y + segment.y * t }
+}
+
+function clipPolygonToConvex(subject: Point2D[], clipPolygon: Point2D[]) {
+  if (subject.length < 3 || clipPolygon.length < 3) return []
+  const orientation = polygonArea(clipPolygon) >= 0 ? 1 : -1
+  let output = [...subject]
+
+  for (let index = 0; index < clipPolygon.length; index += 1) {
+    const clipStart = clipPolygon[index]!
+    const clipEnd = clipPolygon[(index + 1) % clipPolygon.length]!
+    const input = output
+    output = []
+    if (input.length === 0) break
+
+    let previous = input[input.length - 1]!
+    let previousInside = orientation * crossProduct(clipStart, clipEnd, previous) >= -1e-8
+    for (const current of input) {
+      const currentInside = orientation * crossProduct(clipStart, clipEnd, current) >= -1e-8
+      if (currentInside !== previousInside) {
+        output.push(lineIntersection(previous, current, clipStart, clipEnd))
+      }
+      if (currentInside) output.push(current)
+      previous = current
+      previousInside = currentInside
+    }
+    output = dedupeSequentialPoints(output, 1e-7)
+  }
+
+  return output.length >= 3 && Math.abs(polygonArea(output)) > 1e-8 ? output : []
+}
+
+function isConvexPolygon(polygon: Point2D[]) {
+  let direction = 0
+  for (let index = 0; index < polygon.length; index += 1) {
+    const cross = crossProduct(
+      polygon[index]!,
+      polygon[(index + 1) % polygon.length]!,
+      polygon[(index + 2) % polygon.length]!,
+    )
+    if (Math.abs(cross) < 1e-8) continue
+    const nextDirection = Math.sign(cross)
+    if (direction !== 0 && nextDirection !== direction) return false
+    direction = nextDirection
+  }
+  return true
+}
+
+function pointInTriangle(point: Point2D, a: Point2D, b: Point2D, c: Point2D) {
+  return (
+    crossProduct(a, b, point) >= -1e-8 &&
+    crossProduct(b, c, point) >= -1e-8 &&
+    crossProduct(c, a, point) >= -1e-8
+  )
+}
+
+function triangulatePolygon(polygon: Point2D[]) {
+  const points = polygonArea(polygon) >= 0 ? [...polygon] : [...polygon].reverse()
+  const indices = points.map((_, index) => index)
+  const triangles: Point2D[][] = []
+  let attempts = 0
+
+  while (indices.length > 3 && attempts < points.length * points.length) {
+    let clippedEar = false
+    for (let index = 0; index < indices.length; index += 1) {
+      const previousIndex = indices[(index - 1 + indices.length) % indices.length]!
+      const currentIndex = indices[index]!
+      const nextIndex = indices[(index + 1) % indices.length]!
+      const previous = points[previousIndex]!
+      const current = points[currentIndex]!
+      const next = points[nextIndex]!
+      if (crossProduct(previous, current, next) <= 1e-8) continue
+      if (
+        indices.some(
+          (candidateIndex) =>
+            candidateIndex !== previousIndex &&
+            candidateIndex !== currentIndex &&
+            candidateIndex !== nextIndex &&
+            pointInTriangle(points[candidateIndex]!, previous, current, next),
+        )
+      ) {
+        continue
+      }
+      triangles.push([previous, current, next])
+      indices.splice(index, 1)
+      clippedEar = true
+      break
+    }
+    if (!clippedEar) break
+    attempts += 1
+  }
+
+  if (indices.length === 3) triangles.push(indices.map((index) => points[index]!))
+  return triangles
+}
+
+function clipOpeningToRoom(opening: Point2D[], room: Point2D[]) {
+  const openingIsInside = opening.every(
+    (point) => pointInPolygon(point, room) || pointDistanceToPolygonBoundary(point, room) <= 1e-7,
+  )
+  if (openingIsInside) return [opening]
+
+  const clipRegions = isConvexPolygon(room) ? [room] : triangulatePolygon(room)
+  return clipRegions
+    .map((region) => clipPolygonToConvex(opening, region))
+    .filter((polygon) => polygon.length >= 3)
+}
+
+function partitionSurfaceOpenings(
+  surface: SurfaceWithOpenings,
+  roomIndices: number[],
+  detected: DetectedRoom[],
+) {
+  const assignments = new Map<
+    number,
+    { holes: Array<Array<[number, number]>>; holeMetadata: SlabNodeType['holeMetadata'] }
+  >()
+  for (const roomIndex of roomIndices) {
+    assignments.set(roomIndex, { holes: [], holeMetadata: [] })
+  }
+
+  surface.holes.forEach((hole, holeIndex) => {
+    const holePolygon = hole.map(pointFromTuple)
+    for (const roomIndex of roomIndices) {
+      const room = detected[roomIndex]
+      const assignment = assignments.get(roomIndex)
+      if (!(room && assignment)) continue
+      for (const clipped of clipOpeningToRoom(holePolygon, room.poly)) {
+        assignment.holes.push(clipped.map(pointToTuple))
+        assignment.holeMetadata.push(surface.holeMetadata[holeIndex] ?? { source: 'manual' })
+      }
+    }
+  })
+
+  return assignments
+}
+
+function partitionCeilingChildren(
+  ceiling: CeilingNodeType,
+  roomIndices: number[],
+  detected: DetectedRoom[],
+  fallbackRoomIndex: number | undefined,
+  childPosition: AutoCeilingPlanningContext['childPosition'],
+) {
+  const assignments = new Map<number, CeilingNodeType['children']>()
+  for (const roomIndex of roomIndices) assignments.set(roomIndex, [])
+
+  for (const childId of ceiling.children) {
+    const tuple = childPosition?.(childId)
+    const point = tuple ? pointFromTuple(tuple) : undefined
+    const boundaryRoomIndices = point
+      ? roomIndices.filter((roomIndex) => {
+          const room = detected[roomIndex]
+          return room ? pointDistanceToPolygonBoundary(point, room.poly) <= 1e-7 : false
+        })
+      : []
+    const interiorRoomIndex =
+      point && boundaryRoomIndices.length === 0
+        ? roomIndices.find((roomIndex) => {
+            const room = detected[roomIndex]
+            return room ? pointInPolygon(point, room.poly) : false
+          })
+        : undefined
+    const roomIndex =
+      interiorRoomIndex ??
+      (fallbackRoomIndex !== undefined && boundaryRoomIndices.includes(fallbackRoomIndex)
+        ? fallbackRoomIndex
+        : boundaryRoomIndices[0]) ??
+      fallbackRoomIndex ??
+      roomIndices[0]
+    if (roomIndex !== undefined) assignments.get(roomIndex)?.push(childId)
+  }
+
+  return assignments
+}
+
+function sameHoleMetadata(
+  current: SlabNodeType['holeMetadata'],
+  next: SlabNodeType['holeMetadata'],
+) {
+  return (
+    current.length === next.length &&
+    current.every((metadata, index) => {
+      const candidate = next[index]
+      return (
+        candidate?.source === metadata.source &&
+        candidate.stairId === metadata.stairId &&
+        candidate.elevatorId === metadata.elevatorId
+      )
+    })
+  )
+}
+
+function mergedSurfaceOpenings(surfaces: SurfaceWithOpenings[]) {
+  const holes: Array<Array<[number, number]>> = []
+  const holeMetadata: SlabNodeType['holeMetadata'] = []
+  const seen = new Set<string>()
+
+  for (const surface of surfaces) {
+    surface.holes.forEach((hole, index) => {
+      const metadata = surface.holeMetadata[index] ?? { source: 'manual' }
+      const key = JSON.stringify([hole, metadata])
+      if (seen.has(key)) return
+      seen.add(key)
+      holes.push(hole)
+      holeMetadata.push(metadata)
+    })
+  }
+
+  return { holes, holeMetadata }
+}
+
+function ceilingMergeSettingsSignature(ceiling: CeilingNodeType) {
+  return JSON.stringify([
+    ceiling.height ?? null,
+    ceiling.material ?? null,
+    ceiling.materialPreset ?? null,
+    ceiling.slots ?? null,
+    ceiling.visible,
+  ])
+}
+
+function slabMergeSettingsSignature(slab: SlabNodeType) {
+  return JSON.stringify([
+    slab.elevation,
+    slab.thickness,
+    slab.recessed,
+    slab.recessedRimElevation ?? null,
+    slab.fillToTerrain ?? null,
+    slab.material ?? null,
+    slab.materialPreset ?? null,
+    slab.slots ?? null,
+    slab.visible,
+  ])
+}
+
+function slabElevationForReconciledRoom(
+  source: SlabNodeType,
+  polygon: Array<[number, number]>,
+  context: AutoSlabPlanningContext,
+) {
+  const currentDerived = context.elevationForRoom?.(polygon)
+  if (!context.previousElevationForRoom) return currentDerived ?? source.elevation
+
+  const previousDerived = context.previousElevationForRoom(source.polygon)
+  const sourceWasDerived =
+    previousDerived !== undefined &&
+    Math.abs(source.elevation - previousDerived) <= ROOM_VERTICAL_PLANE_EPSILON
+  return sourceWasDerived ? (currentDerived ?? source.elevation) : source.elevation
+}
+
+function ceilingHeightForReconciledRoom(
+  source: CeilingNodeType,
+  polygon: Array<[number, number]>,
+  context: AutoCeilingPlanningContext,
+) {
+  if (source.height === undefined) return undefined
+
+  const currentDerived = context.heightForRoom?.(polygon)
+  if (!context.previousHeightForRoom) return currentDerived ?? source.height
+
+  const previousDerived = context.previousHeightForRoom(source.polygon)
+  const sourceWasDerived =
+    previousDerived !== undefined &&
+    Math.abs(source.height - previousDerived) <= ROOM_VERTICAL_PLANE_EPSILON
+  return sourceWasDerived ? (currentDerived ?? source.height) : source.height
+}
+
 function wallGeometrySignature(wall: WallNode, nodes: Record<string, any>, levelId: string) {
   return [
     wall.id,
@@ -1011,6 +1312,68 @@ function buildSpace(levelId: string, room: ExtractedRoom): Space {
   }
 }
 
+type RoomSurface = SlabNodeType | CeilingNodeType
+
+function roomsAreRelated(beforeRoom: ExtractedRoom, currentRoom: ExtractedRoom) {
+  const beforeIds = new Set(beforeRoom.boundaryFaces.map((boundary) => boundary.wallId))
+  const currentIds = new Set(currentRoom.boundaryFaces.map((boundary) => boundary.wallId))
+  const sharedWallCount = [...currentIds].filter((wallId) => beforeIds.has(wallId)).length
+  const smallerBoundarySize = Math.min(beforeIds.size, currentIds.size)
+  if (sharedWallCount >= 2 && sharedWallCount >= Math.ceil(smallerBoundarySize / 2)) return true
+  if (bboxOverlapArea(bboxOf(beforeRoom.polygon), bboxOf(currentRoom.polygon)) <= 1e-6) return false
+  return (
+    polygonCoverageRatio(beforeRoom.polygon, [currentRoom.polygon]) > 0 ||
+    polygonCoverageRatio(currentRoom.polygon, [beforeRoom.polygon]) > 0
+  )
+}
+
+function roomHasAutoSurface(room: ExtractedRoom, surfaces: RoomSurface[]) {
+  return matchesManualFootprint(
+    room.polygon,
+    surfaces
+      .filter((surface) => surface.autoFromWalls)
+      .map((surface) => surface.polygon.map(pointFromTuple)),
+  )
+}
+
+function roomsEligibleForAutoSurface(
+  beforeRooms: ExtractedRoom[],
+  currentRooms: ExtractedRoom[],
+  currentSurfaces: RoomSurface[],
+) {
+  return currentRooms.filter((currentRoom) => {
+    const related = beforeRooms.flatMap((beforeRoom) => {
+      if (!roomsAreRelated(beforeRoom, currentRoom)) return []
+      return [
+        {
+          room: beforeRoom,
+          coverage: polygonCoverageRatio(currentRoom.polygon, [beforeRoom.polygon]),
+        },
+      ]
+    })
+    const maxCoverage = Math.max(0, ...related.map(({ coverage }) => coverage))
+    const predecessors =
+      currentRooms.length >= beforeRooms.length && maxCoverage > 0
+        ? related.filter(({ coverage }) => coverage >= maxCoverage - 1e-6).map(({ room }) => room)
+        : related.map(({ room }) => room)
+    if (predecessors.length === 0) return true
+    return predecessors.every((beforeRoom) => roomHasAutoSurface(beforeRoom, currentSurfaces))
+  })
+}
+
+function detectedRoomsByLevel(nodes: Record<string, any>) {
+  const wallsByLevel = new Map<string, WallNode[]>()
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'wall' || !node.parentId) continue
+    const walls = wallsByLevel.get(node.parentId) ?? []
+    walls.push(node)
+    wallsByLevel.set(node.parentId, walls)
+  }
+  return new Map(
+    [...wallsByLevel].map(([levelId, walls]) => [levelId, extractRooms(walls)] as const),
+  )
+}
+
 function sameStringSet(a: readonly string[], b: readonly string[]) {
   if (a.length !== b.length) return false
   const right = new Set(b)
@@ -1113,8 +1476,28 @@ export function planAutoSlabsForLevel(
     }
   })
 
+  const conflictingMergeSlabIds = new Set<string>()
+  const conflictingMergeRoomIndices = new Set<number>()
+  const compatibleMergeSlabsByRoomIndex = new Map<number, SlabNodeType[]>()
+  detected.forEach((room, roomIndex) => {
+    const contributors = existingAuto.filter(
+      (slab) =>
+        polygonCoverageRatio(slab.polygon.map(pointFromTuple), [room.poly]) >=
+        ORPHAN_MERGE_COVERAGE_THRESHOLD,
+    )
+    if (contributors.length < 2) return
+    if (new Set(contributors.map(slabMergeSettingsSignature)).size > 1) {
+      conflictingMergeRoomIndices.add(roomIndex)
+      for (const slab of contributors) conflictingMergeSlabIds.add(slab.id)
+      return
+    }
+    compatibleMergeSlabsByRoomIndex.set(roomIndex, contributors)
+  })
+
   const matchedSlabIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
+  const roomIndexBySlabId = new Map<string, number>()
+  const sourceSlabIdByRoomIndex = new Map<number, string>()
   const updatesById = new Map<
     string,
     { polygon: [number, number][]; elevation: number | undefined }
@@ -1128,15 +1511,21 @@ export function planAutoSlabsForLevel(
   }
 
   detected.forEach((room, index) => {
+    if (conflictingMergeRoomIndices.has(index)) {
+      matchedDetectedIdx.add(index)
+      return
+    }
     const existing = autoBySignature.get(room.sig)?.shift()
     if (!existing) return
 
     matchedDetectedIdx.add(index)
     matchedSlabIds.add(existing.slab.id)
+    roomIndexBySlabId.set(existing.slab.id, index)
+    sourceSlabIdByRoomIndex.set(index, existing.slab.id)
     const polygon = room.poly.map(pointToTuple)
     updatesById.set(existing.slab.id, {
       polygon,
-      elevation: context.elevationForRoom?.(polygon),
+      elevation: slabElevationForReconciledRoom(existing.slab, polygon, context),
     })
   })
 
@@ -1172,18 +1561,36 @@ export function planAutoSlabsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedSlabIds.add(bestMatch.entry.slab.id)
+    roomIndexBySlabId.set(bestMatch.entry.slab.id, index)
+    sourceSlabIdByRoomIndex.set(index, bestMatch.entry.slab.id)
     const polygon = room.poly.map(pointToTuple)
     updatesById.set(bestMatch.entry.slab.id, {
       polygon,
-      elevation: context.elevationForRoom?.(polygon),
+      elevation: slabElevationForReconciledRoom(bestMatch.entry.slab, polygon, context),
     })
   }
+
+  detected.forEach((room, index) => {
+    if (sourceSlabIdByRoomIndex.has(index)) return
+    let bestSource: { id: string; coverage: number } | null = null
+    for (const entry of existingAutoMeta) {
+      const coverage = polygonCoverageRatio(room.poly, [entry.slab.polygon.map(pointFromTuple)])
+      if (coverage <= 0 || (bestSource && coverage <= bestSource.coverage)) continue
+      bestSource = { id: entry.slab.id, coverage }
+    }
+    if (bestSource) sourceSlabIdByRoomIndex.set(index, bestSource.id)
+  })
 
   const detectedRoomPolygons = detectedAll.map((room) => room.poly)
   const slabsToDelete: Array<SlabNodeType['id']> = []
   const slabDemotions: AutoSlabSyncPlan['update'] = []
   for (const slab of existingAuto) {
     if (updatesById.has(slab.id)) continue
+
+    if (conflictingMergeSlabIds.has(slab.id)) {
+      slabDemotions.push({ id: slab.id, data: { autoFromWalls: false } })
+      continue
+    }
 
     const coverage = polygonCoverageRatio(slab.polygon.map(pointFromTuple), detectedRoomPolygons)
     if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
@@ -1195,14 +1602,37 @@ export function planAutoSlabsForLevel(
     }
   }
 
+  const openingAssignmentsBySlabId = new Map<string, ReturnType<typeof partitionSurfaceOpenings>>()
+  for (const slab of existingAuto) {
+    const roomIndices = [...sourceSlabIdByRoomIndex.entries()]
+      .filter(([, slabId]) => slabId === slab.id)
+      .map(([roomIndex]) => roomIndex)
+    if (roomIndices.length === 0) continue
+    openingAssignmentsBySlabId.set(slab.id, partitionSurfaceOpenings(slab, roomIndices, detected))
+  }
+
   const slabsToUpdate = [
     ...existingAuto
       .filter((slab) => updatesById.has(slab.id))
       .flatMap((slab) => {
         const update = updatesById.get(slab.id)
         if (!update) return []
+        const roomIndex = roomIndexBySlabId.get(slab.id)
+        const openings =
+          roomIndex == null
+            ? { holes: slab.holes, holeMetadata: slab.holeMetadata }
+            : compatibleMergeSlabsByRoomIndex.has(roomIndex)
+              ? mergedSurfaceOpenings(compatibleMergeSlabsByRoomIndex.get(roomIndex) ?? [])
+              : (openingAssignmentsBySlabId.get(slab.id)?.get(roomIndex) ?? {
+                  holes: [],
+                  holeMetadata: [],
+                })
         const data: Partial<SlabNodeType> = {}
         if (!sameTuplePolygon(slab.polygon, update.polygon)) data.polygon = update.polygon
+        if (!sameTuplePolygons(slab.holes, openings.holes)) data.holes = openings.holes
+        if (!sameHoleMetadata(slab.holeMetadata, openings.holeMetadata)) {
+          data.holeMetadata = openings.holeMetadata
+        }
         if (
           update.elevation !== undefined &&
           Math.abs(slab.elevation - update.elevation) > ROOM_VERTICAL_PLANE_EPSILON
@@ -1226,16 +1656,30 @@ export function planAutoSlabsForLevel(
     plannedSlabsForNaming.push({ name })
 
     const polygon = room.poly.map(pointToTuple)
-    const elevation = context.elevationForRoom?.(polygon)
+    const sourceId = sourceSlabIdByRoomIndex.get(index)
+    const source = sourceId ? existingAuto.find((slab) => slab.id === sourceId) : undefined
+    const openings = sourceId ? openingAssignmentsBySlabId.get(sourceId)?.get(index) : undefined
+    const elevation = source
+      ? slabElevationForReconciledRoom(source, polygon, context)
+      : context.elevationForRoom?.(polygon)
     slabsToCreate.push(
       SlabNode.parse({
         name,
         polygon,
-        holes: [],
+        holes: openings?.holes ?? [],
+        holeMetadata: openings?.holeMetadata ?? [],
         elevation:
           elevation !== undefined && Number.isFinite(elevation)
             ? elevation
             : DEFAULT_AUTO_SLAB_ELEVATION,
+        thickness: source?.thickness,
+        recessed: source?.recessed,
+        recessedRimElevation: source?.recessedRimElevation,
+        fillToTerrain: source?.fillToTerrain,
+        material: source?.material,
+        materialPreset: source?.materialPreset,
+        slots: source?.slots,
+        visible: source?.visible,
         autoFromWalls: true,
       }),
     )
@@ -1317,8 +1761,28 @@ export function planAutoCeilingsForLevel(
     }
   })
 
+  const conflictingMergeCeilingIds = new Set<string>()
+  const conflictingMergeRoomIndices = new Set<number>()
+  const compatibleMergeCeilingsByRoomIndex = new Map<number, CeilingNodeType[]>()
+  detected.forEach((room, roomIndex) => {
+    const contributors = existingAuto.filter(
+      (ceiling) =>
+        polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), [room.poly]) >=
+        ORPHAN_MERGE_COVERAGE_THRESHOLD,
+    )
+    if (contributors.length < 2) return
+    if (new Set(contributors.map(ceilingMergeSettingsSignature)).size > 1) {
+      conflictingMergeRoomIndices.add(roomIndex)
+      for (const ceiling of contributors) conflictingMergeCeilingIds.add(ceiling.id)
+      return
+    }
+    compatibleMergeCeilingsByRoomIndex.set(roomIndex, contributors)
+  })
+
   const matchedCeilingIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
+  const roomIndexByCeilingId = new Map<string, number>()
+  const sourceCeilingIdByRoomIndex = new Map<number, string>()
   const updatesById = new Map<string, { polygon: [number, number][]; height: number | undefined }>()
 
   const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
@@ -1329,15 +1793,21 @@ export function planAutoCeilingsForLevel(
   }
 
   detected.forEach((room, index) => {
+    if (conflictingMergeRoomIndices.has(index)) {
+      matchedDetectedIdx.add(index)
+      return
+    }
     const existing = autoBySignature.get(room.sig)?.shift()
     if (!existing) return
 
     matchedDetectedIdx.add(index)
     matchedCeilingIds.add(existing.ceiling.id)
+    roomIndexByCeilingId.set(existing.ceiling.id, index)
+    sourceCeilingIdByRoomIndex.set(index, existing.ceiling.id)
     const polygon = room.poly.map(pointToTuple)
     updatesById.set(existing.ceiling.id, {
       polygon,
-      height: context.heightForRoom?.(polygon),
+      height: ceilingHeightForReconciledRoom(existing.ceiling, polygon, context),
     })
   })
 
@@ -1373,18 +1843,36 @@ export function planAutoCeilingsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedCeilingIds.add(bestMatch.entry.ceiling.id)
+    roomIndexByCeilingId.set(bestMatch.entry.ceiling.id, index)
+    sourceCeilingIdByRoomIndex.set(index, bestMatch.entry.ceiling.id)
     const polygon = room.poly.map(pointToTuple)
     updatesById.set(bestMatch.entry.ceiling.id, {
       polygon,
-      height: context.heightForRoom?.(polygon),
+      height: ceilingHeightForReconciledRoom(bestMatch.entry.ceiling, polygon, context),
     })
   }
+
+  detected.forEach((room, index) => {
+    if (sourceCeilingIdByRoomIndex.has(index)) return
+    let bestSource: { id: string; coverage: number } | null = null
+    for (const entry of existingAutoMeta) {
+      const coverage = polygonCoverageRatio(room.poly, [entry.ceiling.polygon.map(pointFromTuple)])
+      if (coverage <= 0 || (bestSource && coverage <= bestSource.coverage)) continue
+      bestSource = { id: entry.ceiling.id, coverage }
+    }
+    if (bestSource) sourceCeilingIdByRoomIndex.set(index, bestSource.id)
+  })
 
   const detectedRoomPolygons = detectedAll.map((room) => room.poly)
   const ceilingsToDelete: Array<CeilingNodeType['id']> = []
   const ceilingDemotions: AutoCeilingSyncPlan['update'] = []
   for (const ceiling of existingAuto) {
     if (updatesById.has(ceiling.id)) continue
+
+    if (conflictingMergeCeilingIds.has(ceiling.id)) {
+      ceilingDemotions.push({ id: ceiling.id, data: { autoFromWalls: false } })
+      continue
+    }
 
     const coverage = polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), detectedRoomPolygons)
     if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
@@ -1411,14 +1899,71 @@ export function planAutoCeilingsForLevel(
       : []
   })
 
+  const openingAssignmentsByCeilingId = new Map<
+    string,
+    ReturnType<typeof partitionSurfaceOpenings>
+  >()
+  const childAssignmentsByCeilingId = new Map<string, ReturnType<typeof partitionCeilingChildren>>()
+  for (const ceiling of existingAuto) {
+    const roomIndices = [...sourceCeilingIdByRoomIndex.entries()]
+      .filter(([, ceilingId]) => ceilingId === ceiling.id)
+      .map(([roomIndex]) => roomIndex)
+    if (roomIndices.length === 0) continue
+    openingAssignmentsByCeilingId.set(
+      ceiling.id,
+      partitionSurfaceOpenings(ceiling, roomIndices, detected),
+    )
+    childAssignmentsByCeilingId.set(
+      ceiling.id,
+      partitionCeilingChildren(
+        ceiling,
+        roomIndices,
+        detected,
+        roomIndexByCeilingId.get(ceiling.id),
+        context.childPosition,
+      ),
+    )
+  }
+
+  const childReparents: AutoCeilingSyncPlan['reparent'] = []
   const ceilingsToUpdate = [
     ...existingAuto
       .filter((ceiling) => updatesById.has(ceiling.id))
       .flatMap((ceiling) => {
         const update = updatesById.get(ceiling.id)
         if (!update) return []
+        const roomIndex = roomIndexByCeilingId.get(ceiling.id)
+        const openings =
+          roomIndex == null
+            ? { holes: ceiling.holes, holeMetadata: ceiling.holeMetadata }
+            : compatibleMergeCeilingsByRoomIndex.has(roomIndex)
+              ? mergedSurfaceOpenings(compatibleMergeCeilingsByRoomIndex.get(roomIndex) ?? [])
+              : (openingAssignmentsByCeilingId.get(ceiling.id)?.get(roomIndex) ?? {
+                  holes: [],
+                  holeMetadata: [],
+                })
         const data: Partial<CeilingNodeType> = {}
         if (!sameTuplePolygon(ceiling.polygon, update.polygon)) data.polygon = update.polygon
+        if (!sameTuplePolygons(ceiling.holes, openings.holes)) data.holes = openings.holes
+        if (!sameHoleMetadata(ceiling.holeMetadata, openings.holeMetadata)) {
+          data.holeMetadata = openings.holeMetadata
+        }
+        const mergeContributors =
+          roomIndex == null ? undefined : compatibleMergeCeilingsByRoomIndex.get(roomIndex)
+        const children = mergeContributors
+          ? ([
+              ...new Set(mergeContributors.flatMap((contributor) => contributor.children)),
+            ] as CeilingNodeType['children'])
+          : roomIndex == null
+            ? ceiling.children
+            : (childAssignmentsByCeilingId.get(ceiling.id)?.get(roomIndex) ?? ceiling.children)
+        for (const contributor of mergeContributors ?? []) {
+          if (contributor.id === ceiling.id) continue
+          for (const childId of contributor.children) {
+            childReparents.push({ id: childId, parentId: ceiling.id })
+          }
+        }
+        if (!sameStringSet(ceiling.children, children)) data.children = children
         if (
           update.height !== undefined &&
           (ceiling.height === undefined ||
@@ -1444,22 +1989,37 @@ export function planAutoCeilingsForLevel(
     plannedCeilingsForNaming.push({ name })
 
     const polygon = room.poly.map(pointToTuple)
-    const height = context.heightForRoom?.(polygon)
-    ceilingsToCreate.push(
-      CeilingNode.parse({
-        name,
-        polygon,
-        holes: [],
-        ...(height !== undefined && Number.isFinite(height) ? { height } : {}),
-        autoFromWalls: true,
-      }),
-    )
+    const sourceId = sourceCeilingIdByRoomIndex.get(index)
+    const source = sourceId ? existingAuto.find((ceiling) => ceiling.id === sourceId) : undefined
+    const openings = sourceId ? openingAssignmentsByCeilingId.get(sourceId)?.get(index) : undefined
+    const children = sourceId ? childAssignmentsByCeilingId.get(sourceId)?.get(index) : undefined
+    const height = source
+      ? ceilingHeightForReconciledRoom(source, polygon, context)
+      : context.heightForRoom?.(polygon)
+    const created = CeilingNode.parse({
+      name,
+      polygon,
+      children: children ?? [],
+      holes: openings?.holes ?? [],
+      holeMetadata: openings?.holeMetadata ?? [],
+      material: source?.material,
+      materialPreset: source?.materialPreset,
+      slots: source?.slots,
+      visible: source?.visible,
+      ...(height !== undefined && Number.isFinite(height) ? { height } : {}),
+      autoFromWalls: true,
+    })
+    ceilingsToCreate.push(created)
+    for (const childId of children ?? []) {
+      childReparents.push({ id: childId, parentId: created.id })
+    }
   }
 
   return {
     create: ceilingsToCreate,
     update: ceilingsToUpdate,
     delete: ceilingsToDelete,
+    reparent: childReparents,
   }
 }
 
@@ -1472,16 +2032,22 @@ function syncAutoCeilingsForLevel(
 ) {
   const plan = planAutoCeilingsForLevel(roomPolygons, existingCeilings, context)
 
-  if (plan.delete.length > 0) {
-    sceneStore.getState().deleteNodes(plan.delete)
-  }
-
   if (plan.update.length > 0) {
     sceneStore.getState().updateNodes(plan.update)
   }
 
   if (plan.create.length > 0) {
     sceneStore.getState().createNodes(plan.create.map((node) => ({ node, parentId: levelId })))
+  }
+
+  if (plan.reparent.length > 0) {
+    sceneStore
+      .getState()
+      .updateNodes(plan.reparent.map(({ id, parentId }) => ({ id, data: { parentId } })))
+  }
+
+  if (plan.delete.length > 0) {
+    sceneStore.getState().deleteNodes(plan.delete)
   }
 }
 
@@ -1497,6 +2063,7 @@ function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
   }))
 
   return {
+    rooms,
     roomPolygons,
     spaces: rooms.map((room) => buildSpace(levelId, room)),
     wallUpdates,
@@ -1512,6 +2079,8 @@ function runSpaceDetection(
   sceneStore: any,
   editorStore: any,
   nodes: any,
+  previousNodes: any,
+  previousRoomsByLevel: Map<string, ExtractedRoom[]>,
 ): void {
   const { updateNodes } = sceneStore.getState()
   const existingSpaces = editorStore.getState().spaces as Record<string, Space>
@@ -1538,7 +2107,7 @@ function runSpaceDetection(
       (node: any) => node?.type === 'zone' && node.parentId === levelId,
     )
 
-    const { wallUpdates, spaces, roomPolygons } = detectSpacesFromWalls(levelId, walls)
+    const { wallUpdates, spaces, rooms } = detectSpacesFromWalls(levelId, walls)
 
     const changedWallUpdates = wallUpdates.filter((update) => {
       const wall = nodes[update.wallId]
@@ -1563,6 +2132,10 @@ function runSpaceDetection(
         ? getStoredLevelHeight(levelNode as LevelNode)
         : DEFAULT_LEVEL_HEIGHT
     const parsedSlabs = slabs.map((slab: any) => SlabNode.parse(slab))
+    const parsedCeilings = ceilings.map((ceiling: any) => CeilingNode.parse(ceiling))
+    const previousRooms = previousRoomsByLevel.get(levelId) ?? []
+    const slabRooms = roomsEligibleForAutoSurface(previousRooms, rooms, parsedSlabs)
+    const ceilingRooms = roomsEligibleForAutoSurface(previousRooms, rooms, parsedCeilings)
     const verticalPlacements = autoRoomVerticalPlacements(
       spaces,
       walls,
@@ -1572,20 +2145,55 @@ function runSpaceDetection(
       nodes,
       storeyHeight,
     )
+    const previousWalls = Object.values(previousNodes).filter(
+      (node: any): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+    )
+    const previousSlabs = Object.values(previousNodes)
+      .filter((node: any) => node?.type === 'slab' && node.parentId === levelId)
+      .map((slab: any) => SlabNode.parse(slab))
+    const previousLevelNode = previousNodes[levelId]
+    const previousStoreyHeight =
+      previousLevelNode?.type === 'level'
+        ? getStoredLevelHeight(previousLevelNode as LevelNode)
+        : DEFAULT_LEVEL_HEIGHT
+    const previousSpaces = detectSpacesFromWalls(levelId, previousWalls).spaces
+    const previousVerticalPlacements = autoRoomVerticalPlacements(
+      previousSpaces,
+      previousWalls,
+      previousSlabs.filter((slab) => !slab.autoFromWalls),
+      previousNodes,
+      previousStoreyHeight,
+    )
     const placementFor = (polygon: Array<[number, number]>) =>
       verticalPlacements.get(polygonSignature(polygon.map(pointFromTuple)))
-    syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore, {
-      elevationForRoom: (polygon) => placementFor(polygon)?.slabElevation,
-    })
+    const previousPlacementFor = (polygon: Array<[number, number]>) =>
+      previousVerticalPlacements.get(polygonSignature(polygon.map(pointFromTuple)))
+    syncAutoSlabsForLevel(
+      levelId,
+      slabRooms.map((room) => room.polygon),
+      parsedSlabs,
+      sceneStore,
+      {
+        elevationForRoom: (polygon) => placementFor(polygon)?.slabElevation,
+        previousElevationForRoom: (polygon) => previousPlacementFor(polygon)?.slabElevation,
+      },
+    )
     syncAutoCeilingsForLevel(
       levelId,
-      roomPolygons,
-      ceilings.map((ceiling: any) => CeilingNode.parse(ceiling)),
+      ceilingRooms.map((room) => room.polygon),
+      parsedCeilings,
       sceneStore,
       {
         storeyHeight,
         ceilingClampBound: (polygon) => getCeilingClampBound(levelId, nodes, polygon),
         heightForRoom: (polygon) => placementFor(polygon)?.ceilingHeight,
+        previousHeightForRoom: (polygon) => previousPlacementFor(polygon)?.ceilingHeight,
+        childPosition: (childId) => {
+          const child = nodes[childId]
+          return child && Array.isArray(child.position)
+            ? [child.position[0], child.position[2]]
+            : undefined
+        },
       },
     )
     const zonePlan = planAutoZonesForLevel(
@@ -1597,6 +2205,7 @@ function runSpaceDetection(
     for (const space of spaces) {
       nextSpaces[space.id] = space
     }
+    previousRoomsByLevel.set(levelId, rooms)
   }
 
   editorStore.getState().setSpaces(nextSpaces)
@@ -1631,6 +2240,8 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
   // scene that merely loaded — rerunning on hydration resurrected auto slabs
   // the user had deleted in an earlier session.
   const previousSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
+  const previousRoomsByLevel = detectedRoomsByLevel(sceneStore.getState().nodes)
+  let previousNodes = sceneStore.getState().nodes
   let isProcessing = false
 
   const unsubscribe = sceneStore.subscribe((state: any) => {
@@ -1648,6 +2259,7 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
       for (const [levelId, snapshot] of currentSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)
       }
+      previousNodes = nodes
       return
     }
 
@@ -1669,13 +2281,26 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
       for (const [levelId, snapshot] of currentSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)
       }
+      const currentRoomsByLevel = detectedRoomsByLevel(nodes)
+      previousRoomsByLevel.clear()
+      for (const [levelId, rooms] of currentRoomsByLevel) {
+        previousRoomsByLevel.set(levelId, rooms)
+      }
+      previousNodes = nodes
       return
     }
 
     isProcessing = true
     pauseSceneHistory(sceneStore)
     try {
-      runSpaceDetection([...levelsToUpdate], sceneStore, editorStore, nodes)
+      runSpaceDetection(
+        [...levelsToUpdate],
+        sceneStore,
+        editorStore,
+        nodes,
+        previousNodes,
+        previousRoomsByLevel,
+      )
     } finally {
       resumeSceneHistory(sceneStore)
       previousSnapshots.clear()
@@ -1683,6 +2308,7 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
       for (const [levelId, snapshot] of postRunSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)
       }
+      previousNodes = sceneStore.getState().nodes
       isProcessing = false
     }
   })

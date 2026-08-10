@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { z } from 'zod'
+import { initSpaceDetectionSync, type Space } from '../lib/space-detection'
 import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import { BuildingNode } from '../schema/nodes/building'
 import { LevelNode } from '../schema/nodes/level'
+import { WallNode } from '../schema/nodes/wall'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -23,6 +25,7 @@ import useScene, {
   applyScenePatch,
   applySceneSnapshot,
   clearSceneHistory,
+  type SceneOperationPatch,
 } from './use-scene'
 
 type RafFn = (cb: (time: number) => void) => number
@@ -83,6 +86,62 @@ function applyHostNodePatches(
   })
 }
 
+function operationPatchFromCommit(commit: SceneCommit): SceneOperationPatch {
+  const equal = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
+  const nodeCreates = Object.values(commit.current.nodes)
+    .filter((node) => !commit.before.nodes[node.id])
+    .map((node) => {
+      const siblings = node.parentId
+        ? ((commit.current.nodes[node.parentId as AnyNodeId] as { children?: AnyNodeId[] })
+            ?.children ?? [])
+        : commit.current.rootNodeIds
+      return { node, position: siblings.indexOf(node.id) }
+    })
+  const nodeDeletes = Object.values(commit.before.nodes)
+    .filter((node) => !commit.current.nodes[node.id])
+    .map((node) => {
+      const siblings = node.parentId
+        ? ((commit.before.nodes[node.parentId as AnyNodeId] as { children?: AnyNodeId[] })
+            ?.children ?? [])
+        : commit.before.rootNodeIds
+      return { node, position: siblings.indexOf(node.id) }
+    })
+  const nodeUpdates = Object.values(commit.current.nodes).flatMap((node) => {
+    const before = commit.before.nodes[node.id]
+    if (!before) return []
+    const data: Record<string, unknown> = {}
+    const removeFields: string[] = []
+    for (const key of new Set([...Object.keys(before), ...Object.keys(node)])) {
+      if (key === 'children') continue
+      if (!Object.hasOwn(node, key)) removeFields.push(key)
+      else if (!equal(before[key as keyof AnyNode], node[key as keyof AnyNode])) {
+        data[key] = node[key as keyof AnyNode]
+      }
+    }
+    return Object.keys(data).length > 0 || removeFields.length > 0
+      ? [{ id: node.id, data: data as Partial<AnyNode>, removeFields }]
+      : []
+  })
+  const materialChanges = new Set([
+    ...Object.keys(commit.before.materials),
+    ...Object.keys(commit.current.materials),
+  ])
+    .values()
+    .filter(
+      (id) =>
+        !equal(
+          commit.before.materials[id as SceneMaterialId],
+          commit.current.materials[id as SceneMaterialId],
+        ),
+    )
+    .map((id) => ({
+      id: id as SceneMaterialId,
+      material: commit.current.materials[id as SceneMaterialId] ?? null,
+    }))
+    .toArray()
+  return { materialChanges, nodeCreates, nodeDeletes, nodeUpdates }
+}
+
 describe('scene commit boundary', () => {
   beforeEach(() => {
     unsubscribe()
@@ -127,6 +186,84 @@ describe('scene commit boundary', () => {
 
     useScene.temporal.getState().undo()
     expect(levelNumber()).toBe(0)
+  })
+
+  test('publishes wall-driven slabs, ceilings, and wall sides in the originating commit', () => {
+    const walls = [
+      WallNode.parse({ id: 'wall_commit_a', parentId: LEVEL_ID, start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ id: 'wall_commit_b', parentId: LEVEL_ID, start: [4, 0], end: [4, 4] }),
+      WallNode.parse({ id: 'wall_commit_c', parentId: LEVEL_ID, start: [4, 4], end: [0, 4] }),
+    ]
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [LEVEL_ID]: { ...state.nodes[LEVEL_ID], children: walls.map((wall) => wall.id) } as AnyNode,
+        ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+      },
+    }))
+    clearSceneHistory()
+
+    let spaces: Record<string, Space> = {}
+    const editorStore = {
+      getState: () => ({
+        spaces,
+        setSpaces: (next: Record<string, Space>) => {
+          spaces = next
+        },
+      }),
+    }
+    const stopDetection = initSpaceDetectionSync(useScene, editorStore)
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    try {
+      const closingWall = WallNode.parse({
+        id: 'wall_commit_d',
+        parentId: LEVEL_ID,
+        start: [0, 4],
+        end: [0, 0],
+      })
+      useScene.getState().createNode(closingWall, LEVEL_ID)
+
+      expect(commits).toHaveLength(1)
+      const commit = commits[0]!
+      const publishedNodes = Object.values(commit.current.nodes)
+      expect(publishedNodes.filter((node) => node.type === 'wall')).toHaveLength(4)
+      expect(
+        publishedNodes.filter((node) => node.type === 'slab' && node.autoFromWalls),
+      ).toHaveLength(1)
+      expect(
+        publishedNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
+      ).toHaveLength(1)
+      expect(
+        publishedNodes
+          .filter((node) => node.type === 'wall')
+          .every((wall) => wall.frontSide !== 'unknown' || wall.backSide !== 'unknown'),
+      ).toBe(true)
+      expect(currentSnapshot()).toEqual(commit.current)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+
+      const operationPatch = operationPatchFromCommit(commit)
+      expect(operationPatch.nodeCreates.map(({ node }) => node.type).sort()).toEqual([
+        'ceiling',
+        'slab',
+        'wall',
+      ])
+
+      stopDetection()
+      unsubscribe()
+      unsubscribe = () => {}
+      useScene.setState({
+        ...commit.before,
+        dirtyNodes: new Set<AnyNodeId>(),
+        readOnly: false,
+      } as never)
+      clearSceneHistory()
+      expect(applySceneOperationPatch(operationPatch)).toBe(true)
+      expect(areSceneSnapshotsEqual(commit.current, currentSnapshot())).toBe(true)
+    } finally {
+      stopDetection()
+    }
   })
 
   test('drops a compound transaction that returns to its semantic baseline', () => {

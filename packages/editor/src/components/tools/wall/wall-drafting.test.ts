@@ -262,6 +262,34 @@ describe('createWallOnCurrentLevel', () => {
     expect(created).not.toBeNull()
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
   })
+
+  test('a crossing splits both the host and the inserted wall in one undo step', () => {
+    const before = useScene.temporal.getState().pastStates.length
+
+    const created = createWallOnCurrentLevel([2, -2], [2, 2])
+
+    expect(created?.start).toEqual([2, 0])
+    expect(created?.end).toEqual([2, 2])
+    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+    expect(levelWalls()).toHaveLength(4)
+    expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
+  })
+
+  test('close crossings reject the whole insertion without mutating the scene', () => {
+    seedLevel([
+      makeWall([2, -2], [2, 2], 'wall_close_a'),
+      makeWall([2.0055, -2], [2.0055, 2], 'wall_close_b'),
+    ])
+    useScene.temporal.getState().clear()
+    const beforeNodes = useScene.getState().nodes
+
+    const created = createWallOnCurrentLevel([0, 0], [4, 0])
+
+    expect(created).toBeNull()
+    expect(useScene.getState().nodes).toBe(beforeNodes)
+    expect(levelWalls()).toHaveLength(2)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+  })
 })
 
 describe('resolveEndpointWallSplit', () => {
