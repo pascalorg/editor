@@ -3,12 +3,15 @@ import {
   type AnyNode,
   type AnyNodeId,
   applyHeightPatch,
+  CeilingNode,
   createTerrainField,
   DoorNode as DoorSchema,
   encodeTerrainField,
   flattenPatch,
   GROUND_SUPPORT_ID,
+  initSpaceDetectionSync,
   runAsSingleSceneHistoryStep,
+  SlabNode,
   spatialGridManager,
   useScene,
   type WallNode,
@@ -56,7 +59,7 @@ function seedLevel(walls: WallNode[], extraNodes: AnyNode[] = []) {
           parentId: null,
           visible: true,
           metadata: {},
-          children: walls.map((wall) => wall.id),
+          children: [...walls.map((wall) => wall.id), ...extraNodes.map((node) => node.id)],
           level: 0,
         } as AnyNode,
       ],
@@ -273,6 +276,55 @@ describe('createWallOnCurrentLevel', () => {
     expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
     expect(levelWalls()).toHaveLength(4)
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
+  })
+
+  test('a room divider splits customized auto slabs and ceilings', () => {
+    const walls = [
+      makeWall([0, 0], [8, 0], 'wall_bottom'),
+      makeWall([8, 0], [8, 6], 'wall_right'),
+      makeWall([8, 6], [0, 6], 'wall_top'),
+      makeWall([0, 6], [0, 0], 'wall_left'),
+    ]
+    const slab = SlabNode.parse({
+      id: 'slab_auto',
+      parentId: LEVEL_ID,
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 6],
+        [0, 6],
+      ],
+      elevation: 0.18,
+      thickness: 0.32,
+      autoFromWalls: true,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_auto',
+      parentId: LEVEL_ID,
+      polygon: slab.polygon,
+      autoFromWalls: true,
+    })
+    seedLevel(walls, [slab, ceiling])
+    const stopDetection = initSpaceDetectionSync(useScene, useEditor)
+
+    try {
+      expect(createWallOnCurrentLevel([4, 0], [4, 6])).not.toBeNull()
+
+      const nodes = Object.values(useScene.getState().nodes)
+      const slabs = nodes.filter((node) => node.type === 'slab')
+      const ceilings = nodes.filter((node) => node.type === 'ceiling')
+      expect(slabs).toHaveLength(2)
+      expect(ceilings).toHaveLength(2)
+      expect(
+        slabs.every(
+          (node) =>
+            node.autoFromWalls && node.elevation === 0.18 && node.thickness === 0.32,
+        ),
+      ).toBe(true)
+      expect(ceilings.every((node) => node.autoFromWalls)).toBe(true)
+    } finally {
+      stopDetection()
+    }
   })
 
   test('close crossings reject the whole insertion without mutating the scene', () => {
