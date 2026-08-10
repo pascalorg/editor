@@ -20,6 +20,20 @@ concurrency:
   group: mirror-upstream
   cancel-in-progress: true
 
+# `MIRROR_TOKEN` rather than the built-in token, and the reason is one line in
+# a rejected push:
+#
+#   ! [remote rejected] upstream/main -> main (refusing to allow a GitHub App
+#     to create or update workflow `.github/workflows/ci.yml` without
+#     `workflows` permission)
+#
+# Upstream edits its own CI from time to time, and when it does, the commit
+# carrying that edit cannot be pushed by `GITHUB_TOKEN` — there is no
+# `workflows` scope to grant it in the block below; the permission exists only
+# on a PAT or an App installation. So the mirror ran green for months, hit
+# upstream's first `ci.yml` change on 7 August, and failed every night after
+# that. Nothing else broke, which is why it went unnoticed for four days: the
+# editor kept building from a mirror that had quietly stopped moving.
 permissions:
   contents: write
   pull-requests: write
@@ -31,6 +45,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Checkout stores these credentials for every later `git push` in the
+          # job, so the token has to be set HERE — swapping only the push line
+          # would leave the built-in token in the remote and change nothing.
+          token: ${{ secrets.MIRROR_TOKEN }}
 
       - name: Fast-forward main to upstream
         id: mirror
@@ -78,7 +96,12 @@ jobs:
       - name: Open or update the pull request into the integration branch
         if: steps.mirror.outputs.owed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          # The same token as the push, so the pull request is authored by it
+          # rather than by the App. A pull request opened by `GITHUB_TOKEN`
+          # starts no workflow runs, which would leave this one sitting with no
+          # CI on it — the one pull request whose whole job is to be reviewed
+          # before a human merges hundreds of upstream commits.
+          GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
           BASE: ${{ vars.INTEGRATION_BRANCH || 'integration' }}
           BEHIND: ${{ steps.mirror.outputs.behind }}
         run: |

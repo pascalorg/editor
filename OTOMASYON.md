@@ -97,9 +97,31 @@ Bunlar `ovurrsl/editor` → Settings → Secrets and variables → Actions altı
 |---|---|---|---|
 | `PANEL_TOKEN` | `pull-panel`, `sync-panel` | `ovurrsl/panel`'i okumak | Panel güncellemeleri durur. `pull-panel` **kırmızı olmaz**, sessizce hiçbir şey yapmaz. |
 | `DEPLOY_TOKEN` | `deploy-bundle` | `Digitaltwin`'e yazmak | Derleme geçer, **son adım kırmızı olur**, canlı eski sürümde kalır. |
+| `MIRROR_TOKEN` | `mirror-upstream` | `main`'i ileri sarmak ve entegrasyon PR'ını açmak | Ayna durur, **kırmızı olur**. Upstream biriktikçe birikir ama canlıya hiçbir etkisi olmaz — o yüzden fark edilmesi günler alabilir. |
 
-`bump-plugin`, `mirror-upstream` ve `upstream-check` **hiçbir anahtar kullanmaz** —
-eklenti deposu herkese açık, Pascal'ın deposu herkese açık.
+`bump-plugin` ve `upstream-check` **hiçbir anahtar kullanmaz** — eklenti deposu
+herkese açık, Pascal'ın deposu herkese açık.
+
+> **`MIRROR_TOKEN` neden yerleşik anahtarla olmuyor.** Ayna, upstream'in
+> commit'lerini `main`'e iter. Upstream ara sıra kendi `.github/workflows/ci.yml`
+> dosyasını değiştiriyor, ve GitHub yerleşik `GITHUB_TOKEN`'ın workflow dosyası
+> yazmasını reddediyor:
+>
+> ```
+> ! [remote rejected] upstream/main -> main (refusing to allow a GitHub App to
+>   create or update workflow `.github/workflows/ci.yml` without `workflows`
+>   permission)
+> ```
+>
+> `permissions:` bloğunda verilebilecek bir `workflows` kapsamı YOK; bu izin
+> yalnız PAT'ta ya da App kurulumunda var. Bu yüzden anahtar fine-grained bir
+> PAT ve üç izne ihtiyacı var: **Contents** (yazma), **Workflows** (yazma),
+> **Pull requests** (yazma). Kapsamı tek depo: `ovurrsl/editor`.
+>
+> Bu bir kez ısırdı: ayna aylarca yeşil koştu, 7 Ağustos'ta upstream'in ilk
+> `ci.yml` değişikliğine çarptı ve ondan sonraki her gece kırmızı yandı. Dört
+> gün fark edilmedi çünkü başka hiçbir şey bozulmadı — editör, hareket etmeyi
+> sessizce bırakmış bir aynadan derlenmeye devam etti.
 
 > Süresi dolan bir anahtarı yenilerken: GitHub anahtarın değerini yalnız
 > oluşturulduğu an bir kez gösterir. `Regenerate token` → çıkan `github_pat_…`
