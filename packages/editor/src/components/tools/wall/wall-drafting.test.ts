@@ -317,8 +317,7 @@ describe('createWallOnCurrentLevel', () => {
       expect(ceilings).toHaveLength(2)
       expect(
         slabs.every(
-          (node) =>
-            node.autoFromWalls && node.elevation === 0.18 && node.thickness === 0.32,
+          (node) => node.autoFromWalls && node.elevation === 0.18 && node.thickness === 0.32,
         ),
       ).toBe(true)
       expect(ceilings.every((node) => node.autoFromWalls)).toBe(true)
