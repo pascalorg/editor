@@ -3,6 +3,7 @@ import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 let sceneHistoryPauseDepth = 0
+const sceneHistoryPauseLeases = new Set<symbol>()
 
 export type SceneSnapshot = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -139,7 +140,7 @@ function endSceneCommitTransaction(): void {
 }
 
 export function pauseSceneHistory(sceneStore: TemporalStoreLike): void {
-  if (sceneHistoryPauseDepth === 0) {
+  if (getSceneHistoryPauseDepth() === 0) {
     sceneStore.temporal.getState().pause()
   }
   sceneHistoryPauseDepth += 1
@@ -151,17 +152,35 @@ export function resumeSceneHistory(sceneStore: TemporalStoreLike): void {
   }
 
   sceneHistoryPauseDepth -= 1
-  if (sceneHistoryPauseDepth === 0) {
+  if (getSceneHistoryPauseDepth() === 0) {
     sceneStore.temporal.getState().resume()
   }
 }
 
+export function acquireSceneHistoryPause(sceneStore: TemporalStoreLike): () => void {
+  if (getSceneHistoryPauseDepth() === 0) {
+    sceneStore.temporal.getState().pause()
+  }
+  const lease = Symbol('scene-history-pause')
+  sceneHistoryPauseLeases.add(lease)
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    sceneHistoryPauseLeases.delete(lease)
+    if (getSceneHistoryPauseDepth() === 0) {
+      sceneStore.temporal.getState().resume()
+    }
+  }
+}
+
 export function getSceneHistoryPauseDepth(): number {
-  return sceneHistoryPauseDepth
+  return sceneHistoryPauseDepth + sceneHistoryPauseLeases.size
 }
 
 export function resetSceneHistoryPauseDepth(): void {
   sceneHistoryPauseDepth = 0
+  sceneHistoryPauseLeases.clear()
 }
 
 function retainedPastStateCount<TPastState>(before: TPastState[], after: TPastState[]): number {
