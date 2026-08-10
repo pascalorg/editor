@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { forwardRef, memo, useEffect, useRef } from 'react'
 import { resolveNodeSelectionTarget } from '../../../../../lib/selection-routing'
 import useEditor from '../../../../../store/use-editor'
+import { expandSessionSelectionForNode } from '../../../../../store/use-session-groups'
 
 export function handleTreeSelection(
   e: React.MouseEvent,
@@ -48,7 +49,13 @@ export function handleTreeSelection(
     }
   }
 
-  setSelection({ selectedIds: [nodeId] })
+  if (e.altKey) {
+    setSelection({ selectedIds: [nodeId] })
+    return false
+  }
+
+  const expanded = expandSessionSelectionForNode(nodeId)
+  setSelection({ selectedIds: expanded && expanded.length > 1 ? expanded : [nodeId] })
   return false
 }
 

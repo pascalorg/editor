@@ -12,6 +12,8 @@ import {
   resolveAutoZonePolygon,
   wallClosesRoom,
 } from './space-detection'
+import { encodeTerrainField } from './terrain-codec'
+import { applyHeightPatch, createTerrainField, flattenPatch } from './terrain-field'
 
 const square: Array<[number, number]> = [
   [0, 0],
@@ -485,6 +487,155 @@ describe('raised auto-room surfaces', () => {
       )
       expect(reconciledSlab?.elevation).toBeCloseTo(0.85)
       expect(reconciledCeiling?.height).toBeCloseTo(3.29)
+    } finally {
+      unsubscribe()
+    }
+  })
+})
+
+// A 1 m ramp across the room's x span: ground 0 at x ≤ 0 rising to 1 at
+// x ≥ 4, flat in z. Written column by column so the field is exactly
+// monotonic across the walls, rather than depending on brush falloff.
+function rampedSite(): AnyNode {
+  const base = createTerrainField({ cols: 17, rows: 17, spacing: 1, origin: [-8, -8] })
+  let field = base
+  for (let col = 0; col <= 16; col += 1) {
+    const x = -8 + col
+    const height = Math.max(0, Math.min(1, x / 4))
+    const patch = flattenPatch(field, { minX: x, minZ: -8, maxX: x + 0.001, maxZ: 8 }, height)
+    if (patch) field = applyHeightPatch(field, patch)
+  }
+  return {
+    id: 'site_test',
+    type: 'site',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: ['building_a'],
+    terrain: encodeTerrainField(field),
+  } as unknown as AnyNode
+}
+
+/** The 4×3 `square` room on `level_0` of a building on `site_test`. */
+function slopedRoomScene(site: AnyNode | null) {
+  const wallData = [
+    { id: 'wall_bottom', start: [0, 0], end: [4, 0] },
+    { id: 'wall_right', start: [4, 0], end: [4, 3] },
+    { id: 'wall_top', start: [4, 3], end: [0, 3] },
+    { id: 'wall_left', start: [0, 3], end: [0, 0] },
+  ] as const
+  const walls = wallData.map((wall) =>
+    WallNode.parse({ ...wall, parentId: 'level_0', height: 2.5 }),
+  )
+  const initialWalls = walls.slice(0, 3)
+  const nodes = Object.fromEntries(
+    [
+      ...(site ? [site] : []),
+      BuildingNode.parse({ id: 'building_a', parentId: site?.id ?? null, children: ['level_0'] }),
+      LevelNode.parse({
+        id: 'level_0',
+        level: 0,
+        height: 2.5,
+        parentId: 'building_a',
+        children: initialWalls.map((wall) => wall.id),
+      }),
+      ...initialWalls,
+    ].map((node) => [node.id, node]),
+  ) as Record<string, AnyNode>
+  return { nodes, closingWall: walls[3]! }
+}
+
+function closeRoom(sceneStore: ReturnType<typeof createSceneStoreStub>, closingWall: AnyNode) {
+  const current = sceneStore.getState().nodes
+  const level = current.level_0 as LevelNode
+  sceneStore.setNodes({
+    ...current,
+    [closingWall.id]: closingWall,
+    level_0: { ...level, children: [...level.children, closingWall.id] } as LevelNode,
+  })
+}
+
+function autoSurfacesOf(sceneStore: ReturnType<typeof createSceneStoreStub>) {
+  const all = Object.values(sceneStore.getState().nodes)
+  return {
+    slab: all.find((node): node is SlabNode => node.type === 'slab' && node.autoFromWalls),
+    ceiling: all.find((node): node is CeilingNode => node.type === 'ceiling' && node.autoFromWalls),
+  }
+}
+
+describe('auto-room surfaces over terrain', () => {
+  test('a room on a slope takes its floor from the HIGHEST wall base', () => {
+    // Walls on bare terrain: no `supportSlabId`, no `supportOffset` — exactly
+    // what a stamped room preset or a 3D draw over untouched ground produces.
+    // Bases run 0 → 1 across the ramp, so a floor at the lowest base would
+    // leave daylight under the walls at the high end.
+    const { nodes, closingWall } = slopedRoomScene(rampedSite())
+    const sceneStore = createSceneStoreStub(nodes)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      closeRoom(sceneStore, closingWall)
+      const { slab, ceiling } = autoSurfacesOf(sceneStore)
+
+      // Highest wall base = the ramp at x = 4 (the right wall's start), +the
+      // 5 cm auto-slab lift.
+      expect(slab?.elevation).toBeCloseTo(1.05)
+      // Lowest wall top = the LOWEST base + 2.5 (explicit-height walls ride
+      // their own base), −the 1 cm clamp margin. Bottom/left walls start at
+      // x = 0, i.e. ground 0.
+      expect(ceiling?.height).toBeCloseTo(2.49)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('flat ground is unchanged — the same room with no terrain', () => {
+    const { nodes, closingWall } = slopedRoomScene(null)
+    const sceneStore = createSceneStoreStub(nodes)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      closeRoom(sceneStore, closingWall)
+      const { slab, ceiling } = autoSurfacesOf(sceneStore)
+      expect(slab?.elevation).toBeCloseTo(0.05)
+      expect(ceiling?.height).toBeCloseTo(2.49)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('sculpting under an existing room re-derives its floor and ceiling', () => {
+    // The trigger half of the bug: a sculpt writes only `site.terrain`, so
+    // without a terrain term in the structure signature every level hashes
+    // identically and the sync early-exits.
+    const { nodes, closingWall } = slopedRoomScene(rampedSite())
+    const sceneStore = createSceneStoreStub(nodes)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      closeRoom(sceneStore, closingWall)
+      expect(autoSurfacesOf(sceneStore).slab?.elevation).toBeCloseTo(1.05)
+
+      // Level the whole lot to 2 m — the ground under every wall moves, and
+      // nothing else in the scene changes.
+      const flat = createTerrainField({ cols: 17, rows: 17, spacing: 1, origin: [-8, -8] })
+      const levelled = applyHeightPatch(
+        flat,
+        flattenPatch(flat, { minX: -8, minZ: -8, maxX: 8, maxZ: 8 }, 2) as never,
+      )
+      const current = sceneStore.getState().nodes
+      sceneStore.setNodes({
+        ...current,
+        site_test: {
+          ...(current.site_test as Record<string, unknown>),
+          terrain: encodeTerrainField(levelled),
+        } as AnyNode,
+      })
+
+      const { slab, ceiling } = autoSurfacesOf(sceneStore)
+      expect(slab?.elevation).toBeCloseTo(2.05)
+      expect(ceiling?.height).toBeCloseTo(4.49)
     } finally {
       unsubscribe()
     }

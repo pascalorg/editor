@@ -1,5 +1,5 @@
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
-import { terrainSupportLift } from '../../lib/terrain-support'
+import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
@@ -408,6 +408,7 @@ export class SpatialGridManager {
   private readonly renderedSlabPolygons = new Map<string, Array<[number, number]>>()
 
   private invalidateRenderedSlabPolygons(levelId: string) {
+    this.supportInputsRevision += 1
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return
     for (const slabId of slabMap.keys()) this.renderedSlabPolygons.delete(slabId)
@@ -1057,10 +1058,13 @@ export class SpatialGridManager {
     maxElevation?: number | null,
     supportOffset = 0,
   ): WallSlabSupport {
+    // Sampled at the wall's own start point — the same anchor the mesh is
+    // positioned at, so the resolver and the renderer cannot disagree about
+    // where the ground is under this wall.
+    const levelBase = levelBaseElevationAt(useScene.getState().nodes, levelId, start[0], start[1])
+
     if (preferredSlabId === GROUND_SUPPORT_ID) {
-      const nodes = useScene.getState().nodes
-      const elevation =
-        (terrainSupportLift(nodes, levelId, start[0], start[1]) ?? 0) + supportOffset
+      const elevation = levelBase + supportOffset
       return {
         elevation,
         electedSlabId: null,
@@ -1071,7 +1075,7 @@ export class SpatialGridManager {
 
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) {
-      const elevation = supportOffset
+      const elevation = levelBase + supportOffset
       return {
         elevation,
         electedSlabId: null,
@@ -1080,12 +1084,15 @@ export class SpatialGridManager {
       }
     }
 
+    const inputs = this.getSupportInputs(levelId, slabMap)
+
     const support = computeWallSlabSupport(
       { start, end, curveOffset, thickness },
-      [...slabMap.values()].map((slab) => this.effectiveSlabRecord(slab)),
-      this.getLevelWallNodes(levelId).map((wall) => getEffectiveNode(wall)),
+      inputs.slabs,
+      inputs.walls,
       preferredSlabId,
       maxElevation,
+      levelBase,
     )
     if (supportOffset === 0) return support
     return {
@@ -1097,6 +1104,55 @@ export class SpatialGridManager {
         elevation: segment.elevation + supportOffset,
       })),
     }
+  }
+
+  /**
+   * Effective slab and wall records for a level, held BY IDENTITY. A single
+   * viewer pass queries support once per wall, and each query used to derive
+   * both arrays afresh — mapping every wall on the level through
+   * `getEffectiveNode` — which also defeated the rendered-polygon memo
+   * downstream in `computeWallSlabSupport`. Rebuilt only when the scene
+   * nodes, either live-preview store, or the manager's own slab/wall
+   * bookkeeping changes.
+   */
+  private supportInputsRevision = 0
+  private readonly supportInputs = new Map<
+    string,
+    {
+      revision: number
+      nodes: object
+      overrides: object
+      transforms: object
+      slabs: SlabNode[]
+      walls: WallNode[]
+    }
+  >()
+
+  private getSupportInputs(levelId: string, slabMap: Map<string, SlabNode>) {
+    const nodes = useScene.getState().nodes
+    const overrides = useLiveNodeOverrides.getState().overrides
+    const transforms = useLiveTransforms.getState().transforms
+    const cached = this.supportInputs.get(levelId)
+    if (
+      cached &&
+      cached.revision === this.supportInputsRevision &&
+      cached.nodes === nodes &&
+      cached.overrides === overrides &&
+      cached.transforms === transforms
+    ) {
+      return cached
+    }
+
+    const next = {
+      revision: this.supportInputsRevision,
+      nodes,
+      overrides,
+      transforms,
+      slabs: [...slabMap.values()].map((slab) => this.effectiveSlabRecord(slab)),
+      walls: this.getLevelWallNodes(levelId).map((wall) => getEffectiveNode(wall)),
+    }
+    this.supportInputs.set(levelId, next)
+    return next
   }
 
   /**
@@ -1219,6 +1275,8 @@ export class SpatialGridManager {
     this.ceilings.clear()
     this.itemCeilingMap.clear()
     this.renderedSlabPolygons.clear()
+    this.supportInputs.clear()
+    this.supportInputsRevision += 1
   }
 }
 

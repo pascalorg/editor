@@ -115,6 +115,7 @@ import useInteractionScope, {
   useReshapingNode,
 } from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
+import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
@@ -843,11 +844,13 @@ function getSelectionModifierKeys(event?: {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
+  altKey?: boolean
 }) {
   return {
     meta: Boolean(event?.metaKey),
     ctrl: Boolean(event?.ctrlKey),
     shift: Boolean(event?.shiftKey),
+    alt: Boolean(event?.altKey),
   }
 }
 
@@ -9978,6 +9981,7 @@ export function FloorplanPanel({
         canSelectElementFloorplanGeometry,
         canSelectFloorplanZones,
         currentSelectedIds: useViewer.getState().selection.selectedIds,
+        expandIdsForNode: expandSessionSelectionForNode,
         getFloorplanHitIdAtPoint,
         isWallBuildActive,
         modifierKeys,

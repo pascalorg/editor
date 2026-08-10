@@ -6,11 +6,13 @@ import {
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
+import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
   rootNodeIds: AnyNodeId[]
   collections?: Record<CollectionId, Collection>
+  materials?: Record<SceneMaterialId, SceneMaterial>
   installedPlugins?: string[]
 }
 
@@ -32,7 +34,7 @@ function extractIdPrefix(id: string): string {
  * - Multi-scene in-memory scenarios
  */
 export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
-  const { nodes, rootNodeIds, collections, installedPlugins } = sceneGraph
+  const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
 
   // Build ID mapping: old ID -> new ID
   const idMap = new Map<string, string>()
@@ -164,6 +166,12 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     nodes: clonedNodes,
     rootNodeIds: clonedRootNodeIds,
     ...(clonedCollections && { collections: clonedCollections }),
+    // Material ids are deliberately *not* remapped. Nodes point at these
+    // through `slots` values shaped `scene:mat_…` — opaque strings that the
+    // node remapping above copies verbatim, since `idMap` only covers node
+    // ids. Minting fresh material ids here would orphan every one of those
+    // refs and the clone would render with default materials.
+    ...(materials && { materials: structuredClone(materials) }),
     ...(installedPlugins && { installedPlugins: [...installedPlugins] }),
   }
 }
@@ -304,7 +312,7 @@ export function forkSceneGraph(
     return cloneSceneGraph(sceneGraph)
   }
 
-  const { nodes, rootNodeIds, collections, installedPlugins } = sceneGraph
+  const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
 
   // First, identify scan and guide node IDs to exclude (user-uploaded imagery)
   const excludedNodeIds = new Set<string>()
@@ -366,6 +374,11 @@ export function forkSceneGraph(
     nodes: filteredNodes,
     rootNodeIds: filteredRootNodeIds,
     ...(filteredCollections && { collections: filteredCollections }),
+    // Kept whole rather than filtered to the surviving nodes: a palette entry
+    // is authored content in its own right, and dropping the scan node that
+    // happened to be its only user would silently delete a material the fork's
+    // owner can still pick from the palette.
+    ...(materials && { materials }),
     ...(installedPlugins && { installedPlugins }),
   })
 }

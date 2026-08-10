@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { TerrainData } from '../schema/terrain'
-import { decodeTerrainField, encodeTerrainField, isDatumField } from './terrain-codec'
+import {
+  decodeHeightPatch,
+  decodeTerrainField,
+  encodeHeightPatch,
+  encodeTerrainField,
+  isDatumField,
+} from './terrain-codec'
 import { createTerrainField, heightAt, type TerrainField } from './terrain-field'
 
 function fieldWith(values: number[], cols: number, rows: number): TerrainField {
@@ -90,6 +96,43 @@ describe('encodeTerrainField / decodeTerrainField', () => {
     // And the absolute size is documented, since it lands in every saved scene:
     // 65² samples at 2 bytes → 11 268 base64 chars, ~11 KB.
     expect(encoded.heights.length).toBe(11_268)
+  })
+})
+
+describe('encodeHeightPatch / decodeHeightPatch', () => {
+  test('round-trips a bounded patch without expanding samples into JSON numbers', () => {
+    const patch = {
+      col0: 3,
+      row0: 5,
+      cols: 2,
+      rows: 2,
+      heights: Int16Array.from([0, 32767, -32768, 42]),
+    }
+
+    const encoded = encodeHeightPatch(patch)
+    const decoded = decodeHeightPatch(JSON.parse(JSON.stringify(encoded)))
+
+    expect(encoded.heights).toBe('AAD/fwCAKgA=')
+    expect(decoded && { ...decoded, heights: Array.from(decoded.heights) }).toEqual({
+      ...patch,
+      heights: [0, 32767, -32768, 42],
+    })
+  })
+
+  test('rejects invalid bounds, dimensions, and sample payloads', () => {
+    const encoded = encodeHeightPatch({
+      col0: 0,
+      row0: 0,
+      cols: 2,
+      rows: 2,
+      heights: Int16Array.from([1, 2, 3, 4]),
+    })
+
+    expect(decodeHeightPatch({ ...encoded, col0: -1 })).toBeNull()
+    expect(decodeHeightPatch({ ...encoded, cols: 258 })).toBeNull()
+    expect(decodeHeightPatch({ ...encoded, rows: 0 })).toBeNull()
+    expect(decodeHeightPatch({ ...encoded, heights: encoded.heights.slice(0, -4) })).toBeNull()
+    expect(decodeHeightPatch({ ...encoded, heights: `${encoded.heights}AAAA` })).toBeNull()
   })
 })
 

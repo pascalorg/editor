@@ -1,7 +1,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  calculateLevelMiters,
   DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
@@ -34,12 +33,14 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
+import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
   buildOpeningCutoutGeometry,
   getOpeningCutoutBottomPadding,
@@ -514,6 +515,11 @@ export const WallSystem = () => {
   // tick and the next `useFrame` would still see the stale closure.
   useLiveNodeOverrides((s) => s.overrides)
 
+  // The miter cache is module-level, so it outlives this mount. Editor
+  // teardown resets the other shared singletons; without the same reset here a
+  // remount in the same tab keeps every previous level's walls reachable.
+  useEffect(() => () => clearLevelMiterCache(), [])
+
   useFrame(() => {
     const hasDirty = dirtyNodes.size > 0
     const hasPending = pendingAdjacentByLevel.size > 0
@@ -559,7 +565,7 @@ export const WallSystem = () => {
       }
 
       const levelWalls = getLevelWalls(levelId)
-      const miterData = calculateLevelMiters(levelWalls)
+      const miterData = getCachedLevelMiters(levelId, levelWalls)
       const rebuiltWallIds = new Set<string>()
 
       // Update dirty walls — always, no throttling. The dragged wall must
@@ -620,7 +626,7 @@ export const WallSystem = () => {
       for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
         if (pendingIds.size === 0) continue
         const levelWalls = getLevelWalls(levelId)
-        const miterData = calculateLevelMiters(levelWalls)
+        const miterData = getCachedLevelMiters(levelId, levelWalls)
         for (const wallId of Array.from(pendingIds)) {
           if (useProgressiveAdjacentRebuilds) {
             if (rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {

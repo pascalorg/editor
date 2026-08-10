@@ -1,8 +1,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  findLevelAncestorId,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
+  levelBaseElevationAt,
   resolveCeilingHeight,
 } from '@pascal-app/core'
 import useElevationGuides from '../store/use-elevation-guides'
@@ -46,14 +48,22 @@ function segmentCenter(
   return [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
 }
 
+// Mirrors `resolveFenceLiftElevationForNodes` in `@pascal-app/nodes`, which this
+// package cannot import (the fence definition imports the guides from here).
+// A stale host resolves to the level base — the sculpted ground under the
+// fence's start point, sampled where the builder samples it, so the guide line
+// lands on the rail it claims to describe.
 function fenceBaseElevation(node: AnyNode, nodes: Record<string, AnyNode>): number {
   if (node.type !== 'fence') return 0
   const host = node.supportSlabId ? nodes[node.supportSlabId as AnyNodeId] : undefined
-  const hostElevation =
-    host?.type === 'slab' && (host.parentId ?? null) === (node.parentId ?? null)
-      ? (host.elevation ?? 0)
+  const hosted = host?.type === 'slab' && (host.parentId ?? null) === (node.parentId ?? null)
+  const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
+  const support = hosted
+    ? (host.elevation ?? 0)
+    : levelId
+      ? levelBaseElevationAt(nodes, levelId, node.start[0], node.start[1])
       : 0
-  return hostElevation + (node.supportOffset ?? 0)
+  return support + (node.supportOffset ?? 0)
 }
 
 /**
@@ -75,6 +85,25 @@ export function collectElevationSnapTargets(
       label: 'Level',
     },
   ]
+  // Sculpted ground under the thing being dragged. A separate target rather than
+  // a redefinition of `Level`: the storey plane is still a real datum a user may
+  // want (a fence sunk to the building's floor line), and on a hillside the
+  // ground is a second, different one. Emitted only when they actually differ,
+  // so a flat scene keeps exactly one target at 0.
+  const groundElevation = levelBaseElevationAt(
+    nodes,
+    source.levelId,
+    source.anchor[0],
+    source.anchor[1],
+  )
+  if (Math.abs(groundElevation) > GUIDE_MATCH_EPSILON_M) {
+    targets.push({
+      id: `${source.levelId}:ground`,
+      elevation: groundElevation,
+      anchor: source.anchor,
+      label: 'Ground',
+    })
+  }
   const level = nodes[source.levelId as AnyNodeId]
   if (level?.type !== 'level') return targets
 

@@ -20,13 +20,19 @@ const buildNodes = (list: AnyNode[]): Record<AnyNodeId, AnyNode> =>
 const level = (
   id: string,
   ordinal: number,
-  opts: { height?: number; parentId?: string | null; children?: string[] } = {},
+  opts: {
+    baseElevation?: number
+    height?: number
+    parentId?: string | null
+    children?: string[]
+  } = {},
 ): LevelNode =>
   LevelNode.parse({
     id,
     level: ordinal,
     parentId: opts.parentId ?? null,
     children: opts.children ?? [],
+    ...(opts.baseElevation === undefined ? {} : { baseElevation: opts.baseElevation }),
     ...(opts.height === undefined ? {} : { height: opts.height }),
   })
 
@@ -111,6 +117,45 @@ describe('getLevelElevations', () => {
     expect(elevations.get('level_b1')?.baseY).toBe(4)
     expect(elevations.get('level_a2')?.buildingId).toBe('building_a')
     expect(elevations.get('level_b1')?.buildingId).toBe('building_b')
+  })
+
+  test('applies an offset to its level and every higher level in the same building', () => {
+    const nodes = buildNodes([
+      building('building_a', ['level_a0', 'level_a1', 'level_a2']),
+      building('building_b', ['level_b0', 'level_b1']),
+      level('level_a0', 0, { height: 2.5, parentId: 'building_a' }),
+      level('level_b0', 0, { height: 3, parentId: 'building_b' }),
+      level('level_a1', 1, {
+        baseElevation: 1.25,
+        height: 3,
+        parentId: 'building_a',
+      }),
+      level('level_b1', 1, { height: 3, parentId: 'building_b' }),
+      level('level_a2', 2, { height: 2.8, parentId: 'building_a' }),
+    ])
+
+    const elevations = getLevelElevations(nodes)
+    expect(elevations.get('level_a0')?.baseY).toBe(0)
+    expect(elevations.get('level_b0')?.baseY).toBe(0)
+    expect(elevations.get('level_a1')?.baseY).toBe(3.75)
+    expect(elevations.get('level_b1')?.baseY).toBe(3)
+    expect(elevations.get('level_a2')?.baseY).toBe(6.75)
+  })
+
+  test('allows negative offsets', () => {
+    const nodes = buildNodes([
+      building('building_a', ['level_ground', 'level_first']),
+      level('level_ground', 0, {
+        baseElevation: -0.75,
+        height: 2.5,
+        parentId: 'building_a',
+      }),
+      level('level_first', 1, { height: 3, parentId: 'building_a' }),
+    ])
+
+    const elevations = getLevelElevations(nodes)
+    expect(elevations.get('level_ground')?.baseY).toBe(-0.75)
+    expect(elevations.get('level_first')?.baseY).toBe(1.75)
   })
 
   test('negative ordinals stack from the lowest level up', () => {
@@ -276,11 +321,12 @@ describe('getLevelBelow', () => {
 
 // Two stacked levels in one building; `slabs` become children of the level
 // above the queried one.
-const stackedNodes = (slabs: SlabNode[], queriedHeight = 2.5) =>
+const stackedNodes = (slabs: SlabNode[], queriedHeight = 2.5, aboveBaseElevation = 0) =>
   buildNodes([
     building('building_a', ['level_0', 'level_1']),
     level('level_0', 0, { height: queriedHeight, parentId: 'building_a' }),
     level('level_1', 1, {
+      baseElevation: aboveBaseElevation,
       height: 2.5,
       parentId: 'building_a',
       children: slabs.map((node) => node.id),
@@ -294,6 +340,17 @@ describe('getCoveringSlabUndersideAt', () => {
     // storeyHeight + (0 - 0.3) = 2.2 over the queried level's floor.
     const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
     expect(getCoveringSlabUndersideAt('level_0', nodes, 2, 2)).toBeCloseTo(2.2)
+  })
+
+  test('includes positive and negative offsets in the covering plane', () => {
+    const slab = slabNode('slab_deck', { elevation: 0, thickness: 0.3 })
+
+    expect(getCoveringSlabUndersideAt('level_0', stackedNodes([slab], 2.5, 0.4), 2, 2)).toBeCloseTo(
+      2.6,
+    )
+    expect(
+      getCoveringSlabUndersideAt('level_0', stackedNodes([slab], 2.5, -0.4), 2, 2),
+    ).toBeCloseTo(1.8)
   })
 
   test('returns null outside the slab polygon', () => {
@@ -356,6 +413,14 @@ describe('getWallPlaneTop', () => {
   test('a flush thick deck above clamps the plane to its underside', () => {
     const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
     expect(getWallPlaneTop(wallAt([0.5, 2], [3.5, 2]), 'level_0', nodes)).toBeCloseTo(2.2)
+  })
+
+  test('uses offset-aware floor spacing for positive and negative wall clamps', () => {
+    const slab = slabNode('slab_deck', { elevation: 0, thickness: 0.3 })
+    const wall = wallAt([0.5, 2], [3.5, 2])
+
+    expect(getWallPlaneTop(wall, 'level_0', stackedNodes([slab], 2.5, 0.4))).toBeCloseTo(2.6)
+    expect(getWallPlaneTop(wall, 'level_0', stackedNodes([slab], 2.5, -0.4))).toBeCloseTo(1.8)
   })
 
   test('a slab covering only part of the span clamps via the min of the samples', () => {
@@ -469,6 +534,17 @@ describe('getCeilingClampBound', () => {
     expect(getCeilingClampBound('level_0', nodes, ceilingPolygon)).toBeCloseTo(
       2.2 - CEILING_CLAMP_MARGIN,
     )
+  })
+
+  test('uses offset-aware floor spacing for positive and negative ceiling clamps', () => {
+    const slab = slabNode('slab_deck', { elevation: 0, thickness: 0.3 })
+
+    expect(
+      getCeilingClampBound('level_0', stackedNodes([slab], 2.5, 0.4), ceilingPolygon),
+    ).toBeCloseTo(2.6 - CEILING_CLAMP_MARGIN)
+    expect(
+      getCeilingClampBound('level_0', stackedNodes([slab], 2.5, -0.4), ceilingPolygon),
+    ).toBeCloseTo(1.8 - CEILING_CLAMP_MARGIN)
   })
 
   test('a slab covering only the interior is caught by the centroid sample', () => {

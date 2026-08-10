@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { Copy, Move, Search, Spline, Trash2 } from 'lucide-react'
+import { Copy, Group, Move, Search, Spline, Trash2, Ungroup } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
@@ -11,6 +11,10 @@ type NodeActionMenuProps = {
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
   onMove?: MouseEventHandler<HTMLButtonElement>
   onCurve?: MouseEventHandler<HTMLButtonElement>
+  /** Session group (Ctrl/Cmd+G) — multi-selection floating pill. */
+  onGroup?: MouseEventHandler<HTMLButtonElement>
+  /** Dissolve session group (Ctrl/Cmd+Shift+G). */
+  onUngroup?: MouseEventHandler<HTMLButtonElement>
   onPointerDown?: PointerEventHandler<HTMLDivElement>
   onPointerUp?: PointerEventHandler<HTMLDivElement>
   onPointerEnter?: PointerEventHandler<HTMLDivElement>
@@ -24,6 +28,8 @@ export function NodeActionMenu({
   onDuplicate,
   onMove,
   onCurve,
+  onGroup,
+  onUngroup,
   onPointerDown,
   onPointerUp,
   onPointerEnter,
@@ -57,6 +63,28 @@ export function NodeActionMenu({
           type="button"
         >
           <Move className="h-4 w-4" />
+        </button>
+      )}
+      {onGroup && (
+        <button
+          aria-label="Group selection"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={onGroup}
+          title="Group (Ctrl/Cmd+G)"
+          type="button"
+        >
+          <Group className="h-4 w-4" />
+        </button>
+      )}
+      {onUngroup && (
+        <button
+          aria-label="Ungroup selection"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={onUngroup}
+          title="Ungroup (Ctrl/Cmd+Shift+G)"
+          type="button"
+        >
+          <Ungroup className="h-4 w-4" />
         </button>
       )}
       {onCurve && (

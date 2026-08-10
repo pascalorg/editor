@@ -56,6 +56,12 @@ type CoreLevelChildId =
 
 const LevelChildId = z.string().transform((id) => id as CoreLevelChildId)
 
+export const DEFAULT_LEVEL_BASE_ELEVATION = 0
+
+export function normalizeLevelBaseElevation(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : DEFAULT_LEVEL_BASE_ELEVATION
+}
+
 export const LevelNode = BaseNode.extend({
   id: objectId('level'),
   type: nodeType('level'),
@@ -64,6 +70,10 @@ export const LevelNode = BaseNode.extend({
   children: z.array(LevelChildId).default([]),
   // Specific props
   level: z.number().default(0),
+  baseElevation: z
+    .number()
+    .default(DEFAULT_LEVEL_BASE_ELEVATION)
+    .describe("Additive Y offset in meters applied above this level's computed stack position."),
   /**
    * Stored storey height in meters (floor-to-floor). No zod default on
    * purpose: absence marks unmigrated legacy data and gates the load-time
@@ -75,6 +85,7 @@ export const LevelNode = BaseNode.extend({
   Level node - used to represent a level in the building
   - children: array of architectural, equipment, and MEP distribution nodes
   - level: level number
+  - baseElevation: additive Y offset in meters above the computed stack position
   - height: storey height in meters (floor-to-floor); absent only on unmigrated legacy data
   `,
 )

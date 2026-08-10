@@ -6,8 +6,9 @@ import { SCENE_DESIGN_GUIDANCE } from './scene-guidance'
 const PREAMBLE = [
   'You are a Pascal 3D scene designer.',
   'You have access to semantic scene tools and the lower-level `apply_patch` tool. Prefer semantic construction/room/opening/furnishing tools for architectural work, and use `apply_patch` for bulk graph edits that need exact control.',
-  'If the user asks for a new project, call `create_project` before building. Use `create_house_from_brief` for a fast starter, then refine with semantic tools. Semantic tools update the browser-visible draft; call `save_scene` with `saveMode: "checkpoint"` only for meaningful milestones, then call `verify_scene` and `get_project_status`, and return the final `editorUrl`.',
+  'Bind an active scene before mutating anything. Call `create_project` for a new project, `list_scenes` then `load_scene` for an existing one, or `create_house_from_brief` to create and load a starter in one step. Without a bound scene, mutations apply in memory only — they are not persisted and never appear in the browser.',
   'Build incrementally with visible progress. Starting from an empty scene, first create/load a Site and Building, then create occupied Levels and `create_story_shell` once per story before detailed rooms, openings, furniture, a dedicated roof level via `create_roof`, and landscaping.',
+  'Semantic tools update the browser-visible draft. Call `save_scene` with `saveMode: "checkpoint"` only for meaningful milestones, then call `verify_scene` and `get_project_status`, and return the final `editorUrl`.',
   'Respect these invariants:',
   '  - Levels live under a Building.',
   '  - Walls, fences, zones, slabs, ceilings, roofs, stairs live under a Level.',
@@ -33,7 +34,11 @@ export function buildFromBriefPrompt(args: {
   parts.push(
     '',
     '## Task',
-    'Produce tool calls that realise the brief within the stated constraints. For a new project, call create_project first. Use create_house_from_brief for a fast starter or prefer create_story_shell/create_room/add_door/add_window/create_stair_between_levels/create_roof/furnish_room for architectural layout, use apply_patch for exact bulk graph work, call save_scene with saveMode: "checkpoint" only when the design reaches a meaningful milestone, then call validate_scene, verify_scene, and get_project_status.',
+    'Produce tool calls that realise the brief within the stated constraints.',
+    '1. Bind a scene — `create_project` (new), `list_scenes` then `load_scene` (existing), or `create_house_from_brief` (starter template).',
+    '2. Build the design — `create_story_shell` for exterior shells, `create_room`/`add_door`/`add_window`/`create_stair_between_levels`/`furnish_room` for interior layout, `create_roof` for roofing, `apply_patch` for exact bulk graph work.',
+    '3. Finish — call `validate_scene`, `verify_scene`, and `get_project_status`, then return the `editorUrl`.',
+    'Call `save_scene` with `saveMode: "checkpoint"` only when the design reaches a meaningful milestone.',
   )
   return parts.join('\n')
 }
@@ -44,7 +49,7 @@ export function registerFromBrief(server: McpServer, _bridge: SceneOperations): 
     {
       title: 'Generate a Pascal scene from a brief',
       description:
-        'Produces a plan of apply_patch calls to create a scene from a natural-language brief.',
+        'Generate a Pascal 3D scene from a natural-language brief. Binds an active scene, then produces semantic tool calls to realise the design.',
       argsSchema: {
         brief: z.string(),
         constraints: z.string().optional(),

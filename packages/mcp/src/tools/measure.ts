@@ -90,7 +90,7 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
     {
       title: 'Measure',
       description:
-        'Measure distance (in meters) between two nodes, or the area of a polygon node when fromId === toId.',
+        'Measure distance (in meters) between two nodes, or the net area of a polygon node when fromId === toId.',
       inputSchema: measureInput,
       outputSchema: measureOutput,
     },
@@ -108,7 +108,11 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
       if (fromId === toId) {
         const n = from as AnyNode
         if (n.type === 'zone' || n.type === 'slab' || n.type === 'ceiling') {
-          const area = shoelaceArea(n.polygon as Array<[number, number]>)
+          const holes = n.type === 'zone' ? [] : n.holes
+          const holeArea = Array.isArray(holes)
+            ? holes.reduce((sum, hole) => sum + shoelaceArea(hole), 0)
+            : 0
+          const area = Math.max(0, shoelaceArea(n.polygon) - holeArea)
           const payload = {
             distanceMeters: 0,
             areaSqMeters: area,

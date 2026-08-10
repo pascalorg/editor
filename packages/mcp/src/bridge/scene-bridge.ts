@@ -20,6 +20,9 @@ export type ActiveSceneMeta = Pick<
   'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version'
 >
 
+/** The `extra` bag `setScene` accepts — collections, materials, plugin state. */
+type SetSceneExtra = Parameters<ReturnType<typeof useScene.getState>['setScene']>[2]
+
 /**
  * Headless bridge to the `@pascal-app/core` Zustand store.
  *
@@ -59,11 +62,15 @@ export class SceneBridge {
   }
 
   /** Replace entire scene (undoable via Zundo). */
-  setScene(nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: AnyNodeId[]): void {
-    useScene.getState().setScene(nodes, rootNodeIds)
+  setScene(
+    nodes: Record<AnyNodeId, AnyNode>,
+    rootNodeIds: AnyNodeId[],
+    extra?: SetSceneExtra,
+  ): void {
+    useScene.getState().setScene(nodes, rootNodeIds, extra)
   }
 
-  /** Full snapshot for export, including collections. */
+  /** Full snapshot for export, including collections and the material palette. */
   exportJSON(): SceneGraph & { collections: Record<string, unknown> } {
     const state = useScene.getState()
     // Deep-clone so callers can't mutate store state directly.
@@ -72,6 +79,7 @@ export class SceneBridge {
         nodes: state.nodes,
         rootNodeIds: state.rootNodeIds,
         collections: state.collections ?? {},
+        materials: state.materials ?? {},
         ...(state.hasExplicitPluginInstallState || state.installedPlugins.length > 0
           ? { installedPlugins: state.installedPlugins }
           : {}),
@@ -119,13 +127,25 @@ export class SceneBridge {
       }
     }
 
-    this.setScene(nodes as Record<AnyNodeId, AnyNode>, rootNodeIds as AnyNodeId[])
-    if (Array.isArray(obj.installedPlugins)) {
-      useScene.getState().setInstalledPlugins(
-        obj.installedPlugins.filter((id): id is string => typeof id === 'string'),
-        { explicit: true },
-      )
-    }
+    const record = (value: unknown) =>
+      value && typeof value === 'object' && !Array.isArray(value) ? value : undefined
+    const collections = record(obj.collections) as NonNullable<SetSceneExtra>['collections']
+    const materials = record(obj.materials) as NonNullable<SetSceneExtra>['materials']
+    const installedPlugins = Array.isArray(obj.installedPlugins)
+      ? obj.installedPlugins.filter((id): id is string => typeof id === 'string')
+      : undefined
+
+    // One `setScene` call rather than a follow-up `setInstalledPlugins`:
+    // `setScene` overwrites `collections` and `materials` with `{}` whenever
+    // they aren't in the `extra` bag, so anything applied afterwards is lost.
+    // It also marks every node dirty at the end, and `markDirty` skips nodes
+    // whose plugin isn't installed — so plugin state has to be in place by
+    // then or plugin-owned nodes never get validated.
+    this.setScene(nodes as Record<AnyNodeId, AnyNode>, rootNodeIds as AnyNodeId[], {
+      ...(collections && { collections }),
+      ...(materials && { materials }),
+      ...(installedPlugins && { installedPlugins, hasExplicitPluginInstallState: true }),
+    })
   }
 
   /** Read a single node, or `null` if not present. */

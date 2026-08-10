@@ -122,6 +122,15 @@ export {
 export { mergedOutline } from './lib/merged-outline-node'
 export { unionPolygons } from './lib/polygon-union'
 export {
+  detectRendererCapability,
+  initializeGpuRenderer,
+  type RendererBackendParameters,
+  type RendererCapability,
+  type RendererCapabilityCanvas,
+  type RendererInitializationResult,
+  type RendererPowerPreference,
+} from './lib/renderer-capability'
+export {
   getSceneTheme,
   SCENE_THEME_IDS,
   SCENE_THEMES,
@@ -155,6 +164,7 @@ export {
   applyCountryUnitDefault,
   default as useViewer,
   type MetricNotation,
+  type WallMode,
 } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export {
@@ -224,7 +234,7 @@ export {
   getOpeningCutoutBottomPadding,
   hasFlatOpeningCutoutBottom,
 } from './systems/wall/opening-cutout-geometry'
-export { WallCutout } from './systems/wall/wall-cutout'
+export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the

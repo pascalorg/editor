@@ -107,6 +107,17 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         note: 'Also works mid-move while carrying the selection.',
       },
       {
+        keys: ['Cmd/Ctrl', 'G'],
+        action: 'Group the multi-selection (session only)',
+        note:
+          'Editor-only. Plain click a member later to reselect the whole group. Not saved with the project.',
+      },
+      {
+        keys: ['Cmd/Ctrl', 'Shift', 'G'],
+        action: 'Ungroup the session selection',
+        note: 'Keeps the current selection; only dissolves the session group.',
+      },
+      {
         keys: ['Esc'],
         action: 'Clear the selection',
         note: 'Clicking empty space does the same.',

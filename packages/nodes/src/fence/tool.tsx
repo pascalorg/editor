@@ -50,15 +50,7 @@ import {
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  BoxGeometry,
-  BufferGeometry,
-  type Camera,
-  DoubleSide,
-  type Group,
-  type Mesh,
-  Vector3,
-} from 'three'
+import { BufferGeometry, type Camera, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
 import {
   DraftAngleArc,
   type DraftAngleLabel,
@@ -377,6 +369,7 @@ function getDraftMeasurementState(
   end: FencePlanPoint,
   segments: SegmentLike[],
   unit: 'metric' | 'imperial',
+  metricNotation: 'meters' | 'millimeters',
   baseY: number,
   previewHeight: number,
   previewThickness: number,
@@ -386,7 +379,7 @@ function getDraftMeasurementState(
   const length = Math.hypot(dx, dz)
   if (length < 0.01) return null
   return {
-    lengthLabel: formatLinearMeasurement(length, unit),
+    lengthLabel: formatLinearMeasurement(length, unit, metricNotation),
     lengthPosition: [
       (start[0] + end[0]) / 2,
       baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
@@ -430,16 +423,11 @@ function updateFencePreview(
   }
   mesh.visible = true
   direction.normalize()
-  const geometry = new BoxGeometry(length, previewHeight, previewThickness)
   const angle = Math.atan2(direction.z, direction.x)
 
   mesh.position.set((start.x + end.x) / 2, start.y + previewHeight / 2, (start.z + end.z) / 2)
   mesh.rotation.y = -angle
-
-  if (mesh.geometry) {
-    mesh.geometry.dispose()
-  }
-  mesh.geometry = geometry
+  mesh.scale.set(length, previewHeight, previewThickness)
 }
 
 function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
@@ -465,6 +453,7 @@ export const FenceTool: React.FC = () => {
 
 const StraightFenceTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   // A placed preset seeds `toolDefaults.fence` before the tool mounts, so
   // the draft preview is drawn at the preset's height / thickness rather
@@ -615,6 +604,7 @@ const StraightFenceTool: React.FC = () => {
             snappedLocal,
             getReferenceSegments(walls, fences),
             unit,
+            metricNotation,
             startingPoint.current.y,
             previewHeightRef.current,
             previewThicknessRef.current,
@@ -751,7 +741,7 @@ const StraightFenceTool: React.FC = () => {
       draftPreview.setFenceDraftStart(null)
       draftPreview.setFenceDraftEnd(null)
     }
-  }, [unit])
+  }, [unit, metricNotation])
 
   return (
     <group>
@@ -762,7 +752,7 @@ const StraightFenceTool: React.FC = () => {
       />
       <CursorSphere height={previewHeight} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={previewRef} renderOrder={1} visible={false}>
-        <shapeGeometry />
+        <boxGeometry />
         <meshBasicMaterial
           color="#ffffff"
           depthTest={false}
