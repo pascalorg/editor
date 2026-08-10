@@ -2,6 +2,12 @@ import { type BomCost, COST_GAP_LABELS, type CostLine } from './cost'
 import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
 import type { BomHire, HireLine } from './hire'
 import type { BomLine } from './parts'
+import {
+  type FormworkSchedule,
+  SCHEDULE_GAP_LABELS,
+  scheduleInPourOrder,
+  scheduleOccupancyDays,
+} from './schedule'
 import type { BomSupply, SupplyLine } from './supply'
 
 /**
@@ -63,6 +69,16 @@ export interface BomCsvScope {
    * a row that carries no money has to say why in the row.
    */
   cost?: BomCost
+  /**
+   * When the pours happen, where the project has dated any of them.
+   *
+   * The one block here that is deliberately **not** a set of line columns, and the
+   * reason is the join rather than taste: a bill line spans pours. The same panel type
+   * on a wall poured in March and one poured in May is one row, and a "Pour date" cell
+   * on it could only hold one of the two — so the dates go in the preamble, per pour,
+   * where a row means a pour rather than a product.
+   */
+  schedule?: FormworkSchedule
 }
 
 /**
@@ -242,6 +258,63 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
     }
     for (const gap of cost.gaps) {
       rows.push(['UNPRICED', cell(COST_GAP_LABELS[gap])].join(','))
+    }
+  }
+  const schedule = scope.schedule
+  if (schedule) {
+    // The window first, because it is the figure a delivery is booked against and the one
+    // a reader takes away. `Plant on site d` is arrival to release across every pour, and
+    // it is deliberately not the hire's `Longest period held` above it: a set used on five
+    // pours a week apart is held two days each time and on site for five weeks.
+    if (schedule.firstErectAt !== undefined) {
+      rows.push(['Plant wanted on site', cell(schedule.firstErectAt)].join(','))
+    }
+    rows.push(['First pour', cell(schedule.firstPourAt)].join(','))
+    rows.push(['Last pour', cell(schedule.lastPourAt)].join(','))
+    if (schedule.lastReleaseAt !== undefined) {
+      rows.push(['Plant free again', cell(schedule.lastReleaseAt)].join(','))
+    }
+    const occupancy = scheduleOccupancyDays(schedule)
+    if (occupancy !== undefined) rows.push(['Plant on site d', occupancy].join(','))
+    if (schedule.earliestOnly) {
+      rows.push(
+        [
+          'PROGRAMME',
+          cell(
+            'ACI 347 counts qualifying hours above 10 °C, so every strike date below is the earliest the form could come off, not the date',
+          ),
+        ].join(','),
+      )
+    }
+    // One row per pour rather than a single window, because a pour is the thing a shutter
+    // is erected and struck for and the row a programme has to have. In date order so the
+    // block reads as a sequence, with the undated pours last where they cannot be mistaken
+    // for the start of the job.
+    rows.push(['Pour', 'Erect', 'Pour date', 'Strike', 'Plant free', 'Note'].join(','))
+    for (const pour of scheduleInPourOrder(schedule)) {
+      rows.push(
+        [
+          cell(`Pour — ${pour.id}`),
+          cell(pour.erectAt),
+          cell(pour.pourAt),
+          cell(pour.strikeAt),
+          cell(pour.releaseAt),
+          cell(pour.gaps.map((gap) => SCHEDULE_GAP_LABELS[gap]).join('; ')),
+        ].join(','),
+      )
+    }
+    if (schedule.unscheduled.length > 0) {
+      // An INCOMPLETE row rather than a note, because the block above looks like a whole
+      // programme: 3 dated pours of 40 is a true statement about 3 and a wrong one about
+      // the job, and nothing in the rows themselves shows which.
+      rows.push(
+        [
+          'INCOMPLETE',
+          cell(
+            `${schedule.unscheduled.length} of ${schedule.pours.length} pours have no date, so this programme covers ${schedule.scheduledCount} of them`,
+          ),
+        ].join(','),
+      )
     }
   }
   if (supply && supply.unusedOwnedIds.length > 0) {

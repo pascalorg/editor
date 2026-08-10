@@ -3,8 +3,11 @@
 import {
   COST_GAP_LABELS,
   formatMoney,
+  SCHEDULE_GAP_LABELS,
   STRIKE_TARGET_LABELS,
   STRIKING_STANDARD_LABELS,
+  scheduleInPourOrder,
+  scheduleOccupancyDays,
 } from '@pascal-app/core/formwork'
 import { ActionButton, downloadText, PanelSection } from '@pascal-app/editor'
 import { Download } from 'lucide-react'
@@ -57,6 +60,8 @@ export function FormworkTakeoffPanel() {
   const cost = solution.cost
   const costByLine = new Map(cost?.lines.map((entry) => [entry.line, entry]))
   const money = (value: number) => formatMoney(value, cost?.currency)
+  const schedule = solution.schedule
+  const occupancy = schedule === undefined ? undefined : scheduleOccupancyDays(schedule)
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -218,6 +223,61 @@ export function FormworkTakeoffPanel() {
                   Formwork held only. No labour, no transport, no finance — and labour is normally
                   the largest of those.
                 </Note>
+              </Section>
+            )}
+            {schedule === undefined ? (
+              <Note>
+                No pour is dated, so this takeoff carries no programme. A pour date is the one input
+                here that cannot be derived from anything — deriving it from the order the shutters
+                were built would be a programme nobody agreed to. Date a pour on its assembly and
+                the delivery and strike dates follow from the periods above.
+              </Note>
+            ) : (
+              <Section title="Programme">
+                {schedule.firstErectAt !== undefined && (
+                  <Readout label="Plant wanted" value={schedule.firstErectAt} value2="on site by" />
+                )}
+                <Readout
+                  label="First pour"
+                  value={schedule.firstPourAt ?? '—'}
+                  value2={
+                    schedule.firstPourAt === schedule.lastPourAt ? undefined : 'concrete goes in'
+                  }
+                />
+                {schedule.lastPourAt !== schedule.firstPourAt && (
+                  <Readout label="Last pour" value={schedule.lastPourAt ?? '—'} />
+                )}
+                {schedule.lastReleaseAt !== undefined && (
+                  <Readout
+                    label="Plant free"
+                    value={schedule.lastReleaseAt}
+                    value2="back to yard"
+                  />
+                )}
+                {/* Arrival to release across every pour, and deliberately not the "held for"
+                    figure above it: a set used on five pours a week apart is held two days
+                    each time and on site for five weeks. Only this one is what is invoiced. */}
+                {occupancy !== undefined && (
+                  <Readout label="On site" value={`${occupancy} d`} value2="arrival to release" />
+                )}
+                {/* Keyed and labelled by the pour rather than only by its dates, because
+                    "one of these is not dated" is not something a user can act on. */}
+                {scheduleInPourOrder(schedule).map((pour) => (
+                  <div
+                    className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
+                    key={pour.id}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{pour.id}</span>
+                    <span className="shrink-0 font-mono text-muted-foreground">
+                      {pour.pourAt === undefined
+                        ? 'not dated'
+                        : `${pour.pourAt} → ${pour.strikeAt ?? 'not struck'}`}
+                    </span>
+                  </div>
+                ))}
+                {schedule.gaps.map((gap) => (
+                  <Note key={gap}>{SCHEDULE_GAP_LABELS[gap]}.</Note>
+                ))}
               </Section>
             )}
             <Section

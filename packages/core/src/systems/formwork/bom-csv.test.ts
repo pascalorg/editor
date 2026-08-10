@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { type BomLine, bomCost, bomCsv, bomCsvFilename, bomHire, bomSupply } from './index'
+import {
+  type BomLine,
+  bomCost,
+  bomCsv,
+  bomCsvFilename,
+  bomHire,
+  bomSupply,
+  formworkSchedule,
+  strikingTime,
+} from './index'
 
 /**
  * The bill as a file.
@@ -511,6 +520,111 @@ describe('bomCsv', () => {
 
       const total = rows(csv).find((row) => row.startsWith(',TOTAL,')) as string
       expect(total.split(',').slice(6, 8)).toEqual(['', '7.69'])
+    })
+  })
+
+  describe('when the pours happen', () => {
+    const programme = (
+      pours: Array<{ id: string; pourAt?: string }>,
+      settings: { erectionLeadDays?: number; returnLeadDays?: number } = {},
+    ) =>
+      formworkSchedule(
+        pours.map((pour) => ({
+          ...pour,
+          striking: [strikingTime('BS_8110', { target: 'slab-props', temperatureC: 16 })],
+        })),
+        settings,
+      )
+
+    test('adds no dates at all where the project has programmed nothing', () => {
+      const csv = bomCsv([line()], { subject: 'Project' })
+
+      expect(rows(csv).some((row) => row.startsWith('First pour,'))).toBe(false)
+      expect(rows(csv).some((row) => row.startsWith('Pour,Erect,'))).toBe(false)
+    })
+
+    test('the dates go in the preamble rather than on a line, because a line spans pours', () => {
+      // The join, not a layout preference: the same panel type on a March wall and a May
+      // wall is one row, and a "Pour date" cell on it could only hold one of the two.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        schedule: programme([{ id: 'fwasm_a', pourAt: '2026-03-02' }], {
+          erectionLeadDays: 2,
+          returnLeadDays: 1,
+        }),
+      })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header).not.toContain('Pour date')
+      expect(rows(csv)).toContain('Pour — fwasm_a,2026-02-28,2026-03-02,2026-03-12,2026-03-13,')
+    })
+
+    test('the window is arrival to release, and not the longest single hold', () => {
+      // The figure a delivery is booked against. A set used on two pours a week apart is
+      // held about ten days each time and on site for the whole span.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        schedule: programme(
+          [
+            { id: 'fwasm_a', pourAt: '2026-03-02' },
+            { id: 'fwasm_b', pourAt: '2026-03-09' },
+          ],
+          { erectionLeadDays: 1, returnLeadDays: 1 },
+        ),
+      })
+
+      expect(rows(csv)).toContain('Plant wanted on site,2026-03-01')
+      expect(rows(csv)).toContain('First pour,2026-03-02')
+      expect(rows(csv)).toContain('Last pour,2026-03-09')
+      expect(rows(csv)).toContain('Plant free again,2026-03-20')
+      expect(rows(csv)).toContain('Plant on site d,20')
+    })
+
+    test('an undated pour is an INCOMPLETE row, not a blank cell in a sequence', () => {
+      // The block above reads as a whole programme. One dated pour of three is a true
+      // statement about one and a wrong one about the job, and nothing in the rows shows it.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        schedule: programme(
+          [{ id: 'fwasm_a', pourAt: '2026-03-02' }, { id: 'fwasm_b' }, { id: 'fwasm_c' }],
+          { erectionLeadDays: 1, returnLeadDays: 1 },
+        ),
+      })
+
+      expect(
+        rows(csv).some(
+          (row) => row.startsWith('INCOMPLETE,') && row.includes('2 of 3 pours have no date'),
+        ),
+      ).toBe(true)
+      // Undated last, where it cannot be read as the start of the job.
+      const pourRows = rows(csv).filter((row) => row.startsWith('Pour — '))
+      expect(pourRows[2]).toContain('No pour date recorded')
+    })
+
+    test('under ACI the dates are labelled as the earliest, before any of them is shown', () => {
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        schedule: formworkSchedule(
+          [
+            {
+              id: 'fwasm_a',
+              pourAt: '2026-03-02',
+              striking: [strikingTime('ACI_347', { target: 'slab-props' })],
+            },
+          ],
+          { erectionLeadDays: 1 },
+        ),
+      })
+
+      const flag = rows(csv).find((row) => row.startsWith('PROGRAMME,')) as string
+      expect(flag).toContain('qualifying hours above 10 °C')
+      expect(rows(csv).indexOf(flag)).toBeLessThan(
+        rows(csv).findIndex((row) => row.startsWith('Pour — ')),
+      )
     })
   })
 })

@@ -427,6 +427,28 @@ export {
   verticalElementKind,
 } from './pressure'
 export {
+  type FormworkSchedule,
+  formworkSchedule,
+  formworkScheduleCaveats,
+  isCalendarDate,
+  type PourSchedule,
+  SCHEDULE_GAP_LABELS,
+  type SchedulablePour,
+  type ScheduledStrike,
+  type ScheduleGap,
+  scheduleInPourOrder,
+  scheduleOccupancyDays,
+} from './schedule'
+export {
+  applyPourDatePatch,
+  type PourDatePatch,
+  PourDatePatch as PourDatePatchSchema,
+  type PourDatePatchResult,
+  pourDatePatchInput,
+  SET_POUR_DATE_DESCRIPTION,
+  unknownAssembly,
+} from './schedule-patch'
+export {
   DEFAULT_CONCRETE_TEMPERATURE_C,
   DEFAULT_FORMWORK_SETTINGS,
   type FormworkSettings,

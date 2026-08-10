@@ -5,6 +5,7 @@ import {
   FormworkDesignSummary,
   FormworkHostSummary,
   FormworkPartsSummary,
+  FormworkPourDate,
   FormworkScopeSummary,
   FormworkSelectedPart,
 } from './inspector-editors'
@@ -27,6 +28,13 @@ export const formworkAssemblyParametrics: ParametricDescriptor<FormworkAssemblyN
     {
       label: 'Scope',
       fields: [{ key: 'scope', kind: 'custom', component: FormworkScopeSummary }],
+    },
+    // The date is the assembly's own and belongs beside its scope, because the two
+    // answer the same question: which pour this is, and when it happens. The lead
+    // times it is measured against are project settings, not this shutter's.
+    {
+      label: 'Programme',
+      fields: [{ key: 'pourAt', kind: 'custom', component: FormworkPourDate }],
     },
     {
       label: 'Panels',

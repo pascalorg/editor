@@ -252,6 +252,31 @@ describe('formworkSettings rates', () => {
   })
 })
 
+describe('formworkSettings schedule', () => {
+  it('leaves the lead times unresolved where the project has stated none', () => {
+    // The rates' rule rather than the pressure inputs'. A lead time has no published
+    // table behind it, and a default of zero says the shutter appears on the morning of
+    // the pour — the one answer that is certainly wrong.
+    expect(formworkSettings(node()).schedule).toBeUndefined()
+    expect(DEFAULT_FORMWORK_SETTINGS.schedule).toBeUndefined()
+  })
+
+  it('keeps a stated group with one field, so the other reads as still unstated', () => {
+    const resolved = formworkSettings(node({ schedule: { erectionLeadDays: 3 } }))
+
+    expect(resolved.schedule).toEqual({ erectionLeadDays: 3 })
+    expect(resolved.schedule?.returnLeadDays).toBeUndefined()
+  })
+
+  it('keeps a stated zero, because a same-day erection is a real answer', () => {
+    // Unlike an absent field: a yard that erects on the morning of the pour has said so,
+    // and folding that into absence would lose the one case where zero is right.
+    expect(formworkSettings(node({ schedule: { erectionLeadDays: 0 } })).schedule).toEqual({
+      erectionLeadDays: 0,
+    })
+  })
+})
+
 describe('formworkSettings curing', () => {
   it('leaves every field unstated rather than resolving a default into it', () => {
     // Against the rule the pressure inputs follow, and deliberately. The striking tables

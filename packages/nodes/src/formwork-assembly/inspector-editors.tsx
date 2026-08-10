@@ -1,7 +1,9 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import { applyPourDatePatch } from '@pascal-app/core/formwork'
 import { useViewer } from '@pascal-app/viewer'
+import { useState } from 'react'
 import type { CastableHostNode } from './attach'
 import { FormworkCoverageList } from './coverage-summary'
 import { FormworkDesignReport } from './design-report'
@@ -24,6 +26,65 @@ export function FormworkScopeSummary({ node }: { node: FormworkAssemblyNode }) {
         value={node.liftIndex === 0 ? '1 (base)' : `${node.liftIndex + 1}`}
       />
       <SummaryRow label="System" value={node.systemId ?? 'project default'} />
+    </div>
+  )
+}
+
+/**
+ * The day this pour is cast — the one input that turns the striking periods into dates.
+ *
+ * On the shutter rather than in the project settings because a pour date is per pour: a
+ * 9 m wall in three lifts is three dates a week apart, and a field on the wall could only
+ * be one of them. The two lead times that turn this into a delivery date *are* project
+ * settings, and are the same for every pour on the job.
+ *
+ * Written through `applyPourDatePatch`, which is core's and shared with both AI surfaces,
+ * for the check a date input cannot make: the browser control emits `2026-02-30` for a
+ * February the user overtyped, the schema's regex accepts it, and `Date.UTC` reads it back
+ * as 1 March — so every date derived from it is a day out while the field still shows what
+ * was typed. The refusal is shown rather than swallowed, because a box that silently keeps
+ * a value nothing was stored for is worse than one that says why.
+ *
+ * Nothing is defaulted or suggested here. There is no sequence in this model to read a date
+ * off, so an empty field means unprogrammed and the takeoff carries no dates for this pour.
+ */
+export function FormworkPourDate({
+  node,
+  onUpdate,
+}: {
+  node: FormworkAssemblyNode
+  onUpdate: (patch: Partial<FormworkAssemblyNode>) => void
+}) {
+  const [refused, setRefused] = useState<string | undefined>(undefined)
+
+  return (
+    <div className="flex flex-col gap-1 px-3 py-2 text-xs">
+      <label className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-muted-foreground">Cast on</span>
+        <input
+          className="h-7 shrink-0 rounded-md border border-border/50 bg-[#2C2C2E] px-2 font-mono text-foreground outline-none"
+          defaultValue={node.pourAt ?? ''}
+          // Remount when the stored date changes from elsewhere — the AI setting the same
+          // pour, or an undo — so the box does not keep a stale draft.
+          key={node.pourAt ?? 'unprogrammed'}
+          onBlur={(event) => {
+            const raw = event.currentTarget.value.trim()
+            const result = applyPourDatePatch({ pourAt: raw === '' ? null : raw })
+            setRefused(result.error)
+            if (result.error === undefined) onUpdate({ pourAt: result.writes.pourAt })
+          }}
+          type="date"
+        />
+      </label>
+      {refused !== undefined ? (
+        <p className="text-[10px] text-amber-400/80 leading-snug">{refused}</p>
+      ) : (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          {node.pourAt === undefined
+            ? 'Unprogrammed, so the takeoff carries no dates for this pour. A date is per pour rather than per element — the other lifts of this element are dated on their own shutters.'
+            : 'The delivery and strike dates follow from this and the project’s two lead times. Clear the field to unprogramme the pour.'}
+        </p>
+      )}
     </div>
   )
 }

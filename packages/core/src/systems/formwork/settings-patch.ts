@@ -189,6 +189,38 @@ const CURING_PATCH = z.object({
     ),
 })
 
+/**
+ * The two lead times, and why neither has a default to hand back to.
+ *
+ * `null` here means "unstate", as everywhere else, and unstated is a real answer rather
+ * than a gap to be filled: a lead time has no published table behind it the way a
+ * striking period does, and a default of zero says the shutter arrives on the morning of
+ * the pour and goes back to the yard the afternoon it is struck — the one answer that is
+ * certainly wrong. So the takeoff reports the gap instead of assuming a figure.
+ */
+const SCHEDULE_PATCH = z.object({
+  erectionLeadDays: z
+    .number()
+    .finite()
+    .min(0)
+    .max(365)
+    .nullable()
+    .optional()
+    .describe(
+      'calendar days between the plant arriving on site and the pour — delivery, erection, alignment and the pre-pour check. Calendar rather than working days, deliberately: a hire is charged over a weekend, so a programme that skipped weekends would disagree with the invoice for the same set',
+    ),
+  returnLeadDays: z
+    .number()
+    .finite()
+    .min(0)
+    .max(365)
+    .nullable()
+    .optional()
+    .describe(
+      'calendar days between striking and the set being available again — stripping, cleaning, repair and the trip back. Where this is unstated the takeoff shows plant free the day it is struck, which is a floor rather than an answer',
+    ),
+})
+
 const FALSEWORK_LOAD_PATCH = z.object({
   formworkSelfWeightKpa: z.number().min(0).max(10).nullable().optional(),
   rebarKnM3: z.number().min(0).max(10).nullable().optional(),
@@ -402,6 +434,9 @@ export const formworkSettingsPatchInput = {
   curing: CURING_PATCH.optional().describe(
     'what happens after the pour, which decides when the form comes off and therefore how long every hired part is held. Its temperature is the curing surface, not the placing temperature in placement',
   ),
+  schedule: SCHEDULE_PATCH.optional().describe(
+    'the two lead times that turn a pour date into a delivery date: how long before a pour the plant is wanted on site, and how long after striking before it is back with the hire company. The pour dates themselves are per shutter and set with set_pour_date, because a wall cast in three lifts is three pours on three days',
+  ),
   falseworkLoads: FALSEWORK_LOAD_PATCH.optional().describe(
     "what a soffit carries beyond the concrete itself; each is raised to ACI §2.2.1's floor",
   ),
@@ -424,11 +459,11 @@ export type FormworkSettingsPatch = z.infer<typeof FormworkSettingsPatch>
 
 /** The description every surface's write tool carries, so the guidance cannot diverge either. */
 export const SET_FORMWORK_SETTINGS_DESCRIPTION =
-  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Two of the groups are commercial rather than structural and behave differently: ownedStock and rates are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes.'
+  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Three of the groups are commercial rather than structural and behave differently: ownedStock, rates and schedule are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes, and a lead time you invent becomes a delivery date somebody books against. The schedule group holds only the two lead times; the pour dates they are measured from belong to the shutters and are set with set_pour_date.'
 
 /** The description every surface's read tool carries. */
 export const INSPECT_FORMWORK_SETTINGS_DESCRIPTION =
-  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. One settings record per scene, so this takes no arguments.'
+  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. A third group behaves the same way: schedule, the two lead times between a pour date and a delivery date, is null until somebody records it, and while it is null a takeoff shows plant free the day it is struck and no delivery date at all. One settings record per scene, so this takes no arguments.'
 
 /** The first stock id that names nothing in the catalog, as the error a model reads back. */
 function unknownStockId(patch: Readonly<Record<string, unknown>>): string | undefined {
@@ -656,6 +691,12 @@ export interface FormworkSettingsReport {
     bracing: NonNullable<FormworkProjectSettingsNode['bracing']>
     parts: NonNullable<FormworkProjectSettingsNode['parts']>
     /**
+     * Null where the project has stated neither lead time, which is the answer that means
+     * a programme carries no delivery date. Unlike every other group here there is no
+     * default underneath it — see `SCHEDULE_PATCH`.
+     */
+    schedule: NonNullable<FormworkProjectSettingsNode['schedule']> | null
+    /**
      * Null rather than an empty rack, and the two are different answers: null is nobody
      * having said, so the takeoff shows no owned/hired split at all, where `{}` is a
      * yard that has recorded owning nothing.
@@ -681,6 +722,7 @@ export interface FormworkSettingsReport {
     falseworkLoads: NonNullable<FormworkProjectSettingsNode['falseworkLoads']> | null
     bracing: NonNullable<FormworkProjectSettingsNode['bracing']> | null
     parts: NonNullable<FormworkProjectSettingsNode['parts']> | null
+    schedule: NonNullable<FormworkProjectSettingsNode['schedule']> | null
     stock: NonNullable<FormworkProjectSettingsNode['stock']> | null
     rates: NonNullable<FormworkProjectSettingsNode['rates']> | null
   } | null
@@ -715,6 +757,7 @@ export function formworkSettingsReport(
       falseworkLoads: resolved.falseworkLoads,
       bracing: resolved.bracing,
       parts: resolved.parts,
+      schedule: resolved.schedule ?? null,
       ownedStock: resolved.ownedStock ?? null,
       rates: resolved.rates ?? null,
     },
@@ -728,6 +771,7 @@ export function formworkSettingsReport(
           falseworkLoads: node.falseworkLoads ?? null,
           bracing: node.bracing ?? null,
           parts: node.parts ?? null,
+          schedule: node.schedule ?? null,
           stock: node.stock ?? null,
           rates: node.rates ?? null,
         }

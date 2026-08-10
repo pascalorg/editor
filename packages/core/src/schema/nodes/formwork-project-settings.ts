@@ -282,6 +282,47 @@ export const FormworkRateSettings = z.object({
 export type FormworkRateSettings = z.infer<typeof FormworkRateSettings>
 
 /**
+ * How the programme turns a pour date into the days the plant is on site.
+ *
+ * A project decision rather than a per-shutter one for the usual reason, and a stronger
+ * one than the rack's: erecting a shutter takes as long as this gang takes, and a
+ * different figure per wall would be a claim about the walls rather than about the crew.
+ * The *dates* are per pour and live on the assembly (`FormworkAssemblyNode.pourAt`);
+ * what turns one into an erect date and a release date is this.
+ *
+ * Both are undefaulted, and this is the group where that matters most after the rates.
+ * A strike period has a published table behind it, so silence has a conservative answer.
+ * A lead time has none — it is how this yard works — and a default of zero would say the
+ * form appears on the morning of the pour, which is the one answer that is certainly
+ * wrong. So absent means the programme reports the pour and the strike and says nothing
+ * about the days either side.
+ *
+ * Both are **calendar** days, not working days, and the distinction is a decision rather
+ * than a simplification. Everything these figures are added to is calendar: a hire is
+ * charged over a weekend, and a striking period is either calendar time or an
+ * accumulator over qualifying hours — neither is a working week. Skipping weekends would
+ * need a working calendar and a holiday list that nothing in this model carries, and the
+ * result would be a delivery date the hire invoice disagrees with.
+ */
+export const FormworkScheduleSettings = z.object({
+  /**
+   * Calendar days between the plant arriving and the concrete going in, per pour.
+   *
+   * What a delivery date is calculated back from, and it covers erecting, aligning and
+   * checking the shutter rather than only unloading it.
+   */
+  erectionLeadDays: z.number().finite().min(0).max(365).optional(),
+  /**
+   * Calendar days between striking and the plant being available again.
+   *
+   * Cleaning, repair and the trip back. It is why a set is not free the moment it comes
+   * off: a hire runs to the return, and the next pour cannot have it either.
+   */
+  returnLeadDays: z.number().finite().min(0).max(365).optional(),
+})
+export type FormworkScheduleSettings = z.infer<typeof FormworkScheduleSettings>
+
+/**
  * How the concrete is cured, which is what decides when the form comes off.
  *
  * A separate group from `placement` rather than three more fields in it, because it
@@ -331,6 +372,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   parts: FormworkPartSettings.optional(),
   stock: FormworkStockSettings.optional(),
   rates: FormworkRateSettings.optional(),
+  schedule: FormworkScheduleSettings.optional(),
 }).describe(
   dedent`
   Formwork project settings - the pour every shutter in the scene is designed against. One per scene.
@@ -344,6 +386,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - parts: catalog ids for the panel system, sheathing, beam section and prop
   - stock.owned: how many of each catalog id the yard owns, by id; a bill draws on these before it hires. Absent means nobody has said what the project owns, and the takeoff reports no owned/hired split at all rather than putting the whole bill on hire
   - rates: what the project pays per catalog id — list price, and hire as a percentage of it per month or as a flat monthly rate — plus the agreement's currency and minimum hire period. Here rather than on the catalog because a price is a fact about this project's commercial terms, not about a product: the same panel is different money to two yards. Absent means no rates recorded and the takeoff carries no money at all
+  - schedule: calendar days (not working days — a hire is charged over a weekend) for erecting a shutter before its pour and for getting the plant back after striking. The pour dates themselves are per pour, on each formwork-assembly's pourAt. Absent means the programme reports the pour and strike days only
   `,
 )
 export type FormworkProjectSettingsNode = z.infer<typeof FormworkProjectSettingsNode>

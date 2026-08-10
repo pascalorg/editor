@@ -1,5 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { COST_GAP_LABELS } from '@pascal-app/core/formwork'
+import {
+  COST_GAP_LABELS,
+  SCHEDULE_GAP_LABELS,
+  scheduleInPourOrder,
+  scheduleOccupancyDays,
+} from '@pascal-app/core/formwork'
 import {
   castableHostIds,
   projectFormworkCaveats,
@@ -83,6 +88,31 @@ export const inspectProjectFormworkOutput = {
       excludes: z.array(z.string()),
     })
     .optional(),
+  schedule: z
+    .object({
+      plantWantedOnSite: z.string().nullable(),
+      firstPour: z.string().nullable(),
+      lastPour: z.string().nullable(),
+      lastStrike: z.string().nullable(),
+      plantFreeAgain: z.string().nullable(),
+      daysOnSite: z.number().nullable(),
+      datedPours: z.number(),
+      undatedPours: z.number(),
+      earliestOnly: z.boolean(),
+      complete: z.boolean(),
+      gaps: z.array(z.string()),
+      pours: z.array(
+        z.object({
+          assemblyId: z.string(),
+          pourAt: z.string().nullable(),
+          erectAt: z.string().nullable(),
+          strikeAt: z.string().nullable(),
+          releaseAt: z.string().nullable(),
+          strikes: z.array(z.object({ struckAs: z.string(), date: z.string() })),
+        }),
+      ),
+    })
+    .optional(),
   beyondCapacity: z.array(
     z.object({ elementId: z.string(), mark: z.string(), utilisation: z.number() }),
   ),
@@ -95,7 +125,7 @@ export function registerInspectProjectFormwork(server: McpServer, bridge: SceneO
     {
       title: 'Inspect project formwork',
       description:
-        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate of your own — cost is either in the answer or it is not. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied. Where the project has recorded rates, cost prices the bill and every line carries its own share: hire for the period charged, recharge for hired parts this pour altered, purchase for what is spent. Four rules about the money. Cost absent means no rate is recorded, so there is no price in this answer — say that rather than deriving one, because a rate is the only input in this whole model that no code publishes and no product carries, and a plausible figure is indistinguishable from a real one once you have said it. cost.complete false means some lines could not be priced, so the total is a floor and must be quoted as one — cost.gaps says what is missing. daysCharged rather than daysHeld is what reconciles with an invoice: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days, atMinimumHirePeriod marks those lines, and the remedy is pouring more with the same set rather than striking sooner. And cost.excludes is not boilerplate — this is what the formwork costs to hold, not the cost of forming the job, so never present the total as a formwork price without saying that labour, transport, finance and the project’s own owned stock are all outside it.',
+        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate of your own — cost is either in the answer or it is not. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied. Where the project has recorded rates, cost prices the bill and every line carries its own share: hire for the period charged, recharge for hired parts this pour altered, purchase for what is spent. Four rules about the money. Cost absent means no rate is recorded, so there is no price in this answer — say that rather than deriving one, because a rate is the only input in this whole model that no code publishes and no product carries, and a plausible figure is indistinguishable from a real one once you have said it. cost.complete false means some lines could not be priced, so the total is a floor and must be quoted as one — cost.gaps says what is missing. daysCharged rather than daysHeld is what reconciles with an invoice: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days, atMinimumHirePeriod marks those lines, and the remedy is pouring more with the same set rather than striking sooner. And cost.excludes is not boilerplate — this is what the formwork costs to hold, not the cost of forming the job, so never present the total as a formwork price without saying that labour, transport, finance and the project’s own owned stock are all outside it. Where any pour carries a date, schedule turns those periods into a calendar: plantWantedOnSite is when the plant has to arrive, plantFreeAgain when the last of it is back, and daysOnSite is arrival to release across every pour — which is not hire.longestDaysHeld, because a set used on five pours a week apart is held two days each time and on site for five weeks, and it is the on-site figure a yard invoices. Five rules about the dates. Schedule absent means nobody has dated a pour, so there is no programme in this answer — never infer one from the order the elements or shutters appear in, because a date is the only input in this model with neither a code nor a product behind it, and a derived programme printed beside real geometry carries the same authority as the geometry. undatedPours above zero means the window covers only the dated ones: a window over 3 of 40 pours is a true statement about 3 pours and a wrong one about the job, so always say how many are covered. earliestOnly true means the strike dates are the earliest the forms could come off rather than the dates, because ACI counts qualifying hours above 10 °C and nothing here knows the weather — a cold spell pushes every one of them later. A pour’s strikeAt is the last of its strikes, not the first, because it is the day the set comes free: a slab’s deck comes off days before its props, and both are in that pour’s strikes if the caller needs the sequence. And where no return lead time is recorded, releaseAt is the strike date itself and gaps says so — cleaning and the trip back are not in it, while a hire normally runs to the return.',
       inputSchema: formworkScopeInput,
       outputSchema: inspectProjectFormworkOutput,
     },
@@ -236,6 +266,41 @@ export function registerInspectProjectFormwork(server: McpServer, bridge: SceneO
           assumed: solution.hire.assumed.map((entry) => entry.message),
           substitutedFromAnotherCodeFamily: solution.strikingStandardSubstituted,
         },
+        // Absent where no pour in scope carries a date, which means this answer has no
+        // calendar in it — not a job with no programme. A date is the only input in the
+        // whole feature with neither a code nor a product behind it, so there is nothing
+        // to assume and nothing to derive from the order the shutters happen to be in.
+        ...(solution.schedule
+          ? {
+              schedule: {
+                plantWantedOnSite: solution.schedule.firstErectAt ?? null,
+                firstPour: solution.schedule.firstPourAt ?? null,
+                lastPour: solution.schedule.lastPourAt ?? null,
+                lastStrike: solution.schedule.lastStrikeAt ?? null,
+                plantFreeAgain: solution.schedule.lastReleaseAt ?? null,
+                // Arrival to release across every pour, which is not `hire.longestDaysHeld`:
+                // that is one pour's hold, and a set used on five pours a week apart is held
+                // two days each time and on site five weeks. Only this one is invoiced.
+                daysOnSite: scheduleOccupancyDays(solution.schedule) ?? null,
+                datedPours: solution.schedule.scheduledCount,
+                undatedPours: solution.schedule.unscheduled.length,
+                earliestOnly: solution.schedule.earliestOnly,
+                complete: solution.schedule.complete,
+                gaps: solution.schedule.gaps.map((gap) => SCHEDULE_GAP_LABELS[gap]),
+                pours: scheduleInPourOrder(solution.schedule).map((pour) => ({
+                  assemblyId: pour.id,
+                  pourAt: pour.pourAt ?? null,
+                  erectAt: pour.erectAt ?? null,
+                  strikeAt: pour.strikeAt ?? null,
+                  releaseAt: pour.releaseAt ?? null,
+                  strikes: pour.strikes.map((strike) => ({
+                    struckAs: strike.target as string,
+                    date: strike.date,
+                  })),
+                })),
+              },
+            }
+          : {}),
         beyondCapacity: solution.beyondCapacityMarks.map((part) => ({
           elementId: part.hostId,
           mark: part.mark,

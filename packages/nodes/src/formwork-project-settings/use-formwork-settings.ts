@@ -236,6 +236,7 @@ export function clearFormworkSettings(): void {
         parts: undefined,
         stock: undefined,
         rates: undefined,
+        schedule: undefined,
       }) as Partial<AnyNode>,
   )
 }

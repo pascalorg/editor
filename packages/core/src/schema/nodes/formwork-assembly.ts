@@ -65,6 +65,29 @@ export const FormworkAssemblyNode = BaseNode.extend({
   /** Which lift of that segment, counting up from the base. */
   liftIndex: z.number().int().min(0).default(0),
 
+  /**
+   * The day this pour is cast, `YYYY-MM-DD`. Absent means unprogrammed.
+   *
+   * Here rather than on the host element because a date is per *pour*, and the whole
+   * reason this node exists is that an element is cast in several: a 9 m wall in three
+   * lifts is three dates a week apart, and a date on the wall could only be one of
+   * them. It is also why a shutter is the thing a programme has rows for.
+   *
+   * Stated rather than derived from a sequence. A real scheduler would compute it from
+   * dependencies and float, and until that exists a stated date is the honest input —
+   * where a derived one would be a programme the project never agreed to, presented
+   * with the same confidence as the geometry.
+   *
+   * A date rather than a timestamp, because everything downstream of it is measured in
+   * days: a hire runs in days, a striking table is tabulated in days, and a programme
+   * has day columns. An hour on this field would imply a precision the strike periods
+   * it is added to do not have.
+   */
+  pourAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+
   /** Catalog system; absent means the project default. */
   systemId: z.string().trim().max(120).optional(),
   /**
@@ -84,6 +107,7 @@ export const FormworkAssemblyNode = BaseNode.extend({
   - parentId: the element this shutter forms (wall/column); the host relation
   - segmentIndex: which pour segment along the host's length, 0-based
   - liftIndex: which lift up the host, 0-based; each non-bottom lift sits on a construction joint
+  - pourAt: the day this pour is cast, YYYY-MM-DD; absent means unprogrammed and the takeoff carries no dates for it. Per pour rather than per element: a wall cast in three lifts has three dates
   - systemId: catalog formwork system; absent means the project default
   - panelWidth: widest catalog panel the layout may spend, meters, default 0.6
   - fillerPosition: where the non-modular closing piece goes in the panel run

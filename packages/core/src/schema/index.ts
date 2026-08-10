@@ -148,6 +148,7 @@ export {
   FormworkPartSettings,
   FormworkProjectSettingsNode,
   FormworkRateSettings,
+  FormworkScheduleSettings,
   FormworkStockSettings,
   MeasurementStandardChoice,
   PartRate,

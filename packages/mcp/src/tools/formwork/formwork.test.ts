@@ -94,6 +94,27 @@ interface BillReply {
     gaps: string[]
     excludes: string[]
   }
+  schedule?: {
+    plantWantedOnSite: string | null
+    firstPour: string | null
+    lastPour: string | null
+    lastStrike: string | null
+    plantFreeAgain: string | null
+    daysOnSite: number | null
+    datedPours: number
+    undatedPours: number
+    earliestOnly: boolean
+    complete: boolean
+    gaps: string[]
+    pours: Array<{
+      assemblyId: string
+      pourAt: string | null
+      erectAt: string | null
+      strikeAt: string | null
+      releaseAt: string | null
+      strikes: Array<{ struckAs: string; date: string }>
+    }>
+  }
   caveats: string[]
 }
 
@@ -486,6 +507,7 @@ describe('the formwork MCP tools', () => {
         'set_pour_limits',
         'inspect_pour_units',
         'attach_formwork',
+        'set_pour_date',
       ]),
     )
   })
@@ -1633,6 +1655,133 @@ describe('the formwork MCP tools', () => {
       expect(limits.isError).toBe(true)
       expect(attach.isError).toBe(true)
       expect((attach.content as Array<{ text: string }>)[0]?.text).toContain('wall, column or slab')
+    })
+  })
+
+  /**
+   * When each pour happens — the one write on this surface addressed to a shutter.
+   *
+   * `schedule-patch.test.ts` owns what a date string means and `schedule.test.ts` owns the
+   * arithmetic. What only this layer can get wrong is the addressing: that an element id is
+   * refused rather than silently dating one of three lifts, that a refused date leaves the
+   * pour exactly as it was, and that a cleared date reaches the store as a deleted key
+   * rather than a stored null — which would be a date-shaped absence the programme reads
+   * as programmed.
+   */
+  describe('the pour dates', () => {
+    interface DateReply {
+      assemblyId: string
+      elementId: string | null
+      pourAt: string | null
+      message: string
+    }
+
+    const shutterIds = async (): Promise<string[]> => {
+      await call('attach_formwork', { elementId: 'wall_1' })
+      return (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+        .filter((node) => node.type === 'formwork-assembly')
+        .map((node) => node.id as string)
+    }
+    const stored = (id: string) =>
+      bridge.getNodes()[id as AnyNodeId] as unknown as { pourAt?: string }
+
+    test('a stated date lands on the shutter and names the element back', async () => {
+      // The element is named back because the caller asked about a wall and was made to
+      // address a shutter — without it the reply is an id the user has never seen.
+      load(tallWall())
+      const [id] = await shutterIds()
+
+      const reply = await call<DateReply>('set_pour_date', {
+        assemblyId: id as string,
+        pourAt: '2026-03-02',
+      })
+
+      expect(reply.pourAt).toBe('2026-03-02')
+      expect(reply.elementId).toBe('wall_1')
+      expect(stored(id as string).pourAt).toBe('2026-03-02')
+    })
+
+    test('an element id is refused and sent to the read that lists pours', async () => {
+      // The likeliest mistake this tool invites. Accepted, it would have to pick one of
+      // three lifts, and a 9 m wall's three pours are a week apart.
+      load(tallWall())
+      await shutterIds()
+
+      const result = await client.callTool({
+        name: 'set_pour_date',
+        arguments: { assemblyId: 'wall_1', pourAt: '2026-03-02' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('schedule.pours')
+    })
+
+    test('a day the calendar does not have leaves the pour programmed as it was', async () => {
+      load(tallWall())
+      const [id] = await shutterIds()
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+
+      const result = await client.callTool({
+        name: 'set_pour_date',
+        arguments: { assemblyId: id as string, pourAt: '2026-02-30' },
+      })
+
+      expect(result.isError).toBe(true)
+      // Validated before anything is written, so the earlier date survives rather than the
+      // pour ending up half-changed.
+      expect(stored(id as string).pourAt).toBe('2026-03-02')
+    })
+
+    test('null deletes the key rather than storing a date-shaped absence', async () => {
+      load(tallWall())
+      const [id] = await shutterIds()
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+
+      const reply = await call<DateReply>('set_pour_date', {
+        assemblyId: id as string,
+        pourAt: null,
+      })
+
+      expect(reply.pourAt).toBeNull()
+      expect('pourAt' in stored(id as string)).toBe(false)
+    })
+
+    test('a dated pour puts a programme on the bill, and an undated project puts none', async () => {
+      load(withSettings(tallWall(), { schedule: { erectionLeadDays: 2, returnLeadDays: 3 } }))
+      const [id] = await shutterIds()
+
+      const before = await call<BillReply>('inspect_project_formwork')
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+      const after = await call<BillReply>('inspect_project_formwork')
+
+      // Nothing dated is no calendar at all rather than one starting today: a date is the
+      // only input here with neither a code nor a product behind it.
+      expect(before.schedule).toBeUndefined()
+      expect(after.schedule?.firstPour).toBe('2026-03-02')
+      expect(after.schedule?.plantWantedOnSite).toBe('2026-02-28')
+      expect(after.schedule?.datedPours).toBe(1)
+      expect(after.schedule?.pours[0]?.assemblyId).toBe(id)
+    })
+
+    test('with three lifts and one date, the window says how much of the job it leaves out', async () => {
+      // A programme over 1 of 3 pours is a true statement about one pour and a wrong one
+      // about the wall, and only this count says which.
+      load(withSettings(tallWall(), { schedule: { erectionLeadDays: 1 } }))
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      const ids = await shutterIds()
+      await call('set_pour_date', { assemblyId: ids[0] as string, pourAt: '2026-03-02' })
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      expect(ids).toHaveLength(3)
+      expect(reply.schedule?.datedPours).toBe(1)
+      expect(reply.schedule?.undatedPours).toBe(2)
+      expect(reply.schedule?.complete).toBe(false)
+      // The undated pours come last rather than heading the programme as though they began
+      // the job — which is what a sort over a sentinel does.
+      expect(reply.schedule?.pours[0]?.pourAt).toBe('2026-03-02')
+      expect(reply.schedule?.pours.at(-1)?.pourAt).toBeNull()
     })
   })
 

@@ -81,6 +81,27 @@ interface ProjectReport {
     gaps: string[]
     excludes: string[]
   }
+  schedule?: {
+    plantWantedOnSite: string | null
+    firstPour: string | null
+    lastPour: string | null
+    lastStrike: string | null
+    plantFreeAgain: string | null
+    daysOnSite: number | null
+    datedPours: number
+    undatedPours: number
+    earliestOnly: boolean
+    complete: boolean
+    gaps: string[]
+    pours: Array<{
+      assemblyId: string
+      pourAt: string | null
+      erectAt: string | null
+      strikeAt: string | null
+      releaseAt: string | null
+      strikes: Array<{ struckAs: string; date: string }>
+    }>
+  }
   beyondCapacity: Array<{ elementId: string; mark: string }>
   caveats: string[]
 }
@@ -639,5 +660,121 @@ describe('inspect_project_formwork', () => {
 
     expect(ground.elementCount).toBe(ground.elements.length)
     expect(ground.shutterCount).toBe(ground.elements.reduce((total, e) => total + e.shutters, 0))
+  })
+})
+
+/**
+ * The day each pour happens, stated by the AI.
+ *
+ * `schedule-patch.test.ts` owns which strings are dates and `schedule.test.ts` owns the
+ * arithmetic. What only this surface can get wrong is the addressing and the mutation: that
+ * an element id is refused rather than silently dating one of three lifts, that a cleared
+ * date is deleted from the node rather than stored as a date-shaped absence, and that the
+ * bill carries no programme at all until somebody has dated a pour.
+ */
+describe('set_pour_date', () => {
+  const shutterIds = (graph: SceneGraph): string[] =>
+    Object.values(graph.nodes as unknown as Record<string, { id: string; type: string }>)
+      .filter((node) => node.type === 'formwork-assembly')
+      .map((node) => node.id)
+  const stored = (graph: SceneGraph, id: string) =>
+    (graph.nodes as unknown as Record<string, { pourAt?: string }>)[id] as { pourAt?: string }
+
+  test('a stated date lands on the shutter and names the element back', async () => {
+    // The element is named back because the user asked about a wall and the tool made the
+    // model address a shutter — without it the reply quotes an id nobody has seen.
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    const [id] = shutterIds(graph)
+
+    const reply = await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-03-02' })
+
+    expect(reply).toContain('2026-03-02')
+    expect(reply).toContain('wall_1')
+    expect(stored(graph, id as string).pourAt).toBe('2026-03-02')
+  })
+
+  test('an element id is refused and sent to the read that lists pours', async () => {
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const reply = await call(tools, 'set_pour_date', {
+      assemblyId: 'wall_1',
+      pourAt: '2026-03-02',
+    })
+
+    expect(reply).toContain('schedule.pours')
+    expect(stored(graph, 'wall_1').pourAt).toBeUndefined()
+  })
+
+  test('a day the calendar does not have leaves the pour programmed as it was', async () => {
+    // The check a regex cannot make. Stored, 2026-02-30 is read as 1 March by every date
+    // derived from it and reported back as the date the user gave.
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    const [id] = shutterIds(graph)
+    await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-03-02' })
+
+    const reply = await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-02-30' })
+
+    expect(reply).toContain('no such day')
+    expect(stored(graph, id as string).pourAt).toBe('2026-03-02')
+  })
+
+  test('null deletes the key rather than storing a date-shaped absence', async () => {
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    const [id] = shutterIds(graph)
+    await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-03-02' })
+
+    await call(tools, 'set_pour_date', { assemblyId: id, pourAt: null })
+
+    expect('pourAt' in stored(graph, id as string)).toBe(false)
+  })
+
+  test('a dated pour puts a programme on the bill, and an undated project puts none', async () => {
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    await call(tools, 'set_formwork_settings', {
+      schedule: { erectionLeadDays: 2, returnLeadDays: 3 },
+    })
+    const [id] = shutterIds(graph)
+
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-03-02' })
+    const after = await project(tools, { elementIds: ['wall_1'] })
+
+    // No date is no calendar rather than one starting today: a pour date is the only input
+    // in this model with neither a code nor a product behind it.
+    expect(before.schedule).toBeUndefined()
+    expect(after.schedule?.firstPour).toBe('2026-03-02')
+    expect(after.schedule?.plantWantedOnSite).toBe('2026-02-28')
+    expect(after.schedule?.datedPours).toBe(1)
+    expect(after.schedule?.pours[0]?.assemblyId).toBe(id)
+    // Arrival to release, which is not the longest hold: the erection and return leads are
+    // in this and in neither of the periods.
+    expect(after.schedule?.daysOnSite).toBeGreaterThan(after.hire.longestDaysHeld)
+  })
+
+  test('with two walls and one dated, the window says how much of the job it leaves out', async () => {
+    // A programme over 1 of 2 pours is true about one pour and wrong about the floor, and
+    // only this count says which.
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    await shutter(tools, 'wall_2')
+    await call(tools, 'set_formwork_settings', { schedule: { erectionLeadDays: 1 } })
+    const [id] = shutterIds(graph)
+    await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-03-02' })
+
+    const solved = await project(tools, { levelId: 'level_1' })
+
+    expect(solved.schedule?.datedPours).toBe(1)
+    expect(solved.schedule?.undatedPours).toBe(1)
+    expect(solved.schedule?.complete).toBe(false)
+    // The undated pour comes last rather than heading the programme as though it began the
+    // job, which is what a sort over a sentinel string does.
+    expect(solved.schedule?.pours[0]?.pourAt).toBe('2026-03-02')
+    expect(solved.schedule?.pours.at(-1)?.pourAt).toBeNull()
+    expect(solved.caveats.some((c) => c.includes('1 of 2 pours have no date'))).toBe(true)
   })
 })

@@ -5,6 +5,7 @@ import {
   applyConstructionPatch,
   applyFormworkPartPatch,
   applyFormworkSettingsPatch,
+  applyPourDatePatch,
   applyPourLimitsPatch,
   COST_GAP_LABELS,
   castableElementSummary,
@@ -26,11 +27,17 @@ import {
   POUR_CUT_REASON_LABELS,
   partByMark,
   partLabel,
+  pourDatePatchInput,
   pourLimitsPatchInput,
+  SCHEDULE_GAP_LABELS,
   SET_ELEMENT_CONSTRUCTION_DESCRIPTION,
   SET_FORMWORK_PART_DESCRIPTION,
   SET_FORMWORK_SETTINGS_DESCRIPTION,
+  SET_POUR_DATE_DESCRIPTION,
   SET_POUR_LIMITS_DESCRIPTION,
+  scheduleInPourOrder,
+  scheduleOccupancyDays,
+  unknownAssembly,
   unknownPartMark,
   validationSummary,
 } from '@pascal-app/core/formwork'
@@ -138,6 +145,19 @@ export const SYSTEM_PROMPT =
   'is what the formwork costs to hold, not the cost of forming the job, so labour, transport, ' +
   'finance and the project’s own owned stock are all outside it and labour is normally the largest ' +
   'of them. ' +
+  'A period is not a date, and the gap between them is where a delivery is booked. A striking ' +
+  'table says a wall form comes off in 12 hours; only a pour date says which morning the set has ' +
+  'to be on site and which afternoon it is free for the next pour. So a pour date is recorded per ' +
+  'shutter rather than per element — a 9 m wall in three lifts is three pours a week apart, and a ' +
+  'date on the wall could only be one of them — and it is stated, never derived. Nothing in this ' +
+  'model computes a programme from dependencies or float, so if the user has not dated a pour ' +
+  'there is no schedule in the answer: say that and ask for the dates rather than reading the ' +
+  'order the shutters happen to be in as a sequence. A programme you inferred sits beside geometry ' +
+  'that really is derived and carries the same authority, which is how it ends up on a site notice ' +
+  'board. Two lead times turn the dates into a delivery: how many days before a pour the plant is ' +
+  'wanted, and how many after striking before it is back with the hire company — both on the ' +
+  'project with set_formwork_settings schedule, both calendar days rather than working days ' +
+  'because a hire is charged over a weekend. Ask for them the way you ask for a rate. ' +
   'A bill being right does not make the shutter buildable, and the two have almost no ' +
   'overlap in what makes them wrong. validate_formwork answers the second question: cycles ' +
   'in the cast order, runs with a stretch no panel closes, walls no tie in the system reaches, ' +
@@ -396,6 +416,31 @@ export function buildTools(
           .join('. ')
       },
     }),
+    set_pour_date: tool({
+      description: SET_POUR_DATE_DESCRIPTION,
+      inputSchema: z.object(pourDatePatchInput),
+      execute: async ({ assemblyId, pourAt }) => {
+        toolCalls.push({ name: 'set_pour_date', input: { assemblyId, pourAt } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        const assembly = nodes[assemblyId]
+        // The likeliest mistake this tool invites is a real id of the wrong kind — a wall's
+        // where a shutter's belongs — so the refusal names the read that lists pours rather
+        // than reporting a missing node.
+        if (assembly === undefined || assembly.type !== 'formwork-assembly') {
+          return unknownAssembly(assemblyId)
+        }
+        const result = applyPourDatePatch({ pourAt })
+        if (result.error !== undefined) return result.error
+        const target = assembly as unknown as Record<string, unknown>
+        // An explicit `undefined` deletes rather than stores: an absent `pourAt` is what
+        // encodes an unprogrammed pour, so a key holding undefined would serialise as a
+        // stated null and the pour would look dated with no date.
+        if (result.writes.pourAt === undefined) delete target.pourAt
+        else target.pourAt = result.writes.pourAt
+        onMutate()
+        return `ok — ${result.recorded} on ${assembly.parentId ?? assemblyId}. Read inspect_project_formwork for the delivery and strike dates it produces.`
+      },
+    }),
     inspect_formwork_settings: tool({
       description: INSPECT_FORMWORK_SETTINGS_DESCRIPTION,
       inputSchema: z.object({}),
@@ -464,7 +509,7 @@ export function buildTools(
     }),
     inspect_project_formwork: tool({
       description:
-        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire — record it with set_formwork_settings ownedStock. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate of your own — cost is either in the answer or it is not. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied — record the real ones with set_formwork_settings curing. Where the project has recorded rates, cost prices the bill and every line carries its own share: hire for the period charged, recharge for hired parts this pour altered, purchase for what is spent. Four rules about the money. Cost absent means no rate is recorded, so there is no price in this answer — say that and ask for the figures rather than deriving one, because a rate is the only input in this whole model that no code publishes and no product carries, and a plausible figure is indistinguishable from a real one once you have said it. cost.complete false means some lines could not be priced, so the total is a floor and must be quoted as one — cost.gaps says what is missing, and set_formwork_settings rates is what fixes it. daysCharged rather than daysHeld is what reconciles with an invoice: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days, atMinimumHirePeriod marks those lines, and the remedy is pouring more with the same set rather than striking sooner. And cost.excludes is not boilerplate — this is what the formwork costs to hold, not the cost of forming the job, so never present the total as a formwork price without saying that labour, transport, finance and the project’s own owned stock are all outside it.',
+        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire — record it with set_formwork_settings ownedStock. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate of your own — cost is either in the answer or it is not. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied — record the real ones with set_formwork_settings curing. Where the project has recorded rates, cost prices the bill and every line carries its own share: hire for the period charged, recharge for hired parts this pour altered, purchase for what is spent. Four rules about the money. Cost absent means no rate is recorded, so there is no price in this answer — say that and ask for the figures rather than deriving one, because a rate is the only input in this whole model that no code publishes and no product carries, and a plausible figure is indistinguishable from a real one once you have said it. cost.complete false means some lines could not be priced, so the total is a floor and must be quoted as one — cost.gaps says what is missing, and set_formwork_settings rates is what fixes it. daysCharged rather than daysHeld is what reconciles with an invoice: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days, atMinimumHirePeriod marks those lines, and the remedy is pouring more with the same set rather than striking sooner. And cost.excludes is not boilerplate — this is what the formwork costs to hold, not the cost of forming the job, so never present the total as a formwork price without saying that labour, transport, finance and the project’s own owned stock are all outside it. Where any pour carries a date, schedule turns those periods into a calendar: plantWantedOnSite is when the plant has to arrive, plantFreeAgain when the last of it is back, and daysOnSite is arrival to release across every pour — which is not hire.longestDaysHeld, because a set used on five pours a week apart is held two days each time and on site for five weeks, and it is the on-site figure a yard invoices. Five rules about the dates. Schedule absent means nobody has dated a pour, so there is no programme in this answer — say so and ask for the dates rather than inferring one from the order the elements or shutters appear in, because a date is the only input in this model with neither a code nor a product behind it, and a derived programme printed beside real geometry carries the same authority as the geometry. undatedPours above zero means the window covers only the dated ones: a window over 3 of 40 pours is a true statement about 3 pours and a wrong one about the job, so always say how many are covered. earliestOnly true means the strike dates are the earliest the forms could come off rather than the dates, because ACI counts qualifying hours above 10 °C and nothing here knows the weather — a cold spell pushes every one of them later. A pour’s strikeAt is the last of its strikes, not the first, because it is the day the set comes free: a slab’s deck comes off days before its props, and both are in that pour’s strikes if the user needs the sequence. And where no return lead time is recorded, releaseAt is the strike date itself and gaps says so — cleaning and the trip back are not in it, while a hire normally runs to the return.',
       inputSchema: z.object({
         levelId: z
           .string()
@@ -613,6 +658,41 @@ export function buildTools(
             assumed: solution.hire.assumed.map((entry) => entry.message),
             substitutedFromAnotherCodeFamily: solution.strikingStandardSubstituted,
           },
+          // Absent where no pour in scope carries a date, which means there is no calendar in
+          // this answer at all — not a job with no programme. A date is the only input in the
+          // whole feature with neither a code nor a product behind it, so there is nothing to
+          // assume and nothing to derive from the order the shutters happen to be in.
+          ...(solution.schedule
+            ? {
+                schedule: {
+                  plantWantedOnSite: solution.schedule.firstErectAt ?? null,
+                  firstPour: solution.schedule.firstPourAt ?? null,
+                  lastPour: solution.schedule.lastPourAt ?? null,
+                  lastStrike: solution.schedule.lastStrikeAt ?? null,
+                  plantFreeAgain: solution.schedule.lastReleaseAt ?? null,
+                  // Arrival to release across every pour, and deliberately not
+                  // `hire.longestDaysHeld`: that is one pour's hold, and a set used on five
+                  // pours a week apart is held two days each time and on site five weeks.
+                  daysOnSite: scheduleOccupancyDays(solution.schedule) ?? null,
+                  datedPours: solution.schedule.scheduledCount,
+                  undatedPours: solution.schedule.unscheduled.length,
+                  earliestOnly: solution.schedule.earliestOnly,
+                  complete: solution.schedule.complete,
+                  gaps: solution.schedule.gaps.map((gap) => SCHEDULE_GAP_LABELS[gap]),
+                  pours: scheduleInPourOrder(solution.schedule).map((pour) => ({
+                    assemblyId: pour.id,
+                    pourAt: pour.pourAt ?? null,
+                    erectAt: pour.erectAt ?? null,
+                    strikeAt: pour.strikeAt ?? null,
+                    releaseAt: pour.releaseAt ?? null,
+                    strikes: pour.strikes.map((strike) => ({
+                      struckAs: strike.target,
+                      date: strike.date,
+                    })),
+                  })),
+                },
+              }
+            : {}),
           beyondCapacity: solution.beyondCapacityMarks.map((part) => ({
             elementId: part.hostId,
             mark: part.mark,

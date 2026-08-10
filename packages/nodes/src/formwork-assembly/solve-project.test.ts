@@ -668,6 +668,120 @@ describe('what the bill costs to hold', () => {
   })
 })
 
+describe('when the pours happen', () => {
+  /** A steel-panel wall in two lifts, so a scope can have one pour dated and one not. */
+  function twoLiftScene(
+    first: Partial<FormworkAssemblyNode>,
+    second: Partial<FormworkAssemblyNode>,
+  ): Record<string, AnyNode> {
+    return sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, first),
+      makeAssembly('formwork-assembly_2', 'wall_1', 0, 1, second),
+    )
+  }
+
+  test('a project that has dated no pour gets no programme at all', () => {
+    // The rates' rule rather than the hire's. A period is a consequence of a published
+    // code; a date has no code behind it, and deriving one from the solve order would be
+    // a programme nobody agreed to printed beside geometry that is actually derived.
+    expect(solveProjectFormwork(steelWallScene()).schedule).toBeUndefined()
+    expect(
+      solveProjectFormwork(withSettings(steelWallScene(), { schedule: { erectionLeadDays: 3 } }))
+        .schedule,
+    ).toBeUndefined()
+  })
+
+  test('one dated pour opens the programme, and the strike date follows the code', () => {
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+        ),
+        { pressureStandard: 'BS_8110', schedule: { erectionLeadDays: 2, returnLeadDays: 1 } },
+      ),
+    )
+
+    const pour = solution.schedule?.pours[0]
+    expect(pour?.pourAt).toBe('2026-03-02')
+    expect(pour?.erectAt).toBe('2026-02-28')
+    // BS 8110's vertical row is 12 h at the table's own column, so the day after.
+    expect(pour?.strikeAt).toBe('2026-03-03')
+    expect(pour?.releaseAt).toBe('2026-03-04')
+    expect(solution.schedule?.complete).toBe(true)
+  })
+
+  test('a date is per pour, so two lifts of one wall are two rows', () => {
+    // The reason `pourAt` is on the assembly rather than on the wall: a 9 m wall in two
+    // lifts is two dates a week apart, and a date on the host could only be one of them.
+    const solution = solveProjectFormwork(
+      withSettings(twoLiftScene({ pourAt: '2026-03-02' }, { pourAt: '2026-03-09' }), {
+        pressureStandard: 'BS_8110',
+        schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+      }),
+    )
+
+    expect(solution.schedule?.pours).toHaveLength(2)
+    expect(solution.schedule?.pours.map((pour) => pour.pourAt).sort()).toEqual([
+      '2026-03-02',
+      '2026-03-09',
+    ])
+    expect(solution.schedule?.firstErectAt).toBe('2026-03-01')
+    expect(solution.schedule?.lastReleaseAt).toBe('2026-03-11')
+    expect(solution.schedule?.scheduledCount).toBe(2)
+  })
+
+  test('an undated lift is named rather than dropped, so the window is not read as the job', () => {
+    const solution = solveProjectFormwork(
+      withSettings(twoLiftScene({ pourAt: '2026-03-02' }, {}), {
+        pressureStandard: 'BS_8110',
+        schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+      }),
+    )
+
+    expect(solution.schedule?.scheduledCount).toBe(1)
+    expect(solution.schedule?.unscheduled.map((pour) => pour.id)).toEqual(['formwork-assembly_2'])
+    expect(solution.schedule?.complete).toBe(false)
+    expect(projectFormworkCaveats(solution).some((line) => line.includes('1 of 2'))).toBe(true)
+  })
+
+  test('the periods are the hire’s own, so a strike date cannot disagree with a duration', () => {
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+        ),
+        { pressureStandard: 'BS_8110', curing: { surfaceTemperatureC: 5 } },
+      ),
+    )
+
+    // A cold cure lengthens the hold, and it has to lengthen both figures identically —
+    // the strike date is the hire duration on a calendar, not a second reading of the cure.
+    const strike = solution.schedule?.pours[0]?.strikes[0]
+    expect(strike?.striking).toBe(solution.hire.periods[0])
+    expect(strike?.striking.hours).toBe(solution.hire.longestHours)
+  })
+
+  test('under ACI the dates are the earliest, and the takeoff says so', () => {
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+        ),
+        { pressureStandard: 'ACI_347' },
+      ),
+    )
+
+    // ACI counts qualifying hours above 10 °C rather than calendar days, so a cold spell
+    // pushes every date later and nothing in this model knows the weather.
+    expect(solution.schedule?.earliestOnly).toBe(true)
+    expect(projectFormworkCaveats(solution).some((line) => line.includes('earliest'))).toBe(true)
+  })
+})
+
 describe('projectFormworkCaveats', () => {
   test('says nothing about a complete takeoff', () => {
     const wall = makeWall('wall_1')

@@ -9,6 +9,7 @@ import { registerListCastableElements } from './list-castable-elements'
 import { registerSetElementConstruction } from './set-element-construction'
 import { registerSetFormworkPart } from './set-formwork-part'
 import { registerSetFormworkSettings } from './set-formwork-settings'
+import { registerSetPourDate } from './set-pour-date'
 import { registerSetPourLimits } from './set-pour-limits'
 import { registerValidateFormwork } from './validate-formwork'
 
@@ -86,10 +87,26 @@ import { registerValidateFormwork } from './validate-formwork'
  * it is, in core's own cut labels, because a host with no system prompt has nothing to
  * translate `MAX_POUR_VOLUME` with.
  *
- * With these the surface is closed: an outside agent can now find the elements, state how
- * each is built, state how it is cast, raise the shutters, read the parts and the bill,
- * record the yard's decisions about them, and check that any of it can be erected —
- * without a single question it can only answer by guessing.
+ * With these an outside agent can find the elements, state how each is built, state how it
+ * is cast, raise the shutters, read the parts and the bill, record the yard's decisions
+ * about them, and check that any of it can be erected — without a single question it can
+ * only answer by guessing.
+ *
+ * ## Why `set_pour_date` is last, and why it is addressed differently from every other write
+ *
+ * Everything above answers "what" and "how much". None of it can say "when", and a bill
+ * that cannot name a day is a bill nobody can book a delivery against: the striking tables
+ * say a wall form comes off in 12 hours, and only a pour date says which morning the plant
+ * is wanted and which afternoon it is free for the next pour.
+ *
+ * It is the only write here that addresses a shutter rather than an element, and that is
+ * forced by the thing being recorded. A date is per *pour* — a 9 m wall in three lifts is
+ * three dates a week apart — so a tool taking an element id would have to pick one of them
+ * silently. It is also the only input in the whole feature with neither a code nor a
+ * product behind it: a period has a published table, a rate at least has an invoice, and a
+ * date has only the programme somebody wrote. So nothing is derived from a sequence, and a
+ * project that has dated nothing gets no calendar at all rather than one inferred from the
+ * order the shutters were built in.
  */
 export function registerFormworkTools(server: McpServer, operations: SceneOperations): void {
   registerListCastableElements(server, operations)
@@ -103,6 +120,7 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerSetPourLimits(server, operations)
   registerInspectPourUnits(server, operations)
   registerAttachFormwork(server, operations)
+  registerSetPourDate(server, operations)
 }
 
 export { attachFormworkOutput } from './attach-formwork'
@@ -114,5 +132,6 @@ export { listCastableElementsOutput } from './list-castable-elements'
 export { setElementConstructionOutput } from './set-element-construction'
 export { setFormworkPartOutput } from './set-formwork-part'
 export { setFormworkSettingsOutput } from './set-formwork-settings'
+export { setPourDateOutput } from './set-pour-date'
 export { setPourLimitsOutput } from './set-pour-limits'
 export { validateFormworkOutput } from './validate-formwork'

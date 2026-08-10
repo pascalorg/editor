@@ -134,6 +134,7 @@ export function FormworkSettingsPanel() {
   const loads = node?.falseworkLoads ?? {}
   const bracing = node?.bracing ?? {}
   const parts = node?.parts ?? {}
+  const schedule = node?.schedule ?? {}
   const stated = node !== undefined
 
   return (
@@ -199,7 +200,6 @@ export function FormworkSettingsPanel() {
           value={placement.vibration}
         />
         <OptionalNumberField
-          assumed="not stated"
           hint={`Past ${ACI_VIBRATION_DEPTH_LIMIT_M} m the poker reaches below the hydrostatic zone and re-liquefies concrete that had begun to stiffen — ACI's special cases are void and the reported pressure is an underestimate.`}
           label="Poker depth"
           max={10}
@@ -299,7 +299,6 @@ export function FormworkSettingsPanel() {
           value={concrete.unitWeightKnM3}
         />
         <OptionalNumberField
-          assumed="not stated"
           hint={`Over ${ACI_SLUMP_LIMIT_MM} mm ACI's special-case formulas do not apply and the fluid head governs.`}
           label="Slump"
           max={300}
@@ -571,6 +570,42 @@ export function FormworkSettingsPanel() {
           cost of forming the job: there is no labour, no transport and no finance in it, and labour
           is normally the largest of those. Owned stock is excluded rather than priced at zero,
           because a panel the yard already holds amortises over a reuse count nothing here records.
+        </GroupNote>
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Programme">
+        <GroupNote>
+          The two lead times that turn a pour date into a delivery date. Nothing is assumed for
+          either, for the rates' reason: a striking period has a published table behind it, a lead
+          time is only how this yard works, and a zero would say the shutter appears on the morning
+          of the pour. Both are calendar days rather than working days, because a hire is charged
+          over a weekend.
+        </GroupNote>
+        <OptionalNumberField
+          hint="Delivery, erecting, aligning and the pre-pour check. Until this is stated the takeoff shows no delivery date at all — only the pour and the strike."
+          label="Wanted before pour"
+          max={365}
+          min={0}
+          onChange={(value) => setGroupField('schedule', { erectionLeadDays: value })}
+          step={1}
+          unit="days"
+          value={schedule.erectionLeadDays}
+        />
+        <OptionalNumberField
+          hint="Stripping, cleaning, repair and the trip back. Unstated, the takeoff shows the set free the day it is struck, which is a floor rather than an answer."
+          label="Back after striking"
+          max={365}
+          min={0}
+          onChange={(value) => setGroupField('schedule', { returnLeadDays: value })}
+          step={1}
+          unit="days"
+          value={schedule.returnLeadDays}
+        />
+        <GroupNote>
+          The dates themselves are not here. A 9 m wall cast in three lifts is three pours a week
+          apart, so a date belongs to a shutter rather than to the project or the wall — set it on
+          the assembly, or ask the AI to. Until at least one pour is dated the takeoff carries no
+          programme at all, rather than one inferred from the order the shutters were built in.
         </GroupNote>
       </PanelSection>
 

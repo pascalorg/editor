@@ -26,6 +26,11 @@ import { useId, useState } from 'react'
  * Committed on blur rather than per keystroke: each change re-solves the pressure
  * envelope and every member spacing in the scene, so typing "2.5" through a
  * per-keystroke handler would design the whole model to 2 and then to 2.5.
+ *
+ * Omitting `assumed` is a different claim from naming a conservative figure: it says
+ * nothing is assumed here at all, so the field reads "not stated" rather than
+ * "assumed nothing". A lead time is the case — there is no published table behind it
+ * and a zero would say the shutter appears on the morning of the pour.
  */
 export function OptionalNumberField({
   assumed,
@@ -38,8 +43,8 @@ export function OptionalNumberField({
   unit,
   value,
 }: {
-  /** What the chain uses when this is unset, already formatted. */
-  assumed: string
+  /** What the chain uses when this is unset, already formatted. Absent where nothing is. */
+  assumed?: string
   hint?: string
   label: string
   max?: number
@@ -76,14 +81,16 @@ export function OptionalNumberField({
             if (max !== undefined && parsed > max) return
             onChange(parsed)
           }}
-          placeholder={assumed}
+          placeholder={assumed ?? 'not stated'}
           step={step}
           type="number"
         />
         {unit && <span className="w-10 shrink-0 text-muted-foreground/70">{unit}</span>}
       </div>
       <span className="text-[10px] text-muted-foreground/70 leading-snug">
-        {value === undefined ? `Assumed ${assumed}${unit ? ` ${unit}` : ''}. ` : ''}
+        {value === undefined && assumed !== undefined
+          ? `Assumed ${assumed}${unit ? ` ${unit}` : ''}. `
+          : ''}
         {hint}
       </span>
     </label>

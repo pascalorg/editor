@@ -85,6 +85,17 @@ export interface FormworkSettings {
    * carries no money at all, and the surfaces say so rather than showing a total.
    */
   rates: RateTable | undefined
+  /**
+   * How a pour date becomes the days the plant is on site, or `undefined`.
+   *
+   * The third undefaulted field, and for the rates' reason rather than the rack's: a
+   * lead time has no published table behind it, so there is nothing conservative to
+   * fall back to. A default of zero says the shutter appears on the morning of the
+   * pour, which is the one answer that is certainly wrong, and any other default
+   * invents this yard's way of working. So absent means the programme reports the
+   * pour and the strike and stays quiet about the days either side.
+   */
+  schedule: NonNullable<FormworkProjectSettingsNode['schedule']> | undefined
 }
 
 /**
@@ -106,6 +117,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   parts: {},
   ownedStock: undefined,
   rates: undefined,
+  schedule: undefined,
 }
 
 /**
@@ -153,6 +165,7 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
           byCatalogId: node.rates.byCatalogId ?? {},
         }
       : undefined,
+    schedule: node.schedule,
   }
 }
 
@@ -188,6 +201,7 @@ export type FormworkSettingsGroup =
   | 'parts'
   | 'stock'
   | 'rates'
+  | 'schedule'
 
 /**
  * Merge a patch into one of the settings sub-objects, returning the value to write

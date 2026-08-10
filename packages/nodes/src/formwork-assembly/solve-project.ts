@@ -1,4 +1,13 @@
-import type { BomCost, BomHire, BomLine, BomSupply, StrikeTarget } from '@pascal-app/core/formwork'
+import type {
+  BomCost,
+  BomHire,
+  BomLine,
+  BomSupply,
+  FormworkSchedule,
+  SchedulablePour,
+  StrikeTarget,
+  StrikingTime,
+} from '@pascal-app/core/formwork'
 import {
   bomCost,
   bomCostCaveats,
@@ -6,6 +15,8 @@ import {
   bomLines,
   bomSupply,
   bomWeightKg,
+  formworkSchedule,
+  formworkScheduleCaveats,
   formworkSettingsFor,
   isSubstitutedStrikingStandard,
   overUtilisedParts,
@@ -91,6 +102,17 @@ export interface ProjectFormwork {
    * gets no money — not a zero, and not a figure derived from a plausible market rate.
    */
   cost?: BomCost
+  /**
+   * When each pour happens and when its plant arrives and comes free, or absent where no
+   * pour in scope carries a date.
+   *
+   * Optional like `cost` rather than always present like `hire`, and the reason is the
+   * same shape: a period is a consequence of a published code, and a *date* has no code
+   * behind it at all. A project that has not programmed its pours has not said when it
+   * pours, and deriving a date from the solve order would be a programme nobody agreed to
+   * printed beside geometry that is actually derived.
+   */
+  schedule?: FormworkSchedule
   /**
    * True where the striking table came from a different code family than the pressure
    * standard, because the project's own family publishes none.
@@ -217,6 +239,43 @@ export function solveProjectFormwork(
 
   const supply = settings.ownedStock ? bomSupply(bom, settings.ownedStock) : undefined
 
+  // A pour per shutter, because a shutter *is* a pour unit — and the periods per shutter
+  // rather than per bill line, which is the difference from `bomHire`. A line spans hosts
+  // and a date does not: the same panel type on a wall poured in March and one poured in
+  // May is one line and two pours, so the calendar has to be built off the assemblies.
+  //
+  // The periods come off the hire rather than being solved again. They are the same call
+  // with the same inputs, so a second solve could not produce a different figure today —
+  // it could the day either path gained a case, and a strike date that disagreed with the
+  // hire duration behind it is the one inconsistency this scope cannot explain.
+  const periods = new Map<StrikeTarget, StrikingTime>(
+    hire.periods.map((time) => [time.target, time]),
+  )
+  const pours: SchedulablePour[] = elements.flatMap((element) => {
+    const hostKind = element.host.type as 'wall' | 'column' | 'slab'
+    return element.shutters.map((shutter) => {
+      const targets = new Set<StrikeTarget>()
+      for (const part of shutter.parts) {
+        if (part.omitted) continue
+        const target = strikeTargetForPartKind(part.kind, hostKind)
+        if (target !== undefined) targets.add(target)
+      }
+      const striking = [...targets]
+        .map((target) => periods.get(target))
+        .filter((time): time is StrikingTime => time !== undefined)
+      return {
+        id: shutter.assembly.id as string,
+        ...(shutter.assembly.pourAt === undefined ? {} : { pourAt: shutter.assembly.pourAt }),
+        striking,
+      }
+    })
+  })
+  // Absent where nothing is dated, rather than a programme of empty rows: a takeoff for a
+  // project nobody has programmed should carry no calendar at all, the same way it carries
+  // no money until a rate exists.
+  const schedule = formworkSchedule(pours, settings.schedule)
+  const anyDated = schedule.scheduledCount > 0
+
   return {
     elements,
     bom,
@@ -229,6 +288,7 @@ export function solveProjectFormwork(
     // through as it stands, including absent: a project with rates and no stock list has
     // said it owns none of this, which is a different claim from having said nothing.
     ...(settings.rates ? { cost: bomCost(bom, settings.rates, hire, supply) } : {}),
+    ...(anyDated ? { schedule } : {}),
     strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
@@ -294,6 +354,10 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   // of these makes the total a floor rather than a price, and a money figure is the one
   // number in this whole takeoff a reader will quote without reading anything beside it.
   if (solution.cost) out.push(...bomCostCaveats(solution.cost))
+  // Verbatim again, and the qualifying-time line is the one that earns its place: under
+  // ACI the strike dates are the earliest the forms could come off rather than the dates,
+  // and a reader who takes a cold-spring programme off a summer calculation strikes early.
+  if (solution.schedule) out.push(...formworkScheduleCaveats(solution.schedule))
   return out
 }
 
