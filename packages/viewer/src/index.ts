@@ -138,6 +138,8 @@ export {
 } from './lib/scene-themes'
 export {
   createSnapshotPipeline,
+  SNAPSHOT_MIME,
+  SNAPSHOT_QUALITY,
   type SnapshotCaptureMode,
   type SnapshotCaptureResult,
   type SnapshotCropRegion,
