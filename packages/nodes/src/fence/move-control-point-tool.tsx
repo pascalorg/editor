@@ -2,11 +2,10 @@
 
 import {
   type AnyNodeId,
+  acquireSceneHistoryPause,
   emitter,
   type FenceNode,
   type GridEvent,
-  pauseSceneHistory,
-  resumeSceneHistory,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -37,8 +36,8 @@ export const MoveFenceControlPointTool: React.FC<{
   ])
 
   useEffect(() => {
-    pauseSceneHistory(useScene)
-    let committed = false
+    const releaseHistory = acquireSceneHistoryPause(useScene)
+    let finalized = false
     let lastPoint: [number, number] = [originalPoint[0], originalPoint[1]]
 
     const buildPatch = (point: [number, number]): Partial<FenceNode> => {
@@ -88,8 +87,9 @@ export const MoveFenceControlPointTool: React.FC<{
     }
 
     const onGridClick = (event: GridEvent) => {
-      committed = true
-      resumeSceneHistory(useScene)
+      if (finalized) return
+      finalized = true
+      releaseHistory()
       useScene.getState().updateNode(fenceId, buildPatch(lastPoint))
       useLiveNodeOverrides.getState().clear(fenceId)
       useScene.getState().markDirty(fenceId)
@@ -98,8 +98,10 @@ export const MoveFenceControlPointTool: React.FC<{
     }
 
     const onCancel = () => {
+      if (finalized) return
       restore()
-      resumeSceneHistory(useScene)
+      finalized = true
+      releaseHistory()
       markToolCancelConsumed()
       exit(false)
     }
@@ -109,9 +111,9 @@ export const MoveFenceControlPointTool: React.FC<{
     emitter.on('tool:cancel', onCancel)
 
     return () => {
-      if (!committed) {
+      if (!finalized) {
         restore()
-        resumeSceneHistory(useScene)
+        releaseHistory()
       }
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)

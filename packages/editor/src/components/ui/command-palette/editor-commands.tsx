@@ -38,7 +38,7 @@ import {
 } from 'lucide-react'
 import { useEffect } from 'react'
 import { filterEditableIds } from '../../../lib/edit-lock'
-import { runRedo, runUndo } from '../../../lib/history'
+import { getHistoryCommandState, runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
@@ -353,6 +353,7 @@ export function EditorCommands() {
         group: 'History',
         icon: <Undo2 className="h-4 w-4" />,
         keywords: ['undo', 'revert', 'back'],
+        when: () => getHistoryCommandState().canUndo,
         execute: () => run(() => runUndo()),
       },
       {
@@ -361,6 +362,7 @@ export function EditorCommands() {
         group: 'History',
         icon: <Redo2 className="h-4 w-4" />,
         keywords: ['redo', 'forward', 'repeat'],
+        when: () => getHistoryCommandState().canRedo,
         execute: () => run(() => runRedo()),
       },
 
