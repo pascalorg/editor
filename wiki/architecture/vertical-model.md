@@ -11,7 +11,7 @@ The invariant, in one sentence:
 > that height and translating the wall from its elected base. Optional terrain infill
 > extends only the bottom; it never changes the authored wall height or top.
 
-**Sources**: `packages/core/src/services/storey.ts`, `packages/core/src/systems/wall/wall-top.ts`, `packages/core/src/systems/slab/slab-support.ts`, `packages/core/src/systems/stair/stair-rise.ts`, `packages/core/src/store/use-scene.ts` (migration Pass 3)
+**Sources**: `packages/core/src/services/storey.ts`, `packages/core/src/systems/wall/wall-top.ts`, `packages/core/src/systems/slab/slab-support.ts`, `packages/core/src/systems/stair/stair-rise.ts`, `packages/core/src/utils/vertical-scene-migration.ts`
 
 ## Stored truth
 
@@ -122,9 +122,9 @@ free: `FloorElevationSystem` writes to the node's registered object, which for t
 selection proxy, not the instance. Such renderers must resolve each instance's Y through
 `getFloorStackedPosition` themselves.
 
-## Load migration (lives in `migrateNodes` Pass 3, indefinitely)
+## Load migration (lives in `migrateVerticalSceneNodes`, indefinitely)
 
-Because community autosave only persists after the first post-load edit, the migration must remain in `migrateNodes`:
+Because community autosave only persists after the first post-load edit, the migration must remain on the load path. It is pure and server-safe so the editor loader and hosted scene authority canonicalize identical fields before collaboration compares or persists an operation:
 
 - Writes each legacy level's **exact** derived height (a default legacy storey stores 2.55 = 0.05 slab + 2.5 wall) — never snapped to presets.
 - Compacts `level` ordinals per building, anchored at zero (non-negatives → 0,1,2…; negatives → −1,−2… — basements stay basements). Runs every load; idempotent.
