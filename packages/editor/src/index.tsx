@@ -188,9 +188,11 @@ export {
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
   getSegmentGridStep,
   isSegmentLongEnough,
+  parseWallDraftLength,
   resolveEndpointWallSplit,
   snapPointToGrid,
   snapScalarToGrid,
