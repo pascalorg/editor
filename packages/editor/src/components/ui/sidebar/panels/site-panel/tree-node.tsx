@@ -184,7 +184,18 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
   const nodeType = useScene((state) => state.nodes[nodeId]?.type)
   if (shouldHide) return null
   if (!nodeType) return null
-  const Component = treeNodeByType[nodeType]
+  // A kind the map doesn't name falls through to the generic row when it
+  // declares `def.tree` — which is the map comment's own destination, taken
+  // one opt-in step at a time. Without it a registry kind absent from the map
+  // draws NO row at all, so plugin objects were missing from the scene tree
+  // entirely: `def.tree.label` was computed and never reached a reader.
+  //
+  // Gated on `def.tree` rather than mere registration, because plenty of
+  // registered kinds are sub-parts that must stay out of the tree —
+  // `roof-segment`, `stair-segment`, the duct and pipe fittings, `guide`.
+  // Declaring `tree` is the kind saying it belongs there.
+  const Component =
+    treeNodeByType[nodeType] ?? (nodeRegistry.get(nodeType)?.tree ? RegistryTreeNode : undefined)
   if (!Component) return null
   return <Component depth={depth} isLast={isLast} nodeId={nodeId} />
 })
