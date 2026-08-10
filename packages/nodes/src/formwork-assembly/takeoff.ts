@@ -87,6 +87,8 @@ export function takeoffCsv(
       ...(solution.schedule ? { schedule: solution.schedule } : {}),
       ...(solution.sets ? { sets: solution.sets } : {}),
       ...(solution.acquisition ? { acquisition: solution.acquisition } : {}),
+      ...(solution.sequence ? { sequence: solution.sequence } : {}),
+      ...(solution.resequence ? { resequence: solution.resequence } : {}),
     }),
   }
 }

@@ -1013,6 +1013,189 @@ describe('what the job has to go out and get', () => {
   })
 })
 
+describe('what has to happen before what', () => {
+  const leads = {
+    pressureStandard: 'BS_8110',
+    schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+  } as const
+
+  /**
+   * A rack holding this share of every peak the scope has.
+   *
+   * Derived rather than written out, because a rack naming only the panel is the trap this suite
+   * has fallen into before: a steel-panel wall bills ties and walers too, so a panel-only rack
+   * leaves those short — and the shortfall list is sorted by size, which puts the tie at the head
+   * of the answers and makes an assertion about `answers[0]` an assertion about the wrong item.
+   */
+  function rackFor(nodes: Record<string, AnyNode>, share: number): Record<string, number> {
+    const peaks = solveProjectFormwork(nodes).sets?.peaks ?? []
+    return Object.fromEntries(
+      peaks.map((peak) => [peak.catalogId, Math.floor(peak.peakQuantity * share)]),
+    )
+  }
+
+  test('the lift chain reaches the solution off the scene, with no cast order anywhere', () => {
+    // The claim that made this buildable: precedence needs no new field. Two lifts of one wall
+    // state a dependency, and nothing in the scene had to be edited to say so.
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', { height: 9, maxLiftHeight: 3 } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_2', 'wall_1', 0, 1, { pourAt: '2026-03-16' }),
+        ),
+        leads,
+      ),
+    )
+
+    expect(solution.sequence?.edges).toHaveLength(1)
+    expect(solution.sequence?.edges[0]).toMatchObject({ reason: 'lift' })
+    expect(solution.sequence?.gaps).not.toContain('nothing-sequenced')
+  })
+
+  test('the cast order stated on the wall becomes a dependency between pours', () => {
+    // The join only this layer can make: `castOrder` is on the element and a pour is a shutter.
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', {
+            formworkType: 'steel-panel',
+            castOrder: 1,
+          } as Partial<WallNode>),
+          makeWall('wall_2', {
+            start: [0, 4],
+            end: [6, 4],
+            formworkType: 'steel-panel',
+            castOrder: 2,
+          } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_2', 'wall_2', 0, 0, { pourAt: '2026-03-16' }),
+        ),
+        leads,
+      ),
+    )
+
+    expect(solution.sequence?.edges).toHaveLength(1)
+    expect(solution.sequence?.edges[0]).toMatchObject({
+      from: 'formwork-assembly_1',
+      to: 'formwork-assembly_2',
+      reason: 'cast-order',
+    })
+    // And the successor has a float bounded by its predecessor's stated date rather than by the
+    // programme's start.
+    const later = solution.sequence?.pours.find((pour) => pour.id === 'formwork-assembly_2')
+    expect(later?.earliestPourAt).toBe('2026-03-02')
+    expect(later?.moveEarlierDays).toBe(14)
+  })
+
+  test('a monolithic pour is one node in the sequence, and its members travel with it', () => {
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', {
+            formworkType: 'steel-panel',
+            pourId: 'P1',
+          } as Partial<WallNode>),
+          makeWall('wall_2', {
+            start: [0, 4],
+            end: [6, 4],
+            formworkType: 'steel-panel',
+            pourId: 'P1',
+          } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_2', 'wall_2', 0, 0, { pourAt: '2026-03-02' }),
+        ),
+        leads,
+      ),
+    )
+
+    expect(solution.sequence?.pours).toHaveLength(1)
+    expect(solution.sequence?.pours[0]).toMatchObject({ id: 'P1', monolithic: true })
+    expect(solution.sequence?.pours[0]?.elementIds).toEqual(['wall_1', 'wall_2'])
+  })
+
+  test('an undated project gets no sequence, because a graph with no float is not one', () => {
+    expect(solveProjectFormwork(steelWallScene()).sequence).toBeUndefined()
+  })
+
+  test('the resequencing answer names the pour to move instead of the panels to buy', () => {
+    // The end of the chain: short on the peak day, and one of the two pours has float. The answer
+    // is a move rather than an order, and the reader gets both. The rack holds exactly one pour's
+    // worth of everything, so moving either pour out of the overlap clears every shortage at once.
+    const scene = sceneOf(
+      makeWall('wall_1', {
+        formworkType: 'steel-panel',
+        castOrder: 1,
+      } as Partial<WallNode>),
+      makeWall('wall_2', {
+        start: [0, 4],
+        end: [6, 4],
+        formworkType: 'steel-panel',
+        castOrder: 2,
+      } as Partial<WallNode>),
+      makeWall('wall_3', {
+        start: [0, 8],
+        end: [6, 8],
+        formworkType: 'steel-panel',
+        castOrder: 3,
+      } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+      makeAssembly('formwork-assembly_2', 'wall_2', 0, 0, { pourAt: '2026-03-02' }),
+      makeAssembly('formwork-assembly_3', 'wall_3', 0, 0, { pourAt: '2026-04-06' }),
+    )
+    const solution = solveProjectFormwork(
+      withSettings(scene, { ...leads, stock: { owned: rackFor(withSettings(scene, leads), 0.5) } }),
+    )
+    const answer = solution.resequence?.answers[0]
+
+    expect(solution.acquisition?.shortfallQuantity).toBeGreaterThan(0)
+    expect(answer?.refusal).toBeUndefined()
+    const move = answer?.moves[0]
+    expect(move?.pourId).toBe('formwork-assembly_2')
+    expect(move?.peakAfter).toBeLessThan(move?.peakBefore as number)
+    expect(move?.clearsShortage).toBe(true)
+    // Every shortage in the scope, not only the largest: one pour leaving the overlap halves all
+    // of them together, which is what makes the move worth proposing over an order.
+    expect(solution.resequence?.unavoidable).toEqual([])
+  })
+
+  test('a shortage with nothing short gets no resequencing pass at all', () => {
+    const scene = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+    )
+    const solution = solveProjectFormwork(
+      withSettings(scene, { ...leads, stock: { owned: rackFor(withSettings(scene, leads), 5) } }),
+    )
+
+    expect(solution.acquisition?.shortfalls).toEqual([])
+    expect(solution.resequence).toBeUndefined()
+  })
+
+  test('the sequence’s caveats travel with the takeoff, critical-path warning and all', () => {
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', { height: 9, maxLiftHeight: 3 } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_2', 'wall_1', 0, 1, { pourAt: '2026-03-16' }),
+        ),
+        leads,
+      ),
+    )
+    const caveats = projectFormworkCaveats(solution)
+
+    expect(caveats.some((line) => line.includes('not a critical path'))).toBe(true)
+    expect(caveats.some((line) => line.includes('not slack a gang can spend'))).toBe(true)
+  })
+
+  test('an unprogrammed takeoff says nothing about float', () => {
+    const caveats = projectFormworkCaveats(solveProjectFormwork(steelWallScene()))
+
+    expect(caveats.some((line) => line.includes('not a critical path'))).toBe(false)
+  })
+})
+
 describe('projectFormworkCaveats', () => {
   test('says nothing about a complete takeoff', () => {
     const wall = makeWall('wall_1')

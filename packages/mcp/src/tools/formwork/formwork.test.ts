@@ -160,6 +160,51 @@ interface BillReply {
     gaps: string[]
   }
   noAcquisitionBecause?: string
+  sequence?: {
+    windowFrom: string | null
+    windowTo: string | null
+    pinnedPours: string[]
+    unsequencedPours: string[]
+    pours: Array<{
+      pourId: string
+      assemblyIds: string[]
+      elementIds: string[]
+      castInOneOperation: boolean
+      pourAt: string | null
+      waitsOn: string[]
+      holdsUp: string[]
+      noEarlierThan: string | null
+      noLaterThan: string | null
+      allowanceDays: number | null
+      couldComeForwardDays: number | null
+      couldGoBackDays: number | null
+      gaps?: string[]
+    }>
+    dependencies: Array<{ before: string; after: string; because: string }>
+    brokenByTheStatedDates: string[]
+    gaps: string[]
+  }
+  moveInsteadOfBuying?: Array<{
+    description: string
+    catalogId: string
+    shortBy: number
+    neededBy: string
+    pinnedPours: string[]
+    noMoveBecause?: string
+    moves: Array<{
+      pourId: string
+      assemblyIds: string[]
+      days: number
+      fromDate: string
+      toDate: string
+      peakBefore: number
+      peakAfter: number
+      stillShortBy: number
+      clearsTheShortage: boolean
+      allowanceLeftDays: number
+      raisesElsewhere: Array<{ description: string; catalogId: string; from: number; to: number }>
+    }>
+  }>
   caveats: string[]
 }
 
@@ -424,6 +469,66 @@ function tallWall(formworkType: string | null = 'steel-panel'): Record<string, u
       backSide: 'unknown',
       ...(formworkType === null ? {} : { formworkType }),
     },
+  }
+}
+
+/**
+ * Three plain walls on one level, for an order the project states rather than a lift chain.
+ *
+ * A lift chain has no room in it — lift 2 cannot move while lift 1 stands where it is — so a
+ * pour with somewhere to go has to come from elements the project sequenced itself.
+ */
+function threeWalls(): Record<string, unknown> {
+  const wall = (id: string, y: number) => ({
+    object: 'node',
+    id,
+    type: 'wall',
+    parentId: 'level_1',
+    visible: true,
+    metadata: {},
+    children: [],
+    start: [0, y],
+    end: [6, y],
+    thickness: 0.25,
+    height: 6,
+    frontSide: 'unknown',
+    backSide: 'unknown',
+    formworkType: 'steel-panel',
+  })
+  return {
+    site_1: {
+      object: 'node',
+      id: 'site_1',
+      type: 'site',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['building_1'],
+    },
+    building_1: {
+      object: 'node',
+      id: 'building_1',
+      type: 'building',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: ['level_1'],
+    },
+    level_1: {
+      object: 'node',
+      id: 'level_1',
+      type: 'level',
+      parentId: 'building_1',
+      visible: true,
+      metadata: {},
+      children: ['wall_1', 'wall_2', 'wall_3'],
+      elevation: 0,
+      height: 6,
+      level: 0,
+    },
+    wall_1: wall('wall_1', 0),
+    wall_2: wall('wall_2', 4),
+    wall_3: wall('wall_3', 8),
   }
 }
 
@@ -2053,6 +2158,177 @@ describe('the formwork MCP tools', () => {
         0,
       )
       expect(reply.cost?.excludes.some((line) => line.includes('internal recharge'))).toBe(true)
+    })
+  })
+
+  /**
+   * What waits on what, and whether to move a pour instead of raising an order.
+   *
+   * `sequence.test.ts` and `resequence.test.ts` own the arithmetic. What only this layer can
+   * get wrong is what an agent is handed, and each of these is a sentence a model would say
+   * out loud from the wrong shape: a float column with no provenance under it reads as a
+   * critical path, a 0 and an absent allowance are opposite claims that look alike in JSON,
+   * and a refusal dropped rather than named reads as no answer at all.
+   */
+  describe('what has to happen before what', () => {
+    /** One wall in three lifts a fortnight apart — a lift chain, which is precedence. */
+    const inLifts = async (settings: Record<string, unknown>): Promise<BillReply> => {
+      load(withSettings(tallWall(), { schedule: { returnLeadDays: 3 }, ...settings }))
+      await call('attach_formwork', { elementId: 'wall_1' })
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      await call('attach_formwork', { elementId: 'wall_1' })
+      const ids = (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+        .filter((node) => node.type === 'formwork-assembly')
+        .map((node) => node.id as string)
+      for (const [index, id] of ids.entries()) {
+        await call('set_pour_date', {
+          assemblyId: id,
+          pourAt: `2026-03-${String(2 + index * 14).padStart(2, '0')}`,
+        })
+      }
+      return await call<BillReply>('inspect_project_formwork')
+    }
+
+    /** Three walls in a stated cast order, two on one day and the third with room after. */
+    const inOrder = async (
+      settings: Record<string, unknown>,
+      thirdAt = '2026-03-30',
+    ): Promise<BillReply> => {
+      load(withSettings(threeWalls(), { schedule: { returnLeadDays: 3 }, ...settings }))
+      for (const [index, elementId] of ['wall_1', 'wall_2', 'wall_3'].entries()) {
+        await call('attach_formwork', { elementId })
+        await call('set_element_construction', { elementId, castOrder: index + 1 })
+      }
+      const dates = ['2026-03-02', '2026-03-02', thirdAt]
+      const ids = (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+        .filter((node) => node.type === 'formwork-assembly')
+        .map((node) => node.id as string)
+      for (const [index, id] of ids.entries())
+        await call('set_pour_date', { assemblyId: id, pourAt: dates[index] as string })
+      return await call<BillReply>('inspect_project_formwork')
+    }
+
+    test('the dependency carries the reason it exists, not only the pair', async () => {
+      // A dependency an agent cannot justify is one it presents as a rule of the tool. The
+      // reason here is physical and the same one a foreman would give.
+      const reply = await inLifts({})
+
+      expect(reply.sequence?.pours).toHaveLength(3)
+      expect(reply.sequence?.dependencies.length).toBe(2)
+      expect(reply.sequence?.dependencies[0]?.because).toContain('bears on the lift below')
+      const middle = reply.sequence?.pours.find((pour) => pour.waitsOn.length > 0)
+      expect(middle?.holdsUp.length).toBeGreaterThan(0)
+    })
+
+    test('the float is bounded by the neighbours’ dates, and the caveats refuse the phrase', async () => {
+      const reply = await inLifts({})
+
+      const floated = reply.sequence?.pours.filter((pour) => pour.allowanceDays !== null) ?? []
+      expect(floated.length).toBeGreaterThan(0)
+      for (const pour of floated) {
+        expect(pour.noEarlierThan).not.toBeNull()
+        expect(pour.noLaterThan).not.toBeNull()
+      }
+      expect(reply.caveats.some((caveat) => caveat.includes('not a critical path'))).toBe(true)
+      expect(
+        reply.caveats.some((caveat) => caveat.includes('Float is not slack a gang can spend')),
+      ).toBe(true)
+    })
+
+    test('a pour nothing bounds carries a null allowance rather than a zero', async () => {
+      // The two are opposite claims — nothing says, against pinned — and an agent reading a 0
+      // out loud has told the user a pour cannot move.
+      // Two walls on two levels, neither carrying a cast order and neither cut into lifts, so
+      // nothing in the scene puts one before the other.
+      load(withSettings(twoLevels(), { schedule: { returnLeadDays: 3 } }))
+      for (const elementId of ['wall_1', 'wall_3']) await call('attach_formwork', { elementId })
+      const ids = (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+        .filter((node) => node.type === 'formwork-assembly')
+        .map((node) => node.id as string)
+      for (const [index, id] of ids.entries()) {
+        await call('set_pour_date', { assemblyId: id, pourAt: `2026-03-0${2 + index}` })
+      }
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      expect(reply.sequence?.unsequencedPours).toHaveLength(ids.length)
+      for (const pour of reply.sequence?.pours ?? []) {
+        expect(pour.waitsOn).toEqual([])
+        expect(pour.holdsUp).toEqual([])
+      }
+      expect(reply.sequence?.gaps.join(' ')).toContain('every pour is treated as concurrent')
+      expect(
+        reply.caveats.some((caveat) => caveat.includes('Nothing in this scope states an order')),
+      ).toBe(true)
+    })
+
+    test('no dated pour leaves the block off rather than reporting an unbounded one', async () => {
+      load(withSettings(tallWall(), {}))
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      expect(reply.sequence).toBeUndefined()
+      expect(reply.moveInsteadOfBuying).toBeUndefined()
+    })
+
+    test('a shortfall gets the move that clears it, with the peak it leaves behind', async () => {
+      // Two walls on one day put both bills on site at once, and the second has a month of
+      // room before the third — so there is somewhere for a pour to go.
+      const empty = await inOrder({ stock: { owned: {} } })
+      const panel = empty.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+      const reply = await inOrder({
+        stock: { owned: { [panel.catalogId]: panel.mostAtOnce - 1 } },
+      })
+
+      const answer = reply.moveInsteadOfBuying?.find((entry) => entry.catalogId === panel.catalogId)
+      expect(answer?.shortBy).toBe(1)
+      expect(answer?.noMoveBecause).toBeUndefined()
+      const move = answer?.moves[0]
+      expect(move?.peakBefore).toBe(panel.mostAtOnce)
+      expect(move?.peakAfter).toBeLessThan(panel.mostAtOnce)
+      expect(move?.fromDate).toBe('2026-03-02')
+      expect(move?.toDate).not.toBe('2026-03-02')
+      // Present even when empty, because a move with no price beside it reads as free.
+      expect(move?.raisesElsewhere).toBeDefined()
+      expect(
+        reply.caveats.some((caveat) => caveat.includes('argument to take to the planner')),
+      ).toBe(true)
+    })
+
+    test('a shortfall no move can clear is told to buy it, rather than getting no row', async () => {
+      // The firing half of the same check. All three on one day, each pinned by the others:
+      // the honest answer is that the shortfall has to be bought, and a dropped row reads as
+      // the tool having nothing to say about it.
+      const empty = await inOrder({ stock: { owned: {} } }, '2026-03-02')
+      const panel = empty.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+      const reply = await inOrder(
+        { stock: { owned: { [panel.catalogId]: panel.mostAtOnce - 1 } } },
+        '2026-03-02',
+      )
+
+      const answer = reply.moveInsteadOfBuying?.find((entry) => entry.catalogId === panel.catalogId)
+      expect(answer?.noMoveBecause).toContain('bought or hired')
+      expect(answer?.moves).toEqual([])
+      expect(answer?.pinnedPours.length).toBeGreaterThan(0)
+      expect(reply.caveats.some((caveat) => caveat.includes('pinned by the dates around it'))).toBe(
+        true,
+      )
+    })
+
+    test('nothing short means no proposal at all, and the precedence still reads', async () => {
+      // The rack is derived from the scope's own peaks rather than stated: a steel-panel wall
+      // bills ties and walers as well as panels, and a rack holding only panels leaves those
+      // short — which is a real shortfall, and the module would be right to answer it.
+      const empty = await inLifts({ stock: { owned: {} } })
+      const owned = Object.fromEntries(
+        (empty.sets?.items ?? []).map((item) => [item.catalogId, item.mostAtOnce]),
+      )
+      const reply = await inLifts({ stock: { owned } })
+
+      expect(reply.acquire?.shortfallQuantity).toBe(0)
+      expect(reply.sequence?.dependencies.length).toBeGreaterThan(0)
+      expect(reply.moveInsteadOfBuying).toBeUndefined()
     })
   })
 

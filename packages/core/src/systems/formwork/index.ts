@@ -437,6 +437,15 @@ export {
   verticalElementKind,
 } from './pressure'
 export {
+  type FormworkResequence,
+  formworkResequence,
+  RESEQUENCE_REFUSAL_LABELS,
+  type ResequenceAnswer,
+  type ResequenceMove,
+  type ResequenceRefusal,
+  resequenceCaveats,
+} from './resequence'
+export {
   calendarDayNumber,
   type FormworkSchedule,
   formworkSchedule,
@@ -459,6 +468,20 @@ export {
   SET_POUR_DATE_DESCRIPTION,
   unknownAssembly,
 } from './schedule-patch'
+export {
+  type FormworkSequence,
+  floatForPourId,
+  formworkSequence,
+  formworkSequenceCaveats,
+  PRECEDENCE_REASON_LABELS,
+  type PrecedenceConflict,
+  type PrecedenceEdge,
+  type PrecedenceReason,
+  SEQUENCE_GAP_LABELS,
+  type SequenceablePour,
+  type SequencedPour,
+  type SequenceGap,
+} from './sequence'
 export {
   type FormworkSetCount,
   formworkSetCaveats,

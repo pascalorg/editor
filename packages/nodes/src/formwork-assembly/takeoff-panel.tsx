@@ -3,7 +3,10 @@
 import {
   COST_GAP_LABELS,
   formatMoney,
+  PRECEDENCE_REASON_LABELS,
+  RESEQUENCE_REFUSAL_LABELS,
   SCHEDULE_GAP_LABELS,
+  SEQUENCE_GAP_LABELS,
   STRIKE_TARGET_LABELS,
   STRIKING_STANDARD_LABELS,
   scheduleInPourOrder,
@@ -64,6 +67,8 @@ export function FormworkTakeoffPanel() {
   const occupancy = schedule === undefined ? undefined : scheduleOccupancyDays(schedule)
   const sets = solution.sets
   const acquisition = solution.acquisition
+  const sequence = solution.sequence
+  const resequence = solution.resequence
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -298,6 +303,65 @@ export function FormworkTakeoffPanel() {
                 ))}
               </Section>
             )}
+            {/* Directly under the programme, because it is the same dates read a second way:
+                above is when each pour is, here is how much of that is a choice. Nothing is
+                derived — the bounds are the neighbours' own stated dates. */}
+            {sequence !== undefined && sequence.pours.length > 0 && (
+              <Section title="What waits on what">
+                <Readout
+                  label="Pinned"
+                  value={String(sequence.pinned.length)}
+                  value2={
+                    sequence.pinned.length === 0 ? 'every pour can move' : 'cannot move a day'
+                  }
+                />
+                {sequence.unsequenced.length > 0 && (
+                  <Readout
+                    label="Unsequenced"
+                    value={String(sequence.unsequenced.length)}
+                    value2="nothing orders them"
+                  />
+                )}
+                {sequence.pours.map((pour) => (
+                  <div
+                    className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
+                    key={pour.id}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {pour.monolithic ? `${pour.id} (${pour.members.length} together)` : pour.id}
+                    </span>
+                    <span className="shrink-0 font-mono text-muted-foreground">
+                      {pour.totalFloat === undefined
+                        ? 'no allowance stated'
+                        : pour.totalFloat < 0
+                          ? `${-pour.totalFloat} d late already`
+                          : pour.totalFloat === 0
+                            ? 'pinned'
+                            : `−${pour.moveEarlierDays ?? 0} / +${pour.moveLaterDays ?? 0} d`}
+                    </span>
+                  </div>
+                ))}
+                {/* The reasons rather than the edges. A panel this narrow cannot hold 39 rows
+                    of "a → b", and what a reader argues with is the reason, which repeats. */}
+                {[...new Set(sequence.edges.map((edge) => edge.reason))].map((reason) => (
+                  <Note key={reason}>{PRECEDENCE_REASON_LABELS[reason]}.</Note>
+                ))}
+                {sequence.conflicts.map((conflict) => (
+                  <WarningLine
+                    key={`${conflict.edge.from}-${conflict.edge.to}`}
+                    message={conflict.message}
+                  />
+                ))}
+                {sequence.gaps.map((gap) => (
+                  <Note key={gap}>{SEQUENCE_GAP_LABELS[gap]}.</Note>
+                ))}
+                <Note>
+                  Not a critical path, and not slack a gang can spend: each allowance is measured
+                  against the neighbours' stated dates, so two pours with a week each do not have
+                  two weeks between them. Move one, then read this again.
+                </Note>
+              </Section>
+            )}
             {/* The order, and it is the last section because it is the one to act on: every
                 figure above says what passes through the job and this says what to buy. Only
                 where the programme can carry it — the refusal is a Note rather than an empty
@@ -424,6 +488,53 @@ export function FormworkTakeoffPanel() {
                     </Note>
                   </Section>
                 )}
+            {/* After the shortfall it is an alternative to, because that is the order the
+                decision is made in: a reader who has just seen "40 short by the 9th" is about
+                to raise an order, and the cheapest answer is often that nothing is short on any
+                other day. A refusal is shown as loudly as a move — "this one has to be bought"
+                is the answer, not a missing row. */}
+            {resequence !== undefined && resequence.answers.length > 0 && (
+              <Section title="Move instead of buying">
+                {resequence.answers.map((answer) => (
+                  <div
+                    className="space-y-0.5 border-border/30 border-t pt-1"
+                    key={answer.catalogId}
+                  >
+                    <div className="flex items-baseline justify-between gap-2 text-[11px]">
+                      <span className="min-w-0 flex-1 truncate text-foreground/90">
+                        {answer.description}
+                      </span>
+                      <span className="shrink-0 font-mono text-muted-foreground">
+                        {answer.shortfall} short by {answer.peakOn}
+                      </span>
+                    </div>
+                    {answer.refusal === undefined ? (
+                      answer.moves.map((move) => (
+                        <div className="text-[10px] text-muted-foreground" key={move.pourId}>
+                          {move.days > 0 ? 'Push' : 'Pull'} {move.pourId} {Math.abs(move.days)} d to{' '}
+                          {move.toDate}: peak {move.peakBefore} → {move.peakAfter}
+                          {move.clearsShortage
+                            ? ', nothing short'
+                            : `, still ${move.shortfallAfter} short`}
+                          {move.raises.length === 0
+                            ? ''
+                            : ` · costs ${move.raises.map((rise) => `${rise.description} ${rise.from} → ${rise.to}`).join(', ')}`}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-[10px] text-muted-foreground">
+                        No move helps: {RESEQUENCE_REFUSAL_LABELS[answer.refusal]}.
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <Note>
+                  A proposal, not a plan. This knows about formwork precedence and nothing else — no
+                  gang, no crane, no concrete supply — and the moves cannot be taken together,
+                  because each was measured against the other pours' stated dates.
+                </Note>
+              </Section>
+            )}
             <Section
               title={`${solution.bom.length} ${solution.bom.length === 1 ? 'line' : 'lines'}`}
             >

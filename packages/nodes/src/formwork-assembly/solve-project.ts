@@ -4,10 +4,13 @@ import type {
   BomLine,
   BomSupply,
   FormworkAcquisition,
+  FormworkResequence,
   FormworkSchedule,
+  FormworkSequence,
   FormworkSetCount,
   PourQuantities,
   SchedulablePour,
+  SequenceablePour,
   StrikeTarget,
   StrikingTime,
 } from '@pascal-app/core/formwork'
@@ -20,14 +23,18 @@ import {
   bomSupply,
   bomWeightKg,
   formworkAcquisition,
+  formworkResequence,
   formworkSchedule,
   formworkScheduleCaveats,
+  formworkSequence,
+  formworkSequenceCaveats,
   formworkSetCaveats,
   formworkSetCount,
   formworkSettingsFor,
   isReturnableLine,
   isSubstitutedStrikingStandard,
   overUtilisedParts,
+  resequenceCaveats,
   strikeTargetForPartKind,
   strikingInputFor,
   strikingStandardFor,
@@ -146,6 +153,28 @@ export interface ProjectFormwork {
    * nothing. Both silences are carried to the surfaces as reasons rather than gaps.
    */
   acquisition?: FormworkAcquisition
+  /**
+   * What has to happen before what, and how far each pour can move.
+   *
+   * Present wherever there is a programme at all, unlike `sets` and `acquisition`, because
+   * precedence is a fact about the scene rather than about the commercial inputs: an element
+   * cast in three lifts states two dependencies whether or not anybody has priced anything.
+   * The float inside it is per pour and absent where that pour is undated, which is the same
+   * rule the schedule follows.
+   *
+   * No new field on any node produces this. The scene has always stated order three ways —
+   * `liftIndex`, `castOrder` and `pourId` — and this is the first reader to use them together.
+   */
+  sequence?: FormworkSequence
+  /**
+   * Which pour to move, to stop being short — or why nothing can move.
+   *
+   * The first output in this feature that proposes a change to the project rather than
+   * describing one, and the only one derived from three other fields of this same solution: it
+   * needs the shortfall to know what is short, the sequence to know what can move, and the
+   * programme to re-sweep the peak after a candidate move. Absent where any of the three is.
+   */
+  resequence?: FormworkResequence
   /**
    * True where the striking table came from a different code family than the pressure
    * standard, because the project's own family publishes none.
@@ -290,8 +319,13 @@ export function solveProjectFormwork(
   // a bill line is one catalog id across every pour in scope, so it has no pour to belong to
   // and a sweep over it would find one interval covering the job.
   const pourQuantities: PourQuantities[] = []
+  // And the precedence, off the same walk and for the same layer reason `targetsByMark` is built
+  // here: `castOrder` and `pourId` are stated on the *element* and a pour is a shutter, so only
+  // the layer holding both can join them. Core's sequencer never sees a node.
+  const sequenceable: SequenceablePour[] = []
   for (const element of elements) {
     const hostKind = element.host.type as 'wall' | 'column' | 'slab'
+    const host = element.host as CastableHostNode & { castOrder?: number; pourId?: string }
     for (const shutter of element.shutters) {
       const targets = new Set<StrikeTarget>()
       for (const part of shutter.parts) {
@@ -307,6 +341,17 @@ export function solveProjectFormwork(
         id,
         ...(shutter.assembly.pourAt === undefined ? {} : { pourAt: shutter.assembly.pourAt }),
         striking,
+      })
+      sequenceable.push({
+        id,
+        elementId: element.host.id as string,
+        // Defaulted to the bottom lift of the only segment where the assembly says nothing, which
+        // is what an unsplit element is: one pour at the base. A missing index left absent would
+        // put every shutter on the element in one chain and invent a bearing between them.
+        segmentIndex: shutter.assembly.segmentIndex ?? 0,
+        liftIndex: shutter.assembly.liftIndex ?? 0,
+        ...(host.castOrder === undefined ? {} : { castOrder: host.castOrder }),
+        ...(host.pourId === undefined ? {} : { pourId: host.pourId }),
       })
       // Through `bomLines` rather than counting parts directly, so a shutter's quantities are
       // the same arithmetic as the bill's — a consumable is measured in its own unit and a
@@ -348,6 +393,17 @@ export function solveProjectFormwork(
     sets && settings.ownedStock
       ? formworkAcquisition(sets, settings.ownedStock, settings.rates)
       : undefined
+  // Off the same schedule, so a float cannot be measured against a date the programme above it
+  // does not have. Only where something is dated: precedence without dates is a graph with no
+  // float in it, and reporting the edges alone would put a dependency list on a panel whose every
+  // allowance column is blank.
+  const sequence = anyDated ? formworkSequence(sequenceable, schedule) : undefined
+  // The one output derived from three others. Every input is this solution's own, so a proposed
+  // move cannot be compared against a peak the reader is not looking at.
+  const resequence =
+    sequence && acquisition && acquisition.shortfalls.length > 0
+      ? formworkResequence(acquisition, schedule, pourQuantities, sequence)
+      : undefined
 
   return {
     elements,
@@ -364,6 +420,8 @@ export function solveProjectFormwork(
     ...(anyDated ? { schedule } : {}),
     ...(sets ? { sets } : {}),
     ...(acquisition ? { acquisition } : {}),
+    ...(sequence ? { sequence } : {}),
+    ...(resequence ? { resequence } : {}),
     strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
@@ -455,6 +513,11 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
       'Nothing here says what to buy or hire: the peak above is what the job needs at once, and no rack is recorded to compare it against. That is not a yard that owns nothing — record what it owns with set_formwork_settings ownedStock and the shortfall follows.',
     )
   }
+  // After the acquisition, because a move is the alternative to acquiring and reads as one only
+  // once the reader knows what is short. Both sets of caveats, and the sequence's first: "this is
+  // not a critical path" has to arrive before any figure that was derived from the float.
+  if (solution.sequence) out.push(...formworkSequenceCaveats(solution.sequence))
+  if (solution.resequence) out.push(...resequenceCaveats(solution.resequence))
   return out
 }
 

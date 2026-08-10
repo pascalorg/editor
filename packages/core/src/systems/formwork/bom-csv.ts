@@ -3,12 +3,14 @@ import { type BomCost, COST_GAP_LABELS, type CostLine } from './cost'
 import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
 import type { BomHire, HireLine } from './hire'
 import type { BomLine } from './parts'
+import { type FormworkResequence, RESEQUENCE_REFUSAL_LABELS } from './resequence'
 import {
   type FormworkSchedule,
   SCHEDULE_GAP_LABELS,
   scheduleInPourOrder,
   scheduleOccupancyDays,
 } from './schedule'
+import { type FormworkSequence, PRECEDENCE_REASON_LABELS, SEQUENCE_GAP_LABELS } from './sequence'
 import { type FormworkSetCount, SET_COUNT_GAP_LABELS } from './sets'
 import type { BomSupply, SupplyLine } from './supply'
 
@@ -100,6 +102,23 @@ export interface BomCsvScope {
    * several times what the job needs at once.
    */
   acquisition?: FormworkAcquisition
+  /**
+   * What has to happen before what, and how far each pour can move.
+   *
+   * A preamble block per *pour*, like the programme it is measured against — a dependency is
+   * between two pours and a bill line spans them, so there is no line to put it on. The float
+   * column is the one thing in this file that could be mistaken for a promise, so the header
+   * names it an allowance and the caveats say it is not a critical path.
+   */
+  sequence?: FormworkSequence
+  /**
+   * Which pour to move instead of acquiring, where a shortage has an answer.
+   *
+   * The only block in this file that proposes a change to the project rather than reporting one,
+   * so it is placed after the acquisition it is an alternative to and every row carries the peak
+   * it would leave behind. A move with no "after" figure beside it reads as free.
+   */
+  resequence?: FormworkResequence
 }
 
 /**
@@ -506,6 +525,130 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
     // can say so, because a line the bill does not contain has no row.
     rows.push(['Owned, not used here', cell(supply.unusedOwnedIds.join(' '))].join(','))
   }
+
+  const sequence = scope.sequence
+  if (sequence && sequence.pours.length > 0) {
+    rows.push('')
+    rows.push(
+      [
+        'PRECEDENCE AND FLOAT',
+        cell(
+          'Every bound below comes from a neighbour’s stated pour date, so this is not a critical path — a pour with no allowance is pinned by the dates around it',
+        ),
+      ].join(','),
+    )
+    rows.push(
+      [
+        'Pour',
+        'Elements',
+        'Poured',
+        'Waits on',
+        'Held up',
+        'No earlier than',
+        'No later than',
+        'Allowance (days)',
+        'Note',
+      ].join(','),
+    )
+    for (const pour of sequence.pours) {
+      rows.push(
+        [
+          cell(pour.id),
+          cell(pour.elementIds.join(' ')),
+          cell(pour.pourAt ?? ''),
+          cell(pour.predecessors.join(' ')),
+          cell(pour.successors.join(' ')),
+          cell(pour.earliestPourAt ?? ''),
+          cell(pour.latestPourAt ?? ''),
+          pour.totalFloat === undefined ? '' : pour.totalFloat,
+          cell(pour.gaps.map((gap) => SEQUENCE_GAP_LABELS[gap]).join('; ')),
+        ].join(','),
+      )
+    }
+    // The reason on each edge, because a dependency a reader cannot argue with is one they
+    // ignore. Only where there are any — an unsequenced job's empty table needs no header.
+    if (sequence.edges.length > 0) {
+      rows.push(['Dependency', 'Reason'].join(','))
+      for (const edge of sequence.edges) {
+        rows.push(
+          [
+            cell(`${edge.from} → ${edge.to}`),
+            cell(`${PRECEDENCE_REASON_LABELS[edge.reason]} — ${edge.because}`),
+          ].join(','),
+        )
+      }
+    }
+    for (const conflict of sequence.conflicts) {
+      // INCOMPLETE rather than a note: a programme that breaks its own precedence is not a
+      // programme with a caveat on it, and the pours below it are dated off a day that cannot
+      // happen.
+      rows.push(['INCOMPLETE', cell(conflict.message)].join(','))
+    }
+  }
+
+  const resequence = scope.resequence
+  if (resequence && resequence.answers.length > 0) {
+    rows.push('')
+    rows.push(
+      [
+        'MOVE INSTEAD OF BUYING',
+        cell(
+          'One move at a time: each allowance was measured against the other pours’ stated dates, so the first move changes every other. This knows about formwork precedence and nothing else — no gang, no crane, no concrete supply',
+        ),
+      ].join(','),
+    )
+    rows.push(
+      [
+        'Short item',
+        'Short by',
+        'Move pour',
+        'From',
+        'To',
+        'Days',
+        'Peak before',
+        'Peak after',
+        'Still short',
+        'Costs elsewhere',
+      ].join(','),
+    )
+    for (const answer of resequence.answers) {
+      if (answer.refusal !== undefined) {
+        rows.push(
+          [
+            cell(answer.description),
+            answer.shortfall,
+            cell(`NO MOVE — ${RESEQUENCE_REFUSAL_LABELS[answer.refusal]}`),
+          ].join(','),
+        )
+        continue
+      }
+      for (const move of answer.moves) {
+        rows.push(
+          [
+            cell(answer.description),
+            answer.shortfall,
+            cell(move.pourId),
+            cell(move.fromDate),
+            cell(move.toDate),
+            move.days,
+            move.peakBefore,
+            move.peakAfter,
+            move.shortfallAfter,
+            // What the move costs elsewhere, in the row rather than in a caveat: a proposal
+            // whose price is in a footnote is a proposal that reads as free.
+            cell(
+              move.raises.length === 0
+                ? 'nothing'
+                : move.raises
+                    .map((rise) => `${rise.description} ${rise.from} → ${rise.to}`)
+                    .join('; '),
+            ),
+          ].join(','),
+        )
+      }
+    }
+  }
+
   rows.push('')
 
   const bySupply = new Map<BomLine, SupplyLine>(

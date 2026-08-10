@@ -2,7 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   ACQUIRE_GAP_LABELS,
   COST_GAP_LABELS,
+  PRECEDENCE_REASON_LABELS,
+  RESEQUENCE_REFUSAL_LABELS,
   SCHEDULE_GAP_LABELS,
+  SEQUENCE_GAP_LABELS,
   SET_COUNT_GAP_LABELS,
   scheduleInPourOrder,
   scheduleOccupancyDays,
@@ -179,6 +182,84 @@ export const inspectProjectFormworkOutput = {
     .optional(),
   noAcquisitionBecause: z.string().optional(),
   /**
+   * What has to happen before what, and how far each pour could move.
+   *
+   * Every bound in it comes from a neighbour's **stated** pour date, so this is not a critical
+   * path and `pinned` is deliberately not called critical: see `sequence.ts`.
+   */
+  sequence: z
+    .object({
+      windowFrom: z.string().nullable(),
+      windowTo: z.string().nullable(),
+      pinnedPours: z.array(z.string()),
+      unsequencedPours: z.array(z.string()),
+      pours: z.array(
+        z.object({
+          pourId: z.string(),
+          assemblyIds: z.array(z.string()),
+          elementIds: z.array(z.string()),
+          castInOneOperation: z.boolean(),
+          pourAt: z.string().nullable(),
+          waitsOn: z.array(z.string()),
+          holdsUp: z.array(z.string()),
+          noEarlierThan: z.string().nullable(),
+          noLaterThan: z.string().nullable(),
+          allowanceDays: z.number().nullable(),
+          couldComeForwardDays: z.number().nullable(),
+          couldGoBackDays: z.number().nullable(),
+          gaps: z.array(z.string()).optional(),
+        }),
+      ),
+      // `before`/`after` rather than `first`/`then`, because an object carrying a `then` key is
+      // a thenable and `await` on this reply would try to resolve it.
+      dependencies: z.array(
+        z.object({ before: z.string(), after: z.string(), because: z.string() }),
+      ),
+      brokenByTheStatedDates: z.array(z.string()),
+      gaps: z.array(z.string()),
+    })
+    .optional(),
+  /**
+   * Moving a pour instead of raising an order — one answer per short item.
+   *
+   * Beside `acquire` rather than inside it because it is the alternative to it, and every entry
+   * carries the peak the move would leave behind so a proposal cannot read as free.
+   */
+  moveInsteadOfBuying: z
+    .array(
+      z.object({
+        description: z.string(),
+        catalogId: z.string(),
+        shortBy: z.number(),
+        neededBy: z.string(),
+        pinnedPours: z.array(z.string()),
+        noMoveBecause: z.string().optional(),
+        moves: z.array(
+          z.object({
+            pourId: z.string(),
+            assemblyIds: z.array(z.string()),
+            days: z.number(),
+            fromDate: z.string(),
+            toDate: z.string(),
+            peakBefore: z.number(),
+            peakAfter: z.number(),
+            stillShortBy: z.number(),
+            clearsTheShortage: z.boolean(),
+            allowanceLeftDays: z.number(),
+            raisesElsewhere: z.array(
+              z.object({
+                description: z.string(),
+                catalogId: z.string(),
+                from: z.number(),
+                to: z.number(),
+              }),
+            ),
+          }),
+        ),
+      }),
+    )
+    .optional(),
+  /**
    * Why there is no `sets` block, where there is a programme but too little of one.
    *
    * A field rather than only a caveat, because the absence of `sets` is the one absence in
@@ -199,7 +280,7 @@ export function registerInspectProjectFormwork(server: McpServer, bridge: SceneO
     {
       title: 'Inspect project formwork',
       description:
-        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate of your own — cost is either in the answer or it is not. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied. Where the project has recorded rates, cost prices the bill and every line carries its own share: hire for the period charged, recharge for hired parts this pour altered, purchase for what is spent. Four rules about the money. Cost absent means no rate is recorded, so there is no price in this answer — say that rather than deriving one, because a rate is the only input in this whole model that no code publishes and no product carries, and a plausible figure is indistinguishable from a real one once you have said it. cost.complete false means some lines could not be priced, so the total is a floor and must be quoted as one — cost.gaps says what is missing. daysCharged rather than daysHeld is what reconciles with an invoice: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days, atMinimumHirePeriod marks those lines, and the remedy is pouring more with the same set rather than striking sooner. And cost.excludes is not boilerplate — this is what the formwork costs to hold, not the cost of forming the job, so never present the total as a formwork price without saying that labour, transport and finance are all outside it. cost.ownStock is a fifth rule of its own: the yard’s own rack is charged at the project’s own hire rate for the days this job holds it, as a plant department recharges its own site, and it is deliberately not in cost.total. Never add the two — total is cash the job spends and ownStock is not cash at all, so quote them as two figures or quote the total alone. It is also not amortisation: there is no panel life or resale value anywhere in this model, so never present it as the cost of wearing the rack out. Where any pour carries a date, schedule turns those periods into a calendar: plantWantedOnSite is when the plant has to arrive, plantFreeAgain when the last of it is back, and daysOnSite is arrival to release across every pour — which is not hire.longestDaysHeld, because a set used on five pours a week apart is held two days each time and on site for five weeks, and it is the on-site figure a yard invoices. Five rules about the dates. Schedule absent means nobody has dated a pour, so there is no programme in this answer — never infer one from the order the elements or shutters appear in, because a date is the only input in this model with neither a code nor a product behind it, and a derived programme printed beside real geometry carries the same authority as the geometry. undatedPours above zero means the window covers only the dated ones: a window over 3 of 40 pours is a true statement about 3 pours and a wrong one about the job, so always say how many are covered. earliestOnly true means the strike dates are the earliest the forms could come off rather than the dates, because ACI counts qualifying hours above 10 °C and nothing here knows the weather — a cold spell pushes every one of them later. A pour’s strikeAt is the last of its strikes, not the first, because it is the day the set comes free: a slab’s deck comes off days before its props, and both are in that pour’s strikes if the caller needs the sequence. And where no return lead time is recorded, releaseAt is the strike date itself and gaps says so — cleaning and the trip back are not in it, while a hire normally runs to the return. Where the programme covers enough of the job, sets answers the question the rest of this bill cannot: how many to own or hire. Every quantity in bom is what passes through the job, and sets.items[].mostAtOnce is what stands at the same time — a job of 400 panels with a peak of 100 is an order for 100, so when a user asks what to buy or hire, quote sets and never bom. reuses is mostAtOnce against fittedInTotal — how hard the job works each set, which is worth quoting beside a peak and is not the buy-or-hire argument: hire is charged per unit per month, so a set fitted eight times inside one month costs exactly what a set fitted once inside it does. Use acquire for that question, never reuses. sets.rack is per kind and is a sum of that kind’s items rather than a sweep of them, because a 2.4 m panel does not cover for a 1.2 m one even if their peaks fall a fortnight apart. Four rules about these counts. Sets absent with schedule present is not a fault — read noSetCountBecause and pass it on, because a set count over part of a programme comes out low and a low order is one somebody places, so there is deliberately no figure rather than a small one; the remedy is dating the remaining pours. countedPours below totalPours means every figure is a floor: an undated pour cannot reduce an overlap, so the real peak is that or higher, never lower. Do not subtract a peak from a bill quantity, because the difference is not a quantity of anything — the same panels are counted again each time they are refitted. And a set is counted free from its release date, so back-to-back pours are shown sharing one set with no slack for striking, cleaning and refitting, which no gang does in a day — treat a peak with no margin as the minimum. Where the project has also recorded what the yard owns, acquire is the only block in this answer that says what to actually go and get: shortBy is the peak over the rack, so it is what has to be standing on site by neededBy. That is a smaller number than supply.toHire and neither is wrong — toHire splits the whole bill and this splits the moment, so on a job whose pours run in sequence the same owned panels serve every one of them and the difference is a factor rather than a rounding. Never quote toHire as an order and never quote the difference between them as anything. Five rules about the recommendation. Never present cheaperOverThisJob without paysBackOverJobs beside it: hire runs at a few per cent of new value a month, so hiring is cheaper on almost any single job, and "hire, pays back over 2.1 jobs like this" is a purchase for a yard with three more booked and a hire for one with none — the decision is about an order book this model cannot see, so give the number and let the user decide. There is no panel life, no resale value and no cost of capital in it, so a purchase that serves the next job as well is under-valued by exactly the part not visible from here — say so rather than presenting the verdict as final. spare is not a saving: stock the job never needs all at once is spare capacity for another job, and the money is already spent. inUseFraction below 0.5 means the hire is paying for plant standing idle, which is a programme with gaps rather than a fault in the design, and resequencing the pours is what shortens it. And where acquire is absent but sets is present, read noAcquisitionBecause and pass it on — nobody has recorded a rack, which is not a yard that owns nothing, and inventing a zero rack would report the whole peak as an order.',
+        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate of your own — cost is either in the answer or it is not. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied. Where the project has recorded rates, cost prices the bill and every line carries its own share: hire for the period charged, recharge for hired parts this pour altered, purchase for what is spent. Four rules about the money. Cost absent means no rate is recorded, so there is no price in this answer — say that rather than deriving one, because a rate is the only input in this whole model that no code publishes and no product carries, and a plausible figure is indistinguishable from a real one once you have said it. cost.complete false means some lines could not be priced, so the total is a floor and must be quoted as one — cost.gaps says what is missing. daysCharged rather than daysHeld is what reconciles with an invoice: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days, atMinimumHirePeriod marks those lines, and the remedy is pouring more with the same set rather than striking sooner. And cost.excludes is not boilerplate — this is what the formwork costs to hold, not the cost of forming the job, so never present the total as a formwork price without saying that labour, transport and finance are all outside it. cost.ownStock is a fifth rule of its own: the yard’s own rack is charged at the project’s own hire rate for the days this job holds it, as a plant department recharges its own site, and it is deliberately not in cost.total. Never add the two — total is cash the job spends and ownStock is not cash at all, so quote them as two figures or quote the total alone. It is also not amortisation: there is no panel life or resale value anywhere in this model, so never present it as the cost of wearing the rack out. Where any pour carries a date, schedule turns those periods into a calendar: plantWantedOnSite is when the plant has to arrive, plantFreeAgain when the last of it is back, and daysOnSite is arrival to release across every pour — which is not hire.longestDaysHeld, because a set used on five pours a week apart is held two days each time and on site for five weeks, and it is the on-site figure a yard invoices. Five rules about the dates. Schedule absent means nobody has dated a pour, so there is no programme in this answer — never infer one from the order the elements or shutters appear in, because a date is the only input in this model with neither a code nor a product behind it, and a derived programme printed beside real geometry carries the same authority as the geometry. undatedPours above zero means the window covers only the dated ones: a window over 3 of 40 pours is a true statement about 3 pours and a wrong one about the job, so always say how many are covered. earliestOnly true means the strike dates are the earliest the forms could come off rather than the dates, because ACI counts qualifying hours above 10 °C and nothing here knows the weather — a cold spell pushes every one of them later. A pour’s strikeAt is the last of its strikes, not the first, because it is the day the set comes free: a slab’s deck comes off days before its props, and both are in that pour’s strikes if the caller needs the sequence. And where no return lead time is recorded, releaseAt is the strike date itself and gaps says so — cleaning and the trip back are not in it, while a hire normally runs to the return. Where the programme covers enough of the job, sets answers the question the rest of this bill cannot: how many to own or hire. Every quantity in bom is what passes through the job, and sets.items[].mostAtOnce is what stands at the same time — a job of 400 panels with a peak of 100 is an order for 100, so when a user asks what to buy or hire, quote sets and never bom. reuses is mostAtOnce against fittedInTotal — how hard the job works each set, which is worth quoting beside a peak and is not the buy-or-hire argument: hire is charged per unit per month, so a set fitted eight times inside one month costs exactly what a set fitted once inside it does. Use acquire for that question, never reuses. sets.rack is per kind and is a sum of that kind’s items rather than a sweep of them, because a 2.4 m panel does not cover for a 1.2 m one even if their peaks fall a fortnight apart. Four rules about these counts. Sets absent with schedule present is not a fault — read noSetCountBecause and pass it on, because a set count over part of a programme comes out low and a low order is one somebody places, so there is deliberately no figure rather than a small one; the remedy is dating the remaining pours. countedPours below totalPours means every figure is a floor: an undated pour cannot reduce an overlap, so the real peak is that or higher, never lower. Do not subtract a peak from a bill quantity, because the difference is not a quantity of anything — the same panels are counted again each time they are refitted. And a set is counted free from its release date, so back-to-back pours are shown sharing one set with no slack for striking, cleaning and refitting, which no gang does in a day — treat a peak with no margin as the minimum. Where the project has also recorded what the yard owns, acquire is the only block in this answer that says what to actually go and get: shortBy is the peak over the rack, so it is what has to be standing on site by neededBy. That is a smaller number than supply.toHire and neither is wrong — toHire splits the whole bill and this splits the moment, so on a job whose pours run in sequence the same owned panels serve every one of them and the difference is a factor rather than a rounding. Never quote toHire as an order and never quote the difference between them as anything. Five rules about the recommendation. Never present cheaperOverThisJob without paysBackOverJobs beside it: hire runs at a few per cent of new value a month, so hiring is cheaper on almost any single job, and "hire, pays back over 2.1 jobs like this" is a purchase for a yard with three more booked and a hire for one with none — the decision is about an order book this model cannot see, so give the number and let the user decide. There is no panel life, no resale value and no cost of capital in it, so a purchase that serves the next job as well is under-valued by exactly the part not visible from here — say so rather than presenting the verdict as final. spare is not a saving: stock the job never needs all at once is spare capacity for another job, and the money is already spent. inUseFraction below 0.5 means the hire is paying for plant standing idle, which is a programme with gaps rather than a fault in the design, and resequencing the pours is what shortens it. And where acquire is absent but sets is present, read noAcquisitionBecause and pass it on — nobody has recorded a rack, which is not a yard that owns nothing, and inventing a zero rack would report the whole peak as an order. Where any pour is dated, sequence says what waits on what and how far each pour could move: waitsOn and holdsUp are the dependencies the scene itself states — a lift bears on the lift below it, so the lower one has to be struck first, and an element carrying a cast order is ordered against the others that carry one — and dependencies[].because is the provenance to quote, because a dependency a user cannot argue with is one they ignore. Six rules about the float, and they matter more than the numbers. This is not a critical path and must never be called one: every bound comes from a neighbour’s *stated* pour date rather than from a forward pass over a derived programme, so a pour with allowanceDays 0 is in pinnedPours, meaning pinned by the dates around it — a weaker claim than critical, and one that changes the moment a date elsewhere changes. Float is not slack a gang can spend: two pours with a week each do not have two weeks between them, because the second one’s window was measured against the first one’s stated date, so quote one move at a time and say the rest has to be re-read after it. An unsequenced pour’s allowance is the programme’s own span rather than a real allowance — unsequencedPours names them, and where sequence.gaps says nothing is sequenced at all the whole block is a statement about a job nobody has ordered, so say that instead of quoting a float. Negative allowanceDays is not an allowance: it is how many days the programme is already infeasible by, and brokenByTheStatedDates names the dependency and the pour. allowanceDays null means no bound exists — an undated pour or an undated neighbour — and is the opposite claim from 0, so never render either as the other. And a pour with castInOneOperation true moves whole: assemblyIds are cast in one operation and cannot be separated, so never propose moving one of them. moveInsteadOfBuying is the alternative to acquire, and the cheapest answer to a shortfall is often that nothing is short on any other day: each entry is one short item, and each move carries peakBefore, peakAfter and stillShortBy — the peak after a re-sweep of the whole programme rather than a subtraction, so a move that creates a new peak somewhere else shows it. Four rules for the proposal. Never quote a move without raisesElsewhere: a move that relieves panels by landing beside another pour costs props, and a proposal whose price is in a footnote reads as free. Never present it as a plan: this knows about formwork precedence and nothing else — no gang, no crane, no concrete supply, no client-imposed date — so it is an argument to take to the planner. Never propose two moves together, for the float reason above; give the smallest one that clears the shortage. And where noMoveBecause is set, that is the answer rather than a missing row: pinnedPours says the pours in the overlap cannot move, and the shortfall has to be bought or hired.',
       inputSchema: formworkScopeInput,
       outputSchema: inspectProjectFormworkOutput,
     },
@@ -456,6 +537,74 @@ export function registerInspectProjectFormwork(server: McpServer, bridge: SceneO
                   'The job has a peak but no rack to compare it against — nobody has recorded what the yard owns. That is not a yard that owns nothing; ask the user and set it with set_formwork_settings ownedStock.',
               }
             : {}),
+        // What waits on what, off the scene's own lift order and stated cast order. Absent where
+        // no pour is dated, for the same reason `schedule` is: there is nothing for a float to
+        // be measured from, and a window over an undated programme would be invented.
+        ...(solution.sequence
+          ? {
+              sequence: {
+                windowFrom: solution.sequence.windowFrom ?? null,
+                windowTo: solution.sequence.windowTo ?? null,
+                pinnedPours: solution.sequence.pinned.map((pour) => pour.id),
+                unsequencedPours: solution.sequence.unsequenced.map((pour) => pour.id),
+                pours: solution.sequence.pours.map((pour) => ({
+                  pourId: pour.id,
+                  assemblyIds: pour.members,
+                  elementIds: pour.elementIds,
+                  castInOneOperation: pour.monolithic,
+                  pourAt: pour.pourAt ?? null,
+                  waitsOn: pour.predecessors,
+                  holdsUp: pour.successors,
+                  noEarlierThan: pour.earliestPourAt ?? null,
+                  noLaterThan: pour.latestPourAt ?? null,
+                  // Null rather than 0 where nothing bounds it: a 0 is "pinned", which is the
+                  // opposite claim from "nothing here says".
+                  allowanceDays: pour.totalFloat ?? null,
+                  couldComeForwardDays: pour.moveEarlierDays ?? null,
+                  couldGoBackDays: pour.moveLaterDays ?? null,
+                  ...(pour.gaps.length > 0
+                    ? { gaps: pour.gaps.map((gap) => SEQUENCE_GAP_LABELS[gap]) }
+                    : {}),
+                })),
+                dependencies: solution.sequence.edges.map((edge) => ({
+                  before: edge.from,
+                  after: edge.to,
+                  because: `${PRECEDENCE_REASON_LABELS[edge.reason]} — ${edge.because}`,
+                })),
+                brokenByTheStatedDates: solution.sequence.conflicts.map(
+                  (conflict) => conflict.message,
+                ),
+                gaps: solution.sequence.gaps.map((gap) => SEQUENCE_GAP_LABELS[gap]),
+              },
+            }
+          : {}),
+        ...(solution.resequence && solution.resequence.answers.length > 0
+          ? {
+              moveInsteadOfBuying: solution.resequence.answers.map((answer) => ({
+                description: answer.description,
+                catalogId: answer.catalogId,
+                shortBy: answer.shortfall,
+                neededBy: answer.peakOn,
+                pinnedPours: answer.pinnedPourIds,
+                ...(answer.refusal === undefined
+                  ? {}
+                  : { noMoveBecause: RESEQUENCE_REFUSAL_LABELS[answer.refusal] }),
+                moves: answer.moves.map((move) => ({
+                  pourId: move.pourId,
+                  assemblyIds: move.members,
+                  days: move.days,
+                  fromDate: move.fromDate,
+                  toDate: move.toDate,
+                  peakBefore: move.peakBefore,
+                  peakAfter: move.peakAfter,
+                  stillShortBy: move.shortfallAfter,
+                  clearsTheShortage: move.clearsShortage,
+                  allowanceLeftDays: move.floatRemaining,
+                  raisesElsewhere: move.raises,
+                })),
+              })),
+            }
+          : {}),
         beyondCapacity: solution.beyondCapacityMarks.map((part) => ({
           elementId: part.hostId,
           mark: part.mark,

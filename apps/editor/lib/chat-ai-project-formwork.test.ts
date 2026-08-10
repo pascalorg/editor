@@ -147,6 +147,51 @@ interface ProjectReport {
     gaps: string[]
   }
   noAcquisitionBecause?: string
+  sequence?: {
+    windowFrom: string | null
+    windowTo: string | null
+    pinnedPours: string[]
+    unsequencedPours: string[]
+    pours: Array<{
+      pourId: string
+      assemblyIds: string[]
+      elementIds: string[]
+      castInOneOperation: boolean
+      pourAt: string | null
+      waitsOn: string[]
+      holdsUp: string[]
+      noEarlierThan: string | null
+      noLaterThan: string | null
+      allowanceDays: number | null
+      couldComeForwardDays: number | null
+      couldGoBackDays: number | null
+      gaps?: string[]
+    }>
+    dependencies: Array<{ before: string; after: string; because: string }>
+    brokenByTheStatedDates: string[]
+    gaps: string[]
+  }
+  moveInsteadOfBuying?: Array<{
+    description: string
+    catalogId: string
+    shortBy: number
+    neededBy: string
+    pinnedPours: string[]
+    noMoveBecause?: string
+    moves: Array<{
+      pourId: string
+      assemblyIds: string[]
+      days: number
+      fromDate: string
+      toDate: string
+      peakBefore: number
+      peakAfter: number
+      stillShortBy: number
+      clearsTheShortage: boolean
+      allowanceLeftDays: number
+      raisesElsewhere: Array<{ description: string; catalogId: string; from: number; to: number }>
+    }>
+  }>
   beyondCapacity: Array<{ elementId: string; mark: string }>
   caveats: string[]
 }
@@ -1038,5 +1083,158 @@ describe('what to acquire', () => {
     expect(solved.acquire).toBeUndefined()
     expect(solved.noAcquisitionBecause).toBeUndefined()
     expect(solved.caveats.some((c) => c.includes('what to buy or hire'))).toBe(false)
+  })
+})
+
+/**
+ * What waits on what, as the AI reads it.
+ *
+ * `sequence.test.ts` and `resequence.test.ts` own the arithmetic. What only this surface can
+ * get wrong is what the model carries away, and every one of these is a sentence it would say
+ * out loud from the wrong shape: a float column read as a critical path, an allowance read as
+ * slack two pours can both spend, a refusal dropped instead of named, and a move presented as
+ * a plan when nothing here knows about the gang or the crane.
+ */
+describe('what has to happen before what', () => {
+  const shutterIds = (graph: SceneGraph): string[] =>
+    Object.values(graph.nodes as unknown as Record<string, { id: string; type: string }>)
+      .filter((node) => node.type === 'formwork-assembly')
+      .map((node) => node.id)
+
+  /** Two walls in stated cast order, so there is a real dependency between them. */
+  const ordered = async (dates: [string, string], settings: Record<string, unknown> = {}) => {
+    const { graph, tools } = scene()
+    for (const [index, elementId] of ['wall_1', 'wall_2'].entries()) {
+      await shutter(tools, elementId)
+      await call(tools, 'set_element_construction', { elementId, castOrder: index + 1 })
+    }
+    await call(tools, 'set_formwork_settings', { schedule: { returnLeadDays: 3 }, ...settings })
+    for (const [index, id] of shutterIds(graph).entries())
+      await call(tools, 'set_pour_date', { assemblyId: id, pourAt: dates[index] as string })
+    return await project(tools, { levelId: 'level_1' })
+  }
+
+  test('the dependency carries the reason it exists, not only the pair', async () => {
+    // A dependency the model cannot justify is one it presents as a rule of the tool. This one
+    // is the project's own stated cast order, and the sentence names the elements.
+    const solved = await ordered(['2026-03-02', '2026-03-16'])
+
+    expect(solved.sequence?.pours).toHaveLength(2)
+    expect(solved.sequence?.dependencies).toHaveLength(1)
+    expect(solved.sequence?.dependencies[0]?.because).toContain('explicit cast order')
+    const first = solved.sequence?.pours[0]
+    expect(first?.holdsUp).toEqual([solved.sequence?.pours[1]?.pourId as string])
+    expect(solved.sequence?.pours[1]?.waitsOn).toEqual([first?.pourId as string])
+  })
+
+  test('the allowance is bounded by the neighbour’s date, and the caveats refuse the phrase', async () => {
+    const solved = await ordered(['2026-03-02', '2026-03-16'])
+
+    const second = solved.sequence?.pours[1]
+    expect(second?.noEarlierThan).toBe('2026-03-02')
+    expect(second?.allowanceDays).toBeGreaterThan(0)
+    // The two sentences that matter more than the numbers, and both travel with the answer
+    // rather than living in the tool description the model may or may not still be holding.
+    expect(solved.caveats.some((c) => c.includes('not a critical path'))).toBe(true)
+    expect(solved.caveats.some((c) => c.includes('Float is not slack a gang can spend'))).toBe(true)
+  })
+
+  test('a pour nothing orders against anything says so rather than reporting an allowance', async () => {
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    await shutter(tools, 'wall_2')
+    await call(tools, 'set_formwork_settings', { schedule: { returnLeadDays: 3 } })
+    for (const [index, id] of shutterIds(graph).entries())
+      await call(tools, 'set_pour_date', { assemblyId: id, pourAt: `2026-03-0${2 + index}` })
+
+    const solved = await project(tools, { levelId: 'level_1' })
+
+    expect(solved.sequence?.unsequencedPours).toHaveLength(2)
+    expect(solved.sequence?.dependencies).toEqual([])
+    expect(solved.caveats.some((c) => c.includes('Nothing in this scope states an order'))).toBe(
+      true,
+    )
+  })
+
+  test('no dated pour leaves the block off rather than reporting an unbounded one', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { levelId: 'level_1' })
+
+    expect(solved.sequence).toBeUndefined()
+    expect(solved.moveInsteadOfBuying).toBeUndefined()
+  })
+
+  /**
+   * Three walls in stated cast order over the whole scene, so the middle one has somewhere
+   * to go: two on one day and the third a month later. Two walls alone are always pinned —
+   * with nothing after the second, the programme's own span is the pair's own dates.
+   */
+  const threeOrdered = async (settings: Record<string, unknown>, thirdAt = '2026-03-30') => {
+    const { graph, tools } = scene()
+    for (const [index, elementId] of ['wall_1', 'wall_2', 'wall_3'].entries()) {
+      await shutter(tools, elementId)
+      await call(tools, 'set_element_construction', { elementId, castOrder: index + 1 })
+    }
+    await call(tools, 'set_formwork_settings', { schedule: { returnLeadDays: 3 }, ...settings })
+    const dates = ['2026-03-02', '2026-03-02', thirdAt]
+    for (const [index, id] of shutterIds(graph).entries())
+      await call(tools, 'set_pour_date', { assemblyId: id, pourAt: dates[index] as string })
+    return await project(tools)
+  }
+
+  test('a shortage names the pour to move and the peak the move leaves behind', async () => {
+    // The answer that is often cheaper than the order: two walls on one day put both bills on
+    // site at once, and the second has a month of room before the third.
+    const empty = await threeOrdered({ stock: { owned: {} } })
+    const panel = empty.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+    const solved = await threeOrdered({
+      stock: { owned: { [panel.catalogId]: panel.mostAtOnce - 1 } },
+    })
+
+    const answer = solved.moveInsteadOfBuying?.find((entry) => entry.catalogId === panel.catalogId)
+    expect(answer?.shortBy).toBe(1)
+    expect(answer?.noMoveBecause).toBeUndefined()
+    const move = answer?.moves[0]
+    expect(move?.peakBefore).toBe(panel.mostAtOnce)
+    expect(move?.peakAfter).toBeLessThan(panel.mostAtOnce)
+    expect(move?.fromDate).toBe('2026-03-02')
+    expect(move?.toDate).not.toBe('2026-03-02')
+    // Present even when empty, because a move with no price beside it reads as free.
+    expect(move?.raisesElsewhere).toBeDefined()
+    expect(solved.caveats.some((c) => c.includes('argument to take to the planner'))).toBe(true)
+  })
+
+  test('a shortage no move can clear is told to buy it, rather than getting no row', async () => {
+    // The firing half of the same check. All three on one day and each pinned by the others:
+    // the honest answer is that the shortfall has to be bought, and a dropped row reads as
+    // the tool having nothing to say.
+    const empty = await threeOrdered({ stock: { owned: {} } }, '2026-03-02')
+    const panel = empty.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+    const solved = await threeOrdered(
+      { stock: { owned: { [panel.catalogId]: panel.mostAtOnce - 1 } } },
+      '2026-03-02',
+    )
+
+    const answer = solved.moveInsteadOfBuying?.find((entry) => entry.catalogId === panel.catalogId)
+    expect(answer?.noMoveBecause).toContain('bought or hired')
+    expect(answer?.moves).toEqual([])
+    expect(answer?.pinnedPours.length).toBeGreaterThan(0)
+    expect(solved.caveats.some((c) => c.includes('pinned by the dates around it'))).toBe(true)
+  })
+
+  test('nothing short means no proposal, and the precedence still reads', async () => {
+    // The rack comes off the scope's own peaks: a steel-panel wall bills ties and walers too,
+    // and a rack holding only panels would leave those genuinely short.
+    const empty = await ordered(['2026-03-02', '2026-03-16'], { stock: { owned: {} } })
+    const owned = Object.fromEntries(
+      (empty.sets?.items ?? []).map((item) => [item.catalogId, item.mostAtOnce]),
+    )
+    const solved = await ordered(['2026-03-02', '2026-03-16'], { stock: { owned } })
+
+    expect(solved.acquire?.shortfallQuantity).toBe(0)
+    expect(solved.sequence?.dependencies).toHaveLength(1)
+    expect(solved.moveInsteadOfBuying).toBeUndefined()
   })
 })

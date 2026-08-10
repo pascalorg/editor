@@ -8,7 +8,9 @@ import {
   bomSupply,
   type FormworkSetCount,
   formworkAcquisition,
+  formworkResequence,
   formworkSchedule,
+  formworkSequence,
   formworkSetCount,
   type RateTable,
   type StrikeTarget,
@@ -891,6 +893,135 @@ describe('bomCsv', () => {
       const csv = bomCsv([line({ quantity: 8 })], { subject: 'Project', schedule, sets })
 
       expect(rows(csv).some((row) => row.startsWith('TO ACQUIRE,'))).toBe(false)
+    })
+  })
+
+  describe('what waits on what', () => {
+    /**
+     * Three walls in stated cast order, the first two on one day.
+     *
+     * The whole chain rather than fixtures, so the peak the move is compared against is the
+     * peak printed above it in the same file — a hand-built sequence could pass here while
+     * disagreeing with the acquisition block a reader is looking at.
+     */
+    const chain = (thirdAt: string, owned: number) => {
+      const ids = ['fwasm_a', 'fwasm_b', 'fwasm_c']
+      const dates = ['2026-03-09', '2026-03-09', thirdAt]
+      const schedule = formworkSchedule(
+        ids.map((id, index) => ({
+          id,
+          pourAt: dates[index] as string,
+          striking: [period('vertical-form')],
+        })),
+        { returnLeadDays: 1 },
+      )
+      const quantities = ids.map((id) => ({
+        id,
+        quantities: [
+          {
+            catalogId: 'framax-2700-900',
+            kind: 'panel' as const,
+            description: 'Framax Xlife 2700 × 900',
+            quantity: 30,
+            target: 'vertical-form' as const,
+          },
+        ],
+      }))
+      const sets = formworkSetCount(schedule, quantities) as FormworkSetCount
+      const acquisition = formworkAcquisition(sets, { 'framax-2700-900': owned }, undefined)
+      const sequence = formworkSequence(
+        ids.map((id, index) => ({
+          id,
+          elementId: `wall_${index + 1}`,
+          segmentIndex: 0,
+          liftIndex: 0,
+          castOrder: index + 1,
+        })),
+        schedule,
+      )
+      return bomCsv([line({ quantity: 90 })], {
+        subject: 'Project',
+        schedule,
+        sets,
+        acquisition,
+        sequence,
+        resequence: formworkResequence(acquisition, schedule, quantities, sequence),
+      })
+    }
+
+    test('the block refuses the phrase “critical path” before any float is shown', () => {
+      // The one thing a reader takes from a float column is that it is a critical path, and
+      // every bound here is a neighbour's stated date rather than a pass over a programme.
+      const banner = rows(chain('2026-03-23', 40)).find((row) =>
+        row.startsWith('PRECEDENCE AND FLOAT,'),
+      ) as string
+
+      expect(banner).toContain('not a critical path')
+      expect(banner).toContain('pinned by the dates around it')
+    })
+
+    test('the allowance is per pour, with the dependency’s own reason under it', () => {
+      const all = rows(chain('2026-03-23', 40))
+      const header = all.find((row) => row.startsWith('Pour,Elements,')) as string
+      const middle = all.find((row) => row.startsWith('fwasm_b,')) as string
+
+      expect(header).toContain('Allowance (days)')
+      expect(middle).toContain('wall_2')
+      expect(middle).toContain('fwasm_a')
+      expect(middle).toContain('fwasm_c')
+      // The reason rather than only the pair: an edge with no provenance is one a planner
+      // dismisses, and this is the sentence they argue with.
+      expect(all).toContain(
+        'fwasm_a → fwasm_b,"The project states an explicit cast order across these elements — fwasm_a is cast at order 1, fwasm_b at 2"',
+      )
+    })
+
+    test('a move carries the peak it leaves behind, and what it costs elsewhere', () => {
+      const all = rows(chain('2026-03-23', 40))
+      const banner = all.find((row) => row.startsWith('MOVE INSTEAD OF BUYING,')) as string
+      const move = all.find((row) =>
+        row.startsWith('Framax Xlife 2700 × 900,20,fwasm_b,'),
+      ) as string
+
+      expect(banner).toContain('One move at a time')
+      expect(banner).toContain('no gang, no crane, no concrete supply')
+      expect(move).toContain('2026-03-09')
+      // Peak before, peak after, and nothing left short — the three figures that make the
+      // proposal arguable rather than an instruction.
+      expect(move).toContain('60,30,0')
+      expect(move).toContain('nothing')
+    })
+
+    test('a shortage no move clears says so where a move would have been', () => {
+      // All three pours on one day and every one of them pinned by its neighbours: the answer
+      // is that the shortfall has to be bought, and a missing row would read as no answer.
+      const all = rows(chain('2026-03-09', 40))
+      const refusal = all.find((row) => row.includes('NO MOVE —')) as string
+
+      expect(refusal).toContain('Framax Xlife 2700 × 900,50')
+      expect(refusal).toContain('Every pour in the overlap is pinned')
+      expect(refusal).toContain('bought or hired')
+      expect(all.some((row) => row.startsWith('Framax Xlife 2700 × 900,50,fwasm'))).toBe(false)
+    })
+
+    test('a programme with nothing short carries the precedence block and no proposal', () => {
+      // The two blocks are independent: what waits on what is worth reading on a job that is
+      // short of nothing, and a heading with no rows under it would read as a fault.
+      const all = rows(chain('2026-03-23', 100))
+
+      expect(all.some((row) => row.startsWith('PRECEDENCE AND FLOAT,'))).toBe(true)
+      expect(all.some((row) => row.startsWith('MOVE INSTEAD OF BUYING,'))).toBe(false)
+    })
+
+    test('an export with no sequence in it carries neither block', () => {
+      const schedule = formworkSchedule(
+        [{ id: 'fwasm_a', pourAt: '2026-03-09', striking: [period('vertical-form')] }],
+        { returnLeadDays: 1 },
+      )
+      const csv = bomCsv([line({ quantity: 8 })], { subject: 'Project', schedule })
+
+      expect(rows(csv).some((row) => row.startsWith('PRECEDENCE AND FLOAT,'))).toBe(false)
+      expect(rows(csv).some((row) => row.startsWith('MOVE INSTEAD OF BUYING,'))).toBe(false)
     })
   })
 })
