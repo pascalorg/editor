@@ -7,7 +7,7 @@ import {
   heightAt,
   type TerrainField,
 } from '../lib/terrain-field'
-import { terrainFieldOf } from '../lib/terrain-source'
+import { persistedTerrainFieldOf, terrainFieldOf } from '../lib/terrain-source'
 import useLiveTerrain from './use-live-terrain'
 
 function flatten(field: TerrainField, metres: number) {
@@ -103,6 +103,26 @@ describe('useLiveTerrain', () => {
     useLiveTerrain.getState().end('site_1')
     expect(useLiveTerrain.getState().fieldOf('site_1')).toBeUndefined()
   })
+
+  test('local strokes take precedence over remote previews without adopting them', () => {
+    const base = createTerrainField({ cols: 9, rows: 9, spacing: 1 })
+    const remote = flatten(base, 3)
+    const local = flatten(base, 7)
+
+    useLiveTerrain.getState().previewRemote('site_1', 'session_remote', remote.field, remote.patch)
+    expect(heightAt(useLiveTerrain.getState().fieldOf('site_1') as never, 2, 2)).toBeCloseTo(3, 6)
+
+    useLiveTerrain.getState().begin('site_1', base)
+    useLiveTerrain.getState().advance('site_1', local.field, local.patch)
+    expect(heightAt(useLiveTerrain.getState().fieldOf('site_1') as never, 2, 2)).toBeCloseTo(7, 6)
+
+    useLiveTerrain.getState().end('site_1')
+    expect(heightAt(useLiveTerrain.getState().fieldOf('site_1') as never, 2, 2)).toBeCloseTo(3, 6)
+    useLiveTerrain.getState().endRemote('site_1', 'another_session')
+    expect(useLiveTerrain.getState().remoteStrokeOf('site_1')).toBeDefined()
+    useLiveTerrain.getState().endRemoteSource('session_remote')
+    expect(useLiveTerrain.getState().fieldOf('site_1')).toBeUndefined()
+  })
 })
 
 describe('terrainFieldOf sees the live stroke', () => {
@@ -146,5 +166,16 @@ describe('terrainFieldOf sees the live stroke', () => {
 
   test('a site with no id and no terrain is still null — no crash', () => {
     expect(terrainFieldOf({ terrain: undefined })).toBeNull()
+  })
+
+  test('the persisted-only read ignores local and remote previews', () => {
+    const persisted = createTerrainField({ cols: 9, rows: 9, spacing: 1 })
+    const site = { id: 'site_1', terrain: encodeTerrainField(persisted) }
+    const remote = flatten(persisted, 4)
+    useLiveTerrain.getState().previewRemote(site.id, 'session_remote', remote.field, remote.patch)
+
+    expect(persistedTerrainFieldOf(site)).toBe(persistedTerrainFieldOf(site))
+    expect(heightAt(persistedTerrainFieldOf(site) as never, 2, 2)).toBeCloseTo(0, 6)
+    expect(heightAt(terrainFieldOf(site) as never, 2, 2)).toBeCloseTo(4, 6)
   })
 })

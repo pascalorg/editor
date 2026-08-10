@@ -30,7 +30,7 @@ describe('resolveSelectedIdsForNodeClick', () => {
       resolveSelectedIdsForNodeClick({
         baseSelectedIds: ['wall_1'],
         currentSelectedIds: [],
-        modifierKeys: { meta: true, ctrl: false, shift: false },
+        modifierKeys: { meta: true, ctrl: false, shift: false, alt: false },
         nodeId: 'item_1',
       }),
     ).toEqual(['wall_1', 'item_1'])
@@ -41,10 +41,21 @@ describe('resolveSelectedIdsForNodeClick', () => {
       resolveSelectedIdsForNodeClick({
         baseSelectedIds: ['wall_1', 'item_1'],
         currentSelectedIds: [],
-        modifierKeys: { meta: false, ctrl: false, shift: true },
+        modifierKeys: { meta: false, ctrl: false, shift: true, alt: false },
         nodeId: 'item_1',
       }),
     ).toEqual(['wall_1'])
+  })
+
+  test('plain click expands session groups', () => {
+    expect(
+      resolveSelectedIdsForNodeClick({
+        currentSelectedIds: [],
+        modifierKeys: { meta: false, ctrl: false, shift: false, alt: false },
+        nodeId: 'item_2',
+        expandIdsForNode: () => ['item_2', 'item_1'],
+      }),
+    ).toEqual(['item_2', 'item_1'])
   })
 })
 
@@ -64,23 +75,27 @@ describe('emitCanvasNodeSelection', () => {
 
 describe('selectionModifiersFromEvent', () => {
   test('falls back to tracked modifier state when the click event omits keys', () => {
-    expect(selectionModifiersFromEvent({}, { meta: false, ctrl: true, shift: false })).toEqual({
+    expect(
+      selectionModifiersFromEvent({}, { meta: false, ctrl: true, shift: false, alt: false }),
+    ).toEqual({
       meta: false,
       ctrl: true,
       shift: false,
+      alt: false,
     })
   })
 
   test('prefers explicit event key state over stale tracked modifiers', () => {
     expect(
       selectionModifiersFromEvent(
-        { metaKey: false, ctrlKey: false, shiftKey: false },
-        { meta: true, ctrl: true, shift: true },
+        { metaKey: false, ctrlKey: false, shiftKey: false, altKey: false },
+        { meta: true, ctrl: true, shift: true, alt: true },
       ),
     ).toEqual({
       meta: false,
       ctrl: false,
       shift: false,
+      alt: false,
     })
   })
 })

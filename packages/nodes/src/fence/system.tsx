@@ -2,7 +2,7 @@
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
 import { useEffect } from 'react'
-import { resolveFenceLiftElevation } from './lift'
+import { resolveFenceLiftElevationForNodes } from './lift'
 import type { FenceNode } from './schema'
 
 /**
@@ -20,11 +20,13 @@ function fenceLiftSignatures(nodes: Record<string, AnyNode>): Map<string, number
   for (const node of Object.values(nodes)) {
     if (node.type !== 'fence') continue
     const fence = node as FenceNode
+    // Unhosted fences are covered too, and by a different mechanism: their lift
+    // is the ground, which only a sculpt moves, and `markTerrainSupportDependents`
+    // dirties them from the terrain change itself. Tracking them here would
+    // resolve every fence in the scene on every store update to catch an event
+    // this subscription never sees.
     if (!fence.supportSlabId) continue
-    signatures.set(
-      fence.id,
-      resolveFenceLiftElevation(fence, (id) => nodes[id]),
-    )
+    signatures.set(fence.id, resolveFenceLiftElevationForNodes(fence, nodes))
   }
   return signatures
 }

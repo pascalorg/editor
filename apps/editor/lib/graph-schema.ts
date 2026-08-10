@@ -60,6 +60,15 @@ export const apiGraphSchema = z
     nodes: z.record(z.string(), z.unknown()),
     rootNodeIds: z.array(z.string()),
     collections: z.unknown().optional(),
+    /**
+     * Upstream's #597 fix, ported onto our plugin-aware validator.
+     *
+     * `z.object()` strips what it does not name, so an absent `materials` here
+     * did not fail a save — it silently deleted every custom surface on the way
+     * through. Reopen the scene and it came back with defaults, with nothing
+     * logged and no error to search for.
+     */
+    materials: z.record(z.string(), z.unknown()).optional(),
     installedPlugins: z.array(z.string().min(1)).optional(),
   })
   .superRefine((value, ctx) => {

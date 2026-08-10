@@ -100,6 +100,58 @@ interface Junction {
   connectedWalls: Array<{ wall: WallNode; endType: 'start' | 'end' | 'passthrough' }>
 }
 
+// --- Uniform grid used to prefilter T-junction candidates --------------------
+// 2 m cells: small enough that a dense imported floor spreads across many
+// buckets, large enough that an ordinary room wall touches only a few.
+const JUNCTION_GRID_CELL = 2.0
+// A wall whose AABB would touch more than this many cells (a very long diagonal)
+// is kept in a fallback list checked against every junction. Such walls are rare,
+// and a model made only of them is a model with very few walls — where the naive
+// scan was never the problem.
+const JUNCTION_GRID_MAX_CELLS_PER_WALL = 64
+
+function cellKey(x: number, y: number): string {
+  return `${Math.floor(x / JUNCTION_GRID_CELL)},${Math.floor(y / JUNCTION_GRID_CELL)}`
+}
+
+function buildJunctionGrid(walls: WallNode[]): {
+  grid: Map<string, WallNode[]>
+  oversized: WallNode[]
+} {
+  const grid = new Map<string, WallNode[]>()
+  const oversized: WallNode[] = []
+
+  for (const wall of walls) {
+    // Pad by TOLERANCE so a point sitting exactly on the AABB edge still lands
+    // in a covered cell.
+    const minX = Math.min(wall.start[0], wall.end[0]) - TOLERANCE
+    const maxX = Math.max(wall.start[0], wall.end[0]) + TOLERANCE
+    const minY = Math.min(wall.start[1], wall.end[1]) - TOLERANCE
+    const maxY = Math.max(wall.start[1], wall.end[1]) + TOLERANCE
+
+    const cx0 = Math.floor(minX / JUNCTION_GRID_CELL)
+    const cx1 = Math.floor(maxX / JUNCTION_GRID_CELL)
+    const cy0 = Math.floor(minY / JUNCTION_GRID_CELL)
+    const cy1 = Math.floor(maxY / JUNCTION_GRID_CELL)
+
+    if ((cx1 - cx0 + 1) * (cy1 - cy0 + 1) > JUNCTION_GRID_MAX_CELLS_PER_WALL) {
+      oversized.push(wall)
+      continue
+    }
+
+    for (let cx = cx0; cx <= cx1; cx++) {
+      for (let cy = cy0; cy <= cy1; cy++) {
+        const key = `${cx},${cy}`
+        const bucket = grid.get(key)
+        if (bucket) bucket.push(wall)
+        else grid.set(key, [wall])
+      }
+    }
+  }
+
+  return { grid, oversized }
+}
+
 function findJunctions(walls: WallNode[]): Map<string, Junction> {
   const junctions = new Map<string, Junction>()
 
@@ -122,16 +174,46 @@ function findJunctions(walls: WallNode[]): Map<string, Junction> {
     junctions.get(keyEnd)?.connectedWalls.push({ wall, endType: 'end' })
   }
 
-  // Second pass: detect T-junctions (walls passing through junction points)
+  // Second pass: detect T-junctions (walls passing through junction points).
+  //
+  // The naive form of this pass is `for each junction: for each wall` — O(J×N).
+  // On a real imported floor (1081 walls, 2047 endpoint keys) that is ~2.2M
+  // pointOnWallSegment calls and measured 584 ms per findJunctions() call, which
+  // WallSystem then repeats every frame while progressively rebuilding.
+  //
+  // A T-junction can only exist where the junction point lies ON the wall
+  // segment, so it must lie inside the wall's AABB. Bucketing walls by the grid
+  // cells their AABB covers therefore loses nothing: the cell containing the
+  // point is always one of the cells the wall was indexed into. With the input
+  // ordering restored below, the result matches the naive pass exactly; measured
+  // 11 ms on the same geometry.
+  const { grid, oversized } = buildJunctionGrid(walls)
+  const wallOrder = new Map(walls.map((wall, index) => [wall.id, index]))
   for (const [_key, junction] of junctions.entries()) {
-    for (const wall of walls) {
-      // Skip if wall already in this junction
-      if (junction.connectedWalls.some((cw) => cw.wall.id === wall.id)) continue
+    const p = junction.meetingPoint
+    const cellCandidates = grid.get(cellKey(p.x, p.y))
+    const passthrough: WallNode[] = []
+    for (const bucket of [cellCandidates, oversized]) {
+      if (!bucket || bucket.length === 0) continue
+      for (const wall of bucket) {
+        // Skip if wall already in this junction
+        if (junction.connectedWalls.some((cw) => cw.wall.id === wall.id)) continue
 
-      // Check if junction point lies on this wall's segment (not at endpoints)
-      if (pointOnWallSegment(junction.meetingPoint, wall)) {
-        junction.connectedWalls.push({ wall, endType: 'passthrough' })
+        // Check if junction point lies on this wall's segment (not at endpoints)
+        if (pointOnWallSegment(junction.meetingPoint, wall)) {
+          passthrough.push(wall)
+        }
       }
+    }
+
+    // Append in input order, not bucket order. Two collinear walls overlapping a
+    // junction tie on angle in `calculateJunctionIntersections`, so its stable
+    // sort leaves them in the order they were appended here — and an oversized
+    // wall would otherwise land after a shorter collinear neighbour it precedes
+    // in `walls`, picking the other wall's thickness for the miter.
+    passthrough.sort((a, b) => (wallOrder.get(a.id) ?? 0) - (wallOrder.get(b.id) ?? 0))
+    for (const wall of passthrough) {
+      junction.connectedWalls.push({ wall, endType: 'passthrough' })
     }
   }
 
@@ -275,8 +357,13 @@ function calculateJunctionIntersections(
     }
   }
 
-  // Sort by outgoing angle
-  processedWalls.sort((a, b) => a.angle - b.angle)
+  // Sort by outgoing angle, then by wall ID so equal-angle walls produce the
+  // same pairing regardless of scene iteration order.
+  processedWalls.sort((a, b) => {
+    const angleOrder = a.angle - b.angle
+    if (angleOrder !== 0) return angleOrder
+    return a.wallId < b.wallId ? -1 : a.wallId > b.wallId ? 1 : 0
+  })
 
   const wallIntersections = new Map<string, { left?: Point2D; right?: Point2D }>()
   const n = processedWalls.length

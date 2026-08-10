@@ -7,7 +7,7 @@ const baseArgs = {
   currentSelectedIds: ['wall_1'],
   getFloorplanHitIdAtPoint: () => 'door_1',
   isWallBuildActive: false,
-  modifierKeys: { meta: false, ctrl: false, shift: false },
+  modifierKeys: { meta: false, ctrl: false, shift: false, alt: false },
   planPoint: [0, 0] as [number, number],
   structureLayer: 'elements',
 }
@@ -16,7 +16,7 @@ describe('resolveFloorplanBackgroundSelection', () => {
   test('shift-click on a floorplan node toggles into the current selection', () => {
     const result = resolveFloorplanBackgroundSelection({
       ...baseArgs,
-      modifierKeys: { meta: false, ctrl: false, shift: true },
+      modifierKeys: { meta: false, ctrl: false, shift: true, alt: false },
     })
 
     expect(result).toEqual({
@@ -30,7 +30,7 @@ describe('resolveFloorplanBackgroundSelection', () => {
     const result = resolveFloorplanBackgroundSelection({
       ...baseArgs,
       currentSelectedIds: ['wall_1', 'door_1'],
-      modifierKeys: { meta: false, ctrl: false, shift: true },
+      modifierKeys: { meta: false, ctrl: false, shift: true, alt: false },
     })
 
     expect(result).toEqual({
@@ -44,13 +44,40 @@ describe('resolveFloorplanBackgroundSelection', () => {
     const result = resolveFloorplanBackgroundSelection({
       ...baseArgs,
       getFloorplanHitIdAtPoint: () => null,
-      modifierKeys: { meta: false, ctrl: false, shift: true },
+      modifierKeys: { meta: false, ctrl: false, shift: true, alt: false },
     })
 
     expect(result).toEqual({
       handled: true,
       kind: 'clear-elements',
       preserveSelection: true,
+    })
+  })
+
+  test('plain click expands a session group', () => {
+    const result = resolveFloorplanBackgroundSelection({
+      ...baseArgs,
+      expandIdsForNode: (nodeId) => (nodeId === 'door_1' ? ['door_1', 'wall_2'] : null),
+    })
+
+    expect(result).toEqual({
+      handled: true,
+      kind: 'select-elements',
+      selectedIds: ['door_1', 'wall_2'],
+    })
+  })
+
+  test('alt-click selects one member without expanding', () => {
+    const result = resolveFloorplanBackgroundSelection({
+      ...baseArgs,
+      expandIdsForNode: () => ['door_1', 'wall_2'],
+      modifierKeys: { meta: false, ctrl: false, shift: false, alt: true },
+    })
+
+    expect(result).toEqual({
+      handled: true,
+      kind: 'select-elements',
+      selectedIds: ['door_1'],
     })
   })
 

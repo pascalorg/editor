@@ -9,10 +9,31 @@ export const DEFAULT_LIST_LIMIT = 100
 export const MAX_NAME_LENGTH = 200
 export const MIN_NAME_LENGTH = 1
 
+/**
+ * `z.object()` strips every key it does not name, so this list IS the set of
+ * fields that survive a save → load round trip. A field missing here is not a
+ * validation error — it is silent deletion, discovered only when a user
+ * reopens a scene and finds their work reverted.
+ *
+ * Two were missing, both restored from upstream's #597:
+ *
+ * - `materials` — every custom surface. Reopen and the scene came back with
+ *   default materials.
+ * - `installedPlugins` — which packs the scene needs. A warehouse scene
+ *   forgot it was a warehouse scene.
+ *
+ * Values stay `unknown` rather than being validated against
+ * `SceneMaterial`/`Collection`: nothing validates on the way in, and a strict
+ * shape here would let one odd stored value make a saved scene permanently
+ * unloadable. Validation belongs on the write path, where the caller can still
+ * react to it.
+ */
 const GraphSchema = z.object({
   nodes: z.record(z.string(), z.unknown()),
   rootNodeIds: z.array(z.string()),
   collections: z.record(z.string(), z.unknown()).optional(),
+  materials: z.record(z.string(), z.unknown()).optional(),
+  installedPlugins: z.array(z.string()).optional(),
 })
 
 export function resolveMaxSceneBytes(

@@ -3,11 +3,23 @@
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
-import { applySceneGraphToEditor, Editor, type SceneGraph, useEditor } from '@pascal-app/editor'
-import { useRouter } from 'next/navigation'
+import {
+  applySceneGraphToEditor,
+  Editor,
+  type SceneGraph,
+  type SidebarTab,
+  useEditor,
+} from '@pascal-app/editor'
+import { Hammer, Layers } from 'lucide-react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AccountSettingsSection } from '@/components/account-settings-section'
 import { useSession } from '@/components/auth/session-provider'
+import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
+import { cn } from '@/lib/utils'
+import { BuildTab } from './build-tab'
 import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -35,30 +47,28 @@ interface SceneLoaderProps {
   readOnly?: boolean
 }
 
-type SceneGraphWithCollections = SceneGraph & {
-  collections?: Record<string, unknown>
-}
-
 interface LiveSceneEvent {
   eventId: number
   sceneId: string
   version: number
   kind: string
   createdAt: string
-  graph: SceneGraphWithCollections
+  graph: PersistedSceneGraph
 }
 
-function sceneGraphSignature(graph: SceneGraphWithCollections): string {
-  return JSON.stringify({
-    nodes: graph.nodes,
-    rootNodeIds: graph.rootNodeIds,
-    collections: graph.collections,
-    installedPlugins: graph.installedPlugins,
-  })
+/**
+ * `?disable=postFx` is read at post-processing module load, so it only takes
+ * effect on a full page load. Reading it here as well lets the flag survive a
+ * client-side navigation, since `disablePostFx` is a live prop.
+ */
+function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
+  const disable = searchParams.get('disable') ?? ''
+  return disable.split(',').some((p) => p.trim() === 'postFx')
 }
 
 export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoaderProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
   const suppressRemoteSaveUntilRef = useRef(0)
@@ -69,6 +79,8 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
   useEffect(() => {
     if (readOnly) useEditor.getState().setPreviewMode(true)
   }, [readOnly])
+
+  const lightPreview = isLightPreviewQuery(searchParams)
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
@@ -200,7 +212,30 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
+      <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
+        <button
+          aria-pressed={lightPreview}
+          className={cn(
+            'pointer-events-auto rounded-md border border-border px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur',
+            lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
+          )}
+          onClick={() =>
+            router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
+          }
+          title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
+          type="button"
+        >
+          Light preview
+        </button>
+        <Link
+          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
+          href="/scenes"
+        >
+          All scenes
+        </Link>
+      </div>
       <Editor
+        disablePostFx={lightPreview}
         layoutVersion="v2"
         onLoad={handleLoad}
         onSave={handleSave}

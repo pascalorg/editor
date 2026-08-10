@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
+import { SceneBridge } from '../bridge/scene-bridge'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
 import { createSceneOperations } from './scene-operations'
 
@@ -75,5 +76,19 @@ describe('SceneOperationsFacade scene events', () => {
       }),
     ).toBeNull()
     await expect(operations.listSceneEvents('live')).rejects.toThrow('scene_events_unavailable')
+  })
+})
+
+// `exportSceneGraph` hand-copies fields off `exportJSON`, so a field it omits
+// is dropped from everything that persists through it — `save_scene`,
+// `publishLiveSceneSnapshot`, and variant generation.
+describe('SceneOperationsFacade exportSceneGraph', () => {
+  test('carries the material palette off the bridge', () => {
+    const bridge = new SceneBridge()
+    const materials = { mat_1: { id: 'mat_1', name: 'Oak', material: { preset: 'wood' } } }
+    bridge.loadJSON({ ...makeGraph(), materials } as never)
+    const operations = createSceneOperations({ bridge })
+
+    expect(operations.exportSceneGraph().materials).toEqual(materials)
   })
 })

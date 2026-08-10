@@ -44,6 +44,7 @@ type Vec3 = [number, number, number]
 export const Elevation3DGuideLayer = memo(function Elevation3DGuideLayer() {
   const guide = useElevationGuides((state) => state.guide)
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const groupRef = useRef<Group>(null)
 
   useFrame(() => {
@@ -76,8 +77,8 @@ export const Elevation3DGuideLayer = memo(function Elevation3DGuideLayer() {
   ]
   const elevationText =
     Math.abs(guide.elevation) < 1e-6
-      ? formatMeasurement(0, unit)
-      : `${guide.elevation < 0 ? '-' : '+'}${formatMeasurement(Math.abs(guide.elevation), unit)}`
+      ? formatMeasurement(0, unit, metricNotation)
+      : `${guide.elevation < 0 ? '-' : '+'}${formatMeasurement(Math.abs(guide.elevation), unit, metricNotation)}`
 
   return (
     <group ref={groupRef}>

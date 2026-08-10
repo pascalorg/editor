@@ -55,6 +55,12 @@ export function terrainFieldOf(
     const live = useLiveTerrain.getState().fieldOf(site.id)
     if (live) return live
   }
+  return persistedTerrainFieldOf(site)
+}
+
+export function persistedTerrainFieldOf(
+  site: Pick<SiteNode, 'terrain'> | null | undefined,
+): TerrainField | null {
   const data = site?.terrain
   if (!data) return null
   const cached = fieldCache.get(data)
@@ -82,7 +88,7 @@ export function terrainFieldForEdit(
   site: Pick<SiteNode, 'terrain'> | null | undefined,
   options?: Parameters<typeof createTerrainField>[0],
 ): TerrainField {
-  return terrainFieldOf(site) ?? createTerrainField(options)
+  return persistedTerrainFieldOf(site) ?? createTerrainField(options)
 }
 
 /**

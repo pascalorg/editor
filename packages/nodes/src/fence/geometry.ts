@@ -111,10 +111,20 @@ export function buildFenceGeometry(
   const group = new Group()
   const geometries = generateFenceSlotGeometries(node)
 
-  // A hosted railing (`supportSlabId`) stands on its slab's walking surface.
-  // The builder emits local-space children, so the lift lives on an inner
-  // group rather than the registered (React-transformed) root.
-  const lift = ctx ? resolveFenceLiftElevation(node, (id) => ctx.resolve(id as AnyNodeId)) : 0
+  // A hosted railing (`supportSlabId`) stands on its slab's walking surface;
+  // an unhosted one stands on the ground, which `ctx.levelBaseAt` resolves at
+  // the fence's own start point — the anchor its plan geometry is measured
+  // from, so the resolver and the mesh cannot disagree about where the ground
+  // is under this fence. The builder emits local-space children, so the lift
+  // lives on an inner group rather than the registered (React-transformed)
+  // root.
+  const lift = ctx
+    ? resolveFenceLiftElevation(
+        node,
+        (id) => ctx.resolve(id as AnyNodeId),
+        ctx.levelBaseAt?.(node.start[0], node.start[1]) ?? 0,
+      )
+    : 0
   const meshParent = new Group()
   meshParent.position.y = lift
   group.add(meshParent)

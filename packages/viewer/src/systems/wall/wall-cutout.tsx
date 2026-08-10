@@ -14,7 +14,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
-import useViewer from '../../store/use-viewer'
+import useViewer, { type WallMode } from '../../store/use-viewer'
 import {
   getMaterialsForWall,
   getSelectionHighlightMaterials,
@@ -25,10 +25,18 @@ const tmpVec = new Vector3()
 const u = new Vector3()
 const v = new Vector3()
 
-function getWallHideState(
+/**
+ * Whether a wall should be hidden or see-through for the current camera and
+ * wall mode. Pure: reads only its arguments and the mesh's world direction.
+ *
+ * Exported so hosts rendering their own layers inside `<Viewer>` can match
+ * these semantics instead of re-deriving the facing test or inferring state
+ * from the assigned material variant.
+ */
+export function getWallHideState(
   wallNode: WallNode,
   wallMesh: Mesh,
-  wallMode: string,
+  wallMode: WallMode,
   cameraDir: Vector3,
 ): boolean {
   let hideWall = wallNode.frontSide === 'interior' && wallNode.backSide === 'interior'
@@ -91,6 +99,13 @@ export const WallCutout = () => {
   const lastNumberOfWalls = useRef(0)
   const lastHighlightKey = useRef('')
   const lastWallAppearanceKey = useRef('')
+  const wallAppearanceKeyRef = useRef('')
+  const wallAppearanceInputs = useRef({
+    nodes: null as object | null,
+    materials: null as object | null,
+    shading: null as unknown,
+    wallCount: -1,
+  })
   const lastTextures = useRef(useViewer.getState().textures)
   const lastColorPreset = useRef(useViewer.getState().colorPreset)
   const lastSceneTheme = useRef(useViewer.getState().sceneTheme)
@@ -122,14 +137,31 @@ export const WallCutout = () => {
         ? hoveredId
         : null
     const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${deleteHoveredWallId ?? ''}`
-    const wallAppearanceKey = Array.from(sceneRegistry.byType.wall!)
-      .sort()
-      .map((wallId) => {
-        const wallNode = sceneState.nodes[wallId as WallNode['id']]
-        if (wallNode?.type !== 'wall') return `${wallId}:missing`
-        return `${wallId}:${getWallMaterialHash(wallNode, shading, sceneState.materials)}:${JSON.stringify(wallNode.faceBands ?? null)}`
-      })
-      .join('|')
+    // Sorting every wall id, hashing each wall's material and JSON-dumping its
+    // face bands is a full-scene scan; its inputs are immutable store slices,
+    // so identity is enough to know the key cannot have changed.
+    const wallCount = sceneRegistry.byType.wall!.size
+    const appearanceInputs = wallAppearanceInputs.current
+    if (
+      appearanceInputs.nodes !== sceneState.nodes ||
+      appearanceInputs.materials !== sceneState.materials ||
+      appearanceInputs.shading !== shading ||
+      appearanceInputs.wallCount !== wallCount
+    ) {
+      appearanceInputs.nodes = sceneState.nodes
+      appearanceInputs.materials = sceneState.materials
+      appearanceInputs.shading = shading
+      appearanceInputs.wallCount = wallCount
+      wallAppearanceKeyRef.current = Array.from(sceneRegistry.byType.wall!)
+        .sort()
+        .map((wallId) => {
+          const wallNode = sceneState.nodes[wallId as WallNode['id']]
+          if (wallNode?.type !== 'wall') return `${wallId}:missing`
+          return `${wallId}:${getWallMaterialHash(wallNode, shading, sceneState.materials)}:${JSON.stringify(wallNode.faceBands ?? null)}`
+        })
+        .join('|')
+    }
+    const wallAppearanceKey = wallAppearanceKeyRef.current
 
     const distanceMoved = currentCameraPosition.distanceTo(lastCameraPosition.current)
     const directionChanged = tmpVec.distanceTo(lastCameraTarget.current)

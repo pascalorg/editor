@@ -14,6 +14,7 @@ on:
           - nodes
           - mcp
           - ifc-converter
+          - cli
           - all
       bump:
         description: "Version bump (beta publishes a prerelease on the beta dist-tag)"
@@ -32,7 +33,36 @@ on:
         default: false
 
 jobs:
+  cli-smoke:
+    if: inputs.package == 'cli' || inputs.package == 'all'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Smoke-test the packed CLI and editor runtime
+        env:
+          PASCAL_PORTABLE_BUILD: "1"
+        run: |
+          bun run build --filter editor
+          cd packages/cli
+          bun run build
+          bun run stage-runtime
+          bun run smoke-runtime
+
   release:
+    needs: cli-smoke
+    if: ${{ !cancelled() && (needs.cli-smoke.result == 'success' || needs.cli-smoke.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -43,6 +73,8 @@ jobs:
           fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
 
       - uses: actions/setup-node@v4
         with:
@@ -97,7 +129,7 @@ jobs:
           # peerDeps sync below must use shell vars, not env indirection.
           declare -A NEW_VERSIONS
 
-          for pkg in core viewer editor nodes mcp ifc-converter; do
+          for pkg in core viewer editor nodes mcp ifc-converter cli; do
             if [ "$TARGET" = "$pkg" ] || [ "$TARGET" = "all" ]; then
               CUR=$(jq -r '.version' packages/$pkg/package.json)
               NEW=$(bump_version "$CUR")
@@ -112,9 +144,9 @@ jobs:
 
           # Sync inter-package references in peerDependencies and devDependencies.
           # Anything that references a bumped @pascal-app/* package is updated to ^NEW.
-          for pkg in core viewer editor nodes mcp ifc-converter; do
+          for pkg in core viewer editor nodes mcp ifc-converter cli; do
             FILE=packages/$pkg/package.json
-            for dep in core viewer editor nodes mcp ifc-converter; do
+            for dep in core viewer editor nodes mcp ifc-converter cli; do
               VAL="${NEW_VERSIONS[$dep]}"
               [ -z "$VAL" ] && continue
               jq --arg name "@pascal-app/$dep" --arg v "^$VAL" '
@@ -125,10 +157,21 @@ jobs:
           done
 
           echo "=== @pascal-app/* refs after sync ==="
-          for pkg in core viewer editor nodes mcp ifc-converter; do
+          for pkg in core viewer editor nodes mcp ifc-converter cli; do
             echo "--- packages/$pkg/package.json ---"
             jq '{ peerDependencies: (.peerDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), devDependencies: (.devDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))) }' packages/$pkg/package.json
           done
+
+      - name: Validate portable editor runtime
+        if: inputs.package == 'cli' || inputs.package == 'all'
+        env:
+          PASCAL_PORTABLE_BUILD: "1"
+        run: |
+          bun run build --filter editor
+          cd packages/cli
+          bun run build
+          bun run stage-runtime
+          bun run smoke-runtime
 
       - name: Build & publish core
         if: inputs.package == 'core' || inputs.package == 'all'
@@ -140,6 +183,8 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/core@$CORE_VERSION"
             npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/core@$CORE_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/core@$CORE_VERSION is already published; continuing release recovery"
           else
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/core@$CORE_VERSION"
@@ -155,6 +200,8 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/viewer@$VIEWER_VERSION"
             npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/viewer@$VIEWER_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/viewer@$VIEWER_VERSION is already published; continuing release recovery"
           else
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/viewer@$VIEWER_VERSION"
@@ -169,6 +216,8 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/editor@$EDITOR_VERSION"
             npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/editor@$EDITOR_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/editor@$EDITOR_VERSION is already published; continuing release recovery"
           else
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/editor@$EDITOR_VERSION"
@@ -184,6 +233,8 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/nodes@$NODES_VERSION"
             npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/nodes@$NODES_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/nodes@$NODES_VERSION is already published; continuing release recovery"
           else
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/nodes@$NODES_VERSION"
@@ -199,6 +250,8 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/mcp@$MCP_VERSION"
             npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/mcp@$MCP_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/mcp@$MCP_VERSION is already published; continuing release recovery"
           else
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/mcp@$MCP_VERSION"
@@ -216,9 +269,27 @@ jobs:
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
             npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/ifc-converter@$IFC_CONVERTER_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION is already published; continuing release recovery"
           else
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
+          fi
+
+      - name: Publish CLI
+        if: inputs.package == 'cli' || inputs.package == 'all'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd packages/cli
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/cli@$CLI_VERSION"
+            npm publish --ignore-scripts --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/cli@$CLI_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/cli@$CLI_VERSION is already published; continuing release recovery"
+          else
+            npm publish --ignore-scripts --access public --tag "$NPM_TAG"
+            echo "📦 Published @pascal-app/cli@$CLI_VERSION"
           fi
 
       - name: Commit version bumps & tag
@@ -252,11 +323,19 @@ jobs:
             PKGS="$PKGS @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
             TAGS="$TAGS @pascal-app/ifc-converter@$IFC_CONVERTER_VERSION"
           fi
+          if [ -n "$CLI_VERSION" ]; then
+            PKGS="$PKGS @pascal-app/cli@$CLI_VERSION"
+            TAGS="$TAGS @pascal-app/cli@$CLI_VERSION"
+          fi
 
-          git commit -m "release:${PKGS}"
+          if git diff --cached --quiet; then
+            echo "No version-file changes; tagging the current release commit"
+          else
+            git commit -m "release:${PKGS}"
+          fi
 
           for TAG in $TAGS; do
             git tag "$TAG"
           done
 
-          git push origin HEAD:main $TAGS
+          git push --atomic origin HEAD:main $TAGS

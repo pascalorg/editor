@@ -10,6 +10,8 @@ export type SelectionModifierKeys = {
   meta: boolean
   ctrl: boolean
   shift: boolean
+  /** Alt alone: select one session-group member without expanding. */
+  alt: boolean
 }
 
 export type NodeSelectionTarget = {
@@ -59,17 +61,19 @@ export function selectionModifiersFromEvent(
     metaKey?: boolean
     ctrlKey?: boolean
     shiftKey?: boolean
+    altKey?: boolean
     nativeEvent?: {
       metaKey?: boolean
       ctrlKey?: boolean
       shiftKey?: boolean
+      altKey?: boolean
     }
   } | null,
   fallback?: Partial<SelectionModifierKeys>,
 ): SelectionModifierKeys {
   const fromEvent = (
     key: keyof SelectionModifierKeys,
-    eventKey: 'metaKey' | 'ctrlKey' | 'shiftKey',
+    eventKey: 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey',
   ) => {
     if (typeof event?.[eventKey] === 'boolean') return event[eventKey]
     if (typeof event?.nativeEvent?.[eventKey] === 'boolean') return event.nativeEvent[eventKey]
@@ -80,6 +84,7 @@ export function selectionModifiersFromEvent(
     meta: fromEvent('meta', 'metaKey'),
     ctrl: fromEvent('ctrl', 'ctrlKey'),
     shift: fromEvent('shift', 'shiftKey'),
+    alt: fromEvent('alt', 'altKey'),
   }
 }
 
@@ -88,11 +93,14 @@ export function resolveSelectedIdsForNodeClick({
   currentSelectedIds,
   modifierKeys,
   nodeId,
+  expandIdsForNode,
 }: {
   baseSelectedIds?: readonly string[]
   currentSelectedIds: readonly string[]
   modifierKeys: SelectionModifierKeys
   nodeId: string
+  /** Session-group expand on plain click (not on modifier/Alt). */
+  expandIdsForNode?: (nodeId: string) => string[] | null
 }): string[] {
   if (isSelectionModifierActive(modifierKeys)) {
     const selectedIds = baseSelectedIds ?? currentSelectedIds
@@ -102,6 +110,12 @@ export function resolveSelectedIdsForNodeClick({
     return [...selectedIds, nodeId]
   }
 
+  if (modifierKeys.alt) {
+    return [nodeId]
+  }
+
+  const expanded = expandIdsForNode?.(nodeId)
+  if (expanded && expanded.length > 1) return expanded
   return [nodeId]
 }
 

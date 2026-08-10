@@ -115,6 +115,40 @@ describe('SqliteSceneStore', () => {
     expect(loaded!.name).toBe('Kitchen')
   })
 
+  // `GraphSchema` strips any key it doesn't name, so a field missing from it
+  // is dropped on load without an error — the save looks like it worked.
+  test('round-trips collections, materials and installed plugins', async () => {
+    const graph = makeGraph({
+      collections: {
+        collection_1: { id: 'collection_1', name: 'Refs', nodeIds: ['site_abc'] },
+      } as SceneGraph['collections'],
+      materials: {
+        mat_1: { id: 'mat_1', name: 'Oak', material: { preset: 'wood' } },
+      } as SceneGraph['materials'],
+      installedPlugins: ['pascal:trees'],
+    })
+    await store.save({ id: 'full', name: 'Full', graph })
+
+    store.close()
+    store = createStore(rootDir)
+
+    expect((await store.load('full'))?.graph).toEqual(graph)
+  })
+
+  // Nothing validates a graph on the way in, and `parseGraph` throws on a
+  // shape mismatch, so a strict read schema would make an odd stored value
+  // permanently unloadable rather than merely odd.
+  test('loads a stored scene whose material does not match the strict schema', async () => {
+    const graph = makeGraph({
+      materials: {
+        mat_1: { id: 'mat_1', material: { texture: { url: 'ftp://host/a.png' } } },
+      } as unknown as SceneGraph['materials'],
+    })
+    await store.save({ id: 'odd', name: 'Odd', graph })
+
+    expect((await store.load('odd'))?.graph).toEqual(graph)
+  })
+
   test('stores optional metadata verbatim', async () => {
     await store.save({
       id: 'meta-test',

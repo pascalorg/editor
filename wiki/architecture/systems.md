@@ -69,6 +69,7 @@ Core and viewer systems are mounted inside `<Viewer>` alongside renderers. See `
 - **Never duplicate logic** between a system and a renderer — if the renderer needs it, the system should compute and store it, and the renderer reads the result.
 - Systems should be **idempotent**: given the same nodes, they produce the same output.
 - Mark nodes as `dirty` in the scene store to signal that a system should re-run. Avoid running expensive logic every frame without a dirty check.
+- **Clear module-level caches on unmount.** A cache that survives between frames also survives the mount, and one keyed by level or node ID grows with every project opened in the tab. Reset it from the system's unmount effect, the same way editor teardown calls `spatialGridManager.clear()`.
 
 ## Adding a New System
 

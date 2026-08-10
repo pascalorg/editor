@@ -98,6 +98,19 @@ describe('from_brief', () => {
     expect(text).not.toContain('## Constraints')
     expect(text).toContain('Studio')
   })
+
+  test('buildFromBriefPrompt names every way to bind a scene', () => {
+    const text = buildFromBriefPrompt({ brief: 'Studio' })
+    for (const tool of ['create_project', 'list_scenes', 'load_scene', 'create_house_from_brief']) {
+      expect(text).toContain(tool)
+    }
+  })
+
+  test('buildFromBriefPrompt states the consequence of not binding a scene', () => {
+    const text = buildFromBriefPrompt({ brief: 'Studio' }).toLowerCase()
+    expect(text).toContain('in memory only')
+    expect(text).toContain('never appear in the browser')
+  })
 })
 
 describe('iterate_on_feedback', () => {

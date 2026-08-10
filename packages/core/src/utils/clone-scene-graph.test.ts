@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CollectionId } from '../schema/collections'
+import type { SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
   cloneLevelSubtree,
@@ -46,9 +47,48 @@ function makeSceneGraph(): SceneGraph {
         nodeIds: ['scan_1', 'guide_1'] as AnyNodeId[],
       },
     },
+    materials: {
+      ['mat_1' as SceneMaterialId]: {
+        id: 'mat_1',
+        name: 'Oak',
+        material: { preset: 'wood' },
+      },
+    },
     installedPlugins: ['pascal:trees'],
   }
 }
+
+describe('scene material palette', () => {
+  // Nodes reference materials through `slots` values shaped `scene:mat_…`.
+  // Those are opaque strings to the node remapping, so the ids they point at
+  // have to survive a clone unchanged or every reference dangles.
+  test('cloneSceneGraph carries materials over with their ids intact', () => {
+    const source = makeSceneGraph()
+    const cloned = cloneSceneGraph(source)
+
+    expect(cloned.materials).toEqual(source.materials)
+  })
+
+  test('cloneSceneGraph deep-copies materials', () => {
+    const source = makeSceneGraph()
+    const cloned = cloneSceneGraph(source)
+    const material = cloned.materials?.['mat_1' as SceneMaterialId]
+    expect(material).toBeDefined()
+    if (!material) return
+
+    material.name = 'Mutated'
+    expect(source.materials?.['mat_1' as SceneMaterialId]?.name).toBe('Oak')
+  })
+
+  // A palette entry is authored content in its own right. Stripping the scan
+  // node that happened to use it must not take the material with it.
+  test('forkSceneGraph keeps materials when stripping scans', () => {
+    const source = makeSceneGraph()
+    const forked = forkSceneGraph(source)
+
+    expect(forked.materials).toEqual(source.materials)
+  })
+})
 
 describe('forkSceneGraph', () => {
   test('strips scan and guide nodes by default', () => {

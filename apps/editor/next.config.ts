@@ -1,4 +1,9 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
+
+const appDirectory = path.dirname(fileURLToPath(import.meta.url))
+const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
 
 const nextConfig: NextConfig = {
   // Hostinger runs the app from a self-contained bundle; see hostinger-server.js.
@@ -12,11 +17,27 @@ const nextConfig: NextConfig = {
   // the check is on the Host header, so a LAN entry does not cover the same
   // machine reached from outside. Update this if the WAN address changes.
   allowedDevOrigins: ['192.168.1.101', '192.168.1.*', '*.local', '95.70.136.179'],
+  // Upstream gates `standalone` behind PASCAL_PORTABLE_BUILD=1. Ours stays
+  // unconditional: the deploy copies `hostinger-server.js` into the standalone
+  // output, so a build without it produces nothing to serve — and the failure
+  // would be a missing directory at the end of a green build.
+  outputFileTracingRoot: path.join(appDirectory, '../..'),
   logging: {
     browserToTerminal: true,
   },
   typescript: {
     ignoreBuildErrors: true,
+  },
+  // MCP / package metadata returns `/editor/<id>` (hosted route). This open-source
+  // app serves saved scenes at `/scene/<id>` — redirect so links and bookmarks work.
+  async redirects() {
+    return [
+      {
+        source: '/editor/:id',
+        destination: '/scene/:id',
+        permanent: false,
+      },
+    ]
   },
   transpilePackages: [
     'three',
@@ -26,6 +47,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/mcp',
     '@pascal-app/ifc-converter',
     '@pascal-app/plugin-trees',
+    '@mint/pascal-plugin',
     '@ovurrsl/plugin-warehouse',
     '@dgreenheck/ez-tree',
   ],
@@ -54,7 +76,9 @@ const nextConfig: NextConfig = {
     return config
   },
   images: {
-    unoptimized: process.env.NEXT_PUBLIC_ASSETS_CDN_URL?.startsWith('http://localhost') ?? false,
+    unoptimized:
+      portableBuild ||
+      (process.env.NEXT_PUBLIC_ASSETS_CDN_URL?.startsWith('http://localhost') ?? false),
     remotePatterns: [
       {
         protocol: 'https',

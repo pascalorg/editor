@@ -94,6 +94,15 @@ The floating helper in `packages/editor/src/components/ui/helpers/helper-manager
 mirrors these rules from current selection state and held modifiers. Keep that helper and
 the shortcut dialog in sync when changing selection gestures.
 
+### Session groups (editor-only)
+
+`Ctrl/Cmd+G` / `Ctrl/Cmd+Shift+G` create and dissolve **session selection groups** in
+`use-session-groups` (not the scene graph). Plain click expands to live members via
+`expandIdsForNode`, threaded into all three click paths:
+`resolveSelectedIdsForNodeClick` (3D), the registry layer's `applyEntrySelection` (2D
+entries), and `resolveFloorplanBackgroundSelection` (2D background hit-test). Alt+click
+opts out. See [selection-groups](selection-groups.md).
+
 ---
 
 ## Rules

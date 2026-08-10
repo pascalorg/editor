@@ -1,3 +1,4 @@
+import { mintHostPanel, mintPlugin } from '@mint/pascal-plugin'
 import { warehouseCatalogPanel, warehousePlugin } from '@ovurrsl/plugin-warehouse'
 import {
   type AnyNodeDefinition,
@@ -86,6 +87,8 @@ export async function loadExternalPlugins(): Promise<void> {
 // so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
+extendPluginDiscovery(async () => [mintPlugin])
+registerEditorHostPanel(mintHostPanel)
 
 // Warehouse & logistics pack. Composed onto the discovery chain rather than
 // replacing it — `setPluginDiscovery` would drop every plugin registered above.

@@ -25,7 +25,7 @@ afterEach(async () => {
 
 test('connectHttp listens on the given port and accepts MCP traffic', async () => {
   // Port 0 → OS assigns an ephemeral port.
-  handle = await connectHttp(server, 0)
+  handle = await connectHttp(() => server, 0)
   expect(handle.port).toBeGreaterThan(0)
 
   const url = new URL(`http://127.0.0.1:${handle.port}/mcp`)
@@ -42,7 +42,7 @@ test('connectHttp listens on the given port and accepts MCP traffic', async () =
 })
 
 test('connectHttp close() stops the server', async () => {
-  handle = await connectHttp(server, 0)
+  handle = await connectHttp(() => server, 0)
   const port = handle.port
   await handle.close()
   handle = null
@@ -64,13 +64,13 @@ test('connectHttp close() stops the server', async () => {
 })
 
 test('connectHttp requires auth when binding a non-loopback host', async () => {
-  await expect(connectHttp(server, 0, { host: '0.0.0.0' })).rejects.toThrow(
+  await expect(connectHttp(() => server, 0, { host: '0.0.0.0' })).rejects.toThrow(
     /requires PASCAL_MCP_HTTP_TOKEN/,
   )
 })
 
 test('connectHttp rejects unauthenticated requests when a token is configured', async () => {
-  handle = await connectHttp(server, 0, { authToken: 'secret' })
+  handle = await connectHttp(() => server, 0, { authToken: 'secret' })
 
   const response = await fetch(`http://127.0.0.1:${handle.port}/mcp`, {
     method: 'POST',
@@ -82,7 +82,7 @@ test('connectHttp rejects unauthenticated requests when a token is configured', 
 })
 
 test('connectHttp handles allowed CORS preflight', async () => {
-  handle = await connectHttp(server, 0, {
+  handle = await connectHttp(() => server, 0, {
     authToken: 'secret',
     allowedOrigins: ['https://app.example'],
   })
@@ -97,4 +97,46 @@ test('connectHttp handles allowed CORS preflight', async () => {
 
   expect(response.status).toBe(204)
   expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example')
+})
+
+test('connectHttp serves authenticated supervisor health', async () => {
+  handle = await connectHttp(() => server, 0, {
+    authToken: 'secret',
+    health: { version: '1.2.3', instanceId: 'instance-1' },
+  })
+
+  const response = await fetch(`http://127.0.0.1:${handle.port}/health`, {
+    headers: { authorization: 'Bearer secret' },
+  })
+
+  expect(response.status).toBe(200)
+  expect(await response.json()).toEqual({
+    status: 'ok',
+    app: 'mcp',
+    version: '1.2.3',
+    instanceId: 'instance-1',
+  })
+})
+
+test('connectHttp isolates simultaneous client sessions', async () => {
+  handle = await connectHttp(() => {
+    const sessionBridge = new SceneBridge()
+    sessionBridge.loadDefault()
+    return createPascalMcpServer({ bridge: sessionBridge })
+  }, 0)
+  const url = new URL(`http://127.0.0.1:${handle.port}/mcp`)
+  const first = new Client({ name: 'first-client', version: '0.0.0' })
+  const second = new Client({ name: 'second-client', version: '0.0.0' })
+
+  try {
+    await Promise.all([
+      first.connect(new StreamableHTTPClientTransport(url)),
+      second.connect(new StreamableHTTPClientTransport(url)),
+    ])
+    const [firstTools, secondTools] = await Promise.all([first.listTools(), second.listTools()])
+    expect(firstTools.tools.length).toBeGreaterThan(0)
+    expect(secondTools.tools.length).toBe(firstTools.tools.length)
+  } finally {
+    await Promise.all([first.close(), second.close()])
+  }
 })

@@ -35,9 +35,16 @@ export type LiveTerrainStroke = {
   readonly lastPatch: HeightPatch | null
 }
 
+export type RemoteLiveTerrainStroke = {
+  readonly sourceId: string
+  readonly field: TerrainField
+  readonly lastPatch: HeightPatch
+}
+
 type LiveTerrainState = {
   /** Keyed by site node id — a scene can hold more than one site. */
   strokes: Map<string, LiveTerrainStroke>
+  remoteStrokes: Map<string, RemoteLiveTerrainStroke>
   /**
    * Start a stroke from `field`.
    *
@@ -60,6 +67,10 @@ type LiveTerrainState = {
   /** The live field for a site, or undefined when no stroke is in flight. */
   fieldOf(siteId: string): TerrainField | undefined
   strokeOf(siteId: string): LiveTerrainStroke | undefined
+  remoteStrokeOf(siteId: string): RemoteLiveTerrainStroke | undefined
+  previewRemote(siteId: string, sourceId: string, field: TerrainField, patch: HeightPatch): void
+  endRemote(siteId: string, sourceId: string): void
+  endRemoteSource(sourceId: string): void
   /** End the stroke. The caller persists the field first if it wants to keep it. */
   end(siteId: string): void
   endAll(): void
@@ -67,6 +78,7 @@ type LiveTerrainState = {
 
 const useLiveTerrain = create<LiveTerrainState>((set, get) => ({
   strokes: new Map(),
+  remoteStrokes: new Map(),
 
   begin: (siteId, field) =>
     set((state) => {
@@ -87,8 +99,33 @@ const useLiveTerrain = create<LiveTerrainState>((set, get) => ({
       return { strokes: next }
     }),
 
-  fieldOf: (siteId) => get().strokes.get(siteId)?.field,
+  fieldOf: (siteId) => get().strokes.get(siteId)?.field ?? get().remoteStrokes.get(siteId)?.field,
   strokeOf: (siteId) => get().strokes.get(siteId),
+  remoteStrokeOf: (siteId) => get().remoteStrokes.get(siteId),
+
+  previewRemote: (siteId, sourceId, field, patch) =>
+    set((state) => {
+      const next = new Map(state.remoteStrokes)
+      next.set(siteId, { sourceId, field, lastPatch: patch })
+      return { remoteStrokes: next }
+    }),
+
+  endRemote: (siteId, sourceId) =>
+    set((state) => {
+      if (state.remoteStrokes.get(siteId)?.sourceId !== sourceId) return state
+      const next = new Map(state.remoteStrokes)
+      next.delete(siteId)
+      return { remoteStrokes: next }
+    }),
+
+  endRemoteSource: (sourceId) =>
+    set((state) => {
+      const next = new Map(state.remoteStrokes)
+      for (const [siteId, stroke] of next) {
+        if (stroke.sourceId === sourceId) next.delete(siteId)
+      }
+      return next.size === state.remoteStrokes.size ? state : { remoteStrokes: next }
+    }),
 
   end: (siteId) =>
     set((state) => {
@@ -98,7 +135,12 @@ const useLiveTerrain = create<LiveTerrainState>((set, get) => ({
       return { strokes: next }
     }),
 
-  endAll: () => set((state) => (state.strokes.size === 0 ? state : { strokes: new Map() })),
+  endAll: () =>
+    set((state) =>
+      state.strokes.size === 0 && state.remoteStrokes.size === 0
+        ? state
+        : { remoteStrokes: new Map(), strokes: new Map() },
+    ),
 }))
 
 export default useLiveTerrain
