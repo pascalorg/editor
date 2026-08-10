@@ -6,6 +6,7 @@ import {
   applyFormworkPartPatch,
   applyFormworkSettingsPatch,
   applyPourLimitsPatch,
+  COST_GAP_LABELS,
   castableElementSummary,
   constructionPatchInput,
   describeFormworkReconciliation,
@@ -121,6 +122,22 @@ export const SYSTEM_PROMPT =
   'the same owned panels serve the next pour once stripped, so two levels’ owned figures must not ' +
   'be added; and a hired panel this pour drills is recharged at list rather than charged as hire, ' +
   'which is the one figure in a bill that costs money without appearing as a cost. ' +
+  'Money works the same way and is stricter about it. A rate is the only input in this whole ' +
+  'model that no code publishes and no product carries — the same panel is different money to two ' +
+  'yards in the same city and different again next quarter — so nothing is ever assumed for one. ' +
+  'Where the project has recorded rates with set_formwork_settings rates, inspect_project_formwork ' +
+  'prices the bill and every line carries its share; where it has not, cost is simply absent and ' +
+  'there is no price in the answer. Say that rather than deriving one, and never multiply a period ' +
+  'by a rate of your own: a figure you invented is indistinguishable from a real one once you have ' +
+  'said it, and it ends up in a tender. Ask for the list price and the hire terms rather than ' +
+  'guessing them, the way you ask for the rate of rise. Three things to carry when there is a ' +
+  'price: the total is a floor whenever cost.complete is false, because some line could not be ' +
+  'priced; daysCharged rather than daysHeld is what reconciles with an invoice, since a wall form ' +
+  'struck in 12 hours against a 28-day minimum is charged for 28 days and the remedy is pouring ' +
+  'more with the same set rather than striking sooner; and cost.excludes is not boilerplate — this ' +
+  'is what the formwork costs to hold, not the cost of forming the job, so labour, transport, ' +
+  'finance and the project’s own owned stock are all outside it and labour is normally the largest ' +
+  'of them. ' +
   'A bill being right does not make the shutter buildable, and the two have almost no ' +
   'overlap in what makes them wrong. validate_formwork answers the second question: cycles ' +
   'in the cast order, runs with a stretch no panel closes, walls no tie in the system reaches, ' +
@@ -447,7 +464,7 @@ export function buildTools(
     }),
     inspect_project_formwork: tool({
       description:
-        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire — record it with set_formwork_settings ownedStock. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate, because no price is recorded anywhere in this model. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied — record the real ones with set_formwork_settings curing.',
+        'The formwork the whole job needs, as one bill. This is the scope a yard actually orders at: the same panel type on two walls is one line on a delivery note, and two per-element bills of it cannot be added together afterwards — so use this, not a series of inspect_formwork_parts calls, for any question about what a floor or a project needs, what it weighs, or what to order. Scope it with levelId to bill one level, which is how a pour is planned, or leave it off for the whole scene. Elements with no shutter yet are not in the bill at all, and are listed separately as unshuttered — a wall nobody has formed is not a wall that needs nothing. Read caveats first and lead with them: each one means every figure below it is wrong in a way the figures themselves cannot show. Where the project has recorded what the yard owns, every line also splits into fromOwnStock, toHire and consumed, and supply totals them; supply being absent means nobody has recorded any stock, so say that rather than implying the bill is all on hire — record it with set_formwork_settings ownedStock. Two things about the split worth carrying to the user: it is for this scope only, because the same owned panels serve the next pour once stripped, so two levels’ owned figures are not a total; and hiredAlteredHere is a recharge at list price rather than a hire charge, because a hire company’s panel drilled for this pour does not come back as stock. Every line also carries daysHeld, how long that line stays on the job under the striking table the project’s code family publishes, with struckAs saying what it is held as — a slab’s deck comes off in 4 days and the props under it stay 10, so never quote one period for an element. daysHeld null means the part is not struck at all: a tie is cut off inside the wall, a release agent is used up. Three things never to do with these figures: do not add them, because hire.longestDaysHeld is when the last of the set comes free and a sum is a duration longer than the job; do not call them calendar days when hire.basis is qualifying-time, because ACI counts only hours above 10 °C and in a cold spell the strike date is later than the number reads; and do not multiply them by a rate of your own — cost is either in the answer or it is not. Read hire.assumed and say which figures the job stated and which the code’s own default column supplied — record the real ones with set_formwork_settings curing. Where the project has recorded rates, cost prices the bill and every line carries its own share: hire for the period charged, recharge for hired parts this pour altered, purchase for what is spent. Four rules about the money. Cost absent means no rate is recorded, so there is no price in this answer — say that and ask for the figures rather than deriving one, because a rate is the only input in this whole model that no code publishes and no product carries, and a plausible figure is indistinguishable from a real one once you have said it. cost.complete false means some lines could not be priced, so the total is a floor and must be quoted as one — cost.gaps says what is missing, and set_formwork_settings rates is what fixes it. daysCharged rather than daysHeld is what reconciles with an invoice: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days, atMinimumHirePeriod marks those lines, and the remedy is pouring more with the same set rather than striking sooner. And cost.excludes is not boilerplate — this is what the formwork costs to hold, not the cost of forming the job, so never present the total as a formwork price without saying that labour, transport, finance and the project’s own owned stock are all outside it.',
       inputSchema: z.object({
         levelId: z
           .string()
@@ -486,6 +503,7 @@ export function buildTools(
           bom: solution.bom.map((line, index) => {
             const split = solution.supply?.lines[index]
             const held = solution.hire.lines[index]
+            const priced = solution.cost?.lines[index]
             return {
               description: line.description,
               catalogId: line.catalogId ?? null,
@@ -509,6 +527,32 @@ export function buildTools(
               daysHeld: held?.hours === undefined ? null : round(held.hours / 24),
               struckAs: held?.striking === undefined ? null : held.striking.target,
               ...(held?.mixed ? { mixedPeriods: held.mixed.targets } : {}),
+              // Only where the project has recorded rates, and each figure only where it
+              // resolved. An absent cost is "no rate for this" and never "costs nothing":
+              // a 0 here is the one number a model would repeat to a user as a price.
+              // `daysCharged` differs from `daysHeld` whenever a minimum hire period
+              // bites, and it is the charged figure that reconciles with an invoice.
+              ...(priced
+                ? {
+                    ...(priced.chargedDays === undefined
+                      ? {}
+                      : { daysCharged: round(priced.chargedDays) }),
+                    ...(priced.atMinimumPeriod ? { atMinimumHirePeriod: true } : {}),
+                    ...(priced.hireCost === undefined ? {} : { hireCost: round(priced.hireCost) }),
+                    ...(priced.rechargeCost === undefined
+                      ? {}
+                      : { rechargeCost: round(priced.rechargeCost) }),
+                    ...(priced.consumedCost === undefined
+                      ? {}
+                      : { purchaseCost: round(priced.consumedCost) }),
+                    ...(priced.totalCost === undefined
+                      ? {}
+                      : { lineCost: round(priced.totalCost) }),
+                    ...(priced.gaps.length > 0
+                      ? { costGaps: priced.gaps.map((gap) => COST_GAP_LABELS[gap]) }
+                      : {}),
+                  }
+                : {}),
             }
           }),
           totalWeightKg: round(solution.totalWeightKg),
@@ -527,6 +571,31 @@ export function buildTools(
                       ? null
                       : round(solution.supply.hiredWeightKg),
                   ownedNotUsedHere: solution.supply.unusedOwnedIds,
+                },
+              }
+            : {}),
+          // Absent where the project has recorded no rate, which means there is no money in
+          // this answer at all — not a job that costs nothing. `excludes` is carried as data
+          // rather than left to the description because it is the sentence the model has to
+          // repeat: this is what the formwork costs to hold, and labour is not in it.
+          ...(solution.cost
+            ? {
+                cost: {
+                  currency: solution.cost.currency ?? null,
+                  hire: round(solution.cost.hireCost),
+                  recharge: round(solution.cost.rechargeCost),
+                  purchase: round(solution.cost.consumedCost),
+                  total: round(solution.cost.totalCost),
+                  complete: solution.cost.complete,
+                  linesAtMinimumHirePeriod: solution.cost.linesAtMinimum.length,
+                  ownedQuantityExcluded: solution.cost.ownedQuantityExcluded,
+                  gaps: solution.cost.gaps.map((gap) => COST_GAP_LABELS[gap]),
+                  excludes: [
+                    'labour, which is normally the largest cost of forming a job',
+                    'transport and craneage',
+                    'finance and preliminaries',
+                    'owned formwork, a sunk asset amortising over reuses this model does not record',
+                  ],
                 },
               }
             : {}),

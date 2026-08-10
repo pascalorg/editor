@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type BomLine, bomCsv, bomCsvFilename, bomHire, bomSupply } from './index'
+import { type BomLine, bomCost, bomCsv, bomCsvFilename, bomHire, bomSupply } from './index'
 
 /**
  * The bill as a file.
@@ -371,6 +371,146 @@ describe('bomCsv', () => {
         'Unit',
       ])
       expect(dataRows(csv)[0]).toContain(',26,20,6,0,9.62,Props to a slab,no,')
+    })
+  })
+
+  describe('what it costs to hold', () => {
+    const RATES = {
+      currency: 'GBP',
+      byCatalogId: { 'framax-2700-900': { purchasePerUnit: 200, rentalPercentPerMonth: 3 } },
+    }
+    const priced = (lines: readonly BomLine[], over: Partial<typeof RATES> = {}) => {
+      const supply = bomSupply(lines, {})
+      const hire = bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 })
+      return bomCost(lines, { ...RATES, ...over }, hire, supply)
+    }
+
+    test('is left out of the header entirely where the project has recorded no rates', () => {
+      // Stronger than the supply columns' reason. A blank cell under "Hire cost GBP"
+      // reads as free, and a spreadsheet sums a column of blanks into a tender figure.
+      const csv = bomCsv([line()], { subject: 'Project' })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header).not.toContain('Hire cost')
+      expect(header.split(',')).toHaveLength(9)
+    })
+
+    test('names the currency in the money headers, so no figure is a bare number', () => {
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines) })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header).toContain('Hire cost GBP')
+      expect(header).toContain('Line cost GBP')
+    })
+
+    test('says what the money is before it shows any of it', () => {
+      // The row a reader has to see first. Taken for the cost of forming the job this
+      // is wrong by more than every gap in the rate table put together, because labour
+      // is normally the largest cost and there is none of it here.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines) })
+
+      const basis = rows(csv).find((row) => row.startsWith('Cost basis,')) as string
+      expect(basis).toContain('No labour, transport or finance')
+    })
+
+    test('prices the line and totals the three costs in the same columns', () => {
+      // 4 panels at £200 and 3 %/month is £6/month, held 250/(16+10) = 9.62 d, so
+      // 4 × 6 × 9.62/30 = £7.69.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines) })
+
+      expect(dataRows(csv)[0]).toContain(',4,9.62,7.69,,,7.69,,no,')
+      const total = rows(csv).find((row) => row.startsWith(',TOTAL,')) as string
+      expect(total).toContain(',7.69,0,0,7.69,')
+    })
+
+    test('marks the charged period as the minimum where the minimum bit', () => {
+      // The figure a reader checks an invoice against, and it is not the days held: a
+      // set struck in 9.62 days against a 28-day minimum is charged for 28.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines, { minHireDays: 28 }) })
+
+      expect(dataRows(csv)[0]).toContain('28 (minimum)')
+      expect(rows(csv)).toContain('Lines charged at the minimum hire period,1')
+    })
+
+    test('an unpriced line is blank with a reason, never a zero', () => {
+      // The failure the whole module is shaped around. A 0 totals cleanly, reads as an
+      // answer, and gives the reader no way to see the line was skipped.
+      const lines = [line({ quantity: 4, catalogId: 'tie-dw15', description: 'Tie rod' })]
+      const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines) })
+
+      expect(dataRows(csv)[0]).toContain('No rate recorded for this part')
+      const total = rows(csv).find((row) => row.startsWith(',TOTAL,')) as string
+      expect(total).toContain('a floor — some lines unpriced')
+    })
+
+    test('calls the total a floor rather than a price where a line went unpriced', () => {
+      const lines = [line({ quantity: 4, catalogId: 'tie-dw15', description: 'Tie rod' })]
+      const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines) })
+
+      expect(rows(csv).some((row) => row.startsWith('TOTAL COST — a floor'))).toBe(true)
+      expect(rows(csv).some((row) => row.startsWith('UNPRICED,'))).toBe(true)
+    })
+
+    test('names the owned quantity it excluded rather than pricing it at zero', () => {
+      // An owned panel is a sunk asset amortising over a reuse count nothing here
+      // records, and a spreadsheet cannot tell a zero that means free from a zero that
+      // means unanswered.
+      const lines = [line({ quantity: 4 })]
+      const supply = bomSupply(lines, { 'framax-2700-900': 4 })
+      const hire = bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 })
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        supply,
+        cost: bomCost(lines, RATES, hire, supply),
+      })
+
+      expect(rows(csv)).toContain('Owned parts excluded from cost,4')
+    })
+
+    test('sits between the hire period and the unit, in the header and the rows alike', () => {
+      // Out of step by one column, every figure below the fold answers the wrong
+      // question — and the file still opens.
+      const lines = [line({ quantity: 4 })]
+      const supply = bomSupply(lines, {})
+      const hire = bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 })
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        supply,
+        hire,
+        cost: bomCost(lines, RATES, hire, supply),
+      })
+
+      const header = rows(csv).find((row) => row.startsWith('Mark count,')) as string
+      expect(header.split(',').slice(5, 18)).toEqual([
+        'Quantity',
+        'From own stock',
+        'To hire',
+        'Consumed',
+        'Days held',
+        'Struck as',
+        'Days charged',
+        'Hire cost GBP',
+        'Recharge cost GBP',
+        'Purchase cost GBP',
+        'Line cost GBP',
+        'Cost gap',
+        'Unit',
+      ])
+      expect(dataRows(csv)[0]).toContain(',4,0,4,0,9.62,Props to a slab,9.62,7.69,,,7.69,,no,')
+    })
+
+    test('leaves the total row’s charged-days cell blank, because periods do not total', () => {
+      // The money totals and the days do not: a set comes free when the last of it does,
+      // and a column of periods summed is a hire longer than the job.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines) })
+
+      const total = rows(csv).find((row) => row.startsWith(',TOTAL,')) as string
+      expect(total.split(',').slice(6, 8)).toEqual(['', '7.69'])
     })
   })
 })

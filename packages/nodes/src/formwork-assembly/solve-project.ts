@@ -1,5 +1,7 @@
-import type { BomHire, BomLine, BomSupply, StrikeTarget } from '@pascal-app/core/formwork'
+import type { BomCost, BomHire, BomLine, BomSupply, StrikeTarget } from '@pascal-app/core/formwork'
 import {
+  bomCost,
+  bomCostCaveats,
   bomHire,
   bomLines,
   bomSupply,
@@ -79,6 +81,16 @@ export interface ProjectFormwork {
    * inputs are named in `hire.assumed` rather than withholding the answer.
    */
   hire: BomHire
+  /**
+   * What the scope costs to hold, or absent where the project has recorded no rates.
+   *
+   * Optional like `supply` rather than always present like `hire`, and for the strongest
+   * version of that reason in the whole feature: a strike period is a consequence of a
+   * published code, so silence about it has a conservative answer. A price has no code
+   * behind it at all. There is nothing to assume, so a project that has stated no rate
+   * gets no money — not a zero, and not a figure derived from a plausible market rate.
+   */
+  cost?: BomCost
   /**
    * True where the striking table came from a different code family than the pressure
    * standard, because the project's own family publishes none.
@@ -203,13 +215,20 @@ export function solveProjectFormwork(
     })),
   )
 
+  const supply = settings.ownedStock ? bomSupply(bom, settings.ownedStock) : undefined
+
   return {
     elements,
     bom,
     totalWeightKg: weight.totalKg,
     totalWeightComplete: weight.complete,
-    ...(settings.ownedStock ? { supply: bomSupply(bom, settings.ownedStock) } : {}),
+    ...(supply ? { supply } : {}),
     hire,
+    // Priced from the split and the periods above rather than from a second pass over the
+    // parts, so a cost and the quantity it prices cannot disagree. `supply` is passed
+    // through as it stands, including absent: a project with rates and no stock list has
+    // said it owns none of this, which is a different claim from having said nothing.
+    ...(settings.rates ? { cost: bomCost(bom, settings.rates, hire, supply) } : {}),
     strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
@@ -271,6 +290,10 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   for (const entry of solution.hire.mixedLines) {
     out.push(`${entry.line.description}: ${entry.mixed?.message}`)
   }
+  // Verbatim from the cost pass for the same reason the striking warnings are. Every one
+  // of these makes the total a floor rather than a price, and a money figure is the one
+  // number in this whole takeoff a reader will quote without reading anything beside it.
+  if (solution.cost) out.push(...bomCostCaveats(solution.cost))
   return out
 }
 

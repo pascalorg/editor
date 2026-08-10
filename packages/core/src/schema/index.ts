@@ -147,8 +147,10 @@ export {
   FalseworkLoadSettings,
   FormworkPartSettings,
   FormworkProjectSettingsNode,
+  FormworkRateSettings,
   FormworkStockSettings,
   MeasurementStandardChoice,
+  PartRate,
   PlacementSettings,
   PressureStandardChoice,
 } from './nodes/formwork-project-settings'

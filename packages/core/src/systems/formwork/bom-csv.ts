@@ -1,3 +1,4 @@
+import { type BomCost, COST_GAP_LABELS, type CostLine } from './cost'
 import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
 import type { BomHire, HireLine } from './hire'
 import type { BomLine } from './parts'
@@ -52,6 +53,16 @@ export interface BomCsvScope {
    * qualifying days above 10 °C without opening the code.
    */
   hire?: BomHire
+  /**
+   * What the scope costs to hold, where the project has recorded rates.
+   *
+   * Absent leaves every money column off, for a stronger version of the reason the
+   * supply columns come and go: a blank cell under "Hire cost" reads as free, and a
+   * spreadsheet will sum a column of blanks into a total somebody puts in a tender.
+   * A gap column travels beside the figures rather than only in the preamble, because
+   * a row that carries no money has to say why in the row.
+   */
+  cost?: BomCost
 }
 
 /**
@@ -97,6 +108,27 @@ const SUPPLY_HEADER = ['From own stock', 'To hire', 'Consumed'] as const
  * which is which has no way to check the figure against the drawing.
  */
 const HIRE_HEADER = ['Days held', 'Struck as'] as const
+
+/**
+ * What the line costs, and why it may cost nothing.
+ *
+ * `Days charged` sits beside `Days held` rather than replacing it because the two
+ * differ whenever a minimum hire period bites — which on a wall form is almost always
+ * — and it is the difference that a reader checks an invoice against. The three costs
+ * stay apart because they are three events with three remedies, and `Cost gap` is the
+ * column that stops an unpriced line reading as a free one.
+ */
+const costHeader = (currency: string | undefined): string[] => {
+  const money = currency === undefined ? 'cost' : `cost ${currency}`
+  return [
+    'Days charged',
+    `Hire ${money}`,
+    `Recharge ${money}`,
+    `Purchase ${money}`,
+    `Line ${money}`,
+    'Cost gap',
+  ]
+}
 
 /**
  * Why a line's parts are what they are, in the yard's terms rather than the type's.
@@ -172,6 +204,46 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       rows.push(['ASSUMED', cell(assumption.message)].join(','))
     }
   }
+  const cost = scope.cost
+  if (cost) {
+    // Before any figure, because this is the row that decides what the money below is.
+    // A reader who takes this for the cost of forming the job is wrong by more than
+    // every gap in the rate table put together — labour is normally the largest cost
+    // and there is none of it in here.
+    rows.push(
+      [
+        'Cost basis',
+        cell(
+          'formwork held only — hire, recharges and what is spent. No labour, transport or finance',
+        ),
+      ].join(','),
+    )
+    if (cost.currency !== undefined) rows.push(['Currency', cell(cost.currency)].join(','))
+    rows.push(['Hire cost', round2(cost.hireCost)].join(','))
+    if (cost.rechargeCost > 0) {
+      rows.push(['Recharge cost — altered hire at list', round2(cost.rechargeCost)].join(','))
+    }
+    if (cost.consumedCost > 0)
+      rows.push(['Purchase cost — consumed', round2(cost.consumedCost)].join(','))
+    rows.push(
+      [
+        cost.complete ? 'TOTAL COST' : 'TOTAL COST — a floor, not a price',
+        round2(cost.totalCost),
+      ].join(','),
+    )
+    if (cost.ownedQuantityExcluded > 0) {
+      // Named as excluded rather than priced at zero. An owned panel is a sunk asset
+      // amortising over a reuse count nothing in this model records, and a spreadsheet
+      // cannot tell a zero that means free from a zero that means unanswered.
+      rows.push(['Owned parts excluded from cost', cost.ownedQuantityExcluded].join(','))
+    }
+    if (cost.linesAtMinimum.length > 0) {
+      rows.push(['Lines charged at the minimum hire period', cost.linesAtMinimum.length].join(','))
+    }
+    for (const gap of cost.gaps) {
+      rows.push(['UNPRICED', cell(COST_GAP_LABELS[gap])].join(','))
+    }
+  }
   if (supply && supply.unusedOwnedIds.length > 0) {
     // Plant the project owns and this scope never asks for. Nothing in the lines below
     // can say so, because a line the bill does not contain has no row.
@@ -210,11 +282,34 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
     ]
   }
 
+  const byCost = new Map<BomLine, CostLine>((cost?.lines ?? []).map((entry) => [entry.line, entry]))
+  const costCells = (line: BomLine): Array<string | number> => {
+    if (!cost) return []
+    const entry = byCost.get(line)
+    if (entry === undefined) return ['', '', '', '', '', '']
+    const money = (value: number | undefined) => (value === undefined ? '' : round2(value))
+    return [
+      entry.chargedDays === undefined
+        ? ''
+        : cell(
+            entry.atMinimumPeriod
+              ? `${round2(entry.chargedDays)} (minimum)`
+              : round2(entry.chargedDays),
+          ),
+      money(entry.hireCost),
+      money(entry.rechargeCost),
+      money(entry.consumedCost),
+      money(entry.totalCost),
+      cell(entry.gaps.map((gap) => COST_GAP_LABELS[gap]).join('; ')),
+    ]
+  }
+
   rows.push(
     [
       ...HEADER.slice(0, 6),
       ...(supply ? SUPPLY_HEADER : []),
       ...(hire ? HIRE_HEADER : []),
+      ...(cost ? costHeader(cost.currency) : []),
       ...HEADER.slice(6),
     ].join(','),
   )
@@ -233,6 +328,7 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
         line.quantity,
         ...supplyCells(line),
         ...hireCells(line),
+        ...costCells(line),
         cell(line.unit),
         line.totalWeightKg === undefined ? '' : round2(line.totalWeightKg),
         cell(line.marks.join(' ')),
@@ -261,6 +357,19 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       // the last of it does, and adding periods together produces a hire longer than
       // the job — which is the arithmetic a spreadsheet does to any column of days.
       ...(hire ? [round2(hire.longestHours / 24), cell('longest, not a total')] : []),
+      // Days are deliberately left blank in the cost block's first cell: the column
+      // above holds a charged period per line and there is no such thing as a total
+      // period. The money does total, and the last cell says whether it is a price.
+      ...(cost
+        ? [
+            '',
+            round2(cost.hireCost),
+            round2(cost.rechargeCost),
+            round2(cost.consumedCost),
+            round2(cost.totalCost),
+            cell(cost.complete ? '' : 'a floor — some lines unpriced'),
+          ]
+        : []),
       '',
       lines.length === 0 ? '' : round2(totalKg),
       '',

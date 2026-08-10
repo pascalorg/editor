@@ -43,6 +43,13 @@ interface ProjectReport {
     daysHeld: number | null
     struckAs: string | null
     mixedPeriods?: string[]
+    daysCharged?: number
+    atMinimumHirePeriod?: boolean
+    hireCost?: number
+    rechargeCost?: number
+    purchaseCost?: number
+    lineCost?: number
+    costGaps?: string[]
   }>
   totalWeightKg: number
   totalWeightComplete: boolean
@@ -61,6 +68,18 @@ interface ProjectReport {
     hiredAlteredHere: number
     hiredWeightKg: number | null
     ownedNotUsedHere: string[]
+  }
+  cost?: {
+    currency: string | null
+    hire: number
+    recharge: number
+    purchase: number
+    total: number
+    complete: boolean
+    linesAtMinimumHirePeriod: number
+    ownedQuantityExcluded: number
+    gaps: string[]
+    excludes: string[]
   }
   beyondCapacity: Array<{ elementId: string; mark: string }>
   caveats: string[]
@@ -470,6 +489,144 @@ describe('inspect_project_formwork', () => {
       expect(row.daysHeld === null).toBe(row.struckAs === null)
       if (row.daysHeld !== null)
         expect(row.daysHeld).toBeLessThanOrEqual(solved.hire.longestDaysHeld)
+    }
+  })
+
+  test('says nothing about money until the project records a rate', async () => {
+    // The one input with no conservative fallback, so absent is the whole answer. A 0
+    // here is the single number a model would repeat to a user as a price, and a takeoff
+    // reading "£0" is a tender nobody can withdraw once it has been sent.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    await call(tools, 'set_formwork_settings', { ownedStock: {} })
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.cost).toBeUndefined()
+    expect(solved.bom.every((row) => row.lineCost === undefined)).toBe(true)
+    expect(solved.caveats.some((c) => c.includes('labour'))).toBe(false)
+  })
+
+  test('prices the bill once a rate is recorded, and leads with what the price is not', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as { catalogId: string }
+
+    await call(tools, 'set_formwork_settings', {
+      rates: {
+        currency: 'GBP',
+        byCatalogId: { [panel.catalogId]: { purchasePerUnit: 420, rentalPercentPerMonth: 3 } },
+      },
+    })
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.cost?.currency).toBe('GBP')
+    expect(solved.cost?.hire).toBeGreaterThan(0)
+    const line = solved.bom.find((row) => row.catalogId === panel.catalogId)
+    expect(line?.lineCost).toBeGreaterThan(0)
+    expect(line?.daysCharged).toBeGreaterThan(0)
+    // Only the panel is priced, so the rest of the bill is not — and a total over a
+    // partly-priced bill is a floor, which the model is told rather than left to infer.
+    expect(solved.cost?.complete).toBe(false)
+    expect(solved.caveats.some((c) => c.includes('a floor rather than a price'))).toBe(true)
+    // Not boilerplate: this is the cost of holding the formwork, not of forming the job.
+    expect(solved.cost?.excludes.some((entry) => entry.includes('labour'))).toBe(true)
+  })
+
+  test('a list price with no hire rate beside it prices nothing, and names what is missing', async () => {
+    // The gap worth having a name for. A list price is not a hire rate, and a line
+    // carrying one and not the other would otherwise be indistinguishable from a free one.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as { catalogId: string }
+
+    await call(tools, 'set_formwork_settings', {
+      rates: { byCatalogId: { [panel.catalogId]: { purchasePerUnit: 420 } } },
+    })
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    const line = solved.bom.find((row) => row.catalogId === panel.catalogId)
+    expect(line?.hireCost).toBeUndefined()
+    expect(line?.costGaps?.some((gap) => gap.includes('no hire rate recorded'))).toBe(true)
+    expect(solved.cost?.currency).toBeNull()
+  })
+
+  test('a minimum hire period is charged rather than the time held, and is flagged', async () => {
+    // Most of the answer on a fast cycle: a wall form struck in 12 hours against a
+    // 28-day minimum is charged for 28 days, and the remedy is not striking sooner.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as { catalogId: string }
+    const rates = { byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } } }
+
+    await call(tools, 'set_formwork_settings', { rates })
+    const unbounded = await project(tools, { elementIds: ['wall_1'] })
+    await call(tools, 'set_formwork_settings', { rates: { minHireDays: 28 } })
+    const charged = await project(tools, { elementIds: ['wall_1'] })
+
+    const line = charged.bom.find((row) => row.catalogId === panel.catalogId)
+    expect(line?.daysCharged).toBe(28)
+    expect(line?.atMinimumHirePeriod).toBe(true)
+    expect(charged.cost?.linesAtMinimumHirePeriod).toBe(1)
+    // The unbounded figure has to be a real price for the comparison to mean anything —
+    // a 0 there would make any charge greater than ten times it.
+    const held = unbounded.cost?.hire as number
+    expect(held).toBeGreaterThan(0)
+    expect(charged.cost?.hire).toBeGreaterThan(held * 10)
+    expect(charged.caveats.some((c) => c.includes('pouring more with the same set'))).toBe(true)
+  })
+
+  test('owned stock is left out of the price rather than priced at zero, and says how much', async () => {
+    // A sunk asset amortising over a reuse count nothing in this model records. Priced at
+    // zero it would report a job forming itself free the more of its own kit it uses.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as {
+      catalogId: string
+      quantity: number
+    }
+    const rates = { byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } } }
+
+    await call(tools, 'set_formwork_settings', { rates })
+    const whole = await project(tools, { elementIds: ['wall_1'] })
+    await call(tools, 'set_formwork_settings', { ownedStock: { [panel.catalogId]: 4 } })
+    const partlyOwned = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(partlyOwned.cost?.ownedQuantityExcluded).toBe(4)
+    expect(partlyOwned.caveats.some((c) => c.includes('sunk asset'))).toBe(true)
+    // Charged on the hired remainder rather than on the whole quantity, and the four
+    // owned are missing from the charge rather than priced at zero within it.
+    const hired = partlyOwned.bom.find((row) => row.catalogId === panel.catalogId)
+      ?.hireCost as number
+    const all = whole.bom.find((row) => row.catalogId === panel.catalogId)?.hireCost as number
+    expect(hired).toBeCloseTo((all * (panel.quantity - 4)) / panel.quantity, 2)
+  })
+
+  test('the price sits on the line it belongs to, in the bill’s own order', async () => {
+    // Indexed positionally against the bill, like the split and the period. Out of step,
+    // every figure is attributed to the wrong description and nothing reveals it.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as { catalogId: string }
+    await call(tools, 'set_formwork_settings', {
+      rates: { byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } } },
+    })
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    const priced = solved.bom.filter((row) => row.lineCost !== undefined)
+    expect(priced).toHaveLength(1)
+    expect(priced[0]?.catalogId).toBe(panel.catalogId)
+    // Nothing made on site is priced off a catalog rate, and it says so rather than
+    // reading as a line somebody forgot to fill in.
+    for (const row of solved.bom) {
+      if (row.catalogId === null)
+        expect(row.costGaps?.some((gap) => gap.includes('Made on site'))).toBe(true)
     }
   })
 

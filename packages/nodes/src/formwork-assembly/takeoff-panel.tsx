@@ -1,6 +1,11 @@
 'use client'
 
-import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from '@pascal-app/core/formwork'
+import {
+  COST_GAP_LABELS,
+  formatMoney,
+  STRIKE_TARGET_LABELS,
+  STRIKING_STANDARD_LABELS,
+} from '@pascal-app/core/formwork'
 import { ActionButton, downloadText, PanelSection } from '@pascal-app/editor'
 import { Download } from 'lucide-react'
 import { useState } from 'react'
@@ -49,6 +54,9 @@ export function FormworkTakeoffPanel() {
   // object: `bomSupply` was handed `solution.bom` and returns entries pointing at it.
   const supplyByLine = new Map(supply?.lines.map((entry) => [entry.line, entry]))
   const hireByLine = new Map(solution.hire.lines.map((entry) => [entry.line, entry]))
+  const cost = solution.cost
+  const costByLine = new Map(cost?.lines.map((entry) => [entry.line, entry]))
+  const money = (value: number) => formatMoney(value, cost?.currency)
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -162,12 +170,63 @@ export function FormworkTakeoffPanel() {
                 <Note key={assumption.kind}>{assumption.message}</Note>
               ))}
             </Section>
+            {cost === undefined ? (
+              <Note>
+                No rates recorded, so this takeoff carries no money. A rate is the one input here
+                that no code publishes and no product carries, so nothing is assumed for it — enter
+                what the project pays per part in its formwork settings and every line prices.
+              </Note>
+            ) : (
+              <Section title="Cost to hold">
+                <Readout
+                  label="Hire"
+                  value={money(cost.hireCost)}
+                  value2={
+                    cost.linesAtMinimum.length > 0
+                      ? `${cost.linesAtMinimum.length} at the minimum period`
+                      : undefined
+                  }
+                />
+                {cost.rechargeCost > 0 && (
+                  <Readout
+                    label="Recharges"
+                    value={money(cost.rechargeCost)}
+                    value2="altered hire, at list"
+                  />
+                )}
+                {cost.consumedCost > 0 && (
+                  <Readout label="Consumed" value={money(cost.consumedCost)} value2="bought" />
+                )}
+                <Readout
+                  label={cost.complete ? 'Total' : 'Total so far'}
+                  value={money(cost.totalCost)}
+                  value2={cost.complete ? undefined : 'a floor, not a price'}
+                />
+                {/* The omission named rather than priced at zero. An owned panel is a
+                    sunk asset amortising over a reuse count nothing here records, and a
+                    total that quietly priced it at nothing makes owning formwork free. */}
+                {cost.ownedQuantityExcluded > 0 && (
+                  <Note>
+                    {cost.ownedQuantityExcluded} parts come off the yard's own rack and are not
+                    priced — a sunk asset, amortising over reuses this model does not track.
+                  </Note>
+                )}
+                {cost.gaps.map((gap) => (
+                  <Note key={gap}>{COST_GAP_LABELS[gap]}.</Note>
+                ))}
+                <Note>
+                  Formwork held only. No labour, no transport, no finance — and labour is normally
+                  the largest of those.
+                </Note>
+              </Section>
+            )}
             <Section
               title={`${solution.bom.length} ${solution.bom.length === 1 ? 'line' : 'lines'}`}
             >
               {solution.bom.map((line) => {
                 const split = supplyByLine.get(line)
                 const held = hireByLine.get(line)
+                const priced = costByLine.get(line)
                 return (
                   <div
                     className="space-y-0.5 border-border/30 border-t pt-1 first:border-t-0 first:pt-0"
@@ -211,6 +270,27 @@ export function FormworkTakeoffPanel() {
                           : ' · mixed with a shorter period, longest shown'}
                       </div>
                     )}
+                    {/* The charged period sits with the money rather than beside "held",
+                        because where the two differ it is the minimum hire term that
+                        explains the figure and not the strike time above it. */}
+                    {priced !== undefined &&
+                      (priced.totalCost !== undefined || priced.gaps.length > 0) && (
+                        <div className="flex items-baseline justify-between gap-2 text-[10px] text-muted-foreground">
+                          <span className="min-w-0 flex-1 truncate">
+                            {[
+                              ...(priced.atMinimumPeriod && priced.chargedDays !== undefined
+                                ? [`charged ${priced.chargedDays.toFixed(0)} d, the minimum`]
+                                : []),
+                              ...priced.gaps.map((gap) => COST_GAP_LABELS[gap]),
+                            ].join(' · ')}
+                          </span>
+                          <span className="shrink-0 font-mono">
+                            {priced.totalCost === undefined
+                              ? 'not priced'
+                              : money(priced.totalCost)}
+                          </span>
+                        </div>
+                      )}
                   </div>
                 )
               })}
@@ -230,8 +310,9 @@ export function FormworkTakeoffPanel() {
             }}
           />
           <Note>
-            Quantities, weights and the marks behind each line, plus any warning above — the file
-            carries its own caveats, because it is what gets emailed on.
+            Quantities, weights{cost === undefined ? '' : ', cost'} and the marks behind each line,
+            plus any warning above — the file carries its own caveats, because it is what gets
+            emailed on.
           </Note>
         </div>
       )}

@@ -456,6 +456,7 @@ export {
   mergeFormworkCement,
   mergeFormworkOwnedStock,
   mergeFormworkPartOverride,
+  mergeFormworkRates,
   mergeFormworkSettingsGroup,
   mergeTrimContributions,
   type OpeningMeasurement,

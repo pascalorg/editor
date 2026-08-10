@@ -89,6 +89,16 @@ export {
   slabOnlyFields,
 } from './construction-patch'
 export {
+  type BomCost,
+  bomCost,
+  bomCostCaveats,
+  COST_GAP_LABELS,
+  type CostGap,
+  type CostLine,
+  formatMoney,
+  type RateTable,
+} from './cost'
+export {
   type CastableElement,
   type CastableKind,
   collectCastableElements,
@@ -426,6 +436,7 @@ export {
   formworkSettingsFor,
   mergeFormworkCement,
   mergeFormworkOwnedStock,
+  mergeFormworkRates,
   mergeFormworkSettingsGroup,
 } from './settings'
 export {

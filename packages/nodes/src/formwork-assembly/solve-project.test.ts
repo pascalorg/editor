@@ -149,8 +149,8 @@ function withStock(
   }
 }
 
-/** The pour after it is placed, which is what a strike period is taken from. */
-function withCuring(
+/** Any settings group, verbatim — the cure, the pressure code, the rates. */
+function withSettings(
   nodes: Record<string, AnyNode>,
   settings: Record<string, unknown>,
 ): Record<string, AnyNode> {
@@ -471,9 +471,9 @@ describe('how long the bill is held', () => {
     // field would be wrong for one of the two answers whichever value it held.
     const scene = steelWallScene()
     const assumed = solveProjectFormwork(scene).hire.longestHours
-    const cold = solveProjectFormwork(withCuring(scene, { curing: { surfaceTemperatureC: 5 } }))
+    const cold = solveProjectFormwork(withSettings(scene, { curing: { surfaceTemperatureC: 5 } }))
     const coldMix = solveProjectFormwork(
-      withCuring(scene, { placement: { concreteTemperatureC: 5 } }),
+      withSettings(scene, { placement: { concreteTemperatureC: 5 } }),
     )
 
     expect(cold.hire.longestHours).toBeGreaterThan(assumed)
@@ -485,9 +485,9 @@ describe('how long the bill is held', () => {
     // ACI footnote ‡, which needs the pressure code on ACI too — the two families do not
     // share a striking table, and this is the one clause that reads `shoresRemain`.
     const scene = sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0))
-    const plain = solveProjectFormwork(withCuring(scene, { pressureStandard: 'ACI_347' }))
+    const plain = solveProjectFormwork(withSettings(scene, { pressureStandard: 'ACI_347' }))
     const drophead = solveProjectFormwork(
-      withCuring(scene, { pressureStandard: 'ACI_347', curing: { shoresRemain: true } }),
+      withSettings(scene, { pressureStandard: 'ACI_347', curing: { shoresRemain: true } }),
     )
 
     const formOf = (solution: typeof plain) =>
@@ -503,8 +503,10 @@ describe('how long the bill is held', () => {
     // The failure that turns a correct figure into a missed date. ACI counts only time
     // above 10 °C and the days need not be consecutive, so 4 ACI days can be a fortnight
     // in a cold spring.
-    const aci = solveProjectFormwork(withCuring(steelWallScene(), { pressureStandard: 'ACI_347' }))
-    const bs = solveProjectFormwork(withCuring(steelWallScene(), { pressureStandard: 'BS_8110' }))
+    const aci = solveProjectFormwork(
+      withSettings(steelWallScene(), { pressureStandard: 'ACI_347' }),
+    )
+    const bs = solveProjectFormwork(withSettings(steelWallScene(), { pressureStandard: 'BS_8110' }))
 
     expect(aci.hire.basis).toBe('qualifying-time')
     expect(bs.hire.basis).toBe('calendar')
@@ -517,14 +519,14 @@ describe('how long the bill is held', () => {
     // DIN publishes no striking table at all — its family answers removal in EN 13670,
     // which is uncovered here. Falling to BS 8110 is right and it is a substitution.
     const din = solveProjectFormwork(
-      withCuring(steelWallScene(), { pressureStandard: 'DIN_18218' }),
+      withSettings(steelWallScene(), { pressureStandard: 'DIN_18218' }),
     )
 
     expect(din.hire.standard).toBe('BS_8110')
     expect(din.strikingStandardSubstituted).toBe(true)
     expect(solveProjectFormwork(steelWallScene()).strikingStandardSubstituted).toBe(true)
     expect(
-      solveProjectFormwork(withCuring(steelWallScene(), { pressureStandard: 'BS_8110' }))
+      solveProjectFormwork(withSettings(steelWallScene(), { pressureStandard: 'BS_8110' }))
         .strikingStandardSubstituted,
     ).toBe(false)
   })
@@ -559,6 +561,110 @@ describe('how long the bill is held', () => {
 
     expect(solution.bom.some((line) => line.kind === 'brace')).toBe(false)
     expect(solution.hire.lines.some((entry) => entry.line.kind === 'brace')).toBe(false)
+  })
+})
+
+describe('what the bill costs to hold', () => {
+  test('a project that has recorded no rate gets no money at all', () => {
+    // Sharper than the rack's version of this. A strike period has a code behind it and
+    // silence about the cure has a conservative answer; a price has no code at all, so
+    // there is nothing to assume and a zero would price the job at nothing.
+    expect(solveProjectFormwork(steelWallScene()).cost).toBeUndefined()
+    expect(solveProjectFormwork(withStock(steelWallScene(), { owned: {} })).cost).toBeUndefined()
+  })
+
+  test('a rate against a panel the bill hires prices the hire', () => {
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        stock: { owned: {} },
+        rates: { currency: 'GBP', byCatalogId: { [PANEL_ID]: { purchasePerUnit: 200 } } },
+      }),
+    )
+
+    expect(solution.cost?.currency).toBe('GBP')
+    // A list price alone prices no hire: there is no percentage to apply to it, and the
+    // gap is a table somebody fills in rather than a line that costs nothing.
+    expect(solution.cost?.hireCost).toBe(0)
+    expect(solution.cost?.gaps).toContain('no-rental-rate')
+
+    const priced = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        stock: { owned: {} },
+        rates: {
+          currency: 'GBP',
+          byCatalogId: { [PANEL_ID]: { purchasePerUnit: 200, rentalPercentPerMonth: 3 } },
+        },
+      }),
+    )
+
+    expect(priced.cost?.hireCost).toBeGreaterThan(0)
+  })
+
+  test('the cost sits beside the bill line it is about, in the bill’s own order', () => {
+    // Read positionally by the CSV and both AI tools, keyed by line object in the panel.
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        rates: { byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } } },
+      }),
+    )
+
+    expect(solution.cost?.lines.map((entry) => entry.line)).toEqual(solution.bom)
+  })
+
+  test('the yard’s own panels are excluded from the total, not priced at zero', () => {
+    // A sunk asset amortising over a reuse count nothing in the model carries. Priced at
+    // zero it would make owning formwork free, which is the conclusion a reader draws
+    // from a total that quietly includes it.
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        stock: { owned: { [PANEL_ID]: 4 } },
+        rates: { byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } } },
+      }),
+    )
+
+    expect(solution.cost?.ownedQuantityExcluded).toBe(4)
+    const panel = solution.cost?.lines.find((entry) => entry.line.catalogId === PANEL_ID)
+    const billed = solution.bom.find((line) => line.catalogId === PANEL_ID)?.quantity as number
+    // Charged on the hired remainder only, so the figure moves with the rack.
+    expect(panel?.hireCost).toBeLessThan((billed * 10 * (panel?.chargedDays ?? 0)) / 30)
+  })
+
+  test('a minimum hire period charges the term rather than the time held, and says so', () => {
+    // The commonest reason a hire invoice does not match a programme. A wall form is
+    // struck in hours under BS 8110 and charged for the whole minimum.
+    const rates = { byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 30 } } }
+    const short = solveProjectFormwork(
+      withSettings(steelWallScene(), { pressureStandard: 'BS_8110', rates }),
+    )
+    const minimum = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        pressureStandard: 'BS_8110',
+        rates: { ...rates, minHireDays: 28 },
+      }),
+    )
+
+    expect(minimum.cost?.linesAtMinimum.length).toBeGreaterThan(0)
+    expect(minimum.cost?.hireCost).toBeGreaterThan((short.cost?.hireCost ?? 0) * 10)
+    const panel = minimum.cost?.lines.find((entry) => entry.line.catalogId === PANEL_ID)
+    expect(panel?.chargedDays).toBe(28)
+    expect(panel?.atMinimumPeriod).toBe(true)
+  })
+
+  test('a tie is hired and never struck, so it is reported unpriceable rather than free', () => {
+    // Two right answers that together leave a real cost with no way to price it: the tie
+    // carries a catalog id so the split hires it, and nothing strikes it because it is
+    // cut off inside the wall. A bill missing every tie still totals cleanly.
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        stock: { owned: {} },
+        rates: { byCatalogId: { 'doka-framax-tie-588681000': { rentalPerUnitPerMonth: 1 } } },
+      }),
+    )
+    const tie = solution.cost?.lines.find((entry) => entry.line.kind === 'tie')
+
+    expect(tie?.gaps).toContain('hired-but-never-struck')
+    expect(tie?.totalCost).toBeUndefined()
+    expect(solution.cost?.complete).toBe(false)
   })
 })
 
@@ -643,5 +749,27 @@ describe('projectFormworkCaveats', () => {
 
     expect(solution.supply?.hiredModifiedQuantity).toBe(1)
     expect(projectFormworkCaveats(solution).some((c) => c.includes('recharge at list'))).toBe(true)
+  })
+
+  test('leads a priced takeoff with what the price is not', () => {
+    // The one figure a reader quotes without reading anything beside it, so what it
+    // excludes has to travel with it rather than sit in a tooltip.
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        stock: { owned: {} },
+        rates: { currency: 'GBP', byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } } },
+      }),
+    )
+
+    const caveats = projectFormworkCaveats(solution)
+    expect(caveats.some((c) => c.includes('no labour'))).toBe(true)
+    // A floor, because a bill with a rate for one panel type prices nothing else.
+    expect(caveats.some((c) => c.includes('a floor rather than a price'))).toBe(true)
+  })
+
+  test('says nothing about money where the project recorded no rate', () => {
+    const caveats = projectFormworkCaveats(solveProjectFormwork(steelWallScene()))
+
+    expect(caveats.some((c) => c.includes('no labour'))).toBe(false)
   })
 })

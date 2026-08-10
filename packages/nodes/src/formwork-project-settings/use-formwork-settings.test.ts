@@ -12,9 +12,12 @@ import { formworkAssemblyDefinition } from '../formwork-assembly'
 import { formworkProjectSettingsDefinition } from './definition'
 import {
   clearFormworkOwnedStock,
+  clearFormworkRates,
   clearFormworkSettings,
   setFormworkCementField,
   setFormworkOwnedStock,
+  setFormworkRate,
+  setFormworkRateTerms,
   setFormworkSettingsField,
   setFormworkSettingsGroupField,
 } from './use-formwork-settings'
@@ -287,6 +290,95 @@ describe('formwork settings write — the yard’s own rack', () => {
   })
 })
 
+describe('formwork settings write — what the project pays', () => {
+  beforeEach(seedScene)
+
+  const PANEL = 'doka-framax-panel-588104500'
+  const OTHER = 'doka-framax-panel-588223500'
+
+  test('two figures for one part accumulate, because they arrive from different documents', () => {
+    // The reason the rate merge reaches a second level where the rack's stops at one:
+    // a list price comes off a price list and a hire term off an agreement, and
+    // replacing the rate object would make entering the second delete the first.
+    setFormworkRate(PANEL, { purchasePerUnit: 420 })
+    setFormworkRate(PANEL, { rentalPercentPerMonth: 3 })
+
+    expect(settings()?.rates?.byCatalogId?.[PANEL]).toEqual({
+      purchasePerUnit: 420,
+      rentalPercentPerMonth: 3,
+    })
+  })
+
+  test('a second part is added rather than replacing the table', () => {
+    setFormworkRate(PANEL, { purchasePerUnit: 420 })
+    setFormworkRate(OTHER, { purchasePerUnit: 380 })
+
+    expect(Object.keys(settings()?.rates?.byCatalogId ?? {}).sort()).toEqual([PANEL, OTHER].sort())
+  })
+
+  test('null clears one figure and leaves the part priced', () => {
+    setFormworkRate(PANEL, { purchasePerUnit: 420, rentalPercentPerMonth: 3 })
+    setFormworkRate(PANEL, { rentalPercentPerMonth: null })
+
+    expect(settings()?.rates?.byCatalogId?.[PANEL]).toEqual({ purchasePerUnit: 420 })
+  })
+
+  test('a rate emptied of every figure drops the part, because there is no priced-unknown', () => {
+    // Unlike the rack, where 0 is the real answer to "how many do we own". No number
+    // means "priced, amount unknown", so an empty rate is a row that prices nothing.
+    setFormworkRate(PANEL, { purchasePerUnit: 420 })
+    setFormworkRate(PANEL, { purchasePerUnit: null })
+
+    expect(settings()?.rates?.byCatalogId).toEqual({})
+  })
+
+  test('the terms are stated on the group, and survive a table emptied of every part', () => {
+    setFormworkRateTerms({ currency: 'GBP', minHireDays: 28 })
+    setFormworkRate(PANEL, { purchasePerUnit: 420 })
+    setFormworkRate(PANEL, { purchasePerUnit: null })
+
+    expect(settings()?.rates).toEqual({ byCatalogId: {}, currency: 'GBP', minHireDays: 28 })
+  })
+
+  test('an empty terms patch opens the table without pricing anything', () => {
+    // "The project has looked at its rates and recorded none" is a different answer from
+    // "nobody has been asked", and it is the state the panel is in while a row is chosen.
+    setFormworkRateTerms({})
+
+    expect(settings()?.rates).toEqual({ byCatalogId: {} })
+  })
+
+  test('null against a term clears it without touching the priced parts', () => {
+    setFormworkRateTerms({ currency: 'GBP', minHireDays: 28 })
+    setFormworkRate(PANEL, { purchasePerUnit: 420 })
+
+    setFormworkRateTerms({ minHireDays: null })
+
+    expect(settings()?.rates).toEqual({
+      byCatalogId: { [PANEL]: { purchasePerUnit: 420 } },
+      currency: 'GBP',
+    })
+  })
+
+  test('clearing the rates is the explicit way back to a takeoff with no money on it', () => {
+    setFormworkRate(PANEL, { purchasePerUnit: 420 })
+
+    clearFormworkRates()
+
+    expect(settings()?.rates).toBeUndefined()
+  })
+
+  test('a rate write leaves the rack and a stated design input alone', () => {
+    setFormworkSettingsGroupField('placement', { riseRateMH: 2.5 })
+    setFormworkOwnedStock({ [PANEL]: 200 })
+
+    setFormworkRate(PANEL, { purchasePerUnit: 420 })
+
+    expect(settings()?.placement).toEqual({ riseRateMH: 2.5 })
+    expect(settings()?.stock).toEqual({ owned: { [PANEL]: 200 } })
+  })
+})
+
 describe('formwork settings write — reset', () => {
   beforeEach(seedScene)
 
@@ -295,17 +387,23 @@ describe('formwork settings write — reset', () => {
     setFormworkSettingsGroupField('placement', { riseRateMH: 2.5 })
     setFormworkSettingsGroupField('parts', { doubledWalers: true })
     setFormworkCementField({ retarder: true })
+    setFormworkSettingsGroupField('curing', { surfaceTemperatureC: 8 })
     setFormworkOwnedStock({ 'doka-framax-panel-588104500': 200 })
+    setFormworkRate('doka-framax-panel-588104500', { purchasePerUnit: 420 })
 
     clearFormworkSettings()
 
+    // Every group, not most of them: a reset that leaves one behind reports the shipped
+    // defaults everywhere while the report still calls that group the project's decision.
     const node = settings()
     expect(node).toBeDefined()
     expect(node?.pressureStandard).toBeUndefined()
     expect(node?.placement).toBeUndefined()
     expect(node?.parts).toBeUndefined()
     expect(node?.concrete).toBeUndefined()
+    expect(node?.curing).toBeUndefined()
     expect(node?.stock).toBeUndefined()
+    expect(node?.rates).toBeUndefined()
   })
 
   test('a reset still dirties the assemblies it re-sizes', () => {

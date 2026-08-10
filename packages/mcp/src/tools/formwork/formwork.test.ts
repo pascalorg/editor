@@ -56,6 +56,13 @@ interface BillReply {
     daysHeld: number | null
     struckAs: string | null
     mixedPeriods?: string[]
+    daysCharged?: number
+    atMinimumHirePeriod?: boolean
+    hireCost?: number
+    rechargeCost?: number
+    purchaseCost?: number
+    lineCost?: number
+    costGaps?: string[]
   }>
   totalWeightKg: number
   totalWeightComplete: boolean
@@ -74,6 +81,18 @@ interface BillReply {
     hiredAlteredHere: number
     hiredWeightKg: number | null
     ownedNotUsedHere: string[]
+  }
+  cost?: {
+    currency: string | null
+    hire: number
+    recharge: number
+    purchase: number
+    total: number
+    complete: boolean
+    linesAtMinimumHirePeriod: number
+    ownedQuantityExcluded: number
+    gaps: string[]
+    excludes: string[]
   }
   caveats: string[]
 }
@@ -705,6 +724,67 @@ describe('the formwork MCP tools', () => {
     expect(cold.hire.assumed.some((entry) => entry.includes('No curing surface'))).toBe(false)
   })
 
+  test('there is no money in the bill until the project records a rate', async () => {
+    // The one input in the model with no conservative fallback, so absent is the answer
+    // rather than a total of zero — which is the single figure an agent would quote.
+    load(withStock(twoLevels(), {}))
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.cost).toBeUndefined()
+    expect(reply.bom.every((line) => line.lineCost === undefined)).toBe(true)
+  })
+
+  test('prices the bill against a recorded rate, and says what the price leaves out', async () => {
+    load(twoLevels())
+    const plain = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const panel = plain.bom.find((line) => line.catalogId !== null) as { catalogId: string }
+    load(
+      withSettings(twoLevels(), {
+        rates: {
+          currency: 'GBP',
+          byCatalogId: { [panel.catalogId]: { purchasePerUnit: 420, rentalPercentPerMonth: 3 } },
+        },
+      }),
+    )
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.cost?.currency).toBe('GBP')
+    expect(reply.cost?.hire).toBeGreaterThan(0)
+    expect(reply.bom.find((row) => row.catalogId === panel.catalogId)?.lineCost).toBeGreaterThan(0)
+    // Only one part is priced, so the rest of the bill is not: the total is a floor and
+    // the reply says so rather than leaving an agent to notice.
+    expect(reply.cost?.complete).toBe(false)
+    expect(reply.caveats.some((caveat) => caveat.includes('a floor rather than a price'))).toBe(
+      true,
+    )
+    // This is the cost of holding the formwork, not of forming the job.
+    expect(reply.cost?.excludes.some((entry) => entry.includes('labour'))).toBe(true)
+  })
+
+  test('the minimum hire period is what the invoice reconciles with', async () => {
+    // A wall form struck in 12 hours against a 28-day minimum is charged for 28 days,
+    // and on a fast cycle that difference is most of the cost of the job.
+    load(twoLevels())
+    const plain = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const panel = plain.bom.find((line) => line.catalogId !== null) as { catalogId: string }
+    const rate = { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } }
+
+    load(withSettings(twoLevels(), { rates: { byCatalogId: rate } }))
+    const held = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    load(withSettings(twoLevels(), { rates: { minHireDays: 28, byCatalogId: rate } }))
+    const charged = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    const line = charged.bom.find((row) => row.catalogId === panel.catalogId)
+    expect(line?.daysCharged).toBe(28)
+    expect(line?.atMinimumHirePeriod).toBe(true)
+    expect(charged.cost?.linesAtMinimumHirePeriod).toBe(1)
+    expect(held.cost?.hire).toBeGreaterThan(0)
+    expect(charged.cost?.hire).toBeGreaterThan((held.cost?.hire as number) * 10)
+    expect(charged.caveats.some((c) => c.includes('pouring more with the same set'))).toBe(true)
+  })
+
   test('an empty scene answers rather than throwing', async () => {
     const bill = await call<BillReply>('inspect_project_formwork')
     const validation = await call<Reply>('validate_formwork')
@@ -727,8 +807,17 @@ describe('the formwork MCP tools', () => {
   describe('the project settings pair', () => {
     interface SettingsReply {
       anythingStated: boolean
-      resolved: { riseRateMH: number; concreteTemperatureC: number; pressureStandard: string }
-      stated: { placement?: Record<string, number>; curing?: Record<string, number> } | null
+      resolved: {
+        riseRateMH: number
+        concreteTemperatureC: number
+        pressureStandard: string
+        rates: Record<string, unknown> | null
+      }
+      stated: {
+        placement?: Record<string, number>
+        curing?: Record<string, number>
+        rates?: Record<string, unknown>
+      } | null
       assumedDefaults: { riseRateMH: number; concreteTemperatureC: number }
       shuttersAffectedByAChange: number
     }
@@ -752,6 +841,9 @@ describe('the formwork MCP tools', () => {
       expect(reply.anythingStated).toBe(false)
       expect(reply.stated).toBeNull()
       expect(reply.resolved.riseRateMH).toBe(reply.assumedDefaults.riseRateMH)
+      // Null, not an empty table: the two commercial groups have no assumed default, so
+      // "nobody has recorded a rate" is the answer rather than "this job costs nothing".
+      expect(reply.resolved.rates).toBeNull()
       // The count is what a write would reach, so the caller can say so before writing.
       expect(reply.shuttersAffectedByAChange).toBe(2)
       expect(settingsNodes()).toHaveLength(0)
@@ -884,6 +976,81 @@ describe('the formwork MCP tools', () => {
       expect(reply.bom.find((row) => row.catalogId === panel.catalogId)?.toHire).toBe(
         panel.quantity - 4,
       )
+    })
+
+    test('a rate stated here is what puts money on the bill at all', async () => {
+      // The parity that matters most on this group: without the write, an outside agent
+      // could read that a bill has no price and have no way to record one.
+      load(twoLevels())
+      const plain = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+      const panel = plain.bom.find((line) => line.catalogId !== null) as { catalogId: string }
+      expect(plain.cost).toBeUndefined()
+
+      await call('set_formwork_settings', {
+        rates: {
+          currency: 'GBP',
+          minHireDays: 28,
+          byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } },
+        },
+      })
+      const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+      expect(reply.cost?.currency).toBe('GBP')
+      expect(reply.cost?.total).toBeGreaterThan(0)
+      expect(reply.cost?.linesAtMinimumHirePeriod).toBe(1)
+    })
+
+    test('a hire percentage with no list price under it is refused rather than stored', async () => {
+      // It would be accepted, reported as recorded, and price nothing — and a model that
+      // has just been told "ok" will tell the user the hire rate is set.
+      load(twoLevels())
+      const plain = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+      const panel = plain.bom.find((line) => line.catalogId !== null) as { catalogId: string }
+
+      const result = await client.callTool({
+        name: 'set_formwork_settings',
+        arguments: { rates: { byCatalogId: { [panel.catalogId]: { rentalPercentPerMonth: 3 } } } },
+      })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
+      expect(text).toContain('no purchasePerUnit')
+      // Refused before the node is written, so the project still has no rates at all.
+      const after = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+      expect(after.cost).toBeUndefined()
+    })
+
+    test('a rate written here is readable back, so the agent can check its own work', async () => {
+      // A field a surface can write and not read is one it cannot verify, and rates are
+      // the group where that matters most: nothing downstream would look wrong.
+      load(twoLevels())
+      const plain = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+      const panel = plain.bom.find((line) => line.catalogId !== null) as { catalogId: string }
+
+      await call('set_formwork_settings', {
+        rates: { currency: 'GBP', byCatalogId: { [panel.catalogId]: { purchasePerUnit: 420 } } },
+      })
+      const reply = await call<SettingsReply>('inspect_formwork_settings')
+
+      expect(reply.stated?.rates).toEqual({
+        currency: 'GBP',
+        byCatalogId: { [panel.catalogId]: { purchasePerUnit: 420 } },
+      })
+    })
+
+    test('a rate against a catalog id that names nothing is refused', async () => {
+      // Same reason the rack's ids are checked, and the same failure: it would be stored
+      // and match no bill line, so the project believes it has priced something.
+      load(twoLevels())
+
+      const result = await client.callTool({
+        name: 'set_formwork_settings',
+        arguments: { rates: { byCatalogId: { 'peri-trio-imaginary': { purchasePerUnit: 100 } } } },
+      })
+
+      expect(result.isError).toBe(true)
+      const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
+      expect(text).toContain('peri-trio-imaginary')
     })
   })
 

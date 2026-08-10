@@ -34,6 +34,7 @@ export const inspectFormworkSettingsOutput = {
     bracing: group,
     parts: group,
     ownedStock: z.record(z.string(), z.number()).nullable(),
+    rates: group.nullable(),
   }),
   stated: z
     .object({
@@ -46,6 +47,7 @@ export const inspectFormworkSettingsOutput = {
       bracing: group.nullable(),
       parts: group.nullable(),
       stock: group.nullable(),
+      rates: group.nullable(),
     })
     .nullable(),
   assumedDefaults: z.object({

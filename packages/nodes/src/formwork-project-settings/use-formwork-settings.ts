@@ -10,6 +10,7 @@ import {
   generateId,
   mergeFormworkCement,
   mergeFormworkOwnedStock,
+  mergeFormworkRates,
   mergeFormworkSettingsGroup,
   runAsSingleSceneHistoryStep,
   useScene,
@@ -160,6 +161,66 @@ export function clearFormworkOwnedStock(): void {
   writeFormworkSettings(() => ({ stock: undefined }) as Partial<AnyNode>)
 }
 
+/**
+ * Record what one catalog part costs. `undefined` for the rate removes the id, `null` for
+ * a field clears just that field.
+ *
+ * Two levels of merge, unlike the rack's one, and the second level is why: a part carries
+ * a list price and a hire term, they come from different documents at different times, and
+ * replacing the rate object would make filling in the second figure delete the first. So
+ * `null` is a real value here — it is the only way to say "clear this one field" in a patch
+ * whose absent keys mean "leave alone".
+ */
+export function setFormworkRate(
+  catalogId: string,
+  patch: Record<string, number | null> | undefined,
+): void {
+  writeFormworkSettings((node) => {
+    const fields =
+      patch === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(patch).map(([key, value]) => [key, value === null ? undefined : value]),
+          )
+    return {
+      rates: mergeFormworkRates(node.rates, { byCatalogId: { [catalogId]: fields } }),
+    } as Partial<AnyNode>
+  })
+}
+
+/**
+ * Record the agreement's own terms — the currency and the minimum hire period.
+ *
+ * On the group rather than on each part because a minimum hire period is a term of an
+ * agreement, not a property of a product, and repeating it against forty ids is
+ * thirty-nine copies that go stale. An empty patch opens the group without stating
+ * anything in it, which is the difference between a project that has looked at its rates
+ * and one that never has.
+ */
+export function setFormworkRateTerms(patch: {
+  currency?: string | null
+  minHireDays?: number | null
+}): void {
+  writeFormworkSettings(
+    (node) =>
+      ({
+        rates: mergeFormworkRates(
+          node.rates,
+          {
+            ...('currency' in patch ? { currency: patch.currency ?? undefined } : {}),
+            ...('minHireDays' in patch ? { minHireDays: patch.minHireDays ?? undefined } : {}),
+          },
+          { currency: 'currency' in patch, minHireDays: 'minHireDays' in patch },
+        ),
+      }) as Partial<AnyNode>,
+  )
+}
+
+/** Drops the rates back to unstated, which takes the money off the takeoff entirely. */
+export function clearFormworkRates(): void {
+  writeFormworkSettings(() => ({ rates: undefined }) as Partial<AnyNode>)
+}
+
 /** Hands the whole project back to the shipped defaults. */
 export function clearFormworkSettings(): void {
   writeFormworkSettings(
@@ -169,10 +230,12 @@ export function clearFormworkSettings(): void {
         measurementStandard: undefined,
         concrete: undefined,
         placement: undefined,
+        curing: undefined,
         falseworkLoads: undefined,
         bracing: undefined,
         parts: undefined,
         stock: undefined,
+        rates: undefined,
       }) as Partial<AnyNode>,
   )
 }
@@ -187,6 +250,9 @@ export function useFormworkSettingsWriter(): {
   setCementField: typeof setFormworkCementField
   setOwnedStock: typeof setFormworkOwnedStock
   clearOwnedStock: typeof clearFormworkOwnedStock
+  setRate: typeof setFormworkRate
+  setRateTerms: typeof setFormworkRateTerms
+  clearRates: typeof clearFormworkRates
   clearAll: typeof clearFormworkSettings
 } {
   return useMemo(
@@ -196,6 +262,9 @@ export function useFormworkSettingsWriter(): {
       setCementField: setFormworkCementField,
       setOwnedStock: setFormworkOwnedStock,
       clearOwnedStock: clearFormworkOwnedStock,
+      setRate: setFormworkRate,
+      setRateTerms: setFormworkRateTerms,
+      clearRates: clearFormworkRates,
       clearAll: clearFormworkSettings,
     }),
     [],

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import type { FormworkProjectSettingsNode } from '../../schema/nodes/formwork-project-settings'
-import { DEFAULT_FORMWORK_SETTINGS, formworkSettings, mergeFormworkOwnedStock } from './settings'
+import {
+  DEFAULT_FORMWORK_SETTINGS,
+  formworkSettings,
+  mergeFormworkOwnedStock,
+  mergeFormworkRates,
+} from './settings'
 
 /**
  * What the project stated, and what it merely has not said.
@@ -103,6 +108,147 @@ describe('formworkSettings owned stock', () => {
     // `stock: {}` is a group that exists with nothing in it — reached by a patch that
     // set some future sibling field. Nobody has said what the yard owns.
     expect(formworkSettings(node({ stock: {} })).ownedStock).toBeUndefined()
+  })
+})
+
+describe('mergeFormworkRates', () => {
+  it('keeps the rest of the table when one part is priced', () => {
+    // The rack's failure again: a rate table is filled in one line at a time, and a
+    // one-level merge would replace `byCatalogId` wholesale.
+    const merged = mergeFormworkRates(
+      { byCatalogId: { 'panel-a': { purchasePerUnit: 200 } } },
+      { byCatalogId: { 'prop-b': { purchasePerUnit: 40 } } },
+    )
+
+    expect(merged.byCatalogId).toEqual({
+      'panel-a': { purchasePerUnit: 200 },
+      'prop-b': { purchasePerUnit: 40 },
+    })
+  })
+
+  it('merges the fields of one part rather than replacing the rate', () => {
+    // The difference from the rack, where the value is a single number. Here a list
+    // price and a hire term are entered at different times by different people, so
+    // replacing the object would make filling in the second delete the first.
+    const merged = mergeFormworkRates(
+      { byCatalogId: { 'panel-a': { purchasePerUnit: 200 } } },
+      { byCatalogId: { 'panel-a': { rentalPercentPerMonth: 3 } } },
+    )
+
+    expect(merged.byCatalogId).toEqual({
+      'panel-a': { purchasePerUnit: 200, rentalPercentPerMonth: 3 },
+    })
+  })
+
+  it('clears one field of a rate without removing the part', () => {
+    const merged = mergeFormworkRates(
+      { byCatalogId: { 'panel-a': { purchasePerUnit: 200, rentalPercentPerMonth: 3 } } },
+      { byCatalogId: { 'panel-a': { rentalPercentPerMonth: undefined } } },
+    )
+
+    expect(merged.byCatalogId).toEqual({ 'panel-a': { purchasePerUnit: 200 } })
+  })
+
+  it('removes a part on undefined', () => {
+    const merged = mergeFormworkRates(
+      { byCatalogId: { 'panel-a': { purchasePerUnit: 200 }, 'prop-b': { purchasePerUnit: 40 } } },
+      { byCatalogId: { 'panel-a': undefined } },
+    )
+
+    expect(merged.byCatalogId).toEqual({ 'prop-b': { purchasePerUnit: 40 } })
+  })
+
+  it('drops a part whose last figure was cleared', () => {
+    // An id with no figures against it is a row nothing can price and nothing reports,
+    // so leaving `{}` behind would make the table claim a rate it does not hold.
+    const merged = mergeFormworkRates(
+      { byCatalogId: { 'panel-a': { purchasePerUnit: 200 } } },
+      { byCatalogId: { 'panel-a': { purchasePerUnit: undefined } } },
+    )
+
+    expect(merged.byCatalogId).toEqual({})
+  })
+
+  it('keeps the group when the table empties, rather than dropping to unstated', () => {
+    // Same as the rack and for the same reason: a project that has removed every rate
+    // has stated it prices nothing, and collapsing that to absent takes the money off
+    // the takeoff entirely.
+    const merged = mergeFormworkRates(
+      { currency: 'GBP', byCatalogId: { 'panel-a': { purchasePerUnit: 200 } } },
+      { byCatalogId: { 'panel-a': undefined } },
+    )
+
+    expect(merged).toEqual({ currency: 'GBP', byCatalogId: {} })
+  })
+
+  it('keeps an unmentioned currency and minimum period', () => {
+    const merged = mergeFormworkRates(
+      { currency: 'GBP', minHireDays: 28, byCatalogId: {} },
+      { byCatalogId: { 'panel-a': { purchasePerUnit: 200 } } },
+    )
+
+    expect(merged.currency).toBe('GBP')
+    expect(merged.minHireDays).toBe(28)
+  })
+
+  it('clears a group field only where the caller says it named it', () => {
+    // `undefined` alone cannot carry the difference: an absent key in a patch object and
+    // a key holding undefined look the same to a spread, and one means "leave the
+    // minimum hire period alone" while the other means "we have no minimum".
+    const skipped = mergeFormworkRates({ minHireDays: 28, byCatalogId: {} }, {})
+    const cleared = mergeFormworkRates(
+      { minHireDays: 28, byCatalogId: {} },
+      { minHireDays: undefined },
+      { minHireDays: true },
+    )
+
+    expect(skipped.minHireDays).toBe(28)
+    expect(cleared.minHireDays).toBeUndefined()
+  })
+
+  it('starts a table from an absent group', () => {
+    const merged = mergeFormworkRates(undefined, {
+      currency: 'AED',
+      byCatalogId: { 'panel-a': { purchasePerUnit: 200 } },
+    })
+
+    expect(merged).toEqual({
+      currency: 'AED',
+      byCatalogId: { 'panel-a': { purchasePerUnit: 200 } },
+    })
+  })
+})
+
+describe('formworkSettings rates', () => {
+  it('leaves the rates unresolved where the project has recorded none', () => {
+    // The sharpest version of the rack's rule. A rate is the only input in the model
+    // with no conservative fallback: zero prices the job at nothing, and anything else
+    // invents a price.
+    expect(formworkSettings(node()).rates).toBeUndefined()
+    expect(DEFAULT_FORMWORK_SETTINGS.rates).toBeUndefined()
+  })
+
+  it('resolves a stated group with no table to an empty table', () => {
+    // A priced answer of nothing recorded, which is not the same as no money at all.
+    expect(formworkSettings(node({ rates: {} })).rates).toEqual({ byCatalogId: {} })
+  })
+
+  it('passes the currency and the minimum hire period through', () => {
+    const resolved = formworkSettings(
+      node({
+        rates: {
+          currency: 'GBP',
+          minHireDays: 28,
+          byCatalogId: { 'panel-a': { purchasePerUnit: 200 } },
+        },
+      }),
+    )
+
+    expect(resolved.rates).toEqual({
+      currency: 'GBP',
+      minHireDays: 28,
+      byCatalogId: { 'panel-a': { purchasePerUnit: 200 } },
+    })
   })
 })
 

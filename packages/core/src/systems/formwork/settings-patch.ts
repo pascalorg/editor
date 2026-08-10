@@ -7,12 +7,14 @@ import {
   SHEATHING_TYPES,
   STOCKABLE_CATALOG_PARTS,
 } from './catalog'
+import type { RateTable } from './cost'
 import {
   DEFAULT_FORMWORK_SETTINGS,
   type FormworkSettingsGroup,
   formworkSettings,
   mergeFormworkCement,
   mergeFormworkOwnedStock,
+  mergeFormworkRates,
   mergeFormworkSettingsGroup,
 } from './settings'
 
@@ -302,6 +304,78 @@ const STOCK_PATCH = z.record(
 )
 
 /**
+ * What the project pays for one catalog part.
+ *
+ * Three fields rather than a `basis` enum, because the basis is a property of the line
+ * and not of the part: `bomSupply` has already decided which of a panel type's 26 are
+ * hired and which are spent, and a model stating `basis: 'purchase'` against a panel the
+ * bill hires would be a second answer to a settled question. So a part carries what it
+ * is worth and what it costs to hold, and the bill decides which applies — a hired panel
+ * drilled for this pour needs both.
+ */
+const PART_RATE_PATCH = z.object({
+  purchasePerUnit: z
+    .number()
+    .positive()
+    .max(10_000_000)
+    .nullable()
+    .optional()
+    .describe(
+      'list price of one, new. Also what an altered hired part is recharged at, and what the hire percentage is a percentage of',
+    ),
+  rentalPercentPerMonth: z
+    .number()
+    .positive()
+    .max(100)
+    .nullable()
+    .optional()
+    .describe(
+      'hire as a percentage of new value per month — how the trade quotes it, usually 2–4 %. Needs purchasePerUnit to resolve to money',
+    ),
+  rentalPerUnitPerMonth: z
+    .number()
+    .positive()
+    .max(1_000_000)
+    .nullable()
+    .optional()
+    .describe(
+      'a flat hire quote per unit per month. Overrides the percentage where both are stated, because an actual quote beats a rule of thumb applied to a list price',
+    ),
+})
+
+/**
+ * The rate table, keyed by catalog id like the rack.
+ *
+ * Validated against `CATALOG_IDS` for the same reason the rack is, and with the same
+ * consequence: a rate against an id that names nothing can never be matched by a bill
+ * line, so it would be accepted, stored, and price exactly nothing.
+ */
+const RATES_PATCH = z.object({
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullable()
+    .optional()
+    .describe('ISO 4217, e.g. GBP — so no figure is ever reported as a bare number'),
+  minHireDays: z
+    .number()
+    .int()
+    .positive()
+    .max(3650)
+    .nullable()
+    .optional()
+    .describe(
+      "the agreement's minimum hire period, days. On a fast cycle this is most of the cost: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days",
+    ),
+  byCatalogId: z
+    .record(z.string().max(120), PART_RATE_PATCH.nullable())
+    .optional()
+    .describe(
+      'rate per catalog id. Merged into what is recorded, so pass only the parts you are changing; a field set to null clears that field and null against a whole id removes it',
+    ),
+})
+
+/**
  * The whole write, as a tool's input shape.
  *
  * A raw shape rather than a `z.object` so an MCP `inputSchema` can take it directly
@@ -340,6 +414,9 @@ export const formworkSettingsPatchInput = {
   ownedStock: STOCK_PATCH.optional().describe(
     'how many of each catalog id the yard owns, keyed by id — a bill draws on these before it hires. Merged into what is already recorded, so pass only the types you are changing; null against an id removes it. Until a project records this, the takeoff reports no owned/hired split at all rather than putting the whole bill on hire',
   ),
+  rates: RATES_PATCH.optional().describe(
+    'what this project pays per catalog part, and the terms that apply across them. This is the one input in the whole formwork model that no code publishes and no product carries, so ask the user for it and never infer it: there is no conservative default to fall back to, and a project that has recorded nothing gets no money on its takeoff at all rather than a plausible figure. It is recorded on the project rather than on the catalog because a price is a commercial fact about this job — the same panel is different money to two yards in the same city, and different money again next quarter',
+  ),
 }
 
 export const FormworkSettingsPatch = z.object(formworkSettingsPatchInput)
@@ -347,17 +424,54 @@ export type FormworkSettingsPatch = z.infer<typeof FormworkSettingsPatch>
 
 /** The description every surface's write tool carries, so the guidance cannot diverge either. */
 export const SET_FORMWORK_SETTINGS_DESCRIPTION =
-  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off.'
+  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Two of the groups are commercial rather than structural and behave differently: ownedStock and rates are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes.'
 
 /** The description every surface's read tool carries. */
 export const INSPECT_FORMWORK_SETTINGS_DESCRIPTION =
-  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports ownedStock, what the yard owns by catalog id, which is not a design input but is what the takeoff splits owned from hired against — null there means nobody has recorded a rack, which is not the same as a yard that owns nothing. One settings record per scene, so this takes no arguments.'
+  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. One settings record per scene, so this takes no arguments.'
 
 /** The first stock id that names nothing in the catalog, as the error a model reads back. */
 function unknownStockId(patch: Readonly<Record<string, unknown>>): string | undefined {
   for (const catalogId of Object.keys(patch)) {
     if (!CATALOG_IDS.has(catalogId)) {
       return `Error: no catalog id "${catalogId}" — a stock entry that matches no part would be stored and change nothing. Read inspect_project_formwork for the ids this job's bill actually uses.`
+    }
+  }
+  return undefined
+}
+
+/**
+ * The first rate that names nothing in the catalog, or that resolves to no money.
+ *
+ * The second check is the one worth having. A percentage of new value with no new value
+ * recorded is not a rate — it is a rate for a figure the project has not stated — and it
+ * would be stored, reported as recorded, and price nothing. Refused rather than accepted
+ * with a gap, because a model that has just been told "ok" will tell the user the hire
+ * rate is set.
+ */
+function unknownRate(
+  patch: NonNullable<FormworkSettingsPatch['rates']>,
+  current: FormworkProjectSettingsNode['rates'],
+): string | undefined {
+  for (const [catalogId, rate] of Object.entries(patch.byCatalogId ?? {})) {
+    if (!CATALOG_IDS.has(catalogId)) {
+      return `Error: no catalog id "${catalogId}" — a rate against a part no bill line carries would be stored and price nothing. Read inspect_project_formwork for the ids this job's bill actually uses.`
+    }
+    if (rate === null) continue
+    // Against the merged result, not the patch alone: adding a percentage to a part whose
+    // list price is already recorded is the ordinary way this table gets filled in, and
+    // refusing it would make the two fields impossible to state in either order.
+    const recorded = current?.byCatalogId?.[catalogId]
+    const purchase =
+      rate.purchasePerUnit === undefined
+        ? recorded?.purchasePerUnit
+        : (rate.purchasePerUnit ?? null)
+    const flat =
+      rate.rentalPerUnitPerMonth === undefined
+        ? recorded?.rentalPerUnitPerMonth
+        : (rate.rentalPerUnitPerMonth ?? null)
+    if (rate.rentalPercentPerMonth != null && flat == null && purchase == null) {
+      return `Error: "${catalogId}" has a hire percentage but no purchasePerUnit for it to be a percentage of, so it would price nothing. State the list price too, or give rentalPerUnitPerMonth as a flat rate.`
     }
   }
   return undefined
@@ -426,9 +540,14 @@ export function applyFormworkSettingsPatch(
   current: FormworkProjectSettingsNode | undefined,
   patch: FormworkSettingsPatch,
 ): FormworkSettingsPatchResult {
-  const { cement, ownedStock, ...groups } = patch
+  const { cement, ownedStock, rates, ...groups } = patch
   const stated = Object.entries(groups).filter(([, value]) => value !== undefined)
-  if (stated.length === 0 && cement === undefined && ownedStock === undefined) {
+  if (
+    stated.length === 0 &&
+    cement === undefined &&
+    ownedStock === undefined &&
+    rates === undefined
+  ) {
     return { error: 'Error: nothing to set — pass at least one field' }
   }
   if (groups.parts) {
@@ -437,6 +556,10 @@ export function applyFormworkSettingsPatch(
   }
   if (ownedStock) {
     const bad = unknownStockId(ownedStock)
+    if (bad) return { error: bad }
+  }
+  if (rates) {
+    const bad = unknownRate(rates, current?.rates)
     if (bad) return { error: bad }
   }
 
@@ -483,6 +606,28 @@ export function applyFormworkSettingsPatch(
     changed.push('ownedStock')
   }
 
+  if (rates !== undefined) {
+    // Two levels like the rack, and one difference: a *field* of one id's rate can be
+    // cleared without removing the id, because a list price and a hire term are entered
+    // at different times and replacing the object would make filling in the second delete
+    // the first. `stated` carries which of the two group-level fields this call named, so
+    // an explicit null clears rather than being read as "left alone".
+    const byCatalogId: Record<string, Record<string, number | undefined> | undefined> = {}
+    for (const [catalogId, rate] of Object.entries(rates.byCatalogId ?? {})) {
+      byCatalogId[catalogId] = rate === null ? undefined : (toPatch(rate) as never)
+    }
+    writes.rates = mergeFormworkRates(
+      base.rates,
+      {
+        ...(rates.currency === undefined ? {} : { currency: rates.currency ?? undefined }),
+        ...(rates.minHireDays === undefined ? {} : { minHireDays: rates.minHireDays ?? undefined }),
+        byCatalogId,
+      },
+      { currency: rates.currency !== undefined, minHireDays: rates.minHireDays !== undefined },
+    )
+    changed.push('rates')
+  }
+
   return { writes: writes as Partial<FormworkProjectSettingsNode>, changed }
 }
 
@@ -516,6 +661,12 @@ export interface FormworkSettingsReport {
      * yard that has recorded owning nothing.
      */
     ownedStock: Record<string, number> | null
+    /**
+     * Null for a project that has recorded no rates, which is the answer that means the
+     * takeoff carries no money at all. An empty `byCatalogId` is the other answer: the
+     * project opened the table and priced nothing.
+     */
+    rates: RateTable | null
   }
   /**
    * Only what the project actually said. Anything absent here but present in `resolved`
@@ -531,6 +682,7 @@ export interface FormworkSettingsReport {
     bracing: NonNullable<FormworkProjectSettingsNode['bracing']> | null
     parts: NonNullable<FormworkProjectSettingsNode['parts']> | null
     stock: NonNullable<FormworkProjectSettingsNode['stock']> | null
+    rates: NonNullable<FormworkProjectSettingsNode['rates']> | null
   } | null
   /**
    * The four figures the engine supplies when nobody has. There is no curing entry
@@ -564,6 +716,7 @@ export function formworkSettingsReport(
       bracing: resolved.bracing,
       parts: resolved.parts,
       ownedStock: resolved.ownedStock ?? null,
+      rates: resolved.rates ?? null,
     },
     stated: node
       ? {
@@ -576,6 +729,7 @@ export function formworkSettingsReport(
           bracing: node.bracing ?? null,
           parts: node.parts ?? null,
           stock: node.stock ?? null,
+          rates: node.rates ?? null,
         }
       : null,
     assumedDefaults: {

@@ -229,6 +229,120 @@ describe('applyFormworkSettingsPatch — the yard’s own rack', () => {
   })
 })
 
+describe('applyFormworkSettingsPatch — what the project pays', () => {
+  const PANEL = 'doka-framax-panel-588104500'
+  const OTHER = 'doka-framax-panel-588223500'
+
+  test('a rate against an id that names nothing is refused', () => {
+    // Same consequence as the rack's: it would be stored, reported as recorded, and
+    // never match a bill line — so a model that was told "ok" tells the user the panel
+    // is priced.
+    const result = apply(undefined, {
+      rates: { byCatalogId: { 'doka-framax-panel-90x270': { purchasePerUnit: 200 } } },
+    })
+
+    expect(result.error).toContain('price nothing')
+    expect(result.writes).toBeUndefined()
+  })
+
+  test('a hire percentage with nothing to be a percentage of is refused', () => {
+    const result = apply(undefined, {
+      rates: { byCatalogId: { [PANEL]: { rentalPercentPerMonth: 3 } } },
+    })
+
+    expect(result.error).toContain('percentage of')
+    expect(result.writes).toBeUndefined()
+  })
+
+  test('a hire percentage is accepted against a list price already recorded', () => {
+    // The ordinary way this table gets filled in — the two fields are entered at
+    // different times, and validating the patch in isolation would make them
+    // impossible to state in either order.
+    const result = apply(node({ rates: { byCatalogId: { [PANEL]: { purchasePerUnit: 200 } } } }), {
+      rates: { byCatalogId: { [PANEL]: { rentalPercentPerMonth: 3 } } },
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.writes?.rates?.byCatalogId?.[PANEL]).toEqual({
+      purchasePerUnit: 200,
+      rentalPercentPerMonth: 3,
+    })
+  })
+
+  test('a hire percentage is accepted beside a flat rate, which needs no list price', () => {
+    const result = apply(undefined, {
+      rates: { byCatalogId: { [PANEL]: { rentalPercentPerMonth: 3, rentalPerUnitPerMonth: 6 } } },
+    })
+
+    expect(result.error).toBeUndefined()
+  })
+
+  test('a second part merges instead of replacing the table', () => {
+    const result = apply(node({ rates: { byCatalogId: { [PANEL]: { purchasePerUnit: 200 } } } }), {
+      rates: { byCatalogId: { [OTHER]: { purchasePerUnit: 260 } } },
+    })
+
+    expect(result.writes?.rates?.byCatalogId).toEqual({
+      [PANEL]: { purchasePerUnit: 200 },
+      [OTHER]: { purchasePerUnit: 260 },
+    })
+  })
+
+  test('null against a field clears it without removing the part', () => {
+    const result = apply(
+      node({
+        rates: { byCatalogId: { [PANEL]: { purchasePerUnit: 200, rentalPercentPerMonth: 3 } } },
+      }),
+      { rates: { byCatalogId: { [PANEL]: { rentalPercentPerMonth: null } } } },
+    )
+
+    expect(result.writes?.rates?.byCatalogId).toEqual({ [PANEL]: { purchasePerUnit: 200 } })
+  })
+
+  test('null against a whole part removes it', () => {
+    const result = apply(
+      node({
+        rates: {
+          byCatalogId: { [PANEL]: { purchasePerUnit: 200 }, [OTHER]: { purchasePerUnit: 260 } },
+        },
+      }),
+      { rates: { byCatalogId: { [PANEL]: null } } },
+    )
+
+    expect(result.writes?.rates?.byCatalogId).toEqual({ [OTHER]: { purchasePerUnit: 260 } })
+  })
+
+  test('an emptied table stays stated rather than reverting to nobody having said', () => {
+    const result = apply(node({ rates: { byCatalogId: { [PANEL]: { purchasePerUnit: 200 } } } }), {
+      rates: { byCatalogId: { [PANEL]: null } },
+    })
+
+    expect(result.writes?.rates).toEqual({ byCatalogId: {} })
+  })
+
+  test('null against the minimum hire period clears it rather than being skipped', () => {
+    // The one place an absent key and a null diverge at the group's own level: skipped,
+    // a project that has dropped its minimum keeps being charged 28 days a line.
+    const result = apply(node({ rates: { minHireDays: 28, byCatalogId: {} } }), {
+      rates: { minHireDays: null },
+    })
+
+    expect(result.writes?.rates).toEqual({ byCatalogId: {} })
+  })
+
+  test('a currency and a minimum period on their own are a real call', () => {
+    const result = apply(undefined, { rates: { currency: 'GBP', minHireDays: 28 } })
+
+    expect(result.error).toBeUndefined()
+    expect(result.changed).toEqual(['rates'])
+    expect(result.writes?.rates).toEqual({ currency: 'GBP', minHireDays: 28, byCatalogId: {} })
+  })
+
+  test('a lower-case currency is refused, because ISO 4217 is what a surface formats against', () => {
+    expect(FormworkSettingsPatch.safeParse({ rates: { currency: 'gbp' } }).success).toBe(false)
+  })
+})
+
 describe('formworkSettingsReport', () => {
   test('reports the assumed defaults as assumed on an untouched project', () => {
     const report = formworkSettingsReport(undefined)
@@ -260,6 +374,19 @@ describe('formworkSettingsReport', () => {
     const report = formworkSettingsReport(node({ stock: { owned: {} } }))
 
     expect(report.resolved.ownedStock).toEqual({})
+  })
+
+  test('unrecorded rates read as null, which is what "no money on the takeoff" means', () => {
+    const report = formworkSettingsReport(node({ placement: { riseRateMH: 2 } }))
+
+    expect(report.resolved.rates).toBeNull()
+    expect(report.stated?.rates).toBeNull()
+  })
+
+  test('a stated table with nothing in it reads as an empty table', () => {
+    const report = formworkSettingsReport(node({ rates: { currency: 'GBP' } }))
+
+    expect(report.resolved.rates).toEqual({ currency: 'GBP', byCatalogId: {} })
   })
 
   test('curing is reported unstated rather than resolved to a default', () => {

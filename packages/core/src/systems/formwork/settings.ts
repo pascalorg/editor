@@ -1,5 +1,6 @@
 import type { FormworkProjectSettingsNode } from '../../schema/nodes/formwork-project-settings'
 import type { AnyNode } from '../../schema/types'
+import type { RateTable } from './cost'
 import { DEFAULT_MEASUREMENT_STANDARD_ID, type MeasurementStandardId } from './measurement'
 import {
   DEFAULT_PRESSURE_STANDARD_ID,
@@ -74,6 +75,16 @@ export interface FormworkSettings {
    * supplied the input for is not an answer with a convenient value.
    */
   ownedStock: OwnedStock | undefined
+  /**
+   * What the project pays, or `undefined` where nobody has recorded a rate.
+   *
+   * Undefaulted for the same reason as `ownedStock`, and a sharper one. A rate is the
+   * only input in this whole model that no code publishes and no product carries, so
+   * there is nothing conservative to fall back to: a default of zero prices a job at
+   * nothing and a default of anything else invents a price. So absent means the takeoff
+   * carries no money at all, and the surfaces say so rather than showing a total.
+   */
+  rates: RateTable | undefined
 }
 
 /**
@@ -94,6 +105,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   bracing: {},
   parts: {},
   ownedStock: undefined,
+  rates: undefined,
 }
 
 /**
@@ -130,6 +142,17 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
     bracing: node.bracing ?? {},
     parts: node.parts ?? {},
     ownedStock: node.stock?.owned,
+    // A stated group with an empty table resolves to an empty table rather than to
+    // `undefined`, which keeps the same distinction the rack draws: a project that has
+    // opened the rates and entered nothing gets a priced answer of nothing recorded,
+    // where a project that has never opened them gets no money at all.
+    rates: node.rates
+      ? {
+          ...(node.rates.currency === undefined ? {} : { currency: node.rates.currency }),
+          ...(node.rates.minHireDays === undefined ? {} : { minHireDays: node.rates.minHireDays }),
+          byCatalogId: node.rates.byCatalogId ?? {},
+        }
+      : undefined,
   }
 }
 
@@ -164,6 +187,7 @@ export type FormworkSettingsGroup =
   | 'bracing'
   | 'parts'
   | 'stock'
+  | 'rates'
 
 /**
  * Merge a patch into one of the settings sub-objects, returning the value to write
@@ -256,4 +280,63 @@ export function mergeFormworkOwnedStock(
     else owned[catalogId] = quantity
   }
   return { owned }
+}
+
+/**
+ * Merge rates into `rates`, returning the whole group.
+ *
+ * `byCatalogId` is the rack's problem again — the generic merge replaces the key
+ * wholesale, so recording one panel's price would forget every other price the project
+ * has entered, and a rate table is filled in one line at a time. `undefined` against an
+ * id removes it, which is how a project drops a part it no longer prices.
+ *
+ * A rate for one id is *merged* rather than replaced, so stating a hire percentage does
+ * not wipe the list price beside it. That is the difference from the rack, where the
+ * value is one number: here a part carries a purchase price and a hire term, they are
+ * entered at different times by different people, and replacing the object would make
+ * filling in the second field delete the first. `null` against a *field* clears just
+ * that field, and an emptied rate drops the id rather than leaving `{}` behind — an id
+ * with no figures in it is a row nothing can price and nothing reports.
+ *
+ * The group itself is kept even when the table empties, exactly as `stock` is: a project
+ * that has removed every rate has stated it prices nothing, and dropping back to absent
+ * would turn that into "nobody has said" and take the money off the takeoff entirely.
+ * The caller clears the group by patching `rates` itself.
+ */
+export function mergeFormworkRates(
+  current: FormworkProjectSettingsNode['rates'],
+  patch: {
+    currency?: string | undefined
+    minHireDays?: number | undefined
+    byCatalogId?: Readonly<Record<string, Readonly<Record<string, number | undefined>> | undefined>>
+  },
+  /** Fields explicitly named in the patch, so `undefined` clears rather than skips. */
+  stated: { currency?: boolean; minHireDays?: boolean } = {},
+): NonNullable<FormworkProjectSettingsNode['rates']> {
+  const byCatalogId: Record<string, Record<string, number>> = {}
+  for (const [catalogId, rate] of Object.entries(current?.byCatalogId ?? {})) {
+    byCatalogId[catalogId] = { ...rate }
+  }
+  for (const [catalogId, rate] of Object.entries(patch.byCatalogId ?? {})) {
+    if (rate === undefined) {
+      delete byCatalogId[catalogId]
+      continue
+    }
+    const merged: Record<string, number> = { ...(byCatalogId[catalogId] ?? {}) }
+    for (const [field, value] of Object.entries(rate)) {
+      if (value === undefined) delete merged[field]
+      else merged[field] = value
+    }
+    if (Object.keys(merged).length === 0) delete byCatalogId[catalogId]
+    else byCatalogId[catalogId] = merged
+  }
+
+  const out: Record<string, unknown> = { byCatalogId }
+  const currency = stated.currency ? patch.currency : (patch.currency ?? current?.currency)
+  const minHireDays = stated.minHireDays
+    ? patch.minHireDays
+    : (patch.minHireDays ?? current?.minHireDays)
+  if (currency !== undefined) out.currency = currency
+  if (minHireDays !== undefined) out.minHireDays = minHireDays
+  return out as NonNullable<FormworkProjectSettingsNode['rates']>
 }

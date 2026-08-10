@@ -83,6 +83,7 @@ export function takeoffCsv(
       caveats: projectFormworkCaveats(solution),
       ...(solution.supply ? { supply: solution.supply } : {}),
       hire: solution.hire,
+      ...(solution.cost ? { cost: solution.cost } : {}),
     }),
   }
 }

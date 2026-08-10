@@ -216,6 +216,72 @@ export const FormworkStockSettings = z.object({
 export type FormworkStockSettings = z.infer<typeof FormworkStockSettings>
 
 /**
+ * What one of a catalog part costs this project.
+ *
+ * Two figures rather than one, and not a `basis` discriminator, because the basis is a
+ * property of the *line* rather than of the part. `bomSupply` has already decided which
+ * of a panel type's 26 are off the yard's rack, which are hired and which are spent, and
+ * a `basis: 'purchase'` recorded here against a panel the bill hires would be a second
+ * answer to a question already answered — with no rule for which of the two wins.
+ *
+ * So the part carries what it is worth and what it costs to hold, and the bill decides
+ * which applies. A hired panel drilled for this pour needs *both*: the hire while it is
+ * held, and the list price recharged because it does not go back as stock.
+ *
+ * `rentalPercentPerMonth` is how the trade actually quotes hire — a percentage of new
+ * value per month, typically 2–4 % — which is why it is a percentage of
+ * `purchasePerUnit` rather than a second money figure. `rentalPerUnitPerMonth` is for a
+ * desk that quoted a flat rate, and it wins over the percentage: an actual quote beats a
+ * rule of thumb applied to a list price.
+ */
+export const PartRate = z.object({
+  /** List price of one, new — what a recharge is charged at and what a percentage is of. */
+  purchasePerUnit: z.number().finite().positive().max(10_000_000).optional(),
+  /** Hire as a percentage of new value per month. 2–4 % is the usual band. */
+  rentalPercentPerMonth: z.number().finite().positive().max(100).optional(),
+  /** A flat hire quote per unit per month, which overrides the percentage. */
+  rentalPerUnitPerMonth: z.number().finite().positive().max(1_000_000).optional(),
+})
+export type PartRate = z.infer<typeof PartRate>
+
+/**
+ * What the project pays, by catalog id — the one input a bill needs that no code
+ * publishes and no product carries.
+ *
+ * On the project rather than on the catalog entry, which is the decision this group
+ * exists to record. `CatalogEntry` carries a weight and a `catalogSource` naming the
+ * published table it came from, and a price has no such table: the same Framax panel is
+ * different money to two yards in the same city, different money to the same yard next
+ * quarter, and different money again under a framework agreement. A field on the shipped
+ * catalog would make that a fact about the product and drift with the catalog edition,
+ * against the whole reason `verification` is on those entries.
+ *
+ * Absent and empty are different claims, exactly as in `FormworkStockSettings.owned`:
+ * absent means nobody has recorded rates and the takeoff carries no money at all, empty
+ * means the project has opened the table and stated nothing in it, which prices the same
+ * and reads differently. `minHireDays` sits on the group rather than on each part because
+ * a minimum hire period is a term of an *agreement*, not a property of a product — the
+ * same reasoning that puts the rates on the project rather than on the catalog — and
+ * repeating it against forty ids is forty copies of one number, thirty-nine of which go
+ * stale.
+ */
+export const FormworkRateSettings = z.object({
+  /** ISO 4217, so a figure is never shown as a bare number. */
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
+  /**
+   * The agreement's minimum hire period, days. A line held two days against a 28-day
+   * minimum is charged for 28, which is most of the cost of a fast cycle.
+   */
+  minHireDays: z.number().int().positive().max(3650).optional(),
+  /** Rate per catalog id — `{ 'framax-xlife-0.60x2.70': { purchasePerUnit: 210 } }`. */
+  byCatalogId: z.record(z.string().trim().max(120), PartRate).optional(),
+})
+export type FormworkRateSettings = z.infer<typeof FormworkRateSettings>
+
+/**
  * How the concrete is cured, which is what decides when the form comes off.
  *
  * A separate group from `placement` rather than three more fields in it, because it
@@ -264,6 +330,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   bracing: BracingSettings.optional(),
   parts: FormworkPartSettings.optional(),
   stock: FormworkStockSettings.optional(),
+  rates: FormworkRateSettings.optional(),
 }).describe(
   dedent`
   Formwork project settings - the pour every shutter in the scene is designed against. One per scene.
@@ -276,6 +343,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - bracing: wind, form weight and raker geometry for wall forms
   - parts: catalog ids for the panel system, sheathing, beam section and prop
   - stock.owned: how many of each catalog id the yard owns, by id; a bill draws on these before it hires. Absent means nobody has said what the project owns, and the takeoff reports no owned/hired split at all rather than putting the whole bill on hire
+  - rates: what the project pays per catalog id — list price, and hire as a percentage of it per month or as a flat monthly rate — plus the agreement's currency and minimum hire period. Here rather than on the catalog because a price is a fact about this project's commercial terms, not about a product: the same panel is different money to two yards. Absent means no rates recorded and the takeoff carries no money at all
   `,
 )
 export type FormworkProjectSettingsNode = z.infer<typeof FormworkProjectSettingsNode>

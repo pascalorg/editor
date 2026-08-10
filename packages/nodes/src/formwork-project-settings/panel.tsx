@@ -42,6 +42,7 @@ import {
   OptionalNumberField,
   OptionalSelectField,
   OptionalToggleField,
+  RateTableField,
   StockRackField,
 } from './settings-fields'
 import { useFormworkSettingsNode, useFormworkSettingsWriter } from './use-formwork-settings'
@@ -116,8 +117,17 @@ function labelFor(options: ReadonlyArray<{ label: string; value: string }>, id: 
 
 export function FormworkSettingsPanel() {
   const node = useFormworkSettingsNode()
-  const { setField, setGroupField, setCementField, setOwnedStock, clearOwnedStock, clearAll } =
-    useFormworkSettingsWriter()
+  const {
+    setField,
+    setGroupField,
+    setCementField,
+    setOwnedStock,
+    clearOwnedStock,
+    setRate,
+    setRateTerms,
+    clearRates,
+    clearAll,
+  } = useFormworkSettingsWriter()
   const concrete = node?.concrete ?? {}
   const placement = node?.placement ?? {}
   const curing = node?.curing ?? {}
@@ -538,6 +548,30 @@ export function FormworkSettingsPanel() {
           options={STOCKABLE_CATALOG_PARTS}
           owned={node?.stock?.owned}
         />
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Rates">
+        <GroupNote>
+          What the project pays, by catalog id — the one input a takeoff needs that no code
+          publishes and no product carries. It is here rather than on the catalog because a price is
+          a fact about this project's commercial terms: the same panel is different money to two
+          yards in the same city, and different again next quarter. So nothing is assumed for a
+          rate, and a bill with no rates carries no money at all rather than a total of zero.
+        </GroupNote>
+        <RateTableField
+          onClear={clearRates}
+          onSetRate={setRate}
+          onSetTerms={setRateTerms}
+          options={STOCKABLE_CATALOG_PARTS}
+          rates={node?.rates}
+        />
+        <GroupNote>
+          This prices what the formwork costs to <em>hold</em> — hire for the period charged, the
+          list price recharged on hired parts this pour alters, and what is spent. It is not the
+          cost of forming the job: there is no labour, no transport and no finance in it, and labour
+          is normally the largest of those. Owned stock is excluded rather than priced at zero,
+          because a panel the yard already holds amortises over a reuse count nothing here records.
+        </GroupNote>
       </PanelSection>
 
       {stated && (
