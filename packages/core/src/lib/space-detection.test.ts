@@ -666,11 +666,11 @@ function topologyOutcome(nodes: Record<string, AnyNode>, spaces: Record<string, 
     .sort((left, right) => left.id.localeCompare(right.id))
   const comparableSurfaces = Object.values(nodes)
     .filter(
-      (node): node is SlabNode | CeilingNode =>
-        (node.type === 'slab' || node.type === 'ceiling') && node.autoFromWalls,
+      (node): node is SlabNode | CeilingNode => node.type === 'slab' || node.type === 'ceiling',
     )
     .map((surface) => ({
       type: surface.type,
+      autoFromWalls: surface.autoFromWalls,
       polygon: canonicalRing(surface.polygon),
       holes: surface.holes
         .map(canonicalRing)
@@ -688,7 +688,7 @@ function topologyOutcome(nodes: Record<string, AnyNode>, spaces: Record<string, 
             recessedRimElevation: surface.recessedRimElevation,
             fillToTerrain: surface.fillToTerrain,
           }
-        : { height: surface.height, childCount: surface.children.length }),
+        : { height: surface.height, children: [...surface.children].sort() }),
     }))
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
   return { spaces: comparableSpaces, surfaces: comparableSurfaces }
@@ -976,12 +976,15 @@ describe('live room topology reconciliation', () => {
     const initialNodes = Object.fromEntries(
       [level, ...walls, ...surfaces].map((node) => [node.id, node]),
     ) as Record<string, AnyNode>
-    const sceneStore = createSceneStoreStub(initialNodes)
-    const editorStore = createEditorStoreStub()
+    const indexedStore = createSceneStoreStub(initialNodes)
+    const indexedEditor = createEditorStoreStub()
+    const fullStore = createSceneStoreStub(initialNodes)
+    const fullEditor = createEditorStoreStub()
     const events: SpaceTopologyReconcileEvent[] = []
-    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+    const unsubscribeIndexed = initSpaceDetectionSync(indexedStore, indexedEditor, {
       onTopologyReconcile: (event) => events.push(event),
     })
+    const unsubscribeFull = initSpaceDetectionSync(fullStore, fullEditor)
 
     try {
       const closingWall = WallNode.parse({
@@ -990,23 +993,31 @@ describe('live room topology reconciliation', () => {
         start: [4, 3],
         end: [6, 3],
       })
-      runWithSceneCommitNodeIds([closingWall.id, level.id], () => {
-        sceneStore.setNodes({
-          ...sceneStore.getState().nodes,
+      const closeCorridor = (store: ReturnType<typeof createSceneStoreStub>) => {
+        store.setNodes({
+          ...store.getState().nodes,
           [closingWall.id]: closingWall,
           [level.id]: { ...level, children: [...level.children, closingWall.id] } as LevelNode,
         })
+      }
+      runWithSceneCommitNodeIds([closingWall.id, level.id], () => {
+        closeCorridor(indexedStore)
       })
+      closeCorridor(fullStore)
 
-      const nodes = Object.values(sceneStore.getState().nodes)
-      expect(Object.values(editorStore.getState().spaces)).toHaveLength(3)
+      const nodes = Object.values(indexedStore.getState().nodes)
+      expect(Object.values(indexedEditor.getState().spaces)).toHaveLength(3)
       expect(nodes.filter((node) => node.type === 'slab' && node.autoFromWalls)).toHaveLength(3)
       expect(nodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls)).toHaveLength(3)
+      expect(
+        topologyOutcome(indexedStore.getState().nodes, indexedEditor.getState().spaces),
+      ).toEqual(topologyOutcome(fullStore.getState().nodes, fullEditor.getState().spaces))
       expect(events).toHaveLength(1)
       expect(events[0]?.strategy).toBe('indexed')
       expect(events[0]?.examinedWallIds).toHaveLength(10)
     } finally {
-      unsubscribe()
+      unsubscribeIndexed()
+      unsubscribeFull()
     }
   })
 
@@ -1437,33 +1448,48 @@ describe('live room topology reconciliation', () => {
     const initialNodes = Object.fromEntries(
       [level, ...walls].map((node) => [node.id, node]),
     ) as Record<string, AnyNode>
-    const sceneStore = createSceneStoreStub(initialNodes)
-    const editorStore = createEditorStoreStub()
+    const indexedStore = createSceneStoreStub(initialNodes)
+    const indexedEditor = createEditorStoreStub()
+    const fullStore = createSceneStoreStub(initialNodes)
+    const fullEditor = createEditorStoreStub()
     const events: SpaceTopologyReconcileEvent[] = []
-    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+    const unsubscribeIndexed = initSpaceDetectionSync(indexedStore, indexedEditor, {
       onTopologyReconcile: (event) => events.push(event),
     })
+    const unsubscribeFull = initSpaceDetectionSync(fullStore, fullEditor)
+    const changeWallHeight = (store: ReturnType<typeof createSceneStoreStub>) => {
+      store.setNodes({
+        ...store.getState().nodes,
+        [walls[0]!.id]: { ...walls[0], height: 2.7 } as WallNode,
+      })
+    }
 
     try {
       runWithSceneCommitNodeIds([walls[0]!.id], () => {
-        sceneStore.setNodes({
-          ...sceneStore.getState().nodes,
-          [walls[0]!.id]: { ...walls[0], height: 2.7 } as WallNode,
-        })
+        changeWallHeight(indexedStore)
       })
-      expect(Object.values(editorStore.getState().spaces)).toHaveLength(1)
+      changeWallHeight(fullStore)
+      expect(Object.values(indexedEditor.getState().spaces)).toHaveLength(1)
+      expect(
+        topologyOutcome(indexedStore.getState().nodes, indexedEditor.getState().spaces),
+      ).toEqual(topologyOutcome(fullStore.getState().nodes, fullEditor.getState().spaces))
 
-      const ids = Object.keys(sceneStore.getState().nodes) as AnyNodeId[]
-      runWithSceneCommitNodeIds(ids, () => sceneStore.setNodes({}))
+      const ids = Object.keys(indexedStore.getState().nodes) as AnyNodeId[]
+      runWithSceneCommitNodeIds(ids, () => indexedStore.setNodes({}))
+      fullStore.setNodes({})
 
-      expect(Object.values(editorStore.getState().spaces)).toHaveLength(0)
+      expect(Object.values(indexedEditor.getState().spaces)).toHaveLength(0)
+      expect(
+        topologyOutcome(indexedStore.getState().nodes, indexedEditor.getState().spaces),
+      ).toEqual(topologyOutcome(fullStore.getState().nodes, fullEditor.getState().spaces))
       expect(events.at(-1)).toMatchObject({
         strategy: 'indexed',
         affectedBeforeRoomCount: 1,
         affectedCurrentRoomCount: 0,
       })
     } finally {
-      unsubscribe()
+      unsubscribeIndexed()
+      unsubscribeFull()
     }
   })
 
