@@ -6,6 +6,8 @@ import {
   createSnapshotPipeline,
   GRID_LAYER,
   heroCameraPose,
+  SNAPSHOT_MIME,
+  SNAPSHOT_QUALITY,
   type SnapshotPipeline,
   snapLevelsToTruePositions,
   THUMBNAIL_HEIGHT,
@@ -243,7 +245,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
-                'image/png',
+                SNAPSHOT_MIME,
+                SNAPSHOT_QUALITY,
               ),
             )
           } else if (captureMode === 'area' && cropRegion) {
@@ -260,7 +263,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
-                'image/png',
+                SNAPSHOT_MIME,
+                SNAPSHOT_QUALITY,
               ),
             )
           } else {
@@ -288,7 +292,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
-                'image/png',
+                SNAPSHOT_MIME,
+                SNAPSHOT_QUALITY,
               ),
             )
           }
