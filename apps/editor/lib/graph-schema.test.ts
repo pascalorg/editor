@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { warehousePlugin } from '@ovurrsl/plugin-warehouse'
 import { AnyNode } from '@pascal-app/core/schema'
+import { treesPlugin } from '@pascal-app/plugin-trees'
 import { apiGraphSchema } from './graph-schema'
 
 /**
@@ -13,20 +14,27 @@ import { apiGraphSchema } from './graph-schema'
  * `AnyNode` union, which is the 400 every save containing a rack used to
  * return.
  *
- * **Four of upstream's tests are deliberately absent**, and it is worth knowing
+ * **Six of upstream's tests are deliberately absent**, and it is worth knowing
  * which so nobody "restores" them into a red build:
  *
  *   rejects URL-shaped plugin fields outside the AssetUrl allowlist
  *   reports deeply nested plugin nodes as a validation issue, not a crash
  *   treats an unnamespaced unknown type as a foreign node
  *   rejects a material texture URL outside the allowlist
+ *   accepts the asset URL forms core allows
+ *   does not treat prose or drive paths as URLs
  *
- * All four exercise upstream's content scan — the walk that hunts URL-shaped
+ * All six exercise upstream's content scan — the walk that hunts URL-shaped
  * strings through a node's free-form fields and checks them against `AssetUrl`,
  * bounded by a depth and value budget. This fork kept its own plugin-aware
- * validator through the beta.5 merge and does NOT implement that scan, so the
- * tests fail here for a reason that has nothing to do with the code under
- * test. They come back with the scan, not before. See `UPSTREAM.md`.
+ * validator through the beta.5 merge and does NOT implement that scan.
+ *
+ * The first four fail here outright. The last two would *pass* — and that is
+ * the worse outcome: with no scan, a plugin node's free-form fields are never
+ * walked, so "this URL is accepted" and "this prose is accepted" are true of
+ * every string whatsoever. A green test asserting nothing is a claim of
+ * coverage the file cannot back. All six come back with the scan, not before.
+ * See `UPSTREAM.md`.
  */
 
 function buildGraph(nodes: Record<string, unknown>, rootNodeIds: string[] = []) {
@@ -34,7 +42,6 @@ function buildGraph(nodes: Record<string, unknown>, rootNodeIds: string[] = []) 
 }
 
 const LEVEL_ID = 'level_a1b2c3d4e5f6g7h8'
-const TREE_ID = 'tree_a1b2c3d4e5f6g7h8'
 
 const level = (children: string[] = []) => ({
   object: 'node',
@@ -45,13 +52,33 @@ const level = (children: string[] = []) => ({
   level: 0,
 })
 
-const pluginTree = (overrides: Record<string, unknown> = {}) => ({
+/**
+ * Upstream's fixture was a hand-written object literal. It cannot be one here:
+ * this fork validates a plugin node against the PLUGIN's schema rather than
+ * the base envelope, so a literal is only as valid as its author's memory of
+ * the trees plugin's required fields — and it silently rots when the plugin
+ * changes. Built from the plugin's own schema instead, so defaults materialise
+ * and the branded id is minted by `objectId` rather than guessed.
+ */
+const treeDef = treesPlugin.nodes?.find((d) => d.kind === 'trees:tree') ?? treesPlugin.nodes?.[0]
+if (!treeDef) throw new Error('trees plugin registers no node kinds')
+const treeParsed = treeDef.schema.safeParse({
   object: 'node',
-  id: TREE_ID,
-  type: 'trees:tree',
+  type: treeDef.kind,
   parentId: LEVEL_ID,
-  position: [1, 0, 2],
-  rotation: 0,
+})
+if (!treeParsed.success) {
+  throw new Error(
+    `could not build a valid ${treeDef.kind}: ${treeParsed.error.issues
+      .map((i) => `${i.path.join('.')}: ${i.message}`)
+      .join('; ')}`,
+  )
+}
+const TREE_BASE = treeParsed.data as Record<string, unknown>
+const TREE_ID = String(TREE_BASE.id)
+
+const pluginTree = (overrides: Record<string, unknown> = {}) => ({
+  ...TREE_BASE,
   ...overrides,
 })
 
@@ -92,42 +119,6 @@ test('rejects a plugin node that fails the base envelope', () => {
   expect(apiGraphSchema.safeParse(graph).success).toBe(false)
 })
 
-// The `AssetUrl` allowlist is the whole Phase 3 posture: every scheme outside
-// it is rejected, so this list does not have to be exhaustive to be sound. A
-// denylist would — which is why one isn't used. `169.254.169.254` is the cloud
-// instance-metadata endpoint, the canonical SSRF target.
-test('accepts the asset URL forms core allows', () => {
-  for (const url of [
-    'data:image/png;base64,iVBORw0KGgo=',
-    'https://cdn.example/tree.webp',
-    'asset://tree-bark',
-    'blob:https://editor.pascal.app/9f1c',
-    '/textures/bark.webp',
-    'http://localhost:3000/textures/bark.webp',
-  ]) {
-    const graph = buildGraph({ [TREE_ID]: pluginTree({ thumbnail: url }) })
-
-    expect(apiGraphSchema.safeParse(graph).success, `expected ${url} to be accepted`).toBe(true)
-  }
-})
-
-// Prose that happens to start with a word and a colon is not a URL. A plugin
-// may put arbitrary text in `name` / `metadata`, exactly as builtin nodes do —
-// the allowlist applies to URL-shaped values, not to every string.
-test('does not treat prose or drive paths as URLs', () => {
-  for (const text of [
-    'FTP: north bed',
-    'note: see plan 3',
-    'Data: unavailable',
-    'C:\\Users\\me\\plan.png',
-    'Oak tree',
-  ]) {
-    const graph = buildGraph({ [TREE_ID]: pluginTree({ name: text, metadata: { note: text } }) })
-
-    expect(apiGraphSchema.safeParse(graph).success, `expected ${text} to be accepted`).toBe(true)
-  }
-})
-
 // A recursive walk over untrusted JSON must not throw past `safeParse` — the
 // route would answer 500 where the contract is a 400 with issues.
 test('still rejects invalid builtin nodes', () => {
@@ -138,10 +129,6 @@ test('still rejects invalid builtin nodes', () => {
   expect(apiGraphSchema.safeParse(graph).success).toBe(false)
 })
 
-// Unnamespaced kinds are legitimate: `wiki/architecture/plugin-authoring.md`
-// requires plugin *ids* to look like `vendor:pack`, never kinds, and its worked
-// example registers `kind: 'couch'`. Membership is decided by "not in AnyNode",
-// so such a node is validated as foreign rather than rejected outright.
 const MATERIAL_ID = 'mat_a1b2c3d4e5f6g7h8'
 const material = (overrides: Record<string, unknown> = {}) => ({
   id: MATERIAL_ID,
@@ -157,8 +144,9 @@ test('keeps materials in the parsed output', () => {
   expect(res.data?.materials).toEqual(graph.materials)
 })
 
-// A material's texture is a URL the editor loads, so it is held to the same
-// `AssetUrl` allowlist as every other URL-shaped field in the graph.
+// Materials are carried as opaque records here (see `apiGraphSchema`), so this
+// asserts the round trip, not the allowlist — the negative half of the pair
+// lives with upstream's content scan and is listed absent at the top.
 test('accepts a material texture URL inside the allowlist', () => {
   const graph = {
     ...buildGraph({}),
@@ -188,12 +176,13 @@ test('does not rewrite materials it accepts', () => {
 function pluginNode(kind: string): Record<string, unknown> {
   const def = warehousePlugin.nodes?.find((d) => d.kind === kind)
   if (!def) throw new Error(`plugin does not register ${kind}`)
-  // Node ids are branded per kind: the id prefix is the kind's local part
-  // verbatim (`pallet-rack_x`), so derive it rather than guess.
-  const local = kind.split(':').pop() ?? kind
+  // `id` is deliberately omitted so `objectId`'s default mints a correctly
+  // branded one. An earlier version derived it from the kind's local part
+  // (`live-rack` → `live-rack_t1`) and that is not a rule: `warehouse:live-rack`
+  // brands its ids `live-racking_`. The prefix is persisted user data, so the
+  // plugin cannot be renamed to match — the test asks the schema instead.
   const parsed = def.schema.safeParse({
     object: 'node',
-    id: `${local}_t1`,
     type: kind,
     name: 'Test node',
     parentId: 'level_1',

@@ -165,3 +165,41 @@ alongside ours, but upstream's suite tests upstream's implementation — includi
 an asset-URL allowlist our fork's version does not implement. Merging their
 tests while keeping our implementation fails in CI. Either port the behaviour or
 keep only the tests that match what the file actually does.
+
+**The biggest single thing this merge bought, and it looked like a regression.**
+Taking upstream's root `package.json` restored the `test` script. Ours had none,
+so `turbo run test` had no root entry point and **the entire test suite had been
+dark in CI** — every package, not just `apps/editor`. Nobody removed it on
+purpose; it fell out of an earlier edit and CI stayed green because a suite that
+never runs never fails.
+
+Seven tests failed the moment it came back. **None was caused by upstream's
+code.** They were latent, written and never once executed:
+
+- Six were upstream's own, all built on a hand-written `trees:tree` object
+  literal. Upstream validates a foreign kind against the base envelope, so a
+  five-field literal is enough there; this fork validates it against the trees
+  plugin's own schema, where it is not. Fixtures are now built by calling the
+  plugin's schema, which also mints the branded id — a literal is only as
+  correct as its author's memory of a package we do not control.
+- One was ours, and it is the more interesting: it derived a node id from the
+  kind's local part (`warehouse:live-rack` → `live-rack_t1`) on the assumption
+  that the two always match. They do not — that kind brands its ids
+  `live-racking_`. The id prefix is **persisted user data**, so the plugin
+  cannot be renamed to close the gap; the test asks the schema for an id
+  instead of guessing one.
+
+Two rules fall out of this, and they are worth more than the fix:
+
+1. **A green CI is only evidence if you know what it ran.** After any change to
+   root scripts or to `turbo.json`, check the run's task count — `Tasks: N
+   successful, M total` — not just its colour.
+2. **Never hand-write a fixture for a schema you do not own.** Build it by
+   calling that schema. It costs one line and it cannot rot silently.
+
+Recorded for later, found while reading the plugin during this: the live-rack
+placement tool writes `name: 'Live Racking'` on commit. That is the same
+fixed-name defect already fixed in every kind's `defaults()`, in a second place
+the manifest-wide guard does not reach — it inspects `defaults()`, not tools.
+It costs the tree its derived label for that kind. Not touched here; this merge
+carries no feature work.
