@@ -2,11 +2,10 @@
 
 import {
   type AnyNodeId,
+  acquireSceneHistoryPause,
   emitter,
   type FenceNode,
   type GridEvent,
-  pauseSceneHistory,
-  resumeSceneHistory,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -34,8 +33,8 @@ export const MoveFenceTangentTool: React.FC<{
   const [cursor, setCursor] = useState<[number, number, number]>([anchor[0], 0, anchor[1]])
 
   useEffect(() => {
-    pauseSceneHistory(useScene)
-    let committed = false
+    const releaseHistory = acquireSceneHistoryPause(useScene)
+    let finalized = false
     const originalTangents: Array<[number, number] | null> = (target.fence.tangents ?? []).map(
       (t) => (t ? [t[0], t[1]] : null),
     )
@@ -89,9 +88,10 @@ export const MoveFenceTangentTool: React.FC<{
     }
 
     const onGridClick = (event: GridEvent) => {
-      committed = true
+      if (finalized) return
+      finalized = true
       const finalTangents = lastTangents
-      resumeSceneHistory(useScene)
+      releaseHistory()
       useScene.getState().updateNode(fenceId, { tangents: finalTangents })
       useLiveNodeOverrides.getState().clear(fenceId)
       useScene.getState().markDirty(fenceId)
@@ -101,8 +101,10 @@ export const MoveFenceTangentTool: React.FC<{
     }
 
     const onCancel = () => {
+      if (finalized) return
       restore()
-      resumeSceneHistory(useScene)
+      finalized = true
+      releaseHistory()
       markToolCancelConsumed()
       exit(false)
     }
@@ -112,9 +114,9 @@ export const MoveFenceTangentTool: React.FC<{
     emitter.on('tool:cancel', onCancel)
 
     return () => {
-      if (!committed) {
+      if (!finalized) {
         restore()
-        resumeSceneHistory(useScene)
+        releaseHistory()
       }
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)

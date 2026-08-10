@@ -387,10 +387,14 @@ export {
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {
+  getHistoryCommandState,
   type HistoryCommandDelegate,
+  type HistoryCommandResult,
+  type HistoryCommandState,
   installHistoryCommandDelegate,
   runRedo,
   runUndo,
+  subscribeHistoryCommandState,
 } from './lib/history'
 export {
   boundaryReshapeScope,
