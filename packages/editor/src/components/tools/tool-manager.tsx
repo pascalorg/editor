@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  createSceneApi,
   type FenceNode,
   nodeRegistry,
   type SlabNode,
@@ -30,6 +31,7 @@ import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
+import { RegistryToolProvider } from './registry-tool-context'
 import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
@@ -141,6 +143,15 @@ export const ToolManager: React.FC = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
+  const registrySceneApi = useMemo(() => createSceneApi(useScene), [])
+  const registryToolContext = useMemo(
+    () => ({
+      activeLevelId: activeLevelId ?? null,
+      sceneApi: registrySceneApi,
+      selectNode: (nodeId: AnyNodeId) => setSelection({ selectedIds: [nodeId] }),
+    }),
+    [activeLevelId, registrySceneApi, setSelection],
+  )
 
   // Building transform for the local group — all building-relative tools live inside this group
   // so their cursor positions and committed data are naturally in building-local space.
@@ -377,7 +388,9 @@ export const ToolManager: React.FC = () => {
             NodeDefinition with a tool contribution, mount it here. */}
         {!movingNode && useRegistryTool && RegistryToolComponent && (
           <Suspense fallback={null}>
-            <RegistryToolComponent />
+            <RegistryToolProvider value={registryToolContext}>
+              <RegistryToolComponent />
+            </RegistryToolProvider>
           </Suspense>
         )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (

@@ -57,6 +57,15 @@ export type CustomMeshCommand =
       type: 'loop-cut'
       edgeId: string
       factor: number
+      cuts?: number
+    }
+  | {
+      type: 'bevel-edge'
+      edgeId: string
+      width: number
+      segments: number
+      profile: number
+      clampOverlap: boolean
     }
 
 export type CustomMeshCommandResult =
@@ -172,19 +181,18 @@ function resolveLoopCutRing(topology: CustomMeshTopology, edgeId: string): LoopC
       facesByEdgeId.set(edge.id, faces)
     }
   }
-  const startFaces = facesByEdgeId.get(startEdge.id) ?? []
-  if (
-    startFaces.length === 0 ||
-    startFaces.length > 2 ||
-    startFaces.some((face) => face.vertexIds.length !== 4)
-  ) {
-    return null
-  }
+  const incidentStartFaces = facesByEdgeId.get(startEdge.id) ?? []
+  if (incidentStartFaces.length === 0 || incidentStartFaces.length > 2) return null
+  const startFaces = incidentStartFaces.filter((face) => face.vertexIds.length === 4)
+  if (startFaces.length === 0) return null
 
   const orientedEdgeVertices = new Map<string, [string, string]>([
     [startEdge.id, startEdge.vertexIds],
   ])
-  const queue = startFaces.map((face) => ({ edgeId: startEdge.id, faceId: face.id }))
+  const queue = startFaces.map((face) => ({
+    edgeId: startEdge.id,
+    faceId: face.id,
+  }))
   const visitedFaces = new Set<string>()
   const steps: LoopCutStep[] = []
 
@@ -218,7 +226,7 @@ function resolveLoopCutRing(topology: CustomMeshTopology, edgeId: string): LoopC
     if (adjacentFaces.length > 2) return null
     for (const adjacentFace of adjacentFaces) {
       if (adjacentFace.id === face.id || visitedFaces.has(adjacentFace.id)) continue
-      if (adjacentFace.vertexIds.length !== 4) return null
+      if (adjacentFace.vertexIds.length !== 4) continue
       queue.push({ edgeId: oppositeEdge.id, faceId: adjacentFace.id })
     }
   }
@@ -238,45 +246,72 @@ export function customMeshLoopCutSegments(
   topology: CustomMeshTopology,
   edgeId: string,
   factor: number,
+  cuts = 1,
 ): [Point, Point][] | null {
   const ring = resolveLoopCutRing(topology, edgeId)
-  if (!ring || !Number.isFinite(factor) || factor <= 0 || factor >= 1) return null
+  const fractions = loopCutFractions(factor, cuts)
+  if (!ring || !fractions) return null
   const vertexById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
-  const pointByEdgeId = new Map<string, Point>()
+  const pointByEdgeId = new Map<string, Point[]>()
   for (const [ringEdgeId, [fromId, toId]] of ring.orientedEdgeVertices) {
     const from = vertexById.get(fromId)
     const to = vertexById.get(toId)
     if (!(from && to)) return null
-    pointByEdgeId.set(ringEdgeId, interpolatePoint(from, to, factor))
+    pointByEdgeId.set(
+      ringEdgeId,
+      fractions.map((fraction) => interpolatePoint(from, to, fraction)),
+    )
   }
-  return ring.steps.map((step) => [
-    pointByEdgeId.get(step.fromEdgeId)!,
-    pointByEdgeId.get(step.toEdgeId)!,
-  ])
+  return ring.steps.flatMap((step) =>
+    fractions.map((_, index) => [
+      pointByEdgeId.get(step.fromEdgeId)![index]!,
+      pointByEdgeId.get(step.toEdgeId)![index]!,
+    ]),
+  )
 }
 
-function splitFaceLoop(
+function loopCutFractions(factor: number, cuts: number): number[] | null {
+  const count = Math.floor(cuts)
+  if (
+    !Number.isFinite(factor) ||
+    factor <= 0 ||
+    factor >= 1 ||
+    !Number.isFinite(cuts) ||
+    count < 1 ||
+    count > 32
+  )
+    return null
+  if (count === 1) return [factor]
+  const spacing = 1 / (count + 1)
+  const offset = (factor - 0.5) * spacing * 1.96
+  return Array.from({ length: count }, (_, index) => (index + 1) * spacing + offset)
+}
+
+function augmentFaceLoop(
   face: CustomMeshFace,
-  cutVertexByEdgeKey: ReadonlyMap<string, string>,
-  firstCutId: string,
-  secondCutId: string,
-): [string[], string[]] | null {
+  cutVerticesByEdgeKey: ReadonlyMap<string, { edgeOrder: [string, string]; ids: string[] }>,
+): string[] {
   const augmented: string[] = []
   for (let index = 0; index < face.vertexIds.length; index += 1) {
     const current = face.vertexIds[index]!
     const next = face.vertexIds[(index + 1) % face.vertexIds.length]!
     augmented.push(current)
-    const cutId = cutVertexByEdgeKey.get(topologyEdgeKey(current, next))
-    if (cutId) augmented.push(cutId)
+    const cuts = cutVerticesByEdgeKey.get(topologyEdgeKey(current, next))
+    if (!cuts) continue
+    augmented.push(...(cuts.edgeOrder[0] === current ? cuts.ids : [...cuts.ids].reverse()))
   }
-  const firstIndex = augmented.indexOf(firstCutId)
-  const secondIndex = augmented.indexOf(secondCutId)
+  return augmented
+}
+
+function splitLoopByChord(loop: string[], firstCutId: string, secondCutId: string) {
+  const firstIndex = loop.indexOf(firstCutId)
+  const secondIndex = loop.indexOf(secondCutId)
   if (firstIndex < 0 || secondIndex < 0) return null
   const walk = (start: number, end: number) => {
-    const loop: string[] = []
-    for (let index = start; ; index = (index + 1) % augmented.length) {
-      loop.push(augmented[index]!)
-      if (index === end) return loop
+    const result: string[] = []
+    for (let index = start; ; index = (index + 1) % loop.length) {
+      result.push(loop[index]!)
+      if (index === end) return result
     }
   }
   const first = walk(firstIndex, secondIndex)
@@ -288,11 +323,18 @@ function loopCut(
   topology: CustomMeshTopology,
   command: Extract<CustomMeshCommand, { type: 'loop-cut' }>,
 ): CustomMeshCommandResult {
-  if (!Number.isFinite(command.factor) || command.factor <= 0 || command.factor >= 1) {
-    return { ok: false, error: 'Loop cut factor must be greater than 0 and less than 1' }
-  }
+  const fractions = loopCutFractions(command.factor, command.cuts ?? 1)
+  if (!fractions)
+    return {
+      ok: false,
+      error: 'Loop cut requires 1–32 cuts and a factor between 0 and 1',
+    }
   const ring = resolveLoopCutRing(topology, command.edgeId)
-  if (!ring) return { ok: false, error: 'Loop cut requires a connected ring of quad faces' }
+  if (!ring)
+    return {
+      ok: false,
+      error: 'Loop cut requires a connected ring of quad faces',
+    }
   const vertexById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex]))
   const edgeById = new Map(topology.edges.map((edge) => [edge.id, edge]))
   const allocateVertexId = nextNumericId(
@@ -307,8 +349,8 @@ function loopCut(
     'f',
     topology.faces.map((face) => face.id),
   )
-  const cutVertexByEdgeId = new Map<string, string>()
-  const cutVertexByEdgeKey = new Map<string, string>()
+  const cutVerticesByEdgeId = new Map<string, string[]>()
+  const cutVerticesByEdgeKey = new Map<string, { edgeOrder: [string, string]; ids: string[] }>()
   const newVertices: CustomMeshVertex[] = []
 
   for (const [ringEdgeId, [fromId, toId]] of ring.orientedEdgeVertices) {
@@ -316,19 +358,29 @@ function loopCut(
     const to = vertexById.get(toId)
     const edge = edgeById.get(ringEdgeId)
     if (!(from && to && edge)) return { ok: false, error: 'Loop cut references missing topology' }
-    const id = allocateVertexId()
-    cutVertexByEdgeId.set(ringEdgeId, id)
-    cutVertexByEdgeKey.set(topologyEdgeKey(...edge.vertexIds), id)
-    newVertices.push({ id, position: interpolatePoint(from.position, to.position, command.factor) })
+    const ids = fractions.map(() => allocateVertexId())
+    cutVerticesByEdgeId.set(ringEdgeId, ids)
+    const edgeOrderIds = edge.vertexIds[0] === fromId ? ids : [...ids].reverse()
+    cutVerticesByEdgeKey.set(topologyEdgeKey(...edge.vertexIds), {
+      edgeOrder: edge.vertexIds,
+      ids: edgeOrderIds,
+    })
+    newVertices.push(
+      ...ids.map((id, index) => ({
+        id,
+        position: interpolatePoint(from.position, to.position, fractions[index]!),
+      })),
+    )
   }
 
   const splitBoundaryEdges = topology.edges.flatMap<CustomMeshEdge>((edge) => {
-    const cutId = cutVertexByEdgeId.get(edge.id)
-    if (!cutId) return [edge]
-    return [
-      { ...edge, vertexIds: [edge.vertexIds[0], cutId] },
-      { id: allocateEdgeId(), vertexIds: [cutId, edge.vertexIds[1]] },
-    ]
+    const cutIds = cutVerticesByEdgeKey.get(topologyEdgeKey(...edge.vertexIds))?.ids
+    if (!cutIds) return [edge]
+    const chain = [edge.vertexIds[0], ...cutIds, edge.vertexIds[1]]
+    return chain.slice(0, -1).map((vertexId, index) => ({
+      id: index === 0 ? edge.id : allocateEdgeId(),
+      vertexIds: [vertexId, chain[index + 1]!],
+    }))
   })
   const stepByFaceId = new Map(ring.steps.map((step) => [step.faceId, step] as const))
   const cutEdgeIds: string[] = []
@@ -337,20 +389,47 @@ function loopCut(
   for (const face of topology.faces) {
     const step = stepByFaceId.get(face.id)
     if (!step) {
-      faces.push(face)
+      const vertexIds = augmentFaceLoop(face, cutVerticesByEdgeKey)
+      faces.push(vertexIds.length === face.vertexIds.length ? face : { ...face, vertexIds })
       continue
     }
-    const fromCutId = cutVertexByEdgeId.get(step.fromEdgeId)
-    const toCutId = cutVertexByEdgeId.get(step.toEdgeId)
-    if (!(fromCutId && toCutId)) return { ok: false, error: 'Loop cut references missing topology' }
-    const loops = splitFaceLoop(face, cutVertexByEdgeKey, fromCutId, toCutId)
-    if (!loops) return { ok: false, error: `Could not split quad face: ${face.id}` }
-    const cutEdgeId = allocateEdgeId()
-    cutEdgeIds.push(cutEdgeId)
-    cutEdges.push({ id: cutEdgeId, vertexIds: [fromCutId, toCutId] })
+    const fromCutIds = cutVerticesByEdgeId.get(step.fromEdgeId)
+    const toCutIds = cutVerticesByEdgeId.get(step.toEdgeId)
+    if (!(fromCutIds && toCutIds))
+      return { ok: false, error: 'Loop cut references missing topology' }
+    let remaining = augmentFaceLoop(face, cutVerticesByEdgeKey)
+    const splitLoops: string[][] = []
+    for (let index = 0; index < fromCutIds.length; index += 1) {
+      const fromCutId = fromCutIds[index]!
+      const toCutId = toCutIds[index]!
+      const pair = splitLoopByChord(remaining, fromCutId, toCutId)
+      if (!pair) return { ok: false, error: `Could not split quad face: ${face.id}` }
+      const cutEdgeId = allocateEdgeId()
+      cutEdgeIds.push(cutEdgeId)
+      cutEdges.push({ id: cutEdgeId, vertexIds: [fromCutId, toCutId] })
+      if (index === fromCutIds.length - 1) {
+        splitLoops.push(...pair)
+      } else {
+        const nextFrom = fromCutIds[index + 1]!
+        const nextTo = toCutIds[index + 1]!
+        const remainingIndex = pair.findIndex(
+          (candidate) => candidate.includes(nextFrom) && candidate.includes(nextTo),
+        )
+        if (remainingIndex < 0)
+          return {
+            ok: false,
+            error: `Could not order cuts on quad face: ${face.id}`,
+          }
+        splitLoops.push(pair[1 - remainingIndex]!)
+        remaining = pair[remainingIndex]!
+      }
+    }
     faces.push(
-      { ...face, vertexIds: loops[0] },
-      { ...face, id: allocateFaceId(), vertexIds: loops[1] },
+      ...splitLoops.map((vertexIds, index) => ({
+        ...face,
+        id: index === 0 ? face.id : allocateFaceId(),
+        vertexIds,
+      })),
     )
   }
 
@@ -368,6 +447,244 @@ function loopCut(
   }
 }
 
+function bevelProfileFactor(value: number, profile: number): number {
+  const exponent = 2 ** ((0.5 - profile) * 4)
+  const a = value ** exponent
+  const b = (1 - value) ** exponent
+  return a / (a + b)
+}
+
+function rebuildEdgesFromFaces(
+  topology: CustomMeshTopology,
+  faces: CustomMeshFace[],
+  allocateEdgeId: () => string,
+): CustomMeshEdge[] {
+  const oldByKey = new Map(
+    topology.edges.map((edge) => [topologyEdgeKey(...edge.vertexIds), edge] as const),
+  )
+  const seen = new Set<string>()
+  const edges: CustomMeshEdge[] = []
+  for (const face of faces) {
+    for (let index = 0; index < face.vertexIds.length; index += 1) {
+      const vertexIds = [
+        face.vertexIds[index]!,
+        face.vertexIds[(index + 1) % face.vertexIds.length]!,
+      ] as [string, string]
+      const key = topologyEdgeKey(...vertexIds)
+      if (seen.has(key)) continue
+      seen.add(key)
+      const old = oldByKey.get(key)
+      edges.push(old ?? { id: allocateEdgeId(), vertexIds })
+    }
+  }
+  return edges
+}
+
+function bevelEdge(
+  topology: CustomMeshTopology,
+  command: Extract<CustomMeshCommand, { type: 'bevel-edge' }>,
+): CustomMeshCommandResult {
+  const edge = topology.edges.find((entry) => entry.id === command.edgeId)
+  if (!edge) return { ok: false, error: `Edge not found: ${command.edgeId}` }
+  const segments = Math.floor(command.segments)
+  if (!Number.isFinite(command.width) || command.width <= 0)
+    return { ok: false, error: 'Bevel width must be positive' }
+  if (!Number.isFinite(command.segments) || segments < 1 || segments > 12)
+    return { ok: false, error: 'Bevel segments must be between 1 and 12' }
+  if (!Number.isFinite(command.profile) || command.profile < 0 || command.profile > 1)
+    return { ok: false, error: 'Bevel profile must be between 0 and 1' }
+
+  const [aId, bId] = edge.vertexIds
+  const adjacentFaces = topology.faces.filter((face) => faceContainsEdge(face, aId, bId))
+  if (adjacentFaces.length !== 2)
+    return {
+      ok: false,
+      error: 'Bevel requires an edge shared by exactly two faces',
+    }
+  const incidentAt = (id: string) => topology.faces.filter((face) => face.vertexIds.includes(id))
+  const caps = [aId, bId].map((id) =>
+    incidentAt(id).filter((face) => !adjacentFaces.some((adjacent) => adjacent.id === face.id)),
+  )
+  if (caps.some((faces) => faces.length !== 1))
+    return {
+      ok: false,
+      error: 'Bevel currently requires three-face corner endpoints',
+    }
+  const vertexById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex]))
+  const vertexA = vertexById.get(aId)
+  const vertexB = vertexById.get(bId)
+  if (!(vertexA && vertexB)) return { ok: false, error: 'Bevel edge references missing vertices' }
+
+  const neighborInFace = (face: CustomMeshFace, id: string, other: string) => {
+    const index = face.vertexIds.indexOf(id)
+    const previous = face.vertexIds[(index - 1 + face.vertexIds.length) % face.vertexIds.length]!
+    const next = face.vertexIds[(index + 1) % face.vertexIds.length]!
+    return previous === other ? next : next === other ? previous : null
+  }
+  const neighbors = adjacentFaces.map((face) => ({
+    a: neighborInFace(face, aId, bId),
+    b: neighborInFace(face, bId, aId),
+  }))
+  if (neighbors.some((entry) => !(entry.a && entry.b)))
+    return { ok: false, error: 'Could not resolve bevel corner neighbors' }
+  const points = neighbors.flatMap((entry, faceIndex) =>
+    (
+      [
+        ['a', aId],
+        ['b', bId],
+      ] as const
+    ).map(([endpoint, endpointId]) => {
+      const neighborId = entry[endpoint]!
+      const origin = vertexById.get(endpointId)!.position
+      const neighbor = vertexById.get(neighborId)?.position
+      return neighbor ? { faceIndex, endpoint, origin, neighbor } : null
+    }),
+  )
+  if (points.some((point) => !point))
+    return { ok: false, error: 'Bevel references missing vertices' }
+  const safeMaximum =
+    Math.min(
+      ...points.map((point) =>
+        Math.hypot(
+          point!.neighbor[0] - point!.origin[0],
+          point!.neighbor[1] - point!.origin[1],
+          point!.neighbor[2] - point!.origin[2],
+        ),
+      ),
+    ) * 0.49
+  const width = command.clampOverlap ? Math.min(command.width, safeMaximum) : command.width
+  if (!command.clampOverlap && width >= safeMaximum * 2)
+    return {
+      ok: false,
+      error: 'Bevel width overlaps adjacent edges; enable Clamp',
+    }
+
+  const offset = (origin: Point, neighbor: Point) => {
+    const direction = normalize([
+      neighbor[0] - origin[0],
+      neighbor[1] - origin[1],
+      neighbor[2] - origin[2],
+    ])!
+    return [
+      origin[0] + direction[0] * width,
+      origin[1] + direction[1] * width,
+      origin[2] + direction[2] * width,
+    ] as Point
+  }
+  const outerA = neighbors.map((entry) =>
+    offset(vertexA.position, vertexById.get(entry.a!)!.position),
+  )
+  const outerB = neighbors.map((entry) =>
+    offset(vertexB.position, vertexById.get(entry.b!)!.position),
+  )
+  const allocateVertexId = nextNumericId(
+    'v',
+    topology.vertices.map((vertex) => vertex.id),
+  )
+  const allocateEdgeId = nextNumericId(
+    'e',
+    topology.edges.map((entry) => entry.id),
+  )
+  const allocateFaceId = nextNumericId(
+    'f',
+    topology.faces.map((face) => face.id),
+  )
+  const railsA: string[] = []
+  const railsB: string[] = []
+  const newVertices: CustomMeshVertex[] = []
+  for (let index = 0; index <= segments; index += 1) {
+    const factor = bevelProfileFactor(index / segments, command.profile)
+    const aVertexId = allocateVertexId()
+    const bVertexId = allocateVertexId()
+    railsA.push(aVertexId)
+    railsB.push(bVertexId)
+    newVertices.push(
+      {
+        id: aVertexId,
+        position: interpolatePoint(outerA[0]!, outerA[1]!, factor),
+      },
+      {
+        id: bVertexId,
+        position: interpolatePoint(outerB[0]!, outerB[1]!, factor),
+      },
+    )
+  }
+
+  const replaceVertex = (loop: string[], id: string, replacement: string[]) =>
+    loop.flatMap((vertexId) => (vertexId === id ? replacement : [vertexId]))
+  const faces = topology.faces
+    .filter((face) => !adjacentFaces.some((adjacent) => adjacent.id === face.id))
+    .map((face) => {
+      if (face.id === caps[0]![0]!.id) {
+        const index = face.vertexIds.indexOf(aId)
+        const previous = face.vertexIds[(index - 1 + face.vertexIds.length) % face.vertexIds.length]
+        const replacement = previous === neighbors[0]!.a ? railsA : [...railsA].reverse()
+        return {
+          ...face,
+          vertexIds: replaceVertex(face.vertexIds, aId, replacement),
+        }
+      }
+      if (face.id === caps[1]![0]!.id) {
+        const index = face.vertexIds.indexOf(bId)
+        const previous = face.vertexIds[(index - 1 + face.vertexIds.length) % face.vertexIds.length]
+        const replacement = previous === neighbors[0]!.b ? railsB : [...railsB].reverse()
+        return {
+          ...face,
+          vertexIds: replaceVertex(face.vertexIds, bId, replacement),
+        }
+      }
+      return face
+    })
+  for (let faceIndex = 0; faceIndex < 2; faceIndex += 1) {
+    const source = adjacentFaces[faceIndex]!
+    faces.push({
+      ...source,
+      vertexIds: source.vertexIds.map((id) =>
+        id === aId
+          ? railsA[faceIndex === 0 ? 0 : segments]!
+          : id === bId
+            ? railsB[faceIndex === 0 ? 0 : segments]!
+            : id,
+      ),
+    })
+  }
+  const firstFaceForward = adjacentFaces[0]!.vertexIds.some(
+    (id, index) =>
+      id === aId &&
+      adjacentFaces[0]!.vertexIds[(index + 1) % adjacentFaces[0]!.vertexIds.length] === bId,
+  )
+  for (let index = 0; index < segments; index += 1) {
+    const vertexIds = firstFaceForward
+      ? [railsB[index]!, railsA[index]!, railsA[index + 1]!, railsB[index + 1]!]
+      : [railsA[index]!, railsB[index]!, railsB[index + 1]!, railsA[index + 1]!]
+    faces.push({
+      id: allocateFaceId(),
+      vertexIds,
+      materialSlot: adjacentFaces[0]!.materialSlot,
+    })
+  }
+  const nextTopology: CustomMeshTopology = {
+    vertices: [
+      ...topology.vertices.filter((vertex) => vertex.id !== aId && vertex.id !== bId),
+      ...newVertices,
+    ],
+    edges: rebuildEdgesFromFaces(topology, faces, allocateEdgeId),
+    faces,
+  }
+  const issues = inspectCustomMeshTopology(nextTopology)
+  if (issues.length > 0) return { ok: false, error: issues[0]!.message }
+  const selected = nextTopology.edges.filter((entry) => {
+    const aRail = railsA.includes(entry.vertexIds[0]) && railsB.includes(entry.vertexIds[1])
+    const bRail = railsB.includes(entry.vertexIds[0]) && railsA.includes(entry.vertexIds[1])
+    return aRail || bRail
+  })
+  return {
+    ok: true,
+    topology: nextTopology,
+    selection: { mode: 'edge', ids: selected.map((entry) => entry.id) },
+  }
+}
+
 function extrudeFace(
   topology: CustomMeshTopology,
   command: Extract<CustomMeshCommand, { type: 'extrude-face' }>,
@@ -376,7 +693,10 @@ function extrudeFace(
   const face = topology.faces[faceIndex]
   if (!face) return { ok: false, error: `Face not found: ${command.faceId}` }
   if (!Number.isFinite(command.distance) || Math.abs(command.distance) < 1e-6) {
-    return { ok: false, error: 'Extrude distance must be a non-zero finite number' }
+    return {
+      ok: false,
+      error: 'Extrude distance must be a non-zero finite number',
+    }
   }
   const normal = customMeshFaceNormal(topology, face)
   if (!normal) return { ok: false, error: `Face has no usable normal: ${face.id}` }
@@ -399,7 +719,11 @@ function extrudeFace(
 
   for (const vertexId of face.vertexIds) {
     const vertex = verticesById.get(vertexId)
-    if (!vertex) return { ok: false, error: `Face references missing vertex: ${vertexId}` }
+    if (!vertex)
+      return {
+        ok: false,
+        error: `Face references missing vertex: ${vertexId}`,
+      }
     const id = allocateVertexId()
     duplicateIds.set(vertexId, id)
     newVertices.push({
@@ -480,7 +804,10 @@ function translateComponents(
   command: Extract<CustomMeshCommand, { type: 'translate-components' }>,
 ): CustomMeshCommandResult {
   if (command.delta.some((value) => !Number.isFinite(value))) {
-    return { ok: false, error: 'Translation delta must contain finite numbers' }
+    return {
+      ok: false,
+      error: 'Translation delta must contain finite numbers',
+    }
   }
   const vertexIds = customMeshSelectionVertexIds(topology, command.selection)
   if (vertexIds.size === 0) return { ok: false, error: 'Select a component to move' }
@@ -560,7 +887,10 @@ function scaleComponents(
     command.pivot.some((value) => !Number.isFinite(value)) ||
     command.factors.some((value) => !Number.isFinite(value) || Math.abs(value) < 1e-6)
   ) {
-    return { ok: false, error: 'Scale requires finite, non-zero factors and a finite pivot' }
+    return {
+      ok: false,
+      error: 'Scale requires finite, non-zero factors and a finite pivot',
+    }
   }
   return transformComponents(topology, command.selection, (position) => [
     command.pivot[0] + (position[0] - command.pivot[0]) * command.factors[0],
@@ -577,7 +907,10 @@ function insetFace(
   const face = topology.faces[faceIndex]
   if (!face) return { ok: false, error: `Face not found: ${command.faceId}` }
   if (!Number.isFinite(command.amount) || command.amount <= 0 || command.amount >= 1) {
-    return { ok: false, error: 'Inset amount must be greater than 0 and less than 1' }
+    return {
+      ok: false,
+      error: 'Inset amount must be greater than 0 and less than 1',
+    }
   }
   if (!Number.isFinite(command.depth)) return { ok: false, error: 'Inset depth must be finite' }
   const centroid = customMeshFaceCentroid(topology, face)
@@ -601,7 +934,11 @@ function insetFace(
   const newVertices: CustomMeshVertex[] = []
   for (const vertexId of face.vertexIds) {
     const vertex = verticesById.get(vertexId)
-    if (!vertex) return { ok: false, error: `Face references missing vertex: ${vertexId}` }
+    if (!vertex)
+      return {
+        ok: false,
+        error: `Face references missing vertex: ${vertexId}`,
+      }
     const id = allocateVertexId()
     insetIds.push(id)
     newVertices.push({
@@ -644,7 +981,11 @@ function insetFace(
   }
   const issues = inspectCustomMeshTopology(nextTopology)
   if (issues.length > 0) return { ok: false, error: issues[0]!.message }
-  return { ok: true, topology: nextTopology, selection: { mode: 'face', ids: [face.id] } }
+  return {
+    ok: true,
+    topology: nextTopology,
+    selection: { mode: 'face', ids: [face.id] },
+  }
 }
 
 function deleteComponents(
@@ -738,7 +1079,10 @@ function mergeVertices(
     if (loop.length > 1 && loop[0] === loop.at(-1)) loop.pop()
     if (loop.length < 3 || new Set(loop).size < 3) continue
     if (new Set(loop).size !== loop.length) {
-      return { ok: false, error: 'The selected vertices would create a repeated face vertex' }
+      return {
+        ok: false,
+        error: 'The selected vertices would create a repeated face vertex',
+      }
     }
     faces.push({ ...face, vertexIds: loop })
   }
@@ -797,7 +1141,10 @@ function dissolveEdge(
   const [a, b] = edge.vertexIds
   const adjacentFaces = topology.faces.filter((face) => faceContainsEdge(face, a, b))
   if (adjacentFaces.length !== 2) {
-    return { ok: false, error: 'Dissolve requires an edge shared by exactly two faces' }
+    return {
+      ok: false,
+      error: 'Dissolve requires an edge shared by exactly two faces',
+    }
   }
   const firstPath = longFacePath(adjacentFaces[0]!, a, b)
   const secondPath = longFacePath(adjacentFaces[1]!, b, a)
@@ -805,7 +1152,10 @@ function dissolveEdge(
     return { ok: false, error: 'Could not resolve adjacent face loops' }
   const mergedLoop = [...firstPath, ...secondPath.slice(1, -1)]
   if (new Set(mergedLoop).size !== mergedLoop.length) {
-    return { ok: false, error: 'Dissolving this edge would create a repeated face vertex' }
+    return {
+      ok: false,
+      error: 'Dissolving this edge would create a repeated face vertex',
+    }
   }
   const removedFaceId = adjacentFaces[1]!.id
   const nextTopology: CustomMeshTopology = {
@@ -851,5 +1201,7 @@ export function applyCustomMeshCommand(
       return dissolveEdge(topology, command)
     case 'loop-cut':
       return loopCut(topology, command)
+    case 'bevel-edge':
+      return bevelEdge(topology, command)
   }
 }

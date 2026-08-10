@@ -8,7 +8,7 @@ import { buildCustomMeshFloorplan } from './floorplan'
 import { buildCustomMeshGeometry } from './geometry'
 import { CustomMeshNode } from './schema'
 
-function bounds(node: CustomMeshNodeType) {
+export function customMeshBounds(node: CustomMeshNodeType) {
   const xs = node.topology.vertices.map((vertex) => vertex.position[0])
   const ys = node.topology.vertices.map((vertex) => vertex.position[1])
   const zs = node.topology.vertices.map((vertex) => vertex.position[2])
@@ -46,7 +46,7 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
   schema: CustomMeshNode,
   category: 'structure',
   surfaceRole: 'wall',
-  snapProfile: 'item',
+  snapProfile: 'structural',
   extensions: {
     'pascal:editor/floorplan': {
       tool: () => import('./tool'),
@@ -69,11 +69,11 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
     movable: { axes: ['x', 'z'], gridSnap: true },
     duplicable: true,
     deletable: true,
-    dragBounds: (rawNode) => bounds(rawNode as CustomMeshNodeType),
+    dragBounds: (rawNode) => customMeshBounds(rawNode as CustomMeshNodeType),
     floorPlaced: {
       footprint: (rawNode) => {
         const node = rawNode as CustomMeshNodeType
-        const { size, center } = bounds(node)
+        const { size, center } = customMeshBounds(node)
         return {
           dimensions: size,
           position: footprintPosition(node, center),

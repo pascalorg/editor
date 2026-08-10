@@ -132,6 +132,7 @@ export {
   type PlacementCoordinatorConfig,
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
+export { useRegistryToolContext } from './components/tools/registry-tool-context'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'

@@ -5,7 +5,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
-  useScene,
+  useSpatialQuery,
 } from '@pascal-app/core'
 import {
   getFloorStackPreviewPosition,
@@ -16,8 +16,8 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group } from 'three'
 import {
@@ -27,15 +27,17 @@ import {
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
 } from '../shared/floor-placement'
-import { customMeshDefinition } from './definition'
+import { customMeshBounds, customMeshDefinition } from './definition'
 import CustomMeshPreview from './preview'
 
 const CustomMeshTool = () => {
-  const activeLevelId = useViewer((state) => state.selection.levelId)
+  const { activeLevelId, sceneApi, selectNode } = useRegistryToolContext()
+  const { canPlaceOnFloor } = useSpatialQuery()
   const cursorRef = useRef<Group>(null)
   const previousSnapRef = useRef<string | null>(null)
   const cursorVisibleRef = useRef(false)
   const [cursorVisible, setCursorVisible] = useState(false)
+  const [validPlacement, setValidPlacement] = useState(true)
   const previewNode = useMemo(
     () =>
       CustomMeshNode.parse({
@@ -49,7 +51,8 @@ const CustomMeshTool = () => {
   useEffect(() => {
     if (!activeLevelId) return
     let lastPosition: [number, number, number] | null = null
-    let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+    let alignmentCandidates = collectAlignmentAnchors(sceneApi.nodes(), previewNode.id)
+    const { size } = customMeshBounds(previewNode)
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorVisibleRef.current) {
@@ -75,6 +78,8 @@ const CustomMeshTool = () => {
       })
       cursorRef.current?.position.set(...visualPosition)
       lastPosition = position
+      const placement = canPlaceOnFloor(activeLevelId, position, size, [0, previewNode.rotation, 0])
+      setValidPlacement(placement.valid)
 
       const snapKey = movementSfxStepKey({
         coords: [position[0], position[2]],
@@ -102,12 +107,18 @@ const CustomMeshTool = () => {
         parentId: activeLevelId,
         position,
       })
-      useScene.getState().createNode(node, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      const placement = canPlaceOnFloor(activeLevelId, position, size, [0, node.rotation, 0])
+      setValidPlacement(placement.valid)
+      if (!placement.valid) {
+        stopPlacementCommitPropagation(event)
+        return
+      }
+      sceneApi.upsert(node, activeLevelId)
+      selectNode(node.id)
       triggerSFX('sfx:structure-build')
       useAlignmentGuides.getState().clear()
       if (useEditor.getState().getContinuation('point') === 'repeat') {
-        alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
+        alignmentCandidates = collectAlignmentAnchors(sceneApi.nodes(), previewNode.id)
       } else {
         cursorVisibleRef.current = false
         setCursorVisible(false)
@@ -123,12 +134,12 @@ const CustomMeshTool = () => {
       unsubscribe()
       useAlignmentGuides.getState().clear()
     }
-  }, [activeLevelId, previewNode])
+  }, [activeLevelId, canPlaceOnFloor, previewNode, sceneApi, selectNode])
 
   if (!activeLevelId) return null
   return (
     <group ref={cursorRef} visible={cursorVisible}>
-      <CustomMeshPreview node={previewNode} />
+      <CustomMeshPreview node={previewNode} valid={validPlacement} />
     </group>
   )
 }

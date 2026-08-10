@@ -234,7 +234,7 @@ describe('applyCustomMeshCommand', () => {
     expect(inspectCustomMeshTopology(result.topology)).toEqual([])
   })
 
-  test('rejects a loop cut when the hovered edge does not lead through quads', () => {
+  test('stops a loop cut cleanly before a non-quad face', () => {
     const dissolved = applyCustomMeshCommand(createBoxCustomMeshTopology(), {
       type: 'dissolve-edge',
       edgeId: 'e4',
@@ -242,12 +242,47 @@ describe('applyCustomMeshCommand', () => {
     expect(dissolved.ok).toBe(true)
     if (!dissolved.ok) return
 
-    expect(
-      applyCustomMeshCommand(dissolved.topology, {
-        type: 'loop-cut',
-        edgeId: 'e0',
-        factor: 0.5,
-      }),
-    ).toEqual({ ok: false, error: 'Loop cut requires a connected ring of quad faces' })
+    const result = applyCustomMeshCommand(dissolved.topology, {
+      type: 'loop-cut',
+      edgeId: 'e0',
+      factor: 0.5,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.selection.ids).toHaveLength(2)
+    expect(inspectCustomMeshTopology(result.topology)).toEqual([])
+    expect(result.topology.faces.find((face) => face.id === 'f-top')?.vertexIds.length).toBe(8)
+  })
+
+  test('creates multiple evenly spaced loop cuts in one valid transaction', () => {
+    const result = applyCustomMeshCommand(createBoxCustomMeshTopology(), {
+      type: 'loop-cut',
+      edgeId: 'e8',
+      factor: 0.5,
+      cuts: 3,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.topology.vertices).toHaveLength(20)
+    expect(result.topology.faces).toHaveLength(18)
+    expect(result.selection.ids).toHaveLength(12)
+    expect(inspectCustomMeshTopology(result.topology)).toEqual([])
+  })
+
+  test('bevels a manifold box edge with width, segments, profile, and overlap clamping', () => {
+    const result = applyCustomMeshCommand(createBoxCustomMeshTopology(), {
+      type: 'bevel-edge',
+      edgeId: 'e0',
+      width: 0.2,
+      segments: 3,
+      profile: 0.5,
+      clampOverlap: true,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.selection.mode).toBe('edge')
+    expect(result.selection.ids).toHaveLength(4)
+    expect(result.topology.faces).toHaveLength(9)
+    expect(inspectCustomMeshTopology(result.topology)).toEqual([])
   })
 })

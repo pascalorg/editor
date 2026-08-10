@@ -83,10 +83,17 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     ceiling: 'structural',
     roof: 'structural',
     zone: 'structural',
+    'custom-mesh': 'structural',
   }
   const profileOf = (t: string) => declared[t]
   const profileOfNode = (id: string) =>
-    id === 'cabinet-module_1' ? declared.item : id === 'wall_1' ? declared.wall : undefined
+    id === 'cabinet-module_1'
+      ? declared.item
+      : id === 'wall_1'
+        ? declared.wall
+        : id === 'custom-mesh_1'
+          ? declared['custom-mesh']
+          : undefined
   const ctx = (
     scope: {
       kind: string
@@ -113,6 +120,10 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     expect(
       ctx({ kind: 'handle-drag', nodeId: 'cabinet-module_1', handle: ROTATE_HANDLE_DRAG_LABEL }),
     ).toBeNull()
+  })
+
+  it('gives custom-mesh edit mode the shared grid and angle context', () => {
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1' })).toBe('wall')
   })
 
   it('endpoint reshape is angle-bearing (wall); curve + polygon vertex edits are not', () => {

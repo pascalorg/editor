@@ -56,6 +56,7 @@ export type InteractionScope =
         | 'merge'
         | 'dissolve'
         | 'loop-cut'
+        | 'bevel'
         | 'delete'
     }
   // Click-to-click drafting of a polyline/polygon kind (wall/fence/slab/…).
