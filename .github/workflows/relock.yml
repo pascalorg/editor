@@ -26,9 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Must match `packageManager` in the root package.json. A lockfile written
+      # by an older bun than the one CI installs with is regenerated on install,
+      # and `--frozen-lockfile` turns that into a failed build — a relock that
+      # produces a lockfile CI then rejects is worse than no relock at all.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.0
+          bun-version: 1.3.14
 
       - name: Regenerate the lockfile
         run: bun install
