@@ -22,6 +22,7 @@ import {
   ActionButton,
   ActionGroup,
   curveReshapeScope,
+  formatLinearMeasurement,
   getLinearUnitLabel,
   linearControlValueToMeters,
   metersToLinearUnit,
@@ -155,15 +156,30 @@ export default function WallPanel() {
     [handleUpdate],
   )
 
-  const handleBaseModeChange = useCallback(
-    (mode: 'terrain' | 'fixed') => {
+  const handleTopModeChange = useCallback(
+    (mode: 'storey' | 'custom') => {
       const n = nodeRef.current
       if (!n) return
-      const height = n.height ?? resolveWallOpeningCeiling(n, useScene.getState().nodes)
-      handleUpdate({
-        height: Math.max(0.1, height),
-        fillToTerrain: mode === 'terrain' ? true : undefined,
-      })
+      const isCustom = n.height != null
+      if (mode === 'custom' && !isCustom) {
+        // Seed from the current effective height so the geometry doesn't
+        // jump at the moment of detaching from the storey plane.
+        const seeded = resolveWallOpeningCeiling(n, useScene.getState().nodes)
+        handleUpdate({ height: Math.max(0.1, seeded) })
+      } else if (mode === 'storey' && isCustom) {
+        // Absent `height` = plane-bound; the store strips undefined keys.
+        handleUpdate({ height: undefined })
+      }
+    },
+    [handleUpdate],
+  )
+
+  // Terrain infill only extends the bottom; it must never materialize an
+  // explicit height, or toggling it would silently detach the wall top from
+  // the storey plane.
+  const handleInfillChange = useCallback(
+    (mode: 'terrain' | 'auto') => {
+      handleUpdate({ fillToTerrain: mode === 'terrain' ? true : undefined })
     },
     [handleUpdate],
   )
@@ -184,6 +200,7 @@ export default function WallPanel() {
   const length = getWallCurveLength(node)
 
   const followsTerrain = node.fillToTerrain === true
+  const isPlaneBound = node.height == null
   const height = node.height ?? resolvedHeightMeters ?? 2.5
   const thickness = node.thickness ?? 0.1
   const curveOffset = getClampedWallCurveOffset(node)
@@ -223,30 +240,47 @@ export default function WallPanel() {
           unit={unitLabel}
           value={displayLength}
         />
-        <SliderControl
-          label="Height"
-          max={metersToLinearUnit(6, unit)}
-          min={metersToLinearUnit(0.1, unit)}
-          onChange={(v) =>
-            handleUpdate({
-              height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
-            })
-          }
-          precision={2}
-          step={0.1}
-          unit={unitLabel}
-          value={Math.round(displayHeight * 100) / 100}
-        />
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Base
+          Top
         </div>
         <SegmentedControl
-          onChange={handleBaseModeChange}
+          onChange={handleTopModeChange}
           options={[
-            { label: 'Fixed', value: 'fixed' },
-            { label: 'Follows level', value: 'terrain' },
+            { label: 'Follows level', value: 'storey' },
+            { label: 'Custom height', value: 'custom' },
           ]}
-          value={followsTerrain ? 'terrain' : 'fixed'}
+          value={isPlaneBound ? 'storey' : 'custom'}
+        />
+        {isPlaneBound ? (
+          <div className="px-1 text-[11px] text-muted-foreground">
+            Currently {formatLinearMeasurement(height, unit)}
+          </div>
+        ) : (
+          <SliderControl
+            label="Height"
+            max={metersToLinearUnit(6, unit)}
+            min={metersToLinearUnit(0.1, unit)}
+            onChange={(v) =>
+              handleUpdate({
+                height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
+              })
+            }
+            precision={2}
+            step={0.1}
+            unit={unitLabel}
+            value={Math.round(displayHeight * 100) / 100}
+          />
+        )}
+        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+          Bottom
+        </div>
+        <SegmentedControl
+          onChange={handleInfillChange}
+          options={[
+            { label: 'Auto', value: 'auto' },
+            { label: 'Fill to terrain', value: 'terrain' },
+          ]}
+          value={followsTerrain ? 'terrain' : 'auto'}
         />
         {followsTerrain && (
           <div className="px-1 text-[11px] text-muted-foreground">
