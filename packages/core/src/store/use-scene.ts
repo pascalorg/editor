@@ -1088,7 +1088,80 @@ function sceneHistorySnapshotFromState(
   >,
 ): SceneSnapshot {
   const { nodes, rootNodeIds, collections, materials, installedPlugins } = state
-  return { nodes, rootNodeIds, collections, materials, installedPlugins }
+  // Fresh placement nodes are renderable drafts, not document history. Excluding their
+  // entire subtree here protects both local undo and external commit subscribers.
+  const transientNodeIds = new Set<AnyNodeId>()
+  for (const node of Object.values(nodes)) {
+    const metadata = node.metadata
+    if (
+      metadata &&
+      typeof metadata === 'object' &&
+      !Array.isArray(metadata) &&
+      (metadata as Record<string, unknown>).isNew === true
+    ) {
+      transientNodeIds.add(node.id)
+    }
+  }
+
+  if (transientNodeIds.size === 0) {
+    return { nodes, rootNodeIds, collections, materials, installedPlugins }
+  }
+
+  const childIdsByParentId = new Map<AnyNodeId, Set<AnyNodeId>>()
+  const addChild = (parentId: AnyNodeId, childId: AnyNodeId) => {
+    const childIds = childIdsByParentId.get(parentId) ?? new Set<AnyNodeId>()
+    childIds.add(childId)
+    childIdsByParentId.set(parentId, childIds)
+  }
+  for (const node of Object.values(nodes)) {
+    if (node.parentId) addChild(node.parentId as AnyNodeId, node.id)
+    for (const childId of getNodeChildIds(node)) addChild(node.id, childId)
+  }
+
+  const pendingIds = [...transientNodeIds]
+  while (pendingIds.length > 0) {
+    const parentId = pendingIds.pop()
+    if (!parentId) continue
+    for (const childId of childIdsByParentId.get(parentId) ?? []) {
+      if (transientNodeIds.has(childId)) continue
+      transientNodeIds.add(childId)
+      pendingIds.push(childId)
+    }
+  }
+
+  const historyNodes = {} as Record<AnyNodeId, AnyNode>
+  for (const [id, node] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
+    if (transientNodeIds.has(id)) continue
+    if (!('children' in node && Array.isArray(node.children))) {
+      historyNodes[id] = node
+      continue
+    }
+    const children = (node.children as AnyNodeId[]).filter(
+      (childId) => !transientNodeIds.has(childId),
+    )
+    historyNodes[id] =
+      children.length === node.children.length ? node : ({ ...node, children } as AnyNode)
+  }
+
+  const historyCollections = {} as Record<CollectionId, Collection>
+  for (const [id, collection] of Object.entries(collections) as [CollectionId, Collection][]) {
+    const nodeIds = collection.nodeIds.filter((nodeId) => !transientNodeIds.has(nodeId))
+    if (collection.controlNodeId && transientNodeIds.has(collection.controlNodeId)) {
+      const { controlNodeId: _controlNodeId, ...rest } = collection
+      historyCollections[id] = { ...rest, nodeIds }
+    } else {
+      historyCollections[id] =
+        nodeIds.length === collection.nodeIds.length ? collection : { ...collection, nodeIds }
+    }
+  }
+
+  return {
+    nodes: historyNodes,
+    rootNodeIds: rootNodeIds.filter((id) => !transientNodeIds.has(id)),
+    collections: historyCollections,
+    materials,
+    installedPlugins,
+  }
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
