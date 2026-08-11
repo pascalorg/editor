@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
+import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
@@ -88,6 +89,12 @@ extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
+extendPluginDiscovery(async () => [streetscapePlugin])
+// The upstream manifest still names 'Pascal' as creator; credit the author.
+registerEditorHostPanel({
+  ...streetscapeHostPanel,
+  creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
+})
 
 loadBuiltinsSync()
 void loadExternalPlugins()
