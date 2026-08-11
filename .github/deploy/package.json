@@ -15,7 +15,7 @@
     "@node-rs/argon2": "2.0.2",
     "@opentelemetry/api": "1.9.1",
     "mysql2": "3.23.2",
-    "next": "16.2.9",
+    "next": "16.3.0",
     "nodemailer": "9.0.3",
     "otpauth": "9.5.1",
     "qrcode": "1.5.4",
