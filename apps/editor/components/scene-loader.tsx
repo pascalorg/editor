@@ -4,13 +4,11 @@
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
 import { applySceneGraphToEditor, Editor, type SceneGraph, useEditor } from '@pascal-app/editor'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AccountSettingsSection } from '@/components/account-settings-section'
 import { useSession } from '@/components/auth/session-provider'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
-import { cn } from '@/lib/utils'
 import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -203,28 +201,17 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
-      <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
-        <button
-          aria-pressed={lightPreview}
-          className={cn(
-            'pointer-events-auto rounded-md border border-border px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur',
-            lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
-          )}
-          onClick={() =>
-            router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
-          }
-          title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
-          type="button"
-        >
-          Light preview
-        </button>
-        <Link
-          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-          href="/scenes"
-        >
-          All scenes
-        </Link>
-      </div>
+      {/*
+        "Light preview" and "All scenes" used to float over the canvas here and
+        are gone. Both were navigation sitting on top of the drawing: the first
+        reloaded the page onto `?disable=postFx`, the second linked to `/scenes`
+        — and the Scenes rail already answers the second from inside the editor,
+        without leaving it.
+
+        `disablePostFx` below is unaffected. `?disable=postFx` is still read
+        (`isLightPreviewQuery`), so the flag keeps working for anyone measuring
+        GPU cost; what went away is a permanent button for a diagnostic.
+      */}
       <Editor
         disablePostFx={lightPreview}
         layoutVersion="v2"

@@ -251,6 +251,22 @@ export function ScenesTab() {
         )}
       </div>
 
+      {/*
+        The full scenes page, from inside the rail.
+
+        It used to be an "All scenes" link floating over the canvas, which put
+        navigation on top of the drawing. The rail is where scenes already live,
+        so the door belongs here. Kept as a plain `<a>` rather than a router
+        push: `/scenes` is a server-rendered page and a full load is what makes
+        it show the current list rather than a cached one.
+      */}
+      <a
+        className="rounded-lg bg-muted/40 px-3 py-2 text-center font-medium text-sm transition-colors hover:bg-muted"
+        href="/scenes"
+      >
+        Open scenes page
+      </a>
+
       {user?.role === 'admin' && (
         <a
           className="rounded-lg bg-muted/40 px-3 py-2 text-center font-medium text-sm transition-colors hover:bg-muted"
