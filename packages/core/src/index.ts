@@ -415,6 +415,10 @@ export {
   resolveWallEffectiveHeight,
   resolveWallTop,
 } from './systems/wall/wall-top'
+export {
+  planWallInsertion,
+  planWallSplitAtPoint,
+} from './systems/wall/wall-topology'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'

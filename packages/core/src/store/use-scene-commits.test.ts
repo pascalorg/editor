@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { z } from 'zod'
+import { initSpaceDetectionSync, type Space } from '../lib/space-detection'
 import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import { BuildingNode } from '../schema/nodes/building'
@@ -24,6 +25,7 @@ import useScene, {
   applyScenePatch,
   applySceneSnapshot,
   clearSceneHistory,
+  type SceneOperationPatch,
 } from './use-scene'
 
 type RafFn = (cb: (time: number) => void) => number
@@ -82,6 +84,62 @@ function applyHostNodePatches(
     materialChanges: [],
     nodeUpdates: nodeUpdates.map((update) => ({ ...update, removeFields: [] })),
   })
+}
+
+function operationPatchFromCommit(commit: SceneCommit): SceneOperationPatch {
+  const equal = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
+  const nodeCreates = Object.values(commit.current.nodes)
+    .filter((node) => !commit.before.nodes[node.id])
+    .map((node) => {
+      const siblings = node.parentId
+        ? ((commit.current.nodes[node.parentId as AnyNodeId] as { children?: AnyNodeId[] })
+            ?.children ?? [])
+        : commit.current.rootNodeIds
+      return { node, position: siblings.indexOf(node.id) }
+    })
+  const nodeDeletes = Object.values(commit.before.nodes)
+    .filter((node) => !commit.current.nodes[node.id])
+    .map((node) => {
+      const siblings = node.parentId
+        ? ((commit.before.nodes[node.parentId as AnyNodeId] as { children?: AnyNodeId[] })
+            ?.children ?? [])
+        : commit.before.rootNodeIds
+      return { node, position: siblings.indexOf(node.id) }
+    })
+  const nodeUpdates = Object.values(commit.current.nodes).flatMap((node) => {
+    const before = commit.before.nodes[node.id]
+    if (!before) return []
+    const data: Record<string, unknown> = {}
+    const removeFields: string[] = []
+    for (const key of new Set([...Object.keys(before), ...Object.keys(node)])) {
+      if (key === 'children') continue
+      if (!Object.hasOwn(node, key)) removeFields.push(key)
+      else if (!equal(before[key as keyof AnyNode], node[key as keyof AnyNode])) {
+        data[key] = node[key as keyof AnyNode]
+      }
+    }
+    return Object.keys(data).length > 0 || removeFields.length > 0
+      ? [{ id: node.id, data: data as Partial<AnyNode>, removeFields }]
+      : []
+  })
+  const materialChanges = new Set([
+    ...Object.keys(commit.before.materials),
+    ...Object.keys(commit.current.materials),
+  ])
+    .values()
+    .filter(
+      (id) =>
+        !equal(
+          commit.before.materials[id as SceneMaterialId],
+          commit.current.materials[id as SceneMaterialId],
+        ),
+    )
+    .map((id) => ({
+      id: id as SceneMaterialId,
+      material: commit.current.materials[id as SceneMaterialId] ?? null,
+    }))
+    .toArray()
+  return { materialChanges, nodeCreates, nodeDeletes, nodeUpdates }
 }
 
 describe('scene commit boundary', () => {
@@ -174,6 +232,199 @@ describe('scene commit boundary', () => {
 
     useScene.temporal.getState().undo()
     expect(levelNumber()).toBe(0)
+  })
+
+  test('reports every node changed by a structural mutation', () => {
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+    const wall = WallNode.parse({
+      id: 'wall_changed_closure',
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+    })
+
+    useScene.getState().createNode(wall, LEVEL_ID)
+
+    expect(commits).toHaveLength(1)
+    expect(commits[0]?.changedNodeIds).toEqual(new Set([LEVEL_ID, wall.id]))
+  })
+
+  test('includes cascade-deleted descendants and their surviving parent', () => {
+    const wall = WallNode.parse({
+      id: 'wall_cascade_closure',
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [LEVEL_ID]: { ...state.nodes[LEVEL_ID], children: [wall.id] } as AnyNode,
+        [wall.id]: wall,
+      },
+    }))
+    clearSceneHistory()
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    useScene.getState().deleteNode(LEVEL_ID)
+
+    expect(commits).toHaveLength(1)
+    expect(commits[0]?.changedNodeIds).toEqual(new Set([BUILDING_ID, LEVEL_ID, wall.id]))
+  })
+
+  test('includes both structural parents when a node is reparented', () => {
+    const otherLevel = LevelNode.parse({
+      id: 'level_commit_other',
+      parentId: BUILDING_ID,
+      children: [],
+      level: 1,
+    })
+    const wall = WallNode.parse({
+      id: 'wall_reparent_closure',
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [BUILDING_ID]: {
+          ...state.nodes[BUILDING_ID],
+          children: [LEVEL_ID, otherLevel.id],
+        } as AnyNode,
+        [LEVEL_ID]: { ...state.nodes[LEVEL_ID], children: [wall.id] } as AnyNode,
+        [otherLevel.id]: otherLevel,
+        [wall.id]: wall,
+      },
+    }))
+    clearSceneHistory()
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    useScene.getState().updateNode(wall.id, { parentId: otherLevel.id })
+
+    expect(commits[0]?.changedNodeIds).toEqual(new Set([LEVEL_ID, otherLevel.id, wall.id]))
+  })
+
+  test('reports the complete closure of an atomic node-change plan', () => {
+    const wall = WallNode.parse({
+      id: 'wall_atomic_closure',
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    useScene.getState().applyNodeChanges({ create: [{ node: wall, parentId: LEVEL_ID }] })
+
+    expect(commits[0]?.changedNodeIds).toEqual(new Set([LEVEL_ID, wall.id]))
+  })
+
+  test('publishes wall-driven slabs, ceilings, and wall sides in the originating commit', () => {
+    const walls = [
+      WallNode.parse({ id: 'wall_commit_a', parentId: LEVEL_ID, start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ id: 'wall_commit_b', parentId: LEVEL_ID, start: [4, 0], end: [4, 4] }),
+      WallNode.parse({ id: 'wall_commit_c', parentId: LEVEL_ID, start: [4, 4], end: [0, 4] }),
+    ]
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [LEVEL_ID]: { ...state.nodes[LEVEL_ID], children: walls.map((wall) => wall.id) } as AnyNode,
+        ...Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+      },
+    }))
+    clearSceneHistory()
+
+    let spaces: Record<string, Space> = {}
+    const editorStore = {
+      getState: () => ({
+        spaces,
+        setSpaces: (next: Record<string, Space>) => {
+          spaces = next
+        },
+      }),
+    }
+    let stopDetection = initSpaceDetectionSync(useScene, editorStore)
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    try {
+      const closingWall = WallNode.parse({
+        id: 'wall_commit_d',
+        parentId: LEVEL_ID,
+        start: [0, 4],
+        end: [0, 0],
+      })
+      useScene.getState().createNode(closingWall, LEVEL_ID)
+
+      expect(commits).toHaveLength(1)
+      const commit = commits[0]!
+      const publishedNodes = Object.values(commit.current.nodes)
+      expect(publishedNodes.filter((node) => node.type === 'wall')).toHaveLength(4)
+      expect(
+        publishedNodes.filter((node) => node.type === 'slab' && node.autoFromWalls),
+      ).toHaveLength(1)
+      expect(
+        publishedNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
+      ).toHaveLength(1)
+      expect(
+        publishedNodes
+          .filter((node) => node.type === 'wall')
+          .every((wall) => wall.frontSide !== 'unknown' || wall.backSide !== 'unknown'),
+      ).toBe(true)
+      const semanticallyChangedNodeIds = new Set(
+        new Set([...Object.keys(commit.before.nodes), ...Object.keys(commit.current.nodes)])
+          .values()
+          .filter((id) => commit.before.nodes[id] !== commit.current.nodes[id]),
+      )
+      expect(commit.changedNodeIds).toEqual(semanticallyChangedNodeIds)
+      expect(currentSnapshot()).toEqual(commit.current)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+
+      const operationPatch = operationPatchFromCommit(commit)
+      expect(operationPatch.nodeCreates.map(({ node }) => node.type).sort()).toEqual([
+        'ceiling',
+        'slab',
+        'wall',
+      ])
+
+      stopDetection()
+      unsubscribe()
+      unsubscribe = () => {}
+      spaces = {}
+      useScene.setState({
+        ...commit.before,
+        dirtyNodes: new Set<AnyNodeId>(),
+        readOnly: false,
+      } as never)
+      clearSceneHistory()
+      stopDetection = initSpaceDetectionSync(useScene, editorStore)
+      expect(applySceneOperationPatch(operationPatch)).toBe(true)
+      expect(areSceneSnapshotsEqual(commit.current, currentSnapshot())).toBe(true)
+      expect(Object.values(spaces)).toHaveLength(1)
+
+      const divider = WallNode.parse({
+        id: 'wall_commit_divider',
+        parentId: LEVEL_ID,
+        start: [2, 0],
+        end: [2, 4],
+      })
+      useScene.getState().createNode(divider, LEVEL_ID)
+
+      const receiverNodes = Object.values(useScene.getState().nodes)
+      expect(Object.values(spaces)).toHaveLength(2)
+      expect(
+        receiverNodes.filter((node) => node.type === 'slab' && node.autoFromWalls),
+      ).toHaveLength(2)
+      expect(
+        receiverNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
+      ).toHaveLength(2)
+    } finally {
+      stopDetection()
+    }
   })
 
   test('drops a compound transaction that returns to its semantic baseline', () => {
