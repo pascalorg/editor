@@ -739,11 +739,6 @@ function applyFloorplanViewport(
   mounted.svg.insertBefore(background, mounted.svg.firstChild)
 }
 
-/**
- * Collects the floorplan geometry for one level under the given export
- * scope (`'full'`, `'structure'`, or `'routing'`), walking the level's
- * subtree and any linked-level nodes through the same scope predicate.
- */
 function collectFloorplanGeometry(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
