@@ -33,14 +33,13 @@ import {
   CROUCH_CAPSULE,
   CROUCH_EYE_OFFSET,
   CROUCH_FLOAT_HEIGHT,
-  CROUCH_RUN_SPEED,
-  CROUCH_WALK_SPEED,
   EYE_LERP_SPEED,
   type MovementInput,
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
   useViewer,
+  useWalkthroughSpeeds,
   WALKTHROUGH_FOV,
 } from '@pascal-app/viewer'
 import { KeyboardControls } from '@react-three/drei'
@@ -664,6 +663,7 @@ export const FirstPersonControls = () => {
   const suspendRef = useRef(false)
   const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
   const [crouched, setCrouched] = useState(false)
+  const speeds = useWalkthroughSpeeds(crouched)
   const [isElevatorRideLocked, setIsElevatorRideLocked] = useState(false)
   const ridingElevatorRef = useRef<{
     elevatorId: AnyNodeId
@@ -1591,9 +1591,9 @@ export const FirstPersonControls = () => {
             gravity={9.81}
             jumpVel={5}
             key="first-person-controller"
-            maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
+            maxRunSpeed={speeds.run}
             maxSlope={1.2}
-            maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
+            maxWalkSpeed={speeds.walk}
             paused={isElevatorRideLocked}
             position={controllerStart.position}
             ref={setControllerApi}

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 
 /**
  * BEKÇİ: ana adreste çizilen sahne veri tabanına gitmek ZORUNDA.
@@ -21,8 +22,16 @@ import { readFileSync } from 'node:fs'
  * satırdı — `return <EditorApp />`.
  */
 
-const ROOT_PAGE = 'app/page.tsx'
-const source = readFileSync(ROOT_PAGE, 'utf8')
+/**
+ * Yollar bu dosyaya göre çözülüyor, çalışma dizinine göre değil.
+ *
+ * `turbo run test` her paketi kendi dizininde koşturur, o yüzden göreli yol
+ * CI'da çalışıyordu. Kök dizinden `bun test` diyen biri — ki tam süiti bir kere
+ * böyle koştururuz — ENOENT alıyordu. Test yeşil değil, **çöküyordu**; ve çöken
+ * bir bekçi, iddiasını hiç ölçmeyen bir bekçidir.
+ */
+const APP_DIR = path.join(import.meta.dir, '..')
+const source = readFileSync(path.join(APP_DIR, 'app/page.tsx'), 'utf8')
 
 /** Yorumlar hariç: dosya eski hâli yorumda ANLATIYOR. */
 const code = source
@@ -59,7 +68,7 @@ describe('kök editör veri tabanına kaydediyor', () => {
 })
 
 describe('çalışma alanı satırı', () => {
-  const lib = readFileSync('lib/workspace-scene.ts', 'utf8')
+  const lib = readFileSync(path.join(APP_DIR, 'lib/workspace-scene.ts'), 'utf8')
 
   /**
    * Satır `projectId` ile bulunuyor, adla değil. Ad kullanıcı tarafından

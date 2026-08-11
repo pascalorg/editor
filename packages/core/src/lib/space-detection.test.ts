@@ -717,6 +717,76 @@ describe('detectSpacesForLevel', () => {
   })
 })
 
+/**
+ * GUARD: no size at which a closed outline stops being a room.
+ *
+ * There used to be an upper area bound of 10 000 m², written as a bare number
+ * with no comment. Every building above it lost five things at once — `Space`,
+ * auto slab, auto ceiling, auto zone, and wall-tool auto-close — with no error
+ * and nothing in the console. A 100 × 120 m distribution warehouse is 12 000 m²
+ * and sat just past the edge, which is why "rooms stop working when the
+ * building gets big" was the shape of the report.
+ *
+ * The sweep matters more than any single size. A test at 12 000 m² alone would
+ * pass again the moment someone reinstated the bound at 20 000, so the sweep
+ * runs from a domestic room up to a 30 000 m² shed and asserts each one
+ * detects. Any reintroduced ceiling lands inside the range.
+ */
+describe('warehouse-scale rooms', () => {
+  const perimeter = (width: number, depth: number) => [
+    WallNode.parse({ start: [0, 0], end: [width, 0], height: 8 }),
+    WallNode.parse({ start: [width, 0], end: [width, depth], height: 8 }),
+    WallNode.parse({ start: [width, depth], end: [0, depth], height: 8 }),
+    WallNode.parse({ start: [0, depth], end: [0, 0], height: 8 }),
+  ]
+
+  test.each([
+    [10, 10],
+    [100, 99],
+    [100, 100],
+    [100, 101],
+    [120, 100],
+    [200, 150],
+  ])('a %i × %i m outline encloses a room', (width, depth) => {
+    const { roomPolygons, spaces } = detectSpacesForLevel('level-1', perimeter(width, depth))
+
+    expect(roomPolygons).toHaveLength(1)
+    expect(spaces).toHaveLength(1)
+  })
+
+  /**
+   * The other four consequences, on the size that was reported. Detection
+   * alone is not the feature — the floor has to appear, and the wall tool has
+   * to agree the outline is closed while you are still drawing it.
+   */
+  test('a 100 × 120 m warehouse gets a floor and closes as you draw it', () => {
+    const walls = perimeter(100, 120)
+    const { spaces } = detectSpacesForLevel('level-1', walls)
+    const { roomPolygons } = detectSpacesForLevel('level-1', walls)
+
+    expect(spaces[0]?.boundaryFaces).toHaveLength(4)
+    expect(planAutoSlabsForLevel(roomPolygons, []).create).toHaveLength(1)
+    expect(wallClosesRoom(walls, walls[3]!)).toBe(true)
+  })
+
+  /**
+   * The lower bound was NOT removed, and this is the half of the change that
+   * could go wrong quietly. Two walls doubling back on themselves enclose no
+   * area; without the `< 0.5` floor that degenerate face becomes a room and
+   * grows a zero-area slab.
+   */
+  test('a degenerate sliver is still not a room', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ start: [4, 0], end: [4, 0.01] }),
+      WallNode.parse({ start: [4, 0.01], end: [0, 0.01] }),
+      WallNode.parse({ start: [0, 0.01], end: [0, 0] }),
+    ]
+
+    expect(detectSpacesForLevel('level-1', walls).roomPolygons).toHaveLength(0)
+  })
+})
+
 describe('procedural zones', () => {
   test('adopts an exact room footprint and records its enclosing walls', () => {
     const walls = squareWalls()

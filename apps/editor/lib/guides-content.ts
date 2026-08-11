@@ -64,7 +64,7 @@ const EN: GuidesContent = {
             {
               heading: 'Create the scene',
               body: [
-                'Open your scene list from the editor’s status strip (“Open recent scenes”) and choose “Create new scene”. You land in an empty editor with a ground floor already prepared.',
+                'Open the Scenes tab in the left sidebar and choose “New scene”. You land in an empty editor with a ground floor already prepared.',
               ],
             },
             {
@@ -91,7 +91,7 @@ const EN: GuidesContent = {
             {
               heading: 'Saving',
               body: [
-                'There is no save button: your work is written to the server as you go, and the scene list shows when each scene was last touched. “All scenes” takes you back to the list.',
+                'There is no save button: your work is written to the server as you go, and the Scenes tab in the left sidebar shows when each scene was last touched.',
               ],
             },
           ],
@@ -107,6 +107,7 @@ const EN: GuidesContent = {
                 'Scene — the structure of what you have built, level by level.',
                 'Build — walls, floors, doors, windows, roofs and stairs.',
                 'Items — the catalogue of furniture and equipment.',
+                'Scenes — every scene you have saved: open one, start a new one, or import an IFC model.',
                 'Settings — per-scene preferences.',
               ],
             },
@@ -372,7 +373,7 @@ const EN: GuidesContent = {
             {
               heading: 'How to import',
               body: [
-                'Open your scene list and choose “Import IFC”, then pick the .ifc file. A new scene is created from it and opens when the conversion finishes.',
+                'Open the Scenes tab in the left sidebar and choose “Import IFC”, then pick the .ifc file. A new scene is created from it and opens when the conversion finishes.',
               ],
             },
             {
@@ -447,7 +448,7 @@ const TR: GuidesContent = {
             {
               heading: 'Sahneyi oluşturun',
               body: [
-                'Editörün üst şeridindeki “Son sahneleri aç” ile sahne listenizi açın ve “Yeni sahne oluştur” deyin. Zemin katı hazır, boş bir editöre düşersiniz.',
+                'Sol kenar çubuğundaki Sahneler sekmesini açıp “Yeni sahne” deyin. Zemin katı hazır, boş bir editöre düşersiniz.',
               ],
             },
             {
@@ -474,7 +475,7 @@ const TR: GuidesContent = {
             {
               heading: 'Kaydetme',
               body: [
-                'Kaydet düğmesi yoktur: çalışmanız siz çizdikçe sunucuya yazılır ve sahne listesi her sahnenin en son ne zaman değiştiğini gösterir. “Tüm sahneler” sizi listeye döndürür.',
+                'Kaydet düğmesi yoktur: çalışmanız siz çizdikçe sunucuya yazılır ve sol kenar çubuğundaki Sahneler sekmesi her sahnenin en son ne zaman değiştiğini gösterir.',
               ],
             },
           ],
@@ -490,6 +491,7 @@ const TR: GuidesContent = {
                 'Sahne — kat kat, ne inşa ettiğinizin yapısı.',
                 'Yapı — duvar, döşeme, kapı, pencere, çatı ve merdiven.',
                 'Nesneler — mobilya ve ekipman kataloğu.',
+                'Sahneler — kaydettiğiniz bütün sahneler: birini açın, yenisini başlatın ya da IFC modeli içe aktarın.',
                 'Ayarlar — sahneye özel tercihler.',
               ],
             },
@@ -755,7 +757,7 @@ const TR: GuidesContent = {
             {
               heading: 'Nasıl aktarılır',
               body: [
-                'Sahne listenizi açıp “IFC içe aktar” deyin ve .ifc dosyasını seçin. Dosyadan yeni bir sahne oluşturulur ve dönüşüm bitince açılır.',
+                'Sol kenar çubuğundaki Sahneler sekmesini açıp “IFC içe aktar” deyin ve .ifc dosyasını seçin. Dosyadan yeni bir sahne oluşturulur ve dönüşüm bitince açılır.',
               ],
             },
             {

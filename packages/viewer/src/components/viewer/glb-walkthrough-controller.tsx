@@ -24,6 +24,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { SCENE_LAYER } from '../../lib/layers'
+import { useWalkthroughSpeeds } from '../../lib/use-walkthrough-speeds'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
 
@@ -54,8 +55,6 @@ export const CROUCH_CAPSULE: [number, number, number, number] = [0.25, 0.2, 4, 8
 export const STAND_FLOAT_HEIGHT = 0.5
 export const CROUCH_FLOAT_HEIGHT = 0.25
 export const CROUCH_EYE_OFFSET = 0.1
-export const CROUCH_WALK_SPEED = 1
-export const CROUCH_RUN_SPEED = 1.4
 // Headroom (from the capsule centre, upward) required before uncrouching:
 // standing raises the centre by half the length delta plus the float delta,
 // and the standing capsule top sits standLength/2 + radius above the centre.
@@ -270,6 +269,7 @@ export function GlbWalkthroughController({ url }: { url: string }) {
   const suspendRef = useRef(false)
   const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
   const [crouched, setCrouched] = useState(false)
+  const speeds = useWalkthroughSpeeds(crouched)
   const [start, setStart] = useState<{ position: [number, number, number] } | null>(null)
   const [world, setWorld] = useState<GlbColliderWorld | null>(null)
 
@@ -495,9 +495,9 @@ export function GlbWalkthroughController({ url }: { url: string }) {
         floatSpringK={1200}
         gravity={9.81}
         jumpVel={5}
-        maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
+        maxRunSpeed={speeds.run}
         maxSlope={1.2}
-        maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
+        maxWalkSpeed={speeds.walk}
         position={start.position}
         ref={setControllerApi}
       />

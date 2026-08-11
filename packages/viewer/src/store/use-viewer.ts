@@ -162,6 +162,14 @@ type ViewerState = {
   walkthroughSuspended: boolean
   setWalkthroughSuspended: (suspended: boolean) => void
 
+  /** Let walkthrough pace grow with the building. See `lib/walkthrough-speed.ts`. */
+  walkthroughAutoSpeed: boolean
+  setWalkthroughAutoSpeed: (enabled: boolean) => void
+
+  /** User multiplier on top of the automatic one. 1 = leave it alone. */
+  walkthroughSpeedMultiplier: number
+  setWalkthroughSpeedMultiplier: (multiplier: number) => void
+
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
 
@@ -535,6 +543,13 @@ const useViewer = create<ViewerState>()(
       walkthroughSuspended: false,
       setWalkthroughSuspended: (suspended) => set({ walkthroughSuspended: suspended }),
 
+      walkthroughAutoSpeed: true,
+      setWalkthroughAutoSpeed: (enabled) => set({ walkthroughAutoSpeed: enabled }),
+
+      walkthroughSpeedMultiplier: 1,
+      setWalkthroughSpeedMultiplier: (multiplier) =>
+        set({ walkthroughSpeedMultiplier: multiplier }),
+
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
       inputDragging: false,
@@ -558,6 +573,8 @@ const useViewer = create<ViewerState>()(
         metricNotation: state.metricNotation,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
+        walkthroughAutoSpeed: state.walkthroughAutoSpeed,
+        walkthroughSpeedMultiplier: state.walkthroughSpeedMultiplier,
         projectPreferences: state.projectPreferences,
       }),
     },

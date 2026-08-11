@@ -38,8 +38,6 @@ export {
   CROUCH_CAPSULE,
   CROUCH_EYE_OFFSET,
   CROUCH_FLOAT_HEIGHT,
-  CROUCH_RUN_SPEED,
-  CROUCH_WALK_SPEED,
   EYE_LERP_SPEED,
   GlbWalkthroughController,
   STAND_CAPSULE,
@@ -161,6 +159,19 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
+export { useWalkthroughSpeeds } from './lib/use-walkthrough-speeds'
+export {
+  BASE_RUN_SPEED,
+  BASE_WALK_SPEED,
+  CROUCH_RUN_SPEED,
+  CROUCH_WALK_SPEED,
+  MAX_SPEED_SCALE,
+  REFERENCE_SCENE_RADIUS_M,
+  resolveSpeedScale,
+  resolveWalkthroughSpeeds,
+  type WalkthroughSpeedPreferences,
+  type WalkthroughSpeeds,
+} from './lib/walkthrough-speed'
 export { useItemLightPool } from './store/use-item-light-pool'
 export {
   applyCountryUnitDefault,
