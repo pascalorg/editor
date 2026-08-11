@@ -198,6 +198,7 @@ interface ProjectReport {
     shortBy: number
     neededBy: string
     pinnedPours: string[]
+    committedPours: string[]
     noMoveBecause?: string
     moves: Array<{
       pourId: string
@@ -213,6 +214,31 @@ interface ProjectReport {
       raisesElsewhere: Array<{ description: string; catalogId: string; from: number; to: number }>
     }>
   }>
+  committed?: {
+    committedPours: number
+    totalPours: number
+    committedAssemblyIds: string[]
+    spokenForFrom: string | null
+    spokenForTo: string | null
+    items: Array<{
+      description: string
+      catalogId: string
+      committedQuantity: number
+      from: string
+      to: string
+      days: number
+      pours: string[]
+    }>
+    rack: Array<{ kind: string; committedQuantity: number }>
+    drifted: Array<{
+      assemblyId: string
+      bookedFor: string
+      nowPouredOn: string | null
+      daysOut: number | null
+    }>
+    gaps: string[]
+  }
+  noCommitmentsBecause?: string
   beyondCapacity: Array<{ elementId: string; mark: string }>
   caveats: string[]
 }
@@ -960,6 +986,153 @@ describe('set_pour_date', () => {
     expect(solved.schedule?.pours[0]?.pourAt).toBe('2026-03-02')
     expect(solved.schedule?.pours.at(-1)?.pourAt).toBeNull()
     expect(solved.caveats.some((c) => c.includes('1 of 2 pours have no date'))).toBe(true)
+  })
+})
+
+/**
+ * Which of those dates anybody has agreed to.
+ *
+ * `commitments.test.ts` owns the sweep and `schedule-patch.test.ts` what committing means.
+ * What only this surface can get wrong is the two writes acting on one another: that the day
+ * stored is the day the pour has rather than one the model could name, that committing an
+ * undated pour is refused rather than recorded as a commitment to nothing, and that moving a
+ * booked pour afterwards goes through and comes back as a drift — because the one thing this
+ * surface must never do is silently re-book plant against a day nobody agreed to.
+ */
+describe('commit_pour', () => {
+  const shutterIds = (graph: SceneGraph): string[] =>
+    Object.values(graph.nodes as unknown as Record<string, { id: string; type: string }>)
+      .filter((node) => node.type === 'formwork-assembly')
+      .map((node) => node.id)
+  const stored = (graph: SceneGraph, id: string) =>
+    (graph.nodes as unknown as Record<string, { pourAt?: string; committedPourAt?: string }>)[
+      id
+    ] as { pourAt?: string; committedPourAt?: string }
+
+  const datedShutter = async () => {
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    await call(tools, 'set_formwork_settings', { schedule: { returnLeadDays: 3 } })
+    const [id] = shutterIds(graph)
+    await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-03-02' })
+    return { graph, tools, id: id as string }
+  }
+
+  test('the day agreed comes off the pour rather than out of the call', async () => {
+    // The shape of the tool, and the reason it takes a boolean: a model made to restate the
+    // date could book a day the programme does not have.
+    const { graph, tools, id } = await datedShutter()
+
+    const reply = await call(tools, 'commit_pour', { assemblyId: id, committed: true })
+
+    expect(reply).toContain('2026-03-02')
+    expect(reply).toContain('wall_1')
+    expect(stored(graph, id).committedPourAt).toBe('2026-03-02')
+  })
+
+  test('committing an undated pour is refused rather than recorded against nothing', async () => {
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+    const [id] = shutterIds(graph)
+
+    const reply = await call(tools, 'commit_pour', { assemblyId: id, committed: true })
+
+    expect(reply).toContain('set_pour_date first')
+    expect('committedPourAt' in stored(graph, id as string)).toBe(false)
+  })
+
+  test('an element id is refused and sent to the read that lists pours', async () => {
+    const { graph, tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const reply = await call(tools, 'commit_pour', { assemblyId: 'wall_1', committed: true })
+
+    expect(reply).toContain('schedule.pours')
+    expect(stored(graph, 'wall_1').committedPourAt).toBeUndefined()
+  })
+
+  test('releasing deletes the key and leaves the date standing', async () => {
+    const { graph, tools, id } = await datedShutter()
+    await call(tools, 'commit_pour', { assemblyId: id, committed: true })
+
+    await call(tools, 'commit_pour', { assemblyId: id, committed: false })
+
+    expect('committedPourAt' in stored(graph, id)).toBe(false)
+    expect(stored(graph, id).pourAt).toBe('2026-03-02')
+  })
+
+  test('a commitment puts what is booked on the bill, and no commitment puts a reason', async () => {
+    const { tools, id } = await datedShutter()
+
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    await call(tools, 'commit_pour', { assemblyId: id, committed: true })
+    const after = await project(tools, { elementIds: ['wall_1'] })
+
+    // Absent with a reason rather than absent silently: an empty block beside a present
+    // programme reads as a fault in the tool rather than as nobody having agreed anything.
+    expect(before.committed).toBeUndefined()
+    expect(before.noCommitmentsBecause).toContain('commit_pour')
+    expect(after.committed?.committedPours).toBe(1)
+    expect(after.committed?.committedAssemblyIds).toEqual([id])
+    expect(after.committed?.drifted).toEqual([])
+    expect(after.noCommitmentsBecause).toBeUndefined()
+  })
+
+  test('moving a booked pour goes through, and the bill reports the drift', async () => {
+    // Sites move booked pours, so this is deliberately not an error — but the hire desk is
+    // still holding the old day, and nothing else in the answer would show it.
+    const { graph, tools, id } = await datedShutter()
+    await call(tools, 'commit_pour', { assemblyId: id, committed: true })
+
+    await call(tools, 'set_pour_date', { assemblyId: id, pourAt: '2026-03-09' })
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(stored(graph, id).committedPourAt).toBe('2026-03-02')
+    expect(solved.committed?.drifted).toEqual([
+      { assemblyId: id, bookedFor: '2026-03-02', nowPouredOn: '2026-03-09', daysOut: 7 },
+    ])
+    expect(solved.caveats.some((c) => c.includes('a call to make'))).toBe(true)
+  })
+
+  test('a booked pour is left out of the move proposals and named in them', async () => {
+    // The exclusion, on the surface where a model would otherwise keep proposing a move
+    // somebody has already agreed not to make. Three walls in cast order — two on one day and
+    // the third a month later — because with only two the pair pins itself and nothing moves.
+    const build = async (owned: Record<string, number>, commit: boolean) => {
+      const { graph, tools } = scene()
+      for (const [index, elementId] of ['wall_1', 'wall_2', 'wall_3'].entries()) {
+        await shutter(tools, elementId)
+        await call(tools, 'set_element_construction', { elementId, castOrder: index + 1 })
+      }
+      await call(tools, 'set_formwork_settings', {
+        schedule: { returnLeadDays: 3 },
+        ownedStock: owned,
+      })
+      const dates = ['2026-03-02', '2026-03-02', '2026-03-30']
+      const ids = shutterIds(graph)
+      for (const [index, id] of ids.entries())
+        await call(tools, 'set_pour_date', { assemblyId: id, pourAt: dates[index] as string })
+      if (commit)
+        await call(tools, 'commit_pour', { assemblyId: ids[1] as string, committed: true })
+      return { ids, solved: await project(tools) }
+    }
+
+    const { solved: empty } = await build({}, false)
+    const panel = empty.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+    const rack = { [panel.catalogId]: panel.mostAtOnce - 1 }
+    const free = await build(rack, false)
+    const booked = await build(rack, true)
+
+    // Every build is a fresh scene, so the two runs share no ids — each is checked against its
+    // own second pour. Free, that is the one with a month of room. Booked, the move is nobody's
+    // to make, and the pour is still standing in the overlap, so the shortage is unchanged.
+    const answerFor = ({ solved }: { solved: ProjectReport }) =>
+      solved.moveInsteadOfBuying?.find((entry) => entry.catalogId === panel.catalogId)
+    expect(answerFor(free)?.moves[0]?.pourId).toBe(free.ids[1] as string)
+    const answer = answerFor(booked)
+    expect(answer?.committedPours).toEqual([booked.ids[1] as string])
+    expect(answer?.moves.some((move) => move.pourId === booked.ids[1])).toBe(false)
+    expect(answer?.shortBy).toBe(answerFor(free)?.shortBy as number)
   })
 })
 

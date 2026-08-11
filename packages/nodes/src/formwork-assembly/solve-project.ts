@@ -4,7 +4,9 @@ import type {
   BomLabour,
   BomLine,
   BomSupply,
+  CommittablePour,
   FormworkAcquisition,
+  FormworkCommitments,
   FormworkResequence,
   FormworkSchedule,
   FormworkSequence,
@@ -25,7 +27,10 @@ import {
   bomLines,
   bomSupply,
   bomWeightKg,
+  committedPourIds,
   formworkAcquisition,
+  formworkCommitmentCaveats,
+  formworkCommitments,
   formworkResequence,
   formworkSchedule,
   formworkScheduleCaveats,
@@ -197,6 +202,20 @@ export interface ProjectFormwork {
    */
   resequence?: FormworkResequence
   /**
+   * What is spoken for — how much of each item is booked, from when to when, and which
+   * bookings the programme has since moved off. Absent where no pour is committed.
+   *
+   * The only field here derived from a schema field nothing else reads. Every other
+   * programme answer is a consequence of dates the project already stated; this one needs
+   * `committedPourAt`, because the scene recorded what the project *intends* and had nowhere
+   * to record what anybody has *agreed*.
+   *
+   * Absent rather than empty for the reason `sets` is absent below its threshold: a job with
+   * no bookings and a job whose bookings came to nothing read identically on a panel, and only
+   * one of them is a state to act on.
+   */
+  commitments?: FormworkCommitments
+  /**
    * True where the striking table came from a different code family than the pressure
    * standard, because the project's own family publishes none.
    *
@@ -344,6 +363,11 @@ export function solveProjectFormwork(
   // here: `castOrder` and `pourId` are stated on the *element* and a pour is a shutter, so only
   // the layer holding both can join them. Core's sequencer never sees a node.
   const sequenceable: SequenceablePour[] = []
+  // And what has been agreed, off the same walk. `pourAt` is carried alongside rather than read
+  // back off the schedule, because the pair is the whole question: a commitment matters only
+  // against the date the project now states, and the schedule's row has already had the leads
+  // applied to it.
+  const committable: CommittablePour[] = []
   for (const element of elements) {
     const hostKind = element.host.type as 'wall' | 'column' | 'slab'
     const host = element.host as CastableHostNode & { castOrder?: number; pourId?: string }
@@ -373,6 +397,13 @@ export function solveProjectFormwork(
         liftIndex: shutter.assembly.liftIndex ?? 0,
         ...(host.castOrder === undefined ? {} : { castOrder: host.castOrder }),
         ...(host.pourId === undefined ? {} : { pourId: host.pourId }),
+      })
+      committable.push({
+        id,
+        ...(shutter.assembly.pourAt === undefined ? {} : { pourAt: shutter.assembly.pourAt }),
+        ...(shutter.assembly.committedPourAt === undefined
+          ? {}
+          : { committedPourAt: shutter.assembly.committedPourAt }),
       })
       // Through `bomLines` rather than counting parts directly, so a shutter's quantities are
       // the same arithmetic as the bill's — a consumable is measured in its own unit and a
@@ -419,11 +450,27 @@ export function solveProjectFormwork(
   // float in it, and reporting the edges alone would put a dependency list on a panel whose every
   // allowance column is blank.
   const sequence = anyDated ? formworkSequence(sequenceable, schedule) : undefined
-  // The one output derived from three others. Every input is this solution's own, so a proposed
-  // move cannot be compared against a peak the reader is not looking at.
+  // Off the same schedule and the same walk, so a window cannot be swept over a date the
+  // programme above it does not have. Unlike `sets` this has no coverage threshold: one pour
+  // somebody has booked is a real booking, and there is no peak here to be plausibly small.
+  //
+  // Not gated on `anyDated` either, which every other block here is. A booking outlives the date
+  // it was made against — clear the last date on the job and the plant is still reserved, which
+  // is the one state in this whole feature nothing else would report. The module's own "nobody
+  // has committed" refusal is the only condition.
+  const commitments = formworkCommitments(schedule, pourQuantities, committable)
+  // The one output derived from three others — four now. Every input is this solution's own, so
+  // a proposed move cannot be compared against a peak the reader is not looking at, and cannot
+  // offer to move a pour the windows above it report as booked.
   const resequence =
     sequence && acquisition && acquisition.shortfalls.length > 0
-      ? formworkResequence(acquisition, schedule, pourQuantities, sequence)
+      ? formworkResequence(
+          acquisition,
+          schedule,
+          pourQuantities,
+          sequence,
+          committedPourIds(committable),
+        )
       : undefined
 
   return {
@@ -449,6 +496,7 @@ export function solveProjectFormwork(
     ...(acquisition ? { acquisition } : {}),
     ...(sequence ? { sequence } : {}),
     ...(resequence ? { resequence } : {}),
+    ...(commitments ? { commitments } : {}),
     strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
@@ -557,6 +605,10 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   // not a critical path" has to arrive before any figure that was derived from the float.
   if (solution.sequence) out.push(...formworkSequenceCaveats(solution.sequence))
   if (solution.resequence) out.push(...resequenceCaveats(solution.resequence))
+  // Last, because every figure above it is what the job needs and this is the smaller number
+  // that has actually been agreed — read the other way round, a reader takes the committed
+  // quantity for the requirement and orders short by every uncommitted pour.
+  if (solution.commitments) out.push(...formworkCommitmentCaveats(solution.commitments))
   return out
 }
 

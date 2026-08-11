@@ -88,6 +88,40 @@ export const FormworkAssemblyNode = BaseNode.extend({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
 
+  /**
+   * The day the plant is actually booked against, `YYYY-MM-DD`. Absent means nobody has
+   * committed to this pour yet.
+   *
+   * `pourAt` is what the project currently intends and this is what somebody has agreed
+   * to. Every date in this model until now has been the first kind: typed by whoever was
+   * planning, moved freely by anybody, and — since `resequence.ts` shipped — offered up as
+   * a candidate to shift eight days to save 24 panels. None of that is safe once a hire
+   * company has the delivery in its diary and the following trade has been told when the
+   * floor is theirs. That is a different claim about the same day, and it needs its own
+   * field rather than a flag, for the reason below.
+   *
+   * **A date rather than a boolean, because the two can come apart and that is the whole
+   * point.** A `committed: true` beside `pourAt` would silently follow `pourAt` wherever it
+   * went, so moving a booked pour would look exactly like moving a free one and the
+   * commitment would re-attach itself to the new day as though the hire desk had agreed to
+   * it. Storing the day that was agreed instead means a `pourAt` that has moved off it is
+   * *visible*: the plant is booked for one day and the programme now says another, which is
+   * a phone call somebody has to make rather than a state the model should hide.
+   *
+   * So the four states are distinct and each means something different: neither field is
+   * unprogrammed; `pourAt` alone is an intent, and free to move; the two equal is committed;
+   * and the two unequal is a commitment the programme has drifted off.
+   *
+   * Writing it does not move `pourAt` and moving `pourAt` does not clear it. A site really
+   * does move committed pours, and that event is expensive rather than invalid — refusing
+   * the edit would only push the user into clearing the commitment first, which loses the
+   * one fact worth keeping.
+   */
+  committedPourAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+
   /** Catalog system; absent means the project default. */
   systemId: z.string().trim().max(120).optional(),
   /**
@@ -108,6 +142,7 @@ export const FormworkAssemblyNode = BaseNode.extend({
   - segmentIndex: which pour segment along the host's length, 0-based
   - liftIndex: which lift up the host, 0-based; each non-bottom lift sits on a construction joint
   - pourAt: the day this pour is cast, YYYY-MM-DD; absent means unprogrammed and the takeoff carries no dates for it. Per pour rather than per element: a wall cast in three lifts has three dates
+  - committedPourAt: the day the plant is actually booked against, YYYY-MM-DD; absent means nobody has committed to this pour. pourAt is what the project intends and this is what somebody agreed to, so a committedPourAt that no longer equals pourAt is a booking the programme has drifted off rather than an error
   - systemId: catalog formwork system; absent means the project default
   - panelWidth: widest catalog panel the layout may spend, meters, default 0.6
   - fillerPosition: where the non-modular closing piece goes in the panel run

@@ -1,4 +1,5 @@
 import { ACQUIRE_GAP_LABELS, ACQUIRE_VERDICT_LABELS, type FormworkAcquisition } from './acquire'
+import { COMMITMENT_GAP_LABELS, type FormworkCommitments } from './commitments'
 import { type BomCost, COST_GAP_LABELS, type CostLine } from './cost'
 import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
 import type { BomHire, HireLine } from './hire'
@@ -134,6 +135,16 @@ export interface BomCsvScope {
    * it would leave behind. A move with no "after" figure beside it reads as free.
    */
   resequence?: FormworkResequence
+  /**
+   * What is booked, where anybody has committed to a pour date.
+   *
+   * The one block in this file whose figures are deliberately *smaller* than the block above
+   * it, and the only place that matters is a spreadsheet: a reader who sorts on quantity finds
+   * a committed 40 beside a peak of 120 and takes the difference for a shortfall. So the block
+   * is last, its header says what it is not, and the quantity column is named "Committed" with
+   * no "Peak" anywhere near it.
+   */
+  commitments?: FormworkCommitments
 }
 
 /**
@@ -730,6 +741,54 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
           ].join(','),
         )
       }
+    }
+  }
+
+  const commitments = scope.commitments
+  if (commitments && (commitments.windows.length > 0 || commitments.drifts.length > 0)) {
+    rows.push('')
+    rows.push(
+      [
+        'COMMITTED',
+        cell(
+          `What somebody has agreed to, over ${commitments.committedPours} of ${commitments.totalPours} pours — not what the job needs. Every figure here is swept over the committed pours alone, so it is smaller than the peak above wherever a pour is still uncommitted and ordering to it would leave the rest short`,
+        ),
+      ].join(','),
+    )
+    rows.push(['Item', 'Catalog id', 'Committed', 'From', 'To', 'Days', 'Pours'].join(','))
+    for (const window of commitments.windows) {
+      rows.push(
+        [
+          cell(window.description),
+          cell(window.catalogId),
+          window.committedQuantity,
+          cell(window.from),
+          cell(window.to),
+          window.days,
+          cell(window.pourIds.join(' ')),
+        ].join(','),
+      )
+    }
+    if (commitments.drifts.length > 0) {
+      // DRIFT rather than a note, and one row per pour rather than a count: this is the state
+      // the whole block exists to expose, and it is the only figure in the file a reader has to
+      // act on by picking up a phone. A cleared date says so in words, because "" days out of a
+      // booking would read as none.
+      rows.push(['DRIFT', 'Pour', 'Booked for', 'Now poured', 'Days out'].join(','))
+      for (const drift of commitments.drifts) {
+        rows.push(
+          [
+            '',
+            cell(drift.pourId),
+            cell(drift.committedAt),
+            cell(drift.pourAt ?? 'no date — cleared'),
+            drift.driftDays === undefined ? '' : drift.driftDays,
+          ].join(','),
+        )
+      }
+    }
+    for (const gap of commitments.gaps) {
+      rows.push(['Commitment gap', cell(COMMITMENT_GAP_LABELS[gap])].join(','))
     }
   }
 

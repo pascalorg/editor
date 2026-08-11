@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../../operations'
 import { registerAttachFormwork } from './attach-formwork'
+import { registerCommitPour } from './commit-pour'
 import { registerInspectFormworkParts } from './inspect-formwork-parts'
 import { registerInspectFormworkSettings } from './inspect-formwork-settings'
 import { registerInspectPourUnits } from './inspect-pour-units'
@@ -107,6 +108,23 @@ import { registerValidateFormwork } from './validate-formwork'
  * date has only the programme somebody wrote. So nothing is derived from a sequence, and a
  * project that has dated nothing gets no calendar at all rather than one inferred from the
  * order the shutters were built in.
+ *
+ * ## Why `commit_pour` follows it, and why it records a conversation rather than a building
+ *
+ * A date on its own is an intent, and the takeoff treats it as one: the resequencing
+ * proposals read every dated pour as a candidate to shift, because float says a pour *could*
+ * move. Float says nothing about whether anybody would let it. So an agent with only
+ * `set_pour_date` is one whose proposals keep offering to move the pour the hire desk has
+ * already booked plant against — every time it reads the takeoff, in the same wording, with
+ * no way to record why the answer was no last time.
+ *
+ * It is the only write on this surface whose input describes nothing in the model. The
+ * commitment is a phone call: the hire company has the day, the following trade has been
+ * told. Which is why it takes a boolean and not a date — the day committed to is the day the
+ * pour has, so a caller cannot commit to one the programme does not carry — and why moving a
+ * committed pour afterwards is allowed. Sites move booked pours. The drift is reported back
+ * through `inspect_project_formwork` as a call somebody owes the desk, rather than blocked as
+ * an error that would only make an agent release the commitment and lose what was agreed.
  */
 export function registerFormworkTools(server: McpServer, operations: SceneOperations): void {
   registerListCastableElements(server, operations)
@@ -121,9 +139,11 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerInspectPourUnits(server, operations)
   registerAttachFormwork(server, operations)
   registerSetPourDate(server, operations)
+  registerCommitPour(server, operations)
 }
 
 export { attachFormworkOutput } from './attach-formwork'
+export { commitPourOutput } from './commit-pour'
 export { inspectFormworkPartsOutput } from './inspect-formwork-parts'
 export { inspectFormworkSettingsOutput } from './inspect-formwork-settings'
 export { inspectPourUnitsOutput } from './inspect-pour-units'

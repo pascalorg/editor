@@ -211,6 +211,7 @@ interface BillReply {
     shortBy: number
     neededBy: string
     pinnedPours: string[]
+    committedPours: string[]
     noMoveBecause?: string
     moves: Array<{
       pourId: string
@@ -226,6 +227,31 @@ interface BillReply {
       raisesElsewhere: Array<{ description: string; catalogId: string; from: number; to: number }>
     }>
   }>
+  committed?: {
+    committedPours: number
+    totalPours: number
+    committedAssemblyIds: string[]
+    spokenForFrom: string | null
+    spokenForTo: string | null
+    items: Array<{
+      description: string
+      catalogId: string
+      committedQuantity: number
+      from: string
+      to: string
+      days: number
+      pours: string[]
+    }>
+    rack: Array<{ kind: string; committedQuantity: number }>
+    drifted: Array<{
+      assemblyId: string
+      bookedFor: string
+      nowPouredOn: string | null
+      daysOut: number | null
+    }>
+    gaps: string[]
+  }
+  noCommitmentsBecause?: string
   caveats: string[]
 }
 
@@ -679,6 +705,7 @@ describe('the formwork MCP tools', () => {
         'inspect_pour_units',
         'attach_formwork',
         'set_pour_date',
+        'commit_pour',
       ]),
     )
   })
@@ -2025,6 +2052,158 @@ describe('the formwork MCP tools', () => {
       // the job — which is what a sort over a sentinel does.
       expect(reply.schedule?.pours[0]?.pourAt).toBe('2026-03-02')
       expect(reply.schedule?.pours.at(-1)?.pourAt).toBeNull()
+    })
+  })
+
+  /**
+   * Which of those dates anybody has agreed to.
+   *
+   * `schedule-patch.test.ts` owns what committing means and `commitments.test.ts` the sweep.
+   * What only this layer can get wrong is the pair of writes acting on one another: that the
+   * day stored is the day the pour *has* rather than one the caller could name, that
+   * committing an undated pour is refused rather than stored as a commitment to nothing, and
+   * that moving a committed pour afterwards goes through and is reported — because the one
+   * thing this surface must not do is quietly re-book the plant against a day nobody agreed.
+   */
+  describe('committing a pour', () => {
+    interface CommitReply {
+      assemblyId: string
+      elementId: string | null
+      committedPourAt: string | null
+      message: string
+    }
+
+    const shutterIds = async (): Promise<string[]> => {
+      await call('attach_formwork', { elementId: 'wall_1' })
+      return (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+        .filter((node) => node.type === 'formwork-assembly')
+        .map((node) => node.id as string)
+    }
+    const stored = (id: string) =>
+      bridge.getNodes()[id as AnyNodeId] as unknown as {
+        pourAt?: string
+        committedPourAt?: string
+      }
+
+    test('the day agreed comes off the pour rather than out of the call', async () => {
+      // The whole shape of the tool. A caller made to restate the date could book a day the
+      // programme does not have, so the input is a boolean and the day is read from the pour.
+      load(tallWall())
+      const [id] = await shutterIds()
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+
+      const reply = await call<CommitReply>('commit_pour', {
+        assemblyId: id as string,
+        committed: true,
+      })
+
+      expect(reply.committedPourAt).toBe('2026-03-02')
+      expect(reply.elementId).toBe('wall_1')
+      expect(stored(id as string).committedPourAt).toBe('2026-03-02')
+    })
+
+    test('committing a pour nobody has dated is refused, not stored as a commitment to nothing', async () => {
+      load(tallWall())
+      const [id] = await shutterIds()
+
+      const result = await client.callTool({
+        name: 'commit_pour',
+        arguments: { assemblyId: id as string, committed: true },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('set_pour_date first')
+      expect('committedPourAt' in stored(id as string)).toBe(false)
+    })
+
+    test('releasing deletes the key rather than storing a date-shaped absence', async () => {
+      load(tallWall())
+      const [id] = await shutterIds()
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+      await call('commit_pour', { assemblyId: id as string, committed: true })
+
+      const reply = await call<CommitReply>('commit_pour', {
+        assemblyId: id as string,
+        committed: false,
+      })
+
+      expect(reply.committedPourAt).toBeNull()
+      expect('committedPourAt' in stored(id as string)).toBe(false)
+      // The date itself survives: releasing a commitment unprogrammes nothing.
+      expect(stored(id as string).pourAt).toBe('2026-03-02')
+    })
+
+    test('an element id is refused and sent to the read that lists pours', async () => {
+      load(tallWall())
+      await shutterIds()
+
+      const result = await client.callTool({
+        name: 'commit_pour',
+        arguments: { assemblyId: 'wall_1', committed: true },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('schedule.pours')
+    })
+
+    test('a commitment puts what is booked on the bill, uncommitted puts a reason instead', async () => {
+      load(withSettings(tallWall(), { schedule: { returnLeadDays: 3 } }))
+      const [id] = await shutterIds()
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+
+      const before = await call<BillReply>('inspect_project_formwork')
+      await call('commit_pour', { assemblyId: id as string, committed: true })
+      const after = await call<BillReply>('inspect_project_formwork')
+
+      // Absent with a reason rather than absent silently: an empty block beside a present
+      // programme reads as a fault in the tool rather than as nobody having agreed anything.
+      expect(before.committed).toBeUndefined()
+      expect(before.noCommitmentsBecause).toContain('commit_pour')
+      expect(after.committed?.committedPours).toBe(1)
+      expect(after.committed?.committedAssemblyIds).toEqual([id])
+      expect(after.committed?.spokenForFrom).not.toBeNull()
+      expect(after.committed?.drifted).toEqual([])
+      expect(after.noCommitmentsBecause).toBeUndefined()
+    })
+
+    test('moving a booked pour goes through and is reported as a drift off the booking', async () => {
+      // The one interaction between the two writes, and the design decision worth pinning:
+      // sites move booked pours, so this is not an error — but the hire desk is still holding
+      // the old day, and nothing else in the answer would show it.
+      load(withSettings(tallWall(), { schedule: { returnLeadDays: 3 } }))
+      const [id] = await shutterIds()
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+      await call('commit_pour', { assemblyId: id as string, committed: true })
+
+      const moved = await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-09' })
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      expect(moved).toBeDefined()
+      expect(stored(id as string).committedPourAt).toBe('2026-03-02')
+      expect(reply.committed?.drifted).toEqual([
+        {
+          assemblyId: id as string,
+          bookedFor: '2026-03-02',
+          nowPouredOn: '2026-03-09',
+          daysOut: 7,
+        },
+      ])
+      expect(reply.caveats.some((line) => line.includes('a call to make'))).toBe(true)
+    })
+
+    test('a date cleared out from under a booking is the third case, not a zero drift', async () => {
+      load(withSettings(tallWall(), { schedule: { returnLeadDays: 3 } }))
+      const [id] = await shutterIds()
+      await call('set_pour_date', { assemblyId: id as string, pourAt: '2026-03-02' })
+      await call('commit_pour', { assemblyId: id as string, committed: true })
+      await call('set_pour_date', { assemblyId: id as string, pourAt: null })
+
+      const reply = await call<BillReply>('inspect_project_formwork')
+
+      // No programme left to sweep, so the block is gone — but the caveat has to survive it,
+      // because plant is still reserved for a pour the programme no longer places.
+      expect(reply.committed?.drifted[0]?.nowPouredOn ?? null).toBeNull()
+      expect(reply.caveats.some((line) => line.includes('no longer places'))).toBe(true)
     })
   })
 

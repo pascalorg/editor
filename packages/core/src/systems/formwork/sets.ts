@@ -217,7 +217,7 @@ interface Interval {
  * `returnOffset` is recovered from the pour's own two dates rather than taken from the
  * settings, so a per-target release cannot disagree with the release the programme printed.
  */
-interface PourWindow {
+export interface PourWindow {
   id: string
   from: number
   /** The day the last of this pour's plant comes free, inclusive. */
@@ -228,7 +228,15 @@ interface PourWindow {
   strikeDayByTarget: Map<StrikeTarget, number>
 }
 
-function windowsFor(schedule: FormworkSchedule): {
+/**
+ * Exported for `commitments.ts`, which asks a different question of the same intervals.
+ *
+ * A second implementation there would be a second place to get the release-day convention
+ * wrong — `to` is the day *before* the release here and the release day itself in
+ * `scheduleOccupancyDays` — and a commitment window that disagreed with the set count about
+ * which day a set comes free would be two answers about one booking.
+ */
+export function pourWindowsFor(schedule: FormworkSchedule): {
   windows: PourWindow[]
   unusable: PourSchedule[]
 } {
@@ -330,7 +338,7 @@ export function formworkSetCount(
   const totalPours = schedule.pours.length
   if (totalPours === 0) return undefined
 
-  const { windows, unusable } = windowsFor(schedule)
+  const { windows, unusable } = pourWindowsFor(schedule)
   const coverage = windows.length / totalPours
   if (coverage < SET_COUNT_COVERAGE_THRESHOLD) return undefined
 

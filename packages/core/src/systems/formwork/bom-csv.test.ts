@@ -9,6 +9,7 @@ import {
   bomSupply,
   type FormworkSetCount,
   formworkAcquisition,
+  formworkCommitments,
   formworkResequence,
   formworkSchedule,
   formworkSequence,
@@ -1154,6 +1155,149 @@ describe('bomCsv', () => {
 
       expect(rows(csv).some((row) => row.startsWith('PRECEDENCE AND FLOAT,'))).toBe(false)
       expect(rows(csv).some((row) => row.startsWith('MOVE INSTEAD OF BUYING,'))).toBe(false)
+    })
+  })
+
+  describe('what has been agreed to', () => {
+    /**
+     * Two overlapping pours holding 30 panels each, with whichever of them the caller names
+     * booked — and the whole chain again rather than a fixture, because the claim under test
+     * is that the committed figure is *smaller* than the peak printed above it in the same
+     * file. A hand-built commitment could satisfy every assertion here while disagreeing with
+     * the set-count block a reader is comparing it against.
+     */
+    const booked = (commitments: Record<string, string | undefined>) => {
+      const ids = ['fwasm_a', 'fwasm_b']
+      const schedule = formworkSchedule(
+        ids.map((id) => ({ id, pourAt: '2026-03-09', striking: [period('vertical-form')] })),
+        { returnLeadDays: 1 },
+      )
+      const quantities = ids.map((id) => ({
+        id,
+        quantities: [
+          {
+            catalogId: 'framax-2700-900',
+            kind: 'panel' as const,
+            description: 'Framax Xlife 2700 × 900',
+            quantity: 30,
+            target: 'vertical-form' as const,
+          },
+        ],
+      }))
+      const sets = formworkSetCount(schedule, quantities) as FormworkSetCount
+      return bomCsv([line({ quantity: 60 })], {
+        subject: 'Project',
+        schedule,
+        sets,
+        commitments: formworkCommitments(
+          schedule,
+          quantities,
+          ids.map((id) => ({
+            id,
+            pourAt: '2026-03-09',
+            ...(commitments[id] === undefined
+              ? {}
+              : { committedPourAt: commitments[id] as string }),
+          })),
+        ),
+      })
+    }
+
+    test('the committed quantity is under the peak, and the banner says why', () => {
+      // The one thing a reader can get catastrophically wrong from this file: 30 booked
+      // against a peak of 60 is not a job needing 30, and the difference is not a shortfall.
+      const all = rows(booked({ fwasm_a: '2026-03-09' }))
+      const banner = all.find((row) => row.startsWith('COMMITTED,')) as string
+
+      expect(banner).toContain('1 of 2 pours')
+      expect(banner).toContain('not what the job needs')
+      expect(banner).toContain('ordering to it would leave the rest short')
+      expect(all.some((row) => row.startsWith('Framax Xlife 2700 × 900,framax-2700-900,30,'))).toBe(
+        true,
+      )
+      // Printed after the peak rather than beside it, so the two cannot be differenced in a
+      // reader's head as they scan one row.
+      expect(all.findIndex((row) => row.startsWith('COMMITTED,'))).toBeGreaterThan(
+        all.findIndex((row) => row.startsWith('SETS,')),
+      )
+    })
+
+    test('a booking the programme has moved off gets a row per pour, not a count', () => {
+      // The state the block exists for, and the only figure in the file whose remedy is a
+      // phone call: the hire desk holds the 9th and the pour is now on the 16th.
+      const ids = ['fwasm_a', 'fwasm_b']
+      const schedule = formworkSchedule(
+        [
+          { id: 'fwasm_a', pourAt: '2026-03-16', striking: [period('vertical-form')] },
+          { id: 'fwasm_b', pourAt: '2026-03-09', striking: [period('vertical-form')] },
+        ],
+        { returnLeadDays: 1 },
+      )
+      const quantities = ids.map((id) => ({
+        id,
+        quantities: [
+          {
+            catalogId: 'framax-2700-900',
+            kind: 'panel' as const,
+            description: 'Framax Xlife 2700 × 900',
+            quantity: 30,
+            target: 'vertical-form' as const,
+          },
+        ],
+      }))
+      const csv = bomCsv([line({ quantity: 60 })], {
+        subject: 'Project',
+        schedule,
+        commitments: formworkCommitments(schedule, quantities, [
+          { id: 'fwasm_a', pourAt: '2026-03-16', committedPourAt: '2026-03-09' },
+          { id: 'fwasm_b', pourAt: '2026-03-09' },
+        ]),
+      })
+
+      const all = rows(csv)
+      expect(all).toContain('DRIFT,Pour,Booked for,Now poured,Days out')
+      expect(all).toContain(',fwasm_a,2026-03-09,2026-03-16,7')
+    })
+
+    test('a date cleared out from under a booking says so in words', () => {
+      // An empty days-out cell would read as no drift at all, and this is the worse case:
+      // plant reserved for a pour the programme no longer places anywhere.
+      const schedule = formworkSchedule(
+        [{ id: 'fwasm_b', pourAt: '2026-03-09', striking: [period('vertical-form')] }],
+        { returnLeadDays: 1 },
+      )
+      const csv = bomCsv([line({ quantity: 60 })], {
+        subject: 'Project',
+        schedule,
+        commitments: formworkCommitments(
+          schedule,
+          [
+            {
+              id: 'fwasm_a',
+              quantities: [
+                {
+                  catalogId: 'framax-2700-900',
+                  kind: 'panel' as const,
+                  description: 'Framax Xlife 2700 × 900',
+                  quantity: 30,
+                  target: 'vertical-form' as const,
+                },
+              ],
+            },
+          ],
+          [{ id: 'fwasm_a', committedPourAt: '2026-03-09' }],
+        ),
+      })
+
+      const all = rows(csv)
+      expect(all).toContain(',fwasm_a,2026-03-09,no date — cleared,')
+      expect(all.some((row) => row.startsWith('Commitment gap,'))).toBe(true)
+    })
+
+    test('a programme nobody has committed to carries no block at all', () => {
+      // Not an empty table: a heading with no rows under it reads as a booking that came
+      // out empty, and that is a different claim from nobody having agreed anything.
+      expect(rows(booked({})).some((row) => row.startsWith('COMMITTED,'))).toBe(false)
     })
   })
 })

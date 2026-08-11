@@ -5,6 +5,7 @@ import {
   FormworkDesignSummary,
   FormworkHostSummary,
   FormworkPartsSummary,
+  FormworkPourCommitment,
   FormworkPourDate,
   FormworkScopeSummary,
   FormworkSelectedPart,
@@ -34,7 +35,12 @@ export const formworkAssemblyParametrics: ParametricDescriptor<FormworkAssemblyN
     // times it is measured against are project settings, not this shutter's.
     {
       label: 'Programme',
-      fields: [{ key: 'pourAt', kind: 'custom', component: FormworkPourDate }],
+      // The commitment immediately under the date, because it is a statement *about* that
+      // date and unreadable apart from it.
+      fields: [
+        { key: 'pourAt', kind: 'custom', component: FormworkPourDate },
+        { key: 'committedPourAt', kind: 'custom', component: FormworkPourCommitment },
+      ],
     },
     {
       label: 'Panels',

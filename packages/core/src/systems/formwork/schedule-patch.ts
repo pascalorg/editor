@@ -31,6 +31,14 @@ import { isCalendarDate } from './schedule'
  * It does not write, for the reason the sibling patches do not: the chat tools mutate a
  * plain graph on the server, MCP goes through the store's `updateNode`, and both spell
  * "unstate this" as an explicit `undefined`.
+ *
+ * ## Two writes, because stating a date and agreeing one are different acts
+ *
+ * `applyPourDatePatch` records what the project intends and `applyCommitPourPatch` records
+ * that somebody has agreed to it. One tool with a `committed` flag would let a single call
+ * do both, which is the one combination worth making impossible: a model that has been
+ * asked to move a pour would carry the commitment along with it, and a booking would follow
+ * a date it was never made against.
  */
 
 /**
@@ -110,4 +118,67 @@ export function applyPourDatePatch(patch: Omit<PourDatePatch, 'assemblyId'>): Po
     }
   }
   return { writes: { pourAt }, recorded: `pour date ${pourAt}` }
+}
+
+/**
+ * Committing a pour — the write that turns a stated date into an agreed one.
+ *
+ * `pourAt` is required here and `committed` is the boolean, which is the opposite way round
+ * from how it is stored, and deliberately. A caller commits *a pour*, not *a day*: it has
+ * the programme in front of it and the question is whether this pour's date is agreed. Being
+ * asked to restate the date it is committing to would let it commit to a different one by
+ * typing, which is a booking nobody made — and an agent that had misread the programme could
+ * commit a pour to a day the programme does not have. So the day comes off the pour and the
+ * caller says yes or no.
+ */
+export const commitPourInput = {
+  assemblyId: z
+    .string()
+    .min(1)
+    .describe(
+      "the shutter's own id, from inspect_project_formwork's schedule.pours — not the wall's id",
+    ),
+  committed: z
+    .boolean()
+    .describe(
+      'true to commit this pour to the day it is currently dated, false to release the commitment. Committing does not change the date — it records that somebody has agreed to it, which is what stops the resequencing proposals offering to move it. Only ever pass true when the user has actually agreed the date with whoever is affected: a commitment is a hire booking and a following trade being told, not a level of confidence',
+    ),
+}
+
+export const CommitPourPatch = z.object(commitPourInput)
+export type CommitPourPatch = z.infer<typeof CommitPourPatch>
+
+export const COMMIT_POUR_DESCRIPTION =
+  'Record that a pour date has been agreed rather than merely intended — the plant is booked against it and the following trades have been told. Every date in this model is a stated intent until this is called: free for anybody to move, and offered up by the resequencing proposals as a candidate to shift to save hiring plant. Committing a pour takes it out of that pool, so the proposals only ever suggest moves somebody can still make. It does not change the date and it is not a confidence level: only pass committed: true when the user says the date is agreed with the hire company and the trades that follow, and pass false to release it. Ask rather than infer — an agent that commits a pour on its own has told the takeoff that a booking exists, and the next proposal it makes will route around a phone call nobody made. One consequence worth reading back afterwards: moving a committed pour with set_pour_date is allowed and is not an error, because sites do move booked pours, but the takeoff will then report the pour as having drifted off its booking, which is a call to the hire desk rather than a state to leave standing.'
+
+/** The refusal for committing a pour nobody has dated. */
+export function commitWithoutDate(assemblyId: string): string {
+  return `Error: ${assemblyId} has no pour date, so there is nothing to commit to. A commitment is an agreement about a *day* — set the date with set_pour_date first, and commit it once the user has agreed it with the hire company and the following trades.`
+}
+
+export type CommitPourPatchResult =
+  | { error: string; writes?: undefined; recorded?: undefined }
+  | {
+      error?: undefined
+      writes: { committedPourAt: string | undefined }
+      recorded: string
+    }
+
+/**
+ * What committing does to a shutter, given the date it currently carries.
+ *
+ * Takes `pourAt` from the caller rather than the patch for the reason above: the day
+ * committed to is the day the pour *has*, so it cannot be typed and cannot disagree. A
+ * commit against an undated pour is refused rather than stored as a commitment to nothing.
+ */
+export function applyCommitPourPatch(
+  patch: Omit<CommitPourPatch, 'assemblyId'>,
+  pourAt: string | undefined,
+  assemblyId: string,
+): CommitPourPatchResult {
+  if (!patch.committed) {
+    return { writes: { committedPourAt: undefined }, recorded: 'commitment released' }
+  }
+  if (pourAt === undefined) return { error: commitWithoutDate(assemblyId) }
+  return { writes: { committedPourAt: pourAt }, recorded: `committed to ${pourAt}` }
 }

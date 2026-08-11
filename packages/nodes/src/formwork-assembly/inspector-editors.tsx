@@ -1,7 +1,7 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
-import { applyPourDatePatch } from '@pascal-app/core/formwork'
+import { applyCommitPourPatch, applyPourDatePatch } from '@pascal-app/core/formwork'
 import { useViewer } from '@pascal-app/viewer'
 import { useState } from 'react'
 import type { CastableHostNode } from './attach'
@@ -83,6 +83,75 @@ export function FormworkPourDate({
           {node.pourAt === undefined
             ? 'Unprogrammed, so the takeoff carries no dates for this pour. A date is per pour rather than per element — the other lifts of this element are dated on their own shutters.'
             : 'The delivery and strike dates follow from this and the project’s two lead times. Clear the field to unprogramme the pour.'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Whether anybody has agreed to this date, and which day they agreed to.
+ *
+ * A checkbox rather than a second date field, and that is the decision worth knowing here.
+ * The stored value *is* a date — `committedPourAt`, the day agreed — but a user asked to
+ * restate it could commit the pour to a day the programme does not have, and the question
+ * they are actually answering is about this pour rather than about a day. So the control
+ * commits the date already in the box above, through core's `applyCommitPourPatch`.
+ *
+ * The drift is the reason this exists and it is shown here rather than only on the takeoff:
+ * a booked pour that has since moved is a phone call somebody owes the hire desk, and the
+ * shutter's own inspector is where the person who moved it is standing. Moving it is allowed
+ * — sites move booked pours, and refusing the edit would only make somebody clear the
+ * commitment first and lose the record of what was agreed.
+ */
+export function FormworkPourCommitment({
+  node,
+  onUpdate,
+}: {
+  node: FormworkAssemblyNode
+  onUpdate: (patch: Partial<FormworkAssemblyNode>) => void
+}) {
+  const [refused, setRefused] = useState<string | undefined>(undefined)
+  const committedAt = node.committedPourAt
+  const drifted = committedAt !== undefined && committedAt !== node.pourAt
+
+  return (
+    <div className="flex flex-col gap-1 px-3 py-2 text-xs">
+      <label className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 text-muted-foreground">Date agreed</span>
+        <input
+          checked={committedAt !== undefined}
+          className="size-3.5 shrink-0 accent-foreground"
+          onChange={(event) => {
+            const result = applyCommitPourPatch(
+              { committed: event.currentTarget.checked },
+              node.pourAt,
+              node.id as string,
+            )
+            setRefused(result.error)
+            if (result.error === undefined) {
+              onUpdate({ committedPourAt: result.writes.committedPourAt })
+            }
+          }}
+          type="checkbox"
+        />
+      </label>
+      {refused !== undefined ? (
+        <p className="text-[10px] text-amber-400/80 leading-snug">{refused}</p>
+      ) : drifted ? (
+        <p className="text-[10px] text-amber-400/80 leading-snug">
+          Booked for {committedAt}
+          {node.pourAt === undefined
+            ? ' and now carries no date, so the plant is reserved for a pour the programme no longer places.'
+            : ` and now cast on ${node.pourAt}.`}{' '}
+          The hire desk is still holding the booked day — this is a call to make rather than a
+          figure to reconcile. Untick and tick again to rebook against the new date.
+        </p>
+      ) : (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          {committedAt === undefined
+            ? 'Nobody has committed to this date, so the takeoff treats it as an intent and may propose moving the pour to relieve a shortage. Tick it once the date is agreed with whoever is affected — the hire desk, the following trade.'
+            : `Committed to ${committedAt}. The takeoff will not propose moving this pour, and will report it if the date changes.`}
         </p>
       )}
     </div>

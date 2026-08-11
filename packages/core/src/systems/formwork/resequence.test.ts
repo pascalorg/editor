@@ -50,7 +50,7 @@ function describeId(catalogId: string): string {
 }
 
 /** The whole chain, so nothing here can disagree with anything else. */
-function chainFor(specs: readonly Spec[], owned: OwnedStock) {
+function chainFor(specs: readonly Spec[], owned: OwnedStock, committed?: readonly string[]) {
   const schedulable: SchedulablePour[] = specs.map((spec) => ({
     id: spec.id,
     pourAt: spec.pourAt,
@@ -85,7 +85,13 @@ function chainFor(specs: readonly Spec[], owned: OwnedStock) {
     sets,
     acquisition,
     sequence,
-    resequence: formworkResequence(acquisition, schedule, quantities, sequence),
+    resequence: formworkResequence(
+      acquisition,
+      schedule,
+      quantities,
+      sequence,
+      committed === undefined ? undefined : new Set(committed),
+    ),
   }
 }
 
@@ -443,6 +449,157 @@ describe('formworkResequence', () => {
   })
 })
 
+describe('formworkResequence — a booked pour is not a candidate', () => {
+  /**
+   * The one fixture in this file, three ways: two pours on the 9th need 60 panels against a rack
+   * of 40, and wall_2 has a fortnight of float before wall_3. Without a commitment it is the
+   * move; the tests below commit it, commit the other one, and commit both.
+   */
+  const OVERLAP: Spec[] = [
+    {
+      id: 'a',
+      elementId: 'wall_1',
+      pourAt: '2026-03-09',
+      castOrder: 1,
+      quantities: { [PANEL]: 30 },
+    },
+    {
+      id: 'b',
+      elementId: 'wall_2',
+      pourAt: '2026-03-09',
+      castOrder: 2,
+      quantities: { [PANEL]: 30 },
+    },
+    {
+      id: 'c',
+      elementId: 'wall_3',
+      pourAt: '2026-03-23',
+      castOrder: 3,
+      quantities: { [PANEL]: 30 },
+    },
+  ]
+
+  /**
+   * The same overlap with the booked pour holding its plant for a month, so the pour that moves
+   * has something substantial to clear. `strikeDays` is what makes the hold long: the shutter is
+   * struck five weeks after the pour, and a move of one day past the peak leaves the mover
+   * standing beside it for the rest of them.
+   */
+  const BOOKED_HOLD: Spec[] = [
+    {
+      id: 'a',
+      elementId: 'wall_1',
+      pourAt: '2026-03-09',
+      castOrder: 1,
+      strikeDays: 35,
+      quantities: { [PANEL]: 30 },
+    },
+    {
+      id: 'b',
+      elementId: 'wall_2',
+      pourAt: '2026-03-09',
+      castOrder: 2,
+      quantities: { [PANEL]: 30 },
+    },
+    {
+      id: 'c',
+      elementId: 'wall_3',
+      pourAt: '2026-06-01',
+      castOrder: 3,
+      quantities: { [PANEL]: 30 },
+    },
+  ]
+
+  test('the pour that would have been proposed is not proposed once it is booked', () => {
+    // Named rather than silently dropped, which is the whole difference between a refusal and
+    // an answer that has nothing in it: a reader who saw this move on Monday is owed the reason
+    // it has gone.
+    const free = chainFor(OVERLAP, { [PANEL]: 40 })
+    const booked = chainFor(OVERLAP, { [PANEL]: 40 }, ['b'])
+
+    expect(free.resequence.answers[0]?.moves.map((move) => move.pourId)).toContain('b')
+    expect(booked.resequence.answers[0]?.moves.map((move) => move.pourId)).not.toContain('b')
+    expect(booked.resequence.answers[0]?.committedPourIds).toEqual(['b'])
+  })
+
+  test('a booked pour is still an obstacle, so the pour that does move has to clear it', () => {
+    // Excluded as a candidate and kept in the sweep. wall_1 is booked and holds its plant for a
+    // month, and wall_2 — the one pour with float — has to land clear of that hold rather than
+    // clear of the peak day. A booked pour dropped from the sweep as well as from the candidates
+    // would leave nothing for wall_2 to clear and no move at all.
+    const { resequence } = chainFor(BOOKED_HOLD, { [PANEL]: 40 }, ['a'])
+    const move = resequence.answers[0]?.moves[0]
+
+    expect(resequence.answers[0]?.committedPourIds).toEqual(['a'])
+    expect(move?.pourId).toBe('b')
+    expect(move?.days).toBeGreaterThan(30)
+    expect(move?.peakBefore).toBe(60)
+    expect(move?.peakAfter).toBe(30)
+  })
+
+  test('an overlap where every movable pour is booked is refused, not left empty', () => {
+    const { resequence } = chainFor(OVERLAP, { [PANEL]: 40 }, ['a', 'b'])
+
+    expect(resequence.answers[0]?.refusal).toBe('overlap-committed')
+    expect(resequence.answers[0]?.committedPourIds).toEqual(['a', 'b'])
+    expect(resequence.answers[0]?.moves).toEqual([])
+    expect(resequence.unavoidable).toHaveLength(1)
+  })
+
+  test('one committed member commits the whole monolithic pour', () => {
+    // Half a monolithic pour cannot be moved, so a booking on either member books the operation.
+    const { resequence } = chainFor(
+      [
+        {
+          id: 'a',
+          elementId: 'wall_1',
+          pourAt: '2026-03-09',
+          castOrder: 1,
+          quantities: { [PANEL]: 30 },
+        },
+        {
+          id: 'b',
+          elementId: 'wall_2',
+          pourAt: '2026-03-09',
+          pourId: 'P1',
+          castOrder: 2,
+          quantities: { [PANEL]: 15 },
+        },
+        {
+          id: 'c',
+          elementId: 'wall_3',
+          pourAt: '2026-03-09',
+          pourId: 'P1',
+          castOrder: 2,
+          quantities: { [PANEL]: 15 },
+        },
+        {
+          id: 'd',
+          elementId: 'wall_4',
+          pourAt: '2026-03-23',
+          castOrder: 3,
+          quantities: { [PANEL]: 30 },
+        },
+      ],
+      { [PANEL]: 40 },
+      ['c'],
+    )
+
+    expect(resequence.answers[0]?.committedPourIds).toEqual(['P1'])
+    expect(resequence.answers[0]?.moves.map((move) => move.pourId)).not.toContain('P1')
+  })
+
+  test('no commitments passed is a job nobody has booked, not a job entirely booked', () => {
+    // The default the whole feature runs on today, said as a test because the opposite reading
+    // would silence every proposal in it.
+    const { resequence } = chainFor(OVERLAP, { [PANEL]: 40 })
+
+    expect(resequence.answers[0]?.committedPourIds).toEqual([])
+    expect(resequence.answers[0]?.refusal).toBeUndefined()
+    expect(resequence.clearable).toHaveLength(1)
+  })
+})
+
 describe('resequenceCaveats', () => {
   test('a proposal says the moves cannot be taken together, and is not a plan', () => {
     const { resequence } = chainFor(
@@ -510,5 +667,76 @@ describe('resequenceCaveats', () => {
     expect(text).toContain('pinned by the dates around it')
     expect(text).toContain('bought or hired')
     expect(text).not.toContain('cannot be taken together')
+  })
+
+  test('a booked overlap is sent to the phone rather than to the programme', () => {
+    const { resequence } = chainFor(
+      [
+        {
+          id: 'a',
+          elementId: 'wall_1',
+          pourAt: '2026-03-09',
+          castOrder: 1,
+          quantities: { [PANEL]: 30 },
+        },
+        {
+          id: 'b',
+          elementId: 'wall_2',
+          pourAt: '2026-03-09',
+          castOrder: 2,
+          quantities: { [PANEL]: 30 },
+        },
+        {
+          id: 'c',
+          elementId: 'wall_3',
+          pourAt: '2026-03-23',
+          castOrder: 3,
+          quantities: { [PANEL]: 30 },
+        },
+      ],
+      { [PANEL]: 40 },
+      ['a', 'b'],
+    )
+    const text = resequenceCaveats(resequence).join(' ')
+
+    expect(text).toContain('every pour with float is committed')
+    expect(text).toContain('Release a commitment')
+  })
+
+  test('where a move survives beside a booking, the exclusion is said out loud', () => {
+    // The reader is looking at one proposal where they might have expected two, and the peak
+    // includes a pour that is not on the list. Unsaid, that reads as an arithmetic error.
+    const { resequence } = chainFor(
+      [
+        {
+          id: 'a',
+          elementId: 'wall_1',
+          pourAt: '2026-03-09',
+          castOrder: 1,
+          strikeDays: 35,
+          quantities: { [PANEL]: 30 },
+        },
+        {
+          id: 'b',
+          elementId: 'wall_2',
+          pourAt: '2026-03-09',
+          castOrder: 2,
+          quantities: { [PANEL]: 30 },
+        },
+        {
+          id: 'c',
+          elementId: 'wall_3',
+          pourAt: '2026-06-01',
+          castOrder: 3,
+          quantities: { [PANEL]: 30 },
+        },
+      ],
+      { [PANEL]: 40 },
+      ['a'],
+    )
+    const text = resequenceCaveats(resequence).join(' ')
+
+    expect(text).toContain('Committed pours are left out of these proposals')
+    expect(text).toContain('still stand in the overlap')
   })
 })

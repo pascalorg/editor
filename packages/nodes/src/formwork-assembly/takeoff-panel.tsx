@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  COMMITMENT_GAP_LABELS,
   COST_GAP_LABELS,
   formatMoney,
   LABOUR_GAP_LABELS,
@@ -72,6 +73,12 @@ export function FormworkTakeoffPanel() {
   const acquisition = solution.acquisition
   const sequence = solution.sequence
   const resequence = solution.resequence
+  const commitments = solution.commitments
+  // The programme rows below have to read differently for a booked pour than for a dated one,
+  // and a drifted one differently again — a date on screen that a hire desk is holding a
+  // different version of is the one state in this panel a reader cannot infer from anything.
+  const booked = new Set(commitments?.committedPourIds ?? [])
+  const driftByPour = new Map((commitments?.drifts ?? []).map((drift) => [drift.pourId, drift]))
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -344,19 +351,41 @@ export function FormworkTakeoffPanel() {
                 )}
                 {/* Keyed and labelled by the pour rather than only by its dates, because
                     "one of these is not dated" is not something a user can act on. */}
-                {scheduleInPourOrder(schedule).map((pour) => (
-                  <div
-                    className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
-                    key={pour.id}
-                  >
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">{pour.id}</span>
-                    <span className="shrink-0 font-mono text-muted-foreground">
-                      {pour.pourAt === undefined
-                        ? 'not dated'
-                        : `${pour.pourAt} → ${pour.strikeAt ?? 'not struck'}`}
-                    </span>
-                  </div>
-                ))}
+                {scheduleInPourOrder(schedule).map((pour) => {
+                  const drift = driftByPour.get(pour.id)
+                  return (
+                    <div
+                      className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
+                      key={pour.id}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                        {pour.id}
+                        {/* On the pour rather than in a section of its own, because this is where
+                            a reader looks up a date and it is the date's own status. */}
+                        {booked.has(pour.id) && (
+                          <span className="text-foreground/70"> · booked</span>
+                        )}
+                      </span>
+                      <span
+                        className={
+                          drift === undefined
+                            ? 'shrink-0 font-mono text-muted-foreground'
+                            : 'shrink-0 font-mono text-amber-400/90'
+                        }
+                      >
+                        {drift === undefined
+                          ? pour.pourAt === undefined
+                            ? 'not dated'
+                            : `${pour.pourAt} → ${pour.strikeAt ?? 'not struck'}`
+                          : `booked ${drift.committedAt}${
+                              drift.driftDays === undefined
+                                ? ', now undated'
+                                : `, ${Math.abs(drift.driftDays)} d ${drift.driftDays < 0 ? 'earlier' : 'later'}`
+                            }`}
+                      </span>
+                    </div>
+                  )
+                })}
                 {schedule.gaps.map((gap) => (
                   <Note key={gap}>{SCHEDULE_GAP_LABELS[gap]}.</Note>
                 ))}
@@ -390,13 +419,19 @@ export function FormworkTakeoffPanel() {
                       {pour.monolithic ? `${pour.id} (${pour.members.length} together)` : pour.id}
                     </span>
                     <span className="shrink-0 font-mono text-muted-foreground">
-                      {pour.totalFloat === undefined
-                        ? 'no allowance stated'
-                        : pour.totalFloat < 0
-                          ? `${-pour.totalFloat} d late already`
-                          : pour.totalFloat === 0
-                            ? 'pinned'
-                            : `−${pour.moveEarlierDays ?? 0} / +${pour.moveLaterDays ?? 0} d`}
+                      {/* A committed pour's allowance is real and unspendable, so the allowance
+                          is not printed at all here: a "+7 d" beside a booked pour is an
+                          invitation, and the float is what the proposals below already exclude
+                          it from acting on. */}
+                      {pour.members.some((member) => booked.has(member))
+                        ? 'booked — not ours to move'
+                        : pour.totalFloat === undefined
+                          ? 'no allowance stated'
+                          : pour.totalFloat < 0
+                            ? `${-pour.totalFloat} d late already`
+                            : pour.totalFloat === 0
+                              ? 'pinned'
+                              : `−${pour.moveEarlierDays ?? 0} / +${pour.moveLaterDays ?? 0} d`}
                     </span>
                   </div>
                 ))}
@@ -582,15 +617,95 @@ export function FormworkTakeoffPanel() {
                       ))
                     ) : (
                       <div className="text-[10px] text-muted-foreground">
-                        No move helps: {RESEQUENCE_REFUSAL_LABELS[answer.refusal]}.
+                        {/* "No move helps" is the wrong sentence for a booked overlap: nothing was
+                            tried, because there was nothing anybody here is free to try. */}
+                        {answer.refusal === 'overlap-committed'
+                          ? 'No move to offer: '
+                          : 'No move helps: '}
+                        {RESEQUENCE_REFUSAL_LABELS[answer.refusal]}.
                       </div>
                     )}
+                    {answer.refusal !== 'overlap-committed' &&
+                      answer.committedPourIds.length > 0 && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Booked and left out: {answer.committedPourIds.join(', ')}. They still hold
+                          their plant, so the peak includes them.
+                        </div>
+                      )}
                   </div>
                 ))}
                 <Note>
                   A proposal, not a plan. This knows about formwork precedence and nothing else — no
                   gang, no crane, no concrete supply — and the moves cannot be taken together,
                   because each was measured against the other pours' stated dates.
+                </Note>
+              </Section>
+            )}
+            {/* Last of the programme sections, and after the proposals rather than beside the peak
+                it will be compared against — every figure above is what the job needs, and this is
+                the smaller number somebody has actually agreed to. Put beside the peak, a reader
+                takes the difference for a shortfall. */}
+            {commitments !== undefined && (
+              <Section title="Committed">
+                <Readout
+                  label="Pours booked"
+                  value={`${commitments.committedPours} of ${commitments.totalPours}`}
+                  value2={
+                    commitments.committedPours === commitments.totalPours
+                      ? 'the whole programme'
+                      : 'the rest can still move'
+                  }
+                />
+                {commitments.firstCommittedDay !== undefined && (
+                  <Readout
+                    label="Spoken for"
+                    value={`${commitments.firstCommittedDay} → ${commitments.lastCommittedDay ?? '—'}`}
+                  />
+                )}
+                {commitments.kinds.map((kind) => (
+                  <Readout
+                    key={kind.kind}
+                    label={kind.label}
+                    value={String(kind.committedQuantity)}
+                    value2="booked"
+                  />
+                ))}
+                {commitments.windows.map((window) => (
+                  <div
+                    className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
+                    key={window.catalogId}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {window.description}
+                    </span>
+                    <span className="shrink-0 font-mono text-muted-foreground">
+                      {window.committedQuantity} · {window.from} → {window.to} ({window.days} d)
+                    </span>
+                  </div>
+                ))}
+                {/* A drift is a WarningLine rather than a Note: it is the one state in this panel
+                    that costs money today, and the remedy is a phone call rather than an edit. */}
+                {commitments.drifts.map((drift) => (
+                  <WarningLine
+                    key={drift.pourId}
+                    message={
+                      drift.pourAt === undefined
+                        ? `${drift.pourId} is booked for ${drift.committedAt} and now carries no date at all, so the plant is reserved for a pour the programme no longer places.`
+                        : `${drift.pourId} is booked for ${drift.committedAt} and now poured on ${drift.pourAt} — ${Math.abs(drift.driftDays ?? 0)} d ${(drift.driftDays ?? 0) < 0 ? 'earlier, so the pour is due before the plant is' : 'later, so a set arrives and stands idle at the booked rate'}. The hire desk is still holding the booked day.`
+                    }
+                  />
+                ))}
+                {commitments.gaps
+                  .filter((gap) => gap !== 'drifted-off-booking')
+                  .map((gap) => (
+                    <Note key={gap}>{COMMITMENT_GAP_LABELS[gap]}.</Note>
+                  ))}
+                <Note>
+                  What has been agreed, not what the job needs — swept over the committed pours
+                  alone, so it is under the peak above wherever a pour is still uncommitted. A
+                  commitment records that a date was agreed rather than that it cannot change: it
+                  stops the proposals above offering to move the pour, and reports the drift if
+                  somebody moves it anyway.
                 </Note>
               </Section>
             )}

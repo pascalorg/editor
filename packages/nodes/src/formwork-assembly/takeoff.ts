@@ -90,6 +90,7 @@ export function takeoffCsv(
       ...(solution.acquisition ? { acquisition: solution.acquisition } : {}),
       ...(solution.sequence ? { sequence: solution.sequence } : {}),
       ...(solution.resequence ? { resequence: solution.resequence } : {}),
+      ...(solution.commitments ? { commitments: solution.commitments } : {}),
     }),
   }
 }

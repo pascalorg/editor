@@ -1314,6 +1314,117 @@ describe('what has to happen before what', () => {
 
     expect(caveats.some((line) => line.includes('not a critical path'))).toBe(false)
   })
+
+  test('a committed pour is booked plant, swept over the bookings alone', () => {
+    // Two walls overlapping on one day, one of them agreed with the hire desk. The window is
+    // one wall's panels rather than two, which is the claim the whole block turns on: what is
+    // booked is smaller than what the job needs, and this is the smaller figure.
+    const scene = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeWall('wall_2', {
+        start: [0, 4],
+        end: [6, 4],
+        formworkType: 'steel-panel',
+      } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, {
+        pourAt: '2026-03-02',
+        committedPourAt: '2026-03-02',
+      }),
+      makeAssembly('formwork-assembly_2', 'wall_2', 0, 0, { pourAt: '2026-03-02' }),
+    )
+    const solution = solveProjectFormwork(withSettings(scene, leads))
+
+    expect(solution.commitments?.committedPours).toBe(1)
+    expect(solution.commitments?.totalPours).toBe(2)
+    expect(solution.commitments?.committedPourIds).toEqual(['formwork-assembly_1'])
+    const window = solution.commitments?.windows[0]
+    const peak = solution.sets?.peaks.find((entry) => entry.catalogId === window?.catalogId)
+    expect(window?.committedQuantity).toBeLessThan(peak?.peakQuantity as number)
+  })
+
+  test('a booked pour the programme has moved off is reported as a drift, not corrected', () => {
+    // The state the block exists for. Moving a booked pour is allowed — sites do it — so the
+    // takeoff keeps both days and says how far apart they are, because the remedy is a call to
+    // the hire desk rather than a figure to reconcile.
+    const scene = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, {
+        pourAt: '2026-03-09',
+        committedPourAt: '2026-03-02',
+      }),
+    )
+    const solution = solveProjectFormwork(withSettings(scene, leads))
+
+    expect(solution.commitments?.drifts).toEqual([
+      {
+        pourId: 'formwork-assembly_1',
+        committedAt: '2026-03-02',
+        pourAt: '2026-03-09',
+        driftDays: 7,
+      },
+    ])
+    const caveats = projectFormworkCaveats(solution)
+    expect(caveats.some((line) => line.includes('moved off the day the plant was booked'))).toBe(
+      true,
+    )
+    expect(caveats.some((line) => line.includes('a call to make'))).toBe(true)
+  })
+
+  test('a booked pour is not offered as a move, and is still in the peak the move clears', () => {
+    // The two halves of the exclusion, in the one place they can disagree. The booked pour is
+    // no longer a candidate, so the proposal names the other one — and it is still standing in
+    // the overlap, so the peak the move is measured against is unchanged by the booking.
+    const scene = (committed: boolean) =>
+      sceneOf(
+        makeWall('wall_1', { formworkType: 'steel-panel', castOrder: 1 } as Partial<WallNode>),
+        makeWall('wall_2', {
+          start: [0, 4],
+          end: [6, 4],
+          formworkType: 'steel-panel',
+          castOrder: 2,
+        } as Partial<WallNode>),
+        makeWall('wall_3', {
+          start: [0, 8],
+          end: [6, 8],
+          formworkType: 'steel-panel',
+          castOrder: 3,
+        } as Partial<WallNode>),
+        makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+        makeAssembly('formwork-assembly_2', 'wall_2', 0, 0, {
+          pourAt: '2026-03-02',
+          ...(committed ? { committedPourAt: '2026-03-02' } : {}),
+        }),
+        makeAssembly('formwork-assembly_3', 'wall_3', 0, 0, { pourAt: '2026-04-06' }),
+      )
+    const solve = (committed: boolean) => {
+      const built = scene(committed)
+      return solveProjectFormwork(
+        withSettings(built, {
+          ...leads,
+          stock: { owned: rackFor(withSettings(built, leads), 0.5) },
+        }),
+      )
+    }
+
+    const free = solve(false)
+    const booked = solve(true)
+    // Free, the proposal moves the second pour. Booked, that move is nobody's to make.
+    expect(free.resequence?.answers[0]?.moves[0]?.pourId).toBe('formwork-assembly_2')
+    const answer = booked.resequence?.answers[0]
+    expect(answer?.committedPourIds).toEqual(['formwork-assembly_2'])
+    expect(answer?.moves.some((move) => move.pourId === 'formwork-assembly_2')).toBe(false)
+    // Still an obstacle: the peak a surviving move starts from is the same peak as before.
+    expect(answer?.shortfall).toBe(free.resequence?.answers[0]?.shortfall as number)
+  })
+
+  test('a programme nobody has committed to carries no commitments at all', () => {
+    const scene = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+    )
+
+    expect(solveProjectFormwork(withSettings(scene, leads)).commitments).toBeUndefined()
+  })
 })
 
 describe('projectFormworkCaveats', () => {

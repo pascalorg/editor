@@ -42,6 +42,23 @@ import { formworkSetCount, type PourQuantities } from './sets'
  * a sweep per candidate day, and the honest trade is to propose a move that certainly works
  * and say that a shorter one might.
  *
+ * ## A booked pour is not a candidate
+ *
+ * Float says a pour *could* move without breaking a stated dependency. It says nothing about
+ * whether anybody would let it: a pour with a hire delivery in somebody's diary and the
+ * following trade already told has float and is not available, and a proposal to move it is a
+ * proposal the reader has to decline every time they read the takeoff. So `committed` — the
+ * pours carrying a `committedPourAt`, from `commitments.ts` — is excluded from the candidates
+ * outright, and where that leaves nothing to move the refusal says so rather than the answer
+ * going quiet.
+ *
+ * Excluded as a candidate and kept as an obstacle: a committed pour still stands in the
+ * overlap, so it is still one of the `others` a candidate has to clear. Dropping it from both
+ * would let a move be proposed that lands the mover straight back beside a booked pour.
+ *
+ * The exclusion is per *group*, on any member. A monolithic pour moves whole, so one committed
+ * member commits the operation — half a monolithic pour cannot be moved.
+ *
  * ## This is not a plan
  *
  * There is no gang, no crew size, no batching plant and no concrete supply in this model. A
@@ -61,6 +78,8 @@ export type ResequenceRefusal =
   | 'pour-not-sequenced'
   /** Nothing orders the pours in the overlap, so their float is the span and means nothing. */
   | 'overlap-unsequenced'
+  /** Every pour in the overlap with float to spend is committed, so no move is anybody's to make. */
+  | 'overlap-committed'
 
 export const RESEQUENCE_REFUSAL_LABELS: Record<ResequenceRefusal, string> = {
   'all-pinned':
@@ -73,6 +92,8 @@ export const RESEQUENCE_REFUSAL_LABELS: Record<ResequenceRefusal, string> = {
     'A pour on the peak day is not in the sequence, so there is no float to read for it',
   'overlap-unsequenced':
     'Nothing states an order for the pours in this overlap, so their float is the programme’s own span rather than an allowance — set a cast order on those elements and the move follows',
+  'overlap-committed':
+    'Every pour in this overlap that has float to spend is committed, so the only moves left are ones somebody has already agreed not to make — release a commitment or buy the shortage',
 }
 
 /** One proposal: move this pour by this many days, and here is what happens. */
@@ -120,6 +141,14 @@ export interface ResequenceAnswer {
   moves: ResequenceMove[]
   /** Pours in the overlap with no float to spend, so a reader can see what is stuck. */
   pinnedPourIds: string[]
+  /**
+   * Pours in the overlap nobody here can move, because their date has been committed.
+   *
+   * Reported beside `pinnedPourIds` and kept separate from it, because the two are undone
+   * differently: a pinned pour needs the programme around it changed, and a committed one
+   * needs a phone call.
+   */
+  committedPourIds: string[]
   /** Present where no move is proposed, with the reason. */
   refusal?: ResequenceRefusal
 }
@@ -258,12 +287,18 @@ function candidateShifts(
  * `quantities` and `schedule` are the same objects the set count was taken from, deliberately:
  * the peak this compares against has to be the peak the reader is looking at, and a sweep over
  * a second copy of the programme could differ from it.
+ *
+ * `committed` is the assembly ids nobody can move — `committedPourIds(pours)` from
+ * `commitments.ts`. Optional, and absent means the caller has no commitments to state rather
+ * than that every pour is free: the two read the same here, and the takeoff carries no
+ * commitment at all until somebody makes one.
  */
 export function formworkResequence(
   acquisition: FormworkAcquisition,
   schedule: FormworkSchedule,
   quantities: readonly PourQuantities[],
   sequence: FormworkSequence,
+  committed?: ReadonlySet<string>,
 ): FormworkResequence {
   // The peaks as the reader is already looking at them. Off the acquisition's own lines rather
   // than re-swept, so a "raises props from 40 to 52" cannot disagree with the 40 printed above
@@ -271,7 +306,7 @@ export function formworkResequence(
   // set the sweep produced.
   const beforePeaks = new Map(acquisition.lines.map((line) => [line.catalogId, line.peakQuantity]))
   const answers = acquisition.shortfalls.map((line) =>
-    answerFor(line, schedule, quantities, sequence, beforePeaks),
+    answerFor(line, schedule, quantities, sequence, beforePeaks, committed ?? new Set<string>()),
   )
   return {
     answers,
@@ -290,6 +325,7 @@ function answerFor(
   quantities: readonly PourQuantities[],
   sequence: FormworkSequence,
   beforePeaks: ReadonlyMap<string, number>,
+  committed: ReadonlySet<string>,
 ): ResequenceAnswer {
   const base: ResequenceAnswer = {
     catalogId: line.catalogId,
@@ -300,6 +336,7 @@ function answerFor(
     shortfall: line.shortfall,
     moves: [],
     pinnedPourIds: [],
+    committedPourIds: [],
   }
   if (sequence.gaps.includes('nothing-sequenced')) {
     return { ...base, refusal: 'nothing-sequenced' }
@@ -338,6 +375,22 @@ function answerFor(
     return { ...base, pinnedPourIds, refusal: 'all-pinned' }
   }
 
+  // A committed group on any member: a monolithic pour moves whole, so one booked member books
+  // the operation. Named on every answer whether or not it is the reason there is no move,
+  // because a reader looking at three candidates wants to know the fourth is booked rather than
+  // absent.
+  const committedPourIds = [...groups.values()]
+    .filter((group) => group.members.some((member) => committed.has(member)))
+    .map((group) => group.id)
+    .sort()
+  const pinnedOrCommitted = new Set([...pinnedPourIds, ...committedPourIds])
+  if (pinnedOrCommitted.size === groups.size) {
+    // Pinned pours exist and the rest are booked, so 'all-pinned' would send the reader to the
+    // programme when the answer is a phone call. Reported as the commitment, because that is the
+    // one of the two anybody can still undo today.
+    return { ...base, pinnedPourIds, committedPourIds, refusal: 'overlap-committed' }
+  }
+
   // Each group's occupancy, once. A candidate has to clear the *others* in the overlap, so every
   // window is needed before any move is tried.
   const windows = new Map<string, { from: number; to: number }>()
@@ -346,8 +399,13 @@ function answerFor(
     if (window !== undefined) windows.set(group.id, window)
   }
 
+  const booked = new Set(committedPourIds)
   const moves: ResequenceMove[] = []
   for (const group of groups.values()) {
+    // Skipped as a candidate and left in `windows`, so it is still one of the `others` below: a
+    // booked pour cannot move and has not gone anywhere, and a mover that only had to clear the
+    // free pours would be proposed straight into the overlap it was meant to leave.
+    if (booked.has(group.id)) continue
     const window = windows.get(group.id)
     if (window === undefined || group.pourAt === undefined) continue
     const others = [...windows.entries()]
@@ -395,6 +453,7 @@ function answerFor(
     ...base,
     moves,
     pinnedPourIds,
+    committedPourIds,
     ...(moves.length === 0 ? { refusal: 'no-move-helps' as const } : {}),
   }
 }
@@ -455,6 +514,20 @@ export function resequenceCaveats(resequence: FormworkResequence): string[] {
   if (loose.length > 0) {
     out.push(
       `${loose.length} ${loose.length === 1 ? 'shortage falls' : 'shortages fall'} on pours nothing states an order for, so there is no float to spend and no move proposed. Set a cast order on those elements — the dependency is what makes a move arguable rather than a guess.`,
+    )
+  }
+  const booked = resequence.answers.filter((answer) => answer.refusal === 'overlap-committed')
+  if (booked.length > 0) {
+    out.push(
+      `${booked.length} ${booked.length === 1 ? 'shortage falls' : 'shortages fall'} on an overlap where every pour with float is committed, so nothing here is a move anybody has left to make. Release a commitment first if the date is genuinely still open — otherwise this is a shortage to buy or hire.`,
+    )
+  }
+  const withBookings = resequence.answers.filter(
+    (answer) => answer.moves.length > 0 && answer.committedPourIds.length > 0,
+  )
+  if (withBookings.length > 0) {
+    out.push(
+      'Committed pours are left out of these proposals. They still stand in the overlap and still hold their plant, so the peak includes them — they are simply not offered as the pour to move, because their date has been agreed with somebody.',
     )
   }
   if (resequence.answers.some((answer) => answer.refusal === 'no-move-helps')) {
