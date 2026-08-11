@@ -4,11 +4,13 @@ import {
   type AnyNode,
   type AnyNodeId,
   buildWallFaceBandCountPatch,
+  GROUND_SUPPORT_ID,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallCurveLength,
   getWallFaceBandConfig,
   normalizeWallCurveOffset,
+  terrainSupportLift,
   useLiveNodeOverrides,
   useScene,
   WALL_CHAIR_RAIL_DEFAULT,
@@ -168,7 +170,21 @@ export default function WallPanel() {
         handleUpdate({ height: Math.max(0.1, seeded) })
       } else if (mode === 'storey' && isCustom) {
         // Absent `height` = plane-bound; the store strips undefined keys.
-        handleUpdate({ height: undefined })
+        // Restore the full plane-bound defaults: a stamped draft offset goes
+        // too, and a ground host is dropped unless sculpted terrain actually
+        // supports it — a terrain-less ground host (regression-era data) pins
+        // the base at the level floor and buries the wall in any later slab.
+        const nodes = useScene.getState().nodes
+        const terrainSupported =
+          n.parentId != null &&
+          terrainSupportLift(nodes, n.parentId, n.start[0], n.start[1]) != null
+        handleUpdate({
+          height: undefined,
+          supportOffset: undefined,
+          ...(n.supportSlabId === GROUND_SUPPORT_ID && !terrainSupported
+            ? { supportSlabId: undefined }
+            : {}),
+        })
       }
     },
     [handleUpdate],
