@@ -40,6 +40,24 @@ import { Spline } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
+/**
+ * Base half of the plane-bound repair: a stamped draft offset goes, and a
+ * ground host is dropped unless sculpted terrain actually supports it — a
+ * terrain-less ground host (regression-era data) pins the base at the level
+ * floor and buries the wall in any later slab.
+ */
+function wallBaseRepairPatch(n: WallNode): Partial<WallNode> {
+  const nodes = useScene.getState().nodes
+  const terrainSupported =
+    n.parentId != null && terrainSupportLift(nodes, n.parentId, n.start[0], n.start[1]) != null
+  return {
+    supportOffset: undefined,
+    ...(n.supportSlabId === GROUND_SUPPORT_ID && !terrainSupported
+      ? { supportSlabId: undefined }
+      : {}),
+  }
+}
+
 type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
 
 const WALL_TRIM_PROFILE_OPTIONS: Record<
@@ -170,21 +188,7 @@ export default function WallPanel() {
         handleUpdate({ height: Math.max(0.1, seeded) })
       } else if (mode === 'storey' && isCustom) {
         // Absent `height` = plane-bound; the store strips undefined keys.
-        // Restore the full plane-bound defaults: a stamped draft offset goes
-        // too, and a ground host is dropped unless sculpted terrain actually
-        // supports it — a terrain-less ground host (regression-era data) pins
-        // the base at the level floor and buries the wall in any later slab.
-        const nodes = useScene.getState().nodes
-        const terrainSupported =
-          n.parentId != null &&
-          terrainSupportLift(nodes, n.parentId, n.start[0], n.start[1]) != null
-        handleUpdate({
-          height: undefined,
-          supportOffset: undefined,
-          ...(n.supportSlabId === GROUND_SUPPORT_ID && !terrainSupported
-            ? { supportSlabId: undefined }
-            : {}),
-        })
+        handleUpdate({ height: undefined, ...wallBaseRepairPatch(n) })
       }
     },
     [handleUpdate],
@@ -192,10 +196,19 @@ export default function WallPanel() {
 
   // Terrain infill only extends the bottom; it must never materialize an
   // explicit height, or toggling it would silently detach the wall top from
-  // the storey plane.
+  // the storey plane. "Auto" is a re-election, so it carries the same base
+  // repair as the follows-level toggle — and the control fires on a click of
+  // the already-selected segment, so regression-era walls that DISPLAY Auto
+  // while secretly ground-pinned heal from a click on Auto itself.
   const handleInfillChange = useCallback(
     (mode: 'terrain' | 'auto') => {
-      handleUpdate({ fillToTerrain: mode === 'terrain' ? true : undefined })
+      const n = nodeRef.current
+      if (!n) return
+      if (mode === 'terrain') {
+        handleUpdate({ fillToTerrain: true })
+        return
+      }
+      handleUpdate({ fillToTerrain: undefined, ...wallBaseRepairPatch(n) })
     },
     [handleUpdate],
   )
