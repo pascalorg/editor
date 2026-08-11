@@ -34,6 +34,7 @@
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
+        "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#3c885bfe112e87c7e0e9e38c0c6bc36e6dc692c7",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
         "@radix-ui/react-tooltip": "^1.2.8",
@@ -99,7 +100,7 @@
     },
     "packages/cli": {
       "name": "@pascal-app/cli",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "bin": {
         "pascal": "dist/bin/pascal.js",
       },
@@ -233,7 +234,7 @@
     },
     "packages/mcp": {
       "name": "@pascal-app/mcp",
-      "version": "1.0.0-beta.4",
+      "version": "1.0.0-beta.5",
       "bin": {
         "pascal-mcp": "./dist/bin/pascal-mcp.js",
       },
@@ -722,6 +723,8 @@
     "@pascal-app/mcp": ["@pascal-app/mcp@workspace:packages/mcp"],
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
+
+    "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#3c885bf", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-3c885bf", "sha512-/O+vZjgpmc4bv5crJvU9OZmBIqM/i0ptyu2+t6zAS5QBkwontnnsGNNRobkTLNzMVUDW2vMS6JRuOxfxGnWW4Q=="],
 
     "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c", "sha512-16VzWot1oadvxCPqsRwMJbaP0a3u5FESFy7F7++pY5wAAFq9JTFwzHvKAsllrY5TZ5TJ7Y5vSqvbmQk8sy8HaA=="],
 
