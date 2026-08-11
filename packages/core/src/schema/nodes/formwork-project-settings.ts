@@ -278,8 +278,87 @@ export const FormworkRateSettings = z.object({
   minHireDays: z.number().int().positive().max(3650).optional(),
   /** Rate per catalog id — `{ 'framax-xlife-0.60x2.70': { purchasePerUnit: 210 } }`. */
   byCatalogId: z.record(z.string().trim().max(120), PartRate).optional(),
+  /**
+   * All-in cost of one man-hour of the gang — the rate that turns output norms into money.
+   *
+   * Here rather than in `labour` beside the norms it multiplies, because it is money and
+   * the currency it is in is stated once, above. A gang rate in one group and the currency
+   * it is denominated in in another is how a takeoff comes to hold two figures in
+   * different money and one total.
+   *
+   * On its own it prices nothing: the hours come from `labour.byPartKind`, and a project
+   * that states a rate and no norms gets no labour at all rather than a rate applied to
+   * an invented output.
+   */
+  gangRatePerHour: z.number().finite().positive().max(100_000).optional(),
 })
 export type FormworkRateSettings = z.infer<typeof FormworkRateSettings>
+
+/**
+ * Which part kinds a norm can be stated against.
+ *
+ * A duplicate of `FormworkPartKind` in `systems/formwork/parts.ts`, and it has to be:
+ * the schema layer is below the systems layer and cannot import from it. `labour.test.ts`
+ * asserts the two lists are the same, so a thirteenth kind cannot arrive with nowhere to
+ * record its hours.
+ */
+export const FormworkPartKindChoice = z.enum([
+  'panel',
+  'filler',
+  'corner',
+  'stop-end',
+  'waler',
+  'joist',
+  'tie',
+  'ply-piece',
+  'prop',
+  'brace',
+  'accessory',
+  'consumable',
+])
+export type FormworkPartKindChoice = z.infer<typeof FormworkPartKindChoice>
+
+/**
+ * Man-hours to fit one of a kind of part, and to take it off again.
+ *
+ * Two figures rather than one with a factor, because they are two operations weeks
+ * apart on different halves of a bill, and striking is not the erect reversed — a tie is
+ * a spanner one way and a cut rod, a patched cone and a made-good face the other. Either
+ * may be stated alone, and the takeoff reports that as half an operation rather than
+ * deriving the missing one.
+ */
+export const LabourNormEntry = z.object({
+  /** Man-hours to fit one, once. */
+  erectHours: z.number().finite().positive().max(100).optional(),
+  /** Man-hours to strike one. */
+  strikeHours: z.number().finite().positive().max(100).optional(),
+})
+export type LabourNormEntry = z.infer<typeof LabourNormEntry>
+
+/**
+ * The project's own output norms — how long its gang takes, per kind of part.
+ *
+ * Stated by the project rather than shipped, and the reason is stronger than the one
+ * that puts prices here. Published constants do exist: CPWD's Analysis of Rates prints
+ * carpenter and mazdoor days per 10 m² of shuttering, and Spon's and RSMeans print hours
+ * per m² and daily crew outputs. None of them is a table this engine can apply. They are
+ * per m² of a whole trade operation that already contains the backing, the props, the
+ * ties and the strike, so spreading one over a bill of parts charges the same work
+ * several times — and an output norm is a fact about a *gang* rather than about a product
+ * or a code, so the same crew on its tenth identical floor beats its own figure from the
+ * first. There is nothing conservative to fall back to, exactly as with a price.
+ *
+ * Absent and empty are the same distinction the rack and the rates draw: absent means
+ * nobody has stated a norm and the takeoff carries no hours at all, empty means the
+ * project has opened the table and entered nothing. A kind with no norm is reported as
+ * uncovered fittings rather than costed at zero, because a bill whose panels are normed
+ * and whose ties are not reads complete and is short by every tie in the job.
+ */
+export const FormworkLabourSettings = z.object({
+  /** Norm per part kind — `{ panel: { erectHours: 0.35, strikeHours: 0.2 } }`. */
+  byPartKind: z.record(FormworkPartKindChoice, LabourNormEntry).optional(),
+})
+export type FormworkLabourSettings = z.infer<typeof FormworkLabourSettings>
 
 /**
  * How the programme turns a pour date into the days the plant is on site.
@@ -372,6 +451,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   parts: FormworkPartSettings.optional(),
   stock: FormworkStockSettings.optional(),
   rates: FormworkRateSettings.optional(),
+  labour: FormworkLabourSettings.optional(),
   schedule: FormworkScheduleSettings.optional(),
 }).describe(
   dedent`
@@ -385,7 +465,8 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - bracing: wind, form weight and raker geometry for wall forms
   - parts: catalog ids for the panel system, sheathing, beam section and prop
   - stock.owned: how many of each catalog id the yard owns, by id; a bill draws on these before it hires. Absent means nobody has said what the project owns, and the takeoff reports no owned/hired split at all rather than putting the whole bill on hire
-  - rates: what the project pays per catalog id — list price, and hire as a percentage of it per month or as a flat monthly rate — plus the agreement's currency and minimum hire period. Here rather than on the catalog because a price is a fact about this project's commercial terms, not about a product: the same panel is different money to two yards. Absent means no rates recorded and the takeoff carries no money at all
+  - rates: what the project pays per catalog id — list price, and hire as a percentage of it per month or as a flat monthly rate — plus the agreement's currency, minimum hire period and the all-in cost of one man-hour of the gang. Here rather than on the catalog because a price is a fact about this project's commercial terms, not about a product: the same panel is different money to two yards. Absent means no rates recorded and the takeoff carries no money at all
+  - labour: man-hours to erect and to strike one of each kind of part, as this project's own gang works. Stated rather than shipped because an output norm is a fact about a crew, not about a product or a code — published constants are per m² of a whole trade operation and cannot be spread over a bill of parts without charging the same work twice. Absent means the takeoff carries no hours at all; a kind left out is reported as uncovered fittings rather than costed at zero
   - schedule: calendar days (not working days — a hire is charged over a weekend) for erecting a shutter before its pour and for getting the plant back after striking. The pour dates themselves are per pour, on each formwork-assembly's pourAt. Absent means the programme reports the pour and strike days only
   `,
 )

@@ -9,6 +9,7 @@ import {
   findFormworkSettingsNode,
   generateId,
   mergeFormworkCement,
+  mergeFormworkLabourNorms,
   mergeFormworkOwnedStock,
   mergeFormworkRates,
   mergeFormworkSettingsGroup,
@@ -221,6 +222,61 @@ export function clearFormworkRates(): void {
   writeFormworkSettings(() => ({ rates: undefined }) as Partial<AnyNode>)
 }
 
+/**
+ * Record what one man-hour of the gang costs, all-in.
+ *
+ * On `rates` rather than beside the norms it prices, because it is money and the currency
+ * it is in lives there — a second currency field for labour is how a takeoff ends up
+ * totalling two kinds of money. `null` clears it, which leaves the hours with no cost
+ * against them rather than costing them at nothing.
+ */
+export function setFormworkGangRate(value: number | null): void {
+  writeFormworkSettings(
+    (node) =>
+      ({
+        rates: mergeFormworkRates(
+          node.rates,
+          { gangRatePerHour: value ?? undefined },
+          { gangRatePerHour: true },
+        ),
+      }) as Partial<AnyNode>,
+  )
+}
+
+/**
+ * Record this project's own output norm for one kind of part. `null` clears one figure.
+ *
+ * Keyed by kind rather than by catalog id, because fitting a 0.6 m panel and a 0.9 m one is
+ * the same operation to a carpenter — and keyed by *field*, for the rate table's reason:
+ * the strike figure arrives after the erect figure and replacing the row would delete it.
+ */
+export function setFormworkLabourNorm(
+  kind: string,
+  patch: Record<string, number | null> | undefined,
+): void {
+  writeFormworkSettings((node) => {
+    const fields =
+      patch === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(patch).map(([key, value]) => [key, value === null ? undefined : value]),
+          )
+    return {
+      labour: mergeFormworkLabourNorms(node.labour, { [kind]: fields }),
+    } as Partial<AnyNode>
+  })
+}
+
+/**
+ * Drops the norms back to unstated, which takes the labour off the takeoff entirely.
+ *
+ * Not the gang rate, which lives with the money: clearing the norms leaves a rate that
+ * prices nothing, and that resolves to no labour block at all rather than to zero hours.
+ */
+export function clearFormworkLabourNorms(): void {
+  writeFormworkSettings(() => ({ labour: undefined }) as Partial<AnyNode>)
+}
+
 /** Hands the whole project back to the shipped defaults. */
 export function clearFormworkSettings(): void {
   writeFormworkSettings(
@@ -236,6 +292,7 @@ export function clearFormworkSettings(): void {
         parts: undefined,
         stock: undefined,
         rates: undefined,
+        labour: undefined,
         schedule: undefined,
       }) as Partial<AnyNode>,
   )
@@ -254,6 +311,9 @@ export function useFormworkSettingsWriter(): {
   setRate: typeof setFormworkRate
   setRateTerms: typeof setFormworkRateTerms
   clearRates: typeof clearFormworkRates
+  setGangRate: typeof setFormworkGangRate
+  setLabourNorm: typeof setFormworkLabourNorm
+  clearLabourNorms: typeof clearFormworkLabourNorms
   clearAll: typeof clearFormworkSettings
 } {
   return useMemo(
@@ -266,6 +326,9 @@ export function useFormworkSettingsWriter(): {
       setRate: setFormworkRate,
       setRateTerms: setFormworkRateTerms,
       clearRates: clearFormworkRates,
+      setGangRate: setFormworkGangRate,
+      setLabourNorm: setFormworkLabourNorm,
+      clearLabourNorms: clearFormworkLabourNorms,
       clearAll: clearFormworkSettings,
     }),
     [],

@@ -454,6 +454,7 @@ export {
   measurementStandard,
   measureOpenings,
   mergeFormworkCement,
+  mergeFormworkLabourNorms,
   mergeFormworkOwnedStock,
   mergeFormworkPartOverride,
   mergeFormworkRates,

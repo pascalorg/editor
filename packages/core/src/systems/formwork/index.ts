@@ -255,6 +255,17 @@ export {
 } from './design'
 export { type BomHire, bomHire, type HireLine, strikingInputFor } from './hire'
 export {
+  type BomLabour,
+  bomLabour,
+  bomLabourCaveats,
+  type KindLabour,
+  LABOUR_GAP_LABELS,
+  type LabourGap,
+  type LabourLine,
+  type LabourNorm,
+  type NormTable,
+} from './labour'
+export {
   bespokePieces,
   CLAMP_MODULE_MM,
   type ClampGoverning,
@@ -502,6 +513,7 @@ export {
   formworkSettings,
   formworkSettingsFor,
   mergeFormworkCement,
+  mergeFormworkLabourNorms,
   mergeFormworkOwnedStock,
   mergeFormworkRates,
   mergeFormworkSettingsGroup,

@@ -96,6 +96,27 @@ interface BillReply {
     gaps: string[]
     excludes: string[]
   }
+  labour?: {
+    currency: string | null
+    erectManHours: number
+    strikeManHours: number
+    totalManHours: number
+    cost: number | null
+    complete: boolean
+    byOperation: Array<{
+      operation: string
+      fittings: number
+      erectManHours: number
+      strikeManHours: number
+      totalManHours: number
+      cost: number | null
+    }>
+    unnormedFittings: number
+    unnormedKinds: string[]
+    gaps: string[]
+    excludes: string[]
+  }
+  noLabourBecause?: string
   schedule?: {
     plantWantedOnSite: string | null
     firstPour: string | null
@@ -955,6 +976,78 @@ describe('the formwork MCP tools', () => {
     expect(held.cost?.hire).toBeGreaterThan(0)
     expect(charged.cost?.hire).toBeGreaterThan((held.cost?.hire as number) * 10)
     expect(charged.caveats.some((c) => c.includes('pouring more with the same set'))).toBe(true)
+  })
+
+  test('a project with no norms is told there is no labour, rather than shown none', async () => {
+    // The absence an agent is likeliest to read as "this job needs no labour", and the
+    // only one here with no product table to fall back to.
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.labour).toBeUndefined()
+    expect(reply.noLabourBecause).toContain('no output norms')
+    expect(reply.noLabourBecause).toContain('Never estimate them')
+  })
+
+  test('the gang’s hours are reported beside the money and never inside it', async () => {
+    // Two costs negotiated with two different people: a shorter programme cuts the hire
+    // and leaves the hours exactly where they were. An agent that adds them has quoted a
+    // formwork price nobody will recognise.
+    load(twoLevels())
+    const plain = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const panel = plain.bom.find((line) => line.catalogId !== null) as { catalogId: string }
+    load(
+      withSettings(twoLevels(), {
+        labour: { byPartKind: { panel: { erectHours: 0.5, strikeHours: 0.25 } } },
+        rates: {
+          currency: 'GBP',
+          gangRatePerHour: 32,
+          byCatalogId: { [panel.catalogId]: { rentalPercentPerMonth: 3, purchasePerUnit: 420 } },
+        },
+      }),
+    )
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.labour?.erectManHours).toBeGreaterThan(0)
+    expect(reply.labour?.strikeManHours).toBeGreaterThan(0)
+    expect(reply.labour?.totalManHours).toBeCloseTo(
+      (reply.labour?.erectManHours ?? 0) + (reply.labour?.strikeManHours ?? 0),
+      2,
+    )
+    expect(reply.labour?.cost).toBeCloseTo((reply.labour?.totalManHours ?? 0) * 32, 1)
+    expect(reply.labour?.currency).toBe('GBP')
+    // The hours are absent from the money block, and the money block says where they are.
+    expect(reply.cost?.total).not.toBe(reply.labour?.cost)
+    expect(reply.cost?.excludes.some((entry) => entry.includes('deliberately not in total'))).toBe(
+      true,
+    )
+    // Man-hours rather than a duration, said as data rather than left to the description.
+    expect(reply.labour?.excludes.some((entry) => entry.includes('gang size'))).toBe(true)
+  })
+
+  test('the hours are tabled per operation, and the uncovered fittings are named', async () => {
+    // A norm is per kind, so a panel-only table covers a fraction of a steel-panel bill —
+    // and a total that reads complete while missing every tie is the failure this reports.
+    load(
+      withSettings(twoLevels(), {
+        labour: { byPartKind: { panel: { erectHours: 0.5, strikeHours: 0.25 } } },
+      }),
+    )
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.labour?.byOperation.map((row) => row.operation)).toEqual(['Panel'])
+    const panels = reply.labour?.byOperation[0] as { fittings: number; totalManHours: number }
+    expect(panels.totalManHours).toBeCloseTo(panels.fittings * 0.75, 2)
+    expect(reply.labour?.complete).toBe(false)
+    expect(reply.labour?.unnormedFittings).toBeGreaterThan(0)
+    expect(reply.labour?.unnormedKinds).toContain('Tie')
+    // No gang rate recorded, so hours with no money against them rather than free hours.
+    expect(reply.labour?.cost).toBeNull()
+    expect(reply.labour?.gaps.some((gap) => gap.includes('no money'))).toBe(true)
+    expect(reply.caveats.some((c) => c.includes('carry no norm at all'))).toBe(true)
   })
 
   test('an empty scene answers rather than throwing', async () => {

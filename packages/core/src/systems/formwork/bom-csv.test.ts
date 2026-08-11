@@ -5,6 +5,7 @@ import {
   bomCsv,
   bomCsvFilename,
   bomHire,
+  bomLabour,
   bomSupply,
   type FormworkSetCount,
   formworkAcquisition,
@@ -556,6 +557,137 @@ describe('bomCsv', () => {
 
       const total = rows(csv).find((row) => row.startsWith(',TOTAL,')) as string
       expect(total.split(',').slice(6, 8)).toEqual(['', '7.69'])
+    })
+  })
+
+  describe('what it costs to form', () => {
+    const NORMS = {
+      byPartKind: { panel: { erectHours: 0.5, strikeHours: 0.25 } },
+      gangRatePerHour: 30,
+      currency: 'GBP',
+    }
+    const RATES = {
+      currency: 'GBP',
+      byCatalogId: { 'framax-2700-900': { purchasePerUnit: 200, rentalPercentPerMonth: 3 } },
+    }
+
+    test('adds nothing at all where the project has stated no norms', () => {
+      // Same rule as the money columns: an hours row a project never earned reads as an
+      // answer, and a zero in it reads as work nobody has to do.
+      const csv = bomCsv([line()], { subject: 'Project' })
+
+      expect(rows(csv).some((row) => row.startsWith('LABOUR,'))).toBe(false)
+      expect(rows(csv).some((row) => row.startsWith('TOTAL MAN-HOURS'))).toBe(false)
+    })
+
+    test('says the hours are not a duration before it shows any of them', () => {
+      // The misreading this block exists against. An hours total looks like a programme,
+      // and nothing in this model knows the gang size, so the caveat has to arrive first.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', labour: bomLabour(lines, NORMS) })
+
+      const basis = rows(csv).find((row) => row.startsWith('LABOUR,')) as string
+      expect(basis).toContain('Not a duration')
+      expect(basis).toContain('gang size')
+    })
+
+    test('splits erect from strike and totals them', () => {
+      // 4 panels at 0.5 h to fit and 0.25 h to strike: 2 h up, 1 h down, 3 h of work.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', labour: bomLabour(lines, NORMS) })
+
+      expect(rows(csv)).toContain('Erect man-hours,2')
+      expect(rows(csv)).toContain('Strike man-hours,1')
+      expect(rows(csv)).toContain('TOTAL MAN-HOURS,3')
+    })
+
+    test('prices the hours and says the figure is not in the cost total', () => {
+      // Two money figures in one file, negotiated with two different people. A reader who
+      // adds them has costed the job; a reader who adds them into `TOTAL COST` has not.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, { subject: 'Project', labour: bomLabour(lines, NORMS) })
+
+      const money = rows(csv).find((row) => row.includes('at the gang rate')) as string
+      expect(money).toContain('GBP')
+      expect(money).toContain('not in the cost total above')
+      expect(money).toContain(',90')
+    })
+
+    test('tables the hours per operation, not per bill line', () => {
+      // A norm is stated per kind, so a per-line column would print the same figure
+      // against forty panel rows and answer nothing about where the time goes.
+      const lines = [line({ quantity: 4 }), line({ quantity: 6, marks: [] })]
+      const csv = bomCsv(lines, { subject: 'Project', labour: bomLabour(lines, NORMS) })
+
+      expect(rows(csv)).toContain('Operation,Fittings,Erect h,Strike h,Total h,Cost')
+      // Ten fittings across two lines, one row: 5 h up, 2.5 h down, £225.
+      expect(rows(csv)).toContain('Panel,10,5,2.5,7.5,225')
+    })
+
+    test('names the fittings that carry no norm, and calls the total a floor', () => {
+      // The row that decides whether the figure above is the job or a fragment of it. A
+      // bill whose panels are normed and whose ties are not totals cleanly and is short
+      // by every tie in it.
+      const lines = [
+        line({ quantity: 4 }),
+        line({ kind: 'tie', catalogId: 'tie-dw15', description: 'Tie rod', quantity: 48 }),
+      ]
+      const csv = bomCsv(lines, { subject: 'Project', labour: bomLabour(lines, NORMS) })
+
+      expect(rows(csv).some((row) => row.startsWith('TOTAL MAN-HOURS — a floor'))).toBe(true)
+      const incomplete = rows(csv).find((row) => row.startsWith('INCOMPLETE,')) as string
+      expect(incomplete).toContain('48 fittings carry no norm')
+      expect(incomplete).toContain('tie')
+    })
+
+    test('reports half an operation rather than halving the figure it has', () => {
+      // Striking is not the erect reversed, so a stated erect and an unstated strike is
+      // half the job — and a derived strike would be a second invented number.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        labour: bomLabour(lines, { byPartKind: { panel: { erectHours: 0.5 } } }),
+      })
+
+      expect(rows(csv)).toContain('Strike man-hours,0')
+      expect(
+        rows(csv).some((row) => row.startsWith('UNNORMED,') && row.includes('half the job')),
+      ).toBe(true)
+    })
+
+    test('says a line measured in litres carries no hours, rather than multiplying one', () => {
+      const lines = [
+        line({
+          kind: 'consumable',
+          catalogId: 'release-agent',
+          description: 'Release agent',
+          quantity: 12,
+          unit: 'l',
+        }),
+      ]
+      const csv = bomCsv(lines, { subject: 'Project', labour: bomLabour(lines, NORMS) })
+
+      expect(
+        rows(csv).some((row) => row.startsWith('UNNORMED,') && row.includes('per-fitting norm')),
+      ).toBe(true)
+    })
+
+    test('the cost basis sends the reader to the labour block instead of claiming there is none', () => {
+      // Without this the same file says "no labour" in one row and prints 90 hours of it
+      // twenty rows down.
+      const lines = [line({ quantity: 4 })]
+      const supply = bomSupply(lines, {})
+      const hire = bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 })
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        cost: bomCost(lines, RATES, hire, supply),
+        labour: bomLabour(lines, NORMS),
+      })
+
+      const basis = rows(csv).find((row) => row.startsWith('Cost basis,')) as string
+      expect(basis).not.toContain('No labour')
+      expect(basis).toContain('LABOUR block below')
+      expect(basis).toContain('deliberately not in this total')
     })
   })
 

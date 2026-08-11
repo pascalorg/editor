@@ -3,6 +3,8 @@
 import {
   COST_GAP_LABELS,
   formatMoney,
+  LABOUR_GAP_LABELS,
+  PART_KIND_LABELS,
   PRECEDENCE_REASON_LABELS,
   RESEQUENCE_REFUSAL_LABELS,
   SCHEDULE_GAP_LABELS,
@@ -63,6 +65,7 @@ export function FormworkTakeoffPanel() {
   const cost = solution.cost
   const costByLine = new Map(cost?.lines.map((entry) => [entry.line, entry]))
   const money = (value: number) => formatMoney(value, cost?.currency)
+  const labour = solution.labour
   const schedule = solution.schedule
   const occupancy = schedule === undefined ? undefined : scheduleOccupancyDays(schedule)
   const sets = solution.sets
@@ -243,8 +246,64 @@ export function FormworkTakeoffPanel() {
                   <Note key={gap}>{COST_GAP_LABELS[gap]}.</Note>
                 ))}
                 <Note>
-                  Formwork held only. No labour, no transport, no finance — and labour is normally
-                  the largest of those.
+                  {labour === undefined
+                    ? 'Formwork held only. No labour, no transport, no finance — and labour is normally the largest of those.'
+                    : 'Formwork held only. No transport, no finance — and the gang’s time is the section below rather than part of this total.'}
+                </Note>
+              </Section>
+            )}
+            {labour === undefined ? (
+              <Note>
+                No output norms recorded, so this takeoff carries no labour — which is the largest
+                thing missing from the money above. Nothing is assumed for it: the published
+                constants are per m² of a whole trade operation and cannot be spread over a bill of
+                parts, and an output is a fact about a gang rather than about a product. Enter
+                man-hours to erect and to strike per kind of part in the project's formwork
+                settings.
+              </Note>
+            ) : (
+              <Section title="Labour">
+                <Readout label="Erect" value={`${labour.erectHours.toFixed(1)} h`} />
+                <Readout label="Strike" value={`${labour.strikeHours.toFixed(1)} h`} />
+                <Readout
+                  label={labour.complete ? 'Man-hours' : 'Man-hours so far'}
+                  value={`${labour.totalHours.toFixed(1)} h`}
+                  value2={labour.complete ? undefined : 'a floor, not the work in the job'}
+                />
+                {labour.cost !== undefined && (
+                  <Readout
+                    label="At the gang rate"
+                    value={formatMoney(labour.cost, labour.currency)}
+                    value2="not in the cost total"
+                  />
+                )}
+                {/* Per kind rather than per line, because that is how a norm is stated and it is
+                    the readout that says where the time goes: a bill has two hundred lines and a
+                    gang has five operations. */}
+                {labour.byKind.map((kind) => (
+                  <Readout
+                    key={kind.kind}
+                    label={PART_KIND_LABELS[kind.kind]}
+                    value={`${kind.totalHours.toFixed(1)} h`}
+                    value2={`${kind.fittings} fitted`}
+                  />
+                ))}
+                {labour.unnormedFittings > 0 && (
+                  <Note>
+                    {labour.unnormedFittings} fittings carry no norm at all (
+                    {labour.unnormedKinds.map((kind) => PART_KIND_LABELS[kind]).join(', ')}), so the
+                    hours above are short by every one of them.
+                  </Note>
+                )}
+                {labour.gaps
+                  .filter((gap) => gap !== 'no-norm')
+                  .map((gap) => (
+                    <Note key={gap}>{LABOUR_GAP_LABELS[gap]}.</Note>
+                  ))}
+                <Note>
+                  Man-hours, not a duration: nothing here knows the gang size. Erecting and striking
+                  only — no cleaning, no moving the set between pours, no setting out, no waiting on
+                  concrete, and no learning curve on the first use of a system.
                 </Note>
               </Section>
             )}

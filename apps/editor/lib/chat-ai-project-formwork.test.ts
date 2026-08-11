@@ -83,6 +83,27 @@ interface ProjectReport {
     gaps: string[]
     excludes: string[]
   }
+  labour?: {
+    currency: string | null
+    erectManHours: number
+    strikeManHours: number
+    totalManHours: number
+    cost: number | null
+    complete: boolean
+    byOperation: Array<{
+      operation: string
+      fittings: number
+      erectManHours: number
+      strikeManHours: number
+      totalManHours: number
+      cost: number | null
+    }>
+    unnormedFittings: number
+    unnormedKinds: string[]
+    gaps: string[]
+    excludes: string[]
+  }
+  noLabourBecause?: string
   schedule?: {
     plantWantedOnSite: string | null
     firstPour: string | null
@@ -746,6 +767,72 @@ describe('inspect_project_formwork', () => {
       if (row.catalogId === null)
         expect(row.costGaps?.some((gap) => gap.includes('Made on site'))).toBe(true)
     }
+  })
+
+  test('says there are no hours rather than showing none, until a norm is stated', async () => {
+    // The absence a model is likeliest to turn into "no labour needed", and the only one in
+    // this answer with no product table and no code behind it to fall back to.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.labour).toBeUndefined()
+    expect(solved.noLabourBecause).toContain('no output norms')
+    expect(solved.noLabourBecause).toContain('Never estimate them')
+  })
+
+  test('reports the gang’s hours beside the money, never folded into it', async () => {
+    // Two costs, negotiated with two different people, moving for different reasons: a
+    // shorter programme cuts the hire and leaves the hours where they were. A model that
+    // adds them has quoted a formwork price no estimator will recognise.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as { catalogId: string }
+
+    await call(tools, 'set_formwork_settings', {
+      rates: {
+        currency: 'GBP',
+        gangRatePerHour: 32,
+        byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } },
+      },
+      labourNorms: { panel: { erectHours: 0.5, strikeHours: 0.25 } },
+    })
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.labour?.erectManHours).toBeGreaterThan(0)
+    expect(solved.labour?.strikeManHours).toBeGreaterThan(0)
+    expect(solved.labour?.cost).toBeCloseTo((solved.labour?.totalManHours ?? 0) * 32, 1)
+    expect(solved.labour?.currency).toBe('GBP')
+    // The money block sends the reader to the hours instead of claiming there are none.
+    expect(solved.cost?.excludes.some((e) => e.includes('deliberately not in total'))).toBe(true)
+    // Man-hours rather than a duration, carried as data because it is the sentence the
+    // model has to repeat: nothing in this model knows the gang size.
+    expect(solved.labour?.excludes.some((e) => e.includes('gang size'))).toBe(true)
+    expect(solved.caveats.some((c) => c.includes('not a duration'))).toBe(true)
+  })
+
+  test('tables the hours per operation and names the fittings no norm covers', async () => {
+    // A norm is per kind, so a panel-only table covers a fraction of a steel-panel bill —
+    // and a total that reads complete while missing every tie in the job is the failure.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    await call(tools, 'set_formwork_settings', {
+      labourNorms: { panel: { erectHours: 0.5, strikeHours: 0.25 } },
+    })
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.labour?.byOperation.map((row) => row.operation)).toEqual(['Panel'])
+    const panels = solved.labour?.byOperation[0] as { fittings: number; totalManHours: number }
+    expect(panels.totalManHours).toBeCloseTo(panels.fittings * 0.75, 2)
+    expect(solved.labour?.complete).toBe(false)
+    expect(solved.labour?.unnormedFittings).toBeGreaterThan(0)
+    expect(solved.labour?.unnormedKinds).toContain('Tie')
+    // No gang rate, so hours with no money against them rather than hours that are free.
+    expect(solved.labour?.cost).toBeNull()
+    expect(solved.caveats.some((c) => c.includes('carry no norm at all'))).toBe(true)
   })
 
   test('the element rows and the scope counts agree with each other', async () => {

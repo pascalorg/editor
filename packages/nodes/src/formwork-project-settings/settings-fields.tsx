@@ -1,6 +1,12 @@
 'use client'
 
-import type { FormworkRateSettings, PartRate } from '@pascal-app/core'
+import type {
+  FormworkLabourSettings,
+  FormworkRateSettings,
+  LabourNormEntry,
+  PartRate,
+} from '@pascal-app/core'
+import { PART_KIND_LABELS } from '@pascal-app/core/formwork'
 import { useId, useState } from 'react'
 
 /**
@@ -603,6 +609,185 @@ export function RateTableField({
             setPending([])
             onClear()
           }}
+          type="button"
+        >
+          Back to nobody having said
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The kinds a norm can be stated against, in the order a bill lists them.
+ *
+ * A fixed list rather than a picker, unlike the rack and the rate table: there are twelve
+ * kinds against hundreds of catalog ids, and every one of them is in every bill this
+ * engine produces. So an unfilled row here is a real gap in an answer the user is about to
+ * read, and hiding it behind a dropdown is how a table gets left half-filled.
+ */
+const NORM_KINDS = [
+  'panel',
+  'filler',
+  'corner',
+  'stop-end',
+  'ply-piece',
+  'waler',
+  'joist',
+  'tie',
+  'prop',
+  'brace',
+  'accessory',
+] as const
+
+/**
+ * This project's own output norms, per kind of part, and what an hour of the gang costs.
+ *
+ * The strictest field in this panel about assuming nothing, and stricter than the rates
+ * for a reason worth stating in the UI itself: a price at least has a market, and an
+ * output norm is a fact about *this* crew. The published constants — CPWD's carpenter and
+ * mazdoor days per 10 m², Spon's and RSMeans hours per m² — are per m² of a whole trade
+ * operation that already contains the panels, the backing, the ties and the strike, so
+ * none of them can be spread over a bill of parts. So no placeholder here is ever a
+ * figure: every empty cell reads "—", and an unfilled kind shows on the takeoff as
+ * fittings the answer does not cover.
+ *
+ * `consumable` is deliberately not in the list. A drum of release agent is measured in
+ * litres and an hours-per-fitting norm has no meaning against a litre — the takeoff
+ * reports those lines rather than multiplying them, so a row here could only be a figure
+ * nothing would ever use.
+ */
+export function LabourNormField({
+  gangRatePerHour,
+  currency,
+  labour,
+  onClear,
+  onSetGangRate,
+  onSetNorm,
+}: {
+  /** From `rates`, where the money and its currency live. */
+  gangRatePerHour: number | undefined
+  currency: string | undefined
+  /** `undefined` where the project has stated no norms at all. */
+  labour: FormworkLabourSettings | undefined
+  /** Back to unstated, which takes the hours off the takeoff entirely. */
+  onClear: () => void
+  /** `null` clears the rate, leaving hours with no money against them. */
+  onSetGangRate: (value: number | null) => void
+  /** `null` for a field clears just that figure. */
+  onSetNorm: (kind: string, patch: Record<string, number | null>) => void
+}) {
+  const rateId = useId()
+  const byPartKind: Readonly<Record<string, LabourNormEntry>> = labour?.byPartKind ?? {}
+  const stated = NORM_KINDS.filter((kind) => {
+    const norm = byPartKind[kind]
+    return norm !== undefined && (norm.erectHours !== undefined || norm.strikeHours !== undefined)
+  })
+
+  return (
+    <div className="flex flex-col gap-1 px-1 text-xs">
+      {labour === undefined ? (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          No norms recorded, so the takeoff carries no labour at all — not a job with no labour in
+          it. Enter the hours your gang takes and every kind of part in the bill costs out.
+        </p>
+      ) : stated.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          The table is open and empty, so every fitting reads as unnormed and the hours total is a
+          floor of nothing. Reset below to go back to nobody having said.
+        </p>
+      ) : (
+        stated.length < NORM_KINDS.length && (
+          <p className="text-[10px] text-amber-400/70 leading-snug">
+            {NORM_KINDS.length - stated.length} of {NORM_KINDS.length} kinds carry no norm, so the
+            takeoff's hours are a floor and short by every fitting of those kinds.
+          </p>
+        )
+      )}
+
+      <label className="flex items-center gap-2" htmlFor={rateId}>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+          Gang rate{currency === undefined ? '' : ` (${currency})`}
+        </span>
+        <input
+          aria-label="Gang rate per man-hour"
+          className="h-7 w-[4.5rem] shrink-0 rounded-md border border-border/50 bg-[#2C2C2E] px-1.5 text-right font-mono outline-none"
+          defaultValue={gangRatePerHour ?? ''}
+          id={rateId}
+          key={`gang-rate-${gangRatePerHour ?? 'unset'}`}
+          min={0}
+          onBlur={(event) => {
+            const raw = event.currentTarget.value.trim()
+            const parsed = Number.parseFloat(raw)
+            if (raw === '' || !Number.isFinite(parsed) || parsed <= 0) onSetGangRate(null)
+            else onSetGangRate(parsed)
+          }}
+          placeholder="—"
+          step={0.5}
+          type="number"
+        />
+        <span className="w-12 shrink-0 text-muted-foreground/70">/ h</span>
+      </label>
+      <p className="text-[10px] text-muted-foreground/70 leading-snug">
+        All-in per man-hour, and it lives with the rates because it is money in the project's
+        currency. Without it the takeoff reports hours with no cost against them rather than costing
+        them at nothing.
+      </p>
+
+      <div className="flex items-center gap-2 pt-1 text-[10px] text-muted-foreground/70">
+        <span className="min-w-0 flex-1" />
+        <span className="w-[4.5rem] shrink-0 text-right">Erect h</span>
+        <span className="w-[4.5rem] shrink-0 text-right">Strike h</span>
+      </div>
+
+      {NORM_KINDS.map((kind) => {
+        const norm = byPartKind[kind] ?? {}
+        return (
+          <div className="flex flex-col gap-0.5" key={kind}>
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                {PART_KIND_LABELS[kind]}
+              </span>
+              <RateCell
+                label={`Erect man-hours, ${PART_KIND_LABELS[kind]}`}
+                max={100}
+                onCommit={(value) => onSetNorm(kind, { erectHours: value ?? null })}
+                placeholder="—"
+                step={0.05}
+                value={norm.erectHours}
+              />
+              <RateCell
+                label={`Strike man-hours, ${PART_KIND_LABELS[kind]}`}
+                max={100}
+                onCommit={(value) => onSetNorm(kind, { strikeHours: value ?? null })}
+                placeholder="—"
+                step={0.05}
+                value={norm.strikeHours}
+              />
+            </div>
+            {/* Half a two-part operation, said on the row rather than only on the takeoff:
+                the total counts the half that is stated, so the row looks priced. */}
+            {(norm.erectHours === undefined) !== (norm.strikeHours === undefined) && (
+              <p className="pl-1 text-[10px] text-amber-400/70 leading-snug">
+                Half the operation. Striking is not the erect reversed, so the other figure is not
+                derived from this one — the takeoff counts only what is here.
+              </p>
+            )}
+          </div>
+        )
+      })}
+
+      <p className="text-[10px] text-muted-foreground/70 leading-snug">
+        Hours per fitting, so a panel fitted on three pours is counted three times — that is what a
+        gang is paid for, and it is not the number of panels standing at once. Erecting and striking
+        only: no cleaning, no moving the set between pours, no setting out, no waiting on concrete,
+        and no learning curve on the first use of a system.
+      </p>
+
+      {labour !== undefined && (
+        <button
+          className="self-start rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={onClear}
           type="button"
         >
           Back to nobody having said

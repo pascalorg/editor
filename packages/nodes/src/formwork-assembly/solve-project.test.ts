@@ -683,6 +683,126 @@ describe('what the bill costs to hold', () => {
   })
 })
 
+describe('what the bill costs to form', () => {
+  const NORMS = { panel: { erectHours: 0.5, strikeHours: 0.25 } }
+
+  test('a project that has stated no norms gets no hours at all', () => {
+    // For the price's reason, only harder: an output norm is a fact about a gang, so
+    // there is not even a conservative figure to fall back to. Zero hours would read as
+    // a job nobody has to build.
+    expect(solveProjectFormwork(steelWallScene()).labour).toBeUndefined()
+    expect(
+      solveProjectFormwork(withSettings(steelWallScene(), { rates: { gangRatePerHour: 32 } }))
+        .labour,
+    ).toBeUndefined()
+  })
+
+  test('multiplies the project’s own norm over the bill’s fittings', () => {
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), { labour: { byPartKind: NORMS } }),
+    )
+    // Every panel-kind line, not one catalog id: a norm is keyed by kind because fitting
+    // a 0.6 m panel and a 0.9 m one is the same work to a carpenter.
+    const panels = solution.bom
+      .filter((line) => line.kind === 'panel')
+      .reduce((total, line) => total + line.quantity, 0)
+
+    expect(panels).toBeGreaterThan(0)
+    expect(solution.labour?.erectHours).toBeCloseTo(panels * 0.5, 6)
+    expect(solution.labour?.strikeHours).toBeCloseTo(panels * 0.25, 6)
+    expect(solution.labour?.totalHours).toBeCloseTo(panels * 0.75, 6)
+  })
+
+  test('counts the same bill the money is counted over, not the sets', () => {
+    // The join that decides whether the figure is the work or a fraction of it. A panel
+    // fitted on three pours is three in the bill and one in the peak, and a gang is paid
+    // each time it fits it.
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), { labour: { byPartKind: NORMS } }),
+    )
+
+    expect(solution.labour?.lines.map((entry) => entry.line)).toEqual(solution.bom)
+  })
+
+  test('prices the hours only where a gang rate exists, and keeps them out of the cost', () => {
+    const hoursOnly = solveProjectFormwork(
+      withSettings(steelWallScene(), { labour: { byPartKind: NORMS } }),
+    )
+    expect(hoursOnly.labour?.totalHours).toBeGreaterThan(0)
+    expect(hoursOnly.labour?.cost).toBeUndefined()
+    expect(hoursOnly.labour?.gaps).toContain('no-gang-rate')
+
+    const priced = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        labour: { byPartKind: NORMS },
+        rates: {
+          currency: 'GBP',
+          gangRatePerHour: 32,
+          byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } },
+        },
+      }),
+    )
+
+    expect(priced.labour?.cost).toBeCloseTo((priced.labour?.totalHours ?? 0) * 32, 6)
+    expect(priced.labour?.currency).toBe('GBP')
+    // Two costs negotiated with two different people. Nothing anywhere sums them, and the
+    // hire total is what it was before a norm existed.
+    const unlaboured = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        rates: {
+          currency: 'GBP',
+          byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } },
+        },
+      }),
+    )
+    expect(priced.cost?.totalCost).toBeCloseTo(unlaboured.cost?.totalCost ?? -1, 6)
+  })
+
+  test('reports the fittings no norm covers rather than costing them at zero', () => {
+    // A steel-panel wall bills ties, walers and accessories alongside its panels, so a
+    // panel-only norm covers a fraction of the job and the total has to say so.
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), { labour: { byPartKind: NORMS } }),
+    )
+
+    expect(solution.labour?.complete).toBe(false)
+    expect(solution.labour?.unnormedFittings).toBeGreaterThan(0)
+    expect(solution.labour?.unnormedKinds).toContain('tie')
+    expect(solution.labour?.byKind.map((kind) => kind.kind)).toEqual(['panel'])
+  })
+
+  test('leads the caveats with what an hours figure is not', () => {
+    // It reads like a programme and it is not one: no gang size exists anywhere in this
+    // model, so the division into days is the reader's own decision.
+    const caveats = projectFormworkCaveats(
+      solveProjectFormwork(withSettings(steelWallScene(), { labour: { byPartKind: NORMS } })),
+    )
+
+    expect(caveats.some((c) => c.includes('not a duration'))).toBe(true)
+    expect(caveats.some((c) => c.includes('gang size'))).toBe(true)
+    expect(caveats.some((c) => c.includes('carry no norm at all'))).toBe(true)
+  })
+
+  test('says a priced takeoff has no labour in it where nobody stated a norm', () => {
+    // The largest thing missing from the money, and silence about it is what makes a hire
+    // total get read as the cost of forming the job. Only where money exists: a takeoff
+    // with no figures at all already tells the reader that, and two silences about one
+    // job read as two separate problems.
+    const priced = projectFormworkCaveats(
+      solveProjectFormwork(
+        withSettings(steelWallScene(), {
+          rates: { currency: 'GBP', byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } } },
+        }),
+      ),
+    )
+    expect(priced.some((c) => c.includes('no labour in this takeoff at all'))).toBe(true)
+    expect(priced.some((c) => c.includes('not a duration'))).toBe(false)
+
+    const unpriced = projectFormworkCaveats(solveProjectFormwork(steelWallScene()))
+    expect(unpriced.some((c) => c.includes('no labour in this takeoff at all'))).toBe(false)
+  })
+})
+
 describe('when the pours happen', () => {
   /** A steel-panel wall in two lifts, so a scope can have one pour dated and one not. */
   function twoLiftScene(

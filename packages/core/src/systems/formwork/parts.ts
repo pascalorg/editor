@@ -258,7 +258,7 @@ export function partLabel(part: FormworkPartSpec): string {
 }
 
 /** Bill order: the shutter face first, then what backs it, then what holds it up. */
-const KIND_ORDER: readonly FormworkPartKind[] = [
+export const KIND_ORDER: readonly FormworkPartKind[] = [
   'panel',
   'filler',
   'corner',

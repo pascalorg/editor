@@ -1,6 +1,7 @@
 import type {
   BomCost,
   BomHire,
+  BomLabour,
   BomLine,
   BomSupply,
   FormworkAcquisition,
@@ -19,6 +20,8 @@ import {
   bomCost,
   bomCostCaveats,
   bomHire,
+  bomLabour,
+  bomLabourCaveats,
   bomLines,
   bomSupply,
   bomWeightKg,
@@ -117,6 +120,24 @@ export interface ProjectFormwork {
    * gets no money — not a zero, and not a figure derived from a plausible market rate.
    */
   cost?: BomCost
+  /**
+   * The work in the job — hours to erect and to strike — or absent where the project has
+   * stated no output norms.
+   *
+   * Reported apart from `cost` rather than folded into it, and that is the decision worth
+   * knowing about this field. `cost` is money paid to a supplier for plant: a hire invoice,
+   * a recharge, a purchase. This is the gang's time. They are negotiated with different
+   * people, they move for different reasons — a hire falls with a shorter programme and
+   * labour does not — and a single total would hide the one comparison the pair exists to
+   * make, which is that the labour is usually the larger of the two.
+   *
+   * Absent for the reason `cost` is, one degree further. A price has no code behind it; an
+   * output norm has no code and no *product* behind it either, because it is a fact about a
+   * crew. Nothing is assumed, and until a project states its norms every surface says the
+   * labour is outside the figures — which is what they have all said since the money
+   * arrived.
+   */
+  labour?: BomLabour
   /**
    * When each pour happens and when its plant arrives and comes free, or absent where no
    * pour in scope carries a date.
@@ -417,6 +438,12 @@ export function solveProjectFormwork(
     // through as it stands, including absent: a project with rates and no stock list has
     // said it owns none of this, which is a different claim from having said nothing.
     ...(settings.rates ? { cost: bomCost(bom, settings.rates, hire, supply) } : {}),
+    // Off the same bill as the money, so the hours and the price are counted over the same
+    // quantities. The bill is the right multiplicand for a reason worth stating where it is
+    // used: a project bill is built from every shutter's parts, so a panel type fitted on
+    // three pours is already three in the quantity — total fittings rather than panels
+    // owned, which is what a gang is paid for.
+    ...(settings.labour ? { labour: bomLabour(bom, settings.labour) } : {}),
     ...(anyDated ? { schedule } : {}),
     ...(sets ? { sets } : {}),
     ...(acquisition ? { acquisition } : {}),
@@ -487,6 +514,18 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   // of these makes the total a floor rather than a price, and a money figure is the one
   // number in this whole takeoff a reader will quote without reading anything beside it.
   if (solution.cost) out.push(...bomCostCaveats(solution.cost))
+  // Straight after the money, because the pair is the point: the cost caveat says labour is
+  // outside it and is normally the largest thing that is, and this is that thing.
+  if (solution.labour) out.push(...bomLabourCaveats(solution.labour))
+  // And where there are no norms, the absence said out loud rather than left as a missing
+  // block — but only where the project has priced something, because a takeoff with no money
+  // in it at all is already telling the reader that, and two silences about one job read as
+  // two problems.
+  else if (solution.cost) {
+    out.push(
+      'There is no labour in this takeoff at all, because the project has stated no output norms. That is the largest thing missing from the figures above, and it is deliberately not estimated: published constants are per m² of a whole trade operation and cannot be spread over a bill of parts, and an output is a fact about a gang rather than about a product. Record man-hours to erect and to strike per kind of part, and a rate per man-hour, to get it.',
+    )
+  }
   // Verbatim again, and the qualifying-time line is the one that earns its place: under
   // ACI the strike dates are the earliest the forms could come off rather than the dates,
   // and a reader who takes a cold-spring programme off a summer calculation strikes early.

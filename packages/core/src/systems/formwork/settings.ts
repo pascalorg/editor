@@ -1,6 +1,7 @@
 import type { FormworkProjectSettingsNode } from '../../schema/nodes/formwork-project-settings'
 import type { AnyNode } from '../../schema/types'
 import type { RateTable } from './cost'
+import type { NormTable } from './labour'
 import { DEFAULT_MEASUREMENT_STANDARD_ID, type MeasurementStandardId } from './measurement'
 import {
   DEFAULT_PRESSURE_STANDARD_ID,
@@ -86,6 +87,20 @@ export interface FormworkSettings {
    */
   rates: RateTable | undefined
   /**
+   * How long this project's gang takes, or `undefined` where nobody has stated a norm.
+   *
+   * The fourth undefaulted field, and the one with the least behind it. A rate at least has
+   * a market; an output norm is a fact about a *crew*, and the published constants are per
+   * m² of a whole trade operation rather than per part, so there is no table to fall back
+   * to even in principle. Absent means the takeoff carries no hours at all.
+   *
+   * The gang rate travels with the norms rather than with the money it is stated beside,
+   * because hours and the rate that prices them are one answer: a rate with no norms
+   * prices nothing, and norms with no rate are hours with no money — both of which this
+   * says, and neither of which needs the rest of the rate table to be read.
+   */
+  labour: NormTable | undefined
+  /**
    * How a pour date becomes the days the plant is on site, or `undefined`.
    *
    * The third undefaulted field, and for the rates' reason rather than the rack's: a
@@ -117,6 +132,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   parts: {},
   ownedStock: undefined,
   rates: undefined,
+  labour: undefined,
   schedule: undefined,
 }
 
@@ -165,6 +181,20 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
           byCatalogId: node.rates.byCatalogId ?? {},
         }
       : undefined,
+    // Two stated groups joined into one resolved table, because hours and the rate that
+    // prices them are one answer and a consumer holding only half of it would either
+    // report hours it could not cost or reach back into the settings node for the rate.
+    // The currency comes across for the same reason: a labour cost shown as a bare number
+    // beside a hire charge in GBP is the failure `formatMoney` exists to prevent.
+    labour: node.labour
+      ? {
+          byPartKind: node.labour.byPartKind ?? {},
+          ...(node.rates?.gangRatePerHour === undefined
+            ? {}
+            : { gangRatePerHour: node.rates.gangRatePerHour }),
+          ...(node.rates?.currency === undefined ? {} : { currency: node.rates.currency }),
+        }
+      : undefined,
     schedule: node.schedule,
   }
 }
@@ -201,6 +231,7 @@ export type FormworkSettingsGroup =
   | 'parts'
   | 'stock'
   | 'rates'
+  | 'labour'
   | 'schedule'
 
 /**
@@ -322,10 +353,11 @@ export function mergeFormworkRates(
   patch: {
     currency?: string | undefined
     minHireDays?: number | undefined
+    gangRatePerHour?: number | undefined
     byCatalogId?: Readonly<Record<string, Readonly<Record<string, number | undefined>> | undefined>>
   },
   /** Fields explicitly named in the patch, so `undefined` clears rather than skips. */
-  stated: { currency?: boolean; minHireDays?: boolean } = {},
+  stated: { currency?: boolean; minHireDays?: boolean; gangRatePerHour?: boolean } = {},
 ): NonNullable<FormworkProjectSettingsNode['rates']> {
   const byCatalogId: Record<string, Record<string, number>> = {}
   for (const [catalogId, rate] of Object.entries(current?.byCatalogId ?? {})) {
@@ -350,7 +382,53 @@ export function mergeFormworkRates(
   const minHireDays = stated.minHireDays
     ? patch.minHireDays
     : (patch.minHireDays ?? current?.minHireDays)
+  const gangRate = stated.gangRatePerHour
+    ? patch.gangRatePerHour
+    : (patch.gangRatePerHour ?? current?.gangRatePerHour)
   if (currency !== undefined) out.currency = currency
   if (minHireDays !== undefined) out.minHireDays = minHireDays
+  if (gangRate !== undefined) out.gangRatePerHour = gangRate
   return out as NonNullable<FormworkProjectSettingsNode['rates']>
+}
+
+/**
+ * Merge output norms into `labour.byPartKind`, returning the whole group.
+ *
+ * `byPartKind` is the rate table's problem in a smaller table: the generic merge replaces
+ * the key wholesale, so stating the panel norm would forget the norms for every other
+ * kind, and a norm table is filled in one row at a time by whoever knows that trade.
+ *
+ * A kind's entry is *merged* rather than replaced, so recording a strike time does not
+ * wipe the erect time beside it — the case the erect-only gap exists to report, and the
+ * one a replace would create silently. `undefined` against a kind removes the row;
+ * `undefined` against a field clears just that field, and a row left with no hours in it
+ * is dropped rather than kept as `{}`, because an empty norm and no norm price the same
+ * and only one of them should be representable.
+ *
+ * The group survives an emptied table, exactly as `stock` and `rates` do: a project that
+ * has deleted every norm has stated it has none, and dropping back to absent would turn
+ * that into "nobody has said".
+ */
+export function mergeFormworkLabourNorms(
+  current: FormworkProjectSettingsNode['labour'],
+  patch: Readonly<Record<string, Readonly<Record<string, number | undefined>> | undefined>>,
+): NonNullable<FormworkProjectSettingsNode['labour']> {
+  const byPartKind: Record<string, Record<string, number>> = {}
+  for (const [kind, norm] of Object.entries(current?.byPartKind ?? {})) {
+    byPartKind[kind] = { ...norm }
+  }
+  for (const [kind, norm] of Object.entries(patch)) {
+    if (norm === undefined) {
+      delete byPartKind[kind]
+      continue
+    }
+    const merged: Record<string, number> = { ...(byPartKind[kind] ?? {}) }
+    for (const [field, value] of Object.entries(norm)) {
+      if (value === undefined) delete merged[field]
+      else merged[field] = value
+    }
+    if (Object.keys(merged).length === 0) delete byPartKind[kind]
+    else byPartKind[kind] = merged
+  }
+  return { byPartKind } as NonNullable<FormworkProjectSettingsNode['labour']>
 }

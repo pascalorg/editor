@@ -93,6 +93,26 @@ function withStock(
   }
 }
 
+/** The same node, carrying any settings group verbatim — the rates, the norms. */
+function withSettings(
+  nodes: Record<string, AnyNode>,
+  settings: Record<string, unknown>,
+): Record<string, AnyNode> {
+  return {
+    ...nodes,
+    'formwork-settings_1': {
+      object: 'node',
+      id: 'formwork-settings_1',
+      type: 'formwork-settings',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      ...settings,
+    } as unknown as AnyNode,
+  }
+}
+
 describe('takeoffCsv', () => {
   test('names the scope it was taken at, in the file and in the filename', () => {
     const solution = solveProjectFormwork(
@@ -282,6 +302,43 @@ describe('takeoffCsv', () => {
     expect(text).toContain('TO ACQUIRE')
     expect(text).toContain(`Short in total,,,,${solution.acquisition?.shortfallQuantity}`)
     expect(line?.shortfall).toBeLessThan(hired?.hiredQuantity as number)
+  })
+
+  test('the gang’s hours reach the file, and the money block points at them', () => {
+    // The join the panel cannot cover: a takeoff emailed to a hire desk with the hours
+    // left behind is the same file that says labour is the largest thing it excludes.
+    const scene = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+    const plain = solveProjectFormwork(scene)
+    const panel = plain.bom.find((row) => row.kind === 'panel')
+    const solution = solveProjectFormwork(
+      withSettings(scene, {
+        labour: { byPartKind: { panel: { erectHours: 0.5, strikeHours: 0.25 } } },
+        rates: {
+          currency: 'GBP',
+          gangRatePerHour: 32,
+          byCatalogId: { [panel?.catalogId as string]: { rentalPerUnitPerMonth: 30 } },
+        },
+      }),
+    )
+
+    const rows = takeoffCsv(solution, 'Project').text.split('\n')
+
+    expect(rows.some((row) => row.startsWith('LABOUR,'))).toBe(true)
+    expect(rows).toContain('Operation,Fittings,Erect h,Strike h,Total h,Cost')
+    expect(rows.some((row) => row.startsWith('TOTAL MAN-HOURS'))).toBe(true)
+    const basis = rows.find((row) => row.startsWith('Cost basis,')) as string
+    expect(basis).toContain('LABOUR block below')
+  })
+
+  test('a file taken with no norms recorded has no hours block to misread', () => {
+    const solution = solveProjectFormwork(
+      sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1')),
+    )
+
+    expect(takeoffCsv(solution, 'Project').text).not.toContain('MAN-HOURS')
   })
 
   test('a programme with no rack carries no acquisition block', () => {

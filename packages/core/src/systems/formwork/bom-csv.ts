@@ -2,7 +2,8 @@ import { ACQUIRE_GAP_LABELS, ACQUIRE_VERDICT_LABELS, type FormworkAcquisition } 
 import { type BomCost, COST_GAP_LABELS, type CostLine } from './cost'
 import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
 import type { BomHire, HireLine } from './hire'
-import type { BomLine } from './parts'
+import { type BomLabour, LABOUR_GAP_LABELS } from './labour'
+import { type BomLine, PART_KIND_LABELS } from './parts'
 import { type FormworkResequence, RESEQUENCE_REFUSAL_LABELS } from './resequence'
 import {
   type FormworkSchedule,
@@ -73,6 +74,20 @@ export interface BomCsvScope {
    * a row that carries no money has to say why in the row.
    */
   cost?: BomCost
+  /**
+   * The gang's hours, where the project has stated its own output norms.
+   *
+   * A preamble block rather than columns, and the join is the reason: a norm is per part
+   * *kind* and a bill line is per catalog id, so the hours against a 0.6 m panel and a
+   * 0.9 m one come off the same figure and a per-line column would print the same norm
+   * forty times. The block below carries the per-kind readout instead, which is the one
+   * that says where the time goes.
+   *
+   * Kept apart from the cost block on purpose. These are man-hours and, where a rate
+   * exists, the gang's money — negotiated with different people from the hire desk and
+   * moving for different reasons, so the two never sum into one figure here.
+   */
+  labour?: BomLabour
   /**
    * When the pours happen, where the project has dated any of them.
    *
@@ -273,7 +288,9 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       [
         'Cost basis',
         cell(
-          'formwork held only — hire, recharges and what is spent. No labour, transport or finance',
+          scope.labour === undefined
+            ? 'formwork held only — hire, recharges and what is spent. No labour, transport or finance'
+            : 'formwork held only — hire, recharges and what is spent. No transport or finance. The gang’s time is in the LABOUR block below and is deliberately not in this total',
         ),
       ].join(','),
     )
@@ -311,6 +328,73 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
     }
     for (const gap of cost.gaps) {
       rows.push(['UNPRICED', cell(COST_GAP_LABELS[gap])].join(','))
+    }
+  }
+  const labour = scope.labour
+  if (labour && labour.lines.length > 0) {
+    rows.push('')
+    // The basis before the hours, as the cost block does, and against a harder
+    // misreading: an hours total looks like a programme. Nothing in this model knows the
+    // gang size, so this is how much work there is rather than how long it takes.
+    rows.push(
+      [
+        'LABOUR',
+        cell(
+          'Man-hours from this project’s own output norms — erecting and striking only. Not a duration: nothing here knows the gang size, so dividing by a crew is the reader’s decision. Not in the cost total above',
+        ),
+      ].join(','),
+    )
+    rows.push(['Erect man-hours', round2(labour.erectHours)].join(','))
+    rows.push(['Strike man-hours', round2(labour.strikeHours)].join(','))
+    rows.push(
+      [
+        labour.complete ? 'TOTAL MAN-HOURS' : 'TOTAL MAN-HOURS — a floor, not the work in the job',
+        round2(labour.totalHours),
+      ].join(','),
+    )
+    if (labour.cost !== undefined) {
+      rows.push(
+        [
+          cell(
+            labour.currency === undefined
+              ? 'Labour cost at the gang rate — not in the cost total above'
+              : `Labour cost ${labour.currency} at the gang rate — not in the cost total above`,
+          ),
+          round2(labour.cost),
+        ].join(','),
+      )
+    }
+    // Per kind rather than per line, because a norm is stated per kind: a bill's forty
+    // panel rows come off one figure, and this is the readout that says which operation
+    // the job's hours are actually in.
+    rows.push(['Operation', 'Fittings', 'Erect h', 'Strike h', 'Total h', 'Cost'].join(','))
+    for (const kind of labour.byKind) {
+      rows.push(
+        [
+          cell(PART_KIND_LABELS[kind.kind]),
+          kind.fittings,
+          round2(kind.erectHours),
+          round2(kind.strikeHours),
+          round2(kind.totalHours),
+          kind.cost === undefined ? '' : round2(kind.cost),
+        ].join(','),
+      )
+    }
+    if (labour.unnormedFittings > 0) {
+      // The row that decides whether the total above is a figure or a fragment. A bill
+      // whose panels are normed and whose ties are not is short by every tie in the job,
+      // and nothing in the rows themselves shows it.
+      rows.push(
+        [
+          'INCOMPLETE',
+          cell(
+            `${labour.unnormedFittings} fittings carry no norm at all (${labour.unnormedKinds.join(', ')}), so the hours above are short by every one of them`,
+          ),
+        ].join(','),
+      )
+    }
+    for (const gap of labour.gaps.filter((entry) => entry !== 'no-norm')) {
+      rows.push(['UNNORMED', cell(LABOUR_GAP_LABELS[gap])].join(','))
     }
   }
   const schedule = scope.schedule

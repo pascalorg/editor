@@ -39,6 +39,7 @@ import { ActionButton, PanelSection } from '@pascal-app/editor'
 import { RotateCcw } from 'lucide-react'
 import {
   GroupNote,
+  LabourNormField,
   OptionalNumberField,
   OptionalSelectField,
   OptionalToggleField,
@@ -126,6 +127,9 @@ export function FormworkSettingsPanel() {
     setRate,
     setRateTerms,
     clearRates,
+    setGangRate,
+    setLabourNorm,
+    clearLabourNorms,
     clearAll,
   } = useFormworkSettingsWriter()
   const concrete = node?.concrete ?? {}
@@ -567,9 +571,35 @@ export function FormworkSettingsPanel() {
         <GroupNote>
           This prices what the formwork costs to <em>hold</em> — hire for the period charged, the
           list price recharged on hired parts this pour alters, and what is spent. It is not the
-          cost of forming the job: there is no labour, no transport and no finance in it, and labour
-          is normally the largest of those. Owned stock is excluded rather than priced at zero,
-          because a panel the yard already holds amortises over a reuse count nothing here records.
+          cost of forming the job: there is no transport and no finance in it, and the gang's time
+          is the group below rather than part of this total. Owned stock is excluded rather than
+          priced at zero, because a panel the yard already holds amortises over a reuse count
+          nothing here records.
+        </GroupNote>
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Labour">
+        <GroupNote>
+          How long this project's gang takes, per kind of part — the largest cost the rates above
+          leave out. Nothing is assumed for it, and for a stronger reason than the rates: a price
+          has a market, and an output norm is a fact about a crew. The published constants are per
+          m² of a whole trade operation that already contains the panels, the backing, the ties and
+          the strike, so none of them can be spread over a bill of parts.
+        </GroupNote>
+        <LabourNormField
+          currency={node?.rates?.currency}
+          gangRatePerHour={node?.rates?.gangRatePerHour}
+          labour={node?.labour}
+          onClear={clearLabourNorms}
+          onSetGangRate={setGangRate}
+          onSetNorm={setLabourNorm}
+        />
+        <GroupNote>
+          The takeoff reports these as man-hours beside the money rather than inside it, because the
+          two are negotiated with different people and move for different reasons — a shorter
+          programme cuts the hire and leaves the hours where they were. And man-hours are not a
+          duration: nothing here knows the gang size, so 400 hours is 400 hours rather than ten
+          days.
         </GroupNote>
       </PanelSection>
 

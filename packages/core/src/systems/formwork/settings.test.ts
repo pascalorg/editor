@@ -3,6 +3,7 @@ import type { FormworkProjectSettingsNode } from '../../schema/nodes/formwork-pr
 import {
   DEFAULT_FORMWORK_SETTINGS,
   formworkSettings,
+  mergeFormworkLabourNorms,
   mergeFormworkOwnedStock,
   mergeFormworkRates,
 } from './settings'
@@ -249,6 +250,99 @@ describe('formworkSettings rates', () => {
       minHireDays: 28,
       byCatalogId: { 'panel-a': { purchasePerUnit: 200 } },
     })
+  })
+})
+
+describe('mergeFormworkLabourNorms', () => {
+  it('keeps the rest of the table when one kind is normed', () => {
+    // The rate table's failure in a smaller table: a norm table is filled in one row at
+    // a time by whoever knows that trade, and a one-level merge would replace
+    // `byPartKind` wholesale.
+    const merged = mergeFormworkLabourNorms(
+      { byPartKind: { panel: { erectHours: 0.4 }, prop: { erectHours: 0.1 } } },
+      { tie: { erectHours: 0.05 } },
+    )
+
+    expect(merged.byPartKind).toEqual({
+      panel: { erectHours: 0.4 },
+      prop: { erectHours: 0.1 },
+      tie: { erectHours: 0.05 },
+    })
+  })
+
+  it('merges the two hours of one kind rather than replacing the norm', () => {
+    // The case the erect-only gap exists to report, and the one a replace would create
+    // silently: the strike time arrives after the erect time and must not delete it.
+    const merged = mergeFormworkLabourNorms(
+      { byPartKind: { panel: { erectHours: 0.4 } } },
+      { panel: { strikeHours: 0.25 } },
+    )
+
+    expect(merged.byPartKind).toEqual({ panel: { erectHours: 0.4, strikeHours: 0.25 } })
+  })
+
+  it('drops a kind whose last figure was cleared', () => {
+    // An empty norm and no norm price the same, and only one of them should be
+    // representable — `bomLabour` treats `{}` as unnormed either way.
+    const merged = mergeFormworkLabourNorms(
+      { byPartKind: { panel: { erectHours: 0.4 } } },
+      { panel: { erectHours: undefined } },
+    )
+
+    expect(merged.byPartKind).toEqual({})
+  })
+
+  it('removes a kind on undefined and keeps the group when the table empties', () => {
+    const merged = mergeFormworkLabourNorms(
+      { byPartKind: { panel: { erectHours: 0.4 } } },
+      { panel: undefined },
+    )
+
+    expect(merged).toEqual({ byPartKind: {} })
+  })
+})
+
+describe('formworkSettings labour', () => {
+  it('leaves the norms unresolved where the project has stated none', () => {
+    // The least-supported field in the whole resolver. A rate at least has a market; an
+    // output norm is a fact about a crew, and the published constants are per m² of a
+    // whole trade operation rather than per part.
+    expect(formworkSettings(node()).labour).toBeUndefined()
+    expect(DEFAULT_FORMWORK_SETTINGS.labour).toBeUndefined()
+  })
+
+  it('joins the gang rate and the currency onto the norms', () => {
+    // Two stated groups, one resolved answer: hours and the rate that prices them are
+    // one thing, and a consumer holding only half of it would either report hours it
+    // could not cost or reach back into the settings node for the rate.
+    const resolved = formworkSettings(
+      node({
+        rates: { currency: 'GBP', gangRatePerHour: 32, byCatalogId: {} },
+        labour: { byPartKind: { panel: { erectHours: 0.4 } } },
+      }),
+    )
+
+    expect(resolved.labour).toEqual({
+      byPartKind: { panel: { erectHours: 0.4 } },
+      gangRatePerHour: 32,
+      currency: 'GBP',
+    })
+  })
+
+  it('resolves norms with no gang rate to hours with no money', () => {
+    const resolved = formworkSettings(
+      node({ labour: { byPartKind: { panel: { erectHours: 0.4 } } } }),
+    )
+
+    expect(resolved.labour?.gangRatePerHour).toBeUndefined()
+    expect(resolved.labour?.byPartKind).toEqual({ panel: { erectHours: 0.4 } })
+  })
+
+  it('gives a rate with no norms no labour at all', () => {
+    // A gang rate on its own prices nothing, and resolving an empty norm table off it
+    // would put a labour block on the takeoff with zero hours in it — which reads as a
+    // job with no labour rather than as a project that has not stated its outputs.
+    expect(formworkSettings(node({ rates: { gangRatePerHour: 32 } })).labour).toBeUndefined()
   })
 })
 

@@ -8,11 +8,13 @@ import {
   STOCKABLE_CATALOG_PARTS,
 } from './catalog'
 import type { RateTable } from './cost'
+import type { NormTable } from './labour'
 import {
   DEFAULT_FORMWORK_SETTINGS,
   type FormworkSettingsGroup,
   formworkSettings,
   mergeFormworkCement,
+  mergeFormworkLabourNorms,
   mergeFormworkOwnedStock,
   mergeFormworkRates,
   mergeFormworkSettingsGroup,
@@ -399,6 +401,15 @@ const RATES_PATCH = z.object({
     .describe(
       "the agreement's minimum hire period, days. On a fast cycle this is most of the cost: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days",
     ),
+  gangRatePerHour: z
+    .number()
+    .positive()
+    .max(100_000)
+    .nullable()
+    .optional()
+    .describe(
+      "the all-in cost of one man-hour of the forming gang — what turns the labour norms into money. On its own it prices nothing: the hours come from labourNorms, and a rate with no norms recorded leaves the takeoff with no labour at all rather than a rate applied to an output nobody stated. All-in means the crew's cost to the job, not a bare wage",
+    ),
   byCatalogId: z
     .record(z.string().max(120), PART_RATE_PATCH.nullable())
     .optional()
@@ -406,6 +417,62 @@ const RATES_PATCH = z.object({
       'rate per catalog id. Merged into what is recorded, so pass only the parts you are changing; a field set to null clears that field and null against a whole id removes it',
     ),
 })
+
+/**
+ * How long this project's gang takes, per kind of part.
+ *
+ * Keyed by part kind rather than by catalog id, which is the difference from the rate
+ * table beside it and the reason the group exists at all: a price is a fact about a
+ * product and an output is a fact about an *operation*. Fitting a 0.6 m panel and fitting
+ * a 0.9 m one is the same work to a carpenter, and a table keyed by id would ask for
+ * forty rows where five would do — and would leave every id nobody filled in silently
+ * unnormed.
+ *
+ * The bounds are per *one part fitted once*, which is why the ceiling is 100 hours rather
+ * than something larger: anything above that is a figure somebody has entered per m² or
+ * per pour by mistake, and it would multiply by a bill quantity into a programme nobody
+ * would question.
+ */
+const LABOUR_NORM_PATCH = z.object({
+  erectHours: z
+    .number()
+    .positive()
+    .max(100)
+    .nullable()
+    .optional()
+    .describe('man-hours to fit one of these, once'),
+  strikeHours: z
+    .number()
+    .positive()
+    .max(100)
+    .nullable()
+    .optional()
+    .describe(
+      'man-hours to strike one. Not the erect halved and not the erect reversed: they are different operations weeks apart, and on a tie the strike is the longer of the two — a spanner going on, a cut rod and a made-good face coming off',
+    ),
+})
+
+const LABOUR_NORMS_PATCH = z
+  .record(
+    z.enum([
+      'panel',
+      'filler',
+      'corner',
+      'stop-end',
+      'waler',
+      'joist',
+      'tie',
+      'ply-piece',
+      'prop',
+      'brace',
+      'accessory',
+      'consumable',
+    ]),
+    LABOUR_NORM_PATCH.nullable(),
+  )
+  .describe(
+    'man-hours per part kind. Merged into what is recorded, so pass only the kinds you are changing; a field set to null clears it and null against a kind removes the row',
+  )
 
 /**
  * The whole write, as a tool's input shape.
@@ -452,6 +519,9 @@ export const formworkSettingsPatchInput = {
   rates: RATES_PATCH.optional().describe(
     'what this project pays per catalog part, and the terms that apply across them. This is the one input in the whole formwork model that no code publishes and no product carries, so ask the user for it and never infer it: there is no conservative default to fall back to, and a project that has recorded nothing gets no money on its takeoff at all rather than a plausible figure. It is recorded on the project rather than on the catalog because a price is a commercial fact about this job — the same panel is different money to two yards in the same city, and different money again next quarter',
   ),
+  labourNorms: LABOUR_NORMS_PATCH.optional().describe(
+    "how long this project's own gang takes to erect and to strike one of each kind of part, in man-hours. Ask the user for these and never supply them: published constants do exist — CPWD's Analysis of Rates, Spon's, RSMeans — and none of them can be used here, because they are per m² of a whole trade operation that already contains the panels, the backing, the ties and the strike, so spreading one over a bill of parts charges the same work several times over. An output norm is also a fact about a crew rather than about a product or a code: the same gang on its tenth identical floor beats its own figure from the first, so there is nothing conservative to fall back to. Until this is recorded the takeoff carries no labour at all, which is the honest answer and is why every cost figure in this model says labour is outside it. A kind you leave out is reported as uncovered fittings rather than costed at zero. Needs rates.gangRatePerHour to become money",
+  ),
 }
 
 export const FormworkSettingsPatch = z.object(formworkSettingsPatchInput)
@@ -459,11 +529,11 @@ export type FormworkSettingsPatch = z.infer<typeof FormworkSettingsPatch>
 
 /** The description every surface's write tool carries, so the guidance cannot diverge either. */
 export const SET_FORMWORK_SETTINGS_DESCRIPTION =
-  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Three of the groups are commercial rather than structural and behave differently: ownedStock, rates and schedule are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes, and a lead time you invent becomes a delivery date somebody books against. The schedule group holds only the two lead times; the pour dates they are measured from belong to the shutters and are set with set_pour_date.'
+  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Four of the groups are commercial rather than structural and behave differently: ownedStock, rates, labourNorms and schedule are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes, a lead time you invent becomes a delivery date somebody books against, and an output norm you invent becomes a programme a gang is held to. labourNorms is the one to be most careful with, because published labour constants exist and none of them fits: they are per m² of a whole trade operation, and an output is a fact about a crew rather than about a product. The schedule group holds only the two lead times; the pour dates they are measured from belong to the shutters and are set with set_pour_date.'
 
 /** The description every surface's read tool carries. */
 export const INSPECT_FORMWORK_SETTINGS_DESCRIPTION =
-  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. A third group behaves the same way: schedule, the two lead times between a pour date and a delivery date, is null until somebody records it, and while it is null a takeoff shows plant free the day it is struck and no delivery date at all. One settings record per scene, so this takes no arguments.'
+  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. Two more groups behave the same way. schedule, the two lead times between a pour date and a delivery date, is null until somebody records it, and while it is null a takeoff shows plant free the day it is struck and no delivery date at all. labour is this project’s own output norms — man-hours to erect and to strike one of each kind of part — and while it is null the takeoff carries no labour at all, which is why every cost figure in this model says labour is outside it and is normally the largest thing that is. Its gang rate lives in rates.gangRatePerHour, so norms without that rate are hours with no money and a rate without norms prices nothing. One settings record per scene, so this takes no arguments.'
 
 /** The first stock id that names nothing in the catalog, as the error a model reads back. */
 function unknownStockId(patch: Readonly<Record<string, unknown>>): string | undefined {
@@ -575,13 +645,14 @@ export function applyFormworkSettingsPatch(
   current: FormworkProjectSettingsNode | undefined,
   patch: FormworkSettingsPatch,
 ): FormworkSettingsPatchResult {
-  const { cement, ownedStock, rates, ...groups } = patch
+  const { cement, ownedStock, rates, labourNorms, ...groups } = patch
   const stated = Object.entries(groups).filter(([, value]) => value !== undefined)
   if (
     stated.length === 0 &&
     cement === undefined &&
     ownedStock === undefined &&
-    rates === undefined
+    rates === undefined &&
+    labourNorms === undefined
   ) {
     return { error: 'Error: nothing to set — pass at least one field' }
   }
@@ -656,11 +727,31 @@ export function applyFormworkSettingsPatch(
       {
         ...(rates.currency === undefined ? {} : { currency: rates.currency ?? undefined }),
         ...(rates.minHireDays === undefined ? {} : { minHireDays: rates.minHireDays ?? undefined }),
+        ...(rates.gangRatePerHour === undefined
+          ? {}
+          : { gangRatePerHour: rates.gangRatePerHour ?? undefined }),
         byCatalogId,
       },
-      { currency: rates.currency !== undefined, minHireDays: rates.minHireDays !== undefined },
+      {
+        currency: rates.currency !== undefined,
+        minHireDays: rates.minHireDays !== undefined,
+        gangRatePerHour: rates.gangRatePerHour !== undefined,
+      },
     )
     changed.push('rates')
+  }
+
+  if (labourNorms !== undefined) {
+    // Its own helper for the rate table's reason — the group merge would replace the whole
+    // norm table, so stating the panel figure would forget every other kind — and one of its
+    // own: a kind's two hours are entered by whoever knows that trade, at different times,
+    // so a replace would make recording a strike time delete the erect time beside it.
+    const byPartKind: Record<string, Record<string, number | undefined> | undefined> = {}
+    for (const [kind, norm] of Object.entries(labourNorms)) {
+      byPartKind[kind] = norm === null ? undefined : (toPatch(norm as object) as never)
+    }
+    writes.labour = mergeFormworkLabourNorms(base.labour, byPartKind)
+    changed.push('labourNorms')
   }
 
   return { writes: writes as Partial<FormworkProjectSettingsNode>, changed }
@@ -708,6 +799,12 @@ export interface FormworkSettingsReport {
      * project opened the table and priced nothing.
      */
     rates: RateTable | null
+    /**
+     * Null where nobody has stated an output norm, which is the answer that means the
+     * takeoff carries no hours at all. The gang rate travels inside it rather than beside
+     * the other money, because hours and the rate that prices them are one answer.
+     */
+    labour: NormTable | null
   }
   /**
    * Only what the project actually said. Anything absent here but present in `resolved`
@@ -725,6 +822,7 @@ export interface FormworkSettingsReport {
     schedule: NonNullable<FormworkProjectSettingsNode['schedule']> | null
     stock: NonNullable<FormworkProjectSettingsNode['stock']> | null
     rates: NonNullable<FormworkProjectSettingsNode['rates']> | null
+    labour: NonNullable<FormworkProjectSettingsNode['labour']> | null
   } | null
   /**
    * The four figures the engine supplies when nobody has. There is no curing entry
@@ -760,6 +858,7 @@ export function formworkSettingsReport(
       schedule: resolved.schedule ?? null,
       ownedStock: resolved.ownedStock ?? null,
       rates: resolved.rates ?? null,
+      labour: resolved.labour ?? null,
     },
     stated: node
       ? {
@@ -774,6 +873,7 @@ export function formworkSettingsReport(
           schedule: node.schedule ?? null,
           stock: node.stock ?? null,
           rates: node.rates ?? null,
+          labour: node.labour ?? null,
         }
       : null,
     assumedDefaults: {
