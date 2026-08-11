@@ -297,15 +297,23 @@ export function createWallOnCurrentLevel(
         supportSlabId,
         options?.supportCap ?? null,
       )
+      // Freezing the draft plane into the node (explicit height + offset from
+      // the elected support) is the terrain exception only: a ground-drafted
+      // chain keeps one construction plane and a fixed body height while
+      // sculpting moves the ground. Every other wall stays plane-bound —
+      // height absent, top at the storey plane, base re-elected from slab
+      // support — so a wall merely started on a slab or deck must never have
+      // the ghost height stamped onto it.
+      const groundDraft = preferredSupportSlabId === GROUND_SUPPORT_ID
       const supportOffset =
-        options?.constructionElevation == null
-          ? undefined
-          : options.constructionElevation - sourceSupport.elevation
+        groundDraft && options?.constructionElevation != null
+          ? options.constructionElevation - sourceSupport.elevation
+          : undefined
       const preserveDraftHeight =
+        groundDraft &&
         createdWall.height == null &&
         options?.constructionHeight != null &&
-        options.constructionElevation != null &&
-        (terrainBase != null || Math.abs(options.constructionElevation) > 1e-6)
+        options.constructionElevation != null
       return [
         {
           id: createdWall.id,

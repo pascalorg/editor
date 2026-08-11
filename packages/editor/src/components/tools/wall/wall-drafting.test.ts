@@ -136,6 +136,50 @@ describe('createWallOnCurrentLevel', () => {
     expect(support.elevation).toBe(1.75)
   })
 
+  test('a wall started on a slab stays plane-bound (no stamped height or offset)', () => {
+    const slab = SlabNode.parse({
+      id: 'slab_floor',
+      parentId: LEVEL_ID,
+      polygon: [
+        [-1, -1],
+        [5, -1],
+        [5, 5],
+        [-1, 5],
+      ],
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    seedLevel([makeWall([0, 0], [4, 0], 'wall_a')], [slab])
+
+    // Mirrors the 3D tool's first click on the slab top: frozen plane at the
+    // slab elevation, ghost drawn at the level height. None of it may reach
+    // the committed node — plane-bound is the default.
+    const created = createWallOnCurrentLevel([2, 2], [3, 2], {
+      supportCap: 0.05,
+      preferredSupportSlabId: slab.id,
+      constructionElevation: 0.05,
+      constructionHeight: 2.55,
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
+    expect(created?.supportSlabId).not.toBe(GROUND_SUPPORT_ID)
+  })
+
+  test('a non-ground draft never freezes the ghost height, even at a raised plane', () => {
+    const created = createWallOnCurrentLevel([2, 2], [3, 2], {
+      supportCap: 1.2,
+      preferredSupportSlabId: null,
+      constructionElevation: 1.2,
+      constructionHeight: 2.5,
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
+  })
+
   test('2D terrain construction options freeze the first-point elevation and wall height', () => {
     const field = createTerrainField({ cols: 5, rows: 5, spacing: 1, origin: [-2, -2] })
     const patch = flattenPatch(field, { minX: -2, minZ: -2, maxX: 2, maxZ: 2 }, 1.5)
