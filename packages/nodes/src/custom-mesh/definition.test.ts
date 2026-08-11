@@ -3,6 +3,13 @@ import { CustomMeshNode } from '@pascal-app/core'
 import { customMeshDefinition } from './definition'
 
 describe('custom mesh placement bounds', () => {
+  test('uses the dedicated editable-cube icon in the build palette', () => {
+    expect(customMeshDefinition.presentation?.icon).toEqual({
+      kind: 'url',
+      src: '/icons/cube.webp',
+    })
+  })
+
   test('keeps asymmetric edited topology centered during a rotated drag', () => {
     const base = CustomMeshNode.parse({
       name: 'Asymmetric mesh',

@@ -454,6 +454,58 @@ function bevelProfileFactor(value: number, profile: number): number {
   return a / (a + b)
 }
 
+function roundedBevelPoint(origin: Point, start: Point, end: Point, factor: number): Point {
+  const startDirection = normalize([
+    start[0] - origin[0],
+    start[1] - origin[1],
+    start[2] - origin[2],
+  ])
+  const endDirection = normalize([end[0] - origin[0], end[1] - origin[1], end[2] - origin[2]])
+  if (!(startDirection && endDirection)) return interpolatePoint(start, end, factor)
+  const directionDot = Math.max(
+    -1,
+    Math.min(
+      1,
+      startDirection[0] * endDirection[0] +
+        startDirection[1] * endDirection[1] +
+        startDirection[2] * endDirection[2],
+    ),
+  )
+  if (directionDot < -0.999999) return interpolatePoint(start, end, factor)
+  const width = Math.hypot(start[0] - origin[0], start[1] - origin[1], start[2] - origin[2])
+  const centerScale = width / (1 + directionDot)
+  const center: Point = [
+    origin[0] + (startDirection[0] + endDirection[0]) * centerScale,
+    origin[1] + (startDirection[1] + endDirection[1]) * centerScale,
+    origin[2] + (startDirection[2] + endDirection[2]) * centerScale,
+  ]
+  const startRadius: Point = [start[0] - center[0], start[1] - center[1], start[2] - center[2]]
+  const endRadius: Point = [end[0] - center[0], end[1] - center[1], end[2] - center[2]]
+  const radius = Math.hypot(...startRadius)
+  const endRadiusLength = Math.hypot(...endRadius)
+  if (radius < 1e-8 || endRadiusLength < 1e-8) return interpolatePoint(start, end, factor)
+  const radiusDot = Math.max(
+    -1,
+    Math.min(
+      1,
+      (startRadius[0] * endRadius[0] +
+        startRadius[1] * endRadius[1] +
+        startRadius[2] * endRadius[2]) /
+        (radius * endRadiusLength),
+    ),
+  )
+  const angle = Math.acos(radiusDot)
+  const sine = Math.sin(angle)
+  if (Math.abs(sine) < 1e-8) return interpolatePoint(start, end, factor)
+  const startWeight = Math.sin((1 - factor) * angle) / sine
+  const endWeight = Math.sin(factor * angle) / sine
+  return [
+    center[0] + startRadius[0] * startWeight + endRadius[0] * endWeight,
+    center[1] + startRadius[1] * startWeight + endRadius[1] * endWeight,
+    center[2] + startRadius[2] * startWeight + endRadius[2] * endWeight,
+  ]
+}
+
 function rebuildEdgesFromFaces(
   topology: CustomMeshTopology,
   faces: CustomMeshFace[],
@@ -601,11 +653,11 @@ function bevelEdge(
     newVertices.push(
       {
         id: aVertexId,
-        position: interpolatePoint(outerA[0]!, outerA[1]!, factor),
+        position: roundedBevelPoint(vertexA.position, outerA[0]!, outerA[1]!, factor),
       },
       {
         id: bVertexId,
-        position: interpolatePoint(outerB[0]!, outerB[1]!, factor),
+        position: roundedBevelPoint(vertexB.position, outerB[0]!, outerB[1]!, factor),
       },
     )
   }

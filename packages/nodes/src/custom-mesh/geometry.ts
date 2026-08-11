@@ -17,6 +17,7 @@ import {
 import { customMeshFaceNormal } from './commands'
 
 type Point = [number, number, number]
+const SMOOTH_NORMAL_ANGLE_COSINE = Math.cos(Math.PI / 6)
 
 function projectedPoint(point: Point, normal: Point): Vector2 {
   const ax = Math.abs(normal[0])
@@ -76,6 +77,42 @@ export function buildCustomMeshGeometry(
   const faceRanges: { faceId: string; start: number; count: number }[] = []
   const slotIds = [...new Set(node.topology.faces.map((face) => face.materialSlot))]
   const materialIndex = new Map(slotIds.map((slotId, index) => [slotId, index]))
+  const faceNormals = new Map(
+    node.topology.faces.flatMap((face) => {
+      const normal = customMeshFaceNormal(node.topology, face)
+      return normal ? [[face.id, normal] as const] : []
+    }),
+  )
+  const adjacentFaceNormals = new Map<string, Point[]>()
+  for (const face of node.topology.faces) {
+    const normal = faceNormals.get(face.id)
+    if (!normal) continue
+    for (const vertexId of face.vertexIds) {
+      const adjacent = adjacentFaceNormals.get(vertexId) ?? []
+      adjacent.push(normal)
+      adjacentFaceNormals.set(vertexId, adjacent)
+    }
+  }
+  const cornerNormals = new Map<string, Point>()
+  for (const face of node.topology.faces) {
+    const faceNormal = faceNormals.get(face.id)
+    if (!faceNormal) continue
+    for (const vertexId of face.vertexIds) {
+      const smoothNormal = new Vector3()
+      for (const adjacentNormal of adjacentFaceNormals.get(vertexId) ?? []) {
+        const dot =
+          faceNormal[0] * adjacentNormal[0] +
+          faceNormal[1] * adjacentNormal[1] +
+          faceNormal[2] * adjacentNormal[2]
+        if (dot >= SMOOTH_NORMAL_ANGLE_COSINE) smoothNormal.add(new Vector3(...adjacentNormal))
+      }
+      smoothNormal.normalize()
+      cornerNormals.set(`${face.id}\u0000${vertexId}`, smoothNormal.toArray() as Point)
+    }
+  }
+  const vertexIdByPosition = new Map(
+    node.topology.vertices.map((vertex) => [vertex.position, vertex.id] as const),
+  )
 
   for (const face of node.topology.faces) {
     const triangulated = triangulateCustomMeshFace(node.topology, face)
@@ -84,7 +121,12 @@ export function buildCustomMeshGeometry(
     for (const triangle of triangulated.triangles) {
       for (const point of triangle) {
         positions.push(...point)
-        normals.push(...triangulated.normal)
+        const vertexId = vertexIdByPosition.get(point)
+        normals.push(
+          ...(vertexId
+            ? (cornerNormals.get(`${face.id}\u0000${vertexId}`) ?? triangulated.normal)
+            : triangulated.normal),
+        )
         const uv = projectedPoint(point, triangulated.normal)
         uvs.push(uv.x, uv.y)
       }

@@ -56,6 +56,7 @@ export {
   formatMeasurement,
   MeasurementPill,
 } from './components/editor/measurement-pill'
+export { NodeActionMenu } from './components/editor/node-action-menu'
 // In-world arrow handle primitives (chevron geometry, invisible hit area,
 // shared material, palette + scale constants). Re-exported so kind-owned
 // 3D selection affordances in `@pascal-app/nodes` (duct side-move / height /
@@ -336,6 +337,7 @@ export {
   resolveElevatorSupportLevelId,
   resolveElevatorSupportY,
 } from './lib/elevator-support'
+export { getFloatingMenuScale } from './lib/floating-menu-scale'
 // Floor-plan stair helpers — the cumulative-transform walk
 // (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
 // builder (`buildFloorplanStairEntry`) used by the kind-owned stair

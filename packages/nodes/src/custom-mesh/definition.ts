@@ -99,7 +99,7 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
   presentation: {
     label: 'Custom Mesh',
     description: 'A topology-backed solid edited directly in the canvas.',
-    icon: { kind: 'iconify', name: 'lucide:box-select' },
+    icon: { kind: 'url', src: '/icons/cube.webp' },
     paletteSection: 'structure',
     paletteOrder: 75,
     actionMenu: false,

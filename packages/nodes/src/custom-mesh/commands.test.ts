@@ -283,6 +283,15 @@ describe('applyCustomMeshCommand', () => {
     expect(result.selection.mode).toBe('edge')
     expect(result.selection.ids).toHaveLength(4)
     expect(result.topology.faces).toHaveLength(9)
+    const curvedVertex = result.topology.vertices.find((vertex) => vertex.id === 'v10')!
+    const arcCenter = [-1, 0.2, -0.8]
+    expect(
+      Math.hypot(
+        curvedVertex.position[0] - arcCenter[0]!,
+        curvedVertex.position[1] - arcCenter[1]!,
+        curvedVertex.position[2] - arcCenter[2]!,
+      ),
+    ).toBeCloseTo(0.2, 6)
     expect(inspectCustomMeshTopology(result.topology)).toEqual([])
   })
 })
