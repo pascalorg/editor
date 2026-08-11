@@ -9,10 +9,7 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
-import {
-  streetscapeHostPanel,
-  streetscapePlugin,
-} from '@pascal-app/plugin-streetscape'
+import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
@@ -93,7 +90,13 @@ registerEditorHostPanel(treesHostPanel)
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])
-registerEditorHostPanel(streetscapeHostPanel)
+// The upstream manifest points creator/pluginUrl at a pascalorg repo that
+// doesn't exist; credit the actual author until the package fixes it.
+registerEditorHostPanel({
+  ...streetscapeHostPanel,
+  creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
+  pluginUrl: 'https://github.com/sudhir9297/streetscape-pascal-plugin',
+})
 
 loadBuiltinsSync()
 void loadExternalPlugins()
