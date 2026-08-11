@@ -170,6 +170,52 @@ describe('scene commit boundary', () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   })
 
+  test('excludes fresh placement subtrees until they become a committed undo step', () => {
+    const draftLevel = LevelNode.parse({
+      id: 'level_fresh_placement',
+      parentId: BUILDING_ID,
+      children: [],
+      level: 1,
+      metadata: { isNew: true },
+    })
+    const draftWall = WallNode.parse({
+      id: 'wall_fresh_placement',
+      parentId: draftLevel.id,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    useScene.getState().createNodes([
+      { node: draftLevel, parentId: BUILDING_ID },
+      { node: draftWall, parentId: draftLevel.id },
+    ])
+    useScene.getState().updateNode(draftWall.id, { end: [5, 0] })
+
+    expect(useScene.getState().nodes[draftLevel.id]).toBeDefined()
+    expect(useScene.getState().nodes[draftWall.id]).toBeDefined()
+    expect(commits).toHaveLength(0)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+
+    useScene.getState().updateNode(draftLevel.id, { metadata: {} })
+
+    expect(commits).toHaveLength(1)
+    expect(commits[0]?.before.nodes[draftLevel.id]).toBeUndefined()
+    expect(commits[0]?.before.nodes[draftWall.id]).toBeUndefined()
+    expect(commits[0]?.current.nodes[draftLevel.id]).toBeDefined()
+    expect(commits[0]?.current.nodes[draftWall.id]).toBeDefined()
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[draftLevel.id]).toBeUndefined()
+    expect(useScene.getState().nodes[draftWall.id]).toBeUndefined()
+
+    useScene.temporal.getState().redo()
+    expect(useScene.getState().nodes[draftLevel.id]).toBeDefined()
+    expect(useScene.getState().nodes[draftWall.id]).toBeDefined()
+  })
+
   test('coalesces a compound transaction into one commit and one undo step', () => {
     const commits: SceneCommit[] = []
     unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
