@@ -5,6 +5,7 @@ import {
   collectAlignmentAnchors,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
+  GROUND_SUPPORT_ID,
   type GridEvent,
   getWallMiterBoundaryPoints,
   type LevelNode,
@@ -789,14 +790,21 @@ export const WallTool: React.FC = () => {
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
+        // A ground(terrain)-hosted chain keeps its frozen construction plane;
+        // any other chain re-resolves the aimed surface per commit so a later
+        // segment can still elect the slab it visibly crosses instead of
+        // being capped at the first click's elevation.
+        const draftPlane = constructionPlane.current
+        const commitPointed =
+          draftPlane?.supportSlabId === GROUND_SUPPORT_ID ? null : pointedSurfaceFor(event)
         // Both start and end are building-local ✓
         const createdWall = createWallOnCurrentLevel(
           [startingPoint.current.x, startingPoint.current.z],
           snappedEnd,
           {
-            supportCap: constructionPlane.current?.elevation ?? null,
-            preferredSupportSlabId: constructionPlane.current?.supportSlabId ?? null,
-            constructionElevation: constructionPlane.current?.elevation ?? null,
+            supportCap: commitPointed ? commitPointed.elevation : (draftPlane?.elevation ?? null),
+            preferredSupportSlabId: draftPlane?.supportSlabId ?? null,
+            constructionElevation: draftPlane?.elevation ?? null,
             constructionHeight: previewHeightRef.current,
           },
         )

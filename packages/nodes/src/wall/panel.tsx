@@ -4,11 +4,13 @@ import {
   type AnyNode,
   type AnyNodeId,
   buildWallFaceBandCountPatch,
+  GROUND_SUPPORT_ID,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallCurveLength,
   getWallFaceBandConfig,
   normalizeWallCurveOffset,
+  terrainSupportLift,
   useLiveNodeOverrides,
   useScene,
   WALL_CHAIR_RAIL_DEFAULT,
@@ -22,6 +24,7 @@ import {
   ActionButton,
   ActionGroup,
   curveReshapeScope,
+  formatLinearMeasurement,
   getLinearUnitLabel,
   linearControlValueToMeters,
   metersToLinearUnit,
@@ -36,6 +39,24 @@ import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+
+/**
+ * Base half of the plane-bound repair: a stamped draft offset goes, and a
+ * ground host is dropped unless sculpted terrain actually supports it — a
+ * terrain-less ground host (regression-era data) pins the base at the level
+ * floor and buries the wall in any later slab.
+ */
+function wallBaseRepairPatch(n: WallNode): Partial<WallNode> {
+  const nodes = useScene.getState().nodes
+  const terrainSupported =
+    n.parentId != null && terrainSupportLift(nodes, n.parentId, n.start[0], n.start[1]) != null
+  return {
+    supportOffset: undefined,
+    ...(n.supportSlabId === GROUND_SUPPORT_ID && !terrainSupported
+      ? { supportSlabId: undefined }
+      : {}),
+  }
+}
 
 type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
 
@@ -155,15 +176,39 @@ export default function WallPanel() {
     [handleUpdate],
   )
 
-  const handleBaseModeChange = useCallback(
-    (mode: 'terrain' | 'fixed') => {
+  const handleTopModeChange = useCallback(
+    (mode: 'storey' | 'custom') => {
       const n = nodeRef.current
       if (!n) return
-      const height = n.height ?? resolveWallOpeningCeiling(n, useScene.getState().nodes)
-      handleUpdate({
-        height: Math.max(0.1, height),
-        fillToTerrain: mode === 'terrain' ? true : undefined,
-      })
+      const isCustom = n.height != null
+      if (mode === 'custom' && !isCustom) {
+        // Seed from the current effective height so the geometry doesn't
+        // jump at the moment of detaching from the storey plane.
+        const seeded = resolveWallOpeningCeiling(n, useScene.getState().nodes)
+        handleUpdate({ height: Math.max(0.1, seeded) })
+      } else if (mode === 'storey' && isCustom) {
+        // Absent `height` = plane-bound; the store strips undefined keys.
+        handleUpdate({ height: undefined, ...wallBaseRepairPatch(n) })
+      }
+    },
+    [handleUpdate],
+  )
+
+  // Terrain infill only extends the bottom; it must never materialize an
+  // explicit height, or toggling it would silently detach the wall top from
+  // the storey plane. "Auto" is a re-election, so it carries the same base
+  // repair as the follows-level toggle — and the control fires on a click of
+  // the already-selected segment, so regression-era walls that DISPLAY Auto
+  // while secretly ground-pinned heal from a click on Auto itself.
+  const handleInfillChange = useCallback(
+    (mode: 'terrain' | 'auto') => {
+      const n = nodeRef.current
+      if (!n) return
+      if (mode === 'terrain') {
+        handleUpdate({ fillToTerrain: true })
+        return
+      }
+      handleUpdate({ fillToTerrain: undefined, ...wallBaseRepairPatch(n) })
     },
     [handleUpdate],
   )
@@ -184,6 +229,7 @@ export default function WallPanel() {
   const length = getWallCurveLength(node)
 
   const followsTerrain = node.fillToTerrain === true
+  const isPlaneBound = node.height == null
   const height = node.height ?? resolvedHeightMeters ?? 2.5
   const thickness = node.thickness ?? 0.1
   const curveOffset = getClampedWallCurveOffset(node)
@@ -223,30 +269,47 @@ export default function WallPanel() {
           unit={unitLabel}
           value={displayLength}
         />
-        <SliderControl
-          label="Height"
-          max={metersToLinearUnit(6, unit)}
-          min={metersToLinearUnit(0.1, unit)}
-          onChange={(v) =>
-            handleUpdate({
-              height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
-            })
-          }
-          precision={2}
-          step={0.1}
-          unit={unitLabel}
-          value={Math.round(displayHeight * 100) / 100}
-        />
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Base
+          Top
         </div>
         <SegmentedControl
-          onChange={handleBaseModeChange}
+          onChange={handleTopModeChange}
           options={[
-            { label: 'Fixed', value: 'fixed' },
-            { label: 'Follows level', value: 'terrain' },
+            { label: 'Follows level', value: 'storey' },
+            { label: 'Custom height', value: 'custom' },
           ]}
-          value={followsTerrain ? 'terrain' : 'fixed'}
+          value={isPlaneBound ? 'storey' : 'custom'}
+        />
+        {isPlaneBound ? (
+          <div className="px-1 text-[11px] text-muted-foreground">
+            Currently {formatLinearMeasurement(height, unit)}
+          </div>
+        ) : (
+          <SliderControl
+            label="Height"
+            max={metersToLinearUnit(6, unit)}
+            min={metersToLinearUnit(0.1, unit)}
+            onChange={(v) =>
+              handleUpdate({
+                height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
+              })
+            }
+            precision={2}
+            step={0.1}
+            unit={unitLabel}
+            value={Math.round(displayHeight * 100) / 100}
+          />
+        )}
+        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+          Bottom
+        </div>
+        <SegmentedControl
+          onChange={handleInfillChange}
+          options={[
+            { label: 'Auto', value: 'auto' },
+            { label: 'Fill to terrain', value: 'terrain' },
+          ]}
+          value={followsTerrain ? 'terrain' : 'auto'}
         />
         {followsTerrain && (
           <div className="px-1 text-[11px] text-muted-foreground">
