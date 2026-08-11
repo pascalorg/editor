@@ -7,28 +7,27 @@ import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
+import { canCreateSessionGroup, selectionIntersectsSessionGroup } from '../../lib/session-groups'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
+import useSessionGroups, {
+  groupCurrentSelection,
+  ungroupCurrentSelection,
+} from '../../store/use-session-groups'
 import { deleteSelection, duplicateSelectionAndPickUp, startGroupPickUp } from './group-actions'
 import { classifyParticipant, computeGroupBox, expandToComponent } from './group-transform-shared'
 import { NodeActionMenu } from './node-action-menu'
 import { useMeshSettleEpoch } from './use-mesh-settle-epoch'
 
-// Matches the single-node FloatingActionMenu's zoom-compensation constants.
 const REF_ORTHO_ZOOM = 50
 const REF_CAMERA_DISTANCE = 12
 const MIN_MENU_SCALE = 0.6
 const MAX_MENU_SCALE = 1.4
-// Clearance above the group's bbox top so the pill doesn't sit on the meshes.
 const MENU_Y_OFFSET = 0.42
 
 /**
- * Floating Move / Duplicate / Delete pill for a MULTI-selection in the 3D
- * view — the group sibling of the single-node `FloatingActionMenu` (which is
- * sole-selection only). Anchored above the selection's bounding-box center;
- * every action targets the whole selection: Move picks the group up (it rides
- * the cursor until a click places it), Duplicate clones the selection and
- * picks the clones up, Delete removes everything selected.
+ * Floating pill for MULTI-selection in 3D: Move, Group, Ungroup, Duplicate, Delete.
+ * Group/Ungroup are session-only (Ctrl/Cmd+G / Ctrl/Cmd+Shift+G).
  */
 export function GroupFloatingActionMenu() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -37,8 +36,7 @@ export function GroupFloatingActionMenu() {
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
   const movingNode = useMovingNode()
   const nodes = useScene((s) => s.nodes)
-  // Hard-hidden during any active interaction (drag, pick-up, reshape) so the
-  // pill never competes with the live action — same policy as the 1-node menu.
+  const sessionGroups = useSessionGroups((s) => s.groups)
   const scope = useInteractionScope((s) => s.scope)
   const menuStepBack = resolveOverlayPolicy(scope).conflictingControls === 'hidden'
 
@@ -55,9 +53,18 @@ export function GroupFloatingActionMenu() {
     [selectedIds, levelId, nodes],
   )
 
-  // World anchor above the group bbox. Depends on the scene (post-commit
-  // positions), not the camera, and the menu hides during drags — so a
-  // memo keyed on selection + nodes is enough, no per-frame box traversal.
+  const liveIds = useMemo(() => new Set(Object.keys(nodes)), [nodes])
+  // Always offer Group when multi-select is not already exactly a session group.
+  const showGroup = useMemo(
+    () => canCreateSessionGroup(sessionGroups, selectedIds, liveIds),
+    [sessionGroups, selectedIds, liveIds],
+  )
+  // Ungroup when any selected member is in a session group.
+  const showUngroup = useMemo(
+    () => selectionIntersectsSessionGroup(sessionGroups, selectedIds, liveIds),
+    [sessionGroups, selectedIds, liveIds],
+  )
+
   const meshEpoch = useMeshSettleEpoch(nodes)
   const anchor = useMemo(() => {
     void meshEpoch
@@ -73,8 +80,6 @@ export function GroupFloatingActionMenu() {
   }, [participantIds, nodes, levelId, meshEpoch])
 
   useFrame((state) => {
-    // Scale the HTML pill with camera zoom / distance so it feels anchored to
-    // the world — mirrors the single-node menu.
     if (!(menuScaleRef.current && groupRef.current)) return
     const raw =
       state.camera instanceof THREE.OrthographicCamera
@@ -91,6 +96,14 @@ export function GroupFloatingActionMenu() {
   const handleMove = useCallback((event: React.MouseEvent) => {
     event.stopPropagation()
     startGroupPickUp()
+  }, [])
+  const handleGroup = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation()
+    groupCurrentSelection()
+  }, [])
+  const handleUngroup = useCallback((event: React.MouseEvent) => {
+    event.stopPropagation()
+    ungroupCurrentSelection()
   }, [])
   const handleDuplicate = useCallback((event: React.MouseEvent) => {
     event.stopPropagation()
@@ -119,9 +132,11 @@ export function GroupFloatingActionMenu() {
           <NodeActionMenu
             onDelete={handleDelete}
             onDuplicate={handleDuplicate}
+            onGroup={showGroup ? handleGroup : undefined}
             onMove={handleMove}
             onPointerDown={stopPointer}
             onPointerUp={stopPointer}
+            onUngroup={showUngroup ? handleUngroup : undefined}
           />
         </div>
       </Html>

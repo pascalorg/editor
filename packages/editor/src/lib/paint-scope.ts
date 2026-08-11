@@ -355,13 +355,19 @@ export function resolvePaintScopeTargets(args: {
   if (node.type === 'slab' && scope === 'room') {
     const centroid = polygonCentroid((node as SlabNode).polygon)
     if (!centroid) return single
-    const space = Object.values(spaces).find((candidate) =>
-      pointInPolygon2D(centroid, candidate.polygon),
+    // Space polygons are per-level footprints, and stacked storeys share a
+    // footprint — so the level has to gate both the space lookup and the fan-out
+    // or one click paints the floor above too.
+    const levelId = node.parentId ?? resolveLevelId(node, nodes)
+    if (!levelId) return single
+    const space = Object.values(spaces).find(
+      (candidate) => candidate.levelId === levelId && pointInPolygon2D(centroid, candidate.polygon),
     )
     if (!space) return single
     return Object.values(nodes)
       .filter((other) => {
         if (other.type !== 'slab') return false
+        if ((other.parentId ?? resolveLevelId(other, nodes)) !== levelId) return false
         const otherCentroid = polygonCentroid((other as SlabNode).polygon)
         return otherCentroid != null && pointInPolygon2D(otherCentroid, space.polygon)
       })

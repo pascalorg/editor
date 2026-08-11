@@ -111,6 +111,7 @@ export {
   getLevelAbove,
   getLevelBelow,
   getLevelElevations,
+  getLevelFloorToFloorHeight,
   getStoredLevelHeight,
   getWallPlaneTop,
   type LevelElevation,

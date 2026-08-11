@@ -35,6 +35,8 @@ export const AGENT_GUIDE = [
   '- Prefer semantic tools over raw graph patches.',
   '- Do not hand-write node graphs unless no semantic tool exists.',
   '- For rooms, use `create_room` -> `add_door` -> `add_window` -> `furnish_room`.',
+  '- `furnish_room` skips or nudges poses that block door clear zones or overlap other items; `verify_scene` and `check_collisions` report remaining issues.',
+  '- Between adjacent rooms, prefer one shared wall (or only cut openings that line up). Leave ~0.65 m clear on both sides of each door; do not stack furniture footprints.',
   '- For complete homes, create exterior shell, interior rooms, openings, roof, furniture, then landscaping.',
   '- For doors/windows, use `t` or `position` from 0 to 1 along the wall unless a tool explicitly says otherwise.',
   '- X/Z are floor-plan axes and Y is vertical; dimensions are meters.',

@@ -50,6 +50,7 @@ export function SiteEdgeLabels() {
   })
   const activeHandleDrag = useActiveHandleDrag()
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const cameraMode = useViewer((state) => state.cameraMode)
   const isNight = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const camera = useThree((state) => state.camera)
@@ -132,7 +133,7 @@ export function SiteEdgeLabels() {
               textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
             }}
           >
-            {formatLinearMeasurement(edge.dist, unit)}
+            {formatLinearMeasurement(edge.dist, unit, metricNotation)}
           </div>
         </Html>
       ))}

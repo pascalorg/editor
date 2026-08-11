@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/ifc-converter",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.4",
   "description": "IFC → Pascal scene-graph conversion. Pure logic — no DOM, no React.",
   "type": "module",
   "main": "./dist/index.js",
@@ -19,6 +19,7 @@
   "scripts": {
     "build": "tsc --build",
     "dev": "tsgo --build --watch",
+    "test": "bun test tests",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

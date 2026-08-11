@@ -11,6 +11,7 @@ import { SCENE_THEME_IDS } from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
 export type MetricNotation = 'meters' | 'millimeters'
+export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -94,8 +95,8 @@ type ViewerState = {
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
 
-  wallMode: 'up' | 'cutaway' | 'down' | 'translucent'
-  setWallMode: (mode: 'up' | 'cutaway' | 'down' | 'translucent') => void
+  wallMode: WallMode
+  setWallMode: (mode: WallMode) => void
 
   showScans: boolean
   setShowScans: (show: boolean) => void

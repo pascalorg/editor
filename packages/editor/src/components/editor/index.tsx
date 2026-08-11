@@ -33,6 +33,7 @@ import {
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
+import useSessionGroups from '../../store/use-session-groups'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -189,6 +190,13 @@ export interface EditorProps {
 
   // Thumbnail
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+
+  /**
+   * When true, skip the viewer post-FX pipeline (same as `?disable=postFx`).
+   * Hosts use this for a stable local "light preview" without relying only on
+   * module-load URL flags or shading toggles.
+   */
+  disablePostFx?: boolean
 
   // Version preview overlays (rendered by host app)
   sidebarOverlay?: ReactNode
@@ -961,6 +969,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   onThumbnailCapture,
   viewerSceneSlot,
   floorplanSceneSlot,
+  disablePostFx = false,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -973,6 +982,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
+  disablePostFx?: boolean
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
@@ -1086,6 +1096,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
           <Viewer
             defaultRender={EDITOR_DEFAULT_RENDER}
+            disablePostFx={disablePostFx}
             hoverStyles={EDITOR_HOVER_STYLES}
             onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
@@ -1131,6 +1142,7 @@ export default function Editor({
   isLoading = false,
   onLoaderChange,
   onThumbnailCapture,
+  disablePostFx = false,
   sidebarOverlay,
   viewerBanner,
   settingsPanelProps,
@@ -1197,6 +1209,8 @@ export default function Editor({
       setIsSceneLoading(true)
       useScene.getState().unloadScene()
       useViewer.getState().resetSelection()
+      // Session groups are not scene-graph state — clear on every load/switch.
+      useSessionGroups.getState().clearGroups()
 
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
@@ -1232,6 +1246,9 @@ export default function Editor({
   // Apply preview scene when version preview mode changes
   useEffect(() => {
     if (isVersionPreviewMode && previewScene) {
+      // Drop session groups from the edit session so plain-click expand cannot
+      // pull in members that are not part of the preview graph.
+      useSessionGroups.getState().clearGroups()
       applySceneGraphToEditor(previewScene)
     }
   }, [isVersionPreviewMode, previewScene])
@@ -1313,6 +1330,7 @@ export default function Editor({
   const previewViewerContent = (
     <Viewer
       defaultRender={EDITOR_DEFAULT_RENDER}
+      disablePostFx={disablePostFx}
       hoverStyles={EDITOR_HOVER_STYLES}
       renderContext="editor"
       selectionManager="default"
@@ -1331,6 +1349,7 @@ export default function Editor({
 
   const viewerCanvas = (
     <ViewerCanvas
+      disablePostFx={disablePostFx}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}

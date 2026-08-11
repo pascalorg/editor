@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { WallNode } from '../../schema'
-import { calculateLevelMiters, getWallMiterBoundaryPoints } from './wall-mitering'
+import { calculateLevelMiters, getWallMiterBoundaryPoints, pointToKey } from './wall-mitering'
 
 function wall(id: string, start: [number, number], end: [number, number]): WallNode {
   return {
@@ -76,5 +76,56 @@ describe('wall miter boundary sides', () => {
     expect(boundary.endLeft.y).toBeCloseTo(0.05)
     expect(boundary.startRight.y).toBeCloseTo(-0.05)
     expect(boundary.endRight.y).toBeCloseTo(-0.05)
+  })
+})
+
+describe('deterministic junction ordering', () => {
+  test('same wall set produces the same miter data regardless of input order', () => {
+    const thickWall = (id: string, thickness: number, end: [number, number]) =>
+      ({ ...wall(id, [0, 0], end), thickness }) as WallNode
+    const wide = thickWall('wide', 0.6, [4, 0])
+    const narrow = thickWall('narrow', 0.2, [4, 0])
+    const branch = thickWall('branch', 0.4, [0, 4])
+
+    const forward = calculateLevelMiters([wide, narrow, branch]).junctionData.get('0,0')
+    const reversed = calculateLevelMiters([narrow, wide, branch]).junctionData.get('0,0')
+
+    expect(forward).toEqual(reversed)
+  })
+})
+
+describe('junction grid prefilter', () => {
+  function thickWall(
+    id: string,
+    start: [number, number],
+    end: [number, number],
+    thickness: number,
+  ): WallNode {
+    return { ...wall(id, start, end), thickness } as WallNode
+  }
+
+  // A wall covering more than JUNCTION_GRID_MAX_CELLS_PER_WALL grid cells is held
+  // in the fallback bucket, which is scanned after the per-cell bucket. When such
+  // a wall and a shorter collinear one both pass through a junction they tie on
+  // angle, so the order they were appended in decides which thickness the miter
+  // uses — the prefilter must not reorder them relative to the input.
+  test('an oversized wall keeps its input position among collinear passthroughs', () => {
+    const long = thickWall('long', [0, 0], [20, 20], 0.6)
+    const infill = thickWall('infill', [4, 4], [12, 12], 0.15)
+    const spur = thickWall('spur', [8, 8], [8, 14], 0.3)
+
+    const junction = calculateLevelMiters([long, infill, spur]).junctions.get(
+      pointToKey({ x: 8, y: 8 }),
+    )
+    expect(junction).toBeDefined()
+    expect(junction?.connectedWalls.map((cw) => cw.wall.id)).toEqual(['spur', 'long', 'infill'])
+  })
+
+  test('a junction on a long wall is still found through the fallback bucket', () => {
+    const long = thickWall('long', [0, 0], [140, 0], 0.2)
+    const spur = thickWall('spur', [60, 0], [60, 6], 0.2)
+
+    const junction = calculateLevelMiters([long, spur]).junctions.get(pointToKey({ x: 60, y: 0 }))
+    expect(junction?.connectedWalls.map((cw) => cw.wall.id)).toEqual(['spur', 'long'])
   })
 })

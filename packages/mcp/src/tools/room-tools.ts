@@ -12,15 +12,16 @@ import {
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { findCatalogItem, searchCatalogItems } from './asset-catalog'
+import { keepoutCoversPlanned, keepoutForPolygonEdge } from './door-clearance'
 import { ErrorCode, throwMcpError } from './errors'
+import { polygonArea, polygonBounds, type Vec2, wallLength, wallLocalXFromT } from './geometry'
 import {
-  pointInBoundsWithPadding,
-  polygonArea,
-  polygonBounds,
-  type Vec2,
-  wallLength,
-  wallLocalXFromT,
-} from './geometry'
+  collectDoorKeepouts,
+  collectOccupiedFootprints,
+  findValidPlacement,
+  itemPlanAabb,
+  type PlanAabb,
+} from './layout-clearance'
 import { publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema } from './schemas'
@@ -127,8 +128,15 @@ export const furnishRoomOutput = {
   skipped: z.array(z.string()),
 }
 
-type Footprint = { minX: number; maxX: number; minZ: number; maxZ: number }
-type Placement = { assetId: string; x: number; z: number; rotationDeg?: number }
+type Placement = {
+  assetId: string
+  x: number
+  z: number
+  rotationDeg?: number
+  /** Optional axes for smart re-place (along wall / into room). */
+  along?: { x: number; z: number }
+  inward?: { x: number; z: number }
+}
 
 function textResult<T extends Record<string, unknown>>(payload: T) {
   return {
@@ -220,23 +228,6 @@ function makeItemAsset(asset: AssetInput) {
   }
 }
 
-function itemFootprint(asset: AssetInput, x: number, z: number, rotationDeg = 0): Footprint {
-  const [w = 1, , d = 1] = asset.dimensions ?? [1, 1, 1]
-  const rot = (rotationDeg * Math.PI) / 180
-  const cos = Math.abs(Math.cos(rot))
-  const sin = Math.abs(Math.sin(rot))
-  const halfW = (w * cos + d * sin) / 2
-  const halfD = (w * sin + d * cos) / 2
-  return { minX: x - halfW, maxX: x + halfW, minZ: z - halfD, maxZ: z + halfD }
-}
-
-function footprintsOverlap(a: Footprint, b: Footprint): boolean {
-  const gap = 0.08
-  return (
-    a.maxX - gap > b.minX && a.minX + gap < b.maxX && a.maxZ - gap > b.minZ && a.minZ + gap < b.maxZ
-  )
-}
-
 function buildRoomPlacements(
   roomType: (typeof ROOM_TYPES)[number],
   polygon: Vec2[],
@@ -293,11 +284,25 @@ function buildRoomPlacements(
 
   const addBack = (assetId: string, inset: number, lateral = 0, rotationDeg = facingRot) => {
     const [x, z] = backPos(inset, lateral)
-    placements.push({ assetId, x, z, rotationDeg })
+    placements.push({
+      assetId,
+      x,
+      z,
+      rotationDeg,
+      along: { x: ax, z: az },
+      inward: { x: inX, z: inZ },
+    })
   }
   const addSide = (assetId: string, inset: number, lateral = 0, rotationDeg = sideRot) => {
     const [x, z] = sidePos(inset, lateral)
-    placements.push({ assetId, x, z, rotationDeg })
+    placements.push({
+      assetId,
+      x,
+      z,
+      rotationDeg,
+      along: { x: sax, z: saz },
+      inward: { x: snX, z: snZ },
+    })
   }
 
   switch (roomType) {
@@ -329,14 +334,23 @@ function buildRoomPlacements(
       addBack('sofa', 0.9)
       addBack('coffee-table', 2.1)
       addSide('livingroom-chair', 0.85, -sideAlongLen * 0.18)
+      // TV faces the sofa from the door wall: use door-wall axes so smart
+      // re-place nudges into the room (along wall / inward), not world X/Z.
       const doorIdx = doorWallIndex % n
       const doorStart = polygon[doorIdx]!
       const doorEnd = polygon[(doorIdx + 1) % n]!
+      const doorMidX = (doorStart[0] + doorEnd[0]) / 2
+      const doorMidZ = (doorStart[1] + doorEnd[1]) / 2
+      // Door-wall inward is opposite of "back wall" inward (into room from door).
+      const doorInX = -inX
+      const doorInZ = -inZ
       placements.push({
         assetId: 'tv-stand',
-        x: (doorStart[0] + doorEnd[0]) / 2 - inX * 0.35,
-        z: (doorStart[1] + doorEnd[1]) / 2 - inZ * 0.35,
+        x: doorMidX + doorInX * 0.35,
+        z: doorMidZ + doorInZ * 0.35,
         rotationDeg: facingRot + 180,
+        along: { x: ax, z: az },
+        inward: { x: doorInX, z: doorInZ },
       })
       break
     }
@@ -554,7 +568,7 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
     {
       title: 'Furnish room',
       description:
-        'Place realistic furniture for a room type using levelId + polygon, or infer both from zoneId. Parent floor items to the level so they render and validate.',
+        'Place furniture for a room type (levelId+polygon or zoneId). Skips or nudges poses that block door clear zones or overlap existing items (rotation-aware). Parent floor items to the level.',
       inputSchema: furnishRoomInput,
       outputSchema: furnishRoomOutput,
     },
@@ -562,10 +576,40 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
       const room = inferRoomGeometry(bridge, levelId, polygon as Vec2[] | undefined, zoneId)
       assertLevel(bridge, room.levelId)
       const points = room.polygon
-      const { placements, bounds } = buildRoomPlacements(roomType, points, doorWallIndex ?? 0)
-      const footprints: Footprint[] = []
+      const resolvedDoorWallIndex = doorWallIndex ?? 0
+      const { placements, bounds } = buildRoomPlacements(roomType, points, resolvedDoorWallIndex)
       const skipped: string[] = []
       const items: AnyNode[] = []
+
+      const allNodes = Object.values(bridge.getNodes())
+      // Doors on THIS level only (stacked floors must not interact in plan).
+      const existingKeepouts = collectDoorKeepouts(allNodes, { levelId: room.levelId })
+      const doorKeepoutAabbs: PlanAabb[] = existingKeepouts.map((k) => k.aabb)
+      // Always protect this room's door-wall edge when no keep-out already covers it
+      // (other rooms may already have doors elsewhere on the same level).
+      const planned = keepoutForPolygonEdge(points, resolvedDoorWallIndex, {
+        t: 0.5,
+        width: 0.9,
+      })
+      if (
+        planned &&
+        !doorKeepoutAabbs.some((existing) => keepoutCoversPlanned(existing, planned))
+      ) {
+        doorKeepoutAabbs.push(planned)
+      }
+
+      // Existing floor items on this level + footprints we place in this batch.
+      const occupied: PlanAabb[] = collectOccupiedFootprints(allNodes, {
+        levelId: room.levelId,
+        floorOnly: true,
+      }).map((f) => f.aabb)
+
+      const roomBounds = {
+        minX: bounds.minX,
+        maxX: bounds.maxX,
+        minZ: bounds.minZ,
+        maxZ: bounds.maxZ,
+      }
 
       for (const placement of placements) {
         const asset = findCatalogItem(placement.assetId)
@@ -573,29 +617,48 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
           skipped.push(`${placement.assetId}: asset not found`)
           continue
         }
-        const fp = itemFootprint(asset, placement.x, placement.z, placement.rotationDeg ?? 0)
-        const padding = 0.05
-        if (
-          !(
-            pointInBoundsWithPadding(fp.minX, fp.minZ, bounds, -padding) &&
-            pointInBoundsWithPadding(fp.maxX, fp.maxZ, bounds, -padding)
-          )
-        ) {
-          skipped.push(`${asset.id}: outside room bounds`)
+
+        const primary = {
+          x: placement.x,
+          z: placement.z,
+          rotationDeg: placement.rotationDeg ?? 0,
+        }
+        const resolved = findValidPlacement({
+          primary,
+          dimensions: asset.dimensions,
+          doorKeepouts: doorKeepoutAabbs,
+          occupied,
+          roomBounds,
+          along: placement.along,
+          inward: placement.inward,
+        })
+
+        if (!resolved.candidate) {
+          const reason =
+            resolved.reason === 'blocks_door_clearance'
+              ? 'blocks door clearance'
+              : resolved.reason === 'outside_bounds'
+                ? 'outside room bounds'
+                : 'overlaps another item'
+          skipped.push(`${asset.id}: ${reason}`)
           continue
         }
-        if (footprints.some((existing) => footprintsOverlap(fp, existing))) {
-          skipped.push(`${asset.id}: overlaps another item`)
-          continue
-        }
-        footprints.push(fp)
+
+        const { x, z, rotationDeg } = resolved.candidate
+        const rotRad = (rotationDeg * Math.PI) / 180
+        const planAabb = itemPlanAabb([x, 0, z], asset.dimensions, rotRad)
+        occupied.push(planAabb)
         items.push(
           ItemNode.parse({
             name: asset.name,
-            position: [placement.x, 0, placement.z],
-            rotation: [0, ((placement.rotationDeg ?? 0) * Math.PI) / 180, 0],
+            position: [x, 0, z],
+            rotation: [0, rotRad, 0],
             asset: makeItemAsset(asset),
-            metadata: { mcpTool: 'furnish_room', roomType },
+            metadata: {
+              mcpTool: 'furnish_room',
+              roomType,
+              ...(x !== primary.x || z !== primary.z ? { placementAdjusted: true } : {}),
+            },
           }),
         )
       }

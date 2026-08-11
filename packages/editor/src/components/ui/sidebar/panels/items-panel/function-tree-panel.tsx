@@ -118,9 +118,14 @@ export function FunctionTreePanel({
     <div className="flex h-full flex-col">
       {/* Root nodes as a category grid — icon when available, otherwise a
           two-letter abbreviation, with the full name in a hover tooltip.
-          Mirrors the Build tab's tile grid so the two panels read the same. */}
+          Mirrors the Build tab's tile grid so the two panels read the same.
+
+          `functionTree` is embedder-supplied and unbounded, and these tiles are
+          `aspect-square`, so row count grows with it while the item list below is
+          the only scroller. Without the cap a large taxonomy pushes the list out
+          of the panel entirely and nothing can scroll it back. */}
       <TooltipProvider delayDuration={0} disableHoverableContent>
-        <div className="grid shrink-0 grid-cols-5 gap-1.5 border-border/70 border-b p-2">
+        <div className="grid max-h-[40%] shrink-0 grid-cols-5 gap-1.5 overflow-y-auto border-border/70 border-b p-2">
           {functionTree.map((root) => {
             const isActive = activeRoot?.slug === root.slug
             return (

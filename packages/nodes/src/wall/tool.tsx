@@ -53,7 +53,7 @@ import {
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
-import { BoxGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
+import { DoubleSide, type Group, type Mesh, Vector3 } from 'three'
 import {
   DraftAngleArc,
   type DraftAngleLabel,
@@ -361,6 +361,7 @@ function getDraftMeasurementState(
   end: WallPlanPoint,
   walls: WallNode[],
   unit: 'metric' | 'imperial',
+  metricNotation: 'meters' | 'millimeters',
   baseY: number,
   previewHeight: number,
 ): DraftMeasurementState {
@@ -369,7 +370,7 @@ function getDraftMeasurementState(
   const length = Math.hypot(dx, dz)
   if (length < 0.01) return null
   return {
-    lengthLabel: formatLinearMeasurement(length, unit),
+    lengthLabel: formatLinearMeasurement(length, unit, metricNotation),
     lengthPosition: [
       (start[0] + end[0]) / 2,
       baseY + previewHeight + DRAFT_LABEL_Y_OFFSET,
@@ -395,16 +396,11 @@ function updateWallPreview(
   mesh.visible = true
   direction.normalize()
 
-  const geometry = new BoxGeometry(length, previewHeight, previewThickness)
   const angle = Math.atan2(direction.z, direction.x)
 
   mesh.position.set((start.x + end.x) / 2, start.y + previewHeight / 2, (start.z + end.z) / 2)
   mesh.rotation.y = -angle
-
-  if (mesh.geometry) {
-    mesh.geometry.dispose()
-  }
-  mesh.geometry = geometry
+  mesh.scale.set(length, previewHeight, previewThickness)
 }
 
 function getLevelWalls(levelId: string | null, nodes: Record<string, AnyNode>): WallNode[] {
@@ -448,6 +444,7 @@ function getBelowLevelWalls(): WallNode[] {
 
 export const WallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const activeLevelHeight = useScene((state) => {
@@ -711,6 +708,7 @@ export const WallTool: React.FC = () => {
             snappedLocal,
             walls,
             unit,
+            metricNotation,
             startingPoint.current.y,
             previewHeightRef.current,
           ),
@@ -772,13 +770,9 @@ export const WallTool: React.FC = () => {
           angleLabel: null,
         })
         triggerSFX('sfx:structure-build-start')
-        // Visibility is owned by `updateWallPreview` — it flips
-        // `mesh.visible` based on segment length. Setting it here
-        // (before any geometry data has been written) draws the
-        // mesh's empty `<shapeGeometry/>` placeholder, which WebGPU
-        // flags as "Vertex buffer slot 0 ... was not set" on the
-        // first frame after click. Leaving it false until the next
-        // `onGridMove` writes a real BoxGeometry skips that frame.
+        // Visibility is owned by `updateWallPreview`. Leave the
+        // unit box hidden until the first pointer move scales and
+        // positions it for the active segment.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const angleLocked = isAngleSnapActive()
@@ -862,11 +856,9 @@ export const WallTool: React.FC = () => {
           y: draftY,
           angleLabel: null,
         })
-        // Hide the preview until the next `onGridMove` writes the
-        // new segment's geometry. Without this the prior segment's
-        // BoxGeometry stays visible for a frame on top of the
-        // freshly-committed real wall, producing a brief
-        // double-paint at the new wall's position.
+        // Hide the preview until the next `onGridMove` scales and
+        // repositions it. Otherwise the prior segment stays visible
+        // for a frame on top of the freshly committed wall.
         if (wallPreviewRef.current) {
           wallPreviewRef.current.visible = false
         }
@@ -897,7 +889,7 @@ export const WallTool: React.FC = () => {
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
     }
-  }, [unit])
+  }, [unit, metricNotation])
 
   return (
     <group>
@@ -908,7 +900,7 @@ export const WallTool: React.FC = () => {
       />
       <CursorSphere height={previewHeight} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={wallPreviewRef} renderOrder={1} visible={false}>
-        <shapeGeometry />
+        <boxGeometry />
         <meshBasicMaterial
           color="#818cf8"
           depthTest={false}

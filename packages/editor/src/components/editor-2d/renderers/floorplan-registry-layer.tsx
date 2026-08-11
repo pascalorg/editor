@@ -91,6 +91,7 @@ import useInteractionScope, {
   useEndpointReshape,
   useMovingNode,
 } from '../../../store/use-interaction-scope'
+import { expandSessionSelectionForNode } from '../../../store/use-session-groups'
 import { startGroupPickUp } from '../../editor/group-actions'
 import { classifyParticipant } from '../../editor/group-transform-shared'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
@@ -589,13 +590,19 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   }, [bumpAffectedSiblingEpochs])
 
   const applyEntrySelection = useCallback(
-    (id: AnyNodeId, shouldToggle: boolean) => {
+    (id: AnyNodeId, options: { shouldToggle: boolean; isolateMember: boolean }) => {
       const currentSelectedIds = useViewer.getState().selection.selectedIds
-      const nextSelectedIds = shouldToggle
-        ? currentSelectedIds.includes(id)
+      let nextSelectedIds: string[]
+      if (options.shouldToggle) {
+        nextSelectedIds = currentSelectedIds.includes(id)
           ? currentSelectedIds.filter((selectedId) => selectedId !== id)
           : [...currentSelectedIds, id]
-        : [id]
+      } else if (options.isolateMember) {
+        nextSelectedIds = [id]
+      } else {
+        const expanded = expandSessionSelectionForNode(id)
+        nextSelectedIds = expanded && expanded.length > 1 ? expanded : [id]
+      }
       setSelection({ selectedIds: nextSelectedIds })
       if (nextSelectedIds.length === 1 && nextSelectedIds[0] === id) {
         const node = useScene.getState().nodes[id]
@@ -618,7 +625,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     (id: AnyNodeId, event: React.PointerEvent<SVGGElement>) => {
       if (event.button !== 0) return
       event.stopPropagation()
-      applyEntrySelection(id, event.metaKey || event.ctrlKey || event.shiftKey)
+      applyEntrySelection(id, {
+        shouldToggle: event.metaKey || event.ctrlKey || event.shiftKey,
+        isolateMember: event.altKey && !(event.metaKey || event.ctrlKey || event.shiftKey),
+      })
     },
     [applyEntrySelection],
   )
@@ -691,7 +701,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         if (endEvent.pointerId !== pointerId) return
         cleanup()
         if (!engaged) {
-          applyEntrySelection(id, true)
+          // Cmd/Ctrl+click without drag: toggle member (options object, not bare boolean).
+          applyEntrySelection(id, {
+            shouldToggle: true,
+            isolateMember: false,
+          })
         }
       }
 

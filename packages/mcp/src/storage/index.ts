@@ -1,4 +1,3 @@
-import { readEnv } from '../lib/env'
 import { resolveMysqlUrl } from './mysql-scene-store'
 import { SceneInvalidError, type SceneStore } from './types'
 
@@ -15,9 +14,16 @@ export * from './types'
  * exact file path or `DIGITALTWIN_DATA_DIR` for a directory to hold it.
  *
  * Set `DIGITALTWIN_MYSQL_URL` (or the HOST/USER/DATABASE trio) to store scenes
- * in MySQL. In production MySQL is required: a host's filesystem rarely
- * survives a redeploy, so silently writing to a local file loses every scene.
- * Set `DIGITALTWIN_ALLOW_SQLITE=1` to override for throwaway production runs.
+ * in MySQL.
+ *
+ * **In production MySQL is required and there is no way around it.** There used
+ * to be one — `DIGITALTWIN_ALLOW_SQLITE=1`, meant for a throwaway production
+ * run — and it was removed on purpose. A scene written to a host's filesystem
+ * is gone at the next redeploy, and the variable put that outcome one typo, or
+ * one copied `.env`, away. An escape hatch that is convenient for a five-minute
+ * experiment and catastrophic for a customer's warehouse is not worth keeping
+ * for the experiment's sake: run the experiment with `NODE_ENV` unset, which is
+ * what a throwaway run actually is.
  */
 export async function createSceneStore(env?: NodeJS.ProcessEnv): Promise<SceneStore> {
   const resolved = env ?? process.env
@@ -29,14 +35,14 @@ export async function createSceneStore(env?: NodeJS.ProcessEnv): Promise<SceneSt
     return store
   }
 
-  if (resolved.NODE_ENV === 'production' && readEnv(resolved, 'ALLOW_SQLITE') !== '1') {
+  if (resolved.NODE_ENV === 'production') {
     throw new SceneInvalidError(
-      'No MySQL configuration found, and the SQLite fallback is disabled in production ' +
-        'because scenes written to the local filesystem are lost on redeploy. ' +
+      'No MySQL configuration found. Scenes must live in MySQL in production: a scene ' +
+        'written to the local filesystem is lost on the next redeploy. ' +
         'Set DIGITALTWIN_MYSQL_URL (mysql://user:password@host:3306/database) or all of ' +
         'DIGITALTWIN_MYSQL_HOST, DIGITALTWIN_MYSQL_USER and DIGITALTWIN_MYSQL_DATABASE ' +
         '(plus DIGITALTWIN_MYSQL_PASSWORD/_PORT as needed). ' +
-        'Only set DIGITALTWIN_ALLOW_SQLITE=1 for a throwaway local production run.',
+        'There is no SQLite override in production; unset NODE_ENV for a local run.',
     )
   }
 

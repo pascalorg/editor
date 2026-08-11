@@ -79,14 +79,24 @@ describe('createSceneStore production gate', () => {
     )
   })
 
-  it('allows SQLite in production with the explicit escape hatch', async () => {
-    const store = await createSceneStore({
-      NODE_ENV: 'production',
-      DIGITALTWIN_ALLOW_SQLITE: '1',
-      HOME: '/tmp/dt-gate-test',
-    })
-    expect(store.backend).toBe('sqlite')
-    await store.close?.()
+  /**
+   * The escape hatch is gone, and this test is what keeps it gone.
+   *
+   * `DIGITALTWIN_ALLOW_SQLITE=1` used to let a production process store scenes
+   * in a local file. It read as a convenience for a throwaway run; what it
+   * actually bought was one typo, or one copied `.env`, between a customer's
+   * warehouses and a filesystem the host wipes on every release. Asserting the
+   * old variable is INERT is the point — reintroducing the branch would make
+   * this test green again by returning a sqlite store, so it asserts the throw.
+   */
+  it('refuses SQLite in production even with the old escape hatch set', async () => {
+    await expect(
+      createSceneStore({
+        NODE_ENV: 'production',
+        DIGITALTWIN_ALLOW_SQLITE: '1',
+        HOME: '/tmp/dt-gate-test',
+      }),
+    ).rejects.toBeInstanceOf(SceneInvalidError)
   })
 
   it('uses SQLite in development without configuration', async () => {

@@ -439,6 +439,29 @@ describe('SceneBridge', () => {
       expect(bridge.exportJSON().installedPlugins).toEqual(['pascal:trees'])
     })
 
+    // `setScene` resets `collections` and `materials` to `{}` unless they are
+    // in its `extra` bag, so anything applied after it is silently discarded.
+    // These two round trips are what catch a regression back to that.
+    test('loadJSON round-trips the material palette', () => {
+      const materials = {
+        mat_1: { id: 'mat_1', name: 'Oak', material: { preset: 'wood' } },
+      }
+      bridge.loadJSON({ ...bridge.exportJSON(), materials } as never)
+
+      expect(bridge.exportJSON().materials).toEqual(materials)
+    })
+
+    test('loadJSON round-trips collections', () => {
+      const snap = bridge.exportJSON()
+      const nodeId = Object.keys(snap.nodes)[0]!
+      const collections = {
+        collection_1: { id: 'collection_1', name: 'Refs', nodeIds: [nodeId] },
+      }
+      bridge.loadJSON({ ...snap, collections } as never)
+
+      expect(bridge.exportJSON().collections).toEqual(collections)
+    })
+
     test('legacy graphs do not become explicitly uninstalled on export', () => {
       const snap = bridge.exportJSON()
       const { installedPlugins: _installedPlugins, ...legacy } = snap

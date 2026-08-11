@@ -6,6 +6,7 @@ import { registerResources } from './resources'
 import type { SceneStore } from './storage/types'
 import { registerTools } from './tools'
 import { registerVisionTools } from './tools/vision'
+import { version } from './version'
 
 export type CreatePascalMcpServerOptions = {
   bridge: SceneBridge
@@ -18,8 +19,8 @@ export type CreatePascalMcpServerOptions = {
 
 export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpServer {
   const server = new McpServer({
-    name: opts.name ?? 'pascal-mcp',
-    version: opts.version ?? '0.1.0',
+    name: opts.name ?? 'pascal-mcp-server',
+    version: opts.version ?? version,
   })
   const operations =
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })

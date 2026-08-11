@@ -17,7 +17,8 @@ The invariant, in one sentence:
 
 | Field | Meaning | Absent means |
 |---|---|---|
-| `level.height` | Storey height in meters, floor-to-floor. Level world Y = per-building prefix sum of stored heights, ordered by the `level` ordinal (`getLevelElevations`). | Unmigrated legacy data (never seen post-load; the migration writes it). Consumers fall back to `DEFAULT_LEVEL_HEIGHT` (2.5). |
+| `level.height` | Storey height in meters, floor-to-floor. Level world Y is resolved by `getLevelElevations`, ordered by the `level` ordinal. | Unmigrated legacy data (never seen post-load; the migration writes it). Consumers fall back to `DEFAULT_LEVEL_HEIGHT` (2.5). |
+| `level.baseElevation` | Additive offset from the computed stack position. It shifts this level and cumulatively shifts every higher level in the same building; negative offsets are valid. | Zero (the schema default). |
 | `wall.height` | Explicit body height (half wall, parapet, or a raised-support draft whose ghost height must remain invariant). Ground-hosted walls always resolve top = elected base + height, including below datum; other legacy sunken supports retain their absolute-top constraint. | **Plane-bound** (the default for ordinary datum placement): the top follows `getWallPlaneTop` — `min(level height, lowest covering-slab underside over the span)`. |
 | `ceiling.height` | Explicit custom height, write-clamped to the bound. | **Follows the level**: resolves live to `getCeilingClampBound` = `min(level height, covering underside) − 0.01`. |
 | `slab.elevation` | The walking surface (top), level-local. | Default 0.05. |
@@ -41,7 +42,7 @@ Two schema rules protect these semantics:
 
 | Helper | Home | Resolves |
 |---|---|---|
-| `getStoredLevelHeight`, `getLevelElevations`, `getLevelAbove/Below` | `services/storey.ts` | Level heights, per-building stacking, neighbors |
+| `getStoredLevelHeight`, `getLevelElevations`, `getLevelAbove/Below` | `services/storey.ts` | Level heights, offset-aware per-building stacking, neighbors |
 | `getWallPlaneTop` | `services/storey.ts` | A plane-bound wall's top: level height clamped to covering-slab undersides, span-sampled with boundary-inclusive band overlap |
 | `resolveWallTop`, `resolveWallEffectiveHeight`, `MIN_WALL_HEIGHT` | `systems/wall/wall-top.ts` | A wall's top / effective height given plane + elected base |
 | `getWallBaseElevationForNodes`, `getWallEffectiveHeightForNodes` | spatial-grid manager | The elected base and body height with terrain/support offsets, for UI overlays |
@@ -75,13 +76,51 @@ fixed underside; it never changes the slab interval. Recessed slabs keep an expl
 construction plane is tagged `fixed-plane` so a plane at world Y=0 cannot be mistaken for the
 terrain query plane on later pointer moves.
 
-Auto-room surfaces derive their vertical placement from the enclosing walls when every boundary
-wall agrees on one base and top plane. The floor keeps its established 0.05 m walking-surface
-offset above that base; the ceiling sits 0.01 m below the common wall top. Existing
-`autoFromWalls` surfaces reconcile with later wall support-offset changes. Manual surfaces are
-never rewritten, and a mixed-elevation enclosure keeps its existing/fallback placement rather
-than choosing an arbitrary wall. Auto slabs are excluded from this wall-base election so a
-derived floor cannot recursively lift its own walls and then itself.
+Auto-room surfaces derive their vertical placement from the enclosing walls. Each boundary wall's
+base is resolved through the same election the renderer uses — including the ground under it, so a
+room stamped or drawn on bare terrain gets terrain input even though no wall carries an explicit
+`supportSlabId`. The floor takes the **highest** wall base and keeps its established 0.05 m
+walking-surface offset above it; the ceiling takes the **lowest** wall top and sits 0.01 m below it.
+Both surfaces stay flat: a mixed-elevation enclosure no longer bails to a fallback placement, and
+the highest base is chosen because the lower walls extend down into the ground anyway, so no
+daylight opens under any wall. Existing `autoFromWalls` surfaces reconcile with later wall
+support-offset changes **and with sculpts** — the level's structure signature hashes each wall's
+resolved level base, so moving the ground under a finished room re-derives its floor and ceiling
+(once per stroke, inside the stroke's own undo step). Manual surfaces are never rewritten. Auto
+slabs are excluded from this wall-base election so a derived floor cannot recursively lift its own
+walls and then itself.
+
+## Inheriting terrain (the generic seam)
+
+`levelBaseElevationAt(nodes, levelId, x, z)` is **the** answer to "what surface does a node rest on
+when nothing built is under it" — the sculpted ground where terrain supports that storey, `0`
+everywhere else. Terrain used to be opt-in per kind because each site spelled the question
+`terrainSupportLift(…) ?? 0` and every consumer that forgot to ask silently assumed the plane
+`y = 0`. Resolving a base through this function is all a kind needs to follow the ground; there is
+nothing to register. Callers that must tell flat ground apart from a built surface flush with the
+storey base still need `terrainSupportLift`'s null — both read `0` and only the first drapes.
+
+Three ways a kind's Y reaches the ground, in the order to prefer them:
+
+1. **`capabilities.floorPlaced`** — the resolver (`getFloorPlacedElevation`) elects per footprint
+   between the overlapping slabs and the level base, and `FloorElevationSystem` writes the result to
+   the registered mesh every frame. Correct for anything that stands on a surface.
+2. **`ctx.levelBaseAt(x, z)` in a pure `def.geometry` builder** — for kinds that bake their own
+   vertical origin into the meshes (a fence's inner lift group). Calling it also *enrols* the kind in
+   terrain invalidation: `noteLevelBaseConsumer` records the type on first build, and
+   `markTerrainSupportDependents` dirties those nodes on every terrain change so the baked origin
+   rebuilds. Asking is the registration — deliberately, because a declarative flag would be another
+   per-kind opt-in and "every kind with a builder" would rebuild the whole ground floor per brush dab.
+   Absent for `def.floorplan` (the plan view draws no elevation), so shared builders must treat it as
+   optional rather than assume flat ground in 2D.
+3. **`levelBaseElevationAt` directly** — for resolvers outside the render path that already hold the
+   nodes record (support election, snap guides, handle placement). Sample at the *same* XZ the
+   renderer samples, or the overlay and the mesh will disagree.
+
+A collective renderer (one component drawing many nodes, e.g. instanced meshes) gets none of this for
+free: `FloorElevationSystem` writes to the node's registered object, which for those kinds is the
+selection proxy, not the instance. Such renderers must resolve each instance's Y through
+`getFloorStackedPosition` themselves.
 
 ## Load migration (lives in `migrateNodes` Pass 3, indefinitely)
 
@@ -98,7 +137,8 @@ Because community autosave only persists after the first post-load edit, the mig
 - **Ordinals are semantic.** `level < 0` renders "Basement N"; `level === 0` is the ground-floor lookup. Never renumber without the zero anchor.
 - **Boundary geometry.** Auto slabs derive polygons from wall centerlines, so wall/ceiling clamp samples sit exactly on polygon edges — always use the boundary-inclusive band-overlap helpers (`wallOverlapsSlabFootprint`, `slabCoversPoint`), never raw ray-cast point-in-polygon on those paths.
 - **Straight stairs build from stored segment heights**, not the resolved rise — any rise change must go through `syncStairRises` (applied by `StairOpeningSystem`, history-paused, one microtask after store updates so the spatial grid has settled).
-- **Reactivity is explicit.** A `level.height` change dirties that level's walls/stairs/ceilings/fences; a slab change dirties overlapping same-level supports, the level below's walls/ceilings, and deck-attached stairs. Every live terrain dab dirties ground-hosted structures and `fillToTerrain` walls/slabs through the transient `useLiveTerrain` subscription in `spatial-grid-sync.ts`; the scene graph and undo history are still written only once when the stroke commits. Ending or canceling a stroke runs the same sweep so dependents settle back onto the persisted field. Slab handles reuse the slab-change dependency helper for live previews. If a new consumer reads these bounds, wire its dirty rule there.
+- **Reactivity is explicit.** A `level.height` change dirties that level's walls/stairs/ceilings/fences; a slab change dirties overlapping same-level supports, the level below's walls/ceilings, and deck-attached stairs. Every live terrain dab dirties ground-hosted structures, `fillToTerrain` walls/slabs, every `floorPlaced` node at grade, and every kind whose builder asked for `ctx.levelBaseAt`, through the transient `useLiveTerrain` subscription in `spatial-grid-sync.ts`; the scene graph and undo history are still written only once when the stroke commits. Ending or canceling a stroke runs the same sweep so dependents settle back onto the persisted field. Slab handles reuse the slab-change dependency helper for live previews. If a new consumer reads these bounds, wire its dirty rule there.
+- **Auto-room re-derivation is per stroke, not per dab.** Live dabs publish only to `useLiveTerrain` and never touch the scene store, so the structure-signature diff that re-derives room floors and ceilings runs once on release. Mid-drag the ground-hosted walls follow the brush while the floor waits for release — deliberate: re-deriving per dab means a scene write per dab and a floor that jitters under the cursor.
 - **Host lifecycle.** Deleting a slab strips `supportSlabId`/`deckSlabId` from survivors in the same undo commit; a host merely reshaped away falls back silently and resumes if the slab returns.
 - **Clone paths differ.** `clone-scene-graph.ts` remaps `supportSlabId`/`deckSlabId`; the editor clipboard (`scene-clipboard.ts`) intentionally does not (it re-elects); room placement remaps them (fixed in the private repo's `room-placement.ts`). When adding a new clone/instantiation path, remap both fields.
 

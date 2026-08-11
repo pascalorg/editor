@@ -36,6 +36,7 @@ import { toggleWindowOpenState } from '../lib/window-interaction'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
+import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
 
 // References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
 // the viewer selection, so selection-based key arms (R/T rotate) need this
@@ -210,7 +211,11 @@ export const useKeyboard = ({
       }
 
       // Don't handle shortcuts if user is typing in an input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
         return
       }
 
@@ -695,9 +700,38 @@ export const useKeyboard = ({
       }
     }
 
+    // Capture-phase Ctrl/Cmd+G so browser "Find next" cannot steal the shortcut
+    // before the editor bubble listener runs. `stopPropagation` here silences the
+    // chord for every other capture listener (floorplan hotkeys, group move,
+    // registry move overlay) — safe only because none of them claim Ctrl/Cmd+G.
+    // `e.code` keeps it on the physical G key across keyboard layouts.
+    const handleSessionGroupKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
+        return
+      }
+      if (useDeleteConfirmation.getState().request) return
+      if (isVersionPreviewMode) return
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      if (e.code !== 'KeyG') return
+
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.shiftKey) {
+        ungroupCurrentSelection()
+      } else {
+        groupCurrentSelection()
+      }
+    }
+
+    window.addEventListener('keydown', handleSessionGroupKeyDown, true)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
     return () => {
+      window.removeEventListener('keydown', handleSessionGroupKeyDown, true)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }

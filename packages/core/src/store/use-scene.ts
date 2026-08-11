@@ -10,7 +10,7 @@ import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
-import { LevelNode } from '../schema/nodes/level'
+import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
 import {
   getPitchFromActiveRoofHeight,
   type RoofSegmentNode,
@@ -37,6 +37,7 @@ import { getCeilingClampBound } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
 import { healSceneNodes } from '../utils/heal-scene-graph'
+import { removeRetiredDrawingSheetNodes } from '../utils/retired-scene-nodes'
 import * as nodeActions from './actions/node-actions'
 import {
   areSceneSnapshotsEqual,
@@ -591,26 +592,6 @@ function migrateConstructionDimension(node: Record<string, any>) {
   }
 }
 
-function removeRetiredDrawingSheets(nodes: Record<string, any>) {
-  const retiredIds = new Set(
-    Object.entries(nodes)
-      .filter(([, node]) => node?.type === 'drawing-sheet')
-      .map(([id]) => id),
-  )
-  if (retiredIds.size === 0) return
-
-  for (const id of retiredIds) delete nodes[id]
-  for (const [id, node] of Object.entries(nodes)) {
-    if (!Array.isArray(node?.children)) continue
-    const children = getStringArray(node.children)
-    if (!children.some((childId) => retiredIds.has(childId))) continue
-    nodes[id] = {
-      ...node,
-      children: children.filter((childId) => !retiredIds.has(childId)),
-    }
-  }
-}
-
 function migrateWallAssembly(node: Record<string, any>) {
   if (!Object.hasOwn(node, 'assemblyLayers')) return node
 
@@ -643,8 +624,7 @@ function migrateNodes(nodes: Record<string, any>): {
   // Repair pre-existing corruption (null children, zero-length walls) before
   // any per-type migration runs, so already-saved scenes load cleanly.
   const { nodes: healed } = healSceneNodes(nodes)
-  const patchedNodes = { ...healed } as Record<string, any>
-  removeRetiredDrawingSheets(patchedNodes)
+  const { nodes: patchedNodes } = removeRetiredDrawingSheetNodes(healed as Record<string, any>)
 
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
   // merged into the scene material map by the caller (`setScene`).
@@ -948,6 +928,7 @@ function migrateNodes(nodes: Record<string, any>): {
       const levelNumber = getFiniteNumber(node.level, 0)
       patchedNodes[id] = {
         ...node,
+        baseElevation: normalizeLevelBaseElevation(node.baseElevation),
         level: levelNumber,
         children: validChildren,
       }
@@ -1407,25 +1388,25 @@ const useScene: UseSceneStore = create<SceneState>()(
           return // Scene already loaded
         }
 
-        // Create hierarchy: Site → Building → Level
+        // Create hierarchy: Site → Building → Level. Parent links must be
+        // written explicitly — the schema defaults `parentId` to null, and the
+        // scene authority rejects parent/child asymmetry that the renderer
+        // happily traverses through `children`.
+        const site = SiteNode.parse({})
+        const building = BuildingNode.parse({
+          parentId: site.id,
+        })
         const level0 = LevelNode.parse({
+          parentId: building.id,
           level: 0,
           children: [],
           height: 2.5,
         })
 
-        const building = BuildingNode.parse({
-          children: [level0.id],
-        })
-
-        const site = SiteNode.parse({
-          children: [building.id],
-        })
-
         // Define all nodes flat
         const nodes: Record<AnyNodeId, AnyNode> = {
-          [site.id]: site,
-          [building.id]: building,
+          [site.id]: { ...site, children: [building.id] },
+          [building.id]: { ...building, children: [level0.id] },
           [level0.id]: level0,
         }
 

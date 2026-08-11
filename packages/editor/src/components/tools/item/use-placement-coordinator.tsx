@@ -295,6 +295,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling } = useSpatialQuery()
   const { asset, draftNode } = config
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
   const updatePreviewGeometry = useCallback((bounds: PreviewBounds) => {
     const [width, height, depth] = bounds.dimensions
@@ -2558,9 +2559,21 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     depth: currentDimensionBounds.dimensions[2],
     center: [currentDimensionBounds.center[0], currentDimensionBounds.center[2]],
   }
-  const widthLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[0], unit)
-  const depthLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[2], unit)
-  const heightLabel = formatLinearMeasurement(currentDimensionBounds.dimensions[1], unit)
+  const widthLabel = formatLinearMeasurement(
+    currentDimensionBounds.dimensions[0],
+    unit,
+    metricNotation,
+  )
+  const depthLabel = formatLinearMeasurement(
+    currentDimensionBounds.dimensions[2],
+    unit,
+    metricNotation,
+  )
+  const heightLabel = formatLinearMeasurement(
+    currentDimensionBounds.dimensions[1],
+    unit,
+    metricNotation,
+  )
   const widthLabelPosition: [number, number, number] = [
     currentDimensionBounds.center[0],
     0.04,

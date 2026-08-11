@@ -30,6 +30,15 @@ import { packNormalToRGB, unpackRGBToNormal } from './tsl-compat'
 export const THUMBNAIL_WIDTH = 1920
 export const THUMBNAIL_HEIGHT = 1080
 
+/**
+ * Captures are re-renderable artifacts, not user originals, so they encode as
+ * webp: a 1920×1080 hero shot lands roughly an order of magnitude under PNG,
+ * which is what listings and the catalog actually ship over the wire. Alpha
+ * survives, so transparent item/preset captures keep working.
+ */
+export const SNAPSHOT_MIME = 'image/webp'
+export const SNAPSHOT_QUALITY = 0.9
+
 export type SnapshotCaptureMode = 'standard' | 'viewport' | 'area'
 
 export type SnapshotCropRegion = {
@@ -329,7 +338,7 @@ export async function createSnapshotPipeline({
           outH = captureHeight
           const offscreen = new OffscreenCanvas(outW, outH)
           offscreen.getContext('2d')!.drawImage(srcCanvas, 0, 0)
-          blob = await offscreen.convertToBlob({ type: 'image/png' })
+          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
         } else if (captureMode === 'area' && cropRegion) {
           const sx = Math.round(cropRegion.x * captureWidth)
           const sy = Math.round(cropRegion.y * captureHeight)
@@ -337,7 +346,7 @@ export async function createSnapshotPipeline({
           outH = Math.round(cropRegion.height * captureHeight)
           const offscreen = new OffscreenCanvas(outW, outH)
           offscreen.getContext('2d')!.drawImage(srcCanvas, sx, sy, outW, outH, 0, 0, outW, outH)
-          blob = await offscreen.convertToBlob({ type: 'image/png' })
+          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
         } else {
           // Standard: center-crop to the requested aspect (default 1920×1080)
           const srcAspect = captureWidth / captureHeight
@@ -359,7 +368,7 @@ export async function createSnapshotPipeline({
           offscreen
             .getContext('2d')!
             .drawImage(srcCanvas, sx, sy, sWidth, sHeight, 0, 0, outW, outH)
-          blob = await offscreen.convertToBlob({ type: 'image/png' })
+          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
         }
 
         return { blob, outW, outH }

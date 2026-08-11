@@ -1,5 +1,5 @@
 import type { AnyNode, AnyNodeId, ElevatorNode, LevelNode } from '../../schema'
-import { getStoredLevelHeight } from '../../services/storey'
+import { getLevelElevations } from '../../services/storey'
 
 export type ElevatorLevelEntry = {
   id: LevelNode['id']
@@ -84,19 +84,13 @@ export function resolveElevatorLevels(
   totalHeight: number
 } {
   const allLevels = resolveElevatorBuildingLevels(elevator, nodes)
-
-  const baseYByLevelId = new Map<string, number>()
-  let cumulativeY = 0
-  for (const level of allLevels) {
-    baseYByLevelId.set(level.id, cumulativeY)
-    cumulativeY += getStoredLevelHeight(level)
-  }
+  const levelElevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
 
   const serviceLevels = resolveElevatorServiceLevels(elevator, nodes)
   const entries = serviceLevels.map((level) => ({
     id: level.id,
     label: String(level.level),
-    baseY: baseYByLevelId.get(level.id) ?? 0,
+    baseY: levelElevations.get(level.id)?.baseY ?? 0,
   }))
 
   const defaultEntry =
@@ -106,15 +100,24 @@ export function resolveElevatorLevels(
     null
   const firstServedLevel = serviceLevels[0] ?? null
   const lastServedLevel = serviceLevels[serviceLevels.length - 1] ?? null
-  const shaftBaseY = firstServedLevel ? (baseYByLevelId.get(firstServedLevel.id) ?? 0) : 0
+  const shaftBaseY = firstServedLevel ? (levelElevations.get(firstServedLevel.id)?.baseY ?? 0) : 0
   const lastServedIndex = lastServedLevel
     ? allLevels.findIndex((level) => level.id === lastServedLevel.id)
     : -1
   const nextLevel = lastServedIndex >= 0 ? allLevels[lastServedIndex + 1] : null
+  // Highest ceiling in the stack, not the topmost level's: a negative
+  // baseElevation on the top level can put its ceiling below the level
+  // beneath it, and a shaft top under a served level would clip the cab.
+  let stackTopY = 0
+  for (const level of allLevels) {
+    const elevation = levelElevations.get(level.id)
+    if (!elevation) continue
+    stackTopY = Math.max(stackTopY, elevation.baseY + elevation.height)
+  }
   const shaftTopY = nextLevel
-    ? (baseYByLevelId.get(nextLevel.id) ?? cumulativeY)
+    ? (levelElevations.get(nextLevel.id)?.baseY ?? stackTopY)
     : lastServedLevel
-      ? cumulativeY
+      ? stackTopY
       : elevator.cabHeight + 0.3
 
   return {

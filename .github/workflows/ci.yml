@@ -13,10 +13,17 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned to match `packageManager` in package.json. Unpinned, this floats
+      # to whatever bun is latest, so a bun release can break the gate with no
+      # change in the repo — and CI then disagrees with what contributors run.
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
 
 
       - name: Install dependencies
@@ -27,3 +34,29 @@ jobs:
 
       - name: Type check
         run: bun run check-types
+
+      - name: Test
+        run: bun run test
+
+      - name: Build
+        run: bun run build
+
+  # `cli-smoke` (upstream) was removed here on the beta.5 take, for two reasons
+  # that both point the same way.
+  #
+  # It smoke-tests `packages/cli` — Pascal's command-line runtime, which this
+  # fork deliberately does not publish; `release:cli` is left out of the root
+  # scripts for the same reason. Building it on a macOS runner for every pull
+  # request buys us nothing.
+  #
+  # It also cannot pass here as written. Its first step is
+  # `bun run build --filter editor`, and this fork's root `build` is the
+  # Hostinger packaging chain rather than upstream's plain `turbo run build`.
+  # The caller's arguments land on the script's final command, so the copy
+  # becomes `cp … server.js --filter editor` and fails with
+  # `cp: editor: Not a directory` after a full two-minute build.
+  #
+  # That argument hazard is real independently of this job — anything appended
+  # to `bun run build` corrupts the last copy — and is recorded in UPSTREAM.md
+  # as its own follow-up. Restoring this job needs both: the CLI decision
+  # reversed, and the root script made argument-safe.

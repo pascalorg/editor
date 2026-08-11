@@ -497,13 +497,58 @@ export type WallSlabSupportSegment = {
  * surface the cursor ray actually hit never captures the elected base.
  * `baseSegments` / `baseElevation` stay uncapped (geometry fill-down), and
  * an explicit `preferredSlabId` still wins over the cap.
+ *
+ * `levelBase` is what "no slab supports this here" evaluates to — the
+ * sculpted ground under the wall (`levelBaseElevationAt`), or 0 for a level
+ * with no terrain under it. A caller-resolved scalar rather than a terrain
+ * lookup in here, so this stays pure and the sample stays at the wall's own
+ * XZ. It substitutes for every place this function used to write a literal
+ * `0`, and nowhere else: a slab that supports the wall's faces still wins
+ * outright, so a slab pad on a hillside keeps its wall at the pad's
+ * elevation instead of being overruled by the ground around it. The one
+ * clamp — center-only support, where the old code already clamped a
+ * recessed slab up to `0` so a wall over a pool didn't sink — generalizes to
+ * "never below the ground", which is the same rule with the ground no longer
+ * assumed flat.
  */
+// A rendered slab polygon depends only on the slab set and the level's walls,
+// never on the wall being tested — but a per-frame pass asks for support once
+// per wall, so the identical polygons were rebuilt for every wall on the level
+// (and each rebuild scans all of `levelWalls`). Keyed on array identity: the
+// caller derives those arrays once and only rebuilds them when the scene or a
+// live preview changes, so a hit means the inputs are the same objects.
+let polygonMemoSlabs: readonly SlabNode[] | null = null
+let polygonMemoWalls: readonly WallNode[] | null = null
+let polygonMemo = new Map<string, Array<[number, number]>>()
+
+function renderedSlabPolygon(
+  slab: SlabNode,
+  slabs: readonly SlabNode[],
+  levelWalls: WallNode[],
+): Array<[number, number]> {
+  if (polygonMemoSlabs !== slabs || polygonMemoWalls !== levelWalls) {
+    polygonMemoSlabs = slabs
+    polygonMemoWalls = levelWalls
+    polygonMemo = new Map()
+  }
+  const cached = polygonMemo.get(slab.id)
+  if (cached) return cached
+
+  const polygon = getRenderableSlabPolygon(slab, {
+    walls: levelWalls,
+    siblingSlabs: slabs.filter((other) => other.id !== slab.id),
+  })
+  polygonMemo.set(slab.id, polygon)
+  return polygon
+}
+
 export function computeWallSlabSupport(
   wallLike: WallOverlapInput,
   slabs: readonly SlabNode[],
   levelWalls: WallNode[],
   preferredSlabId?: string | null,
   maxElevation?: number | null,
+  levelBase = 0,
 ): WallSlabSupport {
   const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
   const halfThickness = Math.max(thickness / 2, 0)
@@ -511,7 +556,12 @@ export function computeWallSlabSupport(
   const polylineLengths = polylines.map(polylineLength)
   const wallLength = polylineLengths[0]!
   if (wallLength < 1e-9) {
-    return { elevation: 0, electedSlabId: null, baseElevation: 0, baseSegments: [] }
+    return {
+      elevation: levelBase,
+      electedSlabId: null,
+      baseElevation: levelBase,
+      baseSegments: [],
+    }
   }
 
   const minSupport = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, wallLength * 0.5))
@@ -527,10 +577,7 @@ export function computeWallSlabSupport(
 
   for (const slab of slabs) {
     if (slab.polygon.length < 3) continue
-    const renderedPolygon = getRenderableSlabPolygon(slab, {
-      walls: levelWalls,
-      siblingSlabs: slabs.filter((other) => other.id !== slab.id),
-    })
+    const renderedPolygon = renderedSlabPolygon(slab, slabs, levelWalls)
 
     let supported = 0
     const perPolyline = polylines.map((line) => {
@@ -646,7 +693,7 @@ export function computeWallSlabSupport(
       polylines.length >= 3 ? highestAt(normalizedByGroup, 2, midpoint) : Number.NEGATIVE_INFINITY
     const faceElevations = [leftElevation, rightElevation].filter(Number.isFinite)
     const segmentElevation =
-      faceElevations.length > 0 ? Math.min(...faceElevations) : Math.max(centerElevation, 0)
+      faceElevations.length > 0 ? Math.min(...faceElevations) : Math.max(centerElevation, levelBase)
 
     if (electableNormalizedGroups === normalizedByGroup) {
       if (faceElevations.length > 0 || Number.isFinite(centerElevation)) {
@@ -665,7 +712,7 @@ export function computeWallSlabSupport(
       const electFaces = [electLeft, electRight].filter(Number.isFinite)
       if (electFaces.length > 0 || Number.isFinite(electCenter)) {
         accumulateCarry(
-          electFaces.length > 0 ? Math.min(...electFaces) : Math.max(electCenter, 0),
+          electFaces.length > 0 ? Math.min(...electFaces) : Math.max(electCenter, levelBase),
           end - start,
         )
       }
@@ -704,7 +751,7 @@ export function computeWallSlabSupport(
       : majorityElevation !== Number.NEGATIVE_INFINITY
         ? majorityElevation
         : bestElevation === Number.NEGATIVE_INFINITY
-          ? 0
+          ? levelBase
           : bestElevation
   const electedSlabId =
     preferredElectedSlabId ??

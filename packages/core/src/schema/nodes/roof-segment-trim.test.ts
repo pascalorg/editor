@@ -32,6 +32,15 @@ describe('roof segment trim', () => {
     })
   })
 
+  // Scene loading casts migrated roof-segments instead of zod-parsing them, so a
+  // segment saved before `trim` existed reaches renderers with the field absent.
+  test('tolerates a segment carrying no trim at all', () => {
+    const trim = normalizeRoofSegmentTrim({ width: 8, depth: 6 })
+
+    expect(trim.left).toBe(0)
+    expect(trim.backRightZ).toBe(0)
+  })
+
   test('normalizes impossible side totals without inverting the footprint', () => {
     const trim = normalizeRoofSegmentTrim({
       width: 4,
