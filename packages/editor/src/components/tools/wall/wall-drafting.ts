@@ -280,11 +280,22 @@ export function createWallOnCurrentLevel(
         createdWall.start[0],
         createdWall.start[1],
       )
+      // A ground-preferred draft is the terrain exception only while sculpted
+      // terrain actually supports this storey. On flat ground the ground plane
+      // is just the backdrop the chain started from: drop the draft options so
+      // the wall commits plane-bound — no stamped height, no persisted ground
+      // host, no election cap at the draft plane.
+      const wallOptions =
+        options?.preferredSupportSlabId === GROUND_SUPPORT_ID && terrainBase == null
+          ? undefined
+          : options
       const preferredSupportSlabId =
-        options?.preferredSupportSlabId ??
-        (options?.constructionElevation != null && terrainBase != null ? GROUND_SUPPORT_ID : null)
+        wallOptions?.preferredSupportSlabId ??
+        (wallOptions?.constructionElevation != null && terrainBase != null
+          ? GROUND_SUPPORT_ID
+          : null)
       const supportPatch = resolveWallSupportSlabPatch(createdWall, committedNodes, {
-        maxElevation: options?.supportCap ?? null,
+        maxElevation: wallOptions?.supportCap ?? null,
         preferredSlabId: preferredSupportSlabId,
       })
       const supportSlabId = supportPatch.supportSlabId
@@ -295,7 +306,7 @@ export function createWallOnCurrentLevel(
         createdWall.curveOffset,
         createdWall.thickness,
         supportSlabId,
-        options?.supportCap ?? null,
+        wallOptions?.supportCap ?? null,
       )
       // Freezing the draft plane into the node (explicit height + offset from
       // the elected support) is the terrain exception only: a ground-drafted
@@ -306,21 +317,21 @@ export function createWallOnCurrentLevel(
       // the ghost height stamped onto it.
       const groundDraft = preferredSupportSlabId === GROUND_SUPPORT_ID
       const supportOffset =
-        groundDraft && options?.constructionElevation != null
-          ? options.constructionElevation - sourceSupport.elevation
+        groundDraft && wallOptions?.constructionElevation != null
+          ? wallOptions.constructionElevation - sourceSupport.elevation
           : undefined
       const preserveDraftHeight =
         groundDraft &&
         createdWall.height == null &&
-        options?.constructionHeight != null &&
-        options.constructionElevation != null
+        wallOptions?.constructionHeight != null &&
+        wallOptions.constructionElevation != null
       return [
         {
           id: createdWall.id,
           data: {
             ...supportPatch,
             height: preserveDraftHeight
-              ? (options?.constructionHeight ?? createdWall.height)
+              ? (wallOptions?.constructionHeight ?? createdWall.height)
               : createdWall.height,
             supportOffset:
               supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,

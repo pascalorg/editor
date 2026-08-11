@@ -72,6 +72,66 @@ function seedLevel(walls: WallNode[], extraNodes: AnyNode[] = []) {
   } as never)
 }
 
+// Seeds a site/building/level chain whose terrain field carries a sculpted
+// patch raised to `liftTo` in the far corner — enough for ground drafts to be
+// terrain chains, while the walls under test stand where the ground is 0.
+function seedTerrainLevel(walls: WallNode[], liftTo: number) {
+  const field = createTerrainField({ cols: 9, rows: 9, spacing: 1, origin: [-4, -4] })
+  const patch = flattenPatch(field, { maxX: -2, maxZ: -2, minX: -4, minZ: -4 }, liftTo)
+  if (!patch) throw new Error('Expected terrain patch')
+  const terrain = applyHeightPatch(field, patch)
+  useScene.setState({
+    nodes: Object.fromEntries([
+      [
+        'site_test',
+        {
+          id: 'site_test',
+          type: 'site',
+          object: 'node',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          children: ['building_test'],
+          terrain: encodeTerrainField(terrain),
+        } as unknown as AnyNode,
+      ],
+      [
+        'building_test',
+        {
+          id: 'building_test',
+          type: 'building',
+          object: 'node',
+          parentId: 'site_test',
+          visible: true,
+          metadata: {},
+          children: [LEVEL_ID],
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+        } as AnyNode,
+      ],
+      [
+        LEVEL_ID,
+        {
+          id: LEVEL_ID,
+          type: 'level',
+          object: 'node',
+          parentId: 'building_test',
+          visible: true,
+          metadata: {},
+          children: walls.map((wall) => wall.id),
+          level: 0,
+          baseElevation: 0,
+          height: 2.5,
+        } as AnyNode,
+      ],
+      ...walls.map((wall) => [wall.id, wall] as const),
+    ]),
+    rootNodeIds: ['site_test' as AnyNodeId],
+    dirtyNodes: new Set(),
+    collections: {},
+  } as never)
+}
+
 function levelWalls(): WallNode[] {
   return Object.values(useScene.getState().nodes).filter(
     (node): node is WallNode => node?.type === 'wall',
@@ -112,7 +172,9 @@ describe('createWallOnCurrentLevel', () => {
     expect(levelWalls()).toHaveLength(2)
   })
 
-  test('committed wall preserves the ghost construction elevation on ground', () => {
+  test('committed wall preserves the ghost construction elevation on terrain', () => {
+    seedTerrainLevel([makeWall([0, 0], [4, 0], 'wall_a')], 1.75)
+
     const created = createWallOnCurrentLevel([2, 2], [3, 2], {
       supportCap: 1.75,
       preferredSupportSlabId: GROUND_SUPPORT_ID,
@@ -134,6 +196,25 @@ describe('createWallOnCurrentLevel', () => {
       created?.supportOffset,
     )
     expect(support.elevation).toBe(1.75)
+  })
+
+  test('a flat-ground draft (no sculpted terrain) commits plane-bound', () => {
+    // Pointing at bare ground freezes a GROUND construction plane at 0. With
+    // no terrain field in the scene that plane is just the backdrop — none of
+    // the draft options may reach the committed node: no stamped height, no
+    // persisted ground host (a slab drawn later must lift the wall), no
+    // election cap.
+    const created = createWallOnCurrentLevel([2, 2], [3, 2], {
+      supportCap: 0,
+      preferredSupportSlabId: GROUND_SUPPORT_ID,
+      constructionElevation: 0,
+      constructionHeight: 2.5,
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
+    expect(created?.supportSlabId).toBeUndefined()
   })
 
   test('a wall started on a slab stays plane-bound (no stamped height or offset)', () => {
