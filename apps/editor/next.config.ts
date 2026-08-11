@@ -1,8 +1,5 @@
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
 
-const appDirectory = path.dirname(fileURLToPath(import.meta.url))
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
 
 const nextConfig: NextConfig = {
@@ -21,7 +18,17 @@ const nextConfig: NextConfig = {
   // unconditional: the deploy copies `hostinger-server.js` into the standalone
   // output, so a build without it produces nothing to serve — and the failure
   // would be a missing directory at the end of a green build.
-  outputFileTracingRoot: path.join(appDirectory, '../..'),
+  //
+  // `outputFileTracingRoot` came with the beta.5 merge and is NOT taken. It
+  // decides where `.next/standalone` puts the traced dependencies, and pointing
+  // it at the monorepo root moves them to `standalone/node_modules` — outside
+  // `standalone/apps/editor/`, which is the only subtree
+  // `.github/workflows/deploy-bundle.yml` copies into the bundle. The build
+  // stays green, the assemble step stays green, the server boots and logs
+  // normally, and then every route that needs a traced module fails to resolve.
+  // The published deploy answered nothing on `/api/health` for a full minute
+  // with not one line in the log. Upstream can afford the setting because it
+  // ships the whole standalone tree; we ship one subtree of it.
   logging: {
     browserToTerminal: true,
   },
