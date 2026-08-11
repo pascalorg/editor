@@ -77,6 +77,11 @@ function LeftColumn({
   // up to the minimum so the panel always returns to a usable size.
   const handleRailClick = useCallback(
     (id: string) => {
+      // noPanel tabs drive the stage, not the panel — leave collapse state alone.
+      if (tabs.find((t) => t.id === id)?.noPanel) {
+        setActivePanel(id)
+        return
+      }
       if (isCollapsed) {
         setIsCollapsed(false)
         if (width < SIDEBAR_MIN_WIDTH) setWidth(SIDEBAR_MIN_WIDTH)
@@ -89,7 +94,7 @@ function LeftColumn({
       }
       setActivePanel(id)
     },
-    [isCollapsed, width, activePanel, setIsCollapsed, setWidth, setActivePanel],
+    [tabs, isCollapsed, width, activePanel, setIsCollapsed, setWidth, setActivePanel],
   )
 
   useEffect(() => {
@@ -126,7 +131,7 @@ function LeftColumn({
         onIconClick={handleRailClick}
         tabs={tabs}
       />
-      {!isCollapsed && (
+      {!isCollapsed && !tabs.find((t) => t.id === activePanel)?.noPanel && (
         <div
           className="relative flex h-full flex-col"
           style={{
@@ -239,7 +244,7 @@ export function EditorLayoutV2({
         overlays={overlays}
         renderTabContent={renderTabContent}
         sidebarOverlay={sidebarOverlay}
-        sidebarTabs={sidebarTabs}
+        sidebarTabs={sidebarTabs.filter((t) => !t.noPanel)}
         viewerContent={viewerContent}
         viewerToolbarLeft={viewerToolbarLeft}
         viewerToolbarRight={viewerToolbarRight}
