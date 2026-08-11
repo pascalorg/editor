@@ -58,9 +58,10 @@ Optional:
 start — check the runtime log for the reason. Tables are created on first
 connection. `/api/health` reports the selected backend
 (`"backend":"mysql"`) and whether the database answers (`"db":"ok"`), so one
-curl verifies a deploy. Setting `DIGITALTWIN_ALLOW_SQLITE=1` overrides the
-requirement, writing scenes to a local file the host discards on every
-release — never set it here.
+curl verifies a deploy. There is **no override**: `DIGITALTWIN_ALLOW_SQLITE`
+used to grant one and was removed, because a variable that quietly moves a
+customer's scenes onto a filesystem the host wipes every release is not worth
+the convenience it bought.
 
 Every variable is also read under its older `PASCAL_` name, so an existing
 deployment keeps working until it is renamed.
