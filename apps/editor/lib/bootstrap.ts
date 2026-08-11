@@ -90,12 +90,10 @@ registerEditorHostPanel(treesHostPanel)
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])
-// The upstream manifest points creator/pluginUrl at a pascalorg repo that
-// doesn't exist; credit the actual author until the package fixes it.
+// The upstream manifest still names 'Pascal' as creator; credit the author.
 registerEditorHostPanel({
   ...streetscapeHostPanel,
   creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
-  pluginUrl: 'https://github.com/sudhir9297/streetscape-pascal-plugin',
 })
 
 loadBuiltinsSync()
