@@ -1,6 +1,7 @@
 'use client'
 
 import { emitter } from '@pascal-app/core'
+import { SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
 import { Check, Crop, Loader2, Maximize2, Monitor, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
@@ -37,6 +38,14 @@ const STANDARD_SIZES: Record<SnapshotStandardAspect, { w: number; h: number }> =
 }
 type StandardAspect = SnapshotStandardAspect
 
+function clampSnapshotSize(width: number, height: number): { w: number; h: number } {
+  const maxEdge = Math.max(width, height)
+  if (maxEdge <= SNAPSHOT_MAX_EDGE) return { w: width, h: height }
+
+  const scale = SNAPSHOT_MAX_EDGE / maxEdge
+  return { w: Math.round(width * scale), h: Math.round(height * scale) }
+}
+
 function getResolution(
   mode: CropMode,
   overlayEl: HTMLDivElement | null,
@@ -50,14 +59,14 @@ function getResolution(
   const dpr = Math.min(window.devicePixelRatio, 1.5)
 
   if (mode === 'viewport') {
-    return { w: Math.round(rect.width * dpr), h: Math.round(rect.height * dpr) }
+    return clampSnapshotSize(Math.round(rect.width * dpr), Math.round(rect.height * dpr))
   }
 
   if (mode === 'area' && drag) {
     const w = Math.abs(drag.end.x - drag.start.x)
     const h = Math.abs(drag.end.y - drag.start.y)
     if (w < 4 || h < 4) return null
-    return { w: Math.round(w * dpr), h: Math.round(h * dpr) }
+    return clampSnapshotSize(Math.round(w * dpr), Math.round(h * dpr))
   }
 
   return null

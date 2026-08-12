@@ -3,12 +3,15 @@ import {
   type AnyNode,
   type AnyNodeId,
   applyHeightPatch,
+  CeilingNode,
   createTerrainField,
   DoorNode as DoorSchema,
   encodeTerrainField,
   flattenPatch,
   GROUND_SUPPORT_ID,
+  initSpaceDetectionSync,
   runAsSingleSceneHistoryStep,
+  SlabNode,
   spatialGridManager,
   useScene,
   type WallNode,
@@ -56,7 +59,7 @@ function seedLevel(walls: WallNode[], extraNodes: AnyNode[] = []) {
           parentId: null,
           visible: true,
           metadata: {},
-          children: walls.map((wall) => wall.id),
+          children: [...walls.map((wall) => wall.id), ...extraNodes.map((node) => node.id)],
           level: 0,
         } as AnyNode,
       ],
@@ -64,6 +67,66 @@ function seedLevel(walls: WallNode[], extraNodes: AnyNode[] = []) {
       ...extraNodes.map((node) => [node.id, node] as const),
     ]),
     rootNodeIds: [LEVEL_ID],
+    dirtyNodes: new Set(),
+    collections: {},
+  } as never)
+}
+
+// Seeds a site/building/level chain whose terrain field carries a sculpted
+// patch raised to `liftTo` in the far corner — enough for ground drafts to be
+// terrain chains, while the walls under test stand where the ground is 0.
+function seedTerrainLevel(walls: WallNode[], liftTo: number) {
+  const field = createTerrainField({ cols: 9, rows: 9, spacing: 1, origin: [-4, -4] })
+  const patch = flattenPatch(field, { maxX: -2, maxZ: -2, minX: -4, minZ: -4 }, liftTo)
+  if (!patch) throw new Error('Expected terrain patch')
+  const terrain = applyHeightPatch(field, patch)
+  useScene.setState({
+    nodes: Object.fromEntries([
+      [
+        'site_test',
+        {
+          id: 'site_test',
+          type: 'site',
+          object: 'node',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          children: ['building_test'],
+          terrain: encodeTerrainField(terrain),
+        } as unknown as AnyNode,
+      ],
+      [
+        'building_test',
+        {
+          id: 'building_test',
+          type: 'building',
+          object: 'node',
+          parentId: 'site_test',
+          visible: true,
+          metadata: {},
+          children: [LEVEL_ID],
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+        } as AnyNode,
+      ],
+      [
+        LEVEL_ID,
+        {
+          id: LEVEL_ID,
+          type: 'level',
+          object: 'node',
+          parentId: 'building_test',
+          visible: true,
+          metadata: {},
+          children: walls.map((wall) => wall.id),
+          level: 0,
+          baseElevation: 0,
+          height: 2.5,
+        } as AnyNode,
+      ],
+      ...walls.map((wall) => [wall.id, wall] as const),
+    ]),
+    rootNodeIds: ['site_test' as AnyNodeId],
     dirtyNodes: new Set(),
     collections: {},
   } as never)
@@ -109,7 +172,9 @@ describe('createWallOnCurrentLevel', () => {
     expect(levelWalls()).toHaveLength(2)
   })
 
-  test('committed wall preserves the ghost construction elevation on ground', () => {
+  test('committed wall preserves the ghost construction elevation on terrain', () => {
+    seedTerrainLevel([makeWall([0, 0], [4, 0], 'wall_a')], 1.75)
+
     const created = createWallOnCurrentLevel([2, 2], [3, 2], {
       supportCap: 1.75,
       preferredSupportSlabId: GROUND_SUPPORT_ID,
@@ -131,6 +196,69 @@ describe('createWallOnCurrentLevel', () => {
       created?.supportOffset,
     )
     expect(support.elevation).toBe(1.75)
+  })
+
+  test('a flat-ground draft (no sculpted terrain) commits plane-bound', () => {
+    // Pointing at bare ground freezes a GROUND construction plane at 0. With
+    // no terrain field in the scene that plane is just the backdrop — none of
+    // the draft options may reach the committed node: no stamped height, no
+    // persisted ground host (a slab drawn later must lift the wall), no
+    // election cap.
+    const created = createWallOnCurrentLevel([2, 2], [3, 2], {
+      supportCap: 0,
+      preferredSupportSlabId: GROUND_SUPPORT_ID,
+      constructionElevation: 0,
+      constructionHeight: 2.5,
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
+    expect(created?.supportSlabId).toBeUndefined()
+  })
+
+  test('a wall started on a slab stays plane-bound (no stamped height or offset)', () => {
+    const slab = SlabNode.parse({
+      id: 'slab_floor',
+      parentId: LEVEL_ID,
+      polygon: [
+        [-1, -1],
+        [5, -1],
+        [5, 5],
+        [-1, 5],
+      ],
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    seedLevel([makeWall([0, 0], [4, 0], 'wall_a')], [slab])
+
+    // Mirrors the 3D tool's first click on the slab top: frozen plane at the
+    // slab elevation, ghost drawn at the level height. None of it may reach
+    // the committed node — plane-bound is the default.
+    const created = createWallOnCurrentLevel([2, 2], [3, 2], {
+      supportCap: 0.05,
+      preferredSupportSlabId: slab.id,
+      constructionElevation: 0.05,
+      constructionHeight: 2.55,
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
+    expect(created?.supportSlabId).not.toBe(GROUND_SUPPORT_ID)
+  })
+
+  test('a non-ground draft never freezes the ghost height, even at a raised plane', () => {
+    const created = createWallOnCurrentLevel([2, 2], [3, 2], {
+      supportCap: 1.2,
+      preferredSupportSlabId: null,
+      constructionElevation: 1.2,
+      constructionHeight: 2.5,
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
   })
 
   test('2D terrain construction options freeze the first-point elevation and wall height', () => {
@@ -261,6 +389,82 @@ describe('createWallOnCurrentLevel', () => {
 
     expect(created).not.toBeNull()
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
+  })
+
+  test('a crossing splits both the host and the inserted wall in one undo step', () => {
+    const before = useScene.temporal.getState().pastStates.length
+
+    const created = createWallOnCurrentLevel([2, -2], [2, 2])
+
+    expect(created?.start).toEqual([2, 0])
+    expect(created?.end).toEqual([2, 2])
+    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+    expect(levelWalls()).toHaveLength(4)
+    expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
+  })
+
+  test('a room divider splits customized auto slabs and ceilings', () => {
+    const walls = [
+      makeWall([0, 0], [8, 0], 'wall_bottom'),
+      makeWall([8, 0], [8, 6], 'wall_right'),
+      makeWall([8, 6], [0, 6], 'wall_top'),
+      makeWall([0, 6], [0, 0], 'wall_left'),
+    ]
+    const slab = SlabNode.parse({
+      id: 'slab_auto',
+      parentId: LEVEL_ID,
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 6],
+        [0, 6],
+      ],
+      elevation: 0.18,
+      thickness: 0.32,
+      autoFromWalls: true,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_auto',
+      parentId: LEVEL_ID,
+      polygon: slab.polygon,
+      autoFromWalls: true,
+    })
+    seedLevel(walls, [slab, ceiling])
+    const stopDetection = initSpaceDetectionSync(useScene, useEditor)
+
+    try {
+      expect(createWallOnCurrentLevel([4, 0], [4, 6])).not.toBeNull()
+
+      const nodes = Object.values(useScene.getState().nodes)
+      const slabs = nodes.filter((node) => node.type === 'slab')
+      const ceilings = nodes.filter((node) => node.type === 'ceiling')
+      expect(slabs).toHaveLength(2)
+      expect(ceilings).toHaveLength(2)
+      expect(
+        slabs.every(
+          (node) => node.autoFromWalls && node.elevation === 0.18 && node.thickness === 0.32,
+        ),
+      ).toBe(true)
+      expect(ceilings.every((node) => node.autoFromWalls)).toBe(true)
+    } finally {
+      stopDetection()
+    }
+  })
+
+  test('close crossings reject the whole insertion without mutating the scene', () => {
+    seedLevel([
+      makeWall([2, -2], [2, 2], 'wall_close_a'),
+      makeWall([2.0055, -2], [2.0055, 2], 'wall_close_b'),
+    ])
+    useScene.temporal.getState().clear()
+    const beforeNodes = useScene.getState().nodes
+
+    const created = createWallOnCurrentLevel([0, 0], [4, 0])
+
+    expect(created).toBeNull()
+    expect(useScene.getState().nodes).toBe(beforeNodes)
+    expect(levelWalls()).toHaveLength(2)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
   })
 })
 

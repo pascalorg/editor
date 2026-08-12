@@ -3,6 +3,7 @@ import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 let sceneHistoryPauseDepth = 0
+const sceneHistoryPauseLeases = new Set<symbol>()
 
 export type SceneSnapshot = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -18,6 +19,7 @@ export type SceneCommit = {
   origin: SceneCommitOrigin
   before: SceneSnapshot
   current: SceneSnapshot
+  changedNodeIds?: ReadonlySet<AnyNodeId>
 }
 
 export type SceneCommitListener = (commit: SceneCommit) => void
@@ -43,6 +45,47 @@ type TemporalHistoryStoreLike<TPastState> = {
 const sceneCommitListeners = new Set<SceneCommitListener>()
 let sceneCommitTransactionDepth = 0
 let pendingSceneCommit: SceneCommit | null = null
+const sceneCommitNodeIdScopes: Set<AnyNodeId>[] = []
+
+function mergedNodeIds(
+  left: ReadonlySet<AnyNodeId> | undefined,
+  right: ReadonlySet<AnyNodeId> | undefined,
+) {
+  if (!(left || right)) return undefined
+  return new Set<AnyNodeId>([...(left ?? []), ...(right ?? [])])
+}
+
+export function activeSceneCommitNodeIds(): ReadonlySet<AnyNodeId> | undefined {
+  if (sceneCommitNodeIdScopes.length === 0) return undefined
+  const ids = new Set<AnyNodeId>()
+  for (const scope of sceneCommitNodeIdScopes) {
+    for (const id of scope) ids.add(id)
+  }
+  return ids
+}
+
+export function addActiveSceneCommitNodeIds(nodeIds: Iterable<AnyNodeId>): void {
+  const scope = sceneCommitNodeIdScopes.at(-1)
+  if (!scope) return
+  for (const id of nodeIds) scope.add(id)
+}
+
+export function runWithSceneCommitNodeIds<TResult>(
+  nodeIds: Iterable<AnyNodeId>,
+  run: () => TResult,
+): TResult {
+  const scope = new Set(nodeIds)
+  sceneCommitNodeIdScopes.push(scope)
+  try {
+    return run()
+  } finally {
+    sceneCommitNodeIdScopes.pop()
+    const parentScope = sceneCommitNodeIdScopes.at(-1)
+    if (parentScope) {
+      for (const id of scope) parentScope.add(id)
+    }
+  }
+}
 
 function areSemanticValuesEqual(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true
@@ -98,21 +141,29 @@ function emitSceneCommit(commit: SceneCommit): void {
 
 export function notifySceneCommit(commit: SceneCommit): void {
   if (areSceneSnapshotsEqual(commit.before, commit.current)) return
+  const contextualCommit = {
+    ...commit,
+    changedNodeIds: mergedNodeIds(commit.changedNodeIds, activeSceneCommitNodeIds()),
+  }
 
   if (sceneCommitTransactionDepth > 0) {
     if (pendingSceneCommit) {
       pendingSceneCommit = {
         origin: pendingSceneCommit.origin,
         before: pendingSceneCommit.before,
-        current: commit.current,
+        current: contextualCommit.current,
+        changedNodeIds: mergedNodeIds(
+          pendingSceneCommit.changedNodeIds,
+          contextualCommit.changedNodeIds,
+        ),
       }
     } else {
-      pendingSceneCommit = commit
+      pendingSceneCommit = contextualCommit
     }
     return
   }
 
-  emitSceneCommit(commit)
+  emitSceneCommit(contextualCommit)
 }
 
 function beginSceneCommitTransaction(): void {
@@ -139,7 +190,7 @@ function endSceneCommitTransaction(): void {
 }
 
 export function pauseSceneHistory(sceneStore: TemporalStoreLike): void {
-  if (sceneHistoryPauseDepth === 0) {
+  if (getSceneHistoryPauseDepth() === 0) {
     sceneStore.temporal.getState().pause()
   }
   sceneHistoryPauseDepth += 1
@@ -151,17 +202,35 @@ export function resumeSceneHistory(sceneStore: TemporalStoreLike): void {
   }
 
   sceneHistoryPauseDepth -= 1
-  if (sceneHistoryPauseDepth === 0) {
+  if (getSceneHistoryPauseDepth() === 0) {
     sceneStore.temporal.getState().resume()
   }
 }
 
+export function acquireSceneHistoryPause(sceneStore: TemporalStoreLike): () => void {
+  if (getSceneHistoryPauseDepth() === 0) {
+    sceneStore.temporal.getState().pause()
+  }
+  const lease = Symbol('scene-history-pause')
+  sceneHistoryPauseLeases.add(lease)
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    sceneHistoryPauseLeases.delete(lease)
+    if (getSceneHistoryPauseDepth() === 0) {
+      sceneStore.temporal.getState().resume()
+    }
+  }
+}
+
 export function getSceneHistoryPauseDepth(): number {
-  return sceneHistoryPauseDepth
+  return sceneHistoryPauseDepth + sceneHistoryPauseLeases.size
 }
 
 export function resetSceneHistoryPauseDepth(): void {
   sceneHistoryPauseDepth = 0
+  sceneHistoryPauseLeases.clear()
 }
 
 function retainedPastStateCount<TPastState>(before: TPastState[], after: TPastState[]): number {

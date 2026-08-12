@@ -30,6 +30,25 @@ import { packNormalToRGB, unpackRGBToNormal } from './tsl-compat'
 export const THUMBNAIL_WIDTH = 1920
 export const THUMBNAIL_HEIGHT = 1080
 
+/**
+ * Captures are re-renderable artifacts, not user originals, so they encode as
+ * webp: a 1920×1080 hero shot lands roughly an order of magnitude under PNG,
+ * which is what listings and the catalog actually ship over the wire. Alpha
+ * survives, so transparent item/preset captures keep working.
+ */
+export const SNAPSHOT_MIME = 'image/webp'
+export const SNAPSHOT_QUALITY = 0.9
+// Retina canvases make viewport/area captures multi-MB; 2048 keeps them near the 1920 presets.
+export const SNAPSHOT_MAX_EDGE = 2048
+
+function clampSnapshotSize(width: number, height: number): { w: number; h: number } {
+  const maxEdge = Math.max(width, height)
+  if (maxEdge <= SNAPSHOT_MAX_EDGE) return { w: width, h: height }
+
+  const scale = SNAPSHOT_MAX_EDGE / maxEdge
+  return { w: Math.round(width * scale), h: Math.round(height * scale) }
+}
+
 export type SnapshotCaptureMode = 'standard' | 'viewport' | 'area'
 
 export type SnapshotCropRegion = {
@@ -325,19 +344,23 @@ export async function createSnapshotPipeline({
         let blob: Blob
 
         if (captureMode === 'viewport') {
-          outW = captureWidth
-          outH = captureHeight
+          ;({ w: outW, h: outH } = clampSnapshotSize(captureWidth, captureHeight))
           const offscreen = new OffscreenCanvas(outW, outH)
-          offscreen.getContext('2d')!.drawImage(srcCanvas, 0, 0)
-          blob = await offscreen.convertToBlob({ type: 'image/png' })
+          const ctx = offscreen.getContext('2d')!
+          if (outW !== captureWidth || outH !== captureHeight) ctx.imageSmoothingQuality = 'high'
+          ctx.drawImage(srcCanvas, 0, 0, captureWidth, captureHeight, 0, 0, outW, outH)
+          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
         } else if (captureMode === 'area' && cropRegion) {
           const sx = Math.round(cropRegion.x * captureWidth)
           const sy = Math.round(cropRegion.y * captureHeight)
-          outW = Math.round(cropRegion.width * captureWidth)
-          outH = Math.round(cropRegion.height * captureHeight)
+          const sourceW = Math.round(cropRegion.width * captureWidth)
+          const sourceH = Math.round(cropRegion.height * captureHeight)
+          ;({ w: outW, h: outH } = clampSnapshotSize(sourceW, sourceH))
           const offscreen = new OffscreenCanvas(outW, outH)
-          offscreen.getContext('2d')!.drawImage(srcCanvas, sx, sy, outW, outH, 0, 0, outW, outH)
-          blob = await offscreen.convertToBlob({ type: 'image/png' })
+          const ctx = offscreen.getContext('2d')!
+          if (outW !== sourceW || outH !== sourceH) ctx.imageSmoothingQuality = 'high'
+          ctx.drawImage(srcCanvas, sx, sy, sourceW, sourceH, 0, 0, outW, outH)
+          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
         } else {
           // Standard: center-crop to the requested aspect (default 1920×1080)
           const srcAspect = captureWidth / captureHeight
@@ -359,7 +382,7 @@ export async function createSnapshotPipeline({
           offscreen
             .getContext('2d')!
             .drawImage(srcCanvas, sx, sy, sWidth, sHeight, 0, 0, outW, outH)
-          blob = await offscreen.convertToBlob({ type: 'image/png' })
+          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
         }
 
         return { blob, outW, outH }

@@ -62,6 +62,28 @@ So picking the Mediterranean theme gives a blue roof + warm walls without touchi
 
 Each of these reads `shading`/`textures`/`colorPreset`/`sceneTheme` from `useViewer` (or receives them threaded from `GeometrySystem`) and **must include `sceneTheme` in its material cache key and its rebuild dependency array**, or theme switches won't re-colour. `GeometrySystem` marks every geometry node dirty on any of those changing.
 
+### External plugin renderers
+
+Plugin renderers follow the same four axes through the public `@pascal-app/viewer`
+surface. For an imported hierarchy, capture its authored materials once and apply
+this mapping reactively:
+
+| Host state | Imported material |
+|---|---|
+| Colored + Rendered | Authored material |
+| Colored + Solid | Cached Lambert variant retaining colour, albedo map, alpha, and slots |
+| Monochrome | `createSurfaceRoleMaterial(surfaceRole, colorPreset, side, sceneTheme)` |
+
+The adapter belongs to the plugin renderer because it owns the hierarchy and knows
+which surfaces are furnishing, glazing, or another role. Material swaps happen on
+preference changes, never in `useFrame`. Restore authored materials before disposing
+the loader-owned hierarchy, dispose only plugin-owned variants, and leave host-cached
+role materials alone.
+
+Edges and the expensive render pipeline do not need a plugin material hook: they are
+screen-space host passes over `SCENE_LAYER`. Placement ghosts should use the editor
+overlay layer so they remain crisp and do not enter the scene depth/normal targets.
+
 ## Scene themes
 
 A `SceneTheme` (`lib/scene-themes.ts`) bundles everything that defines a "look":
