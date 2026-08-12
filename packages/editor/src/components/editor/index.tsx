@@ -1393,12 +1393,13 @@ export default function Editor({
     }
 
     const tabBarTabs = [
-      ...(sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon }) => ({
+      ...(sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon, noPanel }) => ({
         id,
         label,
         mobileDefaultSnap,
         mobileIcon,
         icon,
+        noPanel,
       })) ?? []),
       // Host panels appear after the explicit tabs in the rail. The icon
       // doubles as the mobile icon; a half-height sheet is a sensible default.
