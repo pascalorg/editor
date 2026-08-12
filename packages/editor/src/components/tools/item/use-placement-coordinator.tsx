@@ -809,8 +809,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Floor Handlers ----
 
-    let previousGridPos: [number, number, number] | null = null
-
     // Scratch objects reused by the stickiness test (runs per grid:move).
     const stickyRay = new Ray()
     const stickyBox = new Box3()
@@ -952,9 +950,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         result.gridPosition[2] + alignZ,
       ]
 
-      // Play snap sound when grid position changes
-
-      previousGridPos = [...gridPos]
       gridPosition.current.set(...gridPos)
       const cursorPosition = getFloorVisualPosition(gridPos)
       if (!draft && asset.attachTo) {
@@ -1149,8 +1144,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      // Play snap sound when grid position changes
-
       gridPosition.current.set(...result.gridPosition)
       const wc = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(wc.x, wc.y, wc.z)
@@ -1332,7 +1325,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.x !== result.gridPosition[0] ||
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
-
 
       gridPosition.current.set(...result.gridPosition)
       const wc = worldToBuildingLocal(...result.cursorPosition)
@@ -1809,12 +1801,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       event.stopPropagation()
 
-      // Play snap sound when grid position changes
       const posChanged =
         gridPosition.current.x !== result.gridPosition[0] ||
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
-
 
       gridPosition.current.set(...result.gridPosition)
       const cc = worldToBuildingLocal(...result.cursorPosition)

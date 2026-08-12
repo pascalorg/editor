@@ -569,7 +569,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   useEffect(() => () => onEdgeHoverChange?.(null), [onEdgeHoverChange])
 
   const lineRef = useRef<Line>(null!)
-  const previousPositionRef = useRef<[number, number] | null>(null)
 
   useEffect(() => {
     onDragStateChangeRef.current?.(dragState?.isDragging ?? false)
@@ -815,9 +814,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             })
           : gridPoint
 
-      // Play snap sound when cursor moves to a new grid cell during drag
-
-      previousPositionRef.current = newPosition
       setCursorPosition(newPosition)
 
       // Update vertex position during drag

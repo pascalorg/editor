@@ -5225,8 +5225,8 @@ export function FloorplanPanel({
   // it on `grid:move`. It lives in `useFloorplanDraftPreview` (not panel state)
   // so a per-move update re-renders only `FloorplanDraftCursorLayer`, not this
   // ~200ms panel. This shim keeps the `setCursorPoint(value)` /
-  // `setCursorPoint(prev => …)` call sites (and their snap-SFX side effects)
-  // unchanged while routing the write to the store; reads go through the store.
+  // `setCursorPoint(prev => …)` call sites unchanged while routing the write to
+  // the store; reads go through the store.
   const setCursorPoint = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()
@@ -8430,7 +8430,6 @@ export function FloorplanPanel({
             snappedPoint,
             linkedWallUpdates,
           )
-
 
           return nextDraft
         })

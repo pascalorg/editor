@@ -1,18 +1,5 @@
-import {
-  type AnyNodeId,
-  emitter,
-  type RoofEvent,
-  type RoofNode,
-  type RoofSegmentNode,
-  sceneRegistry,
-} from '@pascal-app/core'
-import { consumePlacementDragRelease, triggerSFX } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useRef, useState } from 'react'
+import type { RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
-import { createRelativeRoofDrag } from '../shared/relative-roof-drag'
-import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
-import { DORMER_PLACEMENT_ROTATION_STEP, DORMER_PLACEMENT_SNAP_M } from './geometry'
 
 const tmpMatrix = new THREE.Matrix4()
 const tmpInv = new THREE.Matrix4()
@@ -38,7 +25,7 @@ export type DormerPlacementHit = {
  *   - cursor → roof-segment hit resolution (delegated to the host
  *     RoofNode pointer events)
  *   - building-local segment transform extraction (for ghost mounting)
- *   - 5cm grid snap + SFX cue
+ *   - 5cm grid snap
  *   - keyboard rotate (R / Shift+R, ±15°)
  *
  * Does NOT own:

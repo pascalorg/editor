@@ -62,9 +62,9 @@ function itemRotateHandle(): HandleDescriptor<ItemNodeType> {
 }
 
 // The 4-way move cross, just past the item's left edge. Press-drag hands the
-// item to its placement coordinator (showing the bounding box, dimension labels
-// and grid-snap ticker) and commits on release — press-drag-release motion with
-// the full placement feedback.
+// item to its placement coordinator (showing the bounding box and dimension
+// labels) and commits on release — press-drag-release motion with the full
+// placement feedback.
 function itemMoveHandle(): HandleDescriptor<ItemNodeType> {
   return {
     kind: 'tap-action',

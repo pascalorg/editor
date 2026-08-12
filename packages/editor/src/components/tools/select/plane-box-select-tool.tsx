@@ -299,7 +299,6 @@ export const PlaneBoxSelectTool: React.FC = () => {
   const startClientX = useRef(0)
   const startClientY = useRef(0)
   const gridY = useRef(0)
-  const previousGridPosition = useRef<[number, number] | null>(null)
   const previewSelectedIdsRef = useRef<string[]>([])
   const spaceDownRef = useRef(false)
   const raycasterRef = useRef(new Raycaster())
@@ -411,7 +410,6 @@ export const PlaneBoxSelectTool: React.FC = () => {
       gridY.current = point.y
       pointerDown.current = true
       isDragging.current = false
-      previousGridPosition.current = getSnappedGridPosition(point.x, point.z)
       startClientX.current = event.clientX
       startClientY.current = event.clientY
       syncPreviewSelectedIds([])
@@ -518,7 +516,6 @@ export const PlaneBoxSelectTool: React.FC = () => {
         )
 
         const nextGridPosition: [number, number] = [snappedX, snappedZ]
-        previousGridPosition.current = nextGridPosition
 
         const bounds: Bounds = {
           minX: Math.min(startPoint.current.x, currentPoint.current.x),
