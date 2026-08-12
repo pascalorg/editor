@@ -3,10 +3,9 @@ import {
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
   DEFAULT_LEVEL_HEIGHT,
-  type DoorNode,
   GROUND_SUPPORT_ID,
-  getScaledDimensions,
-  type ItemNode,
+  planWallInsertion,
+  planWallSplitAtPoint,
   resolveSupportSlabPatch,
   resolveWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
@@ -15,8 +14,6 @@ import {
   terrainSupportLift,
   useScene,
   type WallNode,
-  WallNode as WallSchema,
-  type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -26,7 +23,6 @@ import {
   distanceSquared,
   findWallSnapTarget,
   findWallSpecialPointSnap,
-  projectPointOntoWall,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapResult,
@@ -50,17 +46,6 @@ export {
 
 export const WALL_GRID_STEP = 0.5
 export const WALL_MIN_LENGTH = 0.01
-// An endpoint projecting within this distance of an existing wall's corner
-// resolves to the corner without splitting — splitting there would mint a
-// sliver segment a hair longer than `WALL_MIN_LENGTH` that no snap radius
-// can ever target again.
-const WALL_SPLIT_ENDPOINT_EPSILON = 0.02
-
-type WallSplitIntersection = {
-  /** `null` = snap-only outcome: resolve to `point` but split no wall. */
-  wallId: WallNode['id'] | null
-  point: WallPlanPoint
-}
 
 export function getSegmentGridStep(): number {
   // A 0 step means "no grid lattice" — every grid-snap consumer guards on
@@ -79,283 +64,6 @@ export function snapPointToGrid(point: WallPlanPoint, step = WALL_GRID_STEP): Wa
   return [snapScalarToGrid(point[0], step), snapScalarToGrid(point[1], step)]
 }
 
-function splitWallAtPoint(
-  wall: WallNode,
-  splitPoint: WallPlanPoint,
-  nodes: ReturnType<typeof useScene.getState>['nodes'],
-): [WallNode, WallNode] {
-  const { id: _id, parentId: _parentId, children, ...rest } = wall
-
-  const first = WallSchema.parse({
-    ...rest,
-    start: wall.start,
-    end: splitPoint,
-    children: [],
-  })
-  const second = WallSchema.parse({
-    ...rest,
-    start: splitPoint,
-    end: wall.end,
-    children: [],
-  })
-
-  if (wall.supportSlabId !== GROUND_SUPPORT_ID || !wall.parentId) {
-    return [first, second]
-  }
-
-  const levelId = wall.parentId
-  const originalElevation =
-    (terrainSupportLift(nodes, levelId, wall.start[0], wall.start[1]) ?? 0) +
-    (wall.supportOffset ?? 0)
-  const rebase = (segment: WallNode): WallNode => {
-    const terrainElevation =
-      terrainSupportLift(nodes, levelId, segment.start[0], segment.start[1]) ?? 0
-    const supportOffset = originalElevation - terrainElevation
-    return {
-      ...segment,
-      supportOffset: Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
-    }
-  }
-  return [rebase(first), rebase(second)]
-}
-
-function pointsEqual(a: WallPlanPoint, b: WallPlanPoint, tolerance = 1e-6): boolean {
-  return distanceSquared(a, b) <= tolerance * tolerance
-}
-
-function findWallIntersection(
-  point: WallPlanPoint,
-  walls: WallNode[],
-  radius: number,
-  ignoreWallIds?: string[],
-): WallSplitIntersection | null {
-  const ignore = new Set(ignoreWallIds ?? [])
-  let best: WallSplitIntersection | null = null
-  let bestDistanceSquared = Number.POSITIVE_INFINITY
-
-  for (const wall of walls) {
-    if (ignore.has(wall.id)) continue
-
-    const projected = projectPointOntoWall(point, wall)
-    if (!projected) continue
-
-    const candidateDistanceSquared = distanceSquared(point, projected)
-    if (
-      candidateDistanceSquared > radius * radius ||
-      candidateDistanceSquared >= bestDistanceSquared
-    ) {
-      continue
-    }
-
-    const nearCorner = ([wall.start, wall.end] as WallPlanPoint[]).find(
-      (corner) =>
-        distanceSquared(projected, corner) <=
-        WALL_SPLIT_ENDPOINT_EPSILON * WALL_SPLIT_ENDPOINT_EPSILON,
-    )
-    best = nearCorner
-      ? { wallId: null, point: [nearCorner[0], nearCorner[1]] }
-      : { wallId: wall.id, point: projected }
-    bestDistanceSquared = candidateDistanceSquared
-  }
-
-  return best
-}
-
-function wallHasAttachments(wall: WallNode, nodes: ReturnType<typeof useScene.getState>['nodes']) {
-  if ((wall.children?.length ?? 0) > 0) {
-    return true
-  }
-
-  return Object.values(nodes).some((node) => {
-    if (!node) return false
-    if ('parentId' in node && node.parentId === wall.id) return true
-    if ('wallId' in node && typeof node.wallId === 'string' && node.wallId === wall.id) return true
-    return false
-  })
-}
-
-function wallLength(wall: Pick<WallNode, 'start' | 'end'>) {
-  return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-}
-
-function getWallAttachmentSpan(node: AnyNode): { min: number; max: number; center: number } | null {
-  if (node.type === 'door') {
-    const door = node as DoorNode
-    return {
-      min: door.position[0] - door.width / 2,
-      max: door.position[0] + door.width / 2,
-      center: door.position[0],
-    }
-  }
-
-  if (node.type === 'window') {
-    const win = node as WindowNode
-    return {
-      min: win.position[0] - win.width / 2,
-      max: win.position[0] + win.width / 2,
-      center: win.position[0],
-    }
-  }
-
-  if (node.type === 'item') {
-    const item = node as ItemNode
-    if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') {
-      return null
-    }
-
-    const [width] = getScaledDimensions(item)
-    return {
-      min: item.position[0] - width / 2,
-      max: item.position[0] + width / 2,
-      center: item.position[0],
-    }
-  }
-
-  return null
-}
-
-function remapAttachmentToWall(
-  node: AnyNode,
-  nextWallId: WallNode['id'],
-  nextLocalX: number,
-  nextWallLength: number,
-): Partial<AnyNode> | null {
-  const clampedX = Math.max(0, Math.min(nextWallLength, nextLocalX))
-
-  if (node.type === 'door' || node.type === 'window' || node.type === 'item') {
-    const currentPosition = 'position' in node ? node.position : null
-    if (!currentPosition) return null
-
-    const nextPosition: typeof currentPosition = [
-      clampedX,
-      currentPosition[1],
-      currentPosition[2],
-    ] as typeof currentPosition
-
-    return {
-      parentId: nextWallId,
-      position: nextPosition,
-      ...(node.type === 'item'
-        ? {
-            wallId: nextWallId,
-            wallT: nextWallLength > 1e-6 ? clampedX / nextWallLength : 0,
-          }
-        : {
-            wallId: nextWallId,
-          }),
-    } as Partial<AnyNode>
-  }
-
-  return null
-}
-
-function buildAttachmentMigrationPlan(
-  wall: WallNode,
-  splitPoint: WallPlanPoint,
-  firstWall: WallNode,
-  secondWall: WallNode,
-  nodes: ReturnType<typeof useScene.getState>['nodes'],
-): { id: AnyNodeId; data: Partial<AnyNode> }[] | null {
-  const splitDistance = Math.hypot(splitPoint[0] - wall.start[0], splitPoint[1] - wall.start[1])
-  const firstLength = wallLength(firstWall)
-  const secondLength = wallLength(secondWall)
-  const tolerance = 1e-4
-  const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
-
-  for (const childId of wall.children ?? []) {
-    const childNode = nodes[childId as AnyNodeId]
-    if (!childNode) continue
-
-    const span = getWallAttachmentSpan(childNode)
-    if (!span) {
-      return null
-    }
-
-    if (span.max <= splitDistance + tolerance) {
-      const nextUpdate = remapAttachmentToWall(childNode, firstWall.id, span.center, firstLength)
-      if (!nextUpdate) return null
-      updates.push({ id: childNode.id as AnyNodeId, data: nextUpdate })
-      continue
-    }
-
-    if (span.min >= splitDistance - tolerance) {
-      const nextUpdate = remapAttachmentToWall(
-        childNode,
-        secondWall.id,
-        span.center - splitDistance,
-        secondLength,
-      )
-      if (!nextUpdate) return null
-      updates.push({ id: childNode.id as AnyNodeId, data: nextUpdate })
-      continue
-    }
-
-    return null
-  }
-
-  return updates
-}
-
-function splitWallIfNeeded(
-  intersection: WallSplitIntersection | null,
-  walls: WallNode[],
-  nodes: ReturnType<typeof useScene.getState>['nodes'],
-  createNodes: ReturnType<typeof useScene.getState>['createNodes'],
-  updateNodes: ReturnType<typeof useScene.getState>['updateNodes'],
-  deleteNode: ReturnType<typeof useScene.getState>['deleteNode'],
-): { walls: WallNode[]; point: WallPlanPoint } | null {
-  if (!intersection) return null
-
-  if (!intersection.wallId) {
-    return { walls, point: intersection.point }
-  }
-
-  const wallToSplit = walls.find((wall) => wall.id === intersection.wallId)
-  if (!wallToSplit) {
-    return { walls, point: intersection.point }
-  }
-
-  const [first, second] = splitWallAtPoint(wallToSplit, intersection.point, nodes)
-  const attachmentUpdates = buildAttachmentMigrationPlan(
-    wallToSplit,
-    intersection.point,
-    first,
-    second,
-    nodes,
-  )
-
-  if (wallHasAttachments(wallToSplit, nodes) && !attachmentUpdates) {
-    return { walls, point: intersection.point }
-  }
-
-  createNodes([
-    { node: first, parentId: wallToSplit.parentId as AnyNodeId | undefined },
-    { node: second, parentId: wallToSplit.parentId as AnyNodeId | undefined },
-  ])
-  if (attachmentUpdates && attachmentUpdates.length > 0) {
-    updateNodes(attachmentUpdates)
-  }
-  deleteNode(wallToSplit.id as AnyNodeId)
-
-  return {
-    walls: [...walls.filter((wall) => wall.id !== wallToSplit.id), first, second],
-    point: intersection.point,
-  }
-}
-
-/**
- * Commit-time split resolution for an endpoint MOVE — the sibling of the
- * inline resolution in `createWallOnCurrentLevel`: when a moved endpoint is
- * dropped on another wall's interior, split that host exactly like the draw
- * path (duplicate props, migrate attachments by span, skip the split when an
- * opening straddles the point). Mutates the scene store (create halves /
- * migrate attachments / delete host), so callers MUST run it inside the same
- * `runAsSingleSceneHistoryStep` as their endpoint write.
- *
- * Returns the resolved endpoint (projection onto the host, or a nearby corner
- * when the drop is within `WALL_SPLIT_ENDPOINT_EPSILON` of one — corner joins
- * are not splits), or `null` when the point lands on no wall.
- */
 export function resolveEndpointWallSplit(args: {
   point: WallPlanPoint
   /** Level the moved wall lives on — only its walls are split candidates. */
@@ -370,14 +78,23 @@ export function resolveEndpointWallSplit(args: {
   radius?: number
 }): WallPlanPoint | null {
   const { point, levelId, ignoreWallIds, radius = WALL_CONNECT_SNAP_RADIUS } = args
-  const { nodes, createNodes, updateNodes, deleteNode } = useScene.getState()
-  const walls = Object.values(nodes).filter(
-    (node): node is WallNode => node?.type === 'wall' && (node.parentId ?? null) === levelId,
-  )
-
-  const intersection = findWallIntersection(point, walls, radius, ignoreWallIds)
-  const split = splitWallIfNeeded(intersection, walls, nodes, createNodes, updateNodes, deleteNode)
-  return split ? split.point : null
+  const { nodes, applyNodeChanges } = useScene.getState()
+  const result = planWallSplitAtPoint(nodes, {
+    point,
+    levelId: levelId as AnyNodeId | null,
+    ignoreWallIds,
+    radius,
+  })
+  if (!result.ok) return null
+  const { plan } = result
+  if (
+    plan.changes.create.length > 0 ||
+    plan.changes.update.length > 0 ||
+    plan.changes.delete.length > 0
+  ) {
+    applyNodeChanges(plan.changes)
+  }
+  return plan.point
 }
 
 type SnapWallDraftArgs = {
@@ -538,75 +255,24 @@ export function createWallOnCurrentLevel(
   options?: WallConstructionOptions,
 ): WallNode | null {
   const currentLevelId = useViewer.getState().selection.levelId
-  const { createNode, createNodes, deleteNode, nodes } = useScene.getState()
-  const { updateNodes } = useScene.getState()
+  const { nodes, applyNodeChanges } = useScene.getState()
 
   if (!(currentLevelId && isSegmentLongEnough(start, end))) {
     return null
   }
 
-  let workingWalls = Object.values(nodes).filter(
-    (node): node is WallNode => node?.type === 'wall' && node.parentId === currentLevelId,
-  )
-
-  let resolvedStart = start
-  let resolvedEnd = end
-
-  // The corner-join / wall-split resolution follows the snapping mode like the
-  // draft preview does: magnetic ('lines') keeps the generous join radius,
-  // every other mode uses the same tight connect radius the draft path already
-  // sticks endpoints with. So an endpoint the user saw connect to a wall body
-  // actually splits that wall (and redistributes its attachments) in every
-  // mode, while `'off'` / `'angles'` gain no residual long-range snap.
   const joinRadius = isMagneticSnapActive() ? WALL_JOIN_SNAP_RADIUS : WALL_CONNECT_SNAP_RADIUS
 
-  // One undo step for the whole commit: the split ops (create halves, migrate
-  // attachments, delete host) plus the new wall each push their own history
-  // entry, and a single Ctrl-Z must not strand a half-split wall network.
   return runAsSingleSceneHistoryStep(useScene, () => {
-    const endIntersection = findWallIntersection(resolvedEnd, workingWalls, joinRadius)
-    const splitEnd = splitWallIfNeeded(
-      endIntersection,
-      workingWalls,
-      nodes,
-      createNodes,
-      updateNodes,
-      deleteNode,
-    )
-    if (splitEnd) {
-      workingWalls = splitEnd.walls
-      resolvedEnd = splitEnd.point
-    }
-
-    const startIntersection = findWallIntersection(resolvedStart, workingWalls, joinRadius)
-    const splitStart = splitWallIfNeeded(
-      startIntersection,
-      workingWalls,
-      nodes,
-      createNodes,
-      updateNodes,
-      deleteNode,
-    )
-    if (splitStart) {
-      workingWalls = splitStart.walls
-      resolvedStart = splitStart.point
-    }
-
-    if (
-      !isSegmentLongEnough(resolvedStart, resolvedEnd) ||
-      pointsEqual(resolvedStart, resolvedEnd)
-    ) {
-      return null
-    }
-
-    const duplicateWall = workingWalls.some(
-      (wall) =>
-        (pointsEqual(wall.start, resolvedStart) && pointsEqual(wall.end, resolvedEnd)) ||
-        (pointsEqual(wall.start, resolvedEnd) && pointsEqual(wall.end, resolvedStart)),
-    )
-    if (duplicateWall) {
-      return null
-    }
+    const result = planWallInsertion(nodes, {
+      levelId: currentLevelId as AnyNodeId,
+      start,
+      end,
+      joinRadius,
+      wallDefaults: useEditor.getState().toolDefaults.wall ?? {},
+    })
+    if (!result.ok) return null
+    const { plan } = result
 
     const constructionSourceNodeId = options?.constructionSourceNodeId
     if (constructionSourceNodeId) {
@@ -621,69 +287,91 @@ export function createWallOnCurrentLevel(
           pinSupport: true,
         })
         if (sourceSupportPatch.supportSlabId != null) {
-          updateNodes([{ id: constructionSourceNodeId, data: sourceSupportPatch }])
+          useScene
+            .getState()
+            .updateNodes([{ id: constructionSourceNodeId, data: sourceSupportPatch }])
         }
       }
     }
 
-    const wallCount = Object.values(nodes).filter((node) => node.type === 'wall').length
-    // A placed wall preset seeds `toolDefaults.wall` (thickness, height,
-    // materials, sides) before the tool activates; merge those first so the
-    // drawn wall reproduces the preset. Identity + endpoints always win.
-    const defaults = useEditor.getState().toolDefaults.wall ?? {}
-    const wall = WallSchema.parse({
-      ...defaults,
-      name: `Wall ${wallCount + 1}`,
-      start: resolvedStart,
-      end: resolvedEnd,
-      parentId: currentLevelId,
+    const committedNodes = useScene.getState().nodes
+    const finalizedWalls = plan.insertedWalls.map((createdWall) => {
+      const wallWithParent = { ...createdWall, parentId: currentLevelId } as WallNode
+      const terrainBase = terrainSupportLift(
+        committedNodes,
+        currentLevelId,
+        createdWall.start[0],
+        createdWall.start[1],
+      )
+      // A ground-preferred draft is frozen only for sculpted terrain or an
+      // explicitly flat node-top construction plane. On ordinary flat ground,
+      // the ground plane is just the backdrop the chain started from: drop the
+      // draft options so the wall commits plane-bound.
+      const wallOptions =
+        options?.preferredSupportSlabId === GROUND_SUPPORT_ID &&
+        terrainBase == null &&
+        !options.flatConstructionBase
+          ? undefined
+          : options
+      const preferredSupportSlabId =
+        wallOptions?.flatConstructionBase === true
+          ? GROUND_SUPPORT_ID
+          : (wallOptions?.preferredSupportSlabId ??
+            (wallOptions?.constructionElevation != null && terrainBase != null
+              ? GROUND_SUPPORT_ID
+              : null))
+      const supportPatch = resolveWallSupportSlabPatch(wallWithParent, committedNodes, {
+        maxElevation: wallOptions?.supportCap ?? null,
+        preferredSlabId: preferredSupportSlabId,
+      })
+      const supportSlabId = supportPatch.supportSlabId
+      const sourceSupport = spatialGridManager.getSlabSupportForWall(
+        currentLevelId,
+        createdWall.start,
+        createdWall.end,
+        createdWall.curveOffset,
+        createdWall.thickness,
+        supportSlabId,
+        wallOptions?.supportCap ?? null,
+      )
+      // Freezing the draft plane into the node (explicit height + offset from
+      // the elected support) is reserved for terrain and explicitly flat
+      // node-top construction. Every other wall stays plane-bound, so a wall
+      // merely started on a slab or deck never receives the ghost height.
+      const groundDraft =
+        preferredSupportSlabId === GROUND_SUPPORT_ID &&
+        (terrainBase != null || wallOptions?.flatConstructionBase === true)
+      const supportOffset =
+        groundDraft && wallOptions?.constructionElevation != null
+          ? wallOptions.constructionElevation - sourceSupport.elevation
+          : undefined
+      const preserveDraftHeight =
+        groundDraft &&
+        createdWall.height == null &&
+        wallOptions?.constructionHeight != null &&
+        wallOptions.constructionElevation != null
+      return {
+        ...wallWithParent,
+        ...supportPatch,
+        height: preserveDraftHeight
+          ? (wallOptions?.constructionHeight ?? createdWall.height)
+          : createdWall.height,
+        supportOffset:
+          supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
+      } as WallNode
     })
-    const sceneNodes = useScene.getState().nodes
-    const nodesWithWall = { ...sceneNodes, [wall.id]: wall as AnyNode }
-    const terrainBase = terrainSupportLift(
-      nodesWithWall,
-      currentLevelId,
-      wall.start[0],
-      wall.start[1],
-    )
-    const preferredSupportSlabId = options?.flatConstructionBase
-      ? GROUND_SUPPORT_ID
-      : (options?.preferredSupportSlabId ??
-        (options?.constructionElevation != null && terrainBase != null ? GROUND_SUPPORT_ID : null))
-    const supportPatch = resolveWallSupportSlabPatch(wall, nodesWithWall, {
-      maxElevation: options?.supportCap ?? null,
-      preferredSlabId: preferredSupportSlabId,
+    const finalizedWallsById = new Map(finalizedWalls.map((wall) => [wall.id, wall]))
+    applyNodeChanges({
+      ...plan.changes,
+      create: plan.changes.create.map((operation) => ({
+        ...operation,
+        node: finalizedWallsById.get(operation.node.id as WallNode['id']) ?? operation.node,
+      })),
     })
-    const sourceSupport = spatialGridManager.getSlabSupportForWall(
-      currentLevelId,
-      wall.start,
-      wall.end,
-      wall.curveOffset,
-      wall.thickness,
-      supportPatch.supportSlabId,
-      options?.supportCap ?? null,
-    )
-    const supportOffset =
-      options?.constructionElevation == null
-        ? undefined
-        : options.constructionElevation - sourceSupport.elevation
-    const preserveDraftHeight =
-      wall.height == null &&
-      options?.constructionHeight != null &&
-      options.constructionElevation != null &&
-      (terrainBase != null || Math.abs(options.constructionElevation) > 1e-6)
-    const committedWall = WallSchema.parse({
-      ...wall,
-      ...supportPatch,
-      height: preserveDraftHeight ? options?.constructionHeight : wall.height,
-      supportOffset:
-        supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
-    })
-
-    createNode(committedWall, currentLevelId)
     sfxEmitter.emit('sfx:structure-build')
 
-    const storedWall = useScene.getState().nodes[committedWall.id]
-    return storedWall?.type === 'wall' ? storedWall : committedWall
+    const terminalWall = finalizedWalls.at(-1)!
+    const committedWall = useScene.getState().nodes[plan.terminalWallId]
+    return committedWall?.type === 'wall' ? committedWall : terminalWall
   })
 }

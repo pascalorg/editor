@@ -7,7 +7,13 @@ import {
   LevelNode,
   useScene,
 } from '@pascal-app/core'
-import { installHistoryCommandDelegate, runRedo, runUndo } from './history'
+import {
+  getHistoryCommandState,
+  installHistoryCommandDelegate,
+  runRedo,
+  runUndo,
+  subscribeHistoryCommandState,
+} from './history'
 
 type RafFn = (cb: (time: number) => void) => number
 ;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= (cb) => {
@@ -58,12 +64,28 @@ describe('editor history controller', () => {
   })
 
   test('delegates undo and redo while a host delegate is installed', () => {
-    const undo = mock(() => {})
-    const redo = mock(() => {})
-    disposeController = installHistoryCommandDelegate({ undo, redo })
+    const undo = mock(() => ({ kind: 'applied', persistence: 'queued' }) as const)
+    const redo = mock(() => ({ kind: 'empty' }) as const)
+    disposeController = installHistoryCommandDelegate({
+      getState: () => ({
+        canRedo: false,
+        canUndo: true,
+        mode: 'collaborative',
+        status: 'syncing',
+      }),
+      redo,
+      subscribe: () => () => {},
+      undo,
+    })
 
-    runUndo()
-    runRedo()
+    expect(runUndo()).toEqual({ kind: 'applied', persistence: 'queued' })
+    expect(runRedo()).toEqual({ kind: 'empty' })
+    expect(getHistoryCommandState()).toEqual({
+      canRedo: false,
+      canUndo: true,
+      mode: 'collaborative',
+      status: 'syncing',
+    })
 
     expect(undo).toHaveBeenCalledTimes(1)
     expect(redo).toHaveBeenCalledTimes(1)
@@ -72,25 +94,68 @@ describe('editor history controller', () => {
   })
 
   test('falls back to standalone Zundo undo and redo when no controller is installed', () => {
-    runUndo()
+    expect(runUndo()).toEqual({ kind: 'applied', persistence: 'local' })
     expect(levelNumber()).toBe(0)
     expect(useScene.temporal.getState().futureStates).toHaveLength(1)
 
-    runRedo()
+    expect(runRedo()).toEqual({ kind: 'applied', persistence: 'local' })
     expect(levelNumber()).toBe(1)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   })
 
   test('an older cleanup cannot uninstall a newer controller', () => {
     const firstUndo = mock(() => {})
-    const stopFirst = installHistoryCommandDelegate({ undo: firstUndo, redo: () => {} })
+    const delegate = (undo: () => void) => ({
+      getState: () => ({
+        canRedo: false,
+        canUndo: true,
+        mode: 'collaborative' as const,
+        status: 'ready' as const,
+      }),
+      redo: () => ({ kind: 'empty' as const }),
+      subscribe: () => () => {},
+      undo: () => {
+        undo()
+        return { kind: 'applied' as const, persistence: 'queued' as const }
+      },
+    })
+    const stopFirst = installHistoryCommandDelegate(delegate(firstUndo))
     const secondUndo = mock(() => {})
-    disposeController = installHistoryCommandDelegate({ undo: secondUndo, redo: () => {} })
+    disposeController = installHistoryCommandDelegate(delegate(secondUndo))
 
     stopFirst()
     runUndo()
 
     expect(firstUndo).toHaveBeenCalledTimes(0)
     expect(secondUndo).toHaveBeenCalledTimes(1)
+  })
+
+  test('publishes delegate state changes and restores standalone availability on teardown', () => {
+    const listeners = new Set<() => void>()
+    const observed: string[] = []
+    const unsubscribe = subscribeHistoryCommandState(() => {
+      observed.push(getHistoryCommandState().mode)
+    })
+    disposeController = installHistoryCommandDelegate({
+      getState: () => ({
+        canRedo: false,
+        canUndo: true,
+        mode: 'collaborative',
+        status: 'offline',
+      }),
+      redo: () => ({ kind: 'empty' }),
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      undo: () => ({ kind: 'applied', persistence: 'queued' }),
+    })
+
+    for (const listener of listeners) listener()
+    disposeController()
+    disposeController = () => {}
+    unsubscribe()
+
+    expect(observed).toEqual(['collaborative', 'collaborative', 'standalone'])
   })
 })

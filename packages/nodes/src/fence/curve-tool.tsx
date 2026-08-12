@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  acquireSceneHistoryPause,
   emitter,
   type FenceNode,
   type GridEvent,
@@ -10,8 +11,6 @@ import {
   getWallChordFrame,
   getWallMidpointHandlePoint,
   normalizeWallCurveOffset,
-  pauseSceneHistory,
-  resumeSceneHistory,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -61,8 +60,8 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     const chord = getWallChordFrame(node)
     const maxCurveOffset = getMaxWallCurveOffset(node)
 
-    pauseSceneHistory(useScene)
-    let wasCommitted = false
+    let releaseHistory = acquireSceneHistoryPause(useScene)
+    let wasFinalized = false
 
     const applyPreview = (curveOffset: number) => {
       if (previewOffsetRef.current === curveOffset) {
@@ -116,13 +115,14 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasFinalized) return
       if (Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
         return
       }
 
       const curveOffset = previewOffsetRef.current
-      wasCommitted = true
+      wasFinalized = true
 
       if (curveOffset !== originalCurveOffset) {
         // Restore original baseline while paused so the next resume+update
@@ -130,10 +130,10 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         useScene.getState().updateNode(nodeId, { curveOffset: originalCurveOffset })
         useScene.getState().markDirty(nodeId as AnyNodeId)
 
-        resumeSceneHistory(useScene)
+        releaseHistory()
         useScene.getState().updateNode(nodeId, { curveOffset })
         useScene.getState().markDirty(nodeId as AnyNodeId)
-        pauseSceneHistory(useScene)
+        releaseHistory = acquireSceneHistoryPause(useScene)
       }
 
       triggerSFX('sfx:item-place')
@@ -143,9 +143,11 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
+      if (wasFinalized) return
       restoreOriginal()
+      wasFinalized = true
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
-      resumeSceneHistory(useScene)
+      releaseHistory()
       markToolCancelConsumed()
       exitCurveMode()
     }
@@ -155,10 +157,10 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     emitter.on('tool:cancel', onCancel)
 
     return () => {
-      if (!wasCommitted) {
+      if (!wasFinalized) {
         restoreOriginal()
       }
-      resumeSceneHistory(useScene)
+      releaseHistory()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)

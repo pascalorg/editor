@@ -71,6 +71,28 @@ Core and viewer systems are mounted inside `<Viewer>` alongside renderers. See `
 - Mark nodes as `dirty` in the scene store to signal that a system should re-run. Avoid running expensive logic every frame without a dirty check.
 - **Clear module-level caches on unmount.** A cache that survives between frames also survives the mount, and one keyed by level or node ID grows with every project opened in the tab. Reset it from the system's unmount effect, the same way editor teardown calls `spatialGridManager.clear()`.
 
+## Reconciliation and scene commits
+
+Reconciliation that writes persisted scene data must keep every derived write in a transmittable
+scene commit. Space detection, for example, can create slabs and ceilings, update wall-side
+classification, and grow `level.children` in response to one wall edit. Those writes are part of
+the originating edit: they must appear in that edit's `SceneCommit.current` snapshot and remain one
+undo step.
+
+The current store-subscription ordering satisfies this contract because reconciliation finishes
+before the history middleware captures the commit. Moving reconciliation to
+`subscribeSceneCommits` breaks the contract unless it emits a separate transmittable commit: commit
+listeners run after the snapshots have already been captured, and writes made while history is
+paused would otherwise exist only in the local live store.
+
+Remote operations apply the generated nodes carried by the originating commit. Receiving clients
+must not independently regenerate them; mutation locking and read-only guards prevent clients from
+minting different IDs for the same derived surfaces.
+
+Any optimization that scopes reconciliation to a subset of nodes or rooms must be tested for
+equivalence with a full level scan. Representative create, update, delete, cascade, split, merge,
+and corridor-enclosure edits must produce the same spaces and surfaces as full reconciliation.
+
 ## Adding a New System
 
 1. Decide the scope:

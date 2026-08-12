@@ -104,6 +104,35 @@ import { useDragAction, EDITOR_LAYER } from '@pascal-app/editor'
 
 The packages are **peer dependencies**, not normal dependencies — the host app owns the version. A plugin that pins its own copy of `@pascal-app/core` would create two registries and silently fail. (npm peer-dep resolution catches this at install time.)
 
+## Following viewer appearance and performance preferences
+
+A custom `renderer` owns its materials, so it must follow the same host appearance
+axes as built-in nodes. Subscribe read-only to `useViewer` for `shading`, `textures`,
+`colorPreset`, and `sceneTheme`; do not add plugin-specific quality toggles or copy
+those values into scene data.
+
+- **Colored + Rendered** keeps an imported model's authored materials.
+- **Colored + Solid** uses `createDefaultMaterial(..., 'solid')` or another cached
+  `MeshLambertNodeMaterial` variant. Preserve the authored albedo map, colour,
+  transparency, and material slots, but omit PBR-only maps that defeat the cheaper
+  Solid path.
+- **Monochrome** uses `createSurfaceRoleMaterial(def.surfaceRole, colorPreset, side,
+  sceneTheme)`. Imported props normally declare `surfaceRole: 'furnishing'`.
+- Capture authored materials once when the model loads, cache variants per source
+  material, swap only when preferences change, and restore before disposal. Never
+  clone materials per frame, mutate loader-cached authored materials, or dispose a
+  material returned from a host cache.
+
+`shadows`, `edges`, and the Solid/Rendered post-processing cost are host-global.
+Normal plugin geometry stays on `SCENE_LAYER`, so the light rig and depth/normal
+pipeline include it automatically. Editor-only placement previews belong on
+`OVERLAY_LAYER` / `EDITOR_LAYER`; that keeps ghosts out of shadow, SSGI, and ink-edge
+passes. A plugin only needs to manage `castShadow` / `receiveShadow` for transparent
+or overlay meshes rather than duplicating the host settings.
+
+See [materials and themes](materials-and-themes.md#external-plugin-renderers) for the
+material lifecycle pattern.
+
 ## Lifecycle
 
 ```mermaid
@@ -180,7 +209,7 @@ A plugin's own data versioning is `schemaVersion` on each `NodeDefinition`. The 
 - **Materials** — there's no `plugin.materials` slot. Use `createMaterial` from `@pascal-app/viewer` inside your `def.renderer` / `def.system`.
 - **Floor-plan primitives** — the `FloorplanGeometry` union is host-owned. To draw something the union can't express, fall back to `def.renderer` and render through a different 2D mount (or open an issue).
 - **Panels / sidebar UI in the core manifest** — host-specific. Export an `EditorHostPanel` separately for hosts that use `@pascal-app/editor`.
-- **Stores** — plugins create their own Zustand stores; they don't extend `useScene`, `useEditor`, or `useViewer`. Host stores are not part of the v1 plugin surface.
+- **Stores** — plugins create their own Zustand stores; they don't extend `useScene`, `useEditor`, or `useViewer`. A renderer may subscribe read-only to exported host presentation state such as `useViewer` appearance axes, but must not treat host stores as plugin-owned state.
 - **Routes / pages** — plugins are visualisation + interaction code, not full app surfaces. Hosting a settings page belongs to the app.
 
 The boundary stays narrow on purpose so the contract is shippable. Each "not yet" item is a plan, not a "never."
