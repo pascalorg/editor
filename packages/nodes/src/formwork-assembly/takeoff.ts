@@ -93,6 +93,7 @@ export function takeoffCsv(
       ...(solution.commitments ? { commitments: solution.commitments } : {}),
       ...(solution.lifts ? { lifts: solution.lifts } : {}),
       ...(solution.logistics ? { logistics: solution.logistics } : {}),
+      ...(solution.cutList ? { cutList: solution.cutList } : {}),
     }),
   }
 }

@@ -132,6 +132,18 @@ export interface FormworkSettings {
    * lorries nobody booked.
    */
   logistics: NonNullable<FormworkProjectSettingsNode['logistics']> | undefined
+  /**
+   * The sheets the ply is cut out of, or `undefined`.
+   *
+   * The seventh undefaulted field, and the only one whose absence hides an answer the model
+   * could compute: every dimension the nest needs is already on the parts, and what is
+   * missing is the *sheet* they come out of. `parts.sheathingId` cannot supply it — a
+   * sheathing grade carries pressures and no size — and defaulting to the whole catalog
+   * would nest each board out of whichever of seven sheets happened to suit it and report a
+   * count no merchant can fill. So absent means no cut list, and the surfaces say which
+   * fact is missing rather than showing a sheet count for sheets nobody buys.
+   */
+  sheets: NonNullable<FormworkProjectSettingsNode['sheets']> | undefined
 }
 
 /**
@@ -157,6 +169,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   schedule: undefined,
   crane: undefined,
   logistics: undefined,
+  sheets: undefined,
 }
 
 /**
@@ -227,6 +240,7 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
     schedule: node.schedule,
     crane: node.crane,
     logistics: node.logistics,
+    sheets: node.sheets,
   }
 }
 
@@ -266,6 +280,7 @@ export type FormworkSettingsGroup =
   | 'schedule'
   | 'crane'
   | 'logistics'
+  | 'sheets'
 
 /**
  * Merge a patch into one of the settings sub-objects, returning the value to write

@@ -434,6 +434,44 @@ describe('formwork settings write — the deliveries and the crane hours', () =>
   })
 })
 
+describe('formwork settings write — the sheets the ply is cut from', () => {
+  beforeEach(seedScene)
+
+  const PLAIN = 'ply-1220x2440x18-plain'
+  const BIRCH = 'ply-1250x2500x18-birch-wbp'
+
+  test('a second sheet is added to the list rather than replacing the first', () => {
+    // The rack's failure mode, and it costs sheets rather than a field: a nest allowed to
+    // open the bigger sheet for the few boards that need it buys fewer of both.
+    setFormworkSettingsGroupField('sheets', { stockIds: [PLAIN] })
+    setFormworkSettingsGroupField('sheets', { stockIds: [PLAIN, BIRCH] })
+
+    expect(settings()?.sheets).toEqual({ stockIds: [PLAIN, BIRCH] })
+  })
+
+  test('the racking policy arrives beside the sheets without unstating them', () => {
+    // Two different people's answers — a merchant's list and the yard's own rule about what
+    // is worth keeping — so the second must not erase the first.
+    setFormworkSettingsGroupField('sheets', { stockIds: [PLAIN] })
+    setFormworkSettingsGroupField('sheets', { minKeepWidthMm: 150, minKeepLengthMm: 600 })
+
+    expect(settings()?.sheets).toEqual({
+      minKeepLengthMm: 600,
+      minKeepWidthMm: 150,
+      stockIds: [PLAIN],
+    })
+  })
+
+  test('undefined hands the list back to unstated, which is not a yard buying nothing', () => {
+    // A list of no sheets and nobody having said are the same claim, and only one of them
+    // should be reachable — a stated empty list would nest nothing and report a cut list.
+    setFormworkSettingsGroupField('sheets', { stockIds: [PLAIN], minKeepWidthMm: 150 })
+    setFormworkSettingsGroupField('sheets', { stockIds: undefined })
+
+    expect(settings()?.sheets).toEqual({ minKeepWidthMm: 150 })
+  })
+})
+
 describe('formwork settings write — reset', () => {
   beforeEach(seedScene)
 
@@ -447,6 +485,7 @@ describe('formwork settings write — reset', () => {
     setFormworkRate('doka-framax-panel-588104500', { purchasePerUnit: 420 })
     setFormworkSettingsGroupField('crane', { hookHeightM: 40 })
     setFormworkSettingsGroupField('logistics', { lorryPayloadKg: 8000 })
+    setFormworkSettingsGroupField('sheets', { stockIds: ['ply-1220x2440x18-plain'] })
 
     clearFormworkSettings()
 
@@ -463,6 +502,7 @@ describe('formwork settings write — reset', () => {
     expect(node?.rates).toBeUndefined()
     expect(node?.crane).toBeUndefined()
     expect(node?.logistics).toBeUndefined()
+    expect(node?.sheets).toBeUndefined()
   })
 
   test('a reset still dirties the assemblies it re-sizes', () => {

@@ -328,6 +328,7 @@ export function clearFormworkSettings(): void {
         schedule: undefined,
         crane: undefined,
         logistics: undefined,
+        sheets: undefined,
       }) as Partial<AnyNode>,
   )
 }

@@ -3,6 +3,7 @@
 import {
   COMMITMENT_GAP_LABELS,
   COST_GAP_LABELS,
+  CUT_GAP_LABELS,
   formatMoney,
   LABOUR_GAP_LABELS,
   LOGISTICS_GAP_LABELS,
@@ -101,6 +102,10 @@ export function FormworkTakeoffPanel() {
   const commitments = solution.commitments
   const lifts = solution.lifts
   const logistics = solution.logistics
+  const cutList = solution.cutList
+  // The bill rather than the parts, so a steel-panel job is owed no sentence about sheets: the
+  // absent case below is only worth showing where there are boards nobody has stated a sheet for.
+  const hasCutPly = solution.bom.some((line) => line.kind === 'ply-piece')
   // The programme rows below have to read differently for a booked pour than for a dated one,
   // and a drifted one differently again — a date on screen that a hire desk is holding a
   // different version of is the one state in this panel a reader cannot infer from anything.
@@ -954,6 +959,83 @@ export function FormworkTakeoffPanel() {
                 )
               })}
             </Section>
+            {/* After the lines rather than above them, which is where the CSV puts it too. Every
+                board in this nest is one of the ply lines listed above, so a sheet count read as
+                part of the bill buys the job's plywood twice — and the only way to make that hard
+                is to put the figure below the thing it is not part of. */}
+            {cutList === undefined ? (
+              hasCutPly && (
+                <Note>
+                  This job cuts ply, and no sheet size is recorded, so there is no cut list. A
+                  sheathing grade is not a sheet: the grade carries the pressures it takes and no
+                  width or length at all, and a merchant selling 1220 × 2440 and one selling 1250 ×
+                  2500 give the same wall different sheet counts. Record the sheets the yard buys in
+                  the project's formwork settings and the count follows.
+                </Note>
+              )
+            ) : (
+              <Section title="Cutting">
+                {cutList.list.order.map((entry) => (
+                  <Readout
+                    key={entry.sheetId}
+                    label={entry.sheetId}
+                    value={`${entry.sheets} ${entry.sheets === 1 ? 'sheet' : 'sheets'}`}
+                    value2="to buy"
+                  />
+                ))}
+                {(cutList.list.orderWithAllowance ?? []).map((entry) => (
+                  <Readout
+                    key={entry.sheetId}
+                    label="With handling allowance"
+                    value={`${entry.sheets} ${entry.sheets === 1 ? 'sheet' : 'sheets'}`}
+                    value2="booked in"
+                  />
+                ))}
+                <Readout
+                  label="Boards nested"
+                  value={String(cutList.boardCount)}
+                  value2={`${cutList.boardAreaM2} m²`}
+                />
+                <Readout
+                  label="Cutting waste"
+                  value={`${Math.round(cutList.list.cuttingWasteFraction * 100)}%`}
+                  value2={`${cutList.list.kerfMm} mm kerf`}
+                />
+                {cutList.list.retainableAreaMm2 > 0 && (
+                  <Readout
+                    label="Worth racking"
+                    value={`${(cutList.list.retainableAreaMm2 / 1_000_000).toFixed(2)} m²`}
+                    value2="not deducted"
+                  />
+                )}
+                {/* A board no sheet holds is a WarningLine rather than a Note: the sheets above
+                        are not buying it, so the count is short by a board somebody has to source. */}
+                {cutList.list.oversize.map((piece) => (
+                  <WarningLine
+                    key={piece.mark}
+                    message={`${piece.mark} is ${piece.widthMm} × ${piece.heightMm} mm and larger than every stated sheet, so no sheet above is buying it. A formlining board spliced mid-span is a defect rather than a cut, so it is named instead of divided.`}
+                  />
+                ))}
+                {cutList.unknownStockIds.map((id) => (
+                  <WarningLine
+                    key={id}
+                    message={`${id} names no sheet in the catalog, so it is nesting nothing. A sheathing grade carries no width or length — only a sheet stock id has a size to nest against.`}
+                  />
+                ))}
+                {cutList.list.gaps.map((gap) => (
+                  <Note key={gap}>{CUT_GAP_LABELS[gap]}.</Note>
+                ))}
+                <Note>
+                  What to buy, beside the bill rather than in it: the boards above are already
+                  priced as consumed and weighed into the tonnage, so nothing here is in the cost,
+                  the weight or the owned/hired split. Nested in one pass across the whole scope,
+                  because a short board off one wall comes out of another's offcut — so this is not
+                  a slice of a larger cut list, and two scopes' sheet counts do not add up. Nothing
+                  is turned: every one of these is a form face and takes the pour against it, so a
+                  board across the grain is a different product.
+                </Note>
+              </Section>
+            )}
           </div>
         )}
       </PanelSection>

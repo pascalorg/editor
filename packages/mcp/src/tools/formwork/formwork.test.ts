@@ -300,6 +300,21 @@ interface BillReply {
     excludes: string[]
   }
   noLogisticsBecause?: string
+  cutList?: {
+    sheetsToBuy: Array<{ sheetId: string; sheets: number }>
+    sheetsToBuyWithHandlingAllowance: Array<{ sheetId: string; sheets: number }> | null
+    boardsNested: number
+    boardAreaM2: number
+    cuttingWastePercent: number
+    sawKerfMm: number
+    offcutWorthRackingM2: number
+    boardsLargerThanEverySheet: Array<{ mark: string; widthMm: number; heightMm: number }>
+    statedIdsThatAreNotSheets: string[]
+    complete: boolean
+    gaps: string[]
+    excludes: string[]
+  }
+  noCutListBecause?: string
   caveats: string[]
 }
 
@@ -1327,6 +1342,114 @@ describe('the formwork MCP tools', () => {
     expect(reply.noLogisticsBecause).toContain('set_formwork_settings logistics')
     expect(reply.noLogisticsBecause).toContain('set_formwork_settings rates')
     expect(reply.noLogisticsBecause).toContain('Never estimate either')
+  })
+
+  /**
+   * The sheets the cut ply comes out of, which is the one block here that a caller adding
+   * figures together can turn into a wrong answer rather than a missing one.
+   *
+   * What only this layer can get wrong is that stating a sheet changes a total, and the two
+   * absences: a job with no ply has to say something different from a job that cuts ply with
+   * no sheet stated, because only the second one is waiting on the user.
+   */
+  const PLAIN_SHEET = 'ply-1220x2440x18-plain'
+
+  /**
+   * A shuttered deck, because a deck is the element that bills cut ply by the hundred — a
+   * wall in whole panels bills none, so a cut list over one would be absent for the wrong
+   * reason and every assertion below would pass on an empty bill.
+   */
+  const cutPlyScene = async (settings: Record<string, unknown>) => {
+    const nodes = threeKinds()
+    load(
+      withSettings(
+        {
+          ...nodes,
+          slab_1: { ...(nodes.slab_1 as Record<string, unknown>), formworkType: 'plywood' },
+        },
+        settings,
+      ),
+    )
+    await call('attach_formwork', { elementId: 'slab_1' })
+  }
+
+  test('stating a sheet adds sheets to buy and changes no total in the answer', async () => {
+    // The one thing here that could produce a wrong figure rather than a missing one: every
+    // board is already a priced, weighed ply line, so the sheets are the same material
+    // counted a second way and nothing above them may move when they appear.
+    await cutPlyScene({})
+    const plain = await call<BillReply>('inspect_project_formwork', {})
+    await cutPlyScene({ sheets: { stockIds: [PLAIN_SHEET] } })
+    const nested = await call<BillReply>('inspect_project_formwork', {})
+
+    expect(nested.cutList?.sheetsToBuy.every((entry) => entry.sheetId === PLAIN_SHEET)).toBe(true)
+    expect(nested.cutList?.sheetsToBuy[0]?.sheets).toBeGreaterThan(0)
+    expect(nested.cutList?.boardsNested).toBeGreaterThan(0)
+    expect(nested.bom).toEqual(plain.bom)
+    expect(nested.totalWeightKg).toBe(plain.totalWeightKg)
+    // And the rule is in the answer rather than only in the tool description, because a
+    // caller reading the block is not necessarily the one that read the description.
+    expect(nested.cutList?.excludes[0]).toContain('buys the job’s plywood twice')
+    expect(nested.cutList?.excludes.some((entry) => entry.includes('the weight'))).toBe(true)
+  })
+
+  test('the handling allowance is a second order rather than a corrected first one', async () => {
+    await cutPlyScene({ sheets: { handlingWasteFraction: 0.1, stockIds: [PLAIN_SHEET] } })
+
+    const reply = await call<BillReply>('inspect_project_formwork', {})
+    const nested = reply.cutList?.sheetsToBuy[0]?.sheets ?? 0
+    const booked = reply.cutList?.sheetsToBuyWithHandlingAllowance?.[0]?.sheets ?? 0
+
+    expect(nested).toBeGreaterThan(0)
+    expect(booked).toBeGreaterThan(nested)
+  })
+
+  test('with no allowance stated the second order is null rather than a copy of the first', async () => {
+    // Null and not the same array: a caller that saw two equal figures would report a
+    // damage allowance the yard never stated.
+    await cutPlyScene({ sheets: { stockIds: [PLAIN_SHEET] } })
+
+    const reply = await call<BillReply>('inspect_project_formwork', {})
+
+    expect(reply.cutList?.sheetsToBuyWithHandlingAllowance).toBeNull()
+  })
+
+  test('a job that cuts ply with no sheet stated is a missing input, and says the remedy', async () => {
+    await cutPlyScene({})
+
+    const reply = await call<BillReply>('inspect_project_formwork', {})
+
+    expect(reply.cutList).toBeUndefined()
+    expect(reply.noCutListBecause).toContain('set_formwork_settings sheets')
+    expect(reply.noCutListBecause).toContain('never pick one')
+  })
+
+  test('a job with no ply in it says it has nothing to cut, which is a different answer', async () => {
+    // Two absences and two sentences: a steel wall in whole panels cuts no board, so it is
+    // not waiting on an input, and a hedged single sentence would send a caller to ask the
+    // user for a sheet size the job does not need.
+    load(withSettings(tallWall('steel-panel'), { sheets: { stockIds: [PLAIN_SHEET] } }))
+    await call('attach_formwork', { elementId: 'wall_1' })
+
+    const reply = await call<BillReply>('inspect_project_formwork', {})
+
+    expect(reply.bom.length).toBeGreaterThan(0)
+    expect(reply.cutList).toBeUndefined()
+    expect(reply.noCutListBecause).toContain('no cutting to do here')
+    expect(reply.noCutListBecause).not.toContain('set_formwork_settings sheets')
+  })
+
+  test('a stated id that names no sheet is reported rather than nesting silently', async () => {
+    // The rack's failure mode: the write paths refuse a sheathing grade here, so one that
+    // arrives came from an older scene, and "the yard buys one sheet" and "buys two and one
+    // is a typo" are different states.
+    await cutPlyScene({ sheets: { stockIds: [PLAIN_SHEET, 'film-faced-ply-18'] } })
+
+    const reply = await call<BillReply>('inspect_project_formwork', {})
+
+    expect(reply.cutList?.statedIdsThatAreNotSheets).toEqual(['film-faced-ply-18'])
+    expect(reply.cutList?.complete).toBe(false)
+    expect(reply.caveats.some((c) => c.includes('names no sheet in the catalog'))).toBe(true)
   })
 
   test('an empty scene answers rather than throwing', async () => {

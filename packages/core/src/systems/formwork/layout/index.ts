@@ -14,6 +14,25 @@ export {
 } from './clamp-schedule'
 export { type FaceLayout, type FaceLayoutOptions, layOutFace } from './courses'
 export {
+  CUT_GAP_LABELS,
+  type CutGap,
+  type CutList,
+  type CutOffcut,
+  type CutOptions,
+  type CutPiece,
+  type CutPlacement,
+  cutListCaveats,
+  type NestedSheet,
+  nestCutPieces,
+  type OffcutPolicy,
+} from './cut-optimiser'
+export {
+  type NestSearch,
+  type NestSearchOptions,
+  nestSearchCaveats,
+  orderPiecesForNest,
+} from './cut-search'
+export {
   DEFAULT_SLING_ANGLE_DEG,
   type FaceGangs,
   formworkGangCaveats,

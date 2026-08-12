@@ -1599,6 +1599,167 @@ describe('what it costs to deliver and to lift', () => {
   })
 })
 
+describe('the sheets the ply comes out of', () => {
+  const SHEETS = {
+    stockIds: ['ply-1220x2440x18-plain'],
+    minKeepWidthMm: 150,
+    minKeepLengthMm: 600,
+  }
+
+  /** A plywood deck, which is the element that actually bills cut ply by the hundred. */
+  function plywoodSlabScene(): Record<string, AnyNode> {
+    return sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0))
+  }
+
+  test('a project with no stated sheet gets no cut list', () => {
+    // The rates' rule. Nesting against every sheet in the catalog would answer for a
+    // merchant rather than for the job, and picking one would be a supply decision taken on
+    // the project's behalf — 1220 × 2440 and 1250 × 2500 give the same deck different counts.
+    expect(solveProjectFormwork(plywoodSlabScene()).cutList).toBeUndefined()
+    expect(
+      solveProjectFormwork(
+        withSettings(plywoodSlabScene(), { parts: { sheathingId: 'film-faced-ply-18' } }),
+      ).cutList,
+    ).toBeUndefined()
+  })
+
+  test('nests the deck’s boards out of the stated sheet', () => {
+    const solution = solveProjectFormwork(withSettings(plywoodSlabScene(), { sheets: SHEETS }))
+
+    expect(solution.cutList?.stockIds).toEqual(['ply-1220x2440x18-plain'])
+    expect(solution.cutList?.boardCount).toBeGreaterThan(0)
+    expect(solution.cutList?.list.order[0]?.sheetId).toBe('ply-1220x2440x18-plain')
+    expect(solution.cutList?.list.order[0]?.sheets).toBeGreaterThan(0)
+  })
+
+  test('takes the pieces off the parts, not the quantities off the bill', () => {
+    // A deck of 140 identical sheets is one bill line with a quantity of 140. A nest over
+    // the line would place one board, buy one sheet and be short by 139 — so the piece count
+    // is checked against the bill's own quantities rather than against its line count.
+    const solution = solveProjectFormwork(withSettings(plywoodSlabScene(), { sheets: SHEETS }))
+    const billed = solution.bom
+      .filter((line) => line.kind === 'ply-piece')
+      .reduce((total, line) => total + line.quantity, 0)
+
+    expect(solution.cutList?.boardCount).toBe(billed)
+    expect(solution.bom.filter((line) => line.kind === 'ply-piece').length).toBeLessThan(billed)
+  })
+
+  test('a steel-panel job has no cut list because it has nothing to cut', () => {
+    // Absent for a second, unrelated reason — which is why the caveats distinguish them.
+    const solution = solveProjectFormwork(withSettings(steelWallScene(), { sheets: SHEETS }))
+
+    expect(solution.bom.some((line) => line.kind === 'ply-piece')).toBe(false)
+    expect(solution.cutList).toBeUndefined()
+  })
+
+  test('keeps the sheets out of the bill, the weight and the money', () => {
+    // The one thing here that could produce a *wrong* total rather than a missing one. Every
+    // board is already billed as cut ply, so a sheet count folded into the bill would count
+    // the same material twice.
+    const PRICED = { currency: 'GBP', byCatalogId: { [PANEL_ID]: { purchasePerUnit: 100 } } }
+    const nested = solveProjectFormwork(
+      withSettings(plywoodSlabScene(), { sheets: SHEETS, rates: PRICED }),
+    )
+    const plain = solveProjectFormwork(withSettings(plywoodSlabScene(), { rates: PRICED }))
+
+    expect(nested.cutList?.list.order[0]?.sheets).toBeGreaterThan(0)
+    expect(nested.bom).toEqual(plain.bom)
+    expect(nested.totalWeightKg).toBe(plain.totalWeightKg)
+    expect(nested.cost?.totalCost).toBe(plain.cost?.totalCost)
+    // No bill line names a sheet product — only the sheathing grade, which has no size.
+    expect(nested.bom.some((line) => line.catalogId === 'ply-1220x2440x18-plain')).toBe(false)
+  })
+
+  test('one nest across the scope rather than one per element', () => {
+    // The whole reason this is a project answer: a board off one slab comes out of another
+    // slab's offcut, so two scopes nested apart buy more sheets than one nested together.
+    const two = sceneOf(
+      makeSlab('slab_1'),
+      makeAssembly('formwork-assembly_1', 'slab_1', 0, 0),
+      makeSlab('slab_2', {
+        polygon: [
+          [0, 8],
+          [8, 8],
+          [8, 14],
+          [0, 14],
+        ],
+      } as Partial<SlabNode>),
+      makeAssembly('formwork-assembly_2', 'slab_2', 0, 0),
+    )
+    const together = solveProjectFormwork(withSettings(two, { sheets: SHEETS }))
+    const first = solveProjectFormwork(withSettings(two, { sheets: SHEETS }), {
+      hostIds: ['slab_1'],
+    })
+    const second = solveProjectFormwork(withSettings(two, { sheets: SHEETS }), {
+      hostIds: ['slab_2'],
+    })
+    const apart =
+      (first.cutList?.list.sheets.length ?? 0) + (second.cutList?.list.sheets.length ?? 0)
+
+    expect(together.cutList?.list.sheets.length ?? 0).toBeLessThanOrEqual(apart)
+    expect(together.cutList?.boardCount).toBe(
+      (first.cutList?.boardCount ?? 0) + (second.cutList?.boardCount ?? 0),
+    )
+  })
+
+  test('carries the handling allowance beside the nested count, never inside it', () => {
+    const solution = solveProjectFormwork(
+      withSettings(plywoodSlabScene(), { sheets: { ...SHEETS, handlingWasteFraction: 0.1 } }),
+    )
+    const nested = solution.cutList?.list.order[0]?.sheets ?? 0
+
+    expect(solution.cutList?.list.orderWithAllowance?.[0]?.sheets).toBe(Math.ceil(nested * 1.1))
+  })
+
+  test('leads the caveats with the double-count, and says the sheets are not a bill line', () => {
+    const caveats = projectFormworkCaveats(
+      solveProjectFormwork(withSettings(plywoodSlabScene(), { sheets: SHEETS })),
+    )
+
+    expect(caveats.some((c) => c.includes('counts the same material twice'))).toBe(true)
+    expect(caveats.some((c) => c.includes('behind a waler'))).toBe(true)
+  })
+
+  test('says a job with cut ply and no stated sheet has no cut list, and a steel one does not', () => {
+    // The two silences told apart. A deck of 140 boards and no sheet stated is a state to
+    // act on; a steel-panel wall has nothing to cut and is owed no sentence about sheets.
+    const ply = projectFormworkCaveats(solveProjectFormwork(plywoodSlabScene()))
+    expect(ply.some((c) => c.includes('no cut list in this takeoff'))).toBe(true)
+
+    const steel = projectFormworkCaveats(solveProjectFormwork(steelWallScene()))
+    expect(steel.some((c) => c.includes('no cut list in this takeoff'))).toBe(false)
+  })
+
+  test('names the boards no sheet holds rather than dividing them', () => {
+    // A slab's edge form is emitted as one board the length of the rim — 8 m against a
+    // 2.44 m sheet — so it is refused and named. A formlining board spliced mid-span is a
+    // defect rather than a cut, and the refusal is the honest answer to a part stated that
+    // long: what it is not is a sheet count that quietly leaves the rim out.
+    const solution = solveProjectFormwork(withSettings(plywoodSlabScene(), { sheets: SHEETS }))
+
+    expect(solution.cutList?.list.oversize.length).toBeGreaterThan(0)
+    expect(solution.cutList?.complete).toBe(false)
+    expect(
+      projectFormworkCaveats(solution).some((c) => c.includes('larger than every stated sheet')),
+    ).toBe(true)
+  })
+
+  test('records a sheathing grade stated as a sheet as an id that nests nothing', () => {
+    // The write paths refuse it; a hand-edited or older scene can still hold it. A grade
+    // carries permissible pressures and no width or length, so it can hold no board.
+    const solution = solveProjectFormwork(
+      withSettings(plywoodSlabScene(), { sheets: { stockIds: ['film-faced-ply-18'] } }),
+    )
+
+    expect(solution.cutList?.unknownStockIds).toEqual(['film-faced-ply-18'])
+    expect(solution.cutList?.list.order).toEqual([])
+    expect(
+      projectFormworkCaveats(solution).some((c) => c.includes('names no sheet in the catalog')),
+    ).toBe(true)
+  })
+})
+
 describe('projectFormworkCaveats', () => {
   test('says nothing about a complete takeoff', () => {
     const wall = makeWall('wall_1')

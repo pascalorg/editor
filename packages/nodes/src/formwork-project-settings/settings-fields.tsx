@@ -619,6 +619,121 @@ export function RateTableField({
 }
 
 /**
+ * Which sheets the yard buys, in preference order.
+ *
+ * A list rather than one select, because a yard that stocks a 1500 × 3000 beside its
+ * 1220 × 2440 buys fewer sheets than one restricted to either: the nest opens the big
+ * sheet for the few boards that need it. The order is the preference and it is the order
+ * the lines are shown in, not alphabetical — a nest tries the first sheet first, so a
+ * reordered list is a different sheet count and a list sorted for display would hide it.
+ *
+ * Nothing here is assumed, and this is a case the rates' reasoning does not quite cover:
+ * the catalog does hold seven sheets, so a default was available and is still wrong.
+ * Nesting against all seven answers for a merchant rather than for this job, and picking
+ * one is a supply decision taken on the project's behalf.
+ */
+export function SheetStockField({
+  onSet,
+  options,
+  stockIds,
+}: {
+  /** The whole list, in preference order. `undefined` hands the field back to unstated. */
+  onSet: (ids: string[] | undefined) => void
+  options: ReadonlyArray<{ id: string; label: string }>
+  /** `undefined` where the project has recorded no sheet at all. */
+  stockIds: readonly string[] | undefined
+}) {
+  const addId = useId()
+  const byId = new Map(options.map((option) => [option.id, option]))
+  const lines = stockIds ?? []
+
+  return (
+    <div className="flex flex-col gap-1 px-1 text-xs">
+      {lines.length === 0 && (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          No sheet recorded, so the takeoff carries no cut list at all — the cut boards are still
+          billed and priced, and nothing says how many sheets to buy them out of. Add the sheet the
+          yard buys.
+        </p>
+      )}
+
+      {lines.map((id, index) => (
+        <div className="flex items-center gap-2" key={id}>
+          <span className="shrink-0 font-mono text-muted-foreground/70">{index + 1}</span>
+          <span className="min-w-0 flex-1 truncate text-muted-foreground" title={id}>
+            {byId.get(id)?.label ?? id}
+          </span>
+          {/* Reordering is an edit rather than a display preference, because the nest tries
+              the first sheet first — so moving one up is what makes a big sheet the one the
+              wide boards come out of. */}
+          <button
+            aria-label={`Move ${byId.get(id)?.label ?? id} up the preference order`}
+            className="shrink-0 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-30"
+            disabled={index === 0}
+            onClick={() => {
+              const next = [...lines]
+              const above = next[index - 1] as string
+              next[index - 1] = id
+              next[index] = above
+              onSet(next)
+            }}
+            type="button"
+          >
+            Up
+          </button>
+          <button
+            className="shrink-0 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              const next = lines.filter((entry) => entry !== id)
+              // Back to unstated on the last line, rather than to a stated empty list: a
+              // list of no sheets and nobody having said are the same claim, and only one
+              // of them should be reachable.
+              onSet(next.length === 0 ? undefined : next)
+            }}
+            type="button"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+
+      <label className="flex items-center gap-2" htmlFor={addId}>
+        <span className="shrink-0 text-muted-foreground">Add</span>
+        <select
+          className="h-7 min-w-0 flex-1 rounded-md border border-border/50 bg-[#232325] px-1.5 text-foreground outline-none"
+          id={addId}
+          onChange={(event) => {
+            const id = event.target.value
+            event.currentTarget.value = ''
+            if (id) onSet([...lines, id])
+          }}
+          value=""
+        >
+          <option value="">Choose a sheet…</option>
+          {options
+            .filter((option) => !lines.includes(option.id))
+            .map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+        </select>
+      </label>
+
+      {lines.length > 0 && (
+        <button
+          className="self-start rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={() => onSet(undefined)}
+          type="button"
+        >
+          Back to nobody having said
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
  * The kinds a norm can be stated against, in the order a bill lists them.
  *
  * A fixed list rather than a picker, unlike the rack and the rate table: there are twelve

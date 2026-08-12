@@ -281,6 +281,21 @@ interface ProjectReport {
     excludes: string[]
   }
   noLogisticsBecause?: string
+  cutList?: {
+    sheetsToBuy: Array<{ sheetId: string; sheets: number }>
+    sheetsToBuyWithHandlingAllowance: Array<{ sheetId: string; sheets: number }> | null
+    boardsNested: number
+    boardAreaM2: number
+    cuttingWastePercent: number
+    sawKerfMm: number
+    offcutWorthRackingM2: number
+    boardsLargerThanEverySheet: Array<{ mark: string; widthMm: number; heightMm: number }>
+    statedIdsThatAreNotSheets: string[]
+    complete: boolean
+    gaps: string[]
+    excludes: string[]
+  }
+  noCutListBecause?: string
   beyondCapacity: Array<{ elementId: string; mark: string }>
   caveats: string[]
 }
@@ -988,6 +1003,106 @@ describe('inspect_project_formwork', () => {
 
     expect(ground.elementCount).toBe(ground.elements.length)
     expect(ground.shutterCount).toBe(ground.elements.reduce((total, e) => total + e.shutters, 0))
+  })
+
+  /**
+   * The sheets the cut ply comes out of.
+   *
+   * A deck rather than one of the walls above, because a wall in whole panels cuts no board
+   * at all: a cut list over one would be absent for the right reason and every assertion
+   * here would pass on an empty bill.
+   */
+  const PLAIN_SHEET = 'ply-1220x2440x18-plain'
+
+  const deck = async (): Promise<ToolMap> => {
+    const { graph } = scene()
+    const nodes = graph.nodes as unknown as Record<string, unknown>
+    nodes.slab_1 = {
+      object: 'node',
+      id: 'slab_1',
+      type: 'slab',
+      parentId: 'level_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 5],
+        [0, 5],
+      ],
+      holes: [],
+      elevation: 6,
+      thickness: 0.25,
+    }
+    ;(nodes.level_1 as { children: string[] }).children.push('slab_1')
+    const tools = buildTools(graph, [], () => {})
+    await call(tools, 'set_element_construction', {
+      elementId: 'slab_1',
+      formworkType: 'plywood',
+    })
+    await call(tools, 'attach_formwork', { elementId: 'slab_1' })
+    return tools
+  }
+
+  test('stating a sheet adds sheets to buy and moves no total in the answer', async () => {
+    // The one thing here that could produce a wrong figure rather than a missing one: the
+    // boards are already priced and weighed ply lines, so the sheets are the same material
+    // counted a second way and nothing above them may move when they appear.
+    const tools = await deck()
+    const plain = await project(tools, { levelId: 'level_1' })
+
+    await call(tools, 'set_formwork_settings', { sheets: { stockIds: [PLAIN_SHEET] } })
+    const nested = await project(tools, { levelId: 'level_1' })
+
+    expect(nested.cutList?.sheetsToBuy[0]?.sheetId).toBe(PLAIN_SHEET)
+    expect(nested.cutList?.sheetsToBuy[0]?.sheets).toBeGreaterThan(0)
+    expect(nested.cutList?.boardsNested).toBeGreaterThan(0)
+    expect(nested.bom).toEqual(plain.bom)
+    expect(nested.totalWeightKg).toBe(plain.totalWeightKg)
+    // The rule in the answer rather than only in the tool description, because the model
+    // reading the block is not reliably the one that read the description.
+    expect(nested.cutList?.excludes[0]).toContain('buys the job’s plywood twice')
+    expect(nested.caveats.some((c) => c.includes('counts the same material twice'))).toBe(true)
+  })
+
+  test('a job that cuts ply with no sheet stated is told the remedy, and never to guess', async () => {
+    const tools = await deck()
+
+    const solved = await project(tools, { levelId: 'level_1' })
+
+    expect(solved.cutList).toBeUndefined()
+    expect(solved.noCutListBecause).toContain('set_formwork_settings sheets')
+    expect(solved.noCutListBecause).toContain('never pick one')
+  })
+
+  test('a job with no ply in it says it has nothing to cut, which is a different answer', async () => {
+    // Two absences and two sentences: a steel wall is not waiting on an input, and a hedged
+    // single sentence would send the model to ask the user for a sheet size it does not need.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    await call(tools, 'set_formwork_settings', { sheets: { stockIds: [PLAIN_SHEET] } })
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.cutList).toBeUndefined()
+    expect(solved.noCutListBecause).toContain('no cutting to do here')
+    expect(solved.noCutListBecause).not.toContain('set_formwork_settings sheets')
+  })
+
+  test('the handling allowance is a second order rather than a corrected first one', async () => {
+    // The nest count is what the job cuts and this is what the yard books in — a single
+    // corrected figure would hide how much of the order is breakage rather than layout.
+    const tools = await deck()
+    await call(tools, 'set_formwork_settings', {
+      sheets: { handlingWasteFraction: 0.1, stockIds: [PLAIN_SHEET] },
+    })
+
+    const solved = await project(tools, { levelId: 'level_1' })
+
+    expect(solved.cutList?.sheetsToBuyWithHandlingAllowance?.[0]?.sheets).toBeGreaterThan(
+      solved.cutList?.sheetsToBuy[0]?.sheets ?? 0,
+    )
   })
 })
 

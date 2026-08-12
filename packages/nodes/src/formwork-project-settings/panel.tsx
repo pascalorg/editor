@@ -33,6 +33,7 @@ import {
   PROP_TYPES,
   type PressureStandardId,
   SHEATHING_TYPES,
+  SHEET_STOCK,
   STOCKABLE_CATALOG_PARTS,
 } from '@pascal-app/core/formwork'
 import { ActionButton, PanelSection } from '@pascal-app/editor'
@@ -44,6 +45,7 @@ import {
   OptionalSelectField,
   OptionalToggleField,
   RateTableField,
+  SheetStockField,
   StockRackField,
 } from './settings-fields'
 import { useFormworkSettingsNode, useFormworkSettingsWriter } from './use-formwork-settings'
@@ -108,6 +110,8 @@ const SHEATHING_OPTIONS = SHEATHING_TYPES.map((sheathing) => ({
   value: sheathing.id,
 }))
 
+const SHEET_OPTIONS = SHEET_STOCK.map((sheet) => ({ id: sheet.id, label: sheet.label }))
+
 const BEAM_OPTIONS = FALSEWORK_BEAMS.map((beam) => ({ label: beam.label, value: beam.id }))
 const PROP_OPTIONS = PROP_TYPES.map((prop) => ({ label: prop.label, value: prop.id }))
 
@@ -141,6 +145,7 @@ export function FormworkSettingsPanel() {
   const parts = node?.parts ?? {}
   const schedule = node?.schedule ?? {}
   const logistics = node?.logistics ?? {}
+  const sheets = node?.sheets ?? {}
   const stated = node !== undefined
 
   return (
@@ -664,6 +669,67 @@ export function FormworkSettingsPanel() {
           a set that goes back to the yard between two pours travels again, and nothing here knows
           whether it stays on site. Reported beside the money rather than inside it, like the labour
           above.
+        </GroupNote>
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Sheets and offcuts">
+        <GroupNote>
+          Which sheets the cut ply is bought out of, which the face material above cannot answer: a
+          grade carries permissible pressures and no width and no length, and a nest needs a
+          rectangle. Nothing is assumed, for the rates' reason — nesting against all seven catalog
+          sheets would answer for a merchant rather than for this job, so until a sheet is recorded
+          the takeoff carries no cut list at all.
+        </GroupNote>
+        <SheetStockField
+          onSet={(ids) => setGroupField('sheets', { stockIds: ids })}
+          options={SHEET_OPTIONS}
+          stockIds={sheets.stockIds}
+        />
+        <OptionalNumberField
+          hint="Narrowest offcut the yard racks. Below this a remainder is scrap whatever its length, and unstated keeps nothing — an unanswered question is not a yard that racks slivers."
+          label="Keep if wider than"
+          max={5000}
+          min={1}
+          onChange={(value) => setGroupField('sheets', { minKeepWidthMm: value })}
+          step={50}
+          unit="mm"
+          value={sheets.minKeepWidthMm}
+        />
+        <OptionalNumberField
+          hint="Shortest offcut the yard racks."
+          label="Keep if longer than"
+          max={5000}
+          min={1}
+          onChange={(value) => setGroupField('sheets', { minKeepLengthMm: value })}
+          step={50}
+          unit="mm"
+          value={sheets.minKeepLengthMm}
+        />
+        <OptionalNumberField
+          hint="An alternative to the two dimensions rather than an addition to them — a yard that thinks in 'anything over a quarter sheet' states this and leaves those alone. Any one threshold met keeps the offcut."
+          label="Or larger than"
+          max={50}
+          min={0.01}
+          onChange={(value) => setGroupField('sheets', { minKeepAreaM2: value })}
+          step={0.25}
+          unit="m²"
+          value={sheets.minKeepAreaM2}
+        />
+        <OptionalNumberField
+          hint="Sheets broken, mis-cut or spoiled in handling, as a fraction of the nested count. Stated apart from the cutting waste the nest computes because 3 % of geometric offcut is somebody's to improve and 8 % of broken corners is not. Typically 0.05 to 0.10."
+          label="Handling waste"
+          max={0.5}
+          min={0}
+          onChange={(value) => setGroupField('sheets', { handlingWasteFraction: value })}
+          step={0.01}
+          value={sheets.handlingWasteFraction}
+        />
+        <GroupNote>
+          The sheet count is a purchasing figure beside the bill rather than a line in it: every
+          board in the nest is already a priced, weighed ply line in the takeoff, so adding the
+          sheets to that total buys the job's plywood twice. One nest covers the whole scope, so two
+          scopes' counts do not add up, and nothing is turned — face grain carries the bending, so a
+          1220 × 2440 sheet is not a 2440 × 1220 one.
         </GroupNote>
       </PanelSection>
 

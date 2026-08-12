@@ -8,9 +8,12 @@ import {
   bomLabour,
   bomSupply,
   DOKA_FRAMAX_XLIFE,
+  type FormworkPart,
+  type FormworkPartSpec,
   type FormworkSetCount,
   formworkAcquisition,
   formworkCommitments,
+  formworkCutList,
   formworkLifts,
   formworkResequence,
   formworkSchedule,
@@ -18,6 +21,7 @@ import {
   formworkSetCount,
   gangFace,
   layOutFace,
+  partMark,
   type RateTable,
   type StrikeTarget,
   strikingTime,
@@ -1502,6 +1506,130 @@ describe('bomCsv', () => {
 
       expect(all.some((row) => row.startsWith('LIFTING SCHEDULE,'))).toBe(false)
       expect(all.some((row) => row.startsWith('Picks,'))).toBe(false)
+    })
+  })
+
+  describe('how many sheets to buy the ply out of', () => {
+    /**
+     * A real nest off real boards, because the risk this block carries is arithmetic a
+     * hand-built cut list could not reproduce: the sheets are what the boards on the line
+     * table above came out of, and the file has to make it impossible to add the two.
+     */
+    const board = (stationMm: number, widthMm: number, heightMm: number): FormworkPart => {
+      const spec: FormworkPartSpec = {
+        kind: 'ply-piece',
+        use: 'cut-board',
+        locus: { on: 'run', face: 'side-a', stationMm, courseIndex: 0 },
+        description: 'Cut board',
+        provenance: 'bespoke',
+        widthMm,
+        heightMm,
+      }
+      return { ...spec, mark: partMark(spec) }
+    }
+
+    const cutting = (
+      parts: readonly FormworkPart[],
+      sheets: Parameters<typeof formworkCutList>[1],
+    ) =>
+      bomCsv([line({ kind: 'ply-piece', quantity: parts.length, totalWeightKg: 96 })], {
+        subject: 'Project',
+        cutList: formworkCutList(parts, sheets) as never,
+      })
+
+    test('sits below the total and says in words that it is not part of it', () => {
+      // The one error this block is built to prevent, and it is worse than a missing figure:
+      // every board is already a priced, weighed line in the table above, so a reader who
+      // sums the sheets into the bill buys the job's plywood twice.
+      const csv = cutting([board(0, 600, 2400), board(900, 600, 2400)], {
+        stockIds: ['ply-1220x2440x18-plain'],
+      })
+      const all = rows(csv)
+      const banner = all.find((row) => row.startsWith('CUT LIST,')) as string
+
+      expect(banner).toContain('purchasing figure beside this bill rather than a line in it')
+      expect(banner).toContain('counts the same ply twice')
+      expect(banner).toContain(
+        'Nothing here is in the total weight, the owned/hired split or the cost',
+      )
+      // Below the TOTAL row rather than above it, unlike every other block in this file:
+      // a figure printed above a total is one a spreadsheet reader expects to be in it.
+      const total = all.findIndex((row) => row.includes(',TOTAL,'))
+      expect(total).toBeGreaterThan(-1)
+      expect(all.indexOf(banner)).toBeGreaterThan(total)
+    })
+
+    test('names the sheet to order and the boards it was counted from', () => {
+      const csv = cutting([board(0, 600, 2400), board(900, 600, 2400)], {
+        stockIds: ['ply-1220x2440x18-plain'],
+      })
+
+      expect(csv).toContain('Sheets to order — ply-1220x2440x18-plain,1')
+      // The area beside the count, because a sheet figure with nothing to check it against
+      // is a number a reader has to take on faith.
+      expect(csv).toContain('Boards nested,2')
+      expect(csv).toContain('Board area m²,2.88')
+      expect(csv).toContain('Saw kerf mm,3')
+    })
+
+    test('the handling allowance is a second row rather than a corrected first one', () => {
+      // Two questions: what the job cuts, and what the yard books in. Only a reader holding
+      // both can see how much of the order is breakage rather than layout.
+      const csv = cutting([board(0, 600, 2400), board(900, 600, 2400), board(1800, 600, 2400)], {
+        handlingWasteFraction: 0.1,
+        stockIds: ['ply-1220x2440x18-plain'],
+      })
+
+      expect(csv).toContain('Sheets to order — ply-1220x2440x18-plain,2')
+      expect(csv).toContain('Sheets to order with handling allowance — ply-1220x2440x18-plain,3')
+    })
+
+    test('a racked offcut is reported and never netted off the sheets', () => {
+      // A kept offcut saves nothing unless the next job finds it, and nothing here knows
+      // whether the yard racks what this says it could.
+      const csv = cutting([board(0, 600, 1200)], {
+        minKeepAreaM2: 0.25,
+        stockIds: ['ply-1220x2440x18-plain'],
+      })
+      const racking = rows(csv).find((row) => row.startsWith('Offcut worth racking')) as string
+
+      expect(racking).toContain('not deducted from the sheets above')
+      expect(rows(csv).some((row) => row.startsWith('UNNESTED,'))).toBe(true)
+      expect(rows(csv).find((row) => row.startsWith('UNNESTED,'))).toContain(
+        'what this job buys rather than what it consumes',
+      )
+    })
+
+    test('a board no sheet holds is named, because a spliced form face is a defect', () => {
+      const csv = cutting([board(0, 600, 2400), board(900, 2000, 3400)], {
+        stockIds: ['ply-1220x2440x18-plain'],
+      })
+      const short = rows(csv).find((row) => row.startsWith('INCOMPLETE,')) as string
+
+      expect(short).toContain('2000 × 3400 mm')
+      expect(short).toContain('no sheet above is buying it')
+      // And the sheet count above it is still printed: one refused board does not make the
+      // other boards' sheets wrong, it makes the list short, and the file says which.
+      expect(csv).toContain('Sheets to order — ply-1220x2440x18-plain,1')
+    })
+
+    test('a stated id that names no sheet is a typo row rather than a silent nothing', () => {
+      const csv = cutting([board(0, 600, 2400)], { stockIds: ['film-faced-ply-18'] })
+      const bad = rows(csv).find((row) => row.startsWith('NOT A SHEET,')) as string
+
+      expect(bad).toContain('film-faced-ply-18')
+      expect(bad).toContain('a sheathing grade carries no width or length')
+      // Nothing nested, so no sheet is offered — a blank rather than a 0 somebody orders.
+      expect(rows(csv).some((row) => row.startsWith('Sheets to order —'))).toBe(false)
+    })
+
+    test('an export of a job with no cut ply carries no block at all', () => {
+      // Not an empty block: a steel-panel job has no cutting to do, and a cut list of zero
+      // sheets reads as a job whose ply is free rather than as a job with no ply in it.
+      const all = rows(bomCsv([line()], { subject: 'Project' }))
+
+      expect(all.some((row) => row.startsWith('CUT LIST,'))).toBe(false)
+      expect(all.some((row) => row.startsWith('Boards nested,'))).toBe(false)
     })
   })
 })

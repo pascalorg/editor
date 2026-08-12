@@ -469,4 +469,34 @@ describe('takeoffCsv', () => {
     expect(solution.lifts).toBeUndefined()
     expect(takeoffCsv(solution, 'Project').text).not.toContain('LIFTING SCHEDULE')
   })
+
+  test('the sheets to buy reach the file, below the total they must not be added to', () => {
+    // The block whose whole risk is a spreadsheet reader summing a column: every board is
+    // already a priced, weighed ply line above, so a sheet count added in buys the job's
+    // plywood twice. Hence below the total rather than above it, unlike every other block.
+    const scene = sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1'))
+    const solution = solveProjectFormwork(
+      withSettings(scene, { sheets: { stockIds: ['ply-1220x2440x18-plain'] } }),
+    )
+
+    const rows = takeoffCsv(solution, 'Project').text.split('\n')
+
+    expect(rows.some((row) => row.startsWith('CUT LIST,'))).toBe(true)
+    expect(rows).toContain(
+      `Sheets to order — ply-1220x2440x18-plain,${solution.cutList?.list.order[0]?.sheets}`,
+    )
+    expect(rows).toContain(`Boards nested,${solution.cutList?.boardCount}`)
+    expect(rows.findIndex((row) => row.startsWith('CUT LIST,'))).toBeGreaterThan(
+      rows.findIndex((row) => row.includes(',TOTAL,')),
+    )
+  })
+
+  test('a file taken with no sheet recorded carries no cut list to order from', () => {
+    const solution = solveProjectFormwork(
+      sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1')),
+    )
+
+    expect(solution.bom.some((row) => row.kind === 'ply-piece')).toBe(true)
+    expect(takeoffCsv(solution, 'Project').text).not.toContain('CUT LIST')
+  })
 })

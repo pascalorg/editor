@@ -8,6 +8,7 @@ import type {
   ElementGangs,
   FormworkAcquisition,
   FormworkCommitments,
+  FormworkCutList,
   FormworkLifts,
   FormworkLogistics,
   FormworkResequence,
@@ -34,6 +35,8 @@ import {
   formworkAcquisition,
   formworkCommitmentCaveats,
   formworkCommitments,
+  formworkCutList,
+  formworkCutListCaveats,
   formworkLiftCaveats,
   formworkLifts,
   formworkLogistics,
@@ -253,6 +256,26 @@ export interface ProjectFormwork {
    * and no cycle time gets loads and no crane hours, which is a real state and not a gap.
    */
   logistics?: FormworkLogistics
+  /**
+   * The sheets the scope's cut ply nests out of — or absent where the job has no cut ply, or
+   * where the project has not said which sheet it buys.
+   *
+   * The only field here that is not a quantity the bill already implies. Every other answer
+   * on this solution counts, prices or dates what the parts say; this one asks what the parts
+   * were *made from*, which the bill cannot answer because a bill line is a board and a board
+   * is a rectangle out of something larger. So the boards come off the parts and the sheet
+   * comes off the settings, and the nest is the join.
+   *
+   * Deliberately not in `bom`, `supply`, `cost` or the weight, and this is the one field here
+   * where that separation is load-bearing rather than tidy: the boards are already billed as
+   * cut ply, so a sheet count added to the bill would count the same ply twice. It is a
+   * purchasing figure beside the takeoff, and every surface repeats that.
+   *
+   * Two unrelated silences, like `acquisition`'s. No cut ply in scope — a steel-panel job —
+   * means there is nothing to cut, and no stated sheet means nobody has said what the yard
+   * buys. The caveats distinguish them, because only the second is a state to act on.
+   */
+  cutList?: FormworkCutList
   /**
    * True where the striking table came from a different code family than the pressure
    * standard, because the project's own family publishes none.
@@ -511,6 +534,11 @@ export function solveProjectFormwork(
   // The one output derived from three others — four now. Every input is this solution's own, so
   // a proposed move cannot be compared against a peak the reader is not looking at, and cannot
   // offer to move a pour the windows above it report as booked.
+  // Off `everyPart` rather than off `bom`, because a nest needs the pieces and the bill has
+  // grouped them: four boards of one size are one line with a quantity of four, and nesting the
+  // line would place one board and buy a sheet for it. Not a second sweep of the scene — the same
+  // array the bill was built from.
+  const cutList = settings.sheets ? formworkCutList(everyPart, settings.sheets) : undefined
   const resequence =
     sequence && acquisition && acquisition.shortfalls.length > 0
       ? formworkResequence(
@@ -562,6 +590,7 @@ export function solveProjectFormwork(
           ),
         }
       : {}),
+    ...(cutList ? { cutList } : {}),
     strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
@@ -649,6 +678,19 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   else if (solution.cost) {
     out.push(
       'There is no transport and no craneage in this takeoff, because the project has recorded neither what one lorry carries nor how long a pick takes. Both are facts about the job’s own plant rather than about a product, so nothing is assumed. Record a lorry payload and the minutes one pick takes, with a charge per load and an hourly crane rate, to get them.',
+    )
+  }
+  // Last of the run that says what is outside the money, and the only one of them that is not a
+  // cost at all: the sheets the ply came out of. It goes here rather than beside the bill because
+  // a reader who has just been told what is *in* the total is the reader about to add a ply order
+  // to it, and the first sentence of these caveats is that the boards are already billed.
+  if (solution.cutList) out.push(...formworkCutListCaveats(solution.cutList))
+  // Only where there is cut ply to nest and no sheet stated. A steel-panel job has nothing to cut
+  // and is owed no sentence about sheets, which is why this reads the bill rather than the
+  // settings: `cutList` absent means either, and only one of the two is a state to act on.
+  else if (solution.bom.some((line) => line.kind === 'ply-piece')) {
+    out.push(
+      'There is no cut list in this takeoff, because the project has not said which sheet its ply is bought in. The cut boards are billed above as areas, and how many sheets they come out of depends entirely on the sheet: 1220 × 2440 and 1250 × 2500 give the same wall different counts. Record the sheet stock the yard buys with set_formwork_settings sheets to get it.',
     )
   }
   // Verbatim again, and the qualifying-time line is the one that earns its place: under

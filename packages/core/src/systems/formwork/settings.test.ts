@@ -379,6 +379,43 @@ describe('formworkSettings logistics', () => {
   })
 })
 
+describe('formworkSettings sheets', () => {
+  it('leaves the sheet stock unresolved where nobody has stated it', () => {
+    // The seventh undefaulted group. Nesting against every sheet in the catalog would
+    // answer for a merchant rather than for the job, and picking one would be a supply
+    // decision taken on the project's behalf.
+    expect(formworkSettings(node()).sheets).toBeUndefined()
+    expect(DEFAULT_FORMWORK_SETTINGS.sheets).toBeUndefined()
+  })
+
+  it('resolves the stated sheet stock and the offcut policy whole', () => {
+    const resolved = formworkSettings(
+      node({
+        sheets: {
+          stockIds: ['ply-1220x2440x18-plain'],
+          minKeepWidthMm: 150,
+          handlingWasteFraction: 0.08,
+        },
+      }),
+    )
+
+    expect(resolved.sheets).toEqual({
+      stockIds: ['ply-1220x2440x18-plain'],
+      minKeepWidthMm: 150,
+      handlingWasteFraction: 0.08,
+    })
+  })
+
+  it('does not take the sheet from parts.sheathingId, which has no size', () => {
+    // The mistake the group exists to prevent. A sheathing grade carries permissible
+    // pressures and no width or length, so a nest cannot open one — the face material
+    // being stated is not the sheet it comes in.
+    expect(
+      formworkSettings(node({ parts: { sheathingId: 'film-faced-ply-18' } })).sheets,
+    ).toBeUndefined()
+  })
+})
+
 describe('formworkSettings schedule', () => {
   it('leaves the lead times unresolved where the project has stated none', () => {
     // The rates' rule rather than the pressure inputs'. A lead time has no published

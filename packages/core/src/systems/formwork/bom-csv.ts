@@ -2,9 +2,11 @@ import { ACQUIRE_GAP_LABELS, ACQUIRE_VERDICT_LABELS, type FormworkAcquisition } 
 import { COMMITMENT_GAP_LABELS, type FormworkCommitments } from './commitments'
 import { type BomCost, COST_GAP_LABELS, type CostLine } from './cost'
 import { CRANE_PICK_VERDICT_LABELS } from './crane'
+import type { FormworkCutList } from './cut-list'
 import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
 import type { BomHire, HireLine } from './hire'
 import { type BomLabour, LABOUR_GAP_LABELS } from './labour'
+import { CUT_GAP_LABELS } from './layout'
 import type { FormworkLifts } from './lifts'
 import { type FormworkLogistics, LOGISTICS_GAP_LABELS } from './logistics'
 import { type BomLine, PART_KIND_LABELS } from './parts'
@@ -198,6 +200,16 @@ export interface BomCsvScope {
    * number a reader cannot check.
    */
   logistics?: FormworkLogistics
+  /**
+   * The sheets the cut ply comes out of, where the project stated what the yard buys.
+   *
+   * The one block in this file that must never be added to the total below it, and the risk is
+   * specific to a spreadsheet: the boards are already bill lines, priced as consumed and
+   * weighed into the tonnage, so a sheet count added in counts the same ply twice. So it sits
+   * last, after the line table's total row rather than above it, its header says what it is
+   * not, and no sheet figure appears in a money or a weight column.
+   */
+  cutList?: FormworkCutList
 }
 
 /**
@@ -1128,6 +1140,76 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       '',
     ].join(','),
   )
+
+  const cut = scope.cutList
+  if (cut) {
+    rows.push('')
+    // Below the total rather than above it, and the header says why. Every board in this nest
+    // is a `ply-piece` row in the table above, priced as consumed and weighed into the
+    // tonnage; the sheets are that same ply counted a second way, so a reader who adds them
+    // buys the job's plywood twice.
+    rows.push(
+      [
+        'CUT LIST',
+        cell(
+          'Sheets to buy the cut ply out of. A purchasing figure beside this bill rather than a line in it — the boards are already priced and weighed in the table above, so adding these sheets counts the same ply twice. Nothing here is in the total weight, the owned/hired split or the cost',
+        ),
+      ].join(','),
+    )
+    rows.push(['Boards nested', cut.boardCount].join(','))
+    rows.push(['Board area m²', cut.boardAreaM2].join(','))
+    for (const entry of cut.list.order) {
+      rows.push([cell(`Sheets to order — ${entry.sheetId}`), entry.sheets].join(','))
+    }
+    for (const entry of cut.list.orderWithAllowance ?? []) {
+      // A separate row rather than a replacement, because the two answer different questions:
+      // the nest count is what the job cuts and this is what the yard books in, and only a
+      // reader holding both can see how much of the order is breakage.
+      rows.push(
+        [cell(`Sheets to order with handling allowance — ${entry.sheetId}`), entry.sheets].join(
+          ',',
+        ),
+      )
+    }
+    rows.push(
+      ['Cutting waste', cell(`${Math.round(cut.list.cuttingWasteFraction * 100)}%`)].join(','),
+    )
+    rows.push(['Saw kerf mm', cut.list.kerfMm].join(','))
+    if (cut.list.retainableAreaMm2 > 0) {
+      // Reported and never netted off the waste above: a racked offcut is saved only if the
+      // next job finds it, and nothing here knows whether the yard racks what this says it
+      // could.
+      rows.push(
+        [
+          'Offcut worth racking m² — not deducted from the sheets above',
+          round2(cut.list.retainableAreaMm2 / 1_000_000),
+        ].join(','),
+      )
+    }
+    for (const piece of cut.list.oversize) {
+      rows.push(
+        [
+          'INCOMPLETE',
+          cell(
+            `${piece.mark} is ${piece.widthMm} × ${piece.heightMm} mm and larger than every stated sheet, so no sheet above is buying it`,
+          ),
+        ].join(','),
+      )
+    }
+    for (const id of cut.unknownStockIds) {
+      rows.push(
+        [
+          'NOT A SHEET',
+          cell(
+            `${id} names no sheet in the catalog, so it is nesting nothing — a sheathing grade carries no width or length, and only a sheet stock id has a size to nest against`,
+          ),
+        ].join(','),
+      )
+    }
+    for (const gap of cut.list.gaps) {
+      rows.push(['UNNESTED', cell(CUT_GAP_LABELS[gap])].join(','))
+    }
+  }
 
   return `${rows.join('\n')}\n`
 }

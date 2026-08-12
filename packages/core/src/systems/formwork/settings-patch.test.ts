@@ -500,6 +500,93 @@ describe('applyFormworkSettingsPatch — the deliveries and the crane hours', ()
   })
 })
 
+describe('applyFormworkSettingsPatch — the sheets the ply comes out of', () => {
+  test('the stated sheets and the offcut policy are one group', () => {
+    const result = apply(undefined, {
+      sheets: {
+        stockIds: ['ply-1220x2440x18-plain'],
+        minKeepWidthMm: 150,
+        handlingWasteFraction: 0.08,
+      },
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.writes?.sheets).toEqual({
+      stockIds: ['ply-1220x2440x18-plain'],
+      minKeepWidthMm: 150,
+      handlingWasteFraction: 0.08,
+    })
+    expect(result.changed).toContain('sheets')
+  })
+
+  test('a threshold arriving later does not delete the sheet stated before it', () => {
+    const result = apply(node({ sheets: { stockIds: ['ply-1220x2440x18-plain'] } }), {
+      sheets: { minKeepLengthMm: 600 },
+    })
+
+    expect(result.writes?.sheets).toEqual({
+      stockIds: ['ply-1220x2440x18-plain'],
+      minKeepLengthMm: 600,
+    })
+  })
+
+  test('a stated list replaces the sheets rather than merging into them', () => {
+    // Which sizes a yard buys is one fact, like the crane's chart: two sizes stated and one
+    // restated is a yard that has dropped a size, not one that still buys both.
+    const result = apply(
+      node({ sheets: { stockIds: ['ply-1220x2440x18-plain', 'ply-1250x2500x18-birch-wbp'] } }),
+      { sheets: { stockIds: ['ply-1250x2500x18-birch-wbp'] } },
+    )
+
+    expect(result.writes?.sheets).toEqual({ stockIds: ['ply-1250x2500x18-birch-wbp'] })
+  })
+
+  test('a sheathing grade stated as a sheet is refused, and told where it belongs', () => {
+    // The refusal this group most needs, because the id is a real catalog id: a model
+    // reaching for the face material it already knows would have it accepted by any check
+    // built on the stockable catalog, stored, and nest not one board — a grade carries no
+    // width and no length.
+    const result = apply(undefined, { sheets: { stockIds: ['film-faced-ply-18'] } })
+
+    expect(result.error).toContain('sheathing grade')
+    expect(result.error).toContain('parts.sheathingId')
+    expect(result.writes).toBeUndefined()
+  })
+
+  test('an invented sheet size is refused with the catalog in the message', () => {
+    const result = apply(undefined, { sheets: { stockIds: ['ply-1200x2400x18'] } })
+
+    expect(result.error).toContain('no sheet stock')
+    expect(result.error).toContain('ply-1220x2440x18-plain')
+  })
+
+  test('null unstates a threshold and leaves the sheet where it is', () => {
+    const result = apply(
+      node({ sheets: { stockIds: ['ply-1220x2440x18-plain'], minKeepWidthMm: 150 } }),
+      { sheets: { minKeepWidthMm: null } },
+    )
+
+    expect(result.writes?.sheets).toEqual({ stockIds: ['ply-1220x2440x18-plain'] })
+  })
+
+  test('a handling waste of half the order is refused by the schema', () => {
+    // Above 50 % is a figure entered as a percentage rather than a fraction, and it would
+    // double a ply order without looking wrong on a panel.
+    expect(FormworkSettingsPatch.safeParse({ sheets: { handlingWasteFraction: 8 } }).success).toBe(
+      false,
+    )
+    expect(
+      FormworkSettingsPatch.safeParse({ sheets: { handlingWasteFraction: 0.08 } }).success,
+    ).toBe(true)
+  })
+
+  test('a sheet size the length of a lorry is refused by the schema', () => {
+    expect(FormworkSettingsPatch.safeParse({ sheets: { minKeepWidthMm: 12_000 } }).success).toBe(
+      false,
+    )
+  })
+})
+
 describe('formworkSettingsReport', () => {
   test('reports the assumed defaults as assumed on an untouched project', () => {
     const report = formworkSettingsReport(undefined)
@@ -582,6 +669,28 @@ describe('formworkSettingsReport', () => {
     expect(report.resolved.rates?.transportPerLoad).toBe(400)
     expect(report.resolved.rates?.cranePerHour).toBe(120)
     expect(report.resolved.rates?.currency).toBe('GBP')
+  })
+
+  test('an unrecorded sheet reads as null, which is a takeoff with no cut list in it', () => {
+    // And the sheathing grade beside it is not an answer to this: it is the face material,
+    // and a nest needs a width and a length.
+    const report = formworkSettingsReport(node({ parts: { sheathingId: 'film-faced-ply-18' } }))
+
+    expect(report.resolved.sheets).toBeNull()
+    expect(report.stated?.sheets).toBeNull()
+    expect(report.resolved.parts.sheathingId).toBe('film-faced-ply-18')
+  })
+
+  test('a recorded sheet is reported as stated, policy and all', () => {
+    const sheets = {
+      stockIds: ['ply-1220x2440x18-plain'],
+      minKeepAreaM2: 0.5,
+      handlingWasteFraction: 0.05,
+    }
+    const report = formworkSettingsReport(node({ sheets }))
+
+    expect(report.resolved.sheets).toEqual(sheets)
+    expect(report.stated?.sheets).toEqual(sheets)
   })
 
   test('curing is reported unstated rather than resolved to a default', () => {

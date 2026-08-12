@@ -534,6 +534,62 @@ export const FormworkLogisticsSettings = z.object({
 export type FormworkLogisticsSettings = z.infer<typeof FormworkLogisticsSettings>
 
 /**
+ * The sheets the yard buys its ply out of, and what it racks the remainder of.
+ *
+ * `parts.sheathingId` already names the face material and cannot answer this. A
+ * `SheathingType` is a *grade* — it carries permissible pressures and a capacity basis and
+ * no width and no length at all — and a nest needs a rectangle. Only `SHEET_STOCK` carries
+ * dimensions, and which of those a job buys is a commercial fact about the job rather than
+ * a property of the grade: a merchant selling 1220 × 2440 and one selling 1250 × 2500 turn
+ * the same wall into different sheet counts. So the size is stated here and the grade stays
+ * on `parts`.
+ *
+ * Undefaulted for the rates' reason and not the rack's. Nesting against all seven catalog
+ * sheets would answer for a merchant rather than for this job — it would pick the sheet that
+ * happened to suit each board and report a count nobody can order — and picking one sheet as
+ * a default would be a supply decision made on the project's behalf. So absent means no cut
+ * list at all, exactly as an absent rate means no money.
+ *
+ * The thresholds are the other half, and they are a yard's policy rather than a fact about
+ * ply: the same 300 mm strip is racked by a yard with room for it and skipped by one without.
+ * Unstated keeps nothing, because an unanswered question is not a yard that racks slivers.
+ */
+export const FormworkSheetSettings = z.object({
+  /**
+   * Sheet stock ids the yard buys, in preference order — `['ply-1220x2440x18-plain']`.
+   *
+   * A preference and not a filter: a board too wide for the first sheet is nested out of a
+   * later one rather than refused. State more than one where the yard genuinely stocks more
+   * than one, because a nest allowed to open a 1500 × 3000 for the few boards that need it
+   * buys fewer sheets than one that refuses them.
+   */
+  stockIds: z.array(z.string().trim().max(120)).max(20).optional(),
+  /** Narrowest offcut worth racking, mm. Below this it is scrap whatever its length. */
+  minKeepWidthMm: z.number().finite().positive().max(5000).optional(),
+  /** Shortest offcut worth racking, mm. */
+  minKeepLengthMm: z.number().finite().positive().max(5000).optional(),
+  /**
+   * Smallest offcut worth racking by area, m².
+   *
+   * An alternative to the two dimensions rather than an addition to them — a yard that
+   * thinks in "anything over a quarter sheet" states this and leaves those unstated. Any
+   * one threshold met is enough to keep an offcut.
+   */
+  minKeepAreaM2: z.number().finite().positive().max(50).optional(),
+  /**
+   * Sheets damaged, mis-cut or spoiled in handling, as a fraction of the nested count.
+   *
+   * The waste no layout reduces, which is why it is stated separately from the cutting waste
+   * the nest computes: 3.3 % of geometric offcut is somebody's to improve and 8 % of broken
+   * corners is not, and one combined figure hides which. Applied to the sheet count and
+   * rounded up per sheet size, because a third of a sheet is not orderable. Typically 0.05
+   * to 0.10.
+   */
+  handlingWasteFraction: z.number().finite().min(0).max(0.5).optional(),
+})
+export type FormworkSheetSettings = z.infer<typeof FormworkSheetSettings>
+
+/**
  * How the concrete is cured, which is what decides when the form comes off.
  *
  * A separate group from `placement` rather than three more fields in it, because it
@@ -587,6 +643,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   schedule: FormworkScheduleSettings.optional(),
   crane: FormworkCraneSettings.optional(),
   logistics: FormworkLogisticsSettings.optional(),
+  sheets: FormworkSheetSettings.optional(),
 }).describe(
   dedent`
   Formwork project settings - the pour every shutter in the scene is designed against. One per scene.
@@ -604,6 +661,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - schedule: calendar days (not working days — a hire is charged over a weekend) for erecting a shutter before its pour and for getting the plant back after striking. The pour dates themselves are per pour, on each formwork-assembly's pourAt. Absent means the programme reports the pour and strike days only
   - crane: the site's own crane — its load chart as capacity against radius, the height under the hook, the widest gang that can be moved, and the minimum sling angle. A capacity curve rather than a rating because a tower crane rated 8 t lifts 2.2 t at the jib tip, and a gang is checked at the radius it is actually set at. Absent means each face is grouped as one gang and nothing is checked against a lift — there is no conservative default crane, and a shipped curve would pass gangs that do not lift and fail gangs that do
   - logistics: what one lorry carries and how many minutes of hook time a pick takes, which is what turns a bill's weight into loads and a lifting schedule into crane hours. The two costs every total in this model has excluded since the money arrived, and both figures are facts about this job's own plant rather than about a product: a payload is the lorry the yard sends and a cycle time is this crew on this crane. Absent means the takeoff carries no transport and no craneage at all, as an absent norm means it carries no hours
+  - sheets: the sheet stock the yard buys its ply out of, plus what it racks the remainder of and how much it loses to handling. Separate from parts.sheathingId because that names a grade and a grade has no size — only sheet stock carries a width and a length, and which one a job buys is a commercial fact about the job. This is what turns the cut boards on the bill into sheets to order; the sheets are a purchasing figure beside the bill rather than a line in it, because the boards are already billed. Absent means no cut list at all
   `,
 )
 export type FormworkProjectSettingsNode = z.infer<typeof FormworkProjectSettingsNode>
