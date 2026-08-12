@@ -140,6 +140,70 @@ export function projectPointOntoWall(point: WallPlanPoint, wall: WallNode): Wall
   return [x1 + dx * t, z1 + dz * t]
 }
 
+/** How far past an endpoint an extension stays offerable, in metres. */
+export const WALL_EXTENSION_MAX_REACH = 8
+
+/**
+ * Snap to the imaginary continuation of an existing wall — the line it would
+ * trace if it kept going past its endpoint.
+ *
+ * The alignment guides cover the same intent only for X- and Z-aligned
+ * geometry (`AlignmentGuideAxis` is `'x' | 'z'`), so a diagonal wall has
+ * nothing holding a new segment collinear with it. This fills exactly that gap
+ * and nothing else: `t` outside `[0, 1]` is what makes it an *extension*, and
+ * the wall body inside that range is already `findWallSnapTarget`'s job, so the
+ * two never compete for the same cursor position.
+ *
+ * Bounded by `WALL_EXTENSION_MAX_REACH` — a line continues forever, but an
+ * inference that reaches across the whole site stops being a hint and starts
+ * capturing points the user never aimed at.
+ */
+export function findWallExtensionSnap(
+  point: WallPlanPoint,
+  walls: WallNode[],
+  options?: { ignoreWallIds?: string[]; radius?: number; maxReach?: number },
+): { point: WallPlanPoint; wallId: WallNode['id'] } | null {
+  const ignoreWallIds = new Set(options?.ignoreWallIds ?? [])
+  const radiusSquared = (options?.radius ?? WALL_JOIN_SNAP_RADIUS) ** 2
+  const maxReach = options?.maxReach ?? WALL_EXTENSION_MAX_REACH
+  let best: { point: WallPlanPoint; wallId: WallNode['id'] } | null = null
+  let bestDistanceSquared = Number.POSITIVE_INFINITY
+
+  for (const wall of walls) {
+    if (ignoreWallIds.has(wall.id)) continue
+    // A curved wall has no single line to continue.
+    if (isCurvedWall(wall)) continue
+
+    const [x1, z1] = wall.start
+    const [x2, z2] = wall.end
+    const dx = x2 - x1
+    const dz = z2 - z1
+    const lengthSquared = dx * dx + dz * dz
+    if (lengthSquared < 1e-9) continue
+
+    const t = ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSquared
+    // Inside the segment is the body's business, not the extension's.
+    if (t > 0 && t < 1) continue
+
+    const projected: WallPlanPoint = [x1 + dx * t, z1 + dz * t]
+    const beyond =
+      t <= 0 ? distanceSquared(projected, wall.start) : distanceSquared(projected, wall.end)
+    if (beyond > maxReach * maxReach) continue
+
+    const candidateDistanceSquared = distanceSquared(point, projected)
+    if (
+      candidateDistanceSquared > radiusSquared ||
+      candidateDistanceSquared >= bestDistanceSquared
+    ) {
+      continue
+    }
+    best = { point: projected, wallId: wall.id }
+    bestDistanceSquared = candidateDistanceSquared
+  }
+
+  return best
+}
+
 export function findWallSnapTarget(
   point: WallPlanPoint,
   walls: WallNode[],

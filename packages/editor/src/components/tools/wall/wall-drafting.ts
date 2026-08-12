@@ -26,6 +26,7 @@ import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../..
 import { resolveDraftConstraint } from '../../../store/use-measurement-input'
 import {
   distanceSquared,
+  findWallExtensionSnap,
   findWallSnapTarget,
   findWallSpecialPointSnap,
   offsetWallLineForAlignment,
@@ -517,6 +518,18 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
         snap: 'wall',
         targetWallIds: wallIdsAtSnapPoint(wallSnap, walls, ignoreWallIds),
       }
+    }
+
+    // Last magnetic candidate: the continuation of an existing wall's line. It
+    // only ever fires past an endpoint, where the body snap above cannot, so it
+    // takes nothing away from the existing precedence — it fills the diagonal
+    // case the X/Z alignment guides structurally cannot cover.
+    const extension = findWallExtensionSnap(basePoint, walls, {
+      ignoreWallIds,
+      radius: snapRadii?.wall,
+    })
+    if (extension) {
+      return { point: extension.point, snap: 'wall', targetWallIds: [extension.wallId] }
     }
     return { point: basePoint, snap: null, targetWallIds: [] }
   }
