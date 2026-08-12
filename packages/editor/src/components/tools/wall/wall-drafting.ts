@@ -20,9 +20,11 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { findCadSnapOnLevel } from '../../../lib/cad-snap-source'
+import { applyFixedLength } from '../../../lib/measurement-input'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
+import { getMeasurementInputValue } from '../../../store/use-measurement-input'
 import {
   distanceSquared,
   findWallSnapTarget,
@@ -438,6 +440,29 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   } = args
 
   if (bypassSnap) return { point, snap: null, targetWallIds: [] }
+
+  // A typed dimension is authoritative: the user asked for exactly this length,
+  // so it outranks every magnetic target — being pulled onto a corner 4.19 m out
+  // is precisely what typing 4.2 exists to prevent. The cursor still chooses the
+  // *direction* (through the angle lock, when that mode is on) and the typed
+  // value owns only the *distance*, which is why typing mid-draft doesn't fight
+  // the snap. Read here rather than threaded through every caller so the 2D and
+  // 3D drafting paths cannot diverge — both reach this one choke point.
+  if (start) {
+    const typedLength = getMeasurementInputValue()
+    if (typedLength !== null) {
+      const directionTarget = angleSnap
+        ? snapPointAlongAngleRay(
+            start,
+            point,
+            DEFAULT_ANGLE_STEP,
+            overrideStep ?? getSegmentGridStep(),
+          )
+        : point
+      const fixed = applyFixedLength(start, directionTarget, typedLength)
+      if (fixed) return { point: [fixed[0], fixed[1]], snap: null, targetWallIds: [] }
+    }
+  }
 
   // Discrete special points (corner / midpoint / crossing) are taken from the
   // raw cursor so an interim grid snap can't mask them. A corner always wins,

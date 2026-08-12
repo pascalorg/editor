@@ -229,6 +229,11 @@ type CameraControlEvents = {
 
 type ToolEvents = {
   'tool:cancel': undefined
+  // The user pressed Enter on a typed dimension: finish the current tool step at
+  // the value it currently resolves to, rather than waiting for a pointer click.
+  // Only ever emitted while the measurement-input buffer holds text, so tools
+  // that already give Enter a meaning of their own keep it when nothing is typed.
+  'tool:commit': undefined
 }
 
 type GuideEvents = {

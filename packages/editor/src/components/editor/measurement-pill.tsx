@@ -3,6 +3,8 @@
 import { useViewer } from '@pascal-app/viewer'
 import { type ForwardedRef, Fragment, forwardRef } from 'react'
 import { formatLinearMeasurement, type MetricNotation } from '../../lib/measurements'
+import { cn } from '../../lib/utils'
+import useMeasurementInput from '../../store/use-measurement-input'
 
 // Canonical in-world dimension formatter — metric metres or imperial
 // feet/inches. Shared by every measurement readout so they read the same.
@@ -50,10 +52,22 @@ export function DimensionPill({
   primaryRef?: ForwardedRef<HTMLSpanElement>
 }) {
   const metricNotation = useViewer((state) => state.metricNotation)
+  // The typed-dimension buffer takes over the primary readout while the user is
+  // typing, so the pill doubles as the measurements box — no second surface to
+  // look at, no focus to move. Every pill in the app inherits this by being
+  // built from `DimensionPill`.
+  const typed = useMeasurementInput((state) => state.buffer)
 
   return (
-    <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+    <div
+      className={cn(
+        'flex items-center gap-2 whitespace-nowrap rounded-full border bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur',
+        typed ? 'border-primary/70' : 'border-border/60',
+      )}
+    >
       {parts.map((part, index) => {
+        const isPrimary = part.key === primary
+        const isTyping = isPrimary && typed !== ''
         const text = part.signed
           ? `${part.value < 0 ? '-' : '+'}${formatMeasurement(
               Math.abs(part.value),
@@ -69,12 +83,22 @@ export function DimensionPill({
               </span>
             ) : null}
             <span
-              className={
-                part.key === primary ? 'font-medium text-foreground' : 'text-muted-foreground'
-              }
-              ref={part.key === primary ? primaryRef : undefined}
+              className={isPrimary ? 'font-medium text-foreground' : 'text-muted-foreground'}
+              // While typing, the imperative per-frame writer must not stomp the
+              // typed text — withholding the ref makes its `.current` null so it
+              // no-ops for the duration.
+              ref={isPrimary && !isTyping ? primaryRef : undefined}
             >
-              {`${part.prefix} ${text}`}
+              {isTyping ? (
+                <>
+                  {`${part.prefix} ${typed}`}
+                  <span aria-hidden className="ml-px animate-pulse text-primary">
+                    ▌
+                  </span>
+                </>
+              ) : (
+                `${part.prefix} ${text}`
+              )}
             </span>
           </Fragment>
         )

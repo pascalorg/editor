@@ -23,6 +23,7 @@ import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
+import { useMeasurementInputBridge } from '../../hooks/use-measurement-input-bridge'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
 import {
   applySceneGraphToEditor,
@@ -1154,6 +1155,7 @@ export default function Editor({
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
+  useMeasurementInputBridge()
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,

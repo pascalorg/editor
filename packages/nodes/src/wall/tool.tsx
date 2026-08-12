@@ -654,11 +654,17 @@ export const WallTool: React.FC = () => {
         : [event.localPosition[0], event.localPosition[2]]
       // Snapping is governed entirely by the snapping mode (grid / lines /
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
-      const angleLocked = buildingState.current === 1 && isAngleSnapActive()
+      const drafting = buildingState.current === 1
+      const angleLocked = drafting && isAngleSnapActive()
       const snapResult = snapWallDraftPointDetailed({
         point: localPoint,
         walls: snapWalls,
-        start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+        // The anchor is passed for the whole second-point phase, not just under
+        // the angle lock: the angle path is gated on `angleSnap` regardless, and
+        // a typed dimension needs an anchor to measure from in *every* snapping
+        // mode. The 2D path already passes it unconditionally — withholding it
+        // here is what would make typed lengths work in plan but not in 3D.
+        start: drafting ? [startingPoint.current.x, startingPoint.current.z] : undefined,
         angleSnap: angleLocked,
         magnetic: isMagneticSnapActive(),
         cadLevelId: useViewer.getState().selection.levelId ?? null,
@@ -802,7 +808,10 @@ export const WallTool: React.FC = () => {
           snapWallDraftPointDetailed({
             point: localClick,
             walls: snapWalls,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            // Anchor passed unconditionally, matching `onGridMove`: the commit
+            // has to resolve to the same point the ghost was showing, and a
+            // typed dimension needs the anchor in every snapping mode.
+            start: [startingPoint.current.x, startingPoint.current.z],
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
             cadLevelId: useViewer.getState().selection.levelId ?? null,

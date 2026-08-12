@@ -29,6 +29,7 @@ import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
+import { isMeasurementInputContinueKey, isMeasurementInputStartKey } from '../lib/measurement-input'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
@@ -36,6 +37,7 @@ import { toggleWindowOpenState } from '../lib/window-interaction'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
+import useMeasurementInput from '../store/use-measurement-input'
 import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
 
 // References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
@@ -221,6 +223,41 @@ export const useKeyboard = ({
 
       if (useDeleteConfirmation.getState().request) {
         return
+      }
+
+      // Typed-dimension entry ("measurements box"). This runs ahead of every
+      // shortcut below, but only claims a key while an interaction is actually
+      // in flight — at idle the whole block is inert, so `1`/`2`/`3` stay phase
+      // shortcuts and `b`/`v`/`m`/… keep switching tools. A buffer starts on a
+      // digit; once started, every printable key belongs to it so a unit can be
+      // spelled out (`4200mm`). Modifier chords (Cmd+Z, Ctrl+C) never reach it.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+        const input = useMeasurementInput.getState()
+        const typing = input.buffer !== ''
+        if (typing || isActive(useInteractionScope.getState().scope)) {
+          if (typing && e.key === 'Backspace') {
+            e.preventDefault()
+            input.backspace()
+            return
+          }
+          if (typing && e.key === 'Enter') {
+            e.preventDefault()
+            emitter.emit('tool:commit')
+            return
+          }
+          // Escape clears the typed value first; a second Escape falls through
+          // to the ordinary cancel, so a mistyped number never costs the draft.
+          if (typing && e.key === 'Escape') {
+            e.preventDefault()
+            input.clear()
+            return
+          }
+          if (typing ? isMeasurementInputContinueKey(e.key) : isMeasurementInputStartKey(e.key)) {
+            e.preventDefault()
+            input.append(e.key)
+            return
+          }
+        }
       }
 
       if (e.key === 'Shift' && !e.repeat && useEditor.getState().mode === 'material-paint') {
