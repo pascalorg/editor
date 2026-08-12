@@ -28,6 +28,8 @@ const KEY_DISPLAY_MAP: Record<string, string> = {
   Esc: '⎋',
   Shift: '⇧',
   Space: '␣',
+  Enter: '↵',
+  Backspace: '⌫',
 }
 
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
@@ -145,17 +147,49 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     ],
   },
   {
+    title: 'Typed Dimensions',
+    shortcuts: [
+      {
+        keys: ['0-9'],
+        action: 'Type an exact dimension while drawing or dragging',
+        note: 'Just start typing — no field to click into. The draft follows the value as you type. Only active during a gesture, so the tool shortcuts keep working the rest of the time.',
+      },
+      {
+        keys: ['Enter'],
+        action: 'Commit at the typed value',
+      },
+      {
+        keys: ['Esc'],
+        action: 'Clear the typed value',
+        note: 'Press again to cancel the gesture itself, so a mistyped number never costs the draft.',
+      },
+      {
+        keys: ['Backspace'],
+        action: 'Delete the last typed character',
+      },
+    ],
+  },
+  {
     title: 'Drawing Tools',
     shortcuts: [
       {
         keys: ['Shift'],
-        action: 'Bypass guided snapping and angle constraints',
-        note: 'Hold during the active gesture. Passive guide or measurement feedback may stay visible.',
+        action: 'Cycle the snapping mode — grid → lines → angles → off',
+        note: 'A tap, not a hold. The mode is per context and always shown on the HUD chip; "off" is how snapping is turned off.',
       },
       {
-        keys: ['Shift'],
-        action: 'Rotate freely, bypassing the default 15° rotation snap',
-        note: 'Hold while dragging a rotate handle or direct-rotation gesture.',
+        keys: ['Ctrl'],
+        action: 'Cycle the grid step — 0.5 → 0.25 → 0.1 → 0.05 m',
+        note: 'A clean tap, so chords like Ctrl+Z are unaffected.',
+      },
+      {
+        keys: ['Alt'],
+        action: 'Force: follow the raw cursor and commit past an invalid or colliding drop',
+        note: 'Hold during the gesture, where the tool supports it. This is the only momentary bypass.',
+      },
+      {
+        keys: ['C'],
+        action: 'Cycle how placement continues — wall room/single, fence continuous/single, point once/repeat',
       },
     ],
   },
@@ -169,11 +203,6 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['E'],
         action: 'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed',
-      },
-      {
-        keys: ['Shift'],
-        action: 'Temporarily bypass placement validation constraints',
-        note: 'Hold while placing.',
       },
     ],
   },
