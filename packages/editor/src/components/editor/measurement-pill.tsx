@@ -7,6 +7,7 @@ import { formatLinearMeasurement, type MetricNotation } from '../../lib/measurem
 import { cn } from '../../lib/utils'
 import useAxisLock from '../../store/use-axis-lock'
 import useMeasurementInput from '../../store/use-measurement-input'
+import useWallSnapIndicator, { wallSnapLabel } from '../../store/use-wall-snap-indicator'
 
 // Canonical in-world dimension formatter — metric metres or imperial
 // feet/inches. Shared by every measurement readout so they read the same.
@@ -62,6 +63,10 @@ export function DimensionPill({
   // The axis lock is invisible without a readout — the draft just stops moving
   // sideways, which reads as a bug rather than a constraint.
   const axis = useAxisLock((state) => state.axis)
+  // Naming what the draft caught is what makes a snap legible the first time.
+  // An explicit axis lock replaces it — the lock is what is holding the point.
+  const snap = useWallSnapIndicator((state) => state.point)
+  const constraint = axis ? AXIS_LABELS[axis] : snap ? wallSnapLabel(snap) : null
 
   return (
     <div
@@ -70,9 +75,11 @@ export function DimensionPill({
         typed || axis ? 'border-primary/70' : 'border-border/60',
       )}
     >
-      {axis ? (
+      {constraint ? (
         <>
-          <span className="font-medium text-primary">{AXIS_LABELS[axis]}</span>
+          <span className={axis ? 'font-medium text-primary' : 'font-medium text-foreground'}>
+            {constraint}
+          </span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>

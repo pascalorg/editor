@@ -10,6 +10,29 @@ import { create } from 'zustand'
 /** Which kind of wall geometry the draft point snapped to. */
 export type WallSnapKind = 'endpoint' | 'midpoint' | 'intersection' | 'wall'
 
+/**
+ * Names for the readout. The 3D beacon already encodes the kind as a glyph
+ * shape, but a shape only tells an experienced user what was caught — the name
+ * is what makes the snap legible the first time, and what lets someone say "it
+ * grabbed the midpoint" instead of "it jumped".
+ */
+const WALL_SNAP_LABELS: Record<WallSnapKind, string> = {
+  endpoint: 'Endpoint',
+  midpoint: 'Midpoint',
+  intersection: 'Intersection',
+  wall: 'On wall',
+}
+
+export function wallSnapLabel(point: Pick<WallSnapPoint, 'kind' | 'source'>): string {
+  // An imported drawing is never silently conflated with built geometry.
+  if (point.source === 'cad') {
+    return point.kind === 'wall'
+      ? 'On drawing'
+      : `Drawing ${WALL_SNAP_LABELS[point.kind].toLowerCase()}`
+  }
+  return WALL_SNAP_LABELS[point.kind]
+}
+
 export type WallSnapPoint = {
   /** Building-local plan coordinates (XZ meters). */
   x: number
