@@ -1,6 +1,7 @@
 import { customAlphabet } from 'nanoid'
 import { z } from 'zod'
 import { CameraSchema } from './camera'
+import type { CollectionId } from './collections'
 
 const customId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
 
@@ -25,6 +26,12 @@ export const BaseNode = z.object({
   name: z.string().optional(),
   parentId: z.string().nullable().default(null),
   visible: z.boolean().optional().default(true),
+  // Denormalised index of the collections this node belongs to; the authority
+  // is `collection.nodeIds`. Declared here rather than per kind because the
+  // store stamps it onto *any* node — only `item` used to declare it, so every
+  // other kind had it silently stripped by the next `parse()` and the popover
+  // showed no membership for them.
+  collectionIds: z.array(z.custom<CollectionId>()).optional(),
   camera: CameraSchema.optional(),
   metadata: z.json().optional().default({}),
 })

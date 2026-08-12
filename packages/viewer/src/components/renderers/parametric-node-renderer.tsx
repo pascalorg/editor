@@ -3,6 +3,8 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  buildCollectionMembershipIndex,
+  isHiddenByCollections,
   useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
@@ -52,6 +54,11 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
   const n = node as RenderableNode
   const handlers = useNodeEvents(node as any, node.type as any)
   const liveTransform = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
+  // Collection visibility resolves here rather than per kind: this is the one
+  // group every registry-driven node hangs from, so hiding a collection cannot
+  // miss a kind. The index is rebuilt only when `collections` changes and is
+  // reference-stable while nothing is hidden, so the common case costs nothing.
+  const collectionMembership = useScene((s) => buildCollectionMembershipIndex(s.collections))
   // Registry arrow handles (rotation gizmo, position-affecting patches)
   // write to `useLiveNodeOverrides`. GeometrySystem already merges that
   // for the mesh body; we also fold it into the outer group's
@@ -86,7 +93,7 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
       position={position}
       ref={ref}
       rotation={rotation}
-      visible={n.visible !== false}
+      visible={n.visible !== false && !isHiddenByCollections(collectionMembership, n.id)}
       {...handlers}
     >
       {Array.isArray(n.children) &&

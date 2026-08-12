@@ -258,6 +258,12 @@ export type {
 export * from './registry'
 export * from './schema'
 export * from './services'
+export {
+  buildCollectionMembershipIndex,
+  type CollectionMembershipIndex,
+  isHiddenByCollections,
+  isLockedByCollections,
+} from './services/collection-membership'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   getSceneHistoryPauseDepth,

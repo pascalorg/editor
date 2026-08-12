@@ -6,7 +6,11 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Eye,
+  EyeOff,
   Layers,
+  Lock,
+  LockOpen,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -168,6 +172,8 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
             <ul className="divide-y divide-border/30">
               {allCollections.map((collection) => {
                 const isIn = memberIds.includes(collection.id)
+                const isHidden = collection.visible === false
+                const isLocked = collection.locked === true
                 const isExpanded = expandedIds.has(collection.id)
                 const isRenaming = renamingId === collection.id
                 const isDeleting = deletingId === collection.id
@@ -262,6 +268,45 @@ export function CollectionsPopover({ nodeId, collectionIds, children }: Collecti
                         <span className="shrink-0 text-[10px] text-muted-foreground/60">
                           {collection.nodeIds.length}
                         </span>
+                      </button>
+
+                      {/* Visibility — hiding a collection takes its members out
+                          of view without touching each node's own `visible`, so
+                          unhiding restores exactly what was there before. */}
+                      <button
+                        aria-label={isHidden ? 'Show collection' : 'Hide collection'}
+                        className={cn(
+                          'shrink-0 rounded p-0.5 transition-colors hover:bg-white/10',
+                          isHidden ? 'text-foreground' : 'text-muted-foreground/50',
+                        )}
+                        onClick={() => updateCollection(collection.id, { visible: isHidden })}
+                        title={isHidden ? 'Show collection' : 'Hide collection'}
+                        type="button"
+                      >
+                        {isHidden ? (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+
+                      {/* Lock — members stop being selectable, which is what
+                          stops them being moved, rotated, or deleted. */}
+                      <button
+                        aria-label={isLocked ? 'Unlock collection' : 'Lock collection'}
+                        className={cn(
+                          'shrink-0 rounded p-0.5 transition-colors hover:bg-white/10',
+                          isLocked ? 'text-foreground' : 'text-muted-foreground/50',
+                        )}
+                        onClick={() => updateCollection(collection.id, { locked: !isLocked })}
+                        title={isLocked ? 'Unlock collection' : 'Lock collection'}
+                        type="button"
+                      >
+                        {isLocked ? (
+                          <Lock className="h-3.5 w-3.5" />
+                        ) : (
+                          <LockOpen className="h-3.5 w-3.5" />
+                        )}
                       </button>
 
                       {/* Membership check */}

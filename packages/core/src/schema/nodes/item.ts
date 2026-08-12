@@ -2,7 +2,6 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { AssetUrl } from '../asset-url'
 import { BaseNode, nodeType, objectId } from '../base'
-import type { CollectionId } from '../collections'
 
 // --- Control descriptors ---
 
@@ -156,9 +155,6 @@ export const ItemNode = BaseNode.extend({
   // level base — written when a pointer-capped commit elected the ground
   // while a slab (e.g. an elevated deck) still overlapped the footprint.
   supportSlabId: z.string().optional(),
-
-  // Denormalized references to collections this node belongs to
-  collectionIds: z.array(z.custom<CollectionId>()).optional(),
 
   // Per-slot material overrides. Key = slot id (see deriveSlotId), value = a
   // MaterialRef string ('library:<id>' or 'scene:<id>'). Absent = authored /

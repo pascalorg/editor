@@ -35,6 +35,7 @@ import {
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Vector3 } from 'three'
+import { isNodeLockedForSelection } from '../../lib/collection-lock'
 import {
   canDirectMoveNode,
   canDirectRotateNode,
@@ -626,6 +627,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       'door',
     ],
     handleSelect: (node, nativeEvent, modifierKeys, baseSelectedIds) => {
+      if (isNodeLockedForSelection(node.id)) return
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
       const nodeLevelId = node.type === 'elevator' ? null : resolveLevelId(node, nodes)
@@ -711,6 +713,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
   furnish: {
     types: ['item'],
     handleSelect: (node, nativeEvent, modifierKeys, baseSelectedIds) => {
+      if (isNodeLockedForSelection(node.id)) return
       const { selection, setSelection } = useViewer.getState()
       const nodes = useScene.getState().nodes
       const nodeLevelId = resolveLevelId(node, nodes)
