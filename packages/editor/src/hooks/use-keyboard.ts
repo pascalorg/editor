@@ -24,6 +24,7 @@ import {
   rotateGroupPatches,
 } from '../components/editor/group-transform-shared'
 import { steppedRotation } from '../components/tools/item/placement-math'
+import { AXIS_LOCK_KEYS } from '../lib/axis-lock'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
@@ -34,6 +35,7 @@ import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
 import { toggleWindowOpenState } from '../lib/window-interaction'
+import useAxisLock from '../store/use-axis-lock'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
@@ -739,13 +741,24 @@ export const useKeyboard = ({
 
       const input = useMeasurementInput.getState()
       const typing = input.buffer !== ''
-      if (!(typing || isActive(useInteractionScope.getState().scope))) return
+      const drafting = isActive(useInteractionScope.getState().scope)
+      if (!(typing || drafting)) return
 
       // Consuming a key means no other listener — tool-local or otherwise — may
       // also act on it, so the whole propagation stops here.
       const consume = () => {
         e.preventDefault()
         e.stopImmediatePropagation()
+      }
+
+      // Axis lock on the arrow keys, SketchUp's binding. Pressing the same axis
+      // again releases it. Plain arrows only — Cmd/Ctrl+Arrow switches level.
+      const lockedAxis = drafting ? AXIS_LOCK_KEYS[e.key] : undefined
+      if (lockedAxis) {
+        consume()
+        useAxisLock.getState().toggle(lockedAxis)
+        sfxEmitter.emit('sfx:grid-snap')
+        return
       }
 
       if (typing && e.key === 'Backspace') {

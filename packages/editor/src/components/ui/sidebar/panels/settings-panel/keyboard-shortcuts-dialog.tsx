@@ -24,6 +24,8 @@ type ShortcutCategory = {
 
 const KEY_DISPLAY_MAP: Record<string, string> = {
   'Arrow Up': '↑',
+  'Arrow Left': '←',
+  'Arrow Right': '→',
   'Arrow Down': '↓',
   Esc: '⎋',
   Shift: '⇧',
@@ -166,6 +168,15 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Backspace'],
         action: 'Delete the last typed character',
+      },
+      {
+        keys: ['Arrow Right'],
+        action: 'Lock the draft to the X axis',
+        note: 'Press again to release. The lock sets the direction; a typed value then sets the distance along it.',
+      },
+      {
+        keys: ['Arrow Left'],
+        action: 'Lock the draft to the Z axis',
       },
     ],
   },

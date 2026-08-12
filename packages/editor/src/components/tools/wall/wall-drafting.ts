@@ -23,7 +23,7 @@ import { findCadSnapOnLevel } from '../../../lib/cad-snap-source'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
-import { resolveTypedLengthPoint } from '../../../store/use-measurement-input'
+import { resolveDraftConstraint } from '../../../store/use-measurement-input'
 import {
   distanceSquared,
   findWallSnapTarget,
@@ -456,8 +456,10 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
           overrideStep ?? getSegmentGridStep(),
         )
       : point
-    const typed = resolveTypedLengthPoint(start, directionTarget)
-    if (typed) return { point: [typed[0], typed[1]], snap: null, targetWallIds: [] }
+    const constrained = resolveDraftConstraint(start, directionTarget, point)
+    if (constrained) {
+      return { point: [constrained[0], constrained[1]], snap: null, targetWallIds: [] }
+    }
   }
 
   // Discrete special points (corner / midpoint / crossing) are taken from the

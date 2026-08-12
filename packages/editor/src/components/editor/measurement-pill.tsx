@@ -2,8 +2,10 @@
 
 import { useViewer } from '@pascal-app/viewer'
 import { type ForwardedRef, Fragment, forwardRef } from 'react'
+import { AXIS_LABELS } from '../../lib/axis-lock'
 import { formatLinearMeasurement, type MetricNotation } from '../../lib/measurements'
 import { cn } from '../../lib/utils'
+import useAxisLock from '../../store/use-axis-lock'
 import useMeasurementInput from '../../store/use-measurement-input'
 
 // Canonical in-world dimension formatter — metric metres or imperial
@@ -57,14 +59,25 @@ export function DimensionPill({
   // look at, no focus to move. Every pill in the app inherits this by being
   // built from `DimensionPill`.
   const typed = useMeasurementInput((state) => state.buffer)
+  // The axis lock is invisible without a readout — the draft just stops moving
+  // sideways, which reads as a bug rather than a constraint.
+  const axis = useAxisLock((state) => state.axis)
 
   return (
     <div
       className={cn(
         'flex items-center gap-2 whitespace-nowrap rounded-full border bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur',
-        typed ? 'border-primary/70' : 'border-border/60',
+        typed || axis ? 'border-primary/70' : 'border-border/60',
       )}
     >
+      {axis ? (
+        <>
+          <span className="font-medium text-primary">{AXIS_LABELS[axis]}</span>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+        </>
+      ) : null}
       {parts.map((part, index) => {
         const isPrimary = part.key === primary
         const isTyping = isPrimary && typed !== ''

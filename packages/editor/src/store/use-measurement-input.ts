@@ -2,6 +2,7 @@
 
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
+import { applyAxisLock } from '../lib/axis-lock'
 import { isActive } from '../lib/interaction/scope'
 import {
   applyFixedLength,
@@ -10,6 +11,7 @@ import {
   type PlanPoint,
   resolveMeasurementInput,
 } from '../lib/measurement-input'
+import { getAxisLock } from './use-axis-lock'
 import useInteractionScope from './use-interaction-scope'
 
 // The typed-dimension buffer ("measurements box"). While an interaction is in
@@ -79,21 +81,38 @@ export function isMeasurementInputActive(): boolean {
 }
 
 /**
- * The draft point a typed length asks for, or `null` when nothing usable is
- * typed — in which case the caller keeps whatever its snapping produced.
+ * The draft point the user's explicit constraints ask for, or `null` when there
+ * are none — in which case the caller keeps whatever its snapping produced.
  *
- * `directionTarget` is the point the cursor is proposing *after* any angle lock,
- * so the typed value only ever replaces the distance. Every segment drafting
- * path routes through here so the "typed beats snapping" rule cannot drift
- * between kinds.
+ * Two constraints compose here, in this order:
+ *
+ * 1. An **axis lock** (arrow keys) fixes the *direction*, overriding the angle
+ *    snap the caller proposed. It is an explicit per-gesture act, so it outranks
+ *    a mode.
+ * 2. A **typed length** fixes the *distance* along whatever direction survived.
+ *
+ * Either can apply alone. Both outrank magnetic snapping — being pulled onto a
+ * corner is exactly what asking for an exact value is meant to prevent.
+ *
+ * Every segment and polygon drafting path routes through this one function, so
+ * the rule cannot drift between kinds or between the 2D and 3D views.
  */
-export function resolveTypedLengthPoint(
+export function resolveDraftConstraint(
   start: PlanPoint,
   directionTarget: PlanPoint,
+  rawCursor: PlanPoint = directionTarget,
 ): PlanPoint | null {
+  const axis = getAxisLock()
+  const direction = axis ? applyAxisLock(start, rawCursor, axis) : directionTarget
   const typed = getMeasurementInputValue()
-  if (typed === null) return null
-  return applyFixedLength(start, directionTarget, typed)
+
+  if (typed !== null) {
+    const fixed = applyFixedLength(start, direction, typed)
+    if (fixed) return fixed
+    // A typed value with no usable direction yet (cursor still on the anchor)
+    // falls back to the lock alone rather than to nothing.
+  }
+  return axis ? direction : null
 }
 
 export default useMeasurementInput
