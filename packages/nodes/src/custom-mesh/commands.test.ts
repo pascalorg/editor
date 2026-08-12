@@ -54,6 +54,27 @@ describe('applyCustomMeshCommand', () => {
     expect(inspectCustomMeshTopology(second.topology)).toEqual([])
   })
 
+  test('inherits the source face material across an extruded cap and side faces', () => {
+    const topology = createBoxCustomMeshTopology()
+    topology.faces = topology.faces.map((face) =>
+      face.id === 'f-top' ? { ...face, materialSlot: 'accent' } : face,
+    )
+    const originalFaceIds = new Set(topology.faces.map((face) => face.id))
+    const result = applyCustomMeshCommand(topology, {
+      type: 'extrude-face',
+      faceId: 'f-top',
+      distance: 0.25,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const inheritedFaces = result.topology.faces.filter(
+      (face) => face.id === 'f-top' || !originalFaceIds.has(face.id),
+    )
+    expect(inheritedFaces).toHaveLength(5)
+    expect(inheritedFaces.every((face) => face.materialSlot === 'accent')).toBe(true)
+  })
+
   test('reports an invalid face selection without changing topology', () => {
     const topology = createBoxCustomMeshTopology()
     expect(
@@ -149,6 +170,28 @@ describe('applyCustomMeshCommand', () => {
     expect(inspectCustomMeshTopology(result.topology)).toEqual([])
   })
 
+  test('inherits the source face material across an inset cap and ring', () => {
+    const topology = createBoxCustomMeshTopology()
+    topology.faces = topology.faces.map((face) =>
+      face.id === 'f-top' ? { ...face, materialSlot: 'accent' } : face,
+    )
+    const originalFaceIds = new Set(topology.faces.map((face) => face.id))
+    const result = applyCustomMeshCommand(topology, {
+      type: 'inset-face',
+      faceId: 'f-top',
+      amount: 0.2,
+      depth: 0,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const inheritedFaces = result.topology.faces.filter(
+      (face) => face.id === 'f-top' || !originalFaceIds.has(face.id),
+    )
+    expect(inheritedFaces).toHaveLength(5)
+    expect(inheritedFaces.every((face) => face.materialSlot === 'accent')).toBe(true)
+  })
+
   test('deletes selected faces, edges, or vertices without invalid references', () => {
     for (const selection of [
       { mode: 'face' as const, ids: ['f-top'] },
@@ -205,6 +248,26 @@ describe('applyCustomMeshCommand', () => {
     expect(inspectCustomMeshTopology(result.topology)).toEqual([])
   })
 
+  test('keeps the first adjacent face material when dissolving a mixed-material edge', () => {
+    const topology = createBoxCustomMeshTopology()
+    topology.faces = topology.faces.map((face) =>
+      face.id === 'f-top'
+        ? { ...face, materialSlot: 'top' }
+        : face.id === 'f-front'
+          ? { ...face, materialSlot: 'front' }
+          : face,
+    )
+    const result = applyCustomMeshCommand(topology, {
+      type: 'dissolve-edge',
+      edgeId: 'e4',
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.topology.faces.find((face) => face.id === 'f-top')?.materialSlot).toBe('top')
+    expect(result.topology.faces.some((face) => face.id === 'f-front')).toBe(false)
+  })
+
   test('cuts a connected quad ring and selects the inserted loop', () => {
     const result = applyCustomMeshCommand(createBoxCustomMeshTopology(), {
       type: 'loop-cut',
@@ -232,6 +295,33 @@ describe('applyCustomMeshCommand', () => {
       ),
     ).toBe(true)
     expect(inspectCustomMeshTopology(result.topology)).toEqual([])
+  })
+
+  test('preserves each source face material when a loop cut splits the ring', () => {
+    const topology = createBoxCustomMeshTopology()
+    topology.faces = topology.faces.map((face) => ({ ...face, materialSlot: face.id }))
+    const result = applyCustomMeshCommand(topology, {
+      type: 'loop-cut',
+      edgeId: 'e8',
+      factor: 0.25,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const counts = Object.fromEntries(
+      topology.faces.map((face) => [
+        face.id,
+        result.topology.faces.filter((resultFace) => resultFace.materialSlot === face.id).length,
+      ]),
+    )
+    expect(counts).toEqual({
+      'f-bottom': 1,
+      'f-top': 1,
+      'f-front': 2,
+      'f-right': 2,
+      'f-back': 2,
+      'f-left': 2,
+    })
   })
 
   test('stops a loop cut cleanly before a non-quad face', () => {
@@ -293,5 +383,32 @@ describe('applyCustomMeshCommand', () => {
       ),
     ).toBeCloseTo(0.2, 6)
     expect(inspectCustomMeshTopology(result.topology)).toEqual([])
+  })
+
+  test('uses the first adjacent face material for new bevel bands in stable topology order', () => {
+    const topology = createBoxCustomMeshTopology()
+    topology.faces = topology.faces.map((face) =>
+      face.id === 'f-bottom'
+        ? { ...face, materialSlot: 'bottom' }
+        : face.id === 'f-front'
+          ? { ...face, materialSlot: 'front' }
+          : face,
+    )
+    const originalFaceIds = new Set(topology.faces.map((face) => face.id))
+    const result = applyCustomMeshCommand(topology, {
+      type: 'bevel-edge',
+      edgeId: 'e0',
+      width: 0.2,
+      segments: 3,
+      profile: 0.5,
+      clampOverlap: true,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const bevelBands = result.topology.faces.filter((face) => !originalFaceIds.has(face.id))
+    expect(bevelBands).toHaveLength(3)
+    expect(bevelBands.every((face) => face.materialSlot === 'bottom')).toBe(true)
+    expect(result.topology.faces.find((face) => face.id === 'f-front')?.materialSlot).toBe('front')
   })
 })

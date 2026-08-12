@@ -62,6 +62,24 @@ So picking the Mediterranean theme gives a blue roof + warm walls without touchi
 
 Each of these reads `shading`/`textures`/`colorPreset`/`sceneTheme` from `useViewer` (or receives them threaded from `GeometrySystem`) and **must include `sceneTheme` in its material cache key and its rebuild dependency array**, or theme switches won't re-colour. `GeometrySystem` marks every geometry node dirty on any of those changing.
 
+## Custom-mesh face materials
+
+Custom meshes use the reusable `MaterialRef` model at face granularity. `CustomMeshNode.slots` maps stable object-local slot IDs to `scene:` or `library:` references, while each `CustomMeshFace.materialSlot` stores one slot ID. `body` is the permanent base slot and the fallback for unbound or unresolved face slots.
+
+The geometry builder emits one Three.js group per topology face and a material array ordered by the node's stable slot IDs. It publishes the same order as `userData.slotIds`, allowing the paint capability to map a raycast `materialIndex` back to the persistent slot. Face UVs retain the world-scale projection contract below.
+
+Material choice and face assignment are separate. Choosing an object slot, scene material, or library material changes only the transient assignment source. **Assign** reuses or creates one object slot by exact `MaterialRef` identity and commits `topology` plus `slots` in one `updateNode` call. **Select** and **Deselect** only add or subtract faces using the active slot from transient component selection. Assigning `body` restores the base appearance; there is no unassigned face state.
+
+Topology operators preserve assignments deterministically:
+
+- retained and transformed faces keep their slot;
+- extrude caps/sides and inset caps/rings inherit the source face;
+- loop-cut pieces inherit the face they split;
+- bevel bands and mixed-material dissolve use the first adjacent face in stable `topology.faces` order;
+- deleting the last face that uses a slot does not delete its reusable material.
+
+Object-mode **Remove unused slots** deletes only object-local slot bindings that no face references. It never removes `body`, remaps faces, or deletes the referenced reusable scene material. Cleanup is disabled during mesh Edit Mode, matching the separation between face assignment and object-level slot structure.
+
 ### External plugin renderers
 
 Plugin renderers follow the same four axes through the public `@pascal-app/viewer`

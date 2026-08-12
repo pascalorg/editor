@@ -15,7 +15,7 @@ import {
   Vector3,
 } from 'three'
 import { customMeshFaceNormal } from './commands'
-import { CUSTOM_MESH_SLOT_ID } from './slots'
+import { CUSTOM_MESH_BODY_SLOT_ID, customMeshMaterialSlotIds } from './material-slots'
 
 type Point = [number, number, number]
 const SMOOTH_NORMAL_ANGLE_COSINE = Math.cos(Math.PI / 6)
@@ -76,6 +76,8 @@ export function buildCustomMeshGeometry(
   const normals: number[] = []
   const uvs: number[] = []
   const faceRanges: { faceId: string; start: number; count: number }[] = []
+  const slotIds = customMeshMaterialSlotIds(node.topology, node.slots)
+  const materialIndexBySlotId = new Map(slotIds.map((slotId, index) => [slotId, index]))
   const faceNormals = new Map(
     node.topology.faces.flatMap((face) => {
       const normal = customMeshFaceNormal(node.topology, face)
@@ -131,7 +133,7 @@ export function buildCustomMeshGeometry(
       }
     }
     const count = positions.length / 3 - start
-    geometry.addGroup(start, count, 0)
+    geometry.addGroup(start, count, materialIndexBySlotId.get(face.materialSlot) ?? 0)
     faceRanges.push({ faceId: face.id, start, count })
   }
 
@@ -142,16 +144,30 @@ export function buildCustomMeshGeometry(
   geometry.computeBoundingSphere()
   geometry.userData.customMeshFaces = faceRanges
 
-  const materialRef = node.slots?.[CUSTOM_MESH_SLOT_ID]
-  const material =
-    (materialRef ? resolveMaterialRef(materialRef, ctx?.materials, shading) : null) ??
+  const bodyMaterialRef = node.slots?.[CUSTOM_MESH_BODY_SLOT_ID]
+  const bodyMaterial =
+    (bodyMaterialRef ? resolveMaterialRef(bodyMaterialRef, ctx?.materials, shading) : null) ??
     createDefaultMaterial('#b8c5d1', 0.72, shading)
-  const mesh = new Mesh(geometry, material)
+  const bodyFallbackSlotIds: string[] = []
+  const materials = slotIds.map((slotId) => {
+    const materialRef = node.slots?.[slotId]
+    if (slotId === CUSTOM_MESH_BODY_SLOT_ID) return bodyMaterial
+    if (!materialRef) {
+      bodyFallbackSlotIds.push(slotId)
+      return bodyMaterial
+    }
+    const resolved = resolveMaterialRef(materialRef, ctx?.materials, shading)
+    if (resolved) return resolved
+    bodyFallbackSlotIds.push(slotId)
+    return bodyMaterial
+  })
+  const mesh = new Mesh(geometry, materials)
   mesh.name = 'custom-mesh-body'
   mesh.castShadow = true
   mesh.receiveShadow = true
   mesh.userData.customMesh = true
-  mesh.userData.slotId = CUSTOM_MESH_SLOT_ID
+  mesh.userData.slotIds = slotIds
+  mesh.userData.bodyFallbackSlotIds = bodyFallbackSlotIds
   group.add(mesh)
   return group
 }

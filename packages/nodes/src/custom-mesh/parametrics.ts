@@ -8,4 +8,5 @@ export const customMeshParametrics: ParametricDescriptor<CustomMeshNode> = {
       fields: [{ key: 'position', kind: 'vec3' }],
     },
   ],
+  customPanel: () => import('./panel'),
 }

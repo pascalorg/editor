@@ -80,6 +80,7 @@ import {
   customMeshLoopCutSegments,
   customMeshSelectionVertexIds,
 } from './commands'
+import useCustomMeshEditSession from './edit-session'
 import { triangulateCustomMeshFace } from './geometry'
 import { CUSTOM_MESH_WHEEL_OPTIONS, consumeCustomMeshGestureWheel } from './gesture-wheel'
 import { type CustomMeshSfxAction, customMeshSfx } from './interaction-sfx'
@@ -138,6 +139,7 @@ const COMPONENT_HOVER_COLOR = '#ffb020'
 const COMPONENT_IDLE_COLOR = '#737982'
 const DEFAULT_BEVEL_SEGMENTS = 6
 const ROTATION_SNAP_ANGLE_DEGREES = 15
+const EMPTY_COMPONENT_IDS: string[] = []
 
 const FLOATING_PANEL_CLASS =
   'pointer-events-auto flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md'
@@ -1252,9 +1254,15 @@ function CustomMeshEditor({
   const editing = useInteractionScope(
     (state) => state.scope.kind === 'mesh-editing' && state.scope.nodeId === node.id,
   )
-  const [mode, setMode] = useState<ComponentMode>('face')
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const mode = useCustomMeshEditSession((state) =>
+    state.nodeId === node.id ? state.selection.mode : 'face',
+  )
+  const selectedIds = useCustomMeshEditSession((state) =>
+    state.nodeId === node.id ? state.selection.ids : EMPTY_COMPONENT_IDS,
+  )
+  const activeId = useCustomMeshEditSession((state) =>
+    state.nodeId === node.id ? state.selection.activeId : null,
+  )
   const [transformTool, setTransformTool] = useState<TransformTool>('transform')
   const [xray, setXray] = useState(false)
   const [previewTopology, setPreviewTopology] = useState<CustomMeshTopology | null>(null)
@@ -1329,9 +1337,8 @@ function CustomMeshEditor({
     useLiveNodeOverrides.getState().clear(node.id)
     useScene.getState().markDirty(node.id)
     endOwnedScope()
+    useCustomMeshEditSession.getState().end(node.id)
     setPreviewTopology(null)
-    setSelectedIds([])
-    setActiveId(null)
     setTransformTool('transform')
     setActiveTransform(null)
     setLoopCutSegments(null)
@@ -1346,6 +1353,7 @@ function CustomMeshEditor({
       useLiveNodeOverrides.getState().clear(node.id)
       useScene.getState().markDirty(node.id)
       endOwnedScope()
+      useCustomMeshEditSession.getState().end(node.id)
       if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
     },
     [endOwnedScope, node.id],
@@ -1361,6 +1369,7 @@ function CustomMeshEditor({
     setToolbarPanel(null)
     setLoopCutSegments(null)
     setActiveTransform(null)
+    useCustomMeshEditSession.getState().end(node.id)
   }, [editing, node.id])
 
   useEffect(() => {
@@ -1393,14 +1402,13 @@ function CustomMeshEditor({
     const onGridClick = () => {
       const scope = useInteractionScope.getState().scope
       if (scope.kind !== 'mesh-editing' || scope.nodeId !== node.id || cancelDragRef.current) return
-      setSelectedIds([])
-      setActiveId(null)
+      useCustomMeshEditSession.getState().setSelection(node.id, { mode, ids: [], activeId: null })
       setError(null)
       playCustomMeshSfx('component-select')
     }
     emitter.on('grid:click', onGridClick)
     return () => emitter.off('grid:click', onGridClick)
-  }, [editing, node.id])
+  }, [editing, mode, node.id])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1419,9 +1427,11 @@ function CustomMeshEditor({
           exitEditMode()
         } else if (useInteractionScope.getState().scope.kind === 'idle') {
           const face = preferredFace(node.topology)
-          setMode('face')
-          setSelectedIds(face ? [face.id] : [])
-          setActiveId(face?.id ?? null)
+          useCustomMeshEditSession.getState().begin(node.id, {
+            mode: 'face',
+            ids: face ? [face.id] : [],
+            activeId: face?.id ?? null,
+          })
           setTransformTool('transform')
           setToolbarPanel(null)
           setError(null)
@@ -1451,9 +1461,7 @@ function CustomMeshEditor({
         },
         nextMode,
       )
-      setMode(converted.mode)
-      setSelectedIds(converted.ids)
-      setActiveId(converted.activeId)
+      useCustomMeshEditSession.getState().setSelection(node.id, converted)
       setError(null)
       playCustomMeshSfx('tool-select')
     }
@@ -1462,23 +1470,17 @@ function CustomMeshEditor({
   }, [activeId, editing, exitEditMode, mode, node.id, node.topology, selectedIds])
 
   useEffect(() => {
-    const validIds = new Set(
-      mode === 'vertex'
-        ? node.topology.vertices.map((vertex) => vertex.id)
-        : mode === 'edge'
-          ? node.topology.edges.map((edge) => edge.id)
-          : node.topology.faces.map((face) => face.id),
-    )
-    setSelectedIds((current) => current.filter((id) => validIds.has(id)))
-    setActiveId((current) => (current && validIds.has(current) ? current : null))
-  }, [mode, node.topology])
+    useCustomMeshEditSession.getState().reconcileSelection(node.id, node.topology)
+  }, [node.id, node.topology])
 
   const enterEditMode = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     const face = preferredFace(node.topology)
-    setMode('face')
-    setSelectedIds(face ? [face.id] : [])
-    setActiveId(face?.id ?? null)
+    useCustomMeshEditSession.getState().begin(node.id, {
+      mode: 'face',
+      ids: face ? [face.id] : [],
+      activeId: face?.id ?? null,
+    })
     setTransformTool('transform')
     setToolbarPanel(null)
     setError(null)
@@ -1524,12 +1526,11 @@ function CustomMeshEditor({
     (id: string, additive: boolean, event: ThreeEvent<MouseEvent>) => {
       if (!componentIsVisible(id, event)) return
       const next = selectCustomMeshComponent({ mode, ids: selectedIds, activeId }, id, additive)
-      setSelectedIds(next.ids)
-      setActiveId(next.activeId)
+      useCustomMeshEditSession.getState().setSelection(node.id, next)
       setError(null)
       playCustomMeshSfx('component-select')
     },
-    [activeId, componentIsVisible, mode, selectedIds],
+    [activeId, componentIsVisible, mode, node.id, selectedIds],
   )
 
   const switchMode = (nextMode: ComponentMode) => {
@@ -1539,9 +1540,7 @@ function CustomMeshEditor({
       { mode, ids: selectedIds, activeId },
       nextMode,
     )
-    setMode(converted.mode)
-    setSelectedIds(converted.ids)
-    setActiveId(converted.activeId)
+    useCustomMeshEditSession.getState().setSelection(node.id, converted)
     setToolbarPanel(null)
     setError(null)
   }
@@ -1910,9 +1909,11 @@ function CustomMeshEditor({
       let latestSelection: CustomMeshSelection | null = null
       let finished = false
 
-      setMode('edge')
-      setSelectedIds([edgeId])
-      setActiveId(edgeId)
+      useCustomMeshEditSession.getState().setSelection(node.id, {
+        mode: 'edge',
+        ids: [edgeId],
+        activeId: edgeId,
+      })
       setToolbarPanel(null)
       setError(null)
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'bevel'))
@@ -1985,9 +1986,10 @@ function CustomMeshEditor({
         setPreviewTopology(null)
         if (commit && latestTopology && latestSelection && latestWidth > 1e-6) {
           useScene.getState().updateNode(node.id, { topology: latestTopology })
-          setMode(latestSelection.mode)
-          setSelectedIds(latestSelection.ids)
-          setActiveId(latestSelection.ids.at(-1) ?? null)
+          useCustomMeshEditSession.getState().setSelection(node.id, {
+            ...latestSelection,
+            activeId: latestSelection.ids.at(-1) ?? null,
+          })
           playCustomMeshSfx('operation-commit')
         } else if (!commit) {
           playCustomMeshSfx('cancel')
@@ -2135,9 +2137,10 @@ function CustomMeshEditor({
         setLoopCutSegments(null)
         if (commit && latestTopology && latestSelection && latestFactor > 0) {
           useScene.getState().updateNode(node.id, { topology: latestTopology })
-          setMode(latestSelection.mode)
-          setSelectedIds(latestSelection.ids)
-          setActiveId(latestSelection.ids.at(-1) ?? null)
+          useCustomMeshEditSession.getState().setSelection(node.id, {
+            ...latestSelection,
+            activeId: latestSelection.ids.at(-1) ?? null,
+          })
           playCustomMeshSfx('operation-commit')
         } else if (!commit) {
           playCustomMeshSfx('cancel')
@@ -2169,9 +2172,10 @@ function CustomMeshEditor({
       return
     }
     useScene.getState().updateNode(node.id, { topology: result.topology })
-    setMode(result.selection.mode)
-    setSelectedIds(result.selection.ids)
-    setActiveId(result.selection.ids.at(-1) ?? null)
+    useCustomMeshEditSession.getState().setSelection(node.id, {
+      ...result.selection,
+      activeId: result.selection.ids.at(-1) ?? null,
+    })
     setToolbarPanel(null)
     setError(null)
     if (ownsEditSession()) useInteractionScope.getState().begin(meshEditScope(node.id))
@@ -2215,9 +2219,7 @@ function CustomMeshEditor({
   }
 
   const updateSelection = (next: CustomMeshSelectionState) => {
-    setMode(next.mode)
-    setSelectedIds(next.ids)
-    setActiveId(next.activeId)
+    useCustomMeshEditSession.getState().setSelection(node.id, next)
     setError(null)
     playCustomMeshSfx('component-select')
   }

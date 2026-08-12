@@ -320,6 +320,7 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,
   collectElevationSnapTargets,

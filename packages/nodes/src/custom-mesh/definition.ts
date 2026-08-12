@@ -94,7 +94,7 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
       },
       collides: true,
     },
-    slots: () => customMeshSlots(),
+    slots: (rawNode) => customMeshSlots(rawNode as CustomMeshNodeType),
     paint: customMeshPaint,
   },
 

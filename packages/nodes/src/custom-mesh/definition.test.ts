@@ -17,21 +17,38 @@ describe('custom mesh placement bounds', () => {
         fields: [{ key: 'position', kind: 'vec3' }],
       },
     ])
+    expect(customMeshDefinition.parametrics?.customPanel).toBeFunction()
   })
 
-  test('exposes the entire mesh as one paintable material target', () => {
-    const node = CustomMeshNode.parse({ name: 'Paintable mesh' })
+  test('exposes topology material slots as paintable targets', () => {
+    const base = CustomMeshNode.parse({
+      name: 'Paintable mesh',
+      slots: { accent: 'library:preset-softwhite' },
+    })
+    const node = {
+      ...base,
+      topology: {
+        ...base.topology,
+        faces: base.topology.faces.map((face, index) => ({
+          ...face,
+          materialSlot: index === 0 ? 'accent' : 'body',
+        })),
+      },
+    }
     const paint = customMeshDefinition.capabilities.paint
 
     expect(customMeshDefinition.capabilities.slots?.(node)).toEqual([
-      { slotId: 'body', label: 'Whole mesh' },
+      { slotId: 'body', label: 'Body' },
+      { slotId: 'accent', label: 'Accent' },
     ])
+    const hitObject = { userData: { slotIds: ['body', 'accent'] } }
     expect(
       paint?.resolveRole({
         node,
-        materialIndex: null,
+        hitObject: hitObject as never,
+        materialIndex: 1,
       }),
-    ).toBe('body')
+    ).toBe('accent')
     expect(
       paint?.buildPatch({
         node,
@@ -39,7 +56,12 @@ describe('custom mesh placement bounds', () => {
         material: undefined,
         materialPreset: 'library:metal-steel',
       }),
-    ).toEqual({ slots: { body: 'library:metal-steel' } })
+    ).toEqual({
+      slots: {
+        accent: 'library:preset-softwhite',
+        body: 'library:metal-steel',
+      },
+    })
   })
 
   test('declares its edited top as a stackable surface', () => {
