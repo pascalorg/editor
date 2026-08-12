@@ -73,6 +73,14 @@ describe('save_scene', () => {
         },
       },
       rootNodeIds: [siteId],
+      definitions: {
+        definition_provided01: {
+          id: 'definition_provided01',
+          name: 'Provided component',
+          rootNodeId: siteId,
+          thumbnail: '/component.png',
+        },
+      },
     }
     const result = await client.callTool({
       name: 'save_scene',
@@ -86,6 +94,7 @@ describe('save_scene', () => {
     const parsed = parseToolText(result.content as StoredTextContent[])
     expect(parsed.name).toBe('From Graph')
     expect(parsed.nodeCount).toBe(1)
+    expect((await store.load(parsed.id as string))?.graph.definitions).toEqual(graph.definitions)
   })
 
   test('rejects a graph with a malicious URL (P4 security fix)', async () => {
@@ -140,6 +149,48 @@ describe('save_scene', () => {
       name: 'save_scene',
       arguments: { name: 'Evil', includeCurrentScene: false, graph },
     })
+    expect(result.isError).toBe(true)
+  })
+
+  test('rejects a definition with a malicious thumbnail URL', async () => {
+    const siteId = 'site_definition01'
+    const graph = {
+      nodes: {
+        [siteId]: {
+          object: 'node',
+          id: siteId,
+          type: 'site',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          polygon: {
+            type: 'polygon',
+            points: [
+              [-5, -5],
+              [5, -5],
+              [5, 5],
+              [-5, 5],
+            ],
+          },
+          children: [],
+        },
+      },
+      rootNodeIds: [siteId],
+      definitions: {
+        definition_evil01: {
+          id: 'definition_evil01',
+          name: 'Evil component',
+          rootNodeId: siteId,
+          thumbnail: 'javascript:alert(1)',
+        },
+      },
+    }
+
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Evil Definition', includeCurrentScene: false, graph },
+    })
+
     expect(result.isError).toBe(true)
   })
 

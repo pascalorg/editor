@@ -102,11 +102,12 @@ export function useAutoSave({
     const storedNodeCount = createStoredNodeCountTracker(
       Object.keys(useScene.getState().nodes).length,
     )
-    // Collections + scene materials are document-level state that persists with
+    // Collections + component definitions + scene materials are document-level state that persists with
     // the graph but lives outside `nodes`. Track them by reference (zustand
     // hands out a new object on every mutation) so a material edit or a
     // collection change still triggers a save.
     let lastCollectionsRef = useScene.getState().collections
+    let lastDefinitionsRef = useScene.getState().definitions
     let lastMaterialsRef = useScene.getState().materials
     let lastInstalledPluginsRef = useScene.getState().installedPlugins
 
@@ -117,11 +118,13 @@ export function useAutoSave({
         return
       }
 
-      const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
+      const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } =
+        useScene.getState()
       const sceneGraph = {
         nodes,
         rootNodeIds,
         collections,
+        definitions,
         materials,
         installedPlugins,
       } as SceneGraph
@@ -171,6 +174,7 @@ export function useAutoSave({
         lastNodesSnapshot = JSON.stringify(state.nodes)
         storedNodeCount.trackLoadedGraph(Object.keys(state.nodes).length)
         lastCollectionsRef = state.collections
+        lastDefinitionsRef = state.definitions
         lastMaterialsRef = state.materials
         lastInstalledPluginsRef = state.installedPlugins
         return
@@ -180,6 +184,7 @@ export function useAutoSave({
         setSaveStatus('paused')
         lastNodesSnapshot = JSON.stringify(state.nodes)
         lastCollectionsRef = state.collections
+        lastDefinitionsRef = state.definitions
         lastMaterialsRef = state.materials
         lastInstalledPluginsRef = state.installedPlugins
         return
@@ -189,12 +194,14 @@ export function useAutoSave({
       const changed =
         currentNodesSnapshot !== lastNodesSnapshot ||
         state.collections !== lastCollectionsRef ||
+        state.definitions !== lastDefinitionsRef ||
         state.materials !== lastMaterialsRef ||
         state.installedPlugins !== lastInstalledPluginsRef
       if (!changed) return
 
       lastNodesSnapshot = currentNodesSnapshot
       lastCollectionsRef = state.collections
+      lastDefinitionsRef = state.definitions
       lastMaterialsRef = state.materials
       lastInstalledPluginsRef = state.installedPlugins
       hasDirtyChangesRef.current = true
@@ -221,7 +228,8 @@ export function useAutoSave({
     // (mobile Safari, bfcache) where `beforeunload` does not.
     function flushOnExit() {
       if (!hasDirtyChangesRef.current) return
-      const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
+      const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } =
+        useScene.getState()
       const currentNodeCount = Object.keys(nodes).length
       const previousNodeCount = storedNodeCount.count
       if (!storedNodeCount.allowWrite(currentNodeCount)) {
@@ -237,6 +245,7 @@ export function useAutoSave({
         nodes,
         rootNodeIds,
         collections,
+        definitions,
         materials,
         installedPlugins,
       } as SceneGraph

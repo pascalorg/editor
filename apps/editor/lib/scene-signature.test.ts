@@ -3,6 +3,7 @@ import { type PersistedSceneGraph, sceneGraphSignature } from './scene-signature
 
 const NODE_ID = 'level_a1b2c3d4e5f6g7h8'
 const MATERIAL_ID = 'mat_a1b2c3d4e5f6g7h8'
+const DEFINITION_ID = 'definition_balcony'
 
 const graph = (overrides: Partial<PersistedSceneGraph> = {}) =>
   ({
@@ -17,7 +18,9 @@ const graph = (overrides: Partial<PersistedSceneGraph> = {}) =>
 // match, or every remote update looks like a local edit and gets saved back.
 test('an omitted field signs the same as its applied default', () => {
   expect(sceneGraphSignature(graph())).toBe(
-    sceneGraphSignature(graph({ collections: {}, materials: {}, installedPlugins: [] })),
+    sceneGraphSignature(
+      graph({ collections: {}, definitions: {}, materials: {}, installedPlugins: [] }),
+    ),
   )
 })
 
@@ -34,6 +37,19 @@ test('changing any signed field changes the signature', () => {
   ).not.toBe(base)
   expect(
     sceneGraphSignature(graph({ collections: { col_1: { id: 'col_1', nodeIds: [] } } })),
+  ).not.toBe(base)
+  expect(
+    sceneGraphSignature(
+      graph({
+        definitions: {
+          [DEFINITION_ID]: {
+            id: DEFINITION_ID,
+            name: 'Balcony A',
+            rootNodeId: NODE_ID,
+          },
+        },
+      }),
+    ),
   ).not.toBe(base)
   expect(sceneGraphSignature(graph({ installedPlugins: ['@pascal-app/plugin-trees'] }))).not.toBe(
     base,

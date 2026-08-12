@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import { AnyNode } from '@pascal-app/core/schema'
+import { AnyNode, Definition } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { SceneVersionConflictError } from '../../storage/types'
@@ -32,7 +32,7 @@ export const saveSceneInput = {
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      'Full SceneGraph { nodes, rootNodeIds, collections? } to save instead of the bridge state.',
+      'Full SceneGraph { nodes, rootNodeIds, collections?, definitions? } to save instead of the bridge state.',
     ),
 }
 
@@ -108,6 +108,43 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
                 nodeId,
                 path: issue.path.map(String).join('.'),
                 message: issue.message,
+              })
+            }
+          }
+        }
+        const rawDefinitions = (graph as { definitions?: unknown }).definitions
+        if (rawDefinitions !== undefined) {
+          if (
+            typeof rawDefinitions !== 'object' ||
+            rawDefinitions === null ||
+            Array.isArray(rawDefinitions)
+          ) {
+            throwMcpError(ErrorCode.InvalidParams, 'graph.definitions must be an object')
+          }
+          for (const [definitionId, definition] of Object.entries(rawDefinitions)) {
+            const res = Definition.safeParse(definition)
+            if (!res.success) {
+              for (const issue of res.error.issues) {
+                errors.push({
+                  nodeId: definitionId,
+                  path: issue.path.map(String).join('.'),
+                  message: issue.message,
+                })
+              }
+              continue
+            }
+            if (res.data.id !== definitionId) {
+              errors.push({
+                nodeId: definitionId,
+                path: 'id',
+                message: 'Definition key must match its id',
+              })
+            }
+            if (!(res.data.rootNodeId in rawNodes)) {
+              errors.push({
+                nodeId: definitionId,
+                path: 'rootNodeId',
+                message: 'Definition root node does not exist in graph.nodes',
               })
             }
           }

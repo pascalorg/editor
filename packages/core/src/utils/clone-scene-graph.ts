@@ -6,12 +6,14 @@ import {
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
+import type { Definition, DefinitionId } from '../schema/definitions'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
   rootNodeIds: AnyNodeId[]
   collections?: Record<CollectionId, Collection>
+  definitions?: Record<DefinitionId, Definition>
   materials?: Record<SceneMaterialId, SceneMaterial>
   installedPlugins?: string[]
 }
@@ -34,7 +36,7 @@ function extractIdPrefix(id: string): string {
  * - Multi-scene in-memory scenarios
  */
 export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
-  const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
+  const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } = sceneGraph
 
   // Build ID mapping: old ID -> new ID
   const idMap = new Map<string, string>()
@@ -43,6 +45,11 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
   for (const nodeId of Object.keys(nodes)) {
     const prefix = extractIdPrefix(nodeId)
     idMap.set(nodeId, generateId(prefix))
+  }
+
+  const definitionIdMap = new Map<DefinitionId, DefinitionId>()
+  for (const definitionId of Object.keys(definitions ?? {}) as DefinitionId[]) {
+    definitionIdMap.set(definitionId, generateId('definition'))
   }
 
   // Pass 2: Deep clone nodes with remapped references
@@ -109,6 +116,11 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
         | undefined
     }
 
+    if (clonedNode.type === 'instance') {
+      clonedNode.definitionId =
+        definitionIdMap.get(clonedNode.definitionId) ?? clonedNode.definitionId
+    }
+
     if (clonedNode.type === 'measurement') {
       clonedNode.measurement = remapMeasurementReferences(clonedNode.measurement, idMap)
     }
@@ -162,10 +174,26 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     }
   }
 
+  let clonedDefinitions: Record<DefinitionId, Definition> | undefined
+  if (definitions) {
+    clonedDefinitions = {} as Record<DefinitionId, Definition>
+    for (const definition of Object.values(definitions)) {
+      const id = definitionIdMap.get(definition.id)
+      const rootNodeId = idMap.get(definition.rootNodeId) as AnyNodeId | undefined
+      if (!(id && rootNodeId)) continue
+      clonedDefinitions[id] = {
+        ...structuredClone(definition),
+        id,
+        rootNodeId,
+      }
+    }
+  }
+
   return {
     nodes: clonedNodes,
     rootNodeIds: clonedRootNodeIds,
     ...(clonedCollections && { collections: clonedCollections }),
+    ...(clonedDefinitions && { definitions: clonedDefinitions }),
     // Material ids are deliberately *not* remapped. Nodes point at these
     // through `slots` values shaped `scene:mat_…` — opaque strings that the
     // node remapping above copies verbatim, since `idMap` only covers node
@@ -312,13 +340,25 @@ export function forkSceneGraph(
     return cloneSceneGraph(sceneGraph)
   }
 
-  const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
+  const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } = sceneGraph
 
   // First, identify scan and guide node IDs to exclude (user-uploaded imagery)
   const excludedNodeIds = new Set<string>()
   for (const [nodeId, node] of Object.entries(nodes)) {
     if (node.type === 'scan' || node.type === 'guide') {
       excludedNodeIds.add(nodeId)
+    }
+  }
+
+  const excludedDefinitionIds = new Set<DefinitionId>()
+  for (const definition of Object.values(definitions ?? {})) {
+    if (excludedNodeIds.has(definition.rootNodeId)) excludedDefinitionIds.add(definition.id)
+  }
+  if (excludedDefinitionIds.size > 0) {
+    for (const [nodeId, node] of Object.entries(nodes)) {
+      if (node.type === 'instance' && excludedDefinitionIds.has(node.definitionId)) {
+        excludedNodeIds.add(nodeId)
+      }
     }
   }
 
@@ -369,11 +409,21 @@ export function forkSceneGraph(
     }
   }
 
+  let filteredDefinitions: Record<DefinitionId, Definition> | undefined
+  if (definitions) {
+    filteredDefinitions = {} as Record<DefinitionId, Definition>
+    for (const definition of Object.values(definitions)) {
+      if (excludedDefinitionIds.has(definition.id)) continue
+      filteredDefinitions[definition.id] = structuredClone(definition)
+    }
+  }
+
   // Now clone the filtered graph with new IDs
   return cloneSceneGraph({
     nodes: filteredNodes,
     rootNodeIds: filteredRootNodeIds,
     ...(filteredCollections && { collections: filteredCollections }),
+    ...(filteredDefinitions && { definitions: filteredDefinitions }),
     // Kept whole rather than filtered to the surviving nodes: a palette entry
     // is authored content in its own right, and dropping the scan node that
     // happened to be its only user would silently delete a material the fork's

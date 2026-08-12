@@ -5,11 +5,19 @@ import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
+import { cloneNodesInto, collectSubtree } from '../registry/subtree'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
+import {
+  type Definition,
+  type DefinitionId,
+  Definition as DefinitionSchema,
+  generateDefinitionId,
+} from '../schema/definitions'
 import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
+import { InstanceNode as InstanceNodeSchema } from '../schema/nodes/instance'
 import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
 import {
   getPitchFromActiveRoofHeight,
@@ -1179,6 +1187,89 @@ function collectReachableNodeIds(
   return reachable
 }
 
+function normalizeDefinitions(
+  definitions: Record<DefinitionId, Definition> | undefined,
+  nodes: Record<AnyNodeId, AnyNode>,
+): Record<DefinitionId, Definition> {
+  const normalized = {} as Record<DefinitionId, Definition>
+  for (const [key, value] of Object.entries(definitions ?? {})) {
+    const parsed = DefinitionSchema.safeParse(value)
+    if (!parsed.success || parsed.data.id !== key || !nodes[parsed.data.rootNodeId]) {
+      console.warn('[Scene] Ignoring invalid component definition', key)
+      continue
+    }
+    normalized[parsed.data.id] = parsed.data
+  }
+  return normalized
+}
+
+function uniqueDefinitionName(
+  definitions: Record<DefinitionId, Definition>,
+  requestedName: string,
+): string {
+  const base = requestedName.trim() || 'Component'
+  const existingNames = new Set(Object.values(definitions).map((definition) => definition.name))
+  if (!existingNames.has(base)) return base
+
+  let suffix = 2
+  while (existingNames.has(`${base} ${suffix}`)) suffix += 1
+  return `${base} ${suffix}`
+}
+
+function remapClonedSubtreeNodeReferences(
+  originals: AnyNode[],
+  clones: AnyNode[],
+  idMap: Map<AnyNodeId, AnyNodeId>,
+): AnyNode[] {
+  const clonesById = new Map(clones.map((node) => [node.id, node]))
+  for (const original of originals) {
+    const clonedId = idMap.get(original.id)
+    const clone = clonedId ? clonesById.get(clonedId) : undefined
+    if (!clone) continue
+    for (const [field, value] of Object.entries(original)) {
+      if (typeof value !== 'string') continue
+      const remapped = idMap.get(value as AnyNodeId)
+      if (remapped) (clone as unknown as Record<string, unknown>)[field] = remapped
+    }
+  }
+  return clones
+}
+
+function nodeComponentTransform(node: AnyNode): {
+  position: [number, number, number]
+  rotation: [number, number, number]
+  scale: [number, number, number]
+} {
+  const position = (node as { position?: unknown }).position
+  const rotation = (node as { rotation?: unknown }).rotation
+  const scale = (node as { scale?: unknown }).scale
+  return {
+    position: Array.isArray(position)
+      ? [position[0] ?? 0, position[1] ?? 0, position[2] ?? 0]
+      : [0, 0, 0],
+    rotation: Array.isArray(rotation)
+      ? [rotation[0] ?? 0, rotation[1] ?? 0, rotation[2] ?? 0]
+      : [0, typeof rotation === 'number' ? rotation : 0, 0],
+    scale: Array.isArray(scale)
+      ? [scale[0] ?? 1, scale[1] ?? 1, scale[2] ?? 1]
+      : typeof scale === 'number'
+        ? [scale, scale, scale]
+        : [1, 1, 1],
+  }
+}
+
+function resetDetachedComponentRootTransform(node: AnyNode): AnyNode {
+  const detached = { ...node, parentId: null } as AnyNode
+  const record = detached as unknown as Record<string, unknown>
+  if (Array.isArray(record.position)) record.position = [0, 0, 0]
+  if (Array.isArray(record.rotation)) record.rotation = [0, 0, 0]
+  else if (typeof record.rotation === 'number') record.rotation = 0
+  if (Array.isArray(record.scale)) record.scale = [1, 1, 1]
+  else if (typeof record.scale === 'number') record.scale = 1
+  delete record.collectionIds
+  return detached
+}
+
 export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>
@@ -1191,6 +1282,7 @@ export type SceneState = {
 
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
+  definitions: Record<DefinitionId, Definition>
   materials: Record<SceneMaterialId, SceneMaterial>
   installedPlugins: string[]
   hasExplicitPluginInstallState: boolean
@@ -1208,6 +1300,7 @@ export type SceneState = {
     rootNodeIds: AnyNodeId[],
     extra?: {
       collections?: Record<CollectionId, Collection>
+      definitions?: Record<DefinitionId, Definition>
       materials?: Record<SceneMaterialId, SceneMaterial>
       installedPlugins?: string[]
       hasExplicitPluginInstallState?: boolean
@@ -1239,6 +1332,19 @@ export type SceneState = {
   addToCollection: (id: CollectionId, nodeId: AnyNodeId) => void
   removeFromCollection: (id: CollectionId, nodeId: AnyNodeId) => void
 
+  // Component definition actions
+  addDefinition: (definition: Definition) => void
+  updateDefinition: (id: DefinitionId, data: Partial<Omit<Definition, 'id'>>) => void
+  deleteDefinition: (id: DefinitionId) => void
+  makeComponent: (
+    nodeId: AnyNodeId,
+    options?: { name?: string; thumbnail?: string },
+  ) => { definitionId: DefinitionId; instanceId: AnyNodeId } | null
+  makeInstanceUnique: (
+    instanceId: AnyNodeId,
+    options?: { name?: string; thumbnail?: string },
+  ) => DefinitionId | null
+
   // Scene material actions
   addSceneMaterial: (material: SceneMaterial) => void
   updateSceneMaterial: (id: SceneMaterialId, data: Partial<Omit<SceneMaterial, 'id'>>) => void
@@ -1250,7 +1356,10 @@ export type SceneState = {
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<
     TemporalState<
-      Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'>
+      Pick<
+        SceneState,
+        'nodes' | 'rootNodeIds' | 'collections' | 'definitions' | 'materials' | 'installedPlugins'
+      >
     >
   >
 }
@@ -1258,11 +1367,11 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
 function sceneHistorySnapshotFromState(
   state: Pick<
     SceneState,
-    'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'
+    'nodes' | 'rootNodeIds' | 'collections' | 'definitions' | 'materials' | 'installedPlugins'
   >,
 ): SceneSnapshot {
-  const { nodes, rootNodeIds, collections, materials, installedPlugins } = state
-  return { nodes, rootNodeIds, collections, materials, installedPlugins }
+  const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } = state
+  return { nodes, rootNodeIds, collections, definitions, materials, installedPlugins }
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -1279,6 +1388,7 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
+      definitions: {} as Record<DefinitionId, Definition>,
       materials: {} as Record<SceneMaterialId, SceneMaterial>,
       installedPlugins: [],
       hasExplicitPluginInstallState: false,
@@ -1293,6 +1403,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           rootNodeIds: [],
           dirtyNodes: new Set<AnyNodeId>(),
           collections: {},
+          definitions: {},
           materials: {},
           installedPlugins: [],
           hasExplicitPluginInstallState: false,
@@ -1330,8 +1441,13 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
+        const normalizedDefinitions = normalizeDefinitions(extra?.definitions, cleanedNodes)
         const normalizedRootNodeIds = normalizeRootNodeIds(cleanedNodes, rootNodeIds)
-        const reachableNodeIds = collectReachableNodeIds(cleanedNodes, normalizedRootNodeIds)
+        const reachabilityRoots = [
+          ...normalizedRootNodeIds,
+          ...Object.values(normalizedDefinitions).map((definition) => definition.rootNodeId),
+        ]
+        const reachableNodeIds = collectReachableNodeIds(cleanedNodes, reachabilityRoots)
         if (normalizedRootNodeIds.length > 0) {
           for (const node of Object.values(cleanedNodes)) {
             if (reachableNodeIds.has(node.id as AnyNodeId)) continue
@@ -1349,6 +1465,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           rootNodeIds: normalizedRootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
           collections: extra?.collections ?? {},
+          definitions: normalizedDefinitions,
           materials,
           installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
           hasExplicitPluginInstallState: extra?.hasExplicitPluginInstallState ?? false,
@@ -1532,6 +1649,168 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
           return { collections: nextCollections, nodes: nextNodes }
         })
+      },
+
+      // --- COMPONENT DEFINITIONS ---
+
+      addDefinition: (definition) => {
+        if (get().readOnly) return
+        const parsed = DefinitionSchema.parse(definition)
+        if (!get().nodes[parsed.rootNodeId]) {
+          throw new Error(`Definition root node not found: ${parsed.rootNodeId}`)
+        }
+        set((state) => ({
+          definitions: { ...state.definitions, [parsed.id]: parsed },
+        }))
+      },
+
+      updateDefinition: (id, data) => {
+        if (get().readOnly) return
+        set((state) => {
+          const definition = state.definitions[id]
+          if (!definition) return state
+          const parsed = DefinitionSchema.parse({ ...definition, ...data, id })
+          if (!state.nodes[parsed.rootNodeId]) {
+            throw new Error(`Definition root node not found: ${parsed.rootNodeId}`)
+          }
+          return { definitions: { ...state.definitions, [id]: parsed } }
+        })
+      },
+
+      deleteDefinition: (id) => {
+        if (get().readOnly) return
+        const definition = get().definitions[id]
+        if (!definition) return
+        get().deleteNode(definition.rootNodeId)
+      },
+
+      makeComponent: (nodeId, options) => {
+        if (get().readOnly) return null
+        const initial = get()
+        const source = initial.nodes[nodeId]
+        const parentId = source?.parentId as AnyNodeId | null | undefined
+        const parent = parentId ? initial.nodes[parentId] : undefined
+        const sourcePosition = (source as { position?: unknown } | undefined)?.position
+        if (
+          !source ||
+          source.type === 'instance' ||
+          !Array.isArray(sourcePosition) ||
+          sourcePosition.length < 3 ||
+          parent?.type !== 'level' ||
+          !parent.children.some((id) => id === nodeId)
+        ) {
+          return null
+        }
+        const levelId = parent.id as AnyNodeId
+        const componentTransform = nodeComponentTransform(source)
+
+        const definitionId = generateDefinitionId()
+        const definitionName = uniqueDefinitionName(
+          initial.definitions,
+          options?.name ??
+            source.name ??
+            nodeRegistry.get(source.type)?.presentation?.label ??
+            'Component',
+        )
+        const instance = InstanceNodeSchema.parse({
+          definitionId,
+          name: source.name ?? definitionName,
+          parentId: levelId,
+          collectionIds: source.collectionIds,
+          ...componentTransform,
+        })
+        const definition = DefinitionSchema.parse({
+          id: definitionId,
+          name: definitionName,
+          rootNodeId: source.id,
+          thumbnail: options?.thumbnail,
+        })
+
+        set((state) => {
+          const liveSource = state.nodes[nodeId]
+          const liveParent = state.nodes[levelId]
+          if (
+            !liveSource ||
+            liveSource.type === 'instance' ||
+            liveParent?.type !== 'level' ||
+            !liveParent.children.some((id) => id === nodeId)
+          ) {
+            return state
+          }
+
+          const detachedSource = resetDetachedComponentRootTransform(liveSource)
+          const nextNodes = {
+            ...state.nodes,
+            [nodeId]: detachedSource,
+            [instance.id]: instance,
+            [levelId]: {
+              ...liveParent,
+              children: liveParent.children.map((id) => (id === nodeId ? instance.id : id)),
+            },
+          } as Record<AnyNodeId, AnyNode>
+          const nextCollections = { ...state.collections }
+          for (const collectionId of source.collectionIds ?? []) {
+            const collection = nextCollections[collectionId]
+            if (!collection) continue
+            nextCollections[collectionId] = {
+              ...collection,
+              nodeIds: collection.nodeIds.map((id) => (id === nodeId ? instance.id : id)),
+            }
+          }
+          return {
+            nodes: nextNodes,
+            collections: nextCollections,
+            definitions: { ...state.definitions, [definitionId]: definition },
+          }
+        })
+
+        get().markDirty(nodeId)
+        get().markDirty(instance.id)
+        get().markDirty(levelId)
+        return { definitionId, instanceId: instance.id }
+      },
+
+      makeInstanceUnique: (instanceId, options) => {
+        if (get().readOnly) return null
+        const initial = get()
+        const instance = initial.nodes[instanceId]
+        if (instance?.type !== 'instance') return null
+        const sourceDefinition = initial.definitions[instance.definitionId]
+        if (!sourceDefinition) return null
+        const subtree = collectSubtree(initial.nodes, sourceDefinition.rootNodeId)
+        if (!subtree) return null
+
+        const originals = [subtree.root, ...subtree.descendants]
+        const cloned = cloneNodesInto(originals, { rootId: subtree.root.id })
+        const clonedNodes = remapClonedSubtreeNodeReferences(originals, cloned.nodes, cloned.idMap)
+        const definitionId = generateDefinitionId()
+        const definition = DefinitionSchema.parse({
+          id: definitionId,
+          name: uniqueDefinitionName(
+            initial.definitions,
+            options?.name ?? `${sourceDefinition.name} copy`,
+          ),
+          rootNodeId: cloned.rootId,
+          thumbnail: options?.thumbnail ?? sourceDefinition.thumbnail,
+        })
+
+        set((state) => {
+          const liveInstance = state.nodes[instanceId]
+          if (liveInstance?.type !== 'instance' || !state.definitions[liveInstance.definitionId]) {
+            return state
+          }
+          const nextNodes = { ...state.nodes }
+          for (const node of clonedNodes) nextNodes[node.id] = node
+          nextNodes[instanceId] = { ...liveInstance, definitionId }
+          return {
+            nodes: nextNodes,
+            definitions: { ...state.definitions, [definitionId]: definition },
+          }
+        })
+
+        for (const node of clonedNodes) get().markDirty(node.id)
+        get().markDirty(instanceId)
+        return definitionId
       },
 
       // --- SCENE MATERIALS ---
@@ -1778,6 +2057,12 @@ function sceneOperationPatchNextState(
   for (const id of createIds) {
     if (deleteIds.has(id)) return null
   }
+  for (const definition of Object.values(beforeState.definitions)) {
+    // Incremental host patches do not yet carry definition mutations. Refuse a
+    // root deletion here instead of leaving a dangling definition; full live
+    // snapshots can remove the definition and its subtree atomically.
+    if (deleteIds.has(definition.rootNodeId)) return null
+  }
   for (const node of Object.values(beforeState.nodes)) {
     const parentId = (node.parentId as AnyNodeId | null | undefined) ?? null
     if (parentId && deleteIds.has(parentId) && !deleteIds.has(node.id)) return null
@@ -1998,6 +2283,7 @@ export function applySceneSnapshot(
   try {
     useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
       collections: snapshot.collections,
+      definitions: snapshot.definitions,
       installedPlugins: snapshot.installedPlugins,
       materials: snapshot.materials,
     })

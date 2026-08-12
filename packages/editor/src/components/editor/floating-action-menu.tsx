@@ -38,10 +38,12 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
+import { Boxes, Unlink } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useReducedMotion } from '../../hooks/use-reduced-motion'
+import { makeInstanceUnique, makeNodeComponent } from '../../lib/component-actions'
 import { resolveMoveActionNode } from '../../lib/direct-manipulation'
 import {
   createFreshPlacementSubtree,
@@ -337,6 +339,14 @@ export function FloatingActionMenu() {
   // Subscribe just to the selected node so unrelated scene updates do not
   // re-render this menu.
   const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
+  const canMakeComponent = useScene((state) => {
+    if (!(node && node.type !== 'instance' && node.parentId)) return false
+    return (
+      state.nodes[node.parentId as AnyNodeId]?.type === 'level' &&
+      'position' in node &&
+      Array.isArray(node.position)
+    )
+  })
   const quickActionNodes = useScene(useShallow((s) => collectQuickActionNodes(s.nodes, selectedId)))
   const quickActions = useMemo<NodeQuickAction[]>(
     () =>
@@ -745,6 +755,23 @@ export function FloatingActionMenu() {
     [node?.type, selectedId, setSelection],
   )
 
+  const handleComponentAction = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation()
+      if (!(node && selectedId)) return
+      if (node.type === 'instance') {
+        if (!makeInstanceUnique(node.id)) return
+        sfxEmitter.emit('sfx:item-pick')
+        return
+      }
+      const result = makeNodeComponent(node.id)
+      if (!result) return
+      setSelection({ selectedIds: [result.instanceId] })
+      sfxEmitter.emit('sfx:item-place')
+    },
+    [node, selectedId, setSelection],
+  )
+
   // "Find in catalog": the editor only signals intent — the host (community)
   // listens for `selection:find-node` and reveals the node in its browser.
   const handleFind = useCallback(
@@ -829,12 +856,30 @@ export function FloatingActionMenu() {
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
             />
-            {quickActions.length > 0 ? (
+            {quickActions.length > 0 || node.type === 'instance' || canMakeComponent ? (
               <div
                 className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
               >
+                {node.type === 'instance' || canMakeComponent ? (
+                  <button
+                    aria-label={node.type === 'instance' ? 'Make Unique' : 'Make Component'}
+                    className="tooltip-trigger flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent/60 hover:text-foreground"
+                    onClick={handleComponentAction}
+                    title={node.type === 'instance' ? 'Make Unique' : 'Make Component'}
+                    type="button"
+                  >
+                    {node.type === 'instance' ? (
+                      <Unlink className="h-3.5 w-3.5" />
+                    ) : (
+                      <Boxes className="h-3.5 w-3.5" />
+                    )}
+                    <span className="whitespace-nowrap leading-none">
+                      {node.type === 'instance' ? 'Make Unique' : 'Make Component'}
+                    </span>
+                  </button>
+                ) : null}
                 {quickActions.map((action) => (
                   <button
                     aria-disabled={action.disabled || undefined}

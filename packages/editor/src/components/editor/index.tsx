@@ -56,6 +56,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/toolti
 import { SceneLoader } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
+import { ComponentsPanel } from '../ui/sidebar/panels/components-panel'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
@@ -1375,6 +1376,14 @@ export default function Editor({
     const tabMap = new Map<string, SidebarTab & { component: React.ComponentType }>(
       sidebarTabs?.map((t) => [t.id, t]) ?? [],
     )
+    if (!tabMap.has('components')) {
+      tabMap.set('components', {
+        id: 'components',
+        label: 'Components',
+        icon: <Icon height={22} icon="lucide:boxes" width={22} />,
+        component: ComponentsPanel,
+      })
+    }
     for (const p of hostRailPanels) {
       if (!tabMap.has(p.id)) {
         tabMap.set(p.id, { id: p.id, label: p.label, icon: p.icon, component: p.component })
@@ -1404,6 +1413,17 @@ export default function Editor({
         mobileIcon,
         icon,
       })) ?? []),
+      ...(!sidebarTabs?.some((tab) => tab.id === 'components')
+        ? [
+            {
+              id: 'components',
+              label: 'Components',
+              mobileDefaultSnap: 0.5,
+              mobileIcon: <Icon height={20} icon="lucide:boxes" width={20} />,
+              icon: <Icon height={22} icon="lucide:boxes" width={22} />,
+            },
+          ]
+        : []),
       // Host panels appear after the explicit tabs in the rail. The icon
       // doubles as the mobile icon; a half-height sheet is a sensible default.
       ...hostRailPanels.map((p) => ({

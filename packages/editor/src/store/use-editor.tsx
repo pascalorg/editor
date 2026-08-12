@@ -18,6 +18,7 @@ import {
   type DormerSurfaceMaterialRole,
   type ElevatorNode,
   type FenceNode,
+  type InstanceNode,
   type ItemNode,
   type LevelNode,
   nodeRegistry,
@@ -84,6 +85,7 @@ const MAX_FLOORPLAN_PANE_RATIO = 0.85
 function resolveMovingNodeTarget(
   node:
     | ItemNode
+    | InstanceNode
     | WindowNode
     | DoorNode
     | ElevatorNode
@@ -323,6 +325,7 @@ type EditorState = {
   setMovingNode: (
     node:
       | ItemNode
+      | InstanceNode
       | WindowNode
       | DoorNode
       | ElevatorNode

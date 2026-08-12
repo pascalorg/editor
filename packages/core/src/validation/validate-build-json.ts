@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../registry'
+import { Definition, type DefinitionId } from '../schema/definitions'
 import { AnyNode, type AnyNodeType } from '../schema/types'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 
@@ -23,6 +24,7 @@ export type BuildStats = {
 export type ParsedBuildJson = {
   nodes: Record<string, unknown>
   rootNodeIds: string[]
+  definitions?: Record<DefinitionId, Definition>
   installedPlugins?: string[]
 }
 
@@ -110,6 +112,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
 
   const nodesRaw = input.nodes
   const rootNodeIdsRaw = input.rootNodeIds
+  const definitionsRaw = input.definitions
   const installedPluginsRaw = input.installedPlugins
 
   if (!isPlainObject(nodesRaw)) {
@@ -151,6 +154,34 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
     installedPluginsRaw.every((pluginId) => typeof pluginId === 'string')
       ? Array.from(new Set(installedPluginsRaw))
       : undefined
+  let definitions: Record<DefinitionId, Definition> | undefined
+  if (definitionsRaw !== undefined) {
+    if (!isPlainObject(definitionsRaw)) {
+      errors.push({
+        severity: 'error',
+        code: 'invalid_definitions',
+        message: 'Invalid "definitions" — expected an object of id → definition.',
+      })
+    } else {
+      definitions = {} as Record<DefinitionId, Definition>
+      for (const [definitionId, definition] of Object.entries(definitionsRaw)) {
+        const parsed = Definition.safeParse(definition)
+        if (
+          !parsed.success ||
+          parsed.data.id !== definitionId ||
+          !(parsed.data.rootNodeId in nodes)
+        ) {
+          errors.push({
+            severity: 'error',
+            code: 'invalid_definition',
+            message: `Definition "${definitionId}" is invalid or references a missing root node.`,
+          })
+          continue
+        }
+        definitions[parsed.data.id] = parsed.data
+      }
+    }
+  }
 
   if (installedPluginsRaw !== undefined && installedPlugins === undefined) {
     warnings.push({
@@ -372,6 +403,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       ? {
           nodes,
           rootNodeIds,
+          ...(definitions ? { definitions } : {}),
           ...(installedPlugins ? { installedPlugins } : {}),
         }
       : null,

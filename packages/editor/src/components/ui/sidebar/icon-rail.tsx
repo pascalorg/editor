@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus } from 'lucide-react'
+import { Boxes, Plus } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
 import {
   Tooltip,
@@ -123,6 +123,27 @@ export function IconRail({
       })}
 
       {regularExtraPanels?.map(renderExtraPanel)}
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
+              activePanel === 'components' ? 'bg-accent' : 'hover:bg-accent',
+            )}
+            onClick={() => onPanelChange('components')}
+            type="button"
+          >
+            <Boxes
+              className={cn(
+                'h-5 w-5 transition-all',
+                activePanel !== 'components' && 'opacity-50',
+              )}
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">Components</TooltipContent>
+      </Tooltip>
 
       {/* Settings panel */}
       {[settingsPanel].map((panel) => {

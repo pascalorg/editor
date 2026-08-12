@@ -79,6 +79,7 @@ export class SceneBridge {
         nodes: state.nodes,
         rootNodeIds: state.rootNodeIds,
         collections: state.collections ?? {},
+        definitions: state.definitions ?? {},
         materials: state.materials ?? {},
         ...(state.hasExplicitPluginInstallState || state.installedPlugins.length > 0
           ? { installedPlugins: state.installedPlugins }
@@ -130,6 +131,7 @@ export class SceneBridge {
     const record = (value: unknown) =>
       value && typeof value === 'object' && !Array.isArray(value) ? value : undefined
     const collections = record(obj.collections) as NonNullable<SetSceneExtra>['collections']
+    const definitions = record(obj.definitions) as NonNullable<SetSceneExtra>['definitions']
     const materials = record(obj.materials) as NonNullable<SetSceneExtra>['materials']
     const installedPlugins = Array.isArray(obj.installedPlugins)
       ? obj.installedPlugins.filter((id): id is string => typeof id === 'string')
@@ -143,6 +145,7 @@ export class SceneBridge {
     // then or plugin-owned nodes never get validated.
     this.setScene(nodes as Record<AnyNodeId, AnyNode>, rootNodeIds as AnyNodeId[], {
       ...(collections && { collections }),
+      ...(definitions && { definitions }),
       ...(materials && { materials }),
       ...(installedPlugins && { installedPlugins, hasExplicitPluginInstallState: true }),
     })

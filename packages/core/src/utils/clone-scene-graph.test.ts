@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CollectionId } from '../schema/collections'
+import type { DefinitionId } from '../schema/definitions'
 import type { SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -87,6 +88,62 @@ describe('scene material palette', () => {
     const forked = forkSceneGraph(source)
 
     expect(forked.materials).toEqual(source.materials)
+  })
+})
+
+describe('component definition clone references', () => {
+  function sceneWithDefinition(): SceneGraph {
+    const site = makeNode('site_1', 'site', { children: ['level_1'] })
+    const level = makeNode('level_1', 'level', {
+      parentId: 'site_1',
+      children: ['instance_1'],
+    })
+    const source = makeNode('shelf_source', 'shelf', { children: [] })
+    const instance = makeNode('instance_1', 'instance', {
+      parentId: 'level_1',
+      definitionId: 'definition_balcony',
+      position: [2, 0, 3],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    })
+    return {
+      nodes: {
+        [site.id]: site,
+        [level.id]: level,
+        [source.id]: source,
+        [instance.id]: instance,
+      },
+      rootNodeIds: [site.id],
+      definitions: {
+        ['definition_balcony' as DefinitionId]: {
+          id: 'definition_balcony',
+          name: 'Balcony A',
+          rootNodeId: source.id,
+        },
+      },
+    }
+  }
+
+  test('cloneSceneGraph remaps definition ids, roots, and instance references together', () => {
+    const cloned = cloneSceneGraph(sceneWithDefinition())
+    const definition = Object.values(cloned.definitions ?? {})[0]!
+    const instance = Object.values(cloned.nodes).find((node) => node.type === 'instance')
+
+    expect(definition.id).not.toBe('definition_balcony')
+    expect(definition.rootNodeId).not.toBe('shelf_source')
+    expect(cloned.nodes[definition.rootNodeId]).toBeDefined()
+    expect(instance?.type).toBe('instance')
+    if (instance?.type === 'instance') expect(instance.definitionId).toBe(definition.id)
+  })
+
+  test('forkSceneGraph carries definitions through its clone boundary', () => {
+    const forked = forkSceneGraph(sceneWithDefinition())
+    const definition = Object.values(forked.definitions ?? {})[0]!
+    const instance = Object.values(forked.nodes).find((node) => node.type === 'instance')
+
+    expect(forked.nodes[definition.rootNodeId]).toBeDefined()
+    expect(instance?.type).toBe('instance')
+    if (instance?.type === 'instance') expect(instance.definitionId).toBe(definition.id)
   })
 })
 

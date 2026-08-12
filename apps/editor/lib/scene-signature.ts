@@ -8,7 +8,8 @@ export type PersistedSceneGraph = SceneGraph & {
  * Identity of a graph for echo detection, compared across a boundary that
  * normalizes: one side is a raw SSE payload, the other is the editor's state
  * after `applySceneGraphToEditor` ran. `setScene` always writes `collections`,
- * `materials` and `installedPlugins`, so a payload that omits them (MCP live
+ * `definitions`, `materials` and `installedPlugins`, so a payload that omits
+ * them (MCP live
  * sync emits exactly that) has to serialize the same as the store that
  * defaulted them, or the echo reads as a local edit and gets saved back.
  *
@@ -21,6 +22,7 @@ export function sceneGraphSignature(graph: PersistedSceneGraph): string {
     nodes: graph.nodes,
     rootNodeIds: graph.rootNodeIds,
     collections: graph.collections ?? {},
+    definitions: graph.definitions ?? {},
     materials: graph.materials ?? {},
     installedPlugins: graph.installedPlugins ?? [],
   })

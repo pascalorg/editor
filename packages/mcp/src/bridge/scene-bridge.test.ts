@@ -462,6 +462,21 @@ describe('SceneBridge', () => {
       expect(bridge.exportJSON().collections).toEqual(collections)
     })
 
+    test('loadJSON round-trips component definitions for live sync', () => {
+      const snap = bridge.exportJSON()
+      const rootNodeId = Object.keys(snap.nodes)[0]!
+      const definitions = {
+        definition_component: {
+          id: 'definition_component',
+          name: 'Component A',
+          rootNodeId,
+        },
+      }
+      bridge.loadJSON({ ...snap, definitions } as never)
+
+      expect(bridge.exportJSON().definitions).toEqual(definitions)
+    })
+
     test('legacy graphs do not become explicitly uninstalled on export', () => {
       const snap = bridge.exportJSON()
       const { installedPlugins: _installedPlugins, ...legacy } = snap

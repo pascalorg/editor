@@ -21,6 +21,7 @@ export type SceneGraph = {
   // Document-level scene state that travels with the graph. Optional so older
   // payloads (and callers that only build nodes) stay valid.
   collections?: Record<string, unknown>
+  definitions?: Record<string, unknown>
   materials?: Record<string, unknown>
   installedPlugins?: string[]
 }
@@ -385,9 +386,10 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   if (hasUsableSceneGraph(sceneGraph)) {
-    const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
+    const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } = sceneGraph
     useScene.getState().setScene(nodes as any, rootNodeIds as any, {
       collections: collections as any,
+      definitions: definitions as any,
       materials: materials as any,
       installedPlugins: installedPlugins ?? defaultInstalledPlugins,
       hasExplicitPluginInstallState: installedPlugins !== undefined,

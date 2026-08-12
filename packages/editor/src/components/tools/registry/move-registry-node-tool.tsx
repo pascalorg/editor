@@ -221,6 +221,7 @@ type ClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
 
 const CLICK_TRIGGER_KINDS = [
   'shelf',
+  'instance',
   'item',
   'slab',
   'ceiling',

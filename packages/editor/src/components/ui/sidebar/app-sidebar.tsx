@@ -14,6 +14,7 @@ import {
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { type ExtraPanel, IconRail } from './icon-rail'
+import { ComponentsPanel } from './panels/components-panel'
 import { SettingsPanel, type SettingsPanelProps } from './panels/settings-panel'
 import { SitePanel, type SitePanelProps } from './panels/site-panel'
 import { useHostPanels } from './use-plugin-panels'
@@ -42,6 +43,7 @@ export function AppSidebar({
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
   const hasActivePanel =
     activePanel === 'site' ||
+    activePanel === 'components' ||
     activePanel === 'settings' ||
     Boolean(extraPanels?.some((panel) => panel.id === activePanel))
 
@@ -63,6 +65,8 @@ export function AppSidebar({
     switch (activePanel) {
       case 'site':
         return <SitePanel {...sitePanelProps} />
+      case 'components':
+        return <ComponentsPanel />
       case 'settings':
         return <SettingsPanel {...settingsPanelProps} />
       default: {

@@ -167,6 +167,7 @@ test('treats an unnamespaced unknown type as a foreign node', () => {
 })
 
 const MATERIAL_ID = 'mat_a1b2c3d4e5f6g7h8'
+const DEFINITION_ID = 'definition_balcony'
 const material = (overrides: Record<string, unknown> = {}) => ({
   id: MATERIAL_ID,
   name: 'Oak',
@@ -213,4 +214,51 @@ test('does not rewrite materials it accepts', () => {
 
   expect(res.success).toBe(true)
   expect(res.data?.materials?.[MATERIAL_ID]).toEqual(sparse)
+})
+
+test('preserves component definitions whose roots exist in the graph', () => {
+  const graph = {
+    ...buildGraph({ [LEVEL_ID]: level() }, [LEVEL_ID]),
+    definitions: {
+      [DEFINITION_ID]: {
+        id: DEFINITION_ID,
+        name: 'Balcony A',
+        rootNodeId: LEVEL_ID,
+        thumbnail: 'data:image/png;base64,AA==',
+      },
+    },
+  }
+  const res = apiGraphSchema.safeParse(graph)
+
+  expect(res.success).toBe(true)
+  expect(res.data?.definitions).toEqual(graph.definitions)
+})
+
+test('rejects a component definition with a missing root or unsafe thumbnail', () => {
+  const base = buildGraph({ [LEVEL_ID]: level() }, [LEVEL_ID])
+  expect(
+    apiGraphSchema.safeParse({
+      ...base,
+      definitions: {
+        [DEFINITION_ID]: {
+          id: DEFINITION_ID,
+          name: 'Balcony A',
+          rootNodeId: 'shelf_missing',
+        },
+      },
+    }).success,
+  ).toBe(false)
+  expect(
+    apiGraphSchema.safeParse({
+      ...base,
+      definitions: {
+        [DEFINITION_ID]: {
+          id: DEFINITION_ID,
+          name: 'Balcony A',
+          rootNodeId: LEVEL_ID,
+          thumbnail: 'javascript:alert(1)',
+        },
+      },
+    }).success,
+  ).toBe(false)
 })

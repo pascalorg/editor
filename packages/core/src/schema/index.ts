@@ -13,6 +13,12 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 export { CameraSchema } from './camera'
 // Collections
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
+// Definitions
+export {
+  Definition,
+  type DefinitionId,
+  generateDefinitionId,
+} from './definitions'
 export type {
   MaterialMapProperties,
   MaterialMaps,
@@ -106,6 +112,7 @@ export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export { GutterNode, GutterOutlet } from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
+export { InstanceNode, type InstanceNodeId } from './nodes/instance'
 export type {
   AnimationEffect,
   Asset,

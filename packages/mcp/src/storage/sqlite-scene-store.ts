@@ -80,6 +80,7 @@ const GraphSchema = z.object({
   nodes: z.record(z.string(), z.unknown()),
   rootNodeIds: z.array(z.string()),
   collections: z.record(z.string(), z.unknown()).optional(),
+  definitions: z.record(z.string(), z.unknown()).optional(),
   materials: z.record(z.string(), z.unknown()).optional(),
   installedPlugins: z.array(z.string()).optional(),
 })

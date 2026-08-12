@@ -1,4 +1,4 @@
-import { AnyNode, AssetUrl, BaseNode, SceneMaterial } from '@pascal-app/core/schema'
+import { AnyNode, AssetUrl, BaseNode, Definition, SceneMaterial } from '@pascal-app/core/schema'
 import { z } from 'zod'
 
 /**
@@ -100,6 +100,7 @@ export const apiGraphSchema = z
     nodes: z.record(z.string(), z.unknown()),
     rootNodeIds: z.array(z.string()),
     collections: z.unknown().optional(),
+    definitions: z.record(z.string(), z.unknown()).optional(),
     // `unknown` here, validated in `superRefine` below — the same split the
     // nodes get, and for the same reason: the routes persist this schema's
     // *output*, so a validating shape would also rewrite what gets stored.
@@ -129,6 +130,29 @@ export const apiGraphSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['materials', materialId, ...issue.path],
+          message: issue.message,
+        })
+      }
+    }
+
+    for (const [definitionId, definition] of Object.entries(value.definitions ?? {})) {
+      const res = Definition.safeParse(definition)
+      if (res.success && res.data.id === definitionId && value.nodes[res.data.rootNodeId]) continue
+      if (res.success) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['definitions', definitionId, 'rootNodeId'],
+          message:
+            res.data.id !== definitionId
+              ? 'Definition key must match its id'
+              : 'Definition root node does not exist',
+        })
+        continue
+      }
+      for (const issue of res.error.issues) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['definitions', definitionId, ...issue.path],
           message: issue.message,
         })
       }

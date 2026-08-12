@@ -24,6 +24,7 @@ import type {
   GuideNode,
   GutterNode,
   HvacEquipmentNode,
+  InstanceNode,
   ItemNode,
   LevelNode,
   LinesetNode,
@@ -93,6 +94,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
 export type ItemEvent = NodeEvent<ItemNode>
+export type InstanceEvent = NodeEvent<InstanceNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
 export type CabinetEvent = NodeEvent<CabinetNode>
@@ -300,6 +302,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'cabinet', CabinetEvent> &
   NodeEvents<'cabinet-module', CabinetModuleEvent> &
+  NodeEvents<'instance', InstanceEvent> &
   NodeEvents<'item', ItemEvent> &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &

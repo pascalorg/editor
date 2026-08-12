@@ -18,6 +18,7 @@ export type {
   GridEvent,
   GuideEvent,
   GutterEvent,
+  InstanceEvent,
   ItemEvent,
   LevelEvent,
   MeasurementEvent,

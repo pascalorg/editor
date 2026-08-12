@@ -12,6 +12,7 @@ import {
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
+import type { Definition, DefinitionId } from '../../schema/definitions'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
@@ -26,6 +27,29 @@ type WallMergePlan = {
   mergedEnd: [number, number]
   mergedChildren: WallNode['children']
   attachmentUpdates: WallAttachmentUpdate[]
+}
+
+function removeDefinitionsWhoseRootsAreDeleted(
+  definitions: Record<DefinitionId, Definition>,
+  nodes: Record<AnyNodeId, AnyNode>,
+  allIds: Set<AnyNodeId>,
+  collect: (id: AnyNodeId) => void,
+): Record<DefinitionId, Definition> {
+  const removedDefinitionIds = new Set<DefinitionId>()
+  for (const definition of Object.values(definitions)) {
+    if (allIds.has(definition.rootNodeId)) removedDefinitionIds.add(definition.id)
+  }
+  if (removedDefinitionIds.size === 0) return definitions
+
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'instance' && removedDefinitionIds.has(node.definitionId)) {
+      collect(node.id)
+    }
+  }
+
+  const nextDefinitions = { ...definitions }
+  for (const id of removedDefinitionIds) delete nextDefinitions[id]
+  return nextDefinitions
 }
 
 const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
@@ -925,6 +949,12 @@ export const applyNodeChangesAction = (
     for (const id of deleteOps) {
       collectDelete(id)
     }
+    const nextDefinitions = removeDefinitionsWhoseRootsAreDeleted(
+      state.definitions,
+      nextNodes,
+      allIdsToDelete,
+      collectDelete,
+    )
 
     for (const id of allIdsToDelete) {
       const node = nextNodes[id]
@@ -959,7 +989,12 @@ export const applyNodeChangesAction = (
       delete nextNodes[id]
     }
 
-    return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
+    return {
+      nodes: nextNodes,
+      rootNodeIds: resolvedRootIds,
+      collections: nextCollections,
+      definitions: nextDefinitions,
+    }
   })
 
   for (const id of nodesToMarkDirty) {
@@ -1099,6 +1134,12 @@ export const deleteNodesAction = (
       }
     }
     for (const id of ids) collect(id)
+    const nextDefinitions = removeDefinitionsWhoseRootsAreDeleted(
+      state.definitions,
+      nextNodes,
+      allIds,
+      collect,
+    )
     for (const plan of mergePlans) {
       allIds.add(plan.secondaryWallId)
     }
@@ -1204,7 +1245,12 @@ export const deleteNodesAction = (
       delete nextNodes[id]
     }
 
-    return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
+    return {
+      nodes: nextNodes,
+      rootNodeIds: nextRootIds,
+      collections: nextCollections,
+      definitions: nextDefinitions,
+    }
   })
 
   // Deleted ids must leave the dirty set: every consumer skips missing

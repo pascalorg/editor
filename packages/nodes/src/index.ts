@@ -20,6 +20,7 @@ import { fenceDefinition } from './fence'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
+import { instanceDefinition } from './instance'
 import { itemDefinition } from './item'
 import { levelDefinition } from './level'
 import { linesetDefinition } from './lineset'
@@ -77,6 +78,7 @@ export const builtinPlugin: Plugin = {
     windowDefinition as unknown as AnyNodeDefinition,
     cabinetDefinition as unknown as AnyNodeDefinition,
     cabinetModuleDefinition as unknown as AnyNodeDefinition,
+    instanceDefinition as unknown as AnyNodeDefinition,
     itemDefinition as unknown as AnyNodeDefinition,
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
@@ -151,6 +153,7 @@ export { fenceDefinition } from './fence'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'
+export { instanceDefinition } from './instance'
 export { itemDefinition } from './item'
 export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'
