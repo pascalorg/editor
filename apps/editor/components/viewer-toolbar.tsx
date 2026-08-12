@@ -15,7 +15,6 @@ import {
   useFloorplanMode,
   useSidebarStore,
   type ViewMode,
-  ViewerToolbarLeft as ViewToggles,
 } from '@pascal-app/editor'
 import {
   CLAY_PALETTE,
@@ -692,18 +691,6 @@ export function CommunityViewerToolbarLeft() {
     <>
       <CollapseSidebarButton />
       <ViewModeControl />
-      {/*
-        Scans, Guides, Reference floor and Riser.
-
-        This fork wrote its own toolbar and, in doing so, stopped rendering
-        upstream's — so `ViewToggles` had zero call sites and four working
-        features had no way in. The reference-floor underlay (the ghost of the
-        level below, in plan) and the DWV riser diagram were both complete and
-        both unreachable. Upstream mounts this exact component on the left,
-        which is why its export alias is `ViewerToolbarLeft`; putting it back
-        here is restoring the original arrangement, not inventing one.
-      */}
-      <ViewToggles />
     </>
   )
 }

@@ -1456,15 +1456,6 @@ export default function Editor({
                       <HelperManager />
                     </div>
                   )}
-                  {/*
-                    The v1 overlay list has always had this; v2 was written
-                    without it, so the DWV riser diagram could be toggled open
-                    and never appeared. `RiserDiagramPanel` returns null until
-                    it is open, and the whole-scene subscription that builds
-                    the diagram lives in its child — mounting it here costs
-                    nothing while it is closed.
-                  */}
-                  {!isCaptureMode && <RiserDiagramPanel />}
                   {isFirstPersonMode && (
                     <FirstPersonOverlay
                       onExit={() => useEditor.getState().setFirstPersonMode(false)}

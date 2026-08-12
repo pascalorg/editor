@@ -433,7 +433,16 @@ export function ReferencePanel() {
               XYZ<sub className="ml-[1px] text-[11px] opacity-70">scale</sub>
             </>
           }
-          max={10}
+          // No upper bound, and not as a convenience: the ceiling used to be
+          // 10 and it silently destroyed correct calibrations. "Set Scale"
+          // writes whatever the measured line implies — a 121.6 m dimension on
+          // a plan image lands at 20.64 — and that path never goes through this
+          // field. But `SliderControl` clamps on drag and on typed input alike,
+          // so one nudge on a calibrated guide snapped 20.64 down to 10 and the
+          // plan silently stopped matching the model. `GuideNode.scale` is an
+          // unbounded `z.number()`; a UI-invented ceiling below what the app
+          // itself produces is not a limit, it is data loss. The 0.01 floor
+          // stays — zero or negative collapses the image.
           min={0.01}
           onChange={(value) => {
             if (value > 0) {
