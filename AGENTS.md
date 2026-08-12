@@ -80,6 +80,13 @@ Four things that will mislead you if you don't know them:
   built `dist` of its dependencies. After editing a dependency, rebuild it or
   the consumer's tests run against stale code.
 
+A green suite says the pure logic is right. It says nothing about whether the
+component you edited is mounted, whether the store you gated on is ever written,
+or whether your listener runs before the tool's own. Those are the failures the
+suite structurally cannot see, so anything that touches UI wiring, keyboard
+handling or a store gate needs a run in the browser (`bun restart`, `:3002`)
+before it is called done.
+
 ## State: three stores, one per layer
 
 Each layer owns exactly one Zustand store, and the layer boundaries below are
@@ -132,6 +139,36 @@ Consequence: when adding a kind, **do not** add dispatch branches. Contribute
 holds the whole vertical slice for one kind (`schema.ts`, `definition.ts`,
 `renderer.tsx`, `tool.tsx`, `system.tsx`, `floorplan.ts`, `paint.ts`,
 `preview.tsx`, `parametrics.ts` — as applicable).
+
+## Editor interaction: what is actually wired
+
+`interaction-scope.md` describes the target model. Three gaps between that model
+and today's code have each cost a wrong assumption; check them before building on
+any of the three.
+
+- **Drafting tools do not open a scope.** `InteractionScope` has a `drafting`
+  kind, but `wall`, `fence`, `slab`, `ceiling`, `zone` and `roof` tools never
+  call `begin` — only `measurement`, `structural-grid` and
+  `construction-dimension` have been migrated. So `isActive(scope)` is **false**
+  while a wall is being drawn. Gating a feature on it silently disables that
+  feature for exactly the tools it was probably written for. The signal those
+  tools *do* publish is `useFloorplanDraftPreview` (`wallDraftStart`,
+  `polygonDraftPoints`), and both views write it.
+- **Tool keydown listeners beat the global one.** `use-keyboard` listens on
+  `window` in the bubble phase; tools register their own on `document`
+  (`slab/tool.tsx`'s Enter finishes the polygon, `fence/tool.tsx`'s commits). The
+  propagation path reaches `document` first, so a global handler that needs first
+  refusal must use **capture** on `window` and `stopImmediatePropagation` —
+  `preventDefault` alone does not stop a sibling listener. Precedent:
+  `handleSessionGroupKeyDown` and `handleMeasurementInputKeyDown`.
+- **`DimensionPill` is not on screen during drafting.** Each drafting tool draws
+  its own in-scene label (`DraftMeasurementLabel`); the pill only mounts in a
+  *selected* node's floating action menu. A readout added to it is invisible for
+  the whole gesture. Editor-wide HUDs mount next to `QuickMeasurementHud` in
+  `components/editor/index.tsx`.
+
+`CollectionsPopover` is exported from the package but mounted nowhere in this
+app — check a UI surface is actually rendered before extending it.
 
 ## Layer Boundaries (read once, internalise)
 
