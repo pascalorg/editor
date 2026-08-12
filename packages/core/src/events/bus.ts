@@ -160,6 +160,10 @@ type GridEvents = {
   [K in `grid:${EventSuffix}`]: GridEvent
 }
 
+type GenericNodeEvents = {
+  [K in `node:${EventSuffix}`]: NodeEvent<AnyNode>
+}
+
 export interface CameraControlEvent {
   nodeId: AnyNode['id']
 }
@@ -291,6 +295,7 @@ type SelectionEvents = {
 }
 
 type EditorEvents = GridEvents &
+  GenericNodeEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'cabinet', CabinetEvent> &

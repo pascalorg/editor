@@ -4,6 +4,7 @@ import {
   GROUND_SUPPORT_ID,
   type ItemNode,
   isLowProfileItemSurface,
+  nodeRegistry,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -21,9 +22,6 @@ const worldRayDirection = new Vector3()
 const nodeTopRaycaster = new Raycaster()
 const nodeTopNormal = new Vector3()
 const nodeTopNormalMatrix = new Matrix3()
-
-const NODE_TOP_SURFACE_KINDS = ['wall', 'item', 'column', 'custom-mesh'] as const
-const DEFAULT_NODE_TOP_SURFACE_KINDS = ['custom-mesh'] as const
 
 export type PointerSupportSurface = {
   /** Level-local elevation of the pointed surface — the election cap. */
@@ -152,9 +150,12 @@ export function resolvePointerSupportSurface(
     localPoint = [pointScratch.x, pointScratch.y, pointScratch.z]
   }
 
-  const nodeTopSurfaceKinds = options?.includeNodeTopSurfaces
-    ? NODE_TOP_SURFACE_KINDS
-    : DEFAULT_NODE_TOP_SURFACE_KINDS
+  const nodeTopSurfaceKinds =
+    options?.includeNodeTopSurfaces === false
+      ? []
+      : Array.from(nodeRegistry.entries())
+          .filter(([, definition]) => definition.capabilities.surfaces?.top !== undefined)
+          .map(([kind]) => kind)
   if (nodeTopSurfaceKinds.some((kind) => (sceneRegistry.byType[kind]?.size ?? 0) > 0)) {
     nodeTopRaycaster.set(worldRayOrigin, worldRayDirection.clone().normalize())
     const nodes = useScene.getState().nodes

@@ -35,6 +35,8 @@ export type InteractionScope =
       nodeType: string
       view: InteractionView
       pressDrag: boolean
+      /** Omitted means the generic move tool, preserving existing producers. */
+      driver?: 'move-tool' | 'registry-tool'
     }
   // Moving an existing node.
   | { kind: 'moving'; node: AnyNode; nodeId: string; nodeType: string; view: InteractionView }

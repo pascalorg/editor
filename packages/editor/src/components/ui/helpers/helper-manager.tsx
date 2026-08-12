@@ -227,13 +227,13 @@ export function HelperManager() {
     const movingContinuationContext = isFreshPlacementMetadata(movingNode.metadata)
       ? continuationContextOf(movingNode.type)
       : null
-    // Force-place only makes sense for kinds that collision-validate their drop;
-    // structural kinds (wall/slab/…) never reject, so don't advertise Alt.
+    const collisionValidatesDrop =
+      nodeRegistry.get(movingNode.type)?.capabilities.floorPlaced?.collides === true
     return (
       <ItemHelper
         continuationContext={movingContinuationContext}
         showEsc
-        showForce={nodeRegistry.get(movingNode.type)?.snapProfile !== 'structural'}
+        showForce={collisionValidatesDrop}
         snapContext={snapContext}
       />
     )

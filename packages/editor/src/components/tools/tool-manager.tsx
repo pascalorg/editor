@@ -14,7 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
-import {
+import useInteractionScope, {
   useControlPointReshape,
   useEditingHole,
   useEndpointReshape,
@@ -105,6 +105,9 @@ export const ToolManager: React.FC = () => {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const movingNode = useMovingNode()
+  const registryToolOwnsPlacement = useInteractionScope(
+    (state) => state.scope.kind === 'placing' && state.scope.driver === 'registry-tool',
+  )
   const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
   const endpointReshape = useEndpointReshape()
   const controlPointReshape = useControlPointReshape()
@@ -244,7 +247,7 @@ export const ToolManager: React.FC = () => {
   // (the scene writes the overlay makes still mirror into the 3D view). A
   // 3D-initiated move leaves the origin null until its own commit, so this only
   // suppresses the 3D tool for genuinely 2D-owned moves.
-  const showMover = movingNode != null && movingNodeOrigin !== '2d'
+  const showMover = movingNode != null && movingNodeOrigin !== '2d' && !registryToolOwnsPlacement
 
   // Registry-first: if the active tool's kind has a NodeDefinition with a
   // tool contribution, the registry-driven tool takes over.
@@ -386,7 +389,7 @@ export const ToolManager: React.FC = () => {
         )}
         {/* Registry-first: when the active tool's kind has a registered
             NodeDefinition with a tool contribution, mount it here. */}
-        {!movingNode && useRegistryTool && RegistryToolComponent && (
+        {(!movingNode || registryToolOwnsPlacement) && useRegistryTool && RegistryToolComponent && (
           <Suspense fallback={null}>
             <RegistryToolProvider value={registryToolContext}>
               <RegistryToolComponent />

@@ -206,6 +206,14 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    surfaces: {
+      top: {
+        height: (node) => {
+          const item = node as ItemNodeType
+          return (item.asset.surface?.height ?? item.asset.dimensions[1]) * item.scale[1]
+        },
+      },
+    },
     duplicable: true,
     deletable: true,
     paint: itemPaint,

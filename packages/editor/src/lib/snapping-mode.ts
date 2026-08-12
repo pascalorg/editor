@@ -148,6 +148,7 @@ export function snapContextOf(args: {
     nodeId?: string
     tool?: string
     handle?: string
+    operator?: string
   }
   mode: string
   tool: string | null
@@ -167,7 +168,9 @@ export function snapContextOf(args: {
   }
   switch (scope.kind) {
     case 'mesh-editing':
-      return scope.nodeId ? contextForProfile(profileOfNode?.(scope.nodeId), true) : null
+      return scope.nodeId
+        ? contextForProfile(profileOfNode?.(scope.nodeId), scope.operator === 'rotate')
+        : null
     case 'handle-drag':
       if (scope.handle === ROTATE_HANDLE_DRAG_LABEL) return null
       return scope.nodeId ? contextForProfile(profileOfNode?.(scope.nodeId), false) : null

@@ -102,6 +102,7 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
       nodeId?: string
       tool?: string
       handle?: string
+      operator?: string
     },
     mode = 'select',
     tool: string | null = null,
@@ -122,8 +123,18 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     ).toBeNull()
   })
 
-  it('gives custom-mesh edit mode the shared grid and angle context', () => {
-    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1' })).toBe('wall')
+  it('gives mesh rotation the angle context and other edit operations polygon snapping', () => {
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1' })).toBe('polygon')
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1', operator: 'translate' })).toBe(
+      'polygon',
+    )
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1', operator: 'scale' })).toBe(
+      'polygon',
+    )
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1', operator: 'loop-cut' })).toBe(
+      'polygon',
+    )
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1', operator: 'rotate' })).toBe('wall')
   })
 
   it('endpoint reshape is angle-bearing (wall); curve + polygon vertex edits are not', () => {

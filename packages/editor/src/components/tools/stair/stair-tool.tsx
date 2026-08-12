@@ -2,7 +2,6 @@ import {
   type AnyNode,
   collectAlignmentAnchors,
   createSurfaceOpeningPreviewController,
-  type EventSuffix,
   emitter,
   type GridEvent,
   type LevelNode,
@@ -67,21 +66,6 @@ const GRID_OFFSET = 0.02
 const ALIGNMENT_THRESHOLD_M = 0.08
 type ClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
 type MoveTriggerEvent = GridEvent | NodeEvent<AnyNode>
-
-const CLICK_TRIGGER_KINDS = [
-  'shelf',
-  'item',
-  'slab',
-  'ceiling',
-  'wall',
-  'fence',
-  'column',
-  'roof',
-  'roof-segment',
-  'stair',
-  'stair-segment',
-  'custom-mesh',
-] as const
 
 /**
  * Generates the step-profile geometry for the ghost preview.
@@ -566,26 +550,15 @@ export const StairTool: React.FC = () => {
 
     emitter.on('grid:move', onPointerMove)
     emitter.on('grid:click', commitAtCursor)
-    type SuffixedKey<K extends string> = `${K}:${EventSuffix}`
-    type ClickKey = SuffixedKey<(typeof CLICK_TRIGGER_KINDS)[number]>
-    type MoveKey = SuffixedKey<(typeof CLICK_TRIGGER_KINDS)[number]>
-    for (const kind of CLICK_TRIGGER_KINDS) {
-      const key = `${kind}:click` as ClickKey
-      emitter.on(key, commitAtCursor as never)
-      const moveKey = `${kind}:move` as MoveKey
-      emitter.on(moveKey, onPointerMove as never)
-    }
+    emitter.on('node:click', commitAtCursor)
+    emitter.on('node:move', onPointerMove)
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
       emitter.off('grid:move', onPointerMove)
       emitter.off('grid:click', commitAtCursor)
-      for (const kind of CLICK_TRIGGER_KINDS) {
-        const key = `${kind}:click` as ClickKey
-        emitter.off(key, commitAtCursor as never)
-        const moveKey = `${kind}:move` as MoveKey
-        emitter.off(moveKey, onPointerMove as never)
-      }
+      emitter.off('node:click', commitAtCursor)
+      emitter.off('node:move', onPointerMove)
       window.removeEventListener('keydown', onKeyDown)
       useAlignmentGuides.getState().clear()
       openingPreview.clear()

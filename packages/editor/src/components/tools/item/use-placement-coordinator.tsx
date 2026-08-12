@@ -2276,12 +2276,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (placementState.current.surface !== 'floor') return
       onGridClick(event as unknown as GridEvent)
     }
-    emitter.on('wall:click', commitFloorOnSurfaceClick as never)
-    emitter.on('item:click', commitFloorOnSurfaceClick as never)
-    emitter.on('ceiling:click', commitFloorOnSurfaceClick as never)
-    emitter.on('roof:click', commitFloorOnSurfaceClick as never)
-    emitter.on('shelf:click', commitFloorOnSurfaceClick as never)
-    emitter.on('custom-mesh:click', commitFloorOnSurfaceClick as never)
+    emitter.on('node:click', commitFloorOnSurfaceClick as never)
     if (dragMode) window.addEventListener('pointerup', onReleaseCommit)
 
     return () => {
@@ -2317,12 +2312,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('shelf:move', onShelfMove)
       emitter.off('shelf:click', onShelfClick)
       emitter.off('shelf:leave', onShelfLeave)
-      emitter.off('wall:click', commitFloorOnSurfaceClick as never)
-      emitter.off('item:click', commitFloorOnSurfaceClick as never)
-      emitter.off('ceiling:click', commitFloorOnSurfaceClick as never)
-      emitter.off('roof:click', commitFloorOnSurfaceClick as never)
-      emitter.off('shelf:click', commitFloorOnSurfaceClick as never)
-      emitter.off('custom-mesh:click', commitFloorOnSurfaceClick as never)
+      emitter.off('node:click', commitFloorOnSurfaceClick as never)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)

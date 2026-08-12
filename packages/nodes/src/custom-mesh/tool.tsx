@@ -17,6 +17,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useInteractionScope,
   useRegistryToolContext,
 } from '@pascal-app/editor'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -24,6 +25,7 @@ import type { Group } from 'three'
 import {
   type FloorPlacementClickTriggerEvent,
   getLevelLocalSnappedPosition,
+  isForcePlacementEvent,
   resolveAlignedFloorPlacement,
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
@@ -54,12 +56,27 @@ const CustomMeshTool = () => {
     let lastPosition: [number, number, number] | null = null
     let alignmentCandidates = collectAlignmentAnchors(sceneApi.nodes(), previewNode.id)
     const { size } = customMeshBounds(previewNode)
+    useInteractionScope.getState().begin({
+      kind: 'placing',
+      node: CustomMeshNode.parse({
+        ...previewNode,
+        parentId: activeLevelId,
+        metadata: { isNew: true },
+      }),
+      nodeId: previewNode.id,
+      nodeType: previewNode.type,
+      view: '3d',
+      pressDrag: false,
+      driver: 'registry-tool',
+    })
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorVisibleRef.current) {
         cursorVisibleRef.current = true
         setCursorVisible(true)
       }
+      const forcePlacement = isForcePlacementEvent(event)
+      const gridSnapActive = isGridSnapActive()
       const { position, guides } = resolveAlignedFloorPlacement({
         node: previewNode,
         rawX: event.localPosition[0],
@@ -67,8 +84,8 @@ const CustomMeshTool = () => {
         gridStep: useEditor.getState().gridSnapStep,
         candidates: alignmentCandidates,
         showAlignment: isAlignmentGuideActive(),
-        applyAlignmentSnap: isMagneticSnapActive(),
-        bypassGrid: !isGridSnapActive(),
+        applyAlignmentSnap: !forcePlacement && isMagneticSnapActive(),
+        bypassGrid: forcePlacement || !gridSnapActive,
       })
       useAlignmentGuides.getState().set(guides)
       const visualPosition = getFloorStackPreviewPosition({
@@ -80,11 +97,11 @@ const CustomMeshTool = () => {
       cursorRef.current?.position.set(...visualPosition)
       lastPosition = position
       const placement = canPlaceOnFloor(activeLevelId, position, size, [0, previewNode.rotation, 0])
-      setValidPlacement(placement.valid)
+      setValidPlacement(forcePlacement || placement.valid)
 
       const snapKey = movementSfxStepKey({
         coords: [position[0], position[2]],
-        gridSnapActive: isGridSnapActive(),
+        gridSnapActive: !forcePlacement && gridSnapActive,
         gridStep: useEditor.getState().gridSnapStep,
       })
       if (snapKey !== previousSnapRef.current) {
@@ -94,14 +111,21 @@ const CustomMeshTool = () => {
     }
 
     const commit = (event: FloorPlacementClickTriggerEvent) => {
-      const position =
-        lastPosition ??
-        getLevelLocalSnappedPosition(
-          activeLevelId,
-          event,
-          useEditor.getState().gridSnapStep,
-          !isGridSnapActive(),
-        )
+      const forcePlacement = isForcePlacementEvent(event)
+      const position = forcePlacement
+        ? getLevelLocalSnappedPosition(
+            activeLevelId,
+            event,
+            useEditor.getState().gridSnapStep,
+            true,
+          )
+        : (lastPosition ??
+          getLevelLocalSnappedPosition(
+            activeLevelId,
+            event,
+            useEditor.getState().gridSnapStep,
+            !isGridSnapActive(),
+          ))
       const draftNode = CustomMeshNode.parse({
         ...customMeshDefinition.defaults(),
         name: 'Custom Mesh',
@@ -109,8 +133,8 @@ const CustomMeshTool = () => {
         position,
       })
       const placement = canPlaceOnFloor(activeLevelId, position, size, [0, draftNode.rotation, 0])
-      setValidPlacement(placement.valid)
-      if (!placement.valid) {
+      setValidPlacement(forcePlacement || placement.valid)
+      if (!(forcePlacement || placement.valid)) {
         stopPlacementCommitPropagation(event)
         return
       }
@@ -138,6 +162,9 @@ const CustomMeshTool = () => {
       emitter.off('grid:move', onGridMove)
       unsubscribe()
       useAlignmentGuides.getState().clear()
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'placing' && scope.nodeId === previewNode.id)
     }
   }, [activeLevelId, canPlaceOnFloor, previewNode, sceneApi, selectNode])
 
