@@ -11,7 +11,12 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the stand
 | `packages/editor` | Editor UI components reused by the standalone app and embedders |
 | `packages/nodes` | Node kinds: one folder per kind (schema re-export, definition, geometry, floorplan, renderer, tool) |
 | `packages/mcp` | MCP server and scene storage adapters |
+| `packages/cad-import` | DXF → CAD underlay geometry. Pure logic, no DOM, no React |
+| `packages/ifc-converter` | IFC → scene-graph conversion (`web-ifc`). Pure logic, no DOM, no React |
+| `packages/ui` | `@repo/ui` — internal shared primitives, private, not published |
 | `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools |
+| `apps/ifc-converter` | Next app wrapping `packages/ifc-converter` (:3003) |
+| `tooling/` | Release scripts and the shared tsconfig base |
 
 Dependencies run **core → viewer → editor → nodes → apps**. `packages/nodes`
 depends on `@pascal-app/editor`, so the editor package can never import
@@ -32,11 +37,15 @@ Bun + Turborepo. From the repo root:
 
 ```sh
 bun dev            # every app (editor :3002, ifc-converter :3003)
-bun test           # all packages
-bun check-types    # all packages that declare it
+bun run test       # turbo: every package's own test script
+bun check-types    # only the workspaces that declare it (see below)
 bun check          # biome lint + format (add :fix to write)
 bun restart        # kill :3002, clear caches, dev
 ```
+
+CI (`.github/workflows/ci.yml`) gates on exactly `bun run check`,
+`bun run check-types`, `bun run test`, `bun run build`, with bun pinned to the
+`packageManager` version. Reproduce a CI failure with those four, in that order.
 
 Narrow the loop while working:
 
@@ -48,15 +57,23 @@ bunx turbo run test --force                              # ignore the turbo cach
 cd packages/editor && bunx tsgo --noEmit                 # type-check one package
 ```
 
-Three things that will mislead you if you don't know them:
+Four things that will mislead you if you don't know them:
 
-- **`packages/nodes` has no `check-types` script.** Its type errors surface
-  only through its `build`. `bun check-types` passing does not mean `nodes`
-  compiles — run `bunx turbo run build` before believing types are clean.
-- **`core`, `nodes` and `viewer` exclude `**/*.test.ts` from their tsconfigs**,
-  so their tests are never type-checked. A test fixture can drift out of shape
-  with the type it stands for and nothing complains. (`editor` and
-  `cad-import` do check theirs.)
+- **`bun test` is not `bun run test`.** Bare `bun test` hits Bun's built-in
+  runner, which walks the whole repo from source (~365 files) and ignores turbo
+  entirely. `bun run test` is the turbo pipeline CI uses. The built-in is the
+  faster inner loop precisely because it skips the build; use `bun run test`
+  before you claim the suite is green.
+- **Only four workspaces declare `check-types`:** `packages/editor`,
+  `packages/ui`, `apps/editor`, `apps/ifc-converter`. `core`, `viewer`,
+  `nodes`, `mcp`, `cad-import` and `ifc-converter` are *not* covered — their
+  type errors surface only through `build`. A clean `bun check-types` says
+  almost nothing; run `bunx turbo run build` before believing types are clean.
+- **`core`, `viewer`, `nodes` and `mcp` exclude `**/*.test.ts` from their
+  tsconfigs**, so their tests are never type-checked. Neither are
+  `cad-import`'s — it keeps tests in its tsconfig but has no `check-types`
+  script to run. `packages/editor` and `apps/editor` are the only places a test
+  fixture that drifts out of shape with the type it stands for gets caught.
 - **`turbo run test` depends on `^build`**, so a package tests against the last
   built `dist` of its dependencies. After editing a dependency, rebuild it or
   the consumer's tests run against stale code.
