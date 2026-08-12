@@ -54,6 +54,7 @@ import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
+import { CollectionsSection } from '../../../panels/collections/collections-section'
 import { ImportCadDialog } from '../../../dialogs/import-cad-dialog'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
@@ -1687,6 +1688,10 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Collections — above the buildings tree because a hidden collection
+              has no members left in that tree to reach it from. */}
+          <CollectionsSection />
 
           {/* Buildings List */}
           {buildings.length === 0 ? (
