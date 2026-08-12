@@ -7,6 +7,8 @@ import {
   hashGraphJson,
   parseGraph,
   resolveMaxSceneBytes,
+  SCENE_EVENT_HISTORY,
+  SCENE_REVISION_HISTORY,
   serializeGraph,
 } from './scene-store-shared'
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
@@ -400,6 +402,7 @@ export class MysqlSceneStore implements SceneStore {
          ) VALUES (?, ?, ?, ?, ?, ?)`,
         [id, version, graphJson, 'mcp', ownerId, now],
       )
+      await this.trimRevisions(conn, id)
 
       await conn.execute('DELETE FROM project_placeholders WHERE id = ?', [id])
 
@@ -516,6 +519,7 @@ export class MysqlSceneStore implements SceneStore {
          ) VALUES (?, ?, ?, ?, ?, ?)`,
         [safeId, nextVersion, graphRow?.graph_json ?? '', 'mcp', existing.owner_id, now],
       )
+      await this.trimRevisions(conn, safeId)
 
       return {
         ...rowToMeta(existing),
@@ -542,6 +546,7 @@ export class MysqlSceneStore implements SceneStore {
          ) VALUES (?, ?, ?, ?, ?)`,
         [safeId, opts.version, opts.kind, now, graphJson],
       )
+      await this.trimSceneEvents(conn, safeId)
 
       return {
         eventId: Number((result as { insertId?: number })?.insertId ?? 0),
@@ -601,6 +606,65 @@ export class MysqlSceneStore implements SceneStore {
       })()
     }
     return this.poolPromise
+  }
+
+  /**
+   * Drop every revision of this scene older than the newest
+   * {@link SCENE_REVISION_HISTORY}.
+   *
+   * Runs inside the caller's write transaction, so a scene never briefly holds
+   * more than the window: the insert and the eviction commit together.
+   *
+   * Two statements rather than one `NOT IN (SELECT … LIMIT …)`: the primary key
+   * is `(scene_id, version)`, so finding the cutoff and then deleting below it
+   * are both index range scans, while the subquery form makes MySQL materialise
+   * the kept set. The `OFFSET` is interpolated because a placeholder there is
+   * only accepted by newer servers — the value is our own constant, never input.
+   */
+  private async trimRevisions(conn: MysqlConnection, sceneId: string): Promise<void> {
+    const [result] = await conn.execute(
+      `SELECT version FROM scene_revisions
+         WHERE scene_id = ?
+         ORDER BY version DESC
+         LIMIT 1 OFFSET ${SCENE_REVISION_HISTORY - 1}`,
+      [sceneId],
+    )
+
+    // Fewer revisions than the window: nothing has been pushed out yet.
+    const oldestKept = firstRow<{ version: number }>(result)
+    if (!oldestKept) return
+
+    await conn.execute('DELETE FROM scene_revisions WHERE scene_id = ? AND version < ?', [
+      sceneId,
+      oldestKept.version,
+    ])
+  }
+
+  /**
+   * Drop every live-sync event of this scene older than the newest
+   * {@link SCENE_EVENT_HISTORY}.
+   *
+   * Ordered by `event_id`, not `version`: several events can share a version
+   * (a save and the thumbnail that follows it), and `event_id` is the column
+   * the SSE cursor actually advances through, so it is the only ordering that
+   * matches what a client considers "newer".
+   */
+  private async trimSceneEvents(conn: MysqlConnection, sceneId: string): Promise<void> {
+    const [result] = await conn.execute(
+      `SELECT event_id FROM scene_events
+         WHERE scene_id = ?
+         ORDER BY event_id DESC
+         LIMIT 1 OFFSET ${SCENE_EVENT_HISTORY - 1}`,
+      [sceneId],
+    )
+
+    const oldestKept = firstRow<{ event_id: number }>(result)
+    if (!oldestKept) return
+
+    await conn.execute('DELETE FROM scene_events WHERE scene_id = ? AND event_id < ?', [
+      sceneId,
+      oldestKept.event_id,
+    ])
   }
 
   private async migrate(pool: MysqlPool): Promise<void> {

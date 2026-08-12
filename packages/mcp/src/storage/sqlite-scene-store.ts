@@ -9,6 +9,8 @@ import {
   hashGraphJson,
   parseGraph,
   resolveMaxSceneBytes,
+  SCENE_EVENT_HISTORY,
+  SCENE_REVISION_HISTORY,
   serializeGraph,
 } from './scene-store-shared'
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
@@ -188,6 +190,61 @@ function rowToSceneEvent(row: SceneEventRow): SceneEvent {
 }
 
 /**
+ * Drop every revision of this scene older than the newest
+ * {@link SCENE_REVISION_HISTORY}.
+ *
+ * Mirrors `MysqlSceneStore.trimRevisions` deliberately: the two stores are
+ * asserted to behave identically by `store.test.ts`, and a retention policy
+ * that held on only one of them would be a policy nobody could rely on.
+ * Called inside the caller's write transaction, so the insert and the eviction
+ * commit together.
+ */
+function trimRevisions(db: SqliteDatabase, sceneId: string): void {
+  const oldestKept = db
+    .query(
+      `SELECT version FROM scene_revisions
+         WHERE scene_id = ?
+         ORDER BY version DESC
+         LIMIT 1 OFFSET ?`,
+    )
+    .get(sceneId, SCENE_REVISION_HISTORY - 1) as { version: number } | null | undefined
+
+  // Fewer revisions than the window: nothing has been pushed out yet.
+  if (!oldestKept) return
+
+  db.query('DELETE FROM scene_revisions WHERE scene_id = ? AND version < ?').run(
+    sceneId,
+    oldestKept.version,
+  )
+}
+
+/**
+ * Drop every live-sync event of this scene older than the newest
+ * {@link SCENE_EVENT_HISTORY}.
+ *
+ * Ordered by `event_id`, not `version`: several events can share a version, and
+ * `event_id` is the column the SSE cursor advances through — the only ordering
+ * that matches what a client considers "newer".
+ */
+function trimSceneEvents(db: SqliteDatabase, sceneId: string): void {
+  const oldestKept = db
+    .query(
+      `SELECT event_id FROM scene_events
+         WHERE scene_id = ?
+         ORDER BY event_id DESC
+         LIMIT 1 OFFSET ?`,
+    )
+    .get(sceneId, SCENE_EVENT_HISTORY - 1) as { event_id: number } | null | undefined
+
+  if (!oldestKept) return
+
+  db.query('DELETE FROM scene_events WHERE scene_id = ? AND event_id < ?').run(
+    sceneId,
+    oldestKept.event_id,
+  )
+}
+
+/**
  * SQLite-backed implementation of `SceneStore`.
  *
  * Uses one local database file, WAL mode, and transaction-scoped version checks
@@ -342,6 +399,7 @@ export class SqliteSceneStore implements SceneStore {
            scene_id, version, graph_json, author_kind, author_id, created_at
          ) VALUES (?, ?, ?, ?, ?, ?)`,
       ).run(id, version, graphJson, 'mcp', ownerId, now)
+      trimRevisions(db, id)
 
       db.query('DELETE FROM project_placeholders WHERE id = ?').run(id)
 
@@ -450,6 +508,7 @@ export class SqliteSceneStore implements SceneStore {
              scene_id, version, graph_json, author_kind, author_id, created_at
            ) VALUES (?, ?, ?, ?, ?, ?)`,
       ).run(safeId, nextVersion, existing.graph_json, 'mcp', existing.owner_id, now)
+      trimRevisions(db, safeId)
 
       return {
         ...rowToMeta(existing),
@@ -477,6 +536,7 @@ export class SqliteSceneStore implements SceneStore {
            ) VALUES (?, ?, ?, ?, ?)`,
         )
         .run(safeId, opts.version, opts.kind, now, graphJson)
+      trimSceneEvents(db, safeId)
 
       return {
         eventId: Number(result.lastInsertRowid),
