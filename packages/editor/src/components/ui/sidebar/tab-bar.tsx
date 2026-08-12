@@ -13,6 +13,12 @@ export type SidebarTab = {
   mobileIcon?: ReactNode
   /** Desktop icon shown in the vertical rail (v2 layout). */
   icon?: ReactNode
+  /**
+   * Rail entry that drives the stage instead of opening a sidebar panel:
+   * activating it hides the panel column (preserving its collapse state) and
+   * keeps the icon highlighted regardless of collapse.
+   */
+  noPanel?: boolean
 }
 
 interface TabBarProps {
@@ -75,7 +81,7 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
   const pluginTabs = tabs.filter((tab) => pluginPanelIds.has(tab.id) || tab.id === 'plugins')
 
   const renderTab = (tab: SidebarTab) => {
-    const showActive = activeTab === tab.id && !collapsed
+    const showActive = activeTab === tab.id && (!collapsed || tab.noPanel === true)
     return (
       <Tooltip key={tab.id}>
         <TooltipTrigger asChild>
