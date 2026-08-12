@@ -4,8 +4,10 @@ import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 import { isActive } from '../lib/interaction/scope'
 import {
+  applyFixedLength,
   bareLengthUnit,
   type MeasurementInputField,
+  type PlanPoint,
   resolveMeasurementInput,
 } from '../lib/measurement-input'
 import useInteractionScope from './use-interaction-scope'
@@ -74,6 +76,24 @@ export function getMeasurementInputValue(): number | null {
 /** Imperative read for pointer handlers that only need "is the user typing?". */
 export function isMeasurementInputActive(): boolean {
   return useMeasurementInput.getState().buffer !== ''
+}
+
+/**
+ * The draft point a typed length asks for, or `null` when nothing usable is
+ * typed — in which case the caller keeps whatever its snapping produced.
+ *
+ * `directionTarget` is the point the cursor is proposing *after* any angle lock,
+ * so the typed value only ever replaces the distance. Every segment drafting
+ * path routes through here so the "typed beats snapping" rule cannot drift
+ * between kinds.
+ */
+export function resolveTypedLengthPoint(
+  start: PlanPoint,
+  directionTarget: PlanPoint,
+): PlanPoint | null {
+  const typed = getMeasurementInputValue()
+  if (typed === null) return null
+  return applyFixedLength(start, directionTarget, typed)
 }
 
 export default useMeasurementInput

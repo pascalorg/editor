@@ -289,7 +289,10 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
           walls: nextWalls,
           fences: nextFences,
           ignoreFenceIds: [node.id],
-          start: angleLocked ? fixedPoint : undefined,
+          // Unconditional, matching the 3D endpoint action: the angle path is
+          // gated on `angleSnap` anyway, and a typed dimension needs the fixed
+          // corner to measure from in every snapping mode.
+          start: fixedPoint,
           angleSnap: angleLocked,
           magnetic: isMagneticSnapActive(),
           gridSnap: (p) => snapBuildingLocalToWorldGrid(p, getSegmentGridStep()) as FencePlanPoint,

@@ -20,11 +20,10 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { findCadSnapOnLevel } from '../../../lib/cad-snap-source'
-import { applyFixedLength } from '../../../lib/measurement-input'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
-import { getMeasurementInputValue } from '../../../store/use-measurement-input'
+import { resolveTypedLengthPoint } from '../../../store/use-measurement-input'
 import {
   distanceSquared,
   findWallSnapTarget,
@@ -449,19 +448,16 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   // the snap. Read here rather than threaded through every caller so the 2D and
   // 3D drafting paths cannot diverge — both reach this one choke point.
   if (start) {
-    const typedLength = getMeasurementInputValue()
-    if (typedLength !== null) {
-      const directionTarget = angleSnap
-        ? snapPointAlongAngleRay(
-            start,
-            point,
-            DEFAULT_ANGLE_STEP,
-            overrideStep ?? getSegmentGridStep(),
-          )
-        : point
-      const fixed = applyFixedLength(start, directionTarget, typedLength)
-      if (fixed) return { point: [fixed[0], fixed[1]], snap: null, targetWallIds: [] }
-    }
+    const directionTarget = angleSnap
+      ? snapPointAlongAngleRay(
+          start,
+          point,
+          DEFAULT_ANGLE_STEP,
+          overrideStep ?? getSegmentGridStep(),
+        )
+      : point
+    const typed = resolveTypedLengthPoint(start, directionTarget)
+    if (typed) return { point: [typed[0], typed[1]], snap: null, targetWallIds: [] }
   }
 
   // Discrete special points (corner / midpoint / crossing) are taken from the

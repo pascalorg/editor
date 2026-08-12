@@ -562,7 +562,10 @@ const StraightFenceTool: React.FC = () => {
             point: localPoint,
             walls,
             fences,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            // Unconditional, like the wall tool: the angle path is gated on
+            // `angleSnap` anyway, and a typed dimension needs an anchor to
+            // measure from in every snapping mode.
+            start: [startingPoint.current.x, startingPoint.current.z],
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
             cadLevelId: useViewer.getState().selection.levelId ?? null,
@@ -669,7 +672,10 @@ const StraightFenceTool: React.FC = () => {
             point: localClick,
             walls,
             fences,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            // Unconditional, like the wall tool: the angle path is gated on
+            // `angleSnap` anyway, and a typed dimension needs an anchor to
+            // measure from in every snapping mode.
+            start: [startingPoint.current.x, startingPoint.current.z],
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
             cadLevelId: useViewer.getState().selection.levelId ?? null,

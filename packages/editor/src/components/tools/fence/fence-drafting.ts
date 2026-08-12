@@ -14,6 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { findCadSnapOnLevel } from '../../../lib/cad-snap-source'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { resolveTypedLengthPoint } from '../../../store/use-measurement-input'
 import {
   findWallSnapTarget,
   getSegmentGridStep,
@@ -165,6 +166,18 @@ export function snapFenceDraftPoint(args: {
   if (bypassSnap) return point
 
   const gridStep = step ?? getSegmentGridStep()
+
+  // A typed dimension is authoritative and outranks every magnetic target — the
+  // cursor keeps choosing the direction (through the angle lock, when on) while
+  // the typed value owns only the distance. Same contract and same resolver as
+  // `snapWallDraftPointDetailed`, so the two drafting kinds cannot drift.
+  if (start) {
+    const directionTarget: FencePlanPoint = angleSnap
+      ? [...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, gridStep)]
+      : point
+    const typed = resolveTypedLengthPoint(start, directionTarget)
+    if (typed) return [typed[0], typed[1]]
+  }
 
   // Magnetic endpoint snap must beat the angle lock, and the lock can pull
   // the cursor far enough off an endpoint that probing the locked point
