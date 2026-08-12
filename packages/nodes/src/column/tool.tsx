@@ -25,6 +25,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group } from 'three'
+import { publishCadBeacon } from '../shared/cad-placement-beacon'
 import {
   type FloorPlacementClickTriggerEvent,
   getLevelLocalSnappedPosition,
@@ -91,7 +92,11 @@ const ColumnTool = () => {
         setCursorVisible(true)
       }
 
-      const { position: alignedPosition, guides } = resolveAlignedFloorPlacement({
+      const {
+        position: alignedPosition,
+        guides,
+        cadSnap,
+      } = resolveAlignedFloorPlacement({
         node: previewNode,
         rawX: event.localPosition[0],
         rawZ: event.localPosition[2],
@@ -100,6 +105,7 @@ const ColumnTool = () => {
         showAlignment: isAlignmentGuideActive(),
         applyAlignmentSnap: isMagneticSnapActive(),
         bypassGrid: !isGridSnapActive(),
+        cadLevelId: activeLevelId ?? null,
       })
       const structuralSnap =
         isGridSnapActive() || isMagneticSnapActive()
@@ -113,6 +119,13 @@ const ColumnTool = () => {
         : alignedPosition
       if (structuralSnap) useAlignmentGuides.getState().clear()
       else useAlignmentGuides.getState().set(guides)
+
+      // Placement never showed a beacon before; a CAD snap silently moving the
+      // ghost would read as a bug, so it gets the marker the drafting tools
+      // show. Published after the structural-grid pass, which can override the
+      // position — a beacon left standing where the node no longer is would be
+      // worse than none.
+      publishCadBeacon(structuralSnap ? null : cadSnap)
 
       const visualPosition = getFloorStackPreviewPosition({
         node: previewNode,
@@ -180,6 +193,7 @@ const ColumnTool = () => {
       useViewer.getState().setSelection({ selectedIds: [committedColumn.id] })
       triggerSFX('sfx:structure-build')
       useAlignmentGuides.getState().clear()
+      publishCadBeacon(null)
       usePlacementPreview.getState().clear()
       if (useEditor.getState().getContinuation('point') === 'repeat') {
         // The placed column is now a valid alignment target for the next one.
@@ -203,6 +217,7 @@ const ColumnTool = () => {
       emitter.off('grid:move', onGridMove)
       unsubscribePlacementClicks()
       useAlignmentGuides.getState().clear()
+      publishCadBeacon(null)
       usePlacementPreview.getState().clear()
       useFacingPose.getState().clear()
     }

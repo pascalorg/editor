@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
   DEFAULT_LEVEL_HEIGHT,
+  DEFAULT_WALL_THICKNESS,
   type DoorNode,
   GROUND_SUPPORT_ID,
   getScaledDimensions,
@@ -18,6 +19,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { findCadSnapOnLevel } from '../../../lib/cad-snap-source'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
@@ -25,6 +27,7 @@ import {
   distanceSquared,
   findWallSnapTarget,
   findWallSpecialPointSnap,
+  offsetWallLineForAlignment,
   projectPointOntoWall,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
@@ -39,8 +42,12 @@ import {
 export {
   chainEndJoinsExistingWall,
   findWallSnapTarget,
+  nextWallAlignment,
+  offsetWallLineForAlignment,
+  WALL_ALIGNMENTS,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
+  type WallAlignment,
   type WallDraftSnapKind,
   type WallDraftSnapResult,
   type WallPlanPoint,
@@ -404,6 +411,15 @@ type SnapWallDraftArgs = {
   gridSnap?: (point: WallPlanPoint) => WallPlanPoint
   /** Optional magnetic snap radii. Omitted means wall tools keep their defaults. */
   snapRadii?: WallSnapRadii
+  /**
+   * Level whose CAD underlays the draft may snap to. Omit to ignore them.
+   *
+   * This is the whole point of importing a drawing: you trace over it. The
+   * underlay joins the same magnetic pass as existing walls rather than
+   * getting a mode of its own, so there is nothing to turn on — if a drawing
+   * is on the level, its lines are snappable.
+   */
+  cadLevelId?: string | null
 }
 
 export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSnapResult {
@@ -418,6 +434,7 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     magnetic = true,
     gridSnap,
     snapRadii,
+    cadLevelId,
   } = args
 
   if (bypassSnap) return { point, snap: null, targetWallIds: [] }
@@ -428,6 +445,31 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   if (magnetic) {
     const special = findWallSpecialPointSnap(point, walls, ignoreWallIds, snapRadii)
     if (special) return special
+
+    // Then the CAD underlay, before the grid gets a say — a grid quantise
+    // between the cursor and the drawn line is exactly what tracing must not
+    // do. An existing wall body still wins a tie, because the model the user
+    // is building outranks the reference they are building it from.
+    const cad = findCadSnapOnLevel(cadLevelId, point)
+    if (cad) {
+      const wallBody = findWallSnapTarget(point, walls, {
+        ignoreWallIds,
+        radius: snapRadii?.wall,
+      })
+      if (!wallBody || distanceSquared(point, cad.point) < distanceSquared(point, wallBody)) {
+        return {
+          point: cad.point,
+          snap: cad.kind === 'segment' ? 'wall' : cad.kind,
+          targetWallIds: [],
+          source: 'cad',
+        }
+      }
+      return {
+        point: wallBody,
+        snap: 'wall',
+        targetWallIds: wallIdsAtSnapPoint(wallBody, walls, ignoreWallIds),
+      }
+    }
   }
 
   const step = overrideStep ?? getSegmentGridStep()
@@ -469,6 +511,26 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   }
   const connectSpecial = findWallSpecialPointSnap(basePoint, walls, ignoreWallIds, connectRadii)
   if (connectSpecial) return connectSpecial
+
+  // The underlay sticks in these modes too, on the same terms as wall
+  // connectivity: the mode governs placement right up to the line, then the
+  // last few centimetres snap. Without this, someone tracing with the default
+  // grid mode would find the drawing decorative.
+  const connectCad = findCadSnapOnLevel(cadLevelId, basePoint, {
+    endpoint: WALL_CONNECT_SNAP_RADIUS,
+    midpoint: WALL_CONNECT_SNAP_RADIUS,
+    intersection: WALL_CONNECT_SNAP_RADIUS,
+    segment: WALL_CONNECT_SNAP_RADIUS,
+  })
+  if (connectCad) {
+    return {
+      point: connectCad.point,
+      snap: connectCad.kind === 'segment' ? 'wall' : connectCad.kind,
+      targetWallIds: [],
+      source: 'cad',
+    }
+  }
+
   const connectWall = findWallSnapTarget(basePoint, walls, {
     ignoreWallIds,
     radius: WALL_CONNECT_SNAP_RADIUS,
@@ -544,8 +606,26 @@ export function createWallOnCurrentLevel(
     (node): node is WallNode => node?.type === 'wall' && node.parentId === currentLevelId,
   )
 
-  let resolvedStart = start
-  let resolvedEnd = end
+  // Justification is applied BEFORE the corner-join / split resolution, so the
+  // joins are computed between the centrelines that will actually exist. Doing
+  // it afterwards would resolve a connection and then slide the wall off it.
+  const alignment = useEditor.getState().wallAlignment
+  // `ToolDefaults` is an untyped bag seeded from whichever preset was placed,
+  // so the thickness has to be checked rather than trusted.
+  const presetThickness = useEditor.getState().toolDefaults.wall?.thickness
+  const draftThickness =
+    typeof presetThickness === 'number' && presetThickness > 0
+      ? presetThickness
+      : DEFAULT_WALL_THICKNESS
+  const [alignedStart, alignedEnd] = offsetWallLineForAlignment(
+    start,
+    end,
+    draftThickness,
+    alignment,
+  )
+
+  let resolvedStart = alignedStart
+  let resolvedEnd = alignedEnd
 
   // The corner-join / wall-split resolution follows the snapping mode like the
   // draft preview does: magnetic ('lines') keeps the generous join radius,

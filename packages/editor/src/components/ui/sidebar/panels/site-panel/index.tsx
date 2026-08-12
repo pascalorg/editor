@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  type CadUnderlayNode,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GuideNode,
@@ -47,11 +48,13 @@ import {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './../../../../../lib/measurements'
+import { useCadImport } from './../../../../../hooks/use-cad-import'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
+import { ImportCadDialog } from '../../../dialogs/import-cad-dialog'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNode } from './tree-node'
@@ -344,7 +347,7 @@ const ReferenceItem = memo(function ReferenceItem({
   setSelectedReferenceId,
   handleDelete,
 }: {
-  refNode: ScanNode | GuideNode
+  refNode: ScanNode | GuideNode | CadUnderlayNode
   isLastRow: boolean
   setSelectedReferenceId: (id: string) => void
   handleDelete: (id: string, e: React.MouseEvent) => void
@@ -434,8 +437,9 @@ const LevelReferences = memo(function LevelReferences({
   const references = useScene(
     useShallow((s) =>
       Object.values(s.nodes).filter(
-        (node): node is ScanNode | GuideNode =>
-          (node.type === 'scan' || node.type === 'guide') && node.parentId === levelId,
+        (node): node is ScanNode | GuideNode | CadUnderlayNode =>
+          (node.type === 'scan' || node.type === 'guide' || node.type === 'cad-underlay') &&
+          node.parentId === levelId,
       ),
     ),
   )
@@ -452,6 +456,8 @@ const LevelReferences = memo(function LevelReferences({
   const progress = uploadState?.progress ?? 0
 
   const scanInputRef = useRef<HTMLInputElement>(null)
+  const cadInputRef = useRef<HTMLInputElement>(null)
+  const cadImport = useCadImport(levelId)
 
   const handleAddAsset = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -579,11 +585,36 @@ const LevelReferences = memo(function LevelReferences({
                 ref={scanInputRef}
                 type="file"
               />
+
+              <button
+                className="flex h-8 w-full cursor-pointer select-none items-center gap-2 py-0 pr-2 pl-[60px] text-left text-muted-foreground text-xs transition-colors hover:bg-accent/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={cadImport.busy}
+                onClick={() => cadInputRef.current?.click()}
+              >
+                {cadImport.busy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5" />
+                )}
+                {cadImport.busy ? 'Reading drawing...' : 'Import CAD drawing (.dxf)'}
+              </button>
+
+              <input
+                accept=".dxf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (file) cadImport.open(file)
+                }}
+                ref={cadInputRef}
+                type="file"
+              />
             </div>
           )
         }
 
-        const ref = row.data as ScanNode | GuideNode
+        const ref = row.data as ScanNode | GuideNode | CadUnderlayNode
         return (
           <ReferenceItem
             handleDelete={handleDelete}
@@ -604,6 +635,20 @@ const LevelReferences = memo(function LevelReferences({
           {uploadError}
         </div>
       )}
+
+      <ImportCadDialog
+        analysis={cadImport.analysis}
+        busy={cadImport.busy}
+        error={cadImport.error}
+        onCancel={cadImport.cancel}
+        onConfirm={async (result) => {
+          const node = await cadImport.confirm(result)
+          if (node) {
+            setSelectedReferenceId(node.id)
+            setSelection({ selectedIds: [], zoneId: null })
+          }
+        }}
+      />
     </div>
   )
 })

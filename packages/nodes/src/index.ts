@@ -2,6 +2,7 @@ import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
 import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
+import { cadUnderlayDefinition } from './cad-underlay'
 import { ceilingDefinition } from './ceiling'
 import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
@@ -90,6 +91,7 @@ export const builtinPlugin: Plugin = {
     buildingDefinition as unknown as AnyNodeDefinition,
     levelDefinition as unknown as AnyNodeDefinition,
     guideDefinition as unknown as AnyNodeDefinition,
+    cadUnderlayDefinition as unknown as AnyNodeDefinition,
     scanDefinition as unknown as AnyNodeDefinition,
     measurementDefinition as unknown as AnyNodeDefinition,
     constructionDimensionDefinition as unknown as AnyNodeDefinition,
@@ -131,6 +133,7 @@ export {
   useCabinetPlacementStatus,
   useCabinetPlacementType,
 } from './cabinet'
+export { cadUnderlayDefinition } from './cad-underlay'
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'

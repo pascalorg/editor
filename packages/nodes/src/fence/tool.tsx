@@ -565,6 +565,7 @@ const StraightFenceTool: React.FC = () => {
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
+            cadLevelId: useViewer.getState().selection.levelId ?? null,
           }),
           { applySnap: !angleLocked },
         )
@@ -617,6 +618,7 @@ const StraightFenceTool: React.FC = () => {
             walls,
             fences,
             magnetic: isMagneticSnapActive(),
+            cadLevelId: useViewer.getState().selection.levelId ?? null,
           }),
         )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
@@ -642,6 +644,7 @@ const StraightFenceTool: React.FC = () => {
             walls,
             fences,
             magnetic: isMagneticSnapActive(),
+            cadLevelId: useViewer.getState().selection.levelId ?? null,
           }),
         )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
@@ -669,6 +672,7 @@ const StraightFenceTool: React.FC = () => {
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
+            cadLevelId: useViewer.getState().selection.levelId ?? null,
           }),
           { applySnap: !angleLocked },
         )

@@ -19,12 +19,12 @@ import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { findCadSnapOnLevel } from '../../../lib/cad-snap-source'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   resolveStairDestinationLevel,
   resolveStairPlacementLevelId,
 } from '../../../lib/stair-levels'
-
 import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
@@ -399,6 +399,14 @@ export const StairTool: React.FC = () => {
       bypass: boolean,
       applySnap: boolean,
     ): [number, number] => {
+      // The CAD underlay is checked from the RAW cursor and outranks both the
+      // grid and the alignment nudge: a drawing line is an explicit target,
+      // where alignment is a convenience.
+      const cad = bypass ? null : findCadSnapOnLevel(currentLevelId ?? null, [rawX, rawZ])
+      if (cad) {
+        useAlignmentGuides.getState().clear()
+        return cad.point
+      }
       if (bypass || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return [gridX, gridZ]

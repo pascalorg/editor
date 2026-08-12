@@ -92,6 +92,19 @@ const wallTopHighlightGlowMaterial = new MeshBasicNodeMaterial({
   transparent: true,
   opacity: 0.26,
 })
+// A CAD underlay is reference material, not the model, and catching one has a
+// different consequence: nothing joins, nothing splits. Amber says so while the
+// glyph keeps meaning what it always meant.
+const CAD_COLOR = 0xf5_9e_0b // amber-500
+const cadMarkerMaterial = new MeshBasicNodeMaterial({
+  color: CAD_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  toneMapped: false,
+  transparent: true,
+  opacity: 0.9,
+})
+
 const PILLAR_GEOMETRY = new CylinderGeometry(BEACON_RADIUS, BEACON_RADIUS, BEACON_HEIGHT, 8)
 // Flat unit geometries scaled per marker. Boxes are 0.002 tall so they read as
 // a flat plate; circles/triangles lie flat via an X rotation at the mesh.
@@ -131,11 +144,11 @@ export const WallSnapBeaconLayer = memo(function WallSnapBeaconLayer() {
       <mesh
         geometry={PILLAR_GEOMETRY}
         layers={EDITOR_LAYER}
-        material={greenMarkerMaterial}
+        material={point.source === 'cad' ? cadMarkerMaterial : greenMarkerMaterial}
         position={[point.x, BEACON_HEIGHT / 2, point.z]}
         renderOrder={1002}
       />
-      <SnapMarker kind={point.kind} x={point.x} z={point.z} />
+      <SnapMarker fromCad={point.source === 'cad'} kind={point.kind} x={point.x} z={point.z} />
     </group>
   )
 })
@@ -239,14 +252,26 @@ function WallTopHighlight({
 }
 
 /** Floor glyph whose shape encodes which kind of geometry the point snapped to. */
-function SnapMarker({ kind, x, z }: { kind: WallSnapKind; x: number; z: number }) {
+function SnapMarker({
+  fromCad,
+  kind,
+  x,
+  z,
+}: {
+  fromCad: boolean
+  kind: WallSnapKind
+  x: number
+  z: number
+}) {
   const y = FLOOR_LIFT
+  const glyph = fromCad ? cadMarkerMaterial : beaconMaterial
+  const corner = fromCad ? cadMarkerMaterial : greenMarkerMaterial
   if (kind === 'endpoint') {
     return (
       <mesh
         geometry={FLAT_BOX_GEOMETRY}
         layers={EDITOR_LAYER}
-        material={greenMarkerMaterial}
+        material={corner}
         position={[x, y, z]}
         renderOrder={1001}
         scale={[MARKER * 2, 1, MARKER * 2]}
@@ -258,7 +283,7 @@ function SnapMarker({ kind, x, z }: { kind: WallSnapKind; x: number; z: number }
       <mesh
         geometry={TRIANGLE_GEOMETRY}
         layers={EDITOR_LAYER}
-        material={beaconMaterial}
+        material={glyph}
         position={[x, y, z]}
         renderOrder={1001}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -273,7 +298,7 @@ function SnapMarker({ kind, x, z }: { kind: WallSnapKind; x: number; z: number }
         <mesh
           geometry={FLAT_BOX_GEOMETRY}
           layers={EDITOR_LAYER}
-          material={beaconMaterial}
+          material={glyph}
           position={[x, y, z]}
           renderOrder={1001}
           rotation={[0, Math.PI / 4, 0]}
@@ -282,7 +307,7 @@ function SnapMarker({ kind, x, z }: { kind: WallSnapKind; x: number; z: number }
         <mesh
           geometry={FLAT_BOX_GEOMETRY}
           layers={EDITOR_LAYER}
-          material={beaconMaterial}
+          material={glyph}
           position={[x, y, z]}
           renderOrder={1001}
           rotation={[0, -Math.PI / 4, 0]}
@@ -296,7 +321,7 @@ function SnapMarker({ kind, x, z }: { kind: WallSnapKind; x: number; z: number }
     <mesh
       geometry={CIRCLE_GEOMETRY}
       layers={EDITOR_LAYER}
-      material={beaconMaterial}
+      material={glyph}
       position={[x, y, z]}
       renderOrder={1001}
       rotation={[-Math.PI / 2, 0, 0]}

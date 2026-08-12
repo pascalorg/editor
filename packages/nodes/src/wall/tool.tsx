@@ -33,6 +33,7 @@ import {
   isAngleSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  offsetWallLineForAlignment,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
   resampleTerrainConstructionPlane,
@@ -77,6 +78,11 @@ import {
  * Mounted via `def.tool` from `wall/definition.ts`.
  */
 const DRAFT_WALL_THICKNESS = 0.1
+
+// Scratch vectors for the justified ghost, reused so a pointer move allocates
+// nothing.
+const ghostStartVec = new Vector3()
+const ghostEndVec = new Vector3()
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
 // HUD label heights are measured from the top of the preview bar, so they
@@ -655,25 +661,38 @@ export const WallTool: React.FC = () => {
         start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
         angleSnap: angleLocked,
         magnetic: isMagneticSnapActive(),
+        cadLevelId: useViewer.getState().selection.levelId ?? null,
       })
       gridPosition = alignPoint(snapResult.point, { applySnap: !angleLocked })
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
-      useWallSnapIndicator
-        .getState()
-        .set(
-          snapResult.snap
-            ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
-            : null,
-        )
+      useWallSnapIndicator.getState().set(
+        snapResult.snap
+          ? {
+              x: gridPosition[0],
+              z: gridPosition[1],
+              kind: snapResult.snap,
+              source: snapResult.source,
+            }
+          : null,
+      )
 
       if (buildingState.current === 1) {
         const snappedLocal = gridPosition
         const draftY = constructionPlane.current?.localY ?? event.localPosition[1]
         endingPoint.current.set(snappedLocal[0], draftY, snappedLocal[1])
+        // The ghost has to show where the wall will land, not the line being
+        // traced — with face justification those are half a thickness apart,
+        // and a preview that shows the wrong one is worse than none.
+        const [ghostStart, ghostEnd] = offsetWallLineForAlignment(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedLocal,
+          previewThicknessRef.current,
+          useEditor.getState().wallAlignment,
+        )
         const draftPreview = useFloorplanDraftPreview.getState()
-        draftPreview.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
-        draftPreview.setWallDraftEnd(snappedLocal)
+        draftPreview.setWallDraftStart(ghostStart)
+        draftPreview.setWallDraftEnd(ghostEnd)
         cursorRef.current.position.copy(endingPoint.current)
         setAxisGuide({
           origin: [startingPoint.current.x, startingPoint.current.z],
@@ -695,10 +714,12 @@ export const WallTool: React.FC = () => {
         }
         previousWallEnd = currentWallEnd
 
+        ghostStartVec.set(ghostStart[0], startingPoint.current.y, ghostStart[1])
+        ghostEndVec.set(ghostEnd[0], endingPoint.current.y, ghostEnd[1])
         updateWallPreview(
           wallPreviewRef.current,
-          startingPoint.current,
-          endingPoint.current,
+          ghostStartVec,
+          ghostEndVec,
           previewHeightRef.current,
           previewThicknessRef.current,
         )
@@ -744,6 +765,7 @@ export const WallTool: React.FC = () => {
           point: localClick,
           walls: snapWalls,
           magnetic: isMagneticSnapActive(),
+          cadLevelId: useViewer.getState().selection.levelId ?? null,
         })
         const snappedStart = alignPoint(snapResult.point)
         const resolvedPlane =
@@ -783,6 +805,7 @@ export const WallTool: React.FC = () => {
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
+            cadLevelId: useViewer.getState().selection.levelId ?? null,
           }).point,
           { applySnap: !angleLocked },
         )

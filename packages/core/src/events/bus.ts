@@ -6,6 +6,7 @@ import type {
   BuildingNode,
   CabinetModuleNode,
   CabinetNode,
+  CadUnderlayNode,
   CeilingNode,
   ChimneyNode,
   ColumnNode,
@@ -114,6 +115,7 @@ export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
+export type CadUnderlayEvent = NodeEvent<CadUnderlayNode>
 export type BoxVentEvent = NodeEvent<BoxVentNode>
 export type RidgeVentEvent = NodeEvent<RidgeVentNode>
 export type TurbineVentEvent = NodeEvent<TurbineVentNode>
@@ -314,6 +316,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'door', DoorEvent> &
   NodeEvents<'scan', ScanEvent> &
   NodeEvents<'guide', GuideEvent> &
+  NodeEvents<'cad-underlay', CadUnderlayEvent> &
   NodeEvents<'box-vent', BoxVentEvent> &
   NodeEvents<'ridge-vent', RidgeVentEvent> &
   NodeEvents<'turbine-vent', TurbineVentEvent> &

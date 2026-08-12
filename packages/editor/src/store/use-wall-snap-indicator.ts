@@ -17,6 +17,12 @@ export type WallSnapPoint = {
   kind: WallSnapKind
   /** Optional wall ids whose geometry produced this snap. */
   wallIds?: string[]
+  /**
+   * Where the geometry came from. `'cad'` is an imported reference drawing,
+   * which the beacon tints differently so it is never ambiguous whether the
+   * cursor caught the model or the drawing under it.
+   */
+  source?: 'wall' | 'cad'
 }
 
 type WallSnapIndicatorState = {

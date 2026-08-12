@@ -31,6 +31,13 @@ export type WallDraftSnapResult = {
    * whether the target is allowed to transfer its construction plane.
    */
   targetWallIds: string[]
+  /**
+   * Where the geometry came from. `'cad'` means an imported reference drawing
+   * rather than anything in the model — the beacon colours it differently, and
+   * it never carries `targetWallIds`, so nothing downstream can mistake a
+   * traced line for a wall to join or split.
+   */
+  source?: 'wall' | 'cad'
 }
 
 export const WALL_JOIN_SNAP_RADIUS = 0.35
@@ -52,6 +59,62 @@ export const WALL_ENDPOINT_SNAP_RADIUS = 0.7
 // a midpoint / crossing is the next tier down.
 export const WALL_MIDPOINT_SNAP_RADIUS = 0.5
 export const WALL_INTERSECTION_SNAP_RADIUS = 0.5
+
+/**
+ * Which part of a wall the drafted line represents.
+ *
+ * `center` is how walls have always been drawn: the line is the centreline and
+ * the body grows equally on both sides. The other two put the line on a face
+ * instead, which is what tracing a CAD drawing needs — the drawing shows wall
+ * *faces*, so a centreline-drawn wall over a traced face lands half a
+ * thickness out.
+ *
+ * `left` / `right` are relative to the direction of drawing, the same
+ * convention CAD tools use for wall justification. Which one is "inside"
+ * depends on which way round you draw the room, so the draft ghost shows the
+ * offset live rather than asking anyone to reason about it.
+ */
+export type WallAlignment = 'center' | 'left' | 'right'
+
+export const WALL_ALIGNMENTS: WallAlignment[] = ['center', 'left', 'right']
+
+export function nextWallAlignment(alignment: WallAlignment): WallAlignment {
+  return WALL_ALIGNMENTS[(WALL_ALIGNMENTS.indexOf(alignment) + 1) % WALL_ALIGNMENTS.length]!
+}
+
+/**
+ * Shift a drafted line sideways so the wall body lands on the chosen side.
+ *
+ * The wall itself is unchanged by this — it is still an ordinary centreline
+ * wall afterwards, which is what keeps mitering, openings, footprints and
+ * every other consumer of `start`/`end` working untouched. All that moves is
+ * where the centreline is put at commit time.
+ */
+export function offsetWallLineForAlignment(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  thickness: number,
+  alignment: WallAlignment,
+): [WallPlanPoint, WallPlanPoint] {
+  if (alignment === 'center' || !(thickness > 0)) return [start, end]
+
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-9) return [start, end]
+
+  // Left of the direction of travel, in plan. `z` runs down the screen in plan
+  // view, so the left-hand normal is (dz, −dx) — the other sign would label
+  // each option as its opposite.
+  const half = (thickness / 2) * (alignment === 'left' ? 1 : -1)
+  const nx = (dz / length) * half
+  const nz = (-dx / length) * half
+
+  return [
+    [start[0] + nx, start[1] + nz],
+    [end[0] + nx, end[1] + nz],
+  ]
+}
 
 export function distanceSquared(a: WallPlanPoint, b: WallPlanPoint): number {
   const dx = a[0] - b[0]

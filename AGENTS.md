@@ -9,8 +9,19 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the stand
 | `packages/core` | Scene graph, node schemas, stores, event bus, core systems — pure logic, no Three.js |
 | `packages/viewer` | Standalone 3D canvas: renderers, viewer systems, presentation state |
 | `packages/editor` | Editor UI components reused by the standalone app and embedders |
+| `packages/nodes` | Node kinds: one folder per kind (schema re-export, definition, geometry, floorplan, renderer, tool) |
 | `packages/mcp` | MCP server and scene storage adapters |
+| `packages/cad-import` | DXF → CAD underlay geometry. Pure logic, no DOM, no React |
+| `packages/ifc-converter` | IFC → scene-graph conversion (`web-ifc`). Pure logic, no DOM, no React |
+| `packages/ui` | `@repo/ui` — internal shared primitives, private, not published |
 | `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools |
+| `apps/ifc-converter` | Next app wrapping `packages/ifc-converter` (:3003) |
+| `tooling/` | Release scripts and the shared tsconfig base |
+
+Dependencies run **core → viewer → editor → nodes → apps**. `packages/nodes`
+depends on `@pascal-app/editor`, so the editor package can never import
+`nodes` — shared logic a node kind needs has to live in `editor` (or `core`)
+and be imported from there.
 
 ## Where to look
 
@@ -19,6 +30,53 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the stand
 - **Repo orientation for humans** — `README.md`, `SETUP.md`, `CONTRIBUTING.md`.
 
 `CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` are symlinks to this file. Codex reads this file directly.
+
+## Commands
+
+Bun + Turborepo. From the repo root:
+
+```sh
+bun dev            # every app (editor :3002, ifc-converter :3003)
+bun run test       # turbo: every package's own test script
+bun check-types    # only the workspaces that declare it (see below)
+bun check          # biome lint + format (add :fix to write)
+bun restart        # kill :3002, clear caches, dev
+```
+
+CI (`.github/workflows/ci.yml`) gates on exactly `bun run check`,
+`bun run check-types`, `bun run test`, `bun run build`, with bun pinned to the
+`packageManager` version. Reproduce a CI failure with those four, in that order.
+
+Narrow the loop while working:
+
+```sh
+cd packages/core && bun test src/services/snap.test.ts   # one file
+bun test -t "merges collinear"                           # one test by name
+bunx turbo run test --filter=@pascal-app/core            # one package
+bunx turbo run test --force                              # ignore the turbo cache
+cd packages/editor && bunx tsgo --noEmit                 # type-check one package
+```
+
+Four things that will mislead you if you don't know them:
+
+- **`bun test` is not `bun run test`.** Bare `bun test` hits Bun's built-in
+  runner, which walks the whole repo from source (~365 files) and ignores turbo
+  entirely. `bun run test` is the turbo pipeline CI uses. The built-in is the
+  faster inner loop precisely because it skips the build; use `bun run test`
+  before you claim the suite is green.
+- **Only four workspaces declare `check-types`:** `packages/editor`,
+  `packages/ui`, `apps/editor`, `apps/ifc-converter`. `core`, `viewer`,
+  `nodes`, `mcp`, `cad-import` and `ifc-converter` are *not* covered — their
+  type errors surface only through `build`. A clean `bun check-types` says
+  almost nothing; run `bunx turbo run build` before believing types are clean.
+- **`core`, `viewer`, `nodes` and `mcp` exclude `**/*.test.ts` from their
+  tsconfigs**, so their tests are never type-checked. Neither are
+  `cad-import`'s — it keeps tests in its tsconfig but has no `check-types`
+  script to run. `packages/editor` and `apps/editor` are the only places a test
+  fixture that drifts out of shape with the type it stands for gets caught.
+- **`turbo run test` depends on `^build`**, so a package tests against the last
+  built `dist` of its dependencies. After editing a dependency, rebuild it or
+  the consumer's tests run against stale code.
 
 ## Layer Boundaries (read once, internalise)
 
@@ -32,7 +90,11 @@ Details, examples, and rationale live in `wiki/architecture/layers.md`, `wiki/ar
 
 Read the relevant page in `wiki/architecture/` **before** writing code. The page list lives in `wiki/architecture/README.md`. As a minimum:
 
-- Adding a node type → `node-schemas.md`, `renderers.md`, `systems.md`
+- Adding a node type → `node-schemas.md`, `node-definitions.md`, `renderers.md`, `systems.md`. A kind is only fully registered once it exists in **four** places, and the compiler points at none of them until the last one is wrong:
+  1. `packages/core/src/schema/nodes/<kind>.ts` — the zod schema
+  2. `packages/core/src/schema/types.ts` — the `AnyNode` union, plus an export from `schema/index.ts`
+  3. `packages/core/src/events/bus.ts` — a `NodeEvents<'<kind>', …>` entry. Miss this and the failure appears as an unrelated type error inside `packages/viewer`
+  4. `packages/nodes/src/<kind>/` + its entry in `packages/nodes/src/index.ts`
 - Adding a tool → `tools.md`, `spatial-queries.md`, `events.md`
 - Adding / changing a placement or move interaction → `tools.md` ("2D ↔ 3D behavioral parity": applicable behaviors must exist in both views; port the change to the sibling 2D/3D file in the same PR)
 - Adding a system → `systems.md`, `scene-registry.md`

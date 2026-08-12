@@ -21,6 +21,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group } from 'three'
+import { publishCadBeacon } from '../shared/cad-placement-beacon'
 import {
   type FloorPlacementClickTriggerEvent,
   getLevelLocalSnappedPosition,
@@ -82,7 +83,7 @@ const ShelfTool = () => {
         setCursorVisible(true)
       }
 
-      const { position, guides } = resolveAlignedFloorPlacement({
+      const { position, guides, cadSnap } = resolveAlignedFloorPlacement({
         node: previewNode,
         rawX: event.localPosition[0],
         rawZ: event.localPosition[2],
@@ -91,7 +92,9 @@ const ShelfTool = () => {
         showAlignment: isAlignmentGuideActive(),
         applyAlignmentSnap: isMagneticSnapActive(),
         bypassGrid: !isGridSnapActive(),
+        cadLevelId: activeLevelId ?? null,
       })
+      publishCadBeacon(cadSnap)
       useAlignmentGuides.getState().set(guides)
 
       const visualPosition = getFloorStackPreviewPosition({

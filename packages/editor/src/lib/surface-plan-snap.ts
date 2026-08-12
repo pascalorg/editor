@@ -21,6 +21,7 @@ import {
 import useAlignmentGuides from '../store/use-alignment-guides'
 import { isMagneticSnapActive } from '../store/use-editor'
 import useWallSnapIndicator from '../store/use-wall-snap-indicator'
+import { collectCadAlignmentAnchors } from './cad-snap-source'
 import { resolveAlignmentForFloorplanView } from './world-grid-snap'
 
 const SURFACE_SNAP_MOVING_ID = '__surface_snap__'
@@ -183,17 +184,24 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
     magnetic,
     snapRadii: input.snapRadii ?? SURFACE_WALL_SNAP_RADII,
     gridSnap: fallbackPoint ? () => fallbackPoint : undefined,
+    // Every surface kind that draws or reshapes a polygon comes through here —
+    // slab, ceiling, zone, roof — so tracing a room outline off an imported
+    // drawing works for all of them from this one line, in 2D and 3D alike.
+    cadLevelId: input.levelId,
   })
 
   if (wallSnap.snap) {
+    // A CAD snap has no wall behind it, so highlighting is skipped rather than
+    // hunting for a wall that produced a point no wall produced.
     const wallIds =
-      input.highlightWalls === false
+      input.highlightWalls === false || wallSnap.source === 'cad'
         ? []
         : findSnapSourceWallIds(wallSnap.point, wallSnap.snap, walls)
     useWallSnapIndicator.getState().set({
       x: wallSnap.point[0],
       z: wallSnap.point[1],
       kind: wallSnap.snap,
+      ...(wallSnap.source ? { source: wallSnap.source } : {}),
       ...(wallIds.length > 0 ? { wallIds } : {}),
     })
     useAlignmentGuides.getState().clear()
@@ -212,9 +220,15 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
   }
 
   const movingId = input.movingId ?? SURFACE_SNAP_MOVING_ID
-  const allCandidates =
-    input.candidates ??
-    collectAlignmentAnchors(nodes, input.excludeId ?? movingId, input.levelId ?? null)
+  // Underlay corners join the anchor pool so you can line a vertex up with a
+  // drawing feature you are not close enough to snap onto. They come from the
+  // editor side because core's collector walks the scene graph, and underlay
+  // geometry deliberately is not in it.
+  const allCandidates = [
+    ...(input.candidates ??
+      collectAlignmentAnchors(nodes, input.excludeId ?? movingId, input.levelId ?? null)),
+    ...collectCadAlignmentAnchors(input.levelId, basePoint),
+  ]
 
   // In non-magnetic modes nothing pulls the point onto a guide, so restrict
   // alignment to anchors already within connect distance — a corner then reads

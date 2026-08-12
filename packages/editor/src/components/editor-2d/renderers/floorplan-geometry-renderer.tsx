@@ -598,11 +598,13 @@ function pointsToAttr(points: readonly (readonly [number, number])[]): string {
 function formatTransform(t?: {
   translate?: readonly [number, number]
   rotate?: number
+  scale?: number
 }): string | undefined {
   if (!t) return undefined
   const parts: string[] = []
   if (t.translate) parts.push(`translate(${t.translate[0]} ${t.translate[1]})`)
   if (t.rotate !== undefined) parts.push(`rotate(${(t.rotate * 180) / Math.PI})`)
+  if (t.scale !== undefined && t.scale !== 1) parts.push(`scale(${t.scale})`)
   return parts.length > 0 ? parts.join(' ') : undefined
 }
 
