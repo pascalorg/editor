@@ -39,7 +39,7 @@ import useAxisLock from '../store/use-axis-lock'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
-import useMeasurementInput from '../store/use-measurement-input'
+import useMeasurementInput, { isDimensionEntryArmed } from '../store/use-measurement-input'
 import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
 
 // References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
@@ -741,7 +741,7 @@ export const useKeyboard = ({
 
       const input = useMeasurementInput.getState()
       const typing = input.buffer !== ''
-      const drafting = isActive(useInteractionScope.getState().scope)
+      const drafting = isDimensionEntryArmed()
       if (!(typing || drafting)) return
 
       // Consuming a key means no other listener — tool-local or otherwise — may

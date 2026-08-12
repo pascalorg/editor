@@ -12,6 +12,7 @@ import {
   resolveMeasurementInput,
 } from '../lib/measurement-input'
 import { getAxisLock } from './use-axis-lock'
+import { useFloorplanDraftPreview } from './use-floorplan-draft-preview'
 import useInteractionScope from './use-interaction-scope'
 
 // The typed-dimension buffer ("measurements box"). While an interaction is in
@@ -43,13 +44,37 @@ const useMeasurementInput = create<MeasurementInputState>((set) => ({
   setField: (field) => set({ field }),
 }))
 
-// A typed value belongs to the interaction that was running when it was typed.
-// Rather than making every interaction body remember to clear it, the buffer is
-// tied to the same atomic-end invariant the scope already guarantees: the moment
-// the scope returns to idle, the buffer is empty. No typed value can leak into
-// the next gesture.
+/**
+ * Whether a gesture that can consume a typed dimension is in flight.
+ *
+ * Not simply `isActive(scope)`: the wall, fence and polygon tools — the ones
+ * this exists for — never open a `drafting` scope. Only measurement,
+ * structural-grid and construction-dimension have been migrated to the scope so
+ * far (see `wiki/architecture/interaction-scope.md` § Migration status), so
+ * gating on the scope alone left the buffer permanently disarmed for drafting.
+ *
+ * `useFloorplanDraftPreview` is the signal those tools actually publish, and
+ * both views write it, so it covers 2D and 3D alike.
+ */
+export function isDimensionEntryArmed(): boolean {
+  if (isActive(useInteractionScope.getState().scope)) return true
+  const draft = useFloorplanDraftPreview.getState()
+  return draft.wallDraftStart !== null || draft.polygonDraftPoints.length > 0
+}
+
+// A typed value belongs to the gesture that was running when it was typed, so
+// it must not survive that gesture. Both signals that arm the buffer also
+// disarm it.
 useInteractionScope.subscribe((state, previous) => {
-  if (isActive(previous.scope) && !isActive(state.scope)) {
+  if (isActive(previous.scope) && !isActive(state.scope) && !isDimensionEntryArmed()) {
+    useMeasurementInput.getState().clear()
+  }
+})
+
+useFloorplanDraftPreview.subscribe((state, previous) => {
+  const wasDrafting = previous.wallDraftStart !== null || previous.polygonDraftPoints.length > 0
+  const isDrafting = state.wallDraftStart !== null || state.polygonDraftPoints.length > 0
+  if (wasDrafting && !isDrafting && !isDimensionEntryArmed()) {
     useMeasurementInput.getState().clear()
   }
 })

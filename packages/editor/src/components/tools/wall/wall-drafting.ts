@@ -524,8 +524,14 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     // only ever fires past an endpoint, where the body snap above cannot, so it
     // takes nothing away from the existing precedence — it fills the diagonal
     // case the X/Z alignment guides structurally cannot cover.
+    // The anchor's own segment is excluded as well as the caller's ignore list:
+    // while chaining, the segment just committed ends exactly at `start`, so its
+    // continuation runs straight through where the next one is being drawn and
+    // would capture it as "collinear" the whole way.
     const extension = findWallExtensionSnap(basePoint, walls, {
-      ignoreWallIds,
+      ignoreWallIds: start
+        ? [...(ignoreWallIds ?? []), ...wallIdsAtSnapPoint(start, walls, ignoreWallIds)]
+        : ignoreWallIds,
       radius: snapRadii?.wall,
     })
     if (extension) {
