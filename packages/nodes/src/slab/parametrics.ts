@@ -16,7 +16,7 @@ export const slabParametrics: ParametricDescriptor<SlabNode> = {
     {
       label: 'Elevation',
       fields: [
-        { key: 'elevation', kind: 'number', unit: 'm', min: -1, max: 1, step: 0.01 },
+        { key: 'elevation', kind: 'number', unit: 'm', min: -1, step: 0.01 },
         {
           key: 'thickness',
           kind: 'number',

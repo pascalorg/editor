@@ -260,7 +260,11 @@ export function CeilingPanel() {
         ) : (
           <SliderControl
             label="Height"
-            max={Math.min(6, maxHeight)}
+            // `maxHeight` is the real constraint — the level above, or a deck
+            // hanging from it (`getCeilingClampBound`). The `Math.min(6, …)`
+            // that used to wrap it overrode that bound whenever the storey was
+            // genuinely taller, which for a 12 m warehouse is always.
+            max={maxHeight}
             min={0}
             onChange={handleHeightChange}
             precision={3}

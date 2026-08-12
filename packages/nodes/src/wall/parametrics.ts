@@ -21,7 +21,11 @@ export const wallParametrics: ParametricDescriptor<WallNode> = {
         { key: 'thickness', kind: 'number', unit: 'm', min: 0.05, max: 0.6, step: 0.01 },
         // `height` may be absent (plane-bound top); the custom panel owns the
         // Follows storey / Custom height mode switch, so this is metadata only.
-        { key: 'height', kind: 'number', unit: 'm', min: 1.5, max: 6, step: 0.05 },
+        // No `max`. A 6 m ceiling is a house's ceiling; warehouse clear height
+        // is 10–12 m and high-bay goes past 15. `WallNode.height` is an
+        // unbounded `z.number()`, so the cap only ever stopped the panel from
+        // expressing heights the rest of the app stores and draws fine.
+        { key: 'height', kind: 'number', unit: 'm', min: 1.5, step: 0.05 },
         { key: 'curveOffset', kind: 'number', unit: 'm', min: -3, max: 3, step: 0.05 },
       ],
     },

@@ -209,14 +209,28 @@ export default function WallPanel() {
       width={280}
     >
       <PanelSection title="Dimensions">
+        {/*
+          Neither field has an upper bound, and that is a correctness fix, not
+          a convenience.
+
+          Both used to have one — 20 m of length, 6 m of height — and both
+          clamped on write, not just on drag. Walls are drawn by dragging
+          endpoints, which never passes through this panel, so a 120 m
+          warehouse perimeter run existed happily until someone touched the
+          Length field and it silently became 20 m. Same for a 12 m clear
+          height snapping to 6.
+
+          `WallNode.height` is an unbounded `z.number()` and length is derived
+          from endpoints, so neither ceiling described a real limit — each one
+          only stopped the panel from expressing what the app already stores,
+          then destroyed the value on the way past. The floors stay: a
+          zero-length or zero-height wall is not a wall.
+        */}
         <SliderControl
           label="Length"
-          max={metersToLinearUnit(20, unit)}
           min={metersToLinearUnit(0.1, unit)}
           onChange={(value) =>
-            handleUpdateLength(
-              linearControlValueToMeters(value, unit, { maxMeters: 20, minMeters: 0.1 }),
-            )
+            handleUpdateLength(linearControlValueToMeters(value, unit, { minMeters: 0.1 }))
           }
           precision={2}
           step={unit === 'imperial' ? 0.1 : 0.01}
@@ -225,11 +239,10 @@ export default function WallPanel() {
         />
         <SliderControl
           label="Height"
-          max={metersToLinearUnit(6, unit)}
           min={metersToLinearUnit(0.1, unit)}
           onChange={(v) =>
             handleUpdate({
-              height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
+              height: linearControlValueToMeters(v, unit, { minMeters: 0.1 }),
             })
           }
           precision={2}
