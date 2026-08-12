@@ -101,7 +101,6 @@ const SpawnTool = () => {
         position,
         rotation: rotationRef.current,
       })
-
     }
 
     const onGridClick = (event: GridEvent) => {

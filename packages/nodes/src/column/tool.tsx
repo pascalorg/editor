@@ -145,7 +145,6 @@ const ColumnTool = () => {
       // placement-preview layer renders this node's footprint at the snapped,
       // aligned cursor so users see the pillar before they click.
       usePlacementPreview.getState().set({ ...previewNode, position })
-
     }
 
     const commitAtCursor = (event: FloorPlacementClickTriggerEvent) => {

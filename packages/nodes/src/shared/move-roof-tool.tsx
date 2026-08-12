@@ -355,7 +355,6 @@ export const MoveRoofTool: React.FC<{
         localZ = aligned[1]
       }
 
-
       lastLocalPosition = [localX, movingNode.position[1], localZ]
       const previewPosition = getPreviewPosition(lastLocalPosition)
       setCursorWorldPos(

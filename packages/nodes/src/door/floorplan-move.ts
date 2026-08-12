@@ -9,13 +9,7 @@ import {
   type WallNode,
   WallNode as WallNodeSchema,
 } from '@pascal-app/core'
-import {
-  isGridSnapActive,
-  isMagneticSnapActive,
-  snapToHalf,
-  useEditor,
-  usePlacementPreview,
-} from '@pascal-app/editor'
+import { isMagneticSnapActive, snapToHalf, usePlacementPreview } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {

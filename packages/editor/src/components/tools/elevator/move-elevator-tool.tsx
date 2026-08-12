@@ -144,7 +144,6 @@ export function MoveElevatorTool({
         z: gridZ,
       })
 
-
       setCursorPosition([gridX, supportY, gridZ])
       previewPositionRef.current = [gridX, supportY, gridZ]
       applyPreview(previewPositionRef.current, pendingRotation)

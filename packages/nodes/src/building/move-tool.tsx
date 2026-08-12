@@ -135,7 +135,6 @@ export function MoveBuildingContent({ node }: { node: BuildingNode }) {
       const gridX = originalCenter[0] + (rawX - anchor[0])
       const gridZ = originalCenter[1] + (rawZ - anchor[1])
 
-
       previousGridPosRef.current = [gridX, gridZ]
       setCursorWorldPos([gridX, 0, gridZ])
 

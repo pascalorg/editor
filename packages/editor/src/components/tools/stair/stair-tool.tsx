@@ -458,8 +458,6 @@ export const StairTool: React.FC = () => {
       const [gridX, , gridZ] = position
       lastCanonicalPositionRef.current = position
       applyDraftPreview(position, rotationRef.current, supportCapRef.current)
-
-
     }
 
     const commitAtCursor = (event: ClickTriggerEvent) => {

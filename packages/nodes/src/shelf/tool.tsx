@@ -102,7 +102,6 @@ const ShelfTool = () => {
       })
       cursorRef.current?.position.set(...visualPosition)
       lastCursorRef.current = position
-
     }
 
     const commitAtCursor = (event: FloorPlacementClickTriggerEvent) => {

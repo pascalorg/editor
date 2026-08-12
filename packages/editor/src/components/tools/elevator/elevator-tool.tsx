@@ -246,7 +246,6 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
         rotation: rotationRef.current,
       })
 
-
       previousGridPosRef.current = [gridX, gridZ]
     }
 

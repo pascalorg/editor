@@ -18,7 +18,6 @@ import {
   consumePlacementDragRelease,
   EDITOR_LAYER,
   getSideFromNormal,
-  isGridSnapActive,
   isMagneticSnapActive,
   isValidWallSideFace,
   publishPlacementSurface,

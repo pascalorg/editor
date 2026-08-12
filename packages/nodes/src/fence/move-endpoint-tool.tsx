@@ -1,13 +1,6 @@
 'use client'
 
-import {
-  emitter,
-  type FenceNode,
-  type GridEvent,
-  getWallCurveLength,
-  useScene,
-  type WallNode,
-} from '@pascal-app/core'
+import { type FenceNode, getWallCurveLength, useScene, type WallNode } from '@pascal-app/core'
 import {
   CursorSphere,
   type FencePlanPoint,
@@ -22,7 +15,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { moveFenceEndpointDragAction } from './actions/move-endpoint'
 
 /**

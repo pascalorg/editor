@@ -30,7 +30,7 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
-import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
+import useEditor, { isGridSnapActive } from '../../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -457,7 +457,6 @@ export const RoofTool: React.FC = () => {
       const gridY = y + GRID_OFFSET
 
       cursorRef.current.position.set(gridX, gridY, gridZ)
-
 
       setPreview({
         corner1: corner1Ref.current,

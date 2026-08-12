@@ -759,9 +759,7 @@ const CabinetTool = () => {
       const next = hit ? resolveWallHitPlacement(hit) : null
       if (next) {
         markWallOwnedPointer()
-        publishPlacement(
-          withPlacementValidity(next, isForcePlacementEvent(event)),
-        )
+        publishPlacement(withPlacementValidity(next, isForcePlacementEvent(event)))
         event.stopPropagation()
         return
       }
