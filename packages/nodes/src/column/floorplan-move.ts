@@ -42,7 +42,6 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
     metadata: node.metadata,
   })
   let lastPosition: [number, number, number] = originalPosition
-  let lastSnapKey: string | null = null
 
   // Alignment candidates gathered once — scene is stable during the drag.
   const candidates = collectAlignmentAnchors(nodes, columnId)
@@ -75,11 +74,6 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
       const coordinated = structuralSnap?.point ?? snapped
       const next: [number, number, number] = [coordinated[0], originalPosition[1], coordinated[1]]
       lastPosition = next
-
-      const snapKey = `${coordinated[0]},${coordinated[1]}`
-      if (snapKey !== lastSnapKey) {
-        lastSnapKey = snapKey
-      }
       const visualPosition = getFloorStackPreviewPosition({
         node,
         position: next,

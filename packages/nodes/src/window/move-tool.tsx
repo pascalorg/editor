@@ -182,23 +182,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // Live Alt state (force-place) — lets the preview tint re-evaluate when
     // Alt is pressed/released with the pointer stationary (see `MoveDoorTool`).
     let altHeld = false
-    // Movement SFX: ONE soft `sfx:grid-snap` click each time the window's PLACED
-    // position crosses a step. Keyed on the SNAPPED value (passed by the caller),
-    // quantized by the live grid step in grid mode, else a gentle fixed cadence —
-    // so grid mode ticks once per cell (not on every micro mouse-move while the
-    // window sits in a cell) while lines/off still tick as the window moves.
-    // Guards: `lastStepKey` (cell change) + `lastTickFrame` (one per pointermove).
-    const FREE_STEP_M = 0.1
-    let lastStepKey: string | null = null
-    let lastTickFrame = -1
-    const tickGridStep = (frame: number, ...coords: number[]) => {
-      if (frame === lastTickFrame) return
-      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : FREE_STEP_M
-      const key = coords.map((c) => Math.round(c / step)).join(',')
-      if (key === lastStepKey) return
-      lastStepKey = key
-      lastTickFrame = frame
-    }
     // The window's chosen facing side. R flips it mid-placement (front ↔ back),
     // matching the committed-selected R flip. Initialised from the moving node.
     let sideOverride: WindowNode['side'] = movingWindowNode.side
@@ -383,12 +366,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     }
 
     const applyPreview = (target: NonNullable<typeof lastTarget>) => {
-      // One grid-snap tick per real ALONG-WALL step, keyed on the snapped
-      // `clampedX` only — NOT the sill `clampedY`, which tracks the cursor's
-      // vertical position on the wall face and so re-keys on every micro
-      // mouse-move even when the window stays in the same along-wall cell.
-      // Per-frame guard collapses duplicate wall events on the same pointermove.
-      tickGridStep(target.event.nativeEvent?.timeStamp ?? -1, target.clampedX)
       // Keep the REAL node hidden and show a tinted ghost in the wall opening —
       // green when placeable, red when it collides — matching the free-follow
       // ghost so validity reads at a glance (see MoveDoorTool). The node position
@@ -648,12 +625,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       freeFollowing = true
       lastTarget = null
       lastRoofEvent = null
-      // No snap SFX here: the free-follow fires off-wall (an invalid red ghost,
-      // not a placeable position) AND interleaves with the on-wall slide on the
-      // same pointer move (R3F `wall:move` and DOM `grid:move` carry different
-      // timestamps, so the de-dupe guard can't merge them). Emitting here was the
-      // source of the constant click while sliding a window along a wall — the
-      // on-wall `applyPreview` already ticks once per along-wall cell.
       hideCursor()
       useLiveTransforms.getState().clear(movingWindowNode.id)
       const levelId = getLevelId()

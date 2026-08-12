@@ -37,7 +37,6 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
 import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
-import { movementSfxStepKey } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 
@@ -278,7 +277,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     return 0
   }, [node])
   const [cursorPosition, setCursorPosition] = useState<[number, number, number]>(originalPosition)
-  const previousSnapRef = useRef<string | null>(null)
   /**
    * The latest snapped cursor position from `grid:move`. We commit at
    * THIS position regardless of which event variant fires the click —
@@ -412,7 +410,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
   useEffect(() => {
     useScene.temporal.getState().pause()
-    previousSnapRef.current = null
     dragAnchorRef.current = null
     hasMovedRef.current = false
     rotationRef.current = originalRotationY
@@ -762,16 +759,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       markMovedNodeDirty()
       // Carry connected ductwork along (preview only — committed on drop).
       previewConnectivity(position, rotationRef.current)
-
-      const nextSnapKey = movementSfxStepKey({
-        coords: [x, z],
-        gridSnapActive: isGridSnapActive(),
-        gridStep: useEditor.getState().gridSnapStep,
-      })
-      const prev = previousSnapRef.current
-      if (prev !== nextSnapKey) {
-        previousSnapRef.current = nextSnapKey
-      }
     }
 
     /** Commit the move at the latest cursor position. Shared by every

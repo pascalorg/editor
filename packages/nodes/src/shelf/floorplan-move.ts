@@ -37,7 +37,6 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
   })
   let lastPosition: [number, number, number] = originalPosition
   let lastVisualPosition: [number, number, number] = originalPosition
-  let lastSnapKey: string | null = null
 
   // Alignment candidates — corner/edge/segment anchors of every OTHER node
   // (incl. wall faces). Gathered once: the scene is stable during the drag
@@ -66,14 +65,6 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
       )
       const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
       lastPosition = next
-
-      // Grid-snap SFX on cell crossings — matches the 3D `MoveSlabTool`
-      // and the placement coordinators. Item / slab / wall flows fire
-      // the same cue, so the shelf following along is the expected UX.
-      const snapKey = `${snapped[0]},${snapped[1]}`
-      if (gridSnapActive && snapKey !== lastSnapKey) {
-        lastSnapKey = snapKey
-      }
       const visualPosition = getFloorStackPreviewPosition({
         node,
         position: next,

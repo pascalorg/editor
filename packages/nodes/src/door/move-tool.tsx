@@ -167,24 +167,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     // re-evaluated when Alt is pressed/released with the pointer stationary —
     // the stored WallEvent carries a STALE altKey from the last move.
     let altHeld = false
-    // Movement SFX: ONE soft `sfx:grid-snap` click each time the door's PLACED
-    // position crosses a step. Keyed on the SNAPPED value (passed by the caller),
-    // quantized by the live grid step in grid mode, else a gentle fixed cadence —
-    // so grid mode ticks once per cell (not on every micro mouse-move while the
-    // door sits in a cell) while lines/off still tick as the door moves. Two
-    // guards prevent a doubled cue: `lastStepKey` (cell change) + `lastTickFrame`
-    // (one per pointermove — wall + grid paths can both run on the same move).
-    const FREE_STEP_M = 0.1
-    let lastStepKey: string | null = null
-    let lastTickFrame = -1
-    const tickGridStep = (frame: number, ...coords: number[]) => {
-      if (frame === lastTickFrame) return
-      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : FREE_STEP_M
-      const key = coords.map((c) => Math.round(c / step)).join(',')
-      if (key === lastStepKey) return
-      lastStepKey = key
-      lastTickFrame = frame
-    }
     // The door's chosen facing side. R flips it mid-placement (front ↔ back,
     // same as the committed-selected R flip) so the user can reorient before
     // committing. Initialised from the moving node's side.
@@ -334,11 +316,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const applyPreview = (target: NonNullable<typeof lastTarget>) => {
-      // One grid-snap tick per real position step, keyed on the SNAPPED
-      // along-wall position so it ticks only when the door actually moves to a
-      // new cell (not on every micro mouse-move). Per-frame guard collapses any
-      // duplicate wall events on the same pointermove.
-      tickGridStep(target.event.nativeEvent?.timeStamp ?? -1, target.clampedX)
       // Keep the REAL node hidden and show a tinted ghost in the wall opening —
       // green when placeable, red when it collides — the same translucent ghost
       // the free-follow uses, so validity reads at a glance. The node position is
@@ -606,12 +583,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       freeFollowing = true
       lastTarget = null
       lastRoofEvent = null
-      // No snap SFX here: the free-follow fires off-wall (an invalid red ghost,
-      // not a placeable position) AND interleaves with the on-wall slide on the
-      // same pointer move (R3F `wall:move` and DOM `grid:move` carry different
-      // timestamps, so the de-dupe guard can't merge them). Emitting here was the
-      // source of the constant click while sliding a door along a wall — the
-      // on-wall `applyPreview` already ticks once per along-wall cell.
       hideCursor()
       useLiveTransforms.getState().clear(movingDoorNode.id)
       const levelId = getLevelId()

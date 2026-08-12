@@ -14,7 +14,6 @@ import {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
-  movementSfxStepKey,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -50,7 +49,6 @@ function getExistingSpawnIds() {
 const SpawnTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
-  const previousSnapRef = useRef<string | null>(null)
   const rotationRef = useRef(0)
   const cursorVisibleRef = useRef(false)
   const [cursorVisible, setCursorVisible] = useState(false)
@@ -63,7 +61,6 @@ const SpawnTool = () => {
 
   useEffect(() => {
     if (!activeLevelId) return
-    previousSnapRef.current = null
     rotationRef.current = 0
     cursorRef.current?.rotation.set(0, 0, 0)
     cursorVisibleRef.current = false
@@ -105,15 +102,6 @@ const SpawnTool = () => {
         rotation: rotationRef.current,
       })
 
-      const nextSnapKey = movementSfxStepKey({
-        coords: [position[0], position[2]],
-        gridSnapActive: isGridSnapActive(),
-        gridStep: useEditor.getState().gridSnapStep,
-      })
-      const prev = previousSnapRef.current
-      if (prev !== nextSnapKey) {
-        previousSnapRef.current = nextSnapKey
-      }
     }
 
     const onGridClick = (event: GridEvent) => {

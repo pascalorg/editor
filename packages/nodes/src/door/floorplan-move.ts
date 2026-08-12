@@ -111,21 +111,6 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
     useLiveNodeOverrides.getState().set(nodeId, values)
   }
 
-  // Move SFX — parity with the 3D `MoveDoorTool`: ONE soft `sfx:grid-snap` click
-  // each time the door's PLACED position crosses a step. Keyed on the SNAPPED
-  // position, quantized by the live grid step in grid mode else a gentle fixed
-  // cadence — so grid mode ticks once per cell (not on every micro mouse-move
-  // while the door sits in a cell) while lines/off still tick as the door moves.
-  const FREE_STEP_M = 0.1
-  let lastStepKey: string | null = null
-  const tickGridStep = (...coords: number[]) => {
-    const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : FREE_STEP_M
-    const key = coords.map((c) => Math.round(c / step)).join(',')
-    if (key !== lastStepKey) {
-      lastStepKey = key
-    }
-  }
-
   // Off-wall: float the faithful door symbol at the cursor (via a synthetic
   // wall fed to the placement-preview layer) and hide the real node, so the
   // ghost follows the cursor in 2D instead of the door staying frozen on its
@@ -180,9 +165,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
       if (!hit) {
-        // Off any wall — free-follow the cursor (not committable). Click per grid
-        // cell as the ghost slides over open floor.
-        tickGridStep(resolvedPlanPoint[0], resolvedPlanPoint[1])
+        // Off any wall — free-follow the cursor (not committable).
         freeFollow(resolvedPlanPoint)
         return
       }
@@ -208,10 +191,6 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
           })
       const snappedLocalX = neighborX ?? snapToHalf(hit.localX)
       const { clampedX, clampedY } = clampToWall(hit.wall, snappedLocalX, node.width, node.height)
-
-      // One click per real position step, keyed on the SNAPPED along-wall value
-      // so it ticks only when the door actually moves to a new cell.
-      tickGridStep(clampedX)
 
       // Apply the R-flip on top of the wall-derived side.
       const side: DoorNode['side'] = flipped ? (hit.side === 'front' ? 'back' : 'front') : hit.side

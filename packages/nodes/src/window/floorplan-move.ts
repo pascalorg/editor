@@ -105,21 +105,6 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     useLiveNodeOverrides.getState().set(nodeId, values)
   }
 
-  // Move SFX — parity with the 3D `MoveWindowTool` (see `doorFloorplanMoveTarget`):
-  // ONE soft `sfx:grid-snap` click each time the window's PLACED position crosses
-  // a step. Keyed on the SNAPPED value, quantized by the live grid step in grid
-  // mode else a gentle fixed cadence — grid mode ticks once per cell, lines/off
-  // tick as the window moves.
-  const FREE_STEP_M = 0.1
-  let lastStepKey: string | null = null
-  const tickGridStep = (...coords: number[]) => {
-    const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : FREE_STEP_M
-    const key = coords.map((c) => Math.round(c / step)).join(',')
-    if (key !== lastStepKey) {
-      lastStepKey = key
-    }
-  }
-
   const freeFollow = (planPoint: readonly [number, number]) => {
     onWall = false
     lastValid = null
@@ -169,8 +154,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       const resolvedPlanPoint = resolveCursor(planPoint)
       const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
       if (!hit) {
-        // Off any wall — free-follow. Click per grid cell over open floor.
-        tickGridStep(resolvedPlanPoint[0], resolvedPlanPoint[1])
+        // Off any wall — free-follow.
         freeFollow(resolvedPlanPoint)
         return
       }
@@ -202,10 +186,6 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
         node.height,
         nodes,
       )
-
-      // One click per real position step, keyed on the SNAPPED along-wall value
-      // so it ticks only when the window actually moves to a new cell.
-      tickGridStep(clampedX)
 
       const side: WindowNode['side'] = flipped
         ? hit.side === 'front'

@@ -13,7 +13,6 @@ import {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
-  movementSfxStepKey,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -35,7 +34,6 @@ import ShelfPreview from './preview'
 const ShelfTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
-  const previousSnapRef = useRef<string | null>(null)
   const cursorVisibleRef = useRef(false)
   const [cursorVisible, setCursorVisible] = useState(false)
 
@@ -59,7 +57,6 @@ const ShelfTool = () => {
 
   useEffect(() => {
     if (!activeLevelId) return
-    previousSnapRef.current = null
     cursorVisibleRef.current = false
     setCursorVisible(false)
     /**
@@ -106,15 +103,6 @@ const ShelfTool = () => {
       cursorRef.current?.position.set(...visualPosition)
       lastCursorRef.current = position
 
-      const nextSnapKey = movementSfxStepKey({
-        coords: [position[0], position[2]],
-        gridSnapActive: isGridSnapActive(),
-        gridStep: useEditor.getState().gridSnapStep,
-      })
-      const prev = previousSnapRef.current
-      if (prev !== nextSnapKey) {
-        previousSnapRef.current = nextSnapKey
-      }
     }
 
     const commitAtCursor = (event: FloorPlacementClickTriggerEvent) => {

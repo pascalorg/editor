@@ -30,7 +30,6 @@ import {
   isMagneticSnapActive,
   isValidWallSideFace,
   markToolCancelConsumed,
-  movementSfxStepKey,
   PlacementBox,
   publishPlacementSurface,
   triggerSFX,
@@ -270,9 +269,7 @@ const CabinetTool = () => {
   const chainRunRef = useRef<CabinetNode | null>(null)
   const chainEndModuleRef = useRef<ReturnType<typeof CabinetModuleNode.parse> | null>(null)
   const chainCornerSideRef = useRef<'left' | 'right' | null>(null)
-  const previousSnapRef = useRef<string | null>(null)
   const previousWasWallSnapRef = useRef(false)
-  const previousTickFrameRef = useRef(-1)
   const draftAnchorRef = useRef<DraftAnchorState | null>(null)
   const lastRawPositionRef = useRef<[number, number, number] | null>(null)
   const activeGhostRef = useRef<Group | null>(null)
@@ -396,9 +393,7 @@ const CabinetTool = () => {
     chainEndModuleRef.current = null
     chainCornerSideRef.current = null
     setDraftSegments([])
-    previousSnapRef.current = null
     previousWasWallSnapRef.current = false
-    previousTickFrameRef.current = -1
     draftAnchorRef.current = null
     let alignmentCandidates = collectAlignmentAnchors(
       useScene.getState().nodes,
@@ -424,8 +419,6 @@ const CabinetTool = () => {
       placementRef.current = null
       setPlacement(null)
       usePlacementPreview.getState().clear()
-      previousSnapRef.current = null
-      previousTickFrameRef.current = -1
       clearPlacementSurface()
       useFacingPose.getState().clear()
       useAlignmentGuides.getState().clear()
@@ -729,28 +722,14 @@ const CabinetTool = () => {
       return resolveStretchedPlacement(anchor, event)
     }
 
-    const publishPlacement = (next: CabinetPlacement, frame = -1) => {
+    const publishPlacement = (next: CabinetPlacement) => {
       placementRef.current = next
       setPlacement(next)
       useCabinetPlacementStatus.getState().setBlocked(!next.valid)
       publishFloorplanPreview(next)
-      const nextSnapKey = movementSfxStepKey({
-        coords:
-          next.snappedToWall && typeof next.wallLocalX === 'number'
-            ? [next.wallLocalX]
-            : [next.position[0], next.position[2]],
-        gridSnapActive: isGridSnapActive(),
-        gridStep: useEditor.getState().gridSnapStep,
-      })
-      const prev = previousSnapRef.current
       const wasWallSnap = previousWasWallSnapRef.current
-      if (frame !== previousTickFrameRef.current && prev !== nextSnapKey) {
-        if (next.snappedToWall && !wasWallSnap) {
-          triggerSFX('sfx:item-pick')
-        } else {
-        }
-        previousSnapRef.current = nextSnapKey
-        previousTickFrameRef.current = frame
+      if (next.snappedToWall && !wasWallSnap) {
+        triggerSFX('sfx:item-pick')
       }
       previousWasWallSnapRef.current = next.snappedToWall
     }
@@ -760,10 +739,10 @@ const CabinetTool = () => {
       if (ts === lastWallEventTime || wallOwnsPointer()) return
       const anchor = resolveDraftAnchor()
       if (anchor) {
-        publishPlacement(resolveActiveStretchPlacement(anchor, event), ts)
+        publishPlacement(resolveActiveStretchPlacement(anchor, event))
         return
       }
-      publishPlacement(resolvePlacement(event), ts)
+      publishPlacement(resolvePlacement(event))
     }
 
     const onWallMove = (event: WallEvent) => {
@@ -772,7 +751,7 @@ const CabinetTool = () => {
       const anchor = resolveDraftAnchor()
       if (anchor) {
         markWallOwnedPointer()
-        publishPlacement(resolveActiveStretchPlacement(anchor, event), lastWallEventTime)
+        publishPlacement(resolveActiveStretchPlacement(anchor, event))
         event.stopPropagation()
         return
       }
@@ -782,12 +761,11 @@ const CabinetTool = () => {
         markWallOwnedPointer()
         publishPlacement(
           withPlacementValidity(next, isForcePlacementEvent(event)),
-          lastWallEventTime,
         )
         event.stopPropagation()
         return
       }
-      publishPlacement(resolvePlacement(event), lastWallEventTime)
+      publishPlacement(resolvePlacement(event))
     }
 
     const buildRunNodes = (position: [number, number, number], yaw: number) => {

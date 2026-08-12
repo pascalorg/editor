@@ -21,7 +21,6 @@ import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isHistoryShortcut } from '../../lib/history'
 import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
-import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
@@ -142,10 +141,6 @@ export function FloorplanRegistryMoveOverlay() {
       // to be consumed. That legacy flow is gone in the registry layer;
       // all entries use the action menu now.
       let hasMovedSinceStart = false
-      // Last resolved position of the moved node — drives the move "tick" SFX.
-      // Parity with the 3D move, which emits on any change of the resolved
-      // position (every snapping mode, not only grid).
-      let lastSnapKey: string | null = null
       // Live cursor location — updated on EVERY pointermove (even over the 3D
       // canvas) so R-key ownership can follow the pointer's CURRENT pane rather
       // than the sticky `hasMovedSinceStart`. Without this, once the user touched
@@ -176,22 +171,6 @@ export function FloorplanRegistryMoveOverlay() {
             metaKey: event.metaKey,
           },
         })
-        // Move "tick" — same feedback the 3D move gives, which fires whenever the
-        // resolved position changes (any snapping mode, not just grid), so it
-        // ticks as the item lands on each new snapped/free position.
-        const movedId = session.affectedIds[0]
-        const moved = movedId ? useScene.getState().nodes[movedId] : undefined
-        const pos = (moved as { position?: [number, number, number] } | undefined)?.position
-        if (pos) {
-          const key = movementSfxStepKey({
-            coords: [pos[0], pos[2]],
-            gridSnapActive: isGridSnapActive(),
-            gridStep: useEditor.getState().gridSnapStep,
-          })
-          if (key !== lastSnapKey) {
-            lastSnapKey = key
-          }
-        }
       }
 
       const commitFinalStateOrRevert = () => {

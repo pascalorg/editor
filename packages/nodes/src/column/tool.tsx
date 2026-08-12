@@ -15,7 +15,6 @@ import {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
-  movementSfxStepKey,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -65,7 +64,6 @@ function createColumnFromPreset(presetId: ColumnPresetId, position: [number, num
 const ColumnTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
-  const previousSnapRef = useRef<string | null>(null)
   const cursorVisibleRef = useRef(false)
   const [cursorVisible, setCursorVisible] = useState(false)
 
@@ -75,7 +73,6 @@ const ColumnTool = () => {
 
   useEffect(() => {
     if (!activeLevelId) return
-    previousSnapRef.current = null
     cursorVisibleRef.current = false
     setCursorVisible(false)
     const lastCursorRef: { current: [number, number, number] | null } = { current: null }
@@ -149,15 +146,6 @@ const ColumnTool = () => {
       // aligned cursor so users see the pillar before they click.
       usePlacementPreview.getState().set({ ...previewNode, position })
 
-      const nextSnapKey = movementSfxStepKey({
-        coords: [position[0], position[2]],
-        gridSnapActive: isGridSnapActive(),
-        gridStep: useEditor.getState().gridSnapStep,
-      })
-      const prev = previousSnapRef.current
-      if (prev !== nextSnapKey) {
-        previousSnapRef.current = nextSnapKey
-      }
     }
 
     const commitAtCursor = (event: FloorPlacementClickTriggerEvent) => {
