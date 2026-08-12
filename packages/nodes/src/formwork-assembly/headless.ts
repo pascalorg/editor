@@ -28,6 +28,15 @@ export {
   reconcileFormworkNodes,
 } from './attach'
 export {
+  type FormworkFindingWithRemedy,
+  type FormworkFixOutcome,
+  type FormworkFixPlan,
+  findingsWithRemedies,
+  fixOutcome,
+  noSuchFinding,
+  plannedFix,
+} from './fix-finding'
+export {
   coverageCaveatForHost,
   type FormworkPartsReport,
   formworkCoverageCaveat,

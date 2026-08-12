@@ -31,10 +31,10 @@ import {
 import type { FaceGangs, LiftingPoint } from '../layout/gangs'
 import { MIN_WORKABLE_PIECE_MM, type StripPack } from '../layout/strip-pack'
 import { splitIntoLifts } from '../pours/lifts'
-import type { PourLimits, PourUnit } from '../pours/types'
+import type { PourLift, PourLimits, PourUnit } from '../pours/types'
 import { hardCutsForElement, pourUnitsForElement } from '../pours/units'
 import type { PressureEnvelope } from '../pressure'
-import type { Finding, InvariantId, TieField, ValidationReport } from './types'
+import type { Finding, FormworkRemedy, InvariantId, TieField, ValidationReport } from './types'
 
 /**
  * The assertion suite — solver phase 11, and the plan calls it the highest-value
@@ -61,6 +61,17 @@ const SYMMETRY_TOLERANCE_MM = 5
 
 /** A lift joint further than this from a permitted elevation was not snapped, m. */
 const JOINT_SNAP_REPORT_TOLERANCE = 1e-6
+
+/**
+ * The shortest lift a remedy will propose, m.
+ *
+ * A bound on the search rather than on the split — `splitIntoLifts` accepts any
+ * positive cap, and a fix that offered a 0.4 m lift to move a joint would be
+ * arithmetically right and useless: a lift that shallow cannot be poked or poured,
+ * and each one is a separate erect, pour, cure and strike. 1.2 m is about the
+ * shallowest anyone plans for, on a kicker or a capping beam.
+ */
+const MIN_PRACTICAL_LIFT_M = 1.2
 
 /**
  * Narrower than this and an untied band is not a finding, mm.
@@ -198,14 +209,29 @@ export interface ValidateOptions {
   crane?: FormworkCraneSettings
 }
 
+/**
+ * `remedy` is passed only where *this instance* disagrees with its invariant's
+ * default in `remedy.ts` — a volume overrun a length cap reaches, an area
+ * discrepancy no cast order fixes — or where the fix needs a figure this run holds.
+ * Everything else inherits, so the table stays the one place the general answer is
+ * written down.
+ */
 function finding(
   invariant: InvariantId,
   severity: Finding['severity'],
   elementIds: AnyNodeId[],
   message: string,
   locus?: Finding['locus'],
+  remedy?: FormworkRemedy,
 ): Finding {
-  return { invariant, severity, elementIds, message, ...(locus ? { locus } : {}) }
+  return {
+    invariant,
+    severity,
+    elementIds,
+    message,
+    ...(locus ? { locus } : {}),
+    ...(remedy ? { remedy } : {}),
+  }
 }
 
 /**
@@ -382,6 +408,15 @@ function areaConsistency(coverages: ReadonlyMap<AnyNodeId, ElementCoverage>): Fi
             'error',
             [elementId, entry.sourceId],
             `${elementId} ${face.role}: ${entry.physicalSqM.toFixed(2)} m² taken off for ${entry.sourceId}, which only buries ${entry.areaSqM.toFixed(2)} m² of it. More has been deducted than that neighbour covers.`,
+            undefined,
+            // Unlike the pair below, no cast order fixes this one: the two are
+            // overlapping by more than the geometry supports whichever of them
+            // owns the corner, so re-sequencing moves the wrong figure to the
+            // other element rather than removing it.
+            {
+              kind: 'none',
+              note: `The deduction exceeds what ${entry.sourceId} buries, so it is not an ownership question and no cast order changes it. Either the two elements overlap by more than their geometry supports and one has to move, or the deduction is scaled wrong — a faceted clip against a round section is where that lands.`,
+            },
           ),
         )
       }
@@ -562,6 +597,49 @@ function architecturalSymmetry(
 }
 
 /**
+ * A lift cap the element could be given whose joints all satisfy `clean`, or
+ * nothing where no practical cap does — the fix for both joint-placement findings.
+ *
+ * Searched and *verified* rather than solved. The elevation a joint ends up at is
+ * `splitIntoLifts`' answer, not arithmetic available here: it divides into equal
+ * parts, snaps toward permitted elevations, drops joints that collapse a lift, and
+ * takes the tighter of the two caps. A remedy that reproduced that would be a
+ * second implementation of the split, and the first time the two disagreed the fix
+ * button would move a joint somewhere the plan does not put it. So each candidate
+ * is put through the real splitter and kept only if the real joints come back
+ * clean, which is also why a `write` here can be applied without being re-checked.
+ *
+ * Candidates run from the loosest down, because every one of them costs a pour: the
+ * fewest lifts that clear the defect is the cheapest fix, and a search from the
+ * tight end would propose six lifts where three do.
+ */
+function capSatisfying(
+  element: CastableElement,
+  limits: PourLimits,
+  clean: (lifts: readonly PourLift[]) => boolean,
+): number | undefined {
+  const height = element.height
+  const candidates: number[] = []
+  for (let count = 2; height / count >= MIN_PRACTICAL_LIFT_M; count++) {
+    // To the millimetre, because it is written to a node and read by a person. The
+    // rounded value is what gets verified, so a rounding that pushes the split to
+    // another lift is caught rather than shipped.
+    candidates.push(Math.round((height / count) * 1000) / 1000)
+  }
+  for (const candidate of candidates) {
+    // The write is per element, so the model of it is too — a project cap tighter
+    // than the candidate still governs, and the verification sees that.
+    if (clean(splitIntoLifts({ ...element, maxLiftHeight: candidate }, limits))) return candidate
+  }
+  return undefined
+}
+
+/** The remedy for a joint-placement finding no cap in the search clears. */
+function noCapClears(note: string): FormworkRemedy {
+  return { kind: 'none', note }
+}
+
+/**
  * An opening the lift joint runs through.
  *
  * The bulkhead closing a lift joint has to cross the wall, and where it crosses a
@@ -580,6 +658,20 @@ function openingsAcrossLiftJoints(
     if (element.openings.length === 0) continue
     const lifts = splitIntoLifts(element, limits)
     if (lifts.length < 2) continue
+    const straddles = (candidate: readonly PourLift[]) =>
+      candidate.some(
+        (lift) =>
+          lift.hasJointBelow &&
+          element.openings.some(
+            (opening) =>
+              lift.baseElevation > opening.centreY - opening.height / 2 &&
+              lift.baseElevation < opening.centreY + opening.height / 2,
+          ),
+      )
+    // Once per element, not once per straddle: a cap has to clear every opening at
+    // once, so the same answer serves each finding on the element and offering a
+    // different cap per opening would be three fixes that each undo the last.
+    const cap = capSatisfying(element, limits, (candidate) => !straddles(candidate))
     for (const lift of lifts) {
       if (!lift.hasJointBelow) continue
       const elevation = lift.baseElevation
@@ -594,6 +686,17 @@ function openingsAcrossLiftJoints(
             [element.id, opening.id],
             `${element.id}: the lift joint at ${elevation.toFixed(2)} m runs through ${opening.kind} ${opening.id}, which spans ${bottom.toFixed(2)}–${top.toFixed(2)} m. The bulkhead has nothing to bear on across the void — move the joint clear of the opening.`,
             { alongM: opening.along, elevationM: elevation, liftIndex: lift.index },
+            cap === undefined
+              ? noCapClears(
+                  `No lift height between ${MIN_PRACTICAL_LIFT_M} m and half of ${element.id}’s ${element.height.toFixed(2)} m puts every joint clear of every opening — the openings are placed such that some joint always lands in one. Either an opening moves, or the wall is cast in one lift and the pressure at its base carried, which is an engineer’s decision rather than a call.`,
+                )
+              : {
+                  kind: 'write',
+                  tool: 'set_pour_limits',
+                  args: { elementId: element.id, maxLiftHeight: cap },
+                  thenAttach: true,
+                  note: `A ${cap} m cap is the tallest lift whose joints all land clear of every opening on ${element.id}, checked against the same split the plan uses. Tie capacity still bounds it from above, so confirm the shutter is designed for the pressure at ${cap} m.`,
+                },
           ),
         )
       }
@@ -1222,8 +1325,16 @@ function liftJointElevations(elements: readonly CastableElement[], limits: PourL
   const permitted = limits.permittedJointElevations ?? []
   if (permitted.length === 0) return []
   const out: Finding[] = []
+  const unsnapped = (lifts: readonly PourLift[]) =>
+    lifts.some((lift) => lift.hasJointBelow && lift.snappedTo === undefined)
   for (const element of elements) {
-    for (const lift of splitIntoLifts(element, limits)) {
+    const lifts = splitIntoLifts(element, limits)
+    // Only worth searching once the element has a defect, and once per element for
+    // the same reason the opening check does it once: one cap governs every joint.
+    const cap = unsnapped(lifts)
+      ? capSatisfying(element, limits, (candidate) => !unsnapped(candidate))
+      : undefined
+    for (const lift of lifts) {
       if (!lift.hasJointBelow) continue
       if (lift.snappedTo !== undefined) continue
       const nearest = permitted.reduce(
@@ -1241,6 +1352,17 @@ function liftJointElevations(elements: readonly CastableElement[], limits: PourL
           [element.id],
           `${element.id}: the lift joint at ${lift.baseElevation.toFixed(2)} m is not on a permitted elevation — the nearest is ${nearest.toFixed(2)} m, ${Math.abs(nearest - lift.baseElevation).toFixed(2)} m away, outside the snap tolerance. A joint short of a slab soffit leaves a strip too shallow to form.`,
           { elevationM: lift.baseElevation, liftIndex: lift.index },
+          cap === undefined
+            ? noCapClears(
+                `No practical lift height lands every joint on ${element.id} on a permitted elevation. The permitted set is what the structure offers — slab soffits and existing joints — so where a uniform division cannot reach them, either the set is short an elevation the structure does have, or this joint is where the engineer wanted it and the warning is the record of that.`,
+              )
+            : {
+                kind: 'write',
+                tool: 'set_pour_limits',
+                args: { elementId: element.id, maxLiftHeight: cap },
+                thenAttach: true,
+                note: `A ${cap} m cap divides ${element.id} so every joint snaps to a permitted elevation, checked against the same split the plan uses. The joints move to the structure’s own levels rather than to a uniform division of the height.`,
+              },
         ),
       )
     }
@@ -1263,6 +1385,13 @@ function liftJointElevations(elements: readonly CastableElement[], limits: PourL
  * That is precisely the case worth an error. The number is real, it is on the
  * takeoff, and nothing else in the feature says the pour cannot be placed in one
  * operation.
+ *
+ * The two failures also take opposite remedies, which is the reason a remedy is
+ * classified per finding rather than per invariant. A column is cast in lifts, so a
+ * shallower lift is proportionally less concrete and the cap that reaches the limit
+ * is arithmetic on the figures already here. A slab is one pour whatever any cap
+ * says, so no write in this feature touches it at all — and one table keyed on the
+ * invariant would have to be wrong about one of the two.
  */
 function pourVolumes(
   units: readonly PourUnit[],
@@ -1287,10 +1416,48 @@ function pourVolumes(
           ? `${unit.elementId} segment ${unit.segmentIndex + 1} lift ${unit.liftIndex + 1} is ${unit.volumeCuM.toFixed(1)} m³ against a ${governing.toFixed(1)} m³ limit, and the plan split did not cut it. The first concrete placed sets before the last, which is a cold joint where nobody planned one.`
           : `${unit.elementId} is one pour of ${unit.volumeCuM.toFixed(1)} m³ against a ${governing.toFixed(1)} m³ limit. A ${kind ?? 'element'} is not split into bays by this solver, so this has to be divided by hand — or the pour needs a supply rate nobody has confirmed.`,
         { segmentIndex: unit.segmentIndex, liftIndex: unit.liftIndex },
+        kind === 'slab'
+          ? noCapClears(
+              'A slab is one pour whatever the caps say — both plan cuts run along a centreline and a slab has none, so dividing it into bays is a polygon partition nobody has written. The pour is divided on the drawing, at a construction joint the engineer places, or the supply rate is raised to place it in one.',
+            )
+          : liftCapForVolume(unit, governing),
       ),
     )
   }
   return out
+}
+
+/**
+ * The lift cap that brings one over-volume pour unit inside the limit, or nothing
+ * where the cap would be too shallow to pour.
+ *
+ * Derived from the unit's own figures rather than the element's geometry: the
+ * cross-section is `volumeCuM / liftHeight` whichever kind this is, so the
+ * arithmetic never has to know whether the concrete came from a plan area or a
+ * length × thickness. That also means the fix cannot disagree with the finding —
+ * both are the same two numbers.
+ *
+ * Rounded *down* to the millimetre, because rounding up is how a cap computed to be
+ * exactly at the limit comes back a litre over it. `splitIntoLifts` divides into
+ * equal parts no taller than the cap, so the resulting units are at or under the
+ * limit without a search.
+ */
+function liftCapForVolume(unit: PourUnit, governing: number): FormworkRemedy {
+  const liftHeight = unit.topElevation - unit.baseElevation
+  const crossSection = liftHeight > 0 ? unit.volumeCuM / liftHeight : 0
+  const cap = crossSection > 0 ? Math.floor((governing / crossSection) * 1000) / 1000 : 0
+  if (!(cap >= MIN_PRACTICAL_LIFT_M)) {
+    return noCapClears(
+      `A lift shallow enough to bring this inside ${governing.toFixed(1)} m³ would be under ${MIN_PRACTICAL_LIFT_M} m, which is not a pour anyone plans — the cross-section is too large for the limit however it is divided vertically. Either the supply rate rises, or the pour is divided on the drawing.`,
+    )
+  }
+  return {
+    kind: 'write',
+    tool: 'set_pour_limits',
+    args: { elementId: unit.elementId, maxLiftHeight: cap },
+    thenAttach: true,
+    note: `At ${cap} m a lift is ${governing.toFixed(1)} m³ or less, which is what one delivery places before the first concrete sets. Each lift is a separate erect, pour, cure and strike, so this buys programme time to remove a cold joint.`,
+  }
 }
 
 /**

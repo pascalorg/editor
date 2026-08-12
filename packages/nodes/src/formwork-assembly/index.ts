@@ -10,6 +10,15 @@ export { FormworkCoverageList } from './coverage-summary'
 export { formworkAssemblyDefinition } from './definition'
 export { FormworkDesignReport } from './design-report'
 export { formworkAssembliesAffectedBy, formworkAssembliesOnHost } from './dirty-scope'
+export {
+  type FormworkFindingWithRemedy,
+  type FormworkFixOutcome,
+  type FormworkFixPlan,
+  findingsWithRemedies,
+  fixOutcome,
+  noSuchFinding,
+  plannedFix,
+} from './fix-finding'
 export { buildFormwork, buildFormworkGeometry } from './geometry'
 export {
   FormworkConstructionSection,

@@ -105,6 +105,56 @@ export interface TieField {
   holes: ReadonlyArray<{ alongM: number; elevationM: number }>
 }
 
+/**
+ * The writes this feature has. A remedy may name no other, because no other
+ * exists — a fix that pointed at a tool nobody wrote is a button that cannot be
+ * pressed, which is worse than saying outright that nothing here helps.
+ */
+export type FormworkWriteTool =
+  | 'set_element_construction'
+  | 'set_pour_limits'
+  | 'set_pour_date'
+  | 'set_formwork_settings'
+  | 'set_formwork_part'
+
+/**
+ * `write` — the call and every argument are known, so applying it is mechanical.
+ * `choice` — the call is known and one argument is a decision about the world or
+ * the design, so a surface offers the call and never fills it in. `none` — no
+ * write in this feature clears it, and the note says what would instead.
+ */
+export type RemedyKind = 'write' | 'choice' | 'none'
+
+/**
+ * What to do about a finding.
+ *
+ * Lives here rather than in `remedy.ts` because a `Finding` carries one, and the
+ * two modules would otherwise import each other. `remedy.ts` owns the table and
+ * the classification; this owns only the shape.
+ */
+export interface FormworkRemedy {
+  kind: RemedyKind
+  /** Absent on `none`, where naming a tool would imply one helps. */
+  tool?: FormworkWriteTool
+  /** Argument-complete, on `write` alone. Applied as given. */
+  args?: Record<string, string | number | null>
+  /** The one argument a `choice` leaves to the caller. */
+  field?: string
+  /** What applying this does, or — on `none` — what would have to change instead. */
+  note: string
+  /**
+   * Set where the write re-splits the element, so the shutters no longer match
+   * the pour until `attach_formwork` runs.
+   *
+   * Every pour-limit remedy carries it. Changing a cap builds nothing on its own,
+   * and between the two calls the element is cast in more pours than it is formed
+   * for — so a fix that stopped at the first call would clear the finding and
+   * leave the takeoff short by the difference, which is worse than the finding
+   * was.
+   */
+  thenAttach?: true
+}
+
 export interface Finding {
   invariant: InvariantId
   severity: FindingSeverity
@@ -126,6 +176,18 @@ export interface Finding {
     segmentIndex?: number
     liftIndex?: number
   }
+  /**
+   * The fix, where this finding's own figures decide it rather than its invariant.
+   *
+   * Absent on most findings, which take the invariant's default from `remedy.ts`.
+   * Present where the instance disagrees with its own kind — a volume overrun has
+   * a cap that fixes it on a wall and none on a slab, and an opening across a lift
+   * joint has one only if some cap moves every joint clear — and where the
+   * arguments are figures the check already holds. A remedy derived a second time,
+   * from the report rather than from the run, is how a fix comes to disagree with
+   * the finding it was offered for.
+   */
+  remedy?: FormworkRemedy
 }
 
 /**

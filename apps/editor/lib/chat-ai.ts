@@ -18,7 +18,10 @@ import {
   constructionPatchInput,
   describeFormworkReconciliation,
   describePourSplit,
+  FIX_FORMWORK_FINDING_DESCRIPTION,
   findFormworkSettingsNode,
+  findingByKey,
+  fixFindingInput,
   formworkPartPatchInput,
   formworkPartsQueryInput,
   formworkSettings,
@@ -58,8 +61,12 @@ import type { AnyNode, FormworkAssemblyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint/headless'
 import {
   castableHostIds,
+  findingsWithRemedies,
+  fixOutcome,
   formworkCoverageCaveat,
   formworkPartsReport,
+  noSuchFinding,
+  plannedFix,
   pourUnitsForHost,
   projectFormworkCaveats,
   reconcileFormworkNodes,
@@ -292,7 +299,13 @@ export const SYSTEM_PROMPT =
   'silently absent is how a user comes to believe the shutter was compared against rebar it ' +
   'was never compared to. Read each entry’s needs rather than repeating the list as permanent: ' +
   'most name an input somebody can record, and the crane pair runs as soon as a load chart is ' +
-  'in the settings. ' +
+  'in the settings. Each finding also says what would clear it, and fix_formwork_finding applies ' +
+  'the ones whose every argument the check itself supplies — pass the key, not a figure of your ' +
+  'own, and read back whether the finding actually cleared rather than reporting the call as ' +
+  'done. Most findings have no such fix: some need a decision that is the user’s to make, and ' +
+  'others cannot be cleared by any write here at all. Relay what those need instead of proposing ' +
+  'a call, and never edit an input until a check stops firing — a face declared against earth so ' +
+  'the single-sided check goes quiet changes nothing on site. ' +
   'set_formwork_part records the two decisions a yard actually makes about a solved ' +
   'layout — substitute this item, or leave it off the order because it is already on site. It ' +
   'cannot change a size or a spacing; those are outputs, and to change them you change the design ' +
@@ -1233,7 +1246,7 @@ export function buildTools(
     }),
     validate_formwork: tool({
       description:
-        'Whether the formwork in scope can actually be built. This is a different question from what it costs: a bill can total correctly for a shutter nobody can erect, and almost nothing that makes a bill wrong is what makes a shutter unbuildable. It checks cast-order cycles, single-sided pours with no earlier anchor, formed areas that do not sum to the wrapped area, runs with a stretch no panel or filler closes, make-up pieces too narrow to fix, walls no tie in the system reaches, piers and head bands beside an opening that no drilled tie hole falls in, asymmetric tie grids on architectural faces, openings crossing a lift joint, junction angles no hinged unit sweeps, bridged expansion joints, waterstop runs that do not close, drilled tie holes falling inside the width of a waterstop, lift joints off a permitted elevation, pours over the supply limit, designs outside the code envelope, concurrent pours needing more of a part at once than the yard owns, and — where the project has recorded a load chart — gangs heavier than the crane takes at the radius it must reach and gangs whose slings want more height under the hook than there is. Scope it with levelId for a floor, or leave it off for the whole scene. Two things to do with the result rather than summarise it away: errors are things the crew cannot do and warnings are exceptions somebody has to sign, so never merge the two counts; and notChecked lists assertions that could not run here — say so, because a report of failures alone reads as a clean bill of health for everything it never examined, and read each entry’s needs rather than treating the list as permanent, because most of them name an input to record and the crane checks run the moment set_formwork_settings crane has a capacity curve in it. Run this before presenting a takeoff as an order.',
+        'Whether the formwork in scope can actually be built. This is a different question from what it costs: a bill can total correctly for a shutter nobody can erect, and almost nothing that makes a bill wrong is what makes a shutter unbuildable. It checks cast-order cycles, single-sided pours with no earlier anchor, formed areas that do not sum to the wrapped area, runs with a stretch no panel or filler closes, make-up pieces too narrow to fix, walls no tie in the system reaches, piers and head bands beside an opening that no drilled tie hole falls in, asymmetric tie grids on architectural faces, openings crossing a lift joint, junction angles no hinged unit sweeps, bridged expansion joints, waterstop runs that do not close, drilled tie holes falling inside the width of a waterstop, lift joints off a permitted elevation, pours over the supply limit, designs outside the code envelope, concurrent pours needing more of a part at once than the yard owns, and — where the project has recorded a load chart — gangs heavier than the crane takes at the radius it must reach and gangs whose slings want more height under the hook than there is. Scope it with levelId for a floor, or leave it off for the whole scene. Two things to do with the result rather than summarise it away: errors are things the crew cannot do and warnings are exceptions somebody has to sign, so never merge the two counts; and notChecked lists assertions that could not run here — say so, because a report of failures alone reads as a clean bill of health for everything it never examined, and read each entry’s needs rather than treating the list as permanent, because most of them name an input to record and the crane checks run the moment set_formwork_settings crane has a capacity curve in it. Every finding also carries what would clear it: remedy is the sentence to relay, fixable says whether fix_formwork_finding can apply it by key, and refusal says why not — either one argument is a decision somebody has to make, in which case offer the call and let them choose, or nothing this feature writes fixes it at all, in which case say that rather than proposing a call. Do not invent a fix for a finding whose refusal says there is none, and do not derive a cap yourself for one that is fixable: the check already computed it against the real splitter. Run this before presenting a takeoff as an order.',
       inputSchema: z.object({
         levelId: z
           .string()
@@ -1258,18 +1271,21 @@ export function buildTools(
           hostIds: elementIds,
           parentId: levelId,
         })
+        // Each finding carries what would clear it, derived where the check ran. A model
+        // asked to work the fix out from the message would be re-deriving a cap the check
+        // already computed and verified against the real splitter, and the first
+        // disagreement between the two moves a joint the plan does not put there.
+        const findings = findingsWithRemedies(report.findings)
         return JSON.stringify({
           scope: levelId ?? (elementIds ? 'the elements named' : 'whole scene'),
           elementCount: report.elementIds.length,
           errorCount: report.errorCount,
           warningCount: report.warningCount,
-          findings: report.findings.map((finding) => ({
-            invariant: finding.invariant,
-            severity: finding.severity,
-            elementIds: finding.elementIds,
-            message: finding.message,
-            locus: finding.locus ?? null,
-          })),
+          findings,
+          // How many of them fix_formwork_finding can apply — a different conversation
+          // from how many there are, and the one that keeps an agent from attempting all
+          // of them.
+          fixableCount: findings.filter((finding) => finding.fixable).length,
           // The same sentences the Buildability panel prints, so a user comparing the
           // two is not left working out whether they are one fault or two.
           summary: validationSummary(report),
@@ -1278,6 +1294,89 @@ export function buildTools(
           // has neither — a pass over it is not a pass.
           shutteredIds,
           notChecked: report.notChecked,
+        })
+      },
+    }),
+    fix_formwork_finding: tool({
+      description: FIX_FORMWORK_FINDING_DESCRIPTION,
+      inputSchema: z.object(fixFindingInput),
+      execute: async ({ findingKey }) => {
+        toolCalls.push({ name: 'fix_formwork_finding', input: { findingKey } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        const before = validateProjectFormwork(nodes).report
+        const finding = findingByKey(before.findings, findingKey)
+        // The likeliest cause is not a typo but a stale key — one from an earlier reply
+        // whose defect a previous fix already cleared — so the refusal names the re-read.
+        if (!finding) return noSuchFinding(findingKey)
+
+        const plan = plannedFix(finding)
+        if (plan.refusal !== undefined || !plan.elementId || !plan.limits) {
+          return plan.refusal ?? 'Nothing to apply for that finding.'
+        }
+        const element = castableOrError(plan.elementId as string)
+        if (typeof element === 'string') return element
+
+        // The same gate a hand-made set_pour_limits passes, so a fix cannot write a cap
+        // the tool itself would refuse.
+        const patch = applyPourLimitsPatch(element.type, plan.limits)
+        if (patch.error !== undefined) return patch.error
+        for (const [key, value] of Object.entries(patch.writes)) {
+          if (value === undefined) delete (element as Record<string, unknown>)[key]
+          else (element as Record<string, unknown>)[key] = value
+        }
+
+        // Rebuilt here rather than left to a follow-up call, unlike set_pour_limits. There
+        // the agent asked for a limit and is told to attach; here it asked for a *fix*, and
+        // a fix that leaves the element cast in more pours than it is formed for has traded
+        // a reported error for an unreported one — the takeoff short by the difference,
+        // with nothing in the numbers marking it.
+        let rebuilt = 0
+        if (plan.rebuild === true) {
+          const levelNodes = Object.values(graph.nodes) as AnyNode[]
+          const host = element as unknown as Parameters<typeof reconcileFormworkNodes>[0]
+          const existing = shuttersOnHost(plan.elementId as string)
+          const { create, keep, orphan } = reconcileFormworkNodes(host, existing, levelNodes)
+          rebuilt = keep.length + create.length
+          for (const assembly of orphan) {
+            delete graph.nodes[assembly.id as keyof typeof graph.nodes]
+            element.children = (element.children ?? []).filter((id) => id !== assembly.id)
+          }
+          for (const assembly of create) {
+            graph.nodes[assembly.id as keyof typeof graph.nodes] = assembly as unknown as AnyNode
+            element.children = [...(element.children ?? []), assembly.id]
+          }
+          for (const joint of buildSolverJointNodes(host, levelNodes)) {
+            graph.nodes[joint.id as keyof typeof graph.nodes] = joint as unknown as AnyNode
+            const level = joint.parentId
+              ? (graph.nodes[joint.parentId as keyof typeof graph.nodes] as
+                  | { children?: string[] }
+                  | undefined)
+              : undefined
+            if (level) level.children = [...(level.children ?? []), joint.id]
+          }
+        }
+        onMutate()
+
+        // The claim this tool makes, read from the scene the fix produced rather than from
+        // the plan that produced it — a verdict derived from the remedy would only ever
+        // agree with itself.
+        const after = validateProjectFormwork(
+          graph.nodes as unknown as Record<string, AnyNode>,
+        ).report
+        const outcome = fixOutcome(before, after, findingKey)
+        return JSON.stringify({
+          findingKey,
+          applied: patch.changed,
+          elementId: plan.elementId,
+          rebuiltShutters: rebuilt,
+          cleared: outcome.cleared,
+          errorCount: after.errorCount,
+          warningCount: after.warningCount,
+          raised: outcome.raised.map((entry) => ({
+            invariant: entry.invariant,
+            message: entry.message,
+          })),
+          message: `${patch.changed.join(', ')} on ${plan.elementId}. ${outcome.message}`,
         })
       },
     }),
