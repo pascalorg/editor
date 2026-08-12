@@ -135,7 +135,6 @@ function getLinkedFenceUpdates(
 
 export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
   const activatedAtRef = useRef<number>(Date.now())
-  const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
   const originalEndRef = useRef<[number, number]>([...node.end] as [number, number])
   const originalPathRef = useRef(node.path?.map((point) => [...point] as [number, number]))
@@ -305,8 +304,6 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         magnetic: magneticSnapActive,
         step: gridSnapActive ? getSegmentGridStep() : 0,
       })
-
-      previousGridPosRef.current = [localX, localZ]
 
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor

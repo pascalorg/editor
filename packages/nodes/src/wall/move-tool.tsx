@@ -165,7 +165,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       : {}
   const isNew = !!meta.isNew
   const hasDraggedRef = useRef(false)
-  const previousGridPosRef = useRef<[number, number] | null>(null)
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
   const originalEndRef = useRef<[number, number]>([...node.end] as [number, number])
   const originalCenterRef = useRef<[number, number]>([
@@ -515,8 +514,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       }
 
       const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]
-
-      previousGridPosRef.current = constrainedGridPos
 
       const nextCenter: [number, number] = [originalCenter[0] + deltaX, originalCenter[1] + deltaZ]
       const nextWall = buildWallFromCenter(nextCenter)

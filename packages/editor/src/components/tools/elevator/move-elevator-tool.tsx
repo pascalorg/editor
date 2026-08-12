@@ -40,7 +40,6 @@ export function MoveElevatorTool({
 }) {
   const onCommittedRef = useRef(onCommitted)
   const historyPausedRef = useRef(false)
-  const previousGridPosRef = useRef<[number, number] | null>(null)
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const previewPositionRef = useRef<ElevatorNode['position']>([
     movingNode.position[0],
@@ -76,7 +75,6 @@ export function MoveElevatorTool({
 
     pauseHistory()
     dragAnchorRef.current = null
-    previousGridPosRef.current = null
     const movingNodeId = (movingNode as { id?: ElevatorNode['id'] }).id
 
     const meta =
@@ -147,7 +145,6 @@ export function MoveElevatorTool({
       })
 
 
-      previousGridPosRef.current = [gridX, gridZ]
       setCursorPosition([gridX, supportY, gridZ])
       previewPositionRef.current = [gridX, supportY, gridZ]
       applyPreview(previewPositionRef.current, pendingRotation)

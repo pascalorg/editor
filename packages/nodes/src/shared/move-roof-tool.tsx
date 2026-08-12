@@ -90,7 +90,6 @@ export const MoveRoofTool: React.FC<{
     useEditor.getState().setMovingNode(null)
   }, [])
 
-  const previousGridPosRef = useRef<[number, number] | null>(null)
   const dragAnchorRef = useRef<[number, number] | null>(null)
 
   const [previewRotation, setPreviewRotation] = useState<number>(() =>
@@ -133,7 +132,6 @@ export const MoveRoofTool: React.FC<{
   useEffect(() => {
     useScene.temporal.getState().pause()
     dragAnchorRef.current = null
-    previousGridPosRef.current = null
 
     const isNew = isFreshPlacement
     const committedMeta = stripPlacementMetadataFlags(movingNode.metadata) as RoofNode['metadata']
@@ -357,8 +355,6 @@ export const MoveRoofTool: React.FC<{
         localZ = aligned[1]
       }
 
-
-      previousGridPosRef.current = [localX, localZ]
 
       lastLocalPosition = [localX, movingNode.position[1], localZ]
       const previewPosition = getPreviewPosition(lastLocalPosition)

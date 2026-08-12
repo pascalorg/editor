@@ -68,7 +68,6 @@ export const ZoneTool: React.FC = () => {
   const mainLineRef = useRef<Line>(null!)
   const closingLineRef = useRef<Line>(null!)
   const pointsRef = useRef<Array<[number, number]>>([])
-  const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const levelYRef = useRef(0) // Track current level Y position
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const setTool = useEditor((state) => state.setTool)
@@ -208,10 +207,6 @@ export const ZoneTool: React.FC = () => {
       ])
       snappedCursorPosition = displayPoint
       useFloorplanDraftPreview.getState().setCursorPoint(displayPoint)
-
-      // Play snap sound when the snapped position changes during drawing — only
-      // when a quantizing mode is active (off / lines move continuously).
-      previousSnappedPointRef.current = displayPoint
 
       cursorRef.current.position.set(displayPoint[0], event.localPosition[1], displayPoint[1])
 

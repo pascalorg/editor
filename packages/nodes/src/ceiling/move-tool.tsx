@@ -103,7 +103,6 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
   // Resolved once at drag start — the ceiling plane can't change mid-move.
   const heightRef = useRef(resolveCeilingHeight(node, useScene.getState().nodes))
   const dragAnchorRef = useRef<[number, number] | null>(null)
-  const previousGridPosRef = useRef<[number, number] | null>(null)
   const deltaRef = useRef<[number, number]>([0, 0])
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
@@ -155,8 +154,6 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       if (isFloorplanSourcedEvent(event)) return
       const localX = snap(event.localPosition[0])
       const localZ = snap(event.localPosition[2])
-
-      previousGridPosRef.current = [localX, localZ]
 
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor

@@ -383,7 +383,6 @@ export const RoofTool: React.FC = () => {
   useEffect(() => () => useEditor.getState().setToolDefaults('roof', null), [])
 
   const corner1Ref = useRef<[number, number, number] | null>(null)
-  const previousGridPosRef = useRef<[number, number] | null>(null)
   const [preview, setPreview] = useState<PreviewState>({
     corner1: null,
     cursorPosition: [0, 0, 0],
@@ -459,8 +458,6 @@ export const RoofTool: React.FC = () => {
 
       cursorRef.current.position.set(gridX, gridY, gridZ)
 
-
-      previousGridPosRef.current = [gridX, gridZ]
 
       setPreview({
         corner1: corner1Ref.current,

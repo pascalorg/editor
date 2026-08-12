@@ -244,7 +244,6 @@ export const StairTool: React.FC = () => {
   const previewRef = useRef<THREE.Group>(null)
   const rotationRef = useRef(0)
   const supportCapRef = useRef<number | null>(null)
-  const previousGridPosRef = useRef<[number, number] | null>(null)
   const lastCanonicalPositionRef = useRef<[number, number, number] | null>(null)
   const currentLevelId = useViewer((state) => state.selection.levelId)
 
@@ -461,7 +460,6 @@ export const StairTool: React.FC = () => {
       applyDraftPreview(position, rotationRef.current, supportCapRef.current)
 
 
-      previousGridPosRef.current = [gridX, gridZ]
     }
 
     const commitAtCursor = (event: ClickTriggerEvent) => {

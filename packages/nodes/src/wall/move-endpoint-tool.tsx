@@ -185,7 +185,6 @@ function getLinkedWallUpdates(
 }
 
 export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({ target }) => {
-  const previousGridPosRef = useRef<WallPlanPoint | null>(null)
   const altPressedRef = useRef(false)
   const nodeIdRef = useRef(target.wall.id)
   const originalStartRef = useRef<WallPlanPoint>([...target.wall.start] as WallPlanPoint)
@@ -449,8 +448,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       } else {
         useAlignmentGuides.getState().clear()
       }
-
-      previousGridPosRef.current = alignedPoint
 
       // Stand the magnetic beacon at the endpoint when it locked onto existing
       // wall geometry (corner / midpoint / crossing / wall body).

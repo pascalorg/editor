@@ -108,7 +108,6 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
   )
   const originalCenterRef = useRef(getPolygonCenter(originalPolygonRef.current))
   const dragAnchorRef = useRef<[number, number] | null>(null)
-  const previousGridPosRef = useRef<[number, number] | null>(null)
   const deltaRef = useRef<[number, number]>([0, 0])
 
   const [cursorLocalPos, setCursorLocalPos] = useState<[number, number, number]>(() => {
@@ -178,8 +177,6 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
         magnetic: isMagneticSnapActive(),
         gridSnap: (p) => snapBuildingLocalToWorldGrid(p, gridStep),
       })
-
-      previousGridPosRef.current = [localX, localZ]
 
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
