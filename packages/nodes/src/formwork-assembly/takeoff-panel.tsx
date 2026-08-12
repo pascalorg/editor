@@ -5,6 +5,7 @@ import {
   COST_GAP_LABELS,
   formatMoney,
   LABOUR_GAP_LABELS,
+  LOGISTICS_GAP_LABELS,
   PART_KIND_LABELS,
   PRECEDENCE_REASON_LABELS,
   RESEQUENCE_REFUSAL_LABELS,
@@ -49,6 +50,30 @@ function heldFor(hours: number): string {
   return hours < 24 ? `${hours.toFixed(hours < 10 ? 1 : 0)} h` : `${(hours / 24).toFixed(1)} d`
 }
 
+/**
+ * What the cost total is not, off the sections this panel actually shows.
+ *
+ * The same sentence `bom-csv.ts` builds, and built rather than written for its reason: a
+ * fixed line naming labour, transport, craneage and finance tells a reader with a Logistics
+ * section below that transport is missing from a takeoff that prices it.
+ */
+function costBasis(hasLabour: boolean, hasLogistics: boolean): string {
+  const elsewhere: string[] = []
+  const absent: string[] = []
+  if (hasLabour) elsewhere.push('the gang’s time')
+  else absent.push('labour')
+  if (hasLogistics) elsewhere.push('the deliveries and the hook time')
+  else absent.push('transport', 'craneage')
+  absent.push('finance')
+  const missing =
+    absent.length === 1
+      ? absent[0]
+      : `${absent.slice(0, -1).join(', ')} or ${absent[absent.length - 1]}`
+  const head = `Formwork held only. No ${missing}`
+  if (elsewhere.length === 0) return `${head} — and labour is normally the largest of those.`
+  return `${head} — and ${elsewhere.join(' and ')} ${elsewhere.length === 1 ? 'is a section' : 'are sections'} below rather than part of this total.`
+}
+
 export function FormworkTakeoffPanel() {
   const levels = useTakeoffLevels()
   const [levelId, setLevelId] = useState<string | undefined>(undefined)
@@ -74,6 +99,8 @@ export function FormworkTakeoffPanel() {
   const sequence = solution.sequence
   const resequence = solution.resequence
   const commitments = solution.commitments
+  const lifts = solution.lifts
+  const logistics = solution.logistics
   // The programme rows below have to read differently for a booked pour than for a dated one,
   // and a drifted one differently again — a date on screen that a hire desk is holding a
   // different version of is the one state in this panel a reader cannot infer from anything.
@@ -141,6 +168,89 @@ export function FormworkTakeoffPanel() {
                 value2={solution.totalWeightComplete ? undefined : 'part of the set'}
               />
             </Section>
+            {/* Directly under the total weight, because that is the figure this section exists to
+                be distinguished from: the total is what passes through the job and a pick is one
+                hook load. Anywhere further down the panel a reader sizes a crane off the total. */}
+            {lifts !== undefined && (
+              <Section title="Lifting">
+                <Readout
+                  label="Picks"
+                  value={String(lifts.pickCount)}
+                  value2={
+                    lifts.unweighedPicks > 0 ? `${lifts.unweighedPicks} unweighed` : undefined
+                  }
+                />
+                {lifts.heaviestPickKg !== undefined && (
+                  <Readout
+                    label="Heaviest pick"
+                    value={`${lifts.heaviestPickKg.toFixed(0)} kg`}
+                    value2="the crane is sized on this"
+                    warn={lifts.overChartPicks > 0}
+                  />
+                )}
+                {lifts.crane !== undefined && (
+                  <Readout
+                    label="Chart"
+                    value={`${lifts.crane.worstCapacityKg} kg at ${lifts.crane.reachToM} m`}
+                    value2={`${lifts.crane.bestCapacityKg} kg near the mast`}
+                  />
+                )}
+                {/* The three heaviest rather than every pick. A ganged floor is forty picks and
+                    the panel is not the lifting plan — the CSV carries all of them, and the ones
+                    that decide the crane are at the top of the same sorted list. */}
+                {lifts.picks.slice(0, 3).map((pick) => (
+                  <div
+                    className="flex items-baseline justify-between gap-2 border-border/30 border-t pt-1 text-[10px]"
+                    key={`${pick.elementId}-${pick.faceNumber}-${pick.gangNumber}`}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      {pick.elementId} face {pick.faceNumber} gang {pick.gangNumber}
+                    </span>
+                    <span className="shrink-0 font-mono text-muted-foreground">
+                      {pick.pickWeightKg === undefined
+                        ? 'weight not stated'
+                        : `${pick.pickWeightKg.toFixed(0)} kg`}
+                      {pick.liftsInsideM === undefined ? '' : ` · inside ${pick.liftsInsideM} m`}
+                    </span>
+                  </div>
+                ))}
+                {/* Over the chart is a WarningLine and a position is a Note, which is the
+                    validator's own split of the same three verdicts: one is a layout to redo and
+                    the other is where the crane stands, and nothing here knows that. */}
+                {lifts.overChartPicks > 0 && (
+                  <WarningLine
+                    message={`${lifts.overChartPicks} ${lifts.overChartPicks === 1 ? 'pick is' : 'picks are'} over the chart everywhere — no radius on this jib lifts ${lifts.overChartPicks === 1 ? 'it' : 'them'}. Re-lay the face with narrower panels for more joints, or hand-set it.`}
+                  />
+                )}
+                {lifts.overHookHeightPicks > 0 && (
+                  <WarningLine
+                    message={`${lifts.overHookHeightPicks} ${lifts.overHookHeightPicks === 1 ? 'pick wants' : 'picks want'} more height between the gang and the hook than the crane has. A lifting beam brings the sling legs vertical and removes the demand; a flatter sling does not.`}
+                  />
+                )}
+                {lifts.positionPicks > 0 && (
+                  <Note>
+                    {lifts.positionPicks} {lifts.positionPicks === 1 ? 'pick lifts' : 'picks lift'}{' '}
+                    nearer the mast but not at the jib tip. Nothing here says where the crane
+                    stands, so they are measured against the chart's worst figure — a position for
+                    the lifting plan rather than a layout to redo.
+                  </Note>
+                )}
+                {lifts.crane === undefined && (
+                  <Note>
+                    No load chart recorded, so no pick has been checked against a lift and each face
+                    is one gang — what the layout allows rather than what the site can lift. Record
+                    capacity against radius in the project's formwork settings and the faces divide
+                    at the joints already in them.
+                  </Note>
+                )}
+                <Note>
+                  Panels and make-up pieces only. Walers, ties, couplers and any working platform
+                  travel with a ganged face, so the hook load is above these figures — on a
+                  steel-framed gang the steelwork is about a fifth of it. Picks happen one at a time
+                  and are never summed.
+                </Note>
+              </Section>
+            )}
             {supply === undefined ? (
               <Note>
                 No owned stock recorded, so this bill says nothing about what is hired. Enter what
@@ -252,11 +362,7 @@ export function FormworkTakeoffPanel() {
                 {cost.gaps.map((gap) => (
                   <Note key={gap}>{COST_GAP_LABELS[gap]}.</Note>
                 ))}
-                <Note>
-                  {labour === undefined
-                    ? 'Formwork held only. No labour, no transport, no finance — and labour is normally the largest of those.'
-                    : 'Formwork held only. No transport, no finance — and the gang’s time is the section below rather than part of this total.'}
-                </Note>
+                <Note>{costBasis(labour !== undefined, logistics !== undefined)}</Note>
               </Section>
             )}
             {labour === undefined ? (
@@ -311,6 +417,70 @@ export function FormworkTakeoffPanel() {
                   Man-hours, not a duration: nothing here knows the gang size. Erecting and striking
                   only — no cleaning, no moving the set between pours, no setting out, no waiting on
                   concrete, and no learning curve on the first use of a system.
+                </Note>
+              </Section>
+            )}
+            {logistics === undefined ? (
+              cost !== undefined && (
+                <Note>
+                  No lorry payload and no cycle time recorded, so this takeoff carries no transport
+                  and no craneage — the other two things the money above leaves out. Both are facts
+                  about this job's own plant rather than about a product, so neither is assumed:
+                  enter what one lorry carries and how long one pick takes, sling to hook back, in
+                  the project's formwork settings.
+                </Note>
+              )
+            ) : (
+              <Section title="Logistics">
+                {logistics.totalLoads !== undefined && (
+                  <Readout
+                    label="Loads"
+                    value={String(logistics.totalLoads)}
+                    value2={`${logistics.outboundLoads} out, ${logistics.returnLoads} back`}
+                  />
+                )}
+                {logistics.payloadKg !== undefined && logistics.weighedKg !== undefined && (
+                  <Readout
+                    label="At"
+                    value={`${logistics.payloadKg} kg a lorry`}
+                    value2={`over ${logistics.weighedKg.toFixed(0)} kg`}
+                  />
+                )}
+                {logistics.transportCost !== undefined && (
+                  <Readout
+                    label="Transport"
+                    value={formatMoney(logistics.transportCost, logistics.currency)}
+                  />
+                )}
+                {logistics.craneHours !== undefined && (
+                  <Readout
+                    label="Hook time"
+                    value={`${logistics.craneHours.toFixed(1)} h`}
+                    value2={`${logistics.pickCount} picks`}
+                  />
+                )}
+                {logistics.craneCost !== undefined && (
+                  <Readout
+                    label="Craneage"
+                    value={formatMoney(logistics.craneCost, logistics.currency)}
+                  />
+                )}
+                {logistics.totalCost !== undefined && (
+                  <Readout
+                    label={logistics.complete ? 'Logistics' : 'Logistics so far'}
+                    value={formatMoney(logistics.totalCost, logistics.currency)}
+                    value2="not in the cost total"
+                  />
+                )}
+                {logistics.gaps.map((gap) => (
+                  <Note key={gap}>{LOGISTICS_GAP_LABELS[gap]}.</Note>
+                ))}
+                <Note>
+                  The fewest trips a job of this weight takes, not a delivery schedule — a set that
+                  goes back to the yard between two pours travels again, and nothing here knows
+                  whether it stays on site. The hook time is this formwork's cycles alone, and it is
+                  a charge only where the crane is hired by the hour: a tower crane over the pour is
+                  a preliminary charged by the week whether it lifts this or not.
                 </Note>
               </Section>
             )}

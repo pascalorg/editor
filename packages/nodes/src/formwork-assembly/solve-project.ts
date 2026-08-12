@@ -5,8 +5,11 @@ import type {
   BomLine,
   BomSupply,
   CommittablePour,
+  ElementGangs,
   FormworkAcquisition,
   FormworkCommitments,
+  FormworkLifts,
+  FormworkLogistics,
   FormworkResequence,
   FormworkSchedule,
   FormworkSequence,
@@ -31,6 +34,10 @@ import {
   formworkAcquisition,
   formworkCommitmentCaveats,
   formworkCommitments,
+  formworkLiftCaveats,
+  formworkLifts,
+  formworkLogistics,
+  formworkLogisticsCaveats,
   formworkResequence,
   formworkSchedule,
   formworkScheduleCaveats,
@@ -216,6 +223,37 @@ export interface ProjectFormwork {
    */
   commitments?: FormworkCommitments
   /**
+   * Every pick on the job, heaviest first — or absent where nothing in scope is ganged.
+   *
+   * The one commercial answer here that comes off the *geometry* rather than off the bill or
+   * the programme, and the only reason it can exist at project scope: a gang is a grouping of
+   * the layout each shutter already produced, carried out as `ShutterEvidence.gangs` for the
+   * same reason the packs and the envelopes are. Re-grouping the faces here would be a second
+   * gang division of every wall, and a schedule disagreeing with the drawing about where a
+   * gang breaks sends a rigger to a joint that is not on the panel.
+   *
+   * Absent rather than empty for `commitments`' reason: a conventional job is struck panel by
+   * panel and has no assembly to lift at all, and a schedule of zero picks reads as a crane
+   * with nothing to do rather than as a job with no craning in it.
+   */
+  lifts?: FormworkLifts
+  /**
+   * What it costs to deliver this bill and to lift it in — or absent where the project has
+   * recorded no payload and no cycle time.
+   *
+   * The only field here derived from two of the others rather than from the bill or the
+   * programme: the loads come off `totalWeightKg` and the hook time off `lifts`. That is why
+   * it is last to arrive despite being named in `cost.excludes` from the day there was a
+   * cost — a delivery is priced per load and a crane per lift, and until a gang existed the
+   * bill was 2,400 parts and neither.
+   *
+   * Absent for `cost`'s reason rather than `lifts`'. A payload is the lorry the yard sends and
+   * a cycle time is this crew on this crane; neither has a code or a product behind it, so
+   * silence gets no figure. The two halves are independent — a project that states a payload
+   * and no cycle time gets loads and no crane hours, which is a real state and not a gap.
+   */
+  logistics?: FormworkLogistics
+  /**
    * True where the striking table came from a different code family than the pressure
    * standard, because the project's own family publishes none.
    *
@@ -340,6 +378,17 @@ export function solveProjectFormwork(
   )
 
   const supply = settings.ownedStock ? bomSupply(bom, settings.ownedStock) : undefined
+
+  // Every shutter's gangs rather than the first's, and not deduped across lifts — the same two
+  // rules `validate-project` states about the identical input. A 9 m wall in three lifts is
+  // three sets of picks, the heavy one may be in any of them, and two lifts of identical panels
+  // are two assemblies lifted in on two different days.
+  const elementGangs: ElementGangs[] = []
+  for (const element of elements) {
+    const faces = element.shutters.flatMap((shutter) => shutter.evidence.gangs ?? [])
+    if (faces.length > 0) elementGangs.push({ elementId: element.host.id as string, faces })
+  }
+  const lifts = formworkLifts(elementGangs, settings.crane)
 
   // A pour per shutter, because a shutter *is* a pour unit — and the periods per shutter
   // rather than per bill line, which is the difference from `bomHire`. A line spans hosts
@@ -497,6 +546,22 @@ export function solveProjectFormwork(
     ...(sequence ? { sequence } : {}),
     ...(resequence ? { resequence } : {}),
     ...(commitments ? { commitments } : {}),
+    ...(lifts ? { lifts } : {}),
+    // Off the weight and the picks above rather than a second sweep of either, so the lorries
+    // are counted from the same tonnage the takeoff prints and the hook time from the same
+    // schedule the crane was checked against. `lifts` is passed through as it stands,
+    // including absent: a conventional shutter has nothing to lift as an assembly, which does
+    // not touch the delivery half of the answer.
+    ...(settings.logistics
+      ? {
+          logistics: formworkLogistics(
+            { totalKg: weight.totalKg, complete: weight.complete },
+            lifts,
+            settings.logistics,
+            settings.rates,
+          ),
+        }
+      : {}),
     strikingStandardSubstituted: isSubstitutedStrikingStandard(settings.pressureStandard),
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
@@ -534,6 +599,10 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
       'Some parts have no published weight, so the total is the sum of those that do — not the lifting weight of the set.',
     )
   }
+  // Straight after the weight, because that is the sentence these are most often read against:
+  // the bill's tonnage is what passes through the job and a pick is one hook load, and a reader
+  // who has just been told the total is incomplete is the reader about to size a crane on it.
+  if (solution.lifts) out.push(...formworkLiftCaveats(solution.lifts))
   if (solution.supply && solution.supply.ownedQuantity > 0) {
     out.push(
       'The owned/hired split is for this scope alone. The same owned stock serves the next pour once it is stripped, so two scopes’ owned figures are not a total.',
@@ -572,6 +641,14 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   else if (solution.cost) {
     out.push(
       'There is no labour in this takeoff at all, because the project has stated no output norms. That is the largest thing missing from the figures above, and it is deliberately not estimated: published constants are per m² of a whole trade operation and cannot be spread over a bill of parts, and an output is a fact about a gang rather than about a product. Record man-hours to erect and to strike per kind of part, and a rate per man-hour, to get it.',
+    )
+  }
+  // Third in the same run, because the cost caveat names three things outside it and this is
+  // two of them: labour above, transport and craneage here. Finance is what is left.
+  if (solution.logistics) out.push(...formworkLogisticsCaveats(solution.logistics))
+  else if (solution.cost) {
+    out.push(
+      'There is no transport and no craneage in this takeoff, because the project has recorded neither what one lorry carries nor how long a pick takes. Both are facts about the job’s own plant rather than about a product, so nothing is assumed. Record a lorry payload and the minutes one pick takes, with a charge per load and an hourly crane rate, to get them.',
     )
   }
   // Verbatim again, and the qualifying-time line is the one that earns its place: under

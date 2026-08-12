@@ -344,6 +344,70 @@ describe('set_formwork_settings — the yard’s own rack', () => {
   })
 })
 
+describe('set_formwork_settings — the crane and what it costs to get there', () => {
+  test('the load chart is stored as a curve rather than a rating', async () => {
+    // A tower crane rated 8 t lifts 2.2 t at the jib tip, so a single number would pass
+    // gangs that do not lift. The curve is what the gang grouping is measured against.
+    const { tools, settings } = scene()
+
+    await set(tools, {
+      crane: {
+        capacityCurve: [
+          { radiusM: 20, capacityKg: 4000 },
+          { radiusM: 40, capacityKg: 1200 },
+        ],
+        hookHeightM: 40,
+      },
+    })
+
+    expect(settings()?.crane).toEqual({
+      capacityCurve: [
+        { radiusM: 20, capacityKg: 4000 },
+        { radiusM: 40, capacityKg: 1200 },
+      ],
+      hookHeightM: 40,
+    })
+  })
+
+  test('the quantities go to logistics and the money to rates, in one call', async () => {
+    // The split every surface of this pair is arranged around: a payload and a cycle time
+    // are facts about the job's plant, and the two charges are money in the currency
+    // `rates` already states once.
+    const { tools, settings } = scene()
+
+    await set(tools, {
+      logistics: { lorryPayloadKg: 8000, minutesPerPick: 30 },
+      rates: { currency: 'GBP', transportPerLoad: 400, cranePerHour: 120 },
+    })
+
+    expect(settings()?.logistics).toEqual({ lorryPayloadKg: 8000, minutesPerPick: 30 })
+    expect(settings()?.rates).toEqual({
+      byCatalogId: {},
+      currency: 'GBP',
+      transportPerLoad: 400,
+      cranePerHour: 120,
+    })
+  })
+
+  test('a later cycle time does not delete the payload stated before it', async () => {
+    const { tools, settings } = scene()
+
+    await set(tools, { logistics: { lorryPayloadKg: 8000 } })
+    await set(tools, { logistics: { minutesPerPick: 30 } })
+
+    expect(settings()?.logistics).toEqual({ lorryPayloadKg: 8000, minutesPerPick: 30 })
+  })
+
+  test('null unstates one charge and leaves the other priced', async () => {
+    const { tools, settings } = scene()
+
+    await set(tools, { rates: { transportPerLoad: 400, cranePerHour: 120 } })
+    await set(tools, { rates: { cranePerHour: null } })
+
+    expect(settings()?.rates).toEqual({ byCatalogId: {}, transportPerLoad: 400 })
+  })
+})
+
 describe('set_formwork_settings — the reply', () => {
   test('names the pour the scene now designs to', async () => {
     const { tools } = scene()
@@ -464,6 +528,28 @@ describe('inspect_formwork_settings', () => {
     expect(report.stated.curing).toEqual({ surfaceTemperatureC: 5, shoresRemain: true })
     expect(report.stated.placement).toEqual({ concreteTemperatureC: 25 })
     expect(report.resolved.concreteTemperatureC).toBe(25)
+  })
+
+  test('an unrecorded crane and payload read as null rather than as none', async () => {
+    // The two the model is likeliest to fill in: an absent chart is not a site with no
+    // crane, and an absent payload is not a job with no deliveries in it.
+    const { tools } = scene()
+
+    const report = JSON.parse(await inspect(tools))
+
+    expect(report.resolved.crane).toBeNull()
+    expect(report.resolved.logistics).toBeNull()
+    expect(report.assumedDefaults.logistics).toBeUndefined()
+  })
+
+  test('reports the payload and the cycle time the project stated', async () => {
+    const { tools } = scene()
+
+    await set(tools, { logistics: { lorryPayloadKg: 8000, minutesPerPick: 30 } })
+    const report = JSON.parse(await inspect(tools))
+
+    expect(report.stated.logistics).toEqual({ lorryPayloadKg: 8000, minutesPerPick: 30 })
+    expect(report.resolved.logistics).toEqual({ lorryPayloadKg: 8000, minutesPerPick: 30 })
   })
 
   test('does not create the node, so reading is not a decision', async () => {

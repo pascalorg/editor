@@ -471,17 +471,30 @@ export function buildWallFormwork(
     )
     panelRunsByFace.set(face, panelling)
     if (!isFormed(role)) continue
-    const plan = planFace(panelling, node, system, {
-      baseM: baseY,
-      heightM: topY - baseY,
-      kickerM,
-    })
+    const plan = planFace(
+      panelling,
+      node,
+      system,
+      {
+        baseM: baseY,
+        heightM: topY - baseY,
+        kickerM,
+      },
+      settings.crane,
+    )
     if (plan) planByFace.set(face, plan)
   }
   // Both skins are packed identically by rule 3, so one face's runs are the whole
   // layout evidence; taking both would report every open strip twice.
+  //
+  // The gangs go the same way, and for a reason of their own on top of that one: a
+  // gang is one skin's assembly. Both faces of a wall are lifted in, so a takeoff
+  // that meant to count picks doubles this figure knowingly — what it must not do is
+  // report the same pick weight twice as two different gangs to check.
+  const layoutFace = planByFace.get('a') ?? planByFace.get('b')
   parts.evidence({
-    packs: (planByFace.get('a') ?? planByFace.get('b'))?.packs ?? [],
+    packs: layoutFace?.packs ?? [],
+    gangs: layoutFace?.gangs ?? [],
     envelope: design.envelope,
     system,
   })

@@ -1,9 +1,12 @@
 import { ACQUIRE_GAP_LABELS, ACQUIRE_VERDICT_LABELS, type FormworkAcquisition } from './acquire'
 import { COMMITMENT_GAP_LABELS, type FormworkCommitments } from './commitments'
 import { type BomCost, COST_GAP_LABELS, type CostLine } from './cost'
+import { CRANE_PICK_VERDICT_LABELS } from './crane'
 import { STRIKE_TARGET_LABELS, STRIKING_STANDARD_LABELS } from './design/striking'
 import type { BomHire, HireLine } from './hire'
 import { type BomLabour, LABOUR_GAP_LABELS } from './labour'
+import type { FormworkLifts } from './lifts'
+import { type FormworkLogistics, LOGISTICS_GAP_LABELS } from './logistics'
 import { type BomLine, PART_KIND_LABELS } from './parts'
 import { type FormworkResequence, RESEQUENCE_REFUSAL_LABELS } from './resequence'
 import {
@@ -30,6 +33,33 @@ import type { BomSupply, SupplyLine } from './supply'
  * and the total row says so, because a spreadsheet that sums a fabricated zero
  * produces a lifting weight nobody can check and everybody trusts.
  */
+
+/**
+ * What the cost total is *not*, named before any figure below it.
+ *
+ * Assembled rather than written out because the exclusions come off the blocks this file
+ * actually has: labour where there are no norms, transport and craneage where there is no
+ * payload and no cycle time, and finance always. A fixed sentence naming all four would tell
+ * a reader with a LOGISTICS block below that transport is missing from a file that prices it.
+ */
+function costBasis(scope: BomCsvScope): string {
+  const elsewhere: string[] = []
+  const absent: string[] = []
+  if (scope.labour === undefined) absent.push('labour')
+  else elsewhere.push('the gang’s time is in the LABOUR block')
+  if (scope.logistics === undefined) absent.push('transport', 'craneage')
+  else elsewhere.push('the deliveries and the hook time are in the LOGISTICS block')
+  absent.push('finance')
+  const missing =
+    absent.length === 1
+      ? absent[0]
+      : `${absent.slice(0, -1).join(', ')} or ${absent[absent.length - 1]}`
+  const tail =
+    elsewhere.length === 0
+      ? ''
+      : ` — ${elsewhere.join(', and ')} below, deliberately not in this total`
+  return `formwork held only — hire, recharges and what is spent. No ${missing}${tail}`
+}
 
 /** What a bill covers, so the file says what it is a bill *of*. */
 export interface BomCsvScope {
@@ -145,6 +175,29 @@ export interface BomCsvScope {
    * no "Peak" anywhere near it.
    */
   commitments?: FormworkCommitments
+  /**
+   * What gets craned in as one piece, where the faces were grouped into gangs.
+   *
+   * A preamble block per *pick*, and the join is the reason again: a gang is a stretch of
+   * one face of one element, and a bill line is a catalog id across the job. The same panel
+   * appears in nine picks and a "Pick weight" cell on its row could hold none of them.
+   *
+   * The block this one must not be read against is the TOTAL weight row at the foot of the
+   * file. That is what a lorry carries; a pick is what the hook lifts, and the two differ by
+   * more than an order of magnitude on any real job. So the label says what it is not, and
+   * no pick figure appears in the same column as a bill weight.
+   */
+  lifts?: FormworkLifts
+  /**
+   * What the deliveries and the hook time cost, where the project stated a payload and a
+   * cycle time.
+   *
+   * The only block in this file whose figures come from two other blocks of it — the loads
+   * from the TOTAL weight row and the hours from the LIFTING SCHEDULE's pick count. Placed
+   * after both for that reason: a load count above the tonnage it was divided from is a
+   * number a reader cannot check.
+   */
+  logistics?: FormworkLogistics
 }
 
 /**
@@ -295,16 +348,7 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
     // A reader who takes this for the cost of forming the job is wrong by more than
     // every gap in the rate table put together — labour is normally the largest cost
     // and there is none of it in here.
-    rows.push(
-      [
-        'Cost basis',
-        cell(
-          scope.labour === undefined
-            ? 'formwork held only — hire, recharges and what is spent. No labour, transport or finance'
-            : 'formwork held only — hire, recharges and what is spent. No transport or finance. The gang’s time is in the LABOUR block below and is deliberately not in this total',
-        ),
-      ].join(','),
-    )
+    rows.push(['Cost basis', cell(costBasis(scope))].join(','))
     if (cost.currency !== undefined) rows.push(['Currency', cell(cost.currency)].join(','))
     rows.push(['Hire cost', round2(cost.hireCost)].join(','))
     if (cost.rechargeCost > 0) {
@@ -789,6 +833,170 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
     }
     for (const gap of commitments.gaps) {
       rows.push(['Commitment gap', cell(COMMITMENT_GAP_LABELS[gap])].join(','))
+    }
+  }
+
+  const lifts = scope.lifts
+  if (lifts) {
+    rows.push('')
+    // Named against the TOTAL weight row at the foot of this file, because that is the figure
+    // a reader has already taken off it. That total is what a lorry carries over the whole
+    // job; a pick is one hook load, and a crane chosen against the wrong one of the two is
+    // either ten times too big or refuses to lift the first gang.
+    rows.push(
+      [
+        'LIFTING SCHEDULE',
+        cell(
+          'One row per pick — what the hook lifts at a time. Not the TOTAL kg at the foot of this file, which is what passes through the job: picks happen one at a time, so they are never summed. Panels and make-up pieces only — walers, ties and brackets travel with a gang and are not in these figures',
+        ),
+      ].join(','),
+    )
+    rows.push(['Picks', lifts.pickCount].join(','))
+    if (lifts.heaviestPickKg !== undefined) {
+      // The one figure a crane is chosen against, above the table so it is not hunted for.
+      rows.push(
+        ['Heaviest pick kg — the crane is sized on this', round2(lifts.heaviestPickKg)].join(','),
+      )
+    }
+    if (lifts.crane === undefined) {
+      // The refusal in the file, as the set count's is. A reader comparing this export against
+      // one with verdicts in it is owed the reason every Verdict cell below is blank.
+      rows.push(
+        [
+          'NO LOAD CHART',
+          cell(
+            'No crane is recorded, so no pick below has been checked against a lift and each face is one gang — what the layout allows rather than what the site can lift. Record the chart as capacity against radius with set_formwork_settings crane',
+          ),
+        ].join(','),
+      )
+    } else {
+      rows.push(
+        [
+          'Chart',
+          cell(
+            `${lifts.crane.worstCapacityKg} kg at ${lifts.crane.reachToM} m out, ${lifts.crane.bestCapacityKg} kg near the mast`,
+          ),
+        ].join(','),
+      )
+      if (lifts.crane.hookHeightMm !== undefined) {
+        rows.push(['Height under the hook mm', lifts.crane.hookHeightMm].join(','))
+      }
+    }
+    rows.push(
+      [
+        'Element',
+        'Face',
+        'Gang',
+        'Width mm',
+        'Height mm',
+        'Panels',
+        'Pick kg',
+        'Lifts inside m',
+        'Slings want mm',
+        'Verdict',
+      ].join(','),
+    )
+    for (const pick of lifts.picks) {
+      rows.push(
+        [
+          cell(pick.elementId),
+          pick.faceNumber,
+          pick.gangNumber,
+          pick.widthMm,
+          pick.heightMm,
+          pick.panelCount,
+          // Blank rather than 0 where a piece in the gang carries no stated weight, for the
+          // reason the weight column at the foot of the file is: a spreadsheet sums a
+          // fabricated zero into a figure somebody books a crane against.
+          pick.pickWeightKg === undefined ? '' : round2(pick.pickWeightKg),
+          pick.liftsInsideM === undefined ? '' : pick.liftsInsideM,
+          pick.minHookHeightMm === undefined ? '' : pick.minHookHeightMm,
+          cell(
+            [
+              pick.verdict === undefined
+                ? 'not checked — no load chart'
+                : CRANE_PICK_VERDICT_LABELS[pick.verdict],
+              ...(pick.overHookHeight
+                ? ['wants more height under the hook than the crane has']
+                : []),
+              ...(pick.overLimit
+                ? ['over a stated limit with no joint inside it to break at']
+                : []),
+            ].join('; '),
+          ),
+        ].join(','),
+      )
+    }
+    if (lifts.unweighedPicks > 0) {
+      // INCOMPLETE for the programme's reason and with the schedule's force: the table above
+      // looks like a whole lifting schedule, and a blank weight cell is the one gap in this
+      // file that nothing else reveals.
+      rows.push(
+        [
+          'INCOMPLETE',
+          cell(
+            `${lifts.unweighedPicks} of ${lifts.pickCount} picks have no weight, because a piece in them carries no stated weight — those picks are checked against nothing`,
+          ),
+        ].join(','),
+      )
+    }
+  }
+
+  const logistics = scope.logistics
+  if (logistics) {
+    rows.push('')
+    // The basis first again, and against two misreadings rather than one: a load count reads
+    // as a delivery schedule, and hook hours read as a charge on a crane that may be a
+    // preliminary already paid for by the week.
+    rows.push(
+      [
+        'LOGISTICS',
+        cell(
+          'Deliveries and hook time. The loads are the fewest trips a job of this weight takes, not a delivery schedule — plant that goes back to the yard between two pours travels again and nothing here knows whether it does. The hook time is a charge only where the crane is hired by the hour',
+        ),
+      ].join(','),
+    )
+    if (logistics.currency !== undefined)
+      rows.push(['Currency', cell(logistics.currency)].join(','))
+    if (logistics.payloadKg !== undefined && logistics.weighedKg !== undefined) {
+      rows.push(['Lorry payload kg', logistics.payloadKg].join(','))
+      // The dividend beside the divisor, because the whole load count is one division and a
+      // reader who cannot see both cannot check it.
+      rows.push(['Weight the loads were counted from kg', round2(logistics.weighedKg)].join(','))
+    }
+    if (
+      logistics.outboundLoads !== undefined &&
+      logistics.returnLoads !== undefined &&
+      logistics.totalLoads !== undefined
+    ) {
+      rows.push(['Loads out', logistics.outboundLoads].join(','))
+      rows.push(['Loads back', logistics.returnLoads].join(','))
+      rows.push(['Loads — fewest trips, out and back', logistics.totalLoads].join(','))
+    }
+    if (logistics.transportCost !== undefined) {
+      rows.push(['Transport cost', round2(logistics.transportCost)].join(','))
+    }
+    if (logistics.pickCount !== undefined) {
+      rows.push(['Picks the hook makes', logistics.pickCount].join(','))
+    }
+    if (logistics.craneHours !== undefined) {
+      rows.push(['Hook time h — this formwork alone', round2(logistics.craneHours)].join(','))
+    }
+    if (logistics.craneCost !== undefined) {
+      rows.push(['Craneage cost', round2(logistics.craneCost)].join(','))
+    }
+    if (logistics.totalCost !== undefined) {
+      rows.push(
+        [
+          logistics.complete
+            ? 'TOTAL LOGISTICS — not in the cost total above'
+            : 'TOTAL LOGISTICS — a floor, and not in the cost total above',
+          round2(logistics.totalCost),
+        ].join(','),
+      )
+    }
+    for (const gap of logistics.gaps) {
+      rows.push(['UNPRICED', cell(LOGISTICS_GAP_LABELS[gap])].join(','))
     }
   }
 

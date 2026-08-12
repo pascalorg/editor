@@ -8,12 +8,12 @@ import { validateProjectFormwork } from './validate-project'
  * The scene validated against the layout it actually has.
  *
  * `invariants.test.ts` covers the checks. This covers the wiring, and the wiring is
- * where the interesting failures are: six of the nineteen invariants are about a
- * packed run, a pressure solve, a catalog system, a drilled hole grid or the
- * programme's own peak, none of which exist in the node graph, so they only run if the
- * evidence reaches them from the build. The two ways that goes wrong are silent in
- * both directions — an invariant reported as `notChecked` when the data was right
- * there, and an invariant run against another element's hardware.
+ * where the interesting failures are: eight of the twenty-one invariants are about a
+ * packed run, a pressure solve, a catalog system, a drilled hole grid, a gang of the
+ * layout or the programme's own peak, none of which exist in the node graph, so they
+ * only run if the evidence reaches them from the build. The two ways that goes wrong
+ * are silent in both directions — an invariant reported as `notChecked` when the data
+ * was right there, and an invariant run against another element's hardware.
  */
 
 /** The five checks that only run on evidence out of a build. */
@@ -501,12 +501,173 @@ describe('validateProjectFormwork', () => {
   })
 
   test('the assertions with no schema home are always listed', () => {
-    // A fully shuttered scope is not a fully checked one. Rebar clashes and crane
-    // capacity have no data in the scene, and an absent assertion reads as a passed one.
+    // A fully shuttered scope is not a fully checked one. Rebar has no geometry in the
+    // scene at all, and an absent assertion reads as a passed one. The crane is here for
+    // a different reason — a load chart *has* a schema home and this scene has not filled
+    // it in, which is the conditional case and not the permanent one.
     const nodes = sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1'))
 
     expect(unchecked(nodes)).toContain('TIES_THROUGH_REBAR')
     expect(unchecked(nodes)).toContain('GANG_WEIGHT_OVER_CRANE_CAPACITY')
+  })
+})
+
+describe('the crane check, whose evidence is a grouping of the layout', () => {
+  /**
+   * The settings on the level, so *both* readers find them.
+   *
+   * The geometry climbs the host's ancestors and the takeoff scans the scene, and a crane
+   * only one of them can see is the failure this suite is for: the layout would be grouped
+   * as one pick per face and then checked against a chart, so a wall that lifts in seven
+   * gangs would come back as one 1.9 t pick nothing on site can make.
+   */
+  function withCrane(
+    crane: Record<string, unknown>,
+    ...members: Parameters<typeof sceneOf>
+  ): Record<string, AnyNode> {
+    const nodes = sceneOf(...members)
+    const level = nodes.level_1 as unknown as { children: string[] }
+    level.children = [...level.children, 'formwork-settings_1']
+    nodes['formwork-settings_1'] = {
+      object: 'node',
+      id: 'formwork-settings_1',
+      type: 'formwork-settings',
+      parentId: 'level_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      pressureStandard: 'BS_8110',
+      crane,
+    } as unknown as AnyNode
+    return nodes
+  }
+
+  const gangsOf = (nodes: Record<string, AnyNode>) =>
+    (solveProjectFormwork(nodes).elements[0]?.shutters ?? []).flatMap(
+      (shutter) => shutter.evidence.gangs ?? [],
+    )
+
+  const gangFindings = (nodes: Record<string, AnyNode>) =>
+    validateProjectFormwork(nodes).report.findings.filter((finding) =>
+      finding.invariant.startsWith('GANG_'),
+    )
+
+  test('the face the crane grouped is the face the crane is checked against', () => {
+    // The join, and the one that matters most in this whole module: the same chart both
+    // groups the gangs and checks them. A 6 m × 6 m wall is one 1892 kg pick with no crane
+    // stated, and against a 300 kg machine it comes back as seven picks that all lift. A
+    // validator handed the chart but not the grouping would fail the wall on a gang the
+    // model does not draw.
+    const nodes = withCrane(
+      { capacityCurve: [{ radiusM: 30, capacityKg: 300 }], hookHeightM: 40 },
+      makeWall('wall_1'),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+
+    const gangs = gangsOf(nodes).flatMap((face) => face.gangs)
+    expect(gangs.length).toBeGreaterThan(1)
+    expect(gangs.every((gang) => (gang.pickWeightKg ?? 0) <= 300)).toBe(true)
+    expect(gangFindings(nodes)).toEqual([])
+    expect(unchecked(nodes)).not.toContain('GANG_WEIGHT_OVER_CRANE_CAPACITY')
+  })
+
+  test('a pick no joint can split faults the wall, and names it', () => {
+    // 200 kg against a 900 mm panel stack of 281 kg. Every joint in the face is already
+    // used, so the gangs come back over the limit rather than smaller — which is the
+    // finding, and the answer to it is a narrower layout somebody has to pay for.
+    const nodes = withCrane(
+      { capacityCurve: [{ radiusM: 30, capacityKg: 200 }], hookHeightM: 40 },
+      makeWall('wall_1'),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+
+    const found = gangFindings(nodes)
+    expect(found.length).toBeGreaterThan(0)
+    expect(found.every((finding) => finding.severity === 'error')).toBe(true)
+    expect(found[0]?.elementIds).toEqual(['wall_1'])
+    expect(found[0]?.message).toContain('tops out at 200 kg')
+  })
+
+  test('a pick the mast takes and the tip does not is a position, not a re-layout', () => {
+    // The same 206 kg gang against a chart giving 200 kg at the tip and 400 kg at 30 m.
+    // Nothing in the scene says where the crane stands, so this is a warning naming the
+    // radius to set inside rather than an error condemning the layout.
+    const nodes = withCrane(
+      {
+        capacityCurve: [
+          { radiusM: 20, capacityKg: 5600 },
+          { radiusM: 30, capacityKg: 400 },
+          { radiusM: 40, capacityKg: 200 },
+        ],
+        hookHeightM: 40,
+      },
+      makeWall('wall_1'),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+
+    const found = gangFindings(nodes)
+    expect(found.length).toBeGreaterThan(0)
+    expect(found.every((finding) => finding.severity === 'warning')).toBe(true)
+    expect(found[0]?.message).toContain('set inside 30 m')
+  })
+
+  test('the headroom is checked off the same gangs, and separately', () => {
+    // A 6 m gang's eyes are 3.5 m apart, which wants 3 m over the top of it at 60°. This
+    // crane has 2 — so the pick is well inside the chart and does not lift.
+    const nodes = withCrane(
+      { capacityCurve: [{ radiusM: 30, capacityKg: 8000 }], hookHeightM: 2 },
+      makeWall('wall_1'),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+
+    const found = gangFindings(nodes)
+    expect(found.map((finding) => finding.invariant)).toEqual(['GANG_HEADROOM_OVER_HOOK_HEIGHT'])
+    expect(found[0]?.message).toContain('the crane has 2000 mm')
+  })
+
+  test('a chart with no hook height leaves the headroom unchecked and the weight checked', () => {
+    const nodes = withCrane(
+      { capacityCurve: [{ radiusM: 30, capacityKg: 8000 }] },
+      makeWall('wall_1'),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+
+    expect(unchecked(nodes)).not.toContain('GANG_WEIGHT_OVER_CRANE_CAPACITY')
+    expect(unchecked(nodes)).toContain('GANG_HEADROOM_OVER_HOOK_HEIGHT')
+  })
+
+  test('a crane with nothing to lift says the gangs are missing, not the chart', () => {
+    // A slab is decked rather than panelled from a run, so it has no gang. The chart is
+    // recorded and there is simply nothing on this scope to weigh against it — which is a
+    // different sentence from "record a load chart", and the reader acts on it differently.
+    const nodes = withCrane(
+      { capacityCurve: [{ radiusM: 30, capacityKg: 8000 }], hookHeightM: 40 },
+      makeSlab('slab_1'),
+      makeAssembly('formwork-assembly_1', 'slab_1'),
+    )
+
+    expect(gangsOf(nodes)).toEqual([])
+    expect(
+      validateProjectFormwork(nodes).report.notChecked.find(
+        (entry) => entry.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY',
+      )?.needs,
+    ).toContain('pass `gangs`')
+  })
+
+  test('every lift of a wall is weighed, not the first one', () => {
+    // Two lifts of one wall are two assemblies lifted in on two days, and the heavy pick
+    // may be in either. Deduping them — or taking the base lift as the element's — would
+    // check one and report a pass for the other.
+    const nodes = withCrane(
+      { capacityCurve: [{ radiusM: 30, capacityKg: 200 }], hookHeightM: 40 },
+      makeWall('wall_1', { height: 6 }),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0),
+      makeAssembly('formwork-assembly_2', 'wall_1', 1),
+    )
+
+    const faces = gangsOf(nodes)
+    expect(faces.length).toBeGreaterThan(1)
+    expect(gangFindings(nodes).length).toBeGreaterThan(faces[0]?.gangs.length ?? 0)
   })
 })
 

@@ -291,6 +291,30 @@ export const FormworkRateSettings = z.object({
    * an invented output.
    */
   gangRatePerHour: z.number().finite().positive().max(100_000).optional(),
+  /**
+   * What one delivery load costs, one way — the charge a haulier makes per lorry.
+   *
+   * Per load rather than per tonne or per kilometre, because that is how the trade quotes
+   * it: a yard sends a lorry and is invoiced for the lorry, and a part-loaded one costs
+   * what a full one does. Distance is already inside the figure the haulier gave, which is
+   * why there is no site address anywhere in this model.
+   *
+   * One way, because the loads out and the loads back are counted separately and are not
+   * the same number: what is consumed on the job does not come back.
+   */
+  transportPerLoad: z.number().finite().positive().max(1_000_000).optional(),
+  /**
+   * What an hour of the crane costs, all-in with its operator and slinger.
+   *
+   * Here beside the gang rate for the same reason it is: it is money, and the currency it
+   * is in is stated once above. On its own it prices nothing — the hook time comes from
+   * `logistics.minutesPerPick` against the picks the layout produced.
+   *
+   * A rate a *mobile* crane is hired at. A tower crane standing on the job is a
+   * preliminary charged by the week whether it lifts this or not, and every surface says
+   * so rather than leaving a reader to work out which of the two they have.
+   */
+  cranePerHour: z.number().finite().positive().max(1_000_000).optional(),
 })
 export type FormworkRateSettings = z.infer<typeof FormworkRateSettings>
 
@@ -402,6 +426,114 @@ export const FormworkScheduleSettings = z.object({
 export type FormworkScheduleSettings = z.infer<typeof FormworkScheduleSettings>
 
 /**
+ * One point off a crane's published load chart: what it lifts at this radius.
+ *
+ * A curve rather than a single figure because a crane's capacity is not a number, and
+ * treating it as one is the mistake this group exists to prevent. A tower crane rated at
+ * 8 t lifts 8 t near the mast and 2.2 t at the jib tip; the figure on the front of the
+ * brochure is the one that applies where nothing is ever built. So a gang 40 m out is
+ * checked against the chart at 40 m, and a project that records only the headline rating
+ * has recorded the wrong number.
+ */
+export const CraneCapacityPoint = z.object({
+  /** Distance from the slew centre, m. */
+  radiusM: z.number().finite().positive().max(200),
+  /** What the chart says the hook takes there, kg. */
+  capacityKg: z.number().finite().positive().max(1_000_000),
+})
+export type CraneCapacityPoint = z.infer<typeof CraneCapacityPoint>
+
+/**
+ * The crane, which is a fact about this site and about nothing else.
+ *
+ * Undefaulted like the rates and the rack, and for the rates' reason rather than the
+ * rack's: there is no conservative crane. Ship a curve and every gang in every project
+ * is checked against a machine nobody hired — passing gangs that do not lift on the
+ * site's actual crane, and failing gangs that lift perfectly well. So absent means the
+ * takeoff groups a face into one gang, prints its weight, and says no crane was stated.
+ *
+ * The whole curve is one fact and is written whole: patching it replaces it rather than
+ * merging point by point, because half of one chart mixed with half of another is a
+ * machine that does not exist.
+ */
+export const FormworkCraneSettings = z.object({
+  /**
+   * The load chart, point by point. Order does not matter — it is sorted on the way in.
+   *
+   * Two points are enough to be useful (the near rating and the tip), and more is
+   * better: the reading between points is a straight line and a real chart sags below
+   * one.
+   */
+  capacityCurve: z.array(CraneCapacityPoint).max(40).optional(),
+  /**
+   * Height available between the top of a gang and the hook, m.
+   *
+   * What the slings have to fit in. A gang wide enough to need its eyes 4 m apart wants
+   * about 1.7 m of headroom at 60°, and a crane that has not got it cannot lift that
+   * gang however light it is.
+   */
+  hookHeightM: z.number().finite().positive().max(300).optional(),
+  /**
+   * Widest gang that can be handled, mm. Usually the road rather than the crane: a gang
+   * assembled off site travels on a lorry, and past about 3 m that is a permit.
+   */
+  maxGangWidthMm: z.number().finite().positive().max(30_000).optional(),
+  /**
+   * Minimum sling angle from the horizontal, degrees. Below about 45° the leg tension
+   * runs away — at 30° each leg carries the whole gang — which is why a lifting plan
+   * states a floor rather than a target.
+   */
+  minSlingAngleDeg: z.number().finite().min(15).max(89).optional(),
+})
+export type FormworkCraneSettings = z.infer<typeof FormworkCraneSettings>
+
+/**
+ * How the formwork gets to the job and off the lorry — the two costs outside every total.
+ *
+ * `cost.excludes` has named transport and craneage on every surface since the money
+ * arrived, and until the layout was ganged neither had a quantity to hang off. A delivery
+ * is priced per load and a crane per lift, and a bill of 2,400 parts is neither: it is the
+ * weight the lorries carry and the number of times the hook goes up, which are two
+ * different sweeps of two different things.
+ *
+ * The two figures here are the *job's* facts, and both are undefaulted for the rates'
+ * reason rather than the rack's. A payload is a fact about the lorry a yard actually sends
+ * — 8 t on a rigid, 24 t on an artic, less again where the site gate decides it — and a
+ * minute per pick is a fact about a crew and a crane on one site. There is no conservative
+ * figure for either: a payload set low invents lorries and one set high loses them, and a
+ * cycle time is the difference between a tower crane over the pour and a mobile tracking
+ * round a slab. So absent means the takeoff carries no transport and no craneage at all,
+ * exactly as an absent norm means it carries no hours.
+ */
+export const FormworkLogisticsSettings = z.object({
+  /**
+   * What one lorry carries, kg — the payload the loads are counted against.
+   *
+   * The bill's weight over this is the number of loads, rounded up, and the rounding is
+   * the answer rather than a detail: 8.2 t on an 8 t lorry is two loads and the second one
+   * costs what the first did.
+   */
+  lorryPayloadKg: z.number().finite().positive().max(100_000).optional(),
+  /**
+   * Minutes of hook time one pick takes — sling, lift, land, release and hook back.
+   *
+   * The whole cycle rather than the lift, because a crane is hired by the hour and the two
+   * minutes it spends in the air are the smallest part of the twenty it is booked for.
+   */
+  minutesPerPick: z.number().finite().positive().max(600).optional(),
+  /**
+   * Loads that go out and do not come back, as a fraction of the outbound ones.
+   *
+   * Absent means every load returns, which is what a returnable bill does. State it where
+   * a job's formwork is largely consumed — a job of cut ply and site-made soldiers sends
+   * lorries out and brings a fraction of them back, and counting a return leg for each one
+   * doubles a real charge.
+   */
+  returnLoadFraction: z.number().finite().min(0).max(1).optional(),
+})
+export type FormworkLogisticsSettings = z.infer<typeof FormworkLogisticsSettings>
+
+/**
  * How the concrete is cured, which is what decides when the form comes off.
  *
  * A separate group from `placement` rather than three more fields in it, because it
@@ -453,6 +585,8 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   rates: FormworkRateSettings.optional(),
   labour: FormworkLabourSettings.optional(),
   schedule: FormworkScheduleSettings.optional(),
+  crane: FormworkCraneSettings.optional(),
+  logistics: FormworkLogisticsSettings.optional(),
 }).describe(
   dedent`
   Formwork project settings - the pour every shutter in the scene is designed against. One per scene.
@@ -465,9 +599,11 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - bracing: wind, form weight and raker geometry for wall forms
   - parts: catalog ids for the panel system, sheathing, beam section and prop
   - stock.owned: how many of each catalog id the yard owns, by id; a bill draws on these before it hires. Absent means nobody has said what the project owns, and the takeoff reports no owned/hired split at all rather than putting the whole bill on hire
-  - rates: what the project pays per catalog id — list price, and hire as a percentage of it per month or as a flat monthly rate — plus the agreement's currency, minimum hire period and the all-in cost of one man-hour of the gang. Here rather than on the catalog because a price is a fact about this project's commercial terms, not about a product: the same panel is different money to two yards. Absent means no rates recorded and the takeoff carries no money at all
+  - rates: what the project pays per catalog id — list price, and hire as a percentage of it per month or as a flat monthly rate — plus the agreement's currency, minimum hire period, the all-in cost of one man-hour of the gang, the charge per delivery load and the hourly rate of a mobile crane. Here rather than on the catalog because a price is a fact about this project's commercial terms, not about a product: the same panel is different money to two yards. Absent means no rates recorded and the takeoff carries no money at all
   - labour: man-hours to erect and to strike one of each kind of part, as this project's own gang works. Stated rather than shipped because an output norm is a fact about a crew, not about a product or a code — published constants are per m² of a whole trade operation and cannot be spread over a bill of parts without charging the same work twice. Absent means the takeoff carries no hours at all; a kind left out is reported as uncovered fittings rather than costed at zero
   - schedule: calendar days (not working days — a hire is charged over a weekend) for erecting a shutter before its pour and for getting the plant back after striking. The pour dates themselves are per pour, on each formwork-assembly's pourAt. Absent means the programme reports the pour and strike days only
+  - crane: the site's own crane — its load chart as capacity against radius, the height under the hook, the widest gang that can be moved, and the minimum sling angle. A capacity curve rather than a rating because a tower crane rated 8 t lifts 2.2 t at the jib tip, and a gang is checked at the radius it is actually set at. Absent means each face is grouped as one gang and nothing is checked against a lift — there is no conservative default crane, and a shipped curve would pass gangs that do not lift and fail gangs that do
+  - logistics: what one lorry carries and how many minutes of hook time a pick takes, which is what turns a bill's weight into loads and a lifting schedule into crane hours. The two costs every total in this model has excluded since the money arrived, and both figures are facts about this job's own plant rather than about a product: a payload is the lorry the yard sends and a cycle time is this crew on this crane. Absent means the takeoff carries no transport and no craneage at all, as an absent norm means it carries no hours
   `,
 )
 export type FormworkProjectSettingsNode = z.infer<typeof FormworkProjectSettingsNode>

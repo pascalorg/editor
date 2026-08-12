@@ -1,11 +1,12 @@
 import type {
+  FaceGangs,
   FormworkSystem,
   PressureEnvelope,
   StripPack,
   TieField,
   ValidationReport,
 } from '@pascal-app/core/formwork'
-import { validateFormwork } from '@pascal-app/core/formwork'
+import { formworkSettingsFor, validateFormwork } from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import type { ProjectFormworkScope } from './solve-project'
 import { solveProjectFormwork } from './solve-project'
@@ -13,15 +14,16 @@ import { solveProjectFormwork } from './solve-project'
 /**
  * The scene, validated — with the evidence the shutters were actually built from.
  *
- * `validateFormwork` can run on nodes alone, and six of its nineteen invariants come
- * back `notChecked` when it does: an unformable strip is a property of the packed
+ * `validateFormwork` can run on nodes alone, and eight of its twenty-one invariants
+ * come back `notChecked` when it does: an unformable strip is a property of the packed
  * run, a code-envelope breach a property of the pressure solve, a tie that reaches
  * nothing a property of the catalog system, and a band beside an opening with no tie
  * in it — like a waterstop with a drilled tie hole in it — a property of where the
- * frames were drilled. The sixth is not a property of a layout at all: a set-count
- * shortage is a peak against the yard's rack, which needs the programme and the bill
- * together. None of them survive into the node graph, so a validator handed only
- * nodes cannot see them.
+ * frames were drilled. Two more are properties of a *gang*, which is a grouping of the
+ * layout the geometry produced: what one pick weighs, and how much height its slings
+ * want. The last is not a property of a layout at all: a set-count shortage is a peak
+ * against the yard's rack, which needs the programme and the bill together. None of
+ * them survive into the node graph, so a validator handed only nodes cannot see them.
  *
  * It could re-derive them. That is the option this module exists to avoid. Packing
  * the runs a second time inside the validator would produce a second layout of every
@@ -32,11 +34,13 @@ import { solveProjectFormwork } from './solve-project'
  * pack and the envelope come *out* of that build as `ShutterEvidence`.
  *
  * Which means a scope with no shutters yet is validated on its nodes alone and says
- * so. That is the honest answer rather than a degraded one: five of the six are about
- * a layout, and an element nobody has formed has no layout to fault. The shortage is
- * the exception and its silence has three unrelated causes — no pour dated, no rack
- * recorded, or a programme too partial to sweep — so it names the inputs rather than
- * a cause it cannot distinguish.
+ * so. That is the honest answer rather than a degraded one: most of them are about a
+ * layout, and an element nobody has formed has no layout to fault. Two are exceptions
+ * of two different kinds. The shortage's silence has three unrelated causes — no pour
+ * dated, no rack recorded, or a programme too partial to sweep — so it names the
+ * inputs rather than a cause it cannot distinguish. The crane's has two that *can* be
+ * told apart, and both reach the report separately: a scope nobody has formed has no
+ * gang to weigh, and a project with no load chart has nothing to weigh one against.
  */
 
 export interface ProjectValidation {
@@ -58,11 +62,13 @@ export function validateProjectFormwork(
   scope: ProjectFormworkScope = {},
 ): ProjectValidation {
   const solution = solveProjectFormwork(nodes, scope)
+  const settings = formworkSettingsFor(Object.values(nodes))
 
   const packs = new Map<AnyNodeId, readonly StripPack[]>()
   const envelopes = new Map<AnyNodeId, PressureEnvelope>()
   const systems = new Map<AnyNodeId, FormworkSystem>()
   const tieFields = new Map<AnyNodeId, readonly TieField[]>()
+  const gangs = new Map<AnyNodeId, readonly FaceGangs[]>()
   // A shortage names a catalog id and the pours that overlap on it, and a pour id is an
   // assembly id — which the validator never sees, because it reads castable elements. This
   // is the only layer that holds both, the same reason `bomHire`'s `targetsByMark` is built
@@ -96,6 +102,13 @@ export function validateProjectFormwork(
     // they are, so concatenating is not merging.
     const fields = element.shutters.flatMap((shutter) => shutter.evidence.tieFields ?? [])
     if (fields.length > 0) tieFields.set(id, fields)
+    // Every shutter's gangs, like the packs and unlike the envelope: a 9 m wall in three
+    // lifts is three sets of picks and the heavy one may be in any of them. Not deduped
+    // across lifts either — two lifts of identical panels are two separate assemblies,
+    // each lifted in on its own day, and merging them would report one pick where the
+    // crane makes two.
+    const faces = element.shutters.flatMap((shutter) => shutter.evidence.gangs ?? [])
+    if (faces.length > 0) gangs.set(id, faces)
   }
 
   return {
@@ -106,6 +119,12 @@ export function validateProjectFormwork(
       envelopes,
       systems,
       tieFields,
+      gangs,
+      // The scene's crane, read here and not per element: a load chart is a fact about the
+      // site, and the same machine lifts every gang on it. Absent where nobody recorded one,
+      // which the report says rather than checking every pick against a machine on hire
+      // somewhere else.
+      ...(settings.crane === undefined ? {} : { crane: settings.crane }),
       // The solve's own acquisition, not a second one. Absent for three unrelated reasons —
       // no pour dated, no rack recorded, or a programme too partial to sweep — and the check
       // reports itself unavailable for all three rather than reading a scene as stocked.

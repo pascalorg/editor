@@ -14,6 +14,28 @@ export {
 } from './clamp-schedule'
 export { type FaceLayout, type FaceLayoutOptions, layOutFace } from './courses'
 export {
+  DEFAULT_SLING_ANGLE_DEG,
+  type FaceGangs,
+  formworkGangCaveats,
+  type Gang,
+  type GangBound,
+  type GangOptions,
+  type GangPiece,
+  type GangWarning,
+  type GangWarningKind,
+  gangFace,
+  gangPickWeightKg,
+  IDEAL_PICK_FRACTION,
+  type LiftingPoint,
+} from './gangs'
+export {
+  type CraneRelayout,
+  formworkRelayoutCaveats,
+  type RelayoutAttempt,
+  type RelayoutRejection,
+  relayoutForCrane,
+} from './relayout'
+export {
   type Course,
   courseJointsMm,
   DEFAULT_KICKER_MM,

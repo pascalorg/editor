@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, WallNode } from '@pascal-app/core'
+import type { AnyNode, SlabNode, WallNode } from '@pascal-app/core'
 import type { FormworkAssemblyNode } from './schema'
 import { solveProjectFormwork } from './solve-project'
 import { takeoffCsv } from './takeoff'
@@ -53,7 +53,35 @@ function makeAssembly(id: string, hostId: string, liftIndex = 0): FormworkAssemb
   } as unknown as FormworkAssemblyNode
 }
 
-function sceneOf(...members: Array<WallNode | FormworkAssemblyNode>): Record<string, AnyNode> {
+/** A decked slab, which has no gang at all — the formwork is joists, not a run of panels. */
+function makeSlab(id: string): SlabNode {
+  return {
+    object: 'node',
+    id,
+    type: 'slab',
+    parentId: 'level_1',
+    visible: true,
+    metadata: {},
+    children: [],
+    polygon: [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ],
+    holes: [],
+    holeMetadata: [],
+    elevation: 3,
+    thickness: 0.2,
+    recessed: false,
+    autoFromWalls: false,
+    formworkType: 'plywood',
+  } as unknown as SlabNode
+}
+
+function sceneOf(
+  ...members: Array<WallNode | SlabNode | FormworkAssemblyNode>
+): Record<string, AnyNode> {
   const hosts = members.filter((node) => node.type !== 'formwork-assembly')
   const nodes: Record<string, AnyNode> = {
     level_1: {
@@ -350,5 +378,95 @@ describe('takeoffCsv', () => {
     )
 
     expect(takeoffCsv(solution, 'Project').text).not.toContain('TO ACQUIRE')
+  })
+
+  test('the lifting schedule reaches the file, above the total it must not be read as', () => {
+    // The join the panel cannot cover, and the worst one to leave out: the file is what
+    // gets emailed, and a crane sized off the TOTAL row at its foot is several times the
+    // crane the job needs.
+    const solution = solveProjectFormwork(
+      sceneOf(
+        makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+        makeAssembly('formwork-assembly_1', 'wall_1'),
+      ),
+    )
+
+    const rows = takeoffCsv(solution, 'Project').text.split('\n')
+    const banner = rows.find((row) => row.startsWith('LIFTING SCHEDULE,')) as string
+
+    expect(banner).toContain('Not the TOTAL kg at the foot of this file')
+    expect(rows).toContain(
+      `Heaviest pick kg — the crane is sized on this,${solution.lifts?.heaviestPickKg}`,
+    )
+    expect(rows.some((row) => row.startsWith('wall_1,1,1,'))).toBe(true)
+    // Above the bill's own header, so the two figures are never read off one line.
+    expect(rows.findIndex((row) => row.startsWith('LIFTING SCHEDULE,'))).toBeLessThan(
+      rows.findIndex((row) => row.startsWith('Mark count,')),
+    )
+    // And the caveats travel with it, in the same words the panel uses.
+    expect(rows.some((row) => row.startsWith('INCOMPLETE,') && row.includes('Walers, ties'))).toBe(
+      true,
+    )
+  })
+
+  test('the deliveries and the hook time reach the file, outside the cost total', () => {
+    // The two figures a hire desk cannot infer from the bill: how many lorries this
+    // tonnage fills and how long the crane is on it. Both below the money, and both
+    // named as outside it, because a reader adding the columns would double the job.
+    const scene = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1'),
+    )
+    const panel = solveProjectFormwork(scene).bom.find((row) => row.kind === 'panel')
+    const solution = solveProjectFormwork(
+      withSettings(scene, {
+        logistics: { lorryPayloadKg: 3000, minutesPerPick: 30 },
+        rates: {
+          currency: 'GBP',
+          transportPerLoad: 400,
+          cranePerHour: 120,
+          byCatalogId: { [panel?.catalogId as string]: { rentalPerUnitPerMonth: 30 } },
+        },
+      }),
+    )
+
+    const rows = takeoffCsv(solution, 'Project').text.split('\n')
+
+    expect(rows.some((row) => row.startsWith('LOGISTICS,'))).toBe(true)
+    expect(rows).toContain('Lorry payload kg,3000')
+    expect(rows).toContain(`Loads — fewest trips, out and back,${solution.logistics?.totalLoads}`)
+    expect(rows).toContain(`Picks the hook makes,${solution.logistics?.pickCount}`)
+    // A floor rather than a flat total, because a steel panel's fittings carry no published
+    // weight — and the row says which of the two it is either way.
+    const total = rows.find((row) => row.startsWith('TOTAL LOGISTICS')) as string
+    expect(total).toContain('not in the cost total above')
+    expect(total).toContain(`,${solution.logistics?.totalCost}`)
+    // The cost basis names the block rather than calling the pair missing, and the money
+    // itself is still formwork held only.
+    const basis = rows.find((row) => row.startsWith('Cost basis,')) as string
+    expect(basis).toContain('LOGISTICS block')
+    expect(basis).not.toContain('transport')
+  })
+
+  test('a file taken with no payload recorded carries no logistics block', () => {
+    const solution = solveProjectFormwork(
+      sceneOf(
+        makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+        makeAssembly('formwork-assembly_1', 'wall_1'),
+      ),
+    )
+
+    expect(takeoffCsv(solution, 'Project').text).not.toContain('LOGISTICS')
+  })
+
+  test('a file taken where nothing is ganged carries no schedule to misread', () => {
+    // A slab is decked off joists rather than panelled from a run, so there is no
+    // assembly to crane in and no pick to schedule.
+    const solution = solveProjectFormwork(
+      sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1')),
+    )
+
+    expect(solution.lifts).toBeUndefined()
+    expect(takeoffCsv(solution, 'Project').text).not.toContain('LIFTING SCHEDULE')
   })
 })

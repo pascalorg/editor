@@ -7,13 +7,17 @@ import {
   bomHire,
   bomLabour,
   bomSupply,
+  DOKA_FRAMAX_XLIFE,
   type FormworkSetCount,
   formworkAcquisition,
   formworkCommitments,
+  formworkLifts,
   formworkResequence,
   formworkSchedule,
   formworkSequence,
   formworkSetCount,
+  gangFace,
+  layOutFace,
   type RateTable,
   type StrikeTarget,
   strikingTime,
@@ -432,7 +436,68 @@ describe('bomCsv', () => {
       const csv = bomCsv(lines, { subject: 'Project', cost: priced(lines) })
 
       const basis = rows(csv).find((row) => row.startsWith('Cost basis,')) as string
-      expect(basis).toContain('No labour, transport or finance')
+      expect(basis).toContain('No labour, transport, craneage or finance')
+    })
+
+    test('names the block a cost is in rather than saying it is missing', () => {
+      // The row this one exists to catch: a fixed sentence naming all four exclusions
+      // tells a reader with a LOGISTICS block below that transport is missing from a
+      // file that prices it.
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        cost: priced(lines),
+        logistics: {
+          currency: 'GBP',
+          outboundLoads: 1,
+          returnLoads: 1,
+          totalLoads: 2,
+          weighedKg: 100,
+          payloadKg: 8000,
+          transportCost: 800,
+          pickCount: 3,
+          craneHours: 1.5,
+          craneCost: 180,
+          totalCost: 980,
+          complete: true,
+          gaps: [],
+        },
+      })
+
+      const basis = rows(csv).find((row) => row.startsWith('Cost basis,')) as string
+      expect(basis).toContain('No labour or finance')
+      expect(basis).toContain('LOGISTICS block')
+      expect(basis).not.toContain('No labour, transport')
+      // The loads and the tonnage they came off, so the division is checkable, and the
+      // total labelled as outside the cost total above it.
+      const loads = rows(csv).find((row) => row.startsWith('Loads —')) as string
+      expect(loads).toBe('Loads — fewest trips, out and back,2')
+      expect(csv).toContain('Weight the loads were counted from kg,100')
+      expect(csv).toContain('TOTAL LOGISTICS — not in the cost total above,980')
+      expect(csv).toContain('Hook time h — this formwork alone,1.5')
+    })
+
+    test('says why a logistics figure is a floor rather than emptying the block', () => {
+      const lines = [line({ quantity: 4 })]
+      const csv = bomCsv(lines, {
+        subject: 'Project',
+        logistics: {
+          outboundLoads: 2,
+          returnLoads: 2,
+          totalLoads: 4,
+          weighedKg: 9000,
+          payloadKg: 8000,
+          complete: false,
+          gaps: ['weight-incomplete', 'no-transport-rate', 'nothing-ganged'],
+        },
+      })
+
+      expect(csv).toContain('Loads out,2')
+      // No hook time at all rather than a zero, and each gap said in words.
+      expect(csv).not.toContain('Hook time')
+      const unpriced = rows(csv).filter((row) => row.startsWith('UNPRICED,'))
+      expect(unpriced).toHaveLength(3)
+      expect(unpriced.join(' ')).toContain('struck panel by panel')
     })
 
     test('prices the line and totals the three costs in the same columns', () => {
@@ -1298,6 +1363,145 @@ describe('bomCsv', () => {
       // Not an empty table: a heading with no rows under it reads as a booking that came
       // out empty, and that is a different claim from nobody having agreed anything.
       expect(rows(booked({})).some((row) => row.startsWith('COMMITTED,'))).toBe(false)
+    })
+  })
+
+  describe('what the hook lifts at a time', () => {
+    /**
+     * Real gangs off a real face, because the claim this block makes is comparative: the
+     * heaviest pick is a fraction of the TOTAL row at the foot of the same file, and a
+     * hand-built pick could satisfy every assertion here while disagreeing with the gang
+     * division a rigger is reading off the drawing.
+     */
+    const ganged = (runMm: number, opts: Parameters<typeof gangFace>[1] = {}) =>
+      gangFace(
+        layOutFace(DOKA_FRAMAX_XLIFE, { runMm, liftHeightMm: 2600, kickerMm: 100 }).courses,
+        opts,
+      )
+
+    const schedule = (crane?: Parameters<typeof formworkLifts>[1]) =>
+      bomCsv([line({ quantity: 3, totalWeightKg: 1248 })], {
+        subject: 'Project',
+        lifts: formworkLifts(
+          [{ elementId: 'wall_1', faces: [ganged(8100, { maxWidthMm: 4000 })] }],
+          crane,
+        ) as never,
+      })
+
+    test('says in words that it is not the total at the foot of the file', () => {
+      // The one confusion this block is built to prevent: 416 kg is the crane and 1248 kg is
+      // the lorry, and a reader who differences them or sizes on the second is wrong twice.
+      const all = rows(schedule({ capacityCurve: [{ radiusM: 30, capacityKg: 5000 }] }))
+      const banner = all.find((row) => row.startsWith('LIFTING SCHEDULE,')) as string
+
+      expect(banner).toContain('One row per pick')
+      expect(banner).toContain('Not the TOTAL kg at the foot of this file')
+      expect(banner).toContain('never summed')
+      expect(all).toContain('Picks,3')
+      expect(all).toContain('Heaviest pick kg — the crane is sized on this,416')
+      // And the figure it must not be read against is in the same file, ten times larger.
+      expect(all.some((row) => row.includes(',TOTAL,') && row.includes('1248'))).toBe(true)
+    })
+
+    test('prints one row per pick, heaviest first, with the verdict in words', () => {
+      const all = rows(schedule({ capacityCurve: [{ radiusM: 30, capacityKg: 5000 }] }))
+      const header = all.find((row) => row.startsWith('Element,Face,Gang,')) as string
+
+      expect(header).toBe(
+        'Element,Face,Gang,Width mm,Height mm,Panels,Pick kg,Lifts inside m,Slings want mm,Verdict',
+      )
+      expect(all).toContain('wall_1,1,1,2700,2700,1,416,,1370,lifts anywhere the jib reaches')
+      expect(all.filter((row) => row.startsWith('wall_1,1,'))).toHaveLength(3)
+    })
+
+    test('a pick that only lifts nearer the mast carries the radius, not a fail', () => {
+      // A reader who takes this for a fail re-lays a face that lifts perfectly well twenty
+      // metres in, so the cell has to say what it is as well as what it is not.
+      const all = rows(
+        schedule({
+          capacityCurve: [
+            { radiusM: 14, capacityKg: 1000 },
+            { radiusM: 30, capacityKg: 400 },
+          ],
+        }),
+      )
+      const pick = all.find((row) => row.startsWith('wall_1,1,1,')) as string
+
+      expect(pick).toContain(',416,14,1370,')
+      expect(pick).toContain('lifts nearer the mast')
+      expect(pick).toContain('the crane’s position decides it')
+      expect(all).toContain('Chart,"400 kg at 30 m out, 1000 kg near the mast"')
+    })
+
+    test('a pick over the chart everywhere says no radius takes it', () => {
+      const all = rows(
+        schedule({
+          capacityCurve: [
+            { radiusM: 14, capacityKg: 400 },
+            { radiusM: 30, capacityKg: 200 },
+          ],
+        }),
+      )
+      const pick = all.find((row) => row.startsWith('wall_1,1,1,')) as string
+
+      // Blank radius rather than the nearest row: no position on that jib is a lift.
+      expect(pick).toContain(',416,,1370,')
+      expect(pick).toContain('no radius on this jib lifts it')
+    })
+
+    test('with no chart every verdict says why it is blank, and the file refuses once', () => {
+      const all = rows(schedule(undefined))
+
+      expect(all.some((row) => row.startsWith('NO LOAD CHART,'))).toBe(true)
+      expect(all.find((row) => row.startsWith('NO LOAD CHART,'))).toContain(
+        'set_formwork_settings crane',
+      )
+      expect(all.some((row) => row.startsWith('Chart,'))).toBe(false)
+      expect(all.find((row) => row.startsWith('wall_1,1,1,'))).toContain(
+        'not checked — no load chart',
+      )
+    })
+
+    test('an unweighed pick leaves the cell blank and the file says the schedule is short', () => {
+      // A 0 there sums into a figure somebody books a crane against, which is the same trap
+      // the weight column at the foot of the file guards.
+      const csv = bomCsv([line()], {
+        subject: 'Project',
+        lifts: formworkLifts([{ elementId: 'wall_1', faces: [ganged(4225)] }]) as never,
+      })
+      const all = rows(csv)
+
+      expect(all.find((row) => row.startsWith('wall_1,1,1,'))).toContain(',2,,,')
+      expect(all.some((row) => row.startsWith('Heaviest pick kg'))).toBe(false)
+      expect(all.find((row) => row.startsWith('INCOMPLETE,'))).toContain(
+        '1 of 1 picks have no weight',
+      )
+    })
+
+    test('a gang wanting more height than the crane has says so beside its verdict', () => {
+      // A third failure and not a heavier version of the weight: this pick lifts, and the
+      // remedy is a lifting beam.
+      const csv = bomCsv([line()], {
+        subject: 'Project',
+        lifts: formworkLifts([{ elementId: 'wall_1', faces: [ganged(8100)] }], {
+          capacityCurve: [{ radiusM: 30, capacityKg: 5000 }],
+          hookHeightM: 3,
+        }) as never,
+      })
+      const pick = rows(csv).find((row) => row.startsWith('wall_1,1,1,')) as string
+
+      expect(pick).toContain('lifts anywhere the jib reaches')
+      expect(pick).toContain('wants more height under the hook than the crane has')
+      expect(rows(csv)).toContain('Height under the hook mm,3000')
+    })
+
+    test('an export with nothing ganged carries no block at all', () => {
+      // Not an empty table: a lifting schedule of no picks reads as a crane with nothing to
+      // do, and a conventional shutter struck panel by panel is a real way to build.
+      const all = rows(bomCsv([line()], { subject: 'Project' }))
+
+      expect(all.some((row) => row.startsWith('LIFTING SCHEDULE,'))).toBe(false)
+      expect(all.some((row) => row.startsWith('Picks,'))).toBe(false)
     })
   })
 })

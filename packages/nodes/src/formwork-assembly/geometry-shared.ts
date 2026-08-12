@@ -4,11 +4,13 @@ import {
   collectCastableElements,
   cornerLegExtent,
   cornerLegLength,
+  craneGangOptions,
   DEFAULT_COLUMN_KICKER_MM,
   DEFAULT_FORMWORK_SYSTEM_ID,
   DEFAULT_INSIDE_CORNER_LEG_M,
   DEFAULT_KICKER_MM,
   type ElementCorner,
+  type FaceGangs,
   type FaceRole,
   type FormworkFace,
   type FormworkSettings,
@@ -19,6 +21,7 @@ import {
   fitCorner,
   formworkSettings,
   formworkSystem,
+  gangFace,
   hardCutsForElement,
   layOutFace,
   type PourUnit,
@@ -28,7 +31,7 @@ import {
   tieHoles,
 } from '@pascal-app/core/formwork'
 import type { GeometryContext } from '@pascal-app/core/registry'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import type { AnyNode, AnyNodeId, FormworkCraneSettings } from '@pascal-app/core/schema'
 import { MeshStandardMaterial } from 'three'
 import type { CastableHostNode } from './attach'
 import type { FormworkAssemblyNode } from './schema'
@@ -281,6 +284,16 @@ export interface FacePlan {
    * where there is no catalog pack to report.
    */
   packs: StripPack[]
+  /**
+   * What gets craned as one piece, one entry per face run.
+   *
+   * Off the same layout the pieces are drawn from, which is the only reason it is here
+   * rather than derived by whoever needs it: a gang boundary is a joint in every course,
+   * so a second grouping of a second layout would put the hook over a panel this plan
+   * draws whole. Empty on a conventional plan — a carpenter's shutter is struck panel by
+   * panel and there is no assembly to lift.
+   */
+  gangs: FaceGangs[]
 }
 
 /**
@@ -312,6 +325,7 @@ function conventionalPlan(
     courses: [{ baseM: lift.baseM + lift.kickerM, topM: lift.baseM + lift.heightM, pieces }],
     holes: [],
     packs: [],
+    gangs: [],
   }
 }
 
@@ -329,12 +343,22 @@ function conventionalPlan(
  * `panelWidth` on the node caps the width rather than setting it — the layout picks
  * from what the manufacturer sells, and the cap is how a job says "hand-set only,
  * nothing the crane has to lift".
+ *
+ * The crane groups the result into gangs rather than changing it. Grouping against the
+ * chart's worst capacity is the free half of the answer: a face whose one pick is too
+ * heavy usually holds a joint every course shares, and breaking there costs nothing but
+ * a second lift. The other half — re-laying the face in narrower panels, which
+ * `relayoutForCrane` does — changes what is drawn and how many panels are bought, and is
+ * a decision to put in front of somebody rather than one to make silently while they
+ * drag a wall. So what does not lift comes back as an over-limit gang and the validator
+ * says so.
  */
 export function planFace(
   runs: readonly FaceRun[],
   node: FormworkAssemblyNode,
   system: FormworkSystem | undefined,
   lift: { baseM: number; heightM: number; kickerM: number },
+  crane?: FormworkCraneSettings,
 ): FacePlan | undefined {
   if (runs.length === 0) return undefined
   const layouts = system
@@ -393,10 +417,15 @@ export function planFace(
   // The base course's pack per run, not every course's: the stations are shared up
   // the wall by rule 3, so the courses above are the same division at another
   // height and reporting each of them would multiply one open strip by the stack.
+  //
+  // Every course for the gangs, though, and that is not an inconsistency: a gang is
+  // the whole stack between two stations, so a grouping off the base course alone
+  // would weigh one course of a two-course pick and hang the crane off half a figure.
   return {
     courses,
     holes,
     packs: layouts.flatMap((layout) => (layout.courses[0] ? [layout.courses[0].pack] : [])),
+    gangs: layouts.map((layout) => gangFace(layout.courses, craneGangOptions(crane))),
   }
 }
 

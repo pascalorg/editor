@@ -343,6 +343,163 @@ describe('applyFormworkSettingsPatch — what the project pays', () => {
   })
 })
 
+describe('applyFormworkSettingsPatch — the site’s crane', () => {
+  const CURVE = [
+    { radiusM: 14, capacityKg: 8000 },
+    { radiusM: 40, capacityKg: 2200 },
+  ]
+
+  test('a capacity that rises with radius is refused, because it passes every gang', () => {
+    // The error worth refusing hardest: the pairs are plausible on their own, store
+    // fine, and report every gang on the job as liftable — so it reads as a check that
+    // ran. A chart with the columns fully swapped is caught a layer earlier, by the
+    // schema's own bounds: no crane has a 2200 m radius.
+    const result = apply(undefined, {
+      crane: {
+        capacityCurve: [
+          { radiusM: 14, capacityKg: 2200 },
+          { radiusM: 40, capacityKg: 8000 },
+        ],
+      },
+    })
+
+    expect(result.error).toContain('the wrong way round')
+    expect(result.writes).toBeUndefined()
+    expect(
+      FormworkSettingsPatch.safeParse({
+        crane: { capacityCurve: [{ radiusM: 2200, capacityKg: 40 }] },
+      }).success,
+    ).toBe(false)
+  })
+
+  test('two capacities at one radius are refused, since there is no rule for which wins', () => {
+    const result = apply(undefined, {
+      crane: {
+        capacityCurve: [
+          { radiusM: 20, capacityKg: 5600 },
+          { radiusM: 20, capacityKg: 4000 },
+        ],
+      },
+    })
+
+    expect(result.error).toContain('two capacities')
+    expect(result.writes).toBeUndefined()
+  })
+
+  test('an empty curve is refused rather than stored as a crane that lifts nothing', () => {
+    const result = apply(undefined, { crane: { capacityCurve: [] } })
+
+    expect(result.error).toContain('pass null to remove')
+    expect(result.writes).toBeUndefined()
+  })
+
+  test('a flat outer section is accepted, because real charts have one', () => {
+    const result = apply(undefined, {
+      crane: {
+        capacityCurve: [
+          { radiusM: 14, capacityKg: 8000 },
+          { radiusM: 35, capacityKg: 2200 },
+          { radiusM: 40, capacityKg: 2200 },
+        ],
+      },
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.changed).toEqual(['crane'])
+  })
+
+  test('a second call replaces the chart rather than merging point by point', () => {
+    // Against the merge rule every other table here follows, deliberately: half of a
+    // 40 m jib's chart merged with half of a 55 m one is a machine that does not exist.
+    const result = apply(node({ crane: { capacityCurve: CURVE, hookHeightM: 40 } }), {
+      crane: { capacityCurve: [{ radiusM: 55, capacityKg: 1600 }] },
+    })
+
+    expect(result.writes?.crane?.capacityCurve).toEqual([{ radiusM: 55, capacityKg: 1600 }])
+    expect(result.writes?.crane?.hookHeightM).toBe(40)
+  })
+
+  test('null against the chart removes it without removing the rest of the crane', () => {
+    const result = apply(node({ crane: { capacityCurve: CURVE, maxGangWidthMm: 3000 } }), {
+      crane: { capacityCurve: null },
+    })
+
+    expect(result.writes?.crane).toEqual({ maxGangWidthMm: 3000 })
+  })
+
+  test('a road width on its own is a real call — the lorry is a limit without a chart', () => {
+    const result = apply(undefined, { crane: { maxGangWidthMm: 3000 } })
+
+    expect(result.error).toBeUndefined()
+    expect(result.writes?.crane).toEqual({ maxGangWidthMm: 3000 })
+  })
+
+  test('a sling angle outside the workable band is refused by the schema', () => {
+    expect(FormworkSettingsPatch.safeParse({ crane: { minSlingAngleDeg: 5 } }).success).toBe(false)
+    expect(FormworkSettingsPatch.safeParse({ crane: { minSlingAngleDeg: 60 } }).success).toBe(true)
+  })
+})
+
+describe('applyFormworkSettingsPatch — the deliveries and the crane hours', () => {
+  test('the quantities merge into logistics and the money into rates', () => {
+    // Two groups in one call, because that is how a user states it: "8 t lorries at £400 a
+    // load". The split is the single-currency rule — one place says what money this is.
+    const result = apply(undefined, {
+      logistics: { lorryPayloadKg: 8000, minutesPerPick: 25 },
+      rates: { currency: 'GBP', transportPerLoad: 400, cranePerHour: 120 },
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.writes?.logistics).toEqual({ lorryPayloadKg: 8000, minutesPerPick: 25 })
+    expect(result.writes?.rates?.transportPerLoad).toBe(400)
+    expect(result.writes?.rates?.cranePerHour).toBe(120)
+    expect(result.changed).toContain('logistics')
+  })
+
+  test('a cycle time arriving later does not delete the payload stated before it', () => {
+    const result = apply(node({ logistics: { lorryPayloadKg: 8000 } }), {
+      logistics: { minutesPerPick: 25 },
+    })
+
+    expect(result.writes?.logistics).toEqual({ lorryPayloadKg: 8000, minutesPerPick: 25 })
+  })
+
+  test('null unstates one figure and leaves the other where it is', () => {
+    // The third state doing its work on the half of this that is money: a crane hire
+    // that ends does not retract the haulier's quote.
+    const result = apply(
+      node({
+        logistics: { lorryPayloadKg: 8000, minutesPerPick: 25 },
+        rates: { transportPerLoad: 400, cranePerHour: 120 },
+      }),
+      { logistics: { minutesPerPick: null }, rates: { cranePerHour: null } },
+    )
+
+    expect(result.writes?.logistics).toEqual({ lorryPayloadKg: 8000 })
+    expect(result.writes?.rates?.transportPerLoad).toBe(400)
+    expect(result.writes?.rates?.cranePerHour).toBeUndefined()
+  })
+
+  test('a return fraction over one is refused — more lorries come back than went out', () => {
+    expect(
+      FormworkSettingsPatch.safeParse({ logistics: { returnLoadFraction: 1.4 } }).success,
+    ).toBe(false)
+    expect(FormworkSettingsPatch.safeParse({ logistics: { returnLoadFraction: 0 } }).success).toBe(
+      true,
+    )
+  })
+
+  test('a lorry that carries a hundred tonnes is refused by the schema', () => {
+    expect(
+      FormworkSettingsPatch.safeParse({ logistics: { lorryPayloadKg: 200_000 } }).success,
+    ).toBe(false)
+    // Ten hours for one pick is not a cycle time either.
+    expect(FormworkSettingsPatch.safeParse({ logistics: { minutesPerPick: 900 } }).success).toBe(
+      false,
+    )
+  })
+})
+
 describe('formworkSettingsReport', () => {
   test('reports the assumed defaults as assumed on an untouched project', () => {
     const report = formworkSettingsReport(undefined)
@@ -387,6 +544,44 @@ describe('formworkSettingsReport', () => {
     const report = formworkSettingsReport(node({ rates: { currency: 'GBP' } }))
 
     expect(report.resolved.rates).toEqual({ currency: 'GBP', byCatalogId: {} })
+  })
+
+  test('an unrecorded crane reads as null, which means no gang was checked against a lift', () => {
+    const report = formworkSettingsReport(node({ placement: { riseRateMH: 2 } }))
+
+    expect(report.resolved.crane).toBeNull()
+    expect(report.stated?.crane).toBeNull()
+  })
+
+  test('a recorded crane is reported as stated, chart and all', () => {
+    const crane = { capacityCurve: [{ radiusM: 40, capacityKg: 2200 }], hookHeightM: 44 }
+    const report = formworkSettingsReport(node({ crane }))
+
+    expect(report.resolved.crane).toEqual(crane)
+    expect(report.stated?.crane).toEqual(crane)
+  })
+
+  test('an unrecorded payload reads as null, which is a takeoff with no transport in it', () => {
+    const report = formworkSettingsReport(node({ placement: { riseRateMH: 2 } }))
+
+    expect(report.resolved.logistics).toBeNull()
+    expect(report.stated?.logistics).toBeNull()
+  })
+
+  test('the quantities and the money for them are reported in the two groups they live in', () => {
+    // The split this group exists on: a payload and a cycle time are quantities, and
+    // their prices are money, so the currency is stated once beside every other rate.
+    const report = formworkSettingsReport(
+      node({
+        logistics: { lorryPayloadKg: 24_000, minutesPerPick: 20 },
+        rates: { currency: 'GBP', transportPerLoad: 400, cranePerHour: 120 },
+      }),
+    )
+
+    expect(report.resolved.logistics).toEqual({ lorryPayloadKg: 24_000, minutesPerPick: 20 })
+    expect(report.resolved.rates?.transportPerLoad).toBe(400)
+    expect(report.resolved.rates?.cranePerHour).toBe(120)
+    expect(report.resolved.rates?.currency).toBe('GBP')
   })
 
   test('curing is reported unstated rather than resolved to a default', () => {

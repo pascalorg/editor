@@ -6,7 +6,9 @@ import { WallNode } from '../../../schema/nodes/wall'
 import { WindowNode } from '../../../schema/nodes/window'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
 import type { AcquireLine, FormworkAcquisition } from '../acquire'
-import { formworkSystem } from '../catalog'
+import { DOKA_FRAMAX_XLIFE, formworkSystem } from '../catalog'
+import { layOutFace } from '../layout/courses'
+import { type FaceGangs, gangFace } from '../layout/gangs'
 import { packStrip } from '../layout/strip-pack'
 import { pressureEnvelope } from '../pressure'
 import { DEFAULT_FORMWORK_SETTINGS } from '../settings'
@@ -1274,6 +1276,229 @@ describe('set count shortage', () => {
       }),
     )
     expect(summary.some((entry) => entry.includes('80 more have to be on site'))).toBe(true)
+  })
+})
+
+describe('a gang against the crane', () => {
+  /**
+   * The inputs, both real. `gangs.test.ts` owns the grouping and `crane.test.ts` the chart,
+   * so nothing here re-derives either — what is left to get wrong is the *verdict*: which
+   * figure on the chart a pick is compared against, and whether a gang nothing can weigh
+   * comes back as passed.
+   */
+  const faceOf = (runMm: number, liftHeightMm = 2700, capKg?: number): FaceGangs =>
+    gangFace(
+      layOutFace(DOKA_FRAMAX_XLIFE, { runMm, liftHeightMm }).courses,
+      capKg === undefined ? {} : { maxPickWeightKg: capKg },
+    )
+
+  /** A 40 m jib rated 8 t at the mast and 2.2 t at the tip. */
+  const CURVE = [
+    { radiusM: 14, capacityKg: 8000 },
+    { radiusM: 20, capacityKg: 5600 },
+    { radiusM: 30, capacityKg: 3400 },
+    { radiusM: 40, capacityKg: 2200 },
+  ]
+
+  it('is not checked at all until both the gangs and a chart exist', () => {
+    // Two separate silences, and unlike the shortage's three they can be told apart — so
+    // the report names the one that is actually missing rather than listing both inputs.
+    const noCrane = validateFormwork([wall()] as AnyNode[], {
+      gangs: new Map([['wall_x' as AnyNodeId, [faceOf(2700)]]]),
+    })
+    expect(
+      noCrane.notChecked.find((e) => e.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')?.needs,
+    ).toContain('capacityCurve')
+
+    const noGangs = validateFormwork([wall()] as AnyNode[], { crane: { capacityCurve: CURVE } })
+    expect(
+      noGangs.notChecked.find((e) => e.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')?.needs,
+    ).toContain('pass `gangs`')
+  })
+
+  it('a recorded crane with an empty chart is no crane', () => {
+    // The group can exist with every field absent — somebody recorded a hook height and
+    // nothing else. Reading its presence as the input would report a scope as checked
+    // against a machine with no capacity anywhere on it.
+    const w = wall()
+    const report = validateFormwork([w] as AnyNode[], {
+      crane: { hookHeightM: 40 },
+      gangs: new Map([[w.id as AnyNodeId, [faceOf(2700)]]]),
+    })
+    expect(report.notChecked.some((e) => e.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')).toBe(
+      true,
+    )
+    expect(report.findings.some((f) => f.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')).toBe(
+      false,
+    )
+  })
+
+  it('says nothing about a pick the whole chart takes', () => {
+    // A single 2.7 m Framax panel is a 416 kg pick and the tip of this jib takes 2.2 t.
+    const w = wall()
+    const report = validateFormwork([w] as AnyNode[], {
+      crane: { capacityCurve: CURVE },
+      gangs: new Map([[w.id as AnyNodeId, [faceOf(2700)]]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')).toBe(
+      false,
+    )
+    expect(report.notChecked.some((e) => e.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')).toBe(
+      false,
+    )
+  })
+
+  it('warns about a pick the tip will not take but the mast will, and names the radius', () => {
+    // 8.1 m × 5.4 m as one gang is 2496 kg: over the 2200 kg at 40 m, inside the 3400 kg
+    // at 30. That is a position to set it from rather than a face to re-lay, which is why
+    // it is a warning and why the radius is in the message.
+    const w = wall()
+    const report = validateFormwork([w] as AnyNode[], {
+      crane: { capacityCurve: CURVE },
+      gangs: new Map([[w.id as AnyNodeId, [faceOf(8100, 5400)]]]),
+    })
+
+    const found = report.findings.find((f) => f.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')
+    expect(found?.severity).toBe('warning')
+    expect(found?.message).toContain('2496 kg')
+    expect(found?.message).toContain('set inside 30 m')
+    // The published row inside the crossing, not the interpolated crossing itself: the
+    // line between two rows sits above the sagging curve, so the crossing is optimistic.
+    // Matched with the unit on it — a bare "33" also appears in a generated element id.
+    expect(found?.message).not.toContain('33 m')
+    expect(found?.elementIds).toEqual([w.id as AnyNodeId])
+  })
+
+  it('errors on a pick no radius on the jib lifts', () => {
+    const w = wall()
+    const report = validateFormwork([w] as AnyNode[], {
+      crane: { capacityCurve: [{ radiusM: 30, capacityKg: 1000 }] },
+      gangs: new Map([[w.id as AnyNodeId, [faceOf(8100, 5400)]]]),
+    })
+
+    const found = report.findings.find((f) => f.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')
+    expect(found?.severity).toBe('error')
+    expect(found?.message).toContain('tops out at 1000 kg')
+    expect(found?.message).toContain('no radius on the jib')
+  })
+
+  it('says the printed pick is lighter than the hook feels, in both severities', () => {
+    // Walers, ties and the platform travel with a ganged face and are not in the figure.
+    // A reader who takes the pick weight as the load on the hook is reading it low, and
+    // that has to be in the finding rather than only in the caveats.
+    const w = wall()
+    const messages = (curve: Array<{ radiusM: number; capacityKg: number }>) =>
+      validateFormwork([w] as AnyNode[], {
+        crane: { capacityCurve: curve },
+        gangs: new Map([[w.id as AnyNodeId, [faceOf(8100, 5400)]]]),
+      })
+        .findings.filter((f) => f.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')
+        .map((f) => f.message)
+
+    expect(messages(CURVE)[0]).toContain('panels and make-up pieces only')
+    expect(messages([{ radiusM: 30, capacityKg: 1000 }])[0]).toContain(
+      'panels and make-up pieces only',
+    )
+  })
+
+  it('says nothing about a gang it cannot weigh, rather than inventing a figure', () => {
+    // 410 mm of Framax is a board cut on site, which has no catalog weight — so the gang
+    // has no pick weight, and a gang with no weight is over no limit. Failing it against
+    // a guessed figure would be the one thing worse than the silence.
+    const w = wall()
+    const face = faceOf(410)
+    expect(face.totalWeightKg).toBeUndefined()
+
+    const report = validateFormwork([w] as AnyNode[], {
+      crane: { capacityCurve: [{ radiusM: 30, capacityKg: 5 }] },
+      gangs: new Map([[w.id as AnyNodeId, [face]]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')).toBe(
+      false,
+    )
+  })
+
+  it('faults every gang of every face, and locates each one', () => {
+    // Three faces on one element is an ordinary 9 m wall in three lifts, and the heavy
+    // pick can be in any of them. A check that took the first would pass the two above it.
+    const w = wall()
+    const report = validateFormwork([w] as AnyNode[], {
+      crane: { capacityCurve: [{ radiusM: 30, capacityKg: 300 }] },
+      gangs: new Map([[w.id as AnyNodeId, [faceOf(5400, 2700, 300), faceOf(2700)]]]),
+    })
+
+    const found = report.findings.filter((f) => f.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')
+    expect(found).toHaveLength(3)
+    expect(found.map((f) => f.locus?.alongM).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([
+      0, 0, 2.7,
+    ])
+    expect(found.some((f) => f.message.includes('face 2 gang 1'))).toBe(true)
+  })
+
+  it('drops an element outside the scope rather than reporting it', () => {
+    const inScope = wall({ start: [0, 0], end: [5, 0] })
+    const elsewhere = wall({ start: [0, 10], end: [5, 10] })
+    const report = validateFormwork([inScope, elsewhere] as AnyNode[], {
+      elementIds: [inScope.id as AnyNodeId],
+      crane: { capacityCurve: [{ radiusM: 30, capacityKg: 100 }] },
+      gangs: new Map([[elsewhere.id as AnyNodeId, [faceOf(2700)]]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')).toBe(
+      false,
+    )
+  })
+
+  it('checks the headroom the slings need, which is not a lighter version of the weight', () => {
+    // The 8.1 m gang's eyes are 4.744 m apart, so at 60° the hook sits 4.1 m over the top
+    // of it. A crane with 2 m under the hook does not lift that gang however light it is.
+    const w = wall()
+    const report = validateFormwork([w] as AnyNode[], {
+      crane: { capacityCurve: CURVE, hookHeightM: 2 },
+      gangs: new Map([[w.id as AnyNodeId, [faceOf(8100, 5400)]]]),
+    })
+
+    const found = report.findings.find((f) => f.invariant === 'GANG_HEADROOM_OVER_HOOK_HEIGHT')
+    expect(found?.severity).toBe('warning')
+    expect(found?.message).toContain('4108 mm')
+    expect(found?.message).toContain('2000 mm')
+    // The remedy is hardware, and specifically not a flatter sling — that is what the
+    // stated minimum angle exists to forbid.
+    expect(found?.message).toContain('lifting beam')
+  })
+
+  it('leaves the headroom unchecked where no hook height was recorded, and says which half', () => {
+    // The half-checked case, and the one that reads worst if it is silent: a report saying
+    // the crane was checked, having weighed every gang and measured none of them.
+    const w = wall()
+    const report = validateFormwork([w] as AnyNode[], {
+      crane: { capacityCurve: CURVE },
+      gangs: new Map([[w.id as AnyNodeId, [faceOf(8100, 5400)]]]),
+    })
+
+    expect(report.notChecked.some((e) => e.invariant === 'GANG_WEIGHT_OVER_CRANE_CAPACITY')).toBe(
+      false,
+    )
+    expect(
+      report.notChecked.find((e) => e.invariant === 'GANG_HEADROOM_OVER_HOOK_HEIGHT')?.needs,
+    ).toContain('hookHeightM')
+  })
+
+  it('stops telling a clean report that the crane was not verified', () => {
+    // The sentence was a fixed pair — rebar and the crane — until the settings gained a
+    // load chart. A clean scope that was checked against one and still says it was not is
+    // understating what it did, which is the mirror of the failure `notChecked` prevents.
+    const w = wall()
+    const checked = validationSummary(
+      validateFormwork([w] as AnyNode[], {
+        crane: { capacityCurve: CURVE, hookHeightM: 40 },
+        gangs: new Map([[w.id as AnyNodeId, [faceOf(2700)]]]),
+      }),
+    )
+    expect(checked[0]).toContain('clashes against rebar')
+    expect(checked[0]).not.toContain('crane')
+
+    const unchecked = validationSummary(validateFormwork([w] as AnyNode[]))
+    expect(unchecked[0]).toContain('what the crane lifts')
   })
 })
 

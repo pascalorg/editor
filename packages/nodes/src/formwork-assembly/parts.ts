@@ -1,5 +1,6 @@
 import {
   applyPartOverrides,
+  type FaceGangs,
   type FormworkPart,
   type FormworkPartSpec,
   type FormworkSystem,
@@ -74,6 +75,16 @@ export interface PartCollector {
 export interface ShutterEvidence {
   /** Every face run packed for this pour, in the order the faces were laid out. */
   packs: StripPack[]
+  /**
+   * What gets craned as one piece, per face run — for the gang × crane check.
+   *
+   * Carried rather than derived for the reason the packs are, in its sharpest form: a
+   * gang boundary is a joint that every course shares, so a validator that grouped a
+   * face itself would be grouping a second layout, and the pick it reported would put
+   * the hook over a panel the model draws whole. Empty on a conventional shutter, which
+   * is struck panel by panel and has no assembly to lift.
+   */
+  gangs?: FaceGangs[]
   /** The envelope the members were sized on, where the kind has one. */
   envelope?: PressureEnvelope
   /**
@@ -125,6 +136,7 @@ export function collectParts(group: Group, node: FormworkAssemblyNode): PartColl
   return {
     evidence(more) {
       if (more.packs) found.packs.push(...more.packs)
+      if (more.gangs) found.gangs = [...(found.gangs ?? []), ...more.gangs]
       if (more.envelope) found.envelope = more.envelope
       if (more.system) found.system = more.system
       if (more.tieFields) found.tieFields = [...(found.tieFields ?? []), ...more.tieFields]

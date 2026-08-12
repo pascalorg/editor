@@ -1,4 +1,5 @@
 import type { ConstructionJointNode, WaterstopType } from '../../../schema/nodes/construction-joint'
+import type { FormworkCraneSettings } from '../../../schema/nodes/formwork-project-settings'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
 import type { FormworkAcquisition } from '../acquire'
 import { type FormworkSystem, fitCorner, tieForThickness } from '../catalog'
@@ -19,6 +20,15 @@ import {
   findJunctions,
 } from '../coverage/junctions'
 import type { ElementCorner, ElementCoverage } from '../coverage/types'
+import {
+  bestCraneCapacityKg,
+  craneHookHeightMm,
+  cranePickVerdict,
+  craneRadiusForPickM,
+  craneReachM,
+  worstCraneCapacityKg,
+} from '../crane'
+import type { FaceGangs, LiftingPoint } from '../layout/gangs'
 import { MIN_WORKABLE_PIECE_MM, type StripPack } from '../layout/strip-pack'
 import { splitIntoLifts } from '../pours/lifts'
 import type { PourLimits, PourUnit } from '../pours/types'
@@ -166,6 +176,26 @@ export interface ValidateOptions {
    * this module never sees assemblies.
    */
   elementIdByPourId?: ReadonlyMap<string, AnyNodeId>
+  /**
+   * How each element's faces were grouped for the crane, when the caller has it.
+   *
+   * A derived solution like `acquisition` rather than scene data, and passed for the
+   * packs' reason: grouping a face here would be a second gang division, and a validator
+   * that disagreed with the drawing about where a gang breaks would send a rigger to a
+   * joint that is not on the panel.
+   *
+   * Per element and plural, because a 9 m wall in three lifts is three faces and the
+   * heavy pick may be in any of them.
+   */
+  gangs?: Map<AnyNodeId, readonly FaceGangs[]>
+  /**
+   * The site's crane, for the capacity check. Absent leaves the check unavailable.
+   *
+   * One crane for the scope rather than one per element, because a crane is a fact about
+   * the site: `formwork-settings` holds one, and a job running two would be recording the
+   * second one somewhere the schema has no room for yet.
+   */
+  crane?: FormworkCraneSettings
 }
 
 function finding(
@@ -1340,6 +1370,113 @@ function setShortages(
 }
 
 /**
+ * A gang the crane does not lift, and a gang the hook has no room over.
+ *
+ * The one check in this suite about a machine rather than about concrete, and the last
+ * of the plan's assertions to become possible: it needed a gang division (`layout/gangs.ts`)
+ * and a load chart on the project (`crane` on the settings), and until both existed it sat
+ * in `unavailable()` as an assertion nothing could make.
+ *
+ * Both inputs are handed in rather than derived, for the reason the packs are. Grouping the
+ * faces here would be a second gang division, and a validator that disagreed with the
+ * drawing about where a gang breaks would send a rigger to a joint that is not on the panel.
+ *
+ * ## Two severities, because the chart has two failures in it
+ *
+ * A pick over the *best* figure anywhere on the chart is an error: no radius on the jib
+ * lifts it, so the face as laid out cannot be erected by this crane at all. A pick over the
+ * *worst* figure but inside the best is a warning about position — it lifts nearer the mast
+ * and not at the tip — and it is a warning rather than an error precisely because nothing in
+ * the scene says where the crane stands, so the figure it failed against is the conservative
+ * reading rather than the one that applies where the wall is.
+ *
+ * The radius it stops lifting at is the published row inside the crossing, not the
+ * interpolated crossing itself. The straight line between two rows sits above the real
+ * sagging curve, so the interpolated radius is the optimistic one — and a rigger reads a
+ * chart by its rows in any case.
+ *
+ * ## The headroom is a separate failure, not a lighter version of the same one
+ *
+ * A gang whose slings need more height between its top and the hook than the crane has does
+ * not lift however light it is, which is why `hookHeightM` exists on the settings. It is a
+ * warning because the remedy is hardware rather than a re-layout: a lifting beam brings the
+ * legs vertical and the headroom collapses to the beam's own depth.
+ *
+ * A gang with no pick weight is not a finding here. It is a gang nothing can check, and
+ * `formworkGangCaveats` is where that silence is already reported — inventing a figure to
+ * fail it against would be the one thing worse than the silence.
+ */
+function gangCapacity(
+  gangs: ReadonlyMap<AnyNodeId, readonly FaceGangs[]>,
+  crane: FormworkCraneSettings,
+  scoped: ReadonlySet<AnyNodeId>,
+): Finding[] {
+  const worstKg = worstCraneCapacityKg(crane)
+  const bestKg = bestCraneCapacityKg(crane)
+  const reach = craneReachM(crane)
+  if (worstKg === undefined || bestKg === undefined || reach === undefined) return []
+  const hookHeightMm = craneHookHeightMm(crane)
+
+  const out: Finding[] = []
+  for (const [elementId, faces] of gangs) {
+    if (!scoped.has(elementId)) continue
+    for (const [faceIndex, face] of faces.entries()) {
+      for (const gang of face.gangs) {
+        const where = { alongM: gang.fromMm / 1000, elevationM: gang.baseMm / 1000 }
+        const at = `${elementId} face ${faceIndex + 1} gang ${gang.index + 1}`
+        const pickKg = gang.pickWeightKg
+        const verdict = pickKg === undefined ? undefined : cranePickVerdict(crane, pickKg)
+        if (pickKg !== undefined && verdict !== undefined && verdict !== 'lifts') {
+          if (verdict === 'over-chart') {
+            out.push(
+              finding(
+                'GANG_WEIGHT_OVER_CRANE_CAPACITY',
+                'error',
+                [elementId],
+                `${at} picks ${pickKg} kg and the crane's chart tops out at ${bestKg} kg, so no radius on the jib lifts it. Re-lay the face in narrower panels, hand-set it, or bring a machine that takes it — and the ${pickKg} kg is panels and make-up pieces only, so the load on the hook is higher than that.`,
+                where,
+              ),
+            )
+          } else {
+            const inside = craneRadiusForPickM(crane, pickKg)
+            out.push(
+              finding(
+                'GANG_WEIGHT_OVER_CRANE_CAPACITY',
+                'warning',
+                [elementId],
+                `${at} picks ${pickKg} kg against the ${worstKg} kg this crane gives at ${reach.toM} m${inside === undefined ? '' : `, so it has to be set inside ${inside} m`}. Nothing in the model says where the crane stands, so this is the chart's worst figure rather than the one at the wall — but the pick is panels and make-up pieces only, and walers, ties and platform travel with it.`,
+                where,
+              ),
+            )
+          }
+        }
+        if (
+          hookHeightMm !== undefined &&
+          gang.minHookHeightMm !== undefined &&
+          gang.minHookHeightMm > hookHeightMm
+        ) {
+          const eyes = gang.liftingPoints
+          const spreadMm =
+            eyes.length < 2
+              ? undefined
+              : Math.abs((eyes[1] as LiftingPoint).alongMm - (eyes[0] as LiftingPoint).alongMm)
+          out.push(
+            finding(
+              'GANG_HEADROOM_OVER_HOOK_HEIGHT',
+              'warning',
+              [elementId],
+              `${at} needs ${Math.round(gang.minHookHeightMm)} mm between its top and the hook for its slings and the crane has ${Math.round(hookHeightMm)} mm${spreadMm === undefined ? '' : `, because its eyes are ${Math.round(spreadMm)} mm apart`}. A lifting beam brings the legs vertical and removes the demand; a flatter sling does not, which is what a stated minimum angle forbids.`,
+              where,
+            ),
+          )
+        }
+      }
+    }
+  }
+  return out
+}
+
+/**
  * The assertions this scene cannot make, and what each one would need.
  *
  * Declared rather than omitted. A report that lists only what it checked reads as
@@ -1353,13 +1490,15 @@ function unavailable(
   hasSystem: boolean,
   hasTieFields: boolean,
   hasAcquisition: boolean,
+  hasGangs: boolean,
+  crane: FormworkCraneSettings | undefined,
 ) {
+  // A recorded crane with an empty chart is no crane: `craneCapacityAtM` reads nothing off
+  // it, so a check that treated the group's presence as the input would report a scene as
+  // checked against a machine with no capacity anywhere.
+  const hasCrane = (crane?.capacityCurve ?? []).length > 0
   const out: ValidationReport['notChecked'] = [
     { invariant: 'TIES_THROUGH_REBAR', needs: 'rebar geometry — no reinforcement is modelled' },
-    {
-      invariant: 'GANG_WEIGHT_OVER_CRANE_CAPACITY',
-      needs: 'gang assembly and a crane capacity curve — neither has a schema home',
-    },
     {
       invariant: 'PROPS_ONTO_SLAB_BELOW',
       needs:
@@ -1412,6 +1551,33 @@ function unavailable(
         'the same drilled stations — a waterstop with no tie grid over it is a bar nothing has been compared to',
     })
   }
+  if (!hasGangs || !hasCrane) {
+    // Two unrelated silences, and unlike the shortage's three these *can* be told apart, so
+    // they are: a scope nobody has formed has no gang to weigh, and a project that has not
+    // recorded a load chart has nothing to weigh it against. Naming the one that is missing
+    // is the difference between a remedy the reader can act on and a list of everything.
+    out.push({
+      invariant: 'GANG_WEIGHT_OVER_CRANE_CAPACITY',
+      needs: hasCrane
+        ? 'the gangs each face was grouped into — pass `gangs` from the same layout the drawing shows'
+        : 'the site’s load chart — record `crane.capacityCurve` as capacity against radius, and every gang is checked against it',
+    })
+    out.push({
+      invariant: 'GANG_HEADROOM_OVER_HOOK_HEIGHT',
+      needs: hasCrane
+        ? 'the same gangs — a sling demand is a fact about the spread of one gang’s eyes'
+        : 'the height under the hook — record `crane.hookHeightM`, which the capacity curve does not imply',
+    })
+  } else if (crane?.hookHeightM === undefined) {
+    // The one half-checked case: a chart with no height under the hook weighs every gang and
+    // measures none of them. Listed rather than left to the caveats, because a report saying
+    // the crane was checked has to say which half of it.
+    out.push({
+      invariant: 'GANG_HEADROOM_OVER_HOOK_HEIGHT',
+      needs:
+        'the height under the hook — record `crane.hookHeightM`; the capacity curve says nothing about it, and a wide gang can be light and still not fit',
+    })
+  }
   return out
 }
 
@@ -1444,6 +1610,7 @@ export function validateFormwork(
   const envelopes = options.envelopes ?? new Map<AnyNodeId, PressureEnvelope>()
   const systems = options.systems ?? new Map<AnyNodeId, FormworkSystem>()
   const tieFields = options.tieFields ?? new Map<AnyNodeId, readonly TieField[]>()
+  const gangs = options.gangs ?? new Map<AnyNodeId, readonly FaceGangs[]>()
 
   // Neighbours are the whole level, not the scope: an element outside a selection
   // still buries the face of one inside it, and a junction check that only saw
@@ -1481,6 +1648,9 @@ export function validateFormwork(
           options.elementIdByPourId ?? new Map(),
           new Set(scoped.map((element) => element.id)),
         )),
+    ...(options.crane === undefined
+      ? []
+      : gangCapacity(gangs, options.crane, new Set(scoped.map((element) => element.id)))),
   ]
 
   // Errors first, then by element, so the list reads in the order somebody would
@@ -1504,6 +1674,8 @@ export function validateFormwork(
       systems.size > 0,
       tieFields.size > 0,
       options.acquisition !== undefined,
+      gangs.size > 0,
+      options.crane,
     ),
   }
 }
@@ -1517,8 +1689,16 @@ export function validateFormwork(
 export function validationSummary(report: ValidationReport): string[] {
   if (report.elementIds.length === 0) return ['Nothing in this scope to check.']
   if (report.findings.length === 0) {
+    // The crane is named only where it is actually unchecked. It was a fixed half of this
+    // sentence until the settings gained a load chart, and a clean report that still said
+    // the crane was not verified would be understating what it did.
+    const unchecked = new Set(report.notChecked.map((entry) => entry.invariant))
+    const examples = [
+      ...(unchecked.has('TIES_THROUGH_REBAR') ? ['clashes against rebar'] : []),
+      ...(unchecked.has('GANG_WEIGHT_OVER_CRANE_CAPACITY') ? ['what the crane lifts'] : []),
+    ]
     return [
-      `${report.elementIds.length} ${report.elementIds.length === 1 ? 'element' : 'elements'} checked, nothing found. ${report.notChecked.length} ${report.notChecked.length === 1 ? 'assertion' : 'assertions'} could not run — clashes against rebar and crane checks are not among what was verified.`,
+      `${report.elementIds.length} ${report.elementIds.length === 1 ? 'element' : 'elements'} checked, nothing found. ${report.notChecked.length} ${report.notChecked.length === 1 ? 'assertion' : 'assertions'} could not run${examples.length === 0 ? '' : ` — ${examples.join(' and ')} ${examples.length === 1 ? 'is' : 'are'} not among what was verified`}.`,
     ]
   }
   const parts: string[] = []

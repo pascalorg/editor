@@ -111,6 +111,27 @@ export interface FormworkSettings {
    * pour and the strike and stays quiet about the days either side.
    */
   schedule: NonNullable<FormworkProjectSettingsNode['schedule']> | undefined
+  /**
+   * The site's crane, or `undefined` where nobody has recorded one.
+   *
+   * The fifth undefaulted field, and the one where a default would do the most damage.
+   * There is no conservative crane: a shipped curve set low fails gangs the site's actual
+   * machine lifts every day, and one set high passes gangs that do not leave the ground.
+   * Both read as a check that ran. So absent means each face is grouped as one gang and
+   * the takeoff says no crane was stated — see `crane.ts`.
+   */
+  crane: NonNullable<FormworkProjectSettingsNode['crane']> | undefined
+  /**
+   * What a lorry carries and how long a pick takes, or `undefined`.
+   *
+   * The sixth undefaulted field, and the one whose absence has been on every surface of
+   * this feature the longest: transport and craneage are what `cost.excludes` has named
+   * since the money arrived. Both figures are facts about this job's own plant — a payload
+   * is the lorry the yard sends and a cycle time is this crew on this crane — so there is
+   * nothing to fall back to, and a default would put a delivery charge on a takeoff for
+   * lorries nobody booked.
+   */
+  logistics: NonNullable<FormworkProjectSettingsNode['logistics']> | undefined
 }
 
 /**
@@ -134,6 +155,8 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   rates: undefined,
   labour: undefined,
   schedule: undefined,
+  crane: undefined,
+  logistics: undefined,
 }
 
 /**
@@ -179,6 +202,12 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
           ...(node.rates.currency === undefined ? {} : { currency: node.rates.currency }),
           ...(node.rates.minHireDays === undefined ? {} : { minHireDays: node.rates.minHireDays }),
           byCatalogId: node.rates.byCatalogId ?? {},
+          ...(node.rates.transportPerLoad === undefined
+            ? {}
+            : { transportPerLoad: node.rates.transportPerLoad }),
+          ...(node.rates.cranePerHour === undefined
+            ? {}
+            : { cranePerHour: node.rates.cranePerHour }),
         }
       : undefined,
     // Two stated groups joined into one resolved table, because hours and the rate that
@@ -196,6 +225,8 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
         }
       : undefined,
     schedule: node.schedule,
+    crane: node.crane,
+    logistics: node.logistics,
   }
 }
 
@@ -233,6 +264,8 @@ export type FormworkSettingsGroup =
   | 'rates'
   | 'labour'
   | 'schedule'
+  | 'crane'
+  | 'logistics'
 
 /**
  * Merge a patch into one of the settings sub-objects, returning the value to write
@@ -354,10 +387,18 @@ export function mergeFormworkRates(
     currency?: string | undefined
     minHireDays?: number | undefined
     gangRatePerHour?: number | undefined
+    transportPerLoad?: number | undefined
+    cranePerHour?: number | undefined
     byCatalogId?: Readonly<Record<string, Readonly<Record<string, number | undefined>> | undefined>>
   },
   /** Fields explicitly named in the patch, so `undefined` clears rather than skips. */
-  stated: { currency?: boolean; minHireDays?: boolean; gangRatePerHour?: boolean } = {},
+  stated: {
+    currency?: boolean
+    minHireDays?: boolean
+    gangRatePerHour?: boolean
+    transportPerLoad?: boolean
+    cranePerHour?: boolean
+  } = {},
 ): NonNullable<FormworkProjectSettingsNode['rates']> {
   const byCatalogId: Record<string, Record<string, number>> = {}
   for (const [catalogId, rate] of Object.entries(current?.byCatalogId ?? {})) {
@@ -385,9 +426,17 @@ export function mergeFormworkRates(
   const gangRate = stated.gangRatePerHour
     ? patch.gangRatePerHour
     : (patch.gangRatePerHour ?? current?.gangRatePerHour)
+  const perLoad = stated.transportPerLoad
+    ? patch.transportPerLoad
+    : (patch.transportPerLoad ?? current?.transportPerLoad)
+  const perHour = stated.cranePerHour
+    ? patch.cranePerHour
+    : (patch.cranePerHour ?? current?.cranePerHour)
   if (currency !== undefined) out.currency = currency
   if (minHireDays !== undefined) out.minHireDays = minHireDays
   if (gangRate !== undefined) out.gangRatePerHour = gangRate
+  if (perLoad !== undefined) out.transportPerLoad = perLoad
+  if (perHour !== undefined) out.cranePerHour = perHour
   return out as NonNullable<FormworkProjectSettingsNode['rates']>
 }
 

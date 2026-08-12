@@ -346,6 +346,39 @@ describe('formworkSettings labour', () => {
   })
 })
 
+describe('formworkSettings logistics', () => {
+  it('leaves the payload and the cycle time unresolved where nobody has stated them', () => {
+    // The sixth undefaulted group, and the one whose absence has been on every surface of
+    // this feature the longest: `cost.excludes` has named transport and craneage from the
+    // day there was a cost.
+    expect(formworkSettings(node()).logistics).toBeUndefined()
+    expect(DEFAULT_FORMWORK_SETTINGS.logistics).toBeUndefined()
+  })
+
+  it('keeps the quantities in logistics and puts their prices on the rate table', () => {
+    // Unlike the labour norms, which resolve with the gang rate joined on: a load charge
+    // and a crane rate are charges against the whole job rather than against a bill line,
+    // so the module that multiplies them reads both groups.
+    const resolved = formworkSettings(
+      node({
+        logistics: { lorryPayloadKg: 24_000, minutesPerPick: 20 },
+        rates: { currency: 'GBP', transportPerLoad: 400, cranePerHour: 120, byCatalogId: {} },
+      }),
+    )
+
+    expect(resolved.logistics).toEqual({ lorryPayloadKg: 24_000, minutesPerPick: 20 })
+    expect(resolved.rates?.transportPerLoad).toBe(400)
+    expect(resolved.rates?.cranePerHour).toBe(120)
+    expect(resolved.rates?.currency).toBe('GBP')
+  })
+
+  it('gives a charge per load with no payload no logistics at all', () => {
+    // A price with nothing to multiply, the gang rate's case exactly: resolving an empty
+    // group off it would put a logistics block on the takeoff reporting no deliveries.
+    expect(formworkSettings(node({ rates: { transportPerLoad: 400 } })).logistics).toBeUndefined()
+  })
+})
+
 describe('formworkSettings schedule', () => {
   it('leaves the lead times unresolved where the project has stated none', () => {
     // The rates' rule rather than the pressure inputs'. A lead time has no published

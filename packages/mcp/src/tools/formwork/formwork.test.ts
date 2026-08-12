@@ -252,6 +252,54 @@ interface BillReply {
     gaps: string[]
   }
   noCommitmentsBecause?: string
+  lifting?: {
+    picks: number
+    heaviestPickKg: number | null
+    unweighedPicks: number
+    overTheChartPicks: number
+    positionDependentPicks: number
+    overHookHeightPicks: number
+    crane: {
+      worstCapacityKg: number
+      bestCapacityKg: number
+      reachFromM: number
+      reachToM: number
+      hookHeightMm: number | null
+    } | null
+    items: Array<{
+      elementId: string
+      face: number
+      gang: number
+      widthMm: number
+      heightMm: number
+      panels: number
+      pickWeightKg: number | null
+      verdict: string | null
+      liftsInsideM?: number
+      slingsWantMm: number | null
+      overHookHeight?: boolean
+      overAStatedLimit?: boolean
+    }>
+    excludes: string[]
+  }
+  noLiftingBecause?: string
+  logistics?: {
+    currency: string | null
+    loads: number | null
+    loadsOut: number | null
+    loadsBack: number | null
+    lorryPayloadKg: number | null
+    weightTheLoadsCameFromKg: number | null
+    transportCost: number | null
+    picks: number | null
+    hookHours: number | null
+    craneCost: number | null
+    total: number | null
+    complete: boolean
+    gaps: string[]
+    excludes: string[]
+  }
+  noLogisticsBecause?: string
   caveats: string[]
 }
 
@@ -1075,6 +1123,210 @@ describe('the formwork MCP tools', () => {
     expect(reply.labour?.cost).toBeNull()
     expect(reply.labour?.gaps.some((gap) => gap.includes('no money'))).toBe(true)
     expect(reply.caveats.some((c) => c.includes('carry no norm at all'))).toBe(true)
+  })
+
+  /**
+   * The load chart on the site *and* listed in its children, so both readers find it.
+   *
+   * `withSettings` leaves the node out of the children arrays, which the takeoff's scan does
+   * not care about and the geometry's ancestor climb does — and a crane only the takeoff can
+   * see is the wiring failure that matters here: the faces would be grouped as one pick each
+   * and then measured against a chart the layout never saw.
+   */
+  const withCrane = (crane: Record<string, unknown>) => {
+    const nodes = withSettings(twoLevels(), { crane })
+    const site = nodes.site_1 as { children: string[] }
+    site.children = [...site.children, 'formwork-settings_1']
+    return nodes
+  }
+
+  test('the lifting schedule is the picks off the layout, heaviest first', async () => {
+    // The one commercial answer in this tool that comes off the geometry rather than the bill
+    // or the programme, so its absence would be invisible in every other figure.
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.lifting?.picks).toBe(1)
+    expect(reply.lifting?.heaviestPickKg).toBe(2062)
+    expect(reply.lifting?.items[0]?.elementId).toBe('wall_1')
+    expect(reply.lifting?.items[0]?.panels).toBe(20)
+    expect(reply.noLiftingBecause).toBeUndefined()
+  })
+
+  test('the heaviest pick is not the bill weight, and there is no sum of picks in the answer', async () => {
+    // The failure the whole block is shaped against: a caller that adds the picks, or quotes
+    // the bill's tonnage as a lifting weight, sizes a crane several times too big.
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const billKg = reply.bom.reduce((sum, line) => sum + (line.totalWeightKg ?? 0), 0)
+
+    expect(billKg).toBeGreaterThan(reply.lifting?.heaviestPickKg as number)
+    expect(Object.keys(reply.lifting ?? {}).some((key) => /total|sum/i.test(key))).toBe(false)
+    // And the caveats say it in words, because a caller reads those first.
+    expect(reply.caveats.some((c) => c.includes('a load nothing ever lifts'))).toBe(true)
+  })
+
+  test('with no chart recorded every verdict is null rather than a pass', async () => {
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.lifting?.crane).toBeNull()
+    expect(reply.lifting?.items.every((item) => item.verdict === null)).toBe(true)
+    expect(reply.caveats.some((c) => c.includes('No load chart is recorded'))).toBe(true)
+  })
+
+  test('the chart that grouped the faces is the chart the verdicts came from', async () => {
+    // A 300 kg machine divides that wall into ten picks and takes every one of them. A
+    // schedule graded against a chart the layout never saw would report one 2 t pick the
+    // model does not draw.
+    load(withCrane({ capacityCurve: [{ radiusM: 30, capacityKg: 300 }], hookHeightM: 40 }))
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.lifting?.picks).toBe(10)
+    expect(reply.lifting?.heaviestPickKg).toBeLessThanOrEqual(300)
+    expect(reply.lifting?.items.every((item) => item.verdict === 'lifts')).toBe(true)
+    expect(reply.lifting?.crane?.worstCapacityKg).toBe(300)
+    expect(reply.lifting?.crane?.hookHeightMm).toBe(40_000)
+    expect(reply.lifting?.overTheChartPicks).toBe(0)
+  })
+
+  test('a position-dependent pick carries the radius that takes it, not a fail', async () => {
+    // 206 kg over a 200 kg tip and inside a 400 kg near-mast rating. Nothing in the model
+    // says where the crane stands, so this is a line for the lifting plan.
+    load(
+      withCrane({
+        capacityCurve: [
+          { radiusM: 30, capacityKg: 400 },
+          { radiusM: 40, capacityKg: 200 },
+        ],
+        hookHeightM: 40,
+      }),
+    )
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const pick = reply.lifting?.items[0]
+
+    expect(pick?.verdict).toBe('position')
+    expect(pick?.liftsInsideM).toBe(30)
+    expect(reply.lifting?.positionDependentPicks).toBe(reply.lifting?.picks)
+    expect(reply.lifting?.overTheChartPicks).toBe(0)
+    expect(reply.caveats.some((c) => c.includes('rather than a layout to redo'))).toBe(true)
+  })
+
+  test('the height under the hook is a third failure, on a pick the chart takes', async () => {
+    // 8 t at the tip and 2 m of headroom: the 6 m gang's slings want 3 m over the top of it,
+    // so this lifts on weight and does not lift at all — and the remedy is a lifting beam.
+    load(withCrane({ capacityCurve: [{ radiusM: 30, capacityKg: 8000 }], hookHeightM: 2 }))
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const pick = reply.lifting?.items[0]
+
+    expect(pick?.verdict).toBe('lifts')
+    expect(pick?.overHookHeight).toBe(true)
+    expect(pick?.slingsWantMm).toBeGreaterThan(2000)
+    expect(reply.lifting?.overHookHeightPicks).toBe(1)
+    expect(reply.caveats.some((c) => c.includes('lifting beam'))).toBe(true)
+  })
+
+  test('what the pick weight leaves out travels as data rather than in prose', async () => {
+    // The hook load is above every figure in the block, always, and a caller quoting one
+    // without that sentence has understated the lift by about a fifth.
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.lifting?.excludes.some((entry) => entry.includes('a fifth of the pick'))).toBe(
+      true,
+    )
+    expect(reply.lifting?.excludes.some((entry) => entry.includes('where the crane stands'))).toBe(
+      true,
+    )
+    expect(reply.lifting?.excludes.some((entry) => entry.includes('wind'))).toBe(true)
+  })
+
+  test('a scope with nothing ganged says why rather than answering with no picks', async () => {
+    // A wall with no system chosen has no layout, so there is no gang and no pick. The
+    // reason is the whole answer: an empty schedule reads as a crane with nothing to do.
+    load(tallWall(null))
+
+    const reply = await call<BillReply>('inspect_project_formwork', {})
+
+    expect(reply.lifting).toBeUndefined()
+    expect(reply.noLiftingBecause).toContain('struck panel by panel')
+    expect(reply.noLiftingBecause).toContain('rather than a missing input')
+  })
+
+  /**
+   * The deliveries and the hook time, which is the pair every total in this tool excluded.
+   *
+   * What only this layer can get wrong is the join: the loads have to come off the bill
+   * weight the same answer prints and the hook hours off the same lifting schedule, or a
+   * caller reading both blocks gets two counts of one job.
+   */
+  const PRICED = { currency: 'GBP', transportPerLoad: 400, cranePerHour: 120 }
+
+  test('the loads come off the bill weight and the hours off the picks in the same answer', async () => {
+    load(
+      withSettings(twoLevels(), {
+        logistics: { lorryPayloadKg: 3000, minutesPerPick: 30 },
+        rates: PRICED,
+      }),
+    )
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+    const billKg = reply.bom.reduce((sum, line) => sum + (line.totalWeightKg ?? 0), 0)
+
+    expect(reply.logistics?.weightTheLoadsCameFromKg).toBeCloseTo(billKg, 0)
+    expect(reply.logistics?.loads).toBe(
+      (reply.logistics?.loadsOut ?? 0) + (reply.logistics?.loadsBack ?? 0),
+    )
+    // The same schedule the crane was checked against, rather than a second grouping of it.
+    expect(reply.logistics?.picks).toBe(reply.lifting?.picks)
+    expect(reply.logistics?.hookHours).toBeCloseTo((reply.lifting?.picks ?? 0) * 0.5, 6)
+    expect(reply.logistics?.currency).toBe('GBP')
+  })
+
+  test('the logistics total is outside the cost total rather than part of it', async () => {
+    // Labour's rule, and the reason `cost.excludes` names the block instead of the cost:
+    // a caller adding the two figures quotes a job that was never priced that way.
+    const settings = { logistics: { lorryPayloadKg: 3000, minutesPerPick: 30 }, rates: PRICED }
+    load(withSettings(twoLevels(), settings))
+    const priced = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(priced.logistics?.total).toBeGreaterThan(0)
+    expect(
+      priced.cost?.excludes.some((entry) => entry.includes('in the logistics block beside this')),
+    ).toBe(true)
+    expect(priced.caveats.some((c) => c.includes('the fewest trips'))).toBe(true)
+    expect(priced.caveats.some((c) => c.includes('charged by the week'))).toBe(true)
+  })
+
+  test('a payload with no cycle time is loads and no hours rather than a gap in both', async () => {
+    load(withSettings(twoLevels(), { logistics: { lorryPayloadKg: 3000 }, rates: PRICED }))
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.logistics?.loads).toBeGreaterThan(0)
+    expect(reply.logistics?.hookHours).toBeNull()
+    expect(reply.logistics?.craneCost).toBeNull()
+    expect(reply.logistics?.gaps.some((gap) => gap.length > 0)).toBe(true)
+  })
+
+  test('with nothing recorded it says why, and names both halves of the remedy', async () => {
+    // Never a zero: a payload is the lorry the yard actually sends, and a crane cycle is
+    // this crew on this machine, so an invented figure becomes haulage somebody books.
+    load(twoLevels())
+
+    const reply = await call<BillReply>('inspect_project_formwork', { levelId: 'level_1' })
+
+    expect(reply.logistics).toBeUndefined()
+    expect(reply.noLogisticsBecause).toContain('set_formwork_settings logistics')
+    expect(reply.noLogisticsBecause).toContain('set_formwork_settings rates')
+    expect(reply.noLogisticsBecause).toContain('Never estimate either')
   })
 
   test('an empty scene answers rather than throwing', async () => {

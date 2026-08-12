@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import type { FormworkProjectSettingsNode } from '../../schema/nodes/formwork-project-settings'
+import type {
+  CraneCapacityPoint,
+  FormworkProjectSettingsNode,
+} from '../../schema/nodes/formwork-project-settings'
 import {
   FALSEWORK_BEAMS,
   FORMWORK_SYSTEMS,
@@ -223,6 +226,62 @@ const SCHEDULE_PATCH = z.object({
     ),
 })
 
+/**
+ * The crane, and the one field here that is written whole rather than merged.
+ *
+ * `capacityCurve` replaces what is recorded instead of merging point by point, and that
+ * is deliberate against the rule every other table in this file follows. A load chart is
+ * one fact about one machine: half of a 40 m jib's chart merged with half of a 55 m one
+ * describes a crane that does not exist, and it would pass a check. So a model that
+ * states a curve states all of it, and `null` removes it.
+ */
+const CRANE_PATCH = z.object({
+  capacityCurve: z
+    .array(
+      z.object({
+        radiusM: z.number().positive().max(200).describe('distance from the slew centre, m'),
+        capacityKg: z
+          .number()
+          .positive()
+          .max(1_000_000)
+          .describe('what the published chart says the hook takes at that radius, kg'),
+      }),
+    )
+    .max(40)
+    .nullable()
+    .optional()
+    .describe(
+      "the crane's load chart, as capacity against radius. Read it off the published chart and pass every row you have — a capacity between two rows is read on the straight line joining them, and a real chart sags below that line, so a sparse curve reads optimistically. This replaces the recorded curve rather than merging into it, because half of one chart and half of another is a machine that does not exist. Never infer this from a crane's rating: a tower crane rated 8 t lifts 8 t near the mast and about 2.2 t at the jib tip, and the rating is the figure that applies where nothing is built",
+    ),
+  hookHeightM: z
+    .number()
+    .positive()
+    .max(300)
+    .nullable()
+    .optional()
+    .describe(
+      'height available between the top of a gang and the hook, m — what the slings have to fit into. A gang whose lifting eyes sit 4 m apart wants about 1.7 m of it at 60°, so a crane short of headroom cannot lift a wide gang however light it is',
+    ),
+  maxGangWidthMm: z
+    .number()
+    .positive()
+    .max(30_000)
+    .nullable()
+    .optional()
+    .describe(
+      'widest gang that can be handled, mm. Usually the road rather than the crane — a gang assembled off site travels on a lorry, and past about 3 m that is a permit',
+    ),
+  minSlingAngleDeg: z
+    .number()
+    .min(15)
+    .max(89)
+    .nullable()
+    .optional()
+    .describe(
+      'minimum sling angle from the horizontal, degrees. 60 is the ordinary site rule and it is a floor rather than a target: below about 45° the leg tension runs away, and at 30° each leg carries the whole gang',
+    ),
+})
+
 const FALSEWORK_LOAD_PATCH = z.object({
   formworkSelfWeightKpa: z.number().min(0).max(10).nullable().optional(),
   rebarKnM3: z.number().min(0).max(10).nullable().optional(),
@@ -410,11 +469,69 @@ const RATES_PATCH = z.object({
     .describe(
       "the all-in cost of one man-hour of the forming gang — what turns the labour norms into money. On its own it prices nothing: the hours come from labourNorms, and a rate with no norms recorded leaves the takeoff with no labour at all rather than a rate applied to an output nobody stated. All-in means the crew's cost to the job, not a bare wage",
     ),
+  transportPerLoad: z
+    .number()
+    .positive()
+    .max(1_000_000)
+    .nullable()
+    .optional()
+    .describe(
+      'what one delivery load costs, one way — the charge a haulier makes for a lorry. Per load rather than per tonne or per mile, because that is how the trade quotes it and because the distance is already inside the figure the haulier gave. On its own it prices nothing: the number of loads comes from logistics.lorryPayloadKg against the weight of the bill',
+    ),
+  cranePerHour: z
+    .number()
+    .positive()
+    .max(1_000_000)
+    .nullable()
+    .optional()
+    .describe(
+      'the hourly rate of the crane the job hires, all-in with its operator and slinger. State this only where a crane is hired by the hour: a tower crane standing over the pour is a preliminary charged by the week whether it lifts this formwork or not, and pricing hook time against one charges the same crane twice. Needs logistics.minutesPerPick to become money',
+    ),
   byCatalogId: z
     .record(z.string().max(120), PART_RATE_PATCH.nullable())
     .optional()
     .describe(
       'rate per catalog id. Merged into what is recorded, so pass only the parts you are changing; a field set to null clears that field and null against a whole id removes it',
+    ),
+})
+
+/**
+ * What a lorry carries and how long a pick takes — the two quantities behind the two
+ * costs every total in this model has excluded.
+ *
+ * Separate from the rates that price them for the reason the norms are separate from the
+ * gang rate: these are facts about the job's own plant and the rates are money, and the
+ * money is stated once with the currency it is in. A project may state either half — a
+ * payload with no charge counts the loads and does not price them, which is a useful
+ * answer to a yard arranging its own haulage.
+ */
+const LOGISTICS_PATCH = z.object({
+  lorryPayloadKg: z
+    .number()
+    .positive()
+    .max(100_000)
+    .nullable()
+    .optional()
+    .describe(
+      'what one lorry carries, kg — the payload the loads are counted against. Ask the user rather than assuming a vehicle: 8 t on a rigid, 24 t on an artic, and less again where the site gate or the crane at the far end decides it. The weight of the bill over this, rounded up, is the loads — so 8.2 t on an 8 t lorry is two, and the second one costs what the first did',
+    ),
+  minutesPerPick: z
+    .number()
+    .positive()
+    .max(600)
+    .nullable()
+    .optional()
+    .describe(
+      'minutes of hook time one pick takes — sling, lift, land, release and hook back. The whole cycle rather than the lift: a crane is booked by the hour and the two minutes a gang spends in the air are the smallest part of the twenty it occupies. A fact about this crew on this crane, so ask for it',
+    ),
+  returnLoadFraction: z
+    .number()
+    .min(0)
+    .max(1)
+    .nullable()
+    .optional()
+    .describe(
+      'the share of the outbound loads that come back, 0 to 1. Absent means all of them, which is what a returnable bill does. State a fraction where the formwork is largely consumed — a job of cut ply and site-made soldiers sends lorries out and brings a few back, and charging a return leg for each one doubles a real invoice',
     ),
 })
 
@@ -504,6 +621,9 @@ export const formworkSettingsPatchInput = {
   schedule: SCHEDULE_PATCH.optional().describe(
     'the two lead times that turn a pour date into a delivery date: how long before a pour the plant is wanted on site, and how long after striking before it is back with the hire company. The pour dates themselves are per shutter and set with set_pour_date, because a wall cast in three lifts is three pours on three days',
   ),
+  crane: CRANE_PATCH.optional().describe(
+    "the site's own crane — its load chart, the height under the hook, the widest gang that can be moved and the minimum sling angle. Ask the user for the chart and never infer it from a rating: capacity falls along the jib, so the headline figure applies where nothing is ever built. Until this is recorded each face is grouped as one gang and no gang is checked against a lift at all, which is the honest answer — there is no conservative default crane, and a shipped curve would fail gangs the site lifts daily while passing gangs that never leave the ground",
+  ),
   falseworkLoads: FALSEWORK_LOAD_PATCH.optional().describe(
     "what a soffit carries beyond the concrete itself; each is raised to ACI §2.2.1's floor",
   ),
@@ -519,6 +639,9 @@ export const formworkSettingsPatchInput = {
   rates: RATES_PATCH.optional().describe(
     'what this project pays per catalog part, and the terms that apply across them. This is the one input in the whole formwork model that no code publishes and no product carries, so ask the user for it and never infer it: there is no conservative default to fall back to, and a project that has recorded nothing gets no money on its takeoff at all rather than a plausible figure. It is recorded on the project rather than on the catalog because a price is a commercial fact about this job — the same panel is different money to two yards in the same city, and different money again next quarter',
   ),
+  logistics: LOGISTICS_PATCH.optional().describe(
+    'what one lorry carries and how long a pick takes — the two quantities that turn a bill into deliveries and a lifting schedule into crane hours. These are the last two costs this model has excluded from every total it prints, and both figures are facts about the job’s own plant rather than about a product, so ask the user for them: a payload is the lorry the yard actually sends and a cycle time is this crew on this crane. Until they are recorded the takeoff carries no transport and no craneage at all. Needs rates.transportPerLoad and rates.cranePerHour to become money',
+  ),
   labourNorms: LABOUR_NORMS_PATCH.optional().describe(
     "how long this project's own gang takes to erect and to strike one of each kind of part, in man-hours. Ask the user for these and never supply them: published constants do exist — CPWD's Analysis of Rates, Spon's, RSMeans — and none of them can be used here, because they are per m² of a whole trade operation that already contains the panels, the backing, the ties and the strike, so spreading one over a bill of parts charges the same work several times over. An output norm is also a fact about a crew rather than about a product or a code: the same gang on its tenth identical floor beats its own figure from the first, so there is nothing conservative to fall back to. Until this is recorded the takeoff carries no labour at all, which is the honest answer and is why every cost figure in this model says labour is outside it. A kind you leave out is reported as uncovered fittings rather than costed at zero. Needs rates.gangRatePerHour to become money",
   ),
@@ -529,11 +652,11 @@ export type FormworkSettingsPatch = z.infer<typeof FormworkSettingsPatch>
 
 /** The description every surface's write tool carries, so the guidance cannot diverge either. */
 export const SET_FORMWORK_SETTINGS_DESCRIPTION =
-  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Four of the groups are commercial rather than structural and behave differently: ownedStock, rates, labourNorms and schedule are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes, a lead time you invent becomes a delivery date somebody books against, and an output norm you invent becomes a programme a gang is held to. labourNorms is the one to be most careful with, because published labour constants exist and none of them fits: they are per m² of a whole trade operation, and an output is a fact about a crew rather than about a product. The schedule group holds only the two lead times; the pour dates they are measured from belong to the shutters and are set with set_pour_date.'
+  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Six of the groups are commercial or site facts rather than structural and behave differently: ownedStock, rates, labourNorms, schedule, crane and logistics are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes, a lead time you invent becomes a delivery date somebody books against, an output norm you invent becomes a programme a gang is held to, a crane capacity you invent becomes a lift somebody signs off, and a lorry payload you invent becomes a delivery count somebody books haulage against. labourNorms is the one to be most careful with, because published labour constants exist and none of them fits: they are per m² of a whole trade operation, and an output is a fact about a crew rather than about a product. The schedule group holds only the two lead times; the pour dates they are measured from belong to the shutters and are set with set_pour_date. The logistics group is quantities and the money for them is in rates: a payload and a cycle time there, transportPerLoad and cranePerHour here, and neither half prices anything without the other.'
 
 /** The description every surface's read tool carries. */
 export const INSPECT_FORMWORK_SETTINGS_DESCRIPTION =
-  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. Two more groups behave the same way. schedule, the two lead times between a pour date and a delivery date, is null until somebody records it, and while it is null a takeoff shows plant free the day it is struck and no delivery date at all. labour is this project’s own output norms — man-hours to erect and to strike one of each kind of part — and while it is null the takeoff carries no labour at all, which is why every cost figure in this model says labour is outside it and is normally the largest thing that is. Its gang rate lives in rates.gangRatePerHour, so norms without that rate are hours with no money and a rate without norms prices nothing. One settings record per scene, so this takes no arguments.'
+  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. Two more groups behave the same way. schedule, the two lead times between a pour date and a delivery date, is null until somebody records it, and while it is null a takeoff shows plant free the day it is struck and no delivery date at all. labour is this project’s own output norms — man-hours to erect and to strike one of each kind of part — and while it is null the takeoff carries no labour at all, which is why every cost figure in this model says labour is outside it and is normally the largest thing that is. Its gang rate lives in rates.gangRatePerHour, so norms without that rate are hours with no money and a rate without norms prices nothing. crane is the fifth: the site’s load chart as capacity against radius, plus the height under the hook, the widest gang that can be moved and the minimum sling angle. While it is null every face is grouped as one gang and no gang is checked against a lift, so a pick weight in the takeoff is a figure and not a verdict. Read the curve before saying a gang lifts — capacity falls along the jib, and the figure that governs is the one at the radius the gang is actually set at. logistics is the sixth: what one lorry carries, how long one pick takes and what fraction of the loads come back. While it is null the takeoff carries no transport and no craneage — the two costs every total in this model has excluded from the day it could print one. Its money is in rates.transportPerLoad and rates.cranePerHour, so a payload without a charge per load counts lorries and prices none of them. One settings record per scene, so this takes no arguments.'
 
 /** The first stock id that names nothing in the catalog, as the error a model reads back. */
 function unknownStockId(patch: Readonly<Record<string, unknown>>): string | undefined {
@@ -577,6 +700,35 @@ function unknownRate(
         : (rate.rentalPerUnitPerMonth ?? null)
     if (rate.rentalPercentPerMonth != null && flat == null && purchase == null) {
       return `Error: "${catalogId}" has a hire percentage but no purchasePerUnit for it to be a percentage of, so it would price nothing. State the list price too, or give rentalPerUnitPerMonth as a flat rate.`
+    }
+  }
+  return undefined
+}
+
+/**
+ * What is wrong with a stated load chart, in the words a model reads back.
+ *
+ * Two checks, and both are for transcription errors rather than for physics. Two rows at
+ * the same radius are two answers to one question with no rule for which wins. A capacity
+ * that *rises* with radius is a chart entered with its columns swapped — no crane lifts
+ * more further out — and it is the error worth refusing hardest, because the swapped
+ * chart is plausible, is stored, and reports every gang on the job as liftable.
+ */
+function unknownCrane(patch: NonNullable<FormworkSettingsPatch['crane']>): string | undefined {
+  const curve = patch.capacityCurve
+  if (curve == null) return undefined
+  if (curve.length === 0) {
+    return 'Error: an empty capacity curve is not a crane with no capacity — pass null to remove the chart, or the rows off the published one to record it.'
+  }
+  const sorted = [...curve].sort((a, b) => a.radiusM - b.radiusM)
+  for (let index = 1; index < sorted.length; index++) {
+    const under = sorted[index - 1] as CraneCapacityPoint
+    const over = sorted[index] as CraneCapacityPoint
+    if (over.radiusM === under.radiusM) {
+      return `Error: two rows at ${over.radiusM} m (${under.capacityKg} kg and ${over.capacityKg} kg) — a chart cannot give one radius two capacities.`
+    }
+    if (over.capacityKg > under.capacityKg) {
+      return `Error: the chart lifts ${over.capacityKg} kg at ${over.radiusM} m and only ${under.capacityKg} kg at ${under.radiusM} m. No crane lifts more further out — the radius and capacity columns are the wrong way round.`
     }
   }
   return undefined
@@ -668,6 +820,10 @@ export function applyFormworkSettingsPatch(
     const bad = unknownRate(rates, current?.rates)
     if (bad) return { error: bad }
   }
+  if (groups.crane) {
+    const bad = unknownCrane(groups.crane)
+    if (bad) return { error: bad }
+  }
 
   const base = (current ?? {}) as Partial<FormworkProjectSettingsNode>
   const writes: Record<string, unknown> = {}
@@ -730,12 +886,20 @@ export function applyFormworkSettingsPatch(
         ...(rates.gangRatePerHour === undefined
           ? {}
           : { gangRatePerHour: rates.gangRatePerHour ?? undefined }),
+        ...(rates.transportPerLoad === undefined
+          ? {}
+          : { transportPerLoad: rates.transportPerLoad ?? undefined }),
+        ...(rates.cranePerHour === undefined
+          ? {}
+          : { cranePerHour: rates.cranePerHour ?? undefined }),
         byCatalogId,
       },
       {
         currency: rates.currency !== undefined,
         minHireDays: rates.minHireDays !== undefined,
         gangRatePerHour: rates.gangRatePerHour !== undefined,
+        transportPerLoad: rates.transportPerLoad !== undefined,
+        cranePerHour: rates.cranePerHour !== undefined,
       },
     )
     changed.push('rates')
@@ -788,6 +952,12 @@ export interface FormworkSettingsReport {
      */
     schedule: NonNullable<FormworkProjectSettingsNode['schedule']> | null
     /**
+     * Null where no crane is recorded, which is the answer that means no gang has been
+     * checked against a lift. There is no default underneath it for the reason there is
+     * none under the rates: a shipped curve is a machine nobody hired.
+     */
+    crane: NonNullable<FormworkProjectSettingsNode['crane']> | null
+    /**
      * Null rather than an empty rack, and the two are different answers: null is nobody
      * having said, so the takeoff shows no owned/hired split at all, where `{}` is a
      * yard that has recorded owning nothing.
@@ -805,6 +975,12 @@ export interface FormworkSettingsReport {
      * the other money, because hours and the rate that prices them are one answer.
      */
     labour: NormTable | null
+    /**
+     * Null where nobody has stated a payload or a cycle time, which is the answer that
+     * means the takeoff carries no transport and no craneage — the two costs every total
+     * in this model has excluded since the money arrived.
+     */
+    logistics: NonNullable<FormworkProjectSettingsNode['logistics']> | null
   }
   /**
    * Only what the project actually said. Anything absent here but present in `resolved`
@@ -820,9 +996,11 @@ export interface FormworkSettingsReport {
     bracing: NonNullable<FormworkProjectSettingsNode['bracing']> | null
     parts: NonNullable<FormworkProjectSettingsNode['parts']> | null
     schedule: NonNullable<FormworkProjectSettingsNode['schedule']> | null
+    crane: NonNullable<FormworkProjectSettingsNode['crane']> | null
     stock: NonNullable<FormworkProjectSettingsNode['stock']> | null
     rates: NonNullable<FormworkProjectSettingsNode['rates']> | null
     labour: NonNullable<FormworkProjectSettingsNode['labour']> | null
+    logistics: NonNullable<FormworkProjectSettingsNode['logistics']> | null
   } | null
   /**
    * The four figures the engine supplies when nobody has. There is no curing entry
@@ -856,9 +1034,11 @@ export function formworkSettingsReport(
       bracing: resolved.bracing,
       parts: resolved.parts,
       schedule: resolved.schedule ?? null,
+      crane: resolved.crane ?? null,
       ownedStock: resolved.ownedStock ?? null,
       rates: resolved.rates ?? null,
       labour: resolved.labour ?? null,
+      logistics: resolved.logistics ?? null,
     },
     stated: node
       ? {
@@ -871,9 +1051,11 @@ export function formworkSettingsReport(
           bracing: node.bracing ?? null,
           parts: node.parts ?? null,
           schedule: node.schedule ?? null,
+          crane: node.crane ?? null,
           stock: node.stock ?? null,
           rates: node.rates ?? null,
           labour: node.labour ?? null,
+          logistics: node.logistics ?? null,
         }
       : null,
     assumedDefaults: {

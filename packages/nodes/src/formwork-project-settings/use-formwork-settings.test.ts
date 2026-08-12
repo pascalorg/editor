@@ -15,6 +15,7 @@ import {
   clearFormworkRates,
   clearFormworkSettings,
   setFormworkCementField,
+  setFormworkLogisticsRates,
   setFormworkOwnedStock,
   setFormworkRate,
   setFormworkRateTerms,
@@ -379,6 +380,60 @@ describe('formwork settings write — what the project pays', () => {
   })
 })
 
+describe('formwork settings write — the deliveries and the crane hours', () => {
+  beforeEach(seedScene)
+
+  test('the quantities go to logistics and the money to rates, in one edit', () => {
+    // The split the whole group is arranged around: a payload and a cycle time are facts
+    // about the job's plant, and the two charges are money, which is denominated in the
+    // currency `rates` already states once.
+    setFormworkSettingsGroupField('logistics', { lorryPayloadKg: 8000, minutesPerPick: 30 })
+    setFormworkLogisticsRates({ transportPerLoad: 400, cranePerHour: 120 })
+
+    expect(settings()?.logistics).toEqual({ lorryPayloadKg: 8000, minutesPerPick: 30 })
+    // An empty part table beside them, as any write through `rates` opens: the project has
+    // looked at its rates and priced no part, which is not the same as never being asked.
+    expect(settings()?.rates).toEqual({
+      byCatalogId: {},
+      transportPerLoad: 400,
+      cranePerHour: 120,
+    })
+  })
+
+  test('the crane hire arrives after the haulier’s quote without deleting it', () => {
+    // The reason this writer takes the two fields rather than the group: the quotes come
+    // from two desks, and a group replace would make the second one erase the first.
+    setFormworkLogisticsRates({ transportPerLoad: 400 })
+    setFormworkLogisticsRates({ cranePerHour: 120 })
+
+    expect(settings()?.rates).toEqual({
+      byCatalogId: {},
+      transportPerLoad: 400,
+      cranePerHour: 120,
+    })
+  })
+
+  test('null unstates one charge and leaves the other priced', () => {
+    setFormworkLogisticsRates({ transportPerLoad: 400, cranePerHour: 120 })
+    setFormworkLogisticsRates({ cranePerHour: null })
+
+    expect(settings()?.rates).toEqual({ byCatalogId: {}, transportPerLoad: 400 })
+  })
+
+  test('a logistics charge lands beside the part rates rather than replacing the table', () => {
+    setFormworkRateTerms({ currency: 'GBP' })
+    setFormworkRate('doka-framax-panel-588104500', { purchasePerUnit: 420 })
+
+    setFormworkLogisticsRates({ transportPerLoad: 400 })
+
+    expect(settings()?.rates).toEqual({
+      byCatalogId: { 'doka-framax-panel-588104500': { purchasePerUnit: 420 } },
+      currency: 'GBP',
+      transportPerLoad: 400,
+    })
+  })
+})
+
 describe('formwork settings write — reset', () => {
   beforeEach(seedScene)
 
@@ -390,6 +445,8 @@ describe('formwork settings write — reset', () => {
     setFormworkSettingsGroupField('curing', { surfaceTemperatureC: 8 })
     setFormworkOwnedStock({ 'doka-framax-panel-588104500': 200 })
     setFormworkRate('doka-framax-panel-588104500', { purchasePerUnit: 420 })
+    setFormworkSettingsGroupField('crane', { hookHeightM: 40 })
+    setFormworkSettingsGroupField('logistics', { lorryPayloadKg: 8000 })
 
     clearFormworkSettings()
 
@@ -404,6 +461,8 @@ describe('formwork settings write — reset', () => {
     expect(node?.curing).toBeUndefined()
     expect(node?.stock).toBeUndefined()
     expect(node?.rates).toBeUndefined()
+    expect(node?.crane).toBeUndefined()
+    expect(node?.logistics).toBeUndefined()
   })
 
   test('a reset still dirties the assemblies it re-sizes', () => {

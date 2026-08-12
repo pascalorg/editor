@@ -1427,6 +1427,178 @@ describe('what has to happen before what', () => {
   })
 })
 
+describe('what the crane lifts on this job', () => {
+  /**
+   * The chart on the level, so *both* readers of it find the same one.
+   *
+   * `withSettings` parents the node to a site, which the takeoff scans and the geometry's
+   * ancestor walk never reaches — and a crane only the takeoff can see is the one wiring
+   * failure worth guarding here: the faces would be grouped as one pick each and then
+   * measured against a chart the layout never saw.
+   */
+  const withCrane = (crane: Record<string, unknown>) => {
+    const nodes = steelWallScene()
+    const level = nodes.level_1 as unknown as { children: string[] }
+    level.children = [...level.children, 'formwork-settings_1']
+    nodes['formwork-settings_1'] = {
+      object: 'node',
+      id: 'formwork-settings_1',
+      type: 'formwork-settings',
+      parentId: 'level_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      crane,
+    } as unknown as AnyNode
+    return solveProjectFormwork(nodes)
+  }
+
+  test('rolls the gangs the geometry already produced into a schedule', () => {
+    // Off the layout rather than a second division, so the schedule cannot disagree with
+    // the drawing about where a gang breaks. A 6 m × 6 m steel-panel wall with no chart
+    // recorded is one 2062 kg pick, which is the whole face.
+    const solution = solveProjectFormwork(steelWallScene())
+
+    expect(solution.lifts?.pickCount).toBe(1)
+    expect(solution.lifts?.heaviestPickKg).toBe(2062)
+    expect(solution.lifts?.picks[0]?.elementId).toBe('wall_1')
+    expect(solution.lifts?.picks[0]?.panelCount).toBe(20)
+  })
+
+  test('the heaviest pick is a fraction of the bill weight, and the two are not the same figure', () => {
+    // The confusion the block exists to prevent, in the one place both numbers are in
+    // frame: 2062 kg is the hook and 4596 kg is what passes through the job.
+    const solution = solveProjectFormwork(steelWallScene())
+    const billKg = solution.bom.reduce((sum, line) => sum + (line.totalWeightKg ?? 0), 0)
+
+    expect(billKg).toBeGreaterThan(solution.lifts?.heaviestPickKg as number)
+  })
+
+  test('the same chart that grouped the faces is the chart the picks are read against', () => {
+    // The join: a 300 kg machine divides that wall into ten picks and then takes every one
+    // of them. A schedule read against a chart the layout never saw would report ten picks
+    // measured against a different crane.
+    const solution = withCrane({
+      capacityCurve: [{ radiusM: 30, capacityKg: 300 }],
+      hookHeightM: 40,
+    })
+
+    expect(solution.lifts?.pickCount).toBe(10)
+    expect(solution.lifts?.heaviestPickKg).toBeLessThanOrEqual(300)
+    expect(solution.lifts?.picks.every((pick) => pick.verdict === 'lifts')).toBe(true)
+    expect(solution.lifts?.crane?.worstCapacityKg).toBe(300)
+    expect(solution.lifts?.crane?.hookHeightMm).toBe(40_000)
+  })
+
+  test('a scope with nothing ganged carries no schedule at all', () => {
+    // A slab is decked off joists rather than panelled from a run, so it has no gang and
+    // no pick. An empty schedule would read as a crane with nothing to do on a job that is
+    // simply not craning its formwork in.
+    const solution = solveProjectFormwork(
+      sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0)),
+    )
+
+    expect(solution.elements).toHaveLength(1)
+    expect(solution.lifts).toBeUndefined()
+  })
+})
+
+describe('what it costs to deliver and to lift', () => {
+  const PRICED = {
+    currency: 'GBP',
+    transportPerLoad: 400,
+    cranePerHour: 120,
+    byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } },
+  }
+
+  test('a project with no payload and no cycle time carries neither cost', () => {
+    // The rates' rule again, and this pair has been named in `cost.excludes` on every
+    // surface since there was a cost: a payload is the lorry the yard sends and a cycle
+    // time is this crew on this crane, so there is nothing conservative to assume.
+    expect(solveProjectFormwork(steelWallScene()).logistics).toBeUndefined()
+    expect(
+      solveProjectFormwork(withSettings(steelWallScene(), { rates: PRICED })).logistics,
+    ).toBeUndefined()
+  })
+
+  test('counts the loads off the bill weight and the hook hours off the picks', () => {
+    // The two sweeps, on one scene where both quantities are in frame: 4596 kg of bill on
+    // a 3000 kg lorry is two loads out and two back, and the wall is one 2062 kg pick.
+    const solution = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        logistics: { lorryPayloadKg: 3000, minutesPerPick: 30 },
+        rates: PRICED,
+      }),
+    )
+
+    expect(solution.logistics?.weighedKg).toBe(solution.totalWeightKg)
+    expect(solution.logistics?.outboundLoads).toBe(2)
+    expect(solution.logistics?.totalLoads).toBe(4)
+    expect(solution.logistics?.transportCost).toBe(1600)
+    // The picks straight off the lifting schedule rather than a second grouping of the
+    // faces, so the hours and the schedule cannot disagree about how many lifts there are.
+    expect(solution.logistics?.pickCount).toBe(solution.lifts?.pickCount)
+    expect(solution.logistics?.craneHours).toBeCloseTo(0.5, 6)
+    expect(solution.logistics?.craneCost).toBeCloseTo(60, 6)
+    expect(solution.logistics?.totalCost).toBeCloseTo(1660, 6)
+  })
+
+  test('keeps the deliveries out of the cost total, like the labour', () => {
+    const priced = solveProjectFormwork(
+      withSettings(steelWallScene(), {
+        logistics: { lorryPayloadKg: 3000, minutesPerPick: 30 },
+        rates: PRICED,
+      }),
+    )
+    const withoutLogistics = solveProjectFormwork(withSettings(steelWallScene(), { rates: PRICED }))
+
+    expect(priced.logistics?.totalCost).toBeGreaterThan(0)
+    expect(priced.cost?.totalCost).toBeCloseTo(withoutLogistics.cost?.totalCost ?? -1, 6)
+  })
+
+  test('a payload with nothing ganged still counts the lorries', () => {
+    // The two halves are independent: a slab is decked rather than panelled, so it has no
+    // pick to time, and that says nothing about how many lorries its bill fills.
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0)),
+        { logistics: { lorryPayloadKg: 3000, minutesPerPick: 30 }, rates: PRICED },
+      ),
+    )
+
+    expect(solution.lifts).toBeUndefined()
+    expect(solution.logistics?.outboundLoads).toBeGreaterThan(0)
+    expect(solution.logistics?.craneHours).toBeUndefined()
+    expect(solution.logistics?.gaps).toContain('nothing-ganged')
+  })
+
+  test('says the loads are the fewest trips, and that a tower crane is already paid for', () => {
+    const caveats = projectFormworkCaveats(
+      solveProjectFormwork(
+        withSettings(steelWallScene(), {
+          logistics: { lorryPayloadKg: 3000, minutesPerPick: 30 },
+          rates: PRICED,
+        }),
+      ),
+    )
+
+    expect(caveats.some((c) => c.includes('the fewest trips'))).toBe(true)
+    expect(caveats.some((c) => c.includes('charged by the week'))).toBe(true)
+  })
+
+  test('says a priced takeoff carries no transport where nobody stated a payload', () => {
+    // The labour's rule: only where money exists, because a takeoff with no figures at all
+    // already tells the reader that and two silences read as two problems.
+    const priced = projectFormworkCaveats(
+      solveProjectFormwork(withSettings(steelWallScene(), { rates: PRICED })),
+    )
+    expect(priced.some((c) => c.includes('no transport and no craneage'))).toBe(true)
+
+    const unpriced = projectFormworkCaveats(solveProjectFormwork(steelWallScene()))
+    expect(unpriced.some((c) => c.includes('no transport and no craneage'))).toBe(false)
+  })
+})
+
 describe('projectFormworkCaveats', () => {
   test('says nothing about a complete takeoff', () => {
     const wall = makeWall('wall_1')
@@ -1530,5 +1702,26 @@ describe('projectFormworkCaveats', () => {
     const caveats = projectFormworkCaveats(solveProjectFormwork(steelWallScene()))
 
     expect(caveats.some((c) => c.includes('no labour'))).toBe(false)
+  })
+
+  test('puts the lifting caveats straight after the one about the weight total', () => {
+    // The order is the point: a reader who has just been told the bill's tonnage is
+    // incomplete is the reader about to size a crane off it, and the next sentence has to
+    // be that a pick is one hook load rather than a total.
+    const caveats = projectFormworkCaveats(solveProjectFormwork(steelWallScene()))
+    const weight = caveats.findIndex((c) => c.includes('no published weight'))
+    const lifting = caveats.findIndex((c) => c.includes('Walers, ties'))
+
+    expect(weight).toBeGreaterThanOrEqual(0)
+    expect(lifting).toBe(weight + 1)
+    expect(caveats.some((c) => c.includes('a load nothing ever lifts'))).toBe(true)
+  })
+
+  test('says nothing about lifting where nothing in scope is ganged', () => {
+    const solution = solveProjectFormwork(
+      sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0)),
+    )
+
+    expect(projectFormworkCaveats(solution).some((c) => c.includes('Walers, ties'))).toBe(false)
   })
 })

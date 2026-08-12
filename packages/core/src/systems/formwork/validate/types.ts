@@ -69,6 +69,10 @@ export type InvariantId =
   | 'OPENING_INSIDE_CORNER_UNIT'
   /** Concurrent pours need more of a part at once than the yard owns or has hired. */
   | 'SET_COUNT_SHORTAGE'
+  /** A gang weighs more than the site's crane takes at the radius it must reach. */
+  | 'GANG_WEIGHT_OVER_CRANE_CAPACITY'
+  /** A gang's slings want more height between its top and the hook than the crane has. */
+  | 'GANG_HEADROOM_OVER_HOOK_HEIGHT'
 
 /**
  * One stretch a through-tie could pass over, and the stations at which it can.
@@ -129,11 +133,16 @@ export interface Finding {
  * at.
  *
  * `notChecked` exists because a validation report that lists only failures reads
- * as a clean bill of health for everything it never examined. Six of the plan's
- * assertions need data this scene has no schema for (rebar geometry, crane
- * curves, site supply rates), and an unchecked assertion silently absent is how
- * a user comes to believe the shutter was checked against rebar it was never
- * compared to.
+ * as a clean bill of health for everything it never examined. Some of the plan's
+ * assertions need data this scene has no schema for (rebar geometry, a slab's
+ * capacity at a prop position, a system's minimum radius), and an unchecked
+ * assertion silently absent is how a user comes to believe the shutter was
+ * checked against rebar it was never compared to.
+ *
+ * The entries move as the schema grows. A crane's load chart was in this list
+ * until the settings gained one, and the check it blocked now runs wherever a
+ * project has recorded a curve — which is why the conditional entries name the
+ * input to record rather than a permanent absence.
  */
 export interface ValidationReport {
   findings: Finding[]
@@ -165,4 +174,6 @@ export const INVARIANT_LABELS: Record<InvariantId, string> = {
   CORNER_UNITS_OVERLAP: 'Two corner units claim the same stretch of face',
   OPENING_INSIDE_CORNER_UNIT: 'Opening jamb falls inside a corner unit',
   SET_COUNT_SHORTAGE: 'More needed at once than the yard owns',
+  GANG_WEIGHT_OVER_CRANE_CAPACITY: 'A gang is heavier than the crane lifts',
+  GANG_HEADROOM_OVER_HOOK_HEIGHT: 'A gang’s slings want more height than the hook has',
 }

@@ -239,6 +239,48 @@ interface ProjectReport {
     gaps: string[]
   }
   noCommitmentsBecause?: string
+  lifting?: {
+    picks: number
+    heaviestPickKg: number | null
+    unweighedPicks: number
+    overTheChartPicks: number
+    positionDependentPicks: number
+    overHookHeightPicks: number
+    crane: {
+      worstCapacityKg: number
+      bestCapacityKg: number
+      hookHeightMm: number | null
+    } | null
+    items: Array<{
+      elementId: string
+      face: number
+      gang: number
+      panels: number
+      pickWeightKg: number | null
+      verdict: string | null
+      liftsInsideM?: number
+      overHookHeight?: boolean
+    }>
+    excludes: string[]
+  }
+  noLiftingBecause?: string
+  logistics?: {
+    currency: string | null
+    loads: number | null
+    loadsOut: number | null
+    loadsBack: number | null
+    lorryPayloadKg: number | null
+    weightTheLoadsCameFromKg: number | null
+    transportCost: number | null
+    picks: number | null
+    hookHours: number | null
+    craneCost: number | null
+    total: number | null
+    complete: boolean
+    gaps: string[]
+    excludes: string[]
+  }
+  noLogisticsBecause?: string
   beyondCapacity: Array<{ elementId: string; mark: string }>
   caveats: string[]
 }
@@ -859,6 +901,82 @@ describe('inspect_project_formwork', () => {
     // No gang rate, so hours with no money against them rather than hours that are free.
     expect(solved.labour?.cost).toBeNull()
     expect(solved.caveats.some((c) => c.includes('carry no norm at all'))).toBe(true)
+  })
+
+  test('the pick weight is what the hook lifts, and there is no sum of picks in it', async () => {
+    // The one figure in this answer that comes off the geometry rather than the bill or the
+    // programme, and the one a model is likeliest to get wrong by addition: the picks happen
+    // one at a time, so a total of them is a load nothing ever lifts.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.lifting?.picks).toBeGreaterThan(0)
+    expect(solved.lifting?.heaviestPickKg).toBeLessThan(solved.totalWeightKg)
+    expect(Object.keys(solved.lifting ?? {}).some((key) => /total|sum/i.test(key))).toBe(false)
+    // No chart recorded, so every verdict is null rather than a pass, and the block says so.
+    expect(solved.lifting?.crane).toBeNull()
+    expect(solved.lifting?.items.every((item) => item.verdict === null)).toBe(true)
+    expect(solved.lifting?.excludes.some((e) => e.includes('a fifth of the pick'))).toBe(true)
+  })
+
+  test('the chart that grouped the faces is the chart the verdicts came from', async () => {
+    // A 300 kg machine divides that face into several picks and takes every one. A schedule
+    // graded against a chart the layout never saw would report one pick the model never drew.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const ungraded = await project(tools, { elementIds: ['wall_1'] })
+
+    await call(tools, 'set_formwork_settings', {
+      crane: { capacityCurve: [{ radiusM: 30, capacityKg: 300 }], hookHeightM: 40 },
+    })
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.lifting?.picks).toBeGreaterThan(ungraded.lifting?.picks ?? 0)
+    expect(solved.lifting?.heaviestPickKg).toBeLessThanOrEqual(300)
+    expect(solved.lifting?.items.every((item) => item.verdict === 'lifts')).toBe(true)
+    expect(solved.lifting?.crane?.worstCapacityKg).toBe(300)
+  })
+
+  test('says the deliveries and the hook time are absent rather than showing none', async () => {
+    // The pair `cost.excludes` has named since the money arrived, and the same rule as a
+    // norm: a payload is the lorry the yard sends, not a figure to pick.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.logistics).toBeUndefined()
+    expect(solved.noLogisticsBecause).toContain('Never estimate either')
+    expect(solved.noLogisticsBecause).toContain('set_formwork_settings logistics')
+  })
+
+  test('counts the loads off the bill weight and the hours off the picks', async () => {
+    // Two questions rather than one: 60 t in 30 picks and 60 t in 300 deliver the same and
+    // lift ten times as much, so one figure would answer neither.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    await call(tools, 'set_formwork_settings', {
+      logistics: { lorryPayloadKg: 3000, minutesPerPick: 30 },
+      rates: { currency: 'GBP', transportPerLoad: 400, cranePerHour: 120 },
+    })
+    const solved = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(solved.logistics?.weightTheLoadsCameFromKg).toBeCloseTo(solved.totalWeightKg, 0)
+    expect(solved.logistics?.loads).toBe(
+      (solved.logistics?.loadsOut ?? 0) + (solved.logistics?.loadsBack ?? 0),
+    )
+    expect(solved.logistics?.picks).toBe(solved.lifting?.picks)
+    expect(solved.logistics?.hookHours).toBeCloseTo((solved.lifting?.picks ?? 0) * 0.5, 6)
+    // Outside the cost total for labour's reason, and the money block points at the block
+    // rather than claiming the pair is missing from a takeoff that prices it.
+    expect(
+      solved.cost?.excludes.some((e) => e.includes('in the logistics block beside this')),
+    ).toBe(true)
+    expect(solved.caveats.some((c) => c.includes('the fewest trips'))).toBe(true)
+    expect(solved.caveats.some((c) => c.includes('charged by the week'))).toBe(true)
   })
 
   test('the element rows and the scope counts agree with each other', async () => {

@@ -66,6 +66,17 @@ export interface RateTable {
   /** The agreement's minimum hire period, days. */
   minHireDays?: number
   byCatalogId: Readonly<Record<string, PartRate>>
+  /**
+   * One delivery load, one way, and an hour of a mobile crane.
+   *
+   * Carried on the rate table rather than beside the payload and the cycle time they
+   * multiply, for the gang rate's reason: they are money, and the currency they are
+   * denominated in is stated once here. `logistics.ts` reads them; nothing in this module
+   * does, because neither is a charge against a bill *line* — a lorry carries a mixed load
+   * and a pick lifts a gang of several.
+   */
+  transportPerLoad?: number
+  cranePerHour?: number
 }
 
 /**

@@ -244,6 +244,38 @@ export function setFormworkGangRate(value: number | null): void {
 }
 
 /**
+ * Record what a delivery load and an hour of the crane cost. `null` clears one figure.
+ *
+ * Both on `rates` rather than beside the payload and the cycle time they multiply, for the
+ * gang rate's reason: they are money, and the currency they are denominated in lives there.
+ * Field by field rather than as a group, because the haulier's quote and the crane hire come
+ * from two desks — replacing the pair would make filling in the second delete the first.
+ */
+export function setFormworkLogisticsRates(patch: {
+  transportPerLoad?: number | null
+  cranePerHour?: number | null
+}): void {
+  writeFormworkSettings(
+    (node) =>
+      ({
+        rates: mergeFormworkRates(
+          node.rates,
+          {
+            ...('transportPerLoad' in patch
+              ? { transportPerLoad: patch.transportPerLoad ?? undefined }
+              : {}),
+            ...('cranePerHour' in patch ? { cranePerHour: patch.cranePerHour ?? undefined } : {}),
+          },
+          {
+            transportPerLoad: 'transportPerLoad' in patch,
+            cranePerHour: 'cranePerHour' in patch,
+          },
+        ),
+      }) as Partial<AnyNode>,
+  )
+}
+
+/**
  * Record this project's own output norm for one kind of part. `null` clears one figure.
  *
  * Keyed by kind rather than by catalog id, because fitting a 0.6 m panel and a 0.9 m one is
@@ -294,6 +326,8 @@ export function clearFormworkSettings(): void {
         rates: undefined,
         labour: undefined,
         schedule: undefined,
+        crane: undefined,
+        logistics: undefined,
       }) as Partial<AnyNode>,
   )
 }
@@ -312,6 +346,7 @@ export function useFormworkSettingsWriter(): {
   setRateTerms: typeof setFormworkRateTerms
   clearRates: typeof clearFormworkRates
   setGangRate: typeof setFormworkGangRate
+  setLogisticsRates: typeof setFormworkLogisticsRates
   setLabourNorm: typeof setFormworkLabourNorm
   clearLabourNorms: typeof clearFormworkLabourNorms
   clearAll: typeof clearFormworkSettings
@@ -327,6 +362,7 @@ export function useFormworkSettingsWriter(): {
       setRateTerms: setFormworkRateTerms,
       clearRates: clearFormworkRates,
       setGangRate: setFormworkGangRate,
+      setLogisticsRates: setFormworkLogisticsRates,
       setLabourNorm: setFormworkLabourNorm,
       clearLabourNorms: clearFormworkLabourNorms,
       clearAll: clearFormworkSettings,

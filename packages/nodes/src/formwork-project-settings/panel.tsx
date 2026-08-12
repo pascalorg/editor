@@ -128,6 +128,7 @@ export function FormworkSettingsPanel() {
     setRateTerms,
     clearRates,
     setGangRate,
+    setLogisticsRates,
     setLabourNorm,
     clearLabourNorms,
     clearAll,
@@ -139,6 +140,7 @@ export function FormworkSettingsPanel() {
   const bracing = node?.bracing ?? {}
   const parts = node?.parts ?? {}
   const schedule = node?.schedule ?? {}
+  const logistics = node?.logistics ?? {}
   const stated = node !== undefined
 
   return (
@@ -571,9 +573,9 @@ export function FormworkSettingsPanel() {
         <GroupNote>
           This prices what the formwork costs to <em>hold</em> — hire for the period charged, the
           list price recharged on hired parts this pour alters, and what is spent. It is not the
-          cost of forming the job: there is no transport and no finance in it, and the gang's time
-          is the group below rather than part of this total. Owned stock is excluded rather than
-          priced at zero, because a panel the yard already holds amortises over a reuse count
+          cost of forming the job: there is no finance in it, and the gang's time and the deliveries
+          are the two groups below rather than part of this total. Owned stock is excluded rather
+          than priced at zero, because a panel the yard already holds amortises over a reuse count
           nothing here records.
         </GroupNote>
       </PanelSection>
@@ -600,6 +602,68 @@ export function FormworkSettingsPanel() {
           programme cuts the hire and leaves the hours where they were. And man-hours are not a
           duration: nothing here knows the gang size, so 400 hours is 400 hours rather than ten
           days.
+        </GroupNote>
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Delivery and craneage">
+        <GroupNote>
+          The last two costs the rates above leave out, and they are two questions rather than one:
+          a delivery is priced per load and a crane per lift, so the loads come off the weight of
+          the bill and the hook hours off the number of picks. A job of 60 t in 30 picks and one of
+          60 t in 300 cost the same to deliver and ten times as much to lift.
+        </GroupNote>
+        <OptionalNumberField
+          hint="What one lorry carries — 8 t on a rigid, 24 t on an artic, and less again where the site gate or the crane at the far end decides it. The loads are rounded up per lorry, because 8.2 t against an 8 t payload is two trips and the second is invoiced at what the first was."
+          label="Lorry payload"
+          max={100_000}
+          min={1}
+          onChange={(value) => setGroupField('logistics', { lorryPayloadKg: value })}
+          step={500}
+          unit="kg"
+          value={logistics.lorryPayloadKg}
+        />
+        <OptionalNumberField
+          hint="One pick, sling to hook back — the whole cycle rather than the time in the air, because a crane is booked by the hour and landing and releasing a gang is most of it."
+          label="Minutes per pick"
+          max={600}
+          min={1}
+          onChange={(value) => setGroupField('logistics', { minutesPerPick: value })}
+          step={5}
+          unit="min"
+          value={logistics.minutesPerPick}
+        />
+        <OptionalNumberField
+          hint="What fraction of the loads go back to the yard. Unstated means all of them, which is right for a hired set; a job that consumes its formwork sends fewer lorries home."
+          label="Loads returning"
+          max={1}
+          min={0}
+          onChange={(value) => setGroupField('logistics', { returnLoadFraction: value })}
+          step={0.1}
+          value={logistics.returnLoadFraction}
+        />
+        <OptionalNumberField
+          hint="What a haulier charges for one lorry, one way. Per load rather than per tonne or per mile, because that is how the trade quotes it and the distance is already inside the figure the haulier gave."
+          label="Charge per load"
+          min={0}
+          onChange={(value) => setLogisticsRates({ transportPerLoad: value ?? null })}
+          step={10}
+          unit={node?.rates?.currency ?? ''}
+          value={node?.rates?.transportPerLoad}
+        />
+        <OptionalNumberField
+          hint="An hour of the crane, all-in with its operator and slinger — and only where one is hired by the hour. A tower crane standing over the pour is a preliminary charged by the week whether it lifts this formwork or not, so pricing hook time against one charges the same crane twice."
+          label="Crane per hour"
+          min={0}
+          onChange={(value) => setLogisticsRates({ cranePerHour: value ?? null })}
+          step={5}
+          unit={node?.rates?.currency ?? ''}
+          value={node?.rates?.cranePerHour}
+        />
+        <GroupNote>
+          The loads are the fewest trips a job of this weight takes rather than a delivery schedule:
+          a set that goes back to the yard between two pours travels again, and nothing here knows
+          whether it stays on site. Reported beside the money rather than inside it, like the labour
+          above.
         </GroupNote>
       </PanelSection>
 
