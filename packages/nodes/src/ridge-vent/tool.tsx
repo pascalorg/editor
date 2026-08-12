@@ -38,7 +38,6 @@ const RidgeVentTool = () => {
 
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewYaw, setPreviewYaw] = useState(0)
-  const lastSnapRef = useRef<[number, number] | null>(null)
 
   const previewNode = useMemo(
     () =>
@@ -97,10 +96,6 @@ const RidgeVentTool = () => {
 
       const sx = Math.round(ridgeWorld[0] * 20) / 20
       const sz = Math.round(ridgeWorld[2] * 20) / 20
-      const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        lastSnapRef.current = [sx, sz]
-      }
 
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0) + snap.rotation)
       setPreviewPos(worldToBuildingLocal(ridgeWorld[0], ridgeWorld[1], ridgeWorld[2]))

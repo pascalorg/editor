@@ -55,7 +55,6 @@ const ChimneyTool = () => {
   // segment's footprint.
   const [hitLocal, setHitLocal] = useState<[number, number, number] | null>(null)
   const [previewSegment, setPreviewSegment] = useState<RoofSegmentNode | null>(null)
-  const lastSnapRef = useRef<[number, number] | null>(null)
 
   const previewNode = useMemo(
     () =>
@@ -93,10 +92,6 @@ const ChimneyTool = () => {
 
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
-      const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        lastSnapRef.current = [sx, sz]
-      }
 
       const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
       if (!hit) return

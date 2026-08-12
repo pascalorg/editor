@@ -110,7 +110,6 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
   const previewPathRef = useRef<Vec3[]>(originalPathRef.current)
   const hasMovedRef = useRef(false)
   const activatedAtRef = useRef<number>(Date.now())
-  const prevSnapRef = useRef<[number, number] | null>(null)
 
   useEffect(() => {
     const nodeId = node.id as AnyNodeId
@@ -176,7 +175,6 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       }
 
       const cur: [number, number] = [centerX + dx, centerZ + dz]
-      prevSnapRef.current = cur
       hasMovedRef.current = true
       const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)
       setPreview(nextPath)

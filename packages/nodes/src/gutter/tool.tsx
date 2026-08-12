@@ -55,7 +55,6 @@ const GutterTool = () => {
   const setSelection = useViewer((s) => s.setSelection)
 
   const [target, setTarget] = useState<PreviewTarget | null>(null)
-  const lastSnapRef = useRef<[number, number] | null>(null)
 
   const previewNode = useMemo(
     () =>
@@ -88,10 +87,6 @@ const GutterTool = () => {
       // the commit will actually store.
       const sx = Math.round(snap.eaveX * 20) / 20
       const sz = Math.round(snap.eaveZ * 20) / 20
-      const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        lastSnapRef.current = [sx, sz]
-      }
 
       setTarget({
         roof: {

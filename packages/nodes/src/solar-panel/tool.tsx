@@ -41,7 +41,6 @@ const SolarPanelTool = () => {
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewYaw, setPreviewYaw] = useState(0)
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
-  const lastSnapRef = useRef<[number, number] | null>(null)
 
   // Compact 2×3 ghost (rows × columns) — small enough to read as a
   // pointer, large enough to show the array's orientation/aspect.
@@ -77,10 +76,6 @@ const SolarPanelTool = () => {
 
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
-      const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        lastSnapRef.current = [sx, sz]
-      }
 
       const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
       if (!hit) return

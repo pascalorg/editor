@@ -44,7 +44,6 @@ const BoxVentTool = () => {
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
   const [previewYaw, setPreviewYaw] = useState(0)
   const [previewRotation, setPreviewRotation] = useState(0)
-  const lastSnapRef = useRef<[number, number] | null>(null)
 
   // Default-shaped preview node — matches what the commit will create.
   const previewNode = useMemo(
@@ -76,10 +75,6 @@ const BoxVentTool = () => {
 
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
-      const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        lastSnapRef.current = [sx, sz]
-      }
 
       const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
       if (!hit) return

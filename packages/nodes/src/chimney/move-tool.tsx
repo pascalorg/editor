@@ -63,7 +63,6 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
   const [segmentXform, setSegmentXform] = useState<SegmentTransform | null>(null)
   const [hitLocal, setHitLocal] = useState<[number, number, number] | null>(null)
   const [previewSegment, setPreviewSegment] = useState<RoofSegmentNode | null>(null)
-  const lastSnapRef = useRef<[number, number] | null>(null)
 
   // Ghost data — same as the moving clone but pinned to position[0,0,0]
   // (the inner group does the cursor offset). Reparse so Zod fills any
@@ -147,10 +146,6 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
 
       const sx = Math.round(target.localX * 20) / 20
       const sz = Math.round(target.localZ * 20) / 20
-      const prev = lastSnapRef.current
-      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        lastSnapRef.current = [sx, sz]
-      }
 
       const xform = computeSegmentXform(target.segment.id)
       if (!xform) return clearTarget()
