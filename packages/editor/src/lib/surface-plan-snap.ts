@@ -37,6 +37,13 @@ const WALL_SOURCE_MATCH_EPSILON = 0.035
 export type SurfacePlanSnapInput = {
   rawPoint: WallPlanPoint
   fallbackPoint?: WallPlanPoint
+  /**
+   * The vertex the edge being drawn starts from. Supplied by polygon drafting so
+   * a typed dimension has something to measure along; omitting it simply leaves
+   * typed lengths inactive for that call. It does not enable the angle path —
+   * that stays gated on `angleSnap`, which this resolver never sets.
+   */
+  previousPoint?: WallPlanPoint
   levelId?: string | null
   excludeId?: string | null
   movingId?: string
@@ -180,6 +187,7 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
   const wallSnap = snapWallDraftPointDetailed({
     point: input.rawPoint,
     walls,
+    start: input.previousPoint,
     step: input.step ?? getSegmentGridStep(),
     magnetic,
     snapRadii: input.snapRadii ?? SURFACE_WALL_SNAP_RADII,

@@ -173,6 +173,8 @@ export const SlabTool: React.FC = () => {
         rawPoint,
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
+        // The previous vertex is what a typed edge length measures from.
+        previousPoint: lastPoint,
       }).point
       const hoverPlane =
         plane ??

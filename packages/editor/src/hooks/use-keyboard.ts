@@ -225,41 +225,6 @@ export const useKeyboard = ({
         return
       }
 
-      // Typed-dimension entry ("measurements box"). This runs ahead of every
-      // shortcut below, but only claims a key while an interaction is actually
-      // in flight — at idle the whole block is inert, so `1`/`2`/`3` stay phase
-      // shortcuts and `b`/`v`/`m`/… keep switching tools. A buffer starts on a
-      // digit; once started, every printable key belongs to it so a unit can be
-      // spelled out (`4200mm`). Modifier chords (Cmd+Z, Ctrl+C) never reach it.
-      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
-        const input = useMeasurementInput.getState()
-        const typing = input.buffer !== ''
-        if (typing || isActive(useInteractionScope.getState().scope)) {
-          if (typing && e.key === 'Backspace') {
-            e.preventDefault()
-            input.backspace()
-            return
-          }
-          if (typing && e.key === 'Enter') {
-            e.preventDefault()
-            emitter.emit('tool:commit')
-            return
-          }
-          // Escape clears the typed value first; a second Escape falls through
-          // to the ordinary cancel, so a mistyped number never costs the draft.
-          if (typing && e.key === 'Escape') {
-            e.preventDefault()
-            input.clear()
-            return
-          }
-          if (typing ? isMeasurementInputContinueKey(e.key) : isMeasurementInputStartKey(e.key)) {
-            e.preventDefault()
-            input.append(e.key)
-            return
-          }
-        }
-      }
-
       if (e.key === 'Shift' && !e.repeat && useEditor.getState().mode === 'material-paint') {
         // In paint mode Shift cycles the application scope (this surface →
         // whole item / all matching / room) — the paint-mode analogue of the
@@ -751,6 +716,61 @@ export const useKeyboard = ({
       }
     }
 
+    // Typed-dimension entry ("measurements box"), on window capture so it gets
+    // first refusal on a key. It has to: tools register their own `document`
+    // keydown listeners, which in the bubble phase run *before* this hook's
+    // window listener. Slab's Enter finishes the polygon and fence's commits —
+    // both would fire alongside a typed commit without this.
+    //
+    // The block only claims a key while an interaction is in flight, so at idle
+    // it is inert and `1`/`2`/`3` stay phase shortcuts, `b`/`v`/`m`/… keep
+    // switching tools. A buffer starts on a digit; once started every printable
+    // key belongs to it so a unit can be spelled out (`4200mm`). Modifier chords
+    // (Cmd+Z, Ctrl+C) never reach it.
+    const handleMeasurementInputKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target instanceof HTMLElement && e.target.isContentEditable)
+      ) {
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+
+      const input = useMeasurementInput.getState()
+      const typing = input.buffer !== ''
+      if (!(typing || isActive(useInteractionScope.getState().scope))) return
+
+      // Consuming a key means no other listener — tool-local or otherwise — may
+      // also act on it, so the whole propagation stops here.
+      const consume = () => {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+      }
+
+      if (typing && e.key === 'Backspace') {
+        consume()
+        input.backspace()
+        return
+      }
+      if (typing && e.key === 'Enter') {
+        consume()
+        emitter.emit('tool:commit')
+        return
+      }
+      // Escape clears the typed value first; a second Escape falls through to
+      // the ordinary cancel, so a mistyped number never costs the draft.
+      if (typing && e.key === 'Escape') {
+        consume()
+        input.clear()
+        return
+      }
+      if (typing ? isMeasurementInputContinueKey(e.key) : isMeasurementInputStartKey(e.key)) {
+        consume()
+        input.append(e.key)
+      }
+    }
+
     // Capture-phase Ctrl/Cmd+G so browser "Find next" cannot steal the shortcut
     // before the editor bubble listener runs. `stopPropagation` here silences the
     // chord for every other capture listener (floorplan hotkeys, group move,
@@ -778,10 +798,12 @@ export const useKeyboard = ({
       }
     }
 
+    window.addEventListener('keydown', handleMeasurementInputKeyDown, true)
     window.addEventListener('keydown', handleSessionGroupKeyDown, true)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
     return () => {
+      window.removeEventListener('keydown', handleMeasurementInputKeyDown, true)
       window.removeEventListener('keydown', handleSessionGroupKeyDown, true)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)

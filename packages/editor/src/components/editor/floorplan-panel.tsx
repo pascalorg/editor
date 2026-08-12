@@ -8385,6 +8385,12 @@ export function FloorplanPanel({
           point: planPoint,
           walls,
           ignoreWallIds: [dragState.wallId],
+          // The endpoint that is staying put is what a typed length measures
+          // from, so dragging one end and typing 4.2 gives a 4.2 m wall. The 3D
+          // endpoint tool already passes it; without it the same drag would only
+          // accept a typed value in 3D. The angle path stays off — it is gated
+          // on `angleSnap`, which this path does not opt into.
+          start: dragState.fixedPoint,
           magnetic: isMagneticSnapActive(),
         })
         const snappedPoint = snapResult.point
