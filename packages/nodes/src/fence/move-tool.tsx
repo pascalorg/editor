@@ -306,13 +306,6 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         step: gridSnapActive ? getSegmentGridStep() : 0,
       })
 
-      if (
-        (gridSnapActive || magneticSnapActive) &&
-        previousGridPosRef.current &&
-        (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       previousGridPosRef.current = [localX, localZ]
 
       const anchor = dragAnchorRef.current ?? [localX, localZ]

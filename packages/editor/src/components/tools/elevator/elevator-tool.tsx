@@ -246,13 +246,6 @@ export const ElevatorTool: React.FC<ElevatorToolProps> = ({ buildingId, levelId,
         rotation: rotationRef.current,
       })
 
-      if (
-        (isGridSnapActive() || isMagneticSnapActive()) &&
-        previousGridPosRef.current &&
-        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       previousGridPosRef.current = [gridX, gridZ]
     }

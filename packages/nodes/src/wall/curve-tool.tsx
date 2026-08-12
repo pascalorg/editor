@@ -107,12 +107,6 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         Math.max(-maxCurveOffset, Math.min(maxCurveOffset, snappedOffset)),
       )
 
-      if (
-        previousCurveOffsetRef.current !== null &&
-        nextCurveOffset !== previousCurveOffsetRef.current
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       previousCurveOffsetRef.current = nextCurveOffset
 
       applyPreview(nextCurveOffset)

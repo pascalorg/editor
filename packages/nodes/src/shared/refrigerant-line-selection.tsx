@@ -14,7 +14,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { DimensionPill, swallowNextClick, triggerSFX, useEditor } from '@pascal-app/editor'
+import { DimensionPill, swallowNextClick, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
@@ -292,7 +292,6 @@ function RefrigerantLineEndpointHandles({
         return
       drag.current = next
       drag.detached = detached
-      if (step > 0) triggerSFX('sfx:grid-snap')
       const path = line.path.map((p, i) => (i === drag.index ? next! : p)) as Point[]
       useScene
         .getState()

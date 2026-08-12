@@ -31,6 +31,7 @@ import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
+import { GhostedMode } from './ghosted-mode'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
@@ -434,7 +435,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   // back on reuses destroyed resources and every frame submit fails with a
   // GPUValidationError. Disabling at the renderer level rebuilds materials
   // without disposing anything, so the round-trip is safe.
-  const shadowsEnabled = useViewer((state) => state.shadows)
+  const shadowsEnabled = useViewer((state) => state.shadows && state.shading !== 'ghosted')
   useLayoutEffect(() => {
     if (transparent === undefined) return
 
@@ -594,6 +595,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}
         <RegisteredSystems />
+        <GhostedMode />
         <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}

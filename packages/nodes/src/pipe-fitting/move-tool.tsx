@@ -258,9 +258,6 @@ export const MovePipeFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         next = [x, lastPos[1], z]
       }
 
-      if (next[0] !== lastPos[0] || next[1] !== lastPos[1] || next[2] !== lastPos[2]) {
-        triggerSFX('sfx:grid-snap')
-      }
       lastPos = next
       lastDetached = detached
       hasMoved = true

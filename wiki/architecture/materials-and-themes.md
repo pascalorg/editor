@@ -8,14 +8,14 @@ Appearance is a set of orthogonal axes, all held in `useViewer`:
 
 | State | Values | What it controls |
 |---|---|---|
-| `shading` | `'solid' \| 'rendered'` | `solid` = `MeshLambertNodeMaterial`, no SSGI/AO. `rendered` = `MeshStandardNodeMaterial` + SSGI/AO. |
+| `shading` | `'solid' \| 'rendered' \| 'ghosted'` | `solid` = `MeshLambertNodeMaterial`, no SSGI/AO. `rendered` = `MeshStandardNodeMaterial` + SSGI/AO. `ghosted` = translucent scene materials with depth writes and shadows disabled so occluded geometry remains visible. |
 | `textures` | `boolean` | Whether surfaces that have a real material/preset show their texture. |
 | `colorPreset` | `'clay' \| 'white' \| 'mono' \| 'blueprint'` | The per-role base palette for untextured surfaces. |
 | `sceneTheme` | theme id (`studio`, `mediterranean`, `night`, `verdant`, …) | Lighting + background + ground + per-role colour tints. See [scene themes](#scene-themes). |
 | `shadows` | `boolean` | Directional shadow casting (always-on key light; see `lights.tsx`). |
 | `edges` | `'off' \| 'soft' \| 'strong'` | Screen-space ink outline in `post-processing.tsx` (`lib/ink-edges.ts`). |
 
-`shading`/`textures`/`colorPreset` are persisted per-context; `shadingByContext` lets the editor default to `solid` and the community viewer to `rendered`.
+`shading`/`textures`/`colorPreset` are persisted per-context; `shadingByContext` lets the editor default to `solid` and the community viewer to `rendered`. Ghosted materials are temporary clones applied only to `SCENE_LAYER`; exports and the authored/cached materials keep their original opacity.
 
 ## Surface roles
 

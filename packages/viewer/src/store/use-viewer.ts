@@ -199,7 +199,7 @@ type PersistedViewerState = Partial<
 >
 
 const CAMERA_MODES = ['perspective', 'orthographic'] as const
-const RENDER_SHADINGS = ['solid', 'rendered'] as const
+const RENDER_SHADINGS = ['solid', 'rendered', 'ghosted'] as const
 const COLOR_PRESETS = ['clay', 'white', 'mono', 'blueprint'] as const
 const EDGE_MODES = ['off', 'soft', 'strong'] as const
 const UNITS = ['metric', 'imperial'] as const

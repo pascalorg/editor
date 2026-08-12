@@ -9,6 +9,9 @@ const resetMeasurementPreferences = () => {
     projectId: null,
     projectPreferences: {},
     showMeasurements: true,
+    shading: 'rendered',
+    shadingByContext: {},
+    renderContext: 'editor',
     unit: 'metric',
     metricNotation: 'meters',
   })
@@ -71,5 +74,16 @@ describe('external selection highlights', () => {
 
     expect(useViewer.getState().externalSelectedIds).toEqual(['wall_remote'])
     expect(useViewer.getState().selection).toBe(localSelection)
+  })
+})
+
+describe('render shading', () => {
+  test('tracks ghosted as a context-specific display preference', () => {
+    useViewer.getState().setShading('ghosted')
+
+    expect(useViewer.getState()).toMatchObject({
+      shading: 'ghosted',
+      shadingByContext: { editor: 'ghosted' },
+    })
   })
 })

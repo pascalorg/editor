@@ -29,16 +29,6 @@ const DEFAULT_LOOP_FADE_MS = 90
 
 // SFX sound definitions
 export const SFX: Record<string, SFXConfig> = {
-  gridSnap: {
-    src: [
-      '/audios/sfx/grid_snap_0.mp3',
-      '/audios/sfx/grid_snap_1.mp3',
-      '/audios/sfx/grid_snap_2.mp3',
-    ],
-    rateRange: [0.98, 1.02],
-    volumeRange: [0.5, 0.6],
-    minIntervalMs: 50,
-  },
   itemDelete: {
     src: '/audios/sfx/item_delete.mp3',
     rateRange: [0.9, 1.1],
@@ -60,8 +50,7 @@ export const SFX: Record<string, SFXConfig> = {
     volumeRange: [0.92, 1.0],
   },
   // Ticks as a resize handle is dragged across snap steps. Fires in rapid
-  // succession, so it mirrors gridSnap: three variations cycled round-robin
-  // with pitch jitter and a gap so the run reads as texture, not a tone.
+  // succession, so three variations are cycled with pitch jitter and a gap.
   resize: {
     src: ['/audios/sfx/resize_0.mp3', '/audios/sfx/resize_1.mp3', '/audios/sfx/resize_2.mp3'],
     rateRange: [0.98, 1.02],

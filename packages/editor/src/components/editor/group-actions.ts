@@ -244,7 +244,6 @@ export function startGroupPickUp(
 
   const applyDelta = (dx: number, dz: number) => {
     if (!lastDelta || lastDelta[0] !== dx || lastDelta[1] !== dz) {
-      sfxEmitter.emit('sfx:grid-snap')
       lastDelta = [dx, dz]
     }
 

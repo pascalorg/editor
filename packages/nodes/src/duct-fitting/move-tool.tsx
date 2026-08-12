@@ -223,11 +223,6 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       }
       const next: Vec3 = [x, lastPos[1], z]
 
-      if (
-        (isGridSnapActive() || isMagneticSnapActive()) &&
-        (next[0] !== lastPos[0] || next[2] !== lastPos[2])
-      )
-        triggerSFX('sfx:grid-snap')
       lastPos = next
       lastDetached = detached
       hasMoved = true

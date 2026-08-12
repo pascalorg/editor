@@ -475,7 +475,6 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta
-        if (step > 0) triggerSFX('sfx:grid-snap')
         const next = [...base] as Point
         next[axisIndex] = base[axisIndex] + delta
         return { position: next }
@@ -563,7 +562,6 @@ const FittingHandles = ({ fitting }: { fitting: PipeFittingNode }) => {
         if (nextValue === lastValue) return
         lastValue = nextValue
         current = dimensionPatch(fitting, dimension, nextValue)
-        if (!event.shiftKey) triggerSFX('sfx:grid-snap')
         apply(current)
       }
 

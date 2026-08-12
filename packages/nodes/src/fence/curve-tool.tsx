@@ -104,12 +104,6 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
         Math.max(-maxCurveOffset, Math.min(maxCurveOffset, snappedOffset)),
       )
 
-      if (
-        previousCurveOffsetRef.current !== null &&
-        nextCurveOffset !== previousCurveOffsetRef.current
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       previousCurveOffsetRef.current = nextCurveOffset
 
       applyPreview(nextCurveOffset)

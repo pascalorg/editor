@@ -185,14 +185,6 @@ export const SlabTool: React.FC = () => {
       setLevelY(hoverPlane.localY)
       useFloorplanDraftPreview.getState().setCursorPoint(displayPoint)
       setSnappedCursorPosition(displayPoint)
-      if (
-        points.length > 0 &&
-        previousSnappedPointRef.current &&
-        (displayPoint[0] !== previousSnappedPointRef.current[0] ||
-          displayPoint[1] !== previousSnappedPointRef.current[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       previousSnappedPointRef.current = displayPoint
       cursorRef.current.position.set(displayPoint[0], hoverPlane.localY, displayPoint[1])
     }

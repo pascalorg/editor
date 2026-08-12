@@ -146,13 +146,6 @@ export function MoveElevatorTool({
         z: gridZ,
       })
 
-      if (
-        !bypassSnap &&
-        previousGridPosRef.current &&
-        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       previousGridPosRef.current = [gridX, gridZ]
       setCursorPosition([gridX, supportY, gridZ])

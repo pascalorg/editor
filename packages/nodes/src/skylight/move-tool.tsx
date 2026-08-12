@@ -133,7 +133,6 @@ export default function MoveSkylightTool({ node }: { node: SkylightNode }) {
       const sx = Math.round(event.position[0] * 20) / 20
       const sz = Math.round(event.position[2] * 20) / 20
       if (event.nativeEvent?.shiftKey !== true && (sx !== lastSnapX || sz !== lastSnapZ)) {
-        triggerSFX('sfx:grid-snap')
         lastSnapX = sx
         lastSnapZ = sz
       }

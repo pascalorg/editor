@@ -233,7 +233,6 @@ export const useKeyboard = ({
         // snapping-mode cycle below. The scope chip mirrors this key.
         e.preventDefault()
         useEditor.getState().cyclePaintScope()
-        sfxEmitter.emit('sfx:grid-snap')
         return
       }
 
@@ -260,7 +259,6 @@ export const useKeyboard = ({
         )
         if (radius !== terrainBrush.radius) {
           setTerrainBrush({ radius })
-          sfxEmitter.emit('sfx:grid-snap')
         }
         return
       }
@@ -275,7 +273,6 @@ export const useKeyboard = ({
       ) {
         e.preventDefault()
         useEditor.getState().cycleWallAlignment()
-        sfxEmitter.emit('sfx:grid-snap')
         return
       }
 
@@ -284,7 +281,6 @@ export const useKeyboard = ({
         // `'off'` is the snap bypass now, so Shift no longer holds-to-bypass.
         e.preventDefault()
         useEditor.getState().cycleSnappingMode()
-        sfxEmitter.emit('sfx:grid-snap')
         return
       }
 
@@ -303,7 +299,6 @@ export const useKeyboard = ({
           useEditor
             .getState()
             .setContinuation('fence', current === 'curved' ? 'continuous' : 'curved')
-          sfxEmitter.emit('sfx:grid-snap')
           return
         }
       }
@@ -325,12 +320,10 @@ export const useKeyboard = ({
               useEditor
                 .getState()
                 .setContinuation('fence', current === 'single' ? 'continuous' : 'single')
-              sfxEmitter.emit('sfx:grid-snap')
             }
             return
           }
           useEditor.getState().cycleContinuation(context)
-          sfxEmitter.emit('sfx:grid-snap')
           return
         }
       }
@@ -713,7 +706,6 @@ export const useKeyboard = ({
         if (!isSnappingCycleContext()) return
         // Cycle the grid / measurement step (0.5 → 0.25 → 0.1 → 0.05).
         useEditor.getState().cycleGridSnapStep()
-        sfxEmitter.emit('sfx:grid-snap')
         return
       }
     }
@@ -757,7 +749,6 @@ export const useKeyboard = ({
       if (lockedAxis) {
         consume()
         useAxisLock.getState().toggle(lockedAxis)
-        sfxEmitter.emit('sfx:grid-snap')
         return
       }
 

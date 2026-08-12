@@ -79,7 +79,6 @@ const SolarPanelTool = () => {
       const sz = Math.round(wz * 20) / 20
       const prev = lastSnapRef.current
       if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
 

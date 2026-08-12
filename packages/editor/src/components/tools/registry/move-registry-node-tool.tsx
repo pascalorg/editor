@@ -770,7 +770,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       })
       const prev = previousSnapRef.current
       if (prev !== nextSnapKey) {
-        sfxEmitter.emit('sfx:grid-snap')
         previousSnapRef.current = nextSnapKey
       }
     }

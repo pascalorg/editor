@@ -953,12 +953,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       ]
 
       // Play snap sound when grid position changes
-      if (
-        previousGridPos &&
-        (gridPos[0] !== previousGridPos[0] || gridPos[2] !== previousGridPos[2])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       previousGridPos = [...gridPos]
       gridPosition.current.set(...gridPos)
@@ -1156,9 +1150,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.z !== result.gridPosition[2]
 
       // Play snap sound when grid position changes
-      if (posChanged) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       gridPosition.current.set(...result.gridPosition)
       const wc = worldToBuildingLocal(...result.cursorPosition)
@@ -1342,9 +1333,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (posChanged) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       gridPosition.current.set(...result.gridPosition)
       const wc = worldToBuildingLocal(...result.cursorPosition)
@@ -1827,9 +1815,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         gridPosition.current.y !== result.gridPosition[1] ||
         gridPosition.current.z !== result.gridPosition[2]
 
-      if (posChanged) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       gridPosition.current.set(...result.gridPosition)
       const cc = worldToBuildingLocal(...result.cursorPosition)

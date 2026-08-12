@@ -14,7 +14,6 @@ import {
  * SFX-specific events that tools can trigger
  */
 type SFXEvents = {
-  'sfx:grid-snap': undefined
   'sfx:item-delete': undefined
   'sfx:item-pick': undefined
   'sfx:item-place': undefined
@@ -43,7 +42,6 @@ export const sfxEmitter = mitt<SFXEvents>()
 
 let sfxBusInitialized = false
 
-const handleGridSnap = () => playSFX('gridSnap')
 const handleItemDelete = () => playSFX('itemDelete')
 const handleItemPick = () => playSFX('itemPick')
 const handleItemPlace = () => playSFX('itemPlace')
@@ -73,7 +71,6 @@ let unsubscribeAudio: (() => void) | null = null
 export function initSFXBus() {
   if (sfxBusInitialized) return
   sfxBusInitialized = true
-  sfxEmitter.on('sfx:grid-snap', handleGridSnap)
   sfxEmitter.on('sfx:item-delete', handleItemDelete)
   sfxEmitter.on('sfx:item-pick', handleItemPick)
   sfxEmitter.on('sfx:item-place', handleItemPlace)
@@ -93,7 +90,6 @@ export function initSFXBus() {
 
 export function disposeSFXBus() {
   if (sfxBusInitialized) {
-    sfxEmitter.off('sfx:grid-snap', handleGridSnap)
     sfxEmitter.off('sfx:item-delete', handleItemDelete)
     sfxEmitter.off('sfx:item-pick', handleItemPick)
     sfxEmitter.off('sfx:item-place', handleItemPlace)

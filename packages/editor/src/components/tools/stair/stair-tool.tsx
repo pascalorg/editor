@@ -460,13 +460,6 @@ export const StairTool: React.FC = () => {
       lastCanonicalPositionRef.current = position
       applyDraftPreview(position, rotationRef.current, supportCapRef.current)
 
-      if (
-        (isGridSnapActive() || isMagneticSnapActive()) &&
-        previousGridPosRef.current &&
-        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       previousGridPosRef.current = [gridX, gridZ]
     }

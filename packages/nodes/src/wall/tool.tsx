@@ -498,7 +498,6 @@ export const WallTool: React.FC = () => {
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
-    let previousWallEnd: [number, number] | null = null
 
     // Alignment candidates — anchors of every alignable object. Refreshed
     // after each segment commits (the new wall becomes a candidate too).
@@ -710,15 +709,6 @@ export const WallTool: React.FC = () => {
             startingPoint.current.y,
           ),
         })
-
-        const currentWallEnd: [number, number] = [snappedLocal[0], snappedLocal[1]]
-        if (
-          previousWallEnd &&
-          (currentWallEnd[0] !== previousWallEnd[0] || currentWallEnd[1] !== previousWallEnd[1])
-        ) {
-          triggerSFX('sfx:grid-snap')
-        }
-        previousWallEnd = currentWallEnd
 
         ghostStartVec.set(ghostStart[0], startingPoint.current.y, ghostStart[1])
         ghostEndVec.set(ghostEnd[0], endingPoint.current.y, ghostEnd[1])

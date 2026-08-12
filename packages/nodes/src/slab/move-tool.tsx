@@ -179,12 +179,6 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
         gridSnap: (p) => snapBuildingLocalToWorldGrid(p, gridStep),
       })
 
-      if (
-        previousGridPosRef.current &&
-        (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       previousGridPosRef.current = [localX, localZ]
 
       const anchor = dragAnchorRef.current ?? [localX, localZ]

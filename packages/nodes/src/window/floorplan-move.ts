@@ -13,7 +13,6 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   snapToHalf,
-  triggerSFX,
   useEditor,
   usePlacementPreview,
 } from '@pascal-app/editor'
@@ -118,7 +117,6 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
     const key = coords.map((c) => Math.round(c / step)).join(',')
     if (key !== lastStepKey) {
       lastStepKey = key
-      triggerSFX('sfx:grid-snap')
     }
   }
 

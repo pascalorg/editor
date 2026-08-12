@@ -838,7 +838,6 @@ const DuctSegmentTool = () => {
         // Joining a port INHERITS the source's cross-section — continuing
         // a rect trunk keeps drawing rect at its W×H, a round collar its
         // diameter. Body taps (tee branches) keep the tool's own profile.
-        triggerSFX('sfx:grid-snap')
         startPortRef.current = port
         startBodyRef.current = port ? null : body
         if (port) {
@@ -879,7 +878,6 @@ const DuctSegmentTool = () => {
       const next = sizes[Math.min(sizes.length - 1, Math.max(0, nearest + step))]!
       if (next === current) return
       setProfile((p) => ({ ...p, diameter: next }))
-      triggerSFX('sfx:grid-snap')
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -897,7 +895,6 @@ const DuctSegmentTool = () => {
       } else if (e.key === 'q' || e.key === 'Q') {
         e.preventDefault()
         setProfile((p) => ({ ...p, shape: p.shape === 'round' ? 'rect' : 'round' }))
-        triggerSFX('sfx:grid-snap')
       } else if (e.key === 'c' || e.key === 'C') {
         // Toggle ceiling mode: points hang from the ceiling above them
         // (duct top hugging the ceiling) instead of sitting on the floor.
@@ -907,7 +904,6 @@ const DuctSegmentTool = () => {
         e.preventDefault()
         setCeilingMode((m) => !m)
         setHoverCeiling(null)
-        triggerSFX('sfx:grid-snap')
       }
     }
 

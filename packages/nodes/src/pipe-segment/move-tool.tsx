@@ -176,14 +176,6 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       }
 
       const cur: [number, number] = [centerX + dx, centerZ + dz]
-      if (
-        (isGridSnapActive() || isMagneticSnapActive()) &&
-        (!prevSnapRef.current ||
-          prevSnapRef.current[0] !== cur[0] ||
-          prevSnapRef.current[1] !== cur[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       prevSnapRef.current = cur
       hasMovedRef.current = true
       const nextPath = originalPath.map(([x, y, z]) => [x + dx, y, z + dz] as Vec3)

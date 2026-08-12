@@ -8431,15 +8431,6 @@ export function FloorplanPanel({
             linkedWallUpdates,
           )
 
-          if (
-            !(
-              previousDraft &&
-              pointsEqual(previousDraft.start, nextDraft.start) &&
-              pointsEqual(previousDraft.end, nextDraft.end)
-            )
-          ) {
-            sfxEmitter.emit('sfx:grid-snap')
-          }
 
           return nextDraft
         })
@@ -8474,7 +8465,6 @@ export function FloorplanPanel({
       curveDragState.currentCurveOffset = nextCurveOffset
       setWallCurveDraft({ wallId: wall.id, curveOffset: nextCurveOffset })
       setCursorPoint(snappedPoint)
-      sfxEmitter.emit('sfx:grid-snap')
     }
 
     const commitGuideInteraction = (event: PointerEvent) => {
@@ -8716,8 +8706,6 @@ export function FloorplanPanel({
       if (currentPoint && pointsEqual(currentPoint, snappedPoint)) {
         return
       }
-
-      sfxEmitter.emit('sfx:grid-snap')
 
       const nextPolygon = [...currentDraft.polygon]
       nextPolygon[dragState.vertexIndex] = snappedPoint
@@ -9365,9 +9353,6 @@ export function FloorplanPanel({
 
         setCursorPoint((previousPoint) => {
           const hasChanged = !(previousPoint && pointsEqual(previousPoint, snappedPoint))
-          if (hasChanged && activePolygonDraftPoints.length > 0) {
-            sfxEmitter.emit('sfx:grid-snap')
-          }
           return snappedPoint
         })
         return
@@ -9535,17 +9520,9 @@ export function FloorplanPanel({
         return
       }
 
-      setDraftEnd((previousEnd) => {
-        if (
-          !previousEnd ||
-          previousEnd[0] !== snappedPoint[0] ||
-          previousEnd[1] !== snappedPoint[1]
-        ) {
-          sfxEmitter.emit('sfx:grid-snap')
-        }
-
-        return snappedPoint
-      })
+      setDraftEnd((previousEnd) =>
+        previousEnd && pointsEqual(previousEnd, snappedPoint) ? previousEnd : snappedPoint,
+      )
     },
     [
       buildingRotationDeg,
@@ -10838,13 +10815,6 @@ export function FloorplanPanel({
         event.clientY - marquee.startClientY,
       )
 
-      if (
-        dragDistance >= FLOORPLAN_MARQUEE_DRAG_THRESHOLD_PX &&
-        floorplanMarqueeSnapPointRef.current &&
-        !pointsEqual(floorplanMarqueeSnapPointRef.current, snappedPoint)
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
       floorplanMarqueeSnapPointRef.current = snappedPoint
 
       if (dragDistance >= FLOORPLAN_MARQUEE_DRAG_THRESHOLD_PX) {

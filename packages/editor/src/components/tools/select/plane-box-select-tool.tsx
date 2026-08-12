@@ -27,7 +27,6 @@ import {
   Vector3,
 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { isBoxSelectPointerSuppressed, markBoxSelectHandled } from './box-select-state'
@@ -519,13 +518,6 @@ export const PlaneBoxSelectTool: React.FC = () => {
         )
 
         const nextGridPosition: [number, number] = [snappedX, snappedZ]
-        if (
-          previousGridPosition.current &&
-          (nextGridPosition[0] !== previousGridPosition.current[0] ||
-            nextGridPosition[1] !== previousGridPosition.current[1])
-        ) {
-          sfxEmitter.emit('sfx:grid-snap')
-        }
         previousGridPosition.current = nextGridPosition
 
         const bounds: Bounds = {

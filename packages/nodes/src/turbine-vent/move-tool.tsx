@@ -105,7 +105,6 @@ export default function MoveTurbineVentTool({ node }: { node: TurbineVentNode })
         event.nativeEvent?.shiftKey !== true &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
-        triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 

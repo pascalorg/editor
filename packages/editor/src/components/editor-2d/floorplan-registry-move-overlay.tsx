@@ -190,7 +190,6 @@ export function FloorplanRegistryMoveOverlay() {
           })
           if (key !== lastSnapKey) {
             lastSnapKey = key
-            sfxEmitter.emit('sfx:grid-snap')
           }
         }
       }

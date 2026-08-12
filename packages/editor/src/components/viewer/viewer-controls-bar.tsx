@@ -17,6 +17,7 @@ import {
   Eye,
   EyeOff,
   Footprints,
+  Ghost,
   Layers,
   Layers2,
   Palette,
@@ -70,6 +71,12 @@ const wallModeConfig = {
 const SHADING_OPTIONS = [
   { id: 'solid', name: 'Solid', detail: 'Flat and fast — no ambient occlusion', icon: Box },
   { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
+  {
+    id: 'ghosted',
+    name: 'Ghosted',
+    detail: 'Translucent surfaces reveal hidden geometry',
+    icon: Ghost,
+  },
 ] as const
 
 const EDGE_OPTIONS = [

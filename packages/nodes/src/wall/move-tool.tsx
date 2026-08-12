@@ -516,13 +516,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       const constrainedGridPos: [number, number] = [anchor[0] + deltaX, anchor[1] + deltaZ]
 
-      if (
-        previousGridPosRef.current &&
-        (constrainedGridPos[0] !== previousGridPosRef.current[0] ||
-          constrainedGridPos[1] !== previousGridPosRef.current[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       previousGridPosRef.current = constrainedGridPos
 
       const nextCenter: [number, number] = [originalCenter[0] + deltaX, originalCenter[1] + deltaZ]

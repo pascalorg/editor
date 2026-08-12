@@ -549,7 +549,6 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         const delta = snap(s - start, step)
         if (delta === lastDelta) return null
         lastDelta = delta
-        if (step > 0) triggerSFX('sfx:grid-snap')
         const next = [...base] as Point
         next[axisIndex] = (
           axis === 'y' ? Math.max(0, base[axisIndex] + delta) : base[axisIndex] + delta
@@ -647,7 +646,6 @@ const FittingHandles = ({ fitting, target }: { fitting: DuctFittingNode; target:
         if (nextValue === lastValue) return
         lastValue = nextValue
         current = { [dimension]: nextValue } as Partial<DuctFittingNode>
-        if (!event.shiftKey) triggerSFX('sfx:grid-snap')
         apply(current)
       }
 

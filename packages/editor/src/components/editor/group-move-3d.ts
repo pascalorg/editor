@@ -214,7 +214,6 @@ export function armGroupMove3d(args: {
   const applyDelta = (s: Session, dx: number, dz: number) => {
     // Ticker on each delta change — parity with the single-node move SFX.
     if (!s.lastDelta || s.lastDelta[0] !== dx || s.lastDelta[1] !== dz) {
-      sfxEmitter.emit('sfx:grid-snap')
       s.lastDelta = [dx, dz]
     }
 

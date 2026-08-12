@@ -535,7 +535,6 @@ const PipeSegmentTool = () => {
       if (!start) {
         // First click: anchor the start, remembering the port / run body
         // it snapped to so the commit can mint a bend / wye.
-        triggerSFX('sfx:grid-snap')
         startPortRef.current = port
         startBodyRef.current = port ? null : body
         // Continue an existing run at its true size: adopt the snapped
@@ -576,7 +575,6 @@ const PipeSegmentTool = () => {
       const next = sizes[Math.min(sizes.length - 1, Math.max(0, nearest + step))]!
       if (next === current) return
       setDiameter(next)
-      triggerSFX('sfx:grid-snap')
     }
 
     const onKeyDown = (e: KeyboardEvent) => {
@@ -594,11 +592,9 @@ const PipeSegmentTool = () => {
       } else if (e.key === 'q' || e.key === 'Q') {
         e.preventDefault()
         setSystem((s) => (s === 'waste' ? 'vent' : 'waste'))
-        triggerSFX('sfx:grid-snap')
       } else if (e.key === 's' || e.key === 'S') {
         e.preventDefault()
         setSloped((s) => !s)
-        triggerSFX('sfx:grid-snap')
       }
     }
 

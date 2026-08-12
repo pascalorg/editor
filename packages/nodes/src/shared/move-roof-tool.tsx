@@ -357,13 +357,6 @@ export const MoveRoofTool: React.FC<{
         localZ = aligned[1]
       }
 
-      if (
-        event.nativeEvent?.shiftKey !== true &&
-        previousGridPosRef.current &&
-        (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
 
       previousGridPosRef.current = [localX, localZ]
 

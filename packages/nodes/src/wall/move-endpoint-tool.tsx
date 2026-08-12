@@ -450,13 +450,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         useAlignmentGuides.getState().clear()
       }
 
-      if (
-        previousGridPosRef.current &&
-        (alignedPoint[0] !== previousGridPosRef.current[0] ||
-          alignedPoint[1] !== previousGridPosRef.current[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       previousGridPosRef.current = alignedPoint
 
       // Stand the magnetic beacon at the endpoint when it locked onto existing

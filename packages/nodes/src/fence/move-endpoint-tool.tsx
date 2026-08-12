@@ -165,13 +165,6 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
 
   useEffect(() => {
     const prev = previousGridPosRef.current
-    if (
-      !shiftPressedRef.current &&
-      prev &&
-      (prev[0] !== movingPoint[0] || prev[1] !== movingPoint[1])
-    ) {
-      triggerSFX('sfx:grid-snap')
-    }
     previousGridPosRef.current = movingPoint
   }, [movingPoint])
 

@@ -15,7 +15,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { DimensionPill, swallowNextClick, triggerSFX, useEditor } from '@pascal-app/editor'
+import { DimensionPill, swallowNextClick, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
@@ -380,7 +380,6 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       if (!batch) return
       drag.current = next
       drag.detached = detached
-      if (step > 0) triggerSFX('sfx:grid-snap')
       useScene.getState().updateNodes(batch)
     }
 
@@ -564,7 +563,6 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       const next = snap(s - startSample, step)
       if (next === delta) return
       delta = next
-      if (step > 0) triggerSFX('sfx:grid-snap')
       offsetResult =
         kind.axis === 'y' && next !== 0
           ? planVerticalOffsets({

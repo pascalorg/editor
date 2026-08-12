@@ -156,12 +156,6 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       const localX = snap(event.localPosition[0])
       const localZ = snap(event.localPosition[2])
 
-      if (
-        previousGridPosRef.current &&
-        (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
-      ) {
-        triggerSFX('sfx:grid-snap')
-      }
       previousGridPosRef.current = [localX, localZ]
 
       const anchor = dragAnchorRef.current ?? [localX, localZ]

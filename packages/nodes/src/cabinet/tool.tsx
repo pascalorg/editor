@@ -748,7 +748,6 @@ const CabinetTool = () => {
         if (next.snappedToWall && !wasWallSnap) {
           triggerSFX('sfx:item-pick')
         } else {
-          triggerSFX('sfx:grid-snap')
         }
         previousSnapRef.current = nextSnapKey
         previousTickFrameRef.current = frame

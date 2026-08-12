@@ -211,7 +211,6 @@ export function startFloorplanGroupMove(
   const applyDelta = (s: Session, dx: number, dz: number) => {
     // Ticker on each delta change — parity with the 3D group move's SFX.
     if (!s.lastDelta || s.lastDelta[0] !== dx || s.lastDelta[1] !== dz) {
-      sfxEmitter.emit('sfx:grid-snap')
       s.lastDelta = [dx, dz]
     }
 

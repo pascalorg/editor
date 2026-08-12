@@ -33,6 +33,7 @@ import {
   Eye,
   EyeOff,
   Footprints,
+  Ghost,
   Grid2X2,
   Layers3,
   Magnet,
@@ -137,6 +138,12 @@ const wallModeConfig: Record<string, { icon: string; label: string }> = {
 const SHADING_OPTIONS = [
   { id: 'solid', name: 'Solid', detail: 'Flat and fast — no ambient occlusion', icon: Box },
   { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
+  {
+    id: 'ghosted',
+    name: 'Ghosted',
+    detail: 'Translucent surfaces reveal hidden geometry',
+    icon: Ghost,
+  },
 ] as const
 
 const FLOORPLAN_ANNOTATION_OPTIONS = [

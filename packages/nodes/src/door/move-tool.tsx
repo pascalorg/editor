@@ -184,7 +184,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (key === lastStepKey) return
       lastStepKey = key
       lastTickFrame = frame
-      triggerSFX('sfx:grid-snap')
     }
     // The door's chosen facing side. R flips it mid-placement (front ↔ back,
     // same as the committed-selected R flip) so the user can reorient before

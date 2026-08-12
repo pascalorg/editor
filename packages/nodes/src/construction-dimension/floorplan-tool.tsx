@@ -518,7 +518,6 @@ export function FloorplanConstructionDimensionToolLayer({
       if (current.stage !== 'witnesses' || current.points.length < required) return false
       if (!usesBaseline) return commitDraft(current)
       updateDraft({ ...current, stage: 'baseline' })
-      triggerSFX('sfx:grid-snap')
       return true
     }
     const removeLastWitness = () => {
@@ -567,7 +566,6 @@ export function FloorplanConstructionDimensionToolLayer({
       if (curvedWallDraft) {
         const next: Draft = { ...curvedWallDraft, stage: 'witnesses' }
         updateDraft(next)
-        triggerSFX('sfx:grid-snap')
         if (usesBaseline) updateDraft({ ...next, stage: 'baseline' })
         else commitDraft(next)
         return
@@ -586,7 +584,6 @@ export function FloorplanConstructionDimensionToolLayer({
         stage: 'witnesses',
       }
       updateDraft(next)
-      triggerSFX('sfx:grid-snap')
       if (
         !collectsMany &&
         next.points.length === constructionDimensionRequiredAnchorCount(dimensionMode)

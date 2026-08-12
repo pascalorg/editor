@@ -19,7 +19,7 @@ import { isKtx2Url, ktx2Loader, whenKtx2Ready } from './ktx2-loader'
 import { getSceneTheme } from './scene-themes'
 import { stampPascalTextureRef } from './texture-reference'
 
-export type RenderShading = 'solid' | 'rendered'
+export type RenderShading = 'solid' | 'rendered' | 'ghosted'
 export type ColorPreset = 'clay' | 'white' | 'mono' | 'blueprint'
 
 export const CLAY_PALETTE: Record<SurfaceRole, string> = {

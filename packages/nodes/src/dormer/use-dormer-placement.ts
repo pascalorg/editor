@@ -129,7 +129,6 @@ export function useDormerPlacement(opts: {
       const sz = Math.round(wz / DORMER_PLACEMENT_SNAP_M) * DORMER_PLACEMENT_SNAP_M
       const prev = lastSnapRef.current
       if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
-        triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
 

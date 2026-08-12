@@ -588,12 +588,6 @@ const StraightFenceTool: React.FC = () => {
           ),
         })
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
-        if (
-          previousFenceEnd &&
-          (currentFenceEnd[0] !== previousFenceEnd[0] || currentFenceEnd[1] !== previousFenceEnd[1])
-        ) {
-          triggerSFX('sfx:grid-snap')
-        }
         previousFenceEnd = currentFenceEnd
         updateFencePreview(
           previewRef.current,
@@ -879,7 +873,6 @@ const SplineFenceDraft: React.FC = () => {
         return
       }
       const point = snapPoint([event.localPosition[0], event.localPosition[2]])
-      triggerSFX('sfx:grid-snap')
       setDraftPoints((prev) => [...prev, point])
     }
 

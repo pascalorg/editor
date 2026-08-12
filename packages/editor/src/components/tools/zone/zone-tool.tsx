@@ -211,15 +211,6 @@ export const ZoneTool: React.FC = () => {
 
       // Play snap sound when the snapped position changes during drawing — only
       // when a quantizing mode is active (off / lines move continuously).
-      if (
-        (isGridSnapActive() || isAngleSnapActive()) &&
-        pointsRef.current.length > 0 &&
-        previousSnappedPointRef.current &&
-        (displayPoint[0] !== previousSnappedPointRef.current[0] ||
-          displayPoint[1] !== previousSnappedPointRef.current[1])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
       previousSnappedPointRef.current = displayPoint
 
       cursorRef.current.position.set(displayPoint[0], event.localPosition[1], displayPoint[1])

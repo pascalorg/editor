@@ -173,7 +173,6 @@ export function FloorplanStructuralGridToolLayer({
       const currentStart = startRef.current
       if (!currentStart) {
         updateStart(point)
-        triggerSFX('sfx:grid-snap')
         return
       }
       if (Math.hypot(point[0] - currentStart[0], point[1] - currentStart[1]) < MIN_GRID_LENGTH) {

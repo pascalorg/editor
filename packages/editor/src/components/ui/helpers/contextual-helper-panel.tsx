@@ -185,7 +185,6 @@ function SnappingChips({ context }: { context: SnapContext }) {
         label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
         onClick={() => {
           setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))
-          sfxEmitter.emit('sfx:grid-snap')
         }}
         shortcut="Shift"
         tooltip="Snapping mode — click or press Shift to cycle"
@@ -196,7 +195,6 @@ function SnappingChips({ context }: { context: SnapContext }) {
           label={`Grid: ${gridSnapStep.toFixed(2)} m`}
           onClick={() => {
             setGridSnapStep(nextGridSnapStep(gridSnapStep))
-            sfxEmitter.emit('sfx:grid-snap')
           }}
           shortcut="Ctrl"
           tooltip="Grid step — click or tap Ctrl to cycle"

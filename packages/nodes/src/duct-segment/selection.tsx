@@ -527,7 +527,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       // Tick on each new snapped position — the same grid-snap SFX the draw
       // tools fire; the player debounces rapid repeats (minIntervalMs). Only
       // when the grid is live (step > 0): Shift-precision has nothing to snap.
-      if (step > 0) triggerSFX('sfx:grid-snap')
       useScene.getState().updateNodes(batch)
     }
 
@@ -961,7 +960,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       const next = snap(s - startSample, step)
       if (next === delta) return
       delta = next
-      if (step > 0) triggerSFX('sfx:grid-snap')
       const dyEff = baseDy + next
       // Vertical move: connected ends stay welded to their (stationary)
       // partner via an auto-routed elbow → riser → elbow offset, planned from

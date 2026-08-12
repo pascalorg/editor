@@ -440,7 +440,6 @@ const LiquidLineTool = () => {
       }
       const { point } = resolveAlignedPoint(event)
       if (!start) {
-        triggerSFX('sfx:grid-snap')
         setDraftPoints([point])
         return
       }

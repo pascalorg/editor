@@ -198,7 +198,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       if (key === lastStepKey) return
       lastStepKey = key
       lastTickFrame = frame
-      triggerSFX('sfx:grid-snap')
     }
     // The window's chosen facing side. R flips it mid-placement (front ↔ back),
     // matching the committed-selected R flip. Initialised from the moving node.

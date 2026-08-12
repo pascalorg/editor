@@ -17,7 +17,6 @@ import {
 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   createMoveCrossHandleGeometry,
   ARROW_COLOR as EDGE_ARROW_COLOR,
@@ -817,14 +816,6 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           : gridPoint
 
       // Play snap sound when cursor moves to a new grid cell during drag
-      if (
-        dragState?.isDragging &&
-        previousPositionRef.current &&
-        (newPosition[0] !== previousPositionRef.current[0] ||
-          newPosition[1] !== previousPositionRef.current[1])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       previousPositionRef.current = newPosition
       setCursorPosition(newPosition)

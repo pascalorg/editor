@@ -80,7 +80,6 @@ export const MoveFenceControlPointTool: React.FC<{
       const x = step > 0 ? snapScalarToGrid(event.localPosition[0], step) : event.localPosition[0]
       const z = step > 0 ? snapScalarToGrid(event.localPosition[2], step) : event.localPosition[2]
       if (x !== lastPoint[0] || z !== lastPoint[1]) {
-        if (step > 0) triggerSFX('sfx:grid-snap')
         lastPoint = [x, z]
         setCursor([x, 0, z])
         previewPath([x, z])

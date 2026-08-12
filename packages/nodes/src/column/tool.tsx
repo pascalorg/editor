@@ -156,7 +156,6 @@ const ColumnTool = () => {
       })
       const prev = previousSnapRef.current
       if (prev !== nextSnapKey) {
-        triggerSFX('sfx:grid-snap')
         previousSnapRef.current = nextSnapKey
       }
     }

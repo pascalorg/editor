@@ -459,14 +459,6 @@ export const RoofTool: React.FC = () => {
 
       cursorRef.current.position.set(gridX, gridY, gridZ)
 
-      if (
-        (isGridSnapActive() || isMagneticSnapActive()) &&
-        corner1Ref.current &&
-        previousGridPosRef.current &&
-        (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
 
       previousGridPosRef.current = [gridX, gridZ]
 

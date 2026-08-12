@@ -15,7 +15,6 @@ import {
   getFloorStackPreviewPosition,
   isGridSnapActive,
   isMagneticSnapActive,
-  triggerSFX,
   useEditor,
   type WallPlanPoint,
 } from '@pascal-app/editor'
@@ -79,7 +78,6 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
 
       const snapKey = `${coordinated[0]},${coordinated[1]}`
       if (snapKey !== lastSnapKey) {
-        triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey
       }
       const visualPosition = getFloorStackPreviewPosition({

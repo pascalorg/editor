@@ -15,7 +15,6 @@ import {
   getSegmentGridStep,
   isGridSnapActive,
   isMagneticSnapActive,
-  triggerSFX,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
@@ -73,7 +72,6 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
       // the same cue, so the shelf following along is the expected UX.
       const snapKey = `${snapped[0]},${snapped[1]}`
       if (gridSnapActive && snapKey !== lastSnapKey) {
-        triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey
       }
       const visualPosition = getFloorStackPreviewPosition({

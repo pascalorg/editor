@@ -106,7 +106,6 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
         event.nativeEvent?.shiftKey !== true &&
         (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
       ) {
-        triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 

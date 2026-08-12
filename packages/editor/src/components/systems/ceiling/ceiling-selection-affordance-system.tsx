@@ -326,14 +326,6 @@ const CeilingSelectionAffordance = ({
       const alignmentSnapped =
         Math.abs(nextPosition[0] - gridNextPosition[0]) > snapEpsilon ||
         Math.abs(nextPosition[1] - gridNextPosition[1]) > snapEpsilon
-      if (
-        (gridStep > 0 || alignmentSnapped) &&
-        drag.previousSnappedPosition &&
-        (nextPosition[0] !== drag.previousSnappedPosition[0] ||
-          nextPosition[1] !== drag.previousSnappedPosition[1])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
       drag.previousSnappedPosition = nextPosition
 
       const nextPolygon = drag.initialPolygon.map((polygonPoint, index) =>
