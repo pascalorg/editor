@@ -138,6 +138,7 @@ export {
 } from './lib/scene-themes'
 export {
   createSnapshotPipeline,
+  SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
   type SnapshotCaptureMode,

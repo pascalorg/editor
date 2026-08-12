@@ -38,6 +38,16 @@ export const THUMBNAIL_HEIGHT = 1080
  */
 export const SNAPSHOT_MIME = 'image/webp'
 export const SNAPSHOT_QUALITY = 0.9
+// Retina canvases make viewport/area captures multi-MB; 2048 keeps them near the 1920 presets.
+export const SNAPSHOT_MAX_EDGE = 2048
+
+function clampSnapshotSize(width: number, height: number): { w: number; h: number } {
+  const maxEdge = Math.max(width, height)
+  if (maxEdge <= SNAPSHOT_MAX_EDGE) return { w: width, h: height }
+
+  const scale = SNAPSHOT_MAX_EDGE / maxEdge
+  return { w: Math.round(width * scale), h: Math.round(height * scale) }
+}
 
 export type SnapshotCaptureMode = 'standard' | 'viewport' | 'area'
 
@@ -334,18 +344,22 @@ export async function createSnapshotPipeline({
         let blob: Blob
 
         if (captureMode === 'viewport') {
-          outW = captureWidth
-          outH = captureHeight
+          ;({ w: outW, h: outH } = clampSnapshotSize(captureWidth, captureHeight))
           const offscreen = new OffscreenCanvas(outW, outH)
-          offscreen.getContext('2d')!.drawImage(srcCanvas, 0, 0)
+          const ctx = offscreen.getContext('2d')!
+          if (outW !== captureWidth || outH !== captureHeight) ctx.imageSmoothingQuality = 'high'
+          ctx.drawImage(srcCanvas, 0, 0, captureWidth, captureHeight, 0, 0, outW, outH)
           blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
         } else if (captureMode === 'area' && cropRegion) {
           const sx = Math.round(cropRegion.x * captureWidth)
           const sy = Math.round(cropRegion.y * captureHeight)
-          outW = Math.round(cropRegion.width * captureWidth)
-          outH = Math.round(cropRegion.height * captureHeight)
+          const sourceW = Math.round(cropRegion.width * captureWidth)
+          const sourceH = Math.round(cropRegion.height * captureHeight)
+          ;({ w: outW, h: outH } = clampSnapshotSize(sourceW, sourceH))
           const offscreen = new OffscreenCanvas(outW, outH)
-          offscreen.getContext('2d')!.drawImage(srcCanvas, sx, sy, outW, outH, 0, 0, outW, outH)
+          const ctx = offscreen.getContext('2d')!
+          if (outW !== sourceW || outH !== sourceH) ctx.imageSmoothingQuality = 'high'
+          ctx.drawImage(srcCanvas, sx, sy, sourceW, sourceH, 0, 0, outW, outH)
           blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
         } else {
           // Standard: center-crop to the requested aspect (default 1920×1080)

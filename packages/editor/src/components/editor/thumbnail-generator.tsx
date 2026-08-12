@@ -6,6 +6,7 @@ import {
   createSnapshotPipeline,
   GRID_LAYER,
   heroCameraPose,
+  SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
   type SnapshotPipeline,
@@ -33,6 +34,14 @@ export interface SnapshotCameraData {
 
 interface ThumbnailGeneratorProps {
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+}
+
+function clampSnapshotSize(width: number, height: number): { w: number; h: number } {
+  const maxEdge = Math.max(width, height)
+  if (maxEdge <= SNAPSHOT_MAX_EDGE) return { w: width, h: height }
+
+  const scale = SNAPSHOT_MAX_EDGE / maxEdge
+  return { w: Math.round(width * scale), h: Math.round(height * scale) }
 }
 
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
@@ -236,12 +245,13 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           let outH: number
 
           if (captureMode === 'viewport') {
-            outW = width
-            outH = height
+            ;({ w: outW, h: outH } = clampSnapshotSize(width, height))
             const offscreen = document.createElement('canvas')
             offscreen.width = outW
             offscreen.height = outH
-            offscreen.getContext('2d')!.drawImage(gl.domElement, 0, 0)
+            const ctx = offscreen.getContext('2d')!
+            if (outW !== width || outH !== height) ctx.imageSmoothingQuality = 'high'
+            ctx.drawImage(gl.domElement, 0, 0, width, height, 0, 0, outW, outH)
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
@@ -252,14 +262,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           } else if (captureMode === 'area' && cropRegion) {
             const sx = Math.round(cropRegion.x * width)
             const sy = Math.round(cropRegion.y * height)
-            outW = Math.round(cropRegion.width * width)
-            outH = Math.round(cropRegion.height * height)
+            const sourceW = Math.round(cropRegion.width * width)
+            const sourceH = Math.round(cropRegion.height * height)
+            ;({ w: outW, h: outH } = clampSnapshotSize(sourceW, sourceH))
             const offscreen = document.createElement('canvas')
             offscreen.width = outW
             offscreen.height = outH
-            offscreen
-              .getContext('2d')!
-              .drawImage(gl.domElement, sx, sy, outW, outH, 0, 0, outW, outH)
+            const ctx = offscreen.getContext('2d')!
+            if (outW !== sourceW || outH !== sourceH) ctx.imageSmoothingQuality = 'high'
+            ctx.drawImage(gl.domElement, sx, sy, sourceW, sourceH, 0, 0, outW, outH)
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
