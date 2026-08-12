@@ -242,6 +242,7 @@ function LevelRow({
               */}
               <SliderControl
                 label="Level height"
+                max={20}
                 min={1}
                 onChange={(v) => updateNode(level.id, { height: v })}
                 precision={3}
