@@ -156,12 +156,14 @@ export const CustomMeshNode = BaseNode.extend({
   type: nodeType('custom-mesh'),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
+  supportSlabId: z.string().optional(),
   topology: CustomMeshTopology.default(createBoxCustomMeshTopology),
   slots: z.record(z.string(), z.string()).optional(),
 }).describe(dedent`
   Custom mesh node - a topology-backed editable solid.
   - topology: persistent vertices, edges, and ordered face loops with stable IDs
   - position/rotation: level-local placement transform
+  - supportSlabId: persisted placement surface that prevents later slabs from lifting the mesh
   - slots: optional material references keyed by face materialSlot
 `)
 

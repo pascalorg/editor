@@ -72,7 +72,9 @@ export {
 } from './hooks/spatial-grid/spatial-grid-sync'
 export {
   type FenceSupportInput,
+  type FrozenFloorPlacementOptions,
   resolveFenceSupportSlabPatch,
+  resolveFrozenFloorPlacementPatch,
   resolveMovedWallSupportSlabPatch,
   resolveSupportSlabPatch,
   resolveWallSupportSlabPatch,

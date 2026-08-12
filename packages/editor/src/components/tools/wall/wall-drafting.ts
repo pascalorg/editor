@@ -7,6 +7,7 @@ import {
   GROUND_SUPPORT_ID,
   getScaledDimensions,
   type ItemNode,
+  resolveSupportSlabPatch,
   resolveWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
@@ -501,6 +502,10 @@ export type WallConstructionOptions = {
   constructionElevation?: number | null
   /** Height shown by the draft ghost. */
   constructionHeight?: number | null
+  /** Keep a node-top construction plane flat instead of filling down to lower slab segments. */
+  flatConstructionBase?: boolean
+  /** Node whose top surface established this construction plane. */
+  constructionSourceNodeId?: AnyNodeId | null
 }
 
 export function resolveTerrainWallConstructionOptions(
@@ -603,6 +608,24 @@ export function createWallOnCurrentLevel(
       return null
     }
 
+    const constructionSourceNodeId = options?.constructionSourceNodeId
+    if (constructionSourceNodeId) {
+      const sourceNodes = useScene.getState().nodes
+      const sourceNode = sourceNodes[constructionSourceNodeId]
+      const currentSupport =
+        sourceNode && 'supportSlabId' in sourceNode
+          ? (sourceNode.supportSlabId as string | undefined)
+          : undefined
+      if (sourceNode && currentSupport == null) {
+        const sourceSupportPatch = resolveSupportSlabPatch(sourceNode, sourceNodes, {
+          pinSupport: true,
+        })
+        if (sourceSupportPatch.supportSlabId != null) {
+          updateNodes([{ id: constructionSourceNodeId, data: sourceSupportPatch }])
+        }
+      }
+    }
+
     const wallCount = Object.values(nodes).filter((node) => node.type === 'wall').length
     // A placed wall preset seeds `toolDefaults.wall` (thickness, height,
     // materials, sides) before the tool activates; merge those first so the
@@ -613,55 +636,54 @@ export function createWallOnCurrentLevel(
       name: `Wall ${wallCount + 1}`,
       start: resolvedStart,
       end: resolvedEnd,
+      parentId: currentLevelId,
+    })
+    const sceneNodes = useScene.getState().nodes
+    const nodesWithWall = { ...sceneNodes, [wall.id]: wall as AnyNode }
+    const terrainBase = terrainSupportLift(
+      nodesWithWall,
+      currentLevelId,
+      wall.start[0],
+      wall.start[1],
+    )
+    const preferredSupportSlabId = options?.flatConstructionBase
+      ? GROUND_SUPPORT_ID
+      : (options?.preferredSupportSlabId ??
+        (options?.constructionElevation != null && terrainBase != null ? GROUND_SUPPORT_ID : null))
+    const supportPatch = resolveWallSupportSlabPatch(wall, nodesWithWall, {
+      maxElevation: options?.supportCap ?? null,
+      preferredSlabId: preferredSupportSlabId,
+    })
+    const sourceSupport = spatialGridManager.getSlabSupportForWall(
+      currentLevelId,
+      wall.start,
+      wall.end,
+      wall.curveOffset,
+      wall.thickness,
+      supportPatch.supportSlabId,
+      options?.supportCap ?? null,
+    )
+    const supportOffset =
+      options?.constructionElevation == null
+        ? undefined
+        : options.constructionElevation - sourceSupport.elevation
+    const preserveDraftHeight =
+      wall.height == null &&
+      options?.constructionHeight != null &&
+      options.constructionElevation != null &&
+      (terrainBase != null || Math.abs(options.constructionElevation) > 1e-6)
+    const committedWall = WallSchema.parse({
+      ...wall,
+      ...supportPatch,
+      height: preserveDraftHeight ? options?.constructionHeight : wall.height,
+      supportOffset:
+        supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
     })
 
-    createNode(wall, currentLevelId)
-    const createdWall = useScene.getState().nodes[wall.id]
-    if (createdWall?.type === 'wall') {
-      const terrainBase = terrainSupportLift(
-        useScene.getState().nodes,
-        currentLevelId,
-        createdWall.start[0],
-        createdWall.start[1],
-      )
-      const preferredSupportSlabId =
-        options?.preferredSupportSlabId ??
-        (options?.constructionElevation != null && terrainBase != null ? GROUND_SUPPORT_ID : null)
-      const supportPatch = resolveWallSupportSlabPatch(createdWall, useScene.getState().nodes, {
-        maxElevation: options?.supportCap ?? null,
-        preferredSlabId: preferredSupportSlabId,
-      })
-      const supportSlabId = supportPatch.supportSlabId
-      const sourceSupport = spatialGridManager.getSlabSupportForWall(
-        currentLevelId,
-        createdWall.start,
-        createdWall.end,
-        createdWall.curveOffset,
-        createdWall.thickness,
-        supportSlabId,
-        options?.supportCap ?? null,
-      )
-      const supportOffset =
-        options?.constructionElevation == null
-          ? undefined
-          : options.constructionElevation - sourceSupport.elevation
-      const preserveDraftHeight =
-        createdWall.height == null &&
-        options?.constructionHeight != null &&
-        options.constructionElevation != null &&
-        (terrainBase != null || Math.abs(options.constructionElevation) > 1e-6)
-      useScene.getState().updateNode(createdWall.id, {
-        ...supportPatch,
-        height: preserveDraftHeight
-          ? (options?.constructionHeight ?? createdWall.height)
-          : createdWall.height,
-        supportOffset:
-          supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
-      })
-    }
+    createNode(committedWall, currentLevelId)
     sfxEmitter.emit('sfx:structure-build')
 
-    const committedWall = useScene.getState().nodes[wall.id]
-    return committedWall?.type === 'wall' ? committedWall : wall
+    const storedWall = useScene.getState().nodes[committedWall.id]
+    return storedWall?.type === 'wall' ? storedWall : committedWall
   })
 }

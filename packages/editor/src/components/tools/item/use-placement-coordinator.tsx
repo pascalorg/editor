@@ -11,6 +11,7 @@ import {
   type ItemEvent,
   movingFootprintAnchors,
   type RoofEvent,
+  resolveFrozenFloorPlacementPatch,
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
@@ -63,6 +64,7 @@ import {
   updateLineGeometry,
 } from '../shared/placement-box-geometry'
 import {
+  type PointerSupportSurface,
   resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
@@ -280,6 +282,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // by the MAX overlapping slab and a deck above the aimed-at floor
   // captures the item (and the grid-plane feedback makes it blink).
   const pointerSupportCapRef = useRef<number | null>(null)
+  const pointerSupportSurfaceRef = useRef<PointerSupportSurface | null>(null)
+  const frozenSupportSlabIdRef = useRef<string | undefined>(undefined)
   const [dimensionBounds, setDimensionBounds] = useState<PreviewBounds | null>(null)
 
   // Live camera ref — the shelf-stickiness test reconstructs the cursor world
@@ -427,12 +431,20 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     ): [number, number, number] => {
       const draft = draftNode.current
       if (!(draft && !asset?.attachTo)) return position
-      const previewNode = getGridAlignedPreviewNode({ ...draft, ...nodeUpdate } as ItemNode)
+      const previewNode = getGridAlignedPreviewNode({
+        ...draft,
+        ...nodeUpdate,
+        ...(pointerSupportSurfaceRef.current?.sourceNodeId
+          ? { supportSlabId: frozenSupportSlabIdRef.current }
+          : {}),
+      } as ItemNode)
       return getFloorStackPreviewPosition({
         node: previewNode,
         position,
         rotation: previewNode.rotation,
-        maxElevation: pointerSupportCapRef.current,
+        maxElevation: pointerSupportSurfaceRef.current?.sourceNodeId
+          ? null
+          : pointerSupportCapRef.current,
       })
     },
     [asset?.attachTo, draftNode],
@@ -465,6 +477,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // No pointer surface known yet — fall back to the uncapped election
     // (an adopted move draft keeps its persisted host until the first move).
     pointerSupportCapRef.current = null
+    pointerSupportSurfaceRef.current = null
+    frozenSupportSlabIdRef.current = undefined
     if (!asset.attachTo && placementState.current.surface === 'floor') {
       gridPosition.current.y = 0
       if (cursorGroupRef.current) {
@@ -515,6 +529,23 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // lands on the just-placed (now selected) node instead of a tool-less build
       // limbo. Repeat placements took the early return above and stay armed.
       useEditor.getState().setMode('select')
+    }
+
+    const commitDraft = (
+      nodeUpdate: Partial<ItemNode>,
+      options?: {
+        supportElevationCap?: number | null
+        preferredSupportSlabId?: string | null
+        pinSupport?: boolean
+      },
+    ) => {
+      const draftId = draftNode.current?.id ?? null
+      const wasAdopted = draftNode.isAdopted
+      const finalId = draftNode.commit(nodeUpdate, options)
+      if (draftId) {
+        useLiveTransforms.getState().clear(draftId)
+      }
+      return { committedId: finalId ?? draftId, wasAdopted }
     }
 
     const revalidate = (): boolean => {
@@ -617,6 +648,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Init draft ----
     configRef.current.initDraft(gridPosition.current)
+    const floorAuthoredY = draftNode.current?.position[1] ?? 0
     const preserveDragOffset = configRef.current.preserveDragOffset === true
     // The host the item was grabbed from + its pre-drag host-local position.
     // Each surface's grab anchor preserves the grab offset only on THAT host,
@@ -875,6 +907,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // a drag over a deck-above-a-floor hop between the two surfaces).
       const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
       pointerSupportCapRef.current = pointed?.elevation ?? null
+      pointerSupportSurfaceRef.current = pointed
       const surfaceEvent: GridEvent =
         pointed?.worldPoint && pointed.localPoint
           ? { ...event, position: pointed.worldPoint, localPosition: pointed.localPoint }
@@ -946,11 +979,31 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useAlignmentGuides.getState().clear()
       }
 
-      const gridPos: [number, number, number] = [
+      let gridPos: [number, number, number] = [
         result.gridPosition[0] + alignX,
-        result.gridPosition[1],
+        floorAuthoredY,
         result.gridPosition[2] + alignZ,
       ]
+      frozenSupportSlabIdRef.current = undefined
+      if (draft && pointed?.sourceNodeId) {
+        const effectiveNode = {
+          ...draft,
+          position: gridPos,
+          parentId: useViewer.getState().selection.levelId ?? draft.parentId,
+        } as ItemNode
+        const frozenPatch = resolveFrozenFloorPlacementPatch(
+          effectiveNode,
+          useScene.getState().nodes,
+          {
+            position: gridPos,
+            rotation: effectiveNode.rotation,
+            elevation: pointed.elevation,
+            preferredSlabId: pointed.supportSlabId,
+          },
+        )
+        gridPos = frozenPatch.position
+        frozenSupportSlabIdRef.current = frozenPatch.supportSlabId
+      }
 
       // Play snap sound when grid position changes
       if (
@@ -1002,20 +1055,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         0,
       ]
 
-      // Clear live transform before commit
-      if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
-      }
-
-      const committedId = draftNode.current?.id ?? null
-      const wasAdopted = draftNode.isAdopted
       // Carry the pointer surface cap into the commit so the persisted
       // supportSlabId reproduces the capped election (elects the aimed-at
       // lower slab — or the ground — instead of a deck hanging above).
-      const finalId = draftNode.commit(result.nodeUpdate, {
+      const { committedId, wasAdopted } = commitDraft(result.nodeUpdate, {
         supportElevationCap: pointerSupportCapRef.current,
+        preferredSupportSlabId: pointerSupportSurfaceRef.current?.supportSlabId,
+        pinSupport: pointerSupportSurfaceRef.current?.sourceNodeId != null,
       })
-      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+      finishCommittedPlacement(committedId, wasAdopted, () => {
         draftNode.create(
           gridPosition.current,
           asset,
@@ -1229,18 +1277,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
-      // Clear live transform before commit
-      if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
-      }
-      const committedId = draftNode.current?.id ?? null
-      const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(result.nodeUpdate)
+      const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
       if (result.dirtyNodeId) {
         useScene.getState().dirtyNodes.add(result.dirtyNodeId)
       }
 
-      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+      finishCommittedPlacement(committedId, wasAdopted, () => {
         const nodes = useScene.getState().nodes
         const enterResult = wallStrategy.enter(
           getContext(),
@@ -1389,14 +1431,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
-      if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
-      }
-      const committedId = draftNode.current?.id ?? null
-      const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(result.nodeUpdate)
+      const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
 
-      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+      finishCommittedPlacement(committedId, wasAdopted, () => {
         const enterResult = roofWallStrategy.enter(getContext(), event, altFreeRef.current)
         if (enterResult) {
           applyTransition(enterResult)
@@ -1641,13 +1678,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             const result = shelfSurfaceStrategy.click(ctx, synthetic as never)
             if (result) {
               event.stopPropagation()
-              if (draftNode.current) {
-                useLiveTransforms.getState().clear(draftNode.current.id)
-              }
-              const committedId = draftNode.current?.id ?? null
-              const wasAdopted = draftNode.isAdopted
-              const finalId = draftNode.commit(result.nodeUpdate)
-              finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+              const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
+              finishCommittedPlacement(committedId, wasAdopted, () => {
                 const enterResult = shelfSurfaceStrategy.enter(ctx, synthetic as never)
                 if (enterResult) {
                   applyTransition(enterResult)
@@ -1669,13 +1701,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             const result = itemSurfaceStrategy.click(ctx, synthetic)
             if (result) {
               event.stopPropagation()
-              if (draftNode.current) {
-                useLiveTransforms.getState().clear(draftNode.current.id)
-              }
-              const committedId = draftNode.current?.id ?? null
-              const wasAdopted = draftNode.isAdopted
-              const finalId = draftNode.commit(result.nodeUpdate)
-              finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+              const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
+              finishCommittedPlacement(committedId, wasAdopted, () => {
                 const enterResult = itemSurfaceStrategy.enter(ctx, synthetic)
                 if (enterResult) {
                   applyTransition(enterResult)
@@ -1700,13 +1727,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             const result = ceilingStrategy.click(ctx, synthetic, getActiveValidators())
             if (result) {
               event.stopPropagation()
-              if (draftNode.current) {
-                useLiveTransforms.getState().clear(draftNode.current.id)
-              }
-              const committedId = draftNode.current?.id ?? null
-              const wasAdopted = draftNode.isAdopted
-              const finalId = draftNode.commit(result.nodeUpdate)
-              finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+              const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
+              finishCommittedPlacement(committedId, wasAdopted, () => {
                 const nodes = useScene.getState().nodes
                 const enterResult = ceilingStrategy.enter(
                   getContext(),
@@ -1731,15 +1753,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
-      // Clear live transform before commit
-      if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
-      }
-      const committedId = draftNode.current?.id ?? null
-      const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(result.nodeUpdate)
+      const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
 
-      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+      finishCommittedPlacement(committedId, wasAdopted, () => {
         // Try to set up next draft on the same surface
         const enterResult = itemSurfaceStrategy.enter(getContext(), event)
         if (enterResult) {
@@ -1862,15 +1878,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
-      // Clear live transform before commit
-      if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
-      }
-      const committedId = draftNode.current?.id ?? null
-      const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(result.nodeUpdate)
+      const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
 
-      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+      finishCommittedPlacement(committedId, wasAdopted, () => {
         const nodes = useScene.getState().nodes
         const enterResult = ceilingStrategy.enter(getContext(), event, resolveLevelId, nodes)
         if (enterResult) {
@@ -2003,14 +2013,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
-      if (draftNode.current) {
-        useLiveTransforms.getState().clear(draftNode.current.id)
-      }
-      const committedId = draftNode.current?.id ?? null
-      const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(result.nodeUpdate)
+      const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
 
-      finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
+      finishCommittedPlacement(committedId, wasAdopted, () => {
         const enterResult = shelfSurfaceStrategy.enter(getContext(), event)
         if (enterResult) {
           applyTransition(enterResult)
@@ -2276,6 +2281,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('ceiling:click', commitFloorOnSurfaceClick as never)
     emitter.on('roof:click', commitFloorOnSurfaceClick as never)
     emitter.on('shelf:click', commitFloorOnSurfaceClick as never)
+    emitter.on('custom-mesh:click', commitFloorOnSurfaceClick as never)
     if (dragMode) window.addEventListener('pointerup', onReleaseCommit)
 
     return () => {
@@ -2316,6 +2322,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('ceiling:click', commitFloorOnSurfaceClick as never)
       emitter.off('roof:click', commitFloorOnSurfaceClick as never)
       emitter.off('shelf:click', commitFloorOnSurfaceClick as never)
+      emitter.off('custom-mesh:click', commitFloorOnSurfaceClick as never)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)

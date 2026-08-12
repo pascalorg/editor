@@ -5,6 +5,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  resolveSupportSlabPatch,
   useSpatialQuery,
 } from '@pascal-app/core'
 import {
@@ -101,18 +102,22 @@ const CustomMeshTool = () => {
           useEditor.getState().gridSnapStep,
           !isGridSnapActive(),
         )
-      const node = CustomMeshNode.parse({
+      const draftNode = CustomMeshNode.parse({
         ...customMeshDefinition.defaults(),
         name: 'Custom Mesh',
         parentId: activeLevelId,
         position,
       })
-      const placement = canPlaceOnFloor(activeLevelId, position, size, [0, node.rotation, 0])
+      const placement = canPlaceOnFloor(activeLevelId, position, size, [0, draftNode.rotation, 0])
       setValidPlacement(placement.valid)
       if (!placement.valid) {
         stopPlacementCommitPropagation(event)
         return
       }
+      const node = CustomMeshNode.parse({
+        ...draftNode,
+        ...resolveSupportSlabPatch(draftNode, sceneApi.nodes(), { pinSupport: true }),
+      })
       sceneApi.upsert(node, activeLevelId)
       selectNode(node.id)
       triggerSFX('sfx:structure-build')

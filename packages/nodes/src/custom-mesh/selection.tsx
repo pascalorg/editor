@@ -35,9 +35,7 @@ import {
   Ellipsis,
   Eye,
   EyeOff,
-  MousePointer2,
   Move3D,
-  Rotate3D,
   Rows3,
   Scaling,
   ScanLine,
@@ -55,7 +53,6 @@ import {
   useState,
 } from 'react'
 import {
-  BoxGeometry,
   BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
@@ -65,6 +62,7 @@ import {
   LineSegments,
   type Object3D,
   Plane,
+  PlaneGeometry,
   Quaternion,
   Raycaster,
   SphereGeometry,
@@ -96,6 +94,7 @@ import {
 } from './selection-model'
 import {
   customMeshBevelWidthFromDrag,
+  customMeshComponentStatus,
   customMeshOperationAvailability,
   customMeshScaleFactorFromDrag,
   customMeshScaleFactors,
@@ -105,14 +104,15 @@ import {
 type ComponentMode = CustomMeshSelection['mode']
 type Point = [number, number, number]
 type Axis = 'x' | 'y' | 'z'
-type TransformTool = 'select' | 'move' | 'rotate' | 'scale' | 'loop-cut' | 'bevel'
-type ModalOperator = 'extrude' | 'inset' | 'merge' | 'dissolve' | 'delete'
-type ToolbarPanel = 'operations' | 'selection' | null
-type ModalDraft = {
-  topology: CustomMeshTopology
-  selection: CustomMeshSelection
-  operator: ModalOperator
+type PlaneAxes = 'xy' | 'xz' | 'yz'
+type TransformOperation = 'translate' | 'rotate' | 'scale'
+type ActiveTransform = {
+  operation: TransformOperation
+  constraint: Axis
 }
+type TransformTool = 'transform' | 'loop-cut' | 'bevel'
+type TopologyOperator = 'extrude' | 'inset' | 'merge' | 'dissolve' | 'delete'
+type ToolbarPanel = 'operations' | 'selection' | null
 
 const AXIS_VECTORS: Record<Axis, Point> = {
   x: [1, 0, 0],
@@ -120,9 +120,17 @@ const AXIS_VECTORS: Record<Axis, Point> = {
   z: [0, 0, 1],
 }
 const AXIS_COLORS: Record<Axis, string> = {
-  x: '#ef4444',
-  y: '#22c55e',
-  z: '#3b82f6',
+  x: '#ff2060',
+  y: '#20df80',
+  z: '#2080ff',
+}
+const PIVOT_HOVERED_COLOR = '#ffff40'
+const GIZMO_RENDER_ORDER = 1300
+const GIZMO_HIT_RENDER_ORDER = GIZMO_RENDER_ORDER + 1
+const PLANE_NORMAL: Record<PlaneAxes, Axis> = {
+  xy: 'z',
+  xz: 'y',
+  yz: 'x',
 }
 const COMPONENT_ACTIVE_COLOR = '#ff9a24'
 const COMPONENT_SELECTED_COLOR = '#ff6d00'
@@ -132,11 +140,11 @@ const DEFAULT_BEVEL_SEGMENTS = 6
 const ROTATION_SNAP_ANGLE_DEGREES = 15
 
 const FLOATING_PANEL_CLASS =
-  'corner-smooth pointer-events-auto flex rounded-[18px] border border-border/45 bg-background/96 p-1.5 shadow-elevation-4 backdrop-blur-xl'
+  'pointer-events-auto flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md'
 const TOOLBAR_POPOVER_CLASS =
   'absolute top-[calc(100%+10px)] left-1/2 z-50 w-72 -translate-x-1/2 rounded-xl border border-border/50 bg-background/98 p-2 shadow-elevation-4 backdrop-blur-xl'
 const OPERATION_INPUT_CLASS =
-  'h-7 w-14 rounded-md border border-border/50 bg-accent/25 px-1.5 text-right font-mono text-[10px] text-foreground tabular-nums outline-none hover:border-border/80 focus:border-ring disabled:opacity-35'
+  'h-6 w-12 rounded-md border border-border/50 bg-accent/25 px-1 text-right font-mono text-[10px] text-foreground tabular-nums outline-none hover:border-border/80 focus:border-ring disabled:opacity-35'
 
 const playCustomMeshSfx = (action: CustomMeshSfxAction) => triggerSFX(customMeshSfx(action))
 
@@ -597,39 +605,56 @@ function FaceHandle({
   )
 }
 
-function AxisHandle({
+function AxisTransformHandle({
   axis,
   length,
   radius,
-  active,
-  appearance = 'move',
-  onPointerDown,
+  moveActive,
+  scaleActive,
+  onMovePointerDown,
+  onScalePointerDown,
 }: {
   axis: Axis
   length: number
   radius: number
-  active: boolean
-  appearance?: 'move' | 'scale'
-  onPointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
+  moveActive: boolean
+  scaleActive: boolean
+  onMovePointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
+  onScalePointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
 }) {
-  const [hovered, setHovered] = useState(false)
+  const [hovered, setHovered] = useState<TransformOperation | null>(null)
   const shaftGeometry = useMemo(
-    () => new CylinderGeometry(radius, radius, length * 0.72, 10),
+    () => new CylinderGeometry(radius * 0.35, radius * 0.35, length * 0.8, 10),
     [length, radius],
   )
-  const tipGeometry = useMemo(
-    () =>
-      appearance === 'scale'
-        ? new BoxGeometry(radius * 4.5, radius * 4.5, radius * 4.5)
-        : new ConeGeometry(radius * 2.5, length * 0.28, 12),
-    [appearance, length, radius],
+  const arrowGeometry = useMemo(
+    () => new ConeGeometry(radius * 1.6, length * 0.2, 24),
+    [length, radius],
   )
-  const hitGeometry = useMemo(
+  const moveHitGeometry = useMemo(
     () => new CylinderGeometry(radius * 4.5, radius * 4.5, length, 8),
     [length, radius],
   )
-  const material = useMemo(
-    () => new MeshBasicNodeMaterial({ depthTest: false, depthWrite: false }),
+  const scaleGeometry = useMemo(() => new SphereGeometry(radius * 1.3, 12, 12), [radius])
+  const scaleHitGeometry = useMemo(() => new SphereGeometry(radius * 4.2, 12, 8), [radius])
+  const moveMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        transparent: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+  const scaleMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        transparent: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
+      }),
     [],
   )
   const hitMaterial = useMemo(
@@ -644,38 +669,183 @@ function AxisHandle({
     [axis],
   )
   useEffect(() => {
-    material.color.set(active || hovered ? '#fef3c7' : AXIS_COLORS[axis])
-  }, [active, axis, hovered, material])
+    moveMaterial.color.set(
+      moveActive || hovered === 'translate' ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis],
+    )
+    scaleMaterial.color.set(
+      scaleActive || hovered === 'scale' ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis],
+    )
+  }, [axis, hovered, moveActive, moveMaterial, scaleActive, scaleMaterial])
   useEffect(
     () => () => {
       shaftGeometry.dispose()
-      tipGeometry.dispose()
-      hitGeometry.dispose()
-      material.dispose()
+      arrowGeometry.dispose()
+      moveHitGeometry.dispose()
+      scaleGeometry.dispose()
+      scaleHitGeometry.dispose()
+      moveMaterial.dispose()
+      scaleMaterial.dispose()
       hitMaterial.dispose()
     },
-    [hitGeometry, hitMaterial, material, shaftGeometry, tipGeometry],
+    [
+      arrowGeometry,
+      hitMaterial,
+      moveHitGeometry,
+      moveMaterial,
+      scaleGeometry,
+      scaleHitGeometry,
+      scaleMaterial,
+      shaftGeometry,
+    ],
   )
   const rotation: Point =
     axis === 'x' ? [0, 0, -Math.PI / 2] : axis === 'z' ? [Math.PI / 2, 0, 0] : [0, 0, 0]
+  const scalePosition = length * 1.2
 
   return (
     <group rotation={rotation}>
       <mesh
         geometry={shaftGeometry}
         layers={EDITOR_LAYER}
-        material={material}
-        position={[0, length * 0.36, 0]}
+        material={moveMaterial}
+        position={[0, length * 0.4, 0]}
         raycast={() => {}}
-        renderOrder={1210}
+        renderOrder={GIZMO_RENDER_ORDER}
       />
       <mesh
-        geometry={tipGeometry}
+        geometry={arrowGeometry}
+        layers={EDITOR_LAYER}
+        material={moveMaterial}
+        position={[0, length * 0.9, 0]}
+        raycast={() => {}}
+        renderOrder={GIZMO_RENDER_ORDER}
+      />
+      <mesh
+        geometry={moveHitGeometry}
+        layers={EDITOR_LAYER}
+        material={hitMaterial}
+        onPointerDown={(event) => {
+          event.stopPropagation()
+          event.nativeEvent.stopImmediatePropagation()
+          swallowNextClick()
+          onMovePointerDown(axis, event)
+        }}
+        onPointerEnter={(event) => {
+          event.stopPropagation()
+          setHovered('translate')
+          document.body.style.cursor = 'grab'
+        }}
+        onPointerLeave={() => {
+          setHovered(null)
+          if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
+        }}
+        position={[0, length * 0.5, 0]}
+        renderOrder={GIZMO_HIT_RENDER_ORDER}
+      />
+      <mesh
+        geometry={scaleGeometry}
+        layers={EDITOR_LAYER}
+        material={scaleMaterial}
+        position={[0, scalePosition, 0]}
+        raycast={() => {}}
+        renderOrder={GIZMO_RENDER_ORDER}
+      />
+      <mesh
+        geometry={scaleHitGeometry}
+        layers={EDITOR_LAYER}
+        material={hitMaterial}
+        onPointerDown={(event) => {
+          event.stopPropagation()
+          event.nativeEvent.stopImmediatePropagation()
+          swallowNextClick()
+          onScalePointerDown(axis, event)
+        }}
+        onPointerEnter={(event) => {
+          event.stopPropagation()
+          setHovered('scale')
+          document.body.style.cursor = 'grab'
+        }}
+        onPointerLeave={() => {
+          setHovered(null)
+          if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
+        }}
+        position={[0, scalePosition, 0]}
+        renderOrder={GIZMO_HIT_RENDER_ORDER}
+      />
+    </group>
+  )
+}
+
+function PlaneMoveHandle({
+  plane,
+  offset,
+  size,
+  active,
+  onPointerDown,
+}: {
+  plane: PlaneAxes
+  offset: number
+  size: number
+  active: boolean
+  onPointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  const geometry = useMemo(() => new PlaneGeometry(size, size), [size])
+  const hitGeometry = useMemo(() => new PlaneGeometry(size * 1.45, size * 1.45), [size])
+  const normalAxis = PLANE_NORMAL[plane]
+  const material = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: AXIS_COLORS[normalAxis],
+        depthTest: false,
+        depthWrite: false,
+        side: DoubleSide,
+        transparent: true,
+        opacity: 1,
+      }),
+    [normalAxis],
+  )
+  const hitMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: '#ffffff',
+        depthTest: false,
+        depthWrite: false,
+        side: DoubleSide,
+        transparent: true,
+        opacity: 0,
+      }),
+    [],
+  )
+  useEffect(() => {
+    material.color.set(active || hovered ? PIVOT_HOVERED_COLOR : AXIS_COLORS[normalAxis])
+  }, [active, hovered, material, normalAxis])
+  useEffect(
+    () => () => {
+      geometry.dispose()
+      hitGeometry.dispose()
+      material.dispose()
+      hitMaterial.dispose()
+    },
+    [geometry, hitGeometry, hitMaterial, material],
+  )
+  const position: Point =
+    plane === 'xy'
+      ? [offset, offset, 0]
+      : plane === 'xz'
+        ? [offset, 0, offset]
+        : [0, offset, offset]
+  const rotation: Point =
+    plane === 'xz' ? [-Math.PI / 2, 0, 0] : plane === 'yz' ? [0, Math.PI / 2, 0] : [0, 0, 0]
+
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh
+        geometry={geometry}
         layers={EDITOR_LAYER}
         material={material}
-        position={[0, length * 0.86, 0]}
         raycast={() => {}}
-        renderOrder={1210}
+        renderOrder={GIZMO_RENDER_ORDER}
       />
       <mesh
         geometry={hitGeometry}
@@ -685,19 +855,18 @@ function AxisHandle({
           event.stopPropagation()
           event.nativeEvent.stopImmediatePropagation()
           swallowNextClick()
-          onPointerDown(axis, event)
+          onPointerDown(normalAxis, event)
         }}
         onPointerEnter={(event) => {
           event.stopPropagation()
           setHovered(true)
-          document.body.style.cursor = 'grab'
+          document.body.style.cursor = 'move'
         }}
         onPointerLeave={() => {
           setHovered(false)
-          if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
+          if (document.body.style.cursor === 'move') document.body.style.cursor = ''
         }}
-        position={[0, length * 0.5, 0]}
-        renderOrder={1211}
+        renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
     </group>
   )
@@ -717,11 +886,22 @@ function RotationHandle({
   onPointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
 }) {
   const [hovered, setHovered] = useState(false)
-  const ringGeometry = useMemo(() => new TorusGeometry(radius, tube, 8, 64), [radius, tube])
-  const hitGeometry = useMemo(() => new TorusGeometry(radius, tube * 4.5, 8, 64), [radius, tube])
-  const arrowGeometry = useMemo(() => new ConeGeometry(tube * 2.8, tube * 7, 12), [tube])
+  const ringGeometry = useMemo(
+    () => new TorusGeometry(radius, tube * 0.35, 8, 32, Math.PI / 2),
+    [radius, tube],
+  )
+  const hitGeometry = useMemo(
+    () => new TorusGeometry(radius, tube * 4.5, 8, 32, Math.PI / 2),
+    [radius, tube],
+  )
   const material = useMemo(
-    () => new MeshBasicNodeMaterial({ depthTest: false, depthWrite: false }),
+    () =>
+      new MeshBasicNodeMaterial({
+        transparent: true,
+        opacity: 1,
+        depthTest: false,
+        depthWrite: false,
+      }),
     [],
   )
   const hitMaterial = useMemo(
@@ -736,20 +916,19 @@ function RotationHandle({
     [axis],
   )
   useEffect(() => {
-    material.color.set(active || hovered ? '#fef3c7' : AXIS_COLORS[axis])
+    material.color.set(active || hovered ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis])
   }, [active, axis, hovered, material])
   useEffect(
     () => () => {
       ringGeometry.dispose()
       hitGeometry.dispose()
-      arrowGeometry.dispose()
       material.dispose()
       hitMaterial.dispose()
     },
-    [arrowGeometry, hitGeometry, hitMaterial, material, ringGeometry],
+    [hitGeometry, hitMaterial, material, ringGeometry],
   )
   const rotation: Point =
-    axis === 'x' ? [0, Math.PI / 2, 0] : axis === 'y' ? [-Math.PI / 2, 0, 0] : [0, 0, 0]
+    axis === 'x' ? [0, -Math.PI / 2, 0] : axis === 'y' ? [Math.PI / 2, 0, 0] : [0, 0, 0]
 
   return (
     <group rotation={rotation}>
@@ -758,24 +937,7 @@ function RotationHandle({
         layers={EDITOR_LAYER}
         material={material}
         raycast={() => {}}
-        renderOrder={1210}
-      />
-      <mesh
-        geometry={arrowGeometry}
-        layers={EDITOR_LAYER}
-        material={material}
-        position={[radius, 0, 0]}
-        raycast={() => {}}
-        renderOrder={1210}
-      />
-      <mesh
-        geometry={arrowGeometry}
-        layers={EDITOR_LAYER}
-        material={material}
-        position={[-radius, 0, 0]}
-        raycast={() => {}}
-        renderOrder={1210}
-        rotation={[0, 0, Math.PI]}
+        renderOrder={GIZMO_RENDER_ORDER}
       />
       <mesh
         geometry={hitGeometry}
@@ -796,7 +958,7 @@ function RotationHandle({
           setHovered(false)
           if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
         }}
-        renderOrder={1211}
+        renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
     </group>
   )
@@ -939,11 +1101,9 @@ function ToolbarButton({
       <button
         aria-label={label}
         className={cn(
-          'flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-muted-foreground transition-colors',
-          active && 'bg-accent text-foreground ring-1 ring-border/60 ring-inset hover:bg-accent/80',
-          !active &&
-            !destructive &&
-            'hover:bg-accent/80 hover:text-foreground dark:hover:bg-white/8',
+          'flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors',
+          active && 'bg-accent text-foreground hover:bg-accent/80',
+          !active && !destructive && 'hover:bg-accent hover:text-foreground',
           destructive && 'hover:bg-destructive/10 hover:text-destructive',
           'disabled:cursor-not-allowed disabled:opacity-35',
         )}
@@ -1035,13 +1195,13 @@ function ToolbarOperationItem({
   return (
     <div
       className={cn(
-        'flex h-9 items-center rounded-lg transition-colors',
+        'flex h-8 items-center rounded-md transition-colors',
         active ? 'bg-accent' : 'hover:bg-accent/70',
         disabled && 'opacity-35',
       )}
     >
       <button
-        className="flex h-full min-w-0 flex-1 items-center gap-2 px-2.5 text-left text-muted-foreground text-xs hover:text-foreground disabled:cursor-not-allowed"
+        className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-2 text-left text-[11px] text-muted-foreground hover:text-foreground disabled:cursor-not-allowed"
         disabled={disabled}
         onClick={(event) => {
           event.stopPropagation()
@@ -1052,7 +1212,7 @@ function ToolbarOperationItem({
         {children}
         <span className="whitespace-nowrap">{label}</span>
         {shortcut ? (
-          <kbd className="ml-auto font-mono text-[10px] text-muted-foreground/70">{shortcut}</kbd>
+          <kbd className="ml-auto font-mono text-[9px] text-muted-foreground/70">{shortcut}</kbd>
         ) : null}
       </button>
       {controls ? <div className="flex shrink-0 items-center gap-1 pr-1">{controls}</div> : null}
@@ -1095,21 +1255,19 @@ function CustomMeshEditor({
   const [mode, setMode] = useState<ComponentMode>('face')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [transformTool, setTransformTool] = useState<TransformTool>('select')
+  const [transformTool, setTransformTool] = useState<TransformTool>('transform')
   const [xray, setXray] = useState(false)
   const [previewTopology, setPreviewTopology] = useState<CustomMeshTopology | null>(null)
-  const [dragAxis, setDragAxis] = useState<Axis | null>(null)
+  const [activeTransform, setActiveTransform] = useState<ActiveTransform | null>(null)
   const [loopCutSegments, setLoopCutSegments] = useState<[Point, Point][] | null>(null)
   const [loopCutCount, setLoopCutCount] = useState(1)
   const [loopCutFactor, setLoopCutFactor] = useState(0.5)
   const [extrudeDistance, setExtrudeDistance] = useState('0.25')
   const [insetAmount, setInsetAmount] = useState('0.15')
   const [bevelSegments, setBevelSegments] = useState(DEFAULT_BEVEL_SEGMENTS)
-  const [modalDraft, setModalDraft] = useState<ModalDraft | null>(null)
   const [toolbarPanel, setToolbarPanel] = useState<ToolbarPanel>(null)
   const [error, setError] = useState<string | null>(null)
   const cancelDragRef = useRef<(() => void) | null>(null)
-  const modalDraftRef = useRef<ModalDraft | null>(null)
   const displayTopology = previewTopology ?? node.topology
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selection = useMemo<CustomMeshSelection>(
@@ -1119,9 +1277,11 @@ function CustomMeshEditor({
   const extent = topologyExtent(displayTopology)
   const componentRadius = Math.min(0.055, Math.max(0.022, extent * 0.011))
   const gizmoOrigin = selectionCentroid(displayTopology, selection)
-  const gizmoLength = Math.min(0.72, Math.max(0.26, extent * 0.18))
-  const gizmoRadius = Math.min(0.026, Math.max(0.009, extent * 0.006))
-  const rotationGizmoRadius = Math.min(1, Math.max(0.45, extent * 0.28))
+  const gizmoLength = Math.min(1.15, Math.max(0.42, extent * 0.29))
+  const gizmoRadius = Math.min(0.04, Math.max(0.014, extent * 0.009))
+  const rotationGizmoRadius = gizmoLength * 0.65
+  const planeHandleSize = gizmoLength * 0.2
+  const planeHandleOffset = gizmoLength * 0.25
   const vertexById = useMemo(() => topologyVertexMap(displayTopology), [displayTopology])
   const menuAnchor = useMemo<Point>(() => {
     const xs = displayTopology.vertices.map((vertex) => vertex.position[0])
@@ -1152,8 +1312,6 @@ function CustomMeshEditor({
     }
   })
 
-  modalDraftRef.current = modalDraft
-
   const ownsEditSession = useCallback(() => {
     const scope = useInteractionScope.getState().scope
     return scope.kind === 'mesh-editing' && scope.nodeId === node.id
@@ -1172,43 +1330,15 @@ function CustomMeshEditor({
     useScene.getState().markDirty(node.id)
     endOwnedScope()
     setPreviewTopology(null)
-    setModalDraft(null)
     setSelectedIds([])
     setActiveId(null)
-    setTransformTool('select')
-    setDragAxis(null)
+    setTransformTool('transform')
+    setActiveTransform(null)
     setLoopCutSegments(null)
     setToolbarPanel(null)
     setError(null)
     playCustomMeshSfx('finish')
   }, [endOwnedScope, node.id])
-
-  const cancelModalDraft = useCallback(() => {
-    useLiveNodeOverrides.getState().clear(node.id)
-    useScene.getState().markDirty(node.id)
-    setPreviewTopology(null)
-    setModalDraft(null)
-    setToolbarPanel(null)
-    setError(null)
-    if (ownsEditSession()) useInteractionScope.getState().begin(meshEditScope(node.id))
-    playCustomMeshSfx('cancel')
-  }, [node.id, ownsEditSession])
-
-  const confirmModalDraft = useCallback(() => {
-    const draft = modalDraftRef.current
-    if (!draft) return
-    useLiveNodeOverrides.getState().clear(node.id)
-    useScene.getState().markDirty(node.id)
-    useScene.getState().updateNode(node.id, { topology: draft.topology })
-    setPreviewTopology(null)
-    setModalDraft(null)
-    setMode(draft.selection.mode)
-    setSelectedIds(draft.selection.ids)
-    setActiveId(draft.selection.ids.at(-1) ?? null)
-    setError(null)
-    if (ownsEditSession()) useInteractionScope.getState().begin(meshEditScope(node.id))
-    playCustomMeshSfx(draft.operator === 'delete' ? 'delete' : 'operation-commit')
-  }, [node.id, ownsEditSession])
 
   useEffect(
     () => () => {
@@ -1228,10 +1358,9 @@ function CustomMeshEditor({
     useLiveNodeOverrides.getState().clear(node.id)
     useScene.getState().markDirty(node.id)
     setPreviewTopology(null)
-    setModalDraft(null)
     setToolbarPanel(null)
     setLoopCutSegments(null)
-    setDragAxis(null)
+    setActiveTransform(null)
   }, [editing, node.id])
 
   useEffect(() => {
@@ -1242,12 +1371,11 @@ function CustomMeshEditor({
         setToolbarPanel(null)
         playCustomMeshSfx('cancel')
       } else if (cancelDragRef.current) cancelDragRef.current()
-      else if (modalDraftRef.current) cancelModalDraft()
       else exitEditMode()
     }
     emitter.on('tool:cancel', onToolCancel)
     return () => emitter.off('tool:cancel', onToolCancel)
-  }, [cancelModalDraft, editing, exitEditMode, toolbarPanel])
+  }, [editing, exitEditMode, toolbarPanel])
 
   useEffect(() => {
     if (!(editing && toolbarPanel)) return
@@ -1264,13 +1392,7 @@ function CustomMeshEditor({
     if (!editing) return
     const onGridClick = () => {
       const scope = useInteractionScope.getState().scope
-      if (
-        scope.kind !== 'mesh-editing' ||
-        scope.nodeId !== node.id ||
-        cancelDragRef.current ||
-        modalDraftRef.current
-      )
-        return
+      if (scope.kind !== 'mesh-editing' || scope.nodeId !== node.id || cancelDragRef.current) return
       setSelectedIds([])
       setActiveId(null)
       setError(null)
@@ -1292,7 +1414,7 @@ function CustomMeshEditor({
       if (event.key === 'Tab') {
         event.preventDefault()
         event.stopImmediatePropagation()
-        if (cancelDragRef.current || modalDraftRef.current) return
+        if (cancelDragRef.current) return
         if (editing) {
           exitEditMode()
         } else if (useInteractionScope.getState().scope.kind === 'idle') {
@@ -1300,7 +1422,7 @@ function CustomMeshEditor({
           setMode('face')
           setSelectedIds(face ? [face.id] : [])
           setActiveId(face?.id ?? null)
-          setTransformTool('select')
+          setTransformTool('transform')
           setToolbarPanel(null)
           setError(null)
           useInteractionScope.getState().begin(meshEditScope(node.id))
@@ -1309,12 +1431,6 @@ function CustomMeshEditor({
         return
       }
       if (!editing) return
-      if (event.key === 'Enter' && modalDraftRef.current) {
-        event.preventDefault()
-        event.stopImmediatePropagation()
-        confirmModalDraft()
-        return
-      }
       const nextMode =
         event.key === '1'
           ? 'vertex'
@@ -1343,16 +1459,7 @@ function CustomMeshEditor({
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [
-    activeId,
-    confirmModalDraft,
-    editing,
-    exitEditMode,
-    mode,
-    node.id,
-    node.topology,
-    selectedIds,
-  ])
+  }, [activeId, editing, exitEditMode, mode, node.id, node.topology, selectedIds])
 
   useEffect(() => {
     const validIds = new Set(
@@ -1372,7 +1479,7 @@ function CustomMeshEditor({
     setMode('face')
     setSelectedIds(face ? [face.id] : [])
     setActiveId(face?.id ?? null)
-    setTransformTool('select')
+    setTransformTool('transform')
     setToolbarPanel(null)
     setError(null)
     useInteractionScope.getState().begin(meshEditScope(node.id))
@@ -1415,7 +1522,6 @@ function CustomMeshEditor({
 
   const selectComponent = useCallback(
     (id: string, additive: boolean, event: ThreeEvent<MouseEvent>) => {
-      if (modalDraftRef.current) return
       if (!componentIsVisible(id, event)) return
       const next = selectCustomMeshComponent({ mode, ids: selectedIds, activeId }, id, additive)
       setSelectedIds(next.ids)
@@ -1427,7 +1533,7 @@ function CustomMeshEditor({
   )
 
   const switchMode = (nextMode: ComponentMode) => {
-    if (cancelDragRef.current || modalDraftRef.current) return
+    if (cancelDragRef.current) return
     const converted = convertCustomMeshSelection(
       displayTopology,
       { mode, ids: selectedIds, activeId },
@@ -1454,7 +1560,7 @@ function CustomMeshEditor({
     [camera, gl.domElement],
   )
 
-  const beginAxisDrag = useCallback(
+  const beginTranslationDrag = useCallback(
     (axis: Axis, event: ThreeEvent<PointerEvent>) => {
       if (!ownsEditSession() || selectedIds.length === 0 || cancelDragRef.current) return
       const origin = selectionCentroid(displayTopology, selection)
@@ -1463,49 +1569,51 @@ function CustomMeshEditor({
       const originLocal = new Vector3(...origin)
       const worldOrigin = target.localToWorld(originLocal.clone())
       const localAxis = new Vector3(...AXIS_VECTORS[axis])
-      const worldTip = target.localToWorld(originLocal.clone().add(localAxis))
-      const worldAxis = worldTip.sub(worldOrigin).normalize()
+      const worldAxis = target
+        .localToWorld(originLocal.clone().add(localAxis))
+        .sub(worldOrigin)
+        .normalize()
       const initialParameter = closestAxisParameterToRay(worldOrigin, worldAxis, event.ray)
+      const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
       const baseTopology = displayTopology
       const baseSelection = selection
       const previousInputDragging = useViewer.getState().inputDragging
       const previousCursor = document.body.style.cursor
       let latestTopology: CustomMeshTopology | null = null
-      let latestDistance = 0
-      let lastSnapDistance: number | null = null
+      let latestDelta: Point = [0, 0, 0]
+      let lastSnapDelta: string | null = null
       let finished = false
 
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'translate'))
       playCustomMeshSfx('drag-start')
       useViewer.getState().setInputDragging(true)
-      setDragAxis(axis)
+      setActiveTransform({ operation: 'translate', constraint: axis })
       document.body.style.cursor = 'grabbing'
 
       const onMove = (pointerEvent: PointerEvent) => {
-        const parameter = closestAxisParameterToRay(
-          worldOrigin,
-          worldAxis,
-          makeRay(pointerEvent.clientX, pointerEvent.clientY),
-        )
+        const ray = makeRay(pointerEvent.clientX, pointerEvent.clientY)
+        const delta: Point = [0, 0, 0]
+        const parameter = closestAxisParameterToRay(worldOrigin, worldAxis, ray)
         const worldPoint = worldOrigin
           .clone()
           .addScaledVector(worldAxis, parameter - initialParameter)
         const localPoint = target.worldToLocal(worldPoint)
-        const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
-        let distance = localPoint.getComponent(axisIndex) - originLocal.getComponent(axisIndex)
+        delta[axisIndex] = localPoint.getComponent(axisIndex) - originLocal.getComponent(axisIndex)
         const snapping = isGridSnapActive() && !pointerEvent.altKey
         if (snapping) {
           const step = useEditor.getState().gridSnapStep
-          if (step > 0) distance = Math.round(distance / step) * step
+          if (step > 0) {
+            delta[axisIndex] = Math.round(delta[axisIndex] / step) * step
+          }
         }
-        if (snapping && Math.abs(distance) > 1e-6 && distance !== lastSnapDistance) {
-          lastSnapDistance = distance
+        const snapDelta = delta.join(':')
+        const magnitude = Math.hypot(...delta)
+        if (snapping && magnitude > 1e-6 && snapDelta !== lastSnapDelta) {
+          lastSnapDelta = snapDelta
           playCustomMeshSfx('move-step')
         } else if (!snapping) {
-          lastSnapDistance = null
+          lastSnapDelta = null
         }
-        const delta: Point = [0, 0, 0]
-        delta[axisIndex] = distance
         const result = applyCustomMeshCommand(baseTopology, {
           type: 'translate-components',
           selection: baseSelection,
@@ -1515,7 +1623,7 @@ function CustomMeshEditor({
           setError(result.error)
           return
         }
-        latestDistance = distance
+        latestDelta = delta
         latestTopology = result.topology
         setPreviewTopology(result.topology)
         useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
@@ -1535,8 +1643,8 @@ function CustomMeshEditor({
         useViewer.getState().setInputDragging(previousInputDragging)
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
-        setDragAxis(null)
-        if (commit && latestTopology && Math.abs(latestDistance) > 1e-6) {
+        setActiveTransform(null)
+        if (commit && latestTopology && Math.hypot(...latestDelta) > 1e-6) {
           useScene.getState().updateNode(node.id, { topology: latestTopology })
           playCustomMeshSfx('finish')
         } else if (!commit) {
@@ -1592,7 +1700,7 @@ function CustomMeshEditor({
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'rotate'))
       playCustomMeshSfx('drag-start')
       useViewer.getState().setInputDragging(true)
-      setDragAxis(axis)
+      setActiveTransform({ operation: 'rotate', constraint: axis })
       document.body.style.cursor = 'grabbing'
 
       const onMove = (pointerEvent: PointerEvent) => {
@@ -1650,7 +1758,7 @@ function CustomMeshEditor({
         useViewer.getState().setInputDragging(previousInputDragging)
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
-        setDragAxis(null)
+        setActiveTransform(null)
         if (commit && latestTopology && Math.abs(latestAngle) > 1e-6) {
           useScene.getState().updateNode(node.id, { topology: latestTopology })
           playCustomMeshSfx('finish')
@@ -1700,7 +1808,7 @@ function CustomMeshEditor({
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'scale'))
       playCustomMeshSfx('drag-start')
       useViewer.getState().setInputDragging(true)
-      setDragAxis(axis)
+      setActiveTransform({ operation: 'scale', constraint: axis })
       document.body.style.cursor = 'grabbing'
 
       const onMove = (pointerEvent: PointerEvent) => {
@@ -1753,7 +1861,7 @@ function CustomMeshEditor({
         useViewer.getState().setInputDragging(previousInputDragging)
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
-        setDragAxis(null)
+        setActiveTransform(null)
         if (commit && latestTopology && Math.abs(latestFactor - 1) > 1e-6) {
           useScene.getState().updateNode(node.id, { topology: latestTopology })
           playCustomMeshSfx('finish')
@@ -1940,7 +2048,6 @@ function CustomMeshEditor({
       let latestFactor = 0.5
       let activeCuts = loopCutCount
       let lastSnapFactor: number | null = null
-      let firstStageConfirmed = false
       let finished = false
 
       const updatePreview = (factor: number, cuts = activeCuts) => {
@@ -1976,7 +2083,6 @@ function CustomMeshEditor({
       document.body.style.cursor = 'ew-resize'
 
       const onMove = (pointerEvent: PointerEvent) => {
-        if (!firstStageConfirmed) return
         const parameter = closestAxisParameterToRay(
           worldStart,
           worldAxis,
@@ -2016,8 +2122,7 @@ function CustomMeshEditor({
         if (finished) return
         finished = true
         window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onFirstPointerUp)
-        window.removeEventListener('pointerdown', onSecondPointerDown, true)
+        window.removeEventListener('pointerup', onPointerUp)
         window.removeEventListener('wheel', onWheel, CUSTOM_MESH_WHEEL_OPTIONS)
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
@@ -2042,21 +2147,11 @@ function CustomMeshEditor({
         }
         swallowNextClick()
       }
-      const onFirstPointerUp = () => {
-        firstStageConfirmed = true
-      }
-      const onSecondPointerDown = (pointerEvent: PointerEvent) => {
-        if (!firstStageConfirmed || (pointerEvent.button !== 0 && pointerEvent.button !== 2)) return
-        pointerEvent.preventDefault()
-        pointerEvent.stopImmediatePropagation()
-        if (pointerEvent.button === 2) updatePreview(0.5)
-        finish(true)
-      }
+      const onPointerUp = () => finish(true)
       const onPointerCancel = () => finish(false)
       cancelDragRef.current = onPointerCancel
       window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onFirstPointerUp, { once: true })
-      window.addEventListener('pointerdown', onSecondPointerDown, true)
+      window.addEventListener('pointerup', onPointerUp, { once: true })
       window.addEventListener('wheel', onWheel, CUSTOM_MESH_WHEEL_OPTIONS)
       window.addEventListener('pointercancel', onPointerCancel, { once: true })
       window.addEventListener('blur', onPointerCancel, { once: true })
@@ -2064,8 +2159,8 @@ function CustomMeshEditor({
     [displayTopology, loopCutCount, makeRay, node.id, ownsEditSession, target],
   )
 
-  const previewCommand = (command: CustomMeshCommand, operator: ModalOperator) => {
-    if (cancelDragRef.current || modalDraftRef.current) return
+  const commitCommand = (command: CustomMeshCommand, operator: TopologyOperator) => {
+    if (cancelDragRef.current) return
     useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', operator))
     const result = applyCustomMeshCommand(node.topology, command)
     if (!result.ok) {
@@ -2073,19 +2168,19 @@ function CustomMeshEditor({
       setError(result.error)
       return
     }
-    const draft = { topology: result.topology, selection: result.selection, operator }
-    setModalDraft(draft)
+    useScene.getState().updateNode(node.id, { topology: result.topology })
+    setMode(result.selection.mode)
+    setSelectedIds(result.selection.ids)
+    setActiveId(result.selection.ids.at(-1) ?? null)
     setToolbarPanel(null)
-    setPreviewTopology(result.topology)
-    useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-    useScene.getState().markDirty(node.id)
     setError(null)
+    if (ownsEditSession()) useInteractionScope.getState().begin(meshEditScope(node.id))
+    playCustomMeshSfx(operator === 'delete' ? 'delete' : 'operation-commit')
   }
 
   const extrudeSelectedFace = () => {
     if (mode !== 'face' || selectedIds.length !== 1) return
-    playCustomMeshSfx('operation-start')
-    previewCommand(
+    commitCommand(
       { type: 'extrude-face', faceId: selectedIds[0]!, distance: Number(extrudeDistance) },
       'extrude',
     )
@@ -2093,8 +2188,7 @@ function CustomMeshEditor({
 
   const insetSelectedFace = () => {
     if (mode !== 'face' || selectedIds.length !== 1) return
-    playCustomMeshSfx('operation-start')
-    previewCommand(
+    commitCommand(
       {
         type: 'inset-face',
         faceId: selectedIds[0]!,
@@ -2107,20 +2201,17 @@ function CustomMeshEditor({
 
   const deleteSelection = () => {
     if (selectedIds.length === 0) return
-    playCustomMeshSfx('tool-select')
-    previewCommand({ type: 'delete-components', selection }, 'delete')
+    commitCommand({ type: 'delete-components', selection }, 'delete')
   }
 
   const mergeSelection = () => {
     if (mode !== 'vertex' || selectedIds.length < 2) return
-    playCustomMeshSfx('operation-start')
-    previewCommand({ type: 'merge-vertices', vertexIds: selectedIds }, 'merge')
+    commitCommand({ type: 'merge-vertices', vertexIds: selectedIds }, 'merge')
   }
 
   const dissolveSelection = () => {
     if (mode !== 'edge' || selectedIds.length !== 1) return
-    playCustomMeshSfx('operation-start')
-    previewCommand({ type: 'dissolve-edge', edgeId: selectedIds[0]! }, 'dissolve')
+    commitCommand({ type: 'dissolve-edge', edgeId: selectedIds[0]! }, 'dissolve')
   }
 
   const updateSelection = (next: CustomMeshSelectionState) => {
@@ -2196,7 +2287,7 @@ function CustomMeshEditor({
       } else if (key === 'g') {
         if (actions.hasSelection) {
           playCustomMeshSfx('tool-select')
-          setTransformTool('move')
+          setTransformTool('transform')
         }
       } else if (key === 'e') {
         actions.extrudeSelectedFace()
@@ -2209,12 +2300,12 @@ function CustomMeshEditor({
           setToolbarPanel(null)
         } else if (actions.hasSelection) {
           playCustomMeshSfx('tool-select')
-          setTransformTool('rotate')
+          setTransformTool('transform')
         }
       } else if (key === 's') {
         if (actions.hasSelection) {
           playCustomMeshSfx('tool-select')
-          setTransformTool('scale')
+          setTransformTool('transform')
         }
       } else if (key === 'm') {
         actions.mergeSelection()
@@ -2246,32 +2337,18 @@ function CustomMeshEditor({
     playCustomMeshSfx('delete')
   }
 
-  const componentLabel =
-    selectedIds.length === 1 ? mode : mode === 'vertex' ? 'vertices' : `${mode}s`
   const selectionStatus = formatCustomMeshSelectionStatus(mode, selectedIds.length)
   const operationAvailability = customMeshOperationAvailability(mode, selectedIds.length)
   const loopCutActive = transformTool === 'loop-cut'
   const bevelActive = transformTool === 'bevel'
-  const componentStatus = modalDraft
-    ? `${modalDraft.operator} preview · Enter to confirm · Esc to cancel`
-    : transformTool === 'loop-cut'
-      ? `Loop Cut · ${loopCutCount} cut${loopCutCount === 1 ? '' : 's'} · factor ${loopCutFactor.toFixed(2)} · first click chooses ring, second click confirms · wheel changes count`
-      : transformTool === 'bevel'
-        ? `Bevel · drag an edge to peel it · wheel changes segments (${bevelSegments}) · release to apply`
-        : selectedIds.length === 0
-          ? `Click a ${mode} to select it`
-          : transformTool === 'move'
-            ? `${selectedIds.length} ${componentLabel} selected · drag an axis to move · Alt for free movement`
-            : transformTool === 'rotate'
-              ? `${selectedIds.length} ${componentLabel} selected · drag a rotation ring · Alt for free rotation`
-              : transformTool === 'scale'
-                ? `${selectedIds.length} ${componentLabel} selected · drag a colored handle to scale · Alt for free scaling`
-                : `${selectedIds.length} ${componentLabel} selected · choose a transform or mesh operator`
-  const showComponentStatus =
-    Boolean(error || modalDraft || dragAxis) ||
-    transformTool === 'loop-cut' ||
-    transformTool === 'bevel' ||
-    selectedIds.length === 0
+  const componentStatus = customMeshComponentStatus({
+    mode,
+    selectedCount: selectedIds.length,
+    tool: transformTool,
+    loopCutCount,
+    loopCutFactor,
+    bevelSegments,
+  })
 
   return (
     <group ref={outerRef}>
@@ -2340,45 +2417,48 @@ function CustomMeshEditor({
                 )
               })
             : null}
-          {gizmoOrigin && transformTool === 'move' ? (
+          {gizmoOrigin && transformTool === 'transform' ? (
             <group position={gizmoOrigin}>
               {(['x', 'y', 'z'] as const).map((axis) => (
-                <AxisHandle
-                  active={dragAxis === axis}
+                <AxisTransformHandle
                   axis={axis}
                   key={axis}
                   length={gizmoLength}
-                  onPointerDown={beginAxisDrag}
+                  moveActive={
+                    activeTransform?.operation === 'translate' &&
+                    activeTransform.constraint === axis
+                  }
+                  onMovePointerDown={beginTranslationDrag}
+                  onScalePointerDown={beginScaleDrag}
                   radius={gizmoRadius}
+                  scaleActive={
+                    activeTransform?.operation === 'scale' && activeTransform.constraint === axis
+                  }
                 />
               ))}
-            </group>
-          ) : null}
-          {gizmoOrigin && transformTool === 'rotate' ? (
-            <group position={gizmoOrigin}>
+              {(Object.keys(PLANE_NORMAL) as PlaneAxes[]).map((plane) => (
+                <PlaneMoveHandle
+                  active={
+                    activeTransform?.operation === 'translate' &&
+                    activeTransform.constraint === PLANE_NORMAL[plane]
+                  }
+                  key={plane}
+                  offset={planeHandleOffset}
+                  onPointerDown={beginTranslationDrag}
+                  plane={plane}
+                  size={planeHandleSize}
+                />
+              ))}
               {(['x', 'y', 'z'] as const).map((axis) => (
                 <RotationHandle
-                  active={dragAxis === axis}
+                  active={
+                    activeTransform?.operation === 'rotate' && activeTransform.constraint === axis
+                  }
                   axis={axis}
-                  key={axis}
+                  key={`rotate-${axis}`}
                   onPointerDown={beginRotationDrag}
                   radius={rotationGizmoRadius}
                   tube={gizmoRadius}
-                />
-              ))}
-            </group>
-          ) : null}
-          {gizmoOrigin && transformTool === 'scale' ? (
-            <group position={gizmoOrigin}>
-              {(['x', 'y', 'z'] as const).map((axis) => (
-                <AxisHandle
-                  active={dragAxis === axis}
-                  appearance="scale"
-                  axis={axis}
-                  key={axis}
-                  length={gizmoLength}
-                  onPointerDown={beginScaleDrag}
-                  radius={gizmoRadius}
                 />
               ))}
             </group>
@@ -2419,76 +2499,40 @@ function CustomMeshEditor({
           style={{ transformOrigin: 'center center' }}
         >
           {editing ? (
-            <div className={cn(FLOATING_PANEL_CLASS, 'relative items-center gap-1 px-2')}>
-              <div className="flex items-center overflow-hidden rounded-lg border border-border/45 bg-accent/15">
-                <ToolbarButton
-                  active={transformTool === 'select'}
-                  disabled={Boolean(modalDraft || cancelDragRef.current)}
-                  label="Select tool"
-                  onClick={() => setTransformTool('select')}
-                >
-                  <MousePointer2 className="h-4 w-4" />
-                </ToolbarButton>
-                <ToolbarButton
-                  active={transformTool === 'move'}
-                  disabled={Boolean(
-                    selectedIds.length === 0 || modalDraft || cancelDragRef.current,
-                  )}
-                  label="Move selected components (G)"
-                  onClick={() => setTransformTool('move')}
-                >
-                  <Move3D className="h-4 w-4" />
-                </ToolbarButton>
-                <ToolbarButton
-                  active={transformTool === 'rotate'}
-                  disabled={Boolean(
-                    selectedIds.length === 0 || modalDraft || cancelDragRef.current,
-                  )}
-                  label="Rotate selected components (R)"
-                  onClick={() => setTransformTool('rotate')}
-                >
-                  <Rotate3D className="h-4 w-4" />
-                </ToolbarButton>
-                <ToolbarButton
-                  active={transformTool === 'scale'}
-                  disabled={Boolean(
-                    selectedIds.length === 0 || modalDraft || cancelDragRef.current,
-                  )}
-                  label="Scale selected components (S)"
-                  onClick={() => setTransformTool('scale')}
-                >
-                  <Scaling className="h-4 w-4" />
-                </ToolbarButton>
-              </div>
-              <span className="mx-1 h-7 w-px bg-border/40" />
-              <div className="flex items-center overflow-hidden rounded-lg border border-border/45 bg-accent/15">
-                <ToolbarButton
-                  active={mode === 'vertex'}
-                  disabled={Boolean(modalDraft || cancelDragRef.current)}
-                  label="Vertex select (1)"
-                  onClick={() => switchMode('vertex')}
-                >
-                  <CircleDot className="h-4 w-4" />
-                </ToolbarButton>
-                <ToolbarButton
-                  active={mode === 'edge'}
-                  disabled={Boolean(modalDraft || cancelDragRef.current)}
-                  label="Edge select (2)"
-                  onClick={() => switchMode('edge')}
-                >
-                  <ScanLine className="h-4 w-4" />
-                </ToolbarButton>
-                <ToolbarButton
-                  active={mode === 'face'}
-                  disabled={Boolean(modalDraft || cancelDragRef.current)}
-                  label="Face select (3)"
-                  onClick={() => switchMode('face')}
-                >
-                  <Square className="h-4 w-4" />
-                </ToolbarButton>
-              </div>
-              <span className="mx-1 h-7 w-px bg-border/40" />
-              <span className="min-w-16 whitespace-nowrap rounded-lg border border-border/45 px-2.5 py-2 text-center font-mono text-[10px] text-foreground tracking-[0.08em]">
+            <div className={cn(FLOATING_PANEL_CLASS, 'relative')}>
+              <ToolbarButton
+                active={transformTool === 'transform'}
+                disabled={Boolean(selectedIds.length === 0 || cancelDragRef.current)}
+                label="Transform selected components (G / R / S)"
+                onClick={() => setTransformTool('transform')}
+              >
+                <Move3D className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                active={mode === 'vertex'}
+                disabled={Boolean(cancelDragRef.current)}
+                label="Vertex select (1)"
+                onClick={() => switchMode('vertex')}
+              >
+                <CircleDot className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                active={mode === 'edge'}
+                disabled={Boolean(cancelDragRef.current)}
+                label="Edge select (2)"
+                onClick={() => switchMode('edge')}
+              >
+                <ScanLine className="h-4 w-4" />
+              </ToolbarButton>
+              <ToolbarButton
+                active={mode === 'face'}
+                disabled={Boolean(cancelDragRef.current)}
+                label="Face select (3)"
+                onClick={() => switchMode('face')}
+              >
+                <Square className="h-4 w-4" />
+              </ToolbarButton>
+              <span className="min-w-14 whitespace-nowrap px-1.5 text-center font-mono text-[10px] text-foreground tracking-[0.08em]">
                 {selectionStatus}
               </span>
 
@@ -2497,12 +2541,11 @@ function CustomMeshEditor({
                   aria-expanded={toolbarPanel === 'operations'}
                   aria-haspopup="dialog"
                   className={cn(
-                    'flex h-9 min-w-28 items-center justify-center gap-2 rounded-lg px-3 text-xs transition-colors disabled:opacity-35',
+                    'flex h-7 min-w-24 items-center justify-center gap-1.5 rounded-md px-2 text-xs transition-colors disabled:opacity-35',
                     toolbarPanel === 'operations'
-                      ? 'bg-accent text-foreground ring-1 ring-border/60 ring-inset'
-                      : 'text-muted-foreground hover:bg-accent/70 hover:text-foreground',
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                   )}
-                  disabled={Boolean(modalDraft)}
                   onClick={(event) => {
                     event.stopPropagation()
                     playCustomMeshSfx('tool-select')
@@ -2516,8 +2559,8 @@ function CustomMeshEditor({
                   <ChevronDown className="h-3.5 w-3.5" />
                 </button>
                 {toolbarPanel === 'operations' ? (
-                  <ToolbarPanelFrame label="Mesh operations" className="w-[32rem]">
-                    <div className="space-y-1">
+                  <ToolbarPanelFrame label="Mesh operations" className="w-80 p-1.5">
+                    <div className="space-y-0.5">
                       <ToolbarOperationItem
                         controls={
                           <input
@@ -2631,34 +2674,13 @@ function CustomMeshEditor({
                 ) : null}
               </div>
 
-              <span className="mx-1 h-7 w-px bg-border/40" />
-              {modalDraft ? (
-                <>
-                  <ToolbarButton
-                    label="Cancel preview (Esc)"
-                    onClick={cancelModalDraft}
-                    sound={false}
-                  >
-                    <XIcon className="h-4 w-4" />
-                  </ToolbarButton>
-                  <ToolbarButton
-                    label="Confirm preview (Enter)"
-                    onClick={confirmModalDraft}
-                    sound={false}
-                  >
-                    <Check className="h-4 w-4" />
-                  </ToolbarButton>
-                </>
-              ) : (
-                <ToolbarButton label="Finish edit mode (Tab)" onClick={exitEditMode} sound={false}>
-                  <Check className="h-4 w-4" />
-                </ToolbarButton>
-              )}
+              <ToolbarButton label="Finish edit mode (Tab)" onClick={exitEditMode} sound={false}>
+                <Check className="h-4 w-4" />
+              </ToolbarButton>
 
               <div className="relative">
                 <ToolbarButton
                   active={toolbarPanel === 'selection'}
-                  disabled={Boolean(modalDraft)}
                   label="Selection and more"
                   onClick={() =>
                     setToolbarPanel((current) => (current === 'selection' ? null : 'selection'))
@@ -2723,7 +2745,7 @@ function CustomMeshEditor({
           ) : (
             <NodeActionMenu onDelete={deleteNode} onEditMesh={enterEditMode} onMove={moveNode} />
           )}
-          {editing && showComponentStatus ? (
+          {editing && (error || componentStatus) ? (
             <div
               className={cn(
                 'whitespace-nowrap rounded-full border border-border/50 bg-background/90 px-3 py-1 font-medium text-[10px] shadow-sm backdrop-blur-md',

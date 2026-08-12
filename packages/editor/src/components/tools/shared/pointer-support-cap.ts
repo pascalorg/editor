@@ -22,7 +22,8 @@ const nodeTopRaycaster = new Raycaster()
 const nodeTopNormal = new Vector3()
 const nodeTopNormalMatrix = new Matrix3()
 
-const NODE_TOP_SURFACE_KINDS = ['wall', 'item', 'column'] as const
+const NODE_TOP_SURFACE_KINDS = ['wall', 'item', 'column', 'custom-mesh'] as const
+const DEFAULT_NODE_TOP_SURFACE_KINDS = ['custom-mesh'] as const
 
 export type PointerSupportSurface = {
   /** Level-local elevation of the pointed surface — the election cap. */
@@ -151,7 +152,10 @@ export function resolvePointerSupportSurface(
     localPoint = [pointScratch.x, pointScratch.y, pointScratch.z]
   }
 
-  if (options?.includeNodeTopSurfaces) {
+  const nodeTopSurfaceKinds = options?.includeNodeTopSurfaces
+    ? NODE_TOP_SURFACE_KINDS
+    : DEFAULT_NODE_TOP_SURFACE_KINDS
+  if (nodeTopSurfaceKinds.some((kind) => (sceneRegistry.byType[kind]?.size ?? 0) > 0)) {
     nodeTopRaycaster.set(worldRayOrigin, worldRayDirection.clone().normalize())
     const nodes = useScene.getState().nodes
     const registeredOwners = new Map(
@@ -179,7 +183,7 @@ export function resolvePointerSupportSurface(
         }
       | undefined
 
-    for (const kind of NODE_TOP_SURFACE_KINDS) {
+    for (const kind of nodeTopSurfaceKinds) {
       for (const rawId of sceneRegistry.byType[kind] ?? []) {
         const nodeId = rawId as AnyNodeId
         const node = nodes[nodeId]

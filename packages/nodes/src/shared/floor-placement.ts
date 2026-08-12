@@ -25,6 +25,7 @@ export const FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS = [
   'roof-segment',
   'stair',
   'stair-segment',
+  'custom-mesh',
 ] as const
 
 export type FloorPlacementClickTriggerEvent = GridEvent | NodeEvent<AnyNode>

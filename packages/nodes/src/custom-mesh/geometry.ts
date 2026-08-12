@@ -15,6 +15,7 @@ import {
   Vector3,
 } from 'three'
 import { customMeshFaceNormal } from './commands'
+import { CUSTOM_MESH_SLOT_ID } from './slots'
 
 type Point = [number, number, number]
 const SMOOTH_NORMAL_ANGLE_COSINE = Math.cos(Math.PI / 6)
@@ -75,8 +76,6 @@ export function buildCustomMeshGeometry(
   const normals: number[] = []
   const uvs: number[] = []
   const faceRanges: { faceId: string; start: number; count: number }[] = []
-  const slotIds = [...new Set(node.topology.faces.map((face) => face.materialSlot))]
-  const materialIndex = new Map(slotIds.map((slotId, index) => [slotId, index]))
   const faceNormals = new Map(
     node.topology.faces.flatMap((face) => {
       const normal = customMeshFaceNormal(node.topology, face)
@@ -132,7 +131,7 @@ export function buildCustomMeshGeometry(
       }
     }
     const count = positions.length / 3 - start
-    geometry.addGroup(start, count, materialIndex.get(face.materialSlot) ?? 0)
+    geometry.addGroup(start, count, 0)
     faceRanges.push({ faceId: face.id, start, count })
   }
 
@@ -143,18 +142,16 @@ export function buildCustomMeshGeometry(
   geometry.computeBoundingSphere()
   geometry.userData.customMeshFaces = faceRanges
 
-  const materials = slotIds.map((slotId) => {
-    const ref = node.slots?.[slotId]
-    return (
-      (ref ? resolveMaterialRef(ref, ctx?.materials, shading) : null) ??
-      createDefaultMaterial('#b8c5d1', 0.72, shading)
-    )
-  })
-  const mesh = new Mesh(geometry, materials.length === 1 ? materials[0] : materials)
+  const materialRef = node.slots?.[CUSTOM_MESH_SLOT_ID]
+  const material =
+    (materialRef ? resolveMaterialRef(materialRef, ctx?.materials, shading) : null) ??
+    createDefaultMaterial('#b8c5d1', 0.72, shading)
+  const mesh = new Mesh(geometry, material)
   mesh.name = 'custom-mesh-body'
   mesh.castShadow = true
   mesh.receiveShadow = true
   mesh.userData.customMesh = true
+  mesh.userData.slotId = CUSTOM_MESH_SLOT_ID
   group.add(mesh)
   return group
 }

@@ -46,7 +46,11 @@ export interface DraftNodeHandle {
    *  commit lands on the surface the cursor pointed at. */
   commit: (
     finalUpdate: Partial<ItemNode>,
-    options?: { supportElevationCap?: number | null },
+    options?: {
+      supportElevationCap?: number | null
+      preferredSupportSlabId?: string | null
+      pinSupport?: boolean
+    },
   ) => string | null
   /** Destroy the current draft. Create mode: delete node. Move mode: restore original state. */
   destroy: () => void
@@ -134,7 +138,11 @@ export function useDraftNode(): DraftNodeHandle {
   const commit = useCallback(
     (
       finalUpdate: Partial<ItemNode>,
-      options?: { supportElevationCap?: number | null },
+      options?: {
+        supportElevationCap?: number | null
+        preferredSupportSlabId?: string | null
+        pinSupport?: boolean
+      },
     ): string | null => {
       const draft = draftRef.current
       if (!draft) return null
@@ -186,6 +194,8 @@ export function useDraftNode(): DraftNodeHandle {
           ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
           ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
             maxElevation: options?.supportElevationCap,
+            preferredSlabId: options?.preferredSupportSlabId,
+            pinSupport: options?.pinSupport,
           }),
         })
 
@@ -236,7 +246,11 @@ export function useDraftNode(): DraftNodeHandle {
         ...resolveSupportSlabPatch(
           finalNode,
           { ...nodes, [finalNode.id]: finalNode },
-          { maxElevation: options?.supportElevationCap },
+          {
+            maxElevation: options?.supportElevationCap,
+            preferredSlabId: options?.preferredSupportSlabId,
+            pinSupport: options?.pinSupport,
+          },
         ),
       })
       useScene.getState().createNode(committedNode, parentId)

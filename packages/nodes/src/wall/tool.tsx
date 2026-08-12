@@ -480,6 +480,7 @@ export const WallTool: React.FC = () => {
   // snapping onto the chain's own segments never reads as a join.
   const chainWallIds = useRef<string[]>([])
   const constructionPlane = useRef<HorizontalConstructionPlane | null>(null)
+  const flatConstructionBase = useRef(false)
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
@@ -604,6 +605,7 @@ export const WallTool: React.FC = () => {
     const stopDrafting = () => {
       buildingState.current = 0
       constructionPlane.current = null
+      flatConstructionBase.current = false
       chainFirstVertex.current = null
       chainWallIds.current = []
       const draftPreview = useFloorplanDraftPreview.getState()
@@ -754,6 +756,7 @@ export const WallTool: React.FC = () => {
               : null) ?? resolveEventConstructionPlane(event, pointed)
         const plane = resampleTerrainConstructionPlane(resolvedPlane, snappedStart)
         constructionPlane.current = plane
+        flatConstructionBase.current = pointed?.sourceNodeId != null
         publishHorizontalConstructionPlane(event, plane)
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], plane.localY, snappedStart[1])
@@ -798,6 +801,8 @@ export const WallTool: React.FC = () => {
             preferredSupportSlabId: constructionPlane.current?.supportSlabId ?? null,
             constructionElevation: constructionPlane.current?.elevation ?? null,
             constructionHeight: previewHeightRef.current,
+            constructionSourceNodeId: constructionPlane.current?.sourceNodeId ?? null,
+            flatConstructionBase: flatConstructionBase.current,
           },
         )
         if (!createdWall) return

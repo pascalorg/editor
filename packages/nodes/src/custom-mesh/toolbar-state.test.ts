@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   customMeshBevelWidthFromDrag,
+  customMeshComponentStatus,
   customMeshOperationAvailability,
   customMeshScaleFactorFromDrag,
   customMeshScaleFactors,
@@ -33,6 +34,19 @@ describe('custom mesh toolbar state', () => {
     expect(formatCustomMeshSelectionStatus('face', 1)).toBe('1 FACE')
     expect(formatCustomMeshSelectionStatus('edge', 2)).toBe('2 EDGES')
     expect(formatCustomMeshSelectionStatus('vertex', 3)).toBe('3 VERTICES')
+  })
+
+  test('does not show a secondary help strip for a selected transform', () => {
+    expect(
+      customMeshComponentStatus({
+        mode: 'face',
+        selectedCount: 1,
+        tool: 'transform',
+        loopCutCount: 1,
+        loopCutFactor: 0.5,
+        bevelSegments: 6,
+      }),
+    ).toBeNull()
   })
 
   test('builds uniform and axis-specific scale factors', () => {

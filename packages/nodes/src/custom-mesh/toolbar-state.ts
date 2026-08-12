@@ -1,5 +1,6 @@
 export type CustomMeshToolbarMode = 'vertex' | 'edge' | 'face'
 export type CustomMeshScaleAxis = 'uniform' | 'x' | 'y' | 'z'
+export type CustomMeshTransformTool = 'transform' | 'loop-cut' | 'bevel'
 
 export type CustomMeshOperationAvailability = {
   extrude: boolean
@@ -28,6 +29,30 @@ export function formatCustomMeshSelectionStatus(
 ): string {
   const label = selectedCount === 1 ? mode : mode === 'vertex' ? 'vertices' : `${mode}s`
   return `${selectedCount} ${label}`.toUpperCase()
+}
+
+export function customMeshComponentStatus({
+  mode,
+  selectedCount,
+  tool,
+  loopCutCount,
+  loopCutFactor,
+  bevelSegments,
+}: {
+  mode: CustomMeshToolbarMode
+  selectedCount: number
+  tool: CustomMeshTransformTool
+  loopCutCount: number
+  loopCutFactor: number
+  bevelSegments: number
+}): string | null {
+  if (tool === 'loop-cut') {
+    return `Loop Cut · ${loopCutCount} cut${loopCutCount === 1 ? '' : 's'} · factor ${loopCutFactor.toFixed(2)} · click or drag an edge · release applies · wheel changes count`
+  }
+  if (tool === 'bevel') {
+    return `Bevel · drag an edge to peel it · wheel changes segments (${bevelSegments}) · release to apply`
+  }
+  return selectedCount === 0 ? `Click a ${mode} to select it` : null
 }
 
 export function customMeshScaleFactors(

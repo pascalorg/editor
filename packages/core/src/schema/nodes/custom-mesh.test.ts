@@ -16,6 +16,15 @@ describe('CustomMeshNode', () => {
     expect(inspectCustomMeshTopology(node.topology)).toEqual([])
   })
 
+  test('retains its pinned placement support', () => {
+    const node = CustomMeshNode.parse({
+      name: 'Supported platform',
+      supportSlabId: 'ground',
+    })
+
+    expect(node.supportSlabId).toBe('ground')
+  })
+
   test('rejects a face loop without a persisted boundary edge', () => {
     const topology = createBoxCustomMeshTopology()
     topology.edges = topology.edges.filter((edge) => edge.id !== 'e4')

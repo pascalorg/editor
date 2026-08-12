@@ -6,7 +6,10 @@ import {
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildCustomMeshFloorplan } from './floorplan'
 import { buildCustomMeshGeometry } from './geometry'
+import { customMeshPaint } from './paint'
+import { customMeshParametrics } from './parametrics'
 import { CustomMeshNode } from './schema'
+import { customMeshSlots } from './slots'
 
 export function customMeshBounds(node: CustomMeshNodeType) {
   const xs = node.topology.vertices.map((vertex) => vertex.position[0])
@@ -42,7 +45,7 @@ function footprintPosition(node: CustomMeshNodeType, center: [number, number, nu
 
 export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
   kind: 'custom-mesh',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: CustomMeshNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -66,6 +69,15 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    surfaces: {
+      top: {
+        height: (rawNode) => {
+          const node = rawNode as CustomMeshNodeType
+          const { size, center } = customMeshBounds(node)
+          return center[1] + size[1] / 2
+        },
+      },
+    },
     movable: { axes: ['x', 'z'], gridSnap: true },
     duplicable: true,
     deletable: true,
@@ -82,11 +94,14 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
       },
       collides: true,
     },
+    slots: () => customMeshSlots(),
+    paint: customMeshPaint,
   },
 
   geometry: buildCustomMeshGeometry,
   geometryKey: (node) => JSON.stringify([node.topology, node.slots]),
   floorplan: buildCustomMeshFloorplan,
+  parametrics: customMeshParametrics,
   affordanceTools: {
     selection: () => import('./selection'),
   },

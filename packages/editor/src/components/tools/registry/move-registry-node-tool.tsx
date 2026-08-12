@@ -23,6 +23,7 @@ import {
   resolveAlignment,
   resolveConnectivityUpdates,
   resolveFacingIndicator,
+  resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
   sceneRegistry,
   spatialGridManager,
@@ -56,7 +57,10 @@ import { DragBoundingBox } from '../shared/drag-bounding-box'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import { useFreshPlacementVisibility } from '../shared/fresh-placement-visibility'
 import { PlacementBox } from '../shared/placement-box'
-import { resolvePointerSupportSurface } from '../shared/pointer-support-cap'
+import {
+  type PointerSupportSurface,
+  resolvePointerSupportSurface,
+} from '../shared/pointer-support-cap'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
  *  / 0.1 / 0.05), read live so changing the step mid-drag takes effect. */
@@ -231,6 +235,7 @@ const CLICK_TRIGGER_KINDS = [
   'roof-segment',
   'stair',
   'stair-segment',
+  'custom-mesh',
 ] as const
 
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
@@ -243,6 +248,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // refreshed per grid move. Caps the floor-support election so a deck
   // hanging above the aimed-at floor never lifts the dragged node.
   const supportCapRef = useRef<number | null>(null)
+  const supportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   // Kinds whose `position` lives in a host parent's local frame declare
   // `movable.parentFrame` (cabinet module ↔ its run). The tool converts the
   // plan-frame cursor through the capability's hooks and previews via
@@ -420,6 +426,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     // No pointer surface known yet — uncapped election (the node keeps its
     // persisted host / committed elevation until the first grid move).
     supportCapRef.current = null
+    supportSurfaceRef.current = null
     // Re-sync the box transform to the (possibly new) node. `node` changes
     // without this component remounting whenever a positioned preset re-arms a
     // fresh clone after a drop, or the user picks a different catalog tile —
@@ -620,6 +627,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // single fixed point per pointer ray.
       const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
       supportCapRef.current = pointed?.elevation ?? null
+      supportSurfaceRef.current = pointed
       const rawX = pointed?.localPoint?.[0] ?? event.localPosition[0]
       const rawZ = pointed?.localPoint?.[2] ?? event.localPosition[2]
       revealFreshPlacement()
@@ -732,6 +740,24 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
           if (guides.length > 0) useAlignmentGuides.getState().set(guides)
         }
       }
+      if (!parentFrame && pointed?.sourceNodeId) {
+        const rotation = toCommitRotation(rotationRef.current)
+        const effectiveNode = {
+          ...(node as Record<string, unknown>),
+          position,
+          rotation,
+        } as AnyNode
+        position = resolveFrozenFloorPlacementPatch(
+          effectiveNode,
+          { ...useScene.getState().nodes, [node.id]: effectiveNode },
+          {
+            position,
+            rotation,
+            elevation: pointed.elevation,
+            preferredSlabId: pointed.supportSlabId,
+          },
+        ).position
+      }
       const visualPosition = getVisualPosition(position)
       hasMovedRef.current = true
       setCursorPosition(visualPosition)
@@ -830,7 +856,11 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
               ...useScene.getState().nodes,
               [node.id]: effectiveNode,
             },
-            { maxElevation: supportCapRef.current },
+            {
+              maxElevation: supportCapRef.current,
+              preferredSlabId: supportSurfaceRef.current?.supportSlabId,
+              pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
+            },
           ),
           ...(isNew
             ? {
@@ -902,7 +932,11 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
                 ...useScene.getState().nodes,
                 [reparsed.id]: reparsed,
               },
-              { maxElevation: supportCapRef.current },
+              {
+                maxElevation: supportCapRef.current,
+                preferredSlabId: supportSurfaceRef.current?.supportSlabId,
+                pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
+              },
             ),
           }) as AnyNode
           useScene.temporal.getState().resume()
