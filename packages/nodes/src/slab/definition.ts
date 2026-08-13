@@ -34,6 +34,7 @@ import { slabFloorplanMoveTarget } from './floorplan-move'
 import { buildSlabGeometry } from './geometry'
 import { slabPaint } from './paint'
 import { slabParametrics } from './parametrics'
+import { slabQuantities } from './quantities'
 import { slabQuickMeasurement } from './quick-measurement'
 import { SlabNode } from './schema'
 import { slabSlots } from './slots'
@@ -270,6 +271,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   snapProfile: 'structural',
   schemaVersion: 1,
   schema: SlabNode,
+  quantities: slabQuantities,
   category: 'structure',
   surfaceRole: 'floor',
 

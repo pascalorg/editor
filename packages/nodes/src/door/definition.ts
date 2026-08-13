@@ -7,6 +7,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { countQuantities } from '../shared/count-quantities'
 import {
   buildDoorFloorplanSchedule,
   computeDoorFloorplanLevelData,
@@ -172,6 +173,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   facingIndicator: true,
   schemaVersion: 2,
   schema: DoorNode,
+  quantities: countQuantities<DoorNode>('Doors', (door) => door.doorType),
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {

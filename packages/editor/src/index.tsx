@@ -252,6 +252,7 @@ export { CollectionsPopover } from './components/ui/panels/collections/collectio
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { ParametricInspector as Inspector } from './components/ui/panels/parametric-inspector'
+export { QuantitiesSection } from './components/ui/panels/quantities/quantities-section'
 export { SavedViewsSection } from './components/ui/panels/saved-views/saved-views-section'
 export { SunStudySection } from './components/ui/panels/sun-study/sun-study-section'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
@@ -535,6 +536,7 @@ export {
   editorHostPanelRegistry,
   registerEditorHostPanel,
 } from './lib/plugin-panels'
+export { downloadQuantityCsv, formatQuantity, takeoffForSubtree } from './lib/quantities'
 export {
   createQuickMeasurementPointerScheduler,
   quickMeasurementContext,

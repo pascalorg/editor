@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
+import type { QuantitiesContribution } from '../lib/quantity-takeoff'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
@@ -1113,6 +1114,20 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   floorplanDependencies?: (node: z.infer<S>) => readonly AnyNodeId[]
   /** Stable semantic geometry that associative measurement anchors may reference. */
   measurement?: MeasurementContribution<z.infer<S>>
+  /**
+   * Quantity-takeoff rows this kind contributes — lengths, areas, volumes and
+   * counts. Registry-driven for the same reason geometry is: a takeoff must
+   * not become a central switch that every new kind has to be added to, and a
+   * plugin kind should be able to count itself.
+   *
+   * Called once with every visible node of the kind under the subtree being
+   * measured. Emit a row per node and let `mergeQuantityRows` roll them up;
+   * set `group` to split a total by material, type or size.
+   *
+   * Pure — no store reads, no Three.js. `ctx.nodes` is there for rows that
+   * need a host (an opening's parent wall).
+   */
+  quantities?: QuantitiesContribution<z.infer<S>>
   /**
    * Which scope the floor-plan layer walks to find instances of this
    * kind. Default `'level'` — the layer's DFS from the active level id

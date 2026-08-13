@@ -5,6 +5,7 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { countQuantities } from '../shared/count-quantities'
 import {
   collectStructuralGridAxes,
   resolveStructuralGridSnap,
@@ -335,6 +336,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   facingIndicator: true,
   schemaVersion: 1,
   schema: ColumnNode,
+  quantities: countQuantities<ColumnNode>('Columns'),
   category: 'structure',
   surfaceRole: 'wall',
 

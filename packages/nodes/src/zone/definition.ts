@@ -15,6 +15,7 @@ import {
 } from './floorplan-affordances'
 import { zoneFloorplanMoveTarget } from './floorplan-move'
 import { zoneParametrics } from './parametrics'
+import { zoneQuantities } from './quantities'
 import { zoneQuickMeasurement } from './quick-measurement'
 import { buildRoomFloorplanSchedule } from './room-documentation'
 import { ZoneNode } from './schema'
@@ -30,6 +31,7 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   snapProfile: 'structural',
   schemaVersion: 2,
   schema: ZoneNode,
+  quantities: zoneQuantities,
   category: 'site',
   extensions: {
     'pascal:editor/floorplan': {

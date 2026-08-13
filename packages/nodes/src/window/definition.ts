@@ -7,6 +7,7 @@ import type {
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { countQuantities } from '../shared/count-quantities'
 import {
   buildWindowFloorplanSchedule,
   computeWindowFloorplanLevelData,
@@ -169,6 +170,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   facingIndicator: true,
   schemaVersion: 2,
   schema: WindowNode,
+  quantities: countQuantities<WindowNode>('Windows', (window) => window.windowType),
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {

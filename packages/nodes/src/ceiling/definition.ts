@@ -24,6 +24,7 @@ import {
 import { ceilingFloorplanMoveTarget } from './floorplan-move'
 import { ceilingPaint } from './paint'
 import { ceilingParametrics } from './parametrics'
+import { ceilingQuantities } from './quantities'
 import { CeilingNode } from './schema'
 import { ceilingSlots } from './slots'
 
@@ -128,6 +129,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   snapProfile: 'structural',
   schemaVersion: 1,
   schema: CeilingNode,
+  quantities: ceilingQuantities,
   category: 'structure',
   surfaceRole: 'ceiling',
 

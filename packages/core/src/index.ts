@@ -117,6 +117,20 @@ export {
   polygonsOverlap,
   segmentsIntersect,
 } from './lib/polygon-relations'
+export {
+  buildQuantityTakeoff,
+  collectNodesByKind,
+  mergeQuantityRows,
+  type QuantitiesContribution,
+  type QuantityContext,
+  type QuantityContribution,
+  type QuantityLine,
+  type QuantityRow,
+  type QuantitySection,
+  type QuantityTakeoff,
+  type QuantityUnit,
+  quantityTakeoffToCsv,
+} from './lib/quantity-takeoff'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   getRenderableSlabPolygon,

@@ -12,6 +12,7 @@ import {
 } from './measurement'
 import { wallPaint } from './paint'
 import { wallParametrics } from './parametrics'
+import { wallQuantities } from './quantities'
 import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'
 import { wallSlots } from './slots'
@@ -36,6 +37,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   snapProfile: 'structural',
   schemaVersion: 7,
   schema: WallNode,
+  quantities: wallQuantities,
   category: 'structure',
   surfaceRole: 'wall',
   extensions: {
