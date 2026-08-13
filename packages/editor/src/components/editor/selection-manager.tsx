@@ -39,6 +39,7 @@ import { isNodeLockedForSelection } from '../../lib/collection-lock'
 import {
   canDirectMoveNode,
   canDirectRotateNode,
+  isRotationStepBypassed,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
 } from '../../lib/direct-manipulation'
@@ -1453,7 +1454,7 @@ export const SelectionManager = () => {
           startX,
           moveEvent.clientX,
           DIRECT_ROTATE_RADIANS_PER_PIXEL,
-          moveEvent.shiftKey,
+          isRotationStepBypassed(moveEvent),
         )
         if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
           lastPatch = null

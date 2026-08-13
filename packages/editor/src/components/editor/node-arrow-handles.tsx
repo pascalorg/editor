@@ -43,6 +43,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
+import { isRotationStepBypassed } from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
@@ -1296,7 +1297,7 @@ function ArcArrow({
           while (delta > Math.PI) delta -= 2 * Math.PI
           while (delta < -Math.PI) delta += 2 * Math.PI
 
-          if (!moveEvent.shiftKey && descriptor.shape === 'rotate') {
+          if (descriptor.shape === 'rotate' && !isRotationStepBypassed(moveEvent)) {
             delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
           }
 

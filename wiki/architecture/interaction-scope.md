@@ -140,6 +140,13 @@ There is no per-kind snapping switch.
   Shift is **not** a snap bypass. Alt is **not** a snap toggle. Placement continuation (wall room/single,
   fence continuous/single, point once/repeat) is a separate per-context mode, cycled by **C** and surfaced as
   a clickable HUD chip.
+- **Rotation is not one of the modes.** The grid / lines / angles triple governs where a *point* lands;
+  rotation moves no point, which is why `snapContextOf` returns `null` for a rotate-handle drag. A rotation
+  gesture therefore carries its own 15° quantum, bypassed by holding **Alt** like any other force/free —
+  never by Shift, and never by reading `isAngleSnapActive()` (with no context resolved that reads `'off'`,
+  which silently means "never snap"). The single rule lives in `isRotationStepBypassed`
+  (`lib/direct-manipulation.ts`); every rotation entry point — direct rotate in 2D and 3D, and the rotate
+  affordance in both — goes through it.
 - **The chip is the scope's.** The contextual HUD shows the active context's mode and is the only place the
   mode is cycled — so a tool that wants its chip must run inside a scope whose `snapContextOf` resolves
   (a build tool, `drafting`, `placing`/`moving`, or `reshaping`).

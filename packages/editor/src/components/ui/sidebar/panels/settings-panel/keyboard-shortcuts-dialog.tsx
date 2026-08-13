@@ -142,9 +142,9 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         note: 'Drag left or right in Select mode with a single object selected. Rotation snaps to 15° increments by default.',
       },
       {
-        keys: ['Cmd/Ctrl', 'Shift', 'Right click'],
+        keys: ['Cmd/Ctrl', 'Alt', 'Right click'],
         action: 'Rotate freely',
-        note: 'Hold Shift during the drag to bypass the 15° rotation increment.',
+        note: 'Hold Alt during the drag to bypass the 15° rotation increment. Shift is the snapping-mode cycle, so it is not a bypass.',
       },
     ],
   },

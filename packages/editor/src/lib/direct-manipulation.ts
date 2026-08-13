@@ -83,6 +83,26 @@ export function resolveMoveActionNode(
   return parent?.type === node.type ? parent : node
 }
 
+/**
+ * Whether a rotation gesture should run free of its 15° step.
+ *
+ * The single rule for every rotation entry point — direct rotate in 2D and 3D,
+ * and the 3D rotate handle. Having each site decide for itself is what let 2D
+ * and 3D drift apart in the first place.
+ *
+ * **Alt, not Shift.** Rotation's angular step is not one of the positional
+ * snapping modes: `snapContextOf` deliberately returns `null` for a rotate
+ * handle drag, because grid / lines / angles are about where a *point* lands
+ * and rotation moves no point. So the step is the gesture's own quantum, and
+ * its bypass is the modifier the model reserves for force/free — Alt. Shift is
+ * spoken for: it cycles the snapping mode, and
+ * `wiki/architecture/interaction-scope.md` rules out `event.shiftKey` as a snap
+ * bypass outright.
+ */
+export function isRotationStepBypassed(event: { altKey: boolean }): boolean {
+  return event.altKey
+}
+
 export function snapDirectRotationDelta(delta: number, free: boolean): number {
   return free ? delta : Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 }

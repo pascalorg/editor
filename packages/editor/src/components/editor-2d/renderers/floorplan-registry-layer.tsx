@@ -44,6 +44,7 @@ import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
 import {
   canDirectRotateNode,
+  isRotationStepBypassed,
   resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
@@ -84,7 +85,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useDrawingView from '../../../store/use-drawing-view'
-import useEditor, { isAngleSnapActive } from '../../../store/use-editor'
+import useEditor from '../../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import useInteractionScope, {
@@ -748,7 +749,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           startX,
           pointerEvent.clientX,
           DIRECT_ROTATE_RADIANS_PER_PIXEL,
-          !isAngleSnapActive(),
+          isRotationStepBypassed(pointerEvent),
         )
         if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
           lastPatch = null
@@ -1214,7 +1215,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         let delta = current - rot.initialAngle
         while (delta > Math.PI) delta -= 2 * Math.PI
         while (delta < -Math.PI) delta += 2 * Math.PI
-        delta = snapDirectRotationDelta(delta, !isAngleSnapActive())
+        delta = snapDirectRotationDelta(delta, isRotationStepBypassed(event))
         if (Math.abs(delta) < 0.0087) {
           setRotationOverlay(null)
         } else {
