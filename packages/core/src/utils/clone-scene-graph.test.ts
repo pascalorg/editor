@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { CollectionId } from '../schema/collections'
 import type { DefinitionId } from '../schema/definitions'
+import type { SavedViewId } from '../schema/saved-views'
 import type { SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -290,5 +291,106 @@ describe('supportSlabId remap', () => {
     const clonedExternal = clonedNodes.find((node) => node.id === idMap.get('item_2'))!
     expect((clonedHosted as { supportSlabId?: string }).supportSlabId).toBe(idMap.get('slab_1')!)
     expect((clonedExternal as { supportSlabId?: string }).supportSlabId).toBe('slab_external')
+  })
+})
+
+describe('saved view clone references', () => {
+  function graphWithSavedView(): SceneGraph {
+    const base = makeSceneGraph()
+    return {
+      ...base,
+      nodes: {
+        ...base.nodes,
+        ['section-plane_1' as AnyNodeId]: makeNode('section-plane_1', 'section-plane', {
+          parentId: 'level_1',
+          active: true,
+        }),
+      },
+      savedViews: {
+        ['saved-view_1' as SavedViewId]: {
+          id: 'saved-view_1' as SavedViewId,
+          name: 'Entry',
+          order: 0,
+          camera: {
+            position: [10, 10, 10],
+            target: [0, 0, 0],
+            projection: 'perspective',
+          },
+          sectionPlaneId: 'section-plane_1' as AnyNodeId,
+          collectionStates: {
+            ['collection_1' as CollectionId]: { visible: false },
+          },
+          presentation: { viewMode: 'split' },
+        },
+      },
+    }
+  }
+
+  test('cloneSceneGraph mints a fresh view id and keeps the payload', () => {
+    const cloned = cloneSceneGraph(graphWithSavedView())
+    const views = Object.values(cloned.savedViews ?? {})
+
+    expect(views).toHaveLength(1)
+    const view = views[0]
+    expect(view).toBeDefined()
+    if (!view) return
+    expect(view.id).not.toBe('saved-view_1')
+    expect(view.id.startsWith('saved-view_')).toBe(true)
+    // The record key and the entry's own id must agree, or lookups miss.
+    expect(cloned.savedViews?.[view.id]).toBe(view)
+    expect(view.name).toBe('Entry')
+    expect(view.presentation).toEqual({ viewMode: 'split' })
+  })
+
+  test('remaps the section-plane reference onto the cloned node', () => {
+    const cloned = cloneSceneGraph(graphWithSavedView())
+    const view = Object.values(cloned.savedViews ?? {})[0]
+
+    expect(view).toBeDefined()
+    if (!view?.sectionPlaneId) throw new Error('expected a remapped section plane')
+    expect(view.sectionPlaneId).not.toBe('section-plane_1')
+    // It has to point at a node that actually exists in the clone.
+    expect(cloned.nodes[view.sectionPlaneId]?.type).toBe('section-plane')
+  })
+
+  test('remaps collection-state keys onto the cloned collections', () => {
+    const cloned = cloneSceneGraph(graphWithSavedView())
+    const view = Object.values(cloned.savedViews ?? {})[0]
+    const clonedCollectionIds = Object.keys(cloned.collections ?? {})
+
+    expect(view).toBeDefined()
+    if (!view) return
+    const stateKeys = Object.keys(view.collectionStates ?? {})
+    expect(stateKeys).toHaveLength(1)
+    expect(stateKeys[0]).not.toBe('collection_1')
+    expect(clonedCollectionIds).toContain(stateKeys[0] as string)
+    expect(view.collectionStates?.[stateKeys[0] as CollectionId]).toEqual({ visible: false })
+  })
+
+  test('a view whose section plane did not survive the fork records "no cut"', () => {
+    const base = graphWithSavedView()
+    // Point the view at the scan node, which `forkSceneGraph` strips.
+    const scanView = {
+      ...Object.values(base.savedViews ?? {})[0]!,
+      sectionPlaneId: 'scan_1' as AnyNodeId,
+    }
+    const forked = forkSceneGraph({
+      ...base,
+      savedViews: { [scanView.id]: scanView },
+    })
+
+    const view = Object.values(forked.savedViews ?? {})[0]
+    expect(view).toBeDefined()
+    expect(view?.sectionPlaneId).toBeNull()
+  })
+
+  test('forkSceneGraph carries saved views through its clone boundary', () => {
+    const forked = forkSceneGraph(graphWithSavedView())
+    expect(Object.values(forked.savedViews ?? {})).toHaveLength(1)
+  })
+
+  test('a graph without saved views clones without inventing the key', () => {
+    const cloned = cloneSceneGraph(makeSceneGraph())
+    expect(cloned.savedViews).toBeUndefined()
   })
 })

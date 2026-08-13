@@ -1,5 +1,6 @@
 import type { Collection, CollectionId } from '../schema/collections'
 import type { Definition, DefinitionId } from '../schema/definitions'
+import type { SavedView, SavedViewId } from '../schema/saved-views'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
@@ -9,6 +10,7 @@ export type SceneSnapshot = {
   nodes: Record<AnyNodeId, AnyNode>
   rootNodeIds: AnyNodeId[]
   collections: Record<CollectionId, Collection>
+  savedViews: Record<SavedViewId, SavedView>
   definitions: Record<DefinitionId, Definition>
   materials: Record<SceneMaterialId, SceneMaterial>
   installedPlugins: string[]
@@ -76,6 +78,7 @@ export function areSceneSnapshotsEqual(left: SceneSnapshot, right: SceneSnapshot
     areSemanticValuesEqual(left.nodes, right.nodes) &&
     areSemanticValuesEqual(left.rootNodeIds, right.rootNodeIds) &&
     areSemanticValuesEqual(left.collections, right.collections) &&
+    areSemanticValuesEqual(left.savedViews, right.savedViews) &&
     areSemanticValuesEqual(left.definitions, right.definitions) &&
     areSemanticValuesEqual(left.materials, right.materials) &&
     areSemanticValuesEqual(left.installedPlugins, right.installedPlugins)

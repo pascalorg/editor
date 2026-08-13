@@ -34,6 +34,13 @@ import {
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
 import { getEffectiveWallSurfaceMaterial, type WallSurfaceSide } from '../schema/nodes/wall'
 import { WindowNode as WindowNodeSchema } from '../schema/nodes/window'
+import type { SavedView, SavedViewId } from '../schema/saved-views'
+import {
+  generateSavedViewId,
+  nextSavedViewOrder,
+  normalizeSavedViews,
+  reorderSavedViews,
+} from '../schema/saved-views'
 import {
   generateSceneMaterialId,
   SceneMaterial,
@@ -1282,6 +1289,7 @@ export type SceneState = {
 
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
+  savedViews: Record<SavedViewId, SavedView>
   definitions: Record<DefinitionId, Definition>
   materials: Record<SceneMaterialId, SceneMaterial>
   installedPlugins: string[]
@@ -1300,6 +1308,7 @@ export type SceneState = {
     rootNodeIds: AnyNodeId[],
     extra?: {
       collections?: Record<CollectionId, Collection>
+      savedViews?: Record<SavedViewId, SavedView>
       definitions?: Record<DefinitionId, Definition>
       materials?: Record<SceneMaterialId, SceneMaterial>
       installedPlugins?: string[]
@@ -1324,6 +1333,12 @@ export type SceneState = {
 
   deleteNode: (id: AnyNodeId) => void
   deleteNodes: (ids: AnyNodeId[]) => void
+
+  // Saved-view actions
+  createSavedView: (view: Omit<SavedView, 'id' | 'order'>) => SavedViewId
+  updateSavedView: (id: SavedViewId, data: Partial<Omit<SavedView, 'id'>>) => void
+  deleteSavedView: (id: SavedViewId) => void
+  moveSavedView: (fromIndex: number, toIndex: number) => void
 
   // Collection actions
   createCollection: (name: string, nodeIds?: AnyNodeId[]) => CollectionId
@@ -1358,7 +1373,13 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
     TemporalState<
       Pick<
         SceneState,
-        'nodes' | 'rootNodeIds' | 'collections' | 'definitions' | 'materials' | 'installedPlugins'
+        | 'nodes'
+        | 'rootNodeIds'
+        | 'collections'
+        | 'savedViews'
+        | 'definitions'
+        | 'materials'
+        | 'installedPlugins'
       >
     >
   >
@@ -1367,11 +1388,26 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
 function sceneHistorySnapshotFromState(
   state: Pick<
     SceneState,
-    'nodes' | 'rootNodeIds' | 'collections' | 'definitions' | 'materials' | 'installedPlugins'
+    | 'nodes'
+    | 'rootNodeIds'
+    | 'collections'
+    | 'savedViews'
+    | 'definitions'
+    | 'materials'
+    | 'installedPlugins'
   >,
 ): SceneSnapshot {
-  const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } = state
-  return { nodes, rootNodeIds, collections, definitions, materials, installedPlugins }
+  const { nodes, rootNodeIds, collections, savedViews, definitions, materials, installedPlugins } =
+    state
+  return {
+    nodes,
+    rootNodeIds,
+    collections,
+    savedViews,
+    definitions,
+    materials,
+    installedPlugins,
+  }
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -1388,6 +1424,7 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
+      savedViews: {} as Record<SavedViewId, SavedView>,
       definitions: {} as Record<DefinitionId, Definition>,
       materials: {} as Record<SceneMaterialId, SceneMaterial>,
       installedPlugins: [],
@@ -1403,6 +1440,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           rootNodeIds: [],
           dirtyNodes: new Set<AnyNodeId>(),
           collections: {},
+          savedViews: {},
           definitions: {},
           materials: {},
           installedPlugins: [],
@@ -1465,6 +1503,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           rootNodeIds: normalizedRootNodeIds,
           dirtyNodes: new Set<AnyNodeId>(),
           collections: extra?.collections ?? {},
+          savedViews: normalizeSavedViews(extra?.savedViews),
           definitions: normalizedDefinitions,
           materials,
           installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
@@ -1556,6 +1595,54 @@ const useScene: UseSceneStore = create<SceneState>()(
       deleteNodes: (ids) => nodeActions.deleteNodesAction(set, get, ids),
 
       deleteNode: (id) => nodeActions.deleteNodesAction(set, get, [id]),
+
+      // --- SAVED VIEWS ---
+
+      createSavedView: (view) => {
+        if (get().readOnly) return '' as SavedViewId
+        const id = generateSavedViewId()
+        set((state) => ({
+          savedViews: {
+            ...state.savedViews,
+            [id]: { ...view, id, order: nextSavedViewOrder(state.savedViews) },
+          },
+        }))
+        return id
+      },
+
+      updateSavedView: (id, data) => {
+        if (get().readOnly) return
+        set((state) => {
+          const view = state.savedViews[id]
+          if (!view) return state
+          return { savedViews: { ...state.savedViews, [id]: { ...view, ...data, id } } }
+        })
+      },
+
+      deleteSavedView: (id) => {
+        if (get().readOnly) return
+        set((state) => {
+          if (!state.savedViews[id]) return state
+          const next = { ...state.savedViews }
+          delete next[id]
+          return { savedViews: next }
+        })
+      },
+
+      moveSavedView: (fromIndex, toIndex) => {
+        if (get().readOnly) return
+        set((state) => {
+          const patches = reorderSavedViews(state.savedViews, fromIndex, toIndex)
+          // A drag that lands where it started must not push a history entry.
+          if (patches.length === 0) return state
+          const next = { ...state.savedViews }
+          for (const patch of patches) {
+            const view = next[patch.id]
+            if (view) next[patch.id] = { ...view, order: patch.order }
+          }
+          return { savedViews: next }
+        })
+      },
 
       // --- COLLECTIONS ---
 
@@ -2283,6 +2370,7 @@ export function applySceneSnapshot(
   try {
     useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
       collections: snapshot.collections,
+      savedViews: snapshot.savedViews,
       definitions: snapshot.definitions,
       installedPlugins: snapshot.installedPlugins,
       materials: snapshot.materials,

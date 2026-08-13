@@ -252,6 +252,7 @@ export { CollectionsPopover } from './components/ui/panels/collections/collectio
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { ParametricInspector as Inspector } from './components/ui/panels/parametric-inspector'
+export { SavedViewsSection } from './components/ui/panels/saved-views/saved-views-section'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
 export {
   DropdownMenu,
@@ -536,6 +537,13 @@ export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-dup
 // kind-owned door / window tools in `@pascal-app/nodes` and the item
 // placement coordinator's roof-wall strategy.
 export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
+export {
+  applySavedView,
+  captureSavedView,
+  readSavedViewPresentation,
+  type SavedViewPresentation,
+  updateSavedViewFromCurrentState,
+} from './lib/saved-views'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'

@@ -7,12 +7,14 @@ import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
 import type { Definition, DefinitionId } from '../schema/definitions'
+import type { SavedView, SavedViewId } from '../schema/saved-views'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
   rootNodeIds: AnyNodeId[]
   collections?: Record<CollectionId, Collection>
+  savedViews?: Record<SavedViewId, SavedView>
   definitions?: Record<DefinitionId, Definition>
   materials?: Record<SceneMaterialId, SceneMaterial>
   installedPlugins?: string[]
@@ -36,7 +38,8 @@ function extractIdPrefix(id: string): string {
  * - Multi-scene in-memory scenarios
  */
 export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
-  const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } = sceneGraph
+  const { nodes, rootNodeIds, collections, savedViews, definitions, materials, installedPlugins } =
+    sceneGraph
 
   // Build ID mapping: old ID -> new ID
   const idMap = new Map<string, string>()
@@ -137,9 +140,9 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
 
   // Clone and remap collections if present
   let clonedCollections: Record<CollectionId, Collection> | undefined
+  const collectionIdMap = new Map<string, CollectionId>()
   if (collections) {
     clonedCollections = {} as Record<CollectionId, Collection>
-    const collectionIdMap = new Map<string, CollectionId>()
 
     for (const collectionId of Object.keys(collections)) {
       collectionIdMap.set(collectionId, generateId('collection'))
@@ -174,6 +177,35 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     }
   }
 
+  // Clone and remap saved views. A view points at a section-plane node and at
+  // collections; both were just renumbered, so a straight copy would leave the
+  // clone's views restoring a cut and a visibility set that no longer exist.
+  let clonedSavedViews: Record<SavedViewId, SavedView> | undefined
+  if (savedViews) {
+    clonedSavedViews = {} as Record<SavedViewId, SavedView>
+    for (const view of Object.values(savedViews)) {
+      const id = generateId('saved-view') as SavedViewId
+      const cloned: SavedView = { ...structuredClone(view), id }
+
+      if (view.sectionPlaneId) {
+        // Unmapped means the plane didn't survive into this clone, so the view
+        // records "no cut" rather than a dangling id.
+        cloned.sectionPlaneId = (idMap.get(view.sectionPlaneId) as AnyNodeId | undefined) ?? null
+      }
+
+      if (view.collectionStates) {
+        const states: Record<CollectionId, (typeof view.collectionStates)[CollectionId]> = {}
+        for (const [oldCollectionId, state] of Object.entries(view.collectionStates)) {
+          const newCollectionId = collectionIdMap.get(oldCollectionId)
+          if (newCollectionId) states[newCollectionId] = state
+        }
+        cloned.collectionStates = states
+      }
+
+      clonedSavedViews[id] = cloned
+    }
+  }
+
   let clonedDefinitions: Record<DefinitionId, Definition> | undefined
   if (definitions) {
     clonedDefinitions = {} as Record<DefinitionId, Definition>
@@ -193,6 +225,7 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     nodes: clonedNodes,
     rootNodeIds: clonedRootNodeIds,
     ...(clonedCollections && { collections: clonedCollections }),
+    ...(clonedSavedViews && { savedViews: clonedSavedViews }),
     ...(clonedDefinitions && { definitions: clonedDefinitions }),
     // Material ids are deliberately *not* remapped. Nodes point at these
     // through `slots` values shaped `scene:mat_…` — opaque strings that the
@@ -340,7 +373,8 @@ export function forkSceneGraph(
     return cloneSceneGraph(sceneGraph)
   }
 
-  const { nodes, rootNodeIds, collections, definitions, materials, installedPlugins } = sceneGraph
+  const { nodes, rootNodeIds, collections, savedViews, definitions, materials, installedPlugins } =
+    sceneGraph
 
   // First, identify scan and guide node IDs to exclude (user-uploaded imagery)
   const excludedNodeIds = new Set<string>()
@@ -423,6 +457,10 @@ export function forkSceneGraph(
     nodes: filteredNodes,
     rootNodeIds: filteredRootNodeIds,
     ...(filteredCollections && { collections: filteredCollections }),
+    // Passed through whole: `cloneSceneGraph` remaps each view's section-plane
+    // and collection references, and drops the ones whose target didn't survive
+    // the filter above.
+    ...(savedViews && { savedViews }),
     ...(filteredDefinitions && { definitions: filteredDefinitions }),
     // Kept whole rather than filtered to the surviving nodes: a palette entry
     // is authored content in its own right, and dropping the scan node that

@@ -19,7 +19,13 @@ const graph = (overrides: Partial<PersistedSceneGraph> = {}) =>
 test('an omitted field signs the same as its applied default', () => {
   expect(sceneGraphSignature(graph())).toBe(
     sceneGraphSignature(
-      graph({ collections: {}, definitions: {}, materials: {}, installedPlugins: [] }),
+      graph({
+        collections: {},
+        savedViews: {},
+        definitions: {},
+        materials: {},
+        installedPlugins: [],
+      }),
     ),
   )
 })
@@ -46,6 +52,20 @@ test('changing any signed field changes the signature', () => {
             id: DEFINITION_ID,
             name: 'Balcony A',
             rootNodeId: NODE_ID,
+          },
+        },
+      }),
+    ),
+  ).not.toBe(base)
+  expect(
+    sceneGraphSignature(
+      graph({
+        savedViews: {
+          'saved-view_1': {
+            id: 'saved-view_1',
+            name: 'Entry',
+            order: 0,
+            camera: { position: [1, 1, 1], target: [0, 0, 0], projection: 'perspective' },
           },
         },
       }),

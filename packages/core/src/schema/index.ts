@@ -282,6 +282,16 @@ export {
   WindowType,
 } from './nodes/window'
 export { ZoneNode } from './nodes/zone'
+export {
+  generateSavedViewId,
+  nextSavedViewOrder,
+  normalizeSavedViews,
+  reorderSavedViews,
+  type SavedView,
+  type SavedViewCollectionState,
+  type SavedViewId,
+  sortSavedViews,
+} from './saved-views'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
 export type { AnyNodeId, AnyNodeType } from './types'

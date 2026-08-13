@@ -2,6 +2,7 @@ import type { SceneGraph } from '@pascal-app/editor'
 
 export type PersistedSceneGraph = SceneGraph & {
   collections?: Record<string, unknown>
+  savedViews?: Record<string, unknown>
 }
 
 /**
@@ -22,6 +23,7 @@ export function sceneGraphSignature(graph: PersistedSceneGraph): string {
     nodes: graph.nodes,
     rootNodeIds: graph.rootNodeIds,
     collections: graph.collections ?? {},
+    savedViews: graph.savedViews ?? {},
     definitions: graph.definitions ?? {},
     materials: graph.materials ?? {},
     installedPlugins: graph.installedPlugins ?? [],

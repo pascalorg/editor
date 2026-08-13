@@ -100,6 +100,7 @@ export const apiGraphSchema = z
     nodes: z.record(z.string(), z.unknown()),
     rootNodeIds: z.array(z.string()),
     collections: z.unknown().optional(),
+    savedViews: z.unknown().optional(),
     definitions: z.record(z.string(), z.unknown()).optional(),
     // `unknown` here, validated in `superRefine` below — the same split the
     // nodes get, and for the same reason: the routes persist this schema's
