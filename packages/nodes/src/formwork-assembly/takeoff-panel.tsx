@@ -466,10 +466,17 @@ export function FormworkTakeoffPanel() {
                       value={money(cost.ownedCost)}
                       value2="not in the total"
                     />
+                    {cost.ownedAmortisedCost > 0 && cost.ownedRechargeCost > 0 && (
+                      <Readout
+                        label="Of which amortised"
+                        value={money(cost.ownedAmortisedCost)}
+                        value2={`${money(cost.ownedRechargeCost)} on internal hire`}
+                      />
+                    )}
                     <Note>
-                      What the yard's own rack would earn over the days this job holds it, at the
-                      project's own hire rate — an internal recharge rather than cash. Not
-                      amortisation: there is no panel life here to spread a purchase over.
+                      {cost.ownedAmortisedCost > 0
+                        ? 'What this job used up of the rack: the purchase less its residual, over the uses the project says each part gives, per fitting made of it.'
+                        : "What the yard's own rack would earn over the days this job holds it, at the project's own hire rate — an internal recharge rather than cash. State expectedUses against a part to amortise it instead."}
                     </Note>
                   </>
                 )}

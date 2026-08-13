@@ -99,6 +99,14 @@ export const inspectProjectFormworkOutput = {
        * internal recharge.
        */
       ownStock: z.number(),
+      /**
+       * The two bases `ownStock` is made of, because they are not one claim: amortised is a
+       * share of a purchase somebody already made, over the life the project stated for the
+       * part; internal hire is a transfer price for the period held, used where no life is
+       * stated. Reported apart so a caller can say which it is quoting.
+       */
+      ownStockAmortised: z.number(),
+      ownStockInternalHire: z.number(),
       complete: z.boolean(),
       linesAtMinimumHirePeriod: z.number(),
       ownedQuantityExcluded: z.number(),
@@ -646,6 +654,8 @@ export function registerInspectProjectFormwork(server: McpServer, bridge: SceneO
                 purchase: round(solution.cost.consumedCost),
                 total: round(solution.cost.totalCost),
                 ownStock: round(solution.cost.ownedCost),
+                ownStockAmortised: round(solution.cost.ownedAmortisedCost),
+                ownStockInternalHire: round(solution.cost.ownedRechargeCost),
                 complete: solution.cost.complete,
                 linesAtMinimumHirePeriod: solution.cost.linesAtMinimum.length,
                 ownedQuantityExcluded: solution.cost.ownedQuantityExcluded,

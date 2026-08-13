@@ -231,6 +231,127 @@ describe('bomCost', () => {
     expect(cost.complete).toBe(false)
   })
 
+  it('amortises the yard’s own stock where the project stated a life for it', () => {
+    // £200 new, £20 back as scrap, 100 uses: £1.80 a fitting. Ten fittings owned is £18,
+    // and the days held do not enter it — that is the whole difference between a life and
+    // a hire term, and the reason the basis is named rather than the figure summed.
+    const bom = [line({ quantity: 10 })]
+    const table = rates({
+      minHireDays: 28,
+      byCatalogId: {
+        'framax-0.60x2.70': {
+          purchasePerUnit: 200,
+          rentalPercentPerMonth: 3,
+          expectedUses: 100,
+          residualPerUnit: 20,
+        },
+      },
+    })
+
+    const cost = bomCost(
+      bom,
+      table,
+      heldFor(bom, 2 * 24),
+      bomSupply(bom, {
+        'framax-0.60x2.70': 10,
+      }),
+    )
+
+    expect(cost.ownedCost).toBeCloseTo(18, 6)
+    expect(cost.ownedAmortisedCost).toBeCloseTo(18, 6)
+    expect(cost.ownedRechargeCost).toBe(0)
+    expect(cost.lines[0]?.ownedBasis).toBe('amortised')
+    // Still outside the cash total, because a share of a purchase already made is not
+    // money this job spends either.
+    expect(cost.totalCost).toBe(0)
+    expect(cost.complete).toBe(true)
+  })
+
+  it('falls back to the internal hire rate where a life is stated with no price to spread', () => {
+    // A life is a divisor and nothing else: with no list price there is nothing to divide,
+    // so the line charges as it did before lives existed rather than at nothing.
+    const bom = [line({ quantity: 10 })]
+    const table = rates({
+      byCatalogId: { 'framax-0.60x2.70': { rentalPerUnitPerMonth: 6, expectedUses: 100 } },
+    })
+
+    const cost = bomCost(
+      bom,
+      table,
+      heldFor(bom, 30 * 24),
+      bomSupply(bom, {
+        'framax-0.60x2.70': 10,
+      }),
+    )
+
+    expect(cost.ownedCost).toBeCloseTo(60, 6)
+    expect(cost.ownedRechargeCost).toBeCloseTo(60, 6)
+    expect(cost.lines[0]?.ownedBasis).toBe('recharge')
+    expect(cost.ownedQuantityExcluded).toBe(0)
+  })
+
+  it('never charges an owned part at nothing under either basis', () => {
+    // The failure this whole block exists to prevent: an owned part in the job at zero,
+    // which reads as plant that costs nothing to use. Under a life, under a hire rate, or
+    // under neither — the third case has to be a reported exclusion rather than a zero.
+    const bom = [line({ quantity: 10 })]
+    const rack = { 'framax-0.60x2.70': 10 }
+    const held = heldFor(bom, 30 * 24)
+    const withLife = rates({
+      byCatalogId: { 'framax-0.60x2.70': { purchasePerUnit: 200, expectedUses: 50 } },
+    })
+
+    const amortised = bomCost(bom, withLife, held, bomSupply(bom, rack))
+    const recharged = bomCost(bom, rates(), held, bomSupply(bom, rack))
+    const neither = bomCost(
+      bom,
+      rates({ byCatalogId: { 'framax-0.60x2.70': { purchasePerUnit: 200 } } }),
+      held,
+      bomSupply(bom, rack),
+    )
+
+    expect(amortised.ownedCost).toBeGreaterThan(0)
+    expect(recharged.ownedCost).toBeGreaterThan(0)
+    expect(neither.ownedCost).toBe(0)
+    expect(neither.ownedQuantityExcluded).toBe(10)
+  })
+
+  it('states both bases in the caveat where a table holds a life for some parts only', () => {
+    // A yard fills a rate table a part at a time, so one job charges its panels over a life
+    // and its ties at a transfer price. One owned figure made of two bases is a number a
+    // reader cannot reconcile against either, so the sentence has to name both.
+    const bom = [
+      line({ quantity: 10 }),
+      line({
+        catalogId: 'framax-0.90x2.70',
+        description: 'Framax Xlife panel 0.90 x 2.70 m',
+        marks: ['P2'],
+        quantity: 10,
+      }),
+    ]
+    const table = rates({
+      byCatalogId: {
+        'framax-0.60x2.70': { purchasePerUnit: 200, expectedUses: 100 },
+        'framax-0.90x2.70': { purchasePerUnit: 300, rentalPercentPerMonth: 3 },
+      },
+    })
+
+    const cost = bomCost(
+      bom,
+      table,
+      heldFor(bom, 30 * 24),
+      bomSupply(bom, {
+        'framax-0.60x2.70': 10,
+        'framax-0.90x2.70': 10,
+      }),
+    )
+
+    expect(cost.ownedAmortisedCost).toBeCloseTo(20, 6)
+    expect(cost.ownedRechargeCost).toBeCloseTo(90, 6)
+    expect(cost.ownedCost).toBeCloseTo(110, 6)
+    expect(bomCostCaveats(cost).some((entry) => entry.includes('combines two bases'))).toBe(true)
+  })
+
   it('charges a part-owned line on both sides, at the same rate', () => {
     // 4 owned and 6 hired, held a month: £24 internally and £36 in cash. The split is
     // `bomSupply`'s and the rate is one table, so the two cannot disagree about the part.

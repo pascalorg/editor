@@ -564,6 +564,40 @@ describe('bomCsv', () => {
       expect(rows(csv).some((row) => row.startsWith('Owned parts that could not'))).toBe(false)
     })
 
+    test('says which basis the own-stock row is on, and splits it where both apply', () => {
+      // The label carries the claim here: a reader who takes an amortised figure for a hire
+      // charge will reconcile it against a monthly rate and find it does not.
+      const lines = [
+        line({ quantity: 4 }),
+        line({ catalogId: 'tie-dw15', description: 'Tie rod', quantity: 4 }),
+      ]
+      const rack = { 'framax-2700-900': 4, 'tie-dw15': 4 }
+      const supply = bomSupply(lines, rack)
+      const hire = bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 })
+      const cost = bomCost(
+        lines,
+        {
+          currency: 'GBP',
+          byCatalogId: {
+            'framax-2700-900': { purchasePerUnit: 200, expectedUses: 50 },
+            'tie-dw15': { purchasePerUnit: 4, rentalPercentPerMonth: 3 },
+          },
+        },
+        hire,
+        supply,
+      )
+      const csv = bomCsv(lines, { subject: 'Project', supply, cost })
+
+      expect(cost.ownedAmortisedCost).toBeGreaterThan(0)
+      // £200 over 50 uses is £4 a fitting, on four owned.
+      expect(cost.ownedAmortisedCost).toBeCloseTo(16, 6)
+      expect(
+        rows(csv).some((row) => row.startsWith('Own stock — amortised and internal hire')),
+      ).toBe(true)
+      expect(rows(csv)).toContain('— of which amortised,16')
+      expect(rows(csv).some((row) => row.startsWith('— of which internal hire,'))).toBe(true)
+    })
+
     test('names the owned parts it could not charge at all, rather than pricing them at zero', () => {
       // A rack with a list price and no hire rate has nothing to charge an internal
       // recharge at, and a spreadsheet cannot tell a zero that means free from a zero

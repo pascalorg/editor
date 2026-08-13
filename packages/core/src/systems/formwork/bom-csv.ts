@@ -378,9 +378,19 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       // Below the total and labelled as outside it, because a spreadsheet reader adds
       // adjacent money columns. This is the yard's own plant charged at the yard's own
       // rate — a recharge between two parts of one business rather than cash spent.
-      rows.push(
-        ['Own stock at internal hire rate — not in the total', round2(cost.ownedCost)].join(','),
-      )
+      const label =
+        cost.ownedAmortisedCost > 0 && cost.ownedRechargeCost > 0
+          ? 'Own stock — amortised and internal hire, not in the total'
+          : cost.ownedAmortisedCost > 0
+            ? 'Own stock amortised over its stated life — not in the total'
+            : 'Own stock at internal hire rate — not in the total'
+      rows.push([label, round2(cost.ownedCost)].join(','))
+      // The split as its own rows where the table holds both, because one figure made of two
+      // bases is a number a reader cannot reconcile against either.
+      if (cost.ownedAmortisedCost > 0 && cost.ownedRechargeCost > 0) {
+        rows.push(['— of which amortised', round2(cost.ownedAmortisedCost)].join(','))
+        rows.push(['— of which internal hire', round2(cost.ownedRechargeCost)].join(','))
+      }
     }
     if (cost.ownedQuantityExcluded > 0) {
       // A zero here has to keep meaning "the internal recharge is complete", so this counts

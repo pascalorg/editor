@@ -117,6 +117,8 @@ export {
   type CostGap,
   type CostLine,
   formatMoney,
+  OWNED_BASIS_LABELS,
+  type OwnedBasis,
   type RateTable,
 } from './cost'
 export {

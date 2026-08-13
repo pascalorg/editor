@@ -435,6 +435,25 @@ const PART_RATE_PATCH = z.object({
     .describe(
       'a flat hire quote per unit per month. Overrides the percentage where both are stated, because an actual quote beats a rule of thumb applied to a list price',
     ),
+  expectedUses: z
+    .number()
+    .int()
+    .positive()
+    .max(10_000)
+    .nullable()
+    .optional()
+    .describe(
+      'how many fittings this part is expected to give before it is replaced. With purchasePerUnit this charges the yard’s own stock at a cost per use — amortisation — instead of at an internal hire rate, which is what the owned figure falls back to without it. Ask the user: a life in uses is a judgement about how hard this yard works its plant, and it is not the reuse figure on the set count, which is how many times this one job fits a part',
+    ),
+  residualPerUnit: z
+    .number()
+    .nonnegative()
+    .max(10_000_000)
+    .nullable()
+    .optional()
+    .describe(
+      'what one is worth at the end of that life, in the same money as purchasePerUnit. Leave it out where nothing is recovered, which is the usual case for ply; state it for steel frames, where the scrap value is real and charging the whole list price over the uses overstates every job the panel was on',
+    ),
 })
 
 /**

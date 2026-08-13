@@ -241,6 +241,34 @@ export const PartRate = z.object({
   rentalPercentPerMonth: z.number().finite().positive().max(100).optional(),
   /** A flat hire quote per unit per month, which overrides the percentage. */
   rentalPerUnitPerMonth: z.number().finite().positive().max(1_000_000).optional(),
+  /**
+   * How many fittings this part is expected to give before it is replaced.
+   *
+   * The figure that turns a sunk asset into a cost per use, and the reason owned stock
+   * was charged as an internal hire until now: pricing a panel the yard already holds
+   * needs a life, and nothing in the catalog carries one for a panel. `SheetStock`
+   * publishes a reuse band for film-faced ply and that is a *product* fact about a
+   * grade, not about this yard's stock — a panel reconditioned twice and a panel out of
+   * the wrapper have the same item number and different lives left.
+   *
+   * Here beside the price rather than on `CatalogEntry` for the price's own reason: a
+   * life in uses is a commercial judgement about how hard this yard works its plant and
+   * what it writes off against, so it drifts by owner and not by catalog edition.
+   *
+   * Deliberately **not** the set count's `reuseFactor`, which is how many times *this
+   * job* fits a part — a job that reuses a panel four times says nothing about how many
+   * fittings the panel had left when it arrived.
+   */
+  expectedUses: z.number().int().positive().max(10_000).optional(),
+  /**
+   * What one is worth at the end of that life, in the same money as `purchasePerUnit`.
+   *
+   * Absent means nothing is recovered, which is the conservative reading and the usual
+   * one for ply. Steel frames are the case that needs it: a panel written off after 300
+   * pours still weighs 60 kg and is sold as scrap, and charging its whole list price
+   * over its uses overstates every job it was ever on.
+   */
+  residualPerUnit: z.number().finite().nonnegative().max(10_000_000).optional(),
 })
 export type PartRate = z.infer<typeof PartRate>
 

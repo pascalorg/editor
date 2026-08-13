@@ -77,6 +77,8 @@ interface ProjectReport {
     purchase: number
     total: number
     ownStock: number
+    ownStockAmortised: number
+    ownStockInternalHire: number
     complete: boolean
     linesAtMinimumHirePeriod: number
     ownedQuantityExcluded: number
@@ -827,6 +829,37 @@ describe('inspect_project_formwork', () => {
     expect(hired).toBeCloseTo((all * (panel.quantity - 4)) / panel.quantity, 2)
     // At the same rate on both sides, so the two figures reconcile to the unowned charge.
     expect(hired + (row?.ownStockCost as number)).toBeCloseTo(all, 2)
+  })
+
+  test('a stated life amortises the rack instead of recharging it, and says which', async () => {
+    // The write path and the basis in one test, because the failure is not arithmetic: a
+    // model that reports an amortised figure as an internal hire has described a share of a
+    // purchase as a transfer price, and a reader reconciling it against a hire rate cannot.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+    const before = await project(tools, { elementIds: ['wall_1'] })
+    const panel = before.bom.find((row) => row.catalogId !== null) as { catalogId: string }
+
+    await call(tools, 'set_formwork_settings', {
+      ownedStock: { [panel.catalogId]: 4 },
+      rates: { byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } } },
+    })
+    const recharged = await project(tools, { elementIds: ['wall_1'] })
+    await call(tools, 'set_formwork_settings', {
+      rates: {
+        byCatalogId: { [panel.catalogId]: { purchasePerUnit: 400, expectedUses: 100 } },
+      },
+    })
+    const amortised = await project(tools, { elementIds: ['wall_1'] })
+
+    expect(recharged.cost?.ownStockInternalHire).toBeGreaterThan(0)
+    expect(recharged.cost?.ownStockAmortised).toBe(0)
+    // £400 over 100 uses is £4 a fitting, on the four owned.
+    expect(amortised.cost?.ownStockAmortised).toBeCloseTo(16, 2)
+    expect(amortised.cost?.ownStockInternalHire).toBe(0)
+    expect(amortised.cost?.ownStock).toBeCloseTo(16, 2)
+    // Still outside the cash total under either basis.
+    expect(amortised.cost?.total).toBe(amortised.cost?.hire)
   })
 
   test('the price sits on the line it belongs to, in the bill’s own order', async () => {

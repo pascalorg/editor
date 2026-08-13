@@ -501,6 +501,8 @@ export function RateTableField({
           <span className="w-[4.5rem] shrink-0 text-right">List</span>
           <span className="w-[4.5rem] shrink-0 text-right">% / month</span>
           <span className="w-[4.5rem] shrink-0 text-right">Flat / month</span>
+          <span className="w-[4.5rem] shrink-0 text-right">Uses</span>
+          <span className="w-[4.5rem] shrink-0 text-right">Residual</span>
           <span className="w-12 shrink-0" />
         </div>
       )}
@@ -535,6 +537,22 @@ export function RateTableField({
               step={1}
               value={rate.rentalPerUnitPerMonth}
             />
+            <RateCell
+              label={`Expected uses, ${byId.get(catalogId)?.label ?? catalogId}`}
+              max={10_000}
+              onCommit={(value) => onSetRate(catalogId, { expectedUses: value ?? null })}
+              placeholder="—"
+              step={10}
+              value={rate.expectedUses}
+            />
+            <RateCell
+              label={`Residual value, ${byId.get(catalogId)?.label ?? catalogId}`}
+              max={10_000_000}
+              onCommit={(value) => onSetRate(catalogId, { residualPerUnit: value ?? null })}
+              placeholder="—"
+              step={1}
+              value={rate.residualPerUnit}
+            />
             <button
               className="w-12 shrink-0 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
               onClick={() => {
@@ -553,6 +571,25 @@ export function RateTableField({
           {rate.rentalPerUnitPerMonth !== undefined && rate.rentalPercentPerMonth !== undefined && (
             <p className="pl-1 text-[10px] text-muted-foreground/70 leading-snug">
               The flat rate is used — a quote beats a percentage of a list price.
+            </p>
+          )}
+          {/* Which basis the yard's own stock on this line is charged on. A life changes the
+              figure from a transfer price to a share of a purchase, and a reader who entered
+              a life expecting the hire figure to stay put has a number they did not intend. */}
+          {rate.expectedUses !== undefined && rate.purchasePerUnit !== undefined && (
+            <p className="pl-1 text-[10px] text-muted-foreground/70 leading-snug">
+              Own stock on this line is amortised, not recharged:{' '}
+              {(
+                (rate.purchasePerUnit - Math.min(rate.residualPerUnit ?? 0, rate.purchasePerUnit)) /
+                rate.expectedUses
+              ).toFixed(2)}{' '}
+              per fitting.
+            </p>
+          )}
+          {rate.expectedUses !== undefined && rate.purchasePerUnit === undefined && (
+            <p className="pl-1 text-[10px] text-amber-400/70 leading-snug">
+              A life with no list price to spread over it. Own stock stays on the internal hire rate
+              until a list price is entered.
             </p>
           )}
           {rate.purchasePerUnit === undefined && rate.rentalPercentPerMonth !== undefined && (

@@ -90,6 +90,8 @@ interface BillReply {
     purchase: number
     total: number
     ownStock: number
+    ownStockAmortised: number
+    ownStockInternalHire: number
     complete: boolean
     linesAtMinimumHirePeriod: number
     ownedQuantityExcluded: number
@@ -3190,6 +3192,30 @@ describe('the formwork MCP tools', () => {
         0,
       )
       expect(reply.cost?.excludes.some((line) => line.includes('internal recharge'))).toBe(true)
+      expect(reply.cost?.ownStockInternalHire).toBeCloseTo(reply.cost?.ownStock ?? 0, 2)
+      expect(reply.cost?.ownStockAmortised).toBe(0)
+    })
+
+    test('a stated life amortises the rack, and the basis is a field rather than a sentence', async () => {
+      // An agent quoting this has to be able to say which basis it is on: a share of a
+      // purchase already made and a transfer price for the days held are two different
+      // claims about the same rack, and one figure carrying both is unreconcilable.
+      const empty = await sequential({ stock: { owned: {} } })
+      const panel = empty.sets?.items.find((item) => item.reuses > 1) as { catalogId: string }
+      const reply = await sequential({
+        stock: { owned: { [panel.catalogId]: 4 } },
+        rates: {
+          byCatalogId: {
+            [panel.catalogId]: { purchasePerUnit: 400, residualPerUnit: 100, expectedUses: 100 },
+          },
+        },
+      })
+
+      // £400 less £100 back, over 100 uses, is £3 a fitting.
+      expect(reply.cost?.ownStockAmortised).toBeGreaterThan(0)
+      expect(reply.cost?.ownStockInternalHire).toBe(0)
+      expect(reply.cost?.ownStock).toBeCloseTo(reply.cost?.ownStockAmortised ?? 0, 2)
+      expect(reply.cost?.total).toBe(reply.cost?.hire)
     })
   })
 

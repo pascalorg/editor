@@ -929,6 +929,8 @@ export function buildTools(
                   purchase: round(solution.cost.consumedCost),
                   total: round(solution.cost.totalCost),
                   ownStock: round(solution.cost.ownedCost),
+                  ownStockAmortised: round(solution.cost.ownedAmortisedCost),
+                  ownStockInternalHire: round(solution.cost.ownedRechargeCost),
                   complete: solution.cost.complete,
                   linesAtMinimumHirePeriod: solution.cost.linesAtMinimum.length,
                   ownedQuantityExcluded: solution.cost.ownedQuantityExcluded,
