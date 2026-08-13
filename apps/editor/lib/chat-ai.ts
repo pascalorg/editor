@@ -20,8 +20,10 @@ import {
   cutSequenceCaveats,
   describeFormworkReconciliation,
   describePourSplit,
+  elevationCaveats,
   FIX_FORMWORK_FINDING_DESCRIPTION,
   FORMWORK_CUT_SHEET_DESCRIPTION,
+  FORMWORK_ELEVATION_DESCRIPTION,
   FORMWORK_RFI_DESCRIPTION,
   findFormworkSettingsNode,
   findingByKey,
@@ -78,6 +80,7 @@ import {
   pourUnitsForHost,
   projectFormworkCaveats,
   reconcileFormworkNodes,
+  shutterElevations,
   solveProjectFormwork,
   solveShuttersForHost,
   validateProjectFormwork,
@@ -335,6 +338,27 @@ export const SYSTEM_PROMPT =
   'Name boardsLargerThanEverySheet whenever you present the cuts, because those boards are on no ' +
   'sheet here and a cut sheet without them reads as complete while being short a board somebody ' +
   'has to source. ' +
+  'formwork_elevation is the setting-out answer for a wall, and it is where a mark in the parts ' +
+  'list becomes a rectangle on a face: inspect_formwork_parts says what the panels are and this ' +
+  'says which one is beside which, which course each is in, and where the tie holes fall. Every ' +
+  'figure is millimetres from that pour’s own start and its own base, so a wall in three lifts ' +
+  'comes back as three drawings each beginning at zero — never add them and never read a figure ' +
+  'as a height on the wall without saying the lifts below have to be added back. Four things to ' +
+  'pass on rather than reword. The concrete stops at concreteTopMm and the panels run to ' +
+  'formTopMm, and the difference is freeboard, so a pour quoted to the top of the shutter is ' +
+  'quoted too high. Where tiesFrom is drilled-holes the stations are the factory’s holes and ' +
+  'cannot be moved, so never restate them as a calculated spacing and never offer to shift one — ' +
+  'a rod set 25 mm off a hole is a steel frame somebody drills. tiesNotTied is on the drawing on ' +
+  'purpose and is the one thing here whose value is in the absence: those are stations the grid ' +
+  'offers that this wall cannot use, each with the reason, and the untied band each leaves is ' +
+  'what gets queried against the engineer’s elevation — so quote them with the ties rather than ' +
+  'reporting a tie count alone. And the vertical joints lining up rather than staggering is ' +
+  'correct, because the ties pass through holes that must coincide on both skins, so never report ' +
+  'the alignment as a defect. A rectangle is not a quantity: a panel crossed by a window is drawn ' +
+  'as a band above and a band below sharing one mark and is one panel off the rack, so every ' +
+  'count comes from the parts list and none from the drawing. Read noElevationBecause rather than ' +
+  'treating an empty drawings list as a missing shutter — a column and a slab have no elevation ' +
+  'to draw and that is not an input anybody can supply. ' +
   'set_formwork_part records the two decisions a yard actually makes about a solved ' +
   'layout — substitute this item, or leave it off the order because it is already on site. It ' +
   'cannot change a size or a spacing; those are outputs, and to change them you change the design ' +
@@ -1436,6 +1460,90 @@ export function buildTools(
             heightMm: piece.heightMm,
           })),
           caveats: cutSequenceCaveats(plans),
+        })
+      },
+    }),
+    formwork_elevation: tool({
+      description: FORMWORK_ELEVATION_DESCRIPTION,
+      inputSchema: z.object({
+        elementId: z
+          .string()
+          .describe('the wall to draw — one element, because a drawing is of a face'),
+      }),
+      execute: async ({ elementId }) => {
+        toolCalls.push({ name: 'formwork_elevation', input: { elementId } })
+        const element = castableOrError(elementId)
+        if (typeof element === 'string') return element
+        const drawings = shutterElevations(
+          element as unknown as Parameters<typeof shutterElevations>[0],
+          graph.nodes as unknown as Record<string, AnyNode>,
+        )
+        // The same refusal `inspect_formwork_parts` gives, for the same reason: a drawing of
+        // no shutter reads as a wall that needs none.
+        if (drawings === undefined) return noFormworkAssembly(elementId)
+        if (drawings.length === 0) {
+          return JSON.stringify({
+            elementId,
+            drawings: [],
+            // Two absences and two sentences. A wall whose every face is buried is a scope
+            // question; a column has no elevation to draw at all, and one hedged sentence
+            // would send the model back to attach_formwork on a fully formed column.
+            noElevationBecause:
+              element.type === 'wall'
+                ? 'This wall is formed and no face of it is panelled in this scope — a single-sided pour against an existing face, or faces all buried against neighbours. There is no shutter face to draw.'
+                : `A ${element.type} has no shutter elevation: a column is clamped to a schedule and a slab is decked to a plan, and neither is an elevation of a face. Call inspect_formwork_parts for what it is made of. Not a missing input.`,
+          })
+        }
+        return JSON.stringify({
+          elementId,
+          drawings: drawings.map((drawing) => ({
+            assemblyId: drawing.assemblyId,
+            pour: drawing.pour,
+            runMm: Math.round(drawing.elevation.runMm),
+            formBaseMm: Math.round(drawing.elevation.formBaseMm),
+            concreteTopMm: Math.round(drawing.elevation.concreteTopMm),
+            formTopMm: Math.round(drawing.elevation.formTopMm),
+            courses: drawing.elevation.courses.map((course) => ({
+              baseMm: Math.round(course.baseMm),
+              topMm: Math.round(course.topMm),
+            })),
+            openings: drawing.elevation.openings.map((opening) => ({
+              id: opening.id,
+              xMm: Math.round(opening.xMm),
+              yMm: Math.round(opening.yMm),
+              widthMm: Math.round(opening.widthMm),
+              heightMm: Math.round(opening.heightMm),
+            })),
+            ties: drawing.elevation.ties.map((tie) => ({
+              xMm: Math.round(tie.xMm),
+              yMm: Math.round(tie.yMm),
+              mark: tie.mark,
+            })),
+            // Named for what it is on the drawing rather than for the field it comes from:
+            // a station the grid offers and this wall cannot use is the absence somebody
+            // queries against the engineer's elevation.
+            tiesNotTied: drawing.elevation.tiesDropped.map((tie) => ({
+              xMm: Math.round(tie.xMm),
+              yMm: Math.round(tie.yMm),
+              because: tie.because,
+            })),
+            tiesFrom: drawing.elevation.tiesFrom,
+            faces: drawing.elevation.faces.map((face) => ({
+              face: face.role,
+              pieces: face.pieces.map((piece) => ({
+                mark: piece.mark,
+                kind: piece.kind,
+                xMm: Math.round(piece.xMm),
+                yMm: Math.round(piece.yMm),
+                widthMm: Math.round(piece.widthMm),
+                heightMm: Math.round(piece.heightMm),
+                course: piece.courseIndex ?? null,
+              })),
+            })),
+            // Core's own sentences, the same text under the panel and on the issued SVG: a
+            // caveat present on two surfaces and absent from the third did not arrive.
+            caveats: elevationCaveats(drawing.elevation),
+          })),
         })
       },
     }),

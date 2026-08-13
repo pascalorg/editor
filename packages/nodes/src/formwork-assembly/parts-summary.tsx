@@ -30,9 +30,8 @@ import {
   utilisationClass,
   WarningLine,
 } from './report-ui'
-import type { FormworkAssemblyNode } from './schema'
 import { useSelectedPart } from './selected-part'
-import { type SolvedShutter, solveShuttersForHost } from './solve'
+import { type SolvedShutter, shutterLabel, solveShuttersForHost } from './solve'
 
 /**
  * What this shutter is made of, part by part, and what it takes to order it.
@@ -78,11 +77,6 @@ export function useHostShutters(hostId: AnyNodeId | undefined): HostShutters {
     const host = candidate as CastableHostNode
     return { host, settings, shutters: solveShuttersForHost(host, nodes) }
   }, [nodes, hostId])
-}
-
-/** The pour this shutter covers, said the way the design report says it. */
-export function shutterLabel(assembly: FormworkAssemblyNode): string {
-  return `Pour ${assembly.segmentIndex + 1}, lift ${assembly.liftIndex + 1}`
 }
 
 export interface ShutterScope {

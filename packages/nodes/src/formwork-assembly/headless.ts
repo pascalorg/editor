@@ -42,10 +42,12 @@ export {
   formworkCoverageCaveat,
   formworkPartsReport,
   type ReportedBomLine,
+  type ReportedElevation,
   type ReportedPart,
   type ReportedShutter,
+  shutterElevations,
 } from './parts-report'
-export { type SolvedShutter, solveShuttersForHost } from './solve'
+export { type SolvedShutter, shutterLabel, solveShuttersForHost } from './solve'
 export {
   castableHostIds,
   type ProjectFormwork,

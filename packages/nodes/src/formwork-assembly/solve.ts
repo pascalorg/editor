@@ -1,4 +1,4 @@
-import type { FormworkPart } from '@pascal-app/core/formwork'
+import type { FormworkPart, ShutterElevation } from '@pascal-app/core/formwork'
 import type { GeometryContext } from '@pascal-app/core/registry'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import type { CastableHostNode } from './attach'
@@ -22,6 +22,28 @@ export interface SolvedShutter {
    * face disagree about which run has the open strip the first time either changes.
    */
   evidence: ShutterEvidence
+  /**
+   * The shop elevation, on the kinds that have one — walls.
+   *
+   * Carried out of the build rather than derived from the parts, which could not be done at
+   * all: a part carries its own position and not its extent, so a panel's rectangle is not
+   * in the list, and a tie station the wall could not use has no part to be absent from.
+   */
+  elevation?: ShutterElevation
+}
+
+/**
+ * The pour this shutter covers, in one wording.
+ *
+ * Here rather than beside the parts table because four surfaces name the same pour — the table,
+ * the elevation's face selector, the title on the issued drawing and the AI's reply — and a
+ * pour called "Pour 2, lift 1" on the screen and "segment 1 lift 0" in the reply is two pours
+ * as far as the reader is concerned. Also here rather than in a panel file because the server
+ * needs it: a route handler is a Server Component and a `'use client'` module in its import
+ * graph is a build failure.
+ */
+export function shutterLabel(assembly: FormworkAssemblyNode): string {
+  return `Pour ${assembly.segmentIndex + 1}, lift ${assembly.liftIndex + 1}`
 }
 
 /**
@@ -55,7 +77,14 @@ export function solveShuttersForHost(
     const assembly = nodes[assemblyId] as unknown as FormworkAssemblyNode | undefined
     if (!assembly) continue
     const built = buildFormwork(assembly, ctx)
-    if (built) shutters.push({ assembly, parts: built.parts, evidence: built.evidence })
+    if (built) {
+      shutters.push({
+        assembly,
+        parts: built.parts,
+        evidence: built.evidence,
+        ...(built.elevation ? { elevation: built.elevation } : {}),
+      })
+    }
   }
   return shutters.sort(
     (a, b) =>

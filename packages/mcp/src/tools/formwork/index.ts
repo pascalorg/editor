@@ -4,6 +4,7 @@ import { registerAttachFormwork } from './attach-formwork'
 import { registerCommitPour } from './commit-pour'
 import { registerFixFormworkFinding } from './fix-formwork-finding'
 import { registerFormworkCutSheet } from './formwork-cut-sheet'
+import { registerFormworkElevation } from './formwork-elevation'
 import { registerFormworkRfis } from './formwork-rfis'
 import { registerInspectFormworkParts } from './inspect-formwork-parts'
 import { registerInspectFormworkSettings } from './inspect-formwork-settings'
@@ -32,6 +33,22 @@ import { registerValidateFormwork } from './validate-formwork'
  * point rather than the barrel, because the barrel carries the panels and this process
  * renders nothing. A second implementation for the server is how the MCP answer comes
  * to differ from the user's screen.
+ *
+ * ## Why the two drawings are tools rather than fields on the reads beside them
+ *
+ * `formwork_cut_sheet` and `formwork_elevation` both answer "where", and every read around them
+ * answers "what" and "how many". That is not a smaller difference than it sounds: a bill line
+ * says 34 panels and a cut list says 12 boards, and neither can say which panel is beside which
+ * or which sheet a board is on — the join between a mark and its neighbours exists only in a
+ * layout, and a layout is hundreds of rectangles. Folded into the takeoff they would put those
+ * rectangles into every answer about what a floor costs; kept separate they are called by
+ * whoever is setting out, which is a different person on a different day.
+ *
+ * The elevation is the one read here whose value is partly in what it *omits*. Every other tool
+ * reports what the model contains; a shop elevation is checked against the engineer's by
+ * somebody holding both, so a tie station the drilled grid offers and this wall cannot use is
+ * reported as dropped rather than left out. An absence with no reason beside it is the query
+ * that arrives a fortnight later.
  *
  * ## Why the settings pair belongs here rather than being deferred with the rest
  *
@@ -134,6 +151,7 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerSetElementConstruction(server, operations)
   registerInspectProjectFormwork(server, operations)
   registerFormworkCutSheet(server, operations)
+  registerFormworkElevation(server, operations)
   registerValidateFormwork(server, operations)
   registerFixFormworkFinding(server, operations)
   registerFormworkRfis(server, operations)
@@ -152,6 +170,7 @@ export { attachFormworkOutput } from './attach-formwork'
 export { commitPourOutput } from './commit-pour'
 export { fixFormworkFindingOutput } from './fix-formwork-finding'
 export { formworkCutSheetOutput } from './formwork-cut-sheet'
+export { formworkElevationOutput } from './formwork-elevation'
 export { formworkRfisOutput } from './formwork-rfis'
 export { inspectFormworkPartsOutput } from './inspect-formwork-parts'
 export { inspectFormworkSettingsOutput } from './inspect-formwork-settings'

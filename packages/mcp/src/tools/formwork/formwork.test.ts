@@ -760,6 +760,7 @@ describe('the formwork MCP tools', () => {
         'set_element_construction',
         'inspect_project_formwork',
         'formwork_cut_sheet',
+        'formwork_elevation',
         'validate_formwork',
         'fix_formwork_finding',
         'formwork_rfis',
@@ -1566,6 +1567,155 @@ describe('the formwork MCP tools', () => {
 
       expect(result.isError).toBe(true)
       expect((result.content as Array<{ text: string }>)[0]?.text).toContain('no level with id')
+    })
+  })
+
+  /**
+   * The elevation, for a caller with no screen.
+   *
+   * The rectangles are asserted against the build in `nodes`' `elevation.test.ts` and the
+   * wording in core's. What only this layer can get wrong is the join and the refusals: that
+   * every mark drawn here is a mark `inspect_formwork_parts` reports on the same element, that
+   * the caveats travel with the drawing rather than being left on the screen, and that a
+   * column asked for one is told why it has none instead of being handed an empty drawing.
+   */
+  describe('the shutter elevation', () => {
+    interface ElevationReply {
+      elementId: string
+      drawings: Array<{
+        assemblyId: string
+        pour: string
+        runMm: number
+        formBaseMm: number
+        concreteTopMm: number
+        formTopMm: number
+        courses: Array<{ baseMm: number; topMm: number }>
+        openings: Array<{ id: string; xMm: number; widthMm: number }>
+        ties: Array<{ xMm: number; yMm: number; mark: string }>
+        tiesNotTied: Array<{ xMm: number; yMm: number; because: string }>
+        tiesFrom: string
+        faces: Array<{ face: string; pieces: Array<{ mark: string; kind: string; xMm: number }> }>
+        caveats: string[]
+      }>
+      noElevationBecause?: string
+    }
+
+    /** Only what the join needs — the full shape is asserted where that tool is tested. */
+    interface MarkedPartsReply {
+      shutters: Array<{ assemblyId: string; parts: Array<{ mark: string }> }>
+    }
+
+    test('draws both skins, and every mark on them is a part of the same shutter', async () => {
+      // The join. A drawing labelled with a mark the parts list does not have is a drawing of
+      // a shutter nobody ordered, and a reader has no way to tell from either surface alone.
+      load(walledWithOpening())
+
+      const drawing = await call<ElevationReply>('formwork_elevation', { elementId: 'wall_1' })
+      const parts = await call<MarkedPartsReply>('inspect_formwork_parts', { elementId: 'wall_1' })
+
+      const shutter = drawing.drawings[0]
+      expect(shutter?.faces.map((face) => face.face)).toEqual(['side-a', 'side-b'])
+      expect(shutter?.pour).toBe('Pour 1, lift 1')
+      expect(shutter?.assemblyId).toBe(parts.shutters[0]?.assemblyId)
+      const known = new Set(parts.shutters.flatMap((s) => s.parts.map((part) => part.mark)))
+      for (const face of shutter?.faces ?? []) {
+        expect(face.pieces.length).toBeGreaterThan(0)
+        for (const piece of face.pieces) expect(known.has(piece.mark)).toBe(true)
+      }
+      for (const tie of shutter?.ties ?? []) expect(known.has(tie.mark)).toBe(true)
+    })
+
+    test('a wall in lifts draws one elevation per pour, each starting at zero', async () => {
+      // The error that reads as correct: an upper lift drawn from the level's datum is an
+      // elevation of the whole wall with the bottom half missing, and every figure on it is
+      // out by the pour below.
+      load(tallWall())
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 3 })
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<ElevationReply>('formwork_elevation', { elementId: 'wall_1' })
+
+      expect(reply.drawings.length).toBe(3)
+      expect(reply.drawings.map((drawing) => drawing.pour)).toEqual([
+        'Pour 1, lift 1',
+        'Pour 1, lift 2',
+        'Pour 1, lift 3',
+      ])
+      for (const drawing of reply.drawings) {
+        expect(drawing.concreteTopMm).toBeLessThanOrEqual(3100)
+        for (const face of drawing.faces) {
+          for (const piece of face.pieces) expect(piece.xMm).toBeLessThanOrEqual(drawing.runMm)
+        }
+      }
+    })
+
+    test('says where the ties came from, and reports the ones the wall cannot use', async () => {
+      // The drawing's load-bearing absence: this wall's window blocks stations the panels are
+      // drilled at, and a rod on the engineer's drawing with nothing here is the query.
+      load(walledWithOpening())
+
+      const reply = await call<ElevationReply>('formwork_elevation', { elementId: 'wall_1' })
+      const drawing = reply.drawings[0]
+
+      expect(drawing?.tiesFrom).toBe('drilled-holes')
+      expect((drawing?.tiesNotTied.length ?? 0) + (drawing?.ties.length ?? 0)).toBeGreaterThan(0)
+      expect(drawing?.tiesNotTied.every((tie) => ['opening', 'corner'].includes(tie.because))).toBe(
+        true,
+      )
+      // And the sentence that stops the model offering to move one of them.
+      expect(drawing?.caveats.join(' ')).toContain('cannot be moved')
+    })
+
+    test('carries the caveats the panel and the printed sheet carry', async () => {
+      // The same text on all three surfaces. This is the one whose reader is most likely to
+      // restate a lift's own frame as the wall's, or a freeboard band as concrete.
+      load(walledWithOpening())
+
+      const drawing = (await call<ElevationReply>('formwork_elevation', { elementId: 'wall_1' }))
+        .drawings[0]
+
+      expect(drawing?.caveats[0]).toContain('own start')
+      expect(drawing?.caveats.join(' ')).toContain('shutter face only')
+      expect(drawing?.caveats.join(' ')).toContain('the rectangles do not count')
+    })
+
+    test('a column is told it has no elevation rather than handed an empty one', async () => {
+      // Two absences that would otherwise look identical. This one is not a missing input and
+      // there is nothing to fix — an empty array reads as a shutter that failed to solve.
+      load(threeKinds())
+      await call('attach_formwork', { elementId: 'column_1' })
+
+      const reply = await call<ElevationReply>('formwork_elevation', { elementId: 'column_1' })
+
+      expect(reply.drawings).toEqual([])
+      expect(reply.noElevationBecause).toContain('clamped to a schedule')
+      expect(reply.noElevationBecause).toContain('Not a missing input')
+    })
+
+    test('an unformed wall is refused, and named the tool that would form it', async () => {
+      load(tallWall())
+
+      const result = await client.callTool({
+        name: 'formwork_elevation',
+        arguments: { elementId: 'wall_1' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('attach_formwork')
+    })
+
+    test('refuses a level id where an element id was wanted', async () => {
+      load(walledWithOpening())
+
+      const result = await client.callTool({
+        name: 'formwork_elevation',
+        arguments: { elementId: 'level_1' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain(
+        'no wall, column or slab',
+      )
     })
   })
 

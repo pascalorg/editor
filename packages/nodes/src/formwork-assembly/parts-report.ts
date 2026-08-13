@@ -1,4 +1,9 @@
-import type { BomLine, FormworkPart, PartProvenance } from '@pascal-app/core/formwork'
+import type {
+  BomLine,
+  FormworkPart,
+  PartProvenance,
+  ShutterElevation,
+} from '@pascal-app/core/formwork'
 import {
   bomLines,
   bomWeightKg,
@@ -10,7 +15,7 @@ import {
 } from '@pascal-app/core/formwork'
 import type { AnyNode } from '@pascal-app/core/schema'
 import { type CastableHostNode, pourUnitsForHost } from './attach'
-import { solveShuttersForHost } from './solve'
+import { shutterLabel, solveShuttersForHost } from './solve'
 
 /**
  * One element's shutter, as an agent should read it.
@@ -233,4 +238,44 @@ export function formworkPartsReport(
     coversWholeElement: caveat === undefined,
     coverageCaveat: caveat ?? null,
   }
+}
+
+/** One pour's shop elevation, named the way every other surface names that pour. */
+export interface ReportedElevation {
+  assemblyId: string
+  pour: string
+  elevation: ShutterElevation
+}
+
+/**
+ * Every drawn face of one element, for a caller with no screen.
+ *
+ * The drawings come out of the same `solveShuttersForHost` the parts table and the bill read,
+ * so a mark on the AI's drawing is the mark on the user's — which is the only reason this
+ * function exists rather than each surface reaching into `SolvedShutter` itself.
+ *
+ * Three answers rather than two, because they call for three different replies.
+ * `undefined` is "nobody has formed this element", which is a call to `attach_formwork`. An
+ * empty array is "formed, and no face of it is a shutter face to draw" — a column, a slab, or a
+ * wall whose faces are all buried — which is not a missing input and not something to fix. And
+ * a populated array is the drawing. Folding the first two together would have an agent calling
+ * `attach_formwork` on a column that is already fully shuttered.
+ */
+export function shutterElevations(
+  host: CastableHostNode,
+  nodes: Record<string, AnyNode>,
+): ReportedElevation[] | undefined {
+  const shutters = solveShuttersForHost(host, nodes)
+  if (shutters.length === 0) return undefined
+
+  const drawings: ReportedElevation[] = []
+  for (const shutter of shutters) {
+    if (!shutter.elevation) continue
+    drawings.push({
+      assemblyId: shutter.assembly.id as string,
+      pour: shutterLabel(shutter.assembly),
+      elevation: shutter.elevation,
+    })
+  }
+  return drawings
 }

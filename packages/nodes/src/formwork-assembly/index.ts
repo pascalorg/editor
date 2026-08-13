@@ -19,6 +19,20 @@ export { formworkAssemblyDefinition } from './definition'
 export { FormworkDesignReport } from './design-report'
 export { formworkAssembliesAffectedBy, formworkAssembliesOnHost } from './dirty-scope'
 export {
+  type ElevationChoice,
+  ElevationDrawing,
+  FormworkElevation,
+  FormworkElevationSection,
+} from './elevation'
+export {
+  ELEVATION_COLORS,
+  type ElevationPage,
+  type ElevationShape,
+  elevationShapes,
+  elevationSvg,
+  pieceColors,
+} from './elevation-drawing'
+export {
   type FormworkFindingWithRemedy,
   type FormworkFixOutcome,
   type FormworkFixPlan,
@@ -44,12 +58,14 @@ export {
   formworkCoverageCaveat,
   formworkPartsReport,
   type ReportedBomLine,
+  type ReportedElevation,
   type ReportedPart,
   type ReportedShutter,
+  shutterElevations,
 } from './parts-report'
 export { FormworkBom, FormworkPartsList } from './parts-summary'
 export { FormworkAssemblyNode } from './schema'
-export { type SolvedShutter, solveShuttersForHost } from './solve'
+export { type SolvedShutter, shutterLabel, solveShuttersForHost } from './solve'
 export {
   castableHostIds,
   type ProjectFormwork,

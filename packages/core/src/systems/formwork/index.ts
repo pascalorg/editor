@@ -284,6 +284,14 @@ export {
   type WallWarningKind,
   wallDesign,
 } from './design'
+export {
+  type ElevationFace,
+  type ElevationPiece,
+  elevationCaveats,
+  FORMWORK_ELEVATION_DESCRIPTION,
+  type ShutterElevation,
+  type TieBlockedBy,
+} from './elevation'
 export { type BomHire, bomHire, type HireLine, strikingInputFor } from './hire'
 export {
   type BomLabour,

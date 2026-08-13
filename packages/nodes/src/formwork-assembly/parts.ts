@@ -6,6 +6,7 @@ import {
   type FormworkSystem,
   type PressureEnvelope,
   partMark,
+  type ShutterElevation,
   type StripPack,
   type TieField,
 } from '@pascal-app/core/formwork'
@@ -60,6 +61,16 @@ export interface PartCollector {
   tag: (mark: string, mesh: Mesh) => void
   /** Adds a mesh that is not a shutter part — a scaffold tube, an access platform. */
   add: (mesh: Mesh) => void
+  /**
+   * Records the face as a shop drawing, for the builders that have one.
+   *
+   * Off the same loops that place the meshes and emit the parts, for the reason the parts
+   * themselves are: an elevation drawn from the layout a second time is a second layout, and
+   * the first thing a second layout does is put a tie in a panel the model draws whole.
+   * Nothing here is a new figure — every rectangle is a piece already emitted, in the pour's
+   * own frame rather than the element's.
+   */
+  draw: (drawing: ShutterElevation) => void
   /** The group and the marked parts, overrides applied. */
   finish: () => BuiltFormwork
 }
@@ -118,6 +129,15 @@ export interface BuiltFormwork {
   /** Every part of this shutter, marked, with the assembly's overrides applied. */
   parts: FormworkPart[]
   evidence: ShutterEvidence
+  /**
+   * The shutter as a shop elevation, where the kind has one.
+   *
+   * Walls only, and that is the shape of the thing rather than a gap: a slab is decked to a
+   * plan and a column clamped to a schedule, and neither is an elevation of a face. Absent
+   * on a wall too where nothing was formed — a drawing of no panels reads as a wall that
+   * needs none.
+   */
+  elevation?: ShutterElevation
 }
 
 /**
@@ -133,7 +153,11 @@ export interface BuiltFormwork {
 export function collectParts(group: Group, node: FormworkAssemblyNode): PartCollector {
   const parts: FormworkPart[] = []
   const found: ShutterEvidence = { packs: [] }
+  let drawing: ShutterElevation | undefined
   return {
+    draw(elevation) {
+      drawing = elevation
+    },
     evidence(more) {
       if (more.packs) found.packs.push(...more.packs)
       if (more.gangs) found.gangs = [...(found.gangs ?? []), ...more.gangs]
@@ -158,7 +182,12 @@ export function collectParts(group: Group, node: FormworkAssemblyNode): PartColl
       group.add(mesh)
     },
     finish() {
-      return { group, parts: applyPartOverrides(parts, node.partOverrides), evidence: found }
+      return {
+        group,
+        parts: applyPartOverrides(parts, node.partOverrides),
+        evidence: found,
+        ...(drawing ? { elevation: drawing } : {}),
+      }
     },
   }
 }

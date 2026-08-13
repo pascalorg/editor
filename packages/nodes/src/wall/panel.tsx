@@ -45,6 +45,7 @@ import {
   FormworkConstructionSection,
   FormworkCoverageList,
   FormworkDesignReport,
+  FormworkElevationSection,
   FormworkPartsList,
   PourLimitInput,
   PourSequenceFields,
@@ -347,6 +348,11 @@ export default function WallPanel() {
           </PanelSection>
           <PanelSection title="Formwork parts">
             <FormworkPartsList hostId={node.id as AnyNodeId} />
+          </PanelSection>
+          {/* After the parts, because the drawing is how a mark in that list is found on the
+              wall — and before the bill, which is what to order rather than how to set it. */}
+          <PanelSection title="Shutter elevation">
+            <FormworkElevationSection hostId={node.id as AnyNodeId} />
           </PanelSection>
           <PanelSection title="Formwork bill of materials">
             <FormworkBom hostId={node.id as AnyNodeId} />

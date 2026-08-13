@@ -1,8 +1,10 @@
 import {
+  type ElevationPiece,
   type FormworkPartSpec,
   type FormworkSystem,
   fitCorner,
   governingCapacity,
+  type ShutterElevation,
   type WallDesign,
 } from '@pascal-app/core/formwork'
 import type { WallNode } from '@pascal-app/core/schema'
@@ -183,7 +185,7 @@ function alignRuns(runs: readonly FaceRun[], stations: readonly number[]): FaceR
 }
 
 /** What a piece is called, so a filler and a site-cut board are not both `panel`. */
-function pieceKindName(piece: PlannedPiece['piece']): string {
+function pieceKindName(piece: PlannedPiece['piece']): 'panel' | 'filler' | 'cut' {
   return piece.kind === 'panel' ? 'panel' : piece.kind === 'filler' ? 'filler' : 'cut'
 }
 
@@ -507,6 +509,18 @@ export function buildWallFormwork(
   const formTop = coursed?.courses.at(-1)?.topM ?? topY
   if (formTop - formBottom <= 0) return parts.finish()
 
+  // The shop elevation, filled from the loops below rather than from the layout again.
+  // Every rectangle here is a piece those loops already emitted, restated in the pour's
+  // own frame — see `elevation.ts` for why that frame and not one of the other three.
+  const drawnFaces = new Map<'side-a' | 'side-b', ElevationPiece[]>()
+  const alongMm = (m: number) => (m - spanStart) * 1000
+  const upMm = (m: number) => (m - baseY) * 1000
+  const drawPiece = (role: 'side-a' | 'side-b', piece: ElevationPiece) => {
+    const held = drawnFaces.get(role)
+    if (held) held.push(piece)
+    else drawnFaces.set(role, [piece])
+  }
+
   // Corner units, placed before the panels because the panel run starts clear of
   // them: an outside leg wraps the neighbouring core and so is longer than the
   // inside leg it pairs with. Only the owner's unit is billed, but both walls
@@ -523,7 +537,19 @@ export function buildWallFormwork(
       )
       leg.name = `${cornerPartName(run.entry)}-${index}-${side}`
       leg.position.set((lo + hi) / 2, (formBottom + formTop) / 2, sign * faceOffset)
-      parts.emit(cornerSpec(run, system, role, formTop - formBottom), leg)
+      const mark = parts.emit(cornerSpec(run, system, role, formTop - formBottom), leg)
+      // A leg stands the full lift and belongs to no course, and it can start before the
+      // pour does: an outside leg wraps the core it turns onto, which is outside this
+      // wall's footprint, so a negative station here is the leg reaching past the corner
+      // rather than a figure to clamp.
+      drawPiece(role, {
+        mark,
+        kind: 'corner',
+        xMm: alongMm(lo),
+        yMm: upMm(formBottom),
+        widthMm: (hi - lo) * 1000,
+        heightMm: (formTop - formBottom) * 1000,
+      })
     }
   }
 
@@ -573,6 +599,20 @@ export function buildWallFormwork(
           } else {
             parts.tag(firstBandMark, board)
           }
+          // One rectangle per band, sharing the panel's one mark — the same relationship
+          // the meshes have, and the reason a drawing's rectangles are not a count. Drawn
+          // to the piece's own extent rather than the mesh's: `PANEL_GAP` is a hair taken
+          // off so two boxes do not z-fight, and a shutter set out 2 mm short of its own
+          // layout is a shutter with a 2 mm gap in it.
+          drawPiece(role, {
+            mark: firstBandMark,
+            kind: pieceKindName(piece),
+            xMm: alongMm(lo),
+            yMm: upMm(band.lo),
+            widthMm: (hi - lo) * 1000,
+            heightMm: bandHeight * 1000,
+            courseIndex,
+          })
         }
       }
     }
@@ -745,8 +785,26 @@ export function buildWallFormwork(
   // the same component the design report prints.
   const tieCapacity = design.tie ? governingCapacity(design.tie) : undefined
   const tieLengthMm = (thickness + PANEL_THICKNESS * 2) * 1000
+  const drawnTies: ShutterElevation['ties'] = []
+  const droppedTies: ShutterElevation['tiesDropped'] = []
   for (const [index, station] of stations.entries()) {
-    if (!passable(station.x, station.y)) continue
+    if (!passable(station.x, station.y)) {
+      // The only place a dropped station exists. A tie that is never drawn emits no part,
+      // so an elevation reading the parts back could not tell a station the grid never
+      // offered from one the wall could not use — and it is the second that leaves a band
+      // untied and gets queried against the engineer's drawing.
+      droppedTies.push({
+        xMm: alongMm(station.x),
+        yMm: upMm(station.y),
+        because: openings.some(
+          (o) =>
+            station.x > o.left && station.x < o.right && station.y > o.bottom && station.y < o.top,
+        )
+          ? 'opening'
+          : 'corner',
+      })
+      continue
+    }
     const tie = new Mesh(
       new BoxGeometry(TIE_SIZE, TIE_SIZE, thickness + PANEL_THICKNESS * 2),
       tieMaterial,
@@ -757,7 +815,7 @@ export function buildWallFormwork(
     // the design's own arithmetic rather than a second calculation off the geometry.
     const row = rowAt(design, (station.y - baseY) * 1000)
     const forceKn = row?.forceKn ?? 0
-    parts.emit(
+    const tieMark = parts.emit(
       {
         kind: 'tie',
         locus: {
@@ -786,6 +844,7 @@ export function buildWallFormwork(
       },
       tie,
     )
+    drawnTies.push({ xMm: alongMm(station.x), yMm: upMm(station.y), mark: tieMark })
   }
 
   // Walers (waling beams) on both faces, backing the panels so ties bear
@@ -889,6 +948,42 @@ export function buildWallFormwork(
       const scaffoldZ = sign * (faceOffset + PANEL_THICKNESS / 2 + WALER_DEPTH + SCAFFOLD_STANDOFF)
       buildScaffoldSide(parts, side, sign, spanStart, spanEnd, baseY, topY, scaffoldZ)
     }
+  }
+
+  // The drawing, once every face is on it. Nothing is computed here that was not placed
+  // above — this only says which frame the figures are already in, and orders each face's
+  // rectangles the way a shutter is set: along the run, course by course from the base.
+  if (drawnFaces.size > 0) {
+    parts.draw({
+      runMm: spanLength * 1000,
+      formBaseMm: upMm(formBottom),
+      concreteTopMm: upMm(topY),
+      formTopMm: upMm(formTop),
+      courses: (coursed?.courses ?? []).map((course) => ({
+        baseMm: upMm(course.baseM),
+        topMm: upMm(course.topM),
+      })),
+      openings: openings.map((opening) => ({
+        id: opening.id,
+        xMm: alongMm(opening.left),
+        yMm: upMm(opening.bottom),
+        widthMm: (opening.right - opening.left) * 1000,
+        heightMm: (opening.top - opening.bottom) * 1000,
+      })),
+      ties: drawnTies,
+      tiesDropped: droppedTies,
+      // Which of the two `tieStations` paths answered, because a reader who takes the
+      // factory's grid for a calculated spacing sets a rod 25 mm off a hole.
+      tiesFrom: stations.length === 0 ? 'none' : drilled ? 'drilled-holes' : 'solved-spacing',
+      faces: [...drawnFaces.entries()]
+        .sort(([first], [second]) => first.localeCompare(second))
+        .map(([role, pieces]) => ({
+          role,
+          pieces: pieces.sort(
+            (a, b) => a.yMm - b.yMm || a.xMm - b.xMm || a.mark.localeCompare(b.mark),
+          ),
+        })),
+    })
   }
 
   return parts.finish()
