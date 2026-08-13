@@ -585,6 +585,37 @@ describe('applyFormworkSettingsPatch — the sheets the ply comes out of', () =>
       false,
     )
   })
+
+  test('a stated pump rate merges beside the plant it is in series with', () => {
+    const result = apply(node({ concreteSupply: { batchPlantOutputM3PerHour: 40 } }), {
+      concreteSupply: { pumpRateM3PerHour: 15 },
+    })
+
+    expect(result.writes?.concreteSupply).toEqual({
+      batchPlantOutputM3PerHour: 40,
+      pumpRateM3PerHour: 15,
+    })
+  })
+
+  test('null unstates one end of the supply and leaves the other', () => {
+    // The distinction the group is for: a pump taken off the job is not a plant of zero.
+    const result = apply(
+      node({ concreteSupply: { batchPlantOutputM3PerHour: 40, pumpRateM3PerHour: 15 } }),
+      { concreteSupply: { pumpRateM3PerHour: null } },
+    )
+
+    expect(result.writes?.concreteSupply).toEqual({ batchPlantOutputM3PerHour: 40 })
+  })
+
+  test('a supply figure of nought, or of a plant that does not exist, is refused', () => {
+    expect(
+      FormworkSettingsPatch.safeParse({ concreteSupply: { pumpRateM3PerHour: 0 } }).success,
+    ).toBe(false)
+    expect(
+      FormworkSettingsPatch.safeParse({ concreteSupply: { batchPlantOutputM3PerHour: 900 } })
+        .success,
+    ).toBe(false)
+  })
 })
 
 describe('formworkSettingsReport', () => {
@@ -691,6 +722,21 @@ describe('formworkSettingsReport', () => {
 
     expect(report.resolved.sheets).toEqual(sheets)
     expect(report.stated?.sheets).toEqual(sheets)
+  })
+
+  test('an unstated concrete supply reads as null, not as a plant of some assumed size', () => {
+    const report = formworkSettingsReport(node({ parts: { sheathingId: 'film-faced-ply-18' } }))
+
+    expect(report.resolved.concreteSupply).toBeNull()
+    expect(report.stated?.concreteSupply).toBeNull()
+  })
+
+  test('a stated concrete supply is echoed in both halves of the report', () => {
+    const concreteSupply = { batchPlantOutputM3PerHour: 40, pumpRateM3PerHour: 15 }
+    const report = formworkSettingsReport(node({ concreteSupply }))
+
+    expect(report.resolved.concreteSupply).toEqual(concreteSupply)
+    expect(report.stated?.concreteSupply).toEqual(concreteSupply)
   })
 
   test('curing is reported unstated rather than resolved to a default', () => {

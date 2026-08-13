@@ -162,6 +162,12 @@ const REMEDIES: Record<InvariantId, FormworkRemedy> = {
     field: 'crane',
     note: 'A hook height is a fact about the crane on the site, so this is a write only where the recorded figure is wrong. Where it is right, the gang is picked with shorter slings or split — both rigging and layout decisions, and neither a call.',
   },
+  POUR_RATE_OVER_CONCRETE_SUPPLY: {
+    kind: 'choice',
+    tool: 'set_formwork_settings',
+    field: 'riseRateMH',
+    note: 'Two answers and both are calls somebody makes off the software: state the rate the concrete actually supports, or raise the supply — more plant, or a bigger pump. Writing the slower rate is the honest design, because the pressure this form is built for is a pressure this pour never develops; it is offered rather than applied because a rate is a project setting and re-designs every shutter in the scene.',
+  },
   PANEL_PRESSURE_OVER_RATING: {
     kind: 'choice',
     tool: 'set_formwork_settings',

@@ -337,6 +337,27 @@ describe('validate_formwork', () => {
     expect(tie?.elementIds).toEqual(['wall_2'])
   })
 
+  test('reports a stated rate the concrete supply cannot feed, once a supply is stated', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    // Nothing to check until somebody records how fast the concrete arrives.
+    const before = await validate(tools, { levelId: 'level_1' })
+    expect(before.findings.some((f) => f.invariant === 'POUR_RATE_OVER_CONCRETE_SUPPLY')).toBe(
+      false,
+    )
+
+    await call(tools, 'set_formwork_settings', {
+      placement: { riseRateMH: 3 },
+      concreteSupply: { batchPlantOutputM3PerHour: 1 },
+    })
+
+    const after = await validate(tools, { levelId: 'level_1' })
+    const starved = after.findings.find((f) => f.invariant === 'POUR_RATE_OVER_CONCRETE_SUPPLY')
+    expect(starved?.severity).toBe('warning')
+    expect(starved?.message).toContain('m³/h')
+  })
+
   test('keeps the two severities apart rather than reporting one count', async () => {
     const { tools } = scene()
     await shutter(tools, 'wall_1')

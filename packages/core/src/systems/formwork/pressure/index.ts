@@ -72,10 +72,16 @@ export {
   dinPressure,
 } from './din-18218'
 export {
+  RATE_GOVERNING_LABELS,
+  type RateGoverning,
   RISE_RATE_REFUSAL_LABELS,
   type RiseRateLimit,
   type RiseRateRefusal,
   riseRateLimit,
+  SUPPLY_SOURCE_LABELS,
+  type SupplyRate,
+  type SupplySource,
+  supplyRiseRate,
 } from './permitted-rate'
 export {
   ACI_COLUMN_PLAN_LIMIT_M,

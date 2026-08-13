@@ -144,6 +144,17 @@ export interface FormworkSettings {
    * fact is missing rather than showing a sheet count for sheets nobody buys.
    */
   sheets: NonNullable<FormworkProjectSettingsNode['sheets']> | undefined
+  /**
+   * How fast the concrete can arrive, or `undefined`.
+   *
+   * The eighth undefaulted field, and the one whose absence changes an answer rather than
+   * withholding one: a rise rate has always been read as the project's decision, and this
+   * is the fact that can contradict it. There is nothing conservative to fall back to in
+   * either direction — a shipped output reports every small pour as starved and a generous
+   * one reports a supply nobody booked — so absent means the supply check is not performed
+   * and the surfaces say which figure is missing.
+   */
+  concreteSupply: NonNullable<FormworkProjectSettingsNode['concreteSupply']> | undefined
 }
 
 /**
@@ -170,6 +181,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   crane: undefined,
   logistics: undefined,
   sheets: undefined,
+  concreteSupply: undefined,
 }
 
 /**
@@ -241,6 +253,7 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
     crane: node.crane,
     logistics: node.logistics,
     sheets: node.sheets,
+    concreteSupply: node.concreteSupply,
   }
 }
 
@@ -281,6 +294,7 @@ export type FormworkSettingsGroup =
   | 'crane'
   | 'logistics'
   | 'sheets'
+  | 'concreteSupply'
 
 /**
  * Merge a patch into one of the settings sub-objects, returning the value to write

@@ -223,6 +223,9 @@ const RFI_TEMPLATES: Record<InvariantId, RfiTemplate | null> = {
   // is anything genuinely unanswerable here, and that is a note on the finding rather than
   // a different addressee this list has.
   PANEL_PRESSURE_OVER_RATING: null,
+  // A plant's output and a pump's rate are temporary-works facts somebody on this job
+  // booked, so the answer is on site rather than with the designer of the permanent work.
+  POUR_RATE_OVER_CONCRETE_SUPPLY: null,
 }
 
 /**

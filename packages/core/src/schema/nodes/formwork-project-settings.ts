@@ -628,6 +628,40 @@ export const FormworkSheetSettings = z.object({
 export type FormworkSheetSettings = z.infer<typeof FormworkSheetSettings>
 
 /**
+ * How fast the concrete can actually arrive — the third thing that limits a rise rate.
+ *
+ * `placement.riseRateMH` is what the project *intends* to pour at, and the panel rating is
+ * what the form can *take*. Neither is what the job can be *fed*. A 6 m² plan area at 2 m/h
+ * wants 12 m³ an hour, and a plant sending 8 turns that pour into 1.33 m/h whatever the
+ * programme says — so a rate stated faster than the supply sustains is not a conservative
+ * design, it is a design of a pour that will not happen. It goes the other way too, and
+ * that is the case worth stating: a stated rate the supply cannot reach means the *pressure*
+ * the form was built for is never developed, and the shutter is over-built rather than
+ * unsafe. Either way the reader wants to know which of the three governs.
+ *
+ * Both figures are the job's own facts, undefaulted for the rates' reason. A plant's output
+ * is a booking with a supplier and a pump rate is the machine on this site, and there is no
+ * conservative fallback: a figure set low reports every pour as starved, and one set high
+ * reports a supply nobody arranged. Absent means the check is not performed and says so.
+ *
+ * They are two fields rather than one because they are two constraints in series and the
+ * slower wins — a 40 m³/h plant behind a 15 m³/h pump delivers 15 — and a reader told only
+ * "15" cannot tell whether to ring the supplier or hire a bigger pump.
+ */
+export const ConcreteSupplySettings = z.object({
+  /** What the batching plant sustains for this job, m³/h — the booking, not the peak. */
+  batchPlantOutputM3PerHour: z.number().finite().positive().max(500).optional(),
+  /**
+   * What the pump or the crane and skip place, m³/h.
+   *
+   * The placing end rather than the mixing end. State it where placing is the narrower of
+   * the two, which on a column or a wall poured by skip it usually is.
+   */
+  pumpRateM3PerHour: z.number().finite().positive().max(500).optional(),
+})
+export type ConcreteSupplySettings = z.infer<typeof ConcreteSupplySettings>
+
+/**
  * How the concrete is cured, which is what decides when the form comes off.
  *
  * A separate group from `placement` rather than three more fields in it, because it
@@ -682,6 +716,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   crane: FormworkCraneSettings.optional(),
   logistics: FormworkLogisticsSettings.optional(),
   sheets: FormworkSheetSettings.optional(),
+  concreteSupply: ConcreteSupplySettings.optional(),
 }).describe(
   dedent`
   Formwork project settings - the pour every shutter in the scene is designed against. One per scene.
@@ -699,6 +734,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - schedule: calendar days (not working days — a hire is charged over a weekend) for erecting a shutter before its pour and for getting the plant back after striking. The pour dates themselves are per pour, on each formwork-assembly's pourAt. Absent means the programme reports the pour and strike days only
   - crane: the site's own crane — its load chart as capacity against radius, the height under the hook, the widest gang that can be moved, and the minimum sling angle. A capacity curve rather than a rating because a tower crane rated 8 t lifts 2.2 t at the jib tip, and a gang is checked at the radius it is actually set at. Absent means each face is grouped as one gang and nothing is checked against a lift — there is no conservative default crane, and a shipped curve would pass gangs that do not lift and fail gangs that do
   - logistics: what one lorry carries and how many minutes of hook time a pick takes, which is what turns a bill's weight into loads and a lifting schedule into crane hours. The two costs every total in this model has excluded since the money arrived, and both figures are facts about this job's own plant rather than about a product: a payload is the lorry the yard sends and a cycle time is this crew on this crane. Absent means the takeoff carries no transport and no craneage at all, as an absent norm means it carries no hours
+  - concreteSupply: how fast the concrete can arrive — the batching plant's output and the pump or skip's placing rate, m³/h. The third limit on a rise rate, beside the rate the project states and the pressure the panels are rated for: a 6 m² pour at 2 m/h wants 12 m³/h, and a plant sending 8 makes it 1.33 whatever the programme says. Two fields because they are two constraints in series and the slower governs, and a reader told only the answer cannot tell whether to ring the supplier or hire a bigger pump. Absent means the check is not performed rather than passed
   - sheets: the sheet stock the yard buys its ply out of, plus what it racks the remainder of and how much it loses to handling. Separate from parts.sheathingId because that names a grade and a grade has no size — only sheet stock carries a width and a length, and which one a job buys is a commercial fact about the job. This is what turns the cut boards on the bill into sheets to order; the sheets are a purchasing figure beside the bill rather than a line in it, because the boards are already billed. Absent means no cut list at all
   `,
 )

@@ -568,6 +568,36 @@ const SHEET_STOCK_IDS = SHEET_STOCK.map((entry) => entry.id)
  * no width and no length, and a nest cannot open one. So this is checked against sheet stock
  * alone, and the refusal says which list to pick from.
  */
+/**
+ * How fast the concrete can arrive — the third limit on a rise rate.
+ *
+ * Two fields rather than one because they are two constraints in series: a plant sending 40
+ * behind a pump placing 15 delivers 15, and a model told to record "15" cannot say whether
+ * the remedy is a supplier or a bigger pump.
+ */
+const CONCRETE_SUPPLY_PATCH = z.object({
+  batchPlantOutputM3PerHour: z
+    .number()
+    .finite()
+    .positive()
+    .max(500)
+    .nullable()
+    .optional()
+    .describe(
+      'what the batching plant sustains for this job, m³/h — the booking rather than the plant’s peak rating. Ask the user: this is an arrangement with a supplier and there is nothing to infer it from',
+    ),
+  pumpRateM3PerHour: z
+    .number()
+    .finite()
+    .positive()
+    .max(500)
+    .nullable()
+    .optional()
+    .describe(
+      'what the placing end manages, m³/h — the pump, or the crane and skip. State it where placing is the narrower of the two, which on a column or a wall poured by skip it usually is. Not the same figure as placement.riseRateMH: that is metres of height per hour and this is cubic metres of concrete per hour, and the plan area is what turns one into the other',
+    ),
+})
+
 const SHEETS_PATCH = z.object({
   stockIds: z
     .array(z.string().max(120))
@@ -732,6 +762,9 @@ export const formworkSettingsPatchInput = {
   sheets: SHEETS_PATCH.optional().describe(
     'the sheet stock the yard buys its ply out of, plus what it skims off each edge, what it racks the remainder of and what it loses to handling — what turns the cut boards already on the bill into sheets somebody orders. Ask the user for the sizes and never infer them from parts.sheathingId: that is the face grade and a grade has no dimensions, so a sheathing id stated here is refused. Until this is recorded there is no cut list at all, which is the honest answer — nesting against every sheet in the catalog would answer for a merchant rather than for this job and report a count nobody can fill. The sheets are a purchasing figure beside the bill rather than a line in it: the boards are already billed as cut ply, so the sheets are the same material counted a second way and are in no weight, no owned/hired split and no cost',
   ),
+  concreteSupply: CONCRETE_SUPPLY_PATCH.optional().describe(
+    'how fast the concrete can actually arrive — the batching plant’s output and the placing rate, m³/h. The third limit on a rate of rise, beside the rate the project states in placement and the pressure the panels are rated for: a 6 m² pour stated at 2 m/h wants 12 m³/h, and a plant sending 8 makes it 1.33 whatever the programme says. Ask the user for both; a supply figure you invent reports every small pour as starved or every large one as fed. Until this is recorded the supply is not checked at all, and the stated rate is designed to as if the concrete were unlimited',
+  ),
   labourNorms: LABOUR_NORMS_PATCH.optional().describe(
     "how long this project's own gang takes to erect and to strike one of each kind of part, in man-hours. Ask the user for these and never supply them: published constants do exist — CPWD's Analysis of Rates, Spon's, RSMeans — and none of them can be used here, because they are per m² of a whole trade operation that already contains the panels, the backing, the ties and the strike, so spreading one over a bill of parts charges the same work several times over. An output norm is also a fact about a crew rather than about a product or a code: the same gang on its tenth identical floor beats its own figure from the first, so there is nothing conservative to fall back to. Until this is recorded the takeoff carries no labour at all, which is the honest answer and is why every cost figure in this model says labour is outside it. A kind you leave out is reported as uncovered fittings rather than costed at zero. Needs rates.gangRatePerHour to become money",
   ),
@@ -742,11 +775,11 @@ export type FormworkSettingsPatch = z.infer<typeof FormworkSettingsPatch>
 
 /** The description every surface's write tool carries, so the guidance cannot diverge either. */
 export const SET_FORMWORK_SETTINGS_DESCRIPTION =
-  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Seven of the groups are commercial or site facts rather than structural and behave differently: ownedStock, rates, labourNorms, schedule, crane, logistics and sheets are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes, a lead time you invent becomes a delivery date somebody books against, an output norm you invent becomes a programme a gang is held to, a crane capacity you invent becomes a lift somebody signs off, a lorry payload you invent becomes a delivery count somebody books haulage against, and a sheet size you invent becomes a ply order cut to a size the merchant does not sell. labourNorms is the one to be most careful with, because published labour constants exist and none of them fits: they are per m² of a whole trade operation, and an output is a fact about a crew rather than about a product. The schedule group holds only the two lead times; the pour dates they are measured from belong to the shutters and are set with set_pour_date. The logistics group is quantities and the money for them is in rates: a payload and a cycle time there, transportPerLoad and cranePerHour here, and neither half prices anything without the other.'
+  'Set the project pour settings — the inputs every shutter in the scene is designed against. These are project decisions, not per-element ones: the concrete arrives from one plant at one temperature and rises at a rate the pump sets, and the design code follows the contract. Pass only the groups you are changing, and only the fields within them. Pass null for a field to hand it back to the conservative shipped default. These re-design every shutter in the scene the next time it is solved, so you do not need to call attach_formwork afterwards — inspect_formwork_parts and the design report already read the new pour. What they do not change is how many shutters an element has: that is set_pour_limits. Ask the engineer for these figures rather than guessing — the rate of rise, the concrete temperature and the pressure code are the three inputs the whole design hangs off. Eight of the groups are commercial or site facts rather than structural and behave differently: ownedStock, rates, labourNorms, schedule, crane, logistics, sheets and concreteSupply are never assumed, so leave them absent unless the user gives you figures. A rate you invent becomes a price on a takeoff someone quotes, a lead time you invent becomes a delivery date somebody books against, an output norm you invent becomes a programme a gang is held to, a crane capacity you invent becomes a lift somebody signs off, a lorry payload you invent becomes a delivery count somebody books haulage against, and a sheet size you invent becomes a ply order cut to a size the merchant does not sell. labourNorms is the one to be most careful with, because published labour constants exist and none of them fits: they are per m² of a whole trade operation, and an output is a fact about a crew rather than about a product. The schedule group holds only the two lead times; the pour dates they are measured from belong to the shutters and are set with set_pour_date. The logistics group is quantities and the money for them is in rates: a payload and a cycle time there, transportPerLoad and cranePerHour here, and neither half prices anything without the other. concreteSupply is the newest and is not a cost at all: it is how fast the concrete arrives, in m³/h, and it is what decides whether the rate of rise in placement is a rate this pour can actually achieve — do not confuse the two, because a rate of rise is metres of height per hour and a supply is cubic metres of concrete per hour, and the pour’s plan area is what turns one into the other.'
 
 /** The description every surface's read tool carries. */
 export const INSPECT_FORMWORK_SETTINGS_DESCRIPTION =
-  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. Two more groups behave the same way. schedule, the two lead times between a pour date and a delivery date, is null until somebody records it, and while it is null a takeoff shows plant free the day it is struck and no delivery date at all. labour is this project’s own output norms — man-hours to erect and to strike one of each kind of part — and while it is null the takeoff carries no labour at all, which is why every cost figure in this model says labour is outside it and is normally the largest thing that is. Its gang rate lives in rates.gangRatePerHour, so norms without that rate are hours with no money and a rate without norms prices nothing. crane is the fifth: the site’s load chart as capacity against radius, plus the height under the hook, the widest gang that can be moved and the minimum sling angle. While it is null every face is grouped as one gang and no gang is checked against a lift, so a pick weight in the takeoff is a figure and not a verdict. Read the curve before saying a gang lifts — capacity falls along the jib, and the figure that governs is the one at the radius the gang is actually set at. logistics is the sixth: what one lorry carries, how long one pick takes and what fraction of the loads come back. While it is null the takeoff carries no transport and no craneage — the two costs every total in this model has excluded from the day it could print one. Its money is in rates.transportPerLoad and rates.cranePerHour, so a payload without a charge per load counts lorries and prices none of them. sheets is the seventh: the sheet stock the ply is nested out of, the thresholds for racking an offcut, and the handling waste. While it is null the takeoff carries no cut list — the sheet count for the cut boards on its own bill — because a sheathing grade has no size and nesting against the whole catalog would answer for a merchant rather than for this job. When it is stated, read the sheet count as a purchasing figure beside the bill and never add it to one: the boards are already billed as cut ply, so the sheets are that same material counted a second way and are in no weight, no owned/hired split and no cost. One settings record per scene, so this takes no arguments.'
+  'The project pour settings every shutter in the scene is designed against, and — for each figure — whether the project stated it or the engine assumed it. Read this before quoting any pressure or spacing: a design report figure derived from an assumed 7 m/h rate of rise at 20 °C is not the same claim as one the job actually stated. It also reports two commercial groups that are not design inputs: ownedStock, what the yard owns by catalog id, which is what the takeoff splits owned from hired against; and rates, what the project pays per catalog id plus its currency and minimum hire period, which is what a cost is derived from. Null against either means nobody has recorded it — not a yard that owns nothing and not a job that costs nothing. Read rates before quoting any figure from inspect_project_formwork as a price: where it is null there is no money in the takeoff at all, and where it is partial the total is a floor. Two more groups behave the same way. schedule, the two lead times between a pour date and a delivery date, is null until somebody records it, and while it is null a takeoff shows plant free the day it is struck and no delivery date at all. labour is this project’s own output norms — man-hours to erect and to strike one of each kind of part — and while it is null the takeoff carries no labour at all, which is why every cost figure in this model says labour is outside it and is normally the largest thing that is. Its gang rate lives in rates.gangRatePerHour, so norms without that rate are hours with no money and a rate without norms prices nothing. crane is the fifth: the site’s load chart as capacity against radius, plus the height under the hook, the widest gang that can be moved and the minimum sling angle. While it is null every face is grouped as one gang and no gang is checked against a lift, so a pick weight in the takeoff is a figure and not a verdict. Read the curve before saying a gang lifts — capacity falls along the jib, and the figure that governs is the one at the radius the gang is actually set at. logistics is the sixth: what one lorry carries, how long one pick takes and what fraction of the loads come back. While it is null the takeoff carries no transport and no craneage — the two costs every total in this model has excluded from the day it could print one. Its money is in rates.transportPerLoad and rates.cranePerHour, so a payload without a charge per load counts lorries and prices none of them. sheets is the seventh: the sheet stock the ply is nested out of, the thresholds for racking an offcut, and the handling waste. While it is null the takeoff carries no cut list — the sheet count for the cut boards on its own bill — because a sheathing grade has no size and nesting against the whole catalog would answer for a merchant rather than for this job. When it is stated, read the sheet count as a purchasing figure beside the bill and never add it to one: the boards are already billed as cut ply, so the sheets are that same material counted a second way and are in no weight, no owned/hired split and no cost. concreteSupply is the eighth: the batching plant’s output and the placing rate, m³/h. Read it before quoting any pressure or spacing as what this pour produces, because it is the one group that can contradict another: where the supply is slower than the stated rate of rise, the pour rises at the supply’s rate and the form is designed for a pressure it never sees. While it is null nothing is checked and the stated rate is designed to as if the concrete were unlimited, which is the conservative direction and still not what will happen on the day. One settings record per scene, so this takes no arguments.'
 
 /** The first stock id that names nothing in the catalog, as the error a model reads back. */
 function unknownStockId(patch: Readonly<Record<string, unknown>>): string | undefined {
@@ -1102,6 +1135,12 @@ export interface FormworkSettingsReport {
      * grade and carries no dimensions, and a nest needs a width and a length.
      */
     sheets: NonNullable<FormworkProjectSettingsNode['sheets']> | null
+    /**
+     * Null where no supply is recorded, which means the stated rate of rise is designed to
+     * as if the concrete were unlimited — and the supply check reports itself unperformed
+     * rather than passed.
+     */
+    concreteSupply: NonNullable<FormworkProjectSettingsNode['concreteSupply']> | null
   }
   /**
    * Only what the project actually said. Anything absent here but present in `resolved`
@@ -1123,6 +1162,7 @@ export interface FormworkSettingsReport {
     labour: NonNullable<FormworkProjectSettingsNode['labour']> | null
     logistics: NonNullable<FormworkProjectSettingsNode['logistics']> | null
     sheets: NonNullable<FormworkProjectSettingsNode['sheets']> | null
+    concreteSupply: NonNullable<FormworkProjectSettingsNode['concreteSupply']> | null
   } | null
   /**
    * The four figures the engine supplies when nobody has. There is no curing entry
@@ -1162,6 +1202,7 @@ export function formworkSettingsReport(
       labour: resolved.labour ?? null,
       logistics: resolved.logistics ?? null,
       sheets: resolved.sheets ?? null,
+      concreteSupply: resolved.concreteSupply ?? null,
     },
     stated: node
       ? {
@@ -1180,6 +1221,7 @@ export function formworkSettingsReport(
           labour: node.labour ?? null,
           logistics: node.logistics ?? null,
           sheets: node.sheets ?? null,
+          concreteSupply: node.concreteSupply ?? null,
         }
       : null,
     assumedDefaults: {

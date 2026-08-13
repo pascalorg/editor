@@ -33,7 +33,12 @@ import { MIN_WORKABLE_PIECE_MM, type StripPack } from '../layout/strip-pack'
 import { splitIntoLifts } from '../pours/lifts'
 import type { PourLift, PourLimits, PourUnit } from '../pours/types'
 import { pourLimitsForElement, pourUnitsInScene } from '../pours/units'
-import { type PressureEnvelope, RISE_RATE_REFUSAL_LABELS, type RiseRateLimit } from '../pressure'
+import {
+  type PressureEnvelope,
+  RISE_RATE_REFUSAL_LABELS,
+  type RiseRateLimit,
+  SUPPLY_SOURCE_LABELS,
+} from '../pressure'
 import type { Finding, FormworkRemedy, InvariantId, TieField, ValidationReport } from './types'
 
 /**
@@ -1535,7 +1540,7 @@ function panelRatings(
   const out: Finding[] = []
   for (const [elementId, limit] of riseRates) {
     if (!scoped.has(elementId)) continue
-    if (limit.designKnM2 <= limit.permissibleKnM2) continue
+    if (limit.permissibleKnM2 === undefined || limit.designKnM2 <= limit.permissibleKnM2) continue
     const advice =
       limit.maxRateMH === undefined
         ? RISE_RATE_REFUSAL_LABELS[limit.refusal ?? 'no-rate-is-slow-enough']
@@ -1555,6 +1560,45 @@ function panelRatings(
               field: 'riseRateMH',
               note: `Pour at ${limit.maxRateMH.toFixed(2)} m/h or slower, or warm the mix or stiffen the consistency. The rate is a project setting, so changing it re-designs every shutter in the scene — which is why it is offered rather than applied.`,
             },
+      ),
+    )
+  }
+  return out
+}
+
+/**
+ * A pour stated faster than the concrete can arrive.
+ *
+ * The third limit on a rate of rise, and the only one that is not about the form at all.
+ * `panelRatings` above says the pour is too fast for the panels; this says it is too fast for
+ * the plant — 12 m³/h into a 6 m² wall is 2 m/h and no programme makes it 3.
+ *
+ * A warning rather than an error, and the direction is why: a starved pour develops *less*
+ * pressure than the design, so the shutter is over-built rather than overloaded and nobody is
+ * in danger. What is wrong is the design's own premise. The lift was priced, tied and braced
+ * for a pressure this pour never reaches, and the pour takes longer than planned — which is
+ * the cold-joint risk `POUR_VOLUME_OVER_SUPPLY` reports for a volume and this one reports for
+ * a rate. Two different failures on the same site, and a reader wants both.
+ *
+ * It reads `governing` rather than comparing the figures again. `riseRateLimit` already picked
+ * the slowest of the three on one shape precisely so no consumer can reach a different answer,
+ * and a second comparison here is how a warning comes to disagree with the design it quotes.
+ */
+function supplyRates(
+  riseRates: ReadonlyMap<AnyNodeId, RiseRateLimit>,
+  scoped: ReadonlySet<AnyNodeId>,
+): Finding[] {
+  const out: Finding[] = []
+  for (const [elementId, limit] of riseRates) {
+    if (!scoped.has(elementId)) continue
+    if (limit.governing !== 'concrete-supply' || limit.supply === undefined) continue
+    const supply = limit.supply
+    out.push(
+      finding(
+        'POUR_RATE_OVER_CONCRETE_SUPPLY',
+        'warning',
+        [elementId],
+        `${elementId}: ${supply.outputM3PerHour} m³/h from ${SUPPLY_SOURCE_LABELS[supply.governing]} over a ${supply.planAreaM2.toFixed(2)} m² plan area is ${supply.sustainableRateMH.toFixed(2)} m/h, against ${limit.statedRateMH.toFixed(2)} m/h stated — so the form is designed for ${limit.designKnM2.toFixed(1)} kN/m² this pour never develops, and the lift takes longer to place than the programme says.`,
       ),
     )
   }
@@ -1825,6 +1869,14 @@ function unavailable(
       needs:
         'the panel ratings behind each layout — pass `riseRates` from the same solve the panels came from; a conventional shutter has none to compare against',
     })
+    // Named separately even though both come off `riseRates`, because they go missing for
+    // different reasons: a conventional shutter has no rating and every pour has a supply,
+    // so a project that has recorded no plant output is silent here whatever it is built of.
+    out.push({
+      invariant: 'POUR_RATE_OVER_CONCRETE_SUPPLY',
+      needs:
+        'how fast the concrete arrives — record `concreteSupply.batchPlantOutputM3PerHour` or `pumpRateM3PerHour`, and every pour’s stated rate is checked against what its plan area can be fed',
+    })
   }
   return out
 }
@@ -1900,6 +1952,10 @@ export function validateFormwork(
       ? []
       : gangCapacity(gangs, options.crane, new Set(scoped.map((element) => element.id)))),
     ...panelRatings(
+      options.riseRates ?? new Map<AnyNodeId, RiseRateLimit>(),
+      new Set(scoped.map((element) => element.id)),
+    ),
+    ...supplyRates(
       options.riseRates ?? new Map<AnyNodeId, RiseRateLimit>(),
       new Set(scoped.map((element) => element.id)),
     ),

@@ -7,6 +7,7 @@ import {
   pressureEnvelope,
   type RiseRateLimit,
   riseRateLimit,
+  supplyRiseRate,
   verticalElementKind,
 } from '../pressure'
 import type { FormworkSettings } from '../settings'
@@ -59,14 +60,21 @@ export function designPlacement(
 }
 
 /**
- * What the panels on this shutter are rated for, and how fast it may be poured.
+ * What limits this pour's rate of rise: the panels' rating, the concrete supply, or nothing.
  *
  * The rating is read off the panels the layout actually used — the *lowest* of them,
  * because a run closed with an 900 mm panel rated 80 kN/m² is a run rated 80 whatever
  * stands beside it — rather than off the system, which publishes a range its widths do
- * not all reach. `undefined` where the layout named no catalog panel at all: a conventional
- * or bespoke shutter is sized by `wallDesign` against its own members, and there is no
- * published rating to compare a pressure to.
+ * not all reach. A layout that named no catalog panel carries no rating: a conventional or
+ * bespoke shutter is sized by `wallDesign` against its own members and publishes nothing to
+ * compare a pressure to. It is still a pour with a supply, though, which is why the answer
+ * is `undefined` only where there is neither a rating nor a stated supply — a job of site-cut
+ * ply is the commonest case of all, and a supply check that skipped it would be a check that
+ * runs on the jobs least likely to need it.
+ *
+ * The plan area is the product of the plan dimensions rather than a figure of its own: the
+ * two numbers a caller already passes for `verticalElementKind` are the pour's footprint, and
+ * a second area argument would be a second source of truth for the same rectangle.
  */
 export function packRiseRateLimit(
   settings: FormworkSettings,
@@ -81,12 +89,17 @@ export function packRiseRateLimit(
       piece.kind === 'panel' ? [permissiblePressureKnM2(piece.panel, kind)] : [],
     ),
   )
-  if (ratings.length === 0) return undefined
+  const supply = supplyRiseRate(
+    settings.concreteSupply,
+    planDimensionsM.reduce((area, side) => area * side, 1),
+  )
+  if (ratings.length === 0 && supply === undefined) return undefined
   return riseRateLimit(
     settings.pressureStandard,
     settings.concrete,
     designPlacement(settings, liftHeightM, planDimensionsM),
-    Math.min(...ratings),
+    ratings.length === 0 ? undefined : Math.min(...ratings),
     pressureAtDepth(envelope, liftHeightM),
+    supply,
   )
 }

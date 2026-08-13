@@ -146,6 +146,7 @@ export function FormworkSettingsPanel() {
   const schedule = node?.schedule ?? {}
   const logistics = node?.logistics ?? {}
   const sheets = node?.sheets ?? {}
+  const concreteSupply = node?.concreteSupply ?? {}
   const stated = node !== undefined
 
   return (
@@ -227,6 +228,45 @@ export function FormworkSettingsPanel() {
           onChange={(value) => setGroupField('placement', { pumpedFromBase: value })}
           value={placement.pumpedFromBase}
         />
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Concrete supply">
+        <GroupNote>
+          How fast the concrete can actually arrive, which is the third limit on the rate above —
+          the other two being that rate and what the panels are rated for. A 6 m² pour stated at 2
+          m/h wants 12 m³ an hour, and a plant sending 8 makes it 1.33 whatever the programme says.
+          Unstated means the rate above is designed to as if the concrete were unlimited.
+        </GroupNote>
+        <OptionalNumberField
+          hint="What the batching plant sustains for this job — the booking rather than the plant's peak rating."
+          label="Plant output"
+          max={500}
+          min={1}
+          onChange={(value) =>
+            setGroupField('concreteSupply', { batchPlantOutputM3PerHour: value })
+          }
+          step={1}
+          unit="m³/h"
+          value={concreteSupply.batchPlantOutputM3PerHour}
+        />
+        <OptionalNumberField
+          hint="What the placing end manages — the pump, or the crane and skip. State it where placing is the narrower of the two, which on a column or a wall poured by skip it usually is."
+          label="Placing rate"
+          max={500}
+          min={1}
+          onChange={(value) => setGroupField('concreteSupply', { pumpRateM3PerHour: value })}
+          step={1}
+          unit="m³/h"
+          value={concreteSupply.pumpRateM3PerHour}
+        />
+        <GroupNote>
+          Both are asked because they are two constraints in series and the slower governs: a plant
+          sending 40 behind a pump placing 15 delivers 15, and a reader told only the answer cannot
+          tell whether to ring the supplier or hire a bigger pump. Where the supply is the slowest
+          of the three, buildability reports it as a warning rather than an error — the form is
+          over-built rather than overloaded, because the pressure it was designed for is one this
+          pour never develops.
+        </GroupNote>
       </PanelSection>
 
       <PanelSection defaultExpanded={false} title="Curing">

@@ -860,9 +860,58 @@ describe('panel pressure against the published rating', () => {
     ).toBeUndefined()
   })
 
+  it('still answers for a bespoke shutter once a supply is stated', () => {
+    // The commonest job of all — site-cut ply — and the one a rating-only shape skipped.
+    const set = { ...settings(2), concreteSupply: { pumpRateM3PerHour: 0.5 } }
+    const bespoke = [packStrip(system, 40, { heightMm: 2700 })]
+    const limit = packRiseRateLimit(set, bespoke, 3, [5, 0.2], designEnvelope(set, 3, [5, 0.2]))
+    expect(limit?.permissibleKnM2).toBeUndefined()
+    expect(limit?.refusal).toBeUndefined()
+    // 0.5 m³/h into a 5 × 0.2 m wall is 0.5 m/h against 2 stated.
+    expect(limit?.governing).toBe('concrete-supply')
+    expect(limit?.effectiveRateMH).toBe(0.5)
+  })
+
   it('declares itself unrun when no ratings are passed', () => {
     const report = validateFormwork([wall()] as AnyNode[])
     expect(report.notChecked.some((e) => e.invariant === 'PANEL_PRESSURE_OVER_RATING')).toBe(true)
+    // Its own entry, because the two go missing for different reasons.
+    expect(report.notChecked.some((e) => e.invariant === 'POUR_RATE_OVER_CONCRETE_SUPPLY')).toBe(
+      true,
+    )
+  })
+
+  it('reports a stated rate the plant cannot feed, and names which end of the supply', () => {
+    const w = wall()
+    // A 5 × 0.2 m wall is 1 m² of plan: 4 m³/h is 4 m/h, and the pump's 1.5 is 1.5.
+    const set = {
+      ...settings(3),
+      concreteSupply: { batchPlantOutputM3PerHour: 4, pumpRateM3PerHour: 1.5 },
+    }
+    const limit = packRiseRateLimit(set, packs, 3, [5, 0.2], designEnvelope(set, 3, [5, 0.2]))
+    expect(limit?.governing).toBe('concrete-supply')
+    expect(limit?.supply?.governing).toBe('pump')
+    const report = validateFormwork([w] as AnyNode[], {
+      riseRates: new Map([[w.id as AnyNodeId, limit as NonNullable<typeof limit>]]),
+    })
+    const finding = report.findings.find((f) => f.invariant === 'POUR_RATE_OVER_CONCRETE_SUPPLY')
+    // A warning, not an error: the form is over-built rather than overloaded.
+    expect(finding?.severity).toBe('warning')
+    expect(finding?.message).toContain('pump')
+    expect(finding?.message).toContain('1.50 m/h')
+  })
+
+  it('says nothing where the supply keeps up with the stated rate', () => {
+    const w = wall()
+    const set = { ...settings(2), concreteSupply: { batchPlantOutputM3PerHour: 20 } }
+    const limit = packRiseRateLimit(set, packs, 3, [5, 0.2], designEnvelope(set, 3, [5, 0.2]))
+    expect(limit?.governing).toBe('stated')
+    const report = validateFormwork([w] as AnyNode[], {
+      riseRates: new Map([[w.id as AnyNodeId, limit as NonNullable<typeof limit>]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'POUR_RATE_OVER_CONCRETE_SUPPLY')).toBe(
+      false,
+    )
   })
 })
 
