@@ -201,6 +201,7 @@ interface ProjectReport {
     committedPours: string[]
     noMoveBecause?: string
     moves: Array<{
+      key: string
       pourId: string
       assemblyIds: string[]
       days: number
@@ -1729,5 +1730,145 @@ describe('what has to happen before what', () => {
     expect(solved.acquire?.shortfallQuantity).toBe(0)
     expect(solved.sequence?.dependencies).toHaveLength(1)
     expect(solved.moveInsteadOfBuying).toBeUndefined()
+  })
+})
+
+/**
+ * Taking one of those proposals, from the chat surface.
+ *
+ * `apply-move.test.ts` owns the plan and the verdict, and `formwork.test.ts` the same round
+ * trip over MCP. What only this surface can get wrong is the graph it writes to: the model is
+ * handed a key by one tool and calls another with it, the write lands on a plain server-side
+ * graph rather than through a store, and the figure it quotes back has to come from a second
+ * solve of that graph — because a model repeating the proposal's own prediction as a result is
+ * indistinguishable from one that measured it.
+ */
+describe('apply_pour_move', () => {
+  interface MoveReply {
+    moveKey: string
+    catalogId: string
+    pourId: string
+    days: number
+    moved: Array<{ assemblyId: string; from: string; to: string }>
+    cleared: boolean
+    peakBefore: number
+    measuredPeak: number | null
+    predictedPeak: number
+    stillShortBy: number | null
+    raisedElsewhere: Array<{ catalogId: string; from: number; to: number }>
+    message: string
+  }
+
+  const shutterIds = (graph: SceneGraph): string[] =>
+    Object.values(graph.nodes as unknown as Record<string, { id: string; type: string }>)
+      .filter((node) => node.type === 'formwork-assembly')
+      .map((node) => node.id)
+  const dateOf = (graph: SceneGraph, id: string) =>
+    (graph.nodes as unknown as Record<string, { pourAt?: string }>)[id]?.pourAt
+
+  /** Three walls in cast order, two on one day, and one panel short of the peak. */
+  const shortWithAMove = async () => {
+    const built = async (owned: Record<string, number>) => {
+      const { graph, tools } = scene()
+      for (const [index, elementId] of ['wall_1', 'wall_2', 'wall_3'].entries()) {
+        await shutter(tools, elementId)
+        await call(tools, 'set_element_construction', { elementId, castOrder: index + 1 })
+      }
+      await call(tools, 'set_formwork_settings', {
+        schedule: { returnLeadDays: 3 },
+        stock: { owned },
+      })
+      const dates = ['2026-03-02', '2026-03-02', '2026-03-30']
+      for (const [index, id] of shutterIds(graph).entries())
+        await call(tools, 'set_pour_date', { assemblyId: id, pourAt: dates[index] as string })
+      return { graph, tools, solved: await project(tools) }
+    }
+    const empty = await built({})
+    const panel = empty.solved.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+    const short = await built({ [panel.catalogId]: panel.mostAtOnce - 1 })
+    const answer = short.solved.moveInsteadOfBuying?.find(
+      (entry) => entry.catalogId === panel.catalogId,
+    )
+    return { ...short, panel, answer, move: answer?.moves[0] }
+  }
+
+  test('the key the read printed is the key this takes, and every member lands', async () => {
+    // The round trip. A model composing a key by hand is what this avoids, so it is taken
+    // verbatim out of the reply that printed it.
+    const { graph, tools, move } = await shortWithAMove()
+    const before = Object.fromEntries(
+      (move?.assemblyIds ?? []).map((id) => [id, dateOf(graph, id)] as const),
+    )
+
+    const reply = JSON.parse(
+      await call(tools, 'apply_pour_move', { moveKey: move?.key as string }),
+    ) as MoveReply
+
+    expect(reply.moveKey).toBe(move?.key as string)
+    expect(reply.days).toBe(move?.days as number)
+    expect(reply.moved).toHaveLength((move?.assemblyIds ?? []).length)
+    for (const write of reply.moved) {
+      expect(write.from).toBe(before[write.assemblyId] as string)
+      expect(dateOf(graph, write.assemblyId)).toBe(write.to)
+    }
+  })
+
+  test('the peak quoted is the one a second solve measured, not the one proposed', async () => {
+    const { tools, panel, move } = await shortWithAMove()
+
+    const reply = JSON.parse(
+      await call(tools, 'apply_pour_move', { moveKey: move?.key as string }),
+    ) as MoveReply
+    const after = await project(tools)
+    const line = after.acquire?.items.find((item) => item.catalogId === panel.catalogId)
+
+    expect(reply.measuredPeak).toBe(line?.mostAtOnce as number)
+    expect(reply.stillShortBy).toBe(line?.shortBy as number)
+    expect(reply.cleared).toBe((line?.shortBy as number) === 0)
+    expect(reply.predictedPeak).toBe(move?.peakAfter as number)
+    expect(reply.message).toContain('re-read the takeoff')
+  })
+
+  test('applying a move books nothing, because the new day is nobody’s yet', async () => {
+    // The division `commit_pour` draws, one step along: the pour has just moved, so the day
+    // is an intent and agreeing it is a second call.
+    const { graph, tools, move } = await shortWithAMove()
+
+    await call(tools, 'apply_pour_move', { moveKey: move?.key as string })
+
+    for (const id of move?.assemblyIds ?? []) {
+      expect(
+        'committedPourAt' in
+          ((graph.nodes as unknown as Record<string, Record<string, unknown>>)[id] ?? {}),
+      ).toBe(false)
+    }
+    expect((await project(tools)).committed).toBeUndefined()
+  })
+
+  test('a key the programme has moved past is refused rather than written', async () => {
+    // The same key twice. The float it was measured against is gone after the first write, so
+    // taking it again would date a pour against arithmetic nobody can reproduce.
+    const { graph, tools, move } = await shortWithAMove()
+    const key = move?.key as string
+    await call(tools, 'apply_pour_move', { moveKey: key })
+    const dates = Object.fromEntries(
+      (move?.assemblyIds ?? []).map((id) => [id, dateOf(graph, id)] as const),
+    )
+
+    const again = await call(tools, 'apply_pour_move', { moveKey: key })
+
+    expect(again).toContain('superseded')
+    for (const [id, pourAt] of Object.entries(dates)) expect(dateOf(graph, id)).toBe(pourAt)
+  })
+
+  test('a scope proposing no move says so rather than reporting a bad key', async () => {
+    // Two refusals whose remedies differ: nothing to accept at all, against a proposal that
+    // has been superseded. A model handed one for the other re-reads and calls again.
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const reply = await call(tools, 'apply_pour_move', { moveKey: 'panel|pour_1|8' })
+
+    expect(reply).toContain('Nothing in this scope proposes a move')
   })
 })

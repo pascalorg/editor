@@ -1,12 +1,21 @@
 'use client'
 
 import {
+  type AnyNode,
+  type AnyNodeId,
+  runAsSingleSceneHistoryStep,
+  useScene,
+} from '@pascal-app/core'
+import {
+  applyCommitPourPatch,
+  applyPourDatePatch,
   COMMITMENT_GAP_LABELS,
   COST_GAP_LABELS,
   CUT_GAP_LABELS,
   formatMoney,
   LABOUR_GAP_LABELS,
   LOGISTICS_GAP_LABELS,
+  moveKey,
   PART_KIND_LABELS,
   PRECEDENCE_REASON_LABELS,
   RESEQUENCE_REFUSAL_LABELS,
@@ -19,10 +28,11 @@ import {
 } from '@pascal-app/core/formwork'
 import { ActionButton, downloadText, PanelSection } from '@pascal-app/editor'
 import { Download } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { type FormworkMoveOutcome, moveOutcome, plannedMove } from './apply-move'
 import { FormworkCutSheet } from './cut-sheet'
 import { Note, Readout, Section, WarningLine } from './report-ui'
-import { projectFormworkCaveats } from './solve-project'
+import { type ProjectFormwork, projectFormworkCaveats, solveProjectFormwork } from './solve-project'
 import { takeoffCsv, useProjectFormwork, useTakeoffLevels } from './takeoff'
 
 /**
@@ -76,6 +86,98 @@ function costBasis(hasLabour: boolean, hasLogistics: boolean): string {
   return `${head} — and ${elsewhere.join(' and ')} ${elsewhere.length === 1 ? 'is a section' : 'are sections'} below rather than part of this total.`
 }
 
+/** A taken move, and whether the reader also said the new day was agreed. */
+interface TakenMove {
+  result: FormworkMoveOutcome | { refusal: string }
+  booked: boolean
+}
+
+/**
+ * Take one proposal: write every member's date, optionally book it, then re-sweep.
+ *
+ * One history step over all of it, because a monolithic pour moves whole — a Ctrl-Z that
+ * returned one of three walls to its old day would leave an operation split across two dates
+ * that nobody programmed, and the peak the move was measured against assumed all of them.
+ *
+ * Every date goes through `applyPourDatePatch` rather than straight onto the node, so the day
+ * this writes is checked by the same gate a hand-typed date and both AI surfaces go through.
+ * The shift is arithmetic on a date the user stated, so a refusal here means the stored date was
+ * already impossible — worth saying rather than worth writing past.
+ *
+ * Then the whole project is solved again, from the store's nodes rather than the `solution` this
+ * render closed over, because the verdict is what a second sweep measures. The proposal's own
+ * `peakAfter` came off a copy of the programme, and a panel that reported that figure back would
+ * be quoting the arithmetic that proposed the move.
+ */
+function useApplyMove(solution: ProjectFormwork, levelId?: string) {
+  return useCallback(
+    (key: string, book: boolean): FormworkMoveOutcome | { refusal: string } => {
+      const plan = plannedMove(solution, key)
+      if (plan.refusal !== undefined || plan.writes === undefined) {
+        return { refusal: plan.refusal ?? 'Nothing to apply.' }
+      }
+
+      const writes: Array<{ id: AnyNodeId; patch: Partial<AnyNode> }> = []
+      for (const write of plan.writes) {
+        const id = write.assemblyId as AnyNodeId
+        if (useScene.getState().nodes[id] === undefined) {
+          return { refusal: `${write.assemblyId} is no longer in the scene.` }
+        }
+        const dated = applyPourDatePatch({ pourAt: write.pourAt })
+        if (dated.error !== undefined) return { refusal: dated.error }
+        if (!book) {
+          writes.push({ id, patch: dated.writes as Partial<AnyNode> })
+          continue
+        }
+        // Committed against the day just written rather than the day it was booked on before:
+        // the point of this button is that the new date is the agreed one.
+        const committed = applyCommitPourPatch({ committed: true }, write.pourAt, write.assemblyId)
+        if (committed.error !== undefined) return { refusal: committed.error }
+        writes.push({ id, patch: { ...dated.writes, ...committed.writes } as Partial<AnyNode> })
+      }
+
+      runAsSingleSceneHistoryStep(useScene, () => {
+        const scene = useScene.getState()
+        // No rebuild, unlike the validation panel's fix: a date changes when the shutter stands,
+        // not what it is made of, so nothing here re-splits an element or restates a layout.
+        for (const write of writes) scene.updateNode(write.id, write.patch)
+      })
+
+      const after = solveProjectFormwork(useScene.getState().nodes as Record<string, AnyNode>, {
+        parentId: levelId,
+      })
+      return moveOutcome(solution, after, plan)
+    },
+    [levelId, solution],
+  )
+}
+
+/**
+ * What the last move did, held at panel level rather than on the row.
+ *
+ * `FixOutcomeNote`'s reason: a move that works removes its own row — the shortage it was against
+ * is gone, so the answer it was offered under goes with it — and a verdict stored on the row
+ * would be missing in exactly the case worth reporting most.
+ */
+function MoveOutcomeNote({ taken }: { taken: TakenMove }) {
+  const { result, booked } = taken
+  const bad = 'refusal' in result || !result.cleared || result.raised.length > 0
+  return (
+    <div
+      className={
+        bad
+          ? 'px-1 text-[10px] text-amber-500/90 leading-snug'
+          : 'px-1 text-[10px] text-emerald-400/90 leading-snug'
+      }
+    >
+      {'refusal' in result ? result.refusal : result.message}
+      {'refusal' in result || !booked
+        ? ''
+        : ' The new day is booked, so the takeoff will not offer to move this pour again and will report it if the date changes.'}
+    </div>
+  )
+}
+
 export function FormworkTakeoffPanel() {
   const levels = useTakeoffLevels()
   const [levelId, setLevelId] = useState<string | undefined>(undefined)
@@ -113,6 +215,10 @@ export function FormworkTakeoffPanel() {
   // different version of is the one state in this panel a reader cannot infer from anything.
   const booked = new Set(commitments?.committedPourIds ?? [])
   const driftByPour = new Map((commitments?.drifts ?? []).map((drift) => [drift.pourId, drift]))
+  const applyMove = useApplyMove(solution, scopedLevel?.id)
+  const [taken, setTaken] = useState<TakenMove | undefined>(undefined)
+  const takeMove = (key: string, book: boolean) =>
+    setTaken({ result: applyMove(key, book), booked: book })
 
   return (
     <div className="subtle-scrollbar flex h-full flex-col overflow-y-auto">
@@ -764,6 +870,11 @@ export function FormworkTakeoffPanel() {
                 to raise an order, and the cheapest answer is often that nothing is short on any
                 other day. A refusal is shown as loudly as a move — "this one has to be bought"
                 is the answer, not a missing row. */}
+            {/* Outside the section below rather than inside it, because a move that worked takes
+                the whole section with it: the shortage is gone, so there is no answer left to
+                hang a verdict on. Between the shortfall and the proposals is where it reads —
+                directly under the figure it just changed. */}
+            {taken !== undefined && <MoveOutcomeNote taken={taken} />}
             {resequence !== undefined && resequence.answers.length > 0 && (
               <Section title="Move instead of buying">
                 {resequence.answers.map((answer) => (
@@ -781,15 +892,39 @@ export function FormworkTakeoffPanel() {
                     </div>
                     {answer.refusal === undefined ? (
                       answer.moves.map((move) => (
-                        <div className="text-[10px] text-muted-foreground" key={move.pourId}>
-                          {move.days > 0 ? 'Push' : 'Pull'} {move.pourId} {Math.abs(move.days)} d to{' '}
-                          {move.toDate}: peak {move.peakBefore} → {move.peakAfter}
-                          {move.clearsShortage
-                            ? ', nothing short'
-                            : `, still ${move.shortfallAfter} short`}
-                          {move.raises.length === 0
-                            ? ''
-                            : ` · costs ${move.raises.map((rise) => `${rise.description} ${rise.from} → ${rise.to}`).join(', ')}`}
+                        <div className="space-y-0.5" key={move.pourId}>
+                          <div className="text-[10px] text-muted-foreground">
+                            {move.days > 0 ? 'Push' : 'Pull'} {move.pourId} {Math.abs(move.days)} d
+                            to {move.toDate}: peak {move.peakBefore} → {move.peakAfter}
+                            {move.clearsShortage
+                              ? ', nothing short'
+                              : `, still ${move.shortfallAfter} short`}
+                            {move.raises.length === 0
+                              ? ''
+                              : ` · costs ${move.raises.map((rise) => `${rise.description} ${rise.from} → ${rise.to}`).join(', ')}`}
+                          </div>
+                          {/* Two buttons in this order, and never one that does both. Taking the
+                              proposal is a decision about the programme; agreeing the day with a
+                              hire desk and the following trade is a decision somebody else is
+                              party to, and a single button would book a day nobody had been
+                              asked about — the combination `applyCommitPourPatch` exists to
+                              keep apart. */}
+                          <div className="flex gap-1">
+                            <button
+                              className="rounded-md border border-border/50 px-1.5 py-0.5 text-[10px] text-foreground/80 hover:bg-accent/40"
+                              onClick={() => takeMove(moveKey(answer.catalogId, move), false)}
+                              type="button"
+                            >
+                              Move the pour
+                            </button>
+                            <button
+                              className="rounded-md border border-border/50 px-1.5 py-0.5 text-[10px] text-foreground/80 hover:bg-accent/40"
+                              onClick={() => takeMove(moveKey(answer.catalogId, move), true)}
+                              type="button"
+                            >
+                              Move and book it
+                            </button>
+                          </div>
                         </div>
                       ))
                     ) : (

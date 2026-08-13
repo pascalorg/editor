@@ -194,8 +194,15 @@ function toDateString(dayNumber: number): string {
   return new Date(dayNumber * MS_PER_DAY).toISOString().slice(0, 10)
 }
 
-/** A date shifted by whole days, or `undefined` if the input was not a date. */
-function shiftDays(date: string, days: number): string | undefined {
+/**
+ * A date shifted by whole days, or `undefined` if the input was not a date.
+ *
+ * Exported for the write that applies a resequencing move, which has to land the pour on the
+ * day the proposal was measured for. Same parser as the arithmetic above it, deliberately: a
+ * second one would be a second place to roll 2026-02-30 forward, and a written date that
+ * disagreed with the swept one by a day would clear a shortage on a day the peak never fell on.
+ */
+export function shiftDays(date: string, days: number): string | undefined {
   const start = calendarDayNumber(date)
   if (start === undefined) return undefined
   return toDateString(start + days)

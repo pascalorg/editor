@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../../operations'
+import { registerApplyPourMove } from './apply-pour-move'
 import { registerAttachFormwork } from './attach-formwork'
 import { registerCommitPour } from './commit-pour'
 import { registerFixFormworkFinding } from './fix-formwork-finding'
@@ -145,6 +146,27 @@ import { registerValidateFormwork } from './validate-formwork'
  * committed pour afterwards is allowed. Sites move booked pours. The drift is reported back
  * through `inspect_project_formwork` as a call somebody owes the desk, rather than blocked as
  * an error that would only make an agent release the commitment and lose what was agreed.
+ *
+ * ## Why `apply_pour_move` closes the surface
+ *
+ * With the two above, this surface could read a shortage, propose the move that relieves it, and
+ * then do nothing about it: `moveInsteadOfBuying` said "push formwork-assembly_2 eight days" and
+ * the only way to take that proposal was a `set_pour_date` per member, composed by the agent from
+ * a date it had to trust itself to add up. Which is the one operation in the feature where a
+ * monolithic pour can be silently broken in half — the members move whole or the operation is not
+ * the operation the peak was swept over.
+ *
+ * So it takes a key and no date, `fix_formwork_finding`'s shape, and for the stronger version of
+ * its reason. That tool refuses a caller's own cap because the check already searched for one;
+ * this refuses a caller's own date because the shift *is* the proposal — the key carries the days,
+ * a superseded key is refused rather than applied, and a stale one silently taken would write a
+ * date measured against float that no longer exists, breaking the very caveat the proposals print.
+ *
+ * And it reports the peak a second solve measured beside the peak the proposal predicted. The
+ * proposal was swept over a copy of the programme; the write landed in the scene. Where the two
+ * disagree the measurement is the answer, in either direction — a move that did better than
+ * offered is the same fault as one that did worse, and printing whichever reads well would be
+ * choosing which sweep to believe on how it sounds.
  */
 export function registerFormworkTools(server: McpServer, operations: SceneOperations): void {
   registerListCastableElements(server, operations)
@@ -164,8 +186,10 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerAttachFormwork(server, operations)
   registerSetPourDate(server, operations)
   registerCommitPour(server, operations)
+  registerApplyPourMove(server, operations)
 }
 
+export { applyPourMoveOutput } from './apply-pour-move'
 export { attachFormworkOutput } from './attach-formwork'
 export { commitPourOutput } from './commit-pour'
 export { fixFormworkFindingOutput } from './fix-formwork-finding'

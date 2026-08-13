@@ -426,6 +426,15 @@ export {
   type WidthBandRule,
 } from './measurement'
 export {
+  APPLY_POUR_MOVE_DESCRIPTION,
+  type ApplyPourMovePatch,
+  ApplyPourMovePatch as ApplyPourMovePatchSchema,
+  applyPourMoveInput,
+  moveKey,
+  noSuchMove,
+  resequenceMoveByKey,
+} from './move-patch'
+export {
   applyFormworkPartPatch,
   type FormworkPartPatch,
   FormworkPartPatch as FormworkPartPatchSchema,
@@ -562,6 +571,7 @@ export {
   type ScheduleGap,
   scheduleInPourOrder,
   scheduleOccupancyDays,
+  shiftDays,
 } from './schedule'
 export {
   applyCommitPourPatch,

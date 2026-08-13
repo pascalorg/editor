@@ -214,6 +214,7 @@ interface BillReply {
     committedPours: string[]
     noMoveBecause?: string
     moves: Array<{
+      key: string
       pourId: string
       assemblyIds: string[]
       days: number
@@ -773,6 +774,7 @@ describe('the formwork MCP tools', () => {
         'attach_formwork',
         'set_pour_date',
         'commit_pour',
+        'apply_pour_move',
       ]),
     )
   })
@@ -3348,6 +3350,144 @@ describe('the formwork MCP tools', () => {
       expect(reply.acquire?.shortfallQuantity).toBe(0)
       expect(reply.sequence?.dependencies.length).toBeGreaterThan(0)
       expect(reply.moveInsteadOfBuying).toBeUndefined()
+    })
+
+    /**
+     * Taking one of those proposals.
+     *
+     * `apply-move.test.ts` owns the plan and the verdict. What only this layer can get wrong is
+     * the round trip: that the key a read printed is the key this write accepts, that every
+     * member of a monolithic pour landed, that the peak reported came from a second sweep of the
+     * written scene rather than off the proposal, and that a key measured against a programme
+     * that has since moved is refused — which is the one failure here that writes a real date
+     * against arithmetic nobody can reproduce.
+     */
+    describe('taking a resequencing proposal', () => {
+      interface MoveReply {
+        moveKey: string
+        catalogId: string
+        pourId: string
+        days: number
+        moved: Array<{ assemblyId: string; from: string; to: string }>
+        cleared: boolean
+        peakBefore: number
+        measuredPeak: number | null
+        predictedPeak: number
+        stillShortBy: number | null
+        raisedElsewhere: Array<{ catalogId: string; from: number; to: number }>
+        message: string
+      }
+
+      /** The scene of the move test above: two walls on one day, short by one, room after. */
+      const shortWithAMove = async () => {
+        const empty = await inOrder({ stock: { owned: {} } })
+        const panel = empty.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+        const reply = await inOrder({
+          stock: { owned: { [panel.catalogId]: panel.mostAtOnce - 1 } },
+        })
+        const answer = reply.moveInsteadOfBuying?.find(
+          (entry) => entry.catalogId === panel.catalogId,
+        )
+        return { panel, reply, answer, move: answer?.moves[0] }
+      }
+      const dateOf = (id: string) =>
+        (bridge.getNodes()[id as AnyNodeId] as unknown as { pourAt?: string }).pourAt
+
+      test('the key off the read is the key the write takes, and every member lands', async () => {
+        // The round trip the pair exists for. A key composed by hand is the failure this
+        // avoids, so it is taken verbatim out of the reply that printed it.
+        const { move } = await shortWithAMove()
+        const before = Object.fromEntries(
+          (move?.assemblyIds ?? []).map((id) => [id, dateOf(id)] as const),
+        )
+
+        const applied = await call<MoveReply>('apply_pour_move', { moveKey: move?.key as string })
+
+        expect(applied.moveKey).toBe(move?.key as string)
+        expect(applied.days).toBe(move?.days as number)
+        expect(applied.moved).toHaveLength((move?.assemblyIds ?? []).length)
+        for (const write of applied.moved) {
+          expect(write.from).toBe(before[write.assemblyId] as string)
+          expect(dateOf(write.assemblyId)).toBe(write.to)
+          expect(write.to).not.toBe(write.from)
+        }
+      })
+
+      test('the peak reported is the one a second sweep measured, not the one proposed', async () => {
+        // The whole reason this tool re-solves. The proposal swept a copy of the programme;
+        // the figure quoted has to be readable back out of the scene the write landed in.
+        const { panel, move } = await shortWithAMove()
+
+        const applied = await call<MoveReply>('apply_pour_move', { moveKey: move?.key as string })
+        const after = await call<BillReply>('inspect_project_formwork')
+        const line = after.acquire?.items.find((item) => item.catalogId === panel.catalogId)
+
+        expect(applied.measuredPeak).toBe(line?.mostAtOnce as number)
+        expect(applied.stillShortBy).toBe(line?.shortBy as number)
+        expect(applied.cleared).toBe((line?.shortBy as number) === 0)
+        expect(applied.peakBefore).toBe(panel.mostAtOnce)
+        expect(applied.predictedPeak).toBe(move?.peakAfter as number)
+        // Where it cleared, the item is no longer among the shortages a move is proposed for —
+        // the read and the write agree about the same rack rather than each holding its own.
+        expect(
+          applied.cleared &&
+            after.moveInsteadOfBuying?.some((entry) => entry.catalogId === panel.catalogId),
+        ).toBeFalsy()
+      })
+
+      test('applying a move books nothing, because the new day is nobody’s yet', async () => {
+        const { move } = await shortWithAMove()
+
+        await call('apply_pour_move', { moveKey: move?.key as string })
+        const after = await call<BillReply>('inspect_project_formwork')
+
+        for (const id of move?.assemblyIds ?? []) {
+          expect(
+            'committedPourAt' in
+              (bridge.getNodes()[id as AnyNodeId] as unknown as Record<string, unknown>),
+          ).toBe(false)
+        }
+        expect(after.committed).toBeUndefined()
+      })
+
+      test('a key the programme has moved past is refused rather than written', async () => {
+        // The same key twice. After the first write the float it was measured against is gone,
+        // so the second call is a stale proposal — and a stale one taken silently writes a date
+        // against arithmetic that no longer holds.
+        const { move } = await shortWithAMove()
+        const key = move?.key as string
+        await call('apply_pour_move', { moveKey: key })
+        const dates = Object.fromEntries(
+          (move?.assemblyIds ?? []).map((id) => [id, dateOf(id)] as const),
+        )
+
+        const result = await client.callTool({
+          name: 'apply_pour_move',
+          arguments: { moveKey: key },
+        })
+
+        expect(result.isError).toBe(true)
+        const text = (result.content as Array<{ text: string }>)[0]?.text ?? ''
+        expect(text).toContain('superseded')
+        for (const [id, pourAt] of Object.entries(dates)) expect(dateOf(id)).toBe(pourAt)
+      })
+
+      test('a scope that proposes no move says so rather than reporting a bad key', async () => {
+        // Two refusals with different remedies: nothing to accept here at all, against a
+        // proposal that has been superseded. An agent handed one for the other retries.
+        load(withSettings(tallWall(), {}))
+        await call('attach_formwork', { elementId: 'wall_1' })
+
+        const result = await client.callTool({
+          name: 'apply_pour_move',
+          arguments: { moveKey: 'panel|pour_1|8' },
+        })
+
+        expect(result.isError).toBe(true)
+        expect((result.content as Array<{ text: string }>)[0]?.text).toContain(
+          'Nothing in this scope proposes a move',
+        )
+      })
     })
   })
 

@@ -22,6 +22,15 @@
  */
 
 export {
+  type FormworkMoveOutcome,
+  type FormworkMovePlan,
+  type KeyedPourMove,
+  keyedMoves,
+  moveOutcome,
+  type PourMoveWrite,
+  plannedMove,
+} from './apply-move'
+export {
   type CastableHostNode,
   type FormworkReconciliation,
   pourUnitsForHost,
