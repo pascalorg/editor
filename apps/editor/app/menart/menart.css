@@ -1,0 +1,89 @@
+/* Modernist — the design system behind `Menart 3D.dc.html`.
+   Everything is scoped to `.mn-root` so the zero-radius / 2px-rule system and
+   its palette never leak into the app's Tailwind theme, which is a different
+   system entirely. The first block is the design project's base palette
+   (`_ds/modernist-…/styles.css`); the block after it is the shell's own
+   semantic layer, which inverts ground and ink between the two themes. */
+
+.mn-root {
+  --color-bg: #f3f2f2;
+  --color-surface: #eae9e9;
+  --color-text: #201e1d;
+  --color-accent: #ec3013;
+  --color-divider: color-mix(in srgb, #201e1d 40%, transparent);
+  --color-neutral-400: #bab6b6;
+  --color-neutral-500: #9b9797;
+  --color-neutral-700: #605d5d;
+  --color-neutral-800: #444141;
+  --color-neutral-900: #2d2b2b;
+  --color-accent-500: #ff563c;
+  --color-accent-600: #dd2b0f;
+
+  --ground: var(--color-text);
+  --surface: var(--color-neutral-900);
+  --ink: var(--color-bg);
+  --muted: var(--color-neutral-500);
+  --faint: var(--color-neutral-400);
+  --rule: color-mix(in srgb, var(--color-bg) 22%, transparent);
+  --rule-strong: color-mix(in srgb, var(--color-bg) 40%, transparent);
+  --accent: var(--color-accent);
+  --accent-hi: var(--color-accent-500);
+  --accent-soft: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  --canvas: #14100f;
+  --logo-filter: invert(1);
+
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.mn-root[data-theme="light"] {
+  --ground: var(--color-bg);
+  --surface: var(--color-surface);
+  --ink: var(--color-text);
+  --muted: var(--color-neutral-800);
+  --faint: var(--color-neutral-700);
+  --rule: color-mix(in srgb, var(--color-text) 22%, transparent);
+  --rule-strong: var(--color-divider);
+  --accent-hi: var(--color-accent-600);
+  --accent-soft: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  --canvas: #e6e4e0;
+  --logo-filter: none;
+}
+
+/* No button reset here on purpose: Tailwind's preflight already zeroes the
+   background, colour and font, and it does so inside `@layer base`. An
+   unlayered `.mn-root button` rule would outrank every `bg-*` / `text-*`
+   utility in this directory and silently strip the accent buttons. */
+
+.mn-root :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mn-root ::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* The system pairs Archivo with a plain UI monospace for every metric and
+   kicker; that stack is not in the app's Tailwind theme, hence a class. */
+.mn-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+/* Size and colour stay on the element in Tailwind — only the resets that
+   inputs need, plus the placeholder tone, live here. */
+.mn-input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  color: var(--ink);
+  outline: none;
+}
+
+.mn-input::placeholder {
+  color: var(--faint);
+}
