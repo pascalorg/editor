@@ -54,6 +54,14 @@ og-test
 .claude/settings.local.json
 .vscode/launch.json
 
+# Per-tool copies of the shared skills in .agents/skills, which .claude/skills,
+# .cursor/skills and .codex/skills already reach by symlink
+.agent/
+.claude/commands/
+.cursor/commands/
+.pi/prompts/
+.pi/skills/
+
 #pi
 .pi-subagents
 

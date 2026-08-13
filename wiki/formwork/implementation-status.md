@@ -3,6 +3,15 @@
 What's left to ship, organized by plan phase. Measured against the master plan at
 `~/.claude/plans/currently-see-the-formwork-cozy-sky.md`.
 
+**The remainder is now also specified.** Everything this page describes as missing has been
+converted into an OpenSpec change at `openspec/changes/formwork-plan-remainder/` — eight
+capabilities, a design with its rejected alternatives, and 78 dependency-ordered tasks. This page
+stays the narrative source of truth for what is built and why; the change states what the unbuilt
+part owes, in scenarios that are testable. An agent picking the work up cold should start with
+`handoff.md` in that directory, which records where the last session stopped and the traps that
+are not visible from the code. Nothing under `openspec/specs/` was written for the shipped 88%:
+a delta describing behaviour that already ships can only go stale.
+
 ## Completion at a glance
 
 **~88% of line items, unchanged, and the reason it is unchanged is the honest part: P8's sequence-opt *half* closes — a proposed move can now be taken — and the row it sits on stays partial because value-engineering has not started.** The wall elevation landed this session, which is the one drawing that puts a part mark, a tie hole and a lift joint on the same sheet — the last thing the plan asked for on that row, after the RFI generator and the cut sheet. **Its hard part was the frame, not the rectangles.** Four solves position a face and none of them agree about where zero is: `FacePlan.courses[].pieces[]` measures in absolute metres along the element, `StripPiece` in millimetres from its run's start, `PartLocus`'s `run` variant in millimetres from `spanStart`, and a tie hole is positioned from the panel it is drilled through. Mixing any two puts a tie in the wrong panel, which is the one error on this drawing that reads as correct. The frame chosen is **millimetres from the pour unit's own origin**, because that is the frame a mark already encodes — `P-A-1-01250` is at 1250 by construction — so a wall in three lifts is three drawings each starting at zero. And the elevation is **emitted out of the build** rather than derived from the parts a second time, which is not an optimisation: a part carries a position and not an extent, so a panel's rectangle is not in the list at all, and a dropped tie station has no part to be absent from. What it omits is as load-bearing as what it draws, because unlike a cut sheet this drawing has a reader who already has one — a shop elevation is checked against the engineer's, so a station the drilled grid offers and this wall cannot use is reported as *dropped with its reason* rather than left out.
