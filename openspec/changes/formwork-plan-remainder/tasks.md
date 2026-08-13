@@ -1,28 +1,25 @@
-## 1. The pipeline, and the gap it can report
+## 1. The pipeline (void — it already exists)
 
-- [ ] 1.1 Add the gap-carrying phase-result shape in `packages/core/src/systems/formwork/` — a phase output is either a value or a "not performed, missing *input*, would have covered *these elements*" — with tests that a gap survives being folded into a downstream phase
-- [ ] 1.2 Add `solveFormwork(scene, settings, catalog) → FormworkSolution` composing the existing phase modules, consuming nothing new; no consumer is changed
-- [ ] 1.3 Test purity: identical inputs give an equal solution across two runs, and no result depends on wall-clock time or ambient locale
-- [ ] 1.4 Rebuild `packages/core` so `dist/` carries the pipeline before any nodes or MCP work reads it
+`solveProjectFormwork` in `packages/nodes/src/formwork-assembly/solve-project.ts` is the pipeline, every consumer already reads it, and the gap-carrying result shape ships ten times over as `CostGap`/`LabourGap`/… — see `design.md` decision 1 for why it cannot live in core. The four original items were written against a stale claim in the master plan's P1 row. One survives:
+
+- [ ] 1.3 Test purity of the *existing* `solveProjectFormwork`: identical inputs give an equal solution across two runs, and no result depends on wall-clock time or ambient locale
 
 ## 2. The phase-level gaps inside the pipeline
+
+Each of these lands in `solve-project.ts` or in the core phase module it calls, carries its own gap in the shipped `*Gap` / `*_GAP_LABELS` / `*Caveats()` idiom, and owes an unchanged-figure test over a project stating none of its new input — the discipline group 3 was going to carry, now that a fill reaches every surface at once.
 
 - [ ] 2.1 Phase 0: reject degenerate geometry before designing it — zero/negative dimensions, below-minimum thickness or height for the configured system, self-intersecting footprint — with the rejection reason per element and a project-level rejected count
 - [ ] 2.2 Test that a rejected element contributes to no quantity, cost or drawing, and that the rest of the project still solves
 - [ ] 2.3 Phase 1: carry formwork topology on the solution — formed faces, faces against earth/existing/blinding, meetings between elements, shared versus double-formed — rather than only re-deriving it in the validator
 - [ ] 2.4 Test the shared face is counted once in area, panels and cost, and an unformed face appears in no layout
 - [ ] 2.5 Phase 2: permitted construction-joint elevations as project data, respected by pour splitting, with the conflict reported when no permitted joint satisfies the pour limits, and solver-chosen boundaries labelled as such
-- [x] 2.6 Phase 3: concrete-supply check — batch-plant output and/or pump rate against the designed rise rate for the element's plan area — reporting the sustainable rate and naming supply as governing; absent supply reports "not performed"
+- [x] 2.6 Phase 3: concrete-supply check — **shipped `8c5743fd`** — batch-plant output and/or pump rate against the designed rise rate for the element's plan area — reporting the sustainable rate and naming supply as governing; absent supply reports "not performed"
 - [ ] 2.7 Phase 3: alternate-bay construction respected in the sequence, reporting the parity used
 - [ ] 2.8 Phase 10: strength/maturity striking criterion beside the elapsed-time one, reporting which governs and the accumulated maturity; a criterion lacking its inputs falls back to time and says so
 
-## 3. Migrating consumers onto the one solution
+## 3. Migrating consumers onto the one solution (void — they are already on it)
 
-- [ ] 3.1 Move the takeoff panel onto `solveFormwork`, with an unchanged-figure test over an existing fixture asserting every quantity and cost is identical before and after
-- [ ] 3.2 Move the design report on, same guard
-- [ ] 3.3 Move buildability validation on, same guard
-- [ ] 3.4 Move the cut sheet and the elevation on, same guard
-- [ ] 3.5 Move the editor chat reads and the MCP reads on, same guard, through `@pascal-app/nodes/formwork-assembly/headless` only — confirm `apps/editor/lib/server-imports.test.ts` still passes
+`takeoff.ts`, `takeoff-panel.tsx`, `validate-project.ts`, `value-engineer.ts`, `headless.ts`, `apps/editor/lib/chat-ai.ts` and five MCP tools all read `solveProjectFormwork` today. Nothing to migrate, no divergence to close. The unchanged-figure discipline these five items carried moves onto group 2, where a phase-level fill now changes every surface at once.
 
 ## 4. Catalog seed
 

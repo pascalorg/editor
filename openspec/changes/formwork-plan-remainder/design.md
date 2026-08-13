@@ -2,7 +2,7 @@
 
 See `proposal.md` — Why. The design-relevant state:
 
-- **The phases exist; the pipeline does not.** `packages/core/src/systems/formwork/` holds the phase modules — pressure, layout, accessories, sequence, striking, quantities, cost, validate — and each is called directly by whichever consumer needs it. There is no value that represents "the project's formwork". Every consumer therefore performs its own traversal, and the ones that need two phases wire them together themselves.
+- **The pipeline exists, and it is in `nodes`, not `core`.** `packages/nodes/src/formwork-assembly/solve-project.ts`'s `solveProjectFormwork(nodes, scope) → ProjectFormwork` already composes every phase — bom, weight, hire, supply, cost, labour, schedule, sets, acquisition, sequence, resequence, commitments, lifts, logistics, cut list — and every consumer already reads it: `takeoff.ts`, `takeoff-panel.tsx`, `validate-project.ts`, `value-engineer.ts`, `headless.ts`, `apps/editor/lib/chat-ai.ts` and five MCP tools. **This bullet said the opposite when it was written, and that error produced two whole task groups.** The claim it was taken from — the master plan's P1 row, "solver phases exist as modules, not wired into one pipeline" — was stale, and `wiki/formwork/implementation-status.md` had repeated it. What is genuinely unbuilt is the *phase-level* content of group 2, not the composition.
 - **Two shipped loops already set the pattern this change must follow.** `fix-finding` (a validation finding, keyed, fixed, re-validated) and the sequence-opt loop (`move-patch.ts` in core, `apply-move.ts` in nodes, `apply_pour_move` on both AI surfaces) both split into a keyed *decision* in core, a *plan and measure* pair in nodes that mutates nothing, and three thin callers that each write in their own layer. Value engineering is the third instance of the same shape.
 - **Cross-package tests read `dist/`.** `packages/nodes` and `packages/mcp` resolve `@pascal-app/core` to compiled output, so any core signature this change touches is invisible to their tests until core is rebuilt. `tooling/check-dist-parity.mjs` gates it.
 - **`apps/editor/app/api/**/route.ts` is a Server Component graph.** Anything the AI surface reaches must come through `@pascal-app/nodes/formwork-assembly/headless`, not the barrel. `apps/editor/lib/server-imports.test.ts` enforces it.
@@ -28,15 +28,13 @@ See `proposal.md` — Why. The design-relevant state:
 
 ## Decisions
 
-### The pipeline is a pure function returning one value, not a stateful solver or a core system
+### The pipeline is `solveProjectFormwork` in `nodes`, and the layer is the reason it cannot be in `core`
 
-`solveFormwork(scene, settings, catalog) → FormworkSolution` in `packages/core/src/systems/formwork/`. Phases stay as their own modules and the pipeline composes them; nothing is rewritten to live inside it.
+**Superseded decision, kept with its correction rather than deleted**, because the reasoning was sound against the wrong alternative and the next reader will otherwise re-make it. This originally read: `solveFormwork(scene, settings, catalog) → FormworkSolution` in `packages/core/src/systems/formwork/`, argued against a stateful core System. That argument still holds — a pure derivation makes "two consumers derive the same number differently" unrepresentable, where a system's invalidation only makes it unlikely — and the shipped function *is* that pure derivation. It is simply not, and cannot be, in core.
 
-*Why not a core System with subscriptions:* a system holds state and reacts to the bus, and every reported bug in this feature so far has come from two consumers deriving the same number differently, not from a missing invalidation. A pure function makes "two derivations" unrepresentable. Systems remain the right home for scene-graph reactions; this is a derivation.
+**The constraint is the layer, not systems-versus-function.** `solveProjectFormwork` depends on `solveShuttersForHost` → `buildFormwork`, which is nodes-layer geometry and pulls Three.js, and core must not import nodes. Two of its joins are only makeable at this layer and are documented in the file: `strikeTargetForPartKind` cannot tell a shore from a raker without the part's host, and `castOrder`/`pourId` sit on the *element* while a pour is a property of a *shutter*. A core `solveFormwork` would therefore be either a second name for one pipeline or an abstraction that cannot reach the geometry it needs.
 
-*Why one value rather than the phase-by-phase calls we have:* the phases that are unbuilt (9–12) are precisely the ones with no natural owner — they are project-wide, and there is nowhere project-wide to put them today. That is not a coincidence, it is the shape of the gap.
-
-*Migration is additive:* existing consumers keep their direct phase calls and are moved onto the solution one at a time, each move guarded by a test asserting the figure is unchanged. No consumer is rewritten in the same task that introduces the pipeline.
+*What the surviving decision is:* one derivation, pure, read by every consumer, living at the lowest layer that can see everything it joins — which is `nodes`. Group 2's phase-level fills go **into `solve-project.ts` and the core phase modules it calls**, not into a new composition.
 
 ### A phase that cannot run returns a stated gap, and gaps are a first-class part of the solution type
 
@@ -95,7 +93,7 @@ The rated-pressure check and the inverse solve for maximum rise rate share one d
 ## Risks / Trade-offs
 
 - **The pipeline recomputes the whole project on every read; a large project may be visibly slow.** → No cache (see Non-Goals). Mitigate by measuring against the largest existing test scene before moving any interactive panel onto it, and by keeping the phase modules individually callable so a hot path can still call one phase directly if measurement demands it.
-- **Migrating consumers onto the solution could silently change a figure.** → Each migration is its own task with a test asserting the figure is unchanged before and after, and no migration shares a commit with the pipeline's introduction.
+- ~~**Migrating consumers onto the solution could silently change a figure.**~~ → Void: the consumers are already on it. The live version of this risk is the opposite one — a phase-level fill added inside `solve-project.ts` changes a figure for *every* surface at once, so each of group 2's tasks owes the unchanged-figure test that group 3's migrations were going to carry.
 - **New optional schema fields must not perturb existing scenes.** → `formwork-deferred-clashes` carries an explicit "existing projects are unaffected" scenario; it is a regression test over a pre-change fixture, not a review checkbox.
 - **A `derived` level can be used to launder a guess.** → `derived` requires the cited inputs *and* the method. A value with neither is `unverified` regardless of how it was computed, and the specs make an unsourced constant unusable rather than merely flagged.
 - **Value engineering's savings are not additive, and a reader will add them.** → The read explicitly refuses to present a total of claimed savings, and mutual exclusivity is stated per proposal.
@@ -104,12 +102,12 @@ The rated-pressure check and the inverse solve for maximum rise rate share one d
 
 ## Migration Plan
 
-1. Introduce `solveFormwork` alongside the existing phase calls. Nothing consumes it. Rebuild `packages/core` so `dist/` carries it before any nodes or MCP work.
-2. Add the gap-carrying result shape and the phase-level fills (degenerate rejection, topology on the solution, permitted joints, supply check, strength-based striking) inside the pipeline.
-3. Move consumers on one at a time — takeoff, design report, buildability, cut sheet, elevation, then the AI reads — each with an unchanged-figure test.
+1. ~~Introduce `solveFormwork`~~ — **already done, as `solveProjectFormwork` in nodes.** The only task that survives from this step is the purity assertion over the existing function.
+2. Add the phase-level fills (degenerate rejection, topology on the solution, permitted joints, supply check, strength-based striking) into `solve-project.ts` and the core phase modules it calls, each carrying its own gap type in the shipped `*Gap` / `*_GAP_LABELS` / `*Caveats()` idiom rather than a new generic wrapper — there are ten of those already (`CostGap`, `LabourGap`, `ScheduleGap`, `SequenceGap`, `SetCountGap`, `CutGap`, `AcquireGap`, `LogisticsGap`, `CommitmentGap`, `ValueGap`), and an eleventh shape saying the same thing would be the divergence this change exists to prevent.
+3. ~~Move consumers on one at a time~~ — **already done.** Every consumer named here reads `solveProjectFormwork` today; there is nothing to migrate and no divergence to close.
 4. Ship the independent capabilities in any order: catalog seed, rated pressure, cut search, amortisation, provenance, clashes.
 5. Value engineering last, because it prices whatever the others changed.
 
-**Rollback:** every step is additive until step 3, and each step-3 migration is independently revertable because the phase modules stay callable. Nothing is deleted until its last consumer has moved.
+**Rollback:** every remaining step is additive — a new optional input, an unstated one behaving exactly as today — so each is revertable on its own commit. Nothing is deleted.
 
 **Verification:** the four gates on every step — `bun run check-types`, `bun test`, `bunx biome check --write`, `bun run build` — and `wiki/formwork/implementation-status.md` updated in the same commit as the code it describes.

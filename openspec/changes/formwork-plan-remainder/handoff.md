@@ -28,7 +28,7 @@ The master plan the whole thing is measured against is `~/.claude/plans/currentl
 
 Roughly **92%** of the master plan's line items ship today (88% when these specs were written). **These specs cover only the unbuilt remainder** — do not re-specify or refactor the working 88%. `openspec/specs/` is empty by design: no retrospective specs were written for shipped behaviour, because a delta describing what already ships can only go stale.
 
-The completion table per phase (P0–P8) is in the status doc's "Completion at a glance". P1 88%, P2 93%, P3 94%, P4 100%, **P5 100%**, P6 78%, P7 82%, P8 88%. **P5 is the first phase in this document with no gap left on its row**, so nothing in `tasks.md` about cut optimisation is still owed.
+The completion table per phase (P0–P8) is in the status doc's "Completion at a glance". P1 **94%** (corrected — the recorded pipeline gap was wrong; see `design.md` decision 1), P2 93%, P3 94%, P4 100%, **P5 100%**, P6 78%, P7 87%, P8 88%. **P5 is the first phase in this document with no gap left on its row**, so nothing in `tasks.md` about cut optimisation is still owed.
 
 ## The two loops to copy, not reinvent
 
@@ -66,12 +66,12 @@ bun run build
 
 ## Where to start, and what can go in parallel
 
-Group order in `tasks.md` is dependency order, but only groups 1→2→3 and 11→12→13 are hard chains.
+Group order in `tasks.md` is dependency order, but with 1 and 3 void the only hard chain left is 11→12→13.
 
-- **Start with group 1** (`solveFormwork` + the gap-carrying result shape). It unblocks group 2, and group 3's migrations are what make it worth anything. Nothing consumes it in group 1 — that is intentional.
+- **Groups 1 and 3 are void** — the pipeline exists as `solveProjectFormwork` in nodes and every consumer already reads it. Only 1.3 (a purity test over the existing function) survives. Start at **2.1**, or at group 4 if you want the mechanical work.
 - **Groups 4–10 are independent** of the pipeline and of each other, and each is shippable alone. Group 4 (catalog seed) is the most mechanical and the highest immediate value: registered-but-unseeded systems currently cannot be designed against at all.
 - **Groups 11–13 (value engineering) go last**, because value engineering prices whatever the other groups changed.
-- **Group 3 migrations must not share a commit with group 1.** Each migration carries its own unchanged-figure test over an existing fixture.
+- **The unchanged-figure discipline moved from group 3 to group 2.** A phase-level fill inside `solve-project.ts` reaches every surface at once, so each group-2 task owes a test that a project stating none of its new input is byte-identical to today.
 
 ## What is blocked on something other than code
 
@@ -91,4 +91,6 @@ From `CLAUDE.md` and from the user directly:
 
 ## Next step for whoever picks this up
 
-Group 1 (`solveFormwork` + the gap-carrying result shape) is still the start, and it is now the largest single thing left: the seven derivations it would unify are exactly what the P6 work had to fix one by one at the call sites (`pourUnitsInScene` is one of the seven collapsed into one — the rest are not). After that, group 4 (catalog seed) remains the most mechanical and highest-value independent item. **Skip anything in `tasks.md` about cut optimisation — P5 is closed.**
+**Start at 2.1** (reject degenerate geometry before designing it). Group 2 is what is genuinely unbuilt inside the pipeline, and 2.6 has already come out of it — the concrete-supply check shipped as `8c5743fd`. After that, group 4 (catalog seed) is the most mechanical and highest-value independent item, and it is partly procurement-blocked: 4.1 presupposes a registered-but-unseeded system that does not exist in the catalog yet.
+
+**Do not start at group 1.** It is void, and the reason is worth reading in `design.md` decision 1 before trusting any other architectural claim in these artifacts: the master plan's P1 row said the phases were "not wired into one pipeline", the status doc repeated it, and two task groups were written from it. The pipeline had shipped. **Skip anything in `tasks.md` about cut optimisation — P5 is closed.**
