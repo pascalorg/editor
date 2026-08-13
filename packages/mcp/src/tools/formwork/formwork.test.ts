@@ -775,6 +775,7 @@ describe('the formwork MCP tools', () => {
         'set_pour_date',
         'commit_pour',
         'apply_pour_move',
+        'compare_formwork_systems',
       ]),
     )
   })
@@ -3752,6 +3753,71 @@ describe('the formwork MCP tools', () => {
 
       expect(reply.pourUnitCount).toBe(1)
       expect(reply.units).toHaveLength(1)
+    })
+  })
+  /**
+   * What else this job could be built in.
+   *
+   * `value-engineer.test.ts` owns the comparison. What only this layer can get wrong is the reply
+   * an agent reads: an option with no verdict word on it, a refusal flattened into an empty list,
+   * and money quoted for a project that has recorded no rates.
+   */
+  describe('compare_formwork_systems', () => {
+    interface ValueReply {
+      scope: string
+      currentSystemIds: string[]
+      currency?: string
+      options: Array<{
+        key: string
+        systemId: string
+        verdict: string
+        verdictLabel: string
+        cost?: { from: number; to: number; delta: number }
+        weightKg: { from: number; to: number; delta: number }
+        fittings: { from: number; to: number; delta: number }
+        gaps: string[]
+      }>
+      cheaperCount: number
+      caveats: string[]
+    }
+
+    test('offers the other catalog system as a second layout, with a verdict word', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<ValueReply>('compare_formwork_systems')
+
+      expect(reply.currentSystemIds).toEqual(['doka-framax-xlife'])
+      expect(reply.options.map((option) => option.systemId)).toEqual(['peri-trio'])
+      const option = reply.options[0]
+      expect(option?.key).toBe('system:peri-trio')
+      expect(option?.verdictLabel.length).toBeGreaterThan(0)
+      // Not the same bill re-badged into another part number: a different panel grid moves
+      // the fitting count, and a delta of zero here is the cheap implementation.
+      expect(option?.fittings.delta).not.toBe(0)
+      expect(reply.caveats.join(' ')).toContain('set_formwork_settings parts.systemId')
+    })
+
+    test('an unpriced project gets the quantities and no money', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<ValueReply>('compare_formwork_systems')
+
+      expect(reply.options[0]?.verdict).toBe('not-priced')
+      expect(reply.options[0]?.cost).toBeUndefined()
+      expect(reply.options[0]?.gaps).toContain('no-rates')
+      expect(reply.options[0]?.weightKg.from).toBeGreaterThan(0)
+      expect(reply.currency).toBeUndefined()
+    })
+
+    test('a scope with nothing formed is refused rather than compared against nothing', async () => {
+      load(tallWall(null))
+
+      const result = await client.callTool({ name: 'compare_formwork_systems', arguments: {} })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text?.length).toBeGreaterThan(0)
     })
   })
 })

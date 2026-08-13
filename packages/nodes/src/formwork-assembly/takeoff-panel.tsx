@@ -33,7 +33,13 @@ import { type FormworkMoveOutcome, moveOutcome, plannedMove } from './apply-move
 import { FormworkCutSheet } from './cut-sheet'
 import { Note, Readout, Section, WarningLine } from './report-ui'
 import { type ProjectFormwork, projectFormworkCaveats, solveProjectFormwork } from './solve-project'
-import { takeoffCsv, useProjectFormwork, useTakeoffLevels } from './takeoff'
+import { takeoffCsv, useProjectFormwork, useTakeoffLevels, useValueOptions } from './takeoff'
+import {
+  VALUE_GAP_LABELS,
+  VALUE_REFUSAL_LABELS,
+  VALUE_VERDICT_LABELS,
+  valueCaveats,
+} from './value-engineer'
 
 /**
  * What the job needs, and the file to order it with.
@@ -217,6 +223,8 @@ export function FormworkTakeoffPanel() {
   const driftByPour = new Map((commitments?.drifts ?? []).map((drift) => [drift.pourId, drift]))
   const applyMove = useApplyMove(solution, scopedLevel?.id)
   const [taken, setTaken] = useState<TakenMove | undefined>(undefined)
+  const [compare, setCompare] = useState(false)
+  const value = useValueOptions(solution, { levelId: scopedLevel?.id }, compare)
   const takeMove = (key: string, book: boolean) =>
     setTaken({ result: applyMove(key, book), booked: book })
 
@@ -1188,6 +1196,65 @@ export function FormworkTakeoffPanel() {
           </div>
         )}
       </PanelSection>
+
+      {/* Behind a button rather than open, and the button is the point: each option below is the
+          entire scope solved again in another system, so a section that computed itself would
+          charge every reader of a quantity for a question they did not ask. */}
+      {solution.shutterCount > 0 && (
+        <PanelSection title="Other systems">
+          {value === undefined ? (
+            <div className="space-y-1.5">
+              <ActionButton label="Compare panel systems" onClick={() => setCompare(true)} />
+              <Note>
+                What this job would take in the other systems the catalog ships — panels, ties,
+                weight, and the money where the project has rates. Every option is a second solve,
+                so it runs when you ask for it.
+              </Note>
+            </div>
+          ) : value.refusal !== undefined ? (
+            <Note>Nothing to compare: {VALUE_REFUSAL_LABELS[value.refusal]}.</Note>
+          ) : (
+            <Section title={`Instead of ${value.currentSystemIds.join(' + ')}`}>
+              {value.options.map((option) => (
+                <div className="space-y-0.5 border-border/30 border-t pt-1" key={option.key}>
+                  <Readout
+                    label={option.label}
+                    value={
+                      option.cost === undefined
+                        ? '—'
+                        : `${option.cost.delta > 0 ? '+' : ''}${formatMoney(option.cost.delta, value.currency)}`
+                    }
+                    value2={VALUE_VERDICT_LABELS[option.verdict]}
+                  />
+                  <div className="text-[10px] text-muted-foreground">
+                    Fittings {option.fittings.from} → {option.fittings.to} · weight{' '}
+                    {Math.round(option.weightKg.from)} → {Math.round(option.weightKg.to)} kg
+                    {option.hours === undefined
+                      ? ''
+                      : ` · labour ${option.hours.from} → ${option.hours.to} h`}
+                    {option.picks === undefined
+                      ? ''
+                      : ` · ${option.picks.from} → ${option.picks.to} picks`}
+                  </div>
+                  {/* A part beyond capacity is not a cheaper option, it is a shutter that does
+                      not stand up — so it is a warning rather than a figure in the row. */}
+                  {option.beyondCapacity > 0 && (
+                    <WarningLine
+                      message={`${option.beyondCapacity} part${option.beyondCapacity === 1 ? '' : 's'} beyond capacity in this system. Whatever it saves, this layout is not buildable as designed.`}
+                    />
+                  )}
+                  {option.gaps.map((gap) => (
+                    <Note key={gap}>{VALUE_GAP_LABELS[gap]}.</Note>
+                  ))}
+                </div>
+              ))}
+              {valueCaveats(value).map((caveat) => (
+                <Note key={caveat}>{caveat}</Note>
+              ))}
+            </Section>
+          )}
+        </PanelSection>
+      )}
 
       {solution.bom.length > 0 && (
         <div className="space-y-1.5 p-3">

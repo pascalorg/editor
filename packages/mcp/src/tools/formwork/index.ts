@@ -3,6 +3,7 @@ import type { SceneOperations } from '../../operations'
 import { registerApplyPourMove } from './apply-pour-move'
 import { registerAttachFormwork } from './attach-formwork'
 import { registerCommitPour } from './commit-pour'
+import { registerCompareFormworkSystems } from './compare-formwork-systems'
 import { registerFixFormworkFinding } from './fix-formwork-finding'
 import { registerFormworkCutSheet } from './formwork-cut-sheet'
 import { registerFormworkElevation } from './formwork-elevation'
@@ -167,6 +168,19 @@ import { registerValidateFormwork } from './validate-formwork'
  * disagree the measurement is the answer, in either direction — a move that did better than
  * offered is the same fault as one that did worse, and printing whichever reads well would be
  * choosing which sweep to believe on how it sounds.
+
+ * ## Why `compare_formwork_systems` is last, and why it does not write
+ *
+ * Everything above answers questions about the job as specified. This is the only one that asks
+ * whether the specification is the right one — the same scope solved in every other system the
+ * catalog ships, reported as differences from the build in use.
+ *
+ * It is the only proposal here with no apply of its own, deliberately. The write is one field
+ * that `set_formwork_settings` already validates against the catalog, so a second path to it
+ * would be two ways to set one thing. And the bound on this decision is not in the model: a
+ * move is bounded by float, and a system is bounded by what the hire desk has on the rack next
+ * month. An agent that applied "cheaper" unasked would change every wall in the job on a
+ * comparison with no availability in it.
  */
 export function registerFormworkTools(server: McpServer, operations: SceneOperations): void {
   registerListCastableElements(server, operations)
@@ -187,11 +201,13 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerSetPourDate(server, operations)
   registerCommitPour(server, operations)
   registerApplyPourMove(server, operations)
+  registerCompareFormworkSystems(server, operations)
 }
 
 export { applyPourMoveOutput } from './apply-pour-move'
 export { attachFormworkOutput } from './attach-formwork'
 export { commitPourOutput } from './commit-pour'
+export { compareFormworkSystemsOutput } from './compare-formwork-systems'
 export { fixFormworkFindingOutput } from './fix-formwork-finding'
 export { formworkCutSheetOutput } from './formwork-cut-sheet'
 export { formworkElevationOutput } from './formwork-elevation'

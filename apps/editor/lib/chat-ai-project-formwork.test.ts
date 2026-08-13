@@ -1872,3 +1872,65 @@ describe('apply_pour_move', () => {
     expect(reply).toContain('Nothing in this scope proposes a move')
   })
 })
+
+/**
+ * What else this job could be built in, from the chat surface.
+ *
+ * `value-engineer.test.ts` owns the comparison itself. What only this surface can get wrong is
+ * the shape the model reads: an option with no verdict word attached to it, a refusal returned as
+ * an empty option list, and a level id the user named that is not a level.
+ */
+describe('compare_formwork_systems', () => {
+  interface ValueReply {
+    scope: string
+    currentSystemIds: string[]
+    currency: string | null
+    options: Array<{
+      key: string
+      systemId: string
+      verdict: string
+      verdictLabel: string
+      weightKg: { from: number; to: number; delta: number }
+      fittings: { from: number; to: number; delta: number }
+      gaps: string[]
+    }>
+    cheaperCount: number
+    caveats: string[]
+  }
+
+  test('the other catalog system is offered, priced or not, with a verdict word', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const reply = JSON.parse(await call(tools, 'compare_formwork_systems', {})) as ValueReply
+
+    expect(reply.currentSystemIds).toEqual(['doka-framax-xlife'])
+    expect(reply.options.map((option) => option.systemId)).toEqual(['peri-trio'])
+    const option = reply.options[0]
+    expect(option?.key).toBe('system:peri-trio')
+    expect(option?.verdict).toBe('not-priced')
+    expect(option?.verdictLabel.length).toBeGreaterThan(0)
+    // A second layout, not the same bill re-badged.
+    expect(option?.fittings.delta).not.toBe(0)
+    expect(option?.gaps).toContain('no-rates')
+    expect(reply.caveats.join(' ')).toContain('set_formwork_settings parts.systemId')
+  })
+
+  test('a scope with nothing formed is refused rather than compared against nothing', async () => {
+    const { tools } = scene()
+
+    const reply = await call(tools, 'compare_formwork_systems', {})
+
+    expect(reply).toContain('Cannot compare systems')
+    expect(reply).not.toContain('"options"')
+  })
+
+  test('a level id that is not a level is an error naming the read that fixes it', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const reply = await call(tools, 'compare_formwork_systems', { levelId: 'wall_1' })
+
+    expect(reply).toContain('no level with id wall_1')
+  })
+})

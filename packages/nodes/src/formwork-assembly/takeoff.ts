@@ -4,6 +4,7 @@ import { type AnyNode, getLevelDisplayName, type LevelNode, useScene } from '@pa
 import { bomCsv, bomCsvFilename } from '@pascal-app/core/formwork'
 import { useMemo } from 'react'
 import { type ProjectFormwork, projectFormworkCaveats, solveProjectFormwork } from './solve-project'
+import { type FormworkValueEngineering, formworkValueOptions } from './value-engineer'
 
 /**
  * The store read and the file, either side of `solveProjectFormwork`.
@@ -59,6 +60,30 @@ export function useProjectFormwork(scope: TakeoffScope = {}): ProjectFormwork {
   return useMemo(
     () => solveProjectFormwork(nodes as Record<string, AnyNode>, { parentId: levelId }),
     [nodes, levelId],
+  )
+}
+
+/**
+ * The same scope in the other catalog systems — on request, not on read.
+ *
+ * `asked` is a parameter rather than a call site, because every option is the whole scope solved
+ * again: a takeoff that carried its alternatives would pay for one extra solve per shipped system
+ * every time anybody opened the panel to read a quantity. And nobody reads this to place an
+ * order — it is read once, before the system is chosen, by somebody willing to change it.
+ */
+export function useValueOptions(
+  solution: ProjectFormwork,
+  scope: TakeoffScope,
+  asked: boolean,
+): FormworkValueEngineering | undefined {
+  const nodes = useScene((s) => s.nodes)
+  const levelId = scope.levelId
+  return useMemo(
+    () =>
+      asked
+        ? formworkValueOptions(nodes as Record<string, AnyNode>, { parentId: levelId }, solution)
+        : undefined,
+    [asked, nodes, levelId, solution],
   )
 }
 

@@ -95,3 +95,19 @@ export { FormworkTakeoffPanel } from './takeoff-panel'
 export { type ProjectValidation, validateProjectFormwork } from './validate-project'
 export { formworkValidationHostPanel } from './validation-host-panel'
 export { FormworkValidationPanel } from './validation-panel'
+export {
+  FORMWORK_VALUE_DESCRIPTION,
+  type FormworkValueEngineering,
+  formworkValueOptions,
+  VALUE_GAP_LABELS,
+  VALUE_REFUSAL_LABELS,
+  VALUE_VERDICT_LABELS,
+  type ValueDelta,
+  type ValueGap,
+  type ValueOption,
+  type ValueRefusal,
+  type ValueVerdict,
+  valueCaveats,
+  valueOptionByKey,
+  valueOptionKey,
+} from './value-engineer'

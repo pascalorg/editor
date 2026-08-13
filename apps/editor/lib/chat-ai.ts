@@ -74,10 +74,12 @@ import type { AnyNode, FormworkAssemblyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint/headless'
 import {
   castableHostIds,
+  FORMWORK_VALUE_DESCRIPTION,
   findingsWithRemedies,
   fixOutcome,
   formworkCoverageCaveat,
   formworkPartsReport,
+  formworkValueOptions,
   moveOutcome,
   noSuchFinding,
   plannedFix,
@@ -88,7 +90,10 @@ import {
   shutterElevations,
   solveProjectFormwork,
   solveShuttersForHost,
+  VALUE_REFUSAL_LABELS,
+  VALUE_VERDICT_LABELS,
   validateProjectFormwork,
+  valueCaveats,
 } from '@pascal-app/nodes/formwork-assembly/headless'
 import { generateText, isStepCount, type ModelMessage, tool } from 'ai'
 import { z } from 'zod'
@@ -1790,6 +1795,43 @@ export function buildTools(
               unit.endCutReason === undefined ? null : POUR_CUT_REASON_LABELS[unit.endCutReason],
           })),
           coverageCaveat: shutterMismatch(elementId, Math.max(1, units.length)) ?? null,
+        })
+      },
+    }),
+    compare_formwork_systems: tool({
+      description: FORMWORK_VALUE_DESCRIPTION,
+      inputSchema: z.object({
+        levelId: z
+          .string()
+          .optional()
+          .describe('a level id for one level; omit for the whole scene'),
+        elementIds: z
+          .array(z.string())
+          .max(500)
+          .optional()
+          .describe('only these elements — for a selection the user named'),
+      }),
+      execute: async ({ elementIds, levelId }) => {
+        toolCalls.push({ name: 'compare_formwork_systems', input: { elementIds, levelId } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        if (levelId !== undefined && nodes[levelId]?.type !== 'level') {
+          return `Error: no level with id ${levelId}. Call list_castable_elements and read the parentId of the elements you mean.`
+        }
+        const scope = { hostIds: elementIds, parentId: levelId }
+        const value = formworkValueOptions(nodes, scope, solveProjectFormwork(nodes, scope))
+        if (value.refusal !== undefined) {
+          return `Cannot compare systems: ${VALUE_REFUSAL_LABELS[value.refusal]}.`
+        }
+        return JSON.stringify({
+          scope: levelId ?? (elementIds ? 'the elements named' : 'whole scene'),
+          currentSystemIds: value.currentSystemIds,
+          currency: value.currency ?? null,
+          options: value.options.map((option) => ({
+            ...option,
+            verdictLabel: VALUE_VERDICT_LABELS[option.verdict],
+          })),
+          cheaperCount: value.cheaper.length,
+          caveats: valueCaveats(value),
         })
       },
     }),
