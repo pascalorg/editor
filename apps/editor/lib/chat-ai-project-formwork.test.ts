@@ -1091,6 +1091,21 @@ describe('inspect_project_formwork', () => {
     expect(solved.noCutListBecause).not.toContain('set_formwork_settings sheets')
   })
 
+  test('squaring the delivered edges buys more sheets, stated as a sheet count', async () => {
+    // The write path is the risk here rather than the arithmetic: a trim the model can state
+    // and the nest never reads would report a squared edge the saw never made.
+    const tools = await deck()
+    await call(tools, 'set_formwork_settings', { sheets: { stockIds: [PLAIN_SHEET] } })
+    const bare = await project(tools, { levelId: 'level_1' })
+    await call(tools, 'set_formwork_settings', { sheets: { edgeTrimMm: 20 } })
+
+    const trimmed = await project(tools, { levelId: 'level_1' })
+
+    expect(trimmed.cutList?.sheetsToBuy[0]?.sheets).toBeGreaterThan(
+      bare.cutList?.sheetsToBuy[0]?.sheets ?? 0,
+    )
+  })
+
   test('the handling allowance is a second order rather than a corrected first one', async () => {
     // The nest count is what the job cuts and this is what the yard books in — a single
     // corrected figure would hide how much of the order is breakage rather than layout.

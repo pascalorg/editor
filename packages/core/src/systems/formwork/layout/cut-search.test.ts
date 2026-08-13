@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test'
 import { type SheetStock, sheetStock } from '../catalog'
 import { type CutPiece, nestCutPieces } from './cut-optimiser'
-import { type NestSearch, nestSearchCaveats, orderPiecesForNest } from './cut-search'
+import {
+  chooseNestStock,
+  type NestSearch,
+  nestSearchCaveats,
+  orderPiecesForNest,
+} from './cut-search'
 
 /**
  * Searching the orderings.
@@ -254,5 +259,74 @@ describe('nestSearchCaveats', () => {
     const out = nestSearchCaveats(orderPiecesForNest(mixed, [plain], { seed: 3 }))
 
     expect(out.some((line) => line.includes('face grain'))).toBe(true)
+  })
+})
+
+describe('chooseNestStock', () => {
+  const big = sheetStock('ply-1500x3000x18-hardwood-220') as SheetStock
+
+  it('leaves a single stated size alone', () => {
+    const choice = chooseNestStock(beatable, [plain])
+    expect(choice.stockIds).toEqual([plain.id])
+    expect(choice.droppedStockIds).toEqual([])
+    expect(choice.subsetsTried).toBe(0)
+  })
+
+  it('drops a size the job buys less ply without', () => {
+    // Boards that all fit the small sheet: opening a 1500 × 3000 for any of them buys
+    // 4.5 m² where 2.98 would do, so the mix that uses it can only lose.
+    const choice = chooseNestStock(beatable, [big, plain])
+    expect(choice.stockIds).toEqual([plain.id])
+    expect(choice.droppedStockIds).toEqual([big.id])
+    expect(choice.improved).toBe(true)
+    expect(choice.list.sheetAreaMm2).toBeLessThan(choice.baseline.sheetAreaM2 * 1_000_000)
+  })
+
+  it('never drops a size a board needs, however much ply that buys', () => {
+    // A refused board outranks any amount of area, or the cheapest nest of all is the one
+    // that nests nothing.
+    const oversized: CutPiece[] = [...beatable, { mark: 'BIG', widthMm: 1400, heightMm: 2900 }]
+    const choice = chooseNestStock(oversized, [plain, big])
+    expect(choice.stockIds).toContain(big.id)
+    expect(choice.list.oversize).toEqual([])
+  })
+
+  it('is a function of the stated list, so two reads of one scene agree', () => {
+    const a = chooseNestStock(beatable, [big, plain])
+    const b = chooseNestStock(beatable, [big, plain])
+    expect(b.stockIds).toEqual(a.stockIds)
+    expect(b.list.sheets.length).toBe(a.list.sheets.length)
+  })
+})
+
+describe('edge trim', () => {
+  it('refuses a board that fits the delivered sheet and not the squared one', () => {
+    // 1215 fits 1220 and does not fit the 1200 left after 10 mm a side. Nesting it would
+    // put a board on material the saw has already taken off.
+    const piece: CutPiece[] = [{ mark: 'W', widthMm: 1215, heightMm: 1200 }]
+    expect(nestCutPieces(piece, [plain]).oversize).toEqual([])
+    expect(nestCutPieces(piece, [plain], { edgeTrimMm: 10 }).oversize).toHaveLength(1)
+  })
+
+  it('sets every placement out from the squared corner, not the delivered one', () => {
+    const list = nestCutPieces([{ mark: 'A', widthMm: 400, heightMm: 800 }], [plain], {
+      edgeTrimMm: 12,
+    })
+    expect(list.sheets[0]?.placements[0]).toMatchObject({ xMm: 12, yMm: 12 })
+    expect(list.edgeTrimMm).toBe(12)
+  })
+
+  it('leaves the trim in the cutting waste rather than off the sheet count', () => {
+    const pieces: CutPiece[] = Array.from({ length: 8 }, (_, index) => ({
+      mark: `P${index}`,
+      widthMm: 300,
+      heightMm: 1200,
+    }))
+    const bare = nestCutPieces(pieces, [plain])
+    const trimmed = nestCutPieces(pieces, [plain], { edgeTrimMm: 15 })
+    // Four 300 mm boards fit across 1220 and three across the 1190 left after trimming, so
+    // the trim is a sheet rather than a rounding.
+    expect(trimmed.sheets.length).toBeGreaterThan(bare.sheets.length)
+    expect(trimmed.cuttingWasteFraction).toBeGreaterThan(bare.cuttingWasteFraction)
   })
 })

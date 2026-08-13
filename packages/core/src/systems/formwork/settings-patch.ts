@@ -583,6 +583,15 @@ const SHEETS_PATCH = z.object({
     .describe(
       'smallest offcut worth racking by area, m² — an alternative to the two dimensions for a yard that thinks in "anything over a quarter sheet". Any one threshold met keeps the offcut',
     ),
+  edgeTrimMm: z
+    .number()
+    .min(0)
+    .max(100)
+    .nullable()
+    .optional()
+    .describe(
+      'material skimmed off each of a sheet’s four edges before nesting, mm — typically 0 or 10. A delivered edge is neither square nor sound, so a yard that cares about the joint line squares all four first; 10 a side takes a 1220 × 2440 sheet to 1200 × 2420, which is one 300 mm board fewer across it. Reserved on the nest rather than deducted from the count, and a board that fits the delivered sheet but not the squared one is refused rather than nested on material the saw has removed',
+    ),
   handlingWasteFraction: z
     .number()
     .min(0)
@@ -702,7 +711,7 @@ export const formworkSettingsPatchInput = {
     'what one lorry carries and how long a pick takes — the two quantities that turn a bill into deliveries and a lifting schedule into crane hours. These are the last two costs this model has excluded from every total it prints, and both figures are facts about the job’s own plant rather than about a product, so ask the user for them: a payload is the lorry the yard actually sends and a cycle time is this crew on this crane. Until they are recorded the takeoff carries no transport and no craneage at all. Needs rates.transportPerLoad and rates.cranePerHour to become money',
   ),
   sheets: SHEETS_PATCH.optional().describe(
-    'the sheet stock the yard buys its ply out of, plus what it racks the remainder of and what it loses to handling — what turns the cut boards already on the bill into sheets somebody orders. Ask the user for the sizes and never infer them from parts.sheathingId: that is the face grade and a grade has no dimensions, so a sheathing id stated here is refused. Until this is recorded there is no cut list at all, which is the honest answer — nesting against every sheet in the catalog would answer for a merchant rather than for this job and report a count nobody can fill. The sheets are a purchasing figure beside the bill rather than a line in it: the boards are already billed as cut ply, so the sheets are the same material counted a second way and are in no weight, no owned/hired split and no cost',
+    'the sheet stock the yard buys its ply out of, plus what it skims off each edge, what it racks the remainder of and what it loses to handling — what turns the cut boards already on the bill into sheets somebody orders. Ask the user for the sizes and never infer them from parts.sheathingId: that is the face grade and a grade has no dimensions, so a sheathing id stated here is refused. Until this is recorded there is no cut list at all, which is the honest answer — nesting against every sheet in the catalog would answer for a merchant rather than for this job and report a count nobody can fill. The sheets are a purchasing figure beside the bill rather than a line in it: the boards are already billed as cut ply, so the sheets are the same material counted a second way and are in no weight, no owned/hired split and no cost',
   ),
   labourNorms: LABOUR_NORMS_PATCH.optional().describe(
     "how long this project's own gang takes to erect and to strike one of each kind of part, in man-hours. Ask the user for these and never supply them: published constants do exist — CPWD's Analysis of Rates, Spon's, RSMeans — and none of them can be used here, because they are per m² of a whole trade operation that already contains the panels, the backing, the ties and the strike, so spreading one over a bill of parts charges the same work several times over. An output norm is also a fact about a crew rather than about a product or a code: the same gang on its tenth identical floor beats its own figure from the first, so there is nothing conservative to fall back to. Until this is recorded the takeoff carries no labour at all, which is the honest answer and is why every cost figure in this model says labour is outside it. A kind you leave out is reported as uncovered fittings rather than costed at zero. Needs rates.gangRatePerHour to become money",

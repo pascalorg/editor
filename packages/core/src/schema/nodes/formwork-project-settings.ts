@@ -586,6 +586,16 @@ export const FormworkSheetSettings = z.object({
    * to 0.10.
    */
   handlingWasteFraction: z.number().finite().min(0).max(0.5).optional(),
+  /**
+   * Material skimmed off each of a sheet's four edges before it is nested on, mm.
+   *
+   * A delivered edge is neither square nor sound — the outer sheets of a strapped pack rub,
+   * the film chips where the forklift touched it — and a board cut off one is out of square
+   * down its whole length. 10 mm a side takes a 1220 × 2440 sheet to 1200 × 2420, which is
+   * one 300 mm board fewer across it. Unstated nests the sheet at its full size, which is
+   * what site formwork out of plain ply is cut at.
+   */
+  edgeTrimMm: z.number().finite().min(0).max(100).optional(),
 })
 export type FormworkSheetSettings = z.infer<typeof FormworkSheetSettings>
 

@@ -1,6 +1,6 @@
 import type { FormworkSheetSettings } from '../../schema/nodes/formwork-project-settings'
 import { type SheetStock, sheetStock } from './catalog'
-import { type CutList, type CutPiece, cutListCaveats, nestCutPieces } from './layout'
+import { type CutList, type CutPiece, chooseNestStock, cutListCaveats } from './layout'
 import type { FormworkPart } from './parts'
 
 /**
@@ -71,8 +71,16 @@ export interface FormworkCutList {
    * the worse the stock fitted the job.
    */
   boardAreaM2: number
-  /** Sheet ids the nest was allowed to open, in the order the project stated them. */
+  /** Sheet ids the nest opened out of, in the order the project stated them. */
   stockIds: string[]
+  /**
+   * Stated sizes this job does not need, from the subset sweep — a purchasing answer.
+   *
+   * Empty where every stated size earned its place, which is the ordinary case on a yard
+   * holding one. A size in here is not a failure: it says the job nests out of fewer sizes
+   * than the yard stocks, which is one fewer delivery to take.
+   */
+  droppedStockIds: string[]
   /**
    * Stated ids that name no sheet in the catalog.
    *
@@ -130,20 +138,23 @@ export function formworkCutList(
     ...(sheets.minKeepLengthMm === undefined ? {} : { minKeepLengthMm: sheets.minKeepLengthMm }),
     ...(sheets.minKeepAreaM2 === undefined ? {} : { minKeepAreaM2: sheets.minKeepAreaM2 }),
   }
-  const list = nestCutPieces(pieces, stock, {
+  const choice = chooseNestStock(pieces, stock, {
     // An unstated policy keeps nothing rather than everything — see `keepsOffcut`. Passed
     // only where the yard stated a threshold so the two cases stay distinguishable here.
     ...(Object.keys(policy).length > 0 ? { offcutPolicy: policy } : {}),
+    ...(sheets.edgeTrimMm === undefined ? {} : { edgeTrimMm: sheets.edgeTrimMm }),
     ...(sheets.handlingWasteFraction === undefined
       ? {}
       : { handlingWasteFraction: sheets.handlingWasteFraction }),
   })
+  const list = choice.list
 
   return {
     list,
     boardCount: pieces.length,
     boardAreaM2: areaM2(boardAreaMm2),
-    stockIds: stock.map((entry) => entry.id),
+    stockIds: choice.stockIds,
+    droppedStockIds: choice.droppedStockIds,
     unknownStockIds,
     complete: list.complete && unknownStockIds.length === 0,
   }
@@ -165,7 +176,12 @@ export function formworkCutListCaveats(cut: FormworkCutList): string[] {
       `${ordered} ${ordered === 1 ? 'sheet' : 'sheets'} is what ${cut.boardCount} boards totalling ${cut.boardAreaM2} m² nest out of. It is a purchasing figure beside the bill rather than a line in it: those boards are already billed as cut ply, so adding the sheets to the bill counts the same material twice. Nothing here is in the weight, the owned/hired split or the cost.`,
     )
     out.push(
-      'The boards are nested in one plain widest-first pass across the whole scope, which is why this is not a slice of a larger cut list — a board off one wall comes out of another wall’s offcut, so two scopes’ sheet counts do not add up. A better insertion order usually exists and is not searched for here, because the search costs a second on a job of six hundred boards and this is recomputed on every read.',
+      'The boards are nested in one plain widest-first pass across the whole scope, which is why this is not a slice of a larger cut list — a board off one wall comes out of another wall’s offcut, so two scopes’ sheet counts do not add up. A better insertion *order* usually exists and is not searched for here, because that search costs a second on a job of six hundred boards and this is recomputed on every read. The *mix of sheet sizes* is searched, because there are at most a handful of them and a nest is milliseconds.',
+    )
+  }
+  if (cut.droppedStockIds.length > 0) {
+    out.push(
+      `${cut.droppedStockIds.join(', ')} ${cut.droppedStockIds.length === 1 ? 'is' : 'are'} stocked and not used: nesting out of the sizes above buys less ply than nesting out of all of them. The sizes interact — a job of 1150 mm boards wastes 70 mm on every 1220 mm sheet and fits a 1250 with room for the trim — so the mix is searched rather than taken in the order stated, and dropping a size is an answer rather than an omission.`,
     )
   }
   if (cut.unknownStockIds.length > 0) {

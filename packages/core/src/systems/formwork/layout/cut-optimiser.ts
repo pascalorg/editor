@@ -137,6 +137,22 @@ export interface OffcutPolicy {
 
 export interface CutOptions {
   kerfMm?: number
+  /**
+   * Material taken off each of the four edges before anything is nested, mm.
+   *
+   * A sheet as delivered is not square to the millimetre and its edges are not sound: a
+   * strapped pack rubs its outer sheets, the film chips where a forklift touched it, and a
+   * board cut to a nominal width off an unsquared edge is out of square down its whole
+   * length. So a yard that cares about the joint line skims all four edges first, and 10 mm
+   * off each takes a 1220 × 2440 sheet to 1200 × 2420 — which is one 300 mm board fewer
+   * across the width on a sheet cut four ways.
+   *
+   * Reserved on the nest rather than deducted from the count, and the waste it makes stays
+   * in `cuttingWasteFraction`, because it is geometric and a nest that ignored it would place
+   * boards on material the saw has already removed. Unstated means the sheet is nested to its
+   * full size, which is what a yard cutting site formwork out of plain ply does.
+   */
+  edgeTrimMm?: number
   offcutPolicy?: OffcutPolicy
   /**
    * Damage and breakage allowance on top of the nest, as a fraction. Applied to the
@@ -195,6 +211,8 @@ export interface CutList {
    */
   cuttingWasteFraction: number
   kerfMm: number
+  /** Trim taken off each edge before nesting, mm. 0 where the sheet is cut as delivered. */
+  edgeTrimMm: number
   complete: boolean
   gaps: CutGap[]
 }
@@ -241,11 +259,25 @@ function mayRotate(piece: CutPiece, stock: SheetStock, allow: boolean): boolean 
   return allow && (stock.rotatable || piece.grainAgnostic === true)
 }
 
-function fitsSheet(piece: CutPiece, stock: SheetStock, allowRotation: boolean): boolean {
-  const upright = piece.widthMm <= stock.widthMm && piece.heightMm <= stock.lengthMm
+/**
+ * Against the *trimmed* sheet, not the delivered one.
+ *
+ * A board that fits 1220 mm and not the 1200 mm left after skimming is oversize, and saying
+ * otherwise would nest it onto material the saw has already taken off — the one place the
+ * trim has to reach a refusal rather than only a count.
+ */
+function fitsSheet(
+  piece: CutPiece,
+  stock: SheetStock,
+  allowRotation: boolean,
+  edgeTrimMm = 0,
+): boolean {
+  const widthMm = stock.widthMm - 2 * edgeTrimMm
+  const lengthMm = stock.lengthMm - 2 * edgeTrimMm
+  const upright = piece.widthMm <= widthMm && piece.heightMm <= lengthMm
   if (upright) return true
   if (!mayRotate(piece, stock, allowRotation)) return false
-  return piece.heightMm <= stock.widthMm && piece.widthMm <= stock.lengthMm
+  return piece.heightMm <= widthMm && piece.widthMm <= lengthMm
 }
 
 interface Candidate {
@@ -385,6 +417,7 @@ export function nestCutPieces(
   options: CutOptions = {},
 ): CutList {
   const kerfMm = options.kerfMm ?? SAW_KERF_MM
+  const edgeTrimMm = Math.max(0, options.edgeTrimMm ?? 0)
   const allowRotation = options.allowRotation ?? false
   const gaps: CutGap[] = []
 
@@ -398,6 +431,7 @@ export function nestCutPieces(
       retainableAreaMm2: 0,
       cuttingWasteFraction: 0,
       kerfMm,
+      edgeTrimMm,
       complete: false,
       gaps: pieces.length === 0 ? ['no-stock-stated'] : ['no-stock-stated', 'piece-over-sheet'],
     }
@@ -422,13 +456,13 @@ export function nestCutPieces(
   const oversize: CutPiece[] = []
 
   for (const piece of ordered) {
-    if (!stock.some((entry) => fitsSheet(piece, entry, allowRotation))) {
+    if (!stock.some((entry) => fitsSheet(piece, entry, allowRotation, edgeTrimMm))) {
       oversize.push(piece)
       continue
     }
     let candidate = bestFit(piece, open, allowRotation)
     if (candidate === undefined) {
-      const entry = stock.find((sheet) => fitsSheet(piece, sheet, allowRotation))
+      const entry = stock.find((sheet) => fitsSheet(piece, sheet, allowRotation, edgeTrimMm))
       if (entry === undefined) {
         oversize.push(piece)
         continue
@@ -439,7 +473,16 @@ export function nestCutPieces(
         stock: entry,
         number,
         placements: [],
-        free: [{ xMm: 0, yMm: 0, widthMm: entry.widthMm, heightMm: entry.lengthMm }],
+        // Inset by the trim on all four edges, so a placement's own x/y is already measured
+        // from the corner of the squared sheet rather than of the delivered one.
+        free: [
+          {
+            xMm: edgeTrimMm,
+            yMm: edgeTrimMm,
+            widthMm: entry.widthMm - 2 * edgeTrimMm,
+            heightMm: entry.lengthMm - 2 * edgeTrimMm,
+          },
+        ],
       }
       open.push(sheet)
       candidate = bestFit(piece, [sheet], allowRotation)
@@ -527,6 +570,7 @@ export function nestCutPieces(
         ? 0
         : Math.round(((sheetAreaMm2 - pieceAreaMm2) / sheetAreaMm2) * 1000) / 1000,
     kerfMm,
+    edgeTrimMm,
     complete: gaps.length === 0,
     gaps,
   }
@@ -545,7 +589,7 @@ export function cutListCaveats(list: CutList): string[] {
   const out: string[] = []
   if (list.sheets.length > 0) {
     out.push(
-      `${list.sheets.length} ${list.sheets.length === 1 ? 'sheet' : 'sheets'} at ${(list.cuttingWasteFraction * 100).toFixed(1)}% cutting waste, with ${list.kerfMm} mm reserved for the blade on every cut. This is a nest rather than a cutting programme: the pieces fit and the cuts are edge-to-edge so a panel saw can make them, but nothing here checks that a cut board's edge lands behind a waler or a joist, which is the constraint a carpenter will apply and this cannot.`,
+      `${list.sheets.length} ${list.sheets.length === 1 ? 'sheet' : 'sheets'} at ${(list.cuttingWasteFraction * 100).toFixed(1)}% cutting waste, with ${list.kerfMm} mm reserved for the blade on every cut${list.edgeTrimMm > 0 ? ` and ${list.edgeTrimMm} mm skimmed off all four edges of every sheet before anything was nested on it — a delivered edge is neither square nor sound, and a board cut off one is out of square down its whole length` : ''}. This is a nest rather than a cutting programme: the pieces fit and the cuts are edge-to-edge so a panel saw can make them, but nothing here checks that a cut board's edge lands behind a waler or a joist, which is the constraint a carpenter will apply and this cannot.`,
     )
     out.push(
       'The waste is geometric and is the half a better nest can reduce. Damage, breakage and sheets rejected on arrival are a separate allowance on top, and reporting the two as one figure hides which of them anybody can do anything about.',

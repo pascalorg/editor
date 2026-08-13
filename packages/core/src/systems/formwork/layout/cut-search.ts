@@ -237,6 +237,108 @@ export function orderPiecesForNest(
 }
 
 /**
+ * Above this many stated sizes the subsets are not swept.
+ *
+ * 2ⁿ nests, and the nest is the expensive part: four sizes is 15 nests and a yard stating
+ * five has said something this search cannot improve on cheaply enough to run per read.
+ * The whole stated list is nested instead, which is what happened before this existed.
+ */
+const MAX_STOCK_FOR_SUBSETS = 4
+
+export interface StockChoice {
+  list: CutList
+  /** The sizes the nest was allowed to open, in the order the project stated them. */
+  stockIds: string[]
+  /** Sizes the project states and this nest deliberately did not open. */
+  droppedStockIds: string[]
+  /** True where a subset beat the whole stated list. False means every size was used. */
+  improved: boolean
+  /** The whole stated list's figures, so the gain is visible rather than asserted. */
+  baseline: { sheets: number; sheetAreaM2: number }
+  /** Subsets nested. 0 where the list was too long to sweep — see the constant. */
+  subsetsTried: number
+}
+
+/**
+ * Refused boards, then square metres bought, then sheets — in that order.
+ *
+ * The order is the whole of the objective. Area rather than sheet *count*, because a count
+ * across sizes is not a quantity: two 1220 × 2440 and one 1500 × 3000 is three sheets and
+ * less material than four of the small one, and a nest chosen on count buys the wrong pile.
+ * And a refused board outranks any amount of area, or the search would answer "buy less ply"
+ * by declining to hold the widest boards — the cheapest nest of all is the one that nests
+ * nothing.
+ */
+function stockCost(list: CutList): [number, number, number] {
+  return [list.oversize.length, list.sheetAreaMm2, list.sheets.length]
+}
+
+function cheaper(a: readonly number[], b: readonly number[]): boolean {
+  for (const [index, value] of a.entries()) {
+    const other = b[index] as number
+    if (value !== other) return value < other
+  }
+  return false
+}
+
+/**
+ * Which of the sizes the yard stocks this job should actually be cut from.
+ *
+ * The stated list has always been a *preference*: `nestCutPieces` opens the first size a
+ * board fits on, so the second size is reached only by a board too big for the first. That
+ * is the right rule for one board and the wrong answer for a job, because the sizes interact
+ * — a job of 1150 mm boards nested out of 1220 × 2440 wastes 70 mm on every sheet and nests
+ * out of 1250 × 2500 with room for the trim, and no per-board rule finds that. The sizes are
+ * few (a yard holds one or two) and the nest is cheap, so the subsets are enumerated rather
+ * than reasoned about: this is the set-covering step the cut list has been missing, done by
+ * exhaustion because at this size exhaustion is affordable and a heuristic is not honest.
+ *
+ * Dropping a size is a real answer and not an omission, which is why `droppedStockIds` is
+ * reported: it says "this job does not need the 1500 × 3000 you also stock", which is a
+ * purchasing decision somebody makes, rather than silently ordering none of them.
+ */
+export function chooseNestStock(
+  pieces: readonly CutPiece[],
+  stock: readonly SheetStock[],
+  options: Omit<CutOptions, 'order'> = {},
+): StockChoice {
+  const whole = nestCutPieces(pieces, stock, options)
+  const areaM2 = (mm2: number) => Math.round((mm2 / 1_000_000) * 100) / 100
+  const plain: StockChoice = {
+    list: whole,
+    stockIds: stock.map((entry) => entry.id),
+    droppedStockIds: [],
+    improved: false,
+    baseline: { sheets: whole.sheets.length, sheetAreaM2: areaM2(whole.sheetAreaMm2) },
+    subsetsTried: 0,
+  }
+  if (stock.length < 2 || stock.length > MAX_STOCK_FOR_SUBSETS) return plain
+
+  let best = plain
+  let bestCost = stockCost(whole)
+  let subsetsTried = 0
+  // Bitmask over the stated list, so a subset keeps the stated order and the preference
+  // inside the subset is unchanged — this chooses which sizes are available, never which
+  // board goes on which sheet.
+  for (let mask = 1; mask < (1 << stock.length) - 1; mask++) {
+    const subset = stock.filter((_, index) => (mask & (1 << index)) !== 0)
+    const list = nestCutPieces(pieces, subset, options)
+    subsetsTried++
+    if (!cheaper(stockCost(list), bestCost)) continue
+    bestCost = stockCost(list)
+    best = {
+      list,
+      stockIds: subset.map((entry) => entry.id),
+      droppedStockIds: stock.filter((entry) => !subset.includes(entry)).map((entry) => entry.id),
+      improved: true,
+      baseline: plain.baseline,
+      subsetsTried,
+    }
+  }
+  return { ...best, subsetsTried }
+}
+
+/**
  * What a searched nest is, and is not, in words.
  *
  * A reader who sees "optimised" on a cut list will assume the sheet count is the least

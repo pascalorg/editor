@@ -35,10 +35,12 @@ export {
   sheetCutSequence,
 } from './cut-plan'
 export {
+  chooseNestStock,
   type NestSearch,
   type NestSearchOptions,
   nestSearchCaveats,
   orderPiecesForNest,
+  type StockChoice,
 } from './cut-search'
 export {
   DEFAULT_SLING_ANGLE_DEG,

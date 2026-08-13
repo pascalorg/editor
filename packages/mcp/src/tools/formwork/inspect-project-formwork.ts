@@ -505,6 +505,8 @@ export const inspectProjectFormworkOutput = {
       ),
       /** Stated ids that name no sheet — stored, nesting nothing. */
       statedIdsThatAreNotSheets: z.array(z.string()),
+      /** Sizes the yard stocks that this job nests out of more cheaply without. */
+      sizesStockedButNotUsed: z.array(z.string()),
       complete: z.boolean(),
       gaps: z.array(z.string()),
       excludes: z.array(z.string()),
@@ -1060,6 +1062,7 @@ export function registerInspectProjectFormwork(server: McpServer, bridge: SceneO
                   heightMm: piece.heightMm,
                 })),
                 statedIdsThatAreNotSheets: solution.cutList.unknownStockIds,
+                sizesStockedButNotUsed: solution.cutList.droppedStockIds,
                 complete: solution.cutList.complete,
                 gaps: solution.cutList.list.gaps.map((gap) => CUT_GAP_LABELS[gap]),
                 excludes: [

@@ -1360,6 +1360,7 @@ describe('the formwork MCP tools', () => {
    * no sheet stated, because only the second one is waiting on the user.
    */
   const PLAIN_SHEET = 'ply-1220x2440x18-plain'
+  const BIG_SHEET = 'ply-1500x3000x18-hardwood-220'
 
   /**
    * A shuttered deck, because a deck is the element that bills cut ply by the hundred — a
@@ -1398,6 +1399,15 @@ describe('the formwork MCP tools', () => {
     // caller reading the block is not necessarily the one that read the description.
     expect(nested.cutList?.excludes[0]).toContain('buys the job’s plywood twice')
     expect(nested.cutList?.excludes.some((entry) => entry.includes('the weight'))).toBe(true)
+  })
+
+  test('a stocked size the job does not need is named rather than silently unordered', async () => {
+    await cutPlyScene({ sheets: { stockIds: [BIG_SHEET, PLAIN_SHEET] } })
+
+    const reply = await call<BillReply>('inspect_project_formwork', {})
+
+    expect(reply.cutList?.sizesStockedButNotUsed).toEqual([BIG_SHEET])
+    expect(reply.cutList?.sheetsToBuy.every((entry) => entry.sheetId === PLAIN_SHEET)).toBe(true)
   })
 
   test('the handling allowance is a second order rather than a corrected first one', async () => {

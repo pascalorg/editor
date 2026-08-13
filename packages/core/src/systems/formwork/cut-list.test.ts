@@ -13,6 +13,7 @@ import { type FormworkPart, type FormworkPartSpec, partMark } from './parts'
  */
 
 const PLAIN = 'ply-1220x2440x18-plain'
+const BIG = 'ply-1500x3000x18-hardwood-220'
 const BIRCH = 'ply-1250x2500x18-birch-wbp'
 
 function board(stationMm: number, widthMm: number, heightMm: number): FormworkPart {
@@ -178,6 +179,28 @@ describe('formworkCutList', () => {
     expect(out?.list.order).toEqual([{ sheetId: PLAIN, sheets: 3 }])
     expect(out?.list.orderWithAllowance).toEqual([{ sheetId: PLAIN, sheets: 4 }])
     expect(out?.list.cuttingWasteFraction).toBeCloseTo(0.033, 3)
+  })
+
+  it('carries the edge trim through to the nest rather than to the order', () => {
+    // The trim is material the saw takes off before any board is set out, so it belongs to
+    // the sheet the nest works on — a job that squares its edges gets fewer boards per
+    // sheet, not the same nest with a bigger order on the end of it.
+    const boards = Array.from({ length: 8 }, (_, index) => board(index * 700, 300, 1200))
+    const bare = formworkCutList(boards, { stockIds: [PLAIN] })
+    const trimmed = formworkCutList(boards, { stockIds: [PLAIN], edgeTrimMm: 15 })
+
+    expect(bare?.list.edgeTrimMm).toBe(0)
+    expect(trimmed?.list.edgeTrimMm).toBe(15)
+    expect(trimmed?.list.order[0]?.sheets).toBeGreaterThan(bare?.list.order[0]?.sheets ?? 0)
+    expect(formworkCutListCaveats(trimmed!).some((entry) => entry.includes('15'))).toBe(true)
+  })
+
+  it('names a stocked size this job does not need', () => {
+    const boards = Array.from({ length: 4 }, (_, index) => board(index * 700, 600, 2400))
+    const out = formworkCutList(boards, { stockIds: [BIG, PLAIN] })
+
+    expect(out?.droppedStockIds).toEqual([BIG])
+    expect(formworkCutListCaveats(out!).some((entry) => entry.includes(BIG))).toBe(true)
   })
 
   it('carries no allowance where none is stated', () => {

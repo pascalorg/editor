@@ -716,6 +716,16 @@ export function FormworkSettingsPanel() {
           value={sheets.minKeepAreaM2}
         />
         <OptionalNumberField
+          hint="Skimmed off each of a sheet's four edges before anything is nested on it. A delivered edge is neither square nor sound, and a board cut off one is out of square down its whole length. 10 mm a side takes a 1220 × 2440 sheet to 1200 × 2420 — one 300 mm board fewer across it."
+          label="Edge trim"
+          max={100}
+          min={0}
+          onChange={(value) => setGroupField('sheets', { edgeTrimMm: value })}
+          step={5}
+          unit="mm"
+          value={sheets.edgeTrimMm}
+        />
+        <OptionalNumberField
           hint="Sheets broken, mis-cut or spoiled in handling, as a fraction of the nested count. Stated apart from the cutting waste the nest computes because 3 % of geometric offcut is somebody's to improve and 8 % of broken corners is not. Typically 0.05 to 0.10."
           label="Handling waste"
           max={0.5}

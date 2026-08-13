@@ -1354,6 +1354,7 @@ export function buildTools(
                     heightMm: piece.heightMm,
                   })),
                   statedIdsThatAreNotSheets: solution.cutList.unknownStockIds,
+                  sizesStockedButNotUsed: solution.cutList.droppedStockIds,
                   complete: solution.cutList.complete,
                   gaps: solution.cutList.list.gaps.map((gap) => CUT_GAP_LABELS[gap]),
                   excludes: [

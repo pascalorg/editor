@@ -1141,6 +1141,13 @@ export function FormworkTakeoffPanel() {
                   value={String(cutList.boardCount)}
                   value2={`${cutList.boardAreaM2} m²`}
                 />
+                {cutList.droppedStockIds.length > 0 && (
+                  <Readout
+                    label="Stocked, not used"
+                    value={cutList.droppedStockIds.join(', ')}
+                    value2="buys less ply"
+                  />
+                )}
                 <Readout
                   label="Cutting waste"
                   value={`${Math.round(cutList.list.cuttingWasteFraction * 100)}%`}
