@@ -1,4 +1,4 @@
-import { resolveBuildingForLevel, resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
 import { type Point2D, polygonContainsPolygon, polygonsOverlap } from '../../lib/polygon-relations'
 import type {
   AnyNode,
@@ -10,6 +10,7 @@ import type {
   SurfaceHoleMetadata,
 } from '../../schema'
 import { resolveCeilingHeight } from '../../services/level-height'
+import { getLevelIndex } from '../../services/level-index'
 import { getLevelElevations } from '../../services/storey'
 import { computeSegmentTransforms, rotateXZ } from './stair-footprint'
 import { resolveStairTotalRise } from './stair-rise'
@@ -88,7 +89,7 @@ function getLevelNumber(levelId: string | null, nodes: Record<string, AnyNode>) 
 
 function getLevelBuildingId(levelId: string | null, nodes: Record<string, AnyNode>) {
   if (!levelId) return null
-  return resolveBuildingForLevel(levelId as AnyNodeId, nodes as Record<AnyNodeId, AnyNode>)
+  return getLevelIndex(nodes as Record<AnyNodeId, AnyNode>).buildingOfLevel.get(levelId) ?? null
 }
 
 function normalizeLevelId(levelId: string | null | undefined, nodes: Record<string, AnyNode>) {
@@ -96,22 +97,12 @@ function normalizeLevelId(levelId: string | null | undefined, nodes: Record<stri
   return nodes[levelId as AnyNodeId]?.type === 'level' ? levelId : null
 }
 
+// The sync asks this once per stair per surface; the answer must come from the
+// shared index, not a scene rescan — the rescan variant was the whole load-time
+// cost of this system on large scenes.
 function getBuildingLevels(buildingId: string | null, nodes: Record<string, AnyNode>) {
-  const building = buildingId ? nodes[buildingId as AnyNodeId] : null
-  if (building?.type !== 'building') return []
-
-  const levels = new Map<string, Extract<AnyNode, { type: 'level' }>>()
-  for (const childId of building.children ?? []) {
-    const child = nodes[childId as AnyNodeId]
-    if (child?.type === 'level') levels.set(child.id, child)
-  }
-  for (const candidate of Object.values(nodes)) {
-    if (candidate?.type === 'level' && candidate.parentId === building.id) {
-      levels.set(candidate.id, candidate)
-    }
-  }
-
-  return Array.from(levels.values()).sort((left, right) => left.level - right.level)
+  if (!buildingId) return []
+  return getLevelIndex(nodes as Record<AnyNodeId, AnyNode>).levelsByBuilding.get(buildingId) ?? []
 }
 
 function inferSourceLevelForDestination(

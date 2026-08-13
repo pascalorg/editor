@@ -258,6 +258,7 @@ export type {
 export * from './registry'
 export * from './schema'
 export * from './services'
+export { getLevelIndex, type LevelIndex } from './services/level-index'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   getSceneHistoryPauseDepth,

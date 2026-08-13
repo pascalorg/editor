@@ -553,3 +553,89 @@ describe('syncAutoStairOpenings', () => {
     expect(landingUpdate?.data.holeMetadata).toEqual([{ source: 'stair', stairId: stair.id }])
   })
 })
+
+/**
+ * BEKÇİ: senkronun sahne-tarama sayısı yüzey sayısından bağımsız.
+ *
+ * Bu sistemin O(n²) hâli hiçbir testi kırmadan geri gelebilir — sonuçlar
+ * aynı kalır, yalnız süre büyür (4 900 düğümlü gerçek sahnede 2,6 s).
+ * Süreyi test etmek kırılgandır; onun yerine tam enumerasyon sayısı
+ * ölçülüyor: `Object.keys/values(nodes)` çağrıları Proxy'nin `ownKeys`
+ * tuzağından sayılır. Yüzey sayısı iki katına çıktığında sayı değişmemeli —
+ * tarama yüzey başına yapılıyorsa burada iki kat görünür ve test kırmızı
+ * yanar.
+ */
+describe('syncAutoStairOpenings taramaları', () => {
+  function buildScene(slabCount: number) {
+    const building = BuildingNode.parse({ name: 'B' })
+    const ground = LevelNode.parse({ name: 'G', level: 0, parentId: building.id })
+    const upper = LevelNode.parse({ name: 'U', level: 1, parentId: building.id })
+    const entries: AnyNode[] = [building, ground, upper]
+
+    for (let index = 0; index < 3; index += 1) {
+      // Bilerek fromLevelId/toLevelId YOK: kaynak/hedef kat çıkarımla bulunmalı.
+      // Çıkarım yolu (`inferDestinationLevelForSource` → `getBuildingLevels`)
+      // bu bekçinin asıl hedefi — açık kat kimliği verilen merdiven o yola hiç
+      // girmez ve tarama oraya geri gelse de test görmezdi.
+      const stair = StairNode.parse({
+        name: `S${index}`,
+        parentId: ground.id,
+        position: [index * 20, 0, 0],
+        stairType: 'straight',
+        slabOpeningMode: 'destination',
+      })
+      const flight = StairSegmentNode.parse({
+        name: `S${index}f`,
+        parentId: stair.id,
+        segmentType: 'stair',
+        length: 4,
+        width: 1.2,
+        height: 3,
+        stepCount: 16,
+      })
+      stair.children = [flight.id]
+      entries.push(stair, flight)
+    }
+
+    for (let index = 0; index < slabCount; index += 1) {
+      entries.push(
+        SlabNode.parse({
+          name: `slab${index}`,
+          parentId: upper.id,
+          polygon: [
+            [index * 6, 30],
+            [index * 6 + 5, 30],
+            [index * 6 + 5, 35],
+            [index * 6, 35],
+          ],
+        }),
+      )
+    }
+
+    return Object.fromEntries(entries.map((node) => [node.id, node])) as Record<string, AnyNode>
+  }
+
+  function countEnumerations(nodes: Record<string, AnyNode>) {
+    let enumerations = 0
+    const proxied = new Proxy(nodes, {
+      ownKeys(target) {
+        enumerations += 1
+        return Reflect.ownKeys(target)
+      },
+    })
+    syncAutoStairOpenings(proxied)
+    return enumerations
+  }
+
+  test('yüzey sayısı iki katına çıkınca tarama sayısı sabit kalıyor', () => {
+    const small = countEnumerations(buildScene(8))
+    const large = countEnumerations(buildScene(16))
+
+    expect(large).toBe(small)
+    // Mutlak sınır da sabitleniyor: sistem başına birkaç toplama geçişi +
+    // indeks kurulumu. Bu sayıyı büyüten bir değişiklik, düğüm başına maliyeti
+    // sahne boyutuyla çarpıyor demektir — bilerek yapılacaksa bu satır da
+    // bilerek değişmeli.
+    expect(small).toBeLessThanOrEqual(12)
+  })
+})
