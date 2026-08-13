@@ -8,9 +8,9 @@ import { validateProjectFormwork } from './validate-project'
  * The scene validated against the layout it actually has.
  *
  * `invariants.test.ts` covers the checks. This covers the wiring, and the wiring is
- * where the interesting failures are: eight of the twenty-one invariants are about a
+ * where the interesting failures are: nine of the twenty-two invariants are about a
  * packed run, a pressure solve, a catalog system, a drilled hole grid, a gang of the
- * layout or the programme's own peak, none of which exist in the node graph, so they
+ * layout, the rating of the panels it chose, or the programme's own peak, none of which exist in the node graph, so they
  * only run if the evidence reaches them from the build. The two ways that goes wrong
  * are silent in both directions — an invariant reported as `notChecked` when the data
  * was right there, and an invariant run against another element's hardware.
@@ -184,6 +184,19 @@ function sceneOf(
 
 const unchecked = (nodes: Record<string, AnyNode>, scope = {}) =>
   validateProjectFormwork(nodes, scope).report.notChecked.map((entry) => entry.invariant)
+
+describe('panel ratings out of the build', () => {
+  test('a panelled wall is checked against its own panels’ rating', () => {
+    // A steel-panel wall is formed from the catalog, so the rating reaches the check and
+    // the invariant must not come back as unexamined.
+    const nodes = sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1'))
+    expect(unchecked(nodes)).not.toContain('PANEL_PRESSURE_OVER_RATING')
+  })
+
+  test('a scope with nothing formed says so rather than reading as a pass', () => {
+    expect(unchecked(sceneOf(makeWall('wall_1')))).toContain('PANEL_PRESSURE_OVER_RATING')
+  })
+})
 
 describe('validateProjectFormwork', () => {
   test('an empty scene reports nothing to check rather than throwing', () => {

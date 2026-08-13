@@ -30,8 +30,7 @@ const MODEL_ID = 'us.anthropic.claude-sonnet-5'
 const setWallConstructionTool: Tool = {
   toolSpec: {
     name: 'set_wall_construction',
-    description:
-      'Set formwork/construction properties on a wall in the currently open scene.',
+    description: 'Set formwork/construction properties on a wall in the currently open scene.',
     inputSchema: {
       json: {
         type: 'object',

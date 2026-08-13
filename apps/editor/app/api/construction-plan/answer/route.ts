@@ -1,11 +1,14 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { constructionQuestionHook } from '@/workflows/hooks/construction-question'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
+import { constructionQuestionHook } from '@/workflows/hooks/construction-question'
 
 export const dynamic = 'force-dynamic'
 
-const requestSchema = z.object({ sceneId: z.string().min(1).max(64), answer: z.string().min(1).max(2000) })
+const requestSchema = z.object({
+  sceneId: z.string().min(1).max(64),
+  answer: z.string().min(1).max(2000),
+})
 
 export function OPTIONS(request: NextRequest) {
   return sceneApiPreflight(request)
@@ -20,12 +23,20 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json()
   } catch {
-    return sceneApiJson(request, { error: 'invalid_request', details: 'body must be valid JSON' }, { status: 400 })
+    return sceneApiJson(
+      request,
+      { error: 'invalid_request', details: 'body must be valid JSON' },
+      { status: 400 },
+    )
   }
 
   const parsed = requestSchema.safeParse(body)
   if (!parsed.success) {
-    return sceneApiJson(request, { error: 'invalid_request', details: parsed.error.issues }, { status: 400 })
+    return sceneApiJson(
+      request,
+      { error: 'invalid_request', details: parsed.error.issues },
+      { status: 400 },
+    )
   }
 
   try {

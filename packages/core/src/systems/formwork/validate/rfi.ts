@@ -217,6 +217,12 @@ const RFI_TEMPLATES: Record<InvariantId, RfiTemplate | null> = {
   SET_COUNT_SHORTAGE: null,
   GANG_WEIGHT_OVER_CRANE_CAPACITY: null,
   GANG_HEADROOM_OVER_HOOK_HEIGHT: null,
+  // The rate, the mix and the consistency are all temporary-works decisions, and the
+  // rating is published — so there is a call to make and none of it is a question for the
+  // designer of the permanent work. Only where the finding's own code cannot name a rate
+  // is anything genuinely unanswerable here, and that is a note on the finding rather than
+  // a different addressee this list has.
+  PANEL_PRESSURE_OVER_RATING: null,
 }
 
 /**

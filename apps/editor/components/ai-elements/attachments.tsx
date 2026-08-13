@@ -1,16 +1,30 @@
 'use client'
 
+import type { FileUIPart, SourceDocumentUIPart } from 'ai'
+import {
+  FileTextIcon,
+  GlobeIcon,
+  ImageIcon,
+  Music2Icon,
+  PaperclipIcon,
+  VideoIcon,
+  XIcon,
+} from 'lucide-react'
+import type { ComponentProps, HTMLAttributes, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
-import type { FileUIPart, SourceDocumentUIPart } from 'ai'
-import { FileTextIcon, GlobeIcon, ImageIcon, Music2Icon, PaperclipIcon, VideoIcon, XIcon } from 'lucide-react'
-import type { ComponentProps, HTMLAttributes, ReactNode } from 'react'
-import { createContext, useCallback, useContext, useMemo } from 'react'
 
 export type AttachmentData = (FileUIPart & { id: string }) | (SourceDocumentUIPart & { id: string })
 
-export type AttachmentMediaCategory = 'image' | 'video' | 'audio' | 'document' | 'source' | 'unknown'
+export type AttachmentMediaCategory =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'document'
+  | 'source'
+  | 'unknown'
 
 export type AttachmentVariant = 'grid' | 'inline' | 'list'
 
@@ -41,9 +55,21 @@ export const getAttachmentLabel = (data: AttachmentData): string => {
 
 const renderAttachmentImage = (url: string, filename: string | undefined, isGrid: boolean) =>
   isGrid ? (
-    <img alt={filename || 'Image'} className="size-full object-cover" height={96} src={url} width={96} />
+    <img
+      alt={filename || 'Image'}
+      className="size-full object-cover"
+      height={96}
+      src={url}
+      width={96}
+    />
   ) : (
-    <img alt={filename || 'Image'} className="size-full rounded object-cover" height={20} src={url} width={20} />
+    <img
+      alt={filename || 'Image'}
+      className="size-full rounded object-cover"
+      height={20}
+      src={url}
+      width={20}
+    />
   )
 
 interface AttachmentsContextValue {
@@ -61,7 +87,8 @@ interface AttachmentContextValue {
 
 const AttachmentContext = createContext<AttachmentContextValue | null>(null)
 
-export const useAttachmentsContext = () => useContext(AttachmentsContext) ?? { variant: 'grid' as const }
+export const useAttachmentsContext = () =>
+  useContext(AttachmentsContext) ?? { variant: 'grid' as const }
 
 export const useAttachmentContext = () => {
   const ctx = useContext(AttachmentContext)
@@ -73,7 +100,12 @@ export type AttachmentsProps = HTMLAttributes<HTMLDivElement> & {
   variant?: AttachmentVariant
 }
 
-export const Attachments = ({ variant = 'grid', className, children, ...props }: AttachmentsProps) => {
+export const Attachments = ({
+  variant = 'grid',
+  className,
+  children,
+  ...props
+}: AttachmentsProps) => {
   const contextValue = useMemo(() => ({ variant }), [variant])
   return (
     <AttachmentsContext.Provider value={contextValue}>
@@ -117,7 +149,10 @@ export const Attachment = ({ data, onRemove, className, children, ...props }: At
             'font-medium text-sm transition-all',
             'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
           ],
-          variant === 'list' && ['flex w-full items-center gap-3 rounded-lg border p-3', 'hover:bg-accent/50'],
+          variant === 'list' && [
+            'flex w-full items-center gap-3 rounded-lg border p-3',
+            'hover:bg-accent/50',
+          ],
           className,
         )}
         {...props}
@@ -132,11 +167,17 @@ export type AttachmentPreviewProps = HTMLAttributes<HTMLDivElement> & {
   fallbackIcon?: ReactNode
 }
 
-export const AttachmentPreview = ({ fallbackIcon, className, ...props }: AttachmentPreviewProps) => {
+export const AttachmentPreview = ({
+  fallbackIcon,
+  className,
+  ...props
+}: AttachmentPreviewProps) => {
   const { data, mediaCategory, variant } = useAttachmentContext()
   const iconSize = variant === 'inline' ? 'size-3' : 'size-4'
 
-  const renderIcon = (Icon: typeof ImageIcon) => <Icon className={cn(iconSize, 'text-muted-foreground')} />
+  const renderIcon = (Icon: typeof ImageIcon) => (
+    <Icon className={cn(iconSize, 'text-muted-foreground')} />
+  )
 
   const renderContent = () => {
     if (mediaCategory === 'image' && data.type === 'file' && data.url) {
@@ -169,7 +210,11 @@ export type AttachmentInfoProps = HTMLAttributes<HTMLDivElement> & {
   showMediaType?: boolean
 }
 
-export const AttachmentInfo = ({ showMediaType = false, className, ...props }: AttachmentInfoProps) => {
+export const AttachmentInfo = ({
+  showMediaType = false,
+  className,
+  ...props
+}: AttachmentInfoProps) => {
   const { data, variant } = useAttachmentContext()
   const label = getAttachmentLabel(data)
 
@@ -189,7 +234,12 @@ export type AttachmentRemoveProps = ComponentProps<typeof Button> & {
   label?: string
 }
 
-export const AttachmentRemove = ({ label = 'Remove', className, children, ...props }: AttachmentRemoveProps) => {
+export const AttachmentRemove = ({
+  label = 'Remove',
+  className,
+  children,
+  ...props
+}: AttachmentRemoveProps) => {
   const { onRemove, variant } = useAttachmentContext()
 
   const handleClick = useCallback(
@@ -234,24 +284,37 @@ export const AttachmentRemove = ({ label = 'Remove', className, children, ...pro
 
 export type AttachmentHoverCardProps = ComponentProps<typeof HoverCard>
 
-export const AttachmentHoverCard = ({ openDelay = 0, closeDelay = 0, ...props }: AttachmentHoverCardProps) => (
+export const AttachmentHoverCard = ({
+  openDelay = 0,
+  closeDelay = 0,
+  ...props
+}: AttachmentHoverCardProps) => (
   <HoverCard closeDelay={closeDelay} openDelay={openDelay} {...props} />
 )
 
 export type AttachmentHoverCardTriggerProps = ComponentProps<typeof HoverCardTrigger>
 
-export const AttachmentHoverCardTrigger = (props: AttachmentHoverCardTriggerProps) => <HoverCardTrigger {...props} />
+export const AttachmentHoverCardTrigger = (props: AttachmentHoverCardTriggerProps) => (
+  <HoverCardTrigger {...props} />
+)
 
 export type AttachmentHoverCardContentProps = ComponentProps<typeof HoverCardContent>
 
-export const AttachmentHoverCardContent = ({ align = 'start', className, ...props }: AttachmentHoverCardContentProps) => (
+export const AttachmentHoverCardContent = ({
+  align = 'start',
+  className,
+  ...props
+}: AttachmentHoverCardContentProps) => (
   <HoverCardContent align={align} className={cn('w-auto p-2', className)} {...props} />
 )
 
 export type AttachmentEmptyProps = HTMLAttributes<HTMLDivElement>
 
 export const AttachmentEmpty = ({ className, children, ...props }: AttachmentEmptyProps) => (
-  <div className={cn('flex items-center justify-center p-4 text-muted-foreground text-sm', className)} {...props}>
+  <div
+    className={cn('flex items-center justify-center p-4 text-muted-foreground text-sm', className)}
+    {...props}
+  >
     {children ?? 'No attachments'}
   </div>
 )

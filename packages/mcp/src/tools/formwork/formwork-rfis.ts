@@ -36,7 +36,7 @@ export const formworkRfisOutput = {
  * The findings this surface must not offer to fix.
  *
  * `validate_formwork` already says what would clear every finding, and for eleven of the
- * twenty-one invariants the honest answer is "nothing this feature writes". Left there,
+ * twenty-two invariants the honest answer is "nothing this feature writes". Left there,
  * an agent reads a defect with no call attached and does the natural thing: it proposes a
  * layout change, or it invents a detail. Both are the sender doing the designer's work,
  * on the two subjects — a waterstop across a joint, an anchor load into hardened concrete

@@ -73,6 +73,8 @@ export type InvariantId =
   | 'GANG_WEIGHT_OVER_CRANE_CAPACITY'
   /** A gang's slings want more height between its top and the hook than the crane has. */
   | 'GANG_HEADROOM_OVER_HOOK_HEIGHT'
+  /** The pour puts more pressure on the panels than they are rated for. */
+  | 'PANEL_PRESSURE_OVER_RATING'
 
 /**
  * One stretch a through-tie could pass over, and the stations at which it can.
@@ -238,4 +240,5 @@ export const INVARIANT_LABELS: Record<InvariantId, string> = {
   SET_COUNT_SHORTAGE: 'More needed at once than the yard owns',
   GANG_WEIGHT_OVER_CRANE_CAPACITY: 'A gang is heavier than the crane lifts',
   GANG_HEADROOM_OVER_HOOK_HEIGHT: 'A gang’s slings want more height than the hook has',
+  PANEL_PRESSURE_OVER_RATING: 'Pour pressure over what the panels are rated for',
 }

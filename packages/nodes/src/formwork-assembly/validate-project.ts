@@ -2,6 +2,7 @@ import type {
   FaceGangs,
   FormworkSystem,
   PressureEnvelope,
+  RiseRateLimit,
   StripPack,
   TieField,
   ValidationReport,
@@ -14,14 +15,16 @@ import { solveProjectFormwork } from './solve-project'
 /**
  * The scene, validated — with the evidence the shutters were actually built from.
  *
- * `validateFormwork` can run on nodes alone, and eight of its twenty-one invariants
+ * `validateFormwork` can run on nodes alone, and nine of its twenty-two invariants
  * come back `notChecked` when it does: an unformable strip is a property of the packed
  * run, a code-envelope breach a property of the pressure solve, a tie that reaches
  * nothing a property of the catalog system, and a band beside an opening with no tie
  * in it — like a waterstop with a drilled tie hole in it — a property of where the
  * frames were drilled. Two more are properties of a *gang*, which is a grouping of the
  * layout the geometry produced: what one pick weighs, and how much height its slings
- * want. The last is not a property of a layout at all: a set-count shortage is a peak
+ * want. Another is a property of the panels the layout chose: what they are rated for, and
+ * so how fast the pour may rise before it is over that. The last is not a property of a
+ * layout at all: a set-count shortage is a peak
  * against the yard's rack, which needs the programme and the bill together. None of
  * them survive into the node graph, so a validator handed only nodes cannot see them.
  *
@@ -69,6 +72,7 @@ export function validateProjectFormwork(
   const systems = new Map<AnyNodeId, FormworkSystem>()
   const tieFields = new Map<AnyNodeId, readonly TieField[]>()
   const gangs = new Map<AnyNodeId, readonly FaceGangs[]>()
+  const riseRates = new Map<AnyNodeId, RiseRateLimit>()
   // A shortage names a catalog id and the pours that overlap on it, and a pour id is an
   // assembly id — which the validator never sees, because it reads castable elements. This
   // is the only layer that holds both, the same reason `bomHire`'s `targetsByMark` is built
@@ -109,6 +113,12 @@ export function validateProjectFormwork(
     // crane makes two.
     const faces = element.shutters.flatMap((shutter) => shutter.evidence.gangs ?? [])
     if (faces.length > 0) gangs.set(id, faces)
+    // The base lift's, like the envelope and for the same reason: pressure grows with the
+    // head above the point, so the lift with the deepest concrete overloads a panel first,
+    // and a lift above it cannot be over a rating the base one is under.
+    const riseRate = element.shutters.find((shutter) => shutter.evidence.riseRate)?.evidence
+      .riseRate
+    if (riseRate) riseRates.set(id, riseRate)
   }
 
   return {
@@ -120,6 +130,7 @@ export function validateProjectFormwork(
       systems,
       tieFields,
       gangs,
+      riseRates,
       // The scene's crane, read here and not per element: a load chart is a fact about the
       // site, and the same machine lifts every gang on it. Absent where nobody recorded one,
       // which the report says rather than checking every pick against a machine on hire

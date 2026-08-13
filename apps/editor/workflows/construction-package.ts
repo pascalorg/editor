@@ -96,8 +96,7 @@ export async function planConstructionPackage(sceneId: string) {
   const elements = Object.values(stored.graph.nodes)
     .filter(
       (n): n is CastableNode =>
-        (CASTABLE_TYPES as readonly string[]).includes(n.type) &&
-        !(n as CastableNode).formworkType,
+        (CASTABLE_TYPES as readonly string[]).includes(n.type) && !(n as CastableNode).formworkType,
     )
     .map((n) => ({ id: n.id as string, kind: n.type as string }))
 

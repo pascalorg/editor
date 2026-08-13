@@ -1,5 +1,5 @@
-import { getRun } from 'workflow/api'
 import { type NextRequest, NextResponse } from 'next/server'
+import { getRun } from 'workflow/api'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
 
 export const dynamic = 'force-dynamic'
@@ -9,7 +9,10 @@ export function OPTIONS(request: NextRequest) {
 }
 
 /** Polls a construction-plan workflow run: status, and its return value once complete. */
-export async function GET(request: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ runId: string }> },
+) {
   const guard = guardSceneApiRequest(request)
   if (guard) return guard
 

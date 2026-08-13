@@ -7,6 +7,7 @@ import { WindowNode } from '../../../schema/nodes/window'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
 import type { AcquireLine, FormworkAcquisition } from '../acquire'
 import { DOKA_FRAMAX_XLIFE, formworkSystem } from '../catalog'
+import { designEnvelope, packRiseRateLimit } from '../design'
 import { layOutFace } from '../layout/courses'
 import { type FaceGangs, gangFace } from '../layout/gangs'
 import { packStrip } from '../layout/strip-pack'
@@ -805,6 +806,63 @@ describe('code envelope', () => {
     expect(
       report.notChecked.some((entry) => entry.invariant === 'DESIGN_OUTSIDE_CODE_ENVELOPE'),
     ).toBe(true)
+  })
+})
+
+describe('panel pressure against the published rating', () => {
+  const system = formworkSystem('doka-framax-xlife')
+  if (!system) throw new Error('the Framax catalog is missing')
+
+  /** A real Framax face, so the rating compared against is the catalog's own. */
+  const packs = [packStrip(system, 2700, { heightMm: 2700 })]
+
+  const settings = (riseRateMH: number) => ({
+    ...DEFAULT_FORMWORK_SETTINGS,
+    riseRateMH,
+    pressureStandard: 'DIN_18218' as const,
+  })
+
+  it('fires as an error and names the rate that clears it', () => {
+    const w = wall({ height: 12 })
+    // 12 m of concrete at 7 m/h is well past what any panel frame is rated for.
+    const set = settings(7)
+    const limit = packRiseRateLimit(set, packs, 12, [5, 0.2], designEnvelope(set, 12, [5, 0.2]))
+    expect(limit?.designKnM2 ?? 0).toBeGreaterThan(limit?.permissibleKnM2 ?? Infinity)
+    const report = validateFormwork([w] as AnyNode[], {
+      riseRates: new Map([[w.id as AnyNodeId, limit as NonNullable<typeof limit>]]),
+    })
+    const finding = report.findings.find((f) => f.invariant === 'PANEL_PRESSURE_OVER_RATING')
+    expect(finding?.severity).toBe('error')
+    expect(finding?.message).toContain('m/h')
+    // The remedy is the pour rate and is offered rather than applied: it is a project
+    // setting, so accepting it re-designs every shutter in the scene.
+    expect(finding?.remedy?.kind).toBe('choice')
+    expect(finding?.remedy?.field).toBe('riseRateMH')
+  })
+
+  it('says nothing about a pour the panels carry', () => {
+    const w = wall()
+    const set = settings(0.5)
+    const limit = packRiseRateLimit(set, packs, 3, [5, 0.2], designEnvelope(set, 3, [5, 0.2]))
+    expect(limit?.designKnM2 ?? Infinity).toBeLessThan(limit?.permissibleKnM2 ?? 0)
+    const report = validateFormwork([w] as AnyNode[], {
+      riseRates: new Map([[w.id as AnyNodeId, limit as NonNullable<typeof limit>]]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'PANEL_PRESSURE_OVER_RATING')).toBe(false)
+  })
+
+  it('has no rating to check where the layout used no catalog panel', () => {
+    const set = settings(2)
+    // A run only a cut board closes: nothing in it publishes a permissible pressure.
+    const bespoke = [packStrip(system, 40, { heightMm: 2700 })]
+    expect(
+      packRiseRateLimit(set, bespoke, 3, [5, 0.2], designEnvelope(set, 3, [5, 0.2])),
+    ).toBeUndefined()
+  })
+
+  it('declares itself unrun when no ratings are passed', () => {
+    const report = validateFormwork([wall()] as AnyNode[])
+    expect(report.notChecked.some((e) => e.invariant === 'PANEL_PRESSURE_OVER_RATING')).toBe(true)
   })
 })
 

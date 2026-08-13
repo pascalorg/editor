@@ -33,7 +33,7 @@ import { MIN_WORKABLE_PIECE_MM, type StripPack } from '../layout/strip-pack'
 import { splitIntoLifts } from '../pours/lifts'
 import type { PourLift, PourLimits, PourUnit } from '../pours/types'
 import { hardCutsForElement, pourUnitsForElement } from '../pours/units'
-import type { PressureEnvelope } from '../pressure'
+import { type PressureEnvelope, RISE_RATE_REFUSAL_LABELS, type RiseRateLimit } from '../pressure'
 import type { Finding, FormworkRemedy, InvariantId, TieField, ValidationReport } from './types'
 
 /**
@@ -207,6 +207,15 @@ export interface ValidateOptions {
    * second one somewhere the schema has no room for yet.
    */
   crane?: FormworkCraneSettings
+  /**
+   * What each element's panels are rated for and how fast it may be poured, for the
+   * panel × pressure check.
+   *
+   * Absent on an element with no catalog panel in its layout — a bespoke or conventional
+   * face has no published rating to compare a pressure to — and absent for the whole scope
+   * where nothing has been formed, which the report declares rather than reading as a pass.
+   */
+  riseRates?: Map<AnyNodeId, RiseRateLimit>
 }
 
 /**
@@ -1489,6 +1498,57 @@ function codeEnvelopes(envelopes: ReadonlyMap<AnyNodeId, PressureEnvelope>): Fin
 }
 
 /**
+ * A pour that pushes harder than the panels holding it are rated for.
+ *
+ * The one check in this suite whose remedy is not a spacing. Every other overload is
+ * answered by more hardware — a waler closer in, a tie row added — and a panel frame
+ * cannot be: a Framax panel is rated 60 kN/m² and no arrangement of it is rated more.
+ * So the finding names the three things that *are* adjustable, and where the code inverts
+ * it names the first of them as a figure: pour no faster than this.
+ *
+ * An error rather than a warning, unlike the code-envelope check beside it. That one says
+ * the pressure was derived outside the range the standard was validated over, which is an
+ * exception an engineer accepts; this says the form is loaded past its published capacity,
+ * which is a blowout.
+ *
+ * `riseRates` is per element and passed, never derived: the rating belongs to the panels
+ * the layout actually used and the pressure to the pour the envelope came from, and a
+ * second derivation of either is how a warning comes to quote a rate for a different pour.
+ */
+function panelRatings(
+  riseRates: ReadonlyMap<AnyNodeId, RiseRateLimit>,
+  scoped: ReadonlySet<AnyNodeId>,
+): Finding[] {
+  const out: Finding[] = []
+  for (const [elementId, limit] of riseRates) {
+    if (!scoped.has(elementId)) continue
+    if (limit.designKnM2 <= limit.permissibleKnM2) continue
+    const advice =
+      limit.maxRateMH === undefined
+        ? RISE_RATE_REFUSAL_LABELS[limit.refusal ?? 'no-rate-is-slow-enough']
+        : `pouring no faster than ${limit.maxRateMH.toFixed(2)} m/h instead of ${limit.statedRateMH.toFixed(2)} brings it inside`
+    out.push(
+      finding(
+        'PANEL_PRESSURE_OVER_RATING',
+        'error',
+        [elementId],
+        `${elementId}: the pour puts ${limit.designKnM2.toFixed(1)} kN/m² on panels rated ${limit.permissibleKnM2.toFixed(1)} kN/m² — ${advice}.`,
+        undefined,
+        limit.maxRateMH === undefined
+          ? undefined
+          : {
+              kind: 'choice',
+              tool: 'set_formwork_settings',
+              field: 'riseRateMH',
+              note: `Pour at ${limit.maxRateMH.toFixed(2)} m/h or slower, or warm the mix or stiffen the consistency. The rate is a project setting, so changing it re-designs every shutter in the scene — which is why it is offered rather than applied.`,
+            },
+      ),
+    )
+  }
+  return out
+}
+
+/**
  * A part the concurrent pours need more of than the yard owns.
  *
  * The last of the plan's assertions to have had no input, and the one whose absence was
@@ -1659,6 +1719,7 @@ function unavailable(
   hasAcquisition: boolean,
   hasGangs: boolean,
   crane: FormworkCraneSettings | undefined,
+  hasRiseRates: boolean,
 ) {
   // A recorded crane with an empty chart is no crane: `craneCapacityAtM` reads nothing off
   // it, so a check that treated the group's presence as the input would report a scene as
@@ -1745,6 +1806,13 @@ function unavailable(
         'the height under the hook — record `crane.hookHeightM`; the capacity curve says nothing about it, and a wide gang can be light and still not fit',
     })
   }
+  if (!hasRiseRates) {
+    out.push({
+      invariant: 'PANEL_PRESSURE_OVER_RATING',
+      needs:
+        'the panel ratings behind each layout — pass `riseRates` from the same solve the panels came from; a conventional shutter has none to compare against',
+    })
+  }
   return out
 }
 
@@ -1818,6 +1886,10 @@ export function validateFormwork(
     ...(options.crane === undefined
       ? []
       : gangCapacity(gangs, options.crane, new Set(scoped.map((element) => element.id)))),
+    ...panelRatings(
+      options.riseRates ?? new Map<AnyNodeId, RiseRateLimit>(),
+      new Set(scoped.map((element) => element.id)),
+    ),
   ]
 
   // Errors first, then by element, so the list reads in the order somebody would
@@ -1843,6 +1915,7 @@ export function validateFormwork(
       options.acquisition !== undefined,
       gangs.size > 0,
       options.crane,
+      (options.riseRates ?? new Map()).size > 0,
     ),
   }
 }

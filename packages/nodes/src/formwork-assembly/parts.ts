@@ -6,6 +6,7 @@ import {
   type FormworkSystem,
   type PressureEnvelope,
   partMark,
+  type RiseRateLimit,
   type ShutterElevation,
   type StripPack,
   type TieField,
@@ -122,6 +123,18 @@ export interface ShutterEvidence {
    * a band under it is not short of a tie the panels would have brought.
    */
   tieFields?: TieField[]
+  /**
+   * What the panels are rated for and how fast the pour may rise — for the panel ×
+   * pressure check.
+   *
+   * The rating is a property of the panels the layout used and the rate a property of
+   * the pour the envelope was solved from, so neither survives into the parts list and
+   * a validator holding one but not the other could only say "reduce the pressure".
+   * Absent on a shutter with no catalog panel in it: a bespoke face is sized against its
+   * own members and publishes no rating. Walls only for the same reason — a column form
+   * is a clamped box, not a rated panel.
+   */
+  riseRate?: RiseRateLimit
 }
 
 export interface BuiltFormwork {
@@ -163,6 +176,7 @@ export function collectParts(group: Group, node: FormworkAssemblyNode): PartColl
       if (more.gangs) found.gangs = [...(found.gangs ?? []), ...more.gangs]
       if (more.envelope) found.envelope = more.envelope
       if (more.system) found.system = more.system
+      if (more.riseRate) found.riseRate = more.riseRate
       if (more.tieFields) found.tieFields = [...(found.tieFields ?? []), ...more.tieFields]
     },
     emit(spec, mesh) {

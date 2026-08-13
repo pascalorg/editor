@@ -68,11 +68,11 @@ function defaultFor(invariant: InvariantId) {
 }
 
 describe('every invariant has an answer', () => {
-  it('answers for all 21, and the table is what makes that so', () => {
+  it('answers for all 22, and the table is what makes that so', () => {
     // `INVARIANT_LABELS` is the other exhaustive record over `InvariantId`, so it is
     // the list to sweep — a new check reaches both or neither.
     const invariants = Object.keys(INVARIANT_LABELS) as InvariantId[]
-    expect(invariants.length).toBe(21)
+    expect(invariants.length).toBe(22)
     for (const invariant of invariants) {
       const remedy = defaultFor(invariant)
       expect(remedy, invariant).toBeDefined()

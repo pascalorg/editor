@@ -72,6 +72,12 @@ export {
   dinPressure,
 } from './din-18218'
 export {
+  RISE_RATE_REFUSAL_LABELS,
+  type RiseRateLimit,
+  type RiseRateRefusal,
+  riseRateLimit,
+} from './permitted-rate'
+export {
   ACI_COLUMN_PLAN_LIMIT_M,
   ACI_SLUMP_LIMIT_MM,
   ACI_VIBRATION_DEPTH_LIMIT_M,

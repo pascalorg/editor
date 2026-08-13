@@ -1,8 +1,8 @@
-import { start } from 'workflow/api'
 import { type NextRequest, NextResponse } from 'next/server'
+import { start } from 'workflow/api'
 import { z } from 'zod'
-import { planConstructionPackage } from '@/workflows/construction-package'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
+import { planConstructionPackage } from '@/workflows/construction-package'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,12 +21,20 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json()
   } catch {
-    return sceneApiJson(request, { error: 'invalid_request', details: 'body must be valid JSON' }, { status: 400 })
+    return sceneApiJson(
+      request,
+      { error: 'invalid_request', details: 'body must be valid JSON' },
+      { status: 400 },
+    )
   }
 
   const parsed = requestSchema.safeParse(body)
   if (!parsed.success) {
-    return sceneApiJson(request, { error: 'invalid_request', details: parsed.error.issues }, { status: 400 })
+    return sceneApiJson(
+      request,
+      { error: 'invalid_request', details: parsed.error.issues },
+      { status: 400 },
+    )
   }
 
   try {
@@ -34,6 +42,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ runId: run.runId })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return sceneApiJson(request, { error: 'workflow_start_failed', details: message }, { status: 502 })
+    return sceneApiJson(
+      request,
+      { error: 'workflow_start_failed', details: message },
+      { status: 502 },
+    )
   }
 }

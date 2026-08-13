@@ -1,8 +1,13 @@
-import { type NextRequest } from 'next/server'
-import { convertToModelMessages, streamText, isStepCount, type UIMessage } from 'ai'
+import { convertToModelMessages, isStepCount, streamText, type UIMessage } from 'ai'
+import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { buildTools, MODEL, SYSTEM_PROMPT } from '@/lib/chat-ai'
-import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight, withSceneApiHeaders } from '@/lib/scene-api-security'
+import {
+  guardSceneApiRequest,
+  sceneApiJson,
+  sceneApiPreflight,
+  withSceneApiHeaders,
+} from '@/lib/scene-api-security'
 import { getSceneStore } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -24,12 +29,20 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json()
   } catch {
-    return sceneApiJson(request, { error: 'invalid_request', details: 'body must be valid JSON' }, { status: 400 })
+    return sceneApiJson(
+      request,
+      { error: 'invalid_request', details: 'body must be valid JSON' },
+      { status: 400 },
+    )
   }
 
   const parsed = chatRequestSchema.safeParse(body)
   if (!parsed.success) {
-    return sceneApiJson(request, { error: 'invalid_request', details: parsed.error.issues }, { status: 400 })
+    return sceneApiJson(
+      request,
+      { error: 'invalid_request', details: parsed.error.issues },
+      { status: 400 },
+    )
   }
   const { sceneId, messages } = parsed.data
 
@@ -69,7 +82,12 @@ export async function POST(request: NextRequest) {
           operation: 'ai_chat',
         })
         if (store.appendSceneEvent) {
-          await store.appendSceneEvent({ sceneId: meta.id, version: meta.version, kind: 'ai_chat', graph: stored.graph })
+          await store.appendSceneEvent({
+            sceneId: meta.id,
+            version: meta.version,
+            kind: 'ai_chat',
+            graph: stored.graph,
+          })
         }
       } catch (error) {
         // Scene changed under us (another editor/MCP session saved first).

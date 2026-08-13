@@ -1,3 +1,4 @@
+import type { FormworkCraneSettings } from '../../schema/nodes/formwork-project-settings'
 import {
   bestCraneCapacityKg,
   craneHookHeightMm,
@@ -7,7 +8,6 @@ import {
   worstCraneCapacityKg,
 } from './crane'
 import type { FaceGangs, Gang } from './layout/gangs'
-import type { FormworkCraneSettings } from '../../schema/nodes/formwork-project-settings'
 
 /**
  * Every pick on the job, heaviest first — the lifting schedule a takeoff prints.
@@ -123,7 +123,8 @@ function pickFor(
 ): LiftPick {
   const pickKg = gang.pickWeightKg
   const verdict = pickKg === undefined ? undefined : cranePickVerdict(crane, pickKg)
-  const insideM = pickKg === undefined || verdict !== 'position' ? undefined : craneRadiusForPickM(crane, pickKg)
+  const insideM =
+    pickKg === undefined || verdict !== 'position' ? undefined : craneRadiusForPickM(crane, pickKg)
   return {
     elementId,
     faceNumber,

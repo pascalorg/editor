@@ -162,6 +162,12 @@ const REMEDIES: Record<InvariantId, FormworkRemedy> = {
     field: 'crane',
     note: 'A hook height is a fact about the crane on the site, so this is a write only where the recorded figure is wrong. Where it is right, the gang is picked with shorter slings or split — both rigging and layout decisions, and neither a call.',
   },
+  PANEL_PRESSURE_OVER_RATING: {
+    kind: 'choice',
+    tool: 'set_formwork_settings',
+    field: 'riseRateMH',
+    note: 'Pour slower, warm the mix, or stiffen the consistency — the frame is rated what it is rated and no arrangement of it carries more. Only the rate is a call, and it is a project setting, so it re-designs every shutter in the scene. The finding carries the rate that clears this one where its code inverts.',
+  },
 }
 
 /**

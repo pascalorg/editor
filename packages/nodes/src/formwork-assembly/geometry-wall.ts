@@ -4,6 +4,7 @@ import {
   type FormworkSystem,
   fitCorner,
   governingCapacity,
+  packRiseRateLimit,
   type ShutterElevation,
   type WallDesign,
 } from '@pascal-app/core/formwork'
@@ -494,11 +495,19 @@ export function buildWallFormwork(
   // that meant to count picks doubles this figure knowingly — what it must not do is
   // report the same pick weight twice as two different gangs to check.
   const layoutFace = planByFace.get('a') ?? planByFace.get('b')
+  const riseRate = packRiseRateLimit(
+    settings,
+    layoutFace?.packs ?? [],
+    topY - baseY,
+    [wallLength, thickness],
+    design.envelope,
+  )
   parts.evidence({
     packs: layoutFace?.packs ?? [],
     gangs: layoutFace?.gangs ?? [],
     envelope: design.envelope,
     system,
+    ...(riseRate === undefined ? {} : { riseRate }),
   })
 
   // Every face is coursed off the same lift, so the shutter's own extent is one

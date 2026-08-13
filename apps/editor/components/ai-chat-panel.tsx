@@ -1,9 +1,9 @@
 'use client'
 
+import { useChat } from '@ai-sdk/react'
 import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { DefaultChatTransport, isDynamicToolUIPart, isToolUIPart, type UIMessage } from 'ai'
-import { useChat } from '@ai-sdk/react'
 import { MessageSquare, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import {
