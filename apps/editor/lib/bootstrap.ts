@@ -1,4 +1,4 @@
-import { bonesHostPanel, bonesPlugin } from '@bones/pascal-plugin'
+import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { mintHostPanel, mintPlugin } from '@mint/pascal-plugin'
 import {
   type AnyNodeDefinition,

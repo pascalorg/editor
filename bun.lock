@@ -27,7 +27,6 @@
       "name": "editor",
       "version": "0.1.0",
       "dependencies": {
-        "@bones/pascal-plugin": "github:Snoopy147/plugin-bones#32a6c04589b1c80b9d48914ee11341a734931f11",
         "@iconify/react": "^6.0.2",
         "@mint/pascal-plugin": "github:mintdotgg/mint-pascal-plugin#902c546dbaece6b31455c0dc394afe6b9cd136fe",
         "@number-flow/react": "^0.6.0",
@@ -35,6 +34,7 @@
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
+        "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#e79656bdd666d270d971a9972788e7f6eefcfaef",
         "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
@@ -393,8 +393,6 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.4.16", "", { "os": "win32", "cpu": "x64" }, "sha512-Kp85jgoBHa05gix6UIRjfCDiUV3w/8VIdZ247VyyO2gEjaw12WEVhdIjlxp/AMzXxqxQwbxNTDVZ3Mwd2RG5rw=="],
 
-    "@bones/pascal-plugin": ["@bones/pascal-plugin@github:Snoopy147/plugin-bones#32a6c04", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "Snoopy147-plugin-bones-32a6c04"],
-
     "@clack/core": ["@clack/core@1.4.1", "", { "dependencies": { "fast-wrap-ansi": "^0.2.0", "sisteransi": "^1.0.5" } }, "sha512-FILJa1gGKEFTGZAJE9RpVhrjKz3c3h4ar60dSv6cGuDqufQ84YEIS3GAGvZiN+H6yaLbbvTFNejjCC4tXpZEuw=="],
 
     "@clack/prompts": ["@clack/prompts@1.5.1", "", { "dependencies": { "@clack/core": "1.4.1", "fast-string-width": "^3.0.2", "fast-wrap-ansi": "^0.2.0", "sisteransi": "^1.0.5" } }, "sha512-zccHj2z2oCCO4yrDiRSlFOxWerGqRiysP7a5jPK6uoI9URKAquwY42Dd/iUP8JWHxEzdRe4TlbvZCo8z1/mhrw=="],
@@ -726,6 +724,8 @@
     "@pascal-app/mcp": ["@pascal-app/mcp@workspace:packages/mcp"],
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
+
+    "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@github:pascalorg/plugin-bones#e79656b", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-bones-e79656b"],
 
     "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#1c04ec9", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-1c04ec9"],
 
