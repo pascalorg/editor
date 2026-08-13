@@ -34,7 +34,11 @@ export type CustomMeshTopologyIssue = {
   message: string
 }
 
-const edgeKey = (a: string, b: string) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
+export const CUSTOM_MESH_BODY_MATERIAL_REF = 'library:concrete-drywall'
+
+export function customMeshUndirectedEdgeKey(a: string, b: string) {
+  return a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`
+}
 
 export function inspectCustomMeshTopology(topology: CustomMeshTopology): CustomMeshTopologyIssue[] {
   const issues: CustomMeshTopologyIssue[] = []
@@ -67,7 +71,7 @@ export function inspectCustomMeshTopology(topology: CustomMeshTopology): CustomM
         })
       }
     })
-    const key = edgeKey(a, b)
+    const key = customMeshUndirectedEdgeKey(a, b)
     if (edgeKeys.has(key)) {
       issues.push({ path: ['edges', index], message: `Duplicate edge: ${a}–${b}` })
     }
@@ -90,7 +94,7 @@ export function inspectCustomMeshTopology(topology: CustomMeshTopology): CustomM
         })
       }
       const nextVertexId = face.vertexIds[(vertexIndex + 1) % face.vertexIds.length]
-      if (nextVertexId && !edgeKeys.has(edgeKey(vertexId, nextVertexId))) {
+      if (nextVertexId && !edgeKeys.has(customMeshUndirectedEdgeKey(vertexId, nextVertexId))) {
         issues.push({
           path: ['faces', index, 'vertexIds', vertexIndex],
           message: `Missing edge for face boundary: ${vertexId}–${nextVertexId}`,
@@ -158,13 +162,18 @@ export const CustomMeshNode = BaseNode.extend({
   rotation: z.number().default(0),
   supportSlabId: z.string().optional(),
   topology: CustomMeshTopology.default(createBoxCustomMeshTopology),
-  slots: z.record(z.string(), z.string()).optional(),
+  slots: z
+    .record(z.string(), z.string())
+    .default({})
+    .transform(
+      (slots): Record<string, string> => ({ body: CUSTOM_MESH_BODY_MATERIAL_REF, ...slots }),
+    ),
 }).describe(dedent`
   Custom mesh node - a topology-backed editable solid.
   - topology: persistent vertices, edges, and ordered face loops with stable IDs
   - position/rotation: level-local placement transform
   - supportSlabId: persisted placement surface that prevents later slabs from lifting the mesh
-  - slots: optional material references keyed by face materialSlot
+  - slots: material references keyed by face materialSlot; body always starts reusable
 `)
 
 export type CustomMeshNode = z.infer<typeof CustomMeshNode>

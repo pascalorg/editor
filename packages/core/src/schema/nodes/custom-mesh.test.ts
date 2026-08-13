@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  CUSTOM_MESH_BODY_MATERIAL_REF,
   CustomMeshNode,
   CustomMeshTopology,
   createBoxCustomMeshTopology,
@@ -13,6 +14,7 @@ describe('CustomMeshNode', () => {
     expect(node.topology.vertices).toHaveLength(8)
     expect(node.topology.edges).toHaveLength(12)
     expect(node.topology.faces).toHaveLength(6)
+    expect(node.slots).toEqual({ body: CUSTOM_MESH_BODY_MATERIAL_REF })
     expect(inspectCustomMeshTopology(node.topology)).toEqual([])
   })
 
@@ -23,6 +25,18 @@ describe('CustomMeshNode', () => {
     })
 
     expect(node.supportSlabId).toBe('ground')
+  })
+
+  test('repairs legacy slot maps that predate the reusable body binding', () => {
+    const node = CustomMeshNode.parse({
+      name: 'Legacy painted mesh',
+      slots: { accent: 'library:metal-steel' },
+    })
+
+    expect(node.slots).toEqual({
+      body: CUSTOM_MESH_BODY_MATERIAL_REF,
+      accent: 'library:metal-steel',
+    })
   })
 
   test('rejects a face loop without a persisted boundary edge', () => {

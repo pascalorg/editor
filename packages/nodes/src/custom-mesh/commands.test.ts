@@ -359,6 +359,26 @@ describe('applyCustomMeshCommand', () => {
     expect(inspectCustomMeshTopology(result.topology)).toEqual([])
   })
 
+  test('keeps multiple loop cuts centered until multi-cut sliding is supported', () => {
+    const centered = applyCustomMeshCommand(createBoxCustomMeshTopology(), {
+      type: 'loop-cut',
+      edgeId: 'e8',
+      factor: 0.5,
+      cuts: 3,
+    })
+    const attemptedSlide = applyCustomMeshCommand(createBoxCustomMeshTopology(), {
+      type: 'loop-cut',
+      edgeId: 'e8',
+      factor: 0.8,
+      cuts: 3,
+    })
+
+    expect(centered.ok).toBe(true)
+    expect(attemptedSlide.ok).toBe(true)
+    if (!(centered.ok && attemptedSlide.ok)) return
+    expect(attemptedSlide.topology).toEqual(centered.topology)
+  })
+
   test('bevels a manifold box edge with width, segments, profile, and overlap clamping', () => {
     const result = applyCustomMeshCommand(createBoxCustomMeshTopology(), {
       type: 'bevel-edge',

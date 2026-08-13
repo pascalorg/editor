@@ -1,5 +1,7 @@
+import { levelBaseElevationAt, terrainSupportLift } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, FenceNode, SlabNode, WallNode } from '../../schema'
+import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
 import { getWallCurveFrameAt, isCurvedWall } from '../../systems/wall/wall-curve'
 import {
   GROUND_SUPPORT_ID,
@@ -357,4 +359,163 @@ export function resolveFenceSupportSlabPatch(
   }
   const persist = candidateElevations.size >= 2 || winner.elevation > SUPPORT_ELEVATION_EPSILON
   return { supportSlabId: options?.pinSupport || persist ? winner.slabId : undefined }
+}
+
+export type FenceConstructionOptions = {
+  supportCap?: number | null
+  preferredSupportSlabId?: string | null
+  constructionElevation?: number | null
+}
+
+export function resolveFenceConstructionSupport(
+  fence: FenceNode,
+  levelId: string,
+  nodes: Record<string, AnyNode>,
+  options?: FenceConstructionOptions,
+): FenceNode {
+  const supportPatch = resolveFenceSupportSlabPatch({ ...fence, parentId: levelId }, nodes, {
+    maxElevation: options?.supportCap ?? null,
+    preferredSlabId: options?.preferredSupportSlabId ?? null,
+    pinSupport: options?.constructionElevation != null,
+  })
+  const host = supportPatch.supportSlabId ? nodes[supportPatch.supportSlabId] : null
+  const baseElevation =
+    host?.type === 'slab'
+      ? host.elevation
+      : levelBaseElevationAt(nodes, levelId, fence.start[0], fence.start[1])
+  const supportOffset =
+    options?.constructionElevation == null
+      ? fence.supportOffset
+      : options.constructionElevation - baseElevation
+
+  return {
+    ...fence,
+    ...supportPatch,
+    supportOffset:
+      supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
+  }
+}
+
+export type WallConstructionOptions = {
+  supportCap?: number | null
+  preferredSupportSlabId?: string | null
+  constructionElevation?: number | null
+  constructionHeight?: number | null
+  flatConstructionBase?: boolean
+  constructionSourceNodeId?: AnyNodeId | null
+}
+
+export function resolveTerrainWallConstructionOptions(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  point: readonly [number, number],
+  defaults?: Record<string, unknown>,
+): WallConstructionOptions | undefined {
+  const constructionElevation = terrainSupportLift(nodes, levelId, point[0], point[1])
+  if (constructionElevation == null) return undefined
+
+  const level = nodes[levelId]
+  const constructionHeight =
+    typeof defaults?.height === 'number'
+      ? defaults.height
+      : level?.type === 'level'
+        ? (level.height ?? DEFAULT_LEVEL_HEIGHT)
+        : DEFAULT_LEVEL_HEIGHT
+
+  return {
+    constructionElevation,
+    constructionHeight,
+    supportCap: constructionElevation,
+  }
+}
+
+export type WallConstructionResolution = {
+  walls: WallNode[]
+  sourceSupportUpdate: { id: AnyNodeId; data: SupportSlabPatch } | null
+}
+
+export function resolveWallConstruction(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  walls: readonly WallNode[],
+  options?: WallConstructionOptions,
+): WallConstructionResolution {
+  let resolvedNodes = nodes
+  let sourceSupportUpdate: WallConstructionResolution['sourceSupportUpdate'] = null
+  const constructionSourceNodeId = options?.constructionSourceNodeId
+  if (constructionSourceNodeId) {
+    const sourceNode = nodes[constructionSourceNodeId]
+    const currentSupport =
+      sourceNode && 'supportSlabId' in sourceNode
+        ? (sourceNode.supportSlabId as string | undefined)
+        : undefined
+    if (sourceNode && currentSupport == null) {
+      const data = resolveSupportSlabPatch(sourceNode, nodes, { pinSupport: true })
+      if (data.supportSlabId != null) {
+        sourceSupportUpdate = { id: constructionSourceNodeId, data }
+        resolvedNodes = {
+          ...nodes,
+          [constructionSourceNodeId]: { ...sourceNode, ...data } as AnyNode,
+        }
+      }
+    }
+  }
+
+  const resolvedWalls = walls.map((createdWall) => {
+    const wallWithParent = { ...createdWall, parentId: levelId as AnyNodeId } as WallNode
+    const terrainBase = terrainSupportLift(
+      resolvedNodes,
+      levelId,
+      createdWall.start[0],
+      createdWall.start[1],
+    )
+    const wallOptions =
+      options?.preferredSupportSlabId === GROUND_SUPPORT_ID &&
+      terrainBase == null &&
+      !options.flatConstructionBase
+        ? undefined
+        : options
+    const preferredSupportSlabId =
+      wallOptions?.flatConstructionBase === true
+        ? GROUND_SUPPORT_ID
+        : (wallOptions?.preferredSupportSlabId ??
+          (wallOptions?.constructionElevation != null && terrainBase != null
+            ? GROUND_SUPPORT_ID
+            : null))
+    const supportPatch = resolveWallSupportSlabPatch(wallWithParent, resolvedNodes, {
+      maxElevation: wallOptions?.supportCap ?? null,
+      preferredSlabId: preferredSupportSlabId,
+    })
+    const sourceSupport = spatialGridManager.getSlabSupportForWall(
+      levelId,
+      createdWall.start,
+      createdWall.end,
+      createdWall.curveOffset,
+      createdWall.thickness,
+      supportPatch.supportSlabId,
+      wallOptions?.supportCap ?? null,
+    )
+    const groundDraft =
+      preferredSupportSlabId === GROUND_SUPPORT_ID &&
+      (terrainBase != null || wallOptions?.flatConstructionBase === true)
+    const supportOffset =
+      groundDraft && wallOptions?.constructionElevation != null
+        ? wallOptions.constructionElevation - sourceSupport.elevation
+        : undefined
+    const preserveDraftHeight =
+      groundDraft &&
+      createdWall.height == null &&
+      wallOptions?.constructionHeight != null &&
+      wallOptions.constructionElevation != null
+
+    return {
+      ...wallWithParent,
+      ...supportPatch,
+      height: preserveDraftHeight ? wallOptions.constructionHeight : createdWall.height,
+      supportOffset:
+        supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
+    } as WallNode
+  })
+
+  return { walls: resolvedWalls, sourceSupportUpdate }
 }

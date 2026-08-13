@@ -72,6 +72,7 @@ describe('use-interaction-scope state machine', () => {
       nodeType: 'item',
       view: '3d',
       pressDrag: false,
+      driver: 'move-tool',
     })
     s.update({ pressDrag: true })
     const scope = useInteractionScope.getState().scope
@@ -105,6 +106,7 @@ describe('use-interaction-scope state machine', () => {
       nodeType: 'item',
       view: '3d',
       pressDrag: true,
+      driver: 'move-tool',
     })
     expect(useInteractionScope.getState().scope.kind).toBe('moving')
   })
@@ -205,6 +207,7 @@ describe('derived flag views are leak-free (no parallel flags)', () => {
         nodeType: 'item',
         view: '3d',
         pressDrag: false,
+        driver: 'move-tool',
       },
       { kind: 'moving', node: mockNode('i', 'item'), nodeId: 'i', nodeType: 'item', view: '3d' },
       { kind: 'drafting', tool: 'wall' },

@@ -75,6 +75,7 @@ export {
 } from './nodes/construction-dimension'
 export { CupolaNode } from './nodes/cupola'
 export {
+  CUSTOM_MESH_BODY_MATERIAL_REF,
   CustomMeshEdge,
   CustomMeshFace,
   CustomMeshNode,
@@ -82,6 +83,7 @@ export {
   type CustomMeshTopologyIssue,
   CustomMeshVertex,
   createBoxCustomMeshTopology,
+  customMeshUndirectedEdgeKey,
   inspectCustomMeshTopology,
 } from './nodes/custom-mesh'
 export {

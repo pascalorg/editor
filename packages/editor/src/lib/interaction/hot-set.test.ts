@@ -109,6 +109,7 @@ describe('isCandidateInHotSet — by scope', () => {
       nodeType: 'item',
       view: '3d' as const,
       pressDrag: false,
+      driver: 'move-tool' as const,
     }
     expect(isCandidateInHotSet(scope, surfaceClass, floor)).toBe(true)
     expect(isCandidateInHotSet(scope, surfaceClass, ceilingFan)).toBe(false)

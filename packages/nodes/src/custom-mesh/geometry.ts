@@ -4,10 +4,16 @@ import type {
   CustomMeshTopology,
   GeometryContext,
 } from '@pascal-app/core'
-import { createDefaultMaterial, type RenderShading, resolveMaterialRef } from '@pascal-app/viewer'
+import {
+  type ColorPreset,
+  createSurfaceRoleMaterial,
+  type RenderShading,
+  resolveMaterialRef,
+} from '@pascal-app/viewer'
 import {
   BufferGeometry,
   Float32BufferAttribute,
+  FrontSide,
   Group,
   Mesh,
   ShapeUtils,
@@ -66,8 +72,11 @@ export function triangulateCustomMeshFace(
 
 export function buildCustomMeshGeometry(
   node: CustomMeshNode,
-  ctx?: GeometryContext,
+  ctx?: Pick<GeometryContext, 'materials'>,
   shading: RenderShading = 'rendered',
+  textures = true,
+  colorPreset: ColorPreset = 'clay',
+  sceneTheme?: string,
 ): Group {
   const group = new Group()
   group.name = 'custom-mesh-geometry'
@@ -145,9 +154,11 @@ export function buildCustomMeshGeometry(
   geometry.userData.customMeshFaces = faceRanges
 
   const bodyMaterialRef = node.slots?.[CUSTOM_MESH_BODY_SLOT_ID]
+  const roleMaterial = createSurfaceRoleMaterial('wall', colorPreset, FrontSide, sceneTheme)
   const bodyMaterial =
-    (bodyMaterialRef ? resolveMaterialRef(bodyMaterialRef, ctx?.materials, shading) : null) ??
-    createDefaultMaterial('#b8c5d1', 0.72, shading)
+    (textures && bodyMaterialRef
+      ? resolveMaterialRef(bodyMaterialRef, ctx?.materials, shading)
+      : null) ?? roleMaterial
   const bodyFallbackSlotIds: string[] = []
   const materials = slotIds.map((slotId) => {
     const materialRef = node.slots?.[slotId]
@@ -156,7 +167,7 @@ export function buildCustomMeshGeometry(
       bodyFallbackSlotIds.push(slotId)
       return bodyMaterial
     }
-    const resolved = resolveMaterialRef(materialRef, ctx?.materials, shading)
+    const resolved = textures ? resolveMaterialRef(materialRef, ctx?.materials, shading) : null
     if (resolved) return resolved
     bodyFallbackSlotIds.push(slotId)
     return bodyMaterial

@@ -40,7 +40,10 @@ describe('custom mesh face paint', () => {
       'material-1',
     )
     expect(painted.topology.faces.find((face) => face.id === 'f-front')?.materialSlot).toBe('body')
-    expect(painted.slots).toEqual({ 'material-1': 'library:metal-steel' })
+    expect(painted.slots).toEqual({
+      body: 'library:concrete-drywall',
+      'material-1': 'library:metal-steel',
+    })
 
     customMeshPaint.commit?.({
       node: painted,
@@ -54,7 +57,10 @@ describe('custom mesh face paint', () => {
     expect(painted.topology.faces.find((face) => face.id === 'f-front')?.materialSlot).toBe(
       'material-1',
     )
-    expect(painted.slots).toEqual({ 'material-1': 'library:metal-steel' })
+    expect(painted.slots).toEqual({
+      body: 'library:concrete-drywall',
+      'material-1': 'library:metal-steel',
+    })
   })
 
   test('reuses a structurally matching scene material instead of creating one', () => {
@@ -77,7 +83,10 @@ describe('custom mesh face paint', () => {
     expect(painted?.type).toBe('custom-mesh')
     if (painted?.type !== 'custom-mesh') return
     expect(Object.keys(useScene.getState().materials)).toEqual([materialId])
-    expect(painted.slots).toEqual({ 'material-1': toSceneMaterialRef(materialId) })
+    expect(painted.slots).toEqual({
+      body: 'library:concrete-drywall',
+      'material-1': toSceneMaterialRef(materialId),
+    })
   })
 
   test('commits the face and a new reusable scene material in one undo step', () => {

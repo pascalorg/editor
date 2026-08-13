@@ -84,6 +84,7 @@ import useCustomMeshEditSession from './edit-session'
 import { triangulateCustomMeshFace } from './geometry'
 import { CUSTOM_MESH_WHEEL_OPTIONS, consumeCustomMeshGestureWheel } from './gesture-wheel'
 import { type CustomMeshSfxAction, customMeshSfx } from './interaction-sfx'
+import { resolveLoopCutPointerAction, resolveLoopCutSlideFactor } from './loop-cut-interaction'
 import { signedAngleAroundAxis, unwrapRotationDelta } from './rotation-drag'
 import {
   type CustomMeshSelectionState,
@@ -1268,6 +1269,8 @@ function CustomMeshEditor({
   const [previewTopology, setPreviewTopology] = useState<CustomMeshTopology | null>(null)
   const [activeTransform, setActiveTransform] = useState<ActiveTransform | null>(null)
   const [loopCutSegments, setLoopCutSegments] = useState<[Point, Point][] | null>(null)
+  const [loopCutEdgeId, setLoopCutEdgeId] = useState<string | null>(null)
+  const [loopCutSliding, setLoopCutSliding] = useState(false)
   const [loopCutCount, setLoopCutCount] = useState(1)
   const [loopCutFactor, setLoopCutFactor] = useState(0.5)
   const [extrudeDistance, setExtrudeDistance] = useState('0.25')
@@ -1342,6 +1345,8 @@ function CustomMeshEditor({
     setTransformTool('transform')
     setActiveTransform(null)
     setLoopCutSegments(null)
+    setLoopCutEdgeId(null)
+    setLoopCutSliding(false)
     setToolbarPanel(null)
     setError(null)
     playCustomMeshSfx('finish')
@@ -1368,6 +1373,8 @@ function CustomMeshEditor({
     setPreviewTopology(null)
     setToolbarPanel(null)
     setLoopCutSegments(null)
+    setLoopCutEdgeId(null)
+    setLoopCutSliding(false)
     setActiveTransform(null)
     useCustomMeshEditSession.getState().end(node.id)
   }, [editing, node.id])
@@ -1380,11 +1387,17 @@ function CustomMeshEditor({
         setToolbarPanel(null)
         playCustomMeshSfx('cancel')
       } else if (cancelDragRef.current) cancelDragRef.current()
-      else exitEditMode()
+      else if (transformTool === 'loop-cut') {
+        setTransformTool('transform')
+        setLoopCutEdgeId(null)
+        setLoopCutSegments(null)
+        setError(null)
+        playCustomMeshSfx('cancel')
+      } else exitEditMode()
     }
     emitter.on('tool:cancel', onToolCancel)
     return () => emitter.off('tool:cancel', onToolCancel)
-  }, [editing, exitEditMode, toolbarPanel])
+  }, [editing, exitEditMode, toolbarPanel, transformTool])
 
   useEffect(() => {
     if (!(editing && toolbarPanel)) return
@@ -2011,26 +2024,71 @@ function CustomMeshEditor({
     [bevelSegments, displayTopology, extent, gl.domElement, node.id, ownsEditSession],
   )
 
-  const previewLoopCut = useCallback(
-    (edgeId: string | null) => {
-      if (cancelDragRef.current) return
-      if (!edgeId) {
-        setLoopCutSegments(null)
-        setError(null)
-        return
-      }
-      const segments = customMeshLoopCutSegments(displayTopology, edgeId, 0.5, loopCutCount)
-      setLoopCutSegments(segments)
-      setError(segments ? null : 'Loop cut requires a connected ring of quad faces')
-    },
-    [displayTopology, loopCutCount],
-  )
+  const previewLoopCut = useCallback((edgeId: string | null) => {
+    if (cancelDragRef.current) return
+    setLoopCutEdgeId(edgeId)
+  }, [])
 
-  const beginLoopCutDrag = useCallback(
+  useEffect(() => {
+    if (!(editing && transformTool === 'loop-cut') || loopCutSliding) return
+    if (!loopCutEdgeId) {
+      setLoopCutSegments(null)
+      setError(null)
+      return
+    }
+    const segments = customMeshLoopCutSegments(node.topology, loopCutEdgeId, 0.5, loopCutCount)
+    setLoopCutSegments(segments)
+    setLoopCutFactor(0.5)
+    setError(segments ? null : 'Loop cut requires a connected ring of quad faces')
+  }, [editing, loopCutCount, loopCutEdgeId, loopCutSliding, node.topology, transformTool])
+
+  useEffect(() => {
+    if (transformTool === 'loop-cut' || loopCutSliding) return
+    setLoopCutEdgeId(null)
+    setLoopCutSegments(null)
+    setLoopCutFactor(0.5)
+  }, [loopCutSliding, transformTool])
+
+  useEffect(() => {
+    if (!(editing && transformTool === 'loop-cut' && !loopCutSliding)) return
+    const onWheel = (event: WheelEvent) => {
+      const direction = consumeCustomMeshGestureWheel(event)
+      if (direction === 0) return
+      setLoopCutCount((current) => {
+        const next = Math.min(32, Math.max(1, current + direction))
+        if (next !== current) playCustomMeshSfx('resize-step')
+        return next
+      })
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (resolveLoopCutPointerAction('choosing-ring', event.button) !== 'cancel') return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      setTransformTool('transform')
+      setLoopCutEdgeId(null)
+      setLoopCutSegments(null)
+      setError(null)
+      playCustomMeshSfx('cancel')
+      swallowNextClick()
+    }
+    window.addEventListener('wheel', onWheel, CUSTOM_MESH_WHEEL_OPTIONS)
+    window.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      window.removeEventListener('wheel', onWheel, CUSTOM_MESH_WHEEL_OPTIONS)
+      window.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [editing, loopCutSliding, transformTool])
+
+  const beginLoopCutSlide = useCallback(
     (edgeId: string, event: ThreeEvent<PointerEvent>) => {
-      if (event.nativeEvent.button !== 0 || !ownsEditSession() || cancelDragRef.current) return
-      const edge = displayTopology.edges.find((entry) => entry.id === edgeId)
-      const vertices = topologyVertexMap(displayTopology)
+      if (
+        resolveLoopCutPointerAction('choosing-ring', event.nativeEvent.button) !== 'begin-slide' ||
+        !ownsEditSession() ||
+        cancelDragRef.current
+      )
+        return
+      const edge = node.topology.edges.find((entry) => entry.id === edgeId)
+      const vertices = topologyVertexMap(node.topology)
       const start = edge ? vertices.get(edge.vertexIds[0]) : null
       const end = edge ? vertices.get(edge.vertexIds[1]) : null
       if (!(edge && start && end)) return
@@ -2042,36 +2100,41 @@ function CustomMeshEditor({
       if (worldLength < 1e-6) return
       const worldAxis = worldDirection.normalize()
       const initialParameter = closestAxisParameterToRay(worldStart, worldAxis, event.ray)
-      const baseTopology = displayTopology
+      const baseTopology = node.topology
       const previousInputDragging = useViewer.getState().inputDragging
       const previousCursor = document.body.style.cursor
       let latestTopology: CustomMeshTopology | null = null
       let latestSelection: CustomMeshSelection | null = null
       let latestFactor = 0.5
-      let activeCuts = loopCutCount
+      const activeCuts = loopCutCount
       let lastSnapFactor: number | null = null
       let finished = false
+      let confirmationAttached = false
 
-      const updatePreview = (factor: number, cuts = activeCuts) => {
+      const updatePreview = (factor: number) => {
+        const effectiveFactor = resolveLoopCutSlideFactor(activeCuts, factor)
         const result = applyCustomMeshCommand(baseTopology, {
           type: 'loop-cut',
           edgeId,
-          factor,
-          cuts,
+          factor: effectiveFactor,
+          cuts: activeCuts,
         })
-        const segments = customMeshLoopCutSegments(baseTopology, edgeId, factor, cuts)
+        const segments = customMeshLoopCutSegments(
+          baseTopology,
+          edgeId,
+          effectiveFactor,
+          activeCuts,
+        )
         if (!result.ok || !segments) {
           setError(result.ok ? 'Could not preview loop cut' : result.error)
           return false
         }
-        latestFactor = factor
-        activeCuts = cuts
+        latestFactor = effectiveFactor
         latestTopology = result.topology
         latestSelection = result.selection
         setPreviewTopology(result.topology)
         setLoopCutSegments(segments)
-        setLoopCutCount(cuts)
-        setLoopCutFactor(factor)
+        setLoopCutFactor(effectiveFactor)
         useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
         useScene.getState().markDirty(node.id)
         setError(null)
@@ -2082,9 +2145,11 @@ function CustomMeshEditor({
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'loop-cut'))
       playCustomMeshSfx('operation-start')
       useViewer.getState().setInputDragging(true)
+      setLoopCutSliding(true)
       document.body.style.cursor = 'ew-resize'
 
       const onMove = (pointerEvent: PointerEvent) => {
+        if (activeCuts > 1) return
         const parameter = closestAxisParameterToRay(
           worldStart,
           worldAxis,
@@ -2112,20 +2177,13 @@ function CustomMeshEditor({
         updatePreview(factor)
       }
 
-      const onWheel = (wheelEvent: WheelEvent) => {
-        const direction = consumeCustomMeshGestureWheel(wheelEvent)
-        if (direction === 0) return
-        const cuts = Math.min(32, Math.max(1, activeCuts + direction))
-        if (cuts !== activeCuts) playCustomMeshSfx('resize-step')
-        updatePreview(latestFactor, cuts)
-      }
-
-      const finish = (commit: boolean) => {
+      const finish = (outcome: 'commit-current' | 'commit-centered' | 'cancel') => {
         if (finished) return
+        if (outcome === 'commit-centered' && !updatePreview(0.5)) outcome = 'cancel'
         finished = true
         window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onPointerUp)
-        window.removeEventListener('wheel', onWheel, CUSTOM_MESH_WHEEL_OPTIONS)
+        if (confirmationAttached) window.removeEventListener('pointerdown', onConfirm, true)
+        window.removeEventListener('contextmenu', onContextMenu, true)
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
@@ -2135,14 +2193,16 @@ function CustomMeshEditor({
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
         setLoopCutSegments(null)
-        if (commit && latestTopology && latestSelection && latestFactor > 0) {
+        setLoopCutEdgeId(null)
+        setLoopCutSliding(false)
+        if (outcome !== 'cancel' && latestTopology && latestSelection && latestFactor > 0) {
           useScene.getState().updateNode(node.id, { topology: latestTopology })
           useCustomMeshEditSession.getState().setSelection(node.id, {
             ...latestSelection,
             activeId: latestSelection.ids.at(-1) ?? null,
           })
           playCustomMeshSfx('operation-commit')
-        } else if (!commit) {
+        } else if (outcome === 'cancel') {
           playCustomMeshSfx('cancel')
         }
         if (ownsEditSession()) {
@@ -2150,16 +2210,30 @@ function CustomMeshEditor({
         }
         swallowNextClick()
       }
-      const onPointerUp = () => finish(true)
-      const onPointerCancel = () => finish(false)
+      const onConfirm = (pointerEvent: PointerEvent) => {
+        const action = resolveLoopCutPointerAction('sliding', pointerEvent.button)
+        if (action !== 'commit-current' && action !== 'commit-centered') return
+        pointerEvent.preventDefault()
+        pointerEvent.stopImmediatePropagation()
+        finish(action)
+      }
+      const onContextMenu = (contextEvent: MouseEvent) => {
+        contextEvent.preventDefault()
+        contextEvent.stopImmediatePropagation()
+      }
+      const onPointerCancel = () => finish('cancel')
       cancelDragRef.current = onPointerCancel
       window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onPointerUp, { once: true })
-      window.addEventListener('wheel', onWheel, CUSTOM_MESH_WHEEL_OPTIONS)
+      window.addEventListener('contextmenu', onContextMenu, true)
       window.addEventListener('pointercancel', onPointerCancel, { once: true })
       window.addEventListener('blur', onPointerCancel, { once: true })
+      queueMicrotask(() => {
+        if (finished) return
+        confirmationAttached = true
+        window.addEventListener('pointerdown', onConfirm, true)
+      })
     },
-    [displayTopology, loopCutCount, makeRay, node.id, ownsEditSession, target],
+    [loopCutCount, makeRay, node.id, node.topology, ownsEditSession, target],
   )
 
   const commitCommand = (command: CustomMeshCommand, operator: TopologyOperator) => {
@@ -2328,7 +2402,7 @@ function CustomMeshEditor({
 
   const moveNode = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
-    useEditor.getState().setMovingNode(node as never)
+    useEditor.getState().setMovingNode(node)
     useViewer.getState().setSelection({ selectedIds: [] })
     triggerSFX('sfx:item-pick')
   }
@@ -2465,7 +2539,7 @@ function CustomMeshEditor({
               ))}
             </group>
           ) : null}
-          {transformTool === 'loop-cut'
+          {transformTool === 'loop-cut' && !loopCutSliding
             ? displayTopology.edges.map((edge) => {
                 const start = vertexById.get(edge.vertexIds[0])
                 const end = vertexById.get(edge.vertexIds[1])
@@ -2475,7 +2549,7 @@ function CustomMeshEditor({
                     end={end}
                     key={edge.id}
                     onHover={previewLoopCut}
-                    onPointerDown={beginLoopCutDrag}
+                    onPointerDown={beginLoopCutSlide}
                     radius={componentRadius * 3.2}
                     start={start}
                   />
@@ -2772,6 +2846,11 @@ const CustomMeshSelectionAffordance = () => {
   })
   const [target, setTarget] = useState<Object3D | null>(null)
   const nodeId = node?.id ?? null
+  const scopeAllowsAffordance = useInteractionScope(
+    (state) =>
+      state.scope.kind === 'idle' ||
+      (state.scope.kind === 'mesh-editing' && state.scope.nodeId === nodeId),
+  )
 
   useEffect(() => {
     if (!nodeId) {
@@ -2788,7 +2867,7 @@ const CustomMeshSelectionAffordance = () => {
     return () => window.cancelAnimationFrame(frameId)
   }, [nodeId])
 
-  if (!node || !target) return null
+  if (!node || !target || !scopeAllowsAffordance) return null
   const mount = target.parent ?? target
   return createPortal(
     <CustomMeshEditor mirrorTarget={mount !== target} node={node} target={target} />,

@@ -2022,7 +2022,9 @@ export type SnappableConfig = {
 export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 
 export type SurfacesConfig = {
-  top?: { height: number | ((n: AnyNode) => number) }
+  top?: {
+    height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
+  }
   sides?: { faces: 'all' | ReadonlyArray<readonly [number, number, number]> }
   custom?: SurfaceQuery
 }

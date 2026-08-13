@@ -192,6 +192,22 @@ describe('getSurface / getTopSurfaceHeight', () => {
     expect(getTopSurfaceHeight(makeNode('shelf', 'high'))).toBe(1.8)
     expect(getTopSurfaceHeight(makeNode('shelf', 'low'))).toBe(0.3)
   })
+
+  test('passes the complete node record to context-aware surface resolvers', () => {
+    const host = makeNode('platform', 'platform')
+    const support = makeNode('support', 'support')
+    registerNode(
+      makeDef('platform', {
+        surfaces: {
+          top: {
+            height: (_node: any, { nodes }: any) => (nodes[id('support')] ? 2.4 : 0),
+          },
+        },
+      }),
+    )
+
+    expect(getTopSurfaceHeight(host, { [host.id]: host, [support.id]: support })).toBe(2.4)
+  })
 })
 
 describe('clampYToHostTop', () => {

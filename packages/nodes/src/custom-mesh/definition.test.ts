@@ -3,6 +3,12 @@ import { CustomMeshNode } from '@pascal-app/core'
 import { customMeshDefinition } from './definition'
 
 describe('custom mesh placement bounds', () => {
+  test('starts with a reusable body material', () => {
+    expect(customMeshDefinition.defaults().slots).toEqual({
+      body: 'library:concrete-drywall',
+    })
+  })
+
   test('uses the dedicated editable-cube icon in the build palette', () => {
     expect(customMeshDefinition.presentation?.icon).toEqual({
       kind: 'url',
@@ -54,6 +60,7 @@ describe('custom mesh placement bounds', () => {
         ),
       },
       slots: {
+        body: 'library:concrete-drywall',
         accent: 'library:preset-softwhite',
         'material-1': 'library:metal-steel',
       },

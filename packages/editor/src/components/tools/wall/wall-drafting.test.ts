@@ -14,6 +14,7 @@ import {
   initSpaceDetectionSync,
   nodeRegistry,
   registerNode,
+  resolveTerrainWallConstructionOptions,
   runAsSingleSceneHistoryStep,
   SlabNode,
   spatialGridManager,
@@ -27,7 +28,6 @@ import useInteractionScope from '../../../store/use-interaction-scope'
 import {
   createWallOnCurrentLevel,
   resolveEndpointWallSplit,
-  resolveTerrainWallConstructionOptions,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'

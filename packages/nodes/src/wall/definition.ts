@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
-  DEFAULT_WALL_HEIGHT,
+  getWallBaseElevationForNodes,
+  getWallEffectiveHeightForNodes,
   type NodeDefinition,
   type WallNode as WallNodeType,
 } from '@pascal-app/core'
@@ -78,7 +79,14 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     selectable: { hitVolume: 'bbox' },
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
-      top: { height: (node) => (node as WallNodeType).height ?? DEFAULT_WALL_HEIGHT },
+      top: {
+        height: (node, { nodes }) => {
+          const wall = node as WallNodeType
+          return (
+            getWallBaseElevationForNodes(wall, nodes) + getWallEffectiveHeightForNodes(wall, nodes)
+          )
+        },
+      },
       sides: { faces: 'all' },
     },
     duplicable: true,

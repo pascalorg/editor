@@ -2,6 +2,7 @@
 
 import type { CustomMeshNode } from '@pascal-app/core'
 import { EDITOR_LAYER } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import { Color, type Material, Mesh } from 'three'
 import { buildCustomMeshGeometry } from './geometry'
@@ -13,8 +14,19 @@ export default function CustomMeshPreview({
   node: CustomMeshNode
   valid?: boolean
 }) {
+  const shading = useViewer((state) => state.shading)
+  const textures = useViewer((state) => state.textures)
+  const colorPreset = useViewer((state) => state.colorPreset)
+  const sceneTheme = useViewer((state) => state.sceneTheme)
   const preview = useMemo(() => {
-    const next = buildCustomMeshGeometry(node)
+    const next = buildCustomMeshGeometry(
+      node,
+      undefined,
+      shading,
+      textures,
+      colorPreset,
+      sceneTheme,
+    )
     const ownedMaterials: Material[] = []
     next.traverse((child) => {
       child.layers.set(EDITOR_LAYER)
@@ -34,7 +46,7 @@ export default function CustomMeshPreview({
       child.material = Array.isArray(child.material) ? materials : materials[0]!
     })
     return { object: next, ownedMaterials }
-  }, [node, valid])
+  }, [colorPreset, node, sceneTheme, shading, textures, valid])
 
   useEffect(
     () => () => {

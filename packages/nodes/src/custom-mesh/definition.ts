@@ -1,4 +1,5 @@
 import {
+  CUSTOM_MESH_BODY_MATERIAL_REF,
   type CustomMeshNode as CustomMeshNodeType,
   createBoxCustomMeshTopology,
   type NodeDefinition,
@@ -44,7 +45,7 @@ function footprintPosition(node: CustomMeshNodeType, center: [number, number, nu
 
 export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
   kind: 'custom-mesh',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: CustomMeshNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -64,6 +65,7 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
     position: [0, 0, 0],
     rotation: 0,
     topology: createBoxCustomMeshTopology(),
+    slots: { body: CUSTOM_MESH_BODY_MATERIAL_REF },
   }),
 
   capabilities: {

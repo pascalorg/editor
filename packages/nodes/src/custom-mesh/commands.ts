@@ -3,6 +3,7 @@ import {
   type CustomMeshFace,
   type CustomMeshTopology,
   type CustomMeshVertex,
+  customMeshUndirectedEdgeKey,
   inspectCustomMeshTopology,
 } from '@pascal-app/core'
 import type { CustomMeshSelection } from './selection-model'
@@ -130,8 +131,6 @@ function nextNumericId(prefix: string, ids: readonly string[]): () => string {
   }
 }
 
-const topologyEdgeKey = (a: string, b: string) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
-
 type LoopCutStep = {
   faceId: string
   fromEdgeId: string
@@ -164,13 +163,13 @@ function resolveLoopCutRing(topology: CustomMeshTopology, edgeId: string): LoopC
   const startEdge = topology.edges.find((edge) => edge.id === edgeId)
   if (!startEdge) return null
   const edgeByKey = new Map(
-    topology.edges.map((edge) => [topologyEdgeKey(...edge.vertexIds), edge] as const),
+    topology.edges.map((edge) => [customMeshUndirectedEdgeKey(...edge.vertexIds), edge] as const),
   )
   const facesByEdgeId = new Map<string, CustomMeshFace[]>()
   for (const face of topology.faces) {
     for (let index = 0; index < face.vertexIds.length; index += 1) {
       const edge = edgeByKey.get(
-        topologyEdgeKey(
+        customMeshUndirectedEdgeKey(
           face.vertexIds[index]!,
           face.vertexIds[(index + 1) % face.vertexIds.length]!,
         ),
@@ -204,7 +203,7 @@ function resolveLoopCutRing(topology: CustomMeshTopology, edgeId: string): LoopC
     if (!(face && orientedVertices) || face.vertexIds.length !== 4) return null
     const oppositeVertices = oppositeOrientedEdgeVertices(face, orientedVertices)
     if (!oppositeVertices) return null
-    const oppositeEdge = edgeByKey.get(topologyEdgeKey(...oppositeVertices))
+    const oppositeEdge = edgeByKey.get(customMeshUndirectedEdgeKey(...oppositeVertices))
     if (!oppositeEdge) return null
     const existingOrientation = orientedEdgeVertices.get(oppositeEdge.id)
     if (
@@ -283,8 +282,7 @@ function loopCutFractions(factor: number, cuts: number): number[] | null {
     return null
   if (count === 1) return [factor]
   const spacing = 1 / (count + 1)
-  const offset = (factor - 0.5) * spacing * 1.96
-  return Array.from({ length: count }, (_, index) => (index + 1) * spacing + offset)
+  return Array.from({ length: count }, (_, index) => (index + 1) * spacing)
 }
 
 function augmentFaceLoop(
@@ -296,7 +294,7 @@ function augmentFaceLoop(
     const current = face.vertexIds[index]!
     const next = face.vertexIds[(index + 1) % face.vertexIds.length]!
     augmented.push(current)
-    const cuts = cutVerticesByEdgeKey.get(topologyEdgeKey(current, next))
+    const cuts = cutVerticesByEdgeKey.get(customMeshUndirectedEdgeKey(current, next))
     if (!cuts) continue
     augmented.push(...(cuts.edgeOrder[0] === current ? cuts.ids : [...cuts.ids].reverse()))
   }
@@ -361,7 +359,7 @@ function loopCut(
     const ids = fractions.map(() => allocateVertexId())
     cutVerticesByEdgeId.set(ringEdgeId, ids)
     const edgeOrderIds = edge.vertexIds[0] === fromId ? ids : [...ids].reverse()
-    cutVerticesByEdgeKey.set(topologyEdgeKey(...edge.vertexIds), {
+    cutVerticesByEdgeKey.set(customMeshUndirectedEdgeKey(...edge.vertexIds), {
       edgeOrder: edge.vertexIds,
       ids: edgeOrderIds,
     })
@@ -374,7 +372,7 @@ function loopCut(
   }
 
   const splitBoundaryEdges = topology.edges.flatMap<CustomMeshEdge>((edge) => {
-    const cutIds = cutVerticesByEdgeKey.get(topologyEdgeKey(...edge.vertexIds))?.ids
+    const cutIds = cutVerticesByEdgeKey.get(customMeshUndirectedEdgeKey(...edge.vertexIds))?.ids
     if (!cutIds) return [edge]
     const chain = [edge.vertexIds[0], ...cutIds, edge.vertexIds[1]]
     return chain.slice(0, -1).map((vertexId, index) => ({
@@ -512,7 +510,7 @@ function rebuildEdgesFromFaces(
   allocateEdgeId: () => string,
 ): CustomMeshEdge[] {
   const oldByKey = new Map(
-    topology.edges.map((edge) => [topologyEdgeKey(...edge.vertexIds), edge] as const),
+    topology.edges.map((edge) => [customMeshUndirectedEdgeKey(...edge.vertexIds), edge] as const),
   )
   const seen = new Set<string>()
   const edges: CustomMeshEdge[] = []
@@ -522,7 +520,7 @@ function rebuildEdgesFromFaces(
         face.vertexIds[index]!,
         face.vertexIds[(index + 1) % face.vertexIds.length]!,
       ] as [string, string]
-      const key = topologyEdgeKey(...vertexIds)
+      const key = customMeshUndirectedEdgeKey(...vertexIds)
       if (seen.has(key)) continue
       seen.add(key)
       const old = oldByKey.get(key)
@@ -1056,17 +1054,13 @@ function deleteComponents(
     const removedKeys = new Set(
       edges
         .filter((edge) => selected.has(edge.id))
-        .map((edge) =>
-          edge.vertexIds[0] < edge.vertexIds[1]
-            ? `${edge.vertexIds[0]}\u0000${edge.vertexIds[1]}`
-            : `${edge.vertexIds[1]}\u0000${edge.vertexIds[0]}`,
-        ),
+        .map((edge) => customMeshUndirectedEdgeKey(...edge.vertexIds)),
     )
     edges = edges.filter((edge) => !selected.has(edge.id))
     faces = faces.filter((face) =>
       face.vertexIds.every((vertexId, index) => {
         const next = face.vertexIds[(index + 1) % face.vertexIds.length]!
-        const key = vertexId < next ? `${vertexId}\u0000${next}` : `${next}\u0000${vertexId}`
+        const key = customMeshUndirectedEdgeKey(vertexId, next)
         return !removedKeys.has(key)
       }),
     )
@@ -1115,7 +1109,7 @@ function mergeVertices(
     const a = mapVertexId(edge.vertexIds[0])
     const b = mapVertexId(edge.vertexIds[1])
     if (a === b) return []
-    const key = a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`
+    const key = customMeshUndirectedEdgeKey(a, b)
     if (edgeKeys.has(key)) return []
     edgeKeys.add(key)
     return [{ ...edge, vertexIds: [a, b] }]

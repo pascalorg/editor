@@ -1,11 +1,27 @@
 import { describe, expect, test } from 'bun:test'
 import { CustomMeshNode } from '@pascal-app/core'
+import { createSurfaceRoleMaterial } from '@pascal-app/viewer'
 import { Mesh, Ray, Vector3, type Vector3Tuple } from 'three'
 import { applyCustomMeshCommand } from './commands'
 import { buildCustomMeshGeometry } from './geometry'
 import { customMeshPaint } from './paint'
 
 describe('buildCustomMeshGeometry', () => {
+  test('uses the active theme role when the body material cannot resolve', () => {
+    const node = CustomMeshNode.parse({
+      name: 'Themed mesh',
+      slots: { body: 'scene:missing' },
+    })
+    const group = buildCustomMeshGeometry(node, undefined, 'rendered', true, 'blueprint', 'studio')
+    const mesh = group.getObjectByName('custom-mesh-body')
+
+    expect(mesh).toBeInstanceOf(Mesh)
+    if (!(mesh instanceof Mesh) || !Array.isArray(mesh.material)) return
+    expect(mesh.material[0]).toBe(
+      createSurfaceRoleMaterial('wall', 'blueprint', undefined, 'studio'),
+    )
+  })
+
   test('derives a render mesh from persistent topology', () => {
     const node = CustomMeshNode.parse({ name: 'Box' })
     const group = buildCustomMeshGeometry(node)
