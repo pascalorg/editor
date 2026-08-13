@@ -22,16 +22,15 @@ import {
   formworkSettings,
   formworkSystem,
   gangFace,
-  hardCutsForElement,
   layOutFace,
   type PourUnit,
-  pourUnitsForElement,
+  pourUnitsInScene,
   type StripPack,
   type StripPiece,
   tieHoles,
 } from '@pascal-app/core/formwork'
 import type { GeometryContext } from '@pascal-app/core/registry'
-import type { AnyNode, AnyNodeId, FormworkCraneSettings } from '@pascal-app/core/schema'
+import type { AnyNode, FormworkCraneSettings } from '@pascal-app/core/schema'
 import { MeshStandardMaterial } from 'three'
 import type { CastableHostNode } from './attach'
 import type { FormworkAssemblyNode } from './schema'
@@ -159,11 +158,7 @@ function resolvePourUnit(
   node: FormworkAssemblyNode,
   levelNodes: AnyNode[],
 ): PourUnit | undefined {
-  const units = pourUnitsForElement(
-    element,
-    {},
-    hardCutsForElement(element.id as AnyNodeId, levelNodes),
-  )
+  const units = pourUnitsInScene(element, levelNodes)
   if (units.length <= 1) return undefined
   return units.find(
     (unit) => unit.segmentIndex === node.segmentIndex && unit.liftIndex === node.liftIndex,

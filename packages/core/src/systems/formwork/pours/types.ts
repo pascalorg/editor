@@ -98,4 +98,13 @@ export interface PourLimits {
   permittedJointElevations?: readonly number[]
   /** How far a lift joint may move to reach a permitted elevation, m. */
   jointSnapTolerance?: number
+  /**
+   * Elevations a lift joint *must* land on — a joint somebody drew rather than one
+   * the solver may choose. Unlike `permittedJointElevations`, which only attracts a
+   * cut the uniform split already put nearby, these produce a cut on their own and
+   * split an element with no lift cap at all: an engineer who specifies a joint at
+   * 4.6 m has decided where the pour stops, and a split that divides uniformly
+   * through it is designing a shutter for a pour nobody is going to make.
+   */
+  requiredJointElevations?: readonly number[]
 }

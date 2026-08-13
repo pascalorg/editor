@@ -1,4 +1,9 @@
-import { hardCutsForElement, jointsForElement, toCastableElement } from '@pascal-app/core/formwork'
+import {
+  hardCutsForElement,
+  jointsForElement,
+  pourLimitsForElement,
+  toCastableElement,
+} from '@pascal-app/core/formwork'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -48,7 +53,7 @@ export function buildSolverJointNodes(
   const out: ConstructionJointNode[] = []
   for (const spec of jointsForElement(
     element,
-    {},
+    pourLimitsForElement(host.id as AnyNodeId, levelNodes),
     hardCutsForElement(host.id as AnyNodeId, levelNodes),
   )) {
     const key = positionKey(spec.elevation, spec.along)

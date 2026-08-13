@@ -32,7 +32,7 @@ import type { FaceGangs, LiftingPoint } from '../layout/gangs'
 import { MIN_WORKABLE_PIECE_MM, type StripPack } from '../layout/strip-pack'
 import { splitIntoLifts } from '../pours/lifts'
 import type { PourLift, PourLimits, PourUnit } from '../pours/types'
-import { hardCutsForElement, pourUnitsForElement } from '../pours/units'
+import { pourLimitsForElement, pourUnitsInScene } from '../pours/units'
 import { type PressureEnvelope, RISE_RATE_REFUSAL_LABELS, type RiseRateLimit } from '../pressure'
 import type { Finding, FormworkRemedy, InvariantId, TieField, ValidationReport } from './types'
 
@@ -660,12 +660,17 @@ function noCapClears(note: string): FormworkRemedy {
  */
 function openingsAcrossLiftJoints(
   elements: readonly CastableElement[],
+  nodes: readonly AnyNode[],
   limits: PourLimits,
 ): Finding[] {
   const out: Finding[] = []
   for (const element of elements) {
     if (element.openings.length === 0) continue
-    const lifts = splitIntoLifts(element, limits)
+    // The element's own limits, not the project's: a joint the engineer specified is a
+    // cut whatever the caps say, so a check reading the project limits alone would
+    // examine a split the build does not have.
+    const elementLimits = pourLimitsForElement(element.id, nodes, limits)
+    const lifts = splitIntoLifts(element, elementLimits)
     if (lifts.length < 2) continue
     const straddles = (candidate: readonly PourLift[]) =>
       candidate.some(
@@ -680,7 +685,7 @@ function openingsAcrossLiftJoints(
     // Once per element, not once per straddle: a cap has to clear every opening at
     // once, so the same answer serves each finding on the element and offering a
     // different cap per opening would be three fixes that each undo the last.
-    const cap = capSatisfying(element, limits, (candidate) => !straddles(candidate))
+    const cap = capSatisfying(element, elementLimits, (candidate) => !straddles(candidate))
     for (const lift of lifts) {
       if (!lift.hasJointBelow) continue
       const elevation = lift.baseElevation
@@ -1115,7 +1120,7 @@ function expansionJointsBridged(
     const element = scoped.get(named[0] as AnyNodeId)
     const along = joint.along
     if (!element || along === undefined) continue
-    const units = pourUnitsForElement(element, limits, hardCutsForElement(element.id, [...nodes]))
+    const units = pourUnitsInScene(element, [...nodes], limits)
     const bridging = units.find(
       (unit) => along > unit.startAlong + 1e-6 && along < unit.endAlong - 1e-6,
     )
@@ -1330,18 +1335,26 @@ function tiesThroughWaterstops(
  * vibrate. A warning rather than an error: it is buildable, and sometimes it is
  * what the engineer wanted.
  */
-function liftJointElevations(elements: readonly CastableElement[], limits: PourLimits): Finding[] {
-  const permitted = limits.permittedJointElevations ?? []
-  if (permitted.length === 0) return []
+function liftJointElevations(
+  elements: readonly CastableElement[],
+  nodes: readonly AnyNode[],
+  limits: PourLimits,
+): Finding[] {
   const out: Finding[] = []
   const unsnapped = (lifts: readonly PourLift[]) =>
     lifts.some((lift) => lift.hasJointBelow && lift.snappedTo === undefined)
   for (const element of elements) {
-    const lifts = splitIntoLifts(element, limits)
+    // Per element, because the permitted set is: an element with a specified joint has
+    // one even where the project stated none, and the check would otherwise fall silent
+    // on the one wall somebody had an opinion about.
+    const elementLimits = pourLimitsForElement(element.id, nodes, limits)
+    const permitted = elementLimits.permittedJointElevations ?? []
+    if (permitted.length === 0) continue
+    const lifts = splitIntoLifts(element, elementLimits)
     // Only worth searching once the element has a defect, and once per element for
     // the same reason the opening check does it once: one cap governs every joint.
     const cap = unsnapped(lifts)
-      ? capSatisfying(element, limits, (candidate) => !unsnapped(candidate))
+      ? capSatisfying(element, elementLimits, (candidate) => !unsnapped(candidate))
       : undefined
     for (const lift of lifts) {
       if (!lift.hasJointBelow) continue
@@ -1855,18 +1868,18 @@ export function validateFormwork(
   const units: PourUnit[] = []
   for (const element of scoped) {
     coverages.set(element.id, classifyElementFaces(element, abutments, { neighbours: all }))
-    units.push(...pourUnitsForElement(element, limits, hardCutsForElement(element.id, [...nodes])))
+    units.push(...pourUnitsInScene(element, [...nodes], limits))
   }
 
   const findings: Finding[] = [
     ...castOrderCycles(scoped, abutments),
     ...singleSidedAnchors(scoped, abutments),
     ...areaConsistency(coverages),
-    ...openingsAcrossLiftJoints(scoped, limits),
+    ...openingsAcrossLiftJoints(scoped, nodes, limits),
     ...expansionJointsBridged(scoped, nodes, limits),
     ...waterstopRuns(scoped, nodes),
     ...tiesThroughWaterstops(scoped, nodes, tieFields),
-    ...liftJointElevations(scoped, limits),
+    ...liftJointElevations(scoped, nodes, limits),
     ...pourVolumes(units, scoped, limits),
     ...layoutFindings(packs),
     ...architecturalSymmetry(scoped, packs),

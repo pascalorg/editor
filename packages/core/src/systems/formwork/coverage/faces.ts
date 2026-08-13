@@ -9,7 +9,7 @@ import {
   scopeToPourUnit,
 } from '../pours/scope'
 import type { PourLimits, PourUnit } from '../pours/types'
-import { hardCutsForElement, pourUnitsForElement } from '../pours/units'
+import { pourUnitsInScene } from '../pours/units'
 import { type CastableElement, collectCastableElements, elementLength } from './elements'
 import { footprintEdges } from './footprint'
 import {
@@ -834,7 +834,7 @@ export function pourCoverageForElement(
   if (!target) return []
   const abutments = findAbutments(elements)
   const junctions = findJunctions(elements)
-  return pourUnitsForElement(target, limits, hardCutsForElement(elementId, nodes)).map((unit) => ({
+  return pourUnitsInScene(target, nodes, limits).map((unit) => ({
     unit,
     coverage: classifyElementFaces(target, abutments, {
       ...options,

@@ -15,4 +15,11 @@ export {
   type PourSegment,
   type PourUnit,
 } from './types'
-export { hardCutsForElement, pourUnits, pourUnitsForElement } from './units'
+export {
+  hardCutsForElement,
+  pourLimitsForElement,
+  pourUnits,
+  pourUnitsForElement,
+  pourUnitsInScene,
+  specifiedLiftJoints,
+} from './units'

@@ -359,3 +359,37 @@ describe('buildFormworkNodes on a slab', () => {
     expect(buildFormworkNodes(degenerate)).toHaveLength(1)
   })
 })
+
+describe('a lift joint somebody drew', () => {
+  const wall = makeWall({ id: 'wall_joint', height: 6 })
+  const joint = {
+    object: 'node',
+    id: 'construction-joint_specified',
+    type: 'construction-joint',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    kind: 'construction',
+    elementIds: ['wall_joint'],
+    elevation: 3.4,
+    treatments: [],
+    solverPlaced: false,
+  } as unknown as AnyNode
+
+  test('splits the host even though nothing capped its lift height', () => {
+    // The wall has no `maxLiftHeight` and the project no limits, so before the joint
+    // was read this was one 6 m pour — a shutter for a pour the engineer had already
+    // decided stops at 3.4 m.
+    expect(pourUnitsForHost(wall)).toHaveLength(1)
+    const units = pourUnitsForHost(wall, [wall, joint])
+    expect(units.map((unit) => [unit.baseElevation, unit.topElevation])).toEqual([
+      [0, 3.4],
+      [3.4, 6],
+    ])
+  })
+
+  test('so the build makes two shutters rather than one', () => {
+    expect(buildFormworkNodes(wall, [wall, joint])).toHaveLength(2)
+  })
+})

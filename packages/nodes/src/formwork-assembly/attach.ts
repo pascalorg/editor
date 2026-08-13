@@ -1,12 +1,6 @@
-import {
-  hardCutsForElement,
-  type PourUnit,
-  pourUnitsForElement,
-  toCastableElement,
-} from '@pascal-app/core/formwork'
+import { type PourUnit, pourUnitsInScene, toCastableElement } from '@pascal-app/core/formwork'
 import {
   type AnyNode,
-  type AnyNodeId,
   type ColumnNode,
   type FormworkAssemblyNode,
   generateId,
@@ -97,7 +91,7 @@ export function buildFormworkNodes(
 export function pourUnitsForHost(host: CastableHostNode, levelNodes: AnyNode[] = []): PourUnit[] {
   const element = toCastableElement(host as AnyNode)
   if (!element) return []
-  return pourUnitsForElement(element, {}, hardCutsForElement(host.id as AnyNodeId, levelNodes))
+  return pourUnitsInScene(element, levelNodes)
 }
 
 /** A pour unit's identity: what makes two shutters the same shutter. */

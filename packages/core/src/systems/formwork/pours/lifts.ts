@@ -44,24 +44,40 @@ export function splitIntoLifts(element: CastableElement, limits: PourLimits = {}
   ]
   if (height <= MIN_LIFT_HEIGHT) return wholeElement
 
+  // A joint somebody drew is a cut whatever the caps say, so it is resolved before
+  // them: an uncapped wall with a specified joint at 4.6 m is two lifts, and the
+  // early return below would have made it one.
+  const required = (limits.requiredJointElevations ?? []).filter(
+    (elevation) => elevation > MIN_LIFT_HEIGHT && elevation < height - MIN_LIFT_HEIGHT,
+  )
+
   // The element's own cap and the project limit are both ceilings, so the
   // tighter one governs — a wall the engineer capped at 2 m is not permitted a
   // 3 m lift just because the project allows one.
   const caps = [limits.maxLiftHeight, element.maxLiftHeight].filter(
     (value): value is number => value !== undefined && value > MIN_LIFT_HEIGHT,
   )
-  if (caps.length === 0) return wholeElement
-  const maxLift = Math.min(...caps)
-  if (height <= maxLift) return wholeElement
+  const maxLift = caps.length === 0 ? undefined : Math.min(...caps)
+  if (required.length === 0 && (maxLift === undefined || height <= maxLift)) return wholeElement
 
-  const count = Math.ceil(height / maxLift)
+  // No cap, or a cap the element is already inside: the uniform division is the
+  // element itself, and the required joints are the only cuts.
+  const count = maxLift === undefined ? 1 : Math.ceil(height / maxLift)
   const uniform = height / count
-  const permitted = limits.permittedJointElevations ?? []
+  // A required elevation is permitted by construction, which is also what keeps the
+  // uniform grid from landing a 50 mm lift beside a specified joint: a nearby uniform
+  // cut snaps onto it and the duplicate collapse below removes it.
+  const permitted = [...(limits.permittedJointElevations ?? []), ...required]
   const tolerance = limits.jointSnapTolerance ?? DEFAULT_SNAP_TOLERANCE
 
   // Interior joint elevations only — the element's own base and top are fixed
   // by the structure, not by the split, so they are never snapped.
   const joints: Array<{ elevation: number; snappedTo?: number }> = []
+  // `snappedTo: elevation` rather than left blank: it means "this joint is on an
+  // elevation the structure offers", which a specified joint is by definition, and the
+  // off-permitted-elevation warning reads exactly that field — blank here would have it
+  // fault the engineer's own joint for being where the engineer put it.
+  for (const elevation of required) joints.push({ elevation, snappedTo: elevation })
   for (let index = 1; index < count; index++) {
     const uniformElevation = uniform * index
     const snapped =

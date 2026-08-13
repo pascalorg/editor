@@ -6,7 +6,15 @@ import { WallNode } from '../../../schema/nodes/wall'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
 import type { CastableElement } from '../coverage/elements'
 import { toCastableElement } from '../coverage/elements'
-import { hardCutsForElement, pourUnits, pourUnitsForElement } from './units'
+import { splitIntoLifts } from './lifts'
+import {
+  hardCutsForElement,
+  pourLimitsForElement,
+  pourUnits,
+  pourUnitsForElement,
+  pourUnitsInScene,
+  specifiedLiftJoints,
+} from './units'
 
 function wall(overrides: Partial<Parameters<typeof WallNode.parse>[0]> = {}) {
   return WallNode.parse({
@@ -23,6 +31,13 @@ function element(overrides: Partial<Parameters<typeof WallNode.parse>[0]> = {}):
   const castable = toCastableElement(wall(overrides))
   if (!castable) throw new Error('not castable')
   return castable
+}
+
+/** The element for a wall node already in the scene — same id, so a joint can name it. */
+function castable(node: ReturnType<typeof wall>): CastableElement {
+  const out = toCastableElement(node)
+  if (!out) throw new Error('not castable')
+  return out
 }
 
 function joint(overrides: Partial<Parameters<typeof ConstructionJointNode.parse>[0]> = {}) {
@@ -207,5 +222,64 @@ describe('pourUnits', () => {
     const map = pourUnits([a, b, j] as AnyNode[])
     expect(map.get(a.id as AnyNodeId)).toHaveLength(2)
     expect(map.get(b.id as AnyNodeId)).toHaveLength(1)
+  })
+})
+
+describe('specifiedLiftJoints', () => {
+  it('reads a construction joint somebody placed at an elevation', () => {
+    const w = wall()
+    const j = joint({ kind: 'construction', elementIds: [w.id], elevation: 4.6 })
+    expect(specifiedLiftJoints(w.id as AnyNodeId, [w, j] as AnyNode[])).toEqual([4.6])
+  })
+
+  it('ignores the solver’s own joints, which are a record of the last split', () => {
+    const w = wall()
+    const j = joint({
+      kind: 'construction',
+      elementIds: [w.id],
+      elevation: 4.5,
+      solverPlaced: true,
+    })
+    expect(specifiedLiftJoints(w.id as AnyNodeId, [w, j] as AnyNode[])).toEqual([])
+  })
+
+  it('ignores an expansion joint, which partitions the plan rather than the height', () => {
+    const w = wall()
+    const j = joint({ kind: 'expansion', elementIds: [w.id], elevation: 4.6 })
+    expect(specifiedLiftJoints(w.id as AnyNodeId, [w, j] as AnyNode[])).toEqual([])
+  })
+})
+
+describe('a specified lift joint in the scene', () => {
+  it('splits an element the project put no lift cap on', () => {
+    const w = wall({ end: [5, 0] })
+    const j = joint({ kind: 'construction', elementIds: [w.id], elevation: 4.6 })
+    const units = pourUnitsInScene(castable(w), [w, j] as AnyNode[])
+    expect(units.map((u) => [u.baseElevation, u.topElevation])).toEqual([
+      [0, 4.6],
+      [4.6, 9],
+    ])
+  })
+
+  it('survives the uniform division, which would have cut at 4.5 m', () => {
+    const w = wall({ end: [5, 0] })
+    const j = joint({ kind: 'construction', elementIds: [w.id], elevation: 4.6 })
+    const units = pourUnitsInScene(castable(w), [w, j] as AnyNode[], {
+      maxLiftHeight: 5,
+    })
+    // The 4.5 m uniform cut snapped onto the specified joint rather than joining it —
+    // two cuts 100 mm apart would be a lift nobody can form.
+    expect(units.map((u) => u.baseElevation)).toEqual([0, 4.6])
+  })
+
+  it('is permitted as well as required, so the validator does not fault it', () => {
+    const w = wall({ end: [5, 0] })
+    const j = joint({ kind: 'construction', elementIds: [w.id], elevation: 4.6 })
+    const limits = pourLimitsForElement(w.id as AnyNodeId, [w, j] as AnyNode[])
+    expect(limits.requiredJointElevations).toEqual([4.6])
+    expect(limits.permittedJointElevations).toEqual([4.6])
+    // And the split records it as on a permitted elevation, which is the field the
+    // off-permitted-elevation warning reads.
+    expect(splitIntoLifts(castable(w), limits)[1]?.snappedTo).toBe(4.6)
   })
 })

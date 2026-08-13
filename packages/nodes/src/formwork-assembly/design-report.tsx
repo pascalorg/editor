@@ -6,12 +6,11 @@ import {
   type ColumnClampType,
   type FormworkSettings,
   formworkSettingsFor,
-  hardCutsForElement,
   type MemberDesign,
   type PourUnit,
   PRESSURE_STANDARD_LABELS,
   type PressureEnvelope,
-  pourUnitsForElement,
+  pourUnitsInScene,
   type SpanGoverning,
   type TieRow,
   toCastableElement,
@@ -92,11 +91,7 @@ function useHostPours(hostId: AnyNodeId | undefined): {
     return {
       host,
       settings,
-      units: pourUnitsForElement(
-        element,
-        {},
-        hardCutsForElement(host.id as AnyNodeId, Object.values(nodes)),
-      ),
+      units: pourUnitsInScene(element, Object.values(nodes)),
     }
   }, [nodes, hostId])
 }
