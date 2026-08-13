@@ -132,6 +132,13 @@ export {
   slotLabelFromId,
 } from './lib/slots'
 export {
+  type GeoLocation,
+  isDaylight,
+  type SolarPosition,
+  solarPosition,
+  sunDirection,
+} from './lib/solar-position'
+export {
   type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
   type AutoSlabPlanningContext,

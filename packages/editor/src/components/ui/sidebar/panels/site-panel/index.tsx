@@ -57,6 +57,7 @@ import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { CollectionsSection } from '../../../panels/collections/collections-section'
 import { SavedViewsSection } from '../../../panels/saved-views/saved-views-section'
+import { SunStudySection } from '../../../panels/sun-study/sun-study-section'
 import { ImportCadDialog } from '../../../dialogs/import-cad-dialog'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
@@ -1716,6 +1717,10 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
           {/* Saved views — above collections because activating a view rewrites
               collection visibility, so this is the control that owns it. */}
           <SavedViewsSection />
+
+          {/* Sun study — site data (where and which way it faces) plus the
+              instant under study, so it sits with the site, not the building. */}
+          <SunStudySection />
 
           {/* Collections — above the buildings tree because a hidden collection
               has no members left in that tree to reach it from. */}

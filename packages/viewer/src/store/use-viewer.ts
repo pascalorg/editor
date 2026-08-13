@@ -44,6 +44,17 @@ type ViewerState = {
   sceneTheme: string
   setSceneTheme: (id: string) => void
 
+  /**
+   * Direction *towards* the key light, as a unit vector, or `null` to use the
+   * theme's fixed position.
+   *
+   * Presentation only — the viewer is told where the sun is, never why. Solar
+   * geometry, the site's coordinates and the study's clock all live outside
+   * (`@pascal-app/editor`'s sun study), which writes the resolved vector here.
+   */
+  sunDirection: [number, number, number] | null
+  setSunDirection: (direction: [number, number, number] | null) => void
+
   renderContext: RenderContext
   setRenderContext: (context: RenderContext) => void
 
@@ -352,6 +363,9 @@ const useViewer = create<ViewerState>()(
 
       sceneTheme: 'studio',
       setSceneTheme: (id) => set({ sceneTheme: id }),
+
+      sunDirection: null,
+      setSunDirection: (sunDirection) => set({ sunDirection }),
 
       renderContext: 'editor',
       setRenderContext: (context) => set({ renderContext: context }),

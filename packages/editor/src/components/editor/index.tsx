@@ -41,6 +41,7 @@ import {
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
+import { startSunStudyTracking, stopSunStudyTracking } from '../../store/use-sun-study'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -1074,6 +1075,13 @@ const ViewerCanvas = memo(function ViewerCanvas({
   useEffect(() => {
     startArrayDuplicateTracking()
     return stopArrayDuplicateTracking
+  }, [])
+
+  // Keep the key light in step with the sun study. The viewer is handed only
+  // the resolved direction, so it never learns about coordinates or clocks.
+  useEffect(() => {
+    startSunStudyTracking()
+    return stopSunStudyTracking
   }, [])
 
   const dismissCameraControlsHint = useCallback(() => {

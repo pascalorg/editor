@@ -159,11 +159,17 @@ export function Lights() {
       const near = SHADOW_BACKOFF
       const far = distance + size
 
+      // A resolved sun direction replaces the theme's fixed key-light position.
+      // Only the shadow caster follows it: the theme's other lights are fill,
+      // and swinging those with the sun would wash out the very contrast a
+      // shadow study is looking at.
+      const sun = useViewer.getState().sunDirection
+
       for (let index = 0; index < theme.lights.length; index++) {
         const config = theme.lights[index]
         const light = lightRefs.current[index]
         if (!(config?.castShadow && light)) continue
-        const [ox, oy, oz] = config.position
+        const [ox, oy, oz] = sun ?? config.position
         const dir = shadowDir.current.set(ox, oy, oz)
         if (dir.lengthSq() === 0) dir.set(0, 1, 0)
         dir.normalize().multiplyScalar(distance)

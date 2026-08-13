@@ -253,6 +253,7 @@ export { CollectionsPopover } from './components/ui/panels/collections/collectio
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { ParametricInspector as Inspector } from './components/ui/panels/parametric-inspector'
 export { SavedViewsSection } from './components/ui/panels/saved-views/saved-views-section'
+export { SunStudySection } from './components/ui/panels/sun-study/sun-study-section'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
 export {
   DropdownMenu,
@@ -707,6 +708,16 @@ export {
   type StairPreviewPoint,
   useStairBuildPreview,
 } from './store/use-stair-build-preview'
+export {
+  default as useSunStudy,
+  isSiteLocated,
+  minutesIntoDay,
+  readSiteSunSettings,
+  resolveSunDirection,
+  resolveSunPosition,
+  startSunStudyTracking,
+  stopSunStudyTracking,
+} from './store/use-sun-study'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {
