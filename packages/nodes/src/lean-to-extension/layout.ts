@@ -1,13 +1,21 @@
 import { LeanToExtensionNode, type WallNode } from '@pascal-app/core'
+import { EAVE_TUCK_INWARD } from '../gutter/eave-snap'
 
 export const MIN_LEAN_TO_POST_HEIGHT = 0.2
 export const MIN_LEAN_TO_WALL_LENGTH = 0.6
+export const LEAN_TO_ROOF_CONNECTION_OVERLAP = 0.005
+export const MIN_VISIBLE_LEAN_TO_ROOF_DEPTH = 0.1
+export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 2
+const RAFTER_GUTTER_CLEARANCE = 0.04
 
 export type LeanToLayout = {
   span: number
   projection: number
   roofRun: number
   slopeLength: number
+  visibleRoofRun: number
+  visibleSlopeLength: number
+  rafterSlopeLength: number
   pitchRadians: number
   effectivePitchDegrees: number
   highEdgeHeight: number
@@ -15,7 +23,11 @@ export type LeanToLayout = {
   eaveEdgeHeight: number
   roofCenterY: number
   roofCenterZ: number
+  visibleRoofCenterY: number
+  visibleRoofCenterZ: number
   rafterCenterY: number
+  rafterCenterZ: number
+  beamSpan: number
   beamCenterY: number
   postHeight: number
   postXs: number[]
@@ -26,9 +38,15 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
   const span = Math.max(0.5, node.span)
   const projection = Math.max(0.5, node.projection)
   const roofRun = projection + Math.max(0, node.eaveOverhang)
+  const roofStart = Math.min(
+    projection - MIN_VISIBLE_LEAN_TO_ROOF_DEPTH,
+    Math.max(0, (node.connectionInset ?? 0) - LEAN_TO_ROOF_CONNECTION_OVERLAP),
+  )
   const requestedPitch = (Math.max(1, Math.min(45, node.pitch)) * Math.PI) / 180
-  const minimumLowEdge =
-    MIN_LEAN_TO_POST_HEIGHT + node.beamHeight + node.rafterHeight + node.roofThickness / 2
+  const roofBuildUp =
+    node.roofThickness / Math.max(0.1, Math.cos(requestedPitch)) +
+    (node.shingleThickness ?? 0.025) * Math.cos(requestedPitch)
+  const minimumLowEdge = MIN_LEAN_TO_POST_HEIGHT + node.beamHeight + node.rafterHeight + roofBuildUp
   const maximumDrop = Math.max(0, node.highEdgeHeight - minimumLowEdge)
   const maximumPitch = Math.atan2(maximumDrop, projection)
   const pitchRadians = Math.min(requestedPitch, maximumPitch)
@@ -37,11 +55,32 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
   const eaveEdgeHeight = node.highEdgeHeight - roofRun * Math.tan(pitchRadians)
   const roofCenterY = node.highEdgeHeight - (roofRun * Math.tan(pitchRadians)) / 2
   const roofCenterZ = roofRun / 2
-  const rafterCenterY = roofCenterY - (node.roofThickness + node.rafterHeight) / 2
-  const beamTop = lowEdgeHeight - node.roofThickness / 2 - node.rafterHeight
+  const visibleRoofRun = roofRun - roofStart
+  const visibleRoofCenterZ = roofStart + visibleRoofRun / 2
+  const visibleRoofCenterY = node.highEdgeHeight - visibleRoofCenterZ * Math.tan(pitchRadians)
+  const effectiveRoofBuildUp =
+    node.roofThickness / Math.max(0.1, Math.cos(pitchRadians)) +
+    (node.shingleThickness ?? 0.025) * Math.cos(pitchRadians)
+  const gutterBackRun = projection + Math.max(0, node.eaveOverhang - EAVE_TUCK_INWARD)
+  const rafterCornerProjection = (node.rafterHeight / 2) * Math.sin(pitchRadians)
+  const rafterRun = Math.max(
+    gutterBackRun - RAFTER_GUTTER_CLEARANCE - rafterCornerProjection,
+    projection + node.beamWidth / 2,
+  )
+  const rafterCenterZ = rafterRun / 2
+  const rafterCenterY =
+    node.highEdgeHeight -
+    rafterCenterZ * Math.tan(pitchRadians) -
+    effectiveRoofBuildUp -
+    node.rafterHeight / 2
+  const beamTop = lowEdgeHeight - effectiveRoofBuildUp - node.rafterHeight
   const beamCenterY = beamTop - node.beamHeight / 2
   const postHeight = Math.max(MIN_LEAN_TO_POST_HEIGHT, beamCenterY - node.beamHeight / 2)
   const postXs = evenlySpacedXs(span, node.postCount, node.postInset)
+  const beamSpan = Math.max(
+    node.postWidth,
+    (postXs.at(-1) ?? 0) - (postXs[0] ?? 0) + node.postWidth,
+  )
   const rafterCount = Math.max(node.postCount, Math.ceil(span / 1.2) + 1)
 
   return {
@@ -49,6 +88,9 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
     projection,
     roofRun,
     slopeLength: roofRun / Math.max(0.001, Math.cos(pitchRadians)),
+    visibleRoofRun,
+    visibleSlopeLength: visibleRoofRun / Math.max(0.001, Math.cos(pitchRadians)),
+    rafterSlopeLength: rafterRun / Math.max(0.001, Math.cos(pitchRadians)),
     pitchRadians,
     effectivePitchDegrees,
     highEdgeHeight: node.highEdgeHeight,
@@ -56,7 +98,11 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
     eaveEdgeHeight,
     roofCenterY,
     roofCenterZ,
+    visibleRoofCenterY,
+    visibleRoofCenterZ,
     rafterCenterY,
+    rafterCenterZ,
+    beamSpan,
     beamCenterY,
     postHeight,
     postXs,

@@ -4,6 +4,11 @@ import { BaseNode, nodeType, objectId } from '../base'
 import { ColumnNode } from './column'
 import { RoofNode } from './roof'
 
+export const LeanToConnectionMode = z.enum(['auto', 'manual'])
+export const LeanToRoofEdge = z.enum(['+X', '-X', '+Z', '-Z'])
+export type LeanToConnectionMode = z.infer<typeof LeanToConnectionMode>
+export type LeanToRoofEdge = z.infer<typeof LeanToRoofEdge>
+
 export const LeanToExtensionNode = BaseNode.extend({
   id: objectId('leanto'),
   type: nodeType('lean-to-extension'),
@@ -11,12 +16,23 @@ export const LeanToExtensionNode = BaseNode.extend({
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   children: z.array(z.union([ColumnNode.shape.id, RoofNode.shape.id])).default([]),
 
-  span: z.number().min(0.5).max(20).default(4),
+  span: z.number().min(0.5).max(100).default(4),
+  autoSpan: z.boolean().default(true),
   projection: z.number().min(0.5).max(10).default(2.5),
   highEdgeHeight: z.number().min(0.8).max(10).default(2.8),
   pitch: z.number().min(1).max(45).default(10),
 
+  connectionMode: LeanToConnectionMode.default('auto'),
+  hostRoofId: RoofNode.shape.id.optional(),
+  hostRoofSegmentId: z.string().optional(),
+  hostRoofEdge: LeanToRoofEdge.optional(),
+  connectionOffset: z.number().min(-1).max(1).default(0),
+  connectionInset: z.number().min(0).max(10).default(0),
+  matchHostRoofMaterial: z.boolean().default(true),
+  matchHostRoofStructure: z.boolean().default(true),
+
   roofThickness: z.number().min(0.02).max(0.5).default(0.1),
+  shingleThickness: z.number().min(0).max(0.5).default(0.025),
   eaveOverhang: z.number().min(0).max(1.5).default(0.25),
   sideOverhang: z.number().min(0).max(1.5).default(0.15),
   beamWidth: z.number().min(0.05).max(0.6).default(0.16),
@@ -29,10 +45,6 @@ export const LeanToExtensionNode = BaseNode.extend({
   postDepth: z.number().min(0.05).max(0.6).default(0.16),
   postCount: z.number().int().min(2).max(20).default(3),
   postInset: z.number().min(0).max(3).default(0.2),
-
-  flashingEnabled: z.boolean().default(true),
-  flashingHeight: z.number().min(0.03).max(0.5).default(0.12),
-  flashingDepth: z.number().min(0.01).max(0.2).default(0.04),
 }).describe(
   dedent`
   Wall-hosted lean-to roof extension.

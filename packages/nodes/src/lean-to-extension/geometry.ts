@@ -6,14 +6,16 @@ import {
   type RenderShading,
 } from '@pascal-app/viewer'
 import { BoxGeometry, FrontSide, Group, Mesh } from 'three'
-import { resolveLeanToLayout } from './layout'
+import { LEAN_TO_EXTENSION_GEOMETRY_REVISION, resolveLeanToLayout } from './layout'
 
 export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
   return JSON.stringify([
+    LEAN_TO_EXTENSION_GEOMETRY_REVISION,
     node.span,
     node.projection,
     node.highEdgeHeight,
     node.pitch,
+    node.connectionInset,
     node.roofThickness,
     node.eaveOverhang,
     node.sideOverhang,
@@ -27,9 +29,6 @@ export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
     node.postDepth,
     node.postCount,
     node.postInset,
-    node.flashingEnabled,
-    node.flashingHeight,
-    node.flashingDepth,
   ])
 }
 
@@ -75,10 +74,38 @@ export function buildLeanToExtensionGeometry(
   if (!_ctx) {
     addBox(group, {
       name: 'lean-to-preview-roof',
-      size: [layout.span + 2 * node.sideOverhang, node.roofThickness, layout.slopeLength],
-      position: [0, layout.roofCenterY, layout.roofCenterZ],
+      size: [layout.span + 2 * node.sideOverhang, node.roofThickness, layout.visibleSlopeLength],
+      position: [0, layout.visibleRoofCenterY, layout.visibleRoofCenterZ],
       rotationX: layout.pitchRadians,
       role: 'roof',
+      colorPreset,
+      sceneTheme,
+    })
+  }
+
+  const connectionRun = layout.roofRun - layout.visibleRoofRun
+  if (connectionRun > 0.001) {
+    const connectionCenterZ = connectionRun / 2
+    const roofBuildUp =
+      node.roofThickness / Math.max(0.1, Math.cos(layout.pitchRadians)) +
+      (node.shingleThickness ?? 0.025) * Math.cos(layout.pitchRadians)
+    addBox(group, {
+      name: 'lean-to-connection-underlap',
+      size: [
+        layout.span + 2 * node.sideOverhang,
+        node.rafterHeight,
+        connectionRun / Math.max(0.001, Math.cos(layout.pitchRadians)),
+      ],
+      position: [
+        0,
+        layout.highEdgeHeight -
+          connectionCenterZ * Math.tan(layout.pitchRadians) -
+          roofBuildUp -
+          node.rafterHeight / 2,
+        connectionCenterZ,
+      ],
+      rotationX: layout.pitchRadians,
+      role: 'joinery',
       colorPreset,
       sceneTheme,
     })
@@ -95,7 +122,7 @@ export function buildLeanToExtensionGeometry(
 
   addBox(group, {
     name: 'lean-to-front-beam',
-    size: [layout.span, node.beamHeight, node.beamWidth],
+    size: [layout.beamSpan, node.beamHeight, node.beamWidth],
     position: [0, layout.beamCenterY, layout.projection],
     role: 'joinery',
     colorPreset,
@@ -118,24 +145,9 @@ export function buildLeanToExtensionGeometry(
   for (const [index, x] of layout.rafterXs.entries()) {
     addBox(group, {
       name: `lean-to-rafter-${index}`,
-      size: [node.rafterWidth, node.rafterHeight, layout.slopeLength],
-      position: [x, layout.rafterCenterY, layout.roofCenterZ],
+      size: [node.rafterWidth, node.rafterHeight, layout.rafterSlopeLength],
+      position: [x, layout.rafterCenterY, layout.rafterCenterZ],
       rotationX: layout.pitchRadians,
-      role: 'joinery',
-      colorPreset,
-      sceneTheme,
-    })
-  }
-
-  if (node.flashingEnabled) {
-    addBox(group, {
-      name: 'lean-to-wall-flashing',
-      size: [layout.span + 2 * node.sideOverhang, node.flashingHeight, node.flashingDepth],
-      position: [
-        0,
-        layout.highEdgeHeight + node.flashingHeight / 2 - node.roofThickness / 2,
-        node.flashingDepth / 2,
-      ],
       role: 'joinery',
       colorPreset,
       sceneTheme,

@@ -119,7 +119,11 @@ export {
   isLowProfileItemSurface,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
-export { LeanToExtensionNode } from './nodes/lean-to-extension'
+export {
+  LeanToConnectionMode,
+  LeanToExtensionNode,
+  LeanToRoofEdge,
+} from './nodes/lean-to-extension'
 export { LevelNode } from './nodes/level'
 export { LinesetNode } from './nodes/lineset'
 export { LiquidLineNode } from './nodes/liquid-line'

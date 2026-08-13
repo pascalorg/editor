@@ -12,6 +12,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { createLeanToAssembly } from './assembly'
 import { resolveLeanToWallPlacement } from './layout'
+import {
+  applyLeanToRoofAttachment,
+  applyLeanToWallAutoSpan,
+  clearLeanToRoofAttachment,
+  resolveLeanToHostRoof,
+  resolveLeanToRoofAttachment,
+} from './roof-attachment'
 import type { LeanToExtensionNode } from './schema'
 
 type PlanPoint = [number, number]
@@ -59,7 +66,13 @@ const FloorplanLeanToExtensionTool = ({
         activeLevelId,
       )
       if (!hit) return null
-      return resolveLeanToWallPlacement(hit.wall, hit.localX, hit.side)
+      const wallPlacement = resolveLeanToWallPlacement(hit.wall, hit.localX, hit.side)
+      if (!wallPlacement) return null
+      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+      const attachment = resolveLeanToRoofAttachment(wallPlacement, hit.wall, nodes)
+      return attachment
+        ? applyLeanToRoofAttachment(wallPlacement, attachment)
+        : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), hit.wall)
     }
     const update = (event: PointerEvent) => {
       consume(event)
@@ -75,7 +88,8 @@ const FloorplanLeanToExtensionTool = ({
       consume(event)
       const node = resolveEvent(event) ?? targetRef.current
       if (!node) return
-      const assembly = createLeanToAssembly(node)
+      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+      const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes))
       useScene.getState().createNodes([
         { node: assembly.extension, parentId: node.parentId as AnyNodeId },
         ...assembly.children.map((child) => ({

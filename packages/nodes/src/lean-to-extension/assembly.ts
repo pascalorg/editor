@@ -8,22 +8,46 @@ import {
   GutterNode,
   type GutterNode as GutterNodeType,
   generateId,
+  getWallBaseElevationForNodes,
+  levelBaseElevationAt,
   type LeanToExtensionNode,
   RoofNode,
   type RoofNode as RoofNodeType,
   RoofSegmentNode,
   type RoofSegmentNode as RoofSegmentNodeType,
+  spatialGridManager,
+  type WallNode,
 } from '@pascal-app/core'
 import { resolveEaveSnap } from '../gutter/eave-snap'
-import { resolveLeanToLayout } from './layout'
+import { getRoofTopSurfaceY } from '../shared/roof-surface'
+import {
+  LEAN_TO_ROOF_CONNECTION_OVERLAP,
+  MIN_VISIBLE_LEAN_TO_ROOF_DEPTH,
+  resolveLeanToLayout,
+} from './layout'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
 const POST_INDEX_KEY = 'leanToPostIndex'
 const DEFAULT_GROUND_CLEARANCE = 0.08
+const POST_GUTTER_CLEARANCE = 0.02
+const POST_GROUND_EMBED = 0.02
+const POST_BEAM_EMBED = 0.02
 const WALL_EDGE_TRIM = 0.002
 
 type LeanToManagedRole = 'roof' | 'roof-segment' | 'gutter' | 'downspout' | 'post'
+
+export type LeanToRoofMaterialPatch = Pick<
+  RoofNodeType,
+  | 'material'
+  | 'materialPreset'
+  | 'topMaterial'
+  | 'topMaterialPreset'
+  | 'edgeMaterial'
+  | 'edgeMaterialPreset'
+  | 'wallMaterial'
+  | 'wallMaterialPreset'
+>
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
@@ -75,16 +99,84 @@ export type LeanToPostLayoutPatch = Pick<
 export function leanToPostLayoutPatch(
   leanTo: LeanToExtensionNode,
   index: number,
+  baseY = 0,
+  gutterSetback = 0,
 ): LeanToPostLayoutPatch {
   const layout = resolveLeanToLayout(leanTo)
   return {
-    position: [layout.postXs[index] ?? 0, 0, layout.projection],
+    position: [layout.postXs[index] ?? 0, baseY, layout.projection - gutterSetback],
     rotation: 0,
-    height: layout.postHeight,
+    height: Math.max(0.2, layout.postHeight - baseY + POST_BEAM_EMBED),
     width: leanTo.postWidth,
     depth: leanTo.postDepth,
     crossSection: 'rectangular',
   }
+}
+
+export function resolveLeanToPostGutterSetback(
+  leanTo: LeanToExtensionNode,
+  column?: ColumnNodeType,
+): number {
+  if (!column) return 0
+  const shaftHalfDepth = column.depth / 2
+  const baseHalfDepth =
+    column.baseStyle === 'none' ? 0 : (column.depth * Math.max(1, column.baseDepthScale ?? 1)) / 2
+  const isBracketCapital =
+    column.capitalStyle === 'south-indian-bracket' || column.capitalStyle === 'wood-bracket'
+  const capitalFullDepth = isBracketCapital
+    ? column.depth * (Math.max(1, column.capitalWidthScale ?? 1.6) + 0.32) +
+      (column.bracketDepth ?? 0.35)
+    : column.depth * Math.max(1, column.capitalDepthScale ?? column.capitalWidthScale ?? 1)
+  const capitalHalfDepth = column.capitalStyle === 'none' ? 0 : capitalFullDepth / 2
+  const frameHalfDepth =
+    column.supportStyle === 'vertical'
+      ? 0
+      : (Math.max(column.braceDepth ?? column.depth, 0.04) * 1.75) / 2
+  const outwardHalfDepth = Math.max(shaftHalfDepth, baseHalfDepth, capitalHalfDepth, frameHalfDepth)
+  const gutterClearanceSetback = Math.max(
+    0,
+    outwardHalfDepth + POST_GUTTER_CLEARANCE - Math.max(0, leanTo.eaveOverhang),
+  )
+  return Math.min(gutterClearanceSetback, leanTo.beamWidth / 2)
+}
+
+export function resolveLeanToPostBaseY(
+  leanTo: LeanToExtensionNode,
+  wall: WallNode,
+  nodes: Record<string, AnyNode>,
+  index: number,
+): number {
+  const levelId = wall.parentId
+  if (!levelId || nodes[levelId]?.type !== 'level') return 0
+
+  const layout = resolveLeanToLayout(leanTo)
+  const postX = layout.postXs[index] ?? 0
+  const leanRotation = leanTo.rotation[1]
+  const leanCos = Math.cos(leanRotation)
+  const leanSin = Math.sin(leanRotation)
+  const wallLocalX = leanTo.position[0] + postX * leanCos + layout.projection * leanSin
+  const wallLocalZ = leanTo.position[2] - postX * leanSin + layout.projection * leanCos
+  const wallAngle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+  const wallCos = Math.cos(wallAngle)
+  const wallSin = Math.sin(wallAngle)
+  const position: [number, number, number] = [
+    wall.start[0] + wallLocalX * wallCos - wallLocalZ * wallSin,
+    0,
+    wall.start[1] + wallLocalX * wallSin + wallLocalZ * wallCos,
+  ]
+  const support = spatialGridManager.getSlabSupportForItem(
+    levelId,
+    position,
+    [leanTo.postWidth, 1, leanTo.postDepth],
+    [0, -wallAngle + leanRotation, 0],
+  )
+  const groundY =
+    support.slabId === null
+      ? levelBaseElevationAt(nodes, levelId, position[0], position[2])
+      : support.elevation
+  return (
+    groundY - getWallBaseElevationForNodes(wall, nodes) - leanTo.position[1] - POST_GROUND_EMBED
+  )
 }
 
 export function createManagedLeanToPost(
@@ -124,6 +216,7 @@ export type LeanToRoofSegmentLayoutPatch = Pick<
   | 'pitch'
   | 'wallThickness'
   | 'deckThickness'
+  | 'shingleThickness'
   | 'overhang'
   | 'trim'
 >
@@ -132,11 +225,10 @@ export function leanToRoofSegmentLayoutPatch(
   leanTo: LeanToExtensionNode,
 ): LeanToRoofSegmentLayoutPatch {
   const layout = resolveLeanToLayout(leanTo)
+  const shingleThickness = leanTo.shingleThickness ?? 0.025
   const overhang = Math.max(0, leanTo.eaveOverhang)
   const width = Math.max(0.5, layout.span + 2 * leanTo.sideOverhang - 2 * overhang)
-  return {
-    position: [0, layout.lowEdgeHeight, layout.projection / 2],
-    rotation: 0,
+  const surfaceProbe = {
     roofType: 'shed',
     width,
     depth: layout.projection,
@@ -145,11 +237,33 @@ export function leanToRoofSegmentLayoutPatch(
     wallThickness: 0.01,
     deckThickness: leanTo.roofThickness,
     overhang,
+    shingleThickness,
+  } as RoofSegmentNodeType
+  const topAtWall = getRoofTopSurfaceY(0, -layout.projection / 2, surfaceProbe)
+  const backTrim = Math.max(
+    WALL_EDGE_TRIM,
+    Math.min(
+      Math.max(0, (leanTo.connectionInset ?? 0) - LEAN_TO_ROOF_CONNECTION_OVERLAP),
+      layout.projection - MIN_VISIBLE_LEAN_TO_ROOF_DEPTH,
+    ),
+  )
+  return {
+    position: [0, layout.highEdgeHeight - topAtWall, layout.projection / 2],
+    rotation: 0,
+    roofType: 'shed',
+    width,
+    depth: layout.projection,
+    wallHeight: 0,
+    pitch: layout.effectivePitchDegrees,
+    wallThickness: 0.01,
+    deckThickness: leanTo.roofThickness,
+    shingleThickness,
+    overhang,
     trim: {
       left: 0,
       right: 0,
       front: 0,
-      back: WALL_EDGE_TRIM,
+      back: backTrim,
       frontLeft: 0,
       frontRight: 0,
       backLeft: 0,
@@ -191,6 +305,19 @@ export function leanToDownspoutLayoutPatch(
   }
 }
 
+export function leanToRoofMaterialPatch(hostRoof: RoofNodeType): LeanToRoofMaterialPatch {
+  return {
+    material: hostRoof.material,
+    materialPreset: hostRoof.materialPreset,
+    topMaterial: hostRoof.topMaterial,
+    topMaterialPreset: hostRoof.topMaterialPreset,
+    edgeMaterial: hostRoof.edgeMaterial,
+    edgeMaterialPreset: hostRoof.edgeMaterialPreset,
+    wallMaterial: hostRoof.wallMaterial,
+    wallMaterialPreset: hostRoof.wallMaterialPreset,
+  }
+}
+
 export type LeanToRoofAssembly = {
   roof: RoofNodeType
   segment: RoofSegmentNodeType
@@ -198,8 +325,14 @@ export type LeanToRoofAssembly = {
   downspout: DownspoutNodeType
 }
 
-export function createManagedLeanToRoofAssembly(leanTo: LeanToExtensionNode): LeanToRoofAssembly {
+export function createManagedLeanToRoofAssembly(
+  leanTo: LeanToExtensionNode,
+  hostRoof?: RoofNodeType,
+): LeanToRoofAssembly {
   const roof = RoofNode.parse({
+    ...(hostRoof && leanTo.matchHostRoofMaterial !== false
+      ? leanToRoofMaterialPatch(hostRoof)
+      : {}),
     name: 'Lean-to Roof',
     parentId: leanTo.id,
     position: [0, 0, 0],
@@ -210,7 +343,6 @@ export function createManagedLeanToRoofAssembly(leanTo: LeanToExtensionNode): Le
     ...leanToRoofSegmentLayoutPatch(leanTo),
     name: 'Lean-to Shed Roof',
     parentId: roof.id,
-    shingleThickness: 0.025,
     metadata: managedMetadata(leanTo, 'roof-segment'),
   })
   const outletId = generateId('outlet')
@@ -246,7 +378,10 @@ export function createManagedLeanToRoofAssembly(leanTo: LeanToExtensionNode): Le
   }
 }
 
-export function createLeanToAssembly(leanTo: LeanToExtensionNode): {
+export function createLeanToAssembly(
+  leanTo: LeanToExtensionNode,
+  hostRoof?: RoofNodeType,
+): {
   extension: LeanToExtensionNode
   roof: RoofNodeType
   segment: RoofSegmentNodeType
@@ -255,7 +390,7 @@ export function createLeanToAssembly(leanTo: LeanToExtensionNode): {
   posts: ColumnNodeType[]
   children: AnyNode[]
 } {
-  const roofAssembly = createManagedLeanToRoofAssembly(leanTo)
+  const roofAssembly = createManagedLeanToRoofAssembly(leanTo, hostRoof)
   const posts = Array.from({ length: leanTo.postCount }, (_, index) =>
     createManagedLeanToPost(leanTo, index),
   )

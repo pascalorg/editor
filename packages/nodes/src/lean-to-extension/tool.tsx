@@ -22,6 +22,13 @@ import { createLeanToAssembly } from './assembly'
 import { leanToExtensionGeometryKey } from './geometry'
 import { leanToWallLocalPose, resolveLeanToWallPlacement } from './layout'
 import LeanToExtensionPreview from './preview'
+import {
+  applyLeanToRoofAttachment,
+  applyLeanToWallAutoSpan,
+  clearLeanToRoofAttachment,
+  resolveLeanToHostRoof,
+  resolveLeanToRoofAttachment,
+} from './roof-attachment'
 import type { LeanToExtensionNode } from './schema'
 
 type PreviewPose = {
@@ -57,15 +64,20 @@ const LeanToExtensionTool = () => {
         setPreview(null)
         return null
       }
-      const node = resolveLeanToWallPlacement(
+      const wallPlacement = resolveLeanToWallPlacement(
         event.node,
         event.localPosition[0],
         getSideFromNormal(event.normal),
       )
-      if (!node) {
+      if (!wallPlacement) {
         setPreview(null)
         return null
       }
+      const nodes = useScene.getState().nodes
+      const attachment = resolveLeanToRoofAttachment(wallPlacement, event.node, nodes)
+      const node = attachment
+        ? applyLeanToRoofAttachment(wallPlacement, attachment)
+        : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), event.node)
       const pose = leanToWallLocalPose(event.node, node, resolveBaseY(event.node))
       setPreview((current) => ({
         node:
@@ -87,7 +99,8 @@ const LeanToExtensionTool = () => {
       const node = updateTarget(event)
       if (!node) return
       event.stopPropagation()
-      const assembly = createLeanToAssembly(node)
+      const nodes = useScene.getState().nodes
+      const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes))
       useScene.getState().createNodes([
         { node: assembly.extension, parentId: event.node.id },
         ...assembly.children.map((child) => ({
