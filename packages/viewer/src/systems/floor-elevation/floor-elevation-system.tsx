@@ -89,6 +89,15 @@ export const FloorElevationSystem = () => {
       const position = (effectiveNode as PositionedNode).position
       if (!position) return
 
+      // `applies === false` means the kind opts OUT of floor stacking for this
+      // node: its Y belongs to a host frame (a wall/ceiling-mounted item, a
+      // cabinet module inside a run, a wall duct terminal). `getFloorPlacedElevation`
+      // already returns 0 for them, so the write below would degenerate to
+      // copying `position[1]` into the mesh — and tools publish live transforms
+      // in WORLD space, so during a drag that lifts the ghost off its host by
+      // the host frame's own elevation.
+      if (floorPlaced.applies && !floorPlaced.applies(effectiveNode)) return
+
       // This system is the single drag-time authority for floor-stack mesh Y:
       // tools publish base positions to live stores, renderers may
       // reconcile that base Y onto the group, then this presentation system
