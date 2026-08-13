@@ -149,7 +149,10 @@ describe('hard cuts', () => {
 
 describe('degenerate input', () => {
   it('yields one segment for a zero-length element', () => {
-    const segments = splitIntoSegments(element({ end: [0, 0] }), { maxPourLength: 5 })
+    // Built past the conversion on purpose: `unformable` refuses a zero-length wall now, so
+    // this asserts the splitter is still safe if one ever reaches it another way.
+    const zero = { ...element(), end: { x: 0, y: 0 } }
+    const segments = splitIntoSegments(zero, { maxPourLength: 5 })
     expect(segments).toHaveLength(1)
   })
 

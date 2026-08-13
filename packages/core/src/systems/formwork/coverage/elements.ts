@@ -6,6 +6,7 @@ import { getWallAssemblyThickness } from '../../../schema/nodes/wall'
 import type { WindowNode } from '../../../schema/nodes/window'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
 import type { ExposureClass, FormworkMode, TopSurface } from '../../../schema/formwork'
+import { COLUMN_FACETS, unformable } from './formability'
 
 /** Every castable kind carries `ShutteringFields`, so one reading serves all. */
 type ShutteredNode = { formworkType?: 'plywood' | 'aluminium' | 'steel-panel' | 'none' }
@@ -128,13 +129,6 @@ export interface CastableElement {
 const DEFAULT_WALL_HEIGHT = 2.5
 const DEFAULT_COLUMN_HEIGHT = 2.5
 
-/** Facets used to approximate each non-rectangular column cross-section. */
-const COLUMN_FACETS: Partial<Record<ColumnNode['crossSection'], number>> = {
-  round: 32,
-  octagonal: 8,
-  'sixteen-sided': 16,
-}
-
 function wallHeight(wall: WallNode): number {
   return wall.height ?? DEFAULT_WALL_HEIGHT
 }
@@ -237,6 +231,11 @@ export function toCastableElement(
   node: AnyNode,
   openings: ElementOpening[] = [],
 ): CastableElement | null {
+  // One rule for what this engine will not design, so a caller that reports the rejection and
+  // a caller that skips the element agree about which elements those are. `unformable` carries
+  // the reason; a `null` here carries none, which is why every consumer that can print one
+  // should ask it rather than infer the refusal from the absence.
+  if (unformable(node)) return null
   if (node.type === 'wall') {
     const wall = node as WallNode
     const core = getWallAssemblyThickness(wall)
@@ -308,11 +307,9 @@ export function toCastableElement(
 
   if (node.type === 'slab') {
     const slab = node as SlabNode
-    if (slab.polygon.length < 3 || slab.thickness <= 0) return null
     const outline = slab.polygon.map(([x, y]) => ({ x, y }))
     const holes = slab.holes.filter((hole) => hole.length >= 3).map((hole) => hole.map(([x, y]) => ({ x, y })))
     const plan = planFrom(outline, holes)
-    if (plan.areaSqM <= 0) return null
     // `start === end` so the element yields exactly one pour unit. Bay-splitting
     // a slab is a polygon partition, not a cut along a centreline, so
     // `maxPourLength` and `maxPourVolume` do not apply to it yet.

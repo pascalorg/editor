@@ -20,6 +20,7 @@ import type {
   SequenceablePour,
   StrikeTarget,
   StrikingTime,
+  Unformable,
 } from '@pascal-app/core/formwork'
 import {
   acquireCaveats,
@@ -56,6 +57,8 @@ import {
   strikeTargetForPartKind,
   strikingInputFor,
   strikingStandardFor,
+  unformable,
+  unformableCaveats,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { type CastableHostNode, pourUnitsForHost } from './attach'
@@ -290,6 +293,15 @@ export interface ProjectFormwork {
   /** Parts working beyond capacity anywhere in scope. A bill for these is not an order. */
   beyondCapacityMarks: Array<{ hostId: string; mark: string; utilisation: number }>
   shutterCount: number
+  /**
+   * Elements in scope this engine will not design formwork for, with the reason.
+   *
+   * Separate from `incomplete`, which is an element formed for the wrong number of pours — a
+   * real shutter counted wrongly. These carry no shutter at all and never could: the geometry
+   * is degenerate. They were already excluded before this field existed, silently, which made a
+   * short bill indistinguishable from a cheap one.
+   */
+  rejected: Unformable[]
 }
 
 /**
@@ -343,7 +355,16 @@ export function solveProjectFormwork(
 ): ProjectFormwork {
   const allNodes = Object.values(nodes)
   const elements: SolvedElement[] = []
+  const rejected: Unformable[] = []
   for (const host of hostsInScope(nodes, scope)) {
+    // Before anything is designed, and before the shutter solve is asked: a degenerate element
+    // produces no layout anyway, and asking first is what turns the empty answer into a stated
+    // one. The same `unformable` the coverage conversion uses, so the two cannot disagree.
+    const refusal = unformable(host)
+    if (refusal) {
+      rejected.push(refusal)
+      continue
+    }
     const shutters = solveShuttersForHost(host, nodes)
     if (shutters.length === 0) continue
     const pourUnitCount = Math.max(1, pourUnitsForHost(host, allNodes).length)
@@ -595,6 +616,7 @@ export function solveProjectFormwork(
     incomplete: elements.filter((element) => !element.coversWholePour),
     beyondCapacityMarks,
     shutterCount: elements.reduce((total, element) => total + element.shutters.length, 0),
+    rejected,
   }
 }
 
@@ -617,6 +639,7 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
         : `${element.host.id} has ${shutters} shutters for ${units} ${units === 1 ? 'pour' : 'pours'} — this bill counts formwork for a pour it no longer has.`,
     )
   }
+  out.push(...unformableCaveats(solution.rejected))
   if (solution.beyondCapacityMarks.length > 0) {
     const count = solution.beyondCapacityMarks.length
     out.push(

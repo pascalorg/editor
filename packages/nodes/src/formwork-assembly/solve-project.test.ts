@@ -324,6 +324,51 @@ describe('solveProjectFormwork', () => {
     expect(solution.shutterCount).toBe(3)
   })
 
+  test('a degenerate element is rejected with its reason, and the rest of the job still solves', () => {
+    // The refusal used to be a `null` inside the conversion, so the element left the bill and
+    // nothing said so — a total short by a slab reads as a cheap job rather than an incomplete
+    // one. The good wall beside it is half the assertion: a refusal that stops the project is
+    // as useless as one that hides.
+    const good = makeWall('wall_1')
+    const flat = makeSlab('slab_1', { thickness: 0 })
+    const solution = solveProjectFormwork(
+      sceneOf(
+        good,
+        flat,
+        makeAssembly('formwork-assembly_1', 'wall_1', 0, 0),
+        makeAssembly('formwork-assembly_2', 'slab_1', 0, 0),
+      ),
+    )
+
+    expect(solution.rejected).toMatchObject([
+      {
+        elementId: 'slab_1',
+        kind: 'slab',
+        reason: 'dimension-not-positive',
+        dimension: 'thickness',
+      },
+    ])
+    expect(solution.elements.map((element) => element.host.id)).toEqual(['wall_1'])
+    // No quantity, no cost, no drawing: the rejected element contributes to none of the three.
+    const alone = solveProjectFormwork(
+      sceneOf(good, makeAssembly('formwork-assembly_1', 'wall_1', 0, 0)),
+    )
+    expect(solution.bom.map((line) => line.description)).toEqual(
+      alone.bom.map((line) => line.description),
+    )
+    expect(solution.bom.map((line) => line.quantity)).toEqual(
+      alone.bom.map((line) => line.quantity),
+    )
+    expect(solution.totalWeightKg).toBe(alone.totalWeightKg)
+    expect(solution.cost?.totalCost).toBe(alone.cost?.totalCost)
+    expect(solution.cutList).toEqual(alone.cutList)
+    expect(
+      projectFormworkCaveats(solution).some((c) =>
+        c.includes('incomplete job rather than a cheap one'),
+      ),
+    ).toBe(true)
+  })
+
   test('a per-part omission reaches the project bill', () => {
     // The decisions live on the assembly, so a project-scope aggregation that solved
     // its own way would quietly re-order everything a yard had taken off the list.

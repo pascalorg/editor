@@ -142,7 +142,9 @@ describe('snapping to permitted elevations', () => {
 
 describe('degenerate input', () => {
   it('yields one lift for a zero-height element', () => {
-    const lifts = splitIntoLifts(element({ height: 0 }), { maxLiftHeight: 1 })
+    // Built past the conversion on purpose: `unformable` refuses a zero-height wall now, so
+    // this asserts the splitter is still safe if one ever reaches it another way.
+    const lifts = splitIntoLifts({ ...element(), height: 0 }, { maxLiftHeight: 1 })
     expect(lifts).toHaveLength(1)
   })
 

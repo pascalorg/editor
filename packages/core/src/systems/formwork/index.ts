@@ -149,6 +149,15 @@ export {
   outlineOf,
 } from './coverage/footprint'
 export {
+  outlineSelfIntersects,
+  UNFORMABLE_REASON_LABELS,
+  type Unformable,
+  type UnformableDimension,
+  type UnformableReason,
+  unformable,
+  unformableCaveats,
+} from './coverage/formability'
+export {
   type Abutment,
   type AbutmentMap,
   cornerLegExtent,
