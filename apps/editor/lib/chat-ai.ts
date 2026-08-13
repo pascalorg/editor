@@ -19,11 +19,13 @@ import {
   describeFormworkReconciliation,
   describePourSplit,
   FIX_FORMWORK_FINDING_DESCRIPTION,
+  FORMWORK_RFI_DESCRIPTION,
   findFormworkSettingsNode,
   findingByKey,
   fixFindingInput,
   formworkPartPatchInput,
   formworkPartsQueryInput,
+  formworkRfiCandidates,
   formworkSettings,
   formworkSettingsPatchInput,
   formworkSettingsReport,
@@ -43,6 +45,8 @@ import {
   pourDatePatchInput,
   pourLimitsPatchInput,
   RESEQUENCE_REFUSAL_LABELS,
+  RFI_ADDRESSEE_LABELS,
+  rfiSummary,
   SCHEDULE_GAP_LABELS,
   SEQUENCE_GAP_LABELS,
   SET_COUNT_GAP_LABELS,
@@ -306,6 +310,16 @@ export const SYSTEM_PROMPT =
   'others cannot be cleared by any write here at all. Relay what those need instead of proposing ' +
   'a call, and never edit an input until a check stops firing — a face declared against earth so ' +
   'the single-sided check goes quiet changes nothing on site. ' +
+  'About half the findings are not the contractor’s to resolve at all, and formwork_rfis is how ' +
+  'you say so: a waterstop detail, an anchor load into hardened concrete, a tie pattern on an ' +
+  'exposed face are the engineer’s or the architect’s, and proposing a layout change for one is ' +
+  'the sender doing the designer’s work on the two subjects where being wrong is a leak or a ' +
+  'collapse. Call it rather than composing questions from a validation reply — which findings are ' +
+  'somebody else’s is a judgement about liability per check, not something to read off a message ' +
+  '— and quote each question as written, to the addressee named. Say plainly that they are not a ' +
+  'register: nothing here is numbered, dated or answered against, so never report one as ' +
+  'submitted, and never present the count as the number of problems when most findings are ours ' +
+  'to fix and validate_formwork already says how. ' +
   'set_formwork_part records the two decisions a yard actually makes about a solved ' +
   'layout — substitute this item, or leave it off the order because it is already on site. It ' +
   'cannot change a size or a spacing; those are outputs, and to change them you change the design ' +
@@ -1294,6 +1308,44 @@ export function buildTools(
           // has neither — a pass over it is not a pass.
           shutteredIds,
           notChecked: report.notChecked,
+        })
+      },
+    }),
+    formwork_rfis: tool({
+      description: FORMWORK_RFI_DESCRIPTION,
+      inputSchema: z.object({
+        levelId: z
+          .string()
+          .optional()
+          .describe('a level id for one level; omit for the whole scene'),
+        elementIds: z
+          .array(z.string())
+          .max(500)
+          .optional()
+          .describe('only these elements — for a selection the user named'),
+      }),
+      execute: async ({ elementIds, levelId }) => {
+        toolCalls.push({ name: 'formwork_rfis', input: { elementIds, levelId } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        if (levelId !== undefined && nodes[levelId]?.type !== 'level') {
+          return `Error: no level with id ${levelId}. Call list_castable_elements and read the parentId of the elements you mean.`
+        }
+        const { report } = validateProjectFormwork(nodes, {
+          hostIds: elementIds,
+          parentId: levelId,
+        })
+        const candidates = formworkRfiCandidates(report.findings)
+        return JSON.stringify({
+          scope: levelId ?? (elementIds ? 'the elements named' : 'whole scene'),
+          questions: candidates.map((candidate) => ({
+            ...candidate,
+            addresseeLabel: RFI_ADDRESSEE_LABELS[candidate.addressee],
+          })),
+          beforePourCount: candidates.filter((candidate) => candidate.beforePour).length,
+          // The denominator. Ten questions over forty findings is the normal shape, and
+          // without the second number ten reads as a job with ten problems.
+          findingCount: report.findings.length,
+          summary: rfiSummary(candidates),
         })
       },
     }),

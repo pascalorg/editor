@@ -524,3 +524,113 @@ describe('validate_formwork', () => {
     expect(reply.summary.join(' ')).toContain('Nothing in this scope to check.')
   })
 })
+
+/**
+ * The questions the model must not answer itself.
+ *
+ * Every finding above is presented to the model with what would clear it, and for about
+ * half of them the honest answer is "nothing this feature writes". Left at that, a model
+ * does the natural and wrong thing: it proposes a detail. On the two subjects where these
+ * findings actually land — a seal across a joint in a water-retaining structure, an anchor
+ * load into hardened concrete — a detail the model invented is a leak or a collapse rather
+ * than a re-order, and it is somebody else's liability to state.
+ *
+ * The wording and the split belong to `rfi.test.ts` in core. What matters here is that the
+ * tool exists on this surface at all, that it reads the scene rather than an argument, and
+ * that the two things the model would otherwise get wrong survive: a count of questions is
+ * not a count of problems, and this is not a register.
+ */
+describe('formwork_rfis', () => {
+  interface RfiReply {
+    scope: string
+    questions: Array<{
+      invariant: string
+      addressee: string
+      addresseeLabel: string
+      question: string
+      elementIds: string[]
+      context: string[]
+      beforePour: boolean
+    }>
+    beforePourCount: number
+    findingCount: number
+    summary: string[]
+  }
+
+  const rfis = async (tools: ToolMap, input: unknown = {}): Promise<RfiReply> =>
+    JSON.parse(await call(tools, 'formwork_rfis', input)) as RfiReply
+
+  test('asks the engineer about the seal, in words the model did not write', async () => {
+    // The tie drilled through the waterstop: an error, no write here clears it, and the
+    // answer — a watertight tie or a relocated joint — is the engineer's to give.
+    const tools = walledWithWaterstop()
+
+    const reply = await rfis(tools)
+
+    const seal = reply.questions.find((q) => q.invariant === 'TIE_THROUGH_WATERSTOP')
+    expect(seal?.addressee).toBe('engineer-of-record')
+    expect(seal?.addresseeLabel).toBe('Engineer of record')
+    expect(seal?.elementIds).toContain('wall_1')
+    expect(seal?.beforePour).toBe(true)
+    // The question asks for something. A template restating the defect would come back
+    // agreed and unblock nothing.
+    expect(seal?.question).toMatch(/\?|Confirm|Specify|State/)
+  })
+
+  test('the figures on the form are the check’s own, not a second version', async () => {
+    const tools = walledWithWaterstop()
+
+    const validation = await validate(tools)
+    const reply = await rfis(tools)
+
+    for (const question of reply.questions) {
+      for (const line of question.context) {
+        expect(validation.findings.some((finding) => finding.message === line)).toBe(true)
+      }
+    }
+  })
+
+  test('stays quiet about the corner clash, which is ours to lay out again', async () => {
+    // An RFI about two corner units that overlap is a designer being asked to do the
+    // temporary-works engineering the sender is responsible for. The finding is still an
+    // error and validate_formwork still reports it — this tool just is not where it goes.
+    const { tools } = shortReturn()
+
+    const validation = await validate(tools)
+    const reply = await rfis(tools)
+
+    expect(validation.findings.some((f) => f.invariant === 'CORNER_UNITS_OVERLAP')).toBe(true)
+    expect(reply.questions.map((q) => q.invariant)).not.toContain('CORNER_UNITS_OVERLAP')
+    // And the denominator says so, rather than leaving the model to read a short list of
+    // questions as a job with few problems.
+    expect(reply.findingCount).toBe(validation.findings.length)
+  })
+
+  test('says nothing at all where a scope raises no questions', async () => {
+    const { tools } = scene()
+
+    const reply = await rfis(tools, { elementIds: [] })
+
+    expect(reply.questions).toEqual([])
+    expect(reply.summary).toEqual([])
+  })
+
+  test('refuses a level that does not exist, like the check it is derived from', async () => {
+    const { tools } = scene()
+
+    const reply = await call(tools, 'formwork_rfis', { levelId: 'level_9' })
+
+    expect(reply).toStartWith('Error:')
+    expect(reply).toContain('list_castable_elements')
+  })
+
+  test('tells the model outright that this is not a register', async () => {
+    // The sentence that keeps a list of questions from being reported as questions sent.
+    const tools = walledWithWaterstop()
+
+    const reply = await rfis(tools)
+
+    expect(reply.summary.join(' ')).toContain('not a register')
+    expect(reply.summary.join(' ')).toContain('engineer of record')
+  })
+})

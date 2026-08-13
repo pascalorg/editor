@@ -3,6 +3,7 @@ import type { SceneOperations } from '../../operations'
 import { registerAttachFormwork } from './attach-formwork'
 import { registerCommitPour } from './commit-pour'
 import { registerFixFormworkFinding } from './fix-formwork-finding'
+import { registerFormworkRfis } from './formwork-rfis'
 import { registerInspectFormworkParts } from './inspect-formwork-parts'
 import { registerInspectFormworkSettings } from './inspect-formwork-settings'
 import { registerInspectPourUnits } from './inspect-pour-units'
@@ -133,6 +134,7 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerInspectProjectFormwork(server, operations)
   registerValidateFormwork(server, operations)
   registerFixFormworkFinding(server, operations)
+  registerFormworkRfis(server, operations)
   registerInspectFormworkSettings(server, operations)
   registerSetFormworkSettings(server, operations)
   registerInspectFormworkParts(server, operations)
@@ -147,6 +149,7 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
 export { attachFormworkOutput } from './attach-formwork'
 export { commitPourOutput } from './commit-pour'
 export { fixFormworkFindingOutput } from './fix-formwork-finding'
+export { formworkRfisOutput } from './formwork-rfis'
 export { inspectFormworkPartsOutput } from './inspect-formwork-parts'
 export { inspectFormworkSettingsOutput } from './inspect-formwork-settings'
 export { inspectPourUnitsOutput } from './inspect-pour-units'

@@ -10,9 +10,13 @@ import {
   applyPourLimitsPatch,
   type Finding,
   failingElementIds,
+  formworkRfiCandidates,
   INVARIANT_LABELS,
   type InvariantId,
+  RFI_ADDRESSEE_LABELS,
+  type RfiCandidate,
   remedySummary,
+  rfiSummary,
   validationSummary,
 } from '@pascal-app/core/formwork'
 import { PanelSection } from '@pascal-app/editor'
@@ -52,19 +56,33 @@ import { validateProjectFormwork } from './validate-project'
  *
  * ## The fix button, and why most findings do not get one
  *
- * Three of the twenty-one invariants have a fix whose every argument the check itself
- * supplies, and only those get a button. The rest print what would clear them instead:
- * seven end in an argument somebody has to decide — a cast order, a pour id, which
- * crane — and eleven cannot be cleared by any write this feature has at all. A button
- * on those would be a button that appears to work, which is worse than no button,
- * because the reader would take the check's silence afterwards as the defect having
- * gone.
+ * One invariant in twenty-one has a fix whose every argument the check itself supplies,
+ * and a second class of finding earns one where its own instance turns out to be
+ * derivable. Those get a button. The rest print what would clear them instead: nine end
+ * in an argument somebody has to decide — a cast order, a pour id, which crane — and
+ * eleven cannot be cleared by any write this feature has at all. A button on those
+ * would be a button that appears to work, which is worse than no button, because the
+ * reader would take the check's silence afterwards as the defect having gone.
  *
  * The button also does not report success. It applies the write, rebuilds the shutters
  * the new split needs, re-runs the whole suite and says whether *that* finding actually
  * cleared — and names anything the fix raised that was not there before. A cap that
  * moves a joint off one window and through the next is the failure mode here, and it
  * would read as a clean fix to anything that trusted the write.
+ *
+ * ## The questions section, and why it is not the findings again
+ *
+ * The findings above are all addressed to the reader. Eleven of the invariants are not
+ * the reader's to answer at all — a waterstop detail, an anchor load, a tie pattern on
+ * an exposed face — and until this section existed the panel presented those in the
+ * same voice as an unformable strip, which is a list that says "fix these" about work
+ * somebody else is liable for. So they appear again, grouped by the question rather
+ * than by the wall, with the recipient named. Grouped because that is how an RFI is
+ * asked: one question, every location it covers.
+ *
+ * It says outright that it is not a register. Nothing here has a number or a date and
+ * no answer is recorded against it, and a list of questions that looked like a register
+ * would read as questions already sent.
  */
 
 /** The findings, and what could not be looked at, for a scope. */
@@ -237,6 +255,54 @@ function FixOutcomeNote({ outcome }: { outcome: FormworkFixOutcome | { refusal: 
   )
 }
 
+/**
+ * One question, and the walls it covers.
+ *
+ * The question prints in full rather than being summarised, because the wording is the
+ * deliverable — somebody copies it onto their own form, and a paraphrase is a question
+ * they then have to write themselves. `context` is the findings' own messages, so the
+ * figures on the form are the ones the check produced.
+ */
+function RfiRow({ candidate, onSelect }: { candidate: RfiCandidate; onSelect: () => void }) {
+  return (
+    <div className="space-y-0.5 border-border/30 border-t pt-1 first:border-t-0 first:pt-0">
+      <button
+        className="w-full space-y-0.5 text-left hover:bg-white/[0.03]"
+        onClick={onSelect}
+        type="button"
+      >
+        <div className="flex items-baseline justify-between gap-2 text-[11px]">
+          <span className="min-w-0 flex-1 text-foreground/90">{candidate.subject}</span>
+          <span
+            className={
+              candidate.beforePour
+                ? 'shrink-0 text-[10px] text-red-400'
+                : 'shrink-0 text-[10px] text-muted-foreground'
+            }
+          >
+            {candidate.beforePour ? 'before the pour' : 'alongside'}
+          </span>
+        </div>
+        <div className="text-[10px] text-muted-foreground/80">
+          {RFI_ADDRESSEE_LABELS[candidate.addressee]} ·{' '}
+          {candidate.elementIds.length === 1
+            ? candidate.elementIds[0]
+            : `${candidate.elementIds.length} elements`}
+        </div>
+      </button>
+      <div className="text-[10px] text-foreground/75 leading-snug">{candidate.question}</div>
+      {candidate.context.map((line) => (
+        <div className="text-[10px] text-muted-foreground/70 leading-snug" key={line}>
+          {line}
+        </div>
+      ))}
+      <div className="text-[10px] text-muted-foreground/60 leading-snug">
+        Waiting on it: {candidate.unblocks}
+      </div>
+    </div>
+  )
+}
+
 export function FormworkValidationPanel() {
   const levels = useTakeoffLevels()
   const [levelId, setLevelId] = useState<string | undefined>(undefined)
@@ -252,6 +318,7 @@ export function FormworkValidationPanel() {
 
   const errors = report.findings.filter((finding) => finding.severity === 'error')
   const warnings = report.findings.filter((finding) => finding.severity === 'warning')
+  const questions = formworkRfiCandidates(report.findings)
   const select = (ids: AnyNodeId[]) => setSelection({ selectedIds: ids as AnyNode['id'][] })
   const fix = (finding: Finding) => {
     const result = applyFix(finding)
@@ -346,6 +413,27 @@ export function FormworkValidationPanel() {
           )}
         </div>
       </PanelSection>
+
+      {/* Absent, not empty, when there are none. `rfiSummary([])` returns nothing for the
+          same reason: a heading over an empty list reads as a register with no entries. */}
+      {questions.length > 0 && (
+        <PanelSection title="Questions for others">
+          <div className="space-y-2 px-1 pb-1">
+            {rfiSummary(questions).map((line) => (
+              <div className="text-[11px] text-foreground/80 leading-snug" key={line}>
+                {line}
+              </div>
+            ))}
+            {questions.map((candidate) => (
+              <RfiRow
+                candidate={candidate}
+                key={`${candidate.invariant}-${candidate.addressee}`}
+                onSelect={() => select(candidate.elementIds)}
+              />
+            ))}
+          </div>
+        </PanelSection>
+      )}
 
       {/* Last, and never omitted. What was not looked at is part of the result. */}
       <PanelSection title="Not checked">

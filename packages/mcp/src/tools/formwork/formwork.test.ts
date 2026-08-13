@@ -1463,6 +1463,111 @@ describe('the formwork MCP tools', () => {
   })
 
   /**
+   * The questions this surface must not answer itself.
+   *
+   * The wording and the liability split are `rfi.test.ts`'s in core. What is asserted here
+   * is what only this layer can get wrong: that the questions come off the scene rather
+   * than off an argument the caller supplied, that the reply carries the denominator so a
+   * count of questions is not read as a count of problems, and that the sentence keeping
+   * it from being read as a register survives the round trip.
+   */
+  describe('the questions for the designer', () => {
+    interface RfiReply {
+      scope: string
+      questions: Array<{
+        invariant: string
+        addressee: string
+        addresseeLabel: string
+        question: string
+        elementIds: string[]
+        context: string[]
+        beforePour: boolean
+      }>
+      beforePourCount: number
+      findingCount: number
+      summary: string[]
+    }
+
+    test('asks only about the findings that are somebody else’s, over the same scene', async () => {
+      // The U with two overlapping corner units is the control: it is an error, and it is
+      // the contractor's own layout to fix, so it raises no question at all.
+      load(shortReturn())
+
+      const validation = await call<Reply>('validate_formwork')
+      const rfis = await call<RfiReply>('formwork_rfis')
+
+      expect(validation.findings.length).toBeGreaterThan(0)
+      expect(rfis.findingCount).toBe(validation.findings.length)
+      expect(rfis.questions.map((q) => q.invariant)).not.toContain('CORNER_UNITS_OVERLAP')
+      for (const question of rfis.questions) {
+        // The figures are the check's, so nothing on the form is a second version of them.
+        for (const line of question.context) {
+          expect(validation.findings.some((finding) => finding.message === line)).toBe(true)
+        }
+        expect(question.addresseeLabel.length).toBeGreaterThan(0)
+      }
+    })
+
+    test('names the addressee, the elements, and which answers hold a pour', async () => {
+      // A 1.5 m cap on the walled bay puts the joint at 1.5 m, through a window spanning
+      // 0.3–2.7 — and there is no other division of a 3 m wall that clears it, so the
+      // remedy is `none` and the question is the engineer's. Raised through the write
+      // tool rather than a hand-made node, because a joint elevation is what the cap
+      // produces and a fixture asserting one would be asserting our own arithmetic.
+      load(walledWithOpening())
+      await call('set_pour_limits', { elementId: 'wall_1', maxLiftHeight: 1.5 })
+
+      const rfis = await call<RfiReply>('formwork_rfis')
+
+      const straddle = rfis.questions.find((q) => q.invariant === 'OPENING_STRADDLES_LIFT_JOINT')
+      expect(straddle?.addressee).toBe('engineer-of-record')
+      expect(straddle?.addresseeLabel).toBe('Engineer of record')
+      expect(straddle?.elementIds).toEqual(['wall_1', 'window_1'])
+      // An error, so the pour waits on the answer. The pressure-envelope question beside
+      // it is a warning and travels alongside the work — the distinction the flag carries.
+      expect(straddle?.beforePour).toBe(true)
+      expect(rfis.beforePourCount).toBe(1)
+      expect(rfis.questions.filter((q) => q.beforePour === false).length).toBeGreaterThan(0)
+    })
+
+    test('says nothing rather than reporting zero questions', async () => {
+      // For the reason the summary does: a clean report has already said the check found
+      // nothing, and "0 RFIs" beside it invites the reader to ask which register that
+      // count came out of.
+      const rfis = await call<RfiReply>('formwork_rfis')
+
+      expect(rfis.questions).toEqual([])
+      expect(rfis.summary).toEqual([])
+      expect(rfis.findingCount).toBe(0)
+    })
+
+    test('refuses a level that does not exist rather than answering about nothing', async () => {
+      load(twoLevels())
+
+      const result = await client.callTool({
+        name: 'formwork_rfis',
+        arguments: { levelId: 'level_9' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('no level with id')
+    })
+
+    test('refuses to look like a register', async () => {
+      // The one sentence that keeps a list of questions from reading as questions sent.
+      load(twoLevels())
+
+      const rfis = await call<RfiReply>('formwork_rfis', { levelId: 'level_1' })
+
+      expect(rfis.summary.join(' ')).toContain('not a register')
+      for (const question of rfis.questions) {
+        expect(Object.keys(question)).not.toContain('number')
+        expect(Object.keys(question)).not.toContain('status')
+      }
+    })
+  })
+
+  /**
    * The pour, stated and read back from outside the editor.
    *
    * The merge behaviour itself belongs to `settings-patch.test.ts` in core, which owns
