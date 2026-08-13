@@ -33,6 +33,7 @@ import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
 import { scanDefinition } from './scan'
+import { sectionPlaneDefinition } from './section-plane'
 import { shelfDefinition } from './shelf'
 import { siteDefinition } from './site'
 import { skylightDefinition } from './skylight'
@@ -98,6 +99,7 @@ export const builtinPlugin: Plugin = {
     measurementDefinition as unknown as AnyNodeDefinition,
     constructionDimensionDefinition as unknown as AnyNodeDefinition,
     structuralGridDefinition as unknown as AnyNodeDefinition,
+    sectionPlaneDefinition as unknown as AnyNodeDefinition,
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
     boxVentDefinition as unknown as AnyNodeDefinition,
     ridgeVentDefinition as unknown as AnyNodeDefinition,
@@ -166,6 +168,7 @@ export { ridgeVentDefinition } from './ridge-vent'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
+export { sectionPlaneDefinition } from './section-plane'
 export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
 export { skylightDefinition } from './skylight'

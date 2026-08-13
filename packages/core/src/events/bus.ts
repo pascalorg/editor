@@ -37,6 +37,7 @@ import type {
   RoofNode,
   RoofSegmentNode,
   ScanNode,
+  SectionPlaneNode,
   ShelfNode,
   SiteNode,
   SkylightNode,
@@ -116,6 +117,7 @@ export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
 export type ScanEvent = NodeEvent<ScanNode>
+export type SectionPlaneEvent = NodeEvent<SectionPlaneNode>
 export type GuideEvent = NodeEvent<GuideNode>
 export type CadUnderlayEvent = NodeEvent<CadUnderlayNode>
 export type BoxVentEvent = NodeEvent<BoxVentNode>
@@ -323,6 +325,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
   NodeEvents<'scan', ScanEvent> &
+  NodeEvents<'section-plane', SectionPlaneEvent> &
   NodeEvents<'guide', GuideEvent> &
   NodeEvents<'cad-underlay', CadUnderlayEvent> &
   NodeEvents<'box-vent', BoxVentEvent> &

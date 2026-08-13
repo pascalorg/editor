@@ -131,6 +131,12 @@ export {
   type RendererPowerPreference,
 } from './lib/renderer-capability'
 export {
+  clearSceneClippingPlanes,
+  type SceneClippingPlaneInput,
+  sceneClippingPlanes,
+  setSceneClippingPlanes,
+} from './lib/scene-clipping'
+export {
   getSceneTheme,
   SCENE_THEME_IDS,
   SCENE_THEMES,

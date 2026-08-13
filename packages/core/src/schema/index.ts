@@ -211,6 +211,7 @@ export {
   segmentPointToRoofWallFace,
 } from './nodes/roof-segment-walls'
 export { ScanNode } from './nodes/scan'
+export { SectionPlaneNode } from './nodes/section-plane'
 export { ShelfNode } from './nodes/shelf'
 export { SiteNode } from './nodes/site'
 export {

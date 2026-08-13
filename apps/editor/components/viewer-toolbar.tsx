@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon as IconifyIcon } from '@iconify/react'
+import { type SectionPlaneNode, useScene } from '@pascal-app/core'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,7 @@ import {
   PenLine,
   Ruler,
   ScanLine,
+  Scissors,
   SlidersHorizontal,
   Sparkles,
   SquareUserRound,
@@ -358,6 +360,21 @@ function DisplayMenu() {
   )
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const setFloorplanMode = useFloorplanMode((state) => state.setMode)
+  // Scalar selectors on purpose: returning the filtered array would allocate a
+  // new reference on every scene mutation and re-render the whole toolbar.
+  const activeSectionPlaneId = useScene(
+    (state) =>
+      Object.values(state.nodes).find(
+        (node): node is SectionPlaneNode => node.type === 'section-plane' && node.active,
+      )?.id ?? null,
+  )
+  const firstSectionPlaneId = useScene(
+    (state) =>
+      Object.values(state.nodes).find(
+        (node): node is SectionPlaneNode => node.type === 'section-plane',
+      )?.id ?? null,
+  )
+
   const activeShading =
     SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
   const activeEdges = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
@@ -530,6 +547,32 @@ function DisplayMenu() {
           <span>Camera</span>
           <span className="ml-auto text-muted-foreground text-xs">
             {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => {
+            // With a plane already in the scene this toggles the cut and keeps
+            // the menu open like the other display toggles. With none, it hands
+            // over to the placement tool — that one has to let the menu close so
+            // the user can click where the plane should land.
+            const existingId = activeSectionPlaneId ?? firstSectionPlaneId
+            if (!existingId) {
+              // `ToolManager` only mounts a registry tool in build mode, so the
+              // tool id alone would set state that never renders anything.
+              const ed = useEditor.getState()
+              ed.setMode('build')
+              ed.setTool('section-plane')
+              return
+            }
+            keepOpen(e, () =>
+              useScene.getState().updateNode(existingId, { active: !activeSectionPlaneId }),
+            )
+          }}
+        >
+          <Scissors className="h-4 w-4" />
+          <span>Section plane</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {activeSectionPlaneId ? 'On' : firstSectionPlaneId ? 'Off' : 'Place'}
           </span>
         </DropdownMenuItem>
         <DropdownMenuSub>
