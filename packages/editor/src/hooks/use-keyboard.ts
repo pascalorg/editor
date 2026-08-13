@@ -24,6 +24,7 @@ import {
   rotateGroupPatches,
 } from '../components/editor/group-transform-shared'
 import { steppedRotation } from '../components/tools/item/placement-math'
+import { parseArrayCommand } from '../lib/array-duplicate'
 import { AXIS_LOCK_KEYS } from '../lib/axis-lock'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
@@ -35,6 +36,7 @@ import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
 import { toggleWindowOpenState } from '../lib/window-interaction'
+import { isArrayCommandArmed, runArrayCommand } from '../store/use-array-duplicate'
 import useAxisLock from '../store/use-axis-lock'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
@@ -734,7 +736,10 @@ export const useKeyboard = ({
       const input = useMeasurementInput.getState()
       const typing = input.buffer !== ''
       const drafting = isDimensionEntryArmed()
-      if (!(typing || drafting)) return
+      // After a move lands, `*n` / `/n` array it. That window has no drafting
+      // gesture, so it arms the buffer on its own.
+      const arrayArmed = isArrayCommandArmed()
+      if (!(typing || drafting || arrayArmed)) return
 
       // Consuming a key means no other listener — tool-local or otherwise — may
       // also act on it, so the whole propagation stops here.
@@ -759,6 +764,14 @@ export const useKeyboard = ({
       }
       if (typing && e.key === 'Enter') {
         consume()
+        // `*12` is a complete instruction on its own, not a dimension for a
+        // gesture in flight, so it runs here instead of reaching `tool:commit`.
+        const arrayCommand = parseArrayCommand(input.buffer)
+        if (arrayCommand) {
+          input.clear()
+          runArrayCommand(arrayCommand)
+          return
+        }
         emitter.emit('tool:commit')
         return
       }
@@ -769,7 +782,22 @@ export const useKeyboard = ({
         input.clear()
         return
       }
-      if (typing ? isMeasurementInputContinueKey(e.key) : isMeasurementInputStartKey(e.key)) {
+      if (typing) {
+        if (isMeasurementInputContinueKey(e.key)) {
+          consume()
+          input.append(e.key)
+        }
+        return
+      }
+      if (drafting && isMeasurementInputStartKey(e.key)) {
+        consume()
+        input.append(e.key)
+        return
+      }
+      // Post-move, only the two array operators open the buffer. A bare digit
+      // must not, or every single-letter tool shortcut would stay shadowed for
+      // as long as the last move remains armed.
+      if (arrayArmed && (e.key === '*' || e.key === '/')) {
         consume()
         input.append(e.key)
       }

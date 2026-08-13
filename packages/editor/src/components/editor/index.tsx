@@ -34,6 +34,10 @@ import {
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUiPreferences } from '../../lib/ui-preferences'
+import {
+  startArrayDuplicateTracking,
+  stopArrayDuplicateTracking,
+} from '../../store/use-array-duplicate'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
@@ -1062,6 +1066,14 @@ const ViewerCanvas = memo(function ViewerCanvas({
 
   useEffect(() => {
     setIsCameraControlsHintVisible(!readCameraControlsHintDismissed())
+  }, [])
+
+  // Watch scene commits for the move that `*n` / `/n` would array. One
+  // subscription rather than a hook per move tool, so the 2D overlay, the 3D
+  // mover and the group gizmo all arm it identically.
+  useEffect(() => {
+    startArrayDuplicateTracking()
+    return stopArrayDuplicateTracking
   }, [])
 
   const dismissCameraControlsHint = useCallback(() => {

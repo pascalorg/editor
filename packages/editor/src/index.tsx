@@ -315,6 +315,13 @@ export {
   publishPlacementSurface,
 } from './lib/active-placement-surface'
 export {
+  type ArrayCommand,
+  buildArrayOffsets,
+  detectUniformTranslation,
+  MAX_ARRAY_COUNT,
+  parseArrayCommand,
+} from './lib/array-duplicate'
+export {
   type CalibrationInput,
   type CalibrationProblem,
   type CalibrationResult,
@@ -602,6 +609,13 @@ export {
 } from './lib/world-grid-snap'
 export { subscribeCameraPose } from './store/camera-pose-store'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
+export {
+  default as useArrayDuplicate,
+  isArrayCommandArmed,
+  runArrayCommand,
+  startArrayDuplicateTracking,
+  stopArrayDuplicateTracking,
+} from './store/use-array-duplicate'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export {
