@@ -15,7 +15,6 @@ export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
     node.projection,
     node.highEdgeHeight,
     node.pitch,
-    node.connectionInset,
     node.roofThickness,
     node.eaveOverhang,
     node.sideOverhang,
@@ -74,38 +73,10 @@ export function buildLeanToExtensionGeometry(
   if (!_ctx) {
     addBox(group, {
       name: 'lean-to-preview-roof',
-      size: [layout.span + 2 * node.sideOverhang, node.roofThickness, layout.visibleSlopeLength],
-      position: [0, layout.visibleRoofCenterY, layout.visibleRoofCenterZ],
+      size: [layout.span + 2 * node.sideOverhang, node.roofThickness, layout.slopeLength],
+      position: [0, layout.roofCenterY, layout.roofCenterZ],
       rotationX: layout.pitchRadians,
       role: 'roof',
-      colorPreset,
-      sceneTheme,
-    })
-  }
-
-  const connectionRun = layout.roofRun - layout.visibleRoofRun
-  if (connectionRun > 0.001) {
-    const connectionCenterZ = connectionRun / 2
-    const roofBuildUp =
-      node.roofThickness / Math.max(0.1, Math.cos(layout.pitchRadians)) +
-      (node.shingleThickness ?? 0.025) * Math.cos(layout.pitchRadians)
-    addBox(group, {
-      name: 'lean-to-connection-underlap',
-      size: [
-        layout.span + 2 * node.sideOverhang,
-        node.rafterHeight,
-        connectionRun / Math.max(0.001, Math.cos(layout.pitchRadians)),
-      ],
-      position: [
-        0,
-        layout.highEdgeHeight -
-          connectionCenterZ * Math.tan(layout.pitchRadians) -
-          roofBuildUp -
-          node.rafterHeight / 2,
-        connectionCenterZ,
-      ],
-      rotationX: layout.pitchRadians,
-      role: 'joinery',
       colorPreset,
       sceneTheme,
     })

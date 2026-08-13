@@ -8,6 +8,7 @@ import {
   spatialGridManager,
   WallNode,
 } from '@pascal-app/core'
+import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import {
   createLeanToAssembly,
   isManagedLeanToNode,
@@ -17,7 +18,6 @@ import {
   resolveLeanToPostGutterSetback,
 } from './assembly'
 import { resolveLeanToLayout } from './layout'
-import { getRoofTopSurfaceY } from '../shared/roof-surface'
 
 beforeEach(() => spatialGridManager.clear())
 
@@ -49,14 +49,20 @@ describe('lean-to assembly', () => {
     expect(assembly.segment.roofType).toBe('shed')
     expect(assembly.segment.position[0]).toBe(0)
     expect(assembly.segment.position[1]).toBeLessThan(layout.lowEdgeHeight)
-    expect(assembly.segment.position[2]).toBe(1.25)
+    expect(assembly.segment.depth).toBeCloseTo(layout.projection + 0.02, 6)
+    expect(assembly.segment.overhang).toBe(leanTo.eaveOverhang)
+    expect(assembly.segment.position[2]).toBeCloseTo(layout.projection / 2 - 0.012, 6)
     expect(assembly.segment.width + 2 * assembly.segment.overhang).toBeCloseTo(4.3)
     const roofBounds = getRoofSegmentVisibleTopBounds(assembly.segment)
-    expect(assembly.segment.position[2] + roofBounds.minZ).toBeGreaterThanOrEqual(0)
+    expect(assembly.segment.position[2] + roofBounds.minZ).toBeCloseTo(-0.02, 6)
     expect(assembly.segment.children).toEqual([assembly.gutter.id, assembly.downspout.id])
     expect(
       assembly.segment.position[1] +
-        getRoofTopSurfaceY(0, -assembly.segment.depth / 2, assembly.segment),
+        getRoofTopSurfaceY(
+          0,
+          -assembly.segment.depth / 2 + assembly.segment.trim.back + 0.02,
+          assembly.segment,
+        ),
     ).toBeCloseTo(leanTo.highEdgeHeight, 5)
 
     expect(assembly.gutter.type).toBe('gutter')
@@ -99,6 +105,28 @@ describe('lean-to assembly', () => {
     expect(assembly.roof.topMaterialPreset).toBe(hostRoof.topMaterialPreset)
     expect(assembly.roof.edgeMaterialPreset).toBe(hostRoof.edgeMaterialPreset)
     expect(hostRoof).toEqual(originalHost)
+  })
+
+  test('places the connected roof cut on the wall so its sloped side edges reach it', () => {
+    const leanTo = LeanToExtensionNode.parse({ projection: 2.5, connectionInset: 0.3 })
+
+    const assembly = createLeanToAssembly(leanTo)
+    const bounds = getRoofSegmentVisibleTopBounds(assembly.segment)
+
+    expect(assembly.segment.trim.back).toBeCloseTo(0.002, 6)
+    expect(assembly.segment.position[2] + bounds.minZ).toBeCloseTo(-0.02, 6)
+  })
+
+  test('keeps the triangular side edge recessed beneath the sloping eave', () => {
+    const leanTo = LeanToExtensionNode.parse({ projection: 2.5, eaveOverhang: 0.25 })
+    const layout = resolveLeanToLayout(leanTo)
+
+    const { segment } = createLeanToAssembly(leanTo)
+    const triangleFrontZ = segment.position[2] + segment.depth / 2
+
+    const roofBounds = getRoofSegmentVisibleTopBounds(segment)
+    expect(triangleFrontZ).toBeCloseTo(layout.projection - 0.002, 6)
+    expect(segment.position[2] + roofBounds.maxZ).toBeGreaterThan(triangleFrontZ)
   })
 
   test('extends managed pillars down from a slab-supported wall to exterior ground', () => {

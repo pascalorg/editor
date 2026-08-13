@@ -9,8 +9,8 @@ import {
   type GutterNode as GutterNodeType,
   generateId,
   getWallBaseElevationForNodes,
-  levelBaseElevationAt,
   type LeanToExtensionNode,
+  levelBaseElevationAt,
   RoofNode,
   type RoofNode as RoofNodeType,
   RoofSegmentNode,
@@ -20,11 +20,7 @@ import {
 } from '@pascal-app/core'
 import { resolveEaveSnap } from '../gutter/eave-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
-import {
-  LEAN_TO_ROOF_CONNECTION_OVERLAP,
-  MIN_VISIBLE_LEAN_TO_ROOF_DEPTH,
-  resolveLeanToLayout,
-} from './layout'
+import { resolveLeanToLayout } from './layout'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
@@ -33,7 +29,8 @@ const DEFAULT_GROUND_CLEARANCE = 0.08
 const POST_GUTTER_CLEARANCE = 0.02
 const POST_GROUND_EMBED = 0.02
 const POST_BEAM_EMBED = 0.02
-const WALL_EDGE_TRIM = 0.002
+const WALL_CONNECTION_TRIM = 0.002
+const WALL_CONNECTION_OVERLAP = 0.02
 
 type LeanToManagedRole = 'roof' | 'roof-segment' | 'gutter' | 'downspout' | 'post'
 
@@ -228,10 +225,11 @@ export function leanToRoofSegmentLayoutPatch(
   const shingleThickness = leanTo.shingleThickness ?? 0.025
   const overhang = Math.max(0, leanTo.eaveOverhang)
   const width = Math.max(0.5, layout.span + 2 * leanTo.sideOverhang - 2 * overhang)
+  const depth = layout.projection + WALL_CONNECTION_OVERLAP
   const surfaceProbe = {
     roofType: 'shed',
     width,
-    depth: layout.projection,
+    depth,
     wallHeight: 0,
     pitch: layout.effectivePitchDegrees,
     wallThickness: 0.01,
@@ -239,20 +237,21 @@ export function leanToRoofSegmentLayoutPatch(
     overhang,
     shingleThickness,
   } as RoofSegmentNodeType
-  const topAtWall = getRoofTopSurfaceY(0, -layout.projection / 2, surfaceProbe)
-  const backTrim = Math.max(
-    WALL_EDGE_TRIM,
-    Math.min(
-      Math.max(0, (leanTo.connectionInset ?? 0) - LEAN_TO_ROOF_CONNECTION_OVERLAP),
-      layout.projection - MIN_VISIBLE_LEAN_TO_ROOF_DEPTH,
-    ),
+  const topAtWall = getRoofTopSurfaceY(
+    0,
+    -depth / 2 + WALL_CONNECTION_TRIM + WALL_CONNECTION_OVERLAP,
+    surfaceProbe,
   )
   return {
-    position: [0, layout.highEdgeHeight - topAtWall, layout.projection / 2],
+    position: [
+      0,
+      layout.highEdgeHeight - topAtWall,
+      depth / 2 - WALL_CONNECTION_TRIM - WALL_CONNECTION_OVERLAP,
+    ],
     rotation: 0,
     roofType: 'shed',
     width,
-    depth: layout.projection,
+    depth,
     wallHeight: 0,
     pitch: layout.effectivePitchDegrees,
     wallThickness: 0.01,
@@ -263,7 +262,7 @@ export function leanToRoofSegmentLayoutPatch(
       left: 0,
       right: 0,
       front: 0,
-      back: backTrim,
+      back: WALL_CONNECTION_TRIM,
       frontLeft: 0,
       frontRight: 0,
       backLeft: 0,

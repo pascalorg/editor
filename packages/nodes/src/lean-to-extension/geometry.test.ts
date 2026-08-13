@@ -31,7 +31,7 @@ describe('lean-to extension geometry', () => {
     expect(group.children.map((child) => child.name)).not.toContain('lean-to-preview-roof')
   })
 
-  test('closes the underside of a connected host fascia without extending the visible roof', () => {
+  test('extends connected roof framing to the wall without a full-width infill panel', () => {
     const disconnected = LeanToExtensionNode.parse({ projection: 2.5 })
     const connected = LeanToExtensionNode.parse({ projection: 2.5, connectionInset: 0.3 })
     const disconnectedGroup = buildLeanToExtensionGeometry(disconnected)
@@ -40,17 +40,13 @@ describe('lean-to extension geometry', () => {
       ((group.getObjectByName(name) as Mesh<BoxGeometry>).geometry.parameters as { depth: number })
         .depth
 
-    expect(depth(connectedGroup, 'lean-to-preview-roof')).toBeLessThan(
+    expect(depth(connectedGroup, 'lean-to-preview-roof')).toBeCloseTo(
       depth(disconnectedGroup, 'lean-to-preview-roof'),
     )
     expect(depth(connectedGroup, 'lean-to-rafter-0')).toBeCloseTo(
       depth(disconnectedGroup, 'lean-to-rafter-0'),
     )
-    const underlap = connectedGroup.getObjectByName('lean-to-connection-underlap') as
-      | Mesh<BoxGeometry>
-      | undefined
-    expect(underlap).toBeDefined()
-    expect((underlap!.geometry.parameters as { depth: number }).depth).toBeGreaterThan(0.28)
+    expect(connectedGroup.getObjectByName('lean-to-connection-underlap')).toBeUndefined()
     expect(disconnectedGroup.getObjectByName('lean-to-connection-underlap')).toBeUndefined()
   })
 

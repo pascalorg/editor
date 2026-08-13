@@ -11,13 +11,13 @@ import {
   spatialGridManager,
   WallNode,
 } from '@pascal-app/core'
+import { getRoofTopSurfaceY } from '../shared/roof-surface'
+import { leanToRoofSegmentLayoutPatch } from './assembly'
 import {
   applyLeanToRoofAttachment,
   applyLeanToWallAutoSpan,
   resolveLeanToRoofAttachment,
 } from './roof-attachment'
-import { leanToRoofSegmentLayoutPatch } from './assembly'
-import { getRoofTopSurfaceY } from '../shared/roof-surface'
 
 function sceneWithRoof(
   options: { roofType?: 'gable' | 'hip' | 'shed' | 'flat'; wallHeight?: number } = {},
@@ -228,8 +228,8 @@ describe('lean-to roof-edge attachment', () => {
     }
   })
 
-  test('trims a connected extension back to a flat host roof fascia', () => {
-    const { leanTo, nodes, segment, wall } = sceneWithRoof({
+  test('keeps a connected extension rooted at the wall beneath a flat host fascia', () => {
+    const { leanTo, nodes, wall } = sceneWithRoof({
       roofType: 'flat',
     })
     const attachment = resolveLeanToRoofAttachment(leanTo, wall, nodes)
@@ -239,13 +239,11 @@ describe('lean-to roof-edge attachment', () => {
     const extensionSegment = RoofSegmentNode.parse(leanToRoofSegmentLayoutPatch(connected))
     const bounds = getRoofSegmentVisibleTopBounds(extensionSegment)
     const visibleBack = extensionSegment.position[2] + bounds.minZ
-    const visibleBackTop =
-      extensionSegment.position[1] + getRoofTopSurfaceY(0, bounds.minZ, extensionSegment)
-    const hostEdgeTop = getRoofTopSurfaceY(0, segment.depth / 2 + segment.overhang, segment)
+    const wallTop =
+      extensionSegment.position[1] + getRoofTopSurfaceY(0, bounds.minZ + 0.02, extensionSegment)
 
-    expect(visibleBack).toBeGreaterThan(attachment!.planDistance - 0.02)
-    expect(visibleBack).toBeLessThanOrEqual(attachment!.planDistance)
-    expect(visibleBackTop).toBeCloseTo(hostEdgeTop, 2)
+    expect(visibleBack).toBeCloseTo(-0.02, 6)
+    expect(wallTop).toBeCloseTo(connected.highEdgeHeight, 5)
   })
 
   test('does not attach to a managed lean-to roof or a distant roof', () => {
