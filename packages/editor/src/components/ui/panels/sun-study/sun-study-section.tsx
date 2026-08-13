@@ -3,6 +3,7 @@
 import { type AnyNode, useScene } from '@pascal-app/core'
 import { Sun } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
+import { LocationMap } from './location-map'
 import useSunStudy, {
   isSiteLocated,
   minutesIntoDay,
@@ -141,6 +142,14 @@ export function SunStudySection() {
               somewhere.
             </p>
           ) : null}
+
+          <LocationMap
+            latitude={settings.latitude}
+            longitude={settings.longitude}
+            onPick={({ latitude, longitude }) =>
+              updateSite({ latitude, longitude } as Partial<AnyNode>)
+            }
+          />
 
           {numberField(
             'Latitude',
