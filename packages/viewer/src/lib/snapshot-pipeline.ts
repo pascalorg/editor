@@ -9,15 +9,20 @@ import {
   mix,
   mrt,
   normalView,
+  orthographicDepthToViewZ,
   output,
   pass,
+  perspectiveDepthToViewZ,
   sample,
   saturation,
   screenUV,
   smoothstep,
+  sRGBTransferOETF,
+  texture,
   uniform,
   vec3,
   vec4,
+  viewZToOrthographicDepth,
 } from 'three/tsl'
 import { RenderPipeline, RenderTarget, type WebGPURenderer } from 'three/webgpu'
 import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
@@ -38,6 +43,14 @@ export const THUMBNAIL_HEIGHT = 1080
  */
 export const SNAPSHOT_MIME = 'image/webp'
 export const SNAPSHOT_QUALITY = 0.9
+export const SNAPSHOT_CHANNELS = ['color', 'albedo', 'normal', 'depth'] as const
+export type SnapshotChannel = (typeof SNAPSHOT_CHANNELS)[number]
+export const SNAPSHOT_CHANNEL_MIME_TYPES = {
+  color: SNAPSHOT_MIME,
+  albedo: 'image/png',
+  normal: 'image/png',
+  depth: 'image/png',
+} as const satisfies Record<SnapshotChannel, string>
 // Retina canvases make viewport/area captures multi-MB; 2048 keeps them near the 1920 presets.
 export const SNAPSHOT_MAX_EDGE = 2048
 
@@ -69,6 +82,15 @@ export type SnapshotCaptureResult = {
   outH: number
 }
 
+export type SnapshotCaptureOptions = {
+  captureMode?: SnapshotCaptureMode
+  cropRegion?: SnapshotCropRegion
+  standardSize?: SnapshotSize
+}
+
+/** Same-camera views: display color, unlit sRGB albedo, packed view normal, and linear camera-range depth. */
+export type SnapshotChannelCaptureResult = Record<SnapshotChannel, SnapshotCaptureResult>
+
 export type SnapshotPipeline = {
   applyEnvironment: ({
     theme,
@@ -83,15 +105,8 @@ export type SnapshotPipeline = {
     edges: EdgeMode
     camera: Camera
   }) => void
-  capture: ({
-    captureMode,
-    cropRegion,
-    standardSize,
-  }: {
-    captureMode?: SnapshotCaptureMode
-    cropRegion?: SnapshotCropRegion
-    standardSize?: SnapshotSize
-  }) => Promise<SnapshotCaptureResult>
+  capture: (options: SnapshotCaptureOptions) => Promise<SnapshotCaptureResult>
+  captureChannels: (options: SnapshotCaptureOptions) => Promise<SnapshotChannelCaptureResult>
   dispose: () => void
 }
 
@@ -139,9 +154,12 @@ export async function createSnapshotPipeline({
     const scenePassColor = scenePass.getTextureNode('output')
     const scenePassDepth = scenePass.getTextureNode('depth')
     const scenePassNormal = scenePass.getTextureNode('normal')
+    const albedoTexture = scenePass.getTexture('diffuseColor')
+    const normalTexture = scenePass.getTexture('normal')
 
-    scenePass.getTexture('diffuseColor').type = UnsignedByteType
-    scenePass.getTexture('normal').type = UnsignedByteType
+    albedoTexture.type = UnsignedByteType
+    normalTexture.type = UnsignedByteType
+    const normalTextureIndex = scenePass.renderTarget.textures.indexOf(normalTexture)
 
     const sceneNormal = sample((uv) => unpackRGBToNormal(scenePassNormal.sample(uv)))
 
@@ -223,6 +241,168 @@ export async function createSnapshotPipeline({
     const { width, height } = renderer.domElement
     const renderTarget = new RenderTarget(width, height, { depthBuffer: true })
 
+    const projectionCamera = camera as Camera & {
+      near: number
+      far: number
+      isOrthographicCamera?: boolean
+    }
+    const createChannelResources = () => {
+      const albedo = texture(albedoTexture).sample(screenUV)
+      const albedoPipeline = new RenderPipeline(renderer)
+      albedoPipeline.outputNode = vec4(sRGBTransferOETF(albedo.rgb) as any, albedo.a)
+      albedoPipeline.outputColorTransform = false
+
+      const near = uniform(projectionCamera.near)
+      const far = uniform(projectionCamera.far)
+      const rawDepth = texture(scenePass.getTexture('depth')).sample(screenUV).r
+      const viewZ = projectionCamera.isOrthographicCamera
+        ? orthographicDepthToViewZ(rawDepth, near, far)
+        : perspectiveDepthToViewZ(rawDepth, near, far)
+      const linearDepth = viewZToOrthographicDepth(viewZ, near, far)
+      const depthPipeline = new RenderPipeline(renderer)
+      depthPipeline.outputNode = vec4(linearDepth, linearDepth, linearDepth, float(1))
+      depthPipeline.outputColorTransform = false
+
+      return {
+        albedoPipeline,
+        albedoRenderTarget: new RenderTarget(width, height, { depthBuffer: false }),
+        depthPipeline,
+        depthRenderTarget: new RenderTarget(width, height, { depthBuffer: false }),
+        near,
+        far,
+      }
+    }
+    let channelResources: ReturnType<typeof createChannelResources> | null = null
+    const getChannelResources = () => (channelResources ??= createChannelResources())
+
+    const readCapture = async (
+      source: RenderTarget,
+      channel: SnapshotChannel,
+      { captureMode, cropRegion, standardSize }: SnapshotCaptureOptions,
+      textureIndex = 0,
+    ): Promise<SnapshotCaptureResult> => {
+      const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
+      const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
+      const captureWidth = source.width
+      const captureHeight = source.height
+
+      // WebGPU copyTextureToBuffer aligns each row to 256 bytes, so we must
+      // depad the rows before constructing ImageData.
+      const pixels = (await (renderer as any).readRenderTargetPixelsAsync(
+        source,
+        0,
+        0,
+        captureWidth,
+        captureHeight,
+        textureIndex,
+      )) as Uint8Array
+
+      const actualBytesPerRow = captureWidth * 4
+      const tightTotal = actualBytesPerRow * captureHeight
+      const paddedBytesPerRow = Math.ceil(actualBytesPerRow / 256) * 256
+      // Two readback shapes to handle:
+      // - WebGPU (`copyTextureToBuffer`): top-down + 256-byte row padding
+      //   when width*4 isn't already a multiple of 256.
+      // - WebGL2 fallback (iOS Chrome, etc.): tightly-packed but bottom-up
+      //   (OpenGL framebuffer convention).
+      // `isWebGPURenderer` lies — it stays true even when the renderer
+      // falls back to the WebGL backend. Inspect the actual backend
+      // instead (presence of a GPU device, or backend constructor name).
+      const backend = (renderer as any).backend
+      const isWebGPU =
+        !!backend?.device ||
+        backend?.isWebGPUBackend === true ||
+        backend?.constructor?.name === 'WebGPUBackend'
+      let tightPixels: Uint8ClampedArray
+      if (isWebGPU) {
+        // WebGPU: depad rows if needed; orientation is already top-down.
+        if (paddedBytesPerRow === actualBytesPerRow) {
+          tightPixels = new Uint8ClampedArray(
+            pixels.buffer,
+            pixels.byteOffset,
+            Math.min(pixels.byteLength, tightTotal),
+          )
+        } else {
+          tightPixels = new Uint8ClampedArray(tightTotal)
+          for (let row = 0; row < captureHeight; row++) {
+            tightPixels.set(
+              pixels.subarray(row * paddedBytesPerRow, row * paddedBytesPerRow + actualBytesPerRow),
+              row * actualBytesPerRow,
+            )
+          }
+        }
+      } else {
+        // WebGL2: tight buffer in bottom-up order — flip rows.
+        tightPixels = new Uint8ClampedArray(tightTotal)
+        for (let row = 0; row < captureHeight; row++) {
+          const srcStart = (captureHeight - 1 - row) * actualBytesPerRow
+          tightPixels.set(
+            pixels.subarray(srcStart, srcStart + actualBytesPerRow),
+            row * actualBytesPerRow,
+          )
+        }
+      }
+
+      const imageData = new ImageData(
+        tightPixels as unknown as Uint8ClampedArray<ArrayBuffer>,
+        captureWidth,
+        captureHeight,
+      )
+      const srcCanvas = new OffscreenCanvas(captureWidth, captureHeight)
+      srcCanvas.getContext('2d')!.putImageData(imageData, 0, 0)
+      const encode = (canvas: OffscreenCanvas) =>
+        canvas.convertToBlob({
+          type: SNAPSHOT_CHANNEL_MIME_TYPES[channel],
+          quality: SNAPSHOT_QUALITY,
+        })
+
+      let outW: number
+      let outH: number
+      let blob: Blob
+
+      if (captureMode === 'viewport') {
+        ;({ w: outW, h: outH } = clampSnapshotSize(captureWidth, captureHeight))
+        const offscreen = new OffscreenCanvas(outW, outH)
+        const ctx = offscreen.getContext('2d')!
+        if (outW !== captureWidth || outH !== captureHeight) ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(srcCanvas, 0, 0, captureWidth, captureHeight, 0, 0, outW, outH)
+        blob = await encode(offscreen)
+      } else if (captureMode === 'area' && cropRegion) {
+        const sx = Math.round(cropRegion.x * captureWidth)
+        const sy = Math.round(cropRegion.y * captureHeight)
+        const sourceW = Math.round(cropRegion.width * captureWidth)
+        const sourceH = Math.round(cropRegion.height * captureHeight)
+        ;({ w: outW, h: outH } = clampSnapshotSize(sourceW, sourceH))
+        const offscreen = new OffscreenCanvas(outW, outH)
+        const ctx = offscreen.getContext('2d')!
+        if (outW !== sourceW || outH !== sourceH) ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(srcCanvas, sx, sy, sourceW, sourceH, 0, 0, outW, outH)
+        blob = await encode(offscreen)
+      } else {
+        // Standard: center-crop to the requested aspect (default 1920×1080)
+        const srcAspect = captureWidth / captureHeight
+        const dstAspect = standardW / standardH
+        let sx = 0
+        let sy = 0
+        let sWidth = captureWidth
+        let sHeight = captureHeight
+        if (srcAspect > dstAspect) {
+          sWidth = Math.round(captureHeight * dstAspect)
+          sx = Math.round((captureWidth - sWidth) / 2)
+        } else if (srcAspect < dstAspect) {
+          sHeight = Math.round(captureWidth / dstAspect)
+          sy = Math.round((captureHeight - sHeight) / 2)
+        }
+        outW = standardW
+        outH = standardH
+        const offscreen = new OffscreenCanvas(outW, outH)
+        offscreen.getContext('2d')!.drawImage(srcCanvas, sx, sy, sWidth, sHeight, 0, 0, outW, outH)
+        blob = await encode(offscreen)
+      }
+
+      return { blob, outW, outH }
+    }
+
     return {
       applyEnvironment: ({ theme, transparent, grade, edges, camera: captureCamera }) => {
         const sceneTheme = getSceneTheme(theme)
@@ -249,12 +429,9 @@ export async function createSnapshotPipeline({
         bgProjInvUniform.value.copy(captureCamera.projectionMatrixInverse)
         bgCamWorldUniform.value.copy(captureCamera.matrixWorld)
       },
-      capture: async ({ captureMode, cropRegion, standardSize }) => {
-        const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
-        const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
+      capture: async (options) => {
         const { width: captureWidth, height: captureHeight } = renderer.domElement
 
-        // Resize RT if the canvas dimensions changed
         if (renderTarget.width !== captureWidth || renderTarget.height !== captureHeight) {
           renderTarget.setSize(captureWidth, captureHeight)
         }
@@ -271,125 +448,52 @@ export async function createSnapshotPipeline({
         // after the render, before the asynchronous GPU readback begins.
         await Promise.resolve()
 
-        // Read pixels from the RT asynchronously.
-        // WebGPU copyTextureToBuffer aligns each row to 256 bytes, so we must
-        // depad the rows before constructing ImageData.
-        const pixels = (await (renderer as any).readRenderTargetPixelsAsync(
+        return readCapture(renderTarget, 'color', options)
+      },
+      captureChannels: async (options) => {
+        const { width: captureWidth, height: captureHeight } = renderer.domElement
+        const resources = getChannelResources()
+        for (const target of [
           renderTarget,
-          0,
-          0,
-          captureWidth,
-          captureHeight,
-        )) as Uint8Array
-
-        const actualBytesPerRow = captureWidth * 4
-        const tightTotal = actualBytesPerRow * captureHeight
-        const paddedBytesPerRow = Math.ceil(actualBytesPerRow / 256) * 256
-        // Two readback shapes to handle:
-        // - WebGPU (`copyTextureToBuffer`): top-down + 256-byte row padding
-        //   when width*4 isn't already a multiple of 256.
-        // - WebGL2 fallback (iOS Chrome, etc.): tightly-packed but bottom-up
-        //   (OpenGL framebuffer convention).
-        // `isWebGPURenderer` lies — it stays true even when the renderer
-        // falls back to the WebGL backend. Inspect the actual backend
-        // instead (presence of a GPU device, or backend constructor name).
-        const backend = (renderer as any).backend
-        const isWebGPU =
-          !!backend?.device ||
-          backend?.isWebGPUBackend === true ||
-          backend?.constructor?.name === 'WebGPUBackend'
-        let tightPixels: Uint8ClampedArray
-        if (isWebGPU) {
-          // WebGPU: depad rows if needed; orientation is already top-down.
-          if (paddedBytesPerRow === actualBytesPerRow) {
-            tightPixels = new Uint8ClampedArray(
-              pixels.buffer,
-              pixels.byteOffset,
-              Math.min(pixels.byteLength, tightTotal),
-            )
-          } else {
-            tightPixels = new Uint8ClampedArray(tightTotal)
-            for (let row = 0; row < captureHeight; row++) {
-              tightPixels.set(
-                pixels.subarray(
-                  row * paddedBytesPerRow,
-                  row * paddedBytesPerRow + actualBytesPerRow,
-                ),
-                row * actualBytesPerRow,
-              )
-            }
-          }
-        } else {
-          // WebGL2: tight buffer in bottom-up order — flip rows.
-          tightPixels = new Uint8ClampedArray(tightTotal)
-          for (let row = 0; row < captureHeight; row++) {
-            const srcStart = (captureHeight - 1 - row) * actualBytesPerRow
-            tightPixels.set(
-              pixels.subarray(srcStart, srcStart + actualBytesPerRow),
-              row * actualBytesPerRow,
-            )
+          resources.albedoRenderTarget,
+          resources.depthRenderTarget,
+        ]) {
+          if (target.width !== captureWidth || target.height !== captureHeight) {
+            target.setSize(captureWidth, captureHeight)
           }
         }
+        resources.near.value = projectionCamera.near
+        resources.far.value = projectionCamera.far
 
-        const imageData = new ImageData(
-          tightPixels as unknown as Uint8ClampedArray<ArrayBuffer>,
-          captureWidth,
-          captureHeight,
-        )
-        const srcCanvas = new OffscreenCanvas(captureWidth, captureHeight)
-        srcCanvas.getContext('2d')!.putImageData(imageData, 0, 0)
-
-        let outW: number
-        let outH: number
-        let blob: Blob
-
-        if (captureMode === 'viewport') {
-          ;({ w: outW, h: outH } = clampSnapshotSize(captureWidth, captureHeight))
-          const offscreen = new OffscreenCanvas(outW, outH)
-          const ctx = offscreen.getContext('2d')!
-          if (outW !== captureWidth || outH !== captureHeight) ctx.imageSmoothingQuality = 'high'
-          ctx.drawImage(srcCanvas, 0, 0, captureWidth, captureHeight, 0, 0, outW, outH)
-          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
-        } else if (captureMode === 'area' && cropRegion) {
-          const sx = Math.round(cropRegion.x * captureWidth)
-          const sy = Math.round(cropRegion.y * captureHeight)
-          const sourceW = Math.round(cropRegion.width * captureWidth)
-          const sourceH = Math.round(cropRegion.height * captureHeight)
-          ;({ w: outW, h: outH } = clampSnapshotSize(sourceW, sourceH))
-          const offscreen = new OffscreenCanvas(outW, outH)
-          const ctx = offscreen.getContext('2d')!
-          if (outW !== sourceW || outH !== sourceH) ctx.imageSmoothingQuality = 'high'
-          ctx.drawImage(srcCanvas, sx, sy, sourceW, sourceH, 0, 0, outW, outH)
-          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
-        } else {
-          // Standard: center-crop to the requested aspect (default 1920×1080)
-          const srcAspect = captureWidth / captureHeight
-          const dstAspect = standardW / standardH
-          let sx = 0
-          let sy = 0
-          let sWidth = captureWidth
-          let sHeight = captureHeight
-          if (srcAspect > dstAspect) {
-            sWidth = Math.round(captureHeight * dstAspect)
-            sx = Math.round((captureWidth - sWidth) / 2)
-          } else if (srcAspect < dstAspect) {
-            sHeight = Math.round(captureWidth / dstAspect)
-            sy = Math.round((captureHeight - sHeight) / 2)
-          }
-          outW = standardW
-          outH = standardH
-          const offscreen = new OffscreenCanvas(outW, outH)
-          offscreen
-            .getContext('2d')!
-            .drawImage(srcCanvas, sx, sy, sWidth, sHeight, 0, 0, outW, outH)
-          blob = await offscreen.convertToBlob({ type: SNAPSHOT_MIME, quality: SNAPSHOT_QUALITY })
+        try {
+          ;(renderer as any).setClearAlpha(0)
+          renderer.setRenderTarget(renderTarget)
+          pipeline.render()
+          renderer.setRenderTarget(resources.albedoRenderTarget)
+          resources.albedoPipeline.render()
+          renderer.setRenderTarget(resources.depthRenderTarget)
+          resources.depthPipeline.render()
+        } finally {
+          renderer.setRenderTarget(null)
         }
 
-        return { blob, outW, outH }
+        await Promise.resolve()
+
+        const [color, albedo, normal, depth] = await Promise.all([
+          readCapture(renderTarget, 'color', options),
+          readCapture(resources.albedoRenderTarget, 'albedo', options),
+          readCapture(scenePass.renderTarget, 'normal', options, normalTextureIndex),
+          readCapture(resources.depthRenderTarget, 'depth', options),
+        ])
+        return { color, albedo, normal, depth }
       },
       dispose: () => {
         pipeline.dispose()
         renderTarget.dispose()
+        channelResources?.albedoPipeline.dispose()
+        channelResources?.albedoRenderTarget.dispose()
+        channelResources?.depthPipeline.dispose()
+        channelResources?.depthRenderTarget.dispose()
       },
     }
   } catch (error) {
