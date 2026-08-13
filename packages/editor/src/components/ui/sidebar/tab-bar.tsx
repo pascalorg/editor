@@ -81,10 +81,10 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
         <TooltipTrigger asChild>
           <button
             className={cn(
-              'group flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
+              'group flex h-14 w-14 items-center justify-center border-border border-b transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
               showActive
-                ? 'bg-accent text-foreground shadow-sm [&_img]:opacity-100 [&_img]:grayscale-0'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground [&_img]:opacity-60 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
+                ? 'bg-accent text-foreground shadow-[inset_3px_0_0_var(--color-foreground)] [&_img]:opacity-100 [&_img]:grayscale-0'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground [&_img]:opacity-55 [&_img]:grayscale hover:[&_img]:opacity-100 hover:[&_img]:grayscale-0',
             )}
             onClick={() => {
               triggerSFX('sfx:menu-click')
@@ -103,10 +103,10 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
 
   return (
     <TooltipProvider delayDuration={0} disableHoverableContent>
-      <div className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-border/50 border-r py-2">
+      <div className="flex h-full w-14 shrink-0 flex-col items-center border-border border-r-2">
         {defaultTabs.map(renderTab)}
         {pluginTabs.length > 0 && (
-          <div className="mt-1 flex w-11 flex-col items-center gap-1 border-border/70 border-t pt-2">
+          <div className="flex w-14 flex-col items-center border-border border-t-2">
             {pluginTabs.map(renderTab)}
           </div>
         )}

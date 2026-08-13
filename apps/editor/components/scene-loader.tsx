@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
+import { EditorTopBar, TOP_BAR_ACTION } from './editor-top-bar'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -225,31 +226,35 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
-      <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
-        <button
-          aria-pressed={lightPreview}
-          className={cn(
-            'pointer-events-auto rounded-md border border-border px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur',
-            lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
-          )}
-          onClick={() =>
-            router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
-          }
-          title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
-          type="button"
-        >
-          Light preview
-        </button>
-        <Link
-          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-          href="/scenes"
-        >
-          All scenes
-        </Link>
-      </div>
       <Editor
         disablePostFx={lightPreview}
         layoutVersion="v2"
+        navbarSlot={
+          <EditorTopBar
+            actions={
+              <>
+                <button
+                  aria-pressed={lightPreview}
+                  className={cn(TOP_BAR_ACTION, lightPreview && 'bg-accent text-foreground')}
+                  onClick={() =>
+                    router.push(
+                      lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`,
+                    )
+                  }
+                  title="Son işlem hattını atlar — GPU'ya daha hafif, ortam gölgelemesi ve seçim konturu olmadan"
+                  type="button"
+                >
+                  Hafif önizleme
+                </button>
+                <Link className={TOP_BAR_ACTION} href="/scenes">
+                  Kayıtlı sahneler
+                </Link>
+              </>
+            }
+            status={saveError ? 'Kaydedilemedi' : `Sürüm ${meta.version}`}
+            title={meta.name}
+          />
+        }
         onLoad={handleLoad}
         onSave={handleSave}
         onThumbnailCapture={handleThumb}

@@ -5,6 +5,7 @@ import { Hammer, Layers, Package, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
+import { EditorTopBar, TOP_BAR_ACTION } from '@/components/editor-top-bar'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -89,20 +90,19 @@ const PROJECT_ID = 'local-editor'
 export default function Home() {
   return (
     <div className="relative h-screen w-screen">
-      {PROJECT_ID === 'local-editor' && (
-        <div className="pointer-events-none absolute top-3 left-1/2 z-40 -translate-x-1/2">
-          <div className="pointer-events-auto flex max-w-[min(92vw,42rem)] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">
-            <span className="text-muted-foreground">
-              Blank canvas — saved scenes are under Scenes (not this page).
-            </span>
-            <Link className="font-medium text-foreground hover:underline" href="/scenes">
-              Open saved scenes
-            </Link>
-          </div>
-        </div>
-      )}
       <Editor
         layoutVersion="v2"
+        navbarSlot={
+          <EditorTopBar
+            actions={
+              <Link className={TOP_BAR_ACTION} href="/scenes">
+                Kayıtlı sahneler
+              </Link>
+            }
+            status="Boş tuval · kaydedilmiyor"
+            title="Yeni çalışma"
+          />
+        }
         projectId={PROJECT_ID}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}

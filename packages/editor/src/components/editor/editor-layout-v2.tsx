@@ -168,19 +168,13 @@ function RightColumn({
   stageOverlay?: ReactNode
 }) {
   return (
-    <div
-      className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
-      style={{
-        borderTopLeftRadius: 16,
-        clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
-        boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
-      }}
-    >
-      {/* Viewer toolbar */}
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Viewer toolbar. It spans the column edge to edge and is separated from
+          the canvas by a rule rather than floating over it as inset pills. */}
       {(toolbarLeft || toolbarRight) && (
-        <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
-          <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
-          <div className="pointer-events-auto flex items-center gap-2">{toolbarRight}</div>
+        <div className="pointer-events-none absolute top-0 right-0 left-0 z-20 flex items-stretch justify-between border-border border-b-2 bg-background">
+          <div className="pointer-events-auto flex items-stretch">{toolbarLeft}</div>
+          <div className="pointer-events-auto flex items-stretch">{toolbarRight}</div>
         </div>
       )}
       {/* Canvas area */}

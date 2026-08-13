@@ -52,11 +52,12 @@ import { flushSync } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
 
-const TOOLBAR_CONTAINER =
-  'inline-flex h-8 items-stretch overflow-hidden rounded-xl border border-border bg-background/90 shadow-2xl backdrop-blur-md'
+// The toolbar sits flush inside the bar the layout draws, so the groups carry
+// no surface of their own — only the hairline rules that divide their cells.
+const TOOLBAR_CONTAINER = 'inline-flex h-10 items-stretch'
 
 const TOOLBAR_BTN =
-  'flex w-8 items-center justify-center text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90'
+  'flex w-10 items-center justify-center border-border border-l text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
 
 function requestWalkthroughPointerLock() {
   const canvas = document.querySelector<HTMLCanvasElement>('[data-pascal-viewer-3d] canvas')
