@@ -272,12 +272,14 @@ export { SceneLoader } from './components/ui/scene-loader'
 export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
 export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
 export type { FunctionTreeNode } from './components/ui/sidebar/panels/items-panel/function-tree-panel'
+export { QuantitiesPanel } from './components/ui/sidebar/panels/quantities-panel'
 export {
   type ProjectVisibility,
   SettingsPanel,
   type SettingsPanelProps,
 } from './components/ui/sidebar/panels/settings-panel'
 export type { SitePanelProps } from './components/ui/sidebar/panels/site-panel'
+export { SunStudyPanel } from './components/ui/sidebar/panels/sun-study-panel'
 export type { SidebarTab } from './components/ui/sidebar/tab-bar'
 export {
   resolveAssetSnapTarget,

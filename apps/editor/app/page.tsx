@@ -1,7 +1,13 @@
 'use client'
 
-import { Editor, ItemsPanel, useTranslation } from '@pascal-app/editor'
-import { Hammer, Layers, Package, Settings } from 'lucide-react'
+import {
+  Editor,
+  ItemsPanel,
+  QuantitiesPanel,
+  SunStudyPanel,
+  useTranslation,
+} from '@pascal-app/editor'
+import { Hammer, Layers, Package, Settings, Sigma, Sun } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
@@ -67,6 +73,22 @@ function sidebarTabs(t: (text: string) => string) {
           width={32}
         />
       ),
+    },
+    {
+      id: 'sun',
+      label: t('Sun'),
+      component: SunStudyPanel,
+      mobileDefaultSnap: 0.5,
+      mobileIcon: <Sun className="h-5 w-5" />,
+      icon: <Sun className="h-5 w-5" />,
+    },
+    {
+      id: 'quantities',
+      label: t('Quantities'),
+      component: QuantitiesPanel,
+      mobileDefaultSnap: 0.5,
+      mobileIcon: <Sigma className="h-5 w-5" />,
+      icon: <Sigma className="h-5 w-5" />,
     },
     {
       id: 'settings',

@@ -6,11 +6,13 @@
 import {
   applySceneGraphToEditor,
   Editor,
+  QuantitiesPanel,
   type SceneGraph,
   type SidebarTab,
+  SunStudyPanel,
   useTranslation,
 } from '@pascal-app/editor'
-import { Hammer, Layers } from 'lucide-react'
+import { Hammer, Layers, Sigma, Sun } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -66,6 +68,22 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
         width={32}
       />
     ),
+  },
+  {
+    id: 'sun',
+    label: 'Sun',
+    component: SunStudyPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Sun className="h-5 w-5" />,
+    icon: <Sun className="h-5 w-5" />,
+  },
+  {
+    id: 'quantities',
+    label: 'Quantities',
+    component: QuantitiesPanel,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Sigma className="h-5 w-5" />,
+    icon: <Sigma className="h-5 w-5" />,
   },
 ]
 
