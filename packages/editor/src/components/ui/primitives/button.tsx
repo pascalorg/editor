@@ -2,6 +2,8 @@ import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 import type * as React from 'react'
 
+import { translateReactNode } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 const buttonVariants = cva(
@@ -40,29 +42,46 @@ function Button({
   size,
   asChild = false,
   ref,
+  children,
+  title,
+  'aria-label': ariaLabel,
   ...props
 }: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
   }) {
+  const locale = useUiPreferences((state) => state.locale)
+  const localizedChildren = translateReactNode(children, locale)
+  const localizedTitle = typeof title === 'string' ? translateReactNode(title, locale) : title
+  const localizedAriaLabel =
+    typeof ariaLabel === 'string' ? translateReactNode(ariaLabel, locale) : ariaLabel
+
   if (asChild) {
     return (
       <Slot
+        aria-label={localizedAriaLabel as string | undefined}
         className={cn(buttonVariants({ variant, size, className }))}
         data-slot="button"
         ref={ref as never}
+        title={localizedTitle as string | undefined}
         {...props}
-      />
+      >
+        {localizedChildren}
+      </Slot>
     )
   }
 
   return (
     <button
+      aria-label={localizedAriaLabel as string | undefined}
       className={cn(buttonVariants({ variant, size, className }))}
       data-slot="button"
       ref={ref}
+      title={localizedTitle as string | undefined}
       {...props}
-    />
+    >
+      {localizedChildren}
+    </button>
   )
 }
 

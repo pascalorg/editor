@@ -87,6 +87,25 @@ suite structurally cannot see, so anything that touches UI wiring, keyboard
 handling or a store gate needs a run in the browser (`bun restart`, `:3002`)
 before it is called done.
 
+Three things about actually getting the app up:
+
+- **`dotenv` is not on `PATH`.** Both dev scripts shell out to it, so they only
+  resolve through `bun dev` / `bun run dev` (which put `node_modules/.bin` on
+  the path). Invoking `dotenv -e … -- next dev` yourself exits 127.
+- **Root `bun dev` is all-or-nothing.** Turbo runs every app, so a stale process
+  holding `:3003` makes `ifc-converter-app` fail `EADDRINUSE` and turbo tears
+  down the whole run — the editor goes with it. `bun kill` only frees `:3002`.
+  When the editor "won't pick up changes", suspect a leftover server from an
+  earlier session still answering on `:3002` rather than your code. Check with
+  `lsof -i:3002 -i:3003 -sTCP:LISTEN`, or run just the app:
+  `cd apps/editor && bun run dev`.
+- **The R3F canvas can come up unsized in dev**, leaving the viewer blank while
+  the chrome renders fine and the console stays clean. The canvas sits at its
+  default `300×150` while its host element measures correctly; any window
+  resize corrects it. This reproduces on a clean tree, so do not spend a bisect
+  on it — confirm with
+  `document.querySelector('canvas').clientWidth` before blaming your diff.
+
 ## State: three stores, one per layer
 
 Each layer owns exactly one Zustand store, and the layer boundaries below are
@@ -139,6 +158,45 @@ Consequence: when adding a kind, **do not** add dispatch branches. Contribute
 holds the whole vertical slice for one kind (`schema.ts`, `definition.ts`,
 `renderer.tsx`, `tool.tsx`, `system.tsx`, `floorplan.ts`, `paint.ts`,
 `preview.tsx`, `parametrics.ts` — as applicable).
+
+## How the app composes the editor, and who owns the theme
+
+`apps/editor` mounts one `<Editor layoutVersion="v2">` and fills its slots:
+`navbarSlot`, `sidebarTabs`, `viewerToolbarLeft` / `viewerToolbarRight`,
+plus scene I/O (`onLoad` / `onSave`). `EditorLayoutV2` arranges those into
+`IconRail` + resizable `LeftColumn` + `RightColumn` (toolbar bar over the
+canvas). `app/page.tsx` (blank canvas) and `components/scene-loader.tsx`
+(`/scene/[id]`) are two hosts passing the *same* slot set — a chrome change
+made in one and not the other silently ships half-applied.
+
+**No package ships CSS.** `packages/*` contain no `.css` files and define no
+design tokens; they only spell Tailwind class names. The host app owns the
+whole visual system:
+
+- `apps/editor/app/globals.css` defines every token (`--background`,
+  `--accent`, `--border`, `--radius`, the `--sidebar-*` set, the font keys).
+  Retuning them there restyles the package chrome too — usually the right lever,
+  and far smaller than editing components.
+- Those package classes only compile because `globals.css` lists
+  `@source "../../../packages/editor/src"` (and `nodes`, plus plugin sources).
+  A new source directory that isn't `@source`d produces no CSS and silently
+  renders unstyled.
+- Font keys are indirection, not identity: `font-barlow` is spelled across ~15
+  files in `packages/editor`, so the typeface is swapped by repointing the
+  `--font-barlow` theme key at a different face — not by renaming utilities.
+
+Two consequences worth internalising:
+
+- **Plain CSS outranks every Tailwind utility.** Tailwind v4 emits utilities
+  inside `@layer utilities`, and unlayered rules beat layered ones regardless of
+  specificity. A bare `.foo button { background: none }` in an imported
+  stylesheet (the pattern `styles/elevation.css` uses) will strip `bg-*` from
+  every button under `.foo`, with no specificity warning. Preflight already
+  resets button background, colour and font — do not re-reset them.
+- **`packages/editor` is published to npm and consumed as a git submodule by
+  `pascalorg/private-editor`.** Chrome that is product- or brand-specific
+  belongs in `apps/editor`; only generic, embedder-safe changes go in the
+  package.
 
 ## Editor interaction: what is actually wired
 

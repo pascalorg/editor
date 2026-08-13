@@ -50,6 +50,7 @@ import {
 } from './../../../../../lib/measurements'
 import { useCadImport } from './../../../../../hooks/use-cad-import'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
+import { LocalizedContent, useTranslation } from './../../../../../lib/i18n'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
@@ -160,7 +161,8 @@ const PropertyLineSection = memo(function PropertyLineSection() {
   }
 
   return (
-    <div className="relative border-border/50 border-b">
+    <LocalizedContent>
+      <div className="relative border-border/50 border-b">
       {/* Vertical tree line */}
       <div className="absolute top-0 bottom-0 left-[21px] w-px bg-border/50" />
 
@@ -253,7 +255,8 @@ const PropertyLineSection = memo(function PropertyLineSection() {
           </button>
         </div>
       )}
-    </div>
+      </div>
+    </LocalizedContent>
   )
 })
 
@@ -540,7 +543,8 @@ const LevelReferences = memo(function LevelReferences({
   ]
 
   return (
-    <div className="relative flex flex-col">
+    <LocalizedContent>
+      <div className="relative flex flex-col">
       {!isLastLevel && (
         <div
           className="pointer-events-none absolute top-0 bottom-0 z-10 w-px bg-border/50"
@@ -650,7 +654,8 @@ const LevelReferences = memo(function LevelReferences({
           }
         }}
       />
-    </div>
+      </div>
+    </LocalizedContent>
   )
 })
 
@@ -994,7 +999,8 @@ const LevelsSection = memo(function LevelsSection({
   }
 
   return (
-    <div className="relative flex flex-col">
+    <LocalizedContent>
+      <div className="relative flex flex-col">
       {/* Level buttons */}
       <div className="flex min-h-0 flex-1 flex-col">
         <button
@@ -1035,7 +1041,8 @@ const LevelsSection = memo(function LevelsSection({
           />
         ))}
       </div>
-    </div>
+      </div>
+    </LocalizedContent>
   )
 })
 
@@ -1055,7 +1062,8 @@ const LayerToggle = memo(function LayerToggle() {
           : 'none'
 
   return (
-    <div className="relative flex items-center gap-1 border-border/50 border-b bg-[#2C2C2E] p-1">
+    <LocalizedContent>
+      <div className="relative flex items-center gap-1 border-border/50 border-b bg-secondary p-1">
       <button
         className={cn(
           'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
@@ -1070,7 +1078,7 @@ const LayerToggle = memo(function LayerToggle() {
       >
         {activeTab === 'structure' && (
           <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
+            className="absolute inset-0 rounded-md bg-accent shadow-sm ring-1 ring-border/50"
             layoutId="layerToggleActiveBg"
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
@@ -1106,7 +1114,7 @@ const LayerToggle = memo(function LayerToggle() {
       >
         {activeTab === 'furnish' && (
           <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
+            className="absolute inset-0 rounded-md bg-accent shadow-sm ring-1 ring-border/50"
             layoutId="layerToggleActiveBg"
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
@@ -1143,7 +1151,7 @@ const LayerToggle = memo(function LayerToggle() {
       >
         {activeTab === 'zones' && (
           <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
+            className="absolute inset-0 rounded-md bg-accent shadow-sm ring-1 ring-border/50"
             layoutId="layerToggleActiveBg"
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
@@ -1165,7 +1173,8 @@ const LayerToggle = memo(function LayerToggle() {
           </span>
         </div>
       </button>
-    </div>
+      </div>
+    </LocalizedContent>
   )
 })
 
@@ -1339,7 +1348,8 @@ const MultiSelectionBadge = memo(function MultiSelectionBadge() {
   if (selectedIds.length <= 1) return null
 
   return (
-    <div className="pointer-events-none sticky top-4 z-50 flex h-0 w-full justify-center overflow-visible">
+    <LocalizedContent>
+      <div className="pointer-events-none sticky top-4 z-50 flex h-0 w-full justify-center overflow-visible">
       <div className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-primary/20 bg-primary px-0.5 py-4 pl-2 font-medium text-primary-foreground text-xs shadow-black/10 shadow-lg backdrop-blur-md">
         <span>{selectedIds.length} objects selected</span>
         <button
@@ -1350,7 +1360,8 @@ const MultiSelectionBadge = memo(function MultiSelectionBadge() {
           <X className="h-4 w-4" />
         </button>
       </div>
-    </div>
+      </div>
+    </LocalizedContent>
   )
 })
 
@@ -1384,7 +1395,11 @@ const ContentSection = memo(function ContentSection() {
 
   if (!level) {
     return (
-      <div className="px-3 py-4 text-muted-foreground text-sm">Select a level to view content</div>
+      <LocalizedContent>
+        <div className="px-3 py-4 text-muted-foreground text-sm">
+          Select a level to view content
+        </div>
+      </LocalizedContent>
     )
   }
 
@@ -1397,12 +1412,14 @@ const ContentSection = memo(function ContentSection() {
 
     if (levelZones.length === 0) {
       return (
-        <div className="px-3 py-4 text-muted-foreground text-sm">
-          No zones on this level.{' '}
-          <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
-            Add one
-          </button>
-        </div>
+        <LocalizedContent>
+          <div className="px-3 py-4 text-muted-foreground text-sm">
+            No zones on this level.{' '}
+            <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
+              Add one
+            </button>
+          </div>
+        </LocalizedContent>
       )
     }
 
@@ -1416,7 +1433,11 @@ const ContentSection = memo(function ContentSection() {
   }
 
   if (elementChildren.length === 0) {
-    return <div className="px-3 py-4 text-muted-foreground text-sm">No elements on this level</div>
+    return (
+      <LocalizedContent>
+        <div className="px-3 py-4 text-muted-foreground text-sm">No elements on this level</div>
+      </LocalizedContent>
+    )
   }
   return (
     <TreeNodeDragProvider>
@@ -1451,6 +1472,7 @@ const BuildingItem = memo(function BuildingItem({
   onUploadAsset?: (projectId: string, levelId: string, file: File, type: 'scan' | 'guide') => void
   onDeleteAsset?: (projectId: string, url: string) => void
 }) {
+  const t = useTranslation()
   const setSelection = useViewer((state) => state.setSelection)
   const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
@@ -1498,7 +1520,7 @@ const BuildingItem = memo(function BuildingItem({
             )}
             src="/icons/building.webp"
           />
-          <span className="truncate font-medium text-sm">{building.name || 'Building'}</span>
+          <span className="truncate font-medium text-sm">{building.name || t('Building')}</span>
         </div>
         <Popover
           onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
@@ -1608,6 +1630,7 @@ export interface SitePanelProps {
 }
 
 export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanelProps = {}) {
+  const t = useTranslation()
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
@@ -1654,7 +1677,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 )}
                 src="/icons/site-flag.webp"
               />
-              <span className="font-medium text-sm">{siteNode.name || 'Site'}</span>
+              <span className="font-medium text-sm">{siteNode.name || t('Site')}</span>
             </div>
             <CameraPopover
               buttonClassName={cn(
@@ -1695,9 +1718,11 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
 
           {/* Buildings List */}
           {buildings.length === 0 ? (
-            <motion.div className="px-3 py-4 text-muted-foreground text-sm" layout="position">
-              No buildings yet
-            </motion.div>
+            <LocalizedContent>
+              <motion.div className="px-3 py-4 text-muted-foreground text-sm" layout="position">
+                No buildings yet
+              </motion.div>
+            </LocalizedContent>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col">
               {buildings.map((building) => {

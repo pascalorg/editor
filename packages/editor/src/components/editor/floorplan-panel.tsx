@@ -91,6 +91,7 @@ import {
 } from '../../lib/floorplan'
 import { groundHeightAt } from '../../lib/ground-surface'
 import { guideEmitter } from '../../lib/guide-events'
+import { LocalizedContent } from '../../lib/i18n'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -3711,60 +3712,62 @@ function FloorplanGuideHandleHint({
     : 'text-[#09090b] drop-shadow-[0_1px_1.5px_rgba(255,255,255,0.8)]'
 
   return (
-    <div
-      aria-hidden="true"
-      className={cn('pointer-events-none absolute z-20 select-none', primaryToneClass)}
-      style={{
-        left: anchor.x,
-        top: anchor.y,
-        transform: `translate(calc(-50% + ${anchor.directionX * 12}px), calc(-50% + ${anchor.directionY * 12}px))`,
-      }}
-    >
-      <div className="flex flex-col gap-0.5">
-        <div
-          className={cn(
-            'flex items-center gap-1.5 transition-opacity duration-150',
-            rotationModifierPressed ? 'opacity-40' : 'opacity-100',
-          )}
-        >
-          <span className="font-medium text-[11px] lowercase leading-none">resize</span>
-          <Icon
-            aria-hidden="true"
-            className="h-3.5 w-3.5 shrink-0"
-            color="currentColor"
-            icon="ph:mouse-left-click-fill"
-          />
-        </div>
-
-        <div
-          className={cn(
-            'flex items-center gap-1.5 transition-opacity duration-150',
-            rotationModifierPressed ? 'opacity-100' : 'opacity-40',
-          )}
-        >
-          <span className="font-medium text-[11px] lowercase leading-none">rotate</span>
-          {isMacPlatform ? (
-            <Command aria-hidden="true" className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
-          ) : (
-            <span className="font-mono text-[10px] uppercase leading-none">ctrl</span>
-          )}
-          <Icon
-            aria-hidden="true"
-            className="h-3.5 w-3.5 shrink-0"
-            color="currentColor"
-            icon="ph:mouse-left-click-fill"
-          />
-        </div>
-
-        {showScaleHint && (
-          <div className="flex items-center gap-1.5 opacity-40">
-            <span className="font-medium text-[11px] lowercase leading-none">set scale</span>
-            <Ruler aria-hidden="true" className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
-            <span className="font-medium text-[11px] lowercase leading-none">panel</span>
+    <LocalizedContent>
+      <div
+        aria-hidden="true"
+        className={cn('pointer-events-none absolute z-20 select-none', primaryToneClass)}
+        style={{
+          left: anchor.x,
+          top: anchor.y,
+          transform: `translate(calc(-50% + ${anchor.directionX * 12}px), calc(-50% + ${anchor.directionY * 12}px))`,
+        }}
+      >
+        <div className="flex flex-col gap-0.5">
+          <div
+            className={cn(
+              'flex items-center gap-1.5 transition-opacity duration-150',
+              rotationModifierPressed ? 'opacity-40' : 'opacity-100',
+            )}
+          >
+            <span className="font-medium text-[11px] lowercase leading-none">resize</span>
+            <Icon
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0"
+              color="currentColor"
+              icon="ph:mouse-left-click-fill"
+            />
           </div>
-        )}
+
+          <div
+            className={cn(
+              'flex items-center gap-1.5 transition-opacity duration-150',
+              rotationModifierPressed ? 'opacity-100' : 'opacity-40',
+            )}
+          >
+            <span className="font-medium text-[11px] lowercase leading-none">rotate</span>
+            {isMacPlatform ? (
+              <Command aria-hidden="true" className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
+            ) : (
+              <span className="font-mono text-[10px] uppercase leading-none">ctrl</span>
+            )}
+            <Icon
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0"
+              color="currentColor"
+              icon="ph:mouse-left-click-fill"
+            />
+          </div>
+
+          {showScaleHint && (
+            <div className="flex items-center gap-1.5 opacity-40">
+              <span className="font-medium text-[11px] lowercase leading-none">set scale</span>
+              <Ruler aria-hidden="true" className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
+              <span className="font-medium text-[11px] lowercase leading-none">panel</span>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </LocalizedContent>
   )
 }
 
@@ -11167,127 +11170,133 @@ export function FloorplanPanel({
           ))}
 
         {referenceScaleDraft && (
-          <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-md border bg-background/95 px-3 py-2 text-center text-sm shadow-sm">
-            {referenceScaleDraft.start
-              ? 'Click the other end of that distance'
-              : 'Click one end of a distance you know — e.g. a dimension printed on the plan'}
-          </div>
+          <LocalizedContent>
+            <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-md border bg-background/95 px-3 py-2 text-center text-sm shadow-sm">
+              {referenceScaleDraft.start
+                ? 'Click the other end of that distance'
+                : 'Click one end of a distance you know — e.g. a dimension printed on the plan'}
+            </div>
+          </LocalizedContent>
         )}
 
         {pendingReferenceScale && (
-          <form
-            className="absolute top-1/2 left-1/2 z-40 w-[22rem] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background/95 p-3.5 text-foreground shadow-2xl backdrop-blur-md"
-            onKeyDown={(event) => {
-              // The focused length input keeps Escape from reaching the global
-              // handler — cancel the flow from here too.
-              if (event.key === 'Escape') {
+          <LocalizedContent>
+            <form
+              className="absolute top-1/2 left-1/2 z-40 w-[22rem] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background/95 p-3.5 text-foreground shadow-2xl backdrop-blur-md"
+              onKeyDown={(event) => {
+                // The focused length input keeps Escape from reaching the global
+                // handler — cancel the flow from here too.
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  guideEmitter.emit('guide:cancel-reference-scale')
+                }
+              }}
+              onSubmit={(event) => {
                 event.preventDefault()
-                event.stopPropagation()
-                guideEmitter.emit('guide:cancel-reference-scale')
-              }
-            }}
-            onSubmit={(event) => {
-              event.preventDefault()
-              handleReferenceScaleConfirm()
-            }}
-          >
-            <div className="mb-3 flex items-start gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-white/5">
-                <Ruler className="h-4 w-4 text-foreground/80" />
-              </div>
-              <div className="min-w-0">
-                <div className="font-medium text-sm">Set overlay scale</div>
-                <div className="mt-0.5 text-muted-foreground text-xs leading-4">
-                  Enter the real-world length of the line you just drew. The image will resize to
-                  match it.
+                handleReferenceScaleConfirm()
+              }}
+            >
+              <div className="mb-3 flex items-start gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-white/5">
+                  <Ruler className="h-4 w-4 text-foreground/80" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-medium text-sm">Set overlay scale</div>
+                  <div className="mt-0.5 text-muted-foreground text-xs leading-4">
+                    Enter the real-world length of the line you just drew. The image will resize to
+                    match it.
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mb-3 rounded-xl border border-border/70 bg-white/5 px-3 py-2">
-              <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
-                Drawn line
-              </div>
-              <div className="mt-1 font-medium text-sm">
-                {formatMeasurement(
-                  pendingReferenceScale.measuredLengthUnits,
-                  unit,
-                  null,
-                  metricNotation,
-                )}
-              </div>
-            </div>
-
-            <label className="block">
-              <span className="mb-1.5 block font-medium text-muted-foreground text-xs">
-                Real length
-              </span>
-              <div className="grid grid-cols-[1fr_8.25rem] gap-2">
-                <input
-                  aria-invalid={Boolean(referenceScaleInputError)}
-                  className={cn(
-                    'h-9 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-foreground/40',
-                    referenceScaleInputError ? 'border-destructive/60' : 'border-border',
+              <div className="mb-3 rounded-xl border border-border/70 bg-white/5 px-3 py-2">
+                <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                  Drawn line
+                </div>
+                <div className="mt-1 font-medium text-sm">
+                  {formatMeasurement(
+                    pendingReferenceScale.measuredLengthUnits,
+                    unit,
+                    null,
+                    metricNotation,
                   )}
-                  onChange={(event) => setReferenceScaleValue(event.target.value)}
-                  placeholder={`e.g. 3.5, 180cm or 5'11"`}
-                  type="text"
-                  value={referenceScaleValue}
-                />
-                <select
-                  className="h-9 rounded-lg border border-border bg-background px-2 text-sm outline-none transition focus:border-foreground/40"
-                  onChange={(event) =>
-                    setReferenceScaleUnit(event.target.value as ReferenceScaleUnit)
-                  }
-                  value={referenceScaleUnit}
-                >
-                  <option value="meters">Meters</option>
-                  <option value="centimeters">Centimeters</option>
-                  <option value="feet">Feet</option>
-                  <option value="inches">Inches</option>
-                </select>
+                </div>
               </div>
-              <span
-                className={cn(
-                  'mt-1.5 block text-xs',
-                  referenceScaleInputError ? 'text-destructive' : 'text-muted-foreground',
-                )}
-              >
-                {referenceScaleInputError ??
-                  referenceScaleHint ??
-                  'Any decimal works. Use the known real length, not the drawn value.'}
-              </span>
-            </label>
 
-            <div className="mt-3 rounded-lg bg-muted/45 px-3 py-2 text-muted-foreground text-xs">
-              {pendingReferenceImageScaleFactor
-                ? `Image will scale ${formatNumber(pendingReferenceImageScaleFactor, 3)}x from the first point.`
-                : 'Enter a length greater than 0.'}
-            </div>
+              <label className="block">
+                <span className="mb-1.5 block font-medium text-muted-foreground text-xs">
+                  Real length
+                </span>
+                <div className="grid grid-cols-[1fr_8.25rem] gap-2">
+                  <input
+                    aria-invalid={Boolean(referenceScaleInputError)}
+                    className={cn(
+                      'h-9 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-foreground/40',
+                      referenceScaleInputError ? 'border-destructive/60' : 'border-border',
+                    )}
+                    onChange={(event) => setReferenceScaleValue(event.target.value)}
+                    placeholder={`e.g. 3.5, 180cm or 5'11"`}
+                    type="text"
+                    value={referenceScaleValue}
+                  />
+                  <select
+                    className="h-9 rounded-lg border border-border bg-background px-2 text-sm outline-none transition focus:border-foreground/40"
+                    onChange={(event) =>
+                      setReferenceScaleUnit(event.target.value as ReferenceScaleUnit)
+                    }
+                    value={referenceScaleUnit}
+                  >
+                    <option value="meters">Meters</option>
+                    <option value="centimeters">Centimeters</option>
+                    <option value="feet">Feet</option>
+                    <option value="inches">Inches</option>
+                  </select>
+                </div>
+                <span
+                  className={cn(
+                    'mt-1.5 block text-xs',
+                    referenceScaleInputError ? 'text-destructive' : 'text-muted-foreground',
+                  )}
+                >
+                  {referenceScaleInputError ??
+                    referenceScaleHint ??
+                    'Any decimal works. Use the known real length, not the drawn value.'}
+                </span>
+              </label>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-white/8 hover:text-foreground"
-                onClick={() => setPendingReferenceScale(null)}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="h-8 rounded-lg bg-foreground px-3 font-medium text-background text-xs transition hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!pendingReferenceMetersPerUnit}
-                type="submit"
-              >
-                Save Scale
-              </button>
-            </div>
-          </form>
+              <div className="mt-3 rounded-lg bg-muted/45 px-3 py-2 text-muted-foreground text-xs">
+                {pendingReferenceImageScaleFactor
+                  ? `Image will scale ${formatNumber(pendingReferenceImageScaleFactor, 3)}x from the first point.`
+                  : 'Enter a length greater than 0.'}
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-white/8 hover:text-foreground"
+                  onClick={() => setPendingReferenceScale(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="h-8 rounded-lg bg-foreground px-3 font-medium text-background text-xs transition hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!pendingReferenceMetersPerUnit}
+                  type="submit"
+                >
+                  Save Scale
+                </button>
+              </div>
+            </form>
+          </LocalizedContent>
         )}
 
         {levelNode?.type !== 'level' && !hasAmbientBuildingLevel ? (
-          <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground text-sm">
-            Switch to a building level to view and edit the floorplan.
-          </div>
+          <LocalizedContent>
+            <div className="flex h-full items-center justify-center px-6 text-center text-muted-foreground text-sm">
+              Switch to a building level to view and edit the floorplan.
+            </div>
+          </LocalizedContent>
         ) : isFloorplanOpen ? (
           // The panel stays mounted in 3D mode (display:none) to keep the
           // portalled compass + viewport state warm, but the heavy 2D scene

@@ -11,6 +11,8 @@ import {
   useState,
 } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
+import { translate, translateReactNode } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 const DRAG_MARGIN = 8
@@ -87,6 +89,7 @@ export function PanelWrapper({
   width = 320, // default width
 }: PanelWrapperProps) {
   const isMobile = useIsMobile()
+  const locale = useUiPreferences((state) => state.locale)
   const contextFooter = useContext(InspectorFooterContext)
   const resolvedFooter = footer ?? contextFooter
 
@@ -241,7 +244,7 @@ export function PanelWrapper({
           <div className="flex min-w-0 items-center gap-2">
             {onBack && (
               <button
-                className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 onClick={onBack}
                 type="button"
               >
@@ -261,7 +264,7 @@ export function PanelWrapper({
                 <span className="flex shrink-0 items-center justify-center">{icon}</span>
               ))}
             <h2 className="truncate font-semibold text-foreground text-sm tracking-tight">
-              {title}
+              {translate(title, locale)}
             </h2>
           </div>
 
@@ -271,7 +274,7 @@ export function PanelWrapper({
           <div className="flex items-center gap-1">
             {onReset && (
               <button
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 onClick={onReset}
                 type="button"
               >
@@ -281,7 +284,7 @@ export function PanelWrapper({
             <button
               aria-expanded={!collapsed}
               aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
-              className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               onClick={() => setCollapsed((c) => !c)}
               type="button"
             >
@@ -291,7 +294,7 @@ export function PanelWrapper({
             </button>
             {onClose && (
               <button
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 onClick={onClose}
                 type="button"
               >
@@ -304,11 +307,15 @@ export function PanelWrapper({
 
       {/* Content — hidden while the panel is collapsed (desktop). */}
       {!(collapsed && !isMobile) && (
-        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {translateReactNode(children, locale)}
+        </div>
       )}
 
       {resolvedFooter && !(collapsed && !isMobile) && (
-        <div className="shrink-0 border-border/50 border-t p-3">{resolvedFooter}</div>
+        <div className="shrink-0 border-border/50 border-t p-3">
+          {translateReactNode(resolvedFooter, locale)}
+        </div>
       )}
     </div>
   )

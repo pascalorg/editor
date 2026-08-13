@@ -73,6 +73,8 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
   )
   const defaultTabs = tabs.filter((tab) => !pluginPanelIds.has(tab.id) && tab.id !== 'plugins')
   const pluginTabs = tabs.filter((tab) => pluginPanelIds.has(tab.id) || tab.id === 'plugins')
+  const settingsTabs = defaultTabs.filter((tab) => tab.id === 'settings')
+  const mainTabs = defaultTabs.filter((tab) => tab.id !== 'settings')
 
   const renderTab = (tab: SidebarTab) => {
     const showActive = activeTab === tab.id && !collapsed
@@ -104,10 +106,15 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
   return (
     <TooltipProvider delayDuration={0} disableHoverableContent>
       <div className="flex h-full w-14 shrink-0 flex-col items-center border-border border-r-2">
-        {defaultTabs.map(renderTab)}
+        {mainTabs.map(renderTab)}
         {pluginTabs.length > 0 && (
           <div className="flex w-14 flex-col items-center border-border border-t-2">
             {pluginTabs.map(renderTab)}
+          </div>
+        )}
+        {settingsTabs.length > 0 && (
+          <div className="mt-auto flex w-14 flex-col items-center border-border border-t-2">
+            {settingsTabs.map(renderTab)}
           </div>
         )}
       </div>

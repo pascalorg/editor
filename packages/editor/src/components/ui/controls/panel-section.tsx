@@ -3,6 +3,8 @@
 import { ChevronDown } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
+import { translate, translateReactNode } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 interface PanelSectionProps {
@@ -19,6 +21,7 @@ export function PanelSection({
   className,
 }: PanelSectionProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
+  const locale = useUiPreferences((state) => state.locale)
 
   return (
     <motion.div
@@ -37,7 +40,7 @@ export function PanelSection({
         onClick={() => setIsExpanded(!isExpanded)}
         type="button"
       >
-        <span className="truncate font-medium text-sm">{title}</span>
+        <span className="truncate font-medium text-sm">{translate(title, locale)}</span>
         <ChevronDown
           className={cn(
             'h-4 w-4 transition-transform duration-200',
@@ -56,7 +59,9 @@ export function PanelSection({
             initial={{ height: 0, opacity: 0 }}
             transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
           >
-            <div className="flex flex-col gap-1.5 p-3 pt-2">{children}</div>
+            <div className="flex flex-col gap-1.5 p-3 pt-2">
+              {translateReactNode(children, locale)}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

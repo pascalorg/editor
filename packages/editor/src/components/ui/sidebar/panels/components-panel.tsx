@@ -13,6 +13,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Boxes, PackagePlus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createDefinitionThumbnail } from '../../../../lib/component-actions'
+import { LocalizedContent } from '../../../../lib/i18n'
 import { triggerSFX } from '../../../../lib/sfx-bus'
 import useEditor from '../../../../store/use-editor'
 import { Button } from '../../primitives/button'
@@ -53,7 +54,8 @@ function DefinitionCard({
   }
 
   return (
-    <article className="overflow-hidden rounded-xl border border-border/60 bg-accent/20">
+    <LocalizedContent>
+      <article className="overflow-hidden rounded-xl border border-border/60 bg-accent/20">
       <div className="aspect-[4/3] bg-background/50">
         {definition.thumbnail ? (
           <img
@@ -120,7 +122,8 @@ function DefinitionCard({
           </Button>
         </div>
       </div>
-    </article>
+      </article>
+    </LocalizedContent>
   )
 }
 
@@ -183,7 +186,8 @@ export function ComponentsPanel() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
+    <LocalizedContent>
+      <div className="flex h-full flex-col overflow-y-auto p-4">
       <div className="mb-5">
         <h2 className="font-semibold text-lg text-sidebar-foreground">Components</h2>
         <p className="mt-1 text-sidebar-foreground/60 text-sm">
@@ -226,6 +230,7 @@ export function ComponentsPanel() {
           Select a level before placing a component.
         </p>
       ) : null}
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

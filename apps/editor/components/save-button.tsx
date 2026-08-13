@@ -1,6 +1,6 @@
 'use client'
 
-import type { SceneGraph } from '@pascal-app/editor'
+import { type SceneGraph, useTranslation } from '@pascal-app/editor'
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
 
@@ -20,6 +20,7 @@ interface SaveButtonProps {
  * Creates a new empty scene and navigates the user to it.
  */
 export function CreateSceneButton({ label = 'Create new scene' }: { label?: string } = {}) {
+  const t = useTranslation()
   const router = useRouter()
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,14 +49,14 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
 
   return (
     <div className="flex items-center gap-3">
-      {error && <span className="text-destructive text-xs">{error}</span>}
+      {error && <span className="text-destructive text-xs">{t(error)}</span>}
       <button
         className="rounded-md border border-border bg-accent px-3 py-1.5 font-medium text-sm hover:bg-accent/80 disabled:opacity-50"
         disabled={isCreating}
         onClick={handleCreate}
         type="button"
       >
-        {isCreating ? 'Creating…' : label}
+        {isCreating ? t('Creating…') : t(label)}
       </button>
     </div>
   )
@@ -67,6 +68,7 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
  * built-in autosave plumbing.
  */
 export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps) {
+  const t = useTranslation()
   const router = useRouter()
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -141,7 +143,7 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
         onClick={handleSave}
         type="button"
       >
-        {isSaving ? 'Saving…' : 'Save'}
+        {isSaving ? t('Saving…') : t('Save')}
       </button>
       <button
         className="rounded-md border border-border bg-background px-3 py-1.5 font-medium text-xs hover:bg-accent/40 disabled:opacity-50"
@@ -149,9 +151,9 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
         onClick={handleSaveAs}
         type="button"
       >
-        Save as…
+        {t('Save as…')}
       </button>
-      {status && <span className="text-muted-foreground text-xs">{status}</span>}
+      {status && <span className="text-muted-foreground text-xs">{t(status)}</span>}
     </div>
   )
 }

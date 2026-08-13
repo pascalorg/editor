@@ -4,6 +4,8 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
 import type * as React from 'react'
 
+import { translateReactNode } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -46,6 +48,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -57,7 +60,7 @@ function DialogContent({
         data-slot="dialog-content"
         {...props}
       >
-        {children}
+        {translateReactNode(children, locale)}
         {showCloseButton && (
           <DialogPrimitive.Close
             className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0"
@@ -92,26 +95,33 @@ function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+function DialogTitle({ className, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <DialogPrimitive.Title
       className={cn('font-semibold text-lg leading-none', className)}
       data-slot="dialog-title"
       {...props}
-    />
+    >
+      {translateReactNode(children, locale)}
+    </DialogPrimitive.Title>
   )
 }
 
 function DialogDescription({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <DialogPrimitive.Description
       className={cn('text-muted-foreground text-sm', className)}
       data-slot="dialog-description"
       {...props}
-    />
+    >
+      {translateReactNode(children, locale)}
+    </DialogPrimitive.Description>
   )
 }
 

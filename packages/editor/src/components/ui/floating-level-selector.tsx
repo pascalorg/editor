@@ -45,6 +45,7 @@ import {
 } from '../../lib/level-duplication'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
+import { LocalizedContent, useTranslation } from '../../lib/i18n'
 import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
 import { ActionButton } from './controls/action-button'
@@ -71,8 +72,9 @@ function LevelInlineRename({
   isEditing: boolean
   onStopEditing: () => void
 }) {
+  const t = useTranslation()
   const updateNode = useScene((s) => s.updateNode)
-  const defaultName = getDefaultLevelName(level.level)
+  const defaultName = t(getDefaultLevelName(level.level))
   const [value, setValue] = useState(level.name || '')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -166,7 +168,8 @@ function LevelRow({
       ]
 
   return (
-    <div className="group/level">
+    <LocalizedContent>
+      <div className="group/level">
       {isEditing ? (
         <LevelInlineRename
           isEditing={isEditing}
@@ -327,7 +330,8 @@ function LevelRow({
         onOpenChange={setDuplicateDialogOpen}
         open={duplicateDialogOpen}
       />
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }
 
@@ -565,7 +569,8 @@ export function FloatingLevelSelector() {
     'absolute left-1/2 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border border-border/80 bg-neutral-800 text-muted-foreground/60 shadow-md transition-colors hover:bg-neutral-700 hover:text-foreground'
 
   return (
-    <>
+    <LocalizedContent>
+      <>
       <div className="pointer-events-auto absolute top-14 left-3 z-20">
         <div className="relative">
           {/* Floating + at top edge */}
@@ -672,6 +677,7 @@ export function FloatingLevelSelector() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+      </>
+    </LocalizedContent>
   )
 }

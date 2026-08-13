@@ -145,41 +145,42 @@ export function IconRail({
         <TooltipContent side="right">Components</TooltipContent>
       </Tooltip>
 
-      {/* Settings panel */}
-      {[settingsPanel].map((panel) => {
-        const isActive = activePanel === panel.id
-        return (
-          <Tooltip key={panel.id}>
-            <TooltipTrigger asChild>
-              <button
-                className={cn(
-                  'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
-                  isActive ? 'bg-accent' : 'hover:bg-accent',
-                )}
-                onClick={() => onPanelChange(panel.id)}
-                type="button"
-              >
-                <img
-                  alt={panel.label}
-                  className={cn(
-                    'h-6 w-6 object-contain transition-all',
-                    !isActive && 'opacity-50 saturate-0',
-                  )}
-                  src={panel.iconSrc}
-                />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{panel.label}</TooltipContent>
-          </Tooltip>
-        )
-      })}
-
       {(pluginPanels?.length || pluginsPanel) && (
         <div className="mt-1 flex w-9 flex-col items-center gap-1 border-border/70 border-t pt-2">
           {pluginPanels?.map(renderExtraPanel)}
           {pluginsPanel && renderExtraPanel(pluginsPanel)}
         </div>
       )}
+
+      <div className="mt-auto">
+        {[settingsPanel].map((panel) => {
+          const isActive = activePanel === panel.id
+          return (
+            <Tooltip key={panel.id}>
+              <TooltipTrigger asChild>
+                <button
+                  className={cn(
+                    'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
+                    isActive ? 'bg-accent' : 'hover:bg-accent',
+                  )}
+                  onClick={() => onPanelChange(panel.id)}
+                  type="button"
+                >
+                  <img
+                    alt={panel.label}
+                    className={cn(
+                      'h-6 w-6 object-contain transition-all',
+                      !isActive && 'opacity-50 saturate-0',
+                    )}
+                    src={panel.iconSrc}
+                  />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{panel.label}</TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </div>
     </div>
   )
 }

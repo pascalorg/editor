@@ -456,6 +456,12 @@ export {
   runUndo,
 } from './lib/history'
 export {
+  LocalizedContent,
+  translate,
+  translateReactNode,
+  useTranslation,
+} from './lib/i18n'
+export {
   boundaryReshapeScope,
   curveReshapeScope,
   endpointReshapeScope,
@@ -568,6 +574,13 @@ export {
   resolveFlattenTarget,
   sculptFieldForSite,
 } from './lib/terrain-sculpt'
+export {
+  UI_PREFERENCES_STORAGE_KEY,
+  type UiLocale,
+  UiPreferencesSync,
+  type UiTheme,
+  useUiPreferences,
+} from './lib/ui-preferences'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.

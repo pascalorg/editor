@@ -4,6 +4,8 @@ import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 import type * as React from 'react'
 
+import { translateReactNode } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
@@ -50,11 +52,13 @@ function DropdownMenuItem({
   className,
   inset,
   variant = 'default',
+  children,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   inset?: boolean
   variant?: 'default' | 'destructive'
 }) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
@@ -65,7 +69,9 @@ function DropdownMenuItem({
       data-slot="dropdown-menu-item"
       data-variant={variant}
       {...props}
-    />
+    >
+      {translateReactNode(children, locale)}
+    </DropdownMenuPrimitive.Item>
   )
 }
 
@@ -75,6 +81,7 @@ function DropdownMenuCheckboxItem({
   checked,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <DropdownMenuPrimitive.CheckboxItem
       checked={checked}
@@ -90,7 +97,7 @@ function DropdownMenuCheckboxItem({
           <CheckIcon className="size-4" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
-      {children}
+      {translateReactNode(children, locale)}
     </DropdownMenuPrimitive.CheckboxItem>
   )
 }
@@ -106,6 +113,7 @@ function DropdownMenuRadioItem({
   children,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
@@ -120,7 +128,7 @@ function DropdownMenuRadioItem({
           <CircleIcon className="size-2 fill-current" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
-      {children}
+      {translateReactNode(children, locale)}
     </DropdownMenuPrimitive.RadioItem>
   )
 }
@@ -128,17 +136,21 @@ function DropdownMenuRadioItem({
 function DropdownMenuLabel({
   className,
   inset,
+  children,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
   inset?: boolean
 }) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <DropdownMenuPrimitive.Label
       className={cn('px-2 py-1.5 font-barlow font-medium text-sm data-inset:pl-8', className)}
       data-inset={inset}
       data-slot="dropdown-menu-label"
       {...props}
-    />
+    >
+      {translateReactNode(children, locale)}
+    </DropdownMenuPrimitive.Label>
   )
 }
 
@@ -177,6 +189,7 @@ function DropdownMenuSubTrigger({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubTrigger> & {
   inset?: boolean
 }) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
@@ -187,7 +200,7 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       {...props}
     >
-      {children}
+      {translateReactNode(children, locale)}
       <ChevronRightIcon className="ml-auto size-4" />
     </DropdownMenuPrimitive.SubTrigger>
   )

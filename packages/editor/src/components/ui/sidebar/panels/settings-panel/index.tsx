@@ -6,7 +6,17 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
+import {
+  Camera,
+  Download,
+  Languages,
+  Map as MapIcon,
+  Moon,
+  Save,
+  Sun,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import {
   type KeyboardEvent,
   type SyntheticEvent,
@@ -16,6 +26,8 @@ import {
   useState,
 } from 'react'
 import { exportFloorplanPdf } from '../../../../../lib/floorplan/floorplan-export'
+import { LocalizedContent } from '../../../../../lib/i18n'
+import { useUiPreferences } from '../../../../../lib/ui-preferences'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -194,6 +206,10 @@ export function SettingsPanel({
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
+  const locale = useUiPreferences((state) => state.locale)
+  const theme = useUiPreferences((state) => state.theme)
+  const setLocale = useUiPreferences((state) => state.setLocale)
+  const setTheme = useUiPreferences((state) => state.setTheme)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
@@ -318,7 +334,73 @@ export function SettingsPanel({
   }
 
   return (
-    <div className="flex flex-col gap-6 p-3">
+    <LocalizedContent>
+      <div className="flex flex-col gap-6 p-3">
+        <div className="space-y-4">
+          <label className="font-medium text-muted-foreground text-xs uppercase">
+            Preferences
+          </label>
+
+          <div className="space-y-2">
+            <div className="flex items-start gap-2">
+              <Languages className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              <div>
+                <div className="font-medium text-sm">Language</div>
+                <div className="text-muted-foreground text-xs">
+                  Choose the language used throughout the application.
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                aria-pressed={locale === 'tr'}
+                onClick={() => setLocale('tr')}
+                size="sm"
+                variant={locale === 'tr' ? 'default' : 'outline'}
+              >
+                Turkish
+              </Button>
+              <Button
+                aria-pressed={locale === 'en'}
+                onClick={() => setLocale('en')}
+                size="sm"
+                variant={locale === 'en' ? 'default' : 'outline'}
+              >
+                English
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div>
+              <div className="font-medium text-sm">Theme</div>
+              <div className="text-muted-foreground text-xs">
+                Choose how the application interface looks.
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                aria-pressed={theme === 'light'}
+                onClick={() => setTheme('light')}
+                size="sm"
+                variant={theme === 'light' ? 'default' : 'outline'}
+              >
+                <Sun className="size-4" />
+                Light
+              </Button>
+              <Button
+                aria-pressed={theme === 'dark'}
+                onClick={() => setTheme('dark')}
+                size="sm"
+                variant={theme === 'dark' ? 'default' : 'outline'}
+              >
+                <Moon className="size-4" />
+                Dark
+              </Button>
+            </div>
+          </div>
+        </div>
+
       {/* Visibility Section (only for cloud projects) */}
       {projectId && !isLocalProject && (
         <div className="space-y-3">
@@ -494,7 +576,7 @@ export function SettingsPanel({
               Explore scene graph
             </Button>
           </DialogTrigger>
-          <DialogContent className="h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
+          <DialogContent className="h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-background p-0 shadow-none sm:max-w-5xl">
             <DialogTitle className="sr-only">Scene Graph</DialogTitle>
             <div
               className="flex h-full min-h-0 w-full min-w-0 *:h-full *:w-full *:overflow-y-auto"
@@ -524,6 +606,7 @@ export function SettingsPanel({
           Clear & Start New
         </Button>
       </div>
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

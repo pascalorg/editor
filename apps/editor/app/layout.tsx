@@ -32,8 +32,9 @@ export default function RootLayout({
 
   return (
     <html
-      className={`${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${archivo.variable}`}
+      className={`dark ${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${archivo.variable}`}
       lang="tr"
+      suppressHydrationWarning
     >
       <body className="font-sans">
         <ClientBootstrap enableDevDiagnostics={enableDevDiagnostics}>{children}</ClientBootstrap>

@@ -8,6 +8,8 @@ import {
   parseMeasurement,
 } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
+import { translateReactNode } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 interface MetricControlProps {
@@ -37,6 +39,7 @@ export function MetricControl({
   unit = '',
   restoreOnCommit = true,
 }: MetricControlProps) {
+  const locale = useUiPreferences((state) => state.locale)
   const {
     isImperial,
     displayUnit,
@@ -294,7 +297,7 @@ export function MetricControl({
     <div
       className={cn(
         'group flex h-10 w-full items-center justify-between rounded-lg border border-border/50 px-3 text-sm transition-colors',
-        isDragging ? 'bg-[#3e3e3e]' : 'bg-[#2C2C2E] hover:bg-[#3e3e3e]',
+        isDragging ? 'bg-accent' : 'bg-secondary hover:bg-accent',
         className,
       )}
       onMouseEnter={() => setIsHovered(true)}
@@ -310,7 +313,7 @@ export function MetricControl({
         )}
         onPointerDown={handlePointerDown}
       >
-        {label}
+        {translateReactNode(label, locale)}
       </div>
 
       <div className="flex shrink-0 justify-end">

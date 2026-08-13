@@ -6,6 +6,7 @@ import {
   type ContinuationContext,
 } from '../../../lib/continuation'
 import type { ContextualShortcutHint } from '../../../lib/contextual-help'
+import { LocalizedContent } from '../../../lib/i18n'
 import { hasActivePaintMaterial } from '../../../lib/material-paint'
 import { paintScopeLabel, type PaintScope } from '../../../lib/paint-scope'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -383,7 +384,8 @@ export function ContextualHelperPanel({
     return null
 
   return (
-    <div className={CONTAINER_CLASS}>
+    <LocalizedContent>
+      <div className={CONTAINER_CLASS}>
       {snapContext ? <SnappingChips context={snapContext} /> : null}
       {continuationContext === 'fence' ? <FenceContinuationChips /> : null}
       {continuationContext && continuationContext !== 'fence' ? (
@@ -421,6 +423,7 @@ export function ContextualHelperPanel({
           </div>
         </div>
       ))}
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

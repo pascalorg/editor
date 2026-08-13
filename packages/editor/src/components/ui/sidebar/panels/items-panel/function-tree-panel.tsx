@@ -4,6 +4,7 @@ import type { AssetInput } from '@pascal-app/core'
 import { Root as TooltipRoot } from '@radix-ui/react-tooltip'
 import NextImage from 'next/image'
 import { useMemo, useState } from 'react'
+import { LocalizedContent } from '../../../../../lib/i18n'
 import { triggerSFX } from '../../../../../lib/sfx-bus'
 import { cn } from '../../../../../lib/utils'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
@@ -115,7 +116,8 @@ export function FunctionTreePanel({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <LocalizedContent>
+      <div className="flex h-full flex-col">
       {/* Root nodes as a category grid — icon when available, otherwise a
           two-letter abbreviation, with the full name in a hover tooltip.
           Mirrors the Build tab's tile grid so the two panels read the same.
@@ -263,6 +265,7 @@ export function FunctionTreePanel({
           />
         )}
       </div>
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

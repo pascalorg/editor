@@ -10,6 +10,10 @@ interface MobileTabBarProps {
 }
 
 export function MobileTabBar({ tabs, activeTab, onTabPress }: MobileTabBarProps) {
+  const orderedTabs = [
+    ...tabs.filter((tab) => tab.id !== 'settings'),
+    ...tabs.filter((tab) => tab.id === 'settings'),
+  ]
   return (
     <div
       className="z-50 flex h-14 shrink-0 border-border/50 border-t bg-sidebar text-sidebar-foreground"
@@ -20,7 +24,7 @@ export function MobileTabBar({ tabs, activeTab, onTabPress }: MobileTabBarProps)
         paddingBottom: 'min(env(safe-area-inset-bottom, 0px), 34px)',
       }}
     >
-      {tabs.map((tab) => {
+      {orderedTabs.map((tab) => {
         const isActive = activeTab === tab.id
         return (
           <button

@@ -3,6 +3,7 @@
 import type { AssetInput } from '@pascal-app/core'
 import NextImage from 'next/image'
 import { useEffect, useState } from 'react'
+import { LocalizedContent } from '../../../../../lib/i18n'
 import { triggerSFX } from '../../../../../lib/sfx-bus'
 import { cn } from '../../../../../lib/utils'
 import type { CatalogCategory } from '../../../../../store/use-editor'
@@ -193,7 +194,8 @@ function LegacyItemsPanel({
     }).length
 
   return (
-    <div className="flex h-full flex-col">
+    <LocalizedContent>
+      <div className="flex h-full flex-col">
       {/* Category tabs */}
       <div className="flex shrink-0 flex-wrap gap-1 border-border/70 border-b p-2">
         {furnishTools.map((cat) => {
@@ -399,6 +401,7 @@ function LegacyItemsPanel({
           />
         )}
       </div>
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

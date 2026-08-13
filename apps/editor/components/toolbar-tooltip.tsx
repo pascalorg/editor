@@ -1,5 +1,6 @@
 'use client'
 
+import { translateReactNode, useUiPreferences } from '@pascal-app/editor'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 import type * as React from 'react'
 import { cn } from '@/lib/utils'
@@ -19,8 +20,16 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
   )
 }
 
-function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  return <TooltipPrimitive.Trigger {...props} />
+function TooltipTrigger({
+  children,
+  ...props
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+  const locale = useUiPreferences((state) => state.locale)
+  return (
+    <TooltipPrimitive.Trigger {...props}>
+      {translateReactNode(children, locale)}
+    </TooltipPrimitive.Trigger>
+  )
 }
 
 function TooltipContent({
@@ -29,6 +38,7 @@ function TooltipContent({
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -39,7 +49,7 @@ function TooltipContent({
         sideOffset={sideOffset}
         {...props}
       >
-        {children}
+        {translateReactNode(children, locale)}
         <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-foreground fill-foreground" />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>

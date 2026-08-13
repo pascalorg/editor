@@ -5,6 +5,7 @@ import {
   type FloorplanMode,
   getFloorplanNodeExtension,
   isFloorplanToolAvailableInMode,
+  LocalizedContent,
   MaterialPaintPanel,
   TerrainSculptPanel,
   triggerSFX,
@@ -297,260 +298,266 @@ export function BuildTab() {
   }, [buildTypes, handleTypeClick])
 
   return (
-    <div className="flex h-full flex-col gap-3 p-3">
-      <TooltipProvider delayDuration={0} disableHoverableContent>
-        <div
-          className="grid gap-1.5"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
-        >
-          {buildTypes.map((type) => {
-            const active = isTypeActive(type)
-            return (
-              <Tooltip key={type.id}>
-                <TooltipTrigger asChild>
-                  <button
-                    className={cn(
-                      'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
-                      active
-                        ? 'bg-primary/10 ring-1 ring-primary/50'
-                        : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
-                    )}
-                    onClick={() => {
-                      triggerSFX('sfx:menu-click')
-                      handleTypeClick(type)
-                    }}
-                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                    type="button"
-                  >
-                    <Image
-                      alt={type.label}
-                      className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                      height={48}
-                      src={type.iconSrc}
-                      width={48}
-                    />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="pointer-events-none" side="top">
-                  {type.label}
-                </TooltipContent>
-              </Tooltip>
-            )
-          })}
-        </div>
-      </TooltipProvider>
+    <LocalizedContent>
+      <div className="flex h-full flex-col gap-3 p-3">
+        <TooltipProvider delayDuration={0} disableHoverableContent>
+          <div
+            className="grid gap-1.5"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+          >
+            {buildTypes.map((type) => {
+              const active = isTypeActive(type)
+              return (
+                <Tooltip key={type.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      className={cn(
+                        'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                        active
+                          ? 'bg-primary/10 ring-1 ring-primary/50'
+                          : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                      )}
+                      onClick={() => {
+                        triggerSFX('sfx:menu-click')
+                        handleTypeClick(type)
+                      }}
+                      onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                      type="button"
+                    >
+                      <Image
+                        alt={type.label}
+                        className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                        height={48}
+                        src={type.iconSrc}
+                        width={48}
+                      />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="pointer-events-none" side="top">
+                    {type.label}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </div>
+        </TooltipProvider>
 
-      {mode === 'material-paint' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <MaterialPaintPanel />
-        </div>
-      ) : mode === 'terrain-sculpt' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <TerrainSculptPanel />
-        </div>
-      ) : mode === 'build' &&
-        (activeTool === 'roof' || isRoofFeatureActive) &&
-        roofFeatures.length > 0 ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Features</div>
-          <TooltipProvider delayDuration={0} disableHoverableContent>
-            <div
-              className="grid gap-1.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
-            >
-              {roofFeatures.map((feature) => {
-                const active = mode === 'build' && activeTool === feature.kind
-                return (
-                  <Tooltip key={feature.kind}>
-                    <TooltipTrigger asChild>
-                      <button
-                        className={cn(
-                          'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
-                          active
-                            ? 'bg-primary/10 ring-1 ring-primary/50'
-                            : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
-                        )}
-                        onClick={() => {
-                          triggerSFX('sfx:menu-click')
-                          activateRoofFeatureTool(feature.kind)
-                        }}
-                        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                        type="button"
-                      >
-                        <Image
-                          alt={feature.label}
-                          className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                          height={48}
-                          src={feature.iconSrc}
-                          width={48}
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="pointer-events-none" side="top">
-                      {feature.label}
-                    </TooltipContent>
-                  </Tooltip>
-                )
-              })}
-            </div>
-          </TooltipProvider>
-        </div>
-      ) : isMepActive ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">MEP</div>
-          <TooltipProvider delayDuration={0} disableHoverableContent>
-            <div
-              className="grid gap-1.5 px-0.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
-            >
-              {MEP_ITEMS.map((item) => {
-                const active = isMepItemActive(item)
-                return (
-                  <Tooltip key={item.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        className={cn(
-                          'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
-                          active
-                            ? 'bg-primary/10 ring-1 ring-primary/50'
-                            : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
-                        )}
-                        onClick={() => {
-                          triggerSFX('sfx:menu-click')
-                          activateBuildTool(item.kind)
-                        }}
-                        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                        type="button"
-                      >
-                        <Image
-                          alt={item.label}
-                          className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                          height={48}
-                          src={item.iconSrc}
-                          width={48}
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="pointer-events-none" side="top">
-                      {item.label}
-                    </TooltipContent>
-                  </Tooltip>
-                )
-              })}
-            </div>
-          </TooltipProvider>
+        {mode === 'material-paint' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <MaterialPaintPanel />
+          </div>
+        ) : mode === 'terrain-sculpt' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <TerrainSculptPanel />
+          </div>
+        ) : mode === 'build' &&
+          (activeTool === 'roof' || isRoofFeatureActive) &&
+          roofFeatures.length > 0 ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+            <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Features</div>
+            <TooltipProvider delayDuration={0} disableHoverableContent>
+              <div
+                className="grid gap-1.5"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+              >
+                {roofFeatures.map((feature) => {
+                  const active = mode === 'build' && activeTool === feature.kind
+                  return (
+                    <Tooltip key={feature.kind}>
+                      <TooltipTrigger asChild>
+                        <button
+                          className={cn(
+                            'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                            active
+                              ? 'bg-primary/10 ring-1 ring-primary/50'
+                              : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                          )}
+                          onClick={() => {
+                            triggerSFX('sfx:menu-click')
+                            activateRoofFeatureTool(feature.kind)
+                          }}
+                          onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                          type="button"
+                        >
+                          <Image
+                            alt={feature.label}
+                            className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                            height={48}
+                            src={feature.iconSrc}
+                            width={48}
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="pointer-events-none" side="top">
+                        {feature.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </div>
+            </TooltipProvider>
+          </div>
+        ) : isMepActive ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+            <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">MEP</div>
+            <TooltipProvider delayDuration={0} disableHoverableContent>
+              <div
+                className="grid gap-1.5 px-0.5"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+              >
+                {MEP_ITEMS.map((item) => {
+                  const active = isMepItemActive(item)
+                  return (
+                    <Tooltip key={item.id}>
+                      <TooltipTrigger asChild>
+                        <button
+                          className={cn(
+                            'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
+                            active
+                              ? 'bg-primary/10 ring-1 ring-primary/50'
+                              : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                          )}
+                          onClick={() => {
+                            triggerSFX('sfx:menu-click')
+                            activateBuildTool(item.kind)
+                          }}
+                          onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                          type="button"
+                        >
+                          <Image
+                            alt={item.label}
+                            className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                            height={48}
+                            src={item.iconSrc}
+                            width={48}
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="pointer-events-none" side="top">
+                        {item.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </div>
+            </TooltipProvider>
 
-          {ductContext ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs">Duct</span>
-              <button
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  activeTool === 'duct-fitting'
-                    ? 'bg-primary/10 ring-1 ring-primary/50'
-                    : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  activateBuildTool(activeTool === 'duct-fitting' ? 'duct-segment' : 'duct-fitting')
-                }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <Image
-                  alt=""
-                  aria-hidden
-                  className="size-4 object-contain"
-                  height={16}
-                  src="/icons/duct-fitting.webp"
-                  width={16}
-                />
-                Add Fitting
-              </button>
-            </div>
-          ) : null}
+            {ductContext ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-xs">Duct</span>
+                <button
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                    activeTool === 'duct-fitting'
+                      ? 'bg-primary/10 ring-1 ring-primary/50'
+                      : 'bg-muted/40 hover:bg-muted',
+                  )}
+                  onClick={() => {
+                    triggerSFX('sfx:menu-click')
+                    activateBuildTool(
+                      activeTool === 'duct-fitting' ? 'duct-segment' : 'duct-fitting',
+                    )
+                  }}
+                  onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                  type="button"
+                >
+                  <Image
+                    alt=""
+                    aria-hidden
+                    className="size-4 object-contain"
+                    height={16}
+                    src="/icons/duct-fitting.webp"
+                    width={16}
+                  />
+                  Add Fitting
+                </button>
+              </div>
+            ) : null}
 
-          {pipeContext ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs">DWV Pipe</span>
-              <button
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  activeTool === 'pipe-fitting'
-                    ? 'bg-primary/10 ring-1 ring-primary/50'
-                    : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  activateBuildTool(activeTool === 'pipe-fitting' ? 'pipe-segment' : 'pipe-fitting')
-                }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <Image
-                  alt=""
-                  aria-hidden
-                  className="size-4 object-contain"
-                  height={16}
-                  src="/icons/duct-fitting.webp"
-                  width={16}
-                />
-                Add Fitting
-              </button>
-              <button
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  activeTool === 'pipe-trap'
-                    ? 'bg-primary/10 ring-1 ring-primary/50'
-                    : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  activateBuildTool(activeTool === 'pipe-trap' ? 'pipe-segment' : 'pipe-trap')
-                }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <Image
-                  alt=""
-                  aria-hidden
-                  className="size-4 object-contain"
-                  height={16}
-                  src="/icons/dwv-pipes.webp"
-                  width={16}
-                />
-                Add Trap
-              </button>
-            </div>
-          ) : null}
+            {pipeContext ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-xs">DWV Pipe</span>
+                <button
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                    activeTool === 'pipe-fitting'
+                      ? 'bg-primary/10 ring-1 ring-primary/50'
+                      : 'bg-muted/40 hover:bg-muted',
+                  )}
+                  onClick={() => {
+                    triggerSFX('sfx:menu-click')
+                    activateBuildTool(
+                      activeTool === 'pipe-fitting' ? 'pipe-segment' : 'pipe-fitting',
+                    )
+                  }}
+                  onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                  type="button"
+                >
+                  <Image
+                    alt=""
+                    aria-hidden
+                    className="size-4 object-contain"
+                    height={16}
+                    src="/icons/duct-fitting.webp"
+                    width={16}
+                  />
+                  Add Fitting
+                </button>
+                <button
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                    activeTool === 'pipe-trap'
+                      ? 'bg-primary/10 ring-1 ring-primary/50'
+                      : 'bg-muted/40 hover:bg-muted',
+                  )}
+                  onClick={() => {
+                    triggerSFX('sfx:menu-click')
+                    activateBuildTool(activeTool === 'pipe-trap' ? 'pipe-segment' : 'pipe-trap')
+                  }}
+                  onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                  type="button"
+                >
+                  <Image
+                    alt=""
+                    aria-hidden
+                    className="size-4 object-contain"
+                    height={16}
+                    src="/icons/dwv-pipes.webp"
+                    width={16}
+                  />
+                  Add Trap
+                </button>
+              </div>
+            ) : null}
 
-          {liquidLineContext ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs">Liquid Line</span>
-              <button
-                className={cn(
-                  'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  follow ? 'bg-primary/10 ring-1 ring-primary/50' : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  toggleFollow()
-                }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <span>Follow lineset</span>
-                <span className="text-muted-foreground text-xs">{follow ? 'On' : 'Off'}</span>
-              </button>
-              <span className="px-1 text-[11px] text-muted-foreground">
-                {follow
-                  ? 'Click a lineset to lay the line beside it.'
-                  : 'Trace a line alongside an existing lineset (F).'}
-              </span>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+            {liquidLineContext ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-muted-foreground text-xs">Liquid Line</span>
+                <button
+                  className={cn(
+                    'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
+                    follow ? 'bg-primary/10 ring-1 ring-primary/50' : 'bg-muted/40 hover:bg-muted',
+                  )}
+                  onClick={() => {
+                    triggerSFX('sfx:menu-click')
+                    toggleFollow()
+                  }}
+                  onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                  type="button"
+                >
+                  <span>Follow lineset</span>
+                  <span className="text-muted-foreground text-xs">{follow ? 'On' : 'Off'}</span>
+                </button>
+                <span className="px-1 text-[11px] text-muted-foreground">
+                  {follow
+                    ? 'Click a lineset to lay the line beside it.'
+                    : 'Trace a line alongside an existing lineset (F).'}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </LocalizedContent>
   )
 }

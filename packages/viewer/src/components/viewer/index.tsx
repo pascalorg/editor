@@ -93,12 +93,12 @@ const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakS
 /**
  * Renderer-level safety net against the empty-vertex-buffer crash.
  *
- * Wraps the per-object render function so any draw whose geometry has a count-0
- * `position` attribute is skipped instead of submitted. One such draw leaves
- * WebGPU vertex buffer slot 0 unbound, which the validator rejects and which
- * poisons the *whole* command encoder — so a single stray empty mesh (e.g. a
- * transient placeholder, or a derived edge/outline geometry) flickers the entire
- * canvas, not just itself. See `hasDrawableGeometry`.
+ * Wraps the per-object render function so draws with no effective vertices are
+ * skipped instead of submitted. This covers both an empty `position` attribute
+ * and a non-empty geometry whose index, draw range, or material group resolves
+ * to zero. WebGPU still validates the pipeline's vertex buffers for `Draw(0)`,
+ * so one such no-op can poison the *whole* command encoder and flicker the entire
+ * canvas. See `hasDrawableGeometry`.
  *
  * The custom render-object function is the documented three.js hook for this
  * (`Renderer.setRenderObjectFunction`); it must call `renderObject()` for
@@ -119,11 +119,11 @@ function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
       clippingContext: any,
       passId: any,
     ) => {
-      if (!hasDrawableGeometry(geometry)) {
+      if (!hasDrawableGeometry(geometry, group)) {
         if (warnedEmptyDraw && !warnedEmptyDraw.has(geometry ?? object)) {
           warnedEmptyDraw.add(geometry ?? object)
           console.warn(
-            '[viewer] skipped a draw with an empty position buffer (would poison the WebGPU command encoder)',
+            '[viewer] skipped a draw with no effective vertices (would poison the WebGPU command encoder)',
             { name: object?.name, type: object?.type, material: material?.name },
           )
         }
@@ -320,6 +320,7 @@ function SceneReadyTracker({
 
 interface ViewerProps {
   children?: React.ReactNode
+  unsupportedGpuFallback?: React.ReactNode
   hoverStyles?: HoverStyles
   selectionManager?: 'default' | 'custom'
   perf?: boolean
@@ -379,6 +380,7 @@ export type ViewerHandle = {
 const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   {
     children,
+    unsupportedGpuFallback,
     hoverStyles = DEFAULT_HOVER_STYLES,
     selectionManager = 'default',
     perf = false,
@@ -495,7 +497,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   }, [showGpuFallback, onSceneReadyChange])
 
   if (showGpuFallback) {
-    return <UnsupportedGpuViewerFallback />
+    return unsupportedGpuFallback ?? <UnsupportedGpuViewerFallback />
   }
   return (
     <Canvas

@@ -242,7 +242,7 @@ export function EditorLayoutV2({
   }
 
   return (
-    <div className="dark flex h-full w-full flex-col bg-sidebar text-foreground">
+    <div className="flex h-full w-full flex-col bg-sidebar text-foreground">
       {/* Top navbar */}
       {navbarSlot}
 

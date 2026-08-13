@@ -1,6 +1,8 @@
 'use client'
 
 import { Check } from 'lucide-react'
+import { translate } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 interface ToggleControlProps {
@@ -11,16 +13,17 @@ interface ToggleControlProps {
 }
 
 export function ToggleControl({ label, checked, onChange, className }: ToggleControlProps) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <div
       className={cn(
-        'group flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm transition-colors hover:bg-[#3e3e3e]',
+        'group flex h-10 w-full cursor-pointer items-center justify-between rounded-lg border border-border/50 bg-secondary px-3 text-sm transition-colors hover:bg-accent',
         className,
       )}
       onClick={() => onChange(!checked)}
     >
       <div className="select-none text-muted-foreground transition-colors group-hover:text-foreground">
-        {label}
+        {translate(label, locale)}
       </div>
 
       <div
@@ -28,7 +31,7 @@ export function ToggleControl({ label, checked, onChange, className }: ToggleCon
           'flex h-5 w-5 items-center justify-center rounded-[4px] border transition-all duration-200',
           checked
             ? 'border-primary bg-primary text-primary-foreground'
-            : 'border-border bg-black/20 text-transparent group-hover:border-muted-foreground',
+            : 'border-border bg-background/40 text-transparent group-hover:border-muted-foreground',
         )}
       >
         <Check className="h-3.5 w-3.5" strokeWidth={3} />

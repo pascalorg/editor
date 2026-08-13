@@ -8,6 +8,8 @@ import {
   parseMeasurement,
 } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
+import { translateReactNode } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 interface SliderControlProps {
@@ -65,6 +67,7 @@ export function SliderControl({
   unit = '',
   restoreOnCommit = true,
 }: SliderControlProps) {
+  const locale = useUiPreferences((state) => state.locale)
   // Display/storage conversion so the value honors the metric/imperial toggle.
   // `value`, `onChange`, `onCommit`, `min`/`max`/`clamp` are always in the
   // stored unit (meters for `unit === 'm'`); the step, drag deltas, text field
@@ -306,7 +309,7 @@ export function SliderControl({
             <div className="h-[2px] w-[2px] rounded-full bg-current" key={i} />
           ))}
         </div>
-        <span className="font-medium">{label}</span>
+        <span className="font-medium">{translateReactNode(label, locale)}</span>
       </div>
 
       <div className="flex-1" />

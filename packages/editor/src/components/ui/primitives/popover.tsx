@@ -3,22 +3,31 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import type * as React from 'react'
 
+import { translateReactNode } from '../../../lib/i18n'
+import { useUiPreferences } from '../../../lib/ui-preferences'
 import { cn } from '../../../lib/utils'
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
 
-function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
-  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
+function PopoverTrigger({ children, ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
+  const locale = useUiPreferences((state) => state.locale)
+  return (
+    <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props}>
+      {translateReactNode(children, locale)}
+    </PopoverPrimitive.Trigger>
+  )
 }
 
 function PopoverContent({
   className,
   align = 'center',
   sideOffset = 4,
+  children,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  const locale = useUiPreferences((state) => state.locale)
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
@@ -30,7 +39,9 @@ function PopoverContent({
         data-slot="popover-content"
         sideOffset={sideOffset}
         {...props}
-      />
+      >
+        {translateReactNode(children, locale)}
+      </PopoverPrimitive.Content>
     </PopoverPrimitive.Portal>
   )
 }

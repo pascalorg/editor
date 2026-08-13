@@ -56,7 +56,7 @@ export function MobilePanelSheet({ open, onClose, icon, title, children }: Mobil
       {open && (
         <motion.div
           animate={{ y: 0 }}
-          className="dark fixed right-0 bottom-0 left-0 z-[60] flex flex-col overflow-hidden rounded-t-2xl bg-sidebar text-sidebar-foreground shadow-[0_-8px_24px_rgba(0,0,0,0.24)]"
+          className="fixed right-0 bottom-0 left-0 z-[60] flex flex-col overflow-hidden rounded-t-2xl bg-sidebar text-sidebar-foreground shadow-[0_-8px_24px_rgba(0,0,0,0.24)]"
           drag="y"
           dragConstraints={{ top: 0, bottom: 0 }}
           dragElastic={{ top: 0, bottom: 0.4 }}
@@ -89,7 +89,7 @@ export function MobilePanelSheet({ open, onClose, icon, title, children }: Mobil
             </div>
             <button
               aria-label="Close"
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+              className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               onClick={onClose}
               type="button"
             >

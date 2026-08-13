@@ -8,6 +8,7 @@ import {
   Editor,
   type SceneGraph,
   type SidebarTab,
+  useTranslation,
 } from '@pascal-app/editor'
 import { Hammer, Layers } from 'lucide-react'
 import Image from 'next/image'
@@ -93,6 +94,7 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+  const t = useTranslation()
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
@@ -199,9 +201,9 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     <div className="relative h-screen w-screen">
       {conflict && (
         <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
-          <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
+          <h2 className="font-semibold text-sm">{t('Another session saved first — refresh?')}</h2>
           <p className="mt-1 text-muted-foreground text-xs">
-            Your changes haven&apos;t been saved. Reload to pick up the latest version.
+            {t("Your changes haven't been saved. Reload to pick up the latest version.")}
           </p>
           <div className="mt-3 flex items-center gap-2">
             <button
@@ -209,21 +211,21 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
               onClick={() => router.refresh()}
               type="button"
             >
-              Reload
+              {t('Reload')}
             </button>
             <button
               className="rounded-md border border-border bg-background px-3 py-1.5 font-medium text-xs hover:bg-accent/40"
               onClick={() => setConflict(false)}
               type="button"
             >
-              Dismiss
+              {t('Dismiss')}
             </button>
           </div>
         </div>
       )}
       {saveError && !conflict && (
         <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-destructive/50 bg-background p-3 shadow-xl">
-          <p className="font-medium text-destructive text-xs">{saveError}</p>
+          <p className="font-medium text-destructive text-xs">{t(saveError)}</p>
         </div>
       )}
       <Editor
@@ -241,17 +243,19 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
                       lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`,
                     )
                   }
-                  title="Son işlem hattını atlar — GPU'ya daha hafif, ortam gölgelemesi ve seçim konturu olmadan"
+                  title={t(
+                    'Skips post-processing — lighter on the GPU, without ambient shading or selection outlines',
+                  )}
                   type="button"
                 >
-                  Hafif önizleme
+                  {t('Light preview')}
                 </button>
                 <Link className={TOP_BAR_ACTION} href="/scenes">
-                  Kayıtlı sahneler
+                  {t('Saved scenes')}
                 </Link>
               </>
             }
-            status={saveError ? 'Kaydedilemedi' : `Sürüm ${meta.version}`}
+            status={saveError ? t('Not saved') : `${t('Version')} ${meta.version}`}
             title={meta.name}
           />
         }

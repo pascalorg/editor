@@ -9,6 +9,7 @@
 // `loaded` guard inside `../lib/bootstrap` keeps the side effect
 // idempotent under HMR.
 import '../lib/bootstrap'
+import { UiPreferencesSync } from '@pascal-app/editor'
 import { type ReactNode, useEffect } from 'react'
 
 export function ClientBootstrap({
@@ -22,5 +23,10 @@ export function ClientBootstrap({
     if (!enableDevDiagnostics) return
     import('react-scan').then(({ scan }) => scan({ enabled: true }))
   }, [enableDevDiagnostics])
-  return children
+  return (
+    <>
+      <UiPreferencesSync />
+      {children}
+    </>
+  )
 }

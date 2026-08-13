@@ -23,14 +23,11 @@ export function EditorTopBar({ title, status, actions }: EditorTopBarProps) {
   return (
     <header className="flex h-12 flex-shrink-0 items-stretch border-border border-b-2 bg-background text-foreground">
       <div className="flex w-14 flex-shrink-0 items-center justify-center border-border border-r-2">
-        {/* The editor shell is always dark, so the mark is inverted outright
-            rather than through a theme-conditional filter. */}
         <Image
           alt="Menart"
-          className="h-6 w-6 object-contain"
+          className="h-6 w-6 object-contain dark:invert"
           height={24}
           src="/menartlogo.webp"
-          style={{ filter: 'invert(1)' }}
           width={24}
         />
       </div>

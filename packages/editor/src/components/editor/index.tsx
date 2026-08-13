@@ -24,6 +24,7 @@ import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useMeasurementInputBridge } from '../../hooks/use-measurement-input-bridge'
+import { LocalizedContent, translate, useTranslation } from '../../lib/i18n'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
 import {
   applySceneGraphToEditor,
@@ -32,6 +33,7 @@ import {
   writePersistedSelection,
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
+import { useUiPreferences } from '../../lib/ui-preferences'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
@@ -216,29 +218,48 @@ export interface EditorProps {
 
 function EditorSceneCrashFallback() {
   return (
-    <div className="fixed inset-0 z-80 flex items-center justify-center bg-background/95 p-4 text-foreground">
-      <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
-        <h2 className="font-semibold text-lg">The editor scene failed to render</h2>
-        <p className="mt-2 text-muted-foreground text-sm">
-          You can retry the scene or return home without reloading the whole app shell.
-        </p>
-        <div className="mt-4 flex items-center gap-2">
-          <button
-            className="rounded-md border border-border bg-accent px-3 py-2 font-medium text-sm hover:bg-accent/80"
-            onClick={() => window.location.reload()}
-            type="button"
-          >
-            Reload editor
-          </button>
-          <a
-            className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40"
-            href="/"
-          >
-            Back to home
-          </a>
+    <LocalizedContent>
+      <div className="fixed inset-0 z-80 flex items-center justify-center bg-background/95 p-4 text-foreground">
+        <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 shadow-xl">
+          <h2 className="font-semibold text-lg">The editor scene failed to render</h2>
+          <p className="mt-2 text-muted-foreground text-sm">
+            You can retry the scene or return home without reloading the whole app shell.
+          </p>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              className="rounded-md border border-border bg-accent px-3 py-2 font-medium text-sm hover:bg-accent/80"
+              onClick={() => window.location.reload()}
+              type="button"
+            >
+              Reload editor
+            </button>
+            <a
+              className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40"
+              href="/"
+            >
+              Back to home
+            </a>
+          </div>
         </div>
       </div>
-    </div>
+    </LocalizedContent>
+  )
+}
+
+function EditorUnsupportedGpuFallback() {
+  return (
+    <LocalizedContent>
+      <div className="flex h-full min-h-64 w-full items-center justify-center bg-background p-6 text-center text-foreground">
+        <div className="max-w-md rounded-2xl border border-border bg-background p-6 shadow-sm">
+          <h2 className="font-semibold text-lg">3D viewer unavailable</h2>
+          <p className="mt-2 text-muted-foreground text-sm">
+            This browser or environment could not initialize WebGPU or WebGL, so Pascal cannot
+            render the 3D scene here. Try opening the editor in a browser with hardware acceleration
+            enabled.
+          </p>
+        </div>
+      </div>
+    </LocalizedContent>
   )
 }
 
@@ -451,18 +472,19 @@ function writeCameraControlsHintDismissed(dismissed: boolean) {
 }
 
 function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
+  const t = useTranslation()
   const meta = CAMERA_SHORTCUT_KEY_META[shortcutKey.value]
 
   if (meta?.icon) {
     return (
       <span
-        aria-label={meta.label}
+        aria-label={t(meta.label)}
         className="inline-flex items-center text-foreground/90"
         role="img"
-        title={meta.label}
+        title={t(meta.label)}
       >
         <Icon aria-hidden="true" color="currentColor" height={16} icon={meta.icon} width={16} />
-        <span className="sr-only">{meta.label}</span>
+        <span className="sr-only">{t(meta.label)}</span>
       </span>
     )
   }
@@ -488,10 +510,11 @@ function ShortcutSequence({ keys }: { keys: ShortcutKey[] }) {
 }
 
 function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
+  const t = useTranslation()
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 px-4 text-center first:pl-0 last:pr-0">
       <span className="font-medium text-[10px] text-muted-foreground/60 tracking-[0.03em]">
-        {hint.action}
+        {t(hint.action)}
       </span>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
         <ShortcutSequence keys={hint.keys} />
@@ -516,39 +539,41 @@ function ViewerCanvasControlsHint({
   const hints = isPreviewMode ? PREVIEW_CAMERA_CONTROL_HINTS : EDITOR_CAMERA_CONTROL_HINTS
 
   return (
-    <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
-      <section
-        aria-label="Camera controls hint"
-        className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
-      >
-        <div className="grid min-w-0 flex-1 grid-cols-3 items-start divide-x divide-border/18">
-          {hints.map((hint) => (
-            <CameraControlHintItem hint={hint} key={hint.action} />
-          ))}
-        </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              aria-label="Dismiss camera controls hint"
-              className="flex h-5 shrink-0 items-center justify-center self-center border-border/18 border-l pl-3 text-muted-foreground/70 transition-colors hover:text-foreground"
-              onClick={onDismiss}
-              type="button"
-            >
-              <Icon
-                aria-hidden="true"
-                color="currentColor"
-                height={14}
-                icon="lucide:x"
-                width={14}
-              />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={8}>
-            Dismiss
-          </TooltipContent>
-        </Tooltip>
-      </section>
-    </div>
+    <LocalizedContent>
+      <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
+        <section
+          aria-label="Camera controls hint"
+          className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
+        >
+          <div className="grid min-w-0 flex-1 grid-cols-3 items-start divide-x divide-border/18">
+            {hints.map((hint) => (
+              <CameraControlHintItem hint={hint} key={hint.action} />
+            ))}
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                aria-label="Dismiss camera controls hint"
+                className="flex h-5 shrink-0 items-center justify-center self-center border-border/18 border-l pl-3 text-muted-foreground/70 transition-colors hover:text-foreground"
+                onClick={onDismiss}
+                type="button"
+              >
+                <Icon
+                  aria-hidden="true"
+                  color="currentColor"
+                  height={14}
+                  icon="lucide:x"
+                  width={14}
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8}>
+              Dismiss
+            </TooltipContent>
+          </Tooltip>
+        </section>
+      </div>
+    </LocalizedContent>
   )
 }
 
@@ -1106,6 +1131,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             renderContext="editor"
             sceneReadyKey={sceneReadyKey}
             selectionManager={isFirstPersonMode ? 'default' : 'custom'}
+            unsupportedGpuFallback={<EditorUnsupportedGpuFallback />}
           >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
@@ -1154,6 +1180,7 @@ export default function Editor({
   extraSidebarPanels,
   commandPaletteEmptyAction,
 }: EditorProps) {
+  const locale = useUiPreferences((state) => state.locale)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
 
@@ -1266,13 +1293,6 @@ export default function Editor({
     return releaseReadOnly
   }, [isVersionPreviewMode])
 
-  useEffect(() => {
-    document.body.classList.add('dark')
-    return () => {
-      document.body.classList.remove('dark')
-    }
-  }, [])
-
   const handleSceneReadyChange = useCallback((ready: boolean) => {
     setIsViewerSceneReady(ready)
   }, [])
@@ -1339,6 +1359,7 @@ export default function Editor({
       hoverStyles={EDITOR_HOVER_STYLES}
       renderContext="editor"
       selectionManager="default"
+      unsupportedGpuFallback={<EditorUnsupportedGpuFallback />}
     >
       <ExportManager />
       <ViewerZoneSystem />
@@ -1379,14 +1400,19 @@ export default function Editor({
     if (!tabMap.has('components')) {
       tabMap.set('components', {
         id: 'components',
-        label: 'Components',
+        label: translate('Components', locale),
         icon: <Icon height={22} icon="lucide:boxes" width={22} />,
         component: ComponentsPanel,
       })
     }
     for (const p of hostRailPanels) {
       if (!tabMap.has(p.id)) {
-        tabMap.set(p.id, { id: p.id, label: p.label, icon: p.icon, component: p.component })
+        tabMap.set(p.id, {
+          id: p.id,
+          label: translate(p.label, locale),
+          icon: p.icon,
+          component: p.component,
+        })
       }
     }
 
@@ -1405,19 +1431,28 @@ export default function Editor({
       return <Component />
     }
 
-    const tabBarTabs = [
-      ...(sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon }) => ({
+    const explicitTabs =
+      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon }) => ({
         id,
-        label,
+        label: translate(label, locale),
         mobileDefaultSnap,
         mobileIcon,
         icon,
-      })) ?? []),
+      })) ?? []
+    const settingsTab = explicitTabs.find((tab) => tab.id === 'settings') ?? {
+      id: 'settings',
+      label: translate('Settings', locale),
+      mobileDefaultSnap: 0.5,
+      mobileIcon: <Icon height={20} icon="lucide:settings" width={20} />,
+      icon: <Icon height={22} icon="lucide:settings" width={22} />,
+    }
+    const tabBarTabs = [
+      ...explicitTabs.filter((tab) => tab.id !== 'settings'),
       ...(!sidebarTabs?.some((tab) => tab.id === 'components')
         ? [
             {
               id: 'components',
-              label: 'Components',
+              label: translate('Components', locale),
               mobileDefaultSnap: 0.5,
               mobileIcon: <Icon height={20} icon="lucide:boxes" width={20} />,
               icon: <Icon height={22} icon="lucide:boxes" width={22} />,
@@ -1428,11 +1463,12 @@ export default function Editor({
       // doubles as the mobile icon; a half-height sheet is a sensible default.
       ...hostRailPanels.map((p) => ({
         id: p.id,
-        label: p.label,
+        label: translate(p.label, locale),
         mobileDefaultSnap: 0.5,
         mobileIcon: p.icon,
         icon: p.icon,
       })),
+      settingsTab,
     ]
 
     return (
@@ -1445,7 +1481,7 @@ export default function Editor({
         )}
 
         {!isLoading && isPreviewMode ? (
-          <div className="dark flex h-full w-full flex-col bg-neutral-100 text-foreground">
+          <div className="flex h-full w-full flex-col bg-background text-foreground">
             {isFirstPersonMode ? (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
             ) : (
@@ -1512,7 +1548,7 @@ export default function Editor({
   const overlayLeft = LAYOUT_PADDING + (isSidebarCollapsed ? 8 : sidebarWidth) + LAYOUT_GAP
 
   return (
-    <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
+    <div className="flex h-full w-full gap-3 bg-background p-3 text-foreground">
       <FloorplanModeCoordinator />
       {showLoader && (
         <div className="fixed inset-0 z-60">

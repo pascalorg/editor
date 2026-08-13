@@ -192,8 +192,8 @@ function ViewModeControl() {
               className={cn(
                 'flex items-center justify-center gap-1.5 px-2.5 font-medium text-xs transition-colors',
                 isActive
-                  ? 'bg-white/10 text-foreground'
-                  : 'text-muted-foreground/70 hover:bg-white/8 hover:text-muted-foreground',
+                  ? 'bg-accent text-foreground'
+                  : 'text-muted-foreground/70 hover:bg-accent hover:text-foreground',
               )}
               onClick={() => setViewMode(mode.id)}
               type="button"
@@ -260,7 +260,7 @@ function LevelModeToggle() {
         className={cn(
           TOOLBAR_BTN,
           'w-auto gap-1.5 px-2.5',
-          !isDefault && 'bg-white/10 text-foreground/90',
+          !isDefault && 'bg-accent text-foreground/90',
         )}
         onClick={cycle}
         type="button"
@@ -296,7 +296,7 @@ function WallModeToggle() {
           TOOLBAR_BTN,
           'w-auto gap-1.5 px-2.5',
           wallMode !== 'cutaway'
-            ? 'bg-white/10'
+            ? 'bg-accent'
             : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0',
         )}
         onClick={cycle}
@@ -683,7 +683,7 @@ function PreviewButton() {
   return (
     <ToolbarTooltip label="Preview mode">
       <button
-        className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/90"
+        className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-accent hover:text-foreground/90"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >
