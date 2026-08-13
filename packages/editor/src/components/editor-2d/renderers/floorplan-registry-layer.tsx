@@ -114,7 +114,7 @@ import {
   svgAnnotationLabelId,
 } from './floorplan-annotation-layout'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
-import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
+import { FloorplanGeometryRenderer, formatTransform } from './floorplan-geometry-renderer'
 import {
   resolveFloorplanAnnotationUpdate,
   resolveFloorplanLabelAngle,
@@ -2370,7 +2370,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
   function renderInteractive(g: FloorplanGeometry, keyHint: number): React.ReactElement {
     switch (g.kind) {
       case 'group': {
-        const transform = formatGroupTransform(g.transform)
+        const transform = formatTransform(g.transform)
         return (
           <g
             data-floorplan-annotation-obstacle={
@@ -3523,8 +3523,13 @@ function depsValueEqual(a: unknown, b: unknown): boolean {
  * sits under everything with a higher rank. SVG renders in document
  * order, so an earlier entry in the array ends up beneath a later one.
  *
- * Three buckets today:
- *   0 — `zone`: conceptual area regions, always under everything else.
+ * Four buckets today:
+ *  -1 — `cad-underlay`: the traced reference drawing, under everything by
+ *       definition. It used to fall into the default bucket and therefore
+ *       sort among the walls, so whether the drawing you were tracing sat
+ *       under or over your work came down to scene tree order. 3D has always
+ *       pinned it with `renderOrder = -1`.
+ *   0 — `zone`: conceptual area regions, under everything built.
  *   1 — `slab` / `ceiling`: the floor / ceiling surface; sits over the
  *       zone but under any structural / furniture geometry placed on it.
  *   2 — every other kind (walls, items, shelves, columns, stairs, …):
@@ -3535,6 +3540,8 @@ function depsValueEqual(a: unknown, b: unknown): boolean {
  */
 export function floorplanLayerRank(type: string): number {
   switch (type) {
+    case 'cad-underlay':
+      return -1
     case 'zone':
       return 0
     case 'slab':
@@ -3660,17 +3667,6 @@ export function RotationAngleOverlay({
       </g>
     </g>
   )
-}
-
-function formatGroupTransform(t?: {
-  translate?: readonly [number, number]
-  rotate?: number
-}): string | undefined {
-  if (!t) return undefined
-  const parts: string[] = []
-  if (t.translate) parts.push(`translate(${t.translate[0]} ${t.translate[1]})`)
-  if (t.rotate !== undefined) parts.push(`rotate(${(t.rotate * 180) / Math.PI})`)
-  return parts.length > 0 ? parts.join(' ') : undefined
 }
 
 function swallowNextClick(timeoutMs = 0) {

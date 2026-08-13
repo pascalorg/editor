@@ -15,6 +15,7 @@ import {
   FLOORPLAN_NODE_EXTENSION_KEY,
   floorplanGeometryMetadata,
 } from '../../../lib/floorplan/floorplan-extension'
+import { formatTransform } from './floorplan-geometry-renderer'
 import {
   cancelFloorplanAffordanceDrag,
   collectFloorplanDependencyNodes,
@@ -22,6 +23,7 @@ import {
   computeAffectedSiblingIds,
   floorplanAffordanceReshapeScope,
   floorplanHandleDoubleClickAffordance,
+  floorplanLayerRank,
   InteractiveGeometry,
   isFloorplanOpeningPlacementState,
   resolveFloorplanHandleUnitsPerPixel,
@@ -583,5 +585,66 @@ describe('collectFloorplanLinkedLevelNodes', () => {
         new Set([parent.id as AnyNodeId]),
       ),
     ).toEqual([])
+  })
+})
+
+describe('floorplanLayerRank', () => {
+  // SVG paints in document order, so the rank is the only thing keeping a
+  // traced drawing under the work traced on top of it.
+  test('the CAD underlay sits under everything', () => {
+    for (const type of ['zone', 'slab', 'ceiling', 'wall', 'item', 'column', 'stair']) {
+      expect(floorplanLayerRank('cad-underlay')).toBeLessThan(floorplanLayerRank(type))
+    }
+  })
+
+  test('matches the 3D stacking, where the underlay is pinned behind', () => {
+    // The 3D renderer sets `renderOrder = -1` on the underlay; the plan has to
+    // agree or the same drawing reads as an overlay in one view and an
+    // underlay in the other.
+    expect(floorplanLayerRank('cad-underlay')).toBeLessThan(0)
+  })
+
+  test('keeps the surfaces between zones and structure', () => {
+    expect(floorplanLayerRank('zone')).toBeLessThan(floorplanLayerRank('slab'))
+    expect(floorplanLayerRank('slab')).toBe(floorplanLayerRank('ceiling'))
+    expect(floorplanLayerRank('slab')).toBeLessThan(floorplanLayerRank('wall'))
+  })
+
+  test('an unknown kind lands with the structure rather than under it', () => {
+    expect(floorplanLayerRank('trees:tree')).toBe(floorplanLayerRank('wall'))
+  })
+})
+
+describe('group transform formatting', () => {
+  // The interactive layer used to carry its own formatter that handled
+  // translate and rotate but dropped `scale` — and whose parameter type
+  // omitted the field, so the compiler stayed quiet. The CAD underlay is the
+  // only kind that uses `scale`, so its drawing came out a hundred times too
+  // large in the one view you actually draw on. Both layers now share this.
+  test('carries scale, which is what the CAD underlay rides on', () => {
+    expect(formatTransform({ translate: [0, 0], rotate: 0, scale: 0.01 })).toBe(
+      'translate(0 0) rotate(0) scale(0.01)',
+    )
+  })
+
+  test('omits a scale of one rather than emitting a no-op', () => {
+    expect(formatTransform({ translate: [1, 2], rotate: 0, scale: 1 })).toBe(
+      'translate(1 2) rotate(0)',
+    )
+  })
+
+  test('converts the data layer radians into SVG degrees', () => {
+    expect(formatTransform({ rotate: Math.PI / 2 })).toBe('rotate(90)')
+  })
+
+  test('an absent transform emits no attribute at all', () => {
+    expect(formatTransform(undefined)).toBeUndefined()
+    expect(formatTransform({})).toBeUndefined()
+  })
+
+  test('composes in SVG order — translate, then rotate, then scale', () => {
+    expect(formatTransform({ translate: [3, 4], rotate: Math.PI, scale: 2 })).toBe(
+      'translate(3 4) rotate(180) scale(2)',
+    )
   })
 })

@@ -595,7 +595,17 @@ function pointsToAttr(points: readonly (readonly [number, number])[]): string {
   return points.map(([x, y]) => `${x},${y}`).join(' ')
 }
 
-function formatTransform(t?: {
+/**
+ * The one place a `kind: 'group'` transform becomes an SVG transform string.
+ *
+ * Exported because the interactive registry layer renders the same geometry
+ * contract and used to carry its own copy — one that handled `translate` and
+ * `rotate` but silently dropped `scale`, and whose parameter type omitted the
+ * field so the compiler never noticed. The CAD underlay is the only kind that
+ * uses `scale` (its path data is in drawing units), so a scaled drawing came
+ * out a hundred times too large in the view you actually draw on.
+ */
+export function formatTransform(t?: {
   translate?: readonly [number, number]
   rotate?: number
   scale?: number

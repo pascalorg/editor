@@ -94,9 +94,27 @@ describe('buildCadUnderlayFloorplan', () => {
     if (geometry?.kind !== 'group') throw new Error('expected a group')
     expect(geometry.transform).toEqual({
       translate: [4, -2],
-      rotate: Math.PI / 2,
+      // Negated: a Three.js Y-rotation and an SVG `rotate()` turn opposite
+      // ways, so the same stored value has to be flipped to look the same in
+      // both views. Every other rotatable kind's plan builder does this.
+      rotate: -Math.PI / 2,
       scale: 0.001,
     })
+  })
+
+  test('turns the same way as the 3D renderer', () => {
+    primeCadUnderlay(URL, drawing())
+    // The 3D renderer applies `rotation[1]` about +Y, which reads as
+    // anticlockwise from above; SVG's rotate() is clockwise on screen. The
+    // plan transform must therefore carry the opposite sign, or a rotated
+    // drawing lands mirrored between the two viewports.
+    const quarterTurn = buildCadUnderlayFloorplan(node({ rotation: [0, Math.PI / 2, 0] }), context)
+    if (quarterTurn?.kind !== 'group') throw new Error('expected a group')
+    expect(quarterTurn.transform?.rotate).toBeCloseTo(-Math.PI / 2, 9)
+
+    const unrotated = buildCadUnderlayFloorplan(node({ rotation: [0, 0, 0] }), context)
+    if (unrotated?.kind !== 'group') throw new Error('expected a group')
+    expect(unrotated.transform?.rotate).toBe(0)
   })
 
   test('keeps a constant hairline instead of scaling the stroke with the drawing', () => {

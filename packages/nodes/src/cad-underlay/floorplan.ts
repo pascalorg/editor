@@ -52,7 +52,15 @@ export function buildCadUnderlayFloorplan(
     // which would have to be regenerated on every calibration change.
     transform: {
       translate: [node.position[0], node.position[2]],
-      rotate: node.rotation[1],
+      // Negated, like every other rotatable kind's plan builder. A Three.js
+      // Y-rotation and an SVG `rotate()` turn opposite ways once plan Z maps
+      // onto screen Y, so passing `rotation[1]` straight through spun the
+      // drawing the wrong way in 2D — the same value, two directions.
+      //
+      // `+ 0` normalises the negative zero that negating an unrotated drawing
+      // produces. It renders identically but fails `Object.is`, which is
+      // enough to trip an identity comparison downstream.
+      rotate: -node.rotation[1] + 0,
       scale: node.scale,
     },
     children,
