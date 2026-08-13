@@ -12,7 +12,7 @@
 - [ ] 2.3 Phase 1: carry formwork topology on the solution — formed faces, faces against earth/existing/blinding, meetings between elements, shared versus double-formed — rather than only re-deriving it in the validator
 - [ ] 2.4 Test the shared face is counted once in area, panels and cost, and an unformed face appears in no layout
 - [ ] 2.5 Phase 2: permitted construction-joint elevations as project data, respected by pour splitting, with the conflict reported when no permitted joint satisfies the pour limits, and solver-chosen boundaries labelled as such
-- [ ] 2.6 Phase 3: concrete-supply check — batch-plant output and/or pump rate against the designed rise rate for the element's plan area — reporting the sustainable rate and naming supply as governing; absent supply reports "not performed"
+- [x] 2.6 Phase 3: concrete-supply check — batch-plant output and/or pump rate against the designed rise rate for the element's plan area — reporting the sustainable rate and naming supply as governing; absent supply reports "not performed"
 - [ ] 2.7 Phase 3: alternate-bay construction respected in the sequence, reporting the parity used
 - [ ] 2.8 Phase 10: strength/maturity striking criterion beside the elapsed-time one, reporting which governs and the accumulated maturity; a criterion lacking its inputs falls back to time and says so
 
@@ -36,28 +36,28 @@
 
 ## 5. Rated pressure and the inverse rate solve
 
-- [ ] 5.1 One module holding both the rated-pressure check and the inverse maximum-rise-rate solve, so they cannot disagree
-- [ ] 5.2 Check derived pressure against the system's rated pressure, reporting both figures and the utilisation; failure names the panel system, not a component
-- [ ] 5.3 Suppress the conventional component checks (sheeting, joist, waler, tie) for panel-system elements
-- [ ] 5.4 Report the maximum permissible rise rate per panel-formed pour, at the pour's stated temperature, consistency, cement type and admixture condition
-- [ ] 5.5 Test the consistency scenario: a pour designed at exactly the reported maximum rate passes at full utilisation
-- [ ] 5.6 Report the pour whose full head alone exceeds the rating as satisfied by no rate, naming the lift height or head rather than reporting zero
-- [ ] 5.7 Reconcile against the project's stated rate and its supply, naming which of the three governs
+- [x] 5.1 One module holding both the rated-pressure check and the inverse maximum-rise-rate solve, so they cannot disagree
+- [x] 5.2 Check derived pressure against the system's rated pressure, reporting both figures and the utilisation; failure names the panel system, not a component
+- [x] 5.3 Suppress the conventional component checks (sheeting, joist, waler, tie) for panel-system elements
+- [x] 5.4 Report the maximum permissible rise rate per panel-formed pour, at the pour's stated temperature, consistency, cement type and admixture condition
+- [x] 5.5 Test the consistency scenario: a pour designed at exactly the reported maximum rate passes at full utilisation
+- [x] 5.6 Report the pour whose full head alone exceeds the rating as satisfied by no rate, naming the lift height or head rather than reporting zero
+- [x] 5.7 Reconcile against the project's stated rate and its supply, naming which of the three governs
 
 ## 6. Cut set-covering and trim
 
-- [ ] 6.1 Search combinations of the stated purchasable sheet sizes with a stated objective (least cost or least waste), reporting the objective, the counts per size and the offcut area
+- [x] 6.1 Search combinations of the stated purchasable sheet sizes with a stated objective (least cost or least waste), reporting the objective, the counts per size and the offcut area
 - [ ] 6.2 Regression guard: a single stated sheet size reproduces today's cut solution exactly
-- [ ] 6.3 Report an uncuttable piece with its dimensions and the largest stated sheet, excluded from the counts rather than silently absent
+- [x] 6.3 Report an uncuttable piece with its dimensions and the largest stated sheet, excluded from the counts rather than silently absent
 - [ ] 6.4 Cover a repeated floor once — sheets per cycle plus the replacements the stated life implies — and state the reuse assumed
-- [ ] 6.5 Per-cut-edge trim allowance applied in placement, with the offcut area distinguishing trim loss from unused sheet area; no stated allowance means none applied
+- [x] 6.5 Per-cut-edge trim allowance applied in placement, with the offcut area distinguishing trim loss from unused sheet area; no stated allowance means none applied
 
 ## 7. Amortisation and finance
 
-- [ ] 7.1 Widen `SheetStock.expectedReuses` into an asset-life shape (purchase price, expected uses, residual value) available on panels, sheeting, beams, props, ties and accessories
-- [ ] 7.2 Charge an asset with a life per use, reporting the price, life, residual value and per-use figure; charge one without a life at today's internal recharge and name the basis
-- [ ] 7.3 Test that no owned item appears in any total at zero under either basis
-- [ ] 7.4 Report amortised and recharge lines as distinguishable, with the total stating it combines both bases
+- [x] 7.1 Widen `SheetStock.expectedReuses` into an asset-life shape (purchase price, expected uses, residual value) available on panels, sheeting, beams, props, ties and accessories
+- [x] 7.2 Charge an asset with a life per use, reporting the price, life, residual value and per-use figure; charge one without a life at today's internal recharge and name the basis
+- [x] 7.3 Test that no owned item appears in any total at zero under either basis
+- [x] 7.4 Report amortised and recharge lines as distinguishable, with the total stating it combines both bases
 - [ ] 7.5 Report a use count exceeding the stated life as an overrun, naming the replacement it implies
 - [ ] 7.6 Finance cost from a stated rate over the spend-to-recovery period, reported beside and outside the cash total; test the cash total is unchanged by its presence; no rate means no figure; the figure states its rate, period and any pours excluded for being undated
 

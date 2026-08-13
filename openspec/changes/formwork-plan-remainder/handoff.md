@@ -14,7 +14,12 @@ The master plan the whole thing is measured against is `~/.claude/plans/currentl
 
 ## Where the last session stopped
 
-- **Last commit: `9511790d`** `feat(formwork): which sheets to buy, and where the saw starts` — set-covering over the stated sheet sizes plus a per-edge trim allowance, 16 files, 364 insertions. All four gates passed on it.
+- **Last commit: `8c5743fd`** `feat(formwork): the concrete has to arrive` — closes **2.6 and 5.7 together**, because neither is answerable alone: the check needs the supply input, and the input is only meaningful once something decides which of the three ceilings governs. `concreteSupply` is the eighth undefaulted settings group; `RiseRateLimit` now carries `governing`/`effectiveRateMH`; the 23rd invariant is a warning, not an error. All four gates passed.
+- **Before it, `5e659e5b`** `feat(formwork): a panel's life, rather than a rent the yard never pays` — closes **7.1–7.4**. What group 7 still owes is 7.5 (needs the set count's `reuseFactor`, which `bomCost` is not given) and 7.6 (finance, no payment date in the model).
+- **The checkboxes in `tasks.md` are now ticked for the first time**, for the 15 items verified as shipped: 2.6, all of group 5, 6.1/6.3/6.5, 7.1–7.4. **6.2 and 6.4 are left unticked as unverified rather than as owed** — P5 reads 100% and the handoff below says nothing on cut optimisation is still owed, so check those two against the code before writing anything for them.
+- Groups 11–13 are **half-shipped and not ticked**: `value-engineer.ts` and `compare_formwork_systems` land on all three surfaces, but deliberately do not *write* (taking an option is `set_formwork_settings parts.systemId`), so 12.x's apply-and-measure pair and 13.x's apply-by-key do not exist.
+- Group 4 is **procurement-blocked**: 4.1's "registered-but-unseeded system" presupposes a system that does not exist in the catalog, so the code items cannot be written before the seeds land.
+
 - **The planning artifacts are committed** (`7908ed24`); `openspec validate --changes --strict` passed at 1/0 when they went in. The untracked-scaffolding question is answered and closed.
 - **Two plan rows have closed since these specs were written, and neither came out of `tasks.md`.** `6f84abda` honours an engineer-placed lift joint in the pour split (P6 → 78%; the recorded gap "joint-elevation snapping has no schema home" was wrong — the home existed and no caller ever passed limits, so both the snap and `LIFT_JOINT_OFF_PERMITTED_ELEVATION` were dead in the running app), and `9511790d` closes **P5 outright at 100%**. Re-read the status doc's completion table before picking a task: some of what these specs list as remainder has shipped.
 - The working tree is clean.
