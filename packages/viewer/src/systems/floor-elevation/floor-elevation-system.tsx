@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import type * as THREE from 'three'
+import { stampFrozenTransform } from '../../lib/static-transform'
 
 type PositionedNode = AnyNode & {
   position?: [number, number, number]
@@ -107,6 +108,10 @@ export const FloorElevationSystem = () => {
         maxElevation: liveTransform?.supportElevationCap,
       })
       mesh.position.y = visualPosition[1]
+      // Statik-donmuş bir grupta (matrixAutoUpdate=false) alan yazımı tek
+      // başına ekrana yansımaz — damgalanması gerekir. Otomatik güncellenen
+      // nesnede no-op.
+      stampFrozenTransform(mesh)
 
       if (!(def.geometry || def.system) && dirtyNodes.has(id)) {
         clearDirty(id)
