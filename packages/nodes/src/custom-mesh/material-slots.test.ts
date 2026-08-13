@@ -2,14 +2,32 @@ import { describe, expect, test } from 'bun:test'
 import { createBoxCustomMeshTopology } from '@pascal-app/core'
 import {
   assignCustomMeshMaterial,
+  collectReusableCustomMeshMaterialRefs,
   customMeshMaterialSelection,
   customMeshMaterialSlotIds,
-  removeUnusedCustomMeshMaterialSlots,
+  removeCustomMeshMaterialSlot,
   selectCustomMeshFacesByMaterialSlot,
-  unusedCustomMeshMaterialSlotIds,
 } from './material-slots'
 
 describe('custom mesh material slots', () => {
+  test('offers catalog refs already used in scene slots when no scene materials exist', () => {
+    expect(
+      collectReusableCustomMeshMaterialRefs([{ slots: { body: 'library:metal-steel' } }], []),
+    ).toEqual(['library:metal-steel'])
+  })
+
+  test('deduplicates used refs and includes unused reusable scene materials', () => {
+    expect(
+      collectReusableCustomMeshMaterialRefs(
+        [
+          { slots: { body: 'scene:mat_shared', accent: 'library:oak' } },
+          { slots: { trim: 'scene:mat_shared', invalid: 'not-a-material-ref' } },
+        ],
+        ['mat_shared', 'mat_unused'],
+      ),
+    ).toEqual(['scene:mat_shared', 'library:oak', 'scene:mat_unused'])
+  })
+
   test('lists body, persisted, and face-referenced slots in stable order', () => {
     const topology = createBoxCustomMeshTopology()
     topology.faces[0] = { ...topology.faces[0], materialSlot: 'orphaned' }
@@ -59,39 +77,43 @@ describe('custom mesh material slots', () => {
     ).toEqual(['f-bottom'])
   })
 
-  test('removes only unused object slots while preserving body and face references', () => {
+  test('removes a material slot and remaps all of its faces to the first slot', () => {
     const topology = createBoxCustomMeshTopology()
     topology.faces[1] = { ...topology.faces[1], materialSlot: 'accent' }
-    const slots = {
-      body: 'scene:body',
-      accent: 'scene:accent',
-      discarded: 'scene:shared',
-    }
+    topology.faces[2] = { ...topology.faces[2], materialSlot: 'accent' }
 
-    expect(unusedCustomMeshMaterialSlotIds(topology, slots)).toEqual(['discarded'])
-    expect(removeUnusedCustomMeshMaterialSlots(topology, slots)).toEqual({
-      slots: {
-        body: 'scene:body',
-        accent: 'scene:accent',
-      },
-      removedSlotIds: ['discarded'],
-      changed: true,
-    })
+    const result = removeCustomMeshMaterialSlot(
+      topology,
+      { body: 'scene:body', accent: 'scene:accent', trim: 'scene:trim' },
+      'accent',
+    )
+
+    expect(result.changed).toBe(true)
+    expect(result.fallbackSlotId).toBe('body')
+    expect(result.topology.faces.slice(1, 3).map((face) => face.materialSlot)).toEqual([
+      'body',
+      'body',
+    ])
+    expect(result.slots).toEqual({ body: 'scene:body', trim: 'scene:trim' })
     expect(topology.faces[1].materialSlot).toBe('accent')
   })
 
-  test('keeps slot identity on cleanup no-op and collapses an empty mapping', () => {
+  test('removes an unused slot but never removes the first body slot', () => {
     const topology = createBoxCustomMeshTopology()
-    const slots = { body: 'scene:body' }
-    const noOp = removeUnusedCustomMeshMaterialSlots(topology, slots)
+    const slots = { body: 'scene:body', accent: 'scene:accent' }
 
-    expect(noOp).toEqual({ slots, removedSlotIds: [], changed: false })
-    expect(noOp.slots).toBe(slots)
-    expect(removeUnusedCustomMeshMaterialSlots(topology, { discarded: 'scene:shared' })).toEqual({
-      slots: undefined,
-      removedSlotIds: ['discarded'],
+    const removed = removeCustomMeshMaterialSlot(topology, slots, 'accent')
+    expect(removed).toEqual({
+      topology,
+      slots: { body: 'scene:body' },
+      fallbackSlotId: 'body',
       changed: true,
     })
+
+    const body = removeCustomMeshMaterialSlot(topology, slots, 'body')
+    expect(body).toEqual({ topology, slots, fallbackSlotId: 'body', changed: false })
+    expect(body.topology).toBe(topology)
+    expect(body.slots).toBe(slots)
   })
 
   test('assigns an existing slot to all selected faces in one immutable result', () => {

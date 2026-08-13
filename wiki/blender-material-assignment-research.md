@@ -123,13 +123,13 @@ The Edit Mode session should own an `activeMaterialSlotId`. It should not be per
 A Blender-derived Pascal panel can be compact:
 
 1. **Face Material** section visible in custom-mesh Edit Mode, primarily in Face selection mode.
-2. Active slot/material preview and a searchable reusable-material chooser backed by the current scene materials. Library materials may appear too, but choosing one should resolve/mint the same shared `MaterialRef` used elsewhere in Pascal.
-3. **Assign to selected** as the explicit mutating action, with the selection count in its label or nearby.
+2. Active slot/material preview showing only slots already used by the custom mesh, followed by a compact data-block dropdown for material references already used in the scene plus custom scene materials. The full catalog remains in the global Paint tool instead of being duplicated in this inspector.
+3. **Assign to selected** as the explicit mutating action for reusing an existing mesh slot, with the selection count in its label or nearby.
 4. **Select faces** and **Deselect faces** for the active slot; these are valuable once models have many faces.
-5. An add-slot path that reuses a scene Material instead of creating a duplicate.
-6. Slot rename and remove/cleanup can be deferred; removal needs an explicit Pascal fallback policy because stable IDs do not require Blender's accidental preceding-slot remap.
+5. Painting a face with the global Paint tool adds or reuses an object slot by `MaterialRef` identity.
+6. Deleting a non-body slot remaps its faces to the permanent first slot (`body`) in the same update; deleting a mesh-local slot never deletes the reusable material.
 
-For a faster UX, clicking a material search result could perform “ensure object slot + assign to selected” in one undoable command. If adopted, label it as assignment and keep slot editing elsewhere; silently replacing the active slot's shared material reference would have much broader effects.
+Painting a face performs “ensure object slot + assign this face” in one undoable command. It never silently replaces the active slot's shared material reference, which would have much broader effects.
 
 ### Material identity and slot deduplication
 
@@ -155,7 +155,8 @@ This is more important than matching Blender's exact removal remap because custo
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | New custom mesh                                              | All faces resolve through the single `body` slot and show one material.                                 |
 | Click a face                                                 | The face becomes active/selected and the panel follows its assigned material.                           |
-| Select several faces, choose a reused scene material, Assign | One object slot is reused or created; every selected face points to it; unselected faces are unchanged. |
+| Paint a face with a reusable material                         | One object slot is reused or created; only the painted face points to it.                                |
+| Select several faces, choose an existing mesh slot, Assign   | Every selected face points to that slot; unselected faces are unchanged.                                 |
 | Selected faces have mixed materials                          | Panel communicates Mixed while preserving the active face/slot; Assign normalizes only the selection.   |
 | Change which slot is active                                  | No face appearance changes until Assign.                                                                |
 | Edit the Material referenced by a slot                       | Every face/object using that reusable Material updates.                                                 |
@@ -164,13 +165,13 @@ This is more important than matching Blender's exact removal remap because custo
 | Reassign a face to `body`                                    | Face returns to the base material; no null/unassigned state is needed.                                  |
 | Undo a 20-face assignment                                    | One undo restores every prior per-face slot assignment.                                                 |
 | Extrude/inset an assigned face                               | New faces follow the documented inheritance rule and every slot reference remains valid.                |
-| Remove an unused object slot                                 | No face changes and the reusable scene Material remains available.                                      |
+| Delete a used non-body object slot                           | Its faces move to `body`, `body` becomes active, and the reusable Material remains available.           |
 
 ## Implemented decisions
 
-1. Pascal exposes the object slot list and reusable scene/library material choices in the custom-mesh inspector.
-2. Material choice and face assignment remain separate; **Assign** is the explicit mutating action.
+1. Pascal exposes the object slot list plus a compact reusable-material dropdown in the custom-mesh inspector. It contains deduplicated material references used by scene node slots and custom scene materials; the full catalog stays in the global Paint tool, which also adds or reuses slots when it paints individual faces.
+2. Choosing a reusable material from the compact dropdown assigns it immediately to the selected faces. Choosing an existing object slot remains non-mutating until **Assign**.
 3. Mixed selections show **Mixed materials**, while the active face continues to drive the active slot.
 4. **Select** and **Deselect** ship with the MVP and modify only transient face selection.
-5. Object-mode cleanup removes unused object-local slots only. `body` remains permanent, reusable scene materials remain available, and no implicit ordinal remapping is introduced.
+5. `body` remains permanent. Per-item deletion remaps affected faces to `body` and preserves reusable scene materials.
 6. Extrude and inset inherit the source face, loop-cut pieces inherit the face they split, and bevel/dissolve use the first adjacent face in stable topology order.

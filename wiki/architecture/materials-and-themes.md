@@ -66,9 +66,13 @@ Each of these reads `shading`/`textures`/`colorPreset`/`sceneTheme` from `useVie
 
 Custom meshes use the reusable `MaterialRef` model at face granularity. `CustomMeshNode.slots` maps stable object-local slot IDs to `scene:` or `library:` references, while each `CustomMeshFace.materialSlot` stores one slot ID. `body` is the permanent base slot and the fallback for unbound or unresolved face slots.
 
-The geometry builder emits one Three.js group per topology face and a material array ordered by the node's stable slot IDs. It publishes the same order as `userData.slotIds`, allowing the paint capability to map a raycast `materialIndex` back to the persistent slot. Face UVs retain the world-scale projection contract below.
+The geometry builder emits one Three.js group per topology face and a material array ordered by the node's stable slot IDs. It publishes that render-material order as `userData.slotIds` and records each face's vertex range in `geometry.userData.customMeshFaces`. The paint capability re-raycasts the mesh and maps the hit triangle through those ranges to a stable topology face ID, so preview and commit affect only that face. Face UVs retain the world-scale projection contract below.
 
-Material choice and face assignment are separate. Choosing an object slot, scene material, or library material changes only the transient assignment source. **Assign** reuses or creates one object slot by exact `MaterialRef` identity and commits `topology` plus `slots` in one `updateNode` call. **Select** and **Deselect** only add or subtract faces using the active slot from transient component selection. Assigning `body` restores the base appearance; there is no unassigned face state.
+The custom-mesh inspector lists only slots already present on that mesh; it does not embed the material library. A compact dropdown below the list exposes deduplicated `MaterialRef`s already used by scene node slots, plus custom scene-material datablocks that are not yet in use. With faces selected in Edit Mode, choosing a reusable material immediately reuses an object slot with the same `MaterialRef`, or creates one when that material is new to the mesh, and assigns it to those faces in one update. Choosing an object slot changes only the transient assignment source; **Assign** applies that slot to the selected faces. **Select** and **Deselect** only add or subtract faces using the active object slot from transient component selection.
+
+Deleting a non-body item from the Face Materials list removes only that mesh-local slot. Every face assigned to it is remapped to the first slot (`body`) in the same node update, and `body` becomes the active assignment source. The reusable scene or library material remains available to other nodes.
+
+The global Paint tool is the creation path for new face materials. A paint hit resolves one topology face, reuses an existing object slot by exact `MaterialRef` identity or creates one stable slot, and assigns only that face. A one-off material reuses a structurally matching scene material before creating a new reusable scene material. Erasing assigns `body`; there is no unassigned face state.
 
 Topology operators preserve assignments deterministically:
 
@@ -77,8 +81,6 @@ Topology operators preserve assignments deterministically:
 - loop-cut pieces inherit the face they split;
 - bevel bands and mixed-material dissolve use the first adjacent face in stable `topology.faces` order;
 - deleting the last face that uses a slot does not delete its reusable material.
-
-Object-mode **Remove unused slots** deletes only object-local slot bindings that no face references. It never removes `body`, remaps faces, or deletes the referenced reusable scene material. Cleanup is disabled during mesh Edit Mode, matching the separation between face assignment and object-level slot structure.
 
 ### External plugin renderers
 

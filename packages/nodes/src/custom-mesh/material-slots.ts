@@ -1,4 +1,9 @@
-import type { CustomMeshTopology, MaterialRef } from '@pascal-app/core'
+import {
+  type CustomMeshTopology,
+  type MaterialRef,
+  parseMaterialRef,
+  toSceneMaterialRef,
+} from '@pascal-app/core'
 
 export const CUSTOM_MESH_BODY_SLOT_ID = 'body'
 
@@ -20,10 +25,35 @@ export type CustomMeshMaterialAssignmentResult = {
   changed: boolean
 }
 
-export type CustomMeshMaterialSlotCleanupResult = {
+export type CustomMeshMaterialSlotRemovalResult = {
+  topology: CustomMeshTopology
   slots: CustomMeshMaterialSlots
-  removedSlotIds: string[]
+  fallbackSlotId: string
   changed: boolean
+}
+
+function materialSlotsFromNode(node: unknown): Record<string, unknown> | null {
+  if (!node || typeof node !== 'object' || !('slots' in node)) return null
+  const slots = (node as { slots?: unknown }).slots
+  return slots && typeof slots === 'object' && !Array.isArray(slots)
+    ? (slots as Record<string, unknown>)
+    : null
+}
+
+export function collectReusableCustomMeshMaterialRefs(
+  nodes: readonly unknown[],
+  sceneMaterialIds: readonly string[],
+): MaterialRef[] {
+  const refs = new Set<MaterialRef>()
+  for (const node of nodes) {
+    const slots = materialSlotsFromNode(node)
+    if (!slots) continue
+    for (const value of Object.values(slots)) {
+      if (typeof value === 'string' && parseMaterialRef(value)) refs.add(value)
+    }
+  }
+  for (const id of sceneMaterialIds) refs.add(toSceneMaterialRef(id))
+  return [...refs]
 }
 
 export function customMeshMaterialSlotIds(
@@ -61,29 +91,35 @@ export function customMeshMaterialSelection(
   return { kind: 'mixed', activeSlotId }
 }
 
-export function unusedCustomMeshMaterialSlotIds(
+export function removeCustomMeshMaterialSlot(
   topology: CustomMeshTopology,
   slots: CustomMeshMaterialSlots,
-): string[] {
-  const used = new Set<string>([
-    CUSTOM_MESH_BODY_SLOT_ID,
-    ...topology.faces.map((face) => face.materialSlot),
-  ])
-  return Object.keys(slots ?? {}).filter((slotId) => !used.has(slotId))
-}
+  slotId: string,
+): CustomMeshMaterialSlotRemovalResult {
+  const slotIds = customMeshMaterialSlotIds(topology, slots)
+  const fallbackSlotId = slotIds[0] ?? CUSTOM_MESH_BODY_SLOT_ID
+  if (slotId === fallbackSlotId || !slotIds.includes(slotId)) {
+    return { topology, slots, fallbackSlotId, changed: false }
+  }
 
-export function removeUnusedCustomMeshMaterialSlots(
-  topology: CustomMeshTopology,
-  slots: CustomMeshMaterialSlots,
-): CustomMeshMaterialSlotCleanupResult {
-  const removedSlotIds = unusedCustomMeshMaterialSlotIds(topology, slots)
-  if (removedSlotIds.length === 0) return { slots, removedSlotIds, changed: false }
+  const remapsFaces = topology.faces.some((face) => face.materialSlot === slotId)
+  const removesBinding = Object.hasOwn(slots ?? {}, slotId)
+  if (!(remapsFaces || removesBinding)) {
+    return { topology, slots, fallbackSlotId, changed: false }
+  }
 
-  const removed = new Set(removedSlotIds)
-  const retainedEntries = Object.entries(slots ?? {}).filter(([slotId]) => !removed.has(slotId))
+  const retainedEntries = Object.entries(slots ?? {}).filter(([candidate]) => candidate !== slotId)
   return {
+    topology: remapsFaces
+      ? {
+          ...topology,
+          faces: topology.faces.map((face) =>
+            face.materialSlot === slotId ? { ...face, materialSlot: fallbackSlotId } : face,
+          ),
+        }
+      : topology,
     slots: retainedEntries.length > 0 ? Object.fromEntries(retainedEntries) : undefined,
-    removedSlotIds,
+    fallbackSlotId,
     changed: true,
   }
 }

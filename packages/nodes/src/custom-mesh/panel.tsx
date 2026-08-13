@@ -5,14 +5,12 @@ import {
   type CustomMeshNode,
   getCatalogMaterialById,
   parseMaterialRef,
-  toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
   createEditorApi,
-  MaterialPicker,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -20,17 +18,19 @@ import {
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Move, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Check, Move, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import useCustomMeshEditSession from './edit-session'
 import {
   assignCustomMeshMaterial,
+  collectReusableCustomMeshMaterialRefs,
   customMeshMaterialSelection,
-  removeUnusedCustomMeshMaterialSlots,
+  removeCustomMeshMaterialSlot,
   selectCustomMeshFacesByMaterialSlot,
-  unusedCustomMeshMaterialSlotIds,
 } from './material-slots'
 import { customMeshSlots } from './slots'
+
+const REUSABLE_MATERIAL_REF_SEPARATOR = '\u001f'
 
 function materialRefLabel(
   ref: string | undefined,
@@ -41,6 +41,27 @@ function materialRefLabel(
   if (parsed.kind === 'scene')
     return sceneMaterials[parsed.id as keyof typeof sceneMaterials]?.name ?? ref ?? parsed.id
   return getCatalogMaterialById(parsed.id)?.label ?? ref ?? parsed.id
+}
+
+function materialRefPreview(
+  ref: string | undefined,
+  sceneMaterials: ReturnType<typeof useScene.getState>['materials'],
+): { color: string; imageUrl?: string } {
+  const parsed = parseMaterialRef(ref)
+  if (!parsed) return { color: '#71717a' }
+  if (parsed.kind === 'scene') {
+    const material = sceneMaterials[parsed.id as keyof typeof sceneMaterials]?.material
+    return {
+      color: material?.properties?.color ?? '#71717a',
+      imageUrl: material?.texture?.url,
+    }
+  }
+  const catalogMaterial = getCatalogMaterialById(parsed.id)
+  return {
+    color:
+      catalogMaterial?.previewColor ?? catalogMaterial?.preset.mapProperties.color ?? '#71717a',
+    imageUrl: catalogMaterial?.previewThumbnailUrl,
+  }
 }
 
 export default function CustomMeshPanel() {
@@ -54,13 +75,22 @@ export default function CustomMeshPanel() {
   const nodeRef = useRef(node)
   nodeRef.current = node
   const sceneMaterials = useScene((state) => state.materials)
+  const reusableMaterialRefsKey = useScene((state) =>
+    collectReusableCustomMeshMaterialRefs(
+      Object.values(state.nodes),
+      Object.keys(state.materials),
+    ).join(REUSABLE_MATERIAL_REF_SEPARATOR),
+  )
+  const reusableMaterialRefs = reusableMaterialRefsKey
+    ? reusableMaterialRefsKey.split(REUSABLE_MATERIAL_REF_SEPARATOR)
+    : []
+  const readOnly = useScene((state) => state.readOnly)
   const editing = useInteractionScope(
     (state) => state.scope.kind === 'mesh-editing' && state.scope.nodeId === selectedId,
   )
   const sessionNodeId = useCustomMeshEditSession((state) => state.nodeId)
   const selection = useCustomMeshEditSession((state) => state.selection)
   const activeMaterialSlotId = useCustomMeshEditSession((state) => state.activeMaterialSlotId)
-  const [pendingMaterialRef, setPendingMaterialRef] = useState<string | null>(null)
 
   const activeFaceSlotId = useMemo(() => {
     if (!(node && sessionNodeId === node.id && selection.mode === 'face')) return null
@@ -77,7 +107,6 @@ export default function CustomMeshPanel() {
     if (syncedActiveFaceRef.current === syncKey) return
     syncedActiveFaceRef.current = syncKey
     useCustomMeshEditSession.getState().setActiveMaterialSlot(nodeId, activeFaceSlotId)
-    setPendingMaterialRef(null)
   }, [activeFaceId, activeFaceSlotId, nodeId])
 
   const close = useCallback(() => {
@@ -129,30 +158,52 @@ export default function CustomMeshPanel() {
   const activeSlotId =
     sessionNodeId === node.id ? activeMaterialSlotId : materialSelection.activeSlotId
   const activeSlotRef = activeSlotId ? node.slots?.[activeSlotId] : undefined
-  const chosenMaterialRef = pendingMaterialRef ?? activeSlotRef
   const canOperateOnFaces = editing && selection.mode === 'face'
-  const unusedSlotIds = unusedCustomMeshMaterialSlotIds(node.topology, node.slots)
+  const faceCountBySlot = new Map<string, number>()
+  for (const face of node.topology.faces) {
+    faceCountBySlot.set(face.materialSlot, (faceCountBySlot.get(face.materialSlot) ?? 0) + 1)
+  }
 
   const chooseSlot = (slotId: string) => {
     useCustomMeshEditSession.getState().setActiveMaterialSlot(node.id, slotId)
-    setPendingMaterialRef(null)
+  }
+
+  const chooseReusableMaterial = (materialRef: string) => {
+    if (!(materialRef && selectedFaceIds.length > 0)) return
+    const result = assignCustomMeshMaterial(node.topology, node.slots, selectedFaceIds, {
+      kind: 'material',
+      materialRef,
+    })
+    if (result.changed) {
+      useScene.getState().updateNode(node.id, {
+        topology: result.topology,
+        slots: result.slots,
+      })
+      triggerSFX('sfx:menu-click')
+    }
+    useCustomMeshEditSession.getState().setActiveMaterialSlot(node.id, result.slotId)
+  }
+
+  const reusableMaterialLabel = (ref: string) => {
+    const parsed = parseMaterialRef(ref)
+    if (!parsed) return ref
+    return parsed.kind === 'scene'
+      ? (sceneMaterials[parsed.id as keyof typeof sceneMaterials]?.name ?? ref)
+      : (getCatalogMaterialById(parsed.id)?.label ?? ref)
   }
 
   const assignMaterial = () => {
-    const assignment = pendingMaterialRef
-      ? { kind: 'material' as const, materialRef: pendingMaterialRef }
-      : activeSlotId
-        ? { kind: 'slot' as const, slotId: activeSlotId }
-        : null
-    if (!assignment) return
-    const result = assignCustomMeshMaterial(node.topology, node.slots, selectedFaceIds, assignment)
+    if (!activeSlotId) return
+    const result = assignCustomMeshMaterial(node.topology, node.slots, selectedFaceIds, {
+      kind: 'slot',
+      slotId: activeSlotId,
+    })
     if (!result.changed) return
     useScene.getState().updateNode(node.id, {
       topology: result.topology,
       slots: result.slots,
     })
     useCustomMeshEditSession.getState().setActiveMaterialSlot(node.id, result.slotId)
-    setPendingMaterialRef(null)
     triggerSFX('sfx:menu-click')
   }
 
@@ -174,11 +225,14 @@ export default function CustomMeshPanel() {
     })
   }
 
-  const removeUnusedSlots = () => {
-    if (editing) return
-    const result = removeUnusedCustomMeshMaterialSlots(node.topology, node.slots)
+  const removeMaterialSlot = (slotId: string) => {
+    const result = removeCustomMeshMaterialSlot(node.topology, node.slots, slotId)
     if (!result.changed) return
-    useScene.getState().updateNode(node.id, { slots: result.slots })
+    useScene.getState().updateNode(node.id, {
+      topology: result.topology,
+      slots: result.slots,
+    })
+    useCustomMeshEditSession.getState().setActiveMaterialSlot(node.id, result.fallbackSlotId)
     triggerSFX('sfx:menu-click')
   }
 
@@ -226,69 +280,100 @@ export default function CustomMeshPanel() {
           {selectionLabel}
         </div>
 
-        <div className="mt-1 grid grid-cols-1 gap-1.5">
-          {slotDeclarations.map((slot) => {
+        <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-border/60 bg-[#252527]">
+          {slotDeclarations.map((slot, index) => {
             const ref = node.slots?.[slot.slotId]
-            const active = !pendingMaterialRef && activeSlotId === slot.slotId
+            const active = activeSlotId === slot.slotId
+            const preview = materialRefPreview(ref, sceneMaterials)
+            const faceCount = faceCountBySlot.get(slot.slotId) ?? 0
+            const materialLabel = materialRefLabel(ref, sceneMaterials)
             return (
-              <button
-                className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${
-                  active
-                    ? 'border-primary bg-primary/10 text-foreground'
-                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground'
-                }`}
-                aria-label={`${slot.label}: ${materialRefLabel(ref, sceneMaterials)}`}
-                aria-pressed={active}
-                disabled={!canOperateOnFaces}
+              <div
+                className={`group flex min-h-11 items-stretch border-border/50 ${
+                  index > 0 ? 'border-t' : ''
+                } ${active ? 'bg-primary/15' : 'hover:bg-white/[0.035]'}`}
                 key={slot.slotId}
-                onClick={() => chooseSlot(slot.slotId)}
-                type="button"
               >
-                <span className="h-5 w-5 shrink-0 rounded border border-border/60 bg-muted" />
-                <span className="min-w-0 flex-1 truncate">{slot.label}</span>
-                <span className="max-w-36 truncate text-[10px] opacity-70">
-                  {materialRefLabel(ref, sceneMaterials)}
-                </span>
-              </button>
+                <button
+                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left disabled:cursor-default"
+                  aria-label={`${slot.label}: ${materialLabel}`}
+                  aria-pressed={active}
+                  disabled={!canOperateOnFaces}
+                  onClick={() => chooseSlot(slot.slotId)}
+                  type="button"
+                >
+                  <span
+                    className="h-7 w-7 shrink-0 rounded-md border border-white/10 bg-cover bg-center shadow-inner"
+                    style={{
+                      backgroundColor: preview.color,
+                      backgroundImage: preview.imageUrl ? `url(${preview.imageUrl})` : undefined,
+                    }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-foreground text-xs">
+                      {materialLabel}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                      {slot.label} · {faceCount} {faceCount === 1 ? 'face' : 'faces'}
+                    </span>
+                  </span>
+                  {active ? <Check aria-hidden="true" className="h-4 w-4 text-primary" /> : null}
+                </button>
+
+                {index > 0 ? (
+                  <button
+                    className="m-2 ml-0 flex w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    aria-label={`Delete ${materialLabel} from face materials`}
+                    disabled={readOnly}
+                    onClick={() => removeMaterialSlot(slot.slotId)}
+                    title="Delete material slot and use Body on its faces"
+                    type="button"
+                  >
+                    <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </div>
             )
           })}
         </div>
 
-        {Object.keys(sceneMaterials).length > 0 ? (
-          <div className="mt-2">
-            <div className="mb-1.5 font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-              Scene materials
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {Object.entries(sceneMaterials).map(([id, sceneMaterial]) => {
-                const ref = toSceneMaterialRef(id)
-                return (
-                  <button
-                    className={`flex min-w-0 items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-xs transition-colors ${
-                      pendingMaterialRef === ref
-                        ? 'border-primary bg-primary/10 text-foreground'
-                        : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground'
-                    }`}
-                    aria-label={`Use scene material ${sceneMaterial.name}`}
-                    aria-pressed={pendingMaterialRef === ref}
-                    disabled={!canOperateOnFaces}
-                    key={id}
-                    onClick={() => setPendingMaterialRef(ref)}
-                    type="button"
-                  >
-                    <span
-                      className="h-5 w-5 shrink-0 rounded border border-border/60"
-                      style={{
-                        backgroundColor: sceneMaterial.material.properties?.color ?? '#fff',
-                      }}
-                    />
-                    <span className="truncate">{sceneMaterial.name}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ) : null}
+        <div className="mt-2">
+          <label
+            className="mb-1 block font-medium text-[10px] text-muted-foreground uppercase tracking-wider"
+            htmlFor={`custom-mesh-reusable-material-${node.id}`}
+          >
+            Reusable material
+          </label>
+          <select
+            className="h-9 w-full rounded-md border border-border/60 bg-[#2C2C2E] px-2.5 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={
+              !canOperateOnFaces ||
+              readOnly ||
+              selectedFaceIds.length === 0 ||
+              reusableMaterialRefs.length === 0
+            }
+            id={`custom-mesh-reusable-material-${node.id}`}
+            onChange={(event) => chooseReusableMaterial(event.target.value)}
+            value={
+              materialSelection.kind !== 'mixed' &&
+              activeSlotRef &&
+              reusableMaterialRefs.includes(activeSlotRef)
+                ? activeSlotRef
+                : ''
+            }
+          >
+            <option value="">
+              {reusableMaterialRefs.length === 0
+                ? 'No reusable materials in this scene'
+                : 'Choose a reusable material…'}
+            </option>
+            {reusableMaterialRefs.map((ref) => (
+              <option key={ref} value={ref}>
+                {reusableMaterialLabel(ref)}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="mt-2 grid grid-cols-3 gap-1.5">
           <ActionButton
@@ -303,35 +388,9 @@ export default function CustomMeshPanel() {
           />
           <ActionButton
             className="border-primary/50 bg-primary/15"
-            disabled={
-              !canOperateOnFaces ||
-              selectedFaceIds.length === 0 ||
-              (!chosenMaterialRef && !activeSlotId)
-            }
+            disabled={!canOperateOnFaces || selectedFaceIds.length === 0 || !activeSlotId}
             label="Assign"
             onClick={assignMaterial}
-          />
-        </div>
-
-        <div className="mt-1.5">
-          <ActionButton
-            disabled={editing || unusedSlotIds.length === 0}
-            label={
-              unusedSlotIds.length === 0
-                ? 'No unused slots'
-                : `Remove unused slots (${unusedSlotIds.length})`
-            }
-            onClick={removeUnusedSlots}
-          />
-        </div>
-      </PanelSection>
-
-      <PanelSection defaultExpanded={false} title="Material Library">
-        <div className="h-72 min-h-0">
-          <MaterialPicker
-            disabled={!canOperateOnFaces}
-            onSelectMaterialPreset={setPendingMaterialRef}
-            selectedMaterialPreset={pendingMaterialRef ?? activeSlotRef}
           />
         </div>
       </PanelSection>

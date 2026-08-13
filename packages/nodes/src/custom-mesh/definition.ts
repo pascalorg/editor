@@ -9,7 +9,6 @@ import { buildCustomMeshGeometry } from './geometry'
 import { customMeshPaint } from './paint'
 import { customMeshParametrics } from './parametrics'
 import { CustomMeshNode } from './schema'
-import { customMeshSlots } from './slots'
 
 export function customMeshBounds(node: CustomMeshNodeType) {
   const xs = node.topology.vertices.map((vertex) => vertex.position[0])
@@ -94,7 +93,6 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
       },
       collides: true,
     },
-    slots: (rawNode) => customMeshSlots(rawNode as CustomMeshNodeType),
     paint: customMeshPaint,
   },
 

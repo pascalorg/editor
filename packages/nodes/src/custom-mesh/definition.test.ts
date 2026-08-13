@@ -20,7 +20,7 @@ describe('custom mesh placement bounds', () => {
     expect(customMeshDefinition.parametrics?.customPanel).toBeFunction()
   })
 
-  test('exposes topology material slots as paintable targets', () => {
+  test('keeps paint face-scoped instead of exposing object-slot fan-out', () => {
     const base = CustomMeshNode.parse({
       name: 'Paintable mesh',
       slots: { accent: 'library:preset-softwhite' },
@@ -37,29 +37,25 @@ describe('custom mesh placement bounds', () => {
     }
     const paint = customMeshDefinition.capabilities.paint
 
-    expect(customMeshDefinition.capabilities.slots?.(node)).toEqual([
-      { slotId: 'body', label: 'Body' },
-      { slotId: 'accent', label: 'Accent' },
-    ])
-    const hitObject = { userData: { slotIds: ['body', 'accent'] } }
-    expect(
-      paint?.resolveRole({
-        node,
-        hitObject: hitObject as never,
-        materialIndex: 1,
-      }),
-    ).toBe('accent')
+    expect(customMeshDefinition.capabilities.slots).toBeUndefined()
+    expect(paint?.commit).toBeFunction()
     expect(
       paint?.buildPatch({
         node,
-        role: 'body',
+        role: 'face_f-bottom',
         material: undefined,
         materialPreset: 'library:metal-steel',
       }),
     ).toEqual({
+      topology: {
+        ...node.topology,
+        faces: node.topology.faces.map((face) =>
+          face.id === 'f-bottom' ? { ...face, materialSlot: 'material-1' } : face,
+        ),
+      },
       slots: {
         accent: 'library:preset-softwhite',
-        body: 'library:metal-steel',
+        'material-1': 'library:metal-steel',
       },
     })
   })
