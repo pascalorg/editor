@@ -89,7 +89,9 @@ export async function loadExternalPlugins(): Promise<void> {
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
 extendPluginDiscovery(async () => [bonesPlugin])
-registerEditorHostPanel(bonesHostPanel)
+// Opt-in: Bones ships uninstalled — users enable it per scene from the
+// Plugins panel (engineering X-ray is a specialist view, not a default).
+registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])
