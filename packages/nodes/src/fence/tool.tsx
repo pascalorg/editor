@@ -369,7 +369,7 @@ function getDraftMeasurementState(
   end: FencePlanPoint,
   segments: SegmentLike[],
   unit: 'metric' | 'imperial',
-  metricNotation: 'meters' | 'millimeters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters',
   baseY: number,
   previewHeight: number,
   previewThickness: number,

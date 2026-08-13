@@ -28,7 +28,7 @@ const palette = {
 const context = (
   unit: 'metric' | 'imperial',
   selected = false,
-  metricNotation: 'meters' | 'millimeters' = 'meters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters' = 'meters',
 ): GeometryContext => ({
   resolve: () => undefined,
   children: [],

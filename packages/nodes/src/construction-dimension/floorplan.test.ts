@@ -35,7 +35,7 @@ function context(
   nodes: Record<string, AnyNode> = {},
   selected = false,
   purpose: 'edit' | 'document' = 'edit',
-  metricNotation?: 'meters' | 'millimeters',
+  metricNotation?: 'meters' | 'centimeters' | 'millimeters',
 ): GeometryContext {
   return {
     resolve: (id) => nodes[id],

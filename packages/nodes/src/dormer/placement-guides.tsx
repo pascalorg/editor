@@ -194,7 +194,7 @@ function Guide({
   unit,
 }: {
   guide: DormerGuide
-  metricNotation: 'meters' | 'millimeters'
+  metricNotation: 'meters' | 'centimeters' | 'millimeters'
   unit: 'metric' | 'imperial'
 }) {
   if (guide.kind === 'badge') {

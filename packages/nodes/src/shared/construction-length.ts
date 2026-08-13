@@ -3,7 +3,7 @@ const IMPERIAL_FRACTION_DENOMINATOR = 16
 
 export type ConstructionLinearUnit = 'metric' | 'imperial'
 export type ConstructionLengthProfile = 'editor' | 'document'
-export type ConstructionMetricNotation = 'meters' | 'millimeters'
+export type ConstructionMetricNotation = 'meters' | 'centimeters' | 'millimeters'
 export type ConstructionImperialPrecision = '1' | '1/2' | '1/4' | '1/8' | '1/16'
 
 export type ConstructionLengthFormatOptions = {
@@ -20,6 +20,12 @@ export function formatConstructionLength(
   if (!Number.isFinite(meters)) return '--'
 
   if (unit === 'metric') {
+    // An explicit centimetre choice outranks the document profile's millimetre
+    // default; `meters` still leaves the document profile on millimetres.
+    if (options.metricNotation === 'centimeters') {
+      return `${Math.round(meters * 100)}`
+    }
+
     if (profile === 'document' || options.metricNotation === 'millimeters') {
       return `${Math.round(meters * 1000)}`
     }

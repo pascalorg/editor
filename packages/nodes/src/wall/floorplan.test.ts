@@ -29,7 +29,7 @@ const palette: FloorplanPalette = {
 function context(
   purpose: 'edit' | 'document',
   selected = false,
-  metricNotation: 'meters' | 'millimeters' = 'meters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters' = 'meters',
   wallDimensionReference: 'finished-faces' | 'centerline' | 'stud-faces' = 'finished-faces',
   automaticDimensions = true,
 ): GeometryContext {

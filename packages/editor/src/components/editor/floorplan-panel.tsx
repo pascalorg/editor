@@ -2657,7 +2657,7 @@ function formatMeasurement(
   value: number,
   unit: 'metric' | 'imperial',
   metersPerUnit: number | null = null,
-  metricNotation: 'meters' | 'millimeters' = 'meters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters' = 'meters',
 ) {
   const measuredValue = metersPerUnit && metersPerUnit > 0 ? value * metersPerUnit : value
   return formatLinearMeasurement(measuredValue, unit, metricNotation)

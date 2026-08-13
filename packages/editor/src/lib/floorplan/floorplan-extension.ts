@@ -14,7 +14,7 @@ export const FLOORPLAN_GEOMETRY_METADATA_KEY = 'pascal:editor/floorplan'
 export const FLOORPLAN_CONTEXT_EXTENSION_KEY = 'pascal:editor/floorplan'
 
 export type FloorplanRenderPurpose = 'edit' | 'document'
-export type FloorplanMetricNotation = 'meters' | 'millimeters'
+export type FloorplanMetricNotation = 'meters' | 'centimeters' | 'millimeters'
 export type FloorplanToolMode = 'default' | 'expert'
 export type FloorplanWallDimensionReference = 'finished-faces' | 'centerline' | 'stud-faces'
 export const DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE = 'finished-faces'
@@ -140,7 +140,7 @@ export function createFloorplanContextExtensions(
     [FLOORPLAN_CONTEXT_EXTENSION_KEY]: {
       automaticDimensions: values.automaticDimensions !== false,
       purpose: values.purpose === 'document' ? 'document' : 'edit',
-      metricNotation: values.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
+      metricNotation: normalizeFloorplanMetricNotation(values.metricNotation),
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
         values.wallDimensionReference,
       ),
@@ -155,7 +155,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
     return {
       automaticDimensions: extension.automaticDimensions !== false,
       purpose: extension.purpose === 'document' ? 'document' : 'edit',
-      metricNotation: extension.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
+      metricNotation: normalizeFloorplanMetricNotation(extension.metricNotation),
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
         extension.wallDimensionReference,
       ),
@@ -169,13 +169,19 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
   }
 }
 
+function normalizeFloorplanMetricNotation(value: unknown): FloorplanMetricNotation {
+  return isFloorplanMetricNotation(value) ? value : 'meters'
+}
+
+function isFloorplanMetricNotation(value: unknown): value is FloorplanMetricNotation {
+  return value === 'meters' || value === 'centimeters' || value === 'millimeters'
+}
+
 export function readFloorplanMetricNotationOverride(
   ctx: GeometryContext,
 ): FloorplanMetricNotation | undefined {
   const value = ctx.extensions?.[FLOORPLAN_CONTEXT_EXTENSION_KEY]
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const metricNotation = (value as { metricNotation?: unknown }).metricNotation
-  return metricNotation === 'meters' || metricNotation === 'millimeters'
-    ? metricNotation
-    : undefined
+  return isFloorplanMetricNotation(metricNotation) ? metricNotation : undefined
 }

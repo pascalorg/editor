@@ -29,7 +29,7 @@ function ZonePlanSketch({
   unit,
 }: {
   edgeLengths: readonly number[]
-  metricNotation: 'meters' | 'millimeters'
+  metricNotation: 'meters' | 'centimeters' | 'millimeters'
   polygon: readonly Point2D[]
   unit: 'metric' | 'imperial'
 }) {

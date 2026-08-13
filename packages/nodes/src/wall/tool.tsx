@@ -367,7 +367,7 @@ function getDraftMeasurementState(
   end: WallPlanPoint,
   walls: WallNode[],
   unit: 'metric' | 'imperial',
-  metricNotation: 'meters' | 'millimeters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters',
   baseY: number,
   previewHeight: number,
 ): DraftMeasurementState {

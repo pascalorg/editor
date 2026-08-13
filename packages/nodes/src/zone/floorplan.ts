@@ -153,7 +153,7 @@ function buildRoomLabels(
   y: number,
   unit: 'metric' | 'imperial',
   profile: ConstructionLengthProfile,
-  metricNotation: 'meters' | 'millimeters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters',
   color: string,
 ): FloorplanGeometry[] {
   const lines: Array<{ text: string; fontSize: number; fontWeight: number }> = []

@@ -81,6 +81,19 @@ describe('linear measurements', () => {
     expect(formatLinearMeasurement(-0.0005, 'metric', 'millimeters')).toBe('-1mm')
   })
 
+  test('formats metric measurements in whole centimeters', () => {
+    expect(formatLinearMeasurement(3.456, 'metric', 'centimeters')).toBe('346cm')
+    expect(formatLinearMeasurement(-0.1524, 'metric', 'centimeters')).toBe('-15cm')
+    expect(formatLinearMeasurement(0.2, 'metric', 'centimeters')).toBe('20cm')
+    expect(formatLinearMeasurement(18.4, 'metric', 'centimeters')).toBe('1840cm')
+    expect(formatLinearMeasurement(0.005, 'metric', 'centimeters')).toBe('1cm')
+    expect(formatLinearMeasurement(-0.005, 'metric', 'centimeters')).toBe('-1cm')
+  })
+
+  test('drops the sign when a centimetre value rounds to zero', () => {
+    expect(formatLinearMeasurement(-0.001, 'metric', 'centimeters')).toBe('0cm')
+  })
+
   test('formats imperial measurements as feet and inches', () => {
     expect(formatLinearMeasurement(3.048, 'imperial')).toBe(`10'0"`)
     expect(formatLinearMeasurement(3.2004, 'imperial')).toBe(`10'6"`)

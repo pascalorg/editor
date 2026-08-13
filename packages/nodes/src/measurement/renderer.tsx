@@ -291,7 +291,7 @@ function buildRenderData(measurement: ResolvedMeasurementPayload): MeasurementRe
 function formatMeasurement(
   measurement: ResolvedMeasurementPayload,
   unit: 'metric' | 'imperial',
-  metricNotation: 'meters' | 'millimeters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters',
 ): string {
   if (measurement.kind === 'distance') {
     return formatLinearMeasurement(measurementDistance(...measurement.points), unit, metricNotation)

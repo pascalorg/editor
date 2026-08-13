@@ -332,7 +332,7 @@ type NodeDeps = {
   node: AnyNode
   live: LiveTransform | undefined
   unit: 'metric' | 'imperial'
-  metricNotation: 'meters' | 'millimeters'
+  metricNotation: 'meters' | 'centimeters' | 'millimeters'
   wallDimensionReference: FloorplanWallDimensionReference
   selected: boolean
   highlighted: boolean
@@ -1800,7 +1800,7 @@ type FloorplanRegistryEntryProps = {
   setMovingNodeOrigin: ReturnType<typeof useEditor.getState>['setMovingNodeOrigin']
   siblingEpoch: number
   unit: 'metric' | 'imperial'
-  metricNotation: 'meters' | 'millimeters'
+  metricNotation: 'meters' | 'centimeters' | 'millimeters'
   wallDimensionReference: FloorplanWallDimensionReference
   visibilityRootId: AnyNodeId | undefined
 }
@@ -2042,7 +2042,7 @@ type BuildFloorplanEntryGeometryArgs = {
   selected: boolean
   siblingEpoch: number
   unit: 'metric' | 'imperial'
-  metricNotation: 'meters' | 'millimeters'
+  metricNotation: 'meters' | 'centimeters' | 'millimeters'
   wallDimensionReference: FloorplanWallDimensionReference
   visibilityRootId: AnyNodeId | undefined
 }
@@ -3171,7 +3171,7 @@ export function buildContext(
     automaticDimensions?: boolean
     selected: boolean
     unit: 'metric' | 'imperial'
-    metricNotation?: 'meters' | 'millimeters'
+    metricNotation?: 'meters' | 'centimeters' | 'millimeters'
     purpose?: 'edit' | 'document'
     wallDimensionReference?: FloorplanWallDimensionReference
     highlighted: boolean

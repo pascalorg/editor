@@ -58,7 +58,7 @@ export const ConstructionDimensionTerminator = z.enum([
 ])
 export const ConstructionDimensionTextPosition = z.enum(['above', 'centered'])
 export const ConstructionDimensionImperialPrecision = z.enum(['1', '1/2', '1/4', '1/8', '1/16'])
-export const ConstructionDimensionMetricNotation = z.enum(['meters', 'millimeters'])
+export const ConstructionDimensionMetricNotation = z.enum(['meters', 'centimeters', 'millimeters'])
 
 export const ConstructionDimensionNode = BaseNode.extend({
   id: objectId('construction-dimension'),

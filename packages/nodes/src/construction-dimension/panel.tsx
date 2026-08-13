@@ -77,6 +77,7 @@ const METRIC_NOTATION_OPTIONS: Array<{
   value: ConstructionDimensionMetricNotation
 }> = [
   { label: 'Meters', value: 'meters' },
+  { label: 'Centimeters', value: 'centimeters' },
   { label: 'Millimeters', value: 'millimeters' },
 ]
 

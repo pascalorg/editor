@@ -98,7 +98,7 @@ function GuideLine({
   unit,
 }: {
   guide: AlignmentGuide
-  metricNotation: 'meters' | 'millimeters'
+  metricNotation: 'meters' | 'centimeters' | 'millimeters'
   unit: 'metric' | 'imperial'
 }) {
   const { x: fx, z: fz } = guide.from

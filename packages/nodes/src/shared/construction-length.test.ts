@@ -21,6 +21,13 @@ describe('formatConstructionLength profiles', () => {
       formatConstructionLength(1.524, 'metric', 'editor', { metricNotation: 'millimeters' }),
     ).toBe('1524')
     expect(
+      formatConstructionLength(1.524, 'metric', 'editor', { metricNotation: 'centimeters' }),
+    ).toBe('152')
+    // An explicit centimetre choice outranks the document profile's millimetres.
+    expect(
+      formatConstructionLength(1.524, 'metric', 'document', { metricNotation: 'centimeters' }),
+    ).toBe('152')
+    expect(
       formatConstructionLength((7 * 12 + 5.25) * 0.0254, 'imperial', 'editor', {
         imperialPrecision: '1/2',
       }),

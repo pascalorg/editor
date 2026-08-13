@@ -64,6 +64,17 @@ describe('measurement display preferences', () => {
       unitExplicit: true,
     })
   })
+
+  test('selects centimeters as a metric display notation', () => {
+    useViewer.getState().setUnit('imperial')
+    useViewer.getState().setMetricNotation('centimeters')
+
+    expect(useViewer.getState()).toMatchObject({
+      unit: 'metric',
+      metricNotation: 'centimeters',
+      unitExplicit: true,
+    })
+  })
 })
 
 describe('external selection highlights', () => {

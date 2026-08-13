@@ -32,7 +32,9 @@ export function bareLengthUnit(
   notation: MetricNotation = 'meters',
 ): string {
   if (unit === 'imperial') return 'ft'
-  return notation === 'millimeters' ? 'mm' : 'm'
+  if (notation === 'millimeters') return 'mm'
+  if (notation === 'centimeters') return 'cm'
+  return 'm'
 }
 
 /**

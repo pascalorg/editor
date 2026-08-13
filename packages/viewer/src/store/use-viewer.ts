@@ -10,7 +10,7 @@ import type { ColorPreset, RenderShading } from '../lib/materials'
 import { SCENE_THEME_IDS } from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
-export type MetricNotation = 'meters' | 'millimeters'
+export type MetricNotation = 'meters' | 'centimeters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
 
 type SelectionPath = {
@@ -203,7 +203,7 @@ const RENDER_SHADINGS = ['solid', 'rendered', 'ghosted'] as const
 const COLOR_PRESETS = ['clay', 'white', 'mono', 'blueprint'] as const
 const EDGE_MODES = ['off', 'soft', 'strong'] as const
 const UNITS = ['metric', 'imperial'] as const
-const METRIC_NOTATIONS = ['meters', 'millimeters'] as const
+const METRIC_NOTATIONS = ['meters', 'centimeters', 'millimeters'] as const
 const LEVEL_MODES = ['stacked', 'exploded', 'solo', 'manual'] as const
 const WALL_MODES = ['up', 'cutaway', 'down', 'translucent'] as const
 

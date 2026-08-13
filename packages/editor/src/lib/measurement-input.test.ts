@@ -10,6 +10,7 @@ import {
 describe('bareLengthUnit', () => {
   test('follows the viewer display preference', () => {
     expect(bareLengthUnit('metric', 'meters')).toBe('m')
+    expect(bareLengthUnit('metric', 'centimeters')).toBe('cm')
     expect(bareLengthUnit('metric', 'millimeters')).toBe('mm')
     expect(bareLengthUnit('imperial')).toBe('ft')
   })

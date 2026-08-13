@@ -8,7 +8,7 @@ import { formatAreaLabel, formatLinearMeasurement, formatVolumeLabel } from '../
 function formatMetric(
   metric: QuickMeasurementMetric,
   unit: 'metric' | 'imperial',
-  metricNotation: 'meters' | 'millimeters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters',
 ): string {
   if (metric.quantity === 'area') return formatAreaLabel(metric.value, unit, 2)
   if (metric.quantity === 'volume') return formatVolumeLabel(metric.value, unit, 2)
@@ -23,7 +23,7 @@ export const QuickMeasurementCard = memo(function QuickMeasurementCard({
 }: {
   report: QuickMeasurementReport
   unit: 'metric' | 'imperial'
-  metricNotation: 'meters' | 'millimeters'
+  metricNotation: 'meters' | 'centimeters' | 'millimeters'
   lensState: 'live' | 'pinned'
 }) {
   const pinned = lensState === 'pinned'

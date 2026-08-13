@@ -145,7 +145,7 @@ export function buildConstructionDimensionPreviewGeometries(
   baselinePoint: MeasurementPoint,
   unit: 'metric' | 'imperial',
   mode: ConstructionDimensionMode = 'linear',
-  metricNotation: 'meters' | 'millimeters' = 'meters',
+  metricNotation: 'meters' | 'centimeters' | 'millimeters' = 'meters',
   directionOverride?: readonly [number, number] | null,
 ): FloorplanGeometry[] {
   if (mode === 'arc-length' || mode === 'angular') {
