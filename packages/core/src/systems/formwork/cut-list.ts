@@ -176,3 +176,14 @@ export function formworkCutListCaveats(cut: FormworkCutList): string[] {
   out.push(...cutListCaveats(cut.list))
   return out
 }
+
+/**
+ * What the drawing answers, for a surface that has no screen.
+ *
+ * Shared by both AI surfaces so neither writes its own account of a cut sheet. It leads
+ * with what a sequence is for rather than with the placements, because the placements are
+ * the part a model will happily paraphrase into a list of coordinates — and a list of
+ * rectangles is what this exists to *stop* being the answer.
+ */
+export const FORMWORK_CUT_SHEET_DESCRIPTION =
+  'The cut sheet for the bespoke ply: where every board sits on every sheet, and the order the cuts are made in. Use it for any question about cutting rather than buying — inspect_project_formwork already says how many sheets to order, and this says how to get the boards out of them. Each sheet carries its placements in millimetres from that sheet’s own corner, its offcuts marked keep or scrap under the yard’s stated policy, and a numbered list of cuts. Three rules about the cuts, and the first is what the sequence is for: they have to be followed in the order given, because each one runs only as far as the material still joined at that point — a later cut quoted as running the full width of the sheet takes the blade back through a board freed two cuts earlier. A position is the cut face, which is where a fence goes, and the kerf comes off the offcut side as the nest reserved it, so never add or subtract the blade width from a figure here. And guillotineable false is a refusal rather than a warning: that layout cannot be cut on a panel saw, a beam saw or a site table saw at all, and the remedy is nesting those boards again rather than cutting carefully. Report boardsLargerThanEverySheet even though it is also in the takeoff: those boards are on no drawing here, so a cut sheet presented without them looks complete and is short. Where there is no cut list read noCutSheetBecause and pass it on — a job with no cut ply has nothing to cut, and a job that cuts ply with no sheet stated is a missing input whose remedy is set_formwork_settings sheets, never a sheet size taken from a sheathing grade or picked.'

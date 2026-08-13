@@ -759,7 +759,10 @@ describe('the formwork MCP tools', () => {
         'list_castable_elements',
         'set_element_construction',
         'inspect_project_formwork',
+        'formwork_cut_sheet',
         'validate_formwork',
+        'fix_formwork_finding',
+        'formwork_rfis',
         'inspect_formwork_settings',
         'set_formwork_settings',
         'inspect_formwork_parts',
@@ -1450,6 +1453,120 @@ describe('the formwork MCP tools', () => {
     expect(reply.cutList?.statedIdsThatAreNotSheets).toEqual(['film-faced-ply-18'])
     expect(reply.cutList?.complete).toBe(false)
     expect(reply.caveats.some((c) => c.includes('names no sheet in the catalog'))).toBe(true)
+  })
+
+  /**
+   * The nest itself, for a caller with no screen.
+   *
+   * The sequence is `cut-plan.test.ts`'s in core and the drawing is `cut-sheet.test.ts`'s in
+   * nodes. What only this layer can get wrong is the join: that the boards this reports are
+   * the boards the takeoff counted, that the cuts arrive as the sentences the drawing prints
+   * rather than as extents a model would rephrase, and that the two absences reach a caller
+   * that never asked for a takeoff at all.
+   */
+  describe('the cut sheet', () => {
+    interface CutSheetReply {
+      scope: string
+      sheets: Array<{
+        sheetId: string
+        number: number
+        widthMm: number
+        heightMm: number
+        boards: Array<{ mark: string; xMm: number; yMm: number; widthMm: number; heightMm: number }>
+        offcuts: Array<{ widthMm: number; heightMm: number; worthRacking: boolean }>
+        cuts: string[]
+        guillotineable: boolean
+        unsequencedMarks: string[]
+        usedPercent: number
+      }>
+      boardsLargerThanEverySheet: Array<{ mark: string }>
+      caveats: string[]
+      noCutSheetBecause?: string
+    }
+
+    test('places every board the takeoff counted, on the sheets it said to buy', async () => {
+      // The join, and the only assertion here that could not be made in core: a drawing
+      // showing fewer boards than the bill prices is a carpenter short of a board.
+      await cutPlyScene({ sheets: { stockIds: [PLAIN_SHEET] } })
+
+      const bill = await call<BillReply>('inspect_project_formwork', {})
+      const sheet = await call<CutSheetReply>('formwork_cut_sheet', {})
+
+      const placed = sheet.sheets.flatMap((entry) => entry.boards.map((board) => board.mark))
+      expect(placed.length + sheet.boardsLargerThanEverySheet.length).toBe(
+        bill.cutList?.boardsNested,
+      )
+      expect(new Set(placed).size).toBe(placed.length)
+      expect(sheet.sheets.every((entry) => entry.sheetId === PLAIN_SHEET)).toBe(true)
+      expect(sheet.sheets.every((entry) => entry.widthMm === 1220 && entry.heightMm === 2440)).toBe(
+        true,
+      )
+    })
+
+    test('gives the cuts as instructions in sawing order, not as coordinates', async () => {
+      // The whole reason this tool exists rather than the takeoff carrying placements: a
+      // model handed atMm/fromMm/toMm writes "cut at 600 across the sheet", which sends the
+      // blade back through a board freed two cuts earlier.
+      await cutPlyScene({ sheets: { stockIds: [PLAIN_SHEET] } })
+
+      const reply = await call<CutSheetReply>('formwork_cut_sheet', {})
+
+      const cut = reply.sheets.find((entry) => entry.cuts.length > 0)
+      expect(cut).toBeDefined()
+      expect(cut?.cuts[0]).toMatch(/^1\. (Rip|Crosscut) at \d+(\.\d+)? mm, (down|across) /)
+      expect(cut?.cuts.map((line) => line.split('.')[0])).toEqual(
+        cut?.cuts.map((_line, index) => String(index + 1)),
+      )
+      for (const entry of reply.sheets) expect(entry.guillotineable).toBe(true)
+      expect(reply.caveats.some((line) => line.includes('still joined'))).toBe(true)
+    })
+
+    test('marks each offcut keep or scrap, and says how full the sheet is', async () => {
+      await cutPlyScene({ sheets: { minKeepWidthMm: 300, stockIds: [PLAIN_SHEET] } })
+
+      const reply = await call<CutSheetReply>('formwork_cut_sheet', {})
+
+      const withOffcut = reply.sheets.find((entry) => entry.offcuts.length > 0)
+      expect(withOffcut?.offcuts.every((offcut) => typeof offcut.worthRacking === 'boolean')).toBe(
+        true,
+      )
+      for (const entry of reply.sheets) {
+        expect(entry.usedPercent).toBeGreaterThan(0)
+        expect(entry.usedPercent).toBeLessThanOrEqual(100)
+      }
+    })
+
+    test('a job with no sheet stated is a missing input, and names the remedy', async () => {
+      await cutPlyScene({})
+
+      const reply = await call<CutSheetReply>('formwork_cut_sheet', {})
+
+      expect(reply.sheets).toEqual([])
+      expect(reply.noCutSheetBecause).toContain('set_formwork_settings sheets')
+      expect(reply.noCutSheetBecause).toContain('never pick one')
+    })
+
+    test('a job with no cut ply says it has nothing to cut, which is a different answer', async () => {
+      load(withSettings(tallWall('steel-panel'), { sheets: { stockIds: [PLAIN_SHEET] } }))
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<CutSheetReply>('formwork_cut_sheet', {})
+
+      expect(reply.noCutSheetBecause).toContain('Not a missing input')
+      expect(reply.noCutSheetBecause).not.toContain('set_formwork_settings sheets')
+    })
+
+    test('refuses a level that does not exist rather than drawing nothing for it', async () => {
+      load(twoLevels())
+
+      const result = await client.callTool({
+        name: 'formwork_cut_sheet',
+        arguments: { levelId: 'level_9' },
+      })
+
+      expect(result.isError).toBe(true)
+      expect((result.content as Array<{ text: string }>)[0]?.text).toContain('no level with id')
+    })
   })
 
   test('an empty scene answers rather than throwing', async () => {

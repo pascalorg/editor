@@ -7,6 +7,14 @@ export {
   reconcileFormworkNodes,
 } from './attach'
 export { FormworkCoverageList } from './coverage-summary'
+export { CutSheetDrawing, FormworkCutSheet } from './cut-sheet'
+export {
+  CUT_SHEET_COLORS,
+  type CutSheetPage,
+  type CutSheetShape,
+  cutSheetShapes,
+  cutSheetSvg,
+} from './cut-sheet-drawing'
 export { formworkAssemblyDefinition } from './definition'
 export { FormworkDesignReport } from './design-report'
 export { formworkAssembliesAffectedBy, formworkAssembliesOnHost } from './dirty-scope'

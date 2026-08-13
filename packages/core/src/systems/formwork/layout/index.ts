@@ -27,6 +27,14 @@ export {
   type OffcutPolicy,
 } from './cut-optimiser'
 export {
+  type CutAxis,
+  cutInstruction,
+  cutSequenceCaveats,
+  type SheetCut,
+  type SheetCutPlan,
+  sheetCutSequence,
+} from './cut-plan'
+export {
   type NestSearch,
   type NestSearchOptions,
   nestSearchCaveats,

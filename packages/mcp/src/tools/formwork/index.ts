@@ -3,6 +3,7 @@ import type { SceneOperations } from '../../operations'
 import { registerAttachFormwork } from './attach-formwork'
 import { registerCommitPour } from './commit-pour'
 import { registerFixFormworkFinding } from './fix-formwork-finding'
+import { registerFormworkCutSheet } from './formwork-cut-sheet'
 import { registerFormworkRfis } from './formwork-rfis'
 import { registerInspectFormworkParts } from './inspect-formwork-parts'
 import { registerInspectFormworkSettings } from './inspect-formwork-settings'
@@ -132,6 +133,7 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerListCastableElements(server, operations)
   registerSetElementConstruction(server, operations)
   registerInspectProjectFormwork(server, operations)
+  registerFormworkCutSheet(server, operations)
   registerValidateFormwork(server, operations)
   registerFixFormworkFinding(server, operations)
   registerFormworkRfis(server, operations)
@@ -149,6 +151,7 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
 export { attachFormworkOutput } from './attach-formwork'
 export { commitPourOutput } from './commit-pour'
 export { fixFormworkFindingOutput } from './fix-formwork-finding'
+export { formworkCutSheetOutput } from './formwork-cut-sheet'
 export { formworkRfisOutput } from './formwork-rfis'
 export { inspectFormworkPartsOutput } from './inspect-formwork-parts'
 export { inspectFormworkSettingsOutput } from './inspect-formwork-settings'

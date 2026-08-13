@@ -16,9 +16,12 @@ import {
   castableElementSummary,
   commitPourInput,
   constructionPatchInput,
+  cutInstruction,
+  cutSequenceCaveats,
   describeFormworkReconciliation,
   describePourSplit,
   FIX_FORMWORK_FINDING_DESCRIPTION,
+  FORMWORK_CUT_SHEET_DESCRIPTION,
   FORMWORK_RFI_DESCRIPTION,
   findFormworkSettingsNode,
   findingByKey,
@@ -57,6 +60,7 @@ import {
   SET_POUR_LIMITS_DESCRIPTION,
   scheduleInPourOrder,
   scheduleOccupancyDays,
+  sheetCutSequence,
   unknownAssembly,
   unknownPartMark,
   validationSummary,
@@ -320,6 +324,17 @@ export const SYSTEM_PROMPT =
   'register: nothing here is numbered, dated or answered against, so never report one as ' +
   'submitted, and never present the count as the number of problems when most findings are ours ' +
   'to fix and validate_formwork already says how. ' +
+  'formwork_cut_sheet is the cutting answer, and the sheet count in a takeoff is not one: the ' +
+  'takeoff says how many sheets to buy, this says where every board sits on each of them and in ' +
+  'what order the cuts are made. Quote its cut lines in the order and the words it gives them, ' +
+  'and never restate one as running across the whole sheet — each cut reaches only as far as the ' +
+  'material still joined when it is made, so a full-width paraphrase sends the blade back through ' +
+  'a board freed two cuts earlier. The positions are cut faces, where a fence goes, so never add ' +
+  'or subtract the blade width. guillotineable false is a refusal: that sheet cannot be cut on any ' +
+  'saw that cuts edge to edge, and nesting it again is the remedy rather than cutting carefully. ' +
+  'Name boardsLargerThanEverySheet whenever you present the cuts, because those boards are on no ' +
+  'sheet here and a cut sheet without them reads as complete while being short a board somebody ' +
+  'has to source. ' +
   'set_formwork_part records the two decisions a yard actually makes about a solved ' +
   'layout — substitute this item, or leave it off the order because it is already on site. It ' +
   'cannot change a size or a spacing; those are outputs, and to change them you change the design ' +
@@ -1346,6 +1361,81 @@ export function buildTools(
           // without the second number ten reads as a job with ten problems.
           findingCount: report.findings.length,
           summary: rfiSummary(candidates),
+        })
+      },
+    }),
+    formwork_cut_sheet: tool({
+      description: FORMWORK_CUT_SHEET_DESCRIPTION,
+      inputSchema: z.object({
+        levelId: z
+          .string()
+          .optional()
+          .describe('a level id for one level; omit for the whole scene'),
+        elementIds: z
+          .array(z.string())
+          .max(500)
+          .optional()
+          .describe('only these elements — for a selection the user named'),
+      }),
+      execute: async ({ elementIds, levelId }) => {
+        toolCalls.push({ name: 'formwork_cut_sheet', input: { elementIds, levelId } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        if (levelId !== undefined && nodes[levelId]?.type !== 'level') {
+          return `Error: no level with id ${levelId}. Call list_castable_elements and read the parentId of the elements you mean.`
+        }
+        const solution = solveProjectFormwork(nodes, { hostIds: elementIds, parentId: levelId })
+        const scope = levelId ?? (elementIds ? 'the elements named' : 'whole scene')
+        const cutList = solution.cutList
+        if (cutList === undefined) {
+          return JSON.stringify({
+            scope,
+            sheets: [],
+            boardsLargerThanEverySheet: [],
+            caveats: [],
+            noCutSheetBecause: solution.bom.some((line) => line.kind === 'ply-piece')
+              ? 'This job cuts ply and the project has not recorded which sheet the yard buys, so there is nothing to nest the boards into and no cut sheet. Ask the user which sheet the yard buys and record it with set_formwork_settings sheets — never take the size from a sheathing grade, which carries the pressures it takes and no width or length at all.'
+              : 'Nothing in scope is cut out of sheet material — every part in the bill is a standard product — so there is nothing to cut and no cut sheet. Not a missing input.',
+          })
+        }
+        const plans = cutList.list.sheets.map((sheet) => sheetCutSequence(sheet))
+        return JSON.stringify({
+          scope,
+          sheets: cutList.list.sheets.map((sheet, index) => ({
+            sheetId: sheet.sheetId,
+            number: sheet.number,
+            widthMm: sheet.widthMm,
+            heightMm: sheet.heightMm,
+            boards: sheet.placements.map((placed) => ({
+              mark: placed.mark,
+              xMm: placed.xMm,
+              yMm: placed.yMm,
+              widthMm: placed.widthMm,
+              heightMm: placed.heightMm,
+              turned: placed.rotated === true,
+            })),
+            offcuts: sheet.offcuts.map((offcut) => ({
+              xMm: offcut.xMm,
+              yMm: offcut.yMm,
+              widthMm: offcut.widthMm,
+              heightMm: offcut.heightMm,
+              worthRacking: offcut.keep,
+            })),
+            // Sentences rather than extents, and that is the decision worth knowing here:
+            // handed atMm/fromMm/toMm a model composes "cut at 600 across the sheet",
+            // which is the one wrong thing to say about a guillotine sequence.
+            cuts: (plans[index]?.cuts ?? []).map(cutInstruction),
+            guillotineable: plans[index]?.guillotineable ?? false,
+            unsequencedMarks: plans[index]?.unsequencedMarks ?? [],
+            usedPercent: Math.round((sheet.usedAreaMm2 / (sheet.widthMm * sheet.heightMm)) * 100),
+          })),
+          // Also in the takeoff reply, and repeated because this is the drawing: a cut
+          // sheet without them looks complete and is short by a board.
+          boardsLargerThanEverySheet: cutList.list.oversize.map((piece) => ({
+            mark: piece.mark,
+            widthMm: piece.widthMm,
+            heightMm: piece.heightMm,
+          })),
+          caveats: cutSequenceCaveats(plans),
         })
       },
     }),

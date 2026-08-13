@@ -20,6 +20,7 @@ import {
 import { ActionButton, downloadText, PanelSection } from '@pascal-app/editor'
 import { Download } from 'lucide-react'
 import { useState } from 'react'
+import { FormworkCutSheet } from './cut-sheet'
 import { Note, Readout, Section, WarningLine } from './report-ui'
 import { projectFormworkCaveats } from './solve-project'
 import { takeoffCsv, useProjectFormwork, useTakeoffLevels } from './takeoff'
@@ -78,6 +79,7 @@ function costBasis(hasLabour: boolean, hasLogistics: boolean): string {
 export function FormworkTakeoffPanel() {
   const levels = useTakeoffLevels()
   const [levelId, setLevelId] = useState<string | undefined>(undefined)
+  const [cutSheetIndex, setCutSheetIndex] = useState(0)
   // A level deleted while this panel is open would otherwise scope the takeoff to
   // nothing and read as a job with no formwork in it.
   const scopedLevel = levels.find((level) => level.id === levelId)
@@ -1035,6 +1037,18 @@ export function FormworkTakeoffPanel() {
                   board across the grain is a different product.
                 </Note>
               </Section>
+            )}
+            {/* After the Cutting figures rather than inside them: the section above is what a
+                buyer orders against and this is what a carpenter cuts against, and they are read
+                by different people at different times. */}
+            {cutList !== undefined && (
+              <FormworkCutSheet
+                onSheetChange={setCutSheetIndex}
+                oversize={cutList.list.oversize}
+                sheetIndex={cutSheetIndex}
+                sheets={cutList.list.sheets}
+                subject={subject}
+              />
             )}
           </div>
         )}
