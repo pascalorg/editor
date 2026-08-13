@@ -20,6 +20,7 @@ import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
 import { ItemNode } from './nodes/item'
+import { LeanToExtensionNode } from './nodes/lean-to-extension'
 import { LevelNode } from './nodes/level'
 import { LinesetNode } from './nodes/lineset'
 import { LiquidLineNode } from './nodes/liquid-line'
@@ -50,6 +51,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   BuildingNode,
   ElevatorNode,
   LevelNode,
+  LeanToExtensionNode,
   ColumnNode,
   ConstructionDimensionNode,
   StructuralGridNode,

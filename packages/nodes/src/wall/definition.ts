@@ -46,7 +46,13 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
           !node.children.some((childId) => {
             const child = nodes[childId as AnyNodeId]
             if (!child) return false
-            if (child.type === 'door' || child.type === 'window') return true
+            if (
+              child.type === 'door' ||
+              child.type === 'window' ||
+              child.type === 'lean-to-extension'
+            ) {
+              return true
+            }
             if (child.type !== 'item') return false
             return child.asset?.attachTo === 'wall' || child.asset?.attachTo === 'wall-side'
           }),
@@ -90,7 +96,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   relations: {
-    hosts: ['door', 'window', 'item'],
+    hosts: ['door', 'window', 'item', 'lean-to-extension'],
     affectsSpatial: ['slab', 'ceiling', 'zone'],
     linkedBy: 'endpoint-match',
     cascadeDelete: 'descendants',
@@ -154,7 +160,8 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   presentation: {
     label: 'Wall',
-    description: 'A straight or curved wall segment. Hosts doors, windows, and wall-mounted items.',
+    description:
+      'A straight or curved wall segment. Hosts doors, windows, lean-to extensions, and wall-mounted items.',
     icon: { kind: 'url', src: '/icons/wall.webp' },
     paletteSection: 'structure',
     paletteOrder: 10,

@@ -182,7 +182,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   presentation: {
     label: 'Gutter',
     description: 'Rain-water channel running along the eave of a roof segment.',
-    icon: { kind: 'url', src: '/icons/roof.webp' },
+    icon: { kind: 'url', src: '/icons/gutter.webp' },
     paletteSection: 'structure',
     paletteOrder: 122,
   },

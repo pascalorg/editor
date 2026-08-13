@@ -20,6 +20,7 @@ import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
 import { itemDefinition } from './item'
+import { leanToExtensionDefinition } from './lean-to-extension'
 import { levelDefinition } from './level'
 import { linesetDefinition } from './lineset'
 import { liquidLineDefinition } from './liquid-line'
@@ -69,6 +70,7 @@ export const builtinPlugin: Plugin = {
     shelfDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
+    leanToExtensionDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
@@ -149,6 +151,7 @@ export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'
 export { itemDefinition } from './item'
+export { leanToExtensionDefinition } from './lean-to-extension'
 export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'
 export { liquidLineDefinition, useLiquidLineToolOptions } from './liquid-line'

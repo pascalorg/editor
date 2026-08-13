@@ -13,7 +13,7 @@ import {
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import Image from 'next/image'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Tooltip,
   TooltipContent,
@@ -36,6 +36,8 @@ type MepToolKind =
   | 'pipe-segment'
   | 'pipe-fitting'
   | 'pipe-trap'
+
+const ROOF_EXTENSION_KINDS = new Set(['lean-to-extension'])
 
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode, `'mep'` for the MEP group. */
@@ -90,6 +92,7 @@ function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
     const extension = getFloorplanNodeExtension(definition)
     if (
       baseKinds.has(kind) ||
+      ROOF_EXTENSION_KINDS.has(kind) ||
       !extension?.tool ||
       !isFloorplanToolAvailableInMode(extension.availableModes, floorplanMode) ||
       !presentation ||
@@ -171,13 +174,12 @@ type RoofFeature = { kind: string; label: string; iconSrc: string }
 const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.webp'
 
 /**
- * Roof accessories surfaced under the Roof tile (a "Features" group). Unlike
- * the community editor these aren't DB presets — each is a registry kind with
- * `capabilities.roofAccessory`, enumerated from the registry at render time
- * (it is populated by the app bootstrap — a module-scope const would race it)
- * and activated like any structure tool (the kind's tool attaches it to the
- * roof segment under the cursor). Label + icon come from the registry's
- * `presentation`; non-url icons fall back to the roof icon.
+ * Roof accessories and extensions surfaced under the Roof tile. Unlike the
+ * community editor these aren't DB presets — each is a registry kind, either
+ * carrying `capabilities.roofAccessory` or explicitly classified as a roof
+ * extension. They are enumerated at render time because the registry is
+ * populated during app bootstrap. Label + icon come from `presentation`;
+ * non-url icons fall back to the roof icon.
  */
 function activateRoofFeatureTool(kind: string): void {
   const ed = useEditor.getState()
@@ -209,7 +211,15 @@ export function BuildTab() {
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
-  const buildTypes = useMemo(() => collectBuildTypes(floorplanMode), [floorplanMode])
+  const [registryReady, setRegistryReady] = useState(false)
+  const buildTypes = useMemo(
+    () => (registryReady ? collectBuildTypes(floorplanMode) : BASE_BUILD_TYPES),
+    [floorplanMode, registryReady],
+  )
+
+  useEffect(() => {
+    setRegistryReady(true)
+  }, [])
 
   // The fitting / follow tools are armed from a segment's panel, not a grid
   // tile — keep the segment tile lit so the panel (and the way back) stays
@@ -233,9 +243,12 @@ export function BuildTab() {
   // Read at render time (not module scope): the registry is populated by the
   // app bootstrap, so enumerating earlier would race it and see no kinds.
   const roofFeatures = useMemo<RoofFeature[]>(() => {
+    if (!registryReady) return []
     const features: RoofFeature[] = []
     for (const [kind, def] of nodeRegistry.entries()) {
-      if (def.capabilities.roofAccessory === undefined) continue
+      if (def.capabilities.roofAccessory === undefined && !ROOF_EXTENSION_KINDS.has(kind)) {
+        continue
+      }
       // Door / window declare `roofAccessory` for the wall-face cut but
       // already have their own Build tiles — listing them here too
       // would duplicate the entry under Roof → Features.
@@ -248,7 +261,7 @@ export function BuildTab() {
       })
     }
     return features
-  }, [])
+  }, [registryReady])
 
   // Tile highlight derives from the single source of truth (the active tool /
   // mode), never a separate local selection — so keyboard shortcuts and panel
@@ -352,7 +365,9 @@ export function BuildTab() {
         (activeTool === 'roof' || isRoofFeatureActive) &&
         roofFeatures.length > 0 ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Features</div>
+          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">
+            Features & extensions
+          </div>
           <TooltipProvider delayDuration={0} disableHoverableContent>
             <div
               className="grid gap-1.5"

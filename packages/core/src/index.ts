@@ -19,6 +19,7 @@ export type {
   GuideEvent,
   GutterEvent,
   ItemEvent,
+  LeanToExtensionEvent,
   LevelEvent,
   MeasurementEvent,
   NodeEvent,
