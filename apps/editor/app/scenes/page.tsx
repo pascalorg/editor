@@ -1,8 +1,9 @@
-import { headers } from 'next/headers'
+import { type I18nLocale, translate } from '@pascal-app/editor/i18n'
+import { cookies, headers } from 'next/headers'
 import Link from 'next/link'
-import { LocalizedContent } from '@/components/localized-content'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
+import { ServerLocalizedContent } from '@/components/server-localized-content'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,9 +35,9 @@ async function fetchScenes(): Promise<SceneMeta[]> {
   return payload.scenes ?? []
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: I18nLocale): string {
   try {
-    return new Date(iso).toLocaleString()
+    return new Date(iso).toLocaleString(locale === 'tr' ? 'tr-TR' : 'en-US')
   } catch {
     return iso
   }
@@ -44,9 +45,11 @@ function formatDate(iso: string): string {
 
 export default async function ScenesPage() {
   const scenes = await fetchScenes()
+  const locale = (await cookies()).get('pascal-locale')?.value === 'en' ? 'en' : 'tr'
+  const t = (text: string) => translate(text, locale)
 
   return (
-    <LocalizedContent>
+    <ServerLocalizedContent locale={locale}>
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-10 border-border border-b bg-background/95 backdrop-blur">
           <div className="container mx-auto flex items-center justify-between gap-4 px-6 py-4">
@@ -55,27 +58,27 @@ export default async function ScenesPage() {
                 className="text-muted-foreground transition-colors hover:text-foreground"
                 href="/"
               >
-                Home
+                {t('Home')}
               </Link>
               <span className="text-muted-foreground">/</span>
-              <span className="font-medium text-foreground">Scenes</span>
+              <span className="font-medium text-foreground">{t('Scenes')}</span>
             </nav>
             <CreateSceneButton />
           </div>
         </header>
 
         <main className="container mx-auto max-w-5xl px-6 py-12">
-          <h1 className="mb-2 font-bold text-3xl">Your scenes</h1>
+          <h1 className="mb-2 font-bold text-3xl">{t('Your scenes')}</h1>
           <p className="mb-8 text-muted-foreground text-sm">
             {scenes.length === 0
-              ? 'No scenes yet. Create one to get started.'
-              : `${scenes.length} scene${scenes.length === 1 ? '' : 's'}.`}
+              ? t('No scenes yet. Create one to get started.')
+              : translate(`${scenes.length} scene${scenes.length === 1 ? '' : 's'}.`, locale)}
           </p>
 
           {scenes.length === 0 ? (
             <div className="rounded-xl border border-border/60 border-dashed bg-background p-12 text-center">
               <p className="text-muted-foreground text-sm">
-                You haven&apos;t saved any scenes yet.
+                {t("You haven't saved any scenes yet.")}
               </p>
               <div className="mt-4 flex justify-center">
                 <CreateSceneButton />
@@ -98,7 +101,7 @@ export default async function ScenesPage() {
                           src={scene.thumbnailUrl}
                         />
                       ) : (
-                        <span className="text-muted-foreground text-xs">No thumbnail</span>
+                        <span className="text-muted-foreground text-xs">{t('No thumbnail')}</span>
                       )}
                     </div>
                     <div className="mt-3">
@@ -106,8 +109,10 @@ export default async function ScenesPage() {
                         {scene.name}
                       </h2>
                       <div className="mt-1 flex items-center justify-between text-muted-foreground text-xs">
-                        <span>{scene.nodeCount} nodes</span>
-                        <time dateTime={scene.updatedAt}>{formatDate(scene.updatedAt)}</time>
+                        <span>{translate(`${scene.nodeCount} nodes`, locale)}</span>
+                        <time dateTime={scene.updatedAt}>
+                          {formatDate(scene.updatedAt, locale)}
+                        </time>
                       </div>
                     </div>
                   </Link>
@@ -117,6 +122,6 @@ export default async function ScenesPage() {
           )}
         </main>
       </div>
-    </LocalizedContent>
+    </ServerLocalizedContent>
   )
 }

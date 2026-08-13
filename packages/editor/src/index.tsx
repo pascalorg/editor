@@ -457,10 +457,9 @@ export {
 } from './lib/history'
 export {
   LocalizedContent,
-  translate,
-  translateReactNode,
   useTranslation,
 } from './lib/i18n'
+export { translate, translateReactNode } from './lib/i18n-core'
 export {
   boundaryReshapeScope,
   curveReshapeScope,

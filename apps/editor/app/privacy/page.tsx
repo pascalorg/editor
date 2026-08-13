@@ -1,15 +1,18 @@
 import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { LocalizedContent } from '@/components/localized-content'
+import { ServerLocalizedContent } from '@/components/server-localized-content'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
   description: 'Privacy Policy for Pascal Editor and the Pascal platform.',
 }
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const locale = (await cookies()).get('pascal-locale')?.value === 'en' ? 'en' : 'tr'
+
   return (
-    <LocalizedContent>
+    <ServerLocalizedContent locale={locale}>
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-10 border-border border-b bg-background/95 backdrop-blur">
           <div className="container mx-auto px-6 py-4">
@@ -206,6 +209,6 @@ export default function PrivacyPage() {
           </article>
         </main>
       </div>
-    </LocalizedContent>
+    </ServerLocalizedContent>
   )
 }

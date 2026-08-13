@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
-import { translate, translateReactNode } from './i18n'
+import { translate, translateReactNode } from './i18n-core'
 
 describe('translate', () => {
   test('uses Turkish by default when explicitly selected', () => {
