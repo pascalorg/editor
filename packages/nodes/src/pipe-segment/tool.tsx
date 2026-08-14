@@ -9,6 +9,7 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  reserveCameraKeys,
   triggerSFX,
   useEditor,
   usePathDraftPreview,
@@ -616,12 +617,17 @@ const PipeSegmentTool = () => {
       startBodyRef.current = null
     }
 
+    // Q (system) and S (slope) are this tool's own, and the orbit camera pans
+    // with both — without the claim the camera's `document` listener eats them
+    // before this one runs.
+    const releaseCameraKeys = reserveCameraKeys('KeyQ', 'KeyS')
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', onClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     return () => {
+      releaseCameraKeys()
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
       emitter.off('tool:cancel', onCancel)

@@ -226,6 +226,11 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         note: 'Moves in screen space, similar to dragging the camera view.',
       },
       {
+        keys: ['Q', 'E'],
+        action: 'Raise / lower camera',
+        note: 'Moves straight up and down. E falls back to operating the selected door or window, and Q to the active tool’s own shortcut.',
+      },
+      {
         keys: ['Middle click'],
         action: 'Pan camera',
         note: 'Drag with the middle mouse button, or hold Space while dragging with the left mouse button.',

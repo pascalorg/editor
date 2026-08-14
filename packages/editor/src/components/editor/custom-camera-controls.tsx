@@ -22,6 +22,7 @@ import {
   Spherical,
   Vector3,
 } from 'three'
+import { isCameraKeyReserved } from '../../lib/camera-key-reservation'
 import {
   type CameraPoseApplicationPlan,
   normalizeCameraPose,
@@ -32,6 +33,7 @@ import {
   withCameraPoseDistance,
 } from '../../lib/camera-pose'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { resolveSelectionOpenToggle } from '../../lib/selection-open-toggle'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
 import {
   collectNodeBounds,
@@ -143,6 +145,8 @@ type KeyboardPanState = {
   backward: boolean
   left: boolean
   right: boolean
+  up: boolean
+  down: boolean
 }
 
 function setKeyboardPanKey(state: KeyboardPanState, code: string, pressed: boolean): boolean {
@@ -166,15 +170,43 @@ function setKeyboardPanKey(state: KeyboardPanState, code: string, pressed: boole
     state.right = pressed
     return changed
   }
+  if (code === 'KeyQ') {
+    const changed = state.up !== pressed
+    state.up = pressed
+    return changed
+  }
+  if (code === 'KeyE') {
+    const changed = state.down !== pressed
+    state.down = pressed
+    return changed
+  }
   return false
 }
 
 function isKeyboardPanKey(code: string): boolean {
-  return code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD'
+  return (
+    code === 'KeyW' ||
+    code === 'KeyA' ||
+    code === 'KeyS' ||
+    code === 'KeyD' ||
+    code === 'KeyQ' ||
+    code === 'KeyE'
+  )
+}
+
+// Q / E only move the camera when nothing else wants them: E operates the
+// selected door / window / cabinet (`use-keyboard`'s E arm), and drafting tools
+// such as pipe and duct claim Q for their own cycling. Both of those listen on
+// `window`, downstream of this handler's `document` listener, so they can only
+// keep the key if the camera declines it here.
+function isKeyboardPanKeyAvailable(code: string): boolean {
+  if (isCameraKeyReserved(code)) return false
+  if (code === 'KeyE') return resolveSelectionOpenToggle() === null
+  return true
 }
 
 function hasKeyboardPanInput(state: KeyboardPanState): boolean {
-  return state.forward || state.backward || state.left || state.right
+  return state.forward || state.backward || state.left || state.right || state.up || state.down
 }
 
 type CameraViewportSize = {
@@ -377,6 +409,8 @@ export const CustomCameraControls = () => {
     backward: false,
     left: false,
     right: false,
+    up: false,
+    down: false,
   })
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
@@ -720,7 +754,8 @@ export const CustomCameraControls = () => {
     const panKeys = keyboardPanKeys.current
     const horizontal = (panKeys.right ? 1 : 0) - (panKeys.left ? 1 : 0)
     const vertical = (panKeys.forward ? 1 : 0) - (panKeys.backward ? 1 : 0)
-    if (horizontal === 0 && vertical === 0) return
+    const elevation = (panKeys.up ? 1 : 0) - (panKeys.down ? 1 : 0)
+    if (horizontal === 0 && vertical === 0 && elevation === 0) return
 
     const control = controls.current
 
@@ -730,10 +765,13 @@ export const CustomCameraControls = () => {
       Math.max(viewWidth * KEYBOARD_PAN_VIEW_WIDTH_PER_SECOND, KEYBOARD_PAN_MIN_SPEED),
       KEYBOARD_PAN_MAX_SPEED,
     )
-    const step = (speed * Math.min(delta, 0.05)) / Math.hypot(horizontal, vertical)
+    const step = (speed * Math.min(delta, 0.05)) / Math.hypot(horizontal, vertical, elevation)
 
     if (horizontal !== 0) control.truck(horizontal * step, 0, true)
     if (vertical !== 0) control.forward(vertical * step, true)
+    // Q / E ride the world up-axis rather than the screen one, so the height
+    // gained is the same whether the camera is looking level or straight down.
+    if (elevation !== 0) control.elevate(elevation * step, true)
   }, 0)
 
   // Configure mouse buttons based on control mode and camera mode
@@ -821,6 +859,8 @@ export const CustomCameraControls = () => {
       keyboardPanKeys.current.backward = false
       keyboardPanKeys.current.left = false
       keyboardPanKeys.current.right = false
+      keyboardPanKeys.current.up = false
+      keyboardPanKeys.current.down = false
     }
 
     const setNavigationCursor = (cursor: 'grab' | 'grabbing') => {
@@ -887,7 +927,8 @@ export const CustomCameraControls = () => {
       if (isKeyboardPanKey(event.code)) {
         if (
           !(event.metaKey || event.ctrlKey || event.altKey) &&
-          !isEditableKeyboardTarget(event.target)
+          !isEditableKeyboardTarget(event.target) &&
+          isKeyboardPanKeyAvailable(event.code)
         ) {
           const changed = setKeyboardPanKey(keyboardPanKeys.current, event.code, true)
           if (changed) beginLocalCameraInteraction()

@@ -20,6 +20,7 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  reserveCameraKeys,
   triggerSFX,
   useEditor,
   usePathDraftPreview,
@@ -927,12 +928,16 @@ const DuctSegmentTool = () => {
       startBodyRef.current = null
     }
 
+    // Q cycles the duct shape here, so the orbit camera must not claim it for
+    // its ascend movement while this tool is active.
+    const releaseCameraKeys = reserveCameraKeys('KeyQ')
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', onClick)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     return () => {
+      releaseCameraKeys()
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
       emitter.off('tool:cancel', onCancel)

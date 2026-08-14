@@ -27,15 +27,14 @@ import { steppedRotation } from '../components/tools/item/placement-math'
 import { parseArrayCommand } from '../lib/array-duplicate'
 import { AXIS_LOCK_KEYS } from '../lib/axis-lock'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
-import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
 import { isMeasurementInputContinueKey, isMeasurementInputStartKey } from '../lib/measurement-input'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
+import { resolveSelectionOpenToggle } from '../lib/selection-open-toggle'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
-import { toggleWindowOpenState } from '../lib/window-interaction'
 import { isArrayCommandArmed, runArrayCommand } from '../store/use-array-duplicate'
 import useAxisLock from '../store/use-axis-lock'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
@@ -660,35 +659,14 @@ export const useKeyboard = ({
         }
       } else if ((e.key === 'e' || e.key === 'E') && !isVersionPreviewMode) {
         // Toggle door / operable-window open/closed state. Moved off R,
-        // which now flips the opening (side + π rotation).
-        const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
-        if (selectedNodeIds.length === 1) {
-          const node = useScene.getState().nodes[selectedNodeIds[0]!]
-          const registryE = node && nodeRegistry.get(node.type)?.keyboardActions?.e
-          if (node && registryE?.appliesTo(node)) {
-            // Registry-driven E interaction. Same shape as the R/T arms.
-            e.preventDefault()
-            registryE.run(node)
-            sfxEmitter.emit('sfx:item-rotate')
-          } else if (node?.type === 'door' && node.openingKind !== 'opening') {
-            e.preventDefault()
-            toggleDoorOpenState(node.id)
-            sfxEmitter.emit('sfx:item-rotate')
-          } else if (
-            node?.type === 'window' &&
-            node.openingKind !== 'opening' &&
-            (node.windowType === 'sliding' ||
-              node.windowType === 'casement' ||
-              node.windowType === 'awning' ||
-              node.windowType === 'hopper' ||
-              node.windowType === 'single-hung' ||
-              node.windowType === 'double-hung' ||
-              node.windowType === 'louvered')
-          ) {
-            e.preventDefault()
-            toggleWindowOpenState(node.id)
-            sfxEmitter.emit('sfx:item-rotate')
-          }
+        // which now flips the opening (side + π rotation). The same resolver
+        // tells the orbit camera whether E is free for its descend movement,
+        // so the two must agree on when this arm applies.
+        const operate = resolveSelectionOpenToggle()
+        if (operate) {
+          e.preventDefault()
+          operate()
+          sfxEmitter.emit('sfx:item-rotate')
         }
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isVersionPreviewMode) {
         e.preventDefault()

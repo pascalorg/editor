@@ -373,6 +373,7 @@ const tr: Record<string, string> = {
   'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed':
     'Seçili düğümü çalıştır — kapılar, pencereler ve dolap kapakları/çekmeceleri açılır/kapanır',
   'Pan camera': 'Kamerayı kaydır',
+  'Raise / lower camera': 'Kamerayı yükselt / alçalt',
   'Orbit camera': 'Kamerayı döndür',
   'Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift during an active gesture to build freely.':
     'Kısayollar bağlama duyarlıdır. Kılavuzlu kısıtlamalar varsayılan olarak etkindir; etkin bir hareket sırasında serbestçe inşa etmek için Shift tuşunu basılı tutun.',
@@ -2031,6 +2032,8 @@ const tr: Record<string, string> = {
     'Doğrudan yazmaya başlayın — tıklanacak bir alan yok. Taslak siz yazdıkça değeri izler. Yalnızca bir hareket sırasında etkindir; diğer zamanlarda araç kısayolları çalışmaya devam eder.',
   'Moves in screen space, similar to dragging the camera view.':
     'Ekran düzleminde hareket eder; kamera görünümünü sürüklemeye benzer.',
+  'Moves straight up and down. E falls back to operating the selected door or window, and Q to the active tool’s own shortcut.':
+    'Dosdoğru yukarı ve aşağı hareket eder. Seçili bir kapı veya pencere varsa E onu açıp kapatmaya, etkin aracın kendi kısayolu varsa Q ona öncelik verir.',
   'Press again to cancel the gesture itself, so a mistyped number never costs the draft.':
     'Hareketin kendisini iptal etmek için tekrar basın; böylece yanlış yazılan bir sayı taslağa mal olmaz.',
   'Works in Select mode on the 3D canvas, the 2D floor plan, and the scene graph.':

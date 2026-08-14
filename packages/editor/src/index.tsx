@@ -377,6 +377,7 @@ export {
   type ResolvedCadLayer,
   resolveCadLayers,
 } from './lib/cad-underlay-layers'
+export { isCameraKeyReserved, reserveCameraKeys } from './lib/camera-key-reservation'
 export {
   CEILING_ALIGNMENT_THRESHOLD_M,
   type CeilingPlanSnapInput,
