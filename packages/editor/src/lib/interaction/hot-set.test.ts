@@ -22,6 +22,13 @@ const wall: HotSetCandidate = {
   exposesTop: false,
   attachClass: 'surface',
 }
+const customMesh: HotSetCandidate = {
+  type: 'custom-mesh',
+  isFloorLike: false,
+  exposesTop: true,
+  exposesSides: true,
+  attachClass: 'surface',
+}
 const ceiling: HotSetCandidate = {
   type: 'ceiling',
   isFloorLike: false,
@@ -63,8 +70,9 @@ describe('attachClassOf', () => {
 })
 
 describe('isPickableForAttach — wall-mounted (window)', () => {
-  test('only walls are eligible; floor/ceiling/tops are not', () => {
+  test('walls and custom mesh faces are eligible; floor/ceiling/tops are not', () => {
     expect(isPickableForAttach('wall', wall)).toBe(true)
+    expect(isPickableForAttach('wall', customMesh)).toBe(true)
     expect(isPickableForAttach('wall', floor)).toBe(false)
     expect(isPickableForAttach('wall', ceiling)).toBe(false)
     expect(isPickableForAttach('wall', table)).toBe(false)

@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { ItemNode } from './item'
 
 export const CustomMeshVertex = z.object({
   id: z.string().min(1),
@@ -28,6 +29,86 @@ export type CustomMeshVertex = z.infer<typeof CustomMeshVertex>
 export type CustomMeshEdge = z.infer<typeof CustomMeshEdge>
 export type CustomMeshFace = z.infer<typeof CustomMeshFace>
 export type CustomMeshTopology = z.infer<typeof CustomMeshTopologyShape>
+
+export type CustomMeshFaceFrame = {
+  origin: [number, number, number]
+  xAxis: [number, number, number]
+  yAxis: [number, number, number]
+  normal: [number, number, number]
+}
+
+function normalizeCustomMeshVector(
+  vector: [number, number, number],
+): [number, number, number] | null {
+  const length = Math.hypot(vector[0], vector[1], vector[2])
+  if (length < 1e-8) return null
+  return [vector[0] / length, vector[1] / length, vector[2] / length]
+}
+
+export function getCustomMeshFaceNormal(
+  topology: CustomMeshTopology,
+  face: CustomMeshFace,
+): [number, number, number] | null {
+  const vertices = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
+  const positions = face.vertexIds
+    .map((id) => vertices.get(id))
+    .filter((value): value is [number, number, number] => !!value)
+  if (positions.length < 3) return null
+
+  const normal: [number, number, number] = [0, 0, 0]
+  for (let index = 0; index < positions.length; index += 1) {
+    const current = positions[index]!
+    const next = positions[(index + 1) % positions.length]!
+    normal[0] += (current[1] - next[1]) * (current[2] + next[2])
+    normal[1] += (current[2] - next[2]) * (current[0] + next[0])
+    normal[2] += (current[0] - next[0]) * (current[1] + next[1])
+  }
+  return normalizeCustomMeshVector(normal)
+}
+
+export function getCustomMeshFaceCentroid(
+  topology: CustomMeshTopology,
+  face: CustomMeshFace,
+): [number, number, number] | null {
+  const vertices = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
+  const positions = face.vertexIds
+    .map((id) => vertices.get(id))
+    .filter((value): value is [number, number, number] => !!value)
+  if (positions.length !== face.vertexIds.length || positions.length === 0) return null
+  const sum = positions.reduce<[number, number, number]>(
+    (total, position) => [total[0] + position[0], total[1] + position[1], total[2] + position[2]],
+    [0, 0, 0],
+  )
+  return [sum[0] / positions.length, sum[1] / positions.length, sum[2] / positions.length]
+}
+
+export function getCustomMeshFaceFrame(
+  topology: CustomMeshTopology,
+  faceId: string,
+): CustomMeshFaceFrame | null {
+  const face = topology.faces.find((candidate) => candidate.id === faceId)
+  if (!face) return null
+  const origin = getCustomMeshFaceCentroid(topology, face)
+  const normal = getCustomMeshFaceNormal(topology, face)
+  if (!(origin && normal)) return null
+
+  const horizontal: [number, number, number] = [normal[2], 0, -normal[0]]
+  const xAxis =
+    normalizeCustomMeshVector(horizontal) ??
+    normalizeCustomMeshVector([
+      1 - normal[0] * normal[0],
+      -normal[0] * normal[1],
+      -normal[0] * normal[2],
+    ])
+  if (!xAxis) return null
+  const yAxis = normalizeCustomMeshVector([
+    normal[1] * xAxis[2] - normal[2] * xAxis[1],
+    normal[2] * xAxis[0] - normal[0] * xAxis[2],
+    normal[0] * xAxis[1] - normal[1] * xAxis[0],
+  ])
+  if (!yAxis) return null
+  return { origin, xAxis, yAxis, normal }
+}
 
 export type CustomMeshTopologyIssue = {
   path: (string | number)[]
@@ -156,6 +237,7 @@ export function createBoxCustomMeshTopology(
 export const CustomMeshNode = BaseNode.extend({
   id: objectId('custom-mesh'),
   type: nodeType('custom-mesh'),
+  children: z.array(ItemNode.shape.id).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
   supportSlabId: z.string().optional(),
@@ -164,6 +246,7 @@ export const CustomMeshNode = BaseNode.extend({
   slotNames: z.record(z.string(), z.string().min(1)).default({ body: 'Body' }),
 }).describe(dedent`
   Custom mesh node - a topology-backed editable solid.
+  - children: items hosted on persistent topology faces
   - topology: persistent vertices, edges, and ordered face loops with stable IDs
   - position/rotation: level-local placement transform
   - supportSlabId: persisted placement surface that prevents later slabs from lifting the mesh

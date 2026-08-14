@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingEvent,
+  type CustomMeshEvent,
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
@@ -15,6 +16,7 @@ import {
   resolveLevelId,
   type ShelfEvent,
   sceneRegistry,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
   useSpatialQuery,
@@ -68,6 +70,9 @@ import {
   resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
+import { commitCustomMeshClick, resolveCustomMeshPreviewCommit } from './custom-mesh-commit'
+import { applyCustomMeshPreviewPose, resolveCustomMeshFaceSwitch } from './custom-mesh-preview'
+import { shouldCreateFloorDraft } from './draft-creation'
 import {
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
@@ -79,12 +84,14 @@ import {
 import {
   ceilingStrategy,
   checkCanPlace,
+  customMeshFaceStrategy,
   floorStrategy,
   itemSurfaceStrategy,
   roofWallStrategy,
   shelfSurfaceStrategy,
   wallStrategy,
 } from './placement-strategies'
+import { resolveItemPlacementSurfaceNormal } from './placement-surface'
 import type { PlacementState, TransitionResult } from './placement-types'
 import type { DraftNodeHandle } from './use-draft-node'
 
@@ -450,6 +457,31 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     [asset?.attachTo, draftNode],
   )
 
+  // Disable raycasting on the live draft mesh (and restore it when the draft
+  // changes or goes away) so the cursor ray passes through the item being
+  // moved and lands on the surface beneath it.
+  const reconcileDraftRaycast = useCallback((mesh: Object3D | null) => {
+    if (raycastDisabledMeshRef.current !== mesh) {
+      // New draft root (or cleared): restore the prior mesh and reset tracking.
+      for (const restore of restoreRaycastsRef.current) restore()
+      restoreRaycastsRef.current = []
+      raycastDisabledChildrenRef.current = new WeakSet()
+      raycastDisabledMeshRef.current = mesh
+    }
+    if (!mesh) return
+    // Item models can mount descendants asynchronously. Re-walk the root so
+    // newly mounted meshes cannot intercept the next pointer event.
+    mesh.traverse((child) => {
+      if (raycastDisabledChildrenRef.current.has(child)) return
+      raycastDisabledChildrenRef.current.add(child)
+      const original = child.raycast
+      child.raycast = () => {}
+      restoreRaycastsRef.current.push(() => {
+        child.raycast = original
+      })
+    })
+  }, [])
+
   useEffect(() => {
     if (!asset) return
     useScene.temporal.getState().pause()
@@ -464,6 +496,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // layer's frame.
     let alignmentCandidates: AlignmentAnchor[] | null = null
     let floorDragAnchor: [number, number] | null = null
+    let pendingCustomMeshFaceId: string | null = null
 
     // Reset placement state
     placementState.current = configRef.current.initialState ?? {
@@ -507,6 +540,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           }
         : validators
 
+    const disableDraftRaycastNow = () => {
+      const draft = draftNode.current
+      if (!draft) return
+      const mesh = sceneRegistry.nodes.get(draft.id)
+      if (mesh) reconcileDraftRaycast(mesh)
+    }
+
     const finishCommittedPlacement = (
       committedId: string | null,
       wasAdopted: boolean,
@@ -544,6 +584,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const finalId = draftNode.commit(nodeUpdate, options)
       if (draftId) {
         useLiveTransforms.getState().clear(draftId)
+        useLiveNodeOverrides
+          .getState()
+          .clearFields(draftId, ['position', 'rotation', 'customMeshFaceId'])
       }
       return { committedId: finalId ?? draftId, wasAdopted }
     }
@@ -571,6 +614,21 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return buildingMesh ? buildingMesh.localToWorld(new Vector3(x, y, z)) : new Vector3(x, y, z)
     }
 
+    const worldRotationToBuildingLocal = (
+      rotation: [number, number, number],
+    ): [number, number, number] => {
+      const worldQuaternion = new Quaternion().setFromEuler(new Euler(...rotation))
+      const buildingId = useViewer.getState().selection.buildingId
+      const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+      if (buildingMesh) {
+        const buildingWorldQuaternion = new Quaternion()
+        buildingMesh.getWorldQuaternion(buildingWorldQuaternion)
+        worldQuaternion.premultiply(buildingWorldQuaternion.invert())
+      }
+      const localRotation = new Euler().setFromQuaternion(worldQuaternion, 'XYZ')
+      return [localRotation.x, localRotation.y, localRotation.z]
+    }
+
     const applyTransition = (result: TransitionResult) => {
       // Alignment guides are floor-only; clear them when the cursor moves
       // onto a wall / ceiling / item surface (only those paths call this).
@@ -586,7 +644,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (cursorGroupRef.current) {
         cursorGroupRef.current.position.set(c.x, c.y, c.z)
         if (result.cursorRotation) {
-          cursorGroupRef.current.rotation.set(...result.cursorRotation)
+          cursorGroupRef.current.rotation.set(
+            ...worldRotationToBuildingLocal(result.cursorRotation),
+          )
         } else {
           cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
         }
@@ -606,7 +666,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (cursorGroupRef.current) {
         cursorGroupRef.current.position.set(c.x, c.y, c.z)
         if (result.cursorRotation) {
-          cursorGroupRef.current.rotation.set(...result.cursorRotation)
+          cursorGroupRef.current.rotation.set(
+            ...worldRotationToBuildingLocal(result.cursorRotation),
+          )
         } else {
           cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
         }
@@ -631,6 +693,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         Object.assign(draft, result.nodeUpdate)
         // One-time setup: put node in the right parent so it renders correctly
         useScene.getState().updateNode(draft.id, result.nodeUpdate)
+        disableDraftRaycastNow()
       }
 
       const previewBounds = expandBoundsToGrid(
@@ -890,7 +953,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const onGridMove = (event: GridEvent) => {
       releaseCommit = () => onGridClick(event)
       // Lazy draft creation: if no draft yet (e.g. level wasn't ready during init), create now
-      if (draftNode.current === null && asset.attachTo === undefined) {
+      if (
+        shouldCreateFloorDraft(draftNode.current, asset.attachTo, placementState.current.surface)
+      ) {
         configRef.current.initDraft(gridPosition.current)
       }
 
@@ -1466,6 +1531,117 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
+    // ---- Custom Mesh Face Handlers ----
+
+    const enterCustomMeshFace = (event: CustomMeshEvent): boolean => {
+      const result = customMeshFaceStrategy.enter(getContext(), event)
+      if (!result) return false
+      pendingCustomMeshFaceId = null
+      event.stopPropagation()
+      applyTransition(result)
+      if (!draftNode.current) {
+        ensureDraft(result)
+      } else if (result.nodeUpdate.parentId) {
+        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        disableDraftRaycastNow()
+      }
+      if (draftNode.current) useLiveTransforms.getState().clear(draftNode.current.id)
+      return true
+    }
+
+    const onCustomMeshEnter = (event: CustomMeshEvent) => {
+      has3DPointerDrivenMoveRef.current = true
+      enterCustomMeshFace(event)
+    }
+
+    const onCustomMeshMove = (event: CustomMeshEvent) => {
+      has3DPointerDrivenMoveRef.current = true
+      if (!cursorGroupRef.current) return
+      const ctx = getContext()
+      if (ctx.state.surface !== 'custom-mesh-face' || !draftNode.current) {
+        if (enterCustomMeshFace(event)) releaseCommit = () => onCustomMeshClick(event)
+        return
+      }
+      const result = customMeshFaceStrategy.move(ctx, event)
+      if (!result) {
+        if (enterCustomMeshFace(event)) releaseCommit = () => onCustomMeshClick(event)
+        return
+      }
+
+      event.stopPropagation()
+      const draft = draftNode.current
+      const nextFaceId = result.nodeUpdate?.customMeshFaceId
+      const faceSwitch = resolveCustomMeshFaceSwitch(
+        draft?.customMeshFaceId,
+        nextFaceId,
+        pendingCustomMeshFaceId,
+      )
+      pendingCustomMeshFaceId = faceSwitch.pendingFaceId
+      if (!faceSwitch.accept) return
+      releaseCommit = () => onCustomMeshClick(event)
+
+      const posChanged =
+        gridPosition.current.x !== result.gridPosition[0] ||
+        gridPosition.current.y !== result.gridPosition[1] ||
+        gridPosition.current.z !== result.gridPosition[2]
+      if (posChanged) sfxEmitter.emit('sfx:grid-snap')
+      gridPosition.current.set(...result.gridPosition)
+      const cursor = worldToBuildingLocal(...result.cursorPosition)
+      cursorGroupRef.current.position.copy(cursor)
+      if (result.cursorRotation) {
+        cursorGroupRef.current.rotation.set(...worldRotationToBuildingLocal(result.cursorRotation))
+      }
+
+      if (draft && result.nodeUpdate) {
+        Object.assign(draft, result.nodeUpdate)
+        const mesh = sceneRegistry.nodes.get(draft.id)
+        const rotation = result.nodeUpdate.rotation ?? draft.rotation
+        if (mesh) applyCustomMeshPreviewPose(mesh, result.gridPosition, rotation)
+        useLiveNodeOverrides.getState().set(draft.id, {
+          position: result.gridPosition,
+          rotation,
+          customMeshFaceId: nextFaceId,
+        })
+      }
+      revalidate()
+    }
+
+    const onCustomMeshClick = (event: CustomMeshEvent) => {
+      const outcome = commitCustomMeshClick({
+        commitDraft,
+        enterCustomMeshFace,
+        event,
+        getContext,
+      })
+      if (!outcome) return
+      const { committedId, wasAdopted } = outcome
+      finishCommittedPlacement(committedId, wasAdopted, () => {
+        const enterResult = customMeshFaceStrategy.enter(getContext(), event)
+        if (enterResult) applyTransition(enterResult)
+        else revalidate()
+      })
+    }
+
+    const onCustomMeshLeave = (event: CustomMeshEvent) => {
+      pendingCustomMeshFaceId = null
+      const result = customMeshFaceStrategy.leave(getContext())
+      if (!result) return
+      event.stopPropagation()
+      const draft = draftNode.current
+      if (draft) {
+        useLiveNodeOverrides
+          .getState()
+          .clearFields(draft.id, ['position', 'rotation', 'customMeshFaceId'])
+      }
+      if (draftNode.isAdopted) {
+        applyTransition(result)
+        if (draft) useScene.getState().updateNode(draft.id, result.nodeUpdate)
+      } else {
+        draftNode.destroy()
+        Object.assign(placementState.current, result.stateUpdate)
+      }
+    }
+
     // ---- Item Surface Handlers ----
 
     const detachItemSurfaceToFloor = (event: ItemEvent) => {
@@ -1671,6 +1847,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // have to aim around the cursor preview to drop the item.
       if (event.node.id === draftNode.current?.id) {
         const ctx = getContext()
+        if (ctx.state.surface === 'custom-mesh-face') {
+          const result = resolveCustomMeshPreviewCommit(ctx)
+          if (result) {
+            event.stopPropagation()
+            const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
+            finishCommittedPlacement(committedId, wasAdopted, revalidate)
+            return
+          }
+        }
         if (ctx.state.surface === 'shelf-surface' && ctx.state.shelfId) {
           const shelfNode = useScene.getState().nodes[ctx.state.shelfId as AnyNodeId]
           if (shelfNode && shelfNode.type === 'shelf') {
@@ -2044,7 +2229,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       // Roof-wall drafts live flat in the host face frame (yaw 0) —
       // manual rotation would skew them off the wall plane.
-      if (placementState.current.surface === 'roof-wall') return
+      if (
+        placementState.current.surface === 'roof-wall' ||
+        placementState.current.surface === 'custom-mesh-face'
+      )
+        return
 
       let rotationDir: 1 | -1 | 0 = 0
       if ((event.key === 'r' || event.key === 'R') && !event.metaKey && !event.ctrlKey)
@@ -2254,6 +2443,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('roof:move', onRoofWallMove)
     emitter.on('roof:click', onRoofWallClick)
     emitter.on('roof:leave', onRoofWallLeave)
+    emitter.on('custom-mesh:enter', onCustomMeshEnter)
+    emitter.on('custom-mesh:move', onCustomMeshMove)
+    emitter.on('custom-mesh:click', onCustomMeshClick)
+    emitter.on('custom-mesh:leave', onCustomMeshLeave)
     emitter.on('ceiling:enter', onCeilingEnter)
     emitter.on('ceiling:move', onCeilingMove)
     emitter.on('ceiling:click', onCeilingClick)
@@ -2304,6 +2497,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('roof:move', onRoofWallMove)
       emitter.off('roof:click', onRoofWallClick)
       emitter.off('roof:leave', onRoofWallLeave)
+      emitter.off('custom-mesh:enter', onCustomMeshEnter)
+      emitter.off('custom-mesh:move', onCustomMeshMove)
+      emitter.off('custom-mesh:click', onCustomMeshClick)
+      emitter.off('custom-mesh:leave', onCustomMeshLeave)
       emitter.off('ceiling:enter', onCeilingEnter)
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
@@ -2330,6 +2527,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     gridSnapStep,
     updateDimensionGuides,
     updatePreviewGeometry,
+    reconcileDraftRaycast,
   ])
 
   // Refresh wireframe when the grid step changes mid-placement so the green/red
@@ -2361,38 +2559,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const draftParent = draft.parentId
       ? useScene.getState().nodes[draft.parentId as AnyNodeId]
       : undefined
-    if (draftParent?.type === 'item' || draftParent?.type === 'shelf') return
+    if (
+      draftParent?.type === 'item' ||
+      draftParent?.type === 'shelf' ||
+      (draftParent?.type === 'custom-mesh' && draft.customMeshFaceId)
+    )
+      return
     draft.parentId = viewerLevelId
     useScene.getState().updateNode(draft.id as AnyNodeId, { parentId: viewerLevelId })
   }, [viewerLevelId, draftNode, asset])
-
-  // Disable raycasting on the live draft mesh (and restore it when the draft
-  // changes or goes away) so the cursor ray passes through the item being
-  // moved and lands on the surface beneath it.
-  const reconcileDraftRaycast = useCallback((mesh: Object3D | null) => {
-    if (raycastDisabledMeshRef.current !== mesh) {
-      // New draft root (or cleared): restore the prior mesh and reset tracking.
-      for (const restore of restoreRaycastsRef.current) restore()
-      restoreRaycastsRef.current = []
-      raycastDisabledChildrenRef.current = new WeakSet()
-      raycastDisabledMeshRef.current = mesh
-    }
-    if (!mesh) return
-    // Disable any descendant not handled yet. Item drafts are GLB models whose
-    // child meshes mount asynchronously (Suspense), so a one-shot traverse
-    // misses them — those late children keep intercepting the ray and corrupt
-    // the shelf-row hit the moment the item moves onto a row. Re-walking each
-    // frame is cheap: the WeakSet makes it idempotent, so only new children pay.
-    mesh.traverse((child) => {
-      if (raycastDisabledChildrenRef.current.has(child)) return
-      raycastDisabledChildrenRef.current.add(child)
-      const original = child.raycast
-      child.raycast = () => {}
-      restoreRaycastsRef.current.push(() => {
-        child.raycast = original
-      })
-    })
-  }, [])
 
   // Restore the draft mesh's raycast when the coordinator unmounts (tool change).
   useEffect(() => () => reconcileDraftRaycast(null), [reconcileDraftRaycast])
@@ -2407,6 +2582,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
   const facingForwardRef = useRef(new Vector3(0, 0, 1))
   const facingQuatRef = useRef(new Quaternion())
+  const ghostSurfaceQuatRef = useRef(new Quaternion())
   useFrame(() => {
     const ghost = cursorGroupRef.current
     if (!(asset && ghost)) {
@@ -2421,7 +2597,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // the item's forward on the floor, and the triangle rides at the ghost's Y.
     let facingYaw = ghost.rotation.y
     let facingY = ghost.position.y
-    if (surf === 'wall' || surf === 'roof-wall') {
+    if (surf === 'wall' || surf === 'roof-wall' || surf === 'custom-mesh-face') {
       // Wall/roof-segment faces: the cursor group's yaw is the symmetric
       // wireframe yaw (π off the real facing for a wall, and a different frame
       // for a roof face), so derive the item's TRUE outward facing from the
@@ -2429,19 +2605,27 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // surface. This keeps BOTH the grid normal and the triangle correct for
       // wall and roof-segment hosts alike, rather than the old quaternion read
       // that pointed the wrong way.
-      const mesh = draftNode.current ? sceneRegistry.nodes.get(draftNode.current.id) : null
-      if (mesh) {
-        mesh.getWorldQuaternion(facingQuatRef.current)
-        const fwd = facingForwardRef.current.set(0, 0, 1).applyQuaternion(facingQuatRef.current)
-        fwd.y = 0
-        if (fwd.lengthSq() > 1e-6) facingYaw = Math.atan2(fwd.x, fwd.z)
-      }
+      const mesh =
+        surf === 'custom-mesh-face' || !draftNode.current
+          ? null
+          : sceneRegistry.nodes.get(draftNode.current.id)
+      ghost.getWorldQuaternion(ghostSurfaceQuatRef.current)
+      const hostedQuaternion = mesh ? mesh.getWorldQuaternion(facingQuatRef.current) : null
+      resolveItemPlacementSurfaceNormal(
+        surf,
+        ghostSurfaceQuatRef.current,
+        hostedQuaternion,
+        n,
+        asset.attachTo,
+      )
+      const fwd = facingForwardRef.current.copy(n)
+      if (fwd.lengthSq() > 1e-6) facingYaw = Math.atan2(fwd.x, fwd.z)
       // The forward triangle is a floor aid; drop it to the building-local floor
-      // under the wall (the ghost Y is up on the wall).
+      // under the hosted plane.
       facingY = 0
-      n.set(Math.sin(facingYaw), 0, Math.cos(facingYaw))
     } else {
-      n.set(0, 1, 0)
+      ghost.getWorldQuaternion(ghostSurfaceQuatRef.current)
+      resolveItemPlacementSurfaceNormal(surf, ghostSurfaceQuatRef.current, null, n)
     }
     publishPlacementSurface(ghost.position, n)
 
@@ -2513,6 +2697,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         mesh.position.y = visualPosition[1]
         cursorGroupRef.current.position.y = visualPosition[1]
       }
+    } else if (placementState.current.surface === 'custom-mesh-face') {
+      const rotation = draftNode.current.rotation
+      applyCustomMeshPreviewPose(
+        mesh,
+        [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
+        rotation,
+      )
     }
   })
 

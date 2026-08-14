@@ -142,6 +142,11 @@ export const ItemNode = BaseNode.extend({
   // mounts the node inside the face frame (`getRoofWallFaceFrame`).
   roofSegmentId: z.string().optional(),
   roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
+  // Alternative wall-like host: a planar custom-mesh face. Position is
+  // FACE-LOCAL [u, v, normal offset], relative to the live face centroid.
+  // The renderer rebuilds the frame from the face normal so the item follows
+  // later edits that translate or slope the face.
+  customMeshFaceId: z.string().optional(),
 
   // Persisted floor-support host (canonical doc — the same field on other
   // floor-placed kinds and walls follows these rules). Written at

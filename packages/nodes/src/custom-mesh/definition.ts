@@ -46,7 +46,7 @@ function footprintPosition(node: CustomMeshNodeType, center: [number, number, nu
 
 export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
   kind: 'custom-mesh',
-  schemaVersion: 4,
+  schemaVersion: 5,
   schema: CustomMeshNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -64,6 +64,7 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
     parentId: null,
     visible: true,
     metadata: {},
+    children: [],
     position: [0, 0, 0],
     rotation: 0,
     topology: createBoxCustomMeshTopology(),
@@ -81,6 +82,7 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
           return center[1] + size[1] / 2
         },
       },
+      sides: { faces: 'all' },
     },
     movable: { axes: ['x', 'z'], gridSnap: true },
     duplicable: true,

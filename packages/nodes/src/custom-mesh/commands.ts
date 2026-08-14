@@ -4,6 +4,8 @@ import {
   type CustomMeshTopology,
   type CustomMeshVertex,
   customMeshUndirectedEdgeKey,
+  getCustomMeshFaceCentroid,
+  getCustomMeshFaceNormal,
   inspectCustomMeshTopology,
 } from '@pascal-app/core'
 import type { CustomMeshSelection } from './selection-model'
@@ -83,37 +85,14 @@ export function customMeshFaceNormal(
   topology: CustomMeshTopology,
   face: CustomMeshFace,
 ): Point | null {
-  const vertices = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
-  const positions = face.vertexIds
-    .map((id) => vertices.get(id))
-    .filter((value): value is Point => !!value)
-  if (positions.length < 3) return null
-
-  const normal: Point = [0, 0, 0]
-  for (let index = 0; index < positions.length; index += 1) {
-    const current = positions[index]!
-    const next = positions[(index + 1) % positions.length]!
-    normal[0] += (current[1] - next[1]) * (current[2] + next[2])
-    normal[1] += (current[2] - next[2]) * (current[0] + next[0])
-    normal[2] += (current[0] - next[0]) * (current[1] + next[1])
-  }
-  return normalize(normal)
+  return getCustomMeshFaceNormal(topology, face)
 }
 
 export function customMeshFaceCentroid(
   topology: CustomMeshTopology,
   face: CustomMeshFace,
 ): Point | null {
-  const vertices = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
-  const positions = face.vertexIds
-    .map((id) => vertices.get(id))
-    .filter((value): value is Point => !!value)
-  if (positions.length !== face.vertexIds.length || positions.length === 0) return null
-  const total = positions.reduce<Point>(
-    (sum, position) => [sum[0] + position[0], sum[1] + position[1], sum[2] + position[2]],
-    [0, 0, 0],
-  )
-  return [total[0] / positions.length, total[1] / positions.length, total[2] / positions.length]
+  return getCustomMeshFaceCentroid(topology, face)
 }
 
 function nextNumericId(prefix: string, ids: readonly string[]): () => string {

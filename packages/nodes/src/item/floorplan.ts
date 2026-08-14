@@ -4,6 +4,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getCustomMeshFaceFrame,
   getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
@@ -139,6 +140,28 @@ function resolveItemTransform(
         x: rx + roof.position[0],
         y: rz + roof.position[2],
         rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
+      }
+    }
+  } else if (parentNode?.type === 'custom-mesh' && item.customMeshFaceId) {
+    const frame = getCustomMeshFaceFrame(parentNode.topology, item.customMeshFaceId)
+    if (frame) {
+      const localX =
+        frame.origin[0] +
+        frame.xAxis[0] * item.position[0] +
+        frame.yAxis[0] * item.position[1] +
+        frame.normal[0] * item.position[2]
+      const localZ =
+        frame.origin[2] +
+        frame.xAxis[2] * item.position[0] +
+        frame.yAxis[2] * item.position[1] +
+        frame.normal[2] * item.position[2]
+      const hostRotation = parentNode.rotation ?? 0
+      const [offsetX, offsetZ] = rotateVec(localX, localZ, hostRotation)
+      const faceRotation = -Math.atan2(frame.xAxis[2], frame.xAxis[0])
+      result = {
+        x: parentNode.position[0] + offsetX,
+        y: parentNode.position[2] + offsetZ,
+        rotation: hostRotation + faceRotation + localRotation,
       }
     }
   } else {

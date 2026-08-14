@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
 import {
   type PlacementState,
   triggerSFX,
@@ -35,8 +35,24 @@ import { Vector3 } from 'three'
  * move) also ports to `def.tool`, the primitives can be inlined here
  * and dropped from editor.
  */
-function getInitialState(node: ItemNode): PlacementState {
+export function getInitialState(
+  node: ItemNode,
+  parent: AnyNode | undefined = node.parentId
+    ? useScene.getState().nodes[node.parentId as AnyNodeId]
+    : undefined,
+): PlacementState {
   const attachTo = node.asset.attachTo
+  if (node.customMeshFaceId && parent?.type === 'custom-mesh') {
+    return {
+      surface: 'custom-mesh-face',
+      wallId: null,
+      roofSegmentId: null,
+      customMeshId: parent.id,
+      ceilingId: null,
+      surfaceItemId: null,
+      shelfId: null,
+    }
+  }
   if (attachTo === 'wall' || attachTo === 'wall-side') {
     if (node.roofSegmentId) {
       return {
@@ -72,7 +88,6 @@ function getInitialState(node: ItemNode): PlacementState {
   // handler — which preserves the grab offset — instead of a fresh `enter()`
   // that snaps the item's origin under the cursor. Without this the item
   // teleports the instant it's grabbed.
-  const parent = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : undefined
   if (parent?.type === 'item') {
     return {
       surface: 'item-surface',

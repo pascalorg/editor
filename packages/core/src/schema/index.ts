@@ -77,12 +77,16 @@ export { CupolaNode } from './nodes/cupola'
 export {
   CustomMeshEdge,
   CustomMeshFace,
+  type CustomMeshFaceFrame,
   CustomMeshNode,
   CustomMeshTopology,
   type CustomMeshTopologyIssue,
   CustomMeshVertex,
   createBoxCustomMeshTopology,
   customMeshUndirectedEdgeKey,
+  getCustomMeshFaceCentroid,
+  getCustomMeshFaceFrame,
+  getCustomMeshFaceNormal,
   inspectCustomMeshTopology,
 } from './nodes/custom-mesh'
 export {
