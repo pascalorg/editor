@@ -695,6 +695,12 @@ export const FormworkPourSettings = z.object({
    * or vibrate.
    */
   jointSnapTolerance: z.number().finite().positive().max(10).optional(),
+  /**
+   * The project's bays are cast alternately: no two adjacent bays of an element
+   * share a pour interval, so the sequence orders one parity of bays before the
+   * other and reports which. An element's own `alternateBays` overrides this.
+   */
+  alternateBays: z.boolean().optional(),
 })
 export type FormworkPourSettings = z.infer<typeof FormworkPourSettings>
 
@@ -730,6 +736,31 @@ export const CuringSettings = z.object({
    * days, and this is the clause the whole drophead market exists on.
    */
   shoresRemain: z.boolean().optional(),
+  /**
+   * The strength-based striking criterion, as the maturity the concrete must reach
+   * before the form comes off — Nurse–Saul `M_target`, degree-hours, calibrated from
+   * job-cured specimens (design.md §3.4). Stated as a project decision rather than
+   * defaulted: a guessed target is a check that cannot fail. When it is recorded, the
+   * strike is the later of this criterion and the elapsed-time table, and a criterion
+   * missing the temperature history it accumulates over falls back to elapsed time and
+   * says so. The percentages a contract usually states are report-only — see
+   * `requiredStrengthFraction` and `designStrengthMpa`.
+   */
+  maturityTargetDegreeHours: z.number().finite().positive().max(100_000).optional(),
+  /**
+   * Nurse–Saul datum temperature, °C. Unstated takes 0 °C and says so — a target
+   * calibrated against a different datum cannot be compared with this one.
+   */
+  maturityDatumC: z.number().finite().min(-20).max(60).optional(),
+  /**
+   * The required strength the maturity target was calibrated for, as a fraction of
+   * the design strength — the way a contract states a strike criterion (~70 % for
+   * props, ~50 % for soffits with reshores). Report-only naming: the strike is
+   * decided by the maturity target, and this is what it is called in words.
+   */
+  requiredStrengthFraction: z.number().finite().min(0).max(1).optional(),
+  /** The concrete's design strength, MPa, for the naming above. */
+  designStrengthMpa: z.number().finite().positive().max(500).optional(),
 })
 export type CuringSettings = z.infer<typeof CuringSettings>
 
@@ -762,7 +793,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - measurementStandard: the contract's quantity rules (IS 1200, NRM2, HKSMM4, CESMM4, POMI)
   - concrete: the mix — density/unit weight, consistency class, slump, cement blend, admixtures, setting time
   - placement: how the pour is done — rate of rise, concrete temperature, vibration, pumped from base
-  - curing: what happens after the pour, which sets the striking time — surface temperature while curing (NOT the placing temperature), high-early-strength concrete, whether the soffit form leaves its props behind
+  - curing: what happens after the pour, which sets the striking time — surface temperature while curing (NOT the placing temperature), high-early-strength concrete, whether the soffit form leaves its props behind, and the strength-based striking criterion: the concrete's maturity target in degree-hours at which the form may come off (a project decision, not a default — it is the calibration from job-cured specimens), the Nurse–Saul datum it is measured against, and the required strength it corresponds to as a fraction of the design strength with the design strength in MPa, which name the criterion in a contract's words without deciding it. A strength criterion missing the temperature history it accumulates over falls back to elapsed time and says so
   - falseworkLoads: soffit dead and live loads beyond the concrete itself, each raised to the ACI floor
   - bracing: wind, form weight and raker geometry for wall forms
   - parts: catalog ids for the panel system, sheathing, beam section and prop
@@ -773,7 +804,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - crane: the site's own crane — its load chart as capacity against radius, the height under the hook, the widest gang that can be moved, and the minimum sling angle. A capacity curve rather than a rating because a tower crane rated 8 t lifts 2.2 t at the jib tip, and a gang is checked at the radius it is actually set at. Absent means each face is grouped as one gang and nothing is checked against a lift — there is no conservative default crane, and a shipped curve would pass gangs that do not lift and fail gangs that do
   - logistics: what one lorry carries and how many minutes of hook time a pick takes, which is what turns a bill's weight into loads and a lifting schedule into crane hours. The two costs every total in this model has excluded since the money arrived, and both figures are facts about this job's own plant rather than about a product: a payload is the lorry the yard sends and a cycle time is this crew on this crane. Absent means the takeoff carries no transport and no craneage at all, as an absent norm means it carries no hours
   - concreteSupply: how fast the concrete can arrive — the batching plant's output and the pump or skip's placing rate, m³/h. The third limit on a rise rate, beside the rate the project states and the pressure the panels are rated for: a 6 m² pour at 2 m/h wants 12 m³/h, and a plant sending 8 makes it 1.33 whatever the programme says. Two fields because they are two constraints in series and the slower governs, and a reader told only the answer cannot tell whether to ring the supplier or hire a bigger pump. Absent means the check is not performed rather than passed
-  - pours: where a lift joint may land — the permitted joint elevations above each element's base (slab soffits, slab tops, storey breaks) and how far a cut may move to reach one. What the pour split snaps to and what the off-permitted check verifies against; absent means the solver's own uniform split, and a stated set that satisfies no boundary is reported as a conflict rather than silently placed
+  - pours: where a lift joint may land — the permitted joint elevations above each element's base (slab soffits, slab tops, storey breaks), how far a cut may move to reach one, and whether the bays are cast alternately (no two adjacent bays in one pour interval; an element's own alternateBays overrides). What the pour split snaps to and what the off-permitted check verifies against; absent means the solver's own uniform split, and a stated set that satisfies no boundary is reported as a conflict rather than silently placed
   - sheets: the sheet stock the yard buys its ply out of, plus what it racks the remainder of and how much it loses to handling. Separate from parts.sheathingId because that names a grade and a grade has no size — only sheet stock carries a width and a length, and which one a job buys is a commercial fact about the job. This is what turns the cut boards on the bill into sheets to order; the sheets are a purchasing figure beside the bill rather than a line in it, because the boards are already billed. Absent means no cut list at all
   `,
 )

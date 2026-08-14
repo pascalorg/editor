@@ -14,19 +14,22 @@
  * it cures. Reading one as the other is how a January pour gets July's strike
  * time.
  *
- * **Three criteria exist and only one of them is implemented.** ACI 347 §3.7 is
+ * **Two criteria exist, and one of them is a fallback.** ACI 347 §3.7 is
  * explicit that strength is the *preferred* basis and elapsed time is the
- * fallback, so it is worth being plain about which this is:
+ * fallback, so it is worth being plain about which this module can answer on
+ * its own:
  *
- * - *Strength* (`~70 % of f'c` for props, `~50 %` under reshores) needs a design
- *   strength, and no node in the model carries one. It is also contract-specific
- *   rather than code-mandated — design.md §3.4 flags exactly that — so a default
- *   would be an invented contract.
- * - *Maturity* (Nurse–Saul, or Arrhenius equivalent age) needs a temperature
- *   history and an `M_target` calibrated from job-cured specimens. Neither is
- *   recordable here, and a maturity function with a guessed target is a check
- *   that cannot fail — this suite already documents four of those.
- * - *Elapsed time* is what the codes tabulate, and it is what this module is.
+ * - *Elapsed time* is what the codes tabulate, and it is always the answer when
+ *   the project has stated nothing about strength. This is the default and the
+ *   fallback.
+ * - *Strength / maturity* is a project decision, not a code default — design.md
+ *   §3.4 flags the percentages as contract-specific rather than code-mandated,
+ *   and the maturity target is calibrated from job-cured specimens. So it is
+ *   evaluated only when the project records it, never guessed: a maturity
+ *   function with an invented target is a check that cannot fail, which this
+ *   suite already documents four of. When the strength criterion is stated but
+ *   an input it needs is missing, the strike falls back to elapsed time and says
+ *   what was missing rather than silently ignoring the criterion.
  *
  * `basis` on the result exists because the two families do not even measure the
  * same clock. ACI's periods are *"a cumulative number of days, or hours, not
@@ -92,6 +95,8 @@ export type StrikingAssumptionKind =
   | 'clear-span'
   /** The permanent structure's load ratio is unrecorded, so ACI's longer column was taken. */
   | 'load-ratio'
+  /** A strength criterion stated no maturity datum, so the shipped 0 °C was taken. */
+  | 'maturity-datum'
 
 export interface StrikingAssumption {
   kind: StrikingAssumptionKind
@@ -116,6 +121,11 @@ export type StrikingWarningKind =
   | 'temperature-below-table'
   /** DIN's own family answers this in EN 13670 §5.5, which is not covered here. */
   | 'standard-outside-own-family'
+  /**
+   * A strength criterion was stated but the inputs to evaluate it are missing, so
+   * the strike falls back to the elapsed-time table and names what was missing.
+   */
+  | 'strength-criterion-not-evaluated'
 
 export interface StrikingWarning {
   kind: StrikingWarningKind
@@ -149,6 +159,30 @@ export interface StrikingInput {
   highEarlyStrength?: boolean
   /** A retarder in the mix, or ambient below 10 °C. Warns rather than lengthens. */
   delayedSetting?: boolean
+  /**
+   * The strength criterion, as the maturity the concrete must reach before it is
+   * struck — Nurse–Saul `M_target`, degree-hours, calibrated from job-cured
+   * specimens (design.md §3.4). Stated as a project decision rather than
+   * defaulted: a guessed target is a check that cannot fail. When it is stated,
+   * the governing strike is the later of this and the elapsed-time table, and a
+   * criterion missing the temperature history it accumulates over falls back to
+   * elapsed time and names it.
+   */
+  maturityTargetDegreeHours?: number
+  /**
+   * Nurse–Saul datum temperature, °C. Unstated takes 0 °C and says so — a target
+   * calibrated against a different datum cannot be compared with this one.
+   */
+  maturityDatumC?: number
+  /**
+   * The required strength the target was calibrated for, as a fraction of the
+   * design strength — the way a contract states a strike criterion. Report-only
+   * naming: the strike is decided by the maturity target, and this is what it is
+   * called in words.
+   */
+  requiredStrengthFraction?: number
+  /** The concrete's design strength, MPa, for the naming above. */
+  designStrengthMpa?: number
 }
 
 export interface StrikingTime {
@@ -163,11 +197,51 @@ export interface StrikingTime {
    * ACI's is the latter and the difference is a fortnight in a cold spring.
    */
   basis: 'calendar' | 'qualifying-time'
+  /**
+   * Which of the two criteria set the strike — the elapsed-time table, or a
+   * strength/maturity criterion the project stated. Time is the default and the
+   * fallback; strength appears only when the project recorded a target and the
+   * inputs to evaluate it were present.
+   */
+  criterion: StrikingCriterion
+  /**
+   * The strength criterion's assessment, present wherever one was stated and
+   * could be evaluated. The governing strike is the later of the two, so under a
+   * strength-governed strike `accumulatedDegreeHours` meets the target and under
+   * a time-governed one it has already surpassed it.
+   */
+  maturity?: StrikingMaturity
   /** The table row or formula that produced it, for a report that has to be traceable. */
   governingRule: string
   /** Inputs nobody supplied, taken at the conservative end and named. */
   assumed: StrikingAssumption[]
   warnings: StrikingWarning[]
+}
+
+/** Which criterion set the strike on a `StrikingTime`. */
+export type StrikingCriterion = 'elapsed-time' | 'strength'
+
+/**
+ * One strength criterion, as far as it was recorded and evaluated.
+ *
+ * The criterion itself is the maturity target: the concrete is struck when its
+ * accumulated maturity reaches `targetDegreeHours`, and `accumulatedDegreeHours`
+ * is that maturity count at the strike the result reports. The strength fraction
+ * and the design strength are the same criterion spoken as a contract would — the
+ * percentages are contract-specific rather than code-mandated, so they name the
+ * criterion and do not decide it.
+ */
+export interface StrikingMaturity {
+  /** `M_target`, degree-hours — the maturity that reaches the required strength. */
+  targetDegreeHours: number
+  /** The Nurse–Saul datum the target is measured against, °C. */
+  datumC: number
+  /** Accumulated maturity at the strike date, degree-hours. */
+  accumulatedDegreeHours: number
+  /** The required strength, as a fraction of the design strength, where stated. */
+  requiredStrengthFraction?: number
+  /** The concrete's design strength, MPa, where stated. */
+  designStrengthMpa?: number
 }
 
 const HOURS_PER_DAY = 24
@@ -190,6 +264,12 @@ export const ACI_VERTICAL_FORM_H = 12
 
 /** ACI footnote ‡ — a halved soffit period may not fall below this, days. */
 export const ACI_HALVED_FLOOR_DAYS = 3
+
+/**
+ * Nurse–Saul datum when a strength criterion states none. 0 °C is the degree-hours
+ * clock — one hour at 1 °C above freezing is one degree-hour (design.md §3.4).
+ */
+export const DEFAULT_MATURITY_DATUM_C = 0
 
 /** BS 8110 Table 6.2 numerators, over `(t + 10)`. The vertical row is hours; the rest days. */
 const BS_COEFFICIENT: Record<StrikeTarget, number> = {
@@ -312,6 +392,7 @@ function aciStriking(input: StrikingInput): StrikingTime {
     hours,
     days: hours / HOURS_PER_DAY,
     basis: 'qualifying-time',
+    criterion: 'elapsed-time',
     governingRule,
     assumed,
     warnings: warnings.concat(adjustmentWarnings(input)),
@@ -351,6 +432,7 @@ function bsStriking(input: StrikingInput): StrikingTime {
     hours,
     days: hours / HOURS_PER_DAY,
     basis: 'calendar',
+    criterion: 'elapsed-time',
     governingRule: `BS 8110-1:1997 Table 6.2 — ${coefficient}/(t + 10) ${
       inHours ? 'h' : 'd'
     } at t = ${effective} °C`,
@@ -398,7 +480,114 @@ function adjustmentWarnings(input: StrikingInput): StrikingWarning[] {
  * and pricing them as one is the mistake this shape exists to prevent.
  */
 export function strikingTime(standard: StrikingStandardId, input: StrikingInput): StrikingTime {
-  return standard === 'ACI_347' ? aciStriking(input) : bsStriking(input)
+  const elapsed = standard === 'ACI_347' ? aciStriking(input) : bsStriking(input)
+  return withStrength(elapsed, input)
+}
+
+/**
+ * A stated strength criterion, judged against the elapsed-time answer.
+ *
+ * The elapsed tables are the default and the fallback; strength exists only when
+ * the project states a maturity target, and then only as far as the inputs to
+ * evaluate it allow. The governing strike is the *later* of the two — the form
+ * stays until both the code's period and the concrete's strength agree it can
+ * come off, which is the same conservative direction every default in this
+ * module already takes. A criterion that cannot be evaluated is not silently
+ * dropped: it falls back to elapsed time and says what was missing (spec
+ * "A strength criterion without the inputs to evaluate it is not silently
+ * dropped").
+ */
+function withStrength(elapsed: StrikingTime, input: StrikingInput): StrikingTime {
+  const target = input.maturityTargetDegreeHours
+  const fraction = input.requiredStrengthFraction
+  const design = input.designStrengthMpa
+  if (target === undefined && fraction === undefined && design === undefined) return elapsed
+
+  const assumed = [...elapsed.assumed]
+  const warnings = [...elapsed.warnings]
+  const fallback = (message: string): StrikingTime => ({
+    ...elapsed,
+    criterion: 'elapsed-time',
+    assumed,
+    warnings: [...warnings, { kind: 'strength-criterion-not-evaluated', message }],
+  })
+
+  if (target === undefined) {
+    return fallback(
+      `The strength criterion (${strengthName(fraction, design)}) could not be evaluated because the maturity it must reach to get there is not recorded — the degree-hours target calibrated from job-cured specimens. The strike falls back to the elapsed-time criterion: ${elapsed.governingRule}.`,
+    )
+  }
+
+  const datum = input.maturityDatumC ?? DEFAULT_MATURITY_DATUM_C
+  if (input.maturityDatumC === undefined) {
+    assumed.push({
+      kind: 'maturity-datum',
+      message: `The strength criterion names no maturity datum, so the shipped ${DEFAULT_MATURITY_DATUM_C} °C datum was taken. A target calibrated against a different datum cannot be compared with this one.`,
+    })
+  }
+
+  const criterion = `${strengthName(fraction, design)} at ${target} °C·h of maturity (Nurse–Saul at a ${datum} °C datum)`
+  const surface = input.temperatureC
+  if (surface === undefined) {
+    return fallback(
+      `The strength criterion (${criterion}) could not be evaluated because the curing temperature history is not recorded — the surface temperature while it cures, which the maturity accumulates over. The strike falls back to the elapsed-time criterion: ${elapsed.governingRule}.`,
+    )
+  }
+  if (surface <= datum) {
+    return fallback(
+      `The strength criterion (${criterion}) could not be evaluated because at ${surface} °C against a ${datum} °C datum no maturity accumulates. The strike falls back to the elapsed-time criterion: ${elapsed.governingRule}.`,
+    )
+  }
+
+  const strengthHours = target / (surface - datum)
+  const strengthGoverns = strengthHours > elapsed.hours
+  const hours = strengthGoverns ? strengthHours : elapsed.hours
+  const accumulated = (surface - datum) * hours
+
+  const sentence = strengthGoverns
+    ? ` The strike is governed by the strength criterion: ${strengthName(
+        fraction,
+        design,
+      )} is reached at ${target} °C·h of maturity, which at ${surface} °C against the ${datum} °C datum takes ${formatPeriod(
+        strengthHours,
+      )} — later than the elapsed-time period of ${formatPeriod(elapsed.hours)}.`
+    : ` The strength criterion (${strengthName(
+        fraction,
+        design,
+      )} at ${target} °C·h of maturity) is reached in ${formatPeriod(
+        strengthHours,
+      )}, sooner than the elapsed-time period — time governs.`
+
+  return {
+    ...elapsed,
+    hours,
+    days: hours / HOURS_PER_DAY,
+    criterion: strengthGoverns ? 'strength' : 'elapsed-time',
+    maturity: {
+      targetDegreeHours: target,
+      datumC: datum,
+      accumulatedDegreeHours: accumulated,
+      ...(fraction === undefined ? {} : { requiredStrengthFraction: fraction }),
+      ...(design === undefined ? {} : { designStrengthMpa: design }),
+    },
+    governingRule: `${elapsed.governingRule}.${sentence}`,
+    assumed,
+    warnings,
+  }
+}
+
+/** The strength criterion in words a report should print, from what was stated. */
+function strengthName(fraction: number | undefined, design: number | undefined): string {
+  if (fraction !== undefined && design !== undefined)
+    return `${Math.round(fraction * 100)} % of the design strength (${design} MPa)`
+  if (fraction !== undefined) return `${Math.round(fraction * 100)} % of the design strength`
+  if (design !== undefined) return `the design strength of ${design} MPa`
+  return 'the required strength'
+}
+
+/** A period as a report reads it: hours when it is part of a day, days above. */
+function formatPeriod(hours: number): string {
+  return hours < 48 ? `${Math.round(hours)} h` : `${(hours / 24).toFixed(1)} d`
 }
 
 /**

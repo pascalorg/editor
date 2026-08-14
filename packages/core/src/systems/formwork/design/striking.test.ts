@@ -219,6 +219,176 @@ describe('strikingTime — ACI 347 §3.7.2.3', () => {
   })
 })
 
+describe('a stated strength criterion (spec "Striking may be governed by strength")', () => {
+  // The strength criterion is Nurse–Saul maturity at a single recorded cure
+  // temperature, so `hours = M_target / (t - T0)` (design.md §3.4). These tests
+  // key on that arithmetic and on the three spec scenarios: strength governs,
+  // time governs, and a criterion missing an input falls back and says so.
+
+  test('strength governs when the maturity target is reached later than the table', () => {
+    // BS 8110 props at 16 °C are held 250/26 = 9.6 d. A target of 6000 °C·h
+    // accumulates at (16 − 0) °C·h per hour, so it takes 6000/16 = 375 h = 15.6 d.
+    const t = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityTargetDegreeHours: 6000,
+    })
+
+    expect(t.criterion).toBe('strength')
+    expect(t.days).toBeCloseTo(6000 / 16 / 24, 4)
+    expect(t.hours).toBeCloseTo(375, 4)
+    expect(t.maturity?.targetDegreeHours).toBe(6000)
+    // At the strength-governed strike date the accumulated maturity meets the target.
+    expect(t.maturity?.accumulatedDegreeHours).toBeCloseTo(6000, 1)
+    expect(t.governingRule).toContain('governed by the strength criterion')
+  })
+
+  test('time governs when it is the later of the two, and the maturity is reported', () => {
+    // A target of 1000 °C·h is met in 62.5 h, well inside the table's 230.8 h —
+    // so the form stays for the table's period and the strength has long been met.
+    const t = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityTargetDegreeHours: 1000,
+    })
+
+    expect(t.criterion).toBe('elapsed-time')
+    expect(t.days).toBeCloseTo(250 / 26, 4)
+    // Accumulated by the time-governed strike date: 16 °C·h per hour over 230.8 h.
+    expect(t.maturity?.accumulatedDegreeHours).toBeCloseTo(16 * (250 / 26) * 24, 1)
+    expect(t.governingRule).toContain('time governs')
+  })
+
+  test('a target met in exactly the table’s own period does not switch to strength', () => {
+    // At a datum of −10 °C the same 6000 °C·h takes 6000/26 = 230.8 h, the table’s
+    // own period. Equality goes to elapsed time, the conservative reading of "later".
+    const t = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityDatumC: -10,
+      maturityTargetDegreeHours: 6000,
+    })
+
+    expect(t.criterion).toBe('elapsed-time')
+  })
+
+  test('the criterion governs under ACI too, on the same clock the table uses', () => {
+    const t = strikingTime('ACI_347', {
+      target: 'slab-props',
+      clearSpanM: 2,
+      temperatureC: 16,
+      maturityTargetDegreeHours: 6000,
+    })
+
+    expect(t.criterion).toBe('strength')
+    expect(t.basis).toBe('qualifying-time')
+    expect(t.days).toBeCloseTo(6000 / 16 / 24, 4)
+  })
+
+  test('a criterion missing the curing temperature falls back to time and names it', () => {
+    const t = strikingTime('BS_8110', {
+      target: 'slab-props',
+      maturityTargetDegreeHours: 6000,
+    })
+
+    expect(t.criterion).toBe('elapsed-time')
+    expect(t.days).toBeCloseTo(250 / 26, 4)
+    expect(t.warnings.map((warning) => warning.kind)).toContain('strength-criterion-not-evaluated')
+    const warning = t.warnings.find((entry) => entry.kind === 'strength-criterion-not-evaluated')
+    expect(warning?.message).toMatch(/temperature history/)
+  })
+
+  test('a cure at or below the datum accumulates nothing, and that is the missing input', () => {
+    const t = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 0,
+      maturityTargetDegreeHours: 6000,
+    })
+
+    expect(t.criterion).toBe('elapsed-time')
+    const warning = t.warnings.find((entry) => entry.kind === 'strength-criterion-not-evaluated')
+    expect(warning?.message).toMatch(/no maturity accumulates/)
+  })
+
+  test('a strength stated without the maturity target behind it is not silently dropped', () => {
+    // "70 % of f'c" alone is a criterion with nothing to evaluate: the maturity at
+    // which that strength is reached (from job-cured specimens) is the missing input.
+    const t = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      requiredStrengthFraction: 0.7,
+      designStrengthMpa: 40,
+    })
+
+    expect(t.criterion).toBe('elapsed-time')
+    const warning = t.warnings.find((entry) => entry.kind === 'strength-criterion-not-evaluated')
+    expect(warning?.message).toMatch(/calibrated from job-cured specimens/)
+  })
+
+  test('an unstated datum takes 0 °C and is named as assumed', () => {
+    const assumed = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityTargetDegreeHours: 6000,
+    })
+    const stated = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityDatumC: -10,
+      maturityTargetDegreeHours: 6000,
+    })
+
+    expect(assumed.assumed.map((entry) => entry.kind)).toContain('maturity-datum')
+    expect(stated.assumed.map((entry) => entry.kind)).not.toContain('maturity-datum')
+  })
+
+  test('the strength is named as the contract would when its parts are stated', () => {
+    const named = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityTargetDegreeHours: 6000,
+      requiredStrengthFraction: 0.7,
+      designStrengthMpa: 40,
+    })
+
+    expect(named.governingRule).toContain('70 % of the design strength (40 MPa)')
+    expect(named.maturity?.requiredStrengthFraction).toBe(0.7)
+    expect(named.maturity?.designStrengthMpa).toBe(40)
+  })
+
+  test('a fraction alone, or a design strength alone, names the criterion it can', () => {
+    const fractionOnly = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityTargetDegreeHours: 6000,
+      requiredStrengthFraction: 0.7,
+    })
+    const designOnly = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityTargetDegreeHours: 6000,
+      designStrengthMpa: 40,
+    })
+    const neither = strikingTime('BS_8110', {
+      target: 'slab-props',
+      temperatureC: 16,
+      maturityTargetDegreeHours: 6000,
+    })
+
+    expect(fractionOnly.governingRule).toContain('70 % of the design strength')
+    expect(designOnly.governingRule).toContain('the design strength of 40 MPa')
+    expect(neither.governingRule).toContain('the required strength')
+  })
+
+  test('stating none of the strength inputs keeps the elapsed-only answer untouched', () => {
+    const plain = strikingTime('BS_8110', { target: 'slab-props', temperatureC: 16 })
+
+    expect(plain.criterion).toBe('elapsed-time')
+    expect(plain.maturity).toBeUndefined()
+    expect(plain.days).toBeCloseTo(250 / 26, 4)
+  })
+})
+
 describe('the two adjustments neither code quantifies', () => {
   test('high-early-strength concrete is reported as available, not applied', () => {
     // "Can be reduced as approved" is a person's decision with no factor attached.

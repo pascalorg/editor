@@ -193,6 +193,40 @@ const CURING_PATCH = z.object({
     .describe(
       'the soffit form comes away without disturbing the props — a drophead or early-strip system. ACI 347 footnote ‡ halves the form’s period, floored at 3 days; the props themselves are never halved',
     ),
+  maturityTargetDegreeHours: z
+    .number()
+    .positive()
+    .max(100_000)
+    .nullable()
+    .optional()
+    .describe(
+      'the strength-based striking criterion, as the maturity the concrete must reach before the form comes off — Nurse–Saul M_target, degree-hours, calibrated from job-cured specimens. Ask the engineer for it and never infer it: a guessed target is a check that cannot fail. When recorded, the strike is the later of this criterion and the elapsed-time table, and a criterion missing the curing temperature it accumulates over falls back to elapsed time and says so',
+    ),
+  maturityDatumC: z
+    .number()
+    .min(-20)
+    .max(60)
+    .nullable()
+    .optional()
+    .describe(
+      'the Nurse–Saul datum temperature the maturity target is measured against, °C. Unstated takes 0 °C and says so — a target calibrated against a different datum cannot be compared with this one',
+    ),
+  requiredStrengthFraction: z
+    .number()
+    .min(0)
+    .max(1)
+    .nullable()
+    .optional()
+    .describe(
+      'the required strength the maturity target was calibrated for, as a fraction of the design strength — the way a contract states a strike criterion (~0.7 for props, ~0.5 for soffits with reshores). Report-only naming: the strike is decided by maturityTargetDegreeHours, and this is what it is called in words',
+    ),
+  designStrengthMpa: z
+    .number()
+    .positive()
+    .max(500)
+    .nullable()
+    .optional()
+    .describe('the concrete’s design strength, MPa, for the naming above'),
 })
 
 /**
@@ -771,7 +805,7 @@ export const formworkSettingsPatchInput = {
   ),
   placement: PLACEMENT_PATCH.optional(),
   curing: CURING_PATCH.optional().describe(
-    'what happens after the pour, which decides when the form comes off and therefore how long every hired part is held. Its temperature is the curing surface, not the placing temperature in placement',
+    'what happens after the pour, which decides when the form comes off and therefore how long every hired part is held. Its temperature is the curing surface, not the placing temperature in placement. The group also carries the strength-based striking criterion: maturityTargetDegreeHours is the concrete’s maturity target in degree-hours at which the form may come off — a project decision you must ask for, never default, because a guessed target makes the strength check one that cannot fail — with the Nurse–Saul datum and the required strength it corresponds to (a fraction of the design strength, with the design strength in MPa) as the same criterion named as a contract would. A criterion missing the temperature history it accumulates over falls back to elapsed time and says so',
   ),
   schedule: SCHEDULE_PATCH.optional().describe(
     'the two lead times that turn a pour date into a delivery date: how long before a pour the plant is wanted on site, and how long after striking before it is back with the hire company. The pour dates themselves are per shutter and set with set_pour_date, because a wall cast in three lifts is three pours on three days',

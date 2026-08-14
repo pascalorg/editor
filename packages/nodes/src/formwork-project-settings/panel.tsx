@@ -336,6 +336,54 @@ export function FormworkSettingsPanel() {
           onChange={(value) => setGroupField('curing', { shoresRemain: value })}
           value={curing.shoresRemain}
         />
+        <GroupNote>
+          The strength-based striking criterion, beside the elapsed-time tables above. Stated by the
+          project, never assumed — the concrete is struck when its maturity reaches this target,
+          which has to be calibrated from job-cured specimens, and unstated means the table governs.
+          The governing strike is the later of the two, and a target missing the cure temperature
+          above falls back to the table and says so.
+        </GroupNote>
+        <OptionalNumberField
+          hint="The Nurse–Saul M_target — the maturity the concrete must accumulate before the form comes off. A job-cured specimen's figure, not a rule of thumb: a guessed one turns the strength check into a check that cannot fail."
+          label="Maturity to strike"
+          max={100000}
+          min={1}
+          onChange={(value) => setGroupField('curing', { maturityTargetDegreeHours: value })}
+          step={100}
+          unit="°C·h"
+          value={curing.maturityTargetDegreeHours}
+        />
+        <OptionalNumberField
+          assumed="0 °C"
+          hint="The datum the target is measured against. A target calibrated at −10 °C is a different figure from one at 0 °C, and the two cannot be compared."
+          label="Maturity datum"
+          max={60}
+          min={-20}
+          onChange={(value) => setGroupField('curing', { maturityDatumC: value })}
+          step={1}
+          unit="°C"
+          value={curing.maturityDatumC}
+        />
+        <OptionalNumberField
+          hint="How strong the concrete has to be, as a fraction of its design strength — the way a contract states a strike (~0.7 under props, ~0.5 for a soffit with reshores). Names the criterion; the maturity target above decides it."
+          label="Strike-at strength"
+          max={1}
+          min={0.05}
+          onChange={(value) => setGroupField('curing', { requiredStrengthFraction: value })}
+          step={0.05}
+          unit="of f'c"
+          value={curing.requiredStrengthFraction}
+        />
+        <OptionalNumberField
+          hint="The concrete's design strength f'c, so the fraction above can be printed as a number. Needed for the naming only — the strike still follows the maturity target."
+          label="Design strength"
+          max={200}
+          min={1}
+          onChange={(value) => setGroupField('curing', { designStrengthMpa: value })}
+          step={1}
+          unit="MPa"
+          value={curing.designStrengthMpa}
+        />
       </PanelSection>
 
       <PanelSection defaultExpanded={false} title="Concrete">

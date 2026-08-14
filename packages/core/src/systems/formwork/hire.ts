@@ -195,7 +195,7 @@ export function bomHire(
 /**
  * The curing inputs a strike period is taken from, out of the project's settings.
  *
- * Here rather than at each call site because two of the four are *derived*, and a
+ * Here rather than at each call site because two of the six are *derived*, and a
  * second derivation would disagree with this one the first time either changed.
  *
  * `delayedSetting` is the one worth reading twice. It is not a field anybody enters:
@@ -206,6 +206,11 @@ export function bomHire(
  * separately would let a project state a retarder for its pressure and not for its
  * strike time, and the strike time is the one that decides when a floor is allowed
  * to carry itself.
+ *
+ * The four strength-criterion fields pass through as the project stated them, which
+ * is the shape the criterion is built on: the elapsed tables default themselves, and
+ * a strength criterion that cannot be evaluated falls back and says what is missing —
+ * neither is a number to resolve here.
  */
 export function strikingInputFor(settings: FormworkSettings): Omit<StrikingInput, 'target'> {
   const curing = settings.curing
@@ -216,5 +221,15 @@ export function strikingInputFor(settings: FormworkSettings): Omit<StrikingInput
     ...(curing.highEarlyStrength ? { highEarlyStrength: true } : {}),
     ...(curing.shoresRemain ? { shoresRemain: true } : {}),
     ...(delaysSetting(settings.concrete.cement) || cold ? { delayedSetting: true } : {}),
+    ...(curing.maturityTargetDegreeHours === undefined
+      ? {}
+      : { maturityTargetDegreeHours: curing.maturityTargetDegreeHours }),
+    ...(curing.maturityDatumC === undefined ? {} : { maturityDatumC: curing.maturityDatumC }),
+    ...(curing.requiredStrengthFraction === undefined
+      ? {}
+      : { requiredStrengthFraction: curing.requiredStrengthFraction }),
+    ...(curing.designStrengthMpa === undefined
+      ? {}
+      : { designStrengthMpa: curing.designStrengthMpa }),
   }
 }

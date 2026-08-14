@@ -212,4 +212,33 @@ describe('strikingInputFor', () => {
     expect(input.shoresRemain).toBe(true)
     expect(input.highEarlyStrength).toBe(true)
   })
+
+  test('a stated strength criterion passes through as it was stated', () => {
+    const input = strikingInputFor({
+      ...DEFAULT_FORMWORK_SETTINGS,
+      curing: {
+        maturityTargetDegreeHours: 6000,
+        maturityDatumC: -10,
+        requiredStrengthFraction: 0.7,
+        designStrengthMpa: 40,
+      },
+    })
+
+    expect(input.maturityTargetDegreeHours).toBe(6000)
+    expect(input.maturityDatumC).toBe(-10)
+    expect(input.requiredStrengthFraction).toBe(0.7)
+    expect(input.designStrengthMpa).toBe(40)
+  })
+
+  test('an unstated strength criterion adds nothing, so the tables stay the answer', () => {
+    // Not resolved to a default here: a strength criterion that cannot be evaluated
+    // is the striking module's fallback to decide, not a number to invent in settings.
+    expect(strikingInputFor(DEFAULT_FORMWORK_SETTINGS).maturityTargetDegreeHours).toBeUndefined()
+    expect(
+      strikingInputFor({
+        ...DEFAULT_FORMWORK_SETTINGS,
+        curing: { surfaceTemperatureC: 16 },
+      }).maturityTargetDegreeHours,
+    ).toBeUndefined()
+  })
 })

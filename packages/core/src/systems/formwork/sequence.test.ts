@@ -25,6 +25,7 @@ function striking(target: StrikeTarget, days: number): StrikingTime {
     hours: days * 24,
     days,
     basis: 'calendar',
+    criterion: 'elapsed-time',
     governingRule: 'test',
     assumed: [],
     warnings: [],

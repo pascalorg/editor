@@ -408,7 +408,13 @@ export function FormworkTakeoffPanel() {
                   key={period.target}
                   label={STRIKE_TARGET_LABELS[period.target]}
                   value={heldFor(period.hours)}
-                  value2={period.basis === 'calendar' ? undefined : 'above 10 °C'}
+                  value2={
+                    period.criterion === 'strength'
+                      ? `strength governs · ${(period.maturity?.accumulatedDegreeHours ?? 0).toFixed(0)} °C·h`
+                      : period.basis === 'calendar'
+                        ? undefined
+                        : 'above 10 °C'
+                  }
                 />
               ))}
               <Note>
@@ -416,6 +422,14 @@ export function FormworkTakeoffPanel() {
                 longest of these, not their sum — the props holding one slab do not shorten the
                 props holding the next.
               </Note>
+              {solution.hire.periods.some((period) => period.criterion === 'strength') && (
+                <Note>
+                  Some of these are held until the concrete reaches its stated maturity rather than
+                  until the table allows — strength governs wherever that target falls later than
+                  the elapsed-time period, and the figure beside it is the maturity accumulated by
+                  the strike date. The others follow the table.
+                </Note>
+              )}
               {/* An assumption is not a caveat: the tables publish their own conservative
                   column, so there is always an answer. What the reader needs is which
                   figures the job chose and which the code chose for it. */}
