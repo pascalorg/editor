@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/core'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
+import { pickJunctionAngleLabel } from '../shared/junction-angle'
 import {
   buildCurvedWallConstructionDimensions,
   buildLevelWallConstructionDimensionPlan,
@@ -302,6 +303,35 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         variant: 'curve',
         affordance: 'curve',
         payload: { wallId: node.id },
+      })
+    }
+
+    // Junction angle — the plan twin of the 3D endpoint-drag angle pill.
+    // When a sibling wall shares an endpoint, the plan shows the angle
+    // between the two at the shared corner, oriented along this wall's
+    // heading. Same shared picker the beam floor-plan uses, so the two
+    // kinds read the same way.
+    const angle = pickJunctionAngleLabel({
+      targetId: node.id as string,
+      start: [node.start[0], node.start[1]],
+      end: [node.end[0], node.end[1]],
+      curveOffset: node.curveOffset,
+      segments: ctx.siblings
+        .filter((sibling): sibling is AnyNode & WallNode => sibling.type === 'wall')
+        .map((sibling) => ({
+          id: sibling.id,
+          start: [sibling.start[0], sibling.start[1]] as [number, number],
+          end: [sibling.end[0], sibling.end[1]] as [number, number],
+          curveOffset: sibling.curveOffset,
+        })),
+    })
+    if (angle) {
+      children.push({
+        kind: 'dimension-label',
+        cx: angle.position[0],
+        cy: angle.position[2],
+        text: angle.label,
+        angle: Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0]),
       })
     }
   }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  type AnyNode,
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
@@ -31,11 +32,12 @@ function context(
   selected = false,
   metricNotation: 'meters' | 'millimeters' = 'meters',
   wallDimensionReference: 'finished-faces' | 'centerline' | 'stud-faces' = 'finished-faces',
+  siblings: AnyNode[] = [],
 ): GeometryContext {
   return {
     resolve: () => undefined,
     children: [],
-    siblings: [],
+    siblings,
     parent: null,
     viewState: {
       selected,
@@ -88,6 +90,50 @@ describe('buildWallFloorplan render purpose', () => {
     expect(documentThickness).toBeCloseTo(0.1)
     expect(readFloorplanGeometryMetadata(editPolygon).annotationObstacle).toBe('outline')
     expect(readFloorplanGeometryMetadata(documentPolygon).annotationObstacle).toBe('outline')
+  })
+
+  test('shows the junction angle against a sibling wall sharing an endpoint when selected', () => {
+    const branch = WallNode.parse({
+      id: 'wall_branch_plan',
+      parentId: 'level_main',
+      start: [4, 0],
+      end: [4, 2],
+      thickness: 0.1,
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const geometry = buildWallFloorplan(
+      wall,
+      context('edit', true, 'meters', 'finished-faces', [branch]),
+    )
+    if (!geometry) return
+    const entries = flatten(geometry)
+    const angleLabel = entries.find(
+      (entry) => entry.kind === 'dimension-label' && entry.text === '90°',
+    )
+
+    expect(angleLabel).toBeDefined()
+    if (angleLabel?.kind !== 'dimension-label') return
+    expect(angleLabel.cx).toBeCloseTo(4)
+    expect(angleLabel.cy).toBeCloseTo(0)
+  })
+
+  test('emits no junction angle when unselected', () => {
+    const branch = WallNode.parse({
+      id: 'wall_branch_unselected',
+      parentId: 'level_main',
+      start: [4, 0],
+      end: [4, 2],
+      thickness: 0.1,
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const geometry = buildWallFloorplan(
+      wall,
+      context('edit', false, 'meters', 'finished-faces', [branch]),
+    )
+    if (!geometry) return
+    expect(flatten(geometry).some((entry) => entry.kind === 'dimension-label')).toBe(false)
   })
 
   test('uses document metric notation only for document output', () => {

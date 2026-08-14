@@ -108,9 +108,11 @@ export const MoveBeamEndpointTool: React.FC<{ target: MovingBeamEndpoint }> = ({
   }, [parentId, beamId])
 
   // Live linked-beam endpoints — the action writes the cascaded corners to
-  // the scene per tick, so the angle pill follows the junction. Subscribes
-  // to the nodes record and derives; a scene write to any linked beam
-  // re-renders this tool (same shape as the live `nodes[beamId]` read above).
+  // the scene per tick, so the angle pill follows the junction. Derives
+  // from one subscription on the nodes record (the per-id map form trips
+  // the rules-of-hooks linter, which can't prove the id list is stable);
+  // the ids are fixed at mount and only the linked beams move, so the
+  // derived array is stable in practice.
   const liveLinkedBeams = useScene((s) =>
     linkedBeamIds
       .map((id) => s.nodes[id])
