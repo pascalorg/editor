@@ -1,5 +1,9 @@
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { pauseSceneHistory, resumeSceneHistory } from '../store/history-control'
+import {
+  activeSceneCommitNodeIds,
+  pauseSceneHistory,
+  resumeSceneHistory,
+} from '../store/history-control'
 import {
   type CloneNodesIntoOptions,
   collectSubtree,
@@ -83,12 +87,16 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
     },
 
     createMany(ops) {
+      for (const op of ops) captureIfNeeded(op.node.id)
       const batch = store.getState().createNodes
       if (batch) batch(ops)
       else for (const op of ops) this.upsert(op.node, op.parentId)
     },
 
     applyChanges(changes) {
+      for (const op of changes.create ?? []) captureIfNeeded(op.node.id)
+      for (const op of changes.update ?? []) captureIfNeeded(op.id)
+      for (const id of changes.delete ?? []) captureIfNeeded(id)
       const batch = store.getState().applyNodeChanges
       if (batch) {
         batch(changes)
@@ -102,7 +110,18 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
     subscribeNodes(listener) {
       return (
         store.subscribe?.((state, previous) => {
-          if (state.nodes !== previous.nodes) listener(state.nodes)
+          if (state.nodes === previous.nodes) return
+          const scopedIds = activeSceneCommitNodeIds()
+          const changedIds = new Set<AnyNodeId>(scopedIds)
+          if (!scopedIds) {
+            for (const id of Object.keys(state.nodes) as AnyNodeId[]) {
+              if (state.nodes[id] !== previous.nodes[id]) changedIds.add(id)
+            }
+            for (const id of Object.keys(previous.nodes) as AnyNodeId[]) {
+              if (!(id in state.nodes)) changedIds.add(id)
+            }
+          }
+          listener(state.nodes, previous.nodes, changedIds)
         }) ?? (() => {})
       )
     },

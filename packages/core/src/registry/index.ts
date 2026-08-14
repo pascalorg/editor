@@ -149,6 +149,7 @@ export type {
   SurfaceRole,
   SurfacesConfig,
   SystemContribution,
+  ToolContributionProps,
   ToolHint,
   ToolHintChip,
   Vec2,

@@ -4,9 +4,9 @@ import {
   type AnyNode,
   type AnyNodeId,
   emitter,
-  type SceneApi,
-  sceneRegistry,
-  spatialGridManager,
+  getLevelElevations,
+  getWallBaseElevationForNodes,
+  type ToolContributionProps,
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
@@ -17,12 +17,11 @@ import {
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
 import { createLeanToAssembly } from './assembly'
 import { leanToExtensionGeometryKey } from './geometry'
 import { leanToWallLocalPose, resolveLeanToWallPlacement } from './layout'
-import { leanToPlacementConflicts } from './placement-validation'
+import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import LeanToExtensionPreview from './preview'
 import {
   applyLeanToRoofAttachment,
@@ -39,8 +38,7 @@ type PreviewPose = {
   rotationY: number
 }
 
-const LeanToExtensionTool = ({ sceneApi }: { sceneApi: SceneApi }) => {
-  const activeLevelId = useViewer((state) => state.selection.levelId)
+const LeanToExtensionTool = ({ activeLevelId, sceneApi, selectNode }: ToolContributionProps) => {
   const viewMode = useEditor((state) => state.viewMode)
   const [preview, setPreview] = useState<PreviewPose | null>(null)
 
@@ -49,16 +47,9 @@ const LeanToExtensionTool = ({ sceneApi }: { sceneApi: SceneApi }) => {
     useInteractionScope.getState().begin({ kind: 'drafting', tool: 'lean-to-extension' })
 
     const resolveBaseY = (wall: WallNode) => {
-      const levelY = sceneRegistry.nodes.get(activeLevelId)?.position.y ?? 0
-      const slabY = spatialGridManager.getSlabElevationForWall(
-        wall.parentId ?? '',
-        wall.start,
-        wall.end,
-        wall.curveOffset ?? 0,
-        wall.thickness,
-        wall.supportSlabId,
-      )
-      return levelY + slabY
+      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+      const levelY = wall.parentId ? (getLevelElevations(nodes).get(wall.parentId)?.baseY ?? 0) : 0
+      return levelY + getWallBaseElevationForNodes(wall, nodes)
     }
 
     const updateTarget = (event: WallEvent) => {
@@ -77,9 +68,10 @@ const LeanToExtensionTool = ({ sceneApi }: { sceneApi: SceneApi }) => {
       }
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const attachment = resolveLeanToRoofAttachment(wallPlacement, event.node, nodes)
-      const node = attachment
+      const attachedNode = attachment
         ? applyLeanToRoofAttachment(wallPlacement, attachment)
         : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), event.node)
+      const node = resolveLeanToEndAbutments(attachedNode, event.node, nodes)
       if (leanToPlacementConflicts(node, event.node, nodes).length > 0) {
         setPreview(null)
         return null
@@ -114,7 +106,7 @@ const LeanToExtensionTool = ({ sceneApi }: { sceneApi: SceneApi }) => {
           parentId: (child.parentId as AnyNodeId | null) ?? undefined,
         })),
       ])
-      useViewer.getState().setSelection({ selectedIds: [assembly.extension.id] })
+      selectNode(assembly.extension.id as AnyNodeId)
       triggerSFX('sfx:structure-build')
       if (useEditor.getState().getContinuation('point') !== 'repeat') {
         useEditor.getState().setTool(null)
@@ -136,7 +128,7 @@ const LeanToExtensionTool = ({ sceneApi }: { sceneApi: SceneApi }) => {
         .getState()
         .endIf((scope) => scope.kind === 'drafting' && scope.tool === 'lean-to-extension')
     }
-  }, [activeLevelId, sceneApi, viewMode])
+  }, [activeLevelId, sceneApi, selectNode, viewMode])
 
   if (!preview || viewMode !== '3d') return null
   return (

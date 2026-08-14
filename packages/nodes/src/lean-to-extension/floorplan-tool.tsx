@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { createLeanToAssembly } from './assembly'
 import { resolveLeanToWallPlacement } from './layout'
-import { leanToPlacementConflicts } from './placement-validation'
+import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import {
   applyLeanToRoofAttachment,
   applyLeanToWallAutoSpan,
@@ -71,9 +71,10 @@ const FloorplanLeanToExtensionTool = ({
       if (!wallPlacement) return null
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const attachment = resolveLeanToRoofAttachment(wallPlacement, hit.wall, nodes)
-      const node = attachment
+      const attachedNode = attachment
         ? applyLeanToRoofAttachment(wallPlacement, attachment)
         : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), hit.wall)
+      const node = resolveLeanToEndAbutments(attachedNode, hit.wall, nodes)
       return leanToPlacementConflicts(node, hit.wall, nodes).length === 0 ? node : null
     }
     const update = (event: PointerEvent) => {
@@ -145,13 +146,15 @@ const FloorplanLeanToExtensionTool = ({
   const originZ = wall.start[1] + dirZ * target.position[0] + perpZ * target.position[2]
   const outX = perpX * sign
   const outZ = perpZ * sign
-  const half = target.span / 2 + target.sideOverhang
-  const run = target.projection + target.eaveOverhang
+  const left = target.span / 2 + target.leftOverhang
+  const right = target.span / 2 + target.rightOverhang
+  const high = target.highOverhang
+  const low = target.projection + target.lowOverhang
   const points = [
-    [originX - dirX * half, originZ - dirZ * half],
-    [originX + dirX * half, originZ + dirZ * half],
-    [originX + dirX * half + outX * run, originZ + dirZ * half + outZ * run],
-    [originX - dirX * half + outX * run, originZ - dirZ * half + outZ * run],
+    [originX - dirX * left - outX * high, originZ - dirZ * left - outZ * high],
+    [originX + dirX * right - outX * high, originZ + dirZ * right - outZ * high],
+    [originX + dirX * right + outX * low, originZ + dirZ * right + outZ * low],
+    [originX - dirX * left + outX * low, originZ - dirZ * left + outZ * low],
   ]
 
   return (

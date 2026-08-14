@@ -28,16 +28,18 @@ export function buildLeanToExtensionFloorplan(
   const layout = resolveLeanToLayout(node)
   const outX = perpX * outwardSign
   const outZ = perpZ * outwardSign
-  const halfSpan = layout.span / 2 + node.sideOverhang
-  const run = layout.roofRun
+  const left = layout.span / 2 + node.leftOverhang
+  const right = layout.span / 2 + node.rightOverhang
+  const high = node.highOverhang
+  const low = layout.projection + node.lowOverhang
   const points: readonly FloorplanPoint[] = [
-    [originX - dirX * halfSpan, originZ - dirZ * halfSpan],
-    [originX + dirX * halfSpan, originZ + dirZ * halfSpan],
-    [originX + dirX * halfSpan + outX * run, originZ + dirZ * halfSpan + outZ * run],
-    [originX - dirX * halfSpan + outX * run, originZ - dirZ * halfSpan + outZ * run],
+    [originX - dirX * left - outX * high, originZ - dirZ * left - outZ * high],
+    [originX + dirX * right - outX * high, originZ + dirZ * right - outZ * high],
+    [originX + dirX * right + outX * low, originZ + dirZ * right + outZ * low],
+    [originX - dirX * left + outX * low, originZ - dirZ * left + outZ * low],
   ]
-  const beamX = originX + outX * layout.projection
-  const beamZ = originZ + outZ * layout.projection
+  const beamX = originX + outX * layout.beamZ
+  const beamZ = originZ + outZ * layout.beamZ
   const selected = ctx.viewState?.selected ?? false
   const stroke = selected ? '#f97316' : '#475569'
   const children: FloorplanGeometry[] = [
@@ -63,8 +65,8 @@ export function buildLeanToExtensionFloorplan(
   ]
 
   for (const x of layout.postXs) {
-    const postX = originX + dirX * x + outX * layout.projection
-    const postZ = originZ + dirZ * x + outZ * layout.projection
+    const postX = originX + dirX * x + outX * layout.beamZ
+    const postZ = originZ + dirZ * x + outZ * layout.beamZ
     children.push({
       kind: 'rect',
       x: postX - node.postWidth / 2,
@@ -90,13 +92,13 @@ export function buildLeanToExtensionFloorplan(
       payload: { dimension: 'projection' },
     })
     for (const side of [-1, 1] as const) {
-      const x = side * (layout.span / 2 + node.sideOverhang + arrowOffset)
+      const x =
+        side < 0
+          ? -(layout.span / 2 + node.leftOverhang + arrowOffset)
+          : layout.span / 2 + node.rightOverhang + arrowOffset
       children.push({
         kind: 'move-arrow',
-        point: [
-          originX + dirX * x + outX * layout.projection,
-          originZ + dirZ * x + outZ * layout.projection,
-        ],
+        point: [originX + dirX * x + outX * layout.beamZ, originZ + dirZ * x + outZ * layout.beamZ],
         angle: Math.atan2(dirZ * side, dirX * side),
         affordance: 'lean-to-resize',
         payload: { dimension: 'span', side },

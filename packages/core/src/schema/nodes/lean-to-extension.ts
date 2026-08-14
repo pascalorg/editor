@@ -1,7 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import { MaterialSchema } from '../material'
 import { ColumnNode } from './column'
 import { RoofNode } from './roof'
 
@@ -14,6 +13,11 @@ export const LeanToResizeLock = z.enum([
 ])
 export const LeanToEndCondition = z.enum(['open', 'wall-abutment', 'joined'])
 export const LeanToFramingStrategy = z.enum(['hidden', 'rafters', 'purlins', 'covering-specific'])
+export const LeanToHighSideMode = z.enum(['wall-ledger', 'independent-high-beam'])
+export const LeanToPostLayoutMode = z.enum(['count', 'target-spacing'])
+export const LeanToFootingStyle = z.enum(['none', 'base-plate', 'concrete-pad'])
+export const LeanToCoveringType = z.enum(['generic', 'shingle', 'metal-panel'])
+const DEFAULT_LOW_EDGE_HEIGHT = 2.7 - 3 * Math.tan((5 * Math.PI) / 180)
 export type LeanToConnectionMode = z.infer<typeof LeanToConnectionMode>
 export type LeanToRoofEdge = z.infer<typeof LeanToRoofEdge>
 
@@ -28,7 +32,7 @@ export const LeanToExtensionNode = BaseNode.extend({
   autoSpan: z.boolean().default(true),
   projection: z.number().min(0.5).max(10).default(2.5),
   highEdgeHeight: z.number().min(0.8).max(10).default(2.8),
-  lowEdgeHeight: z.number().min(0.2).max(10).default(2.36),
+  lowEdgeHeight: z.number().min(0.2).max(10).default(DEFAULT_LOW_EDGE_HEIGHT),
   pitch: z.number().min(1).max(45).default(10),
   resizeLock: LeanToResizeLock.default('preserve-high-edge'),
   leftEndCondition: LeanToEndCondition.default('open'),
@@ -37,7 +41,12 @@ export const LeanToExtensionNode = BaseNode.extend({
   sideFlashing: z.boolean().default(true),
   flashingProjection: z.number().min(0.01).max(0.5).default(0.025),
   flashingHeight: z.number().min(0.03).max(0.5).default(0.14),
-  flashingMaterial: MaterialSchema.default({ preset: 'metal' }),
+  slots: z.record(z.string(), z.string()).optional(),
+
+  highSideMode: LeanToHighSideMode.default('wall-ledger'),
+  ledgerVisible: z.boolean().default(true),
+  ledgerVerticalOffset: z.number().min(-1).max(1).default(0),
+  lowBeamInset: z.number().min(0).max(2).default(0),
 
   gutterEnabled: z.boolean().default(true),
   gutterProfile: z.enum(['k-style', 'half-round', 'box']).default('k-style'),
@@ -57,14 +66,19 @@ export const LeanToExtensionNode = BaseNode.extend({
 
   roofThickness: z.number().min(0.02).max(0.5).default(0.1),
   shingleThickness: z.number().min(0).max(0.5).default(0.025),
-  eaveOverhang: z.number().min(0).max(1.5).default(0.25),
-  sideOverhang: z.number().min(0).max(1.5).default(0.15),
+  highOverhang: z.number().min(0).max(1.5).default(0),
+  lowOverhang: z.number().min(0).max(1.5).default(0.25),
+  leftOverhang: z.number().min(0).max(1.5).default(0.15),
+  rightOverhang: z.number().min(0).max(1.5).default(0.15),
+  coveringType: LeanToCoveringType.default('generic'),
   beamWidth: z.number().min(0.05).max(0.6).default(0.16),
   beamHeight: z.number().min(0.05).max(0.8).default(0.24),
   ledgerDepth: z.number().min(0.03).max(0.5).default(0.1),
   ledgerHeight: z.number().min(0.05).max(0.8).default(0.18),
   rafterWidth: z.number().min(0.03).max(0.4).default(0.08),
   rafterHeight: z.number().min(0.03).max(0.5).default(0.14),
+  rafterSpacing: z.number().min(0.2).max(3).default(1.2),
+  rafterEndInset: z.number().min(0).max(3).default(0),
   framingStrategy: LeanToFramingStrategy.default('rafters'),
   purlinWidth: z.number().min(0.03).max(0.4).default(0.08),
   purlinHeight: z.number().min(0.03).max(0.5).default(0.1),
@@ -72,7 +86,11 @@ export const LeanToExtensionNode = BaseNode.extend({
   postWidth: z.number().min(0.05).max(0.6).default(0.16),
   postDepth: z.number().min(0.05).max(0.6).default(0.16),
   postCount: z.number().int().min(2).max(20).default(3),
+  postLayoutMode: LeanToPostLayoutMode.default('count'),
+  postSpacing: z.number().min(0.3).max(10).default(2),
   postInset: z.number().min(0).max(3).default(0.2),
+  postBracing: z.enum(['none', 'knee']).default('none'),
+  footingStyle: LeanToFootingStyle.default('none'),
 }).describe(
   dedent`
   Wall-hosted lean-to roof extension.

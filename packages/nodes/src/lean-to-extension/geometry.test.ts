@@ -56,6 +56,15 @@ describe('lean-to extension geometry', () => {
     expect(purlinNames.some((name) => name.startsWith('lean-to-rafter-'))).toBe(false)
   })
 
+  test('models an independent high beam and tags configurable finish slots', () => {
+    const node = LeanToExtensionNode.parse({ highSideMode: 'independent-high-beam' })
+    const group = buildLeanToExtensionGeometry(node)
+    expect(group.getObjectByName('lean-to-independent-high-beam')).toBeDefined()
+    expect(group.getObjectByName('lean-to-high-post-0')).toBeDefined()
+    expect(group.getObjectByName('lean-to-high-side-flashing')?.userData.slotId).toBe('flashing')
+    expect(group.getObjectByName('lean-to-front-beam')?.userData.slotId).toBe('beam')
+  })
+
   test('leaves the roof and posts to real child nodes in scene geometry', () => {
     const node = LeanToExtensionNode.parse({ postCount: 3 })
     const group = buildLeanToExtensionGeometry(node, {} as never)
@@ -85,7 +94,7 @@ describe('lean-to extension geometry', () => {
   })
 
   test('continues rafters over the front beam with a small gutter clearance', () => {
-    const node = LeanToExtensionNode.parse({ projection: 2.5, eaveOverhang: 0.25 })
+    const node = LeanToExtensionNode.parse({ projection: 2.5, lowOverhang: 0.25 })
     const group = buildLeanToExtensionGeometry(node, {} as never)
     const rafter = group.getObjectByName('lean-to-rafter-0') as Mesh<BoxGeometry>
     const rafterSlopeLength = (rafter.geometry.parameters as { depth: number }).depth
@@ -104,12 +113,12 @@ describe('lean-to extension geometry', () => {
 
     expect(rafterFrontZ).toBeGreaterThan(beamOuterZ)
     expect(gutterClearance).toBeGreaterThan(0)
-    expect(gutterClearance).toBeCloseTo(0.035, 5)
+    expect(gutterClearance).toBeCloseTo(0.033, 5)
     gutterGeometry.dispose()
   })
 
   test('still carries rafters across the front beam when there is no eave overhang', () => {
-    const node = LeanToExtensionNode.parse({ projection: 2.5, eaveOverhang: 0 })
+    const node = LeanToExtensionNode.parse({ projection: 2.5, lowOverhang: 0 })
     const group = buildLeanToExtensionGeometry(node, {} as never)
     const rafter = group.getObjectByName('lean-to-rafter-0') as Mesh<BoxGeometry>
     const rafterSlopeLength = (rafter.geometry.parameters as { depth: number }).depth

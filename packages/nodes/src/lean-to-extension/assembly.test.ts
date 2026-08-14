@@ -16,7 +16,10 @@ import {
   createLeanToAssembly,
   isManagedLeanToNode,
   isManagedLeanToPost,
+  leanToDownspoutLayoutPatch,
+  leanToGutterLayoutPatch,
   leanToPostLayoutPatch,
+  managedLeanToPostSide,
   resolveLeanToPostBaseY,
   resolveLeanToPostGutterSetback,
 } from './assembly'
@@ -32,8 +35,9 @@ describe('lean-to assembly', () => {
       postDepth: 0.14,
       span: 4,
       projection: 2.5,
-      eaveOverhang: 0.25,
-      sideOverhang: 0.15,
+      lowOverhang: 0.25,
+      leftOverhang: 0.15,
+      rightOverhang: 0.15,
     })
     const layout = resolveLeanToLayout(leanTo)
     const assembly = createLeanToAssembly(leanTo)
@@ -52,10 +56,13 @@ describe('lean-to assembly', () => {
     expect(assembly.segment.roofType).toBe('shed')
     expect(assembly.segment.position[0]).toBe(0)
     expect(assembly.segment.position[1]).toBeLessThan(layout.lowEdgeHeight)
-    expect(assembly.segment.depth).toBeCloseTo(layout.projection + 0.02, 6)
-    expect(assembly.segment.overhang).toBe(leanTo.eaveOverhang)
-    expect(assembly.segment.position[2]).toBeCloseTo(layout.projection / 2 - 0.012, 6)
-    expect(assembly.segment.width + 2 * assembly.segment.overhang).toBeCloseTo(4.3)
+    expect(assembly.segment.depth).toBeCloseTo(layout.roofRun + 0.02, 6)
+    expect(assembly.segment.overhang).toBe(0)
+    expect(assembly.segment.position[2]).toBeCloseTo(
+      (leanTo.projection + leanTo.lowOverhang - leanTo.highOverhang) / 2 - 0.012,
+      6,
+    )
+    expect(assembly.segment.width).toBeCloseTo(4.3)
     const roofBounds = getRoofSegmentVisibleTopBounds(assembly.segment)
     expect(assembly.segment.position[2] + roofBounds.minZ).toBeCloseTo(-0.02, 6)
     expect(assembly.segment.children).toEqual([assembly.gutter.id, assembly.downspout.id])
@@ -86,12 +93,25 @@ describe('lean-to assembly', () => {
     for (const [index, post] of assembly.posts.entries()) {
       expect(post.type).toBe('column')
       expect(post.parentId).toBe(leanTo.id)
-      expect(post.position).toEqual([layout.postXs[index], 0, leanTo.projection])
+      expect(post.position).toEqual([layout.postXs[index], 0, layout.beamZ])
       expect(post.height).toBeCloseTo(layout.postHeight + 0.02, 6)
       expect(post.width).toBe(0.18)
       expect(post.depth).toBe(0.14)
       expect(isManagedLeanToPost(post, leanTo.id)).toBe(true)
     }
+  })
+
+  test('composes terrain-aware high-side columns for an independent beam', () => {
+    const leanTo = LeanToExtensionNode.parse({
+      highSideMode: 'independent-high-beam',
+      postCount: 3,
+    })
+    const assembly = createLeanToAssembly(leanTo)
+    const highPosts = assembly.posts.filter((post) => managedLeanToPostSide(post) === 'high')
+
+    expect(assembly.posts).toHaveLength(6)
+    expect(highPosts).toHaveLength(3)
+    expect(highPosts.every((post) => post.position[2] === 0)).toBe(true)
   })
 
   test('resolves a managed upper-storey downspout to world ground', () => {
@@ -145,6 +165,27 @@ describe('lean-to assembly', () => {
     expect(assembly.downspout.visible).toBe(false)
   })
 
+  test('preserves manually adjusted managed drainage', () => {
+    const leanTo = LeanToExtensionNode.parse({ downspoutPosition: 1 })
+    const assembly = createLeanToAssembly(leanTo)
+    const manualGutter = {
+      ...assembly.gutter,
+      outlets: [{ ...assembly.gutter.outlets[0]!, offset: -0.4, generatedBy: undefined }],
+    }
+    const manualDownspout = { ...assembly.downspout, length: 1.7, lengthMode: 'manual' as const }
+
+    const gutterPatch = leanToGutterLayoutPatch(assembly.segment, leanTo, manualGutter)
+    const downspoutPatch = leanToDownspoutLayoutPatch(
+      assembly.segment,
+      { ...manualGutter, ...gutterPatch },
+      leanTo,
+      manualDownspout,
+    )
+
+    expect(gutterPatch.outlets[0]?.offset).toBe(-0.4)
+    expect(downspoutPatch.lengthMode).toBe('manual')
+  })
+
   test('matches the connected roof material without changing the host roof', () => {
     const leanTo = LeanToExtensionNode.parse({ matchHostRoofMaterial: true })
     const hostRoof = RoofNode.parse({
@@ -173,14 +214,14 @@ describe('lean-to assembly', () => {
   })
 
   test('keeps the triangular side edge recessed beneath the sloping eave', () => {
-    const leanTo = LeanToExtensionNode.parse({ projection: 2.5, eaveOverhang: 0.25 })
+    const leanTo = LeanToExtensionNode.parse({ projection: 2.5, lowOverhang: 0.25 })
     const layout = resolveLeanToLayout(leanTo)
 
     const { segment } = createLeanToAssembly(leanTo)
     const triangleFrontZ = segment.position[2] + segment.depth / 2
 
     const roofBounds = getRoofSegmentVisibleTopBounds(segment)
-    expect(triangleFrontZ).toBeCloseTo(layout.projection - 0.002, 6)
+    expect(triangleFrontZ).toBeCloseTo(layout.projection + leanTo.lowOverhang - 0.002, 6)
     expect(segment.position[2] + roofBounds.maxZ).toBeGreaterThan(triangleFrontZ)
   })
 
@@ -241,7 +282,7 @@ describe('lean-to assembly', () => {
   })
 
   test('keeps a swapped pillar beneath the beam while its shaft clears the gutter', () => {
-    const leanTo = LeanToExtensionNode.parse({ eaveOverhang: 0.25, projection: 2.5 })
+    const leanTo = LeanToExtensionNode.parse({ lowOverhang: 0.25, projection: 2.5 })
     const swapped = {
       ...createLeanToAssembly(leanTo).posts[0]!,
       capitalStyle: 'wood-bracket' as const,
@@ -256,7 +297,7 @@ describe('lean-to assembly', () => {
     expect(post.position[1] + post.height).toBeGreaterThan(resolveLeanToLayout(leanTo).postHeight)
     expect(post.position[2]).toBeGreaterThanOrEqual(leanTo.projection - leanTo.beamWidth / 2)
     expect(post.position[2] + swapped.depth / 2 + 0.02).toBeLessThanOrEqual(
-      leanTo.projection + leanTo.eaveOverhang + 1e-6,
+      leanTo.projection + leanTo.lowOverhang + 1e-6,
     )
   })
 })

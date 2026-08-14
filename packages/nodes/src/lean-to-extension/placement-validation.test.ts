@@ -9,7 +9,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { leanToPlacementConflicts } from './placement-validation'
+import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 
 describe('lean-to placement validation', () => {
   test('rejects a span crossing a host-wall opening', () => {
@@ -60,6 +60,90 @@ describe('lean-to placement validation', () => {
     ) as Record<string, AnyNode>
 
     expect(leanToPlacementConflicts(leanTo, wall, nodes)).toContain(
+      `adjacent building ${adjacentBuilding.id}`,
+    )
+  })
+
+  test('resolves an adjacent building at an end as a wall abutment', () => {
+    const building = BuildingNode.parse({ id: 'building_end_host' })
+    const level = LevelNode.parse({ id: 'level_end_host', parentId: building.id })
+    const wall = WallNode.parse({
+      id: 'wall_end_host',
+      parentId: level.id,
+      start: [0, 0],
+      end: [6, 0],
+    })
+    const adjacentBuilding = BuildingNode.parse({ id: 'building_end_adjacent' })
+    const adjacentLevel = LevelNode.parse({
+      id: 'level_end_adjacent',
+      parentId: adjacentBuilding.id,
+    })
+    const adjacentWall = WallNode.parse({
+      id: 'wall_end_adjacent',
+      parentId: adjacentLevel.id,
+      start: [0.85, -0.5],
+      end: [0.85, 3.5],
+    })
+    const leanTo = LeanToExtensionNode.parse({
+      parentId: wall.id,
+      position: [3, 0, 0.05],
+      span: 4,
+    })
+    const nodes = Object.fromEntries(
+      [building, level, wall, adjacentBuilding, adjacentLevel, adjacentWall].map((node) => [
+        node.id,
+        node,
+      ]),
+    ) as Record<string, AnyNode>
+
+    const resolved = resolveLeanToEndAbutments(leanTo, wall, nodes)
+    expect(resolved.leftEndCondition).toBe('wall-abutment')
+    expect(resolved.downspoutPosition).toBe(1)
+    expect(leanToPlacementConflicts(resolved, wall, nodes)).not.toContain(
+      `adjacent building ${adjacentBuilding.id}`,
+    )
+  })
+
+  test('still rejects an adjacent wall crossing the middle when another wall resolves an end', () => {
+    const building = BuildingNode.parse({ id: 'building_mixed_host' })
+    const level = LevelNode.parse({ id: 'level_mixed_host', parentId: building.id })
+    const wall = WallNode.parse({
+      id: 'wall_mixed_host',
+      parentId: level.id,
+      start: [0, 0],
+      end: [6, 0],
+    })
+    const adjacentBuilding = BuildingNode.parse({ id: 'building_mixed_adjacent' })
+    const adjacentLevel = LevelNode.parse({
+      id: 'level_mixed_adjacent',
+      parentId: adjacentBuilding.id,
+    })
+    const endWall = WallNode.parse({
+      id: 'wall_mixed_end',
+      parentId: adjacentLevel.id,
+      start: [0.85, -0.5],
+      end: [0.85, 3.5],
+    })
+    const crossingWall = WallNode.parse({
+      id: 'wall_mixed_crossing',
+      parentId: adjacentLevel.id,
+      start: [2, 1],
+      end: [4, 1],
+    })
+    const leanTo = LeanToExtensionNode.parse({
+      parentId: wall.id,
+      position: [3, 0, 0.05],
+      span: 4,
+    })
+    const nodes = Object.fromEntries(
+      [building, level, wall, adjacentBuilding, adjacentLevel, endWall, crossingWall].map(
+        (node) => [node.id, node],
+      ),
+    ) as Record<string, AnyNode>
+    const resolved = resolveLeanToEndAbutments(leanTo, wall, nodes)
+
+    expect(resolved.leftEndCondition).toBe('wall-abutment')
+    expect(leanToPlacementConflicts(resolved, wall, nodes)).toContain(
       `adjacent building ${adjacentBuilding.id}`,
     )
   })

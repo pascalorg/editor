@@ -77,7 +77,7 @@ describe('lean-to scene commit boundary', () => {
 
     expect(commits).toHaveLength(1)
     expect(commits[0]?.current.nodes[segmentId]?.type).toBe('roof-segment')
-    expect((commits[0]?.current.nodes[segmentId] as { depth: number }).depth).toBeCloseTo(4.02)
+    expect((commits[0]?.current.nodes[segmentId] as { depth: number }).depth).toBeCloseTo(4.27)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     stopCommits()
   })

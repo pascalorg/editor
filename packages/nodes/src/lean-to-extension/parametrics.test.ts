@@ -69,4 +69,12 @@ describe('lean-to resize locks', () => {
       hostRoofEdgeRange: undefined,
     })
   })
+
+  test('warns when the selected covering pitch is below its advisory minimum', () => {
+    const node = LeanToExtensionNode.parse({ coveringType: 'shingle', pitch: 5 })
+    const issues = leanToExtensionParametrics.invariants?.flatMap((invariant) => invariant(node))
+    expect(issues?.some((issue) => issue.severity === 'warning' && issue.field === 'pitch')).toBe(
+      true,
+    )
+  })
 })

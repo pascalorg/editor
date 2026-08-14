@@ -10,6 +10,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
+import { leanToLowEdgeHeight } from './layout'
 
 const MAX_EDGE_DISTANCE = 1.25
 const MIN_EDGE_OVERLAP = 0.35
@@ -159,7 +160,7 @@ function autoSpanPatch(
 ): Pick<LeanToExtensionNode, 'position' | 'span'> {
   const span = Math.max(
     MIN_EXTENSION_SPAN,
-    Math.min(MAX_EXTENSION_SPAN, visibleSpan - leanTo.sideOverhang * 2),
+    Math.min(MAX_EXTENSION_SPAN, visibleSpan - leanTo.leftOverhang - leanTo.rightOverhang),
   )
   return {
     span,
@@ -195,7 +196,8 @@ export function resolveLeanToRoofAttachment(
   const wallBase = getWallBaseElevationForNodes(wall, nodes)
   const levelElevations = getLevelElevations(nodes)
   const wallLevel = wall.parentId ? levelElevations.get(wall.parentId) : undefined
-  const halfSpan = leanTo.span / 2 + leanTo.sideOverhang
+  const halfSpan =
+    leanTo.span / 2 + Math.max(Math.max(0, leanTo.leftOverhang), Math.max(0, leanTo.rightOverhang))
   let best: { attachment: LeanToRoofAttachment; score: number } | null = null
 
   for (const candidate of Object.values(nodes)) {
@@ -290,6 +292,8 @@ export function applyLeanToRoofAttachment(
   leanTo: LeanToExtensionNode,
   attachment: LeanToRoofAttachment,
 ): LeanToExtensionNode {
+  const highEdgeHeight = attachment.highEdgeHeight
+  const lowEdgeHeight = leanToLowEdgeHeight({ ...leanTo, highEdgeHeight })
   return {
     ...leanTo,
     ...(leanTo.autoSpan
@@ -301,7 +305,8 @@ export function applyLeanToRoofAttachment(
     hostRoofEdge: attachment.edge,
     hostRoofEdgeRange: leanTo.autoSpan ? [0, 1] : [...attachment.edgeRange],
     connectionInset: attachment.planDistance,
-    highEdgeHeight: attachment.highEdgeHeight,
+    highEdgeHeight,
+    lowEdgeHeight,
     ...(leanTo.matchHostRoofStructure !== false
       ? {
           roofThickness: attachment.deckThickness,

@@ -8,10 +8,13 @@ import type {
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildLeanToExtensionFloorplan } from './floorplan'
 import { leanToResizeAffordance } from './floorplan-affordances'
+import { leanToFloorplanMoveTarget } from './floorplan-move'
 import { buildLeanToExtensionGeometry, leanToExtensionGeometryKey } from './geometry'
+import { leanToPaint } from './paint'
 import { deriveLeanToResizePatch, leanToExtensionParametrics } from './parametrics'
 import { applyLeanToRoofAttachment, resolveLeanToRoofAttachment } from './roof-attachment'
 import { LeanToExtensionNode } from './schema'
+import { leanToSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.25
 const ROOF_EDGE_SNAP_TOLERANCE = 0.3
@@ -57,6 +60,7 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
         const connected = applyLeanToRoofAttachment(node, attachment)
         return {
           highEdgeHeight: connected.highEdgeHeight,
+          lowEdgeHeight: connected.lowEdgeHeight,
           connectionMode: connected.connectionMode,
           hostRoofId: connected.hostRoofId,
           hostRoofSegmentId: connected.hostRoofSegmentId,
@@ -115,7 +119,7 @@ leanToExtensionHandles.push({
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 4,
+  schemaVersion: 5,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',
@@ -133,6 +137,8 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    slots: () => leanToSlots(),
+    paint: leanToPaint,
   },
   relations: {
     cascadeDelete: 'descendants',
@@ -147,7 +153,9 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
     priority: 1,
   },
   floorplan: buildLeanToExtensionFloorplan,
+  floorplanMoveTarget: leanToFloorplanMoveTarget,
   floorplanAffordances: { 'lean-to-resize': leanToResizeAffordance },
+  affordanceTools: { move: () => import('./move-tool') },
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   toolHints: [

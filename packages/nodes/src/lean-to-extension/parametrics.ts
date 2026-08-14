@@ -1,11 +1,14 @@
 import type { LeanToExtensionNode, ParametricDescriptor } from '@pascal-app/core'
-import { MIN_LEAN_TO_POST_HEIGHT, resolveLeanToLayout } from './layout'
+import { leanToLowEdgeHeight, MIN_LEAN_TO_POST_HEIGHT, resolveLeanToLayout } from './layout'
 
 const degrees = (rise: number, run: number) =>
   Math.max(1, Math.min(45, (Math.atan2(rise, Math.max(0.001, run)) * 180) / Math.PI))
 
-const lowEdgeOf = (node: Pick<LeanToExtensionNode, 'highEdgeHeight' | 'projection' | 'pitch'>) =>
-  node.highEdgeHeight - node.projection * Math.tan((node.pitch * Math.PI) / 180)
+const COVERING_MIN_PITCH: Record<LeanToExtensionNode['coveringType'], number | null> = {
+  generic: null,
+  shingle: 9.5,
+  'metal-panel': 2,
+}
 
 export function deriveLeanToResizePatch(
   previous: LeanToExtensionNode,
@@ -20,7 +23,7 @@ export function deriveLeanToResizePatch(
   const projection = patch.projection ?? previous.projection
   let highEdgeHeight = patch.highEdgeHeight ?? previous.highEdgeHeight
   let pitch = patch.pitch ?? previous.pitch
-  let lowEdgeHeight = lowEdgeOf(previous)
+  let lowEdgeHeight = leanToLowEdgeHeight(previous)
 
   if (changesLow) {
     lowEdgeHeight = patch.lowEdgeHeight ?? lowEdgeHeight
@@ -84,6 +87,37 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'enum',
           options: ['auto', 'manual'],
           display: 'segmented',
+        },
+        {
+          key: 'highSideMode',
+          kind: 'enum',
+          options: ['wall-ledger', 'independent-high-beam'],
+        },
+        { key: 'ledgerVisible', kind: 'boolean' },
+        {
+          key: 'ledgerVerticalOffset',
+          kind: 'number',
+          unit: 'm',
+          min: -1,
+          max: 1,
+          step: 0.01,
+          visibleIf: (node) => node.ledgerVisible || node.highSideMode === 'independent-high-beam',
+        },
+        {
+          key: 'ledgerDepth',
+          kind: 'number',
+          unit: 'm',
+          min: 0.03,
+          max: 0.5,
+          step: 0.01,
+        },
+        {
+          key: 'ledgerHeight',
+          kind: 'number',
+          unit: 'm',
+          min: 0.05,
+          max: 0.8,
+          step: 0.01,
         },
         { key: 'autoSpan', kind: 'boolean' },
         {
@@ -162,7 +196,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
         },
         { key: 'pitch', kind: 'number', unit: '°', min: 1, max: 45, step: 1 },
         {
-          key: 'eaveOverhang',
+          key: 'highOverhang',
           kind: 'number',
           unit: 'm',
           min: 0,
@@ -170,12 +204,33 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           step: 0.05,
         },
         {
-          key: 'sideOverhang',
+          key: 'lowOverhang',
           kind: 'number',
           unit: 'm',
           min: 0,
           max: 1.5,
           step: 0.05,
+        },
+        {
+          key: 'leftOverhang',
+          kind: 'number',
+          unit: 'm',
+          min: 0,
+          max: 1.5,
+          step: 0.05,
+        },
+        {
+          key: 'rightOverhang',
+          kind: 'number',
+          unit: 'm',
+          min: 0,
+          max: 1.5,
+          step: 0.05,
+        },
+        {
+          key: 'coveringType',
+          kind: 'enum',
+          options: ['generic', 'shingle', 'metal-panel'],
         },
         { key: 'highSideFlashing', kind: 'boolean' },
         { key: 'sideFlashing', kind: 'boolean' },
@@ -198,11 +253,6 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           visibleIf: (node) => node.highSideFlashing || node.sideFlashing,
         },
         {
-          key: 'flashingMaterial',
-          kind: 'material',
-          visibleIf: (node) => node.highSideFlashing || node.sideFlashing,
-        },
-        {
           key: 'leftEndCondition',
           kind: 'enum',
           options: ['open', 'wall-abutment', 'joined'],
@@ -221,6 +271,41 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           key: 'framingStrategy',
           kind: 'enum',
           options: ['hidden', 'rafters', 'purlins', 'covering-specific'],
+        },
+        {
+          key: 'rafterWidth',
+          kind: 'number',
+          unit: 'm',
+          min: 0.03,
+          max: 0.4,
+          step: 0.01,
+          visibleIf: (node) => node.framingStrategy === 'rafters',
+        },
+        {
+          key: 'rafterHeight',
+          kind: 'number',
+          unit: 'm',
+          min: 0.03,
+          max: 0.5,
+          step: 0.01,
+        },
+        {
+          key: 'rafterSpacing',
+          kind: 'number',
+          unit: 'm',
+          min: 0.2,
+          max: 3,
+          step: 0.05,
+          visibleIf: (node) => node.framingStrategy === 'rafters',
+        },
+        {
+          key: 'rafterEndInset',
+          kind: 'number',
+          unit: 'm',
+          min: 0,
+          max: 3,
+          step: 0.05,
+          visibleIf: (node) => node.framingStrategy === 'rafters',
         },
         {
           key: 'purlinWidth',
@@ -252,7 +337,28 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           visibleIf: (node) =>
             node.framingStrategy === 'purlins' || node.framingStrategy === 'covering-specific',
         },
-        { key: 'postCount', kind: 'number', min: 2, max: 20, step: 1 },
+        {
+          key: 'postCount',
+          kind: 'number',
+          min: 2,
+          max: 20,
+          step: 1,
+          visibleIf: (node) => node.postLayoutMode === 'count',
+        },
+        {
+          key: 'postLayoutMode',
+          kind: 'enum',
+          options: ['count', 'target-spacing'],
+        },
+        {
+          key: 'postSpacing',
+          kind: 'number',
+          unit: 'm',
+          min: 0.3,
+          max: 10,
+          step: 0.1,
+          visibleIf: (node) => node.postLayoutMode === 'target-spacing',
+        },
         {
           key: 'postInset',
           kind: 'number',
@@ -292,6 +398,20 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           min: 0.05,
           max: 0.6,
           step: 0.01,
+        },
+        {
+          key: 'lowBeamInset',
+          kind: 'number',
+          unit: 'm',
+          min: 0,
+          max: 2,
+          step: 0.05,
+        },
+        { key: 'postBracing', kind: 'enum', options: ['none', 'knee'] },
+        {
+          key: 'footingStyle',
+          kind: 'enum',
+          options: ['none', 'base-plate', 'concrete-pad'],
         },
       ],
     },
@@ -339,6 +459,18 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
               field: 'pitch',
               msg: `Pitch is too steep for the selected height and projection; leave at least ${MIN_LEAN_TO_POST_HEIGHT}m of post height.`,
               severity: 'error' as const,
+            },
+          ]
+        : []
+    },
+    (node) => {
+      const minimum = COVERING_MIN_PITCH[node.coveringType]
+      return minimum !== null && node.pitch + 1e-6 < minimum
+        ? [
+            {
+              field: 'pitch',
+              msg: `${node.coveringType} covering typically needs at least ${minimum}° pitch; verify the selected product and local requirements.`,
+              severity: 'warning' as const,
             },
           ]
         : []

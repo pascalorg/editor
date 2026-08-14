@@ -876,6 +876,7 @@ export type FloorplanMoveTargetSession = {
 export type FloorplanMoveTarget<N> = (args: {
   node: N
   nodes: Record<AnyNodeId, AnyNode>
+  sceneApi?: SceneApi
 }) => FloorplanMoveTargetSession
 
 // ─── Plugin manifest ─────────────────────────────────────────────────
@@ -1428,7 +1429,11 @@ export type IconRef =
    * boundary per icon. */
   | { kind: 'component'; module: () => Promise<{ default: ComponentType }> }
 
-export type ToolContributionProps = { sceneApi: SceneApi }
+export type ToolContributionProps = {
+  sceneApi: SceneApi
+  activeLevelId: AnyNodeId | null
+  selectNode: (nodeId: AnyNodeId) => void
+}
 export type ToolLazyComponent = () => Promise<{ default: ComponentType<ToolContributionProps> }>
 export type LazyComponent = () => Promise<{ default: ComponentType }>
 
@@ -2303,7 +2308,13 @@ export type SceneApi = {
     update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
     delete?: AnyNodeId[]
   }) => void
-  subscribeNodes?: (listener: (nodes: Readonly<Record<AnyNodeId, AnyNode>>) => void) => () => void
+  subscribeNodes?: (
+    listener: (
+      nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+      previous: Readonly<Record<AnyNodeId, AnyNode>>,
+      changedIds: ReadonlySet<AnyNodeId>,
+    ) => void,
+  ) => () => void
   delete: (id: AnyNodeId) => void
   restore: (id: AnyNodeId) => void
   restoreAll: () => void

@@ -7,6 +7,7 @@ import {
   type FenceNode,
   nodeRegistry,
   type SlabNode,
+  type ToolContributionProps,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -42,7 +43,7 @@ import { ZoneTool } from './zone/zone-tool'
 
 // Cache lazy tool components keyed by their loader so React.lazy isn't
 // re-invoked across renders.
-type RegistryToolProps = { sceneApi: ReturnType<typeof createSceneApi> }
+type RegistryToolProps = ToolContributionProps
 const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType<RegistryToolProps>>()
 const registryToolPreloadCache = new WeakMap<AnyNodeDefinition, Promise<void>>()
 
@@ -380,7 +381,11 @@ export const ToolManager: React.FC = () => {
             NodeDefinition with a tool contribution, mount it here. */}
         {!movingNode && useRegistryTool && RegistryToolComponent && (
           <Suspense fallback={null}>
-            <RegistryToolComponent sceneApi={sceneApi} />
+            <RegistryToolComponent
+              activeLevelId={activeLevelId as AnyNodeId | null}
+              sceneApi={sceneApi}
+              selectNode={handlePlacedNodeSelected}
+            />
           </Suspense>
         )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (
