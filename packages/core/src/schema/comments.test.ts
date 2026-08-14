@@ -9,7 +9,7 @@ import {
 } from './comments'
 import type { AnyNodeId } from './types'
 
-const pointAnchor: CommentAnchor = { kind: 'point', position: [1, 2, 3] }
+const pointAnchor: CommentAnchor = { position: [1, 2, 3] }
 
 const thread = (id: string, createdAt: string): CommentThread => ({
   id: id as CommentId,
@@ -45,23 +45,36 @@ describe('sortCommentThreads', () => {
 describe('resolveCommentAnchorPosition', () => {
   const nowhere = () => null
 
-  test('returns a point anchor unchanged', () => {
+  test('returns a bare pin position unchanged', () => {
     expect(resolveCommentAnchorPosition(pointAnchor, nowhere)).toEqual([1, 2, 3])
   })
 
   test('adds the offset to the anchored node position', () => {
     const at = () => [10, 0, 10] as [number, number, number]
     const anchor: CommentAnchor = {
-      kind: 'node',
-      nodeId: 'wall_1' as AnyNodeId,
+      position: [4, 2.5, 4],
+      nodeId: 'shelf_1' as AnyNodeId,
       offset: [0, 2.5, 0],
     }
     expect(resolveCommentAnchorPosition(anchor, at)).toEqual([10, 2.5, 10])
   })
 
-  test('returns null when the anchored node is gone', () => {
-    const anchor: CommentAnchor = { kind: 'node', nodeId: 'wall_gone' as AnyNodeId }
-    expect(resolveCommentAnchorPosition(anchor, nowhere)).toBeNull()
+  test('falls back to the recorded position when the node cannot be resolved', () => {
+    const anchor: CommentAnchor = {
+      position: [4, 2.5, 4],
+      nodeId: 'wall_gone' as AnyNodeId,
+      offset: [0, 2.5, 0],
+    }
+    expect(resolveCommentAnchorPosition(anchor, nowhere)).toEqual([4, 2.5, 4])
+  })
+
+  // A wall has `start`/`end`, not `position`, so the editor's resolver has no
+  // origin to offset from. The thread still names the wall; the pin just stays
+  // where it was dropped.
+  test('a node anchor with no offset never tries to follow', () => {
+    const at = () => [99, 99, 99] as [number, number, number]
+    const anchor: CommentAnchor = { position: [4, 2.5, 4], nodeId: 'wall_1' as AnyNodeId }
+    expect(resolveCommentAnchorPosition(anchor, at)).toEqual([4, 2.5, 4])
   })
 })
 
@@ -73,10 +86,29 @@ describe('normalizeComments', () => {
 
   test('drops a thread whose anchor cannot be placed', () => {
     const result = normalizeComments({
-      c1: { id: 'c1', anchor: { kind: 'point', position: [1, 2] }, body: 'x' },
-      c2: { id: 'c2', anchor: { kind: 'point', position: [1, 2, 3] }, body: 'y' },
+      c1: { id: 'c1', anchor: { position: [1, 2] }, body: 'x' },
+      c2: { id: 'c2', anchor: { position: [1, 2, 3] }, body: 'y' },
     })
     expect(Object.keys(result)).toEqual(['c2'])
+  })
+
+  test('keeps the node reference and offset when both are well formed', () => {
+    const result = normalizeComments({
+      c1: {
+        anchor: { position: [1, 2, 3], nodeId: 'shelf_1', offset: [0, 1, 0] },
+        body: 'x',
+      },
+      c2: { anchor: { position: [1, 2, 3], nodeId: 'shelf_1', offset: [0, 1] }, body: 'y' },
+    })
+    expect(result['c1' as CommentId]?.anchor).toEqual({
+      position: [1, 2, 3],
+      nodeId: 'shelf_1' as AnyNodeId,
+      offset: [0, 1, 0],
+    })
+    // A malformed offset drops to "does not follow" rather than taking the
+    // thread down with it.
+    expect(result['c2' as CommentId]?.anchor.offset).toBeUndefined()
+    expect(result['c2' as CommentId]?.anchor.nodeId).toBe('shelf_1' as AnyNodeId)
   })
 
   test('keys off the record key when the entry has no id', () => {

@@ -4,7 +4,7 @@ import type { CommentAnchor } from '../schema/comments'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import useScene, { clearSceneHistory } from './use-scene'
 
-const anchor: CommentAnchor = { kind: 'point', position: [1, 0, 2] }
+const anchor: CommentAnchor = { position: [1, 0, 2] }
 
 function baseScene() {
   const site = SiteNode.parse({})

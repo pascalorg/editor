@@ -123,6 +123,7 @@ import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
+import { FloorplanCommentLayer } from '../editor-2d/floorplan-comment-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
@@ -11602,6 +11603,14 @@ export function FloorplanPanel({
                 </g>
                 <FloorplanMeasurementToolLayer />
                 <FloorplanRegisteredToolLayer />
+                {/* Inside the provider, not merely inside the scene `<g>`:
+                    the pin chrome counter-rotates and counter-scales against
+                    `sceneRotationDeg` / `unitsPerPixel`, and a sibling of the
+                    provider silently gets the fallback values instead. */}
+                <FloorplanCommentLayer
+                  buildingPosition={buildingPosition}
+                  buildingRotationY={buildingRotationY}
+                />
                 {floorplanSceneSlot}
               </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the

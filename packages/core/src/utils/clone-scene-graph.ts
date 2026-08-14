@@ -216,16 +216,17 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     }
   }
 
-  // Clone and remap comment threads. A thread pinned to a node that did not
+  // Clone and remap comment threads. A thread *about* a node that did not
   // survive into this clone is dropped rather than kept dangling: the feedback
-  // was about that element, and a pin with no anchor cannot be drawn.
+  // was about that element. A thread pinned to bare space has nothing to
+  // dangle from and always survives.
   let clonedComments: Record<CommentId, CommentThread> | undefined
   if (comments) {
     clonedComments = {} as Record<CommentId, CommentThread>
     for (const thread of Object.values(comments)) {
       const cloned: CommentThread = structuredClone(thread)
 
-      if (cloned.anchor.kind === 'node') {
+      if (cloned.anchor.nodeId) {
         const nodeId = idMap.get(cloned.anchor.nodeId) as AnyNodeId | undefined
         if (!nodeId) continue
         cloned.anchor = { ...cloned.anchor, nodeId }

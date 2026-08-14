@@ -404,7 +404,7 @@ describe('comment clone references', () => {
       comments: {
         ['comment_pinned' as CommentId]: {
           id: 'comment_pinned' as CommentId,
-          anchor: { kind: 'node', nodeId: 'wall_1' as AnyNodeId, offset: [0, 1.2, 0] },
+          anchor: { position: [2, 1.2, 0], nodeId: 'wall_1' as AnyNodeId, offset: [0, 1.2, 0] },
           author: { name: 'Ada' },
           body: 'Bu duvar çok ince',
           createdAt: '2026-08-01T09:00:00.000Z',
@@ -420,7 +420,7 @@ describe('comment clone references', () => {
         },
         ['comment_loose' as CommentId]: {
           id: 'comment_loose' as CommentId,
-          anchor: { kind: 'point', position: [3, 0, 4] },
+          anchor: { position: [3, 0, 4] },
           author: { name: 'Ada' },
           body: 'Burada bir giriş olmalı',
           createdAt: '2026-08-02T09:00:00.000Z',
@@ -443,7 +443,7 @@ describe('comment clone references', () => {
       expect(cloned.comments?.[thread.id]).toBe(thread)
     }
 
-    const pinned = threads.find((thread) => thread.anchor.kind === 'node')
+    const pinned = threads.find((thread) => thread.anchor.nodeId)
     expect(pinned?.body).toBe('Bu duvar çok ince')
     expect(pinned?.replies).toHaveLength(1)
     expect(pinned?.replies[0]?.body).toBe('20 cm yapalım')
@@ -451,12 +451,10 @@ describe('comment clone references', () => {
 
   test('remaps a node anchor and its level onto the cloned nodes', () => {
     const cloned = cloneSceneGraph(graphWithComments())
-    const pinned = Object.values(cloned.comments ?? {}).find(
-      (thread) => thread.anchor.kind === 'node',
-    )
+    const pinned = Object.values(cloned.comments ?? {}).find((thread) => thread.anchor.nodeId)
 
     expect(pinned).toBeDefined()
-    if (pinned?.anchor.kind !== 'node') throw new Error('expected a node anchor')
+    if (!pinned?.anchor.nodeId) throw new Error('expected a node anchor')
     expect(pinned.anchor.nodeId).not.toBe('wall_1')
     expect(cloned.nodes[pinned.anchor.nodeId]?.type).toBe('wall')
     expect(pinned.anchor.offset).toEqual([0, 1.2, 0])
@@ -464,14 +462,11 @@ describe('comment clone references', () => {
     expect(cloned.nodes[pinned.levelId as AnyNodeId]?.type).toBe('level')
   })
 
-  test('a point anchor survives the clone untouched', () => {
+  test('a pin with no node reference survives the clone untouched', () => {
     const cloned = cloneSceneGraph(graphWithComments())
-    const loose = Object.values(cloned.comments ?? {}).find(
-      (thread) => thread.anchor.kind === 'point',
-    )
+    const loose = Object.values(cloned.comments ?? {}).find((thread) => !thread.anchor.nodeId)
 
-    if (loose?.anchor.kind !== 'point') throw new Error('expected a point anchor')
-    expect(loose.anchor.position).toEqual([3, 0, 4])
+    expect(loose?.anchor.position).toEqual([3, 0, 4])
   })
 
   test('a thread pinned to a node the fork stripped is dropped, not left dangling', () => {
@@ -479,7 +474,7 @@ describe('comment clone references', () => {
     const orphan = {
       ...Object.values(base.comments ?? {})[0]!,
       id: 'comment_onscan' as CommentId,
-      anchor: { kind: 'node', nodeId: 'scan_1' as AnyNodeId } as const,
+      anchor: { position: [0, 0, 0], nodeId: 'scan_1' as AnyNodeId, offset: [0, 0, 0] },
     }
     const forked = forkSceneGraph({
       ...base,
@@ -489,7 +484,7 @@ describe('comment clone references', () => {
     const threads = Object.values(forked.comments ?? {})
     expect(threads).toHaveLength(2)
     for (const thread of threads) {
-      if (thread.anchor.kind !== 'node') continue
+      if (!thread.anchor.nodeId) continue
       expect(forked.nodes[thread.anchor.nodeId]).toBeDefined()
     }
   })

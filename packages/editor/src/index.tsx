@@ -254,6 +254,7 @@ export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 export { CadUnderlayPanel } from './components/ui/panels/cad-underlay-panel'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
+export { CommentsSection } from './components/ui/panels/comments/comments-section'
 // Phase 5 Stage E — kinds with bespoke editors (slab holes list,
 // ceiling height presets, etc.) use `parametrics.customPanel` to mount
 // a kind-owned panel and need PanelWrapper for the chrome.

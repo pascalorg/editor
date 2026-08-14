@@ -56,6 +56,7 @@ import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { CollectionsSection } from '../../../panels/collections/collections-section'
+import { CommentsSection } from '../../../panels/comments/comments-section'
 import { SavedViewsSection } from '../../../panels/saved-views/saved-views-section'
 import { ImportCadDialog } from '../../../dialogs/import-cad-dialog'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
@@ -1716,6 +1717,10 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
           {/* Saved views — above collections because activating a view rewrites
               collection visibility, so this is the control that owns it. */}
           <SavedViewsSection />
+
+          {/* Comments — under the views because a thread's "go there" is the
+              same gesture a saved view performs. */}
+          <CommentsSection />
 
           {/* Collections — above the buildings tree because a hidden collection
               has no members left in that tree to reach it from. */}

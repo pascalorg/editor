@@ -6,13 +6,24 @@ export type CommentId = `comment_${string}`
 export type CommentReplyId = `comment-reply_${string}`
 
 /**
- * Where a thread hangs in the model. `node` follows the element when it moves;
- * `point` is a bare world position, which is what you get when the reviewer
- * clicks empty space or the site itself.
+ * Where a thread hangs in the model.
+ *
+ * `position` is always recorded, so the 2D floorplan and the 3D canvas draw the
+ * pin from the same number without either needing the other's machinery — the
+ * floorplan has no scene registry to resolve a node through, and a session that
+ * opens in 2D never mounts the R3F tree at all.
+ *
+ * `nodeId` + `offset` are the *follow* half, filled when the pin was dropped on
+ * an element: the pin tracks that element as long as the kind exposes a plain
+ * `position`. Kinds that don't (a wall is `start`/`end`) keep the thread and
+ * fall back to `position`, which is stale after a move but never wrong about
+ * which element the thread is against.
  */
-export type CommentAnchor =
-  | { kind: 'point'; position: [number, number, number] }
-  | { kind: 'node'; nodeId: AnyNodeId; offset?: [number, number, number] }
+export type CommentAnchor = {
+  position: [number, number, number]
+  nodeId?: AnyNodeId
+  offset?: [number, number, number]
+}
 
 /**
  * Who wrote a comment. `id` is absent for anonymous share-link visitors, who
@@ -79,17 +90,20 @@ export function sortCommentThreads(comments: Record<CommentId, CommentThread>): 
   )
 }
 
-/** World position of a thread's pin, resolving a node anchor against the scene. */
+/**
+ * World position of a thread's pin. Follows the anchored node when the caller
+ * can resolve its origin, and falls back to the position recorded at drop time
+ * otherwise — a node that was deleted, or a kind with no plain `position`.
+ */
 export function resolveCommentAnchorPosition(
   anchor: CommentAnchor,
   nodePosition: (id: AnyNodeId) => [number, number, number] | null,
-): [number, number, number] | null {
-  if (anchor.kind === 'point') return anchor.position
+): [number, number, number] {
+  if (!(anchor.nodeId && anchor.offset)) return anchor.position
   const base = nodePosition(anchor.nodeId)
-  if (!base) return null
-  const offset = anchor.offset
-  if (!offset) return base
-  return [base[0] + offset[0], base[1] + offset[1], base[2] + offset[2]]
+  if (!base) return anchor.position
+  const [dx, dy, dz] = anchor.offset
+  return [base[0] + dx, base[1] + dy, base[2] + dz]
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -110,16 +124,11 @@ function normalizeAuthor(value: unknown): CommentAuthor {
 
 function normalizeAnchor(value: unknown): CommentAnchor | null {
   if (!isRecord(value)) return null
-  if (value.kind === 'point') {
-    return isTriple(value.position) ? { kind: 'point', position: value.position } : null
-  }
-  if (value.kind === 'node') {
-    if (typeof value.nodeId !== 'string' || !value.nodeId) return null
-    const anchor: CommentAnchor = { kind: 'node', nodeId: value.nodeId as AnyNodeId }
-    if (isTriple(value.offset)) anchor.offset = value.offset
-    return anchor
-  }
-  return null
+  if (!isTriple(value.position)) return null
+  const anchor: CommentAnchor = { position: value.position }
+  if (typeof value.nodeId === 'string' && value.nodeId) anchor.nodeId = value.nodeId as AnyNodeId
+  if (isTriple(value.offset)) anchor.offset = value.offset
+  return anchor
 }
 
 function normalizeCameraPose(value: unknown): CameraPose | null {

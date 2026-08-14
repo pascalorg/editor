@@ -159,7 +159,21 @@ export type Phase = 'site' | 'structure' | 'furnish'
  * controls stay stepped back. `material-paint` is the existing precedent for
  * exactly this shape.
  */
-export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint' | 'terrain-sculpt'
+/**
+ * `comment` is a mode for the same reason `terrain-sculpt` is: it places no
+ * node, and while it is armed a click must drop a pin rather than select the
+ * wall under it. Modelling it as a mode makes it mutually exclusive with
+ * `build`/`select`/`delete` by construction, and every selection manager
+ * already early-returns unless `mode === 'select'`.
+ */
+export type Mode =
+  | 'select'
+  | 'edit'
+  | 'delete'
+  | 'build'
+  | 'material-paint'
+  | 'terrain-sculpt'
+  | 'comment'
 
 // Structure mode tools (building elements)
 type BuiltInStructureTool =

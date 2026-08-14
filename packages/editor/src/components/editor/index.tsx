@@ -69,6 +69,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { CommentLayer3D } from './comment-layer-3d'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
 import { EditorLayoutV2 } from './editor-layout-v2'
@@ -813,6 +814,10 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <StairEditSystem />
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
+      {/* Pins stay up in first-person and studio too: a comment is something to
+          read, not an editing affordance. Only version preview and capture
+          suppress them, via `noEditing`'s stricter siblings below. */}
+      {!(isLoading || isVersionPreviewMode || isCaptureMode) && <CommentLayer3D />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />

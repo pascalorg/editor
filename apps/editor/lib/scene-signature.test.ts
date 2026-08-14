@@ -81,7 +81,7 @@ test('changing any signed field changes the signature', () => {
         comments: {
           comment_1: {
             id: 'comment_1',
-            anchor: { kind: 'point', position: [1, 0, 2] },
+            anchor: { position: [1, 0, 2] },
             author: { name: 'Ada' },
             body: 'check this',
             createdAt: '2026-08-01T09:00:00.000Z',
