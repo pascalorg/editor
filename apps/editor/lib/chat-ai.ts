@@ -408,7 +408,7 @@ export type ChatResult = {
 }
 
 /** The kinds that get cast and therefore shuttered. Everything else has no formwork to speak of. */
-const CASTABLE_TYPES = ['wall', 'column', 'slab'] as const
+const CASTABLE_TYPES = ['wall', 'column', 'slab', 'beam'] as const
 
 type CastableType = (typeof CASTABLE_TYPES)[number]
 type CastableGraphNode = AnyNode & { type: CastableType }
@@ -440,7 +440,7 @@ export function buildTools(
   const castableOrError = (elementId: string): CastableGraphNode | string => {
     const node = graph.nodes[elementId as keyof typeof graph.nodes] as AnyNode | undefined
     if (!isCastable(node)) {
-      return `Error: No wall, column or slab found with id ${elementId}`
+      return `Error: No wall, column, slab or beam found with id ${elementId}`
     }
     return node
   }

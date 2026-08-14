@@ -1,4 +1,5 @@
 import z from 'zod'
+import { BeamNode } from './nodes/beam'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
 import { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
@@ -19,6 +20,7 @@ import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
 import { FormworkAssemblyNode } from './nodes/formwork-assembly'
+import { FormworkBoxOutNode } from './nodes/formwork-box-out'
 import { FormworkProjectSettingsNode } from './nodes/formwork-project-settings'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
@@ -54,12 +56,14 @@ export const AnyNode = z.discriminatedUnion('type', [
   BuildingNode,
   ElevatorNode,
   LevelNode,
+  BeamNode,
   ColumnNode,
   ConstructionDimensionNode,
   StructuralGridNode,
   WallNode,
   FenceNode,
   FormworkAssemblyNode,
+  FormworkBoxOutNode,
   FormworkProjectSettingsNode,
   ConstructionJointNode,
   CabinetNode,

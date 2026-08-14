@@ -294,7 +294,7 @@ export function registerDescribeNode(server: McpServer, bridge: SceneOperations)
     {
       title: 'Describe node',
       description:
-        "Return a structured summary of a node including its ancestry, children IDs, key properties, and a short human description. For walls, columns and slabs with a formworkType, also returns formworkCoverage: which of that kind's faces need shuttering (a wall's two sides and two ends, a column's four faces or one wrapped shaft, a slab's soffit and rim), the reason for each, how each opening was treated under the active measurement standard, the inside/outside corner units the element's faces turn onto (with `owns` saying which of the two walls at a junction bills each one, so summing across a level does not double count), and both the physical area (what you buy and cut) and the measured area (what the contract pays for).",
+        "Return a structured summary of a node including its ancestry, children IDs, key properties, and a short human description. For walls, columns, slabs and beams with a formworkType, also returns formworkCoverage: which of that kind's faces need shuttering (a wall's two sides and two ends, a column's four faces or one wrapped shaft, a slab's soffit and rim, a beam's two tied side shutters over a propped soffit), the reason for each, how each opening was treated under the active measurement standard, the inside/outside corner units the element's faces turn onto (with `owns` saying which of the two walls at a junction bills each one, so summing across a level does not double count), and both the physical area (what you buy and cut) and the measured area (what the contract pays for).",
       inputSchema: describeNodeInput,
       outputSchema: describeNodeOutput,
     },

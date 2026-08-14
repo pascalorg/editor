@@ -1,5 +1,7 @@
+import type { BeamNode } from '../../../schema/nodes/beam'
 import type { ColumnNode } from '../../../schema/nodes/column'
 import type { DoorNode } from '../../../schema/nodes/door'
+import type { FormworkBoxOutNode } from '../../../schema/nodes/formwork-box-out'
 import type { SlabNode } from '../../../schema/nodes/slab'
 import type { WallNode } from '../../../schema/nodes/wall'
 import { getWallAssemblyThickness } from '../../../schema/nodes/wall'
@@ -28,7 +30,7 @@ export interface Vec2 {
   y: number
 }
 
-export type CastableKind = 'wall' | 'column' | 'slab'
+export type CastableKind = 'wall' | 'column' | 'slab' | 'beam'
 
 /**
  * A void through a castable element, in its own elevation frame: `along` runs
@@ -37,13 +39,16 @@ export type CastableKind = 'wall' | 'column' | 'slab'
  */
 export interface ElementOpening {
   id: AnyNodeId
-  kind: 'door' | 'window'
+  kind: 'door' | 'window' | 'formwork-box-out'
   /** Distance along the centreline to the opening centre, m. */
   along: number
   /** Height of the opening centre above the element base, m. */
   centreY: number
   width: number
   height: number
+  /** Box-out release details — read into the reveal parts' descriptions. */
+  draftAngleDeg?: number
+  chamferStrips?: boolean
 }
 
 /**
@@ -118,6 +123,13 @@ export interface CastableElement {
   maxPourLength?: number
   maxPourVolume?: number
   /**
+   * The architect's tie-hole grid on visible concrete, mm. On architectural
+   * work this is the design and the layout is an output of it: rows sit on the
+   * module uniform rather than graded, and an overload is answered by a lower
+   * pressure rather than by moving the grid.
+   */
+  specifiedTieGridMm?: { columnsMm: number; rowsMm: number }
+  /**
    * False until the host names a shuttering system, and false again when it
    * names `'none'`. Read the same way for every kind: a column or a slab the
    * user has not shuttered is not silently formed on its behalf.
@@ -133,9 +145,10 @@ function wallHeight(wall: WallNode): number {
   return wall.height ?? DEFAULT_WALL_HEIGHT
 }
 
-type OpeningNode = DoorNode | WindowNode
+type OpeningNode = DoorNode | WindowNode | FormworkBoxOutNode
 
 function openingHostId(opening: OpeningNode): string | null {
+  if (opening.type === 'formwork-box-out') return opening.parentId
   return opening.wallId ?? opening.parentId
 }
 
@@ -181,7 +194,9 @@ function planFrom(outline: Vec2[], holes: Vec2[][]): ElementPlan {
 export function openingsForHost(hostId: AnyNodeId, nodes: AnyNode[]): ElementOpening[] {
   const out: ElementOpening[] = []
   for (const node of nodes) {
-    if (node.type !== 'door' && node.type !== 'window') continue
+    if (node.type !== 'door' && node.type !== 'window' && node.type !== 'formwork-box-out') {
+      continue
+    }
     if (node.visible === false) continue
     const opening = node as OpeningNode
     if (openingHostId(opening) !== hostId) continue
@@ -192,6 +207,14 @@ export function openingsForHost(hostId: AnyNodeId, nodes: AnyNode[]): ElementOpe
       centreY: opening.position[1],
       width: opening.width,
       height: opening.height,
+      // A box-out is cut to release: the crew building the reveal boards sees
+      // the draft and the chamfer in the part description.
+      ...(opening.type === 'formwork-box-out'
+        ? {
+            draftAngleDeg: opening.draftAngleDeg,
+            chamferStrips: opening.chamferStrips,
+          }
+        : {}),
     })
   }
   return out
@@ -257,6 +280,7 @@ export function toCastableElement(
       maxLiftHeight: wall.maxLiftHeight,
       maxPourLength: wall.maxPourLength,
       maxPourVolume: wall.maxPourVolume,
+      specifiedTieGridMm: wall.specifiedTieGridMm,
       formworkEnabled: shutteringEnabled(wall),
       openings,
     }
@@ -300,7 +324,37 @@ export function toCastableElement(
       maxLiftHeight: column.maxLiftHeight,
       maxPourLength: column.maxPourLength,
       maxPourVolume: column.maxPourVolume,
+      specifiedTieGridMm: column.specifiedTieGridMm,
       formworkEnabled: shutteringEnabled(column),
+      openings,
+    }
+  }
+
+  if (node.type === 'beam') {
+    const beam = node as BeamNode
+    // A beam is a wall lying on its side: a centreline band whose "core" is
+    // the width across it and whose "height" is the depth the side shutters
+    // span. The soffit is the fourth face, propped off the floor at `elevation`.
+    return {
+      id: beam.id as AnyNodeId,
+      kind: 'beam',
+      start: { x: beam.start[0], y: beam.start[1] },
+      end: { x: beam.end[0], y: beam.end[1] },
+      coreThickness: beam.width,
+      height: beam.depth,
+      halfWidth: beam.width / 2,
+      soffitHeightAboveSupport: beam.elevation,
+      castOrder: beam.castOrder,
+      pourId: beam.pourId,
+      formworkMode: beam.formworkMode ?? 'double-sided',
+      againstEarthSide: beam.againstEarthSide,
+      topSurface: beam.topSurface ?? { kind: 'open', slopeDeg: 0 },
+      exposureClass: beam.exposureClass,
+      maxLiftHeight: beam.maxLiftHeight,
+      maxPourLength: beam.maxPourLength,
+      maxPourVolume: beam.maxPourVolume,
+      specifiedTieGridMm: beam.specifiedTieGridMm,
+      formworkEnabled: shutteringEnabled(beam),
       openings,
     }
   }
@@ -337,6 +391,7 @@ export function toCastableElement(
       maxLiftHeight: slab.maxLiftHeight,
       maxPourLength: slab.maxPourLength,
       maxPourVolume: slab.maxPourVolume,
+      specifiedTieGridMm: slab.specifiedTieGridMm,
       formworkEnabled: shutteringEnabled(slab),
       openings,
     }

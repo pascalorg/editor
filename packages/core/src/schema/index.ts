@@ -41,6 +41,7 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
+export { BeamNode } from './nodes/beam'
 export { BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
 export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
@@ -138,6 +139,7 @@ export {
   FormworkFillerPosition,
   FormworkPartOverride,
 } from './nodes/formwork-assembly'
+export { FormworkBoxOutNode } from './nodes/formwork-box-out'
 export {
   BracingSettings,
   CementSpecSettings,

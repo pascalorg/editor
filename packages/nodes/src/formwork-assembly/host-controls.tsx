@@ -70,6 +70,8 @@ export const SPACING_LABELS: Record<CastableHostNode['type'], { tie: string; wal
   wall: { tie: 'Tie spacing', waler: 'Waler spacing' },
   column: { tie: 'Clamp spacing', waler: 'Yoke spacing' },
   slab: { tie: 'Bearer spacing', waler: 'Joist spacing' },
+  // A beam's side shutters are a wall's: ties across the width, walers up the sides.
+  beam: { tie: 'Tie spacing', waler: 'Waler spacing' },
 }
 
 /**
@@ -87,6 +89,7 @@ const MONOLITHIC_HINT: Record<CastableHostNode['type'], string> = {
   column:
     'A column sharing its pour ID with the wall it sits in is a pilaster — the shared faces are not formed.',
   slab: 'A slab sharing its pour ID with the beams under it is cast monolithically with them.',
+  beam: 'A beam sharing its pour ID with the slab above or the column it lands on is cast monolithically with them — no joint where they meet.',
 }
 
 /**

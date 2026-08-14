@@ -601,8 +601,18 @@ function formatPeriod(hours: number): string {
  */
 export function strikeTargetForPartKind(
   kind: string,
-  hostKind: 'wall' | 'column' | 'slab',
+  hostKind: 'wall' | 'column' | 'slab' | 'beam',
+  use?: string,
 ): StrikeTarget | undefined {
+  if (hostKind === 'beam') {
+    // A beam is a wall lying on its side over a soffit: the sides, walers and
+    // stop-ends are vertical forms that come away with the face, the props are
+    // shores held to the striking table, and the deck sheets are soffit forms
+    // held with them.
+    if (kind === 'prop') return 'slab-props'
+    if (kind === 'ply-piece' && use === 'deck-sheet') return 'slab-soffit-form'
+    return kind === 'tie' || kind === 'consumable' ? undefined : 'vertical-form'
+  }
   if (hostKind !== 'slab') {
     // Everything forming a wall or a column is a vertical form, props included:
     // a wall's raker holds it on line against wind, it is not shoring a soffit.

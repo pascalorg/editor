@@ -1,8 +1,9 @@
 import { DEFAULT_FORMWORK_SYSTEM_ID, formworkSystem } from '@pascal-app/core/formwork'
 import type { GeometryContext } from '@pascal-app/core/registry'
-import type { AnyNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core/schema'
+import type { AnyNode, BeamNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core/schema'
 import { Group } from 'three'
 import type { CastableHostNode } from './attach'
+import { buildBeamFormwork } from './geometry-beam'
 import { buildColumnFormwork } from './geometry-column'
 import { panelMaterial, resolveFormworkScope } from './geometry-shared'
 import { buildSlabFormwork } from './geometry-slab'
@@ -39,7 +40,14 @@ export function buildFormwork(
 ): BuiltFormwork | null {
   const host = ctx.parent as AnyNode | null
   if (!host) return null
-  if (host.type !== 'wall' && host.type !== 'column' && host.type !== 'slab') return null
+  if (
+    host.type !== 'wall' &&
+    host.type !== 'column' &&
+    host.type !== 'slab' &&
+    host.type !== 'beam'
+  ) {
+    return null
+  }
 
   const castable = host as CastableHostNode
   if (!castable.formworkType || castable.formworkType === 'none') return null
@@ -58,6 +66,7 @@ export function buildFormwork(
 
   if (host.type === 'column') return buildColumnFormwork(host as ColumnNode, node, scope, material)
   if (host.type === 'slab') return buildSlabFormwork(host as SlabNode, node, scope, material)
+  if (host.type === 'beam') return buildBeamFormwork(host as BeamNode, node, scope, material)
   return buildWallFormwork(host as WallNode, node, scope, material)
 }
 

@@ -22,7 +22,7 @@ import { cn, formatLinearMeasurement } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import type { CastableHostNode } from './attach'
-import { columnPourDesign, slabPourDesign, wallPourDesign } from './design'
+import { beamPourDesign, columnPourDesign, slabPourDesign, wallPourDesign } from './design'
 import {
   mm,
   Note,
@@ -116,7 +116,7 @@ export function FormworkDesignReport({
   if (!host) {
     return (
       <div className="px-1 text-[11px] text-muted-foreground">
-        Host wall, column or slab not found.
+        Host wall, column, slab or beam not found.
       </div>
     )
   }
@@ -173,6 +173,14 @@ export function FormworkDesignReport({
         />
       ) : host.type === 'column' ? (
         <ColumnReport column={host} settings={settings} unit={unit} unitSystem={unitSystem} />
+      ) : host.type === 'beam' ? (
+        <BeamReport
+          settings={settings}
+          systemId={systemId}
+          unit={unit}
+          unitSystem={unitSystem}
+          beam={host}
+        />
       ) : (
         <SlabReport settings={settings} slab={host} unitSystem={unitSystem} />
       )}
@@ -290,6 +298,90 @@ function WallReport({
           { label: design.sheathing?.label ?? '', verification: design.sheathing?.verification },
           { label: design.beam?.label ?? '', verification: design.beam?.verification },
           { label: design.tie?.label ?? '', verification: design.tie?.verification },
+        ]}
+      />
+    </div>
+  )
+}
+
+function BeamReport({
+  settings,
+  systemId,
+  unit,
+  unitSystem,
+  beam,
+}: {
+  settings: FormworkSettings
+  systemId: string | undefined
+  unit: PourUnit | undefined
+  unitSystem: UnitSystem
+  beam: Extract<CastableHostNode, { type: 'beam' }>
+}) {
+  const { side, falsework, liftHeightM } = useMemo(
+    () => beamPourDesign(settings, beam, unit, systemId),
+    [settings, beam, unit, systemId],
+  )
+
+  return (
+    <div className="space-y-2 px-1 pb-1">
+      <Section title="Side shutters — the wall chain">
+        <EnvelopeSection
+          designPressureKnM2={side.designPressureKnM2}
+          envelope={side.envelope}
+          liftHeightM={liftHeightM}
+          settings={settings}
+          unitSystem={unitSystem}
+        />
+        <MemberRow design={side.stud} label="Studs" unitSystem={unitSystem} />
+        <MemberRow
+          design={side.waler}
+          label="Walers"
+          note={beamNote(side.beam)}
+          unitSystem={unitSystem}
+        />
+        <MemberRow
+          design={side.tieSpacing}
+          label="Ties across the width"
+          note={
+            side.tie
+              ? `${side.tie.label} at ${capacityLabel(side.tieCapacityKn)} — the spacing is the waler's check; the force is per row.`
+              : 'No tie named — the spacing is a waler span check with no hardware behind it.'
+          }
+          unitSystem={unitSystem}
+        />
+        <Readout label="Tie density" value={`${side.tiesPerM2.toFixed(2)} /m²`} />
+      </Section>
+
+      <Section title="Soffit — the falsework chain">
+        <Readout
+          label="Design load"
+          value={`${falsework.load.totalKpa.toFixed(2)} kPa`}
+          value2={falsework.load.governedBy === 'code-minimum' ? 'code minimum' : 'calculated'}
+        />
+        <MemberRow design={falsework.joist} label="Deck span" unitSystem={unitSystem} />
+        <MemberRow
+          design={falsework.propSpacing}
+          label="Prop pitch"
+          note={
+            falsework.props
+              ? `on ${falsework.props.label}, ${capacityLabel(falsework.propCapacityKn ?? 0)}`
+              : 'No prop named — the pitch has no capacity behind it.'
+          }
+          unitSystem={unitSystem}
+        />
+      </Section>
+
+      <Warnings warnings={[...side.warnings, ...falsework.warnings]} />
+      <VerificationNote
+        entries={[
+          { label: side.sheathing?.label ?? '', verification: side.sheathing?.verification },
+          { label: side.beam?.label ?? '', verification: side.beam?.verification },
+          { label: side.tie?.label ?? '', verification: side.tie?.verification },
+          {
+            label: falsework.sheathing?.label ?? '',
+            verification: falsework.sheathing?.verification,
+          },
+          { label: falsework.props?.label ?? '', verification: falsework.props?.verification },
         ]}
       />
     </div>

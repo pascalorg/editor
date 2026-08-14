@@ -183,7 +183,7 @@ export interface FormworkFace {
 /** How the active standard treated one opening, and the reveals it adds. */
 export interface OpeningMeasurement {
   openingId: AnyNodeId
-  kind: 'door' | 'window'
+  kind: 'door' | 'window' | 'formwork-box-out'
   /** Elevation area of the void within the element's face, m². */
   areaSqM: number
   /** Taken off each formed side face's `measuredArea` — 0 unless deducted. */

@@ -6,6 +6,7 @@ import {
 } from '@pascal-app/core/formwork'
 import {
   type AnyNode,
+  type BeamNode,
   type ColumnNode,
   type FormworkAssemblyNode,
   generateId,
@@ -34,7 +35,7 @@ import {
  *   builds there directly.
  */
 
-export type CastableHostNode = WallNode | ColumnNode | SlabNode
+export type CastableHostNode = WallNode | ColumnNode | SlabNode | BeamNode
 
 function assemblyFor(
   host: CastableHostNode,

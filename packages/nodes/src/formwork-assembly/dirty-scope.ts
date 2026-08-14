@@ -45,6 +45,14 @@ export function formworkAssembliesAffectedBy(
     return hostId ? formworkAssembliesOnHost(hostId, nodes) : []
   }
 
+  if (node.type === 'formwork-box-out') {
+    // A box-out is hosted directly by the element it voids — parentId only, no
+    // wallId indirection. Moving or resizing it re-cuts that host's panels and
+    // moves its reveal boards, and no neighbour's coverage depends on it.
+    const hostId = node.parentId
+    return hostId ? formworkAssembliesOnHost(hostId, nodes) : []
+  }
+
   const levelId = node.parentId
   const out: AnyNodeId[] = []
   for (const candidate of Object.values(nodes)) {

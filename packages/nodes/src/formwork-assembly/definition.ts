@@ -75,6 +75,6 @@ export const formworkAssemblyDefinition: NodeDefinition<typeof FormworkAssemblyN
 
   mcp: {
     description:
-      "One formwork assembly — the shutter for a single pour segment and lift of a wall, column or slab, generated from the host's formworkType/tieSpacing/walerSpacing fields. The parts differ per kind: a wall gets panels, walers and through-ties; a column a clamped box or a wrapped shaft; a slab a propped soffit deck plus edge forms. Attached to a host element, not placed by hand.",
+      "One formwork assembly — the shutter for a single pour segment and lift of a wall, column, slab or beam, generated from the host's formworkType/tieSpacing/walerSpacing fields. The parts differ per kind: a wall gets panels, walers and through-ties; a column a clamped box or a wrapped shaft; a slab a propped soffit deck plus edge forms; a beam two tied side shutters over a propped soffit. Attached to a host element, not placed by hand.",
   },
 }

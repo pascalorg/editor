@@ -104,7 +104,7 @@ function EmptyState({ host, scoped }: { host: CastableHostNode | undefined; scop
   if (!host) {
     return (
       <div className="px-1 text-[11px] text-muted-foreground">
-        Host wall, column or slab not found.
+        Host wall, column, slab or beam not found.
       </div>
     )
   }

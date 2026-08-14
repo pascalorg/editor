@@ -250,7 +250,7 @@ function cornerSpec(
  * rack. A cut board is the opposite — its height *is* the band, because that is what
  * somebody saws.
  */
-function pieceSpec(
+export function pieceSpec(
   piece: PlannedPiece['piece'],
   locus: Extract<FormworkPartSpec['locus'], { on: 'run' }>,
   bandHeightMm: number,
@@ -319,6 +319,49 @@ function rowAt(design: WallDesign, elevationMm: number): WallDesign['rows'][numb
 }
 
 /**
+ * The architect's tie-column stations, per run, in run-local mm.
+ *
+ * The grid is symmetric about the pour unit's midpoint — the module steps out
+ * in both directions — because the exposed face is read as a mirror, not as a
+ * modulus. Each run then asks the packer for the stations inside it, expressed
+ * in the run's own coordinates: the packer cuts at those stations, so a panel
+ * joint lands on the grid line and the tie holes the panels bring follow it.
+ */
+function wallGlobalGridStationsMm(
+  spanStart: number,
+  spanEnd: number,
+  columnsMm: number,
+  runs: readonly { lo: number; hi: number }[],
+): number[] | undefined {
+  if (!(columnsMm > 0)) return undefined
+  const mid = (spanStart + spanEnd) / 2
+  const out: number[] = []
+  for (const run of runs) {
+    const runLoMm = run.lo * 1000
+    const runHiMm = run.hi * 1000
+    const runStations: number[] = []
+    // Outward from the midpoint so the first station in each direction is the
+    // closest to the centre — the face is read from its middle, not its end. The
+    // midpoint itself is a column line (step 0): a mirror reads with a line at
+    // its centre, and leaving it out would open a two-module bay in the middle
+    // of the face where the pattern is read first.
+    for (let step = 0; ; step++) {
+      const offset = (step * columnsMm) / 1000
+      const left = mid - offset
+      const right = mid + offset
+      const reached = left <= run.lo - 1e-6 && right >= run.hi + 1e-6
+      if (step > 0 && left > run.lo + 1e-6 && left < run.hi - 1e-6) {
+        runStations.push((left - run.lo) * 1000)
+      }
+      if (right > run.lo + 1e-6 && right < run.hi - 1e-6) runStations.push((right - run.lo) * 1000)
+      if (reached) break
+    }
+    out.push(...runStations)
+  }
+  return out.length > 0 ? out : undefined
+}
+
+/**
  * Where a through-tie can actually pass.
  *
  * On a panel system this is not a spacing: the frames leave the factory drilled, so
@@ -334,11 +377,18 @@ function rowAt(design: WallDesign, elevationMm: number): WallDesign['rows'][numb
  * each row's spacing rather than stepping along it keeps the layout symmetrical, the
  * way APA sets one out, and puts a tie on each end of the run where the shutter is
  * levered hardest.
+ *
+ * A specified grid changes that last sentence. The module is the design — the
+ * exposed face is read by it — so the stations step out from the midpoint at the
+ * stated module rather than dividing the run into bays, and a run whose length is
+ * not a whole number of modules simply leaves its end zones untied. That is the
+ * difference between matching a grid and fitting one.
  */
 function tieStations(
   planByFace: ReadonlyMap<'a' | 'b', FacePlan>,
   design: WallDesign,
   extent: { spanStart: number; spanEnd: number; baseY: number; formTop: number },
+  specifiedGridMm?: { columnsMm: number; rowsMm: number },
 ): Array<{ x: number; y: number }> {
   const a = planByFace.get('a')?.holes ?? []
   const b = planByFace.get('b')?.holes ?? []
@@ -360,6 +410,26 @@ function tieStations(
   for (const row of design.rows) {
     const y = extent.baseY + row.elevationMm / 1000
     if (y > extent.formTop) continue
+    if (specifiedGridMm) {
+      // Outward from the midpoint so the pattern is a mirror, not a modulus: the
+      // first station right of centre has its pair the same distance left of it,
+      // and the centre itself is a column line (step 0) — a mirror reads with a
+      // line at its middle, and dropping it would open a two-module bay where the
+      // face is read first. Collected then sorted, because stepping outward
+      // visits the near stations before the far ones.
+      const mid = (extent.spanStart + extent.spanEnd) / 2
+      const moduleM = specifiedGridMm.columnsMm / 1000
+      const xs: number[] = []
+      for (let step = 0; ; step++) {
+        const left = mid - step * moduleM
+        const right = mid + step * moduleM
+        if (left < extent.spanStart - 1e-9 && right > extent.spanEnd + 1e-9) break
+        if (step > 0 && left >= extent.spanStart - 1e-9) xs.push(left)
+        if (right <= extent.spanEnd + 1e-9) xs.push(right)
+      }
+      for (const x of xs.sort((a, b) => a - b)) out.push({ x, y })
+      continue
+    }
     // Rounded up, so the pitch set out comes in at or below what the row allowed. To
     // the nearest instead would put a 3 m run at 0.9 m centres on three bays of 1 m,
     // over capacity on every one of them.
@@ -431,6 +501,8 @@ export function buildWallFormwork(
     right: number
     bottom: number
     top: number
+    draftAngleDeg?: number
+    chamferStrips?: boolean
   }> = []
   for (const opening of element.openings) {
     const left = Math.max(spanStart, opening.along - opening.width / 2)
@@ -438,7 +510,15 @@ export function buildWallFormwork(
     const bottom = Math.max(baseY, opening.centreY - opening.height / 2)
     const top = Math.min(topY, opening.centreY + opening.height / 2)
     if (right - left <= 0 || top - bottom <= 0) continue
-    openings.push({ id: opening.id as string, left, right, bottom, top })
+    openings.push({
+      id: opening.id as string,
+      left,
+      right,
+      bottom,
+      top,
+      ...(opening.draftAngleDeg !== undefined ? { draftAngleDeg: opening.draftAngleDeg } : {}),
+      ...(opening.chamferStrips === true ? { chamferStrips: true as const } : {}),
+    })
   }
 
   // An outside leg reaches past the element's own end, because it wraps the core
@@ -476,6 +556,18 @@ export function buildWallFormwork(
     )
     panelRunsByFace.set(face, panelling)
     if (!isFormed(role)) continue
+    // The architect's grid is a property of the wall, not of any one run: the
+    // stations fall symmetric about the pour unit's midpoint, and each run asks
+    // the packer for the ones inside it, in run-local coordinates.
+    const grid = element.specifiedTieGridMm
+    const requiredJointsMm = grid
+      ? wallGlobalGridStationsMm(
+          spanStart,
+          spanEnd,
+          grid.columnsMm,
+          panelling.map((run) => ({ lo: run.lo, hi: run.hi })),
+        )
+      : undefined
     const plan = planFace(
       panelling,
       node,
@@ -486,6 +578,7 @@ export function buildWallFormwork(
         kickerM,
       },
       settings.crane,
+      { requiredJointsMm },
     )
     if (plan) planByFace.set(face, plan)
   }
@@ -689,7 +782,17 @@ export function buildWallFormwork(
         {
           kind: 'ply-piece',
           locus: { on: 'opening', openingId: opening.id, reveal: reveal.name },
-          description: `Box-out ${reveal.name}, ${Math.round(Math.max(reveal.w, reveal.h) * 1000)} mm`,
+          // How the void is released is part of the cut: a drafted box-out is
+          // struck rather than wedged, and chamfer strips leave a clean arris.
+          description:
+            `Box-out ${reveal.name}, ${Math.round(Math.max(reveal.w, reveal.h) * 1000)} mm` +
+            [
+              opening.draftAngleDeg !== undefined ? `${opening.draftAngleDeg}° draft` : undefined,
+              opening.chamferStrips ? 'chamfer strips' : undefined,
+            ]
+              .filter((detail): detail is string => detail !== undefined)
+              .map((detail) => `, ${detail}`)
+              .join(''),
           provenance: 'bespoke',
           use: 'box-out',
           widthMm: thickness * 1000,
@@ -759,7 +862,12 @@ export function buildWallFormwork(
     !blockedRuns.some((run) => x > run.lo && x < run.hi)
 
   const stations = bothSidesFormed
-    ? tieStations(planByFace, design, { spanStart, spanEnd, baseY, formTop })
+    ? tieStations(
+        planByFace,
+        design,
+        { spanStart, spanEnd, baseY, formTop },
+        element.specifiedTieGridMm,
+      )
     : []
 
   // Where a tie *could* pass, for the ties × openings clash — recorded before
@@ -834,9 +942,7 @@ export function buildWallFormwork(
           elevationMm: (station.y - baseY) * 1000,
           stationMm: (station.x - spanStart) * 1000,
         },
-        ...(design.tie
-          ? { catalogId: design.tie.id, verification: design.tie.verification }
-          : {}),
+        ...(design.tie ? { catalogId: design.tie.id, verification: design.tie.verification } : {}),
         description: design.tie
           ? `${design.tie.label}, ${Math.round(tieLengthMm)} mm`
           : `Through-tie ${Math.round(tieLengthMm)} mm`,

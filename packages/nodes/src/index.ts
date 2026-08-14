@@ -1,4 +1,5 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { beamDefinition } from './beam'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
 import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
@@ -19,6 +20,7 @@ import { elevatorDefinition } from './elevator'
 import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
 import { formworkAssemblyDefinition } from './formwork-assembly'
+import { formworkBoxOutDefinition } from './formwork-box-out'
 import { formworkProjectSettingsDefinition } from './formwork-project-settings'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
@@ -75,8 +77,10 @@ export const builtinPlugin: Plugin = {
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
     formworkAssemblyDefinition as unknown as AnyNodeDefinition,
+    formworkBoxOutDefinition as unknown as AnyNodeDefinition,
     formworkProjectSettingsDefinition as unknown as AnyNodeDefinition,
     constructionJointDefinition as unknown as AnyNodeDefinition,
+    beamDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
     doorDefinition as unknown as AnyNodeDefinition,
@@ -128,6 +132,7 @@ export const builtinPlugin: Plugin = {
   ],
 }
 
+export { beamDefinition } from './beam'
 export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export {
@@ -162,6 +167,7 @@ export {
   formworkAssemblyDefinition,
   pourUnitsForHost,
 } from './formwork-assembly'
+export { formworkBoxOutDefinition } from './formwork-box-out'
 export {
   FormworkSettingsPanel,
   formworkProjectSettingsDefinition,

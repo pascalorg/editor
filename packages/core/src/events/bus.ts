@@ -2,6 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  BeamNode,
   BoxVentNode,
   BuildingNode,
   CabinetModuleNode,
@@ -23,6 +24,7 @@ import type {
   EyebrowVentNode,
   FenceNode,
   FormworkAssemblyNode,
+  FormworkBoxOutNode,
   FormworkProjectSettingsNode,
   GuideNode,
   GutterNode,
@@ -95,7 +97,9 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
+export type BeamEvent = NodeEvent<BeamNode>
 export type FormworkAssemblyEvent = NodeEvent<FormworkAssemblyNode>
+export type FormworkBoxOutEvent = NodeEvent<FormworkBoxOutNode>
 export type ConstructionJointEvent = NodeEvent<ConstructionJointNode>
 export type FormworkProjectSettingsEvent = NodeEvent<FormworkProjectSettingsNode>
 export type ItemEvent = NodeEvent<ItemNode>
@@ -299,7 +303,9 @@ type SelectionEvents = {
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
+  NodeEvents<'beam', BeamEvent> &
   NodeEvents<'formwork-assembly', FormworkAssemblyEvent> &
+  NodeEvents<'formwork-box-out', FormworkBoxOutEvent> &
   NodeEvents<'construction-joint', ConstructionJointEvent> &
   NodeEvents<'formwork-settings', FormworkProjectSettingsEvent> &
   NodeEvents<'cabinet', CabinetEvent> &

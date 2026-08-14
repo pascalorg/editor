@@ -363,6 +363,7 @@ export function planFace(
   system: FormworkSystem | undefined,
   lift: { baseM: number; heightM: number; kickerM: number },
   crane?: FormworkCraneSettings,
+  opts: { requiredJointsMm?: readonly number[] } = {},
 ): FacePlan | undefined {
   if (runs.length === 0) return undefined
   const layouts = system
@@ -374,6 +375,7 @@ export function planFace(
           fillerPosition: node.fillerPosition,
           avoidPanelIds: node.avoidedPanelIds,
           preferredWidthMm: node.panelWidth * 1000,
+          requiredJointsMm: opts.requiredJointsMm,
         }),
       )
     : []

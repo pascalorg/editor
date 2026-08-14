@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import { BeamNode } from '../../../schema/nodes/beam'
 import { ColumnNode } from '../../../schema/nodes/column'
 import { WallNode } from '../../../schema/nodes/wall'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
@@ -22,6 +23,51 @@ function formedRoles(nodes: AnyNode[], id: AnyNodeId): FaceRole[] {
   const coverage = coverageForElement(id, nodes)
   return (coverage?.faces ?? []).filter((f) => f.formed).map((f) => f.role)
 }
+
+function beam(overrides: Partial<Parameters<typeof BeamNode.parse>[0]> = {}) {
+  return BeamNode.parse({
+    start: [0, 0],
+    end: [5, 0],
+    width: 0.3,
+    depth: 0.6,
+    elevation: 3,
+    formworkType: 'plywood',
+    ...overrides,
+  })
+}
+
+describe('freestanding beam', () => {
+  it('forms both sides, both ends, and the soffit — but not the top', () => {
+    const b = beam()
+    const roles = formedRoles([b], b.id as AnyNodeId)
+    expect(roles.sort()).toEqual(['end-end', 'end-start', 'side-a', 'side-b', 'soffit'])
+  })
+
+  it('measures the soffit by length x width, propped off the floor below', () => {
+    const b = beam()
+    const soffit = coverageForElement(b.id as AnyNodeId, [b])?.faces.find((f) => f.role === 'soffit')
+    expect(soffit?.formed).toBe(true)
+    expect(soffit?.reason).toBe('FORMED_SOFFIT')
+    expect(soffit?.physicalArea).toBeCloseTo(5 * 0.3, 6)
+    // The prop height is the beam's soffit height — banded into the falsework
+    // height stage, the figure the prop length read.
+    expect(soffit?.measurement?.heightStage).toBeDefined()
+    expect(soffit?.measurement?.thicknessStage).toBeDefined()
+  })
+
+  it('a beam cast on the ground takes no soffit form', () => {
+    const b = beam({ againstEarthSide: 'b' })
+    const roles = formedRoles([b], b.id as AnyNodeId)
+    expect(roles).not.toContain('soffit')
+    expect(roles).toContain('side-a')
+  })
+
+  it('carries no corner units — its ends butt, which is a stop-end question', () => {
+    const b = beam()
+    const coverage = coverageForElement(b.id as AnyNodeId, [b])
+    expect(coverage?.corners.length).toBe(0)
+  })
+})
 
 describe('freestanding wall', () => {
   it('forms all four faces — both sides plus a stop-end at each free end', () => {

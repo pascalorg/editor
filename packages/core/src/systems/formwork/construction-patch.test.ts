@@ -49,6 +49,32 @@ describe('the construction write contract', () => {
     expect(result.writes).toEqual({ castOrder: 2 })
   })
 
+  test('the specified tie grid is written through and read back in words a reply uses', () => {
+    const result = applyConstructionPatch(
+      'wall',
+      'steel-panel',
+      { specifiedTieGridMm: { columnsMm: 600, rowsMm: 900 } },
+      'wall_1',
+    )
+
+    expect(result.error).toBeUndefined()
+    expect(result.writes).toEqual({ specifiedTieGridMm: { columnsMm: 600, rowsMm: 900 } })
+    // Read back as a module, not as "[object Object]".
+    expect(result.changed).toEqual(['specifiedTieGridMm 600 × 900 mm'])
+  })
+
+  test('null takes the specified tie grid off', () => {
+    const result = applyConstructionPatch(
+      'wall',
+      'steel-panel',
+      { specifiedTieGridMm: null },
+      'wall_1',
+    )
+
+    expect(result.writes).toEqual({ specifiedTieGridMm: undefined })
+    expect(result.changed).toEqual(['specifiedTieGridMm unstated'])
+  })
+
   test.each([
     'wall',
     'column',
@@ -70,8 +96,33 @@ describe('the construction write contract', () => {
       'wall_1',
     )
 
-    expect(result.error).toContain('edgeFaceCount and soffitHeightAboveSupport')
-    expect(result.error).toContain('apply to slabs only')
+    // edgeFaceCount is caught as slab-only first — the two refusals are separate
+    // because soffitHeightAboveSupport is a beam field too.
+    expect(result.error).toContain('edgeFaceCount')
+    expect(result.error).toContain('slabs only')
+  })
+
+  test('the soffit height is refused on a wall and accepted on a beam', () => {
+    // A prop length on an element with nothing propped is a decision recorded
+    // nowhere; a beam's props stand on the floor below, so it is the beam's
+    // own field exactly as it is a slab's.
+    const wall = applyConstructionPatch(
+      'wall',
+      'steel-panel',
+      { soffitHeightAboveSupport: 3 },
+      'wall_1',
+    )
+    expect(wall.error).toContain('slabs and beams only')
+    expect(wall.error).toContain('wall_1 is a wall')
+
+    const beam = applyConstructionPatch(
+      'beam',
+      'plywood',
+      { soffitHeightAboveSupport: 3 },
+      'beam_1',
+    )
+    expect(beam.error).toBeUndefined()
+    expect(beam.writes).toEqual({ soffitHeightAboveSupport: 3 })
   })
 
   test('the same fields on a slab are written', () => {

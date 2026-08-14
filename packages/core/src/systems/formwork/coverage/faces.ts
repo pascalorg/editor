@@ -281,6 +281,10 @@ function rolesFor(element: CastableElement): FaceRole[] {
       : ['column-face-1', 'column-face-2', 'column-face-3', 'column-face-4', 'top', 'bottom']
   }
   if (element.kind === 'slab') return ['soffit', 'edge', 'top']
+  // A beam is a wall lying on its side — two side shutters, two stop-ends and a
+  // top — except that its underside is a soffit to be propped, not a base that
+  // bears on a kicker or substrate.
+  if (element.kind === 'beam') return ['side-a', 'side-b', 'end-start', 'end-end', 'soffit', 'top']
   return ['side-a', 'side-b', 'end-start', 'end-end', 'top', 'bottom']
 }
 
@@ -383,6 +387,8 @@ function classifyWallFaces(
     standard: MeasurementStandard
     lookup: (id: AnyNodeId) => CastableElement | undefined
     corners: ElementCorner[]
+    /** `'soffit'` for a beam — the underside is formed falsework, not a base. */
+    bottomRole?: 'bottom' | 'soffit'
   },
 ): ElementCoverage {
   const length = elementLength(scoped)
@@ -473,11 +479,27 @@ function classifyWallFaces(
       extentsM: [scoped.coreThickness, length],
       extra: { upliftLoaded: top.upliftLoaded },
     }),
-    face(element.id, {
-      role: 'bottom',
-      reason: options.onJoint ? 'BEARS_ON_LIFT_BELOW' : 'BEARS_ON_KICKER_OR_SUBSTRATE',
-      grossArea: 0,
-    }),
+    // A wall's underside bears on a kicker or the lift below and is never
+    // formed. A beam's underside is a soffit: it carries the beam's own weight
+    // on falsework and is measured by thickness and prop-height stage like a
+    // slab's, except that a beam cast on the ground (`againstEarthSide: 'b'`)
+    // needs no soffit form at all.
+    options.bottomRole === 'soffit'
+      ? face(element.id, {
+          role: 'soffit',
+          reason:
+            element.againstEarthSide === 'b' ? 'SLAB_ON_GROUND' : 'FORMED_SOFFIT',
+          grossArea: topArea,
+          standard,
+          surfaceClass: 'horizontal',
+          thicknessM: scoped.coreThickness,
+          soffitHeightAboveSupportM: scoped.soffitHeightAboveSupport,
+        })
+      : face(element.id, {
+          role: 'bottom',
+          reason: options.onJoint ? 'BEARS_ON_LIFT_BELOW' : 'BEARS_ON_KICKER_OR_SUBSTRATE',
+          grossArea: 0,
+        }),
   ]
 
   return totals(element, faces, openings, options.corners)
@@ -760,13 +782,18 @@ export function classifyElementFaces(
   // Corner hardware sits at the element's real ends, so a pour unit that does
   // not reach one has no corner there to place or pay for: the shutter closes on
   // a bulkhead instead and the corner belongs to the unit that does reach it.
+  // A beam carries no corner units: its ends butt columns or walls, which is a
+  // stop-end question, not a junction the beam turns.
   const junctions = options.junctions ?? findJunctions(neighbours)
-  const corners = cornersFor(element, junctions, lookup).filter((entry) => {
-    if (!unit) return true
-    if (entry.leg.end === 'start') return reachesElementStart(unit)
-    if (entry.leg.end === 'end') return reachesElementEnd(element, unit)
-    return entry.leg.alongM >= unit.startAlong && entry.leg.alongM <= unit.endAlong
-  })
+  const corners =
+    element.kind === 'beam'
+      ? []
+      : cornersFor(element, junctions, lookup).filter((entry) => {
+          if (!unit) return true
+          if (entry.leg.end === 'start') return reachesElementStart(unit)
+          if (entry.leg.end === 'end') return reachesElementEnd(element, unit)
+          return entry.leg.alongM >= unit.startAlong && entry.leg.alongM <= unit.endAlong
+        })
 
   return classifyWallFaces(element, scoped, ends, {
     atStart: unit ? reachesElementStart(unit) : true,
@@ -777,6 +804,7 @@ export function classifyElementFaces(
     standard,
     lookup,
     corners,
+    bottomRole: element.kind === 'beam' ? 'soffit' : 'bottom',
   })
 }
 

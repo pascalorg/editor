@@ -15,7 +15,7 @@ import {
   type WallDesign,
   wallDesign,
 } from '@pascal-app/core/formwork'
-import type { ColumnNode, SlabNode, WallNode } from '@pascal-app/core/schema'
+import type { BeamNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core/schema'
 import { assemblySystem, COLUMN_KICKER_M } from './geometry-shared'
 
 /**
@@ -114,6 +114,9 @@ export function wallPourDesign(
       // Visible concrete is read for its finish, so the sheathing takes the tighter
       // `l/360` plus absolute cap rather than general structural `l/270`.
       architectural: wall.exposureClass === 'architectural',
+      // The architect's tie-hole module, where one is stated — the rows sit on it
+      // uniform rather than graded, and an overload answers with a lower pressure.
+      specifiedTieGridMm: wall.specifiedTieGridMm,
       // Spacings the job has fixed are honoured; the design then reports against them,
       // so an overload shows up in the warnings rather than being silently retightened
       // under a crew that has already set out to the stated module.
@@ -195,6 +198,80 @@ export function columnPourDesign(
       uniformSpacingM: column.tieSpacing,
     }),
   }
+}
+
+export interface BeamPourDesign {
+  system: FormworkSystem | undefined
+  /** The side shutters' height, m — the beam's depth. */
+  liftHeightM: number
+  /** The wall chain for the two side shutters — tied across the beam's width. */
+  side: WallDesign
+  /** The falsework under the soffit — the beam's own weight propped off the floor. */
+  falsework: FalseworkDesign
+  soffitHeightM: number
+}
+
+/**
+ * The two machines of one beam shutter.
+ *
+ * A beam is a short wall lying on its side with a slab underneath it: the two
+ * side shutters are solved by the wall chain — lateral pressure, walers, ties
+ * across the beam's width — and the soffit by the falsework chain, loaded by
+ * the beam's own depth of concrete and propped off the floor below.
+ */
+export function beamPourDesign(
+  settings: FormworkSettings,
+  beam: BeamNode,
+  unit: PourUnit | undefined,
+  systemId: string | undefined,
+): BeamPourDesign {
+  const beamLength = Math.hypot(beam.end[0] - beam.start[0], beam.end[1] - beam.start[1])
+  const spanStart = unit?.startAlong ?? 0
+  const spanEnd = unit?.endAlong ?? beamLength
+  const baseY = (unit?.baseElevation ?? 0) + beam.elevation
+  const topY = (unit?.topElevation ?? beam.depth) + beam.elevation
+  const system = assemblySystem(settings, systemId)
+  const liftHeightM = topY - baseY
+  const side = wallDesign({
+    envelope: designEnvelope(settings, liftHeightM, [beamLength, beam.width]),
+    liftHeightM,
+    runM: spanEnd - spanStart,
+    wallThicknessMm: beam.width * 1000,
+    system,
+    sheathingId: settings.parts.sheathingId,
+    beamId: settings.parts.beamId,
+    doubledWalers: settings.parts.doubledWalers,
+    architectural: beam.exposureClass === 'architectural',
+    specifiedTieGridMm: beam.specifiedTieGridMm,
+    statedWalerSpacingM: beam.walerSpacing,
+    statedTieSpacingM: beam.tieSpacing,
+    windPressureKpa: settings.bracing.windPressureKpa,
+    formDeadLoadKnM: settings.bracing.formDeadLoadKnM,
+    rakerSpacingM: settings.bracing.rakerSpacingM,
+    rakerAngleDeg: settings.bracing.rakerAngleDeg,
+    guyWires: settings.bracing.guyWires,
+  })
+  // The deck carries the beam's own depth of concrete — the same load a slab of
+  // that thickness carries — and the props stand on the floor `elevation` below.
+  const soffitHeightM = beam.elevation
+  const falsework = falseworkDesign({
+    slabThicknessM: beam.depth,
+    soffitHeightM,
+    runM: spanEnd - spanStart,
+    unitWeightKnM3: settings.concrete.unitWeightKnM3,
+    formworkSelfWeightKpa: settings.falseworkLoads.formworkSelfWeightKpa,
+    rebarKnM3: settings.falseworkLoads.rebarKnM3,
+    liveLoadKpa: settings.falseworkLoads.liveLoadKpa,
+    motorizedCarts: settings.falseworkLoads.motorizedCarts,
+    sheathingId: settings.parts.sheathingId,
+    beamId: settings.parts.beamId,
+    propId: settings.parts.propId,
+    architectural: beam.exposureClass === 'architectural',
+    // The beam's spacing fields belong to the side shutters (a wall's tie and
+    // waler pitch); feeding them into the soffit's bearer grid would state one
+    // spacing for two different members.
+  })
+  return { system, liftHeightM, side, falsework, soffitHeightM }
 }
 
 export interface SlabPourDesign {

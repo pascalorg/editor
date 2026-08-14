@@ -1731,7 +1731,7 @@ describe('the formwork MCP tools', () => {
 
       expect(result.isError).toBe(true)
       expect((result.content as Array<{ text: string }>)[0]?.text).toContain(
-        'no wall, column or slab',
+        'no wall, column, slab or beam',
       )
     })
   })
@@ -2235,7 +2235,7 @@ describe('the formwork MCP tools', () => {
 
       expect(result.isError).toBe(true)
       const text = (result.content as Array<{ text: string }>)[0]?.text ?? ''
-      expect(text).toContain('wall, column or slab')
+      expect(text).toContain('wall, column, slab or beam')
       expect(text).not.toContain('attach_formwork')
     })
 
@@ -2688,7 +2688,9 @@ describe('the formwork MCP tools', () => {
 
       expect(limits.isError).toBe(true)
       expect(attach.isError).toBe(true)
-      expect((attach.content as Array<{ text: string }>)[0]?.text).toContain('wall, column or slab')
+      expect((attach.content as Array<{ text: string }>)[0]?.text).toContain(
+        'wall, column, slab or beam',
+      )
     })
   })
 

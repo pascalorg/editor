@@ -610,6 +610,59 @@ describe('wall chain', () => {
     expect(architectural.stud.calculatedM).toBeLessThan(plain.stud.calculatedM)
   })
 
+  it('a specified grid sits the rows uniform at the module, not graded', () => {
+    // The architect's module is the design, not a starting point: the columns are
+    // the same figure up the wall rather than opening out as the head falls, and
+    // the rows step at the stated pitch.
+    const w = wallDesign({
+      envelope: envelope(7, 6),
+      liftHeightM: 6,
+      runM: 10,
+      wallThicknessMm: 300,
+      specifiedTieGridMm: { columnsMm: 600, rowsMm: 900 },
+    })
+    expect(w.rows.length).toBeGreaterThan(1)
+    for (const row of w.rows) {
+      expect(row.horizontalSpacingMm).toBe(600)
+      // A fixed column is the exposed face, not a widening the grading produced.
+      expect(row.monotonicallyWidened).toBeUndefined()
+    }
+    for (let i = 1; i < w.rows.length; i++) {
+      expect((w.rows[i]?.elevationMm ?? 0) - (w.rows[i - 1]?.elevationMm ?? 0)).toBeCloseTo(900, 6)
+    }
+  })
+
+  it('a grid that overloads a tie answers with a lower pressure, not a wider spacing', () => {
+    // A fast pour under a 600 × 600 mm module on a Trio tie (20 kN): the base row's
+    // tie force exceeds the hardware, but the grid is the exposed face and does not
+    // move — the remedy is the rate that brings the pressure down, named in the
+    // warning with the pressure that clears it.
+    const w = wallDesign({
+      envelope: envelope(10, 5),
+      liftHeightM: 5,
+      runM: 8,
+      wallThicknessMm: 300,
+      system: PERI_TRIO,
+      specifiedTieGridMm: { columnsMm: 600, rowsMm: 600 },
+    })
+    const warning = w.warnings.find((x) => x.kind === 'tie-over-capacity')
+    expect(warning).toBeDefined()
+    // The grid is untouched: no row moved to shed load.
+    for (const row of w.rows) {
+      expect(row.horizontalSpacingMm).toBe(600)
+    }
+    expect(warning?.message).toContain('does not move')
+    expect(warning?.message).toMatch(/kN\/m²/)
+    // And the pressure that clears it is the force-linear scale, not a guess.
+    const worst = w.rows.reduce(
+      (a, r) => (r.forceKn > a.forceKn ? r : a),
+      w.rows[0] as (typeof w.rows)[number],
+    )
+    expect(warning?.message).toContain(
+      ((w.designPressureKnM2 * w.tieCapacityKn) / worst.forceKn).toFixed(1),
+    )
+  })
+
   it('a faster pour needs more ties per square metre', () => {
     const slow = wallDesign({
       envelope: envelope(0.5, 3),

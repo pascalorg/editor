@@ -246,6 +246,6 @@ describe('formwork_elevation', () => {
 
     const reply = await call(tools, 'formwork_elevation', { elementId: 'level_1' })
 
-    expect(reply).toContain('No wall, column or slab')
+    expect(reply).toContain('No wall, column, slab or beam')
   })
 })

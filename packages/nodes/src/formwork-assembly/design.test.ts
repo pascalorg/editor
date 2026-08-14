@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { ColumnNode, SlabNode, WallNode } from '@pascal-app/core'
+import type { BeamNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core'
 import {
   DEFAULT_FORMWORK_SETTINGS,
   type FormworkSettings,
@@ -7,7 +7,7 @@ import {
   type PourUnit,
 } from '@pascal-app/core/formwork'
 import type { FormworkProjectSettingsNode } from '@pascal-app/core/schema'
-import { columnPourDesign, slabPourDesign, wallPourDesign } from './design'
+import { beamPourDesign, columnPourDesign, slabPourDesign, wallPourDesign } from './design'
 
 /**
  * The design report and the 3D builders read the same three functions, so what is
@@ -41,6 +41,25 @@ function makeWall(overrides: Partial<WallNode> = {}): WallNode {
     formworkType: 'steel-panel',
     ...overrides,
   } as WallNode
+}
+
+function makeBeam(overrides: Partial<BeamNode> = {}): BeamNode {
+  return {
+    object: 'node',
+    id: 'beam_test',
+    type: 'beam',
+    parentId: 'level_test',
+    visible: true,
+    metadata: {},
+    children: [],
+    start: [0, 0],
+    end: [6, 0],
+    width: 0.3,
+    depth: 0.6,
+    elevation: 3,
+    formworkType: 'steel-panel',
+    ...overrides,
+  } as BeamNode
 }
 
 function makeColumn(overrides: Partial<ColumnNode> = {}): ColumnNode {
@@ -442,5 +461,47 @@ describe('slabPourDesign', () => {
     expect(poured.design.load.totalKpa).toBe(
       slabPourDesign(DEFAULTS, makeSlab()).design.load.totalKpa,
     )
+  })
+})
+
+describe('beamPourDesign', () => {
+  test('reports both machines: the wall chain for the sides and the falsework for the soffit', () => {
+    const { side, falsework, liftHeightM, system } = beamPourDesign(
+      DEFAULTS,
+      makeBeam(),
+      undefined,
+      undefined,
+    )
+
+    // The sides are a wall chain over the beam's depth, tied across its width.
+    expect(liftHeightM).toBeCloseTo(0.6, 6)
+    expect(side.wallThicknessMm ?? side.stud.adoptedM * 1000).toBeGreaterThan(0)
+    expect(side.rows.length).toBeGreaterThan(0)
+    expect(side.designPressureKnM2).toBeGreaterThan(0)
+    // The soffit is the beam's own depth of concrete carried on falsework.
+    expect(falsework.load.totalKpa).toBeGreaterThan(0)
+    expect(falsework.propsPerM2).toBeGreaterThan(0)
+    expect(system).toBeDefined()
+  })
+
+  test('a deeper beam loads the soffit harder and tightens the prop grid', () => {
+    const shallow = beamPourDesign(DEFAULTS, makeBeam({ depth: 0.4 }), undefined, undefined)
+    const deep = beamPourDesign(DEFAULTS, makeBeam({ depth: 1.2 }), undefined, undefined)
+
+    expect(deep.falsework.load.totalKpa).toBeGreaterThan(shallow.falsework.load.totalKpa)
+    expect(deep.falsework.propSpacing.adoptedM).toBeLessThanOrEqual(
+      shallow.falsework.propSpacing.adoptedM,
+    )
+  })
+
+  test('a stated tie spacing reaches the side chain, not the soffit', () => {
+    const { side, falsework } = beamPourDesign(
+      DEFAULTS,
+      makeBeam({ tieSpacing: 0.45 }),
+      undefined,
+      undefined,
+    )
+    expect(side.tieSpacing.stated).toBe(true)
+    expect(falsework.bearer.stated).not.toBe(true)
   })
 })

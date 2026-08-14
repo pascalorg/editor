@@ -208,12 +208,42 @@ describe('seeded and unseeded', () => {
     // The capability is recorded even where the data is not: a seed would have to rate
     // exactly the kinds each registration claims, and the refusal names the same kinds.
     const supports = (id: string) => formworkSystem(id)?.supports
-    expect(supports('peri-srs')).toEqual({ walls: false, columns: true, slabs: false })
-    expect(supports('peri-quattro')).toEqual({ walls: false, columns: true, slabs: false })
-    expect(supports('peri-skydeck')).toEqual({ walls: false, columns: false, slabs: true })
-    expect(supports('peri-multiflex')).toEqual({ walls: false, columns: false, slabs: true })
-    expect(supports('mivan-generic')).toEqual({ walls: true, columns: false, slabs: true })
-    expect(supports('doka-frami')).toEqual({ walls: true, columns: true, slabs: false })
+    expect(supports('peri-srs')).toEqual({
+      walls: false,
+      columns: true,
+      slabs: false,
+      beams: false,
+    })
+    expect(supports('peri-quattro')).toEqual({
+      walls: false,
+      columns: true,
+      slabs: false,
+      beams: false,
+    })
+    expect(supports('peri-skydeck')).toEqual({
+      walls: false,
+      columns: false,
+      slabs: true,
+      beams: false,
+    })
+    expect(supports('peri-multiflex')).toEqual({
+      walls: false,
+      columns: false,
+      slabs: true,
+      beams: false,
+    })
+    expect(supports('mivan-generic')).toEqual({
+      walls: true,
+      columns: false,
+      slabs: true,
+      beams: true,
+    })
+    expect(supports('doka-frami')).toEqual({
+      walls: true,
+      columns: true,
+      slabs: false,
+      beams: true,
+    })
   })
 
   it('the default system is seeded, so an unconfigured project still designs', () => {

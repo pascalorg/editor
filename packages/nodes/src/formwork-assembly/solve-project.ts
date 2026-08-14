@@ -558,11 +558,11 @@ export function solveProjectFormwork(
   // last; accumulating makes the line `mixed`, which is the honest answer.
   const targetsByMark = new Map<string, Set<StrikeTarget>>()
   for (const element of elements) {
-    const hostKind = element.host.type as 'wall' | 'column' | 'slab'
+    const hostKind = element.host.type as 'wall' | 'column' | 'slab' | 'beam' | 'beam'
     for (const shutter of element.shutters) {
       for (const part of shutter.parts) {
         if (part.omitted) continue
-        const target = strikeTargetForPartKind(part.kind, hostKind)
+        const target = strikeTargetForPartKind(part.kind, hostKind, (part as { use?: string }).use)
         if (target === undefined) continue
         const existing = targetsByMark.get(part.mark)
         if (existing) existing.add(target)
@@ -626,7 +626,7 @@ export function solveProjectFormwork(
   // applied to it.
   const committable: CommittablePour[] = []
   for (const element of elements) {
-    const hostKind = element.host.type as 'wall' | 'column' | 'slab'
+    const hostKind = element.host.type as 'wall' | 'column' | 'slab' | 'beam'
     const host = element.host as CastableHostNode & {
       castOrder?: number
       pourId?: string
@@ -636,7 +636,7 @@ export function solveProjectFormwork(
       const targets = new Set<StrikeTarget>()
       for (const part of shutter.parts) {
         if (part.omitted) continue
-        const target = strikeTargetForPartKind(part.kind, hostKind)
+        const target = strikeTargetForPartKind(part.kind, hostKind, (part as { use?: string }).use)
         if (target !== undefined) targets.add(target)
       }
       const striking = [...targets]

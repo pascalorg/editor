@@ -221,6 +221,13 @@ export interface WallDesignOptions {
   system?: FormworkSystem
   /** Governs the deflection limit: architectural work takes `l/360` and a 1.6 mm cap. */
   architectural?: boolean
+  /**
+   * The architect's tie-hole grid, mm — columns and rows. On architectural work
+   * this is the design: the rows sit on the module uniform rather than graded,
+   * and a tie the module would overload is answered by a lower pressure rather
+   * than by moving the grid. Absent means the design is free to grade.
+   */
+  specifiedTieGridMm?: { columnsMm: number; rowsMm: number }
   /** Walers paired either side of the tie, which halves the load in each member. */
   doubledWalers?: boolean
   /** Stud centres the project has fixed, m. Reported against, not used to choose. */
@@ -364,20 +371,24 @@ function tieRows(opts: {
   tieCapacityKn: number
   maxTieSpacingM: number
   statedTieSpacingM?: number
+  /**
+   * The architect's grid module, mm. When stated the rows sit on it uniform and
+   * the columns are fixed at it, which is what makes the exposed face readable.
+   */
+  specifiedGridMm?: { columnsMm: number; rowsMm: number }
 }): TieRow[] {
   const heightMm = opts.liftHeightM * 1000
-  const spacingMm = opts.walerSpacingM * 1000
+  const spacingMm = opts.specifiedGridMm?.rowsMm ?? opts.walerSpacingM * 1000
   if (!(spacingMm > 0) || !(heightMm > 0)) return []
   // The waler carries the pressure at the row it sits on, not the base pressure. A
   // row in the constant-pressure zone and a row above the break carry the same
   // members and different loads, and that difference is the whole point of grading.
+  // On a specified grid there is no grading to do — the module *is* the design — so
+  // the rows fall on the stated elevations and only the pressure at each is read.
 
   const elevationsMm: number[] = []
-  for (
-    let y = Math.min(FIRST_WALER_ABOVE_BASE_MM, heightMm / 2);
-    y < heightMm - 1e-6 && elevationsMm.length < MAX_TIE_ROWS;
-    y += spacingMm
-  ) {
+  const startMm = Math.min(FIRST_WALER_ABOVE_BASE_MM, heightMm / 2)
+  for (let y = startMm; y < heightMm - 1e-6 && elevationsMm.length < MAX_TIE_ROWS; y += spacingMm) {
     elevationsMm.push(y)
   }
   if (elevationsMm.length === 0) elevationsMm.push(heightMm / 2)
@@ -386,6 +397,7 @@ function tieRows(opts: {
   let previousHorizontalMm = 0
   for (const [i, elevationMm] of elevationsMm.entries()) {
     const pressureKnM2 = pressureAtDepth(opts.envelope, (heightMm - elevationMm) / 1000)
+    const horizontalMm = opts.specifiedGridMm?.columnsMm
     const calculatedM =
       opts.statedTieSpacingM ??
       tieSpacingAt(
@@ -398,7 +410,7 @@ function tieRows(opts: {
     const roundedMm =
       (opts.statedTieSpacingM ??
         adoptTieSpan(Math.min(calculatedM, opts.maxTieSpacingM), opts.studSpacingM)) * 1000
-    const horizontalSpacingMm = Math.max(roundedMm, previousHorizontalMm)
+    const horizontalSpacingMm = horizontalMm ?? Math.max(roundedMm, previousHorizontalMm)
 
     // The band a row carries is half the gap either side. The lowest row's lower band
     // runs to the base, which it shares with the kicker; the top row's upper band
@@ -414,7 +426,11 @@ function tieRows(opts: {
       horizontalSpacingMm,
       pressureKnM2,
       forceKn: pressureKnM2 * ((bandBelowMm + bandAboveMm) / 1000) * (horizontalSpacingMm / 1000),
-      ...(horizontalSpacingMm > roundedMm + 1e-6 ? { monotonicallyWidened: true as const } : {}),
+      // A fixed grid column is the design, not a widening; only a graded row can
+      // have been widened to match the one below.
+      ...(horizontalMm === undefined && horizontalSpacingMm > roundedMm + 1e-6
+        ? { monotonicallyWidened: true as const }
+        : {}),
     })
     previousHorizontalMm = horizontalSpacingMm
   }
@@ -630,6 +646,7 @@ export function wallDesign(opts: WallDesignOptions): WallDesign {
     tieCapacityKn: governing.capacityKn,
     maxTieSpacingM,
     statedTieSpacingM: opts.statedTieSpacingM,
+    specifiedGridMm: opts.specifiedTieGridMm,
   })
 
   // Over every row rather than the lowest: the lowest shares its band with the
@@ -640,9 +657,21 @@ export function wallDesign(opts: WallDesignOptions): WallDesign {
     rows[0] ?? { forceKn: 0, elevationMm: 0 },
   )
   if (tie && worst.forceKn > governing.capacityKn + 1e-6) {
+    // On a specified grid the module is the design and moving it breaks the
+    // exposed face, so the answer is a lower pressure — the rate that brings the
+    // worst row inside the tie's capacity — not a wider spacing. That is the one
+    // case where this chain's usual remedy is unavailable and must not be offered.
+    const grid = opts.specifiedTieGridMm
+    // Force is linear in pressure at a fixed tributary, so the pressure that
+    // clears the worst row is the design pressure scaled by capacity/demand.
+    const pressureClearsKnM2 = grid
+      ? (designPressureKnM2 * governing.capacityKn) / worst.forceKn
+      : undefined
     warnings.push({
       kind: 'tie-over-capacity',
-      message: `The row at ${Math.round(worst.elevationMm)} mm carries ${worst.forceKn.toFixed(1)} kN per tie against ${governing.capacityKn.toFixed(0)} kN at the ${governing.component}, and the walers cannot close further. Pour slower, pour warmer, use a stiffer consistency, or specify a heavier tie.`,
+      message: grid
+        ? `The ${grid.columnsMm} × ${grid.rowsMm} mm grid puts ${worst.forceKn.toFixed(1)} kN on the tie at ${Math.round(worst.elevationMm)} mm against ${governing.capacityKn.toFixed(0)} kN at the ${governing.component}. The grid is the exposed face, so it does not move: pour slower — the rate that brings the base pressure under ${pressureClearsKnM2?.toFixed(1) ?? 'a lower'} kN/m² — pour warmer, or use a stiffer consistency.`
+        : `The row at ${Math.round(worst.elevationMm)} mm carries ${worst.forceKn.toFixed(1)} kN per tie against ${governing.capacityKn.toFixed(0)} kN at the ${governing.component}, and the walers cannot close further. Pour slower, pour warmer, use a stiffer consistency, or specify a heavier tie.`,
       demandKn: worst.forceKn,
       capacityKn: governing.capacityKn,
       elevationMm: worst.elevationMm,

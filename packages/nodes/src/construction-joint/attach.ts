@@ -7,6 +7,7 @@ import {
 import {
   type AnyNode,
   type AnyNodeId,
+  type BeamNode,
   type ColumnNode,
   type ConstructionJointNode,
   generateId,
@@ -37,7 +38,7 @@ import {
  * survive a regenerate rather than be replaced by a default one.
  */
 export function buildSolverJointNodes(
-  host: WallNode | ColumnNode | SlabNode,
+  host: WallNode | ColumnNode | SlabNode | BeamNode,
   levelNodes: AnyNode[] = [],
 ): ConstructionJointNode[] {
   const element = toCastableElement(host as AnyNode)

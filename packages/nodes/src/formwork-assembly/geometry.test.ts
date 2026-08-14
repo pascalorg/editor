@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import type { GeometryContext, SlabNode, WallNode } from '@pascal-app/core'
+import type { BeamNode, GeometryContext, SlabNode, WallNode } from '@pascal-app/core'
 import { DOKA_FRAMAX_XLIFE } from '@pascal-app/core/formwork'
 import type { Group } from 'three'
-import { buildFormworkGeometry } from './geometry'
+import { buildFormwork, buildFormworkGeometry } from './geometry'
 import type { FormworkAssemblyNode } from './schema'
 
 function makeWall(overrides: Partial<WallNode> = {}): WallNode {
@@ -111,6 +111,25 @@ function makeLevelCtx(wall: WallNode, neighbours: Array<Record<string, unknown>>
     parent: wall,
     resolve: (id: string) => byId.get(id),
   } as unknown as GeometryContext
+}
+
+function makeBeam(overrides: Partial<BeamNode> = {}): BeamNode {
+  return {
+    object: 'node',
+    id: 'beam_test',
+    type: 'beam',
+    parentId: 'level_test',
+    visible: true,
+    metadata: {},
+    children: [],
+    start: [0, 0],
+    end: [4, 0],
+    width: 0.3,
+    depth: 0.6,
+    elevation: 3,
+    formworkType: 'plywood',
+    ...overrides,
+  } as BeamNode
 }
 
 function makeColumn(id: string, x: number, castOrder?: number) {
@@ -382,6 +401,46 @@ describe('cast-order-aware coverage', () => {
     const boxOut = group.children.filter((c) => c.name.startsWith('box-out-door_a-'))
     expect(boxOut).toHaveLength(3)
     expect(boxOut.some((c) => c.name.endsWith('sill'))).toBe(false)
+  })
+
+  test('a box-out node forms a void the panels cut around, cut to its release details', () => {
+    // A void that is neither a door nor a window — a pipe sleeve. The box-out
+    // node declares it, the host shutter forms it: the panels split around the
+    // void and all four reveals are returned inside it.
+    const wall = makeWall({ parentId: 'level_test', height: 3 })
+    const boxOut = {
+      object: 'node',
+      id: 'box-out_a',
+      type: 'formwork-box-out',
+      parentId: wall.id,
+      visible: true,
+      metadata: {},
+      position: [1.5, 1.5, 0],
+      width: 0.8,
+      height: 1.2,
+      draftAngleDeg: 1.5,
+      chamferStrips: true,
+    }
+    const built = buildFormwork(
+      makeNode(),
+      makeLevelCtx({ ...wall, children: [boxOut.id] } as WallNode, [boxOut]),
+    )
+    if (!built) throw new Error('nothing built')
+    const reveals = built.group.children.filter((c) => c.name.startsWith('box-out-box-out_a-'))
+    expect(reveals.map((c) => c.name.split('-').pop()).sort()).toEqual([
+      'end',
+      'head',
+      'sill',
+      'start',
+    ])
+    // The columns crossing the void are split into sill + head bands, and the
+    // release details ride the box-out parts' descriptions so the crew cutting
+    // the boards sees them.
+    expect(built.group.children.some((c) => /^panel-front-c\d+-\d+-\d+$/.test(c.name))).toBe(true)
+    const boxOutParts = built.parts.filter((part) => part.description.startsWith('Box-out '))
+    expect(boxOutParts.length).toBe(reveals.length)
+    expect(boxOutParts.some((part) => part.description.includes('1.5° draft'))).toBe(true)
+    expect(boxOutParts.some((part) => part.description.includes('chamfer strips'))).toBe(true)
   })
 
   test('drops ties that would land in an opening', () => {
@@ -852,6 +911,54 @@ describe('wall tie and waler chain', () => {
     for (const row of rows) expect(pitch(row)).toBeCloseTo(0.6, 6)
   })
 
+  test('a specified grid ties on the module, symmetric about the midpoint', () => {
+    // The architect's grid is the design: rows sit on the stated pitch uniform
+    // rather than graded, and the columns step out from the midpoint — with a
+    // column on the centre line itself, so the pitch is uniform rather than
+    // opening a two-module bay in the middle of the face. The 3 m run is
+    // 5 × 600 mm exactly, but the end stations are still off-module (0 and 3 are
+    // not grid lines) and stay untied rather than dragging a tie off the pattern.
+    const rows = rowsOf(
+      build(
+        unstated({ specifiedTieGridMm: { columnsMm: 600, rowsMm: 900 } } as Partial<WallNode>),
+        conventional(),
+      ),
+      'tie-',
+    )
+    expect(rows.map((row) => row.y)).toEqual([0.1, 1, 1.9])
+    for (const row of rows) {
+      expect(row.xs).toEqual([0.3, 0.9, 1.5, 2.1, 2.7])
+    }
+  })
+
+  test('a non-modular run keeps the grid symmetric and leaves its ends untied', () => {
+    // 3.7 m is not a whole number of 600 mm modules. The grid does not stretch to
+    // fit it: the stations stay on the module, mirrored about 1.85, and the ends
+    // simply carry no tie.
+    const rows = rowsOf(
+      build(
+        unstated({
+          end: [3.7, 0],
+          specifiedTieGridMm: { columnsMm: 600, rowsMm: 900 },
+        } as Partial<WallNode>),
+        conventional(),
+      ),
+      'tie-',
+    )
+    const xs = rows[0]?.xs ?? []
+    // Stations at 1.85 ± 600 mm steps, the centre line included: the ends at 0 and
+    // 3.7 are off-module and simply carry no tie.
+    expect(xs).toEqual([0.05, 0.65, 1.25, 1.85, 2.45, 3.05, 3.65])
+    // Symmetric about the midpoint 1.85: each station has its mirror.
+    for (const x of xs) {
+      expect(xs).toContain(Number((3.7 - x).toFixed(6)))
+    }
+    // And every station is on the module from the midpoint, not a bay dragged onto an end.
+    for (let i = 1; i < xs.length; i++) {
+      expect((xs[i] as number) - (xs[i - 1] as number)).toBeCloseTo(0.6, 6)
+    }
+  })
+
   test('a drilled panel system ties where holes meet, not on the solved pitch', () => {
     // Framax leaves the factory drilled, so a rod passes only where a hole on one
     // skin lines up with a hole on the other. Asking for a tie at the calculated
@@ -890,6 +997,49 @@ describe('wall tie and waler chain', () => {
       'tie-',
     ).map((row) => row.y)
     expect(seen).not.toEqual(plain)
+  })
+})
+
+describe('beam shutter', () => {
+  const beamCtx = (beam: BeamNode) =>
+    makeLevelCtx(beam as unknown as WallNode) as unknown as GeometryContext
+
+  test('builds two side shutters, ties across the width, stop-ends and a propped soffit', () => {
+    const group = buildFormworkGeometry(makeNode({ parentId: 'beam_test' }), beamCtx(makeBeam()))
+    // Both side skins, standing proud of the core.
+    expect(group.children.filter((c) => c.name.startsWith('panel-a-')).length).toBeGreaterThan(0)
+    expect(group.children.filter((c) => c.name.startsWith('panel-b-')).length).toBeGreaterThan(0)
+    // Through-ties across the beam's width, closing both ends, and the soffit
+    // deck propped off the floor below.
+    expect(group.children.filter((c) => c.name.startsWith('tie-')).length).toBeGreaterThan(0)
+    expect(group.children.some((c) => c.name === 'stop-end-start')).toBe(true)
+    expect(group.children.some((c) => c.name === 'stop-end-end')).toBe(true)
+    expect(group.children.filter((c) => c.name.startsWith('panel-soffit-')).length).toBeGreaterThan(
+      0,
+    )
+    expect(group.children.filter((c) => c.name.startsWith('prop-')).length).toBeGreaterThan(0)
+  })
+
+  test('the ties span the beam width plus both skins, not the length', () => {
+    const built = buildFormwork(makeNode({ parentId: 'beam_test' }), beamCtx(makeBeam()))
+    if (!built) throw new Error('nothing built')
+    const ties = built.parts.filter((part) => part.kind === 'tie')
+    expect(ties.length).toBeGreaterThan(0)
+    for (const tie of ties) {
+      if (tie.kind !== 'tie') continue
+      expect(tie.lengthMm).toBeCloseTo(340, 0)
+    }
+  })
+
+  test('a beam cast on the ground takes no soffit deck or props', () => {
+    const group = buildFormworkGeometry(
+      makeNode({ parentId: 'beam_test' }),
+      beamCtx(makeBeam({ againstEarthSide: 'b' })),
+    )
+    expect(group.children.filter((c) => c.name.startsWith('panel-soffit-')).length).toBe(0)
+    expect(group.children.filter((c) => c.name.startsWith('prop-')).length).toBe(0)
+    // The side shutters still stand.
+    expect(group.children.filter((c) => c.name.startsWith('panel-a-')).length).toBeGreaterThan(0)
   })
 })
 

@@ -66,6 +66,20 @@ export const CastableFields = {
    * placed reaches initial set, so supply is a geometric constraint.
    */
   maxPourVolume: z.number().finite().positive().optional(),
+  /**
+   * The architect's tie-hole grid on visible concrete, mm — the module the
+   * exposed face is read by. Stated, never derived: on architectural work the
+   * grid is the design and the layout is an output of it, so the tie rows sit
+   * on this module uniform rather than graded, and a tie the module would
+   * overload is answered by a lower pressure, not by moving the grid. Absent
+   * means the design is free to grade.
+   */
+  specifiedTieGridMm: z
+    .object({
+      columnsMm: z.number().finite().positive(),
+      rowsMm: z.number().finite().positive(),
+    })
+    .optional(),
 } as const
 
 /**
@@ -102,4 +116,5 @@ export const CASTABLE_FIELD_DOCS = dedent`
   - maxLiftHeight: split into multiple lifts above this height, in meters
   - maxPourLength: split into segments when a bay exceeds this length, in meters (shrinkage control)
   - maxPourVolume: split into segments when a bay would exceed the concrete one pour can supply, in m³
+  - specifiedTieGridMm: the architect's tie-hole grid on visible concrete, columns × rows in mm — the module the exposed face is read by, so rows sit on it uniform rather than graded and an overload answers with a lower pressure
 `

@@ -108,13 +108,13 @@ export function castableOrRefusal(
   const node = nodes[elementId]
   if (node === undefined || !CASTABLE_TYPES.includes(node.type)) {
     return refusal(
-      `Error: no wall, column or slab with id ${elementId}. Call find_nodes with type wall, column or slab and read the id you mean.`,
+      `Error: no wall, column, slab or beam with id ${elementId}. Call find_nodes with type wall, column, slab or beam and read the id you mean.`,
     )
   }
   return node as CastableHostNode
 }
 
-const CASTABLE_TYPES: readonly string[] = ['wall', 'column', 'slab']
+const CASTABLE_TYPES: readonly string[] = ['wall', 'column', 'slab', 'beam']
 
 export function round(value: number): number {
   return Math.round(value * 1000) / 1000

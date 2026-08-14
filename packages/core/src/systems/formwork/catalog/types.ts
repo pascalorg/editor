@@ -349,6 +349,8 @@ export interface FormworkSystem {
     walls: boolean
     columns: boolean
     slabs: boolean
+    /** Beams — a beam's two side shutters are wall-type faces, tied across the width. */
+    beams: boolean
   }
   /** Constant frame depth, repeated here so a layout can read it without a panel. */
   frameDepthMm: number
@@ -394,6 +396,7 @@ export interface UnseededFormworkSystem {
     walls: boolean
     columns: boolean
     slabs: boolean
+    beams: boolean
   }
   /**
    * Which document has to be bought or fetched before this can be designed
@@ -434,9 +437,7 @@ export function panelHeightsMm(system: FormworkSystem): number[] {
  * carries the fold names the constants at the returned level, because the level
  * without the responsible constants is a verdict with no evidence.
  */
-export function weakestVerification(
-  levels: readonly Verification[],
-): Verification | undefined {
+export function weakestVerification(levels: readonly Verification[]): Verification | undefined {
   const order: Record<Verification, number> = {
     certified: 0,
     derived: 1,
@@ -462,9 +463,11 @@ export function weakestVerification(
  */
 export function systemSupportsKind(
   system: Pick<FormworkSystem, 'supports'>,
-  kind: 'wall' | 'column' | 'slab',
+  kind: 'wall' | 'column' | 'slab' | 'beam',
 ): boolean {
-  return system.supports[kind === 'wall' ? 'walls' : kind === 'column' ? 'columns' : 'slabs']
+  return system.supports[
+    kind === 'wall' ? 'walls' : kind === 'column' ? 'columns' : kind === 'beam' ? 'beams' : 'slabs'
+  ]
 }
 
 /**
