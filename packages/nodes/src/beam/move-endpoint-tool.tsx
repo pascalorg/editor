@@ -1,12 +1,15 @@
 'use client'
 
-import { type FenceNode, getWallCurveLength, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type FenceNode,
+  getWallCurveLength,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   type FencePlanPoint,
-  formatAngleRadians,
-  getAngleToSegmentReference,
-  getSegmentAngleReferenceAtPoint,
   MeasurementPill,
   triggerSFX,
   useAlignmentGuides,
@@ -17,6 +20,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo } from 'react'
 import { moveBeamEndpointDragAction } from './actions/move-endpoint'
+import { pickBeamAngleLabel, referenceSegments } from './angle-label'
+import { collectLinkedBeams } from './cascade'
 import type { BeamNode } from './schema'
 
 /**
@@ -32,47 +37,6 @@ import type { BeamNode } from './schema'
 export type MovingBeamEndpoint = {
   beam: BeamNode
   endpoint: 'start' | 'end'
-}
-
-type SegmentLike = {
-  id: string
-  start: FencePlanPoint
-  end: FencePlanPoint
-  curveOffset?: number
-}
-
-function referenceSegments(walls: WallNode[], fences: FenceNode[]): SegmentLike[] {
-  return [
-    ...walls.map((w) => ({ id: w.id, start: w.start, end: w.end, curveOffset: w.curveOffset })),
-    ...fences.map((f) => ({ id: f.id, start: f.start, end: f.end, curveOffset: f.curveOffset })),
-  ]
-}
-
-function pickAngleLabel(args: {
-  start: FencePlanPoint
-  end: FencePlanPoint
-  segments: SegmentLike[]
-}): { label: string; position: [number, number, number] } | null {
-  // The beam itself is never in `segments` (walls + fences only), so no
-  // self-exclusion is needed — every candidate is a genuine neighbour.
-  const target: SegmentLike = { id: 'beam', start: args.start, end: args.end }
-  for (const endpoint of [args.start, args.end] as FencePlanPoint[]) {
-    const targetRef = getSegmentAngleReferenceAtPoint(endpoint, target)
-    if (!targetRef) continue
-    const neighbour = args.segments.find((s) =>
-      Boolean(getSegmentAngleReferenceAtPoint(endpoint, s)),
-    )
-    if (!neighbour) continue
-    const neighbourRef = getSegmentAngleReferenceAtPoint(endpoint, neighbour)
-    if (!neighbourRef) continue
-    const angle = getAngleToSegmentReference(targetRef.vector, neighbourRef)
-    if (angle === null) continue
-    return {
-      label: formatAngleRadians(angle),
-      position: [endpoint[0], 0.34, endpoint[1]],
-    }
-  }
-  return null
 }
 
 export const MoveBeamEndpointTool: React.FC<{ target: MovingBeamEndpoint }> = ({ target }) => {
@@ -112,29 +76,62 @@ export const MoveBeamEndpointTool: React.FC<{ target: MovingBeamEndpoint }> = ({
     onCancel: () => exitMoveMode(false),
   })
 
-  // Neighbour segments at the parent level — computed once at mount.
+  // Neighbour segments at the parent level — walls + fences computed once
+  // at mount, plus the sibling beams sharing an endpoint ("linked beams") so
+  // the angle at the shared junction reads against the meeting beam too.
+  // The linked beams cascade with the drag, so their segments track the
+  // LIVE endpoints via the per-node subscription below.
   const parentId = target.beam.parentId ?? null
-  const neighbourSegments = useMemo(() => {
+  const { staticSegments, linkedBeamIds } = useMemo(() => {
     const { nodes } = useScene.getState()
     const walls: WallNode[] = []
     const fences: FenceNode[] = []
+    const levelBeams: BeamNode[] = []
     for (const node of Object.values(nodes)) {
       if (!node) continue
       if ((node.parentId ?? null) !== parentId) continue
       if (node.type === 'wall') walls.push(node)
       else if (node.type === 'fence') fences.push(node)
+      else if (node.type === 'beam' && node.id !== beamId) levelBeams.push(node as BeamNode)
     }
-    return referenceSegments(walls, fences)
+    const linked = collectLinkedBeams(
+      levelBeams,
+      beamId as AnyNodeId,
+      parentId,
+      [target.beam.start[0], target.beam.start[1]],
+      [target.beam.end[0], target.beam.end[1]],
+    )
+    return {
+      staticSegments: referenceSegments(walls, fences),
+      linkedBeamIds: linked.map((beam) => beam.id),
+    }
   }, [parentId, beamId])
+
+  // Live linked-beam endpoints — the action writes the cascaded corners to
+  // the scene per tick, so the angle pill follows the junction. Subscribes
+  // to the nodes record and derives; a scene write to any linked beam
+  // re-renders this tool (same shape as the live `nodes[beamId]` read above).
+  const liveLinkedBeams = useScene((s) =>
+    linkedBeamIds
+      .map((id) => s.nodes[id])
+      .filter((node): node is BeamNode => node?.type === 'beam'),
+  )
 
   const angleLabel = useMemo(
     () =>
-      pickAngleLabel({
-        start: target.beam.start,
-        end: target.beam.end,
-        segments: neighbourSegments,
+      pickBeamAngleLabel({
+        start: liveStart,
+        end: liveEnd,
+        segments: [
+          ...staticSegments,
+          ...liveLinkedBeams.map((beam) => ({
+            id: beam.id,
+            start: [beam.start[0], beam.start[1]] as FencePlanPoint,
+            end: [beam.end[0], beam.end[1]] as FencePlanPoint,
+          })),
+        ],
       }),
-    [target.beam.start, target.beam.end, neighbourSegments],
+    [liveStart, liveEnd, liveLinkedBeams, staticSegments],
   )
 
   // Safety net: drop any alignment guides if the tool unmounts without the
