@@ -1243,19 +1243,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         }
         const correctedX = wallDragAnchor.startX + (rawX - wallDragAnchor.rawX)
         const correctedY = wallDragAnchor.startY + (rawY - wallDragAnchor.rawY)
-        const wallMesh = sceneRegistry.nodes.get(event.node.id)
-        // Derive the world cursor from the corrected wall-local point so the
-        // visual cursor (world) and the stored position (wall-local) agree; if
-        // the wall mesh is somehow absent, keep the raw world hit unchanged.
-        const correctedWorld = wallMesh
-          ? wallMesh.localToWorld(new Vector3(correctedX, correctedY, event.localPosition[2]))
-          : null
         wallMoveEvent = {
           ...event,
           localPosition: [correctedX, correctedY, event.localPosition[2]],
-          position: correctedWorld
-            ? [correctedWorld.x, correctedWorld.y, correctedWorld.z]
-            : event.position,
         }
       }
       const result = wallStrategy.move(ctx, wallMoveEvent, getActiveValidators())
@@ -1317,22 +1307,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
         // Publish live transform for the 2D floorplan. The floorplan resolves a
         // wall item's footprint (and its wall-side depth offset) from this
-        // rotation as a PLAN-space yaw. `cursorRotationY` is the 3D world cursor
-        // yaw, which is π off from the plan rotation on a wall face — feeding it
-        // raw flips the footprint to the far side of the wall during placement.
-        // Publish the plan rotation (wall angle + the item's wall-local yaw) so
-        // the preview matches what the committed node resolves to.
-        let liveRotation = result.cursorRotationY
-        const liveWallId = placementState.current.wallId
-        const liveWall = liveWallId ? useScene.getState().nodes[liveWallId as AnyNodeId] : undefined
-        if (liveWall?.type === 'wall') {
-          const w = liveWall as WallNode
-          const wallPlanRotation = -Math.atan2(w.end[1] - w.start[1], w.end[0] - w.start[0])
-          liveRotation = wallPlanRotation + (draft.rotation[1] ?? 0)
-        }
+        // rotation as a PLAN-space yaw — which is exactly what the wall strategy
+        // composes `cursorRotationY` as (wall yaw + the item's wall-local yaw).
         useLiveTransforms.getState().set(draft.id, {
           position: result.cursorPosition,
-          rotation: liveRotation,
+          rotation: result.cursorRotationY,
         })
       }
     }

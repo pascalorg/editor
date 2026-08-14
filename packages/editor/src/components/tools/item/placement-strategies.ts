@@ -37,7 +37,6 @@ import {
   clampCustomMeshFacePosition,
 } from './custom-mesh-preview'
 import {
-  calculateCursorRotation,
   calculateItemRotation,
   getGridAlignedDimensions,
   getSideFromNormal,
@@ -188,6 +187,51 @@ export const floorStrategy = {
 // WALL STRATEGY
 // ============================================================================
 
+/**
+ * Resolve the wall-local node position AND the world pose of the placement
+ * wireframe from ONE wall-local point, so the box can't drift from the item it
+ * previews.
+ *
+ * `event.object` is the wall's collision mesh — the frame `event.localPosition`
+ * was measured in — so `localToWorld` is the exact inverse of the hit. Snapping
+ * the raw world hit per axis instead (the old path) put the box on a different
+ * lattice than the node: wall-local X runs from `wall.start`, and wall-local Y
+ * is measured from the supporting slab's elevation, not from world zero.
+ *
+ * `z` follows the hosting convention rather than the hit depth: `wall` items
+ * center in the thickness, `wall-side` items mount on the hit face — mirroring
+ * `ItemSystem`'s per-frame push, so the wireframe's `z = 0` face lands flush
+ * with the wall instead of extending through it.
+ */
+function resolveWallPlacementPose(
+  event: WallEvent,
+  localX: number,
+  localY: number,
+  attachTo: 'wall' | 'wall-side',
+  side: 'front' | 'back',
+  itemRotation: number,
+): {
+  position: [number, number, number]
+  cursorPosition: [number, number, number]
+  cursorRotationY: number
+} {
+  const localZ =
+    attachTo === 'wall-side' ? ((event.node.thickness ?? 0.1) / 2) * (side === 'front' ? 1 : -1) : 0
+  event.object.updateWorldMatrix(true, false)
+  const world = event.object.localToWorld(new Vector3(localX, localY, localZ))
+  const wallYaw = -Math.atan2(
+    event.node.end[1] - event.node.start[1],
+    event.node.end[0] - event.node.start[0],
+  )
+  return {
+    position: [localX, localY, localZ],
+    cursorPosition: [world.x, world.y, world.z],
+    // Same composition the 2D floorplan resolves a wall child with
+    // (`resolveItemTransform`): the cursor frame IS the item frame.
+    cursorRotationY: wallYaw + itemRotation,
+  }
+}
+
 export const wallStrategy = {
   /**
    * Handle wall:enter — transition from floor to wall surface.
@@ -211,11 +255,9 @@ export const wallStrategy = {
 
     const side = getSideFromNormal(event.normal)
     const itemRotation = calculateItemRotation(event.normal)
-    const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
     const x = snapToHalf(event.localPosition[0])
     const y = snapToHalf(event.localPosition[1])
-    const z = snapToHalf(event.localPosition[2])
 
     // Get auto-adjusted Y position from validator
     const rawDims = ctx.draftItem
@@ -233,6 +275,7 @@ export const wallStrategy = {
     )
 
     const adjustedY = validation.adjustedY ?? y
+    const pose = resolveWallPlacementPose(event, x, adjustedY, attachTo, side, itemRotation)
 
     return {
       stateUpdate: {
@@ -241,7 +284,7 @@ export const wallStrategy = {
         roofSegmentId: null,
       },
       nodeUpdate: {
-        position: [x, adjustedY, z],
+        position: pose.position,
         parentId: event.node.id,
         // The draft may arrive from a roof-segment wall face.
         roofSegmentId: undefined,
@@ -250,13 +293,9 @@ export const wallStrategy = {
         side,
         rotation: [0, itemRotation, 0],
       },
-      cursorRotationY: cursorRotation,
-      gridPosition: [x, adjustedY, z],
-      cursorPosition: [
-        snapToHalf(event.position[0]),
-        snapToHalf(event.position[1]),
-        snapToHalf(event.position[2]),
-      ],
+      cursorRotationY: pose.cursorRotationY,
+      gridPosition: pose.position,
+      cursorPosition: pose.cursorPosition,
       stopPropagation: true,
     }
   },
@@ -277,11 +316,10 @@ export const wallStrategy = {
 
     const side = getSideFromNormal(event.normal)
     const itemRotation = calculateItemRotation(event.normal)
-    const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
+    const attachTo = ctx.draftItem.asset.attachTo as 'wall' | 'wall-side'
 
     const snappedX = snapToHalf(event.localPosition[0])
     const snappedY = snapToHalf(event.localPosition[1])
-    const snappedZ = snapToHalf(event.localPosition[2])
 
     // Get auto-adjusted Y position from validator
     const validation = validators.canPlaceOnWall(
@@ -290,23 +328,20 @@ export const wallStrategy = {
       snappedX,
       snappedY,
       getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
-      ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
+      attachTo,
       side,
       [ctx.draftItem.id],
     )
 
     const adjustedY = validation.adjustedY ?? snappedY
+    const pose = resolveWallPlacementPose(event, snappedX, adjustedY, attachTo, side, itemRotation)
 
     return {
-      gridPosition: [snappedX, adjustedY, snappedZ],
-      cursorPosition: [
-        snapToHalf(event.position[0]),
-        snapToHalf(event.position[1]),
-        snapToHalf(event.position[2]),
-      ],
-      cursorRotationY: cursorRotation,
+      gridPosition: pose.position,
+      cursorPosition: pose.cursorPosition,
+      cursorRotationY: pose.cursorRotationY,
       nodeUpdate: {
-        position: [snappedX, adjustedY, snappedZ],
+        position: pose.position,
         side,
         rotation: [0, itemRotation, 0],
       },
