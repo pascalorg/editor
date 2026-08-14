@@ -8,6 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { Mountain, Pipette } from 'lucide-react'
+import { LocalizedContent } from '../../../lib/i18n'
 import { brushRadiusRange, flattenSite, resetSiteTerrain } from '../../../lib/terrain-sculpt'
 import useEditor from '../../../store/use-editor'
 import { Button } from '../primitives/button'
@@ -58,7 +59,8 @@ export function TerrainSculptPanel() {
   const [minRadius, maxRadius] = brushRadiusRange(site)
 
   return (
-    <div className="flex flex-col gap-3">
+    <LocalizedContent>
+      <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <SegmentedControl
           className="h-14"
@@ -188,6 +190,7 @@ export function TerrainSculptPanel() {
           Clear terrain
         </Button>
       </div>
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

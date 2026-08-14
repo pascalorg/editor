@@ -15,6 +15,7 @@ import {
   viewportPointToLonLat,
   visibleTiles,
 } from '../../../../lib/slippy-map'
+import { LocalizedContent } from '../../../../lib/i18n'
 import { cn } from '../../../../lib/utils'
 
 const MAP_HEIGHT = 176
@@ -160,7 +161,8 @@ export function LocationMap({
   const tiles = width > 0 ? visibleTiles(center, zoom, width, MAP_HEIGHT) : []
 
   return (
-    <div className="flex flex-col gap-1.5 px-3 pb-2">
+    <LocalizedContent>
+      <div className="flex flex-col gap-1.5 px-3 pb-2">
       <div className="flex items-center gap-1.5">
         <div className="relative min-w-0 flex-1">
           <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-1.5 h-3 w-3 text-muted-foreground/60" />
@@ -270,6 +272,7 @@ export function LocationMap({
             ? `Click the map to move the site · ${formatCoordinate(latitude)}, ${formatCoordinate(longitude)}`
             : 'Click the map to place the site.')}
       </p>
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

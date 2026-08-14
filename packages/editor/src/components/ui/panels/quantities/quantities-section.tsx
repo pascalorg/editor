@@ -4,6 +4,7 @@ import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Download, Sigma } from 'lucide-react'
 import { useMemo } from 'react'
+import { LocalizedContent } from '../../../../lib/i18n'
 import { downloadQuantityCsv, formatQuantity, takeoffForSubtree } from '../../../../lib/quantities'
 
 /**
@@ -30,7 +31,8 @@ export function QuantitiesSection() {
   const hasRows = (takeoff?.sections.length ?? 0) > 0
 
   return (
-    <div className="flex flex-col border-border/40 border-b">
+    <LocalizedContent>
+      <div className="flex flex-col border-border/40 border-b">
       <div className="flex items-center gap-1.5 px-3 pt-3 pb-1.5">
         <Sigma className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="font-semibold text-muted-foreground text-xs tracking-tight">
@@ -83,6 +85,7 @@ export function QuantitiesSection() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

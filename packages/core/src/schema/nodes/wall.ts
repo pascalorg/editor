@@ -96,6 +96,9 @@ export const WALL_FACE_BAND_DEFAULT: WallFaceBandConfig = {
   upperHeight: 0.61,
 }
 
+// Unpainted wall faces read as a flat light grey paint rather than a mapped
+// finish — a texture on every freshly drawn wall reads as noise while drafting.
+export const WALL_SURFACE_SLOT_DEFAULT = 'library:preset-lightgrey'
 export const WALL_SKIRTING_SLOT_DEFAULT = 'library:preset-softwhite'
 export const WALL_CROWN_SLOT_DEFAULT = 'library:preset-white'
 export const WALL_CHAIR_RAIL_SLOT_DEFAULT = 'library:preset-cream'
@@ -107,16 +110,16 @@ export const WALL_FACE_BAND_SOLID_SLOT_DEFAULTS = {
 } as const satisfies Record<WallFaceBand, string>
 
 export const WALL_SURFACE_SLOT_DEFAULTS = {
-  interior: 'library:concrete-drywall',
-  exterior: 'library:concrete-drywall',
-  lowerInterior: 'library:concrete-drywall',
-  middleInterior: 'library:concrete-drywall',
-  upperInterior: 'library:concrete-drywall',
-  topInterior: 'library:concrete-drywall',
-  lowerExterior: 'library:concrete-drywall',
-  middleExterior: 'library:concrete-drywall',
-  upperExterior: 'library:concrete-drywall',
-  topExterior: 'library:concrete-drywall',
+  interior: WALL_SURFACE_SLOT_DEFAULT,
+  exterior: WALL_SURFACE_SLOT_DEFAULT,
+  lowerInterior: WALL_SURFACE_SLOT_DEFAULT,
+  middleInterior: WALL_SURFACE_SLOT_DEFAULT,
+  upperInterior: WALL_SURFACE_SLOT_DEFAULT,
+  topInterior: WALL_SURFACE_SLOT_DEFAULT,
+  lowerExterior: WALL_SURFACE_SLOT_DEFAULT,
+  middleExterior: WALL_SURFACE_SLOT_DEFAULT,
+  upperExterior: WALL_SURFACE_SLOT_DEFAULT,
+  topExterior: WALL_SURFACE_SLOT_DEFAULT,
   skirtingInterior: WALL_SKIRTING_SLOT_DEFAULT,
   skirtingExterior: WALL_SKIRTING_SLOT_DEFAULT,
   crownInterior: WALL_CROWN_SLOT_DEFAULT,

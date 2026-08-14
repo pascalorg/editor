@@ -3,6 +3,7 @@
 import { type SavedViewId, sortSavedViews, useScene } from '@pascal-app/core'
 import { Camera, ChevronDown, ChevronUp, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { LocalizedContent } from '../../../../lib/i18n'
 import { cn } from '../../../../lib/utils'
 import {
   applySavedView,
@@ -33,7 +34,8 @@ export function SavedViewsSection() {
   }
 
   return (
-    <div className="flex flex-col border-border/40 border-b">
+    <LocalizedContent>
+      <div className="flex flex-col border-border/40 border-b">
       <div className="flex items-center gap-1.5 px-3 pt-3 pb-1.5">
         <Camera className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="font-semibold text-muted-foreground text-xs tracking-tight">
@@ -143,6 +145,7 @@ export function SavedViewsSection() {
           ))}
         </ul>
       )}
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

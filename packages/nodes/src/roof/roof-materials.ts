@@ -1,3 +1,4 @@
+import { WALL_SURFACE_SLOT_DEFAULT } from '@pascal-app/core'
 import {
   type ColorPreset,
   createDefaultMaterial,
@@ -22,9 +23,10 @@ export function getRoofMaterials(
 
   const materials = textures
     ? [
-        // Mirrors getRoofMaterialArray's catalog defaults (wall/trim drywall,
-        // soft-white deck + soffit, terracotta shingle) for the no-parent path.
-        resolveSlotDefaultMaterial('library:concrete-drywall', shading), // 0: Wall/Trim
+        // Mirrors getRoofMaterialArray's catalog defaults (wall/trim tracks the
+        // wall default, soft-white deck + soffit, terracotta shingle) for the
+        // no-parent path.
+        resolveSlotDefaultMaterial(WALL_SURFACE_SLOT_DEFAULT, shading), // 0: Wall/Trim
         resolveSlotDefaultMaterial('library:preset-softwhite', shading), // 1: Deck
         resolveSlotDefaultMaterial('library:preset-softwhite', shading), // 2: Interior
         resolveSlotDefaultMaterial('library:roof-terracottatiles', shading), // 3: Shingle

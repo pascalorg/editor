@@ -2,6 +2,8 @@
 
 import { type AnyNode, useScene } from '@pascal-app/core'
 import { Sun } from 'lucide-react'
+import { LocalizedContent } from '../../../../lib/i18n'
+import { type UiLocale, useUiPreferences } from '../../../../lib/ui-preferences'
 import { cn } from '../../../../lib/utils'
 import { LocationMap } from './location-map'
 import useSunStudy, {
@@ -36,8 +38,13 @@ function compassPoint(azimuth: number): string {
   return 'N'
 }
 
-const formatClock = (dateMs: number): string =>
-  new Date(dateMs).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+// The clock follows the editor's language, not the browser's: a Turkish UI that
+// reads back "12:00 PM" is the one place the study looks half-translated.
+const formatClock = (dateMs: number, locale: UiLocale): string =>
+  new Date(dateMs).toLocaleTimeString(locale === 'tr' ? 'tr-TR' : undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 
 const toDateInputValue = (dateMs: number): string => {
   const date = new Date(dateMs)
@@ -55,6 +62,7 @@ const toDateInputValue = (dateMs: number): string => {
  * `useViewer.sunDirection` by `use-sun-study`.
  */
 export function SunStudySection() {
+  const locale = useUiPreferences((state) => state.locale)
   const enabled = useSunStudy((state) => state.enabled)
   const setEnabled = useSunStudy((state) => state.setEnabled)
   const dateMs = useSunStudy((state) => state.dateMs)
@@ -107,7 +115,8 @@ export function SunStudySection() {
   )
 
   return (
-    <div className="flex flex-col border-border/40 border-b">
+    <LocalizedContent>
+      <div className="flex flex-col border-border/40 border-b">
       <div className="flex items-center gap-1.5 px-3 pt-3 pb-1.5">
         <Sun className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="font-semibold text-muted-foreground text-xs tracking-tight">
@@ -196,7 +205,7 @@ export function SunStudySection() {
           <div className="flex flex-col gap-1 px-3 pt-1 pb-2">
             <div className="flex items-baseline justify-between text-xs">
               <span className="text-muted-foreground">Time</span>
-              <span className="text-foreground tabular-nums">{formatClock(dateMs)}</span>
+              <span className="text-foreground tabular-nums">{formatClock(dateMs, locale)}</span>
             </div>
             <input
               aria-label="Time of day"
@@ -234,6 +243,7 @@ export function SunStudySection() {
           ) : null}
         </>
       )}
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }

@@ -50,6 +50,7 @@ import {
   duplicatesAsFreshSubtree,
   prepareFreshPlacementRootDuplicate,
 } from '../../lib/fresh-planar-placement'
+import { LocalizedContent } from '../../lib/i18n'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
@@ -823,132 +824,134 @@ export function FloatingActionMenu() {
           }}
           zIndexRange={[25, 0]}
         >
-          <div
-            className="relative flex flex-col items-center"
-            ref={menuScaleRef}
-            style={{ transformOrigin: 'center center' }}
-          >
-            <NodeActionMenu
-              onFind={node && canFindNode ? handleFind : undefined}
-              onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
-              onCurve={
-                (node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
-                (node?.type === 'wall' && canCurveSelectedWall)
-                  ? handleCurve
-                  : undefined
-              }
-              onMove={
-                // Fully registry-driven: any kind that declares
-                // `capabilities.movable`, a `floorplanMoveTarget`, or a
-                // 3D `affordanceTools.move` mover gets the Move button.
-                // Adding a new movable kind never touches this file.
-                node && isRegistryMovable(node.type) ? handleMove : undefined
-              }
-              onDelete={handleDelete}
-              onDuplicate={
-                node &&
-                node.type !== 'spawn' &&
-                !DELETE_ONLY_TYPES.includes(node.type) &&
-                !HOLE_TYPES.includes(node.type)
-                  ? handleDuplicate
-                  : undefined
-              }
-              onPointerDown={(e) => e.stopPropagation()}
-              onPointerUp={(e) => e.stopPropagation()}
-            />
-            {quickActions.length > 0 || node.type === 'instance' || canMakeComponent ? (
-              <div
-                className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
+          <LocalizedContent>
+            <div
+              className="relative flex flex-col items-center"
+              ref={menuScaleRef}
+              style={{ transformOrigin: 'center center' }}
+            >
+              <NodeActionMenu
+                onFind={node && canFindNode ? handleFind : undefined}
+                onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+                onCurve={
+                  (node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
+                  (node?.type === 'wall' && canCurveSelectedWall)
+                    ? handleCurve
+                    : undefined
+                }
+                onMove={
+                  // Fully registry-driven: any kind that declares
+                  // `capabilities.movable`, a `floorplanMoveTarget`, or a
+                  // 3D `affordanceTools.move` mover gets the Move button.
+                  // Adding a new movable kind never touches this file.
+                  node && isRegistryMovable(node.type) ? handleMove : undefined
+                }
+                onDelete={handleDelete}
+                onDuplicate={
+                  node &&
+                  node.type !== 'spawn' &&
+                  !DELETE_ONLY_TYPES.includes(node.type) &&
+                  !HOLE_TYPES.includes(node.type)
+                    ? handleDuplicate
+                    : undefined
+                }
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
-              >
-                {node.type === 'instance' || canMakeComponent ? (
-                  <button
-                    aria-label={node.type === 'instance' ? 'Make Unique' : 'Make Component'}
-                    className="tooltip-trigger flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent/60 hover:text-foreground"
-                    onClick={handleComponentAction}
-                    title={node.type === 'instance' ? 'Make Unique' : 'Make Component'}
-                    type="button"
-                  >
-                    {node.type === 'instance' ? (
-                      <Unlink className="h-3.5 w-3.5" />
-                    ) : (
-                      <Boxes className="h-3.5 w-3.5" />
-                    )}
-                    <span className="whitespace-nowrap leading-none">
-                      {node.type === 'instance' ? 'Make Unique' : 'Make Component'}
-                    </span>
-                  </button>
-                ) : null}
-                {quickActions.map((action) => (
-                  <button
-                    aria-disabled={action.disabled || undefined}
-                    aria-label={action.title ?? action.label}
-                    className={cn(
-                      'tooltip-trigger flex items-center rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
-                      action.disabled &&
-                        'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
-                    )}
-                    disabled={action.disabled && !action.blockedFeedback}
-                    key={action.id}
-                    onClick={handleQuickAction(action)}
-                    title={action.title ?? action.label}
-                    type="button"
-                  >
-                    <span className="flex items-center gap-1.5" data-quick-action-feedback>
-                      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
-                        <QuickActionIcon action={action} />
+              />
+              {quickActions.length > 0 || node.type === 'instance' || canMakeComponent ? (
+                <div
+                  className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerUp={(e) => e.stopPropagation()}
+                >
+                  {node.type === 'instance' || canMakeComponent ? (
+                    <button
+                      aria-label={node.type === 'instance' ? 'Make Unique' : 'Make Component'}
+                      className="tooltip-trigger flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent/60 hover:text-foreground"
+                      onClick={handleComponentAction}
+                      title={node.type === 'instance' ? 'Make Unique' : 'Make Component'}
+                      type="button"
+                    >
+                      {node.type === 'instance' ? (
+                        <Unlink className="h-3.5 w-3.5" />
+                      ) : (
+                        <Boxes className="h-3.5 w-3.5" />
+                      )}
+                      <span className="whitespace-nowrap leading-none">
+                        {node.type === 'instance' ? 'Make Unique' : 'Make Component'}
                       </span>
-                      <span className="whitespace-nowrap leading-none" data-quick-action-label>
-                        {action.label}
+                    </button>
+                  ) : null}
+                  {quickActions.map((action) => (
+                    <button
+                      aria-disabled={action.disabled || undefined}
+                      aria-label={action.title ?? action.label}
+                      className={cn(
+                        'tooltip-trigger flex items-center rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
+                        action.disabled &&
+                          'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
+                      )}
+                      disabled={action.disabled && !action.blockedFeedback}
+                      key={action.id}
+                      onClick={handleQuickAction(action)}
+                      title={action.title ?? action.label}
+                      type="button"
+                    >
+                      <span className="flex items-center gap-1.5" data-quick-action-feedback>
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+                          <QuickActionIcon action={action} />
+                        </span>
+                        <span className="whitespace-nowrap leading-none" data-quick-action-label>
+                          {action.label}
+                        </span>
                       </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            {/* Height-drag dimension pill. Absolutely positioned just above
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {/* Height-drag dimension pill. Absolutely positioned just above
                 the menu (away from the height arrow below it) so it rides the
                 same scale transform + anchor, never overlaps the menu, and
                 needs no menu lift — which is what caused the click flicker.
                 Non-interactive. */}
-            {isHeightDragPill && pillDims ? (
-              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2">
-                <MeasurementPill
-                  height={pillDims.height}
-                  length={pillDims.length}
-                  primary="height"
-                  ref={pillHeightRef}
-                  thickness={pillDims.thickness}
-                  unit={unit}
-                />
-              </div>
-            ) : null}
-            {/* HVAC chrome above the menu — same slot as the wall height
+              {isHeightDragPill && pillDims ? (
+                <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2">
+                  <MeasurementPill
+                    height={pillDims.height}
+                    length={pillDims.length}
+                    primary="height"
+                    ref={pillHeightRef}
+                    thickness={pillDims.thickness}
+                    unit={unit}
+                  />
+                </div>
+              ) : null}
+              {/* HVAC chrome above the menu — same slot as the wall height
                 pill. System pill (which tree, run length, equipment reach)
                 for every distribution kind; the rotation-axis pill stacks
                 under it for duct fittings. */}
-            {node && hasPorts(node.type) ? (
-              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2 flex flex-col items-center gap-1">
-                <SystemSummaryPill metricNotation={metricNotation} nodeId={node.id} unit={unit} />
-                {hasAxisCycling(node.type) ? (
-                  <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
-                    <span className="font-medium text-foreground">
-                      Axis {rotationAxis.toUpperCase()}
-                    </span>
-                    <span aria-hidden className="text-muted-foreground">
-                      ·
-                    </span>
-                    <span className="text-muted-foreground">R/T rotate</span>
-                    <span aria-hidden className="text-muted-foreground">
-                      ·
-                    </span>
-                    <span className="text-muted-foreground">⌥ axis</span>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+              {node && hasPorts(node.type) ? (
+                <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2 flex flex-col items-center gap-1">
+                  <SystemSummaryPill metricNotation={metricNotation} nodeId={node.id} unit={unit} />
+                  {hasAxisCycling(node.type) ? (
+                    <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+                      <span className="font-medium text-foreground">
+                        Axis {rotationAxis.toUpperCase()}
+                      </span>
+                      <span aria-hidden className="text-muted-foreground">
+                        ·
+                      </span>
+                      <span className="text-muted-foreground">R/T rotate</span>
+                      <span aria-hidden className="text-muted-foreground">
+                        ·
+                      </span>
+                      <span className="text-muted-foreground">⌥ axis</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </LocalizedContent>
         </Html>
       </group>
     </group>

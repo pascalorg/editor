@@ -26,6 +26,7 @@ import {
   duplicatesAsFreshSubtree,
   prepareFreshPlacementRootDuplicate,
 } from '../../lib/fresh-planar-placement'
+import { LocalizedContent } from '../../lib/i18n'
 import { curveReshapeScope } from '../../lib/interaction/scope'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
@@ -388,37 +389,39 @@ export function FloorplanRegistryActionMenu() {
         onPointerUp={(event) => event.stopPropagation()}
       />
       {quickActions.length > 0 ? (
-        <div
-          className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
-          onPointerDown={(event) => event.stopPropagation()}
-          onPointerUp={(event) => event.stopPropagation()}
-        >
-          {quickActions.map((action) => (
-            <button
-              aria-disabled={action.disabled || undefined}
-              aria-label={action.title ?? action.label}
-              className={cn(
-                'tooltip-trigger flex items-center rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
-                action.disabled &&
-                  'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
-              )}
-              disabled={action.disabled && !action.blockedFeedback}
-              key={action.id}
-              onClick={(event) => handleQuickAction(action, event)}
-              title={action.title ?? action.label}
-              type="button"
-            >
-              <span className="flex items-center gap-1.5" data-quick-action-feedback>
-                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
-                  <QuickActionIcon action={action} />
+        <LocalizedContent>
+          <div
+            className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+          >
+            {quickActions.map((action) => (
+              <button
+                aria-disabled={action.disabled || undefined}
+                aria-label={action.title ?? action.label}
+                className={cn(
+                  'tooltip-trigger flex items-center rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
+                  action.disabled &&
+                    'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
+                )}
+                disabled={action.disabled && !action.blockedFeedback}
+                key={action.id}
+                onClick={(event) => handleQuickAction(action, event)}
+                title={action.title ?? action.label}
+                type="button"
+              >
+                <span className="flex items-center gap-1.5" data-quick-action-feedback>
+                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+                    <QuickActionIcon action={action} />
+                  </span>
+                  <span className="whitespace-nowrap leading-none" data-quick-action-label>
+                    {action.label}
+                  </span>
                 </span>
-                <span className="whitespace-nowrap leading-none" data-quick-action-label>
-                  {action.label}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
+        </LocalizedContent>
       ) : null}
     </div>,
     document.body,

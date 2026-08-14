@@ -907,8 +907,8 @@ function hasSegmentTrim(node: RoofSegmentNode): boolean {
 }
 
 // Material slot the freshly exposed trim plane is assigned to. Slot 0 is the
-// wall/trim band — the same finish the gable walls render with (concrete-drywall
-// by default, continuous with the walls below). `remapRoofShellFaces` does not
+// wall/trim band — the same finish the gable walls render with (the wall slot
+// default, continuous with the walls below). `remapRoofShellFaces` does not
 // reclassify slot 0, so any new interior face CSG carves out of a BoxGeometry
 // cutter lands on the wall band regardless of which box face it came from.
 // Without this the box's default 6 groups (materialIndex 0..5) collapse via

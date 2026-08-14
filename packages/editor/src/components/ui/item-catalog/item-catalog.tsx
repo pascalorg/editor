@@ -3,6 +3,7 @@
 import type { AssetInput } from '@pascal-app/core'
 import { resolveCdnUrl, useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { LocalizedContent, useTranslation } from './../../../lib/i18n'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
@@ -31,6 +32,7 @@ export function ItemCatalog({
   /** Rendered when there are no items to show. Replaces the empty grid. */
   emptyState?: React.ReactNode
 }) {
+  const t = useTranslation()
   const selectedItem = useEditor((state) => state.selectedItem)
   const setSelectedItem = useEditor((state) => state.setSelectedItem)
   const setMode = useEditor((state) => state.setMode)
@@ -48,7 +50,15 @@ export function ItemCatalog({
         const tags = item.tags ?? []
         if (activePlacementTag && !tags.includes(activePlacementTag)) return false
         if (activeFunctionalTag && !tags.includes(activeFunctionalTag)) return false
-        if (search && !item.name.toLowerCase().includes(search.toLowerCase())) return false
+        // Tiles render the localized name, so the query has to match that too —
+        // otherwise a Turkish user searches for what they can see and finds
+        // nothing.
+        if (search) {
+          const needle = search.toLocaleLowerCase()
+          const name = item.name.toLocaleLowerCase()
+          const localized = t(item.name).toLocaleLowerCase()
+          if (!(name.includes(needle) || localized.includes(needle))) return false
+        }
         return true
       })
     })()
@@ -58,7 +68,8 @@ export function ItemCatalog({
   }
 
   return (
-    <div
+    <LocalizedContent>
+      <div
       className="grid gap-2"
       style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))' }}
     >
@@ -103,6 +114,7 @@ export function ItemCatalog({
           </button>
         )
       })}
-    </div>
+      </div>
+    </LocalizedContent>
   )
 }
