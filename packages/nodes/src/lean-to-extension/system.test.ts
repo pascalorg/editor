@@ -3,6 +3,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   clearSceneHistory,
+  createSceneApi,
   LeanToExtensionNode,
   LevelNode,
   type SceneCommit,
@@ -58,7 +59,7 @@ describe('lean-to scene commit boundary', () => {
       rootNodeIds: [level.id],
     } as never)
     clearSceneHistory()
-    stopSync = initializeLeanToExtensionSync()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
   })
 
   afterEach(() => stopSync())

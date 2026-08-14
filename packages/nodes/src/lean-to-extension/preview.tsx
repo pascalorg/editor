@@ -1,6 +1,7 @@
 'use client'
 
 import type { LeanToExtensionNode } from '@pascal-app/core'
+import { EDITOR_LAYER } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import type { Material } from 'three'
@@ -18,6 +19,7 @@ const LeanToExtensionPreview = ({ node }: { node: LeanToExtensionNode }) => {
   useEffect(() => {
     const ownedMaterials: Material[] = []
     built.traverse((object) => {
+      object.layers.set(EDITOR_LAYER)
       ;(object as unknown as { raycast: () => void }).raycast = () => {}
       const mesh = object as { material?: Material | Material[] }
       if (!mesh.material) return

@@ -5,11 +5,9 @@ import {
   type AnyNodeId,
   type DownspoutNode,
   type GutterNode,
-  pauseSceneHistory,
   type RoofSegmentNode,
   resolveAutomaticDownspoutLength,
-  resumeSceneHistory,
-  useScene,
+  type SceneApi,
   usesAutomaticDownspoutLength,
 } from '@pascal-app/core'
 import { useEffect } from 'react'
@@ -35,28 +33,30 @@ function automaticLengthUpdates(nodes: Record<AnyNodeId, AnyNode>) {
   return updates
 }
 
-export function initializeAutomaticDownspoutSync() {
+export function initializeAutomaticDownspoutSync(sceneApi: SceneApi) {
   let syncing = false
   const apply = (nodes: Record<AnyNodeId, AnyNode>) => {
     const updates = automaticLengthUpdates(nodes)
     if (updates.length === 0) return
     syncing = true
-    pauseSceneHistory(useScene)
+    sceneApi.pauseHistory()
     try {
-      useScene.getState().applyNodeChanges({ update: updates })
+      sceneApi.applyChanges?.({ update: updates })
     } finally {
-      resumeSceneHistory(useScene)
+      sceneApi.resumeHistory()
       syncing = false
     }
   }
-  apply(useScene.getState().nodes)
-  return useScene.subscribe((state, previous) => {
-    if (!syncing && state.nodes !== previous.nodes) apply(state.nodes)
-  })
+  apply(sceneApi.nodes() as Record<AnyNodeId, AnyNode>)
+  return (
+    sceneApi.subscribeNodes?.((nodes) => {
+      if (!syncing) apply(nodes as Record<AnyNodeId, AnyNode>)
+    }) ?? (() => {})
+  )
 }
 
-const DownspoutSystem = () => {
-  useEffect(() => initializeAutomaticDownspoutSync(), [])
+const DownspoutSystem = ({ sceneApi }: { sceneApi: SceneApi }) => {
+  useEffect(() => initializeAutomaticDownspoutSync(sceneApi), [sceneApi])
   return null
 }
 

@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  createSceneApi,
   type FenceNode,
   nodeRegistry,
   type SlabNode,
@@ -41,7 +42,8 @@ import { ZoneTool } from './zone/zone-tool'
 
 // Cache lazy tool components keyed by their loader so React.lazy isn't
 // re-invoked across renders.
-const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+type RegistryToolProps = { sceneApi: ReturnType<typeof createSceneApi> }
+const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType<RegistryToolProps>>()
 const registryToolPreloadCache = new WeakMap<AnyNodeDefinition, Promise<void>>()
 
 export function preloadRegistryToolModules(tool: string | null): Promise<void> {
@@ -66,7 +68,7 @@ export function preloadRegistryToolModules(tool: string | null): Promise<void> {
   return preload
 }
 
-function getRegistryTool(tool: Tool | null): ComponentType | null {
+function getRegistryTool(tool: Tool | null): ComponentType<RegistryToolProps> | null {
   if (!tool) return null
   const def = nodeRegistry.get(tool)
   if (!def?.tool) return null
@@ -77,7 +79,7 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
     // inspector, and move contribution are warm. This keeps the click itself
     // synchronous even under Next.js dev-time on-demand compilation.
     await preloadRegistryToolModules(tool)
-    return def.tool!() as Promise<{ default: ComponentType }>
+    return def.tool!() as Promise<{ default: ComponentType<RegistryToolProps> }>
   })
   lazyToolCache.set(def.tool, Comp)
   return Comp
@@ -99,6 +101,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
 }
 
 export const ToolManager: React.FC = () => {
+  const sceneApi = useMemo(() => createSceneApi(useScene), [])
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
@@ -377,7 +380,7 @@ export const ToolManager: React.FC = () => {
             NodeDefinition with a tool contribution, mount it here. */}
         {!movingNode && useRegistryTool && RegistryToolComponent && (
           <Suspense fallback={null}>
-            <RegistryToolComponent />
+            <RegistryToolComponent sceneApi={sceneApi} />
           </Suspense>
         )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (

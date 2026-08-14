@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { MaterialSchema } from '../material'
 import { ColumnNode } from './column'
 import { RoofNode } from './roof'
 
@@ -12,6 +13,7 @@ export const LeanToResizeLock = z.enum([
   'preserve-pitch',
 ])
 export const LeanToEndCondition = z.enum(['open', 'wall-abutment', 'joined'])
+export const LeanToFramingStrategy = z.enum(['hidden', 'rafters', 'purlins', 'covering-specific'])
 export type LeanToConnectionMode = z.infer<typeof LeanToConnectionMode>
 export type LeanToRoofEdge = z.infer<typeof LeanToRoofEdge>
 
@@ -26,12 +28,22 @@ export const LeanToExtensionNode = BaseNode.extend({
   autoSpan: z.boolean().default(true),
   projection: z.number().min(0.5).max(10).default(2.5),
   highEdgeHeight: z.number().min(0.8).max(10).default(2.8),
+  lowEdgeHeight: z.number().min(0.2).max(10).default(2.36),
   pitch: z.number().min(1).max(45).default(10),
   resizeLock: LeanToResizeLock.default('preserve-high-edge'),
   leftEndCondition: LeanToEndCondition.default('open'),
   rightEndCondition: LeanToEndCondition.default('open'),
   highSideFlashing: z.boolean().default(true),
   sideFlashing: z.boolean().default(true),
+  flashingProjection: z.number().min(0.01).max(0.5).default(0.025),
+  flashingHeight: z.number().min(0.03).max(0.5).default(0.14),
+  flashingMaterial: MaterialSchema.default({ preset: 'metal' }),
+
+  gutterEnabled: z.boolean().default(true),
+  gutterProfile: z.enum(['k-style', 'half-round', 'box']).default('k-style'),
+  gutterSize: z.number().min(0.04).max(0.3).default(0.13),
+  downspoutEnabled: z.boolean().default(true),
+  downspoutPosition: z.number().min(-1).max(1).default(1),
 
   connectionMode: LeanToConnectionMode.default('auto'),
   hostRoofId: RoofNode.shape.id.optional(),
@@ -53,6 +65,10 @@ export const LeanToExtensionNode = BaseNode.extend({
   ledgerHeight: z.number().min(0.05).max(0.8).default(0.18),
   rafterWidth: z.number().min(0.03).max(0.4).default(0.08),
   rafterHeight: z.number().min(0.03).max(0.5).default(0.14),
+  framingStrategy: LeanToFramingStrategy.default('rafters'),
+  purlinWidth: z.number().min(0.03).max(0.4).default(0.08),
+  purlinHeight: z.number().min(0.03).max(0.5).default(0.1),
+  purlinSpacing: z.number().min(0.2).max(3).default(0.8),
   postWidth: z.number().min(0.05).max(0.6).default(0.16),
   postDepth: z.number().min(0.05).max(0.6).default(0.16),
   postCount: z.number().int().min(2).max(20).default(3),

@@ -2,10 +2,11 @@ import type { GeometryContext, LeanToExtensionNode, SurfaceRole } from '@pascal-
 import {
   applyWorldScaleBoxUVs,
   type ColorPreset,
+  createMaterial,
   createSurfaceRoleMaterial,
   type RenderShading,
 } from '@pascal-app/viewer'
-import { BoxGeometry, FrontSide, Group, Mesh } from 'three'
+import { BoxGeometry, FrontSide, Group, type Material, Mesh } from 'three'
 import { LEAN_TO_EXTENSION_GEOMETRY_REVISION, resolveLeanToLayout } from './layout'
 
 export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
@@ -30,6 +31,13 @@ export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
     node.postInset,
     node.highSideFlashing,
     node.sideFlashing,
+    node.flashingProjection,
+    node.flashingHeight,
+    node.flashingMaterial,
+    node.framingStrategy,
+    node.purlinWidth,
+    node.purlinHeight,
+    node.purlinSpacing,
     node.leftEndCondition,
     node.rightEndCondition,
   ])
@@ -45,13 +53,15 @@ function addBox(
     role: SurfaceRole
     colorPreset: ColorPreset
     sceneTheme?: string
+    material?: Material
   },
 ) {
   const geometry = new BoxGeometry(...args.size)
   applyWorldScaleBoxUVs(geometry, ...args.size)
   const mesh = new Mesh(
     geometry,
-    createSurfaceRoleMaterial(args.role, args.colorPreset, FrontSide, args.sceneTheme),
+    args.material ??
+      createSurfaceRoleMaterial(args.role, args.colorPreset, FrontSide, args.sceneTheme),
   )
   mesh.name = args.name
   mesh.position.set(...args.position)
@@ -73,6 +83,7 @@ export function buildLeanToExtensionGeometry(
   const layout = resolveLeanToLayout(node)
   const group = new Group()
   group.name = 'lean-to-extension-geometry'
+  const flashingMaterial = createMaterial(node.flashingMaterial, _shading)
 
   if (!_ctx) {
     addBox(group, {
@@ -98,11 +109,16 @@ export function buildLeanToExtensionGeometry(
   if (node.highSideFlashing) {
     addBox(group, {
       name: 'lean-to-high-side-flashing',
-      size: [layout.span + 2 * node.sideOverhang, 0.14, 0.025],
-      position: [0, layout.highEdgeHeight + 0.055, -0.0125],
+      size: [layout.span + 2 * node.sideOverhang, node.flashingHeight, node.flashingProjection],
+      position: [
+        0,
+        layout.highEdgeHeight + node.flashingHeight / 2 - 0.015,
+        -node.flashingProjection / 2,
+      ],
       role: 'roof',
       colorPreset,
       sceneTheme,
+      material: flashingMaterial,
     })
   }
 
@@ -114,16 +130,17 @@ export function buildLeanToExtensionGeometry(
       if (condition === 'open') continue
       addBox(group, {
         name: `lean-to-${side < 0 ? 'left' : 'right'}-side-flashing`,
-        size: [0.025, 0.12, layout.slopeLength],
+        size: [node.flashingProjection, node.flashingHeight, layout.slopeLength],
         position: [
           side * (layout.span / 2 + node.sideOverhang),
-          layout.roofCenterY + 0.04,
+          layout.roofCenterY + node.flashingHeight / 3,
           layout.roofCenterZ,
         ],
         rotationX: layout.pitchRadians,
         role: 'roof',
         colorPreset,
         sceneTheme,
+        material: flashingMaterial,
       })
     }
   }
@@ -150,16 +167,38 @@ export function buildLeanToExtensionGeometry(
     }
   }
 
-  for (const [index, x] of layout.rafterXs.entries()) {
-    addBox(group, {
-      name: `lean-to-rafter-${index}`,
-      size: [node.rafterWidth, node.rafterHeight, layout.rafterSlopeLength],
-      position: [x, layout.rafterCenterY, layout.rafterCenterZ],
-      rotationX: layout.pitchRadians,
-      role: 'joinery',
-      colorPreset,
-      sceneTheme,
-    })
+  if (node.framingStrategy === 'rafters') {
+    for (const [index, x] of layout.rafterXs.entries()) {
+      addBox(group, {
+        name: `lean-to-rafter-${index}`,
+        size: [node.rafterWidth, node.rafterHeight, layout.rafterSlopeLength],
+        position: [x, layout.rafterCenterY, layout.rafterCenterZ],
+        rotationX: layout.pitchRadians,
+        role: 'joinery',
+        colorPreset,
+        sceneTheme,
+      })
+    }
+  } else if (node.framingStrategy === 'purlins' || node.framingStrategy === 'covering-specific') {
+    const spacing =
+      node.framingStrategy === 'covering-specific'
+        ? Math.min(node.purlinSpacing, 0.6)
+        : node.purlinSpacing
+    const count = Math.max(2, Math.ceil(layout.rafterSlopeLength / spacing) + 1)
+    for (let index = 0; index < count; index++) {
+      const fraction = index / (count - 1)
+      const z = fraction * layout.rafterCenterZ * 2
+      const y = layout.rafterCenterY + (layout.rafterCenterZ - z) * Math.tan(layout.pitchRadians)
+      addBox(group, {
+        name: `lean-to-purlin-${index}`,
+        size: [layout.span, node.purlinHeight, node.purlinWidth],
+        position: [0, y, z],
+        rotationX: layout.pitchRadians,
+        role: 'joinery',
+        colorPreset,
+        sceneTheme,
+      })
+    }
   }
 
   return group

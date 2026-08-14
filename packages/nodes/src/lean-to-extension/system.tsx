@@ -1,18 +1,16 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  type ColumnNode,
-  type DownspoutNode,
-  type GutterNode,
-  type LeanToExtensionNode,
-  pauseSceneHistory,
-  type RoofNode,
-  type RoofSegmentNode,
-  resumeSceneHistory,
-  useScene,
-  type WallNode,
+import type {
+  AnyNode,
+  AnyNodeId,
+  ColumnNode,
+  DownspoutNode,
+  GutterNode,
+  LeanToExtensionNode,
+  RoofNode,
+  RoofSegmentNode,
+  SceneApi,
+  WallNode,
 } from '@pascal-app/core'
 import { useEffect } from 'react'
 import {
@@ -80,13 +78,21 @@ function segmentNeedsLayoutUpdate(segment: RoofSegmentNode, leanTo: LeanToExtens
   )
 }
 
-function gutterNeedsLayoutUpdate(gutter: GutterNode, segment: RoofSegmentNode) {
-  const expected = leanToGutterLayoutPatch(segment)
+function gutterNeedsLayoutUpdate(
+  gutter: GutterNode,
+  segment: RoofSegmentNode,
+  leanTo: LeanToExtensionNode,
+) {
+  const expected = leanToGutterLayoutPatch(segment, leanTo, gutter)
   return (
     !sameTuple(gutter.position, expected.position) ||
     gutter.rotation !== expected.rotation ||
     gutter.length !== expected.length ||
-    gutter.roofSegmentId !== expected.roofSegmentId
+    gutter.roofSegmentId !== expected.roofSegmentId ||
+    gutter.visible !== expected.visible ||
+    gutter.profile !== expected.profile ||
+    gutter.size !== expected.size ||
+    JSON.stringify(gutter.outlets) !== JSON.stringify(expected.outlets)
   )
 }
 
@@ -94,12 +100,15 @@ function downspoutNeedsLayoutUpdate(
   downspout: DownspoutNode,
   gutter: GutterNode,
   segment: RoofSegmentNode,
+  leanTo: LeanToExtensionNode,
 ) {
-  const expected = leanToDownspoutLayoutPatch(segment, gutter)
+  const expected = leanToDownspoutLayoutPatch(segment, gutter, leanTo)
   return (
     downspout.diameter !== expected.diameter ||
     downspout.gutterId !== expected.gutterId ||
-    downspout.lengthMode !== expected.lengthMode
+    downspout.lengthMode !== expected.lengthMode ||
+    downspout.visible !== expected.visible ||
+    downspout.outletId !== expected.outletId
   )
 }
 
@@ -134,6 +143,11 @@ function extensionSignature(
     leanTo.connectionInset,
     leanTo.matchHostRoofMaterial,
     leanTo.matchHostRoofStructure,
+    leanTo.gutterEnabled,
+    leanTo.gutterProfile,
+    leanTo.gutterSize,
+    leanTo.downspoutEnabled,
+    leanTo.downspoutPosition,
     hostRoof && leanTo.matchHostRoofMaterial !== false ? leanToRoofMaterialPatch(hostRoof) : null,
     leanTo.children,
     leanTo.children.map((childId) => {
@@ -195,29 +209,29 @@ function resolveEffectiveLeanTo(
     : clearLeanToRoofAttachment(wallSpanningLeanTo)
 }
 
-export function initializeLeanToExtensionSync() {
+export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
   const signatures = new Map<AnyNodeId, string>()
   let syncing = false
   const reconcile = () => {
-    const scene = useScene.getState()
+    const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
     const liveIds = new Set<AnyNodeId>()
 
-    for (const candidate of Object.values(scene.nodes)) {
+    for (const candidate of Object.values(nodes)) {
       if (candidate.type !== 'lean-to-extension') continue
       const leanTo = candidate
       const id = leanTo.id as AnyNodeId
       liveIds.add(id)
-      const effectiveLeanTo = resolveEffectiveLeanTo(leanTo, scene.nodes)
-      const parent = leanTo.parentId ? scene.nodes[leanTo.parentId as AnyNodeId] : undefined
-      const hostRoof = resolveLeanToHostRoof(effectiveLeanTo, scene.nodes)
-      const signature = extensionSignature(effectiveLeanTo, hostRoof, scene.nodes)
+      const effectiveLeanTo = resolveEffectiveLeanTo(leanTo, nodes)
+      const parent = leanTo.parentId ? nodes[leanTo.parentId as AnyNodeId] : undefined
+      const hostRoof = resolveLeanToHostRoof(effectiveLeanTo, nodes)
+      const signature = extensionSignature(effectiveLeanTo, hostRoof, nodes)
       if (signatures.get(id) === signature) continue
 
       const managedByIndex = new Map<number, ColumnNode>()
       const duplicateIds: AnyNodeId[] = []
       let roof: RoofNode | undefined
       for (const childId of leanTo.children) {
-        const child = scene.nodes[childId as AnyNodeId]
+        const child = nodes[childId as AnyNodeId]
         if (!child) continue
         if (child.type === 'roof' && isManagedLeanToNode(child, leanTo.id, 'roof')) {
           roof ??= child
@@ -275,7 +289,7 @@ export function initializeLeanToExtensionSync() {
           })
         }
         const segment = roof.children
-          .map((childId) => scene.nodes[childId as AnyNodeId])
+          .map((childId) => nodes[childId as AnyNodeId])
           .find(
             (child): child is RoofSegmentNode =>
               child?.type === 'roof-segment' &&
@@ -294,35 +308,41 @@ export function initializeLeanToExtensionSync() {
             })
           }
           const gutter = segment.children
-            .map((childId) => scene.nodes[childId as AnyNodeId])
+            .map((childId) => nodes[childId as AnyNodeId])
             .find(
               (child): child is GutterNode =>
                 child?.type === 'gutter' && isManagedLeanToNode(child, leanTo.id, 'gutter'),
             )
           if (gutter) {
-            const gutterPatch = leanToGutterLayoutPatch(expectedSegment)
+            const gutterPatch = leanToGutterLayoutPatch(expectedSegment, effectiveLeanTo, gutter)
             const expectedGutter = { ...gutter, ...gutterPatch } as GutterNode
-            if (gutterNeedsLayoutUpdate(gutter, expectedSegment)) {
+            if (gutterNeedsLayoutUpdate(gutter, expectedSegment, effectiveLeanTo)) {
               update.push({
                 id: gutter.id as AnyNodeId,
                 data: gutterPatch as Partial<AnyNode>,
               })
             }
             const downspout = segment.children
-              .map((childId) => scene.nodes[childId as AnyNodeId])
+              .map((childId) => nodes[childId as AnyNodeId])
               .find(
                 (child): child is DownspoutNode =>
                   child?.type === 'downspout' && isManagedLeanToNode(child, leanTo.id, 'downspout'),
               )
             if (
               downspout &&
-              downspoutNeedsLayoutUpdate(downspout, expectedGutter, expectedSegment)
+              downspoutNeedsLayoutUpdate(
+                downspout,
+                expectedGutter,
+                expectedSegment,
+                effectiveLeanTo,
+              )
             ) {
               update.push({
                 id: downspout.id as AnyNodeId,
                 data: leanToDownspoutLayoutPatch(
                   expectedSegment,
                   expectedGutter,
+                  effectiveLeanTo,
                 ) as Partial<AnyNode>,
               })
             }
@@ -333,7 +353,7 @@ export function initializeLeanToExtensionSync() {
       for (let index = 0; index < effectiveLeanTo.postCount; index++) {
         const postBaseY =
           parent?.type === 'wall'
-            ? resolveLeanToPostBaseY(effectiveLeanTo, parent, scene.nodes, index)
+            ? resolveLeanToPostBaseY(effectiveLeanTo, parent, nodes, index)
             : 0
         const current = managedByIndex.get(index)
         const gutterSetback = resolveLeanToPostGutterSetback(effectiveLeanTo, current)
@@ -365,11 +385,11 @@ export function initializeLeanToExtensionSync() {
 
       if (create.length > 0 || update.length > 0 || remove.length > 0) {
         syncing = true
-        pauseSceneHistory(useScene)
+        sceneApi.pauseHistory()
         try {
-          scene.applyNodeChanges({ create, update, delete: remove })
+          sceneApi.applyChanges?.({ create, update, delete: remove })
         } finally {
-          resumeSceneHistory(useScene)
+          sceneApi.resumeHistory()
           syncing = false
         }
       }
@@ -382,19 +402,21 @@ export function initializeLeanToExtensionSync() {
   }
 
   reconcile()
-  return useScene.subscribe((state, previous) => {
-    if (!syncing && state.nodes !== previous.nodes) reconcile()
-  })
+  return (
+    sceneApi.subscribeNodes?.(() => {
+      if (!syncing) reconcile()
+    }) ?? (() => {})
+  )
 }
 
-const LeanToExtensionSystem = () => {
+const LeanToExtensionSystem = ({ sceneApi }: { sceneApi: SceneApi }) => {
   useEffect(() => {
     void LEAN_TO_EXTENSION_GEOMETRY_REVISION
-    for (const node of Object.values(useScene.getState().nodes)) {
-      if (node.type === 'lean-to-extension') useScene.getState().markDirty(node.id as AnyNodeId)
+    for (const node of Object.values(sceneApi.nodes())) {
+      if (node.type === 'lean-to-extension') sceneApi.markDirty(node.id as AnyNodeId)
     }
-    return initializeLeanToExtensionSync()
-  }, [])
+    return initializeLeanToExtensionSync(sceneApi)
+  }, [sceneApi])
 
   return null
 }

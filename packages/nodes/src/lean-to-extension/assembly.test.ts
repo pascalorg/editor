@@ -123,6 +123,28 @@ describe('lean-to assembly', () => {
     ).toBeGreaterThan(5)
   })
 
+  test('applies configurable gutter profile, size, and outlet position', () => {
+    const leanTo = LeanToExtensionNode.parse({
+      gutterProfile: 'half-round',
+      gutterSize: 0.18,
+      downspoutPosition: -1,
+    })
+    const assembly = createLeanToAssembly(leanTo)
+
+    expect(assembly.gutter.profile).toBe('half-round')
+    expect(assembly.gutter.size).toBe(0.18)
+    expect(assembly.gutter.outlets[0]?.offset).toBeLessThan(0)
+  })
+
+  test('keeps managed drainage composed but hidden when disabled', () => {
+    const leanTo = LeanToExtensionNode.parse({ gutterEnabled: false })
+    const assembly = createLeanToAssembly(leanTo)
+
+    expect(assembly.gutter.visible).toBe(false)
+    expect(assembly.gutter.outlets).toEqual([])
+    expect(assembly.downspout.visible).toBe(false)
+  })
+
   test('matches the connected roof material without changing the host roof', () => {
     const leanTo = LeanToExtensionNode.parse({ matchHostRoofMaterial: true })
     const hostRoof = RoofNode.parse({

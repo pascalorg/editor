@@ -90,7 +90,7 @@ function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
     const extension = getFloorplanNodeExtension(definition)
     if (
       baseKinds.has(kind) ||
-      definition.capabilities.roofExtension ||
+      definition.presentation?.paletteGroup === 'roof-features' ||
       !extension?.tool ||
       !isFloorplanToolAvailableInMode(extension.availableModes, floorplanMode) ||
       !presentation ||
@@ -244,7 +244,10 @@ export function BuildTab() {
     if (!registryReady) return []
     const features: RoofFeature[] = []
     for (const [kind, def] of nodeRegistry.entries()) {
-      if (def.capabilities.roofAccessory === undefined && !def.capabilities.roofExtension) {
+      if (
+        def.capabilities.roofAccessory === undefined &&
+        def.presentation?.paletteGroup !== 'roof-features'
+      ) {
         continue
       }
       // Door / window declare `roofAccessory` for the wall-face cut but

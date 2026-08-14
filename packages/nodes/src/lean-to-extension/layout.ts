@@ -3,7 +3,7 @@ import { EAVE_TUCK_INWARD } from '../gutter/eave-snap'
 
 export const MIN_LEAN_TO_POST_HEIGHT = 0.2
 export const MIN_LEAN_TO_WALL_LENGTH = 0.6
-export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 3
+export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 4
 const RAFTER_GUTTER_CLEARANCE = 0.042
 
 export type LeanToLayout = {

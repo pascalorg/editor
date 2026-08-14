@@ -280,25 +280,43 @@ export function leanToRoofSegmentLayoutPatch(
 
 export function leanToGutterLayoutPatch(
   segment: RoofSegmentNodeType,
-): Pick<GutterNodeType, 'position' | 'rotation' | 'length' | 'roofSegmentId'> {
+  leanTo: LeanToExtensionNode,
+  gutter?: GutterNodeType,
+): Pick<
+  GutterNodeType,
+  'position' | 'rotation' | 'length' | 'roofSegmentId' | 'visible' | 'profile' | 'size' | 'outlets'
+> {
   const snap = resolveEaveSnap(segment, 0, segment.depth / 2)
+  const length = segment.width + 2 * segment.overhang
+  const outletId = gutter?.outlets[0]?.id ?? generateId('outlet')
+  const offset = leanTo.downspoutPosition * Math.max(0, length / 2 - 0.16)
   return {
     position: [snap.eaveX, snap.eaveY, snap.eaveZ],
     rotation: snap.rotation,
-    length: segment.width + 2 * segment.overhang,
+    length,
     roofSegmentId: segment.id,
+    visible: leanTo.gutterEnabled,
+    profile: leanTo.gutterProfile,
+    size: leanTo.gutterSize,
+    outlets:
+      leanTo.gutterEnabled && leanTo.downspoutEnabled
+        ? [{ id: outletId, offset, diameter: 0.07 }]
+        : [],
   }
 }
 
 export function leanToDownspoutLayoutPatch(
   _segment: RoofSegmentNodeType,
   gutter: GutterNodeType,
-): Pick<DownspoutNodeType, 'diameter' | 'gutterId' | 'lengthMode'> {
+  leanTo: LeanToExtensionNode,
+): Pick<DownspoutNodeType, 'diameter' | 'gutterId' | 'lengthMode' | 'visible' | 'outletId'> {
   const outlet = gutter.outlets[0]
   return {
     diameter: outlet?.diameter ?? 0.07,
     gutterId: gutter.id,
     lengthMode: 'to-ground',
+    visible: leanTo.gutterEnabled && leanTo.downspoutEnabled,
+    outletId: outlet?.id,
   }
 }
 
@@ -342,26 +360,16 @@ export function createManagedLeanToRoofAssembly(
     parentId: roof.id,
     metadata: managedMetadata(leanTo, 'roof-segment'),
   })
-  const outletId = generateId('outlet')
-  const gutterLength = segment.width + 2 * segment.overhang
   const gutter = GutterNode.parse({
-    ...leanToGutterLayoutPatch(segment),
+    ...leanToGutterLayoutPatch(segment, leanTo),
     name: 'Lean-to Gutter',
     parentId: segment.id,
-    outlets: [
-      {
-        id: outletId,
-        offset: Math.max(0, gutterLength / 2 - 0.16),
-        diameter: 0.07,
-      },
-    ],
     metadata: managedMetadata(leanTo, 'gutter'),
   })
   const downspout = DownspoutNode.parse({
-    ...leanToDownspoutLayoutPatch(segment, gutter),
+    ...leanToDownspoutLayoutPatch(segment, gutter, leanTo),
     name: 'Lean-to Downspout',
     parentId: segment.id,
-    outletId,
     lengthMode: 'to-ground',
     strapStyle: 'none',
     terminal: 'straight',

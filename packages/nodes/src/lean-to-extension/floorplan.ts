@@ -78,5 +78,31 @@ export function buildLeanToExtensionFloorplan(
     })
   }
 
+  if (selected) {
+    const arrowOffset = 0.12
+    const eaveX = originX + outX * (layout.roofRun + arrowOffset)
+    const eaveZ = originZ + outZ * (layout.roofRun + arrowOffset)
+    children.push({
+      kind: 'move-arrow',
+      point: [eaveX, eaveZ],
+      angle: Math.atan2(outZ, outX),
+      affordance: 'lean-to-resize',
+      payload: { dimension: 'projection' },
+    })
+    for (const side of [-1, 1] as const) {
+      const x = side * (layout.span / 2 + node.sideOverhang + arrowOffset)
+      children.push({
+        kind: 'move-arrow',
+        point: [
+          originX + dirX * x + outX * layout.projection,
+          originZ + dirZ * x + outZ * layout.projection,
+        ],
+        angle: Math.atan2(dirZ * side, dirX * side),
+        affordance: 'lean-to-resize',
+        payload: { dimension: 'span', side },
+      })
+    }
+  }
+
   return { kind: 'group', children }
 }

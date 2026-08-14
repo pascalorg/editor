@@ -1044,6 +1044,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         nodes: sceneNodes,
         initialPlanPoint,
         gridSnapStep: useEditor.getState().gridSnapStep,
+        sceneApi: createSceneApi(useScene),
       })
       if (!(session.commit && session.canCommit())) return
       session.commit()
@@ -1087,6 +1088,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         nodes: sceneNodes,
         initialPlanPoint,
         gridSnapStep: useEditor.getState().gridSnapStep,
+        sceneApi: createSceneApi(useScene),
       })
 
       const snapshots: NodeSnapshot[] = []

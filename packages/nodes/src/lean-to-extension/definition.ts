@@ -7,8 +7,9 @@ import type {
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildLeanToExtensionFloorplan } from './floorplan'
+import { leanToResizeAffordance } from './floorplan-affordances'
 import { buildLeanToExtensionGeometry, leanToExtensionGeometryKey } from './geometry'
-import { leanToExtensionParametrics } from './parametrics'
+import { deriveLeanToResizePatch, leanToExtensionParametrics } from './parametrics'
 import { applyLeanToRoofAttachment, resolveLeanToRoofAttachment } from './roof-attachment'
 import { LeanToExtensionNode } from './schema'
 
@@ -68,17 +69,8 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
           shingleThickness: connected.shingleThickness,
         }
       }
-      const lowEdge = node.highEdgeHeight - node.projection * Math.tan((node.pitch * Math.PI) / 180)
       return {
-        highEdgeHeight: newValue,
-        ...(node.resizeLock === 'preserve-low-edge'
-          ? {
-              pitch: Math.max(
-                1,
-                Math.min(45, (Math.atan2(newValue - lowEdge, node.projection) * 180) / Math.PI),
-              ),
-            }
-          : {}),
+        ...deriveLeanToResizePatch(node, { highEdgeHeight: newValue }),
         connectionMode: 'manual',
         hostRoofId: undefined,
         hostRoofSegmentId: undefined,
@@ -102,22 +94,28 @@ leanToExtensionHandles.push({
   min: 0.5,
   max: 10,
   currentValue: (node) => node.projection,
-  apply: (node, projection) => {
-    const lowEdge = node.highEdgeHeight - node.projection * Math.tan((node.pitch * Math.PI) / 180)
-    return {
-      projection,
-      ...(node.resizeLock === 'preserve-low-edge'
-        ? { highEdgeHeight: lowEdge + projection * Math.tan((node.pitch * Math.PI) / 180) }
-        : {}),
-    }
-  },
+  apply: (node, projection) => ({
+    projection,
+    ...deriveLeanToResizePatch(node, { projection }),
+  }),
   placement: { position: (node) => [0, PROJECTION_HANDLE_HEIGHT, node.projection] },
   measureLabel: 'Projection',
+})
+leanToExtensionHandles.push({
+  kind: 'linear-resize',
+  axis: 'x',
+  anchor: 'center',
+  min: 0.5,
+  max: 100,
+  currentValue: (node) => node.span,
+  apply: (_node, span) => ({ span, autoSpan: false }),
+  placement: { position: (node) => [node.span / 2, PROJECTION_HANDLE_HEIGHT, node.projection] },
+  measureLabel: 'Span',
 })
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',
@@ -135,7 +133,6 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
-    roofExtension: true,
   },
   relations: {
     cascadeDelete: 'descendants',
@@ -150,6 +147,7 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
     priority: 1,
   },
   floorplan: buildLeanToExtensionFloorplan,
+  floorplanAffordances: { 'lean-to-resize': leanToResizeAffordance },
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   toolHints: [
@@ -161,6 +159,7 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
     description: 'An open mono-pitch roof attached to a wall and supported by a pillar row.',
     icon: { kind: 'url', src: '/icons/lean-to-extension.webp' },
     paletteSection: 'structure',
+    paletteGroup: 'roof-features',
     paletteOrder: 105,
   },
   mcp: {

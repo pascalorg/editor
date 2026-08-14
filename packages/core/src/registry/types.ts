@@ -792,6 +792,8 @@ export type FloorplanAffordance<N> = {
     initialPlanPoint: FloorplanAffordancePoint
     /** Active editor grid step in meters. */
     gridSnapStep: number
+    /** Injected mutation/read seam for kind-owned affordances. */
+    sceneApi?: SceneApi
   }): FloorplanAffordanceSession
 }
 
@@ -1246,7 +1248,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   ports?: (node: z.infer<S>) => NodePort[]
   system?: SystemContribution
-  tool?: LazyComponent
+  tool?: ToolLazyComponent
   /**
    * Stage-D drag-affordance components — one per kind-owned editor mode
    * triggered by `useEditor` state. Component receives `{ node }` as its
@@ -1399,6 +1401,8 @@ export type Presentation = {
   icon: IconRef
   /** Tool palette section. Defaults to `category` when omitted. */
   paletteSection?: 'site' | 'structure' | 'furnish'
+  /** Optional presentation-only subgroup used by palette surfaces. */
+  paletteGroup?: string
   /** Sort key within a palette section; lower numbers come first. */
   paletteOrder?: number
   /** Set true for kinds that exist but should NOT appear in the palette
@@ -1424,6 +1428,8 @@ export type IconRef =
    * boundary per icon. */
   | { kind: 'component'; module: () => Promise<{ default: ComponentType }> }
 
+export type ToolContributionProps = { sceneApi: SceneApi }
+export type ToolLazyComponent = () => Promise<{ default: ComponentType<ToolContributionProps> }>
 export type LazyComponent = () => Promise<{ default: ComponentType }>
 
 export type RendererSource<N> =
@@ -1521,8 +1527,6 @@ export type Capabilities = {
     nodes?: Readonly<Record<string, AnyNode>>,
   ) => { size: [number, number, number]; center?: [number, number, number]; centerY?: number }
   roofAccessory?: RoofAccessoryConfig
-  /** A roof-related structure surfaced with roof accessories in build palettes. */
-  roofExtension?: boolean
   /**
    * Kind cuts a hole in the ceiling surface it is attached to (e.g. recessed
    * downlights). The viewer's `CeilingSystem` calls this for each child of a
@@ -2293,6 +2297,13 @@ export type SceneApi = {
   nodes: () => Readonly<Record<AnyNodeId, AnyNode>>
   update: (id: AnyNodeId, patch: Partial<AnyNode>) => void
   upsert: (node: AnyNode, parentId?: AnyNodeId) => AnyNodeId
+  createMany?: (ops: { node: AnyNode; parentId?: AnyNodeId }[]) => void
+  applyChanges?: (changes: {
+    create?: { node: AnyNode; parentId?: AnyNodeId }[]
+    update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
+    delete?: AnyNodeId[]
+  }) => void
+  subscribeNodes?: (listener: (nodes: Readonly<Record<AnyNodeId, AnyNode>>) => void) => () => void
   delete: (id: AnyNodeId) => void
   restore: (id: AnyNodeId) => void
   restoreAll: () => void

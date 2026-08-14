@@ -32,6 +32,30 @@ describe('lean-to extension geometry', () => {
     expect(group.getObjectByName('lean-to-right-side-flashing')).toBeUndefined()
   })
 
+  test('uses configurable flashing dimensions', () => {
+    const node = LeanToExtensionNode.parse({ flashingHeight: 0.22, flashingProjection: 0.06 })
+    const group = buildLeanToExtensionGeometry(node)
+    const flashing = group.getObjectByName('lean-to-high-side-flashing') as Mesh<BoxGeometry>
+    const parameters = flashing.geometry.parameters as { height: number; depth: number }
+
+    expect(parameters.height).toBeCloseTo(0.22)
+    expect(parameters.depth).toBeCloseTo(0.06)
+  })
+
+  test('switches between hidden, rafter, and purlin framing', () => {
+    const hiddenNames = buildLeanToExtensionGeometry(
+      LeanToExtensionNode.parse({ framingStrategy: 'hidden' }),
+    ).children.map((child) => child.name)
+    const purlinNames = buildLeanToExtensionGeometry(
+      LeanToExtensionNode.parse({ framingStrategy: 'purlins' }),
+    ).children.map((child) => child.name)
+
+    expect(hiddenNames.some((name) => name.startsWith('lean-to-rafter-'))).toBe(false)
+    expect(hiddenNames.some((name) => name.startsWith('lean-to-purlin-'))).toBe(false)
+    expect(purlinNames.some((name) => name.startsWith('lean-to-purlin-'))).toBe(true)
+    expect(purlinNames.some((name) => name.startsWith('lean-to-rafter-'))).toBe(false)
+  })
+
   test('leaves the roof and posts to real child nodes in scene geometry', () => {
     const node = LeanToExtensionNode.parse({ postCount: 3 })
     const group = buildLeanToExtensionGeometry(node, {} as never)

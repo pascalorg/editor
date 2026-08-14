@@ -916,6 +916,27 @@ function collectDefaultGutterRefresh(
   for (const id of result.deletedIds) deletedIds.add(id)
 }
 
+function refreshDefaultGuttersForRoofIds(
+  nextNodes: Record<AnyNodeId, AnyNode>,
+  roofIds: Iterable<AnyNodeId>,
+  dirtyIds: Set<AnyNodeId>,
+  deletedIds: Set<AnyNodeId>,
+) {
+  for (const roofId of new Set(roofIds)) {
+    const roof = nextNodes[roofId]
+    if (roof?.type !== 'roof') continue
+    const segment = (roof.children ?? [])
+      .map((childId) => nextNodes[childId as AnyNodeId])
+      .find((child): child is RoofSegmentNode => child?.type === 'roof-segment')
+    if (!segment) continue
+    collectDefaultGutterRefresh(
+      refreshDefaultGuttersForRoof(nextNodes, segment),
+      dirtyIds,
+      deletedIds,
+    )
+  }
+}
+
 // Track pending RAF for updateNodesAction to prevent multiple queued callbacks
 let pendingRafId: number | null = null
 let pendingUpdates: Set<AnyNodeId> = new Set()
@@ -1183,19 +1204,12 @@ const createNodesActionImpl = (
       }
       addLeanToHostRoofId(created, nextNodes, refreshedRoofIds)
     }
-    for (const roofId of refreshedRoofIds) {
-      const roof = nextNodes[roofId]
-      if (roof?.type !== 'roof') continue
-      const segment = (roof.children ?? [])
-        .map((childId) => nextNodes[childId as AnyNodeId])
-        .find((child): child is RoofSegmentNode => child?.type === 'roof-segment')
-      if (!segment) continue
-      collectDefaultGutterRefresh(
-        refreshDefaultGuttersForRoof(nextNodes, segment),
-        extraNodesToMarkDirty,
-        extraNodesToClearDirty,
-      )
-    }
+    refreshDefaultGuttersForRoofIds(
+      nextNodes,
+      refreshedRoofIds,
+      extraNodesToMarkDirty,
+      extraNodesToClearDirty,
+    )
 
     addActiveSceneCommitNodeIds([...extraNodesToMarkDirty, ...extraNodesToClearDirty])
 
@@ -1270,11 +1284,7 @@ const applyNodeChangesActionImpl = (
       }
       const currentSegment = nextNodes[id]
       if (currentSegment?.type === 'roof-segment' && shouldRefreshDefaultGutters(data)) {
-        collectDefaultGutterRefresh(
-          refreshDefaultGuttersForRoof(nextNodes, currentSegment),
-          nodesToMarkDirty,
-          nodesToClearDirty,
-        )
+        if (currentSegment.parentId) roofsToRefresh.add(currentSegment.parentId as AnyNodeId)
       }
       nodesToMarkDirty.add(id)
     }
@@ -1361,19 +1371,7 @@ const applyNodeChangesActionImpl = (
       delete nextNodes[id]
     }
 
-    for (const roofId of roofsToRefresh) {
-      const roof = nextNodes[roofId]
-      if (!(roof && roof.type === 'roof')) continue
-      const segment = (roof.children ?? [])
-        .map((childId) => nextNodes[childId as AnyNodeId])
-        .find((node): node is RoofSegmentNode => node?.type === 'roof-segment')
-      if (!segment) continue
-      collectDefaultGutterRefresh(
-        refreshDefaultGuttersForRoof(nextNodes, segment),
-        nodesToMarkDirty,
-        nodesToClearDirty,
-      )
-    }
+    refreshDefaultGuttersForRoofIds(nextNodes, roofsToRefresh, nodesToMarkDirty, nodesToClearDirty)
 
     addActiveSceneCommitNodeIds([
       ...allIdsToDelete,
@@ -1468,27 +1466,16 @@ const updateNodesActionImpl = (
       }
       const currentSegment = nextNodes[id]
       if (currentSegment?.type === 'roof-segment' && shouldRefreshDefaultGutters(data)) {
-        collectDefaultGutterRefresh(
-          refreshDefaultGuttersForRoof(nextNodes, currentSegment),
-          extraNodesToUpdate,
-          extraNodesToDelete,
-        )
+        if (currentSegment.parentId) roofsToRefresh.add(currentSegment.parentId as AnyNodeId)
       }
     }
 
-    for (const roofId of roofsToRefresh) {
-      const roof = nextNodes[roofId]
-      if (roof?.type !== 'roof') continue
-      const segment = (roof.children ?? [])
-        .map((childId) => nextNodes[childId as AnyNodeId])
-        .find((child): child is RoofSegmentNode => child?.type === 'roof-segment')
-      if (!segment) continue
-      collectDefaultGutterRefresh(
-        refreshDefaultGuttersForRoof(nextNodes, segment),
-        extraNodesToUpdate,
-        extraNodesToDelete,
-      )
-    }
+    refreshDefaultGuttersForRoofIds(
+      nextNodes,
+      roofsToRefresh,
+      extraNodesToUpdate,
+      extraNodesToDelete,
+    )
 
     addActiveSceneCommitNodeIds([
       ...updates.map(({ id }) => id),
@@ -1674,19 +1661,7 @@ const deleteNodesActionImpl = (
       delete nextNodes[id]
     }
 
-    for (const roofId of affectedRoofIds) {
-      const roof = nextNodes[roofId]
-      if (!(roof && roof.type === 'roof')) continue
-      const segment = (roof.children ?? [])
-        .map((childId) => nextNodes[childId as AnyNodeId])
-        .find((node): node is RoofSegmentNode => node?.type === 'roof-segment')
-      if (!segment) continue
-      collectDefaultGutterRefresh(
-        refreshDefaultGuttersForRoof(nextNodes, segment),
-        nodesToMarkDirty,
-        deletedIds,
-      )
-    }
+    refreshDefaultGuttersForRoofIds(nextNodes, affectedRoofIds, nodesToMarkDirty, deletedIds)
 
     addActiveSceneCommitNodeIds([...deletedIds, ...parentsToMarkDirty, ...nodesToMarkDirty])
 

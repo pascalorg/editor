@@ -1,11 +1,12 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   emitter,
+  type SceneApi,
   sceneRegistry,
   spatialGridManager,
-  useScene,
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
@@ -38,7 +39,7 @@ type PreviewPose = {
   rotationY: number
 }
 
-const LeanToExtensionTool = () => {
+const LeanToExtensionTool = ({ sceneApi }: { sceneApi: SceneApi }) => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const viewMode = useEditor((state) => state.viewMode)
   const [preview, setPreview] = useState<PreviewPose | null>(null)
@@ -74,7 +75,7 @@ const LeanToExtensionTool = () => {
         setPreview(null)
         return null
       }
-      const nodes = useScene.getState().nodes
+      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const attachment = resolveLeanToRoofAttachment(wallPlacement, event.node, nodes)
       const node = attachment
         ? applyLeanToRoofAttachment(wallPlacement, attachment)
@@ -104,9 +105,9 @@ const LeanToExtensionTool = () => {
       const node = updateTarget(event)
       if (!node) return
       event.stopPropagation()
-      const nodes = useScene.getState().nodes
+      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes))
-      useScene.getState().createNodes([
+      sceneApi.createMany?.([
         { node: assembly.extension, parentId: event.node.id },
         ...assembly.children.map((child) => ({
           node: child,
@@ -135,7 +136,7 @@ const LeanToExtensionTool = () => {
         .getState()
         .endIf((scope) => scope.kind === 'drafting' && scope.tool === 'lean-to-extension')
     }
-  }, [activeLevelId, viewMode])
+  }, [activeLevelId, sceneApi, viewMode])
 
   if (!preview || viewMode !== '3d') return null
   return (

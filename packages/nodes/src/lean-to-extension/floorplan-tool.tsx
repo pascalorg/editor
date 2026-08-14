@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import {
   type FloorplanToolContext,
   markToolCancelConsumed,
@@ -92,7 +92,7 @@ const FloorplanLeanToExtensionTool = ({
       if (!node) return
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes))
-      useScene.getState().createNodes([
+      sceneApi.createMany?.([
         { node: assembly.extension, parentId: node.parentId as AnyNodeId },
         ...assembly.children.map((child) => ({
           node: child,
