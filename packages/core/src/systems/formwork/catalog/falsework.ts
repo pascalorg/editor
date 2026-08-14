@@ -95,9 +95,10 @@ export interface PropType extends CatalogEntry {
   sourceRef: string
 }
 
-const PLY_SOURCE = 'wiki/formwork/reference/design.md §2.2 — APA Tables 12–13'
+const PLY_SOURCE =
+  'wiki/formwork/reference/design.md §2.2 — APA Tables 12–13, converted from the published per-foot section properties (KS in³/ft, I in⁴/ft against Fb/Fs/E psi) by the unit factors in catalog/falsework.ts; concrete-setting factor Cs = 1.625 already applied in the tabulated wet stresses'
 const METRIC_PLY_SOURCE =
-  'wiki/formwork/reference/design.md §2.2 — stated typical range for film-faced ply, not a manufacturer declaration'
+  'wiki/formwork/reference/design.md §2.2 — stated typical range for film-faced ply, not a manufacturer declaration; certifiable from a Metsä WISA-Form, UPM or Doka film-faced ply product declaration'
 
 /**
  * APA Plyform section properties are published per foot of width in mixed units.
@@ -186,7 +187,7 @@ export const PLYFORM_CLASS_I_19MM: SheathingType = {
   label: 'Plyform Class I, 3/4 in (19 mm)',
   weightKg: 10.7,
   catalogSource: 'APA Concrete Forming Design/Construction Guide, Tables 12–13',
-  verification: 'verified',
+  verification: 'derived',
   thicknessMm: 19.05,
   acrossSupports: fromApa(0.455, 7.187, 0.199, 1930, 72, 1_650_000),
   parallelToSupports: fromApa(0.306, 4.063, 0.092, 1930, 72, 1_650_000),
@@ -202,7 +203,7 @@ export const PLYFORM_STRUCTURAL_I_19MM: SheathingType = {
   label: 'Structural I Plyform, 3/4 in (19 mm)',
   weightKg: 10.7,
   catalogSource: 'APA Concrete Forming Design/Construction Guide, Tables 12–13',
-  verification: 'verified',
+  verification: 'derived',
   thicknessMm: 19.05,
   acrossSupports: fromApa(0.464, 6.189, 0.202, 1930, 102, 1_650_000),
   parallelToSupports: fromApa(0.418, 4.047, 0.108, 1930, 102, 1_650_000),
@@ -337,7 +338,7 @@ export const EUREX_30: PropType = {
   label: 'Doka floor prop Eurex 30 top',
   weightKg: 18.5,
   catalogSource: 'Doka Floor-prop-Eurex permissible load capacity, approval Z-8.311-942',
-  verification: 'verified',
+  verification: 'certified',
   minLengthM: 1.5,
   maxLengthM: 5.5,
   capacities: [

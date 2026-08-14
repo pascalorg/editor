@@ -49,6 +49,25 @@ A seeded panel system SHALL carry its rated fresh-concrete pressure, its panel s
 - **WHEN** a seeded panel system is used
 - **THEN** the layout uses only its stated panel sizes, and the reported weight per lift is the sum of the stated panel and accessory weights
 
+### Requirement: A system declares what it forms, and carries ratings for what it forms
+
+Where a registered system forms only a subset of element kinds — a circular-column form, a column form, a slab-soffit system — the registry SHALL record which kinds it supports, and a seeded system SHALL carry the rating each supported kind needs: a wall system a wall pressure, a column system a column rating, a soffit system its soffit capacities. The per-kind invariant replaces the wall-pressure invariant wholesale: a system is unseeded where any supported kind lacks its rating, and seeded where every supported kind has one. A system used on a kind it does not support SHALL be refused with both names, on the same rejection channel the unseeded refusal rides — never approximated with another kind's data.
+
+#### Scenario: A column system used on a wall is refused, not approximated
+
+- **WHEN** an element configured to a seeded column-only system is a wall
+- **THEN** the solution reports the element as undesignable, naming the system and the kind the element needs and the system does not support
+
+#### Scenario: A column-only system with a column rating is seeded
+
+- **WHEN** a column-only system carries a column rating and no wall rating
+- **THEN** it is seeded (its supported kind is fully rated) rather than unseeded, and a column configured to it designs while a wall configured to it is refused
+
+#### Scenario: A soffit system carries its own capacities, not a wall pressure
+
+- **WHEN** a slab-soffit system is seeded
+- **THEN** it carries the panel/beam/prop capacities a soffit design needs, and is not required to invent a wall pressure it does not have
+
 ### Requirement: Sheet grades carry design values in the project's unit system
 
 A seeded sheeting grade SHALL carry the bending strength, shear strength, stiffness and thickness needed by the deflection and bending checks, in the unit system the check is performed in. Where a grade's published values exist only in another unit system, the converted values SHALL be recorded as `derived` with the conversion stated.

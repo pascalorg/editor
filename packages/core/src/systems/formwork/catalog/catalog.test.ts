@@ -8,6 +8,7 @@ import {
   FRAMAX_COLUMN,
 } from './columns'
 import { DOKA_FRAMAX_XLIFE } from './doka-framax'
+import { SHEATHING_TYPES } from './falsework'
 import {
   DEFAULT_FORMWORK_SYSTEM_ID,
   FORMWORK_SYSTEMS,
@@ -64,6 +65,46 @@ describe('every shipped entry is sourced', () => {
       for (const tie of system.ties) {
         expect(['permissible', 'ultimate', 'design']).toContain(tie.capacityBasis)
         expect(tie.capacityKn).toBeGreaterThan(0)
+      }
+    }
+  })
+})
+
+describe('the verification vocabulary (8.1–8.2)', () => {
+  const LEVELS = ['certified', 'derived', 'secondary', 'unverified']
+
+  it('every shipped value carries one of the four levels', () => {
+    for (const system of SEEDED_SYSTEMS) {
+      for (const part of [...system.panels, ...system.corners, ...system.fillers, ...system.ties]) {
+        expect(LEVELS).toContain(part.verification)
+      }
+    }
+    for (const sheet of SHEATHING_TYPES) expect(LEVELS).toContain(sheet.verification)
+  })
+
+  it('a derived value names its inputs and its method, so it cannot launder a guess', () => {
+    // The level exists for the conversions: computed from cited values by a stated
+    // method. A derived label without the method beside it would be a certified
+    // label's authority attached to arithmetic — the laundering the fold exists to
+    // stop — so every derived value must state the conversion in its own source.
+    const derived = SHEATHING_TYPES.filter((sheet) => sheet.verification === 'derived')
+    expect(derived.length).toBeGreaterThan(0)
+    for (const sheet of derived) {
+      expect(sheet.sourceRef).toMatch(/convert/i)
+      expect(sheet.catalogSource).toMatch(/APA/i)
+    }
+  })
+
+  it('an unverified value names what would certify it', () => {
+    // The actionable half of the level: a gap that names the document that closes it
+    // is procurement; a gap that names nothing is a number nobody can act on.
+    for (const sheet of SHEATHING_TYPES.filter((entry) => entry.verification === 'unverified')) {
+      expect(sheet.sourceRef).toMatch(/datasheet|declaration|table|declaration/i)
+    }
+    for (const system of SEEDED_SYSTEMS) {
+      for (const part of [...system.panels, ...system.corners, ...system.fillers, ...system.ties]) {
+        if (part.verification !== 'unverified') continue
+        expect(part.catalogSource.length).toBeGreaterThan(15)
       }
     }
   })

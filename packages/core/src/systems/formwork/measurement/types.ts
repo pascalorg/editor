@@ -67,7 +67,7 @@ export interface MeasurementStandard {
    * Standards whose clause text we could not obtain ship anyway — a project in
    * that jurisdiction still needs a number — but every output must say so.
    */
-  verification: 'verified' | 'unverified'
+  verification: 'certified' | 'unverified'
   openings: OpeningRule
   /**
    * Whether the reveal faces of an opening count as measured contact area.

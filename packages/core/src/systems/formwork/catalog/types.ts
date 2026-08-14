@@ -12,7 +12,23 @@
  * See `wiki/formwork/reference/products.md` for the transcribed tables.
  */
 
-export type Verification = 'verified' | 'secondary' | 'unverified'
+/**
+ * How much a published value can be trusted, and the fold a result inherits the
+ * weakest of (OpenSpec 8.1–8.3): `certified > derived > secondary > unverified`.
+ *
+ * - `certified` — transcribed from the cited manufacturer's document: item list,
+ *   user information, stamped table.
+ * - `derived` — computed from cited inputs by the stated method; every factor and
+ *   the source of every input travel with the value (a unit conversion off a
+ *   published table, a section property off a stated section). A computed value
+ *   whose inputs are not cited is `unverified`, not `derived` — the level is about
+ *   auditability, and a method over uncited inputs is a guess with a formula.
+ * - `secondary` — transcribed from a dealer or secondary listing rather than the
+ *   manufacturer's own table. A real document, but not the authoritative one.
+ * - `unverified` — arrived at by stated reasoning with nothing published to check
+ *   it against, and it names what would certify it.
+ */
+export type Verification = 'certified' | 'derived' | 'secondary' | 'unverified'
 
 /**
  * Whether a published capacity is already reduced for safety. Mixing the two is

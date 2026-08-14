@@ -27,8 +27,11 @@ import type { ColumnClampType, ColumnFormType } from './types'
  * rating. It almost never governs, because tension goes as `p·s·b` where the arm's
  * bending goes as `p·s·b²/8`.
  *
- * Both are `unverified` and want a manufacturer's table before a schedule derived
- * from them is built to.
+ * Both are `unverified` (8.6) and want a manufacturer's table before a schedule
+ * derived from them is built to — the published document that would certify them is a
+ * branded column-clamp load/spacing chart (e.g. Gates' Lok 'n-Square column clamp
+ * load table, gatesconcreteforms.com), transcribed for the exact part rather than
+ * borrowed by analogy.
  */
 function adjustableClamp(
   minSizeMm: number,
@@ -52,7 +55,7 @@ function adjustableClamp(
     capacityKn: 90,
     bendingMomentKnM,
     capacityBasis: 'permissible',
-    sourceRef: `products.md §1.6 — sets of 4, ranges 150–600 / 300–900 / 450–1200 mm at 50 mm punched pitch. Bending capacity derived from an L${angleMm}×${angleMm} equal angle in S235 at a 1.5 reduction; corner tension by analogy with Doka Tie Yoke 022030 (90 kN permissible, products.md §2.4). Neither is the clamps’ own published rating.`,
+    sourceRef: `products.md §1.6 — sets of 4, ranges 150–600 / 300–900 / 450–1200 mm at 50 mm punched pitch. Bending capacity derived from an L${angleMm}×${angleMm} equal angle in S235 at a 1.5 reduction; corner tension by analogy with Doka Tie Yoke 022030 (90 kN permissible, products.md §2.4). Neither is the clamps’ own published rating — certifiable from a branded column-clamp load table (Gates Lok 'n-Square column clamp load chart, gatesconcreteforms.com), transcribed for the exact part.`,
   }
 }
 
@@ -106,7 +109,7 @@ export const FRAMAX_COLUMN: ColumnFormType = {
   label: 'Doka Framax Xlife column arrangement',
   weightKg: 0,
   catalogSource: 'Doka item list me/91.pdf; Framax Xlife User Information',
-  verification: 'verified',
+  verification: 'certified',
   minDimMm: 200,
   maxDimMm: 1067,
   incrementMm: 51,

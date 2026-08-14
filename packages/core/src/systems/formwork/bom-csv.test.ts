@@ -481,6 +481,61 @@ describe('bomCsv', () => {
       expect(csv).toContain('Hook time h — this formwork alone,1.5')
     })
 
+    test('prices finance beside the total and names the period it was computed over', () => {
+      const lines = [line({ quantity: 4 })]
+      const cost = bomCost(
+        lines,
+        { ...RATES, financeRatePerAnnum: 8 },
+        bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 }),
+        bomSupply(lines, {}),
+        {
+          pours: [],
+          scheduledCount: 0,
+          unscheduled: [],
+          earliestOnly: false,
+          complete: true,
+          gaps: [],
+          firstErectAt: '2026-01-05',
+          lastReleaseAt: '2026-03-31',
+        },
+      )
+      const csv = bomCsv(lines, { subject: 'Project', cost })
+
+      const finance = rows(csv).find((row) => row.startsWith('FINANCE —')) as string
+      expect(finance).toContain('not in the total')
+      expect(Number(finance.split(',').at(-1))).toBeCloseTo(cost.financeCost ?? 0, 2)
+      // The basis row carries the rate and the period, so the figure can be checked —
+      // and the cost-basis sentence moves finance off the absent list, because a reader
+      // told "No finance" beside a FINANCE row has been told two contradictory things.
+      const basis = rows(csv).find((row) => row.startsWith('— basis,')) as string
+      expect(basis).toContain('8% a year')
+      expect(basis).toContain('2026-03-31')
+      const costBasis = rows(csv).find((row) => row.startsWith('Cost basis,')) as string
+      expect(costBasis).toContain('FINANCE row')
+      expect(costBasis).not.toContain('No labour, transport, craneage or finance')
+    })
+
+    test('names an asset used past its stated life as an overrun with the replacement money', () => {
+      const lines = [line({ quantity: 150 })]
+      const cost = bomCost(
+        lines,
+        {
+          currency: 'GBP',
+          byCatalogId: {
+            'framax-2700-900': { purchasePerUnit: 200, expectedUses: 100, residualPerUnit: 20 },
+          },
+        },
+        bomHire(lines, () => ['slab-props'], 'BS_8110', { temperatureC: 16 }),
+        bomSupply(lines, { 'framax-2700-900': 150 }),
+      )
+      const csv = bomCsv(lines, { subject: 'Project', cost })
+
+      const overrun = rows(csv).find((row) => row.startsWith('OVERRUN —')) as string
+      expect(overrun).toContain('framax-2700-900 used 150 times against a life of 100')
+      expect(overrun).toContain('1 replacement at list')
+      expect(overrun.split(',').at(-1)).toBe('200')
+    })
+
     test('says why a logistics figure is a floor rather than emptying the block', () => {
       const lines = [line({ quantity: 4 })]
       const csv = bomCsv(lines, {

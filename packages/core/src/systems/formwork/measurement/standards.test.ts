@@ -25,8 +25,8 @@ describe('the shipped rule sets', () => {
     expect(unverified.sort()).toEqual(['CESMM4', 'POMI'])
   })
 
-  it('defaults to a verified standard', () => {
-    expect(measurementStandard(DEFAULT_MEASUREMENT_STANDARD_ID).verification).toBe('verified')
+  it('defaults to a certified standard', () => {
+    expect(measurementStandard(DEFAULT_MEASUREMENT_STANDARD_ID).verification).toBe('certified')
   })
 })
 

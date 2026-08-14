@@ -41,8 +41,10 @@ import type { BomSupply, SupplyLine } from './supply'
  *
  * Assembled rather than written out because the exclusions come off the blocks this file
  * actually has: labour where there are no norms, transport and craneage where there is no
- * payload and no cycle time, and finance always. A fixed sentence naming all four would tell
- * a reader with a LOGISTICS block below that transport is missing from a file that prices it.
+ * payload and no cycle time, and finance where no rate is stated — it moves to the
+ * elsewhere side the moment a FINANCE row appears below. A fixed sentence naming all four
+ * would tell a reader with a LOGISTICS block below that transport is missing from a file
+ * that prices it.
  */
 function costBasis(scope: BomCsvScope): string {
   const elsewhere: string[] = []
@@ -51,7 +53,8 @@ function costBasis(scope: BomCsvScope): string {
   else elsewhere.push('the gang’s time is in the LABOUR block')
   if (scope.logistics === undefined) absent.push('transport', 'craneage')
   else elsewhere.push('the deliveries and the hook time are in the LOGISTICS block')
-  absent.push('finance')
+  if (scope.cost?.financeCost === undefined) absent.push('finance')
+  else elsewhere.push('the money this job ties up is priced in the FINANCE row')
   const missing =
     absent.length === 1
       ? absent[0]
@@ -374,6 +377,18 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
         round2(cost.totalCost),
       ].join(','),
     )
+    if (cost.financeCost !== undefined && cost.financeNote !== undefined) {
+      // Beside the total and labelled as outside it, as the own-stock row is, because a
+      // spreadsheet reader adds adjacent money columns — and the basis row is the same
+      // discipline `financeNote` exists for: a figure without its rate and period is a
+      // figure that cannot be checked.
+      rows.push(
+        ['FINANCE — the money this job ties up, not in the total', round2(cost.financeCost)].join(
+          ',',
+        ),
+      )
+      rows.push(['— basis', cell(cost.financeNote)].join(','))
+    }
     if (cost.ownedCost > 0) {
       // Below the total and labelled as outside it, because a spreadsheet reader adds
       // adjacent money columns. This is the yard's own plant charged at the yard's own
@@ -398,6 +413,18 @@ export function bomCsv(lines: readonly BomLine[], scope: BomCsvScope): string {
       // nothing, and a spreadsheet cannot tell that zero from one that means free.
       rows.push(
         ['Owned parts that could not be charged at all', cost.ownedQuantityExcluded].join(','),
+      )
+    }
+    for (const entry of cost.overruns) {
+      const o = entry.overrun as NonNullable<typeof entry.overrun>
+      // Own-stock money, beside the owned block for the same reason: the yard replacing
+      // its own dead panel is not cash this job spends. Named per line, because the
+      // remedy is a purchasing decision about that part.
+      rows.push(
+        [
+          `OVERRUN — ${entry.line.catalogId} used ${o.uses} times against a life of ${o.life}; ${o.replacements} replacement${o.replacements === 1 ? '' : 's'} at list`,
+          round2(o.replacementCost),
+        ].join(','),
       )
     }
     if (cost.linesAtMinimum.length > 0) {

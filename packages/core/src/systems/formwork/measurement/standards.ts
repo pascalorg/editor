@@ -16,7 +16,7 @@ const IS_1200_5: MeasurementStandard = {
   id: 'IS_1200_5',
   label: 'IS 1200 Pt.5:1982 (India)',
   sourceRef: 'IS 1200 Part 5 : 1982 cl. 6, 6.4',
-  verification: 'verified',
+  verification: 'certified',
   openings: { kind: 'deduct-above-area', thresholdSqM: 0.4 },
   revealsMeasured: true,
 }
@@ -36,7 +36,7 @@ const NRM2: MeasurementStandard = {
   id: 'NRM2',
   label: 'RICS NRM2 §11 In-situ Concrete Works',
   sourceRef: 'NRM2 11.23 (openings), 11.24 (wall ends and soffits)',
-  verification: 'verified',
+  verification: 'certified',
   openings: { kind: 'extra-over-count', bandsSqM: [5, 10] },
   revealsMeasured: false,
   narrowWidth: {
@@ -58,7 +58,7 @@ const HKSMM4: MeasurementStandard = {
   id: 'HKSMM4',
   label: 'HKSMM4 (Hong Kong)',
   sourceRef: 'HKSMM4/4R — formwork, openings exceeding 1.00 m²',
-  verification: 'verified',
+  verification: 'certified',
   openings: { kind: 'deduct-above-area', thresholdSqM: 1 },
   revealsMeasured: true,
   narrowWidth: {
