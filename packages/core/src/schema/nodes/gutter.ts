@@ -19,6 +19,12 @@ export type GutterRun = {
   length: number
 }
 
+export type GutterEdgeExclusion = {
+  side: GutterEaveSide
+  from: number
+  to: number
+}
+
 type Point2D = readonly [number, number]
 type Interval = readonly [number, number]
 
@@ -307,9 +313,45 @@ function clipRunAgainstSegments(
     .filter((candidate) => candidate.length >= MIN_DEFAULT_GUTTER_LENGTH_M)
 }
 
+function clipRunAgainstExclusions(
+  run: GutterRun,
+  exclusions: readonly GutterEdgeExclusion[],
+): GutterRun[] {
+  let visible: Interval[] = [[0, 1]]
+  for (const exclusion of exclusions) {
+    if (exclusion.side !== run.side) continue
+    const from = Math.max(0, Math.min(1, Math.min(exclusion.from, exclusion.to)))
+    const to = Math.max(0, Math.min(1, Math.max(exclusion.from, exclusion.to)))
+    visible = subtractInterval(visible, [from, to])
+    if (visible.length === 0) break
+  }
+
+  const direction: Point2D = [Math.cos(run.rotation), -Math.sin(run.rotation)]
+  const start: Point2D = [
+    run.position[0] - direction[0] * (run.length / 2),
+    run.position[2] - direction[1] * (run.length / 2),
+  ]
+  return visible
+    .map(([from, to]) => {
+      const length = run.length * (to - from)
+      const middle = (from + to) / 2
+      return {
+        ...run,
+        position: [
+          start[0] + direction[0] * run.length * middle,
+          run.position[1],
+          start[1] + direction[1] * run.length * middle,
+        ] as [number, number, number],
+        length,
+      }
+    })
+    .filter((candidate) => candidate.length >= MIN_DEFAULT_GUTTER_LENGTH_M)
+}
+
 export function getGutterRunsForSegment(
   segment: RoofSegmentNode,
   roofSegments: readonly RoofSegmentNode[] = [],
+  exclusions: readonly GutterEdgeExclusion[] = [],
 ): GutterRun[] {
   const { minX, maxX, minZ, maxZ, outerHalfW, outerHalfD, trim } = getGutterEnvelope(segment)
   const eaveY = computeGutterEaveY(segment)
@@ -357,15 +399,17 @@ export function getGutterRunsForSegment(
     .map((side) => runs[side])
     .filter((run): run is GutterRun => run !== null && run.length >= MIN_DEFAULT_GUTTER_LENGTH_M)
 
-  if (roofSegments.length === 0) return candidates
-  return candidates.flatMap((run) => clipRunAgainstSegments(run, segment, roofSegments))
+  return candidates
+    .flatMap((run) => clipRunAgainstExclusions(run, exclusions))
+    .flatMap((run) => clipRunAgainstSegments(run, segment, roofSegments))
 }
 
 export function createDefaultGuttersForSegment(
   segment: RoofSegmentNode,
   roofSegments: readonly RoofSegmentNode[] = [],
+  exclusions: readonly GutterEdgeExclusion[] = [],
 ): GutterNode[] {
-  return getGutterRunsForSegment(segment, roofSegments).map((run) =>
+  return getGutterRunsForSegment(segment, roofSegments, exclusions).map((run) =>
     GutterNode.parse({
       name: 'Gutter',
       roofSegmentId: segment.id,

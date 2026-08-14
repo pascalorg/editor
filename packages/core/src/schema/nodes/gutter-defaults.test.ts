@@ -88,6 +88,29 @@ describe('createDefaultGuttersForSegment', () => {
     expect(frontRuns[1]?.length).toBeCloseTo(2)
   })
 
+  test('splits an eave around an attached roof-extension range', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'shed',
+      width: 8,
+      depth: 6,
+      overhang: 0.3,
+    })
+    const fullRun = getGutterRunsForSegment(segment)[0]!
+    const runs = getGutterRunsForSegment(segment, [], [{ side: '+Z', from: 0.25, to: 0.75 }])
+
+    expect(runs).toHaveLength(2)
+    expect(runs[0]?.length).toBeCloseTo(fullRun.length * 0.25)
+    expect(runs[1]?.length).toBeCloseTo(fullRun.length * 0.25)
+    expect(runs[0]?.position[0]).toBeLessThan(0)
+    expect(runs[1]?.position[0]).toBeGreaterThan(0)
+  })
+
+  test('omits an eave fully occupied by an attached roof extension', () => {
+    const segment = RoofSegmentNode.parse({ roofType: 'shed', width: 8, depth: 6 })
+
+    expect(getGutterRunsForSegment(segment, [], [{ side: '+Z', from: 0, to: 1 }])).toHaveLength(0)
+  })
+
   test('keeps flat gutters on the deck and sloped gutters at the live eave height', () => {
     expect(
       computeGutterEaveY({ roofType: 'flat', wallHeight: 0.6, overhang: 0.3, pitch: 40 }),

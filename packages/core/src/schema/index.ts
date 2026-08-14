@@ -116,6 +116,7 @@ export {
   GUTTER_EAVE_TUCK_INWARD,
   GUTTER_EAVE_TUCK_UP,
   type GutterEaveSide,
+  type GutterEdgeExclusion,
   GutterNode,
   GutterOutlet,
   type GutterRun,

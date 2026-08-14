@@ -11,4 +11,24 @@ describe('lean-to resize locks', () => {
     const high = derived?.highEdgeHeight ?? node.highEdgeHeight
     expect(high - patch.projection * Math.tan((node.pitch * Math.PI) / 180)).toBeCloseTo(low)
   })
+
+  test('clears the occupied host edge when switched to manual connection', () => {
+    const node = LeanToExtensionNode.parse({
+      connectionMode: 'auto',
+      hostRoofId: 'roof_test',
+      hostRoofSegmentId: 'rseg_test',
+      hostRoofEdge: '+Z',
+      hostRoofEdgeRange: [0.25, 0.75],
+    })
+    const patch = { connectionMode: 'manual' as const }
+
+    const derived = leanToExtensionParametrics.derive?.({ ...node, ...patch }, patch, node)
+
+    expect(derived).toMatchObject({
+      hostRoofId: undefined,
+      hostRoofSegmentId: undefined,
+      hostRoofEdge: undefined,
+      hostRoofEdgeRange: undefined,
+    })
+  })
 })

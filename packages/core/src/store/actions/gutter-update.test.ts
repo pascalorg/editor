@@ -10,6 +10,7 @@ import {
   type GutterNode as GutterNodeType,
   getDefaultGutterSide,
 } from '../../schema/nodes/gutter'
+import { LeanToExtensionNode } from '../../schema/nodes/lean-to-extension'
 import { LevelNode } from '../../schema/nodes/level'
 import { RoofNode } from '../../schema/nodes/roof'
 import { RoofSegmentNode } from '../../schema/nodes/roof-segment'
@@ -297,6 +298,80 @@ describe('roof segment default gutters', () => {
     expect(
       generatedGutters(current).filter((gutter) => getDefaultGutterSide(gutter) === '+Z'),
     ).toHaveLength(1)
+  })
+
+  test('removes host drainage while an auto-connected lean-to occupies the eave', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_main' as never,
+      roofType: 'shed',
+      width: 8,
+      depth: 6,
+      metadata: { autoGutter: true },
+    })
+    setRoofScene(segment)
+    useScene.getState().updateNode(segment.id as AnyNodeId, { width: 8 } as Partial<AnyNode>)
+
+    let current = useScene.getState().nodes[segment.id as AnyNodeId] as RoofSegmentNode
+    expect(generatedGutters(current)).toHaveLength(1)
+    expect(generatedDownspouts(current)).toHaveLength(1)
+
+    const leanTo = LeanToExtensionNode.parse({
+      id: 'leanto_attached' as never,
+      autoSpan: true,
+      connectionMode: 'auto',
+      hostRoofId: 'roof_test',
+      hostRoofSegmentId: segment.id,
+      hostRoofEdge: '+Z',
+    })
+    useScene.getState().createNode(leanTo)
+
+    current = useScene.getState().nodes[segment.id as AnyNodeId] as RoofSegmentNode
+    expect(generatedGutters(current)).toHaveLength(0)
+    expect(generatedDownspouts(current)).toHaveLength(0)
+
+    useScene.getState().deleteNode(leanTo.id as AnyNodeId)
+
+    current = useScene.getState().nodes[segment.id as AnyNodeId] as RoofSegmentNode
+    expect(generatedGutters(current)).toHaveLength(1)
+    expect(generatedDownspouts(current)).toHaveLength(1)
+  })
+
+  test('splits and restores host drainage as a partial lean-to attachment changes', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_main' as never,
+      roofType: 'shed',
+      width: 8,
+      depth: 6,
+      metadata: { autoGutter: true },
+    })
+    setRoofScene(segment)
+    useScene.getState().updateNode(segment.id as AnyNodeId, { width: 8 } as Partial<AnyNode>)
+
+    const leanTo = LeanToExtensionNode.parse({
+      id: 'leanto_partial' as never,
+      autoSpan: false,
+      connectionMode: 'auto',
+      hostRoofId: 'roof_test',
+      hostRoofSegmentId: segment.id,
+      hostRoofEdge: '+Z',
+      hostRoofEdgeRange: [0.25, 0.75],
+    })
+    useScene.getState().createNode(leanTo)
+
+    let current = useScene.getState().nodes[segment.id as AnyNodeId] as RoofSegmentNode
+    expect(generatedGutters(current)).toHaveLength(2)
+    expect(generatedDownspouts(current)).toHaveLength(2)
+
+    useScene.getState().updateNode(
+      leanTo.id as AnyNodeId,
+      {
+        connectionMode: 'manual',
+      } as Partial<AnyNode>,
+    )
+
+    current = useScene.getState().nodes[segment.id as AnyNodeId] as RoofSegmentNode
+    expect(generatedGutters(current)).toHaveLength(1)
+    expect(generatedDownspouts(current)).toHaveLength(1)
   })
 
   test('removes obsolete generated gutters and their linked downspouts on a roof-type change', () => {

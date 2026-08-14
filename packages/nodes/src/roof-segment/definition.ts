@@ -167,6 +167,7 @@ function roofSegmentWallHeightHandle(): HandleDescriptor<RoofSegmentNodeType> {
     anchor: 'min',
     shape: 'tracker',
     min: MIN_WALL_HEIGHT,
+    gridSnap: true,
     currentValue: (n) => n.wallHeight,
     apply: (_n, newValue) => ({ wallHeight: newValue }),
     placement: {
@@ -193,6 +194,7 @@ function roofSegmentPitchHandle(): HandleDescriptor<RoofSegmentNodeType> {
     axis: 'y',
     anchor: 'min',
     min: (n) => n.wallHeight,
+    gridSnap: true,
     currentValue: (n) => getPeakHeight(n),
     apply: (initial, newPeakHeight) => {
       const roofHeight = Math.max(0, newPeakHeight - initial.wallHeight)

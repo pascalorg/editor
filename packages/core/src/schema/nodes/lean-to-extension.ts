@@ -37,6 +37,7 @@ export const LeanToExtensionNode = BaseNode.extend({
   hostRoofId: RoofNode.shape.id.optional(),
   hostRoofSegmentId: z.string().optional(),
   hostRoofEdge: LeanToRoofEdge.optional(),
+  hostRoofEdgeRange: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]).optional(),
   connectionOffset: z.number().min(-1).max(1).default(0),
   connectionInset: z.number().min(0).max(10).default(0),
   matchHostRoofMaterial: z.boolean().default(true),

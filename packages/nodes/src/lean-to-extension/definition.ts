@@ -60,6 +60,7 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
           hostRoofId: connected.hostRoofId,
           hostRoofSegmentId: connected.hostRoofSegmentId,
           hostRoofEdge: connected.hostRoofEdge,
+          hostRoofEdgeRange: connected.hostRoofEdgeRange,
           connectionInset: connected.connectionInset,
           span: connected.span,
           position: connected.position,
@@ -82,6 +83,7 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
         hostRoofId: undefined,
         hostRoofSegmentId: undefined,
         hostRoofEdge: undefined,
+        hostRoofEdgeRange: undefined,
         connectionInset: 0,
       }
     },
@@ -115,7 +117,7 @@ leanToExtensionHandles.push({
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',

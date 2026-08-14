@@ -9,6 +9,7 @@ import {
   DownspoutNode as DownspoutNodeSchema,
   defaultDownspoutMetadata,
   type GutterEaveSide,
+  type GutterEdgeExclusion,
   type GutterNode,
   generateId,
   getDefaultGutterSide,
@@ -597,6 +598,38 @@ function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
   return Object.keys(data).some((key) => DEFAULT_GUTTER_REFRESH_FIELDS.has(key))
 }
 
+function getLeanToGutterExclusions(
+  nodes: Record<AnyNodeId, AnyNode>,
+  segmentId: RoofSegmentNode['id'],
+): GutterEdgeExclusion[] {
+  return Object.values(nodes).flatMap((node) => {
+    if (
+      node.type !== 'lean-to-extension' ||
+      node.connectionMode !== 'auto' ||
+      node.hostRoofSegmentId !== segmentId ||
+      !node.hostRoofEdge
+    ) {
+      return []
+    }
+    const range = node.hostRoofEdgeRange ?? [0, 1]
+    return [{ side: node.hostRoofEdge, from: range[0], to: range[1] }]
+  })
+}
+
+function addLeanToHostRoofId(
+  node: AnyNode | undefined,
+  nodes: Record<AnyNodeId, AnyNode>,
+  roofIds: Set<AnyNodeId>,
+) {
+  if (node?.type !== 'lean-to-extension' || !node.hostRoofSegmentId) return
+  const segment = nodes[node.hostRoofSegmentId as AnyNodeId]
+  const roofId =
+    segment?.type === 'roof-segment'
+      ? (segment.parentId as AnyNodeId | null)
+      : (node.hostRoofId as AnyNodeId | undefined)
+  if (roofId && nodes[roofId]?.type === 'roof') roofIds.add(roofId)
+}
+
 type DefaultGutterRefreshResult = {
   dirtyIds: AnyNodeId[]
   deletedIds: AnyNodeId[]
@@ -625,7 +658,11 @@ function refreshDefaultGuttersForSegment(
   }
 
   const desiredGutters = isAutoGutterEnabled(segment, nextNodes)
-    ? createDefaultGuttersForSegment(segment, roofSegments)
+    ? createDefaultGuttersForSegment(
+        segment,
+        roofSegments,
+        getLeanToGutterExclusions(nextNodes, segment.id),
+      )
     : []
   const desiredChildIds: AnyNodeId[] = []
   const dirtyIds: AnyNodeId[] = []
@@ -1140,11 +1177,19 @@ const createNodesActionImpl = (
 
     const refreshedRoofIds = new Set<AnyNodeId>()
     for (const { node } of ops) {
-      const segment = nextNodes[node.id as AnyNodeId]
-      if (segment?.type !== 'roof-segment') continue
-      const roofId = segment.parentId as AnyNodeId | null
-      if (roofId && refreshedRoofIds.has(roofId)) continue
-      if (roofId) refreshedRoofIds.add(roofId)
+      const created = nextNodes[node.id as AnyNodeId]
+      if (created?.type === 'roof-segment' && created.parentId) {
+        refreshedRoofIds.add(created.parentId as AnyNodeId)
+      }
+      addLeanToHostRoofId(created, nextNodes, refreshedRoofIds)
+    }
+    for (const roofId of refreshedRoofIds) {
+      const roof = nextNodes[roofId]
+      if (roof?.type !== 'roof') continue
+      const segment = (roof.children ?? [])
+        .map((childId) => nextNodes[childId as AnyNodeId])
+        .find((child): child is RoofSegmentNode => child?.type === 'roof-segment')
+      if (!segment) continue
       collectDefaultGutterRefresh(
         refreshDefaultGuttersForRoof(nextNodes, segment),
         extraNodesToMarkDirty,
@@ -1191,7 +1236,9 @@ const applyNodeChangesActionImpl = (
     for (const { id, data } of updateOps) {
       const currentNode = nextNodes[id]
       if (!currentNode) continue
+      addLeanToHostRoofId(currentNode, nextNodes, roofsToRefresh)
       const updatedNode = parseUpdatedNode(currentNode, data)
+      addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
         const oldParentId = currentNode.parentId as AnyNodeId | null
@@ -1241,6 +1288,7 @@ const applyNodeChangesActionImpl = (
       if (newNode.type === 'roof-segment' && effectiveParentId) {
         roofsToRefresh.add(effectiveParentId)
       }
+      addLeanToHostRoofId(newNode, nextNodes, roofsToRefresh)
 
       if (effectiveParentId && nextNodes[effectiveParentId]) {
         const parent = nextNodes[effectiveParentId]
@@ -1274,6 +1322,7 @@ const applyNodeChangesActionImpl = (
 
     for (const id of allIdsToDelete) {
       const node = nextNodes[id]
+      addLeanToHostRoofId(node, nextNodes, roofsToRefresh)
       if (node?.type === 'roof-segment' && node.parentId) {
         roofsToRefresh.add(node.parentId as AnyNodeId)
       }
@@ -1362,6 +1411,7 @@ const updateNodesActionImpl = (
   const parentsToUpdate = new Set<AnyNodeId>()
   const extraNodesToUpdate = new Set<AnyNodeId>()
   const extraNodesToDelete = new Set<AnyNodeId>()
+  const roofsToRefresh = new Set<AnyNodeId>()
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -1369,7 +1419,9 @@ const updateNodesActionImpl = (
     for (const { id, data } of updates) {
       const currentNode = nextNodes[id]
       if (!currentNode) continue
+      addLeanToHostRoofId(currentNode, nextNodes, roofsToRefresh)
       const updatedNode = parseUpdatedNode(currentNode, data)
+      addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
       // Handle Reparenting Logic
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
@@ -1422,6 +1474,20 @@ const updateNodesActionImpl = (
           extraNodesToDelete,
         )
       }
+    }
+
+    for (const roofId of roofsToRefresh) {
+      const roof = nextNodes[roofId]
+      if (roof?.type !== 'roof') continue
+      const segment = (roof.children ?? [])
+        .map((childId) => nextNodes[childId as AnyNodeId])
+        .find((child): child is RoofSegmentNode => child?.type === 'roof-segment')
+      if (!segment) continue
+      collectDefaultGutterRefresh(
+        refreshDefaultGuttersForRoof(nextNodes, segment),
+        extraNodesToUpdate,
+        extraNodesToDelete,
+      )
     }
 
     addActiveSceneCommitNodeIds([
@@ -1501,6 +1567,7 @@ const deleteNodesActionImpl = (
     const affectedRoofIds = new Set<AnyNodeId>()
     for (const id of allIds) {
       const node = nextNodes[id]
+      addLeanToHostRoofId(node, nextNodes, affectedRoofIds)
       if (node?.type === 'roof-segment' && node.parentId) {
         affectedRoofIds.add(node.parentId as AnyNodeId)
       }

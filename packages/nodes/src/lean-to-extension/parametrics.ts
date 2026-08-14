@@ -14,6 +14,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
             hostRoofId: undefined,
             hostRoofSegmentId: undefined,
             hostRoofEdge: undefined,
+            hostRoofEdgeRange: undefined,
             connectionInset: 0,
           }
         : {}),

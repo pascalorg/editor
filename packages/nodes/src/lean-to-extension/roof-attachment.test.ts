@@ -107,6 +107,7 @@ describe('lean-to roof-edge attachment', () => {
     const connected = applyLeanToRoofAttachment(initial.leanTo, attachment!)
     expect(connected.position[0]).toBeCloseTo(3, 5)
     expect(connected.span + connected.sideOverhang * 2).toBeCloseTo(6.6, 5)
+    expect(connected.hostRoofEdgeRange).toEqual([0, 1])
   })
 
   test('keeps manual span unchanged when auto span is disabled', () => {
@@ -123,6 +124,8 @@ describe('lean-to roof-edge attachment', () => {
     const connected = applyLeanToRoofAttachment(manualSpan, attachment!)
     expect(connected.position[0]).toBe(1.5)
     expect(connected.span).toBe(3)
+    expect(connected.hostRoofEdgeRange).toBeDefined()
+    expect(connected.hostRoofEdgeRange![1] - connected.hostRoofEdgeRange![0]).toBeCloseTo(0.5)
   })
 
   test('falls back to spanning the complete wall when no roof edge is available', () => {

@@ -152,6 +152,10 @@ export function HelperManager() {
         mode,
         tool,
         profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
+        profileOfNode: (nodeId) => {
+          const node = useScene.getState().nodes[nodeId as AnyNodeId]
+          return node ? nodeRegistry.get(node.type)?.snapProfile : undefined
+        },
         draftDirectionalOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapDraftDirectional ?? true,
       }),
     [scope, mode, tool],
@@ -207,6 +211,22 @@ export function HelperManager() {
     return (
       <ContextualHelperPanel
         hints={[{ keys: ['R / T'], label: 'Rotate the selection ±45°' }]}
+        snapContext={snapContext}
+      />
+    )
+  }
+
+  // A single-node resize arrow is still an active snapping interaction. Roof
+  // width/depth handles opt into grid snapping, so keep the mode and grid-step
+  // controls visible for the whole drag instead of falling through to idle
+  // selection hints.
+  if (activeHandleDrag) {
+    return (
+      <ContextualHelperPanel
+        hints={[
+          { keys: ['Drag'], label: 'Resize' },
+          { keys: ['Esc'], label: 'Cancel' },
+        ]}
         snapContext={snapContext}
       />
     )

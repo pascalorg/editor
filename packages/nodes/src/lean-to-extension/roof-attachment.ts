@@ -23,6 +23,7 @@ export type LeanToRoofAttachment = {
   roofId: RoofNode['id']
   roofSegmentId: RoofSegmentNode['id']
   edge: LeanToRoofEdge
+  edgeRange: readonly [number, number]
   highEdgeHeight: number
   planDistance: number
   overlap: number
@@ -166,6 +167,23 @@ function autoSpanPatch(
   }
 }
 
+function gutterEdgeRange(
+  edge: LeanToRoofEdge,
+  edgeStart: number,
+  edgeEnd: number,
+  halfSpan: number,
+): readonly [number, number] {
+  const overlapFrom = Math.max(-halfSpan, Math.min(edgeStart, edgeEnd))
+  const overlapTo = Math.min(halfSpan, Math.max(edgeStart, edgeEnd))
+  const delta = edgeEnd - edgeStart
+  if (Math.abs(delta) <= 1e-9) return [0, 1]
+  const first = (overlapFrom - edgeStart) / delta
+  const second = (overlapTo - edgeStart) / delta
+  const from = Math.max(0, Math.min(1, Math.min(first, second)))
+  const to = Math.max(0, Math.min(1, Math.max(first, second)))
+  return edge === '-Z' || edge === '+X' ? [1 - to, 1 - from] : [from, to]
+}
+
 export function resolveLeanToRoofAttachment(
   leanTo: LeanToExtensionNode,
   wall: WallNode,
@@ -244,6 +262,7 @@ export function resolveLeanToRoofAttachment(
           roofId: roof.id,
           roofSegmentId: segment.id,
           edge,
+          edgeRange: gutterEdgeRange(edge, edgeStart, edgeEnd, halfSpan),
           highEdgeHeight,
           planDistance,
           overlap,
@@ -280,6 +299,7 @@ export function applyLeanToRoofAttachment(
     hostRoofId: attachment.roofId,
     hostRoofSegmentId: attachment.roofSegmentId,
     hostRoofEdge: attachment.edge,
+    hostRoofEdgeRange: leanTo.autoSpan ? [0, 1] : [...attachment.edgeRange],
     connectionInset: attachment.planDistance,
     highEdgeHeight: attachment.highEdgeHeight,
     ...(leanTo.matchHostRoofStructure !== false
@@ -311,6 +331,7 @@ export function detachLeanToFromRoof(leanTo: LeanToExtensionNode): LeanToExtensi
     hostRoofId: undefined,
     hostRoofSegmentId: undefined,
     hostRoofEdge: undefined,
+    hostRoofEdgeRange: undefined,
     connectionInset: 0,
   }
 }
@@ -322,6 +343,7 @@ export function clearLeanToRoofAttachment(leanTo: LeanToExtensionNode): LeanToEx
     hostRoofId: undefined,
     hostRoofSegmentId: undefined,
     hostRoofEdge: undefined,
+    hostRoofEdgeRange: undefined,
     connectionInset: 0,
   }
 }

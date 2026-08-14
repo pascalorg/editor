@@ -129,6 +129,7 @@ function extensionSignature(
     leanTo.hostRoofId,
     leanTo.hostRoofSegmentId,
     leanTo.hostRoofEdge,
+    leanTo.hostRoofEdgeRange,
     leanTo.connectionOffset,
     leanTo.connectionInset,
     leanTo.matchHostRoofMaterial,
@@ -148,6 +149,7 @@ function attachmentNeedsUpdate(current: LeanToExtensionNode, next: LeanToExtensi
     current.hostRoofId !== next.hostRoofId ||
     current.hostRoofSegmentId !== next.hostRoofSegmentId ||
     current.hostRoofEdge !== next.hostRoofEdge ||
+    !sameTuple(current.hostRoofEdgeRange ?? [], next.hostRoofEdgeRange ?? []) ||
     current.connectionInset !== next.connectionInset ||
     current.highEdgeHeight !== next.highEdgeHeight ||
     current.span !== next.span ||
@@ -242,6 +244,7 @@ export function initializeLeanToExtensionSync() {
             hostRoofId: effectiveLeanTo.hostRoofId,
             hostRoofSegmentId: effectiveLeanTo.hostRoofSegmentId,
             hostRoofEdge: effectiveLeanTo.hostRoofEdge,
+            hostRoofEdgeRange: effectiveLeanTo.hostRoofEdgeRange,
             connectionInset: effectiveLeanTo.connectionInset,
             highEdgeHeight: effectiveLeanTo.highEdgeHeight,
             span: effectiveLeanTo.span,

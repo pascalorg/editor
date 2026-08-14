@@ -55,6 +55,7 @@ function downspoutLengthHandle(): HandleDescriptor<DownspoutNodeType> {
     anchor: 'max',
     shape: 'tracker',
     min: MIN_LENGTH,
+    gridSnap: true,
     currentValue: (n) => n.length,
     apply: (_n, newValue) => ({
       length: Math.max(MIN_LENGTH, newValue),
@@ -113,6 +114,7 @@ function downspoutMoveHandle(side: 'left' | 'right'): HandleDescriptor<Downspout
     axis: 'x',
     anchor: 'min',
     cursor: 'ew-resize',
+    gridSnap: true,
     overrideTarget: (n) => (n.gutterId ? (n.gutterId as AnyNodeId) : undefined),
     currentValue: (n) => readOutletOffset(n),
     apply: (n, newOffset, scene) => {
@@ -162,6 +164,7 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   schema: DownspoutNode,
   category: 'structure',
   surfaceRole: 'roof',
+  snapProfile: 'item',
 
   defaults: () => {
     const stub = DownspoutNodeSchema.parse({
