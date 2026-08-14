@@ -173,4 +173,112 @@ describe('beamMoveEndpointAffordance', () => {
     session.apply({ planPoint: [0, 0], modifiers })
     expect(session.canCommit()).toBe(false)
   })
+
+  test('cascades the dragged corner onto sibling beams sharing it, in preview and commit', () => {
+    const main = BeamNode.parse({
+      id: 'beam_cascade_main',
+      parentId: 'level_main',
+      start: [0, 0],
+      end: [4, 0],
+      width: 0.3,
+      depth: 0.6,
+      elevation: 3,
+    })
+    // Shares the dragged `end` (4,0); its far end (6,0) stays put.
+    const branch = BeamNode.parse({
+      id: 'beam_cascade_branch',
+      parentId: 'level_main',
+      start: [4, 0],
+      end: [6, 0],
+      width: 0.3,
+      depth: 0.6,
+      elevation: 3,
+    })
+    // Shares only the fixed `start` (0,0) — must NOT move.
+    const fixedSide = BeamNode.parse({
+      id: 'beam_cascade_fixed',
+      parentId: 'level_main',
+      start: [-2, 0],
+      end: [0, 0],
+      width: 0.3,
+      depth: 0.6,
+      elevation: 3,
+    })
+    useScene.setState({
+      nodes: {
+        [main.id]: main,
+        [branch.id]: branch,
+        [fixedSide.id]: fixedSide,
+      } as never,
+    })
+
+    const session = beamMoveEndpointAffordance.start({
+      node: main,
+      payload: { beamId: main.id, endpoint: 'end' },
+      nodes: useScene.getState().nodes,
+      initialPlanPoint: [4, 0],
+      gridSnapStep: 0.1,
+    })
+    session.apply({ planPoint: [5, 0], modifiers })
+
+    // Preview: main + branch carry the new junction corner as overrides;
+    // the fixed-side beam is untouched. Scene still holds originals.
+    expect(useLiveNodeOverrides.getState().get(main.id as AnyNodeId)?.end).toEqual([5, 0])
+    expect(useLiveNodeOverrides.getState().get(branch.id as AnyNodeId)?.start).toEqual([5, 0])
+    expect(useLiveNodeOverrides.getState().get(branch.id as AnyNodeId)?.end).toEqual([6, 0])
+    expect(useLiveNodeOverrides.getState().get(fixedSide.id as AnyNodeId)).toBeUndefined()
+    expect((useScene.getState().nodes[main.id] as typeof main).end).toEqual([4, 0])
+
+    expect(session.canCommit()).toBe(true)
+    session.commit?.()
+
+    // Commit: the junction lands on the scene as one tracked write.
+    expect((useScene.getState().nodes[main.id] as typeof main).end).toEqual([5, 0])
+    expect((useScene.getState().nodes[branch.id] as typeof branch).start).toEqual([5, 0])
+    expect((useScene.getState().nodes[branch.id] as typeof branch).end).toEqual([6, 0])
+    expect((useScene.getState().nodes[fixedSide.id] as typeof fixedSide).end).toEqual([0, 0])
+    expect(useLiveNodeOverrides.getState().get(main.id as AnyNodeId)).toBeUndefined()
+    expect(useLiveNodeOverrides.getState().get(branch.id as AnyNodeId)).toBeUndefined()
+  })
+
+  test('alt-detaches: the dragged beam moves and linked beams keep their endpoints', () => {
+    const main = BeamNode.parse({
+      id: 'beam_detach_main',
+      parentId: 'level_main',
+      start: [0, 0],
+      end: [4, 0],
+      width: 0.3,
+      depth: 0.6,
+      elevation: 3,
+    })
+    const branch = BeamNode.parse({
+      id: 'beam_detach_branch',
+      parentId: 'level_main',
+      start: [4, 0],
+      end: [6, 0],
+      width: 0.3,
+      depth: 0.6,
+      elevation: 3,
+    })
+    useScene.setState({
+      nodes: { [main.id]: main, [branch.id]: branch } as never,
+    })
+
+    const session = beamMoveEndpointAffordance.start({
+      node: main,
+      payload: { beamId: main.id, endpoint: 'end' },
+      nodes: useScene.getState().nodes,
+      initialPlanPoint: [4, 0],
+      gridSnapStep: 0.1,
+    })
+    session.apply({ planPoint: [5, 0], modifiers: { ...modifiers, altKey: true } })
+
+    expect(useLiveNodeOverrides.getState().get(main.id as AnyNodeId)?.end).toEqual([5, 0])
+    expect(useLiveNodeOverrides.getState().get(branch.id as AnyNodeId)).toBeUndefined()
+
+    session.commit?.()
+
+    expect((useScene.getState().nodes[main.id] as typeof main).end).toEqual([5, 0])
+    expect((useScene.getState().nodes[branch.id] as typeof branch).start).toEqual([4, 0])
+  })
 })

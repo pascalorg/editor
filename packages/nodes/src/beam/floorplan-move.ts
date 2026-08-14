@@ -14,10 +14,10 @@ type PlanPoint = [number, number]
 /**
  * 2D floor-plan body move for beam. The beam is a centreline element, so
  * a body move translates both endpoints by the same delta — length and
- * heading stay intact, exactly like the 3D `MoveBeamTool`. No linked-beam
- * cascade (beams share no endpoint relation), no support-slab election.
- * Tick publishes endpoint overrides; commit folds them into a single
- * tracked update.
+ * heading stay intact, exactly like the 3D `MoveBeamTool`. Linked beams
+ * are NOT carried by a body move (only endpoint drags cascade), and there
+ * is no support-slab election. Tick publishes endpoint overrides; commit
+ * folds them into a single tracked update.
  */
 export const beamFloorplanMoveTarget: FloorplanMoveTarget<BeamNode> = ({ node }) => {
   const beamId = node.id as AnyNodeId

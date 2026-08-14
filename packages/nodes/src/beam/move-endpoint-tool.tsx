@@ -21,11 +21,11 @@ import type { BeamNode } from './schema'
 
 /**
  * Thin React wrapper around `moveBeamEndpointDragAction` — the beam's
- * reshape tool. Same shape as the fence's endpoint tool but without the
- * alt-detach badge (beams have no linked-endpoint cascade to detach) and
- * without the ticker SFX subscription noise (the drag action's own grid
- * writes drive the cursor; the fence tool's ticker mirrors the wall's
- * legacy behaviour, which the beam doesn't need).
+ * reshape tool. Same shape as the fence's endpoint tool: sibling beams
+ * sharing the dragged corner cascade with it (Alt detaches), and there's
+ * no alt-detach badge because the action has no cascade to detach FROM
+ * the dragged beam itself. No ticker SFX subscription noise either — the
+ * drag action's own grid writes drive the cursor.
  *
  * Mounted by ToolManager via the `move-endpoint` affordance key.
  */

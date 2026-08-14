@@ -35,8 +35,8 @@ import type { BeamNode } from './schema'
  * Live-drag pattern (same as the fence mover): preview through live node
  * overrides, write the final position once on commit for a single undo
  * step. Grid snap follows the active mode; magnetic snap runs against the
- * level's walls + fences. No linked-beam cascade — beams share no endpoint
- * relation — and no support-slab election.
+ * level's walls + fences. Linked beams are NOT carried by a body move
+ * (only endpoint drags cascade), and there is no support-slab election.
  *
  * Wired via `def.affordanceTools.move`. The editor's `MoveTool`
  * dispatcher picks this up before its legacy chain.

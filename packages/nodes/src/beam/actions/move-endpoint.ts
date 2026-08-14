@@ -18,6 +18,12 @@ import {
   snapFenceDraftPoint,
   useAlignmentGuides,
 } from '@pascal-app/editor'
+import {
+  cascadeLinkedBeamUpdates,
+  collectLinkedBeams,
+  type LinkedBeamSnapshot,
+  linkedBeamsAtMovingCorner,
+} from '../cascade'
 import type { BeamNode } from '../schema'
 
 /**
@@ -26,9 +32,10 @@ import type { BeamNode } from '../schema'
  * A beam is a centreline element: dragging one endpoint reshapes the span,
  * the other endpoint stays put. Same orchestration shape as the fence's
  * action — snapshot originals, snap the pointer (grid + angle + magnetic +
- * alignment), publish the draft, single-undo dance on commit — but stripped
- * of the fence's linked-endpoint cascade and support-slab election: beams
- * don't share endpoints by relation and run no lift host.
+ * alignment), publish the draft, single-undo dance on commit — plus the
+ * linked-beam corner cascade: sibling beams sharing the dragged corner come
+ * with it, so a junction of meeting beams stays a single point (Alt detaches
+ * and leaves the neighbours put).
  *
  * Pure data — no React, no DOM. Tests drive it through `createDragSession`
  * with a stub `SceneApi` + a `useScene` fixture.
@@ -43,6 +50,9 @@ export type MoveBeamEndpointCtx = {
   originalEnd: FencePlanPoint
   originalMovingPoint: FencePlanPoint
   fixedPoint: FencePlanPoint
+  /** Sibling beams sharing either endpoint — their corners cascade with the
+   *  dragged corner unless Alt detaches. */
+  linkedBeams: LinkedBeamSnapshot[]
   /** Snap targets at the parent level — walls + fences (beams themselves
    *  are the dragged segment and aren't in the snap pipeline's union). */
   levelWalls: WallNode[]
@@ -56,6 +66,9 @@ export type MoveBeamEndpointDraft = {
   movingPoint: FencePlanPoint
   start: FencePlanPoint
   end: FencePlanPoint
+  /** Last Alt state — the apply/commit writes skip the linked-beam cascade
+   *  while Alt detaches. */
+  altDetach: boolean
 }
 
 export const moveBeamEndpointDragAction: DragAction<MoveBeamEndpointCtx, MoveBeamEndpointDraft> = {
@@ -70,14 +83,23 @@ export const moveBeamEndpointDragAction: DragAction<MoveBeamEndpointCtx, MoveBea
     const fixedPoint = endpoint === 'start' ? originalEnd : originalStart
 
     const { nodes } = useScene.getState()
+    const levelBeams: BeamNode[] = []
     const levelWalls: WallNode[] = []
     const levelFences: FenceNode[] = []
     for (const node of Object.values(nodes)) {
       if (!node) continue
       if ((node.parentId ?? null) !== parentId) continue
-      if (node.type === 'wall') levelWalls.push(node)
+      if (node.type === 'beam') levelBeams.push(node as BeamNode)
+      else if (node.type === 'wall') levelWalls.push(node)
       else if (node.type === 'fence') levelFences.push(node)
     }
+    const linkedBeams = collectLinkedBeams(
+      levelBeams,
+      beam.id as AnyNodeId,
+      parentId,
+      originalStart,
+      originalEnd,
+    )
 
     const alignCandidates = collectAlignmentAnchors(useScene.getState().nodes, beam.id)
 
@@ -88,6 +110,7 @@ export const moveBeamEndpointDragAction: DragAction<MoveBeamEndpointCtx, MoveBea
       originalEnd,
       originalMovingPoint,
       fixedPoint,
+      linkedBeams,
       levelWalls,
       levelFences,
       alignCandidates,
@@ -108,13 +131,18 @@ export const moveBeamEndpointDragAction: DragAction<MoveBeamEndpointCtx, MoveBea
 
     // Figma-style alignment — same as the fence action: nudge the dragged
     // endpoint onto another node's endpoint / midpoint axis when within
-    // threshold and publish a guide. Alt is not reserved for anything on a
-    // beam (no cascade to detach), so it behaves as plain bypass.
+    // threshold and publish a guide. The dragged beam and any beams sharing
+    // the moving corner move with the drag, so their stale anchors are
+    // excluded from the candidate pool; under Alt they stay put and rejoin
+    // it. Alt is detach, not bypass.
     let aligned = snapped
+    const staleIds: string[] = modifiers.alt
+      ? []
+      : [ctx.beamId, ...linkedBeamsAtMovingCorner(ctx.linkedBeams, ctx.originalMovingPoint)]
     if (isAlignmentGuideActive() && ctx.alignCandidates.length > 0) {
       const ar = resolveAlignment({
         moving: [{ nodeId: ctx.beamId as string, kind: 'corner', x: snapped[0], z: snapped[1] }],
-        candidates: ctx.alignCandidates,
+        candidates: ctx.alignCandidates.filter((anchor) => !staleIds.includes(anchor.nodeId)),
         threshold: ALIGNMENT_THRESHOLD_M,
       })
       if (ar.snap && isMagneticSnapActive()) {
@@ -129,12 +157,25 @@ export const moveBeamEndpointDragAction: DragAction<MoveBeamEndpointCtx, MoveBea
       movingPoint: aligned,
       start: ctx.endpoint === 'start' ? aligned : ctx.fixedPoint,
       end: ctx.endpoint === 'end' ? aligned : ctx.fixedPoint,
+      altDetach: modifiers.alt,
     }
   },
 
   apply: (draft, ctx, scene) => {
     scene.update(ctx.beamId, { start: draft.start, end: draft.end } as Partial<AnyNode>)
-    return [ctx.beamId]
+    if (draft.altDetach) return [ctx.beamId]
+    const linkedUpdates = cascadeLinkedBeamUpdates(
+      ctx.linkedBeams,
+      ctx.originalStart,
+      ctx.originalEnd,
+      ctx.endpoint,
+      draft.start,
+      draft.end,
+    )
+    for (const upd of linkedUpdates) {
+      scene.update(upd.id, { start: upd.start, end: upd.end } as Partial<AnyNode>)
+    }
+    return [ctx.beamId, ...linkedUpdates.map((upd) => upd.id)]
   },
 
   commit: (draft, ctx, scene) => {
@@ -142,11 +183,26 @@ export const moveBeamEndpointDragAction: DragAction<MoveBeamEndpointCtx, MoveBea
     if (!isSegmentLongEnough(draft.start, draft.end)) return false
 
     // Single-undo dance: revert to originals (paused history → no zundo
-    // record), resume history, then re-apply the final draft so zundo
-    // captures the entire drag as one undo step.
+    // record), resume history, then re-apply the final draft — dragged beam
+    // plus cascaded linked beams — so zundo captures the entire drag as one
+    // undo step. Under Alt the linked beams were never touched, so only the
+    // dragged beam is re-applied.
+    const linkedUpdates = draft.altDetach
+      ? []
+      : cascadeLinkedBeamUpdates(
+          ctx.linkedBeams,
+          ctx.originalStart,
+          ctx.originalEnd,
+          ctx.endpoint,
+          draft.start,
+          draft.end,
+        )
     scene.restoreAll()
     scene.resumeHistory()
     scene.update(ctx.beamId, { start: draft.start, end: draft.end } as Partial<AnyNode>)
+    for (const upd of linkedUpdates) {
+      scene.update(upd.id, { start: upd.start, end: upd.end } as Partial<AnyNode>)
+    }
     return true
   },
 
