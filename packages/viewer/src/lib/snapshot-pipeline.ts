@@ -50,6 +50,8 @@ function clampSnapshotSize(width: number, height: number): { w: number; h: numbe
 }
 
 export type SnapshotCaptureMode = 'standard' | 'viewport' | 'area'
+/** Depth captures encode near as white and far or background as black. */
+export type SnapshotCaptureChannel = 'rgb' | 'depth'
 
 export type SnapshotCropRegion = {
   x: number
@@ -84,10 +86,12 @@ export type SnapshotPipeline = {
     camera: Camera
   }) => void
   capture: ({
+    channel,
     captureMode,
     cropRegion,
     standardSize,
   }: {
+    channel?: SnapshotCaptureChannel
     captureMode?: SnapshotCaptureMode
     cropRegion?: SnapshotCropRegion
     standardSize?: SnapshotSize
@@ -215,8 +219,12 @@ export async function createSnapshotPipeline({
     // into an intermediate RT so FXAA can sample it with neighbour UV offsets.
     const aaOutput = fxaa(convertToTexture(finalOutput))
 
-    const pipeline = new RenderPipeline(renderer)
-    pipeline.outputNode = aaOutput
+    const colorPipeline = new RenderPipeline(renderer)
+    colorPipeline.outputNode = aaOutput
+    const depth = snapshotCameraDepthNode(scenePass, camera).oneMinus()
+    const depthPipeline = new RenderPipeline(renderer)
+    depthPipeline.outputNode = vec4(vec3(depth), float(1))
+    depthPipeline.outputColorTransform = false
 
     // Dedicated render target — pipeline outputs here instead of the canvas,
     // so R3F's main render loop can never overwrite our capture.
@@ -249,7 +257,7 @@ export async function createSnapshotPipeline({
         bgProjInvUniform.value.copy(captureCamera.projectionMatrixInverse)
         bgCamWorldUniform.value.copy(captureCamera.matrixWorld)
       },
-      capture: async ({ captureMode, cropRegion, standardSize }) => {
+      capture: async ({ channel = 'rgb', captureMode, cropRegion, standardSize }) => {
         const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
         const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
         const { width: captureWidth, height: captureHeight } = renderer.domElement
@@ -262,7 +270,7 @@ export async function createSnapshotPipeline({
         try {
           ;(renderer as any).setClearAlpha(0)
           renderer.setRenderTarget(renderTarget)
-          pipeline.render()
+          ;(channel === 'depth' ? depthPipeline : colorPipeline).render()
         } finally {
           renderer.setRenderTarget(null)
         }
@@ -388,7 +396,8 @@ export async function createSnapshotPipeline({
         return { blob, outW, outH }
       },
       dispose: () => {
-        pipeline.dispose()
+        colorPipeline.dispose()
+        depthPipeline.dispose()
         renderTarget.dispose()
       },
     }
@@ -399,4 +408,10 @@ export async function createSnapshotPipeline({
     )
     return null
   }
+}
+
+export function snapshotCameraDepthNode(scenePass: ReturnType<typeof pass>, camera: Camera) {
+  return camera.type === 'OrthographicCamera'
+    ? scenePass.getTextureNode('depth').r
+    : scenePass.getLinearDepthNode()
 }

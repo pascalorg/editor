@@ -141,6 +141,7 @@ export {
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
+  type SnapshotCaptureChannel,
   type SnapshotCaptureMode,
   type SnapshotCaptureResult,
   type SnapshotCropRegion,
