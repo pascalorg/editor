@@ -1,19 +1,35 @@
 import { describe, expect, test } from 'bun:test'
 import { LeanToExtensionNode } from '@pascal-app/core'
-import { Box3, type BoxGeometry, type Mesh } from 'three'
+import { resolveSurfaceColor } from '@pascal-app/viewer'
+import { Box3, type BoxGeometry, type Mesh, type MeshStandardMaterial } from 'three'
 import { buildGutterGeometry } from '../gutter/geometry'
 import { createLeanToAssembly } from './assembly'
 import { buildLeanToExtensionGeometry } from './geometry'
+import { leanToSlots } from './slots'
 
 describe('lean-to extension geometry', () => {
+  test('defaults structural framing to the untextured wall role color', () => {
+    const defaults = Object.fromEntries(leanToSlots().map((slot) => [slot.slotId, slot.default]))
+    const group = buildLeanToExtensionGeometry(LeanToExtensionNode.parse({}))
+
+    expect(defaults.ledger).toBeUndefined()
+    expect(defaults.beam).toBeUndefined()
+    expect(defaults.framing).toBeUndefined()
+    for (const name of ['lean-to-front-beam', 'lean-to-rafter-0']) {
+      const material = (group.getObjectByName(name) as Mesh).material as MeshStandardMaterial
+      expect(material.color.getHexString()).toBe(resolveSurfaceColor('wall', 'clay').slice(1))
+      expect(material.map).toBeFalsy()
+    }
+  })
+
   test('builds a placement preview with structure and a roof proxy', () => {
     const node = LeanToExtensionNode.parse({ postCount: 3, span: 4 })
     const group = buildLeanToExtensionGeometry(node)
     const names = group.children.map((child) => child.name)
     expect(names).toContain('lean-to-preview-roof')
-    expect(names).toContain('lean-to-ledger')
+    expect(names).not.toContain('lean-to-ledger')
     expect(names).toContain('lean-to-front-beam')
-    expect(names).toContain('lean-to-high-side-flashing')
+    expect(names).not.toContain('lean-to-high-side-flashing')
     expect(names.some((name) => name.includes('gutter'))).toBe(false)
     expect(names.some((name) => name.includes('downspout'))).toBe(false)
     expect(names.filter((name) => name.startsWith('lean-to-post-'))).toHaveLength(3)
@@ -32,14 +48,19 @@ describe('lean-to extension geometry', () => {
     expect(group.getObjectByName('lean-to-right-side-flashing')).toBeUndefined()
   })
 
-  test('uses configurable flashing dimensions', () => {
-    const node = LeanToExtensionNode.parse({ flashingHeight: 0.22, flashingProjection: 0.06 })
+  test('uses configurable side flashing dimensions', () => {
+    const node = LeanToExtensionNode.parse({
+      sideFlashing: true,
+      leftEndCondition: 'wall-abutment',
+      flashingHeight: 0.22,
+      flashingProjection: 0.06,
+    })
     const group = buildLeanToExtensionGeometry(node)
-    const flashing = group.getObjectByName('lean-to-high-side-flashing') as Mesh<BoxGeometry>
-    const parameters = flashing.geometry.parameters as { height: number; depth: number }
+    const flashing = group.getObjectByName('lean-to-left-side-flashing') as Mesh<BoxGeometry>
+    const parameters = flashing.geometry.parameters as { width: number; height: number }
 
     expect(parameters.height).toBeCloseTo(0.22)
-    expect(parameters.depth).toBeCloseTo(0.06)
+    expect(parameters.width).toBeCloseTo(0.06)
   })
 
   test('switches between hidden, rafter, and purlin framing', () => {
@@ -61,7 +82,7 @@ describe('lean-to extension geometry', () => {
     const group = buildLeanToExtensionGeometry(node)
     expect(group.getObjectByName('lean-to-independent-high-beam')).toBeDefined()
     expect(group.getObjectByName('lean-to-high-post-0')).toBeDefined()
-    expect(group.getObjectByName('lean-to-high-side-flashing')?.userData.slotId).toBe('flashing')
+    expect(group.getObjectByName('lean-to-high-side-flashing')).toBeUndefined()
     expect(group.getObjectByName('lean-to-front-beam')?.userData.slotId).toBe('beam')
   })
 

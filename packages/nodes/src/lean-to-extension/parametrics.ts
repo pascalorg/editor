@@ -93,7 +93,6 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'enum',
           options: ['wall-ledger', 'independent-high-beam'],
         },
-        { key: 'ledgerVisible', kind: 'boolean' },
         {
           key: 'ledgerVerticalOffset',
           kind: 'number',
@@ -101,7 +100,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           min: -1,
           max: 1,
           step: 0.01,
-          visibleIf: (node) => node.ledgerVisible || node.highSideMode === 'independent-high-beam',
+          visibleIf: (node) => node.highSideMode === 'independent-high-beam',
         },
         {
           key: 'ledgerDepth',
@@ -110,6 +109,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           min: 0.03,
           max: 0.5,
           step: 0.01,
+          visibleIf: (node) => node.highSideMode === 'independent-high-beam',
         },
         {
           key: 'ledgerHeight',
@@ -118,6 +118,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           min: 0.05,
           max: 0.8,
           step: 0.01,
+          visibleIf: (node) => node.highSideMode === 'independent-high-beam',
         },
         { key: 'autoSpan', kind: 'boolean' },
         {
@@ -232,7 +233,6 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'enum',
           options: ['generic', 'shingle', 'metal-panel'],
         },
-        { key: 'highSideFlashing', kind: 'boolean' },
         { key: 'sideFlashing', kind: 'boolean' },
         {
           key: 'flashingProjection',
@@ -241,7 +241,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           min: 0.01,
           max: 0.5,
           step: 0.005,
-          visibleIf: (node) => node.highSideFlashing || node.sideFlashing,
+          visibleIf: (node) => node.sideFlashing,
         },
         {
           key: 'flashingHeight',
@@ -250,7 +250,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           min: 0.03,
           max: 0.5,
           step: 0.01,
-          visibleIf: (node) => node.highSideFlashing || node.sideFlashing,
+          visibleIf: (node) => node.sideFlashing,
         },
         {
           key: 'leftEndCondition',

@@ -2,11 +2,8 @@ import type { SlotDeclaration } from '@pascal-app/core'
 
 export type LeanToSlotId = 'flashing' | 'ledger' | 'beam' | 'framing' | 'posts' | 'footings'
 
-export const LEAN_TO_SLOT_DEFAULTS: Record<LeanToSlotId, string> = {
+export const LEAN_TO_SLOT_DEFAULTS: Partial<Record<LeanToSlotId, string>> = {
   flashing: 'library:metal-steel',
-  ledger: 'library:wood-woodplank48',
-  beam: 'library:wood-woodplank48',
-  framing: 'library:wood-woodplank48',
   posts: 'library:concrete-plaster',
   footings: 'library:concrete-plaster',
 }

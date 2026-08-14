@@ -162,6 +162,7 @@ const treeNodeByType: Record<
   wall: WallTreeNode,
   fence: FenceTreeNode,
   gutter: GutterTreeNode,
+  'lean-to-extension': RegistryTreeNode,
   measurement: RegistryTreeNode,
   'ridge-vent': RegistryTreeNode,
   'turbine-vent': RegistryTreeNode,
@@ -178,6 +179,10 @@ const treeNodeByType: Record<
     nodeId: AnyNodeId
   }>,
   item: ItemTreeNode,
+}
+
+export function hasTreeNodeComponent(nodeType: string): boolean {
+  return treeNodeByType[nodeType] !== undefined
 }
 
 export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {

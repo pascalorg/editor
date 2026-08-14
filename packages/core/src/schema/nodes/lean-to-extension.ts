@@ -37,14 +37,12 @@ export const LeanToExtensionNode = BaseNode.extend({
   resizeLock: LeanToResizeLock.default('preserve-high-edge'),
   leftEndCondition: LeanToEndCondition.default('open'),
   rightEndCondition: LeanToEndCondition.default('open'),
-  highSideFlashing: z.boolean().default(true),
   sideFlashing: z.boolean().default(true),
   flashingProjection: z.number().min(0.01).max(0.5).default(0.025),
   flashingHeight: z.number().min(0.03).max(0.5).default(0.14),
   slots: z.record(z.string(), z.string()).optional(),
 
   highSideMode: LeanToHighSideMode.default('wall-ledger'),
-  ledgerVisible: z.boolean().default(true),
   ledgerVerticalOffset: z.number().min(-1).max(1).default(0),
   lowBeamInset: z.number().min(0).max(2).default(0),
 

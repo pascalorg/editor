@@ -195,7 +195,6 @@ function extensionSignature(
     leanTo.postBracing,
     leanTo.footingStyle,
     leanTo.highSideMode,
-    leanTo.ledgerVisible,
     leanTo.ledgerVerticalOffset,
     leanTo.lowBeamInset,
     leanTo.slots,

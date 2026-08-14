@@ -29,7 +29,6 @@ export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
     node.ledgerDepth,
     node.ledgerHeight,
     node.highSideMode,
-    node.ledgerVisible,
     node.ledgerVerticalOffset,
     node.lowBeamInset,
     node.rafterWidth,
@@ -44,7 +43,6 @@ export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
     node.postInset,
     node.postBracing,
     node.footingStyle,
-    node.highSideFlashing,
     node.sideFlashing,
     node.flashingProjection,
     node.flashingHeight,
@@ -101,9 +99,12 @@ function resolveLeanToSlotMaterial(
 ): Material {
   if (!textures) return createSurfaceRoleMaterial(role, colorPreset, FrontSide, sceneTheme)
   const ref = node.slots?.[slotId]
+  const slotDefault = LEAN_TO_SLOT_DEFAULTS[slotId]
   return (
     (ref ? resolveMaterialRef(ref, ctx?.materials, shading) : null) ??
-    resolveSlotDefaultMaterial(LEAN_TO_SLOT_DEFAULTS[slotId], shading)
+    (slotDefault
+      ? resolveSlotDefaultMaterial(slotDefault, shading)
+      : createSurfaceRoleMaterial(role, colorPreset, FrontSide, sceneTheme))
   )
 }
 
@@ -134,7 +135,7 @@ export function buildLeanToExtensionGeometry(
     ctx,
     shading,
     textures,
-    'joinery',
+    'wall',
     colorPreset,
     sceneTheme,
   )
@@ -144,7 +145,7 @@ export function buildLeanToExtensionGeometry(
     ctx,
     shading,
     textures,
-    'joinery',
+    'wall',
     colorPreset,
     sceneTheme,
   )
@@ -154,7 +155,7 @@ export function buildLeanToExtensionGeometry(
     ctx,
     shading,
     textures,
-    'joinery',
+    'wall',
     colorPreset,
     sceneTheme,
   )
@@ -193,12 +194,9 @@ export function buildLeanToExtensionGeometry(
     })
   }
 
-  if (node.ledgerVisible || node.highSideMode === 'independent-high-beam') {
+  if (node.highSideMode === 'independent-high-beam') {
     addBox(group, {
-      name:
-        node.highSideMode === 'independent-high-beam'
-          ? 'lean-to-independent-high-beam'
-          : 'lean-to-ledger',
+      name: 'lean-to-independent-high-beam',
       size: [layout.span, node.ledgerHeight, node.ledgerDepth],
       position: [
         0,
@@ -213,23 +211,6 @@ export function buildLeanToExtensionGeometry(
       sceneTheme,
       material: ledgerMaterial,
       slotId: 'ledger',
-    })
-  }
-
-  if (node.highSideFlashing) {
-    addBox(group, {
-      name: 'lean-to-high-side-flashing',
-      size: [layout.span, node.flashingHeight, node.flashingProjection],
-      position: [
-        0,
-        layout.highEdgeHeight + node.flashingHeight / 2 - 0.015,
-        -node.flashingProjection / 2,
-      ],
-      role: 'roof',
-      colorPreset,
-      sceneTheme,
-      material: flashingMaterial,
-      slotId: 'flashing',
     })
   }
 

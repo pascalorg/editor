@@ -119,7 +119,7 @@ leanToExtensionHandles.push({
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 5,
+  schemaVersion: 6,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',
