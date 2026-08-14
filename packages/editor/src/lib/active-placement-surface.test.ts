@@ -23,7 +23,7 @@ describe('active placement surface', () => {
     expect(getPlacementSurface()?.projection).toBe('surface')
   })
 
-  test('orients the grid to every slope accepted as a wall-like custom face', () => {
+  test('orients the grid to a sloped placement surface', () => {
     expect(usesOrientedPlacementPlane(new Vector3(0, 0.6, 0.8))).toBe(true)
   })
 })

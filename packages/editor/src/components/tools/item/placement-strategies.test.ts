@@ -55,6 +55,60 @@ function floorItemContext(): PlacementContext {
   }
 }
 
+function wallItemContext(): PlacementContext {
+  return {
+    ...ceilingContext(),
+    asset: {
+      id: 'wall-light',
+      category: 'lighting',
+      name: 'Wall light',
+      thumbnail: '/wall-light.png',
+      src: '/wall-light.glb',
+      dimensions: [0.5, 0.5, 0.25],
+      attachTo: 'wall-side',
+    },
+  }
+}
+
+function frontFaceEvent(slopeTopEdge = false): CustomMeshEvent {
+  const box = CustomMeshNode.parse({ id: CUSTOM_MESH_ID, parentId: LEVEL_ID })
+  const node = slopeTopEdge
+    ? {
+        ...box,
+        topology: {
+          ...box.topology,
+          vertices: box.topology.vertices.map((vertex) =>
+            vertex.id === 'v4' || vertex.id === 'v5'
+              ? {
+                  ...vertex,
+                  position: [vertex.position[0], vertex.position[1], 0] satisfies [
+                    number,
+                    number,
+                    number,
+                  ],
+                }
+              : vertex,
+          ),
+        },
+      }
+    : box
+  const geometry = new BufferGeometry()
+  geometry.userData.customMeshFaces = [{ faceId: 'f-front', start: 0, count: 6 }]
+  const object = new Mesh(geometry, new MeshBasicMaterial())
+  object.updateMatrixWorld(true)
+
+  return {
+    node,
+    object,
+    faceIndex: 0,
+    position: [0, 1.2, slopeTopEdge ? -0.5 : -1],
+    localPosition: [0, 1.2, slopeTopEdge ? -0.5 : -1],
+    normal: [0, 0, -1],
+    stopPropagation: () => {},
+    nativeEvent: {} as CustomMeshEvent['nativeEvent'],
+  }
+}
+
 function bottomFaceEvent(): CustomMeshEvent {
   const node = CustomMeshNode.parse({ id: CUSTOM_MESH_ID, parentId: LEVEL_ID })
   const geometry = new BufferGeometry()
@@ -94,6 +148,14 @@ function topFaceEvent(): CustomMeshEvent {
 }
 
 describe('customMeshFaceStrategy', () => {
+  test('hosts a wall-mounted item on a vertical custom-mesh face', () => {
+    expect(customMeshFaceStrategy.enter(wallItemContext(), frontFaceEvent())).not.toBeNull()
+  })
+
+  test('does not host a wall-mounted item after the custom-mesh face is edited into a slope', () => {
+    expect(customMeshFaceStrategy.enter(wallItemContext(), frontFaceEvent(true))).toBeNull()
+  })
+
   test('hosts a ceiling item on a downward-facing custom-mesh face', () => {
     const result = customMeshFaceStrategy.enter(ceilingContext(), bottomFaceEvent())
 

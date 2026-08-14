@@ -57,6 +57,7 @@ import type {
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 const UPWARD_SURFACE_NORMAL_MIN_Y = 0.75
 const CUSTOM_MESH_HORIZONTAL_NORMAL_MIN_Y = 0.95
+const CUSTOM_MESH_VERTICAL_NORMAL_MAX_Y = 0.05
 const CUSTOM_MESH_FLOOR_ROTATION_X = Math.PI / 2
 const CUSTOM_MESH_CEILING_ROTATION_X = -Math.PI / 2
 
@@ -650,7 +651,7 @@ function customMeshFaceAcceptsAttachment(
   if (!attachTo) return normalY >= CUSTOM_MESH_HORIZONTAL_NORMAL_MIN_Y
   if (attachTo === 'ceiling') return normalY <= -CUSTOM_MESH_HORIZONTAL_NORMAL_MIN_Y
   if (attachTo === 'wall' || attachTo === 'wall-side') {
-    return Math.abs(normalY) < CUSTOM_MESH_HORIZONTAL_NORMAL_MIN_Y
+    return Math.abs(normalY) <= CUSTOM_MESH_VERTICAL_NORMAL_MAX_Y
   }
   return false
 }
