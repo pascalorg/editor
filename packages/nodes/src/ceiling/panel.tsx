@@ -55,7 +55,7 @@ export function CeilingPanel() {
     const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
     return parent?.type === 'level'
       ? getCeilingClampBound(parent.id, s.nodes, node?.polygon ?? [])
-      : 6
+      : Number.POSITIVE_INFINITY
   })
 
   // Effective height: the stored custom height, or — for follows-mode
@@ -271,16 +271,34 @@ export function CeilingPanel() {
         )}
 
         {/* Presets write an explicit height (clamped to the bound), so
-            clicking one on a follows-mode ceiling switches it to custom. */}
+            clicking one on a follows-mode ceiling switches it to custom.
+            A preset taller than the storey would clamp silently and look
+            like a dead button — disable it and name the real gate instead. */}
         <div className="mt-2 grid grid-cols-3 gap-1.5 px-1 pb-1">
-          {heightPresets.map((preset) => (
-            <ActionButton
-              key={preset.label}
-              label={preset.label}
-              onClick={() => handleHeightChange(preset.height)}
-            />
-          ))}
+          {heightPresets.map((preset) => {
+            const fits = preset.height <= maxHeight
+            return (
+              <ActionButton
+                className={fits ? undefined : 'cursor-not-allowed opacity-40'}
+                disabled={!fits}
+                key={preset.label}
+                label={preset.label}
+                onClick={() => handleHeightChange(preset.height)}
+                title={
+                  fits
+                    ? undefined
+                    : `Taller than this level (${formatLinearMeasurement(maxHeight, unit, metricNotation)} available). Raise the level height first.`
+                }
+              />
+            )
+          })}
         </div>
+        {Number.isFinite(maxHeight) && (
+          <div className="px-1 pb-1 text-[11px] text-muted-foreground">
+            Limited by the level to {formatLinearMeasurement(maxHeight, unit, metricNotation)} —
+            raise the level height for a taller ceiling.
+          </div>
+        )}
       </PanelSection>
 
       <PanelSection title="Info">
