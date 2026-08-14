@@ -1,7 +1,90 @@
-import type { NodeDefinition } from '@pascal-app/core/registry'
+import type {
+  BeamNode as BeamNodeType,
+  EditorApi,
+  HandleDescriptor,
+  NodeDefinition,
+  SceneApi,
+} from '@pascal-app/core'
+import { buildBeamFloorplan } from './floorplan'
+import { beamMoveEndpointAffordance } from './floorplan-affordances'
+import { beamFloorplanMoveTarget } from './floorplan-move'
 import { buildBeamBody } from './geometry'
 import { beamParametrics } from './parametrics'
 import { BeamNode } from './schema'
+
+const SIDE_HANDLE_OFFSET = 0.27
+const SIDE_HANDLE_MIN_OFFSET = 0.33
+
+function beamMidpointFrame(n: BeamNodeType): {
+  midX: number
+  midZ: number
+  normalX: number
+  normalZ: number
+} {
+  const dx = n.end[0] - n.start[0]
+  const dz = n.end[1] - n.start[1]
+  const len = Math.max(Math.hypot(dx, dz), 1e-6)
+  return {
+    midX: (n.start[0] + n.end[0]) / 2,
+    midZ: (n.start[1] + n.end[1]) / 2,
+    normalX: -dz / len,
+    normalZ: dx / len,
+  }
+}
+
+// Side-move arrows: click to hand the beam to its move tool. Positioned
+// past the beam's width at the mid-height of the body (the soffit at
+// `elevation` up to `elevation + depth`), so the arrows read against the
+// element they move.
+function beamSideMoveHandle(side: 'front' | 'back'): HandleDescriptor<BeamNodeType> {
+  const sign = side === 'front' ? 1 : -1
+  return {
+    kind: 'tap-action',
+    onActivate: (node: BeamNodeType, _scene: SceneApi, editor: EditorApi) =>
+      editor.engageMove(node),
+    placement: {
+      position: (n: BeamNodeType) => {
+        const { midX, midZ, normalX, normalZ } = beamMidpointFrame(n)
+        const offset = Math.max((n.width ?? 0.3) / 2 + SIDE_HANDLE_OFFSET, SIDE_HANDLE_MIN_OFFSET)
+        const handleY = (n.elevation ?? 0) + (n.depth ?? 0.6) / 2
+        return [midX + sign * normalX * offset, handleY, midZ + sign * normalZ * offset]
+      },
+      rotationY: (n: BeamNodeType) => {
+        const { normalX, normalZ } = beamMidpointFrame(n)
+        return Math.atan2(-sign * normalZ, sign * normalX)
+      },
+    },
+    cursor: 'ew-resize',
+  }
+}
+
+// Corner picker — dashed vertical leader + billboarded hex disc at the
+// endpoint. Tap engages the endpoint-move flow (sister to the wall/fence
+// pickers). The leader spans the beam's depth so the dashes reach the
+// element being reshaped.
+function beamCornerPicker(endpoint: 'start' | 'end'): HandleDescriptor<BeamNodeType> {
+  return {
+    kind: 'tap-action',
+    shape: 'corner-picker',
+    cursor: 'move',
+    nodeHeight: (n: BeamNodeType) => n.depth ?? 0.6,
+    onActivate: (node: BeamNodeType, _scene: SceneApi, editor: EditorApi) =>
+      editor.engageEndpointMove(node, endpoint),
+    placement: {
+      position: (n: BeamNodeType) => {
+        const corner = endpoint === 'start' ? n.start : n.end
+        return [corner[0], n.elevation ?? 0, corner[1]]
+      },
+    },
+  }
+}
+
+const beamHandles = (): HandleDescriptor<BeamNodeType>[] => [
+  beamSideMoveHandle('front'),
+  beamSideMoveHandle('back'),
+  beamCornerPicker('start'),
+  beamCornerPicker('end'),
+]
 
 /**
  * A horizontal castable element — two side shutters tied across the width, a
@@ -35,20 +118,17 @@ export const beamDefinition: NodeDefinition<typeof BeamNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
-    // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
-    // mode-driven snapping the overhaul standardised). Endpoint drag would be
-    // nicer than translate-and-re-draw, but the beam is a centreline element
-    // with no bespoke mover yet, and the generic move is what makes a placed
-    // beam adjustable at all.
-    movable: {
-      axes: ['x', 'z'],
-      gridSnap: true,
-    },
+    // No generic `movable`: the beam body is built from world `start` /
+    // `end`, so the generic translate-on-XZ mover (which writes
+    // `position`) would move nothing. The bespoke `affordanceTools.move`
+    // translates both endpoints instead, keeping the centreline parallel.
   },
 
   geometry: buildBeamBody,
 
   parametrics: beamParametrics,
+
+  handles: beamHandles,
 
   // Two-click centreline draw, the wall convention a beam runs on.
   tool: () => import('./tool'),
@@ -57,6 +137,24 @@ export const beamDefinition: NodeDefinition<typeof BeamNode> = {
     { key: 'Left click again', label: 'End beam' },
     { key: 'Esc', label: 'Cancel' },
   ],
+
+  // 2D floor-plan rendering: a width band along the centreline.
+  floorplan: buildBeamFloorplan,
+  // 2D endpoint drag — sister to `actions/move-endpoint.ts`, driven from
+  // SVG pointer events instead of R3F grid events.
+  floorplanAffordances: {
+    'move-endpoint': beamMoveEndpointAffordance,
+  },
+  // 2D body move — the side arrows the floor-plan builder emits at the
+  // midpoint route here (translate both endpoints by the same delta).
+  floorplanMoveTarget: beamFloorplanMoveTarget,
+
+  // 3D affordances: bespoke whole-move (start/end translate) + endpoint
+  // reshape via the corner pickers.
+  affordanceTools: {
+    move: () => import('./move-tool'),
+    'move-endpoint': () => import('./move-endpoint-tool'),
+  },
 
   presentation: {
     label: 'Beam',

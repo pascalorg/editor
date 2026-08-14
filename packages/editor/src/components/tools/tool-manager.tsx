@@ -1,6 +1,7 @@
 import {
   type AnyNodeDefinition,
   type AnyNodeId,
+  type BeamNode,
   type BuildingNode,
   type CeilingNode,
   type FenceNode,
@@ -115,9 +116,11 @@ export const ToolManager: React.FC = () => {
   // re-fires the tool's setup effect (endpoint drag would loop / freeze).
   const endpointTarget = useMemo(() => {
     if (!(endpointReshape && reshapingNode)) return null
-    return reshapingNode.type === 'fence'
-      ? { fence: reshapingNode as FenceNode, endpoint: endpointReshape.endpoint }
-      : { wall: reshapingNode as WallNode, endpoint: endpointReshape.endpoint }
+    if (reshapingNode.type === 'fence')
+      return { fence: reshapingNode as FenceNode, endpoint: endpointReshape.endpoint }
+    if (reshapingNode.type === 'beam')
+      return { beam: reshapingNode as BeamNode, endpoint: endpointReshape.endpoint }
+    return { wall: reshapingNode as WallNode, endpoint: endpointReshape.endpoint }
   }, [endpointReshape, reshapingNode])
   const controlPointTarget = useMemo(() => {
     if (!(controlPointReshape && reshapingNode?.type === 'fence')) return null
