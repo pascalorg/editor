@@ -1,4 +1,3 @@
-import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { mintHostPanel, mintPlugin } from '@mint/pascal-plugin'
 import {
   type AnyNodeDefinition,
@@ -10,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
+import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
