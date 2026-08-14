@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   collectAlignmentAnchors,
+  computeStairSegmentTransforms,
   createSurfaceOpeningPreviewController,
   type EventSuffix,
   emitter,
@@ -11,7 +12,8 @@ import {
   resolveAlignment,
   resolveSupportSlabPatch,
   StairNode,
-  StairSegmentNode,
+  type StairSegmentNode,
+  type StairShape,
   syncAutoStairOpenings,
   useScene,
 } from '@pascal-app/core'
@@ -45,10 +47,7 @@ import {
   DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
   DEFAULT_SPIRAL_TOP_LANDING_DEPTH,
   DEFAULT_SPIRAL_TOP_LANDING_MODE,
-  DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
-  DEFAULT_STAIR_HEIGHT,
-  DEFAULT_STAIR_LENGTH,
   DEFAULT_STAIR_OPENING_OFFSET,
   DEFAULT_STAIR_RAILING_HEIGHT,
   DEFAULT_STAIR_RAILING_MODE,
@@ -57,6 +56,7 @@ import {
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './stair-defaults'
+import { createStairShapeSegments, resolveStairShape } from './stair-shape'
 
 const GRID_OFFSET = 0.02
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
@@ -78,55 +78,77 @@ const CLICK_TRIGGER_KINDS = [
   'stair-segment',
 ] as const
 
+type StairPreviewPart = {
+  geometry: THREE.BufferGeometry
+  position: [number, number, number]
+  rotationY: number
+}
+
 /**
- * Generates the step-profile geometry for the ghost preview.
+ * Step-profile geometry for one flight of the ghost preview.
  * Same algorithm as StairSystem's generateStairSegmentGeometry.
  */
-function createStairPreviewGeometry(): THREE.BufferGeometry {
-  const riserHeight = DEFAULT_STAIR_HEIGHT / DEFAULT_STAIR_STEP_COUNT
-  const treadDepth = DEFAULT_STAIR_LENGTH / DEFAULT_STAIR_STEP_COUNT
+function createFlightPreviewGeometry(segment: StairSegmentNode): THREE.BufferGeometry {
+  const steps = Math.max(1, segment.stepCount)
+  const riserHeight = segment.height / steps
+  const treadDepth = segment.length / steps
 
   const shape = new THREE.Shape()
   shape.moveTo(0, 0)
 
-  for (let i = 0; i < DEFAULT_STAIR_STEP_COUNT; i++) {
+  for (let i = 0; i < steps; i++) {
     shape.lineTo(i * treadDepth, (i + 1) * riserHeight)
     shape.lineTo((i + 1) * treadDepth, (i + 1) * riserHeight)
   }
 
   // Fill to floor (absoluteHeight = 0)
-  shape.lineTo(DEFAULT_STAIR_LENGTH, 0)
+  shape.lineTo(segment.length, 0)
   shape.lineTo(0, 0)
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
     steps: 1,
-    depth: DEFAULT_STAIR_WIDTH,
+    depth: segment.width,
     bevelEnabled: false,
   })
 
   // Rotate so extrusion is along X (width), shape profile in XZ plane
   const matrix = new THREE.Matrix4()
   matrix.makeRotationY(-Math.PI / 2)
-  matrix.setPosition(DEFAULT_STAIR_WIDTH / 2, 0, 0)
+  matrix.setPosition(segment.width / 2, 0, 0)
   geometry.applyMatrix4(matrix)
 
   return geometry
 }
 
+/** Landing slab for the ghost preview — a plain deck hanging below the
+ * elevation its flight arrives at, which is all the ghost has to read as. */
+function createLandingPreviewGeometry(segment: StairSegmentNode): THREE.BufferGeometry {
+  const thickness = Math.max(segment.thickness, 0.01)
+  const geometry = new THREE.BoxGeometry(segment.width, thickness, segment.length)
+  geometry.translate(0, -thickness / 2, segment.length / 2)
+  return geometry
+}
+
 /**
- * Creates a default straight stair segment.
+ * Ghost preview for the armed shape. Each segment is drawn in its own local
+ * frame and placed by the same cumulative chain transform the renderer and
+ * the slab-opening sync use, so an L / U ghost turns exactly where the
+ * committed stair will.
  */
-function createDefaultStairSegment() {
-  return StairSegmentNode.parse({
-    segmentType: 'stair',
-    width: DEFAULT_STAIR_WIDTH,
-    length: DEFAULT_STAIR_LENGTH,
-    height: DEFAULT_STAIR_HEIGHT,
-    stepCount: DEFAULT_STAIR_STEP_COUNT,
-    attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
-    fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
-    thickness: DEFAULT_STAIR_THICKNESS,
-    position: [0, 0, 0],
+function createStairPreviewParts(shape: StairShape): StairPreviewPart[] {
+  const segments = createStairShapeSegments(shape)
+  const transforms = computeStairSegmentTransforms(segments)
+
+  return segments.map((segment, index) => {
+    const transform = transforms[index]!
+    return {
+      geometry:
+        segment.segmentType === 'landing'
+          ? createLandingPreviewGeometry(segment)
+          : createFlightPreviewGeometry(segment),
+      position: transform.position,
+      rotationY: transform.rotation,
+    }
   })
 }
 
@@ -136,14 +158,14 @@ function createDefaultStairNode({
   nextLevelId,
   position,
   rotation,
-  segmentId,
+  segmentIds,
 }: {
   name: string
   levelId: LevelNode['id']
   nextLevelId: LevelNode['id']
   position: [number, number, number]
   rotation: number
-  segmentId: StairSegmentNode['id']
+  segmentIds: StairSegmentNode['id'][]
 }) {
   return StairNode.parse({
     name,
@@ -166,15 +188,17 @@ function createDefaultStairNode({
     showStepSupports: DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
     railingHeight: DEFAULT_STAIR_RAILING_HEIGHT,
     railingMode: DEFAULT_STAIR_RAILING_MODE,
-    children: [segmentId],
+    children: segmentIds,
   })
 }
 
 /**
- * Creates a stair group with one default stair segment at the given position/rotation.
+ * Creates a stair group with the armed shape's segment chain at the given
+ * position/rotation.
  */
 function commitStairPlacement(
   levelId: LevelNode['id'],
+  shape: StairShape,
   position: [number, number, number],
   rotation: number,
   supportElevationCap: number | null,
@@ -189,7 +213,7 @@ function commitStairPlacement(
 
   const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
   const name = `Staircase ${stairCount + 1}`
-  const segment = createDefaultStairSegment()
+  const segments = createStairShapeSegments(shape)
 
   const destinationPlan = resolveStairDestinationLevel({
     createMissing: true,
@@ -205,14 +229,16 @@ function commitStairPlacement(
       nextLevelId,
       position,
       rotation,
-      segmentId: segment.id,
+      segmentIds: segments.map((segment) => segment.id),
     }),
     parentId: placementLevelId,
   })
   const prospectiveNodes = {
     ...nodes,
     [stair.id]: stair,
-    [segment.id]: { ...segment, parentId: stair.id },
+    ...Object.fromEntries(
+      segments.map((segment) => [segment.id, { ...segment, parentId: stair.id }]),
+    ),
   } as Record<string, AnyNode>
   const committedStair = StairNode.parse({
     ...stair,
@@ -230,7 +256,7 @@ function commitStairPlacement(
   createNodes([
     ...levelCreateOps,
     { node: committedStair, parentId: placementLevelId },
-    { node: segment, parentId: committedStair.id },
+    ...segments.map((segment) => ({ node: segment, parentId: committedStair.id })),
   ])
 
   sfxEmitter.emit('sfx:structure-build')
@@ -246,8 +272,10 @@ export const StairTool: React.FC = () => {
   const supportCapRef = useRef<number | null>(null)
   const lastCanonicalPositionRef = useRef<[number, number, number] | null>(null)
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  // Straight / L / U, staged into `toolDefaults.stair` by the build palette.
+  const shape = useEditor((state) => resolveStairShape(state.toolDefaults.stair))
 
-  const previewGeometry = useMemo(() => createStairPreviewGeometry(), [])
+  const previewParts = useMemo(() => createStairPreviewParts(shape), [shape])
 
   useEffect(() => {
     if (!currentLevelId) return
@@ -256,6 +284,10 @@ export const StairTool: React.FC = () => {
     // Refuses the duplicate commit triggers a single physical click produces
     // — see `stair-click-guard.ts`. Fresh per armed session.
     const commitGate = createStairCommitGate()
+
+    // The facing triangle marks the entry flight, whose run is only a fraction
+    // of the total once the shape turns.
+    const entryRunLength = createStairShapeSegments(shape)[0]!.length
 
     // Reset rotation when tool activates
     rotationRef.current = 0
@@ -279,14 +311,14 @@ export const StairTool: React.FC = () => {
         nodes,
       })
       const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
-      const segment = createDefaultStairSegment()
+      const segments = createStairShapeSegments(shape)
       const stair = createDefaultStairNode({
         name: 'Staircase Preview',
         levelId: placementLevelId,
         nextLevelId,
         position,
         rotation,
-        segmentId: segment.id,
+        segmentIds: segments.map((segment) => segment.id),
       })
       const previewNodes = {
         ...nodes,
@@ -294,10 +326,12 @@ export const StairTool: React.FC = () => {
           ? { [destinationPlan.createdLevel.id]: destinationPlan.createdLevel }
           : {}),
         [stair.id]: { ...stair, parentId: placementLevelId },
-        [segment.id]: { ...segment, parentId: stair.id },
+        ...Object.fromEntries(
+          segments.map((segment) => [segment.id, { ...segment, parentId: stair.id }]),
+        ),
       } as Record<string, AnyNode>
 
-      return { placementLevelId, previewNodes, stair }
+      return { placementLevelId, previewNodes, segments, stair }
     }
 
     // The preview rebuild (full-scene copy + destination-level resolution +
@@ -350,8 +384,8 @@ export const StairTool: React.FC = () => {
       useFacingPose.getState().set({
         position: visualPosition,
         rotationY: rotation,
-        depth: DEFAULT_STAIR_LENGTH,
-        center: [0, DEFAULT_STAIR_LENGTH / 2],
+        depth: entryRunLength,
+        center: [0, entryRunLength / 2],
         reversed: true,
       })
 
@@ -481,7 +515,13 @@ export const StairTool: React.FC = () => {
       const position = resolveStairPosition(event)
       if (!position) return
 
-      commitStairPlacement(currentLevelId, position, rotationRef.current, supportCapRef.current)
+      commitStairPlacement(
+        currentLevelId,
+        shape,
+        position,
+        rotationRef.current,
+        supportCapRef.current,
+      )
       openingPreview.clear()
       // Commit cleared the opening preview, so force the next hover (even on the
       // same cell) to rebuild rather than dedupe against the just-placed key.
@@ -559,19 +599,28 @@ export const StairTool: React.FC = () => {
       useFacingPose.getState().clear()
       useStairBuildPreview.getState().reset()
     }
-  }, [currentLevelId])
+  }, [currentLevelId, shape])
 
   return (
     <group>
       <CursorSphere ref={cursorRef} />
 
-      {/* 3D ghost preview — position/rotation updated imperatively. The
-          forward-facing triangle is drawn by the editor-side overlay from the
-          pose published in `applyDraftPreview`. */}
+      {/* 3D ghost preview — the group's position/rotation are updated
+          imperatively; each part carries the armed shape's chain transform in
+          the group's local frame. The forward-facing triangle is drawn by the
+          editor-side overlay from the pose published in `applyDraftPreview`. */}
       <group ref={previewRef}>
-        <mesh castShadow geometry={previewGeometry}>
-          <meshStandardMaterial color="#818cf8" depthWrite={false} opacity={0.35} transparent />
-        </mesh>
+        {previewParts.map((part, index) => (
+          <mesh
+            castShadow
+            geometry={part.geometry}
+            key={`${shape}-${index}`}
+            position={part.position}
+            rotation-y={part.rotationY}
+          >
+            <meshStandardMaterial color="#818cf8" depthWrite={false} opacity={0.35} transparent />
+          </mesh>
+        ))}
       </group>
     </group>
   )

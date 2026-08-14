@@ -39,7 +39,9 @@ import {
   SlabNode as SlabNodeSchema,
   type StairNode,
   StairNode as StairNodeSchema,
+  type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
+  type StairShape,
   sampleWallCenterline,
   sceneRegistry,
   snapPointAlongAngleRay,
@@ -175,14 +177,10 @@ import {
   getSegmentAngleReferenceAtPoint,
 } from '../tools/shared/segment-angle'
 import {
-  DEFAULT_STAIR_ATTACHMENT_SIDE,
-  DEFAULT_STAIR_FILL_TO_FLOOR,
-  DEFAULT_STAIR_HEIGHT,
-  DEFAULT_STAIR_LENGTH,
-  DEFAULT_STAIR_STEP_COUNT,
-  DEFAULT_STAIR_THICKNESS,
-  DEFAULT_STAIR_WIDTH,
-} from '../tools/stair/stair-defaults'
+  createStairShapeSegments,
+  resolveStairShape,
+  STAIR_SHAPES,
+} from '../tools/stair/stair-shape'
 import {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
@@ -4482,22 +4480,22 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   )
 })
 
-// Static segment for the in-flight stair build preview. No per-render
-// dependency (the geometry only moves / rotates), so it lives at module scope
-// instead of a `useMemo`.
-const FLOORPLAN_PREVIEW_STAIR_SEGMENT = StairSegmentNodeSchema.parse({
-  id: 'sseg_floorplan_preview',
-  segmentType: 'stair',
-  width: DEFAULT_STAIR_WIDTH,
-  length: DEFAULT_STAIR_LENGTH,
-  height: DEFAULT_STAIR_HEIGHT,
-  stepCount: DEFAULT_STAIR_STEP_COUNT,
-  attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
-  fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
-  thickness: DEFAULT_STAIR_THICKNESS,
-  position: [0, 0, 0],
-  metadata: { isTransient: true, isFloorplanPreview: true },
-})
+// Segment chain for the in-flight stair build preview, one entry per placement
+// shape. Only the armed shape's chain is read, and the chain never changes
+// while a shape is armed (the preview only moves / rotates), so these are built
+// once at module scope rather than in a `useMemo`.
+const FLOORPLAN_PREVIEW_STAIR_SEGMENTS: Record<StairShape, StairSegmentNode[]> = Object.fromEntries(
+  STAIR_SHAPES.map((shape) => [
+    shape,
+    createStairShapeSegments(shape).map((segment, index) =>
+      StairSegmentNodeSchema.parse({
+        ...segment,
+        id: `sseg_floorplan_preview_${shape}_${index}`,
+        metadata: { isTransient: true, isFloorplanPreview: true },
+      }),
+    ),
+  ]),
+) as Record<StairShape, StairSegmentNode[]>
 
 const EMPTY_FLOORPLAN_ID_SET: ReadonlySet<string> = new Set()
 
@@ -4522,21 +4520,23 @@ function FloorplanStairBuildPreviewLayer({
   const tool = useEditor((s) => s.tool)
   const point = useStairBuildPreview((s) => s.point)
   const rotation = useStairBuildPreview((s) => s.rotation)
+  const shape = useEditor((s) => resolveStairShape(s.toolDefaults.stair))
   const isActive = phase === 'structure' && mode === 'build' && tool === 'stair'
 
   const previewEntry = useMemo(() => {
     if (!(isActive && point)) {
       return null
     }
+    const segments = FLOORPLAN_PREVIEW_STAIR_SEGMENTS[shape]
     const previewStair = StairNodeSchema.parse({
       id: 'stair_floorplan_preview',
       name: 'Staircase preview',
       position: [point[0], 0, point[1]],
       rotation,
-      children: [FLOORPLAN_PREVIEW_STAIR_SEGMENT.id],
+      children: segments.map((segment) => segment.id),
       metadata: { isTransient: true, isFloorplanPreview: true },
     })
-    const entry = buildSharedFloorplanStairEntry(previewStair, [FLOORPLAN_PREVIEW_STAIR_SEGMENT])
+    const entry = buildSharedFloorplanStairEntry(previewStair, segments)
     if (!entry) {
       return null
     }
@@ -4558,7 +4558,7 @@ function FloorplanStairBuildPreviewLayer({
         })),
       })),
     }
-  }, [isActive, point, rotation])
+  }, [isActive, point, rotation, shape])
 
   if (!previewEntry) {
     return null

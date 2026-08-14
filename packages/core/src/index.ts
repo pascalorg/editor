@@ -390,11 +390,21 @@ export {
   getSlabElevationUpperBound,
   type SlabElevationClamp,
 } from './systems/slab/slab-support'
-export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
+export {
+  computeSegmentTransforms as computeStairSegmentTransforms,
+  type StairFootprintAABB,
+  stairFootprintAABB,
+} from './systems/stair/stair-footprint'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
+export {
+  type StairShape,
+  type StairShapeParams,
+  type StairShapeSegmentSpec,
+  stairShapeSegmentSpecs,
+} from './systems/stair/stair-shape'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,

@@ -180,11 +180,18 @@ export {
   DEFAULT_STAIR_LENGTH,
   DEFAULT_STAIR_RAILING_HEIGHT,
   DEFAULT_STAIR_RAILING_MODE,
+  DEFAULT_STAIR_SHAPE,
   DEFAULT_STAIR_STEP_COUNT,
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './components/tools/stair/stair-defaults'
+export {
+  createStairShapeSegments,
+  resolveStairShape,
+  STAIR_SHAPES,
+  stairShapeToolDefaults,
+} from './components/tools/stair/stair-shape'
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,

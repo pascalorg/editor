@@ -1,12 +1,14 @@
 'use client'
 
-import { nodeRegistry } from '@pascal-app/core'
+import { nodeRegistry, type StairShape } from '@pascal-app/core'
 import {
   type FloorplanMode,
   getFloorplanNodeExtension,
   isFloorplanToolAvailableInMode,
   LocalizedContent,
   MaterialPaintPanel,
+  resolveStairShape,
+  stairShapeToolDefaults,
   TerrainSculptPanel,
   triggerSFX,
   useEditor,
@@ -130,8 +132,12 @@ const MEP_ITEMS: MepItem[] = [
 /**
  * Activate a raw structure draw/cursor tool. Mirrors the editor's own
  * structure-tool activation (`setPhase`/`setStructureLayer`/`setMode`/`setTool`).
+ *
+ * `defaults` stages the tool's starting parameters — it has to land *before*
+ * `setTool`, which seeds `toolDefaults` from the sticky memory only when the
+ * entry is still empty.
  */
-function activateBuildTool(kind: string): void {
+function activateBuildTool(kind: string, defaults: Record<string, unknown> | null = null): void {
   const ed = useEditor.getState()
   const definition = nodeRegistry.get(kind)
   const extension = getFloorplanNodeExtension(definition)
@@ -146,7 +152,7 @@ function activateBuildTool(kind: string): void {
   ed.setPhase('structure')
   ed.setStructureLayer('elements')
   ed.setCatalogCategory(null)
-  ed.setToolDefaults(kind, null)
+  ed.setToolDefaults(kind, defaults)
   ed.setMode('build')
   ed.setTool(kind)
 }
@@ -165,6 +171,86 @@ function activatePaintMode(): void {
  */
 function activateTerrainSculptMode(): void {
   useEditor.getState().setMode('terrain-sculpt')
+}
+
+/**
+ * Placement shapes surfaced under the Stairs tile. All three place an ordinary
+ * segment-chained stair — the shape only picks how many flights and landings
+ * the tool lays down, which is the difference between a straight run and an
+ * L / U that turns on its landings.
+ */
+type StairShapeItem = { shape: StairShape; label: string; parts: StairShapeGlyphPart[] }
+
+/** One rectangle of a shape's plan glyph. `treads` runs tick lines across it,
+ * `h` for a flight climbing up the glyph, `v` for one crossing it. */
+type StairShapeGlyphPart = { x: number; y: number; w: number; h: number; treads?: 'h' | 'v' }
+
+const STAIR_SHAPE_ITEMS: StairShapeItem[] = [
+  { shape: 'straight', label: 'Straight', parts: [{ x: 9, y: 3, w: 6, h: 18, treads: 'h' }] },
+  {
+    shape: 'l-shaped',
+    label: 'L-shaped',
+    parts: [
+      { x: 6, y: 12, w: 6, h: 9, treads: 'h' },
+      { x: 6, y: 6, w: 6, h: 6 },
+      { x: 12, y: 6, w: 9, h: 6, treads: 'v' },
+    ],
+  },
+  {
+    shape: 'u-shaped',
+    label: 'U-shaped',
+    parts: [
+      { x: 6, y: 9, w: 6, h: 12, treads: 'h' },
+      { x: 6, y: 3, w: 6, h: 6 },
+      { x: 12, y: 3, w: 6, h: 6 },
+      { x: 12, y: 9, w: 6, h: 12, treads: 'h' },
+    ],
+  },
+]
+
+function StairShapeGlyph({ parts }: { parts: StairShapeGlyphPart[] }) {
+  return (
+    <svg
+      aria-hidden
+      className="size-3/5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.2}
+      viewBox="0 0 24 24"
+    >
+      {parts.map((part) => {
+        const span = part.treads === 'v' ? part.w : part.h
+        const count = part.treads ? Math.max(1, Math.round(span / 3)) : 0
+        return (
+          <g key={`${part.x}-${part.y}`}>
+            <rect height={part.h} rx={0.5} width={part.w} x={part.x} y={part.y} />
+            {Array.from({ length: Math.max(0, count - 1) }).map((_, index) => {
+              const offset = ((index + 1) * span) / count
+              return part.treads === 'v' ? (
+                <line
+                  key={offset}
+                  opacity={0.55}
+                  x1={part.x + offset}
+                  x2={part.x + offset}
+                  y1={part.y}
+                  y2={part.y + part.h}
+                />
+              ) : (
+                <line
+                  key={offset}
+                  opacity={0.55}
+                  x1={part.x}
+                  x2={part.x + part.w}
+                  y1={part.y + offset}
+                  y2={part.y + offset}
+                />
+              )
+            })}
+          </g>
+        )
+      })}
+    </svg>
+  )
 }
 
 type RoofFeature = { kind: string; label: string; iconSrc: string }
@@ -260,6 +346,8 @@ export function BuildTab() {
   const isRoofFeatureActive =
     mode === 'build' && !!activeTool && roofFeatures.some((f) => f.kind === activeTool)
   const isMepActive = mode === 'build' && !!activeTool && MEP_TOOL_KINDS.has(activeTool)
+  const isStairActive = mode === 'build' && activeTool === 'stair'
+  const stairShape = useEditor((s) => resolveStairShape(s.toolDefaults.stair))
 
   const isTypeActive = (type: BuildType) => {
     if (type.mode) return mode === type.mode
@@ -390,6 +478,45 @@ export function BuildTab() {
                       </TooltipTrigger>
                       <TooltipContent className="pointer-events-none" side="top">
                         {feature.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </div>
+            </TooltipProvider>
+          </div>
+        ) : isStairActive ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+            <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Shape</div>
+            <TooltipProvider delayDuration={0} disableHoverableContent>
+              <div
+                className="grid gap-1.5"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+              >
+                {STAIR_SHAPE_ITEMS.map((item) => {
+                  const active = stairShape === item.shape
+                  return (
+                    <Tooltip key={item.shape}>
+                      <TooltipTrigger asChild>
+                        <button
+                          className={cn(
+                            'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                            active
+                              ? 'bg-primary/10 text-foreground ring-1 ring-primary/50'
+                              : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
+                          )}
+                          onClick={() => {
+                            triggerSFX('sfx:menu-click')
+                            activateBuildTool('stair', stairShapeToolDefaults(item.shape))
+                          }}
+                          onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                          type="button"
+                        >
+                          <StairShapeGlyph parts={item.parts} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="pointer-events-none" side="top">
+                        {item.label}
                       </TooltipContent>
                     </Tooltip>
                   )

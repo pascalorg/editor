@@ -1,4 +1,5 @@
 export const DEFAULT_STAIR_TYPE = 'straight' as const
+export const DEFAULT_STAIR_SHAPE = 'straight' as const
 export const DEFAULT_STAIR_WIDTH = 1.0
 export const DEFAULT_STAIR_LENGTH = 3.0
 export const DEFAULT_STAIR_HEIGHT = 2.5
