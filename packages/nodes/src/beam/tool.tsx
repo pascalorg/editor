@@ -192,7 +192,7 @@ const BeamTool = () => {
 }
 
 /** The drawn beam's own box, translucent — the element the centreline will form. */
-function BeamGhost({
+export function BeamGhost({
   start,
   end,
   width,

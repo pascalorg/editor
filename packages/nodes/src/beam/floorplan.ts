@@ -1,4 +1,5 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
+import { pickBeamAngleLabel } from './angle-label'
 import type { BeamNode } from './schema'
 
 /**
@@ -123,6 +124,33 @@ export function buildBeamFloorplan(node: BeamNode, ctx: GeometryContext): Floorp
         cx: (startX + endX) / 2,
         cy: (startY + endY) / 2,
         text: `${Number.parseFloat(length.toFixed(2))}m`,
+        angle: Math.atan2(endY - startY, endX - startX),
+      })
+    }
+
+    // Junction angle — the 2D twin of the 3D endpoint-drag angle pill. When
+    // a sibling beam shares an endpoint, the plan shows the angle between
+    // the two at the shared corner, oriented along the beam's heading.
+    // Computed from `ctx.siblings` (same kind, same level) so no scene
+    // access is needed here.
+    const siblingBeams = ctx.siblings.filter(
+      (sibling): sibling is BeamNode => sibling.type === 'beam',
+    )
+    const angle = pickBeamAngleLabel({
+      start: [startX, startY],
+      end: [endX, endY],
+      segments: siblingBeams.map((beam) => ({
+        id: beam.id,
+        start: [beam.start[0], beam.start[1]],
+        end: [beam.end[0], beam.end[1]],
+      })),
+    })
+    if (angle) {
+      children.push({
+        kind: 'dimension-label',
+        cx: angle.position[0],
+        cy: angle.position[2],
+        text: angle.label,
         angle: Math.atan2(endY - startY, endX - startX),
       })
     }

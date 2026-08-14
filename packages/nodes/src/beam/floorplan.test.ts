@@ -35,11 +35,11 @@ const palette: FloorplanPalette = {
   measurementLabelText: '#111827',
 }
 
-function context(selected = false): GeometryContext {
+function context(selected = false, siblings: Array<Record<string, unknown>> = []): GeometryContext {
   return {
     resolve: () => undefined,
     children: [],
-    siblings: [],
+    siblings: siblings as GeometryContext['siblings'],
     parent: null,
     viewState: {
       selected,
@@ -98,6 +98,36 @@ describe('buildBeamFloorplan', () => {
     expect(label).toMatchObject({ kind: 'dimension-label', text: '4m' })
     // No hit-line while selected — the handles + arrows take over.
     expect(entries.find((entry) => entry.kind === 'hit-line')).toBeUndefined()
+  })
+
+  test('shows the junction angle against a sibling beam sharing an endpoint when selected', () => {
+    const branch = BeamNode.parse({
+      id: 'beam_branch_plan',
+      parentId: 'level_main',
+      start: [4, 0],
+      end: [4, 2],
+      width: 0.3,
+      depth: 0.6,
+      elevation: 3,
+    })
+    const geometry = buildBeamFloorplan(beam, context(true, [branch]))
+    if (!geometry) return
+    const entries = flatten(geometry)
+    const angleLabel = entries.find(
+      (entry) => entry.kind === 'dimension-label' && entry.text !== '4m',
+    )
+
+    expect(angleLabel).toMatchObject({ kind: 'dimension-label', text: '90°' })
+    if (angleLabel?.kind !== 'dimension-label') return
+    expect(angleLabel.cx).toBeCloseTo(4)
+    expect(angleLabel.cy).toBeCloseTo(0)
+  })
+
+  test('emits no junction angle when unselected or when no sibling meets an endpoint', () => {
+    const geometry = buildBeamFloorplan(beam, context(false))
+    if (!geometry) return
+    const entries = flatten(geometry)
+    expect(entries.some((entry) => entry.kind === 'dimension-label')).toBe(false)
   })
 
   test('returns null for a collapsed centreline', () => {

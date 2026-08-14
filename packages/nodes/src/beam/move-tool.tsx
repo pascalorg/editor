@@ -22,6 +22,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BeamNode } from './schema'
+import { BeamGhost } from './tool'
 
 /**
  * Beam whole-move tool.
@@ -53,6 +54,12 @@ export const MoveBeamTool: React.FC<{ node: BeamNode }> = ({ node }) => {
     const centerZ = (node.start[1] + node.end[1]) / 2
     return [centerX, 0, centerZ]
   })
+  // The live preview span — mirrors the override-merged endpoints so the
+  // translucent ghost renders at the dragged position.
+  const [previewSpan, setPreviewSpan] = useState<{
+    start: [number, number]
+    end: [number, number]
+  } | null>(null)
 
   const exitMoveMode = useCallback(() => {
     useEditor.getState().setMovingNode(null)
@@ -78,6 +85,7 @@ export const MoveBeamTool: React.FC<{ node: BeamNode }> = ({ node }) => {
     const restoreOriginal = () => {
       useLiveNodeOverrides.getState().clear(beamId)
       useScene.getState().markDirty(beamId)
+      setPreviewSpan(null)
     }
 
     const applyPreview = (nextStart: [number, number], nextEnd: [number, number]) => {
@@ -85,6 +93,7 @@ export const MoveBeamTool: React.FC<{ node: BeamNode }> = ({ node }) => {
       const centerX = (nextStart[0] + nextEnd[0]) / 2
       const centerZ = (nextStart[1] + nextEnd[1]) / 2
       setCursorLocalPos([centerX, 0, centerZ])
+      setPreviewSpan({ start: nextStart, end: nextEnd })
       useLiveNodeOverrides.getState().set(beamId as AnyNodeId, { start: nextStart, end: nextEnd })
       useScene.getState().markDirty(beamId)
     }
@@ -187,6 +196,15 @@ export const MoveBeamTool: React.FC<{ node: BeamNode }> = ({ node }) => {
   return (
     <group>
       <CursorSphere position={cursorLocalPos} showTooltip={false} />
+      {previewSpan && (
+        <BeamGhost
+          start={previewSpan.start}
+          end={previewSpan.end}
+          width={node.width ?? 0.3}
+          depth={node.depth ?? 0.6}
+          elevation={node.elevation ?? 0}
+        />
+      )}
     </group>
   )
 }
