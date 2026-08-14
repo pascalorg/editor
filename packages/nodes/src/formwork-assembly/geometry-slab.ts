@@ -200,7 +200,10 @@ export function buildSlabFormwork(
             widthMm: xStep * 1000,
             heightMm: zStep * 1000,
             ...(falsework.sheathing
-              ? { catalogId: falsework.sheathing.id, verification: falsework.sheathing.verification }
+              ? {
+                  catalogId: falsework.sheathing.id,
+                  verification: falsework.sheathing.verification,
+                }
               : {}),
             description: falsework.sheathing
               ? `${falsework.sheathing.label}, ${Math.round(xStep * 1000)} × ${Math.round(zStep * 1000)} mm`
@@ -270,9 +273,15 @@ export function buildSlabFormwork(
     const propLength = Math.max(0, propTop - (slab.elevation - slab.thickness - soffitHeightM))
     const propY = propTop - propLength / 2
     const propZs = stations(bounds.minZ, spanZ, falsework.propSpacing.adoptedM)
+    const propPositions: Array<{ x: number; z: number }> = []
     for (const [xi, x] of bearerXs.entries()) {
       for (const [zi, z] of propZs.entries()) {
         if (!nearSlab(x, z)) continue
+        // Recorded for the validator, which finds what each prop stands on and
+        // checks the slab below can take it — see `propsOntoSlabBelow`. Collected
+        // here because the falsework grid is this design pass and nobody should
+        // re-derive it.
+        propPositions.push({ x, z })
         const prop = new Mesh(
           new BoxGeometry(SCAFFOLD_POST_SIZE, propLength, SCAFFOLD_POST_SIZE),
           scaffoldMaterial,
@@ -311,6 +320,17 @@ export function buildSlabFormwork(
           prop,
         )
       }
+    }
+    if (propPositions.length > 0) {
+      parts.evidence({
+        falsework: {
+          props: propPositions,
+          loadKn: falsework.propLoadKn,
+          // The tributary cell the prop was checked against — the check compares
+          // the reaction over this cell against the slab below's capacity.
+          cellM2: falsework.bearer.adoptedM * falsework.propSpacing.adoptedM,
+        },
+      })
     }
   }
 

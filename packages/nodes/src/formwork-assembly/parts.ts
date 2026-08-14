@@ -5,6 +5,7 @@ import {
   type FormworkPartSpec,
   type FormworkSystem,
   type PressureEnvelope,
+  type PropEvidence,
   partMark,
   type RiseRateLimit,
   type ShutterElevation,
@@ -135,6 +136,15 @@ export interface ShutterEvidence {
    * is a clamped box, not a rated panel.
    */
   riseRate?: RiseRateLimit
+  /**
+   * The props under a slab soffit, for the prop × capacity clash.
+   *
+   * Carried rather than derived for the packs' reason: the falsework grid is a design
+   * pass, and a validator that re-designed it would report a prop where the parts
+   * table draws none. The positions are the grid's own, so the validator can find
+   * what each one stands on.
+   */
+  falsework?: PropEvidence
 }
 
 export interface BuiltFormwork {
@@ -178,6 +188,7 @@ export function collectParts(group: Group, node: FormworkAssemblyNode): PartColl
       if (more.system) found.system = more.system
       if (more.riseRate) found.riseRate = more.riseRate
       if (more.tieFields) found.tieFields = [...(found.tieFields ?? []), ...more.tieFields]
+      if (more.falsework) found.falsework = more.falsework
     },
     emit(spec, mesh) {
       const mark = partMark(spec)

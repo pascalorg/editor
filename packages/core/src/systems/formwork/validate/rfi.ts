@@ -226,6 +226,36 @@ const RFI_TEMPLATES: Record<InvariantId, RfiTemplate | null> = {
   // A plant's output and a pump's rate are temporary-works facts somebody on this job
   // booked, so the answer is on site rather than with the designer of the permanent work.
   POUR_RATE_OVER_CONCRETE_SUPPLY: null,
+  // The cage is the permanent works' own, so a tie through it is the engineer's to
+  // answer — the grid and the bar arrangement are both theirs to change.
+  TIES_THROUGH_REBAR: {
+    addressee: 'engineer-of-record',
+    subject: 'Tie positions versus the reinforcement cage',
+    question:
+      'These tie positions clash with the reinforcement. Where the finding names a clear position the tie may move to, may it be relocated there within the grid; and where it names none, may the bar arrangement or the tie grid be changed so a tie can pass?',
+    unblocks:
+      'The tie grid for the pour — a fixed cage with no clear position means the shutter cannot be tied at all.',
+  },
+  // A slab's capacity is the permanent works' own figure, so what it may carry is the
+  // engineer's to confirm — the temporary-works side can only tighten its own grid.
+  PROPS_ONTO_SLAB_BELOW: {
+    addressee: 'engineer-of-record',
+    subject: 'Prop loads versus the capacity of the slab below',
+    question:
+      'These props transmit more to the slab below than its stated capacity allows. Is the capacity as recorded correct at the prop positions, and where the slab is itself still propped, may the load be carried through the storeys the finding names?',
+    unblocks:
+      'The falsework grid — the prop positions are sized from the load each one may put on the slab below.',
+  },
+  // The boundary is a fact of the site, but a formwork footprint crossing it is not
+  // something the temporary-works side can resolve alone — the element or the scaffold
+  // layout has to change, or the recorded boundary is wrong.
+  FORMWORK_OUTSIDE_BOUNDARY: {
+    addressee: 'architect',
+    subject: 'Formwork footprint beyond the site boundary',
+    question:
+      'This element’s formwork extends past the site boundary (or into its setback). May the element move or the scaffold be set within the boundary, or is the recorded boundary incorrect?',
+    unblocks: 'The element positions and the scaffold layout for the affected work.',
+  },
 }
 
 /**

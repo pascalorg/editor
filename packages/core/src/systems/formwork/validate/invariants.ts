@@ -1,6 +1,11 @@
 import type { ConstructionJointNode, WaterstopType } from '../../../schema/nodes/construction-joint'
 import type { FormworkCraneSettings } from '../../../schema/nodes/formwork-project-settings'
+import type { SiteNode } from '../../../schema/nodes/site'
+import type { SlabNode } from '../../../schema/nodes/slab'
+import type { WallNode } from '../../../schema/nodes/wall'
 import type { AnyNode, AnyNodeId } from '../../../schema/types'
+import { getLevelBelow } from '../../../services/storey'
+import { pointInPolygon } from '../../slab/slab-support'
 import type { FormworkAcquisition } from '../acquire'
 import { type FormworkSystem, fitCorner, tieForThickness } from '../catalog'
 import {
@@ -10,6 +15,7 @@ import {
   elementLength,
 } from '../coverage/elements'
 import { classifyElementFaces } from '../coverage/faces'
+import { outlineOf } from '../coverage/footprint'
 import {
   type Abutment,
   type AbutmentMap,
@@ -39,7 +45,15 @@ import {
   type RiseRateLimit,
   SUPPLY_SOURCE_LABELS,
 } from '../pressure'
-import type { Finding, FormworkRemedy, InvariantId, TieField, ValidationReport } from './types'
+import type {
+  Finding,
+  FormworkRemedy,
+  InvariantId,
+  NotCheckedEntry,
+  PropEvidence,
+  TieField,
+  ValidationReport,
+} from './types'
 
 /**
  * The assertion suite — solver phase 11, and the plan calls it the highest-value
@@ -221,6 +235,14 @@ export interface ValidateOptions {
    * where nothing has been formed, which the report declares rather than reading as a pass.
    */
   riseRates?: Map<AnyNodeId, RiseRateLimit>
+  /**
+   * The props under each slab, for the prop × capacity clash.
+   *
+   * Carried per element from the solve, like the packs and the envelopes: re-deriving
+   * the falsework grid here would be a second design pass, and a validator that disagreed
+   * with the parts table about where a prop stands is worse than one that said nothing.
+   */
+  propsByElement?: Map<AnyNodeId, PropEvidence>
 }
 
 /**
@@ -1761,6 +1783,362 @@ function gangCapacity(
 }
 
 /**
+ * The DW 15 rod the shipped catalogs tie with, mm.
+ *
+ * The tie's hole diameter for the clash test. Read as a constant rather than off
+ * the tie catalog because `tieFields` carry the stations, not the tie that was
+ * chosen — the check's message names the figure so a reader can verify it.
+ */
+const TIE_ROD_DIAMETER_MM = 15
+
+/**
+ * How far a tie rod must clear a bar, mm.
+ *
+ * A rod brushing the bar is a rod that cannot be driven: the tolerance is what
+ * lets the crew pass the tie through the cage without reaming a hole through
+ * steel. Stated on the finding so a project with a tighter figure can see what
+ * was assumed.
+ */
+const TIE_BAR_CLEARANCE_MM = 5
+
+/**
+ * A tie the reinforcement cage does not let through.
+ *
+ * The last of the plan's deferred clashes to get its input: `ReinforcementGeometry`
+ * on the wall schema arrived in group 9, and this is the check that reads it. A
+ * through-tie crosses the whole thickness, so every layer of the cage is in its
+ * path — the bar's `through` position does not matter, only its `along` does, and
+ * the tie's elevation does not matter either because a vertical bar spans the
+ * full height. The check is deliberately that single axis: it reports what the
+ * geometry it was given can actually assert.
+ *
+ * An error where no position in the grid clears the cage — the shutter cannot be
+ * tied at all — and a warning where the grid admits a clear position nearby, which
+ * is buildable by an exception somebody accepts. The count on each finding is the
+ * 10.3 requirement: one awkward tie and a broadly incompatible cage must not read
+ * the same.
+ */
+/**
+ * Whether a rod at this station clears every bar in `bars`.
+ *
+ * A through-tie crosses the whole thickness, so the bar's `through` position does
+ * not matter — only its `along` does, and the tie's elevation does not matter
+ * either, because a vertical bar spans the full height. The reach is the rod's
+ * own half-diameter plus the bar's, plus the stated clearance.
+ */
+function barReachM(barDiameterM: number): number {
+  return (TIE_ROD_DIAMETER_MM / 1000 + barDiameterM) / 2 + TIE_BAR_CLEARANCE_MM / 1000
+}
+
+function tiesThroughRebar(
+  elements: readonly CastableElement[],
+  byId: ReadonlyMap<AnyNodeId, AnyNode>,
+  fields: ReadonlyMap<AnyNodeId, readonly TieField[]>,
+): { findings: Finding[]; blocked: NotCheckedEntry[] } {
+  // Which scoped elements carry a drilled grid at all — the only ones a tie can
+  // be checked against. A conventional shutter is bored where the calculation
+  // asks, so there is no fixed set of stations to compare a bar to.
+  const checked = elements.filter((element) =>
+    (fields.get(element.id) ?? []).some((field) => field.holes.length > 0),
+  )
+  const findings: Finding[] = []
+  const lackingReinforcement: AnyNodeId[] = []
+  for (const element of checked) {
+    const node = byId.get(element.id)
+    const reinforcement =
+      node?.type === 'wall' ? ((node as WallNode).reinforcement ?? undefined) : undefined
+    if (!reinforcement) {
+      lackingReinforcement.push(element.id)
+      continue
+    }
+
+    const bars: Array<{ alongM: number; diameterM: number }> = []
+    for (const bar of reinforcement.bars ?? []) {
+      bars.push({ alongM: bar.along, diameterM: bar.diameter })
+    }
+    if (reinforcement.arrangement) {
+      const { spacing, diameter, layers } = reinforcement.arrangement
+      const length = elementLength(element)
+      // The `layers` planes are all through the thickness, and a through-tie crosses
+      // every one of them, so each layer puts a bar at the same along positions.
+      for (let alongM = 0; alongM <= length; alongM += spacing) {
+        for (let layer = 0; layer < layers; layer++) {
+          bars.push({ alongM, diameterM: diameter })
+        }
+      }
+    }
+    if (bars.length === 0) {
+      // Stated geometry with no bars in it is a claim nothing is modelled as
+      // explicitly as not stating it at all (group 9's contract).
+      lackingReinforcement.push(element.id)
+      continue
+    }
+
+    const allHoles = (fields.get(element.id) ?? []).flatMap((field) => field.holes)
+    const clashing = allHoles.filter((hole) =>
+      bars.some((bar) => Math.abs(hole.alongM - bar.alongM) < barReachM(bar.diameterM)),
+    )
+    if (clashing.length === 0) continue
+
+    for (const hole of clashing) {
+      // The bar this hole actually fouls, for the message — the first of possibly
+      // several, which the count already reflects.
+      const fouled = bars.find(
+        (bar) => Math.abs(hole.alongM - bar.alongM) < barReachM(bar.diameterM),
+      )
+      // The permissible grid is the field's own stations — the drilled holes a rod
+      // may pass. An alternative is another station in the same field that clears
+      // the cage; where none does, the tie cannot be relocated at all.
+      const clear = allHoles.find(
+        (other) =>
+          other !== hole &&
+          !bars.some((bar) => Math.abs(other.alongM - bar.alongM) < barReachM(bar.diameterM)),
+      )
+      findings.push(
+        finding(
+          'TIES_THROUGH_REBAR',
+          clear ? 'warning' : 'error',
+          [element.id],
+          `${element.id}: the tie at ${hole.alongM.toFixed(2)} m along, ${hole.elevationM.toFixed(2)} m up fouls a ${Math.round((fouled?.diameterM ?? 0) * 1000)} mm bar within ${TIE_ROD_DIAMETER_MM + TIE_BAR_CLEARANCE_MM} mm of the rod — ${clashing.length} of ${allHoles.length} ties on this element clash with the cage. ${clear ? `The grid admits a clear position at ${clear.alongM.toFixed(2)} m along, ${clear.elevationM.toFixed(2)} m up, and the tie may move there.` : 'No position in the permissible grid clears the cage, so the tie cannot be relocated — the bar arrangement, the tie grid, or the formwork system has to change.'}`,
+          { alongM: hole.alongM, elevationM: hole.elevationM },
+        ),
+      )
+    }
+  }
+
+  const blocked: NotCheckedEntry[] = []
+  if (checked.length === 0) {
+    // No drilled grid anywhere: the check has no station to compare, and the
+    // same silence OPENING_LEAVES_TIE_GAP declares for its input.
+    blocked.push({
+      invariant: 'TIES_THROUGH_REBAR',
+      needs: 'the stations a tie passes — pass `tieFields` from the same layout that drew the ties',
+    })
+  } else if (lackingReinforcement.length === checked.length) {
+    blocked.push({
+      invariant: 'TIES_THROUGH_REBAR',
+      needs: 'reinforcement geometry — no wall in this scope states bars or an arrangement',
+    })
+  } else if (lackingReinforcement.length > 0) {
+    blocked.push({
+      invariant: 'TIES_THROUGH_REBAR',
+      needs:
+        'reinforcement geometry — the tie grids on these elements have no cage to compare against',
+      elementIds: lackingReinforcement,
+    })
+  }
+  return { findings, blocked }
+}
+
+/**
+ * A prop that overloads the slab it stands on.
+ *
+ * A deck's props stand on the floor below, and that floor has a capacity of its
+ * own — stated as `loadCapacityKnM2` on the slab (group 9). The pressure the prop
+ * puts on it is its reaction over its tributary cell; the check compares the two
+ * and reports the utilisation.
+ *
+ * Backpropping: where the supporting slab is itself being formed (its own
+ * falsework still in the scene), the load from above passes through it to the
+ * slab below, and the finding reports every storey it is carried through with
+ * the utilisation at each. The signal for "still propped" is that the supporting
+ * slab is itself shuttered — its props are in the scene — which is the honest
+ * bound the node graph can express without the striking schedule.
+ */
+/**
+ * The slab at `levelId` whose stored polygon covers `[x, z]`, or nothing.
+ *
+ * Levels stack in Y only, so a level-local `[x, z]` is valid in the level below
+ * unchanged — the same convention `getCoveringSlabUndersideAt` relies on.
+ */
+function slabBelowPoint(
+  levelId: string | null,
+  record: Record<AnyNodeId, AnyNode>,
+  x: number,
+  z: number,
+): SlabNode | undefined {
+  if (levelId === null) return undefined
+  for (const node of Object.values(record)) {
+    if (node?.type !== 'slab') continue
+    const slab = node as SlabNode
+    if (slab.parentId !== levelId) continue
+    if (slab.polygon.length < 3) continue
+    if (pointInPolygon(x, z, slab.polygon)) return slab
+  }
+  return undefined
+}
+
+function propsOntoSlabBelow(
+  elements: readonly CastableElement[],
+  byId: ReadonlyMap<AnyNodeId, AnyNode>,
+  nodes: readonly AnyNode[],
+  propsByElement: ReadonlyMap<AnyNodeId, PropEvidence>,
+): { findings: Finding[]; blocked: NotCheckedEntry[] } {
+  const findings: Finding[] = []
+  const blocked: NotCheckedEntry[] = []
+  const record: Record<AnyNodeId, AnyNode> = {}
+  for (const node of nodes) record[node.id as AnyNodeId] = node
+
+  for (const element of elements) {
+    const evidence = propsByElement.get(element.id)
+    if (!evidence || evidence.props.length === 0) continue
+    const host = byId.get(element.id)
+    if (!host) continue
+    const levelId = host.parentId as AnyNodeId | undefined
+    const belowLevel = levelId ? getLevelBelow(levelId, record) : null
+    if (belowLevel === null) continue
+
+    for (const prop of evidence.props) {
+      const pressureKnM2 = evidence.cellM2 > 0 ? evidence.loadKn / evidence.cellM2 : 0
+      // The storeys this prop's load actually passes through, resolved at its own
+      // position: the slab below covering it, then each slab below that is itself
+      // still propped and covers it. The walk stops at the first slab that is not
+      // itself shuttered — a ground slab, or one whose props have gone — because
+      // the load terminates there.
+      const storeys: SlabNode[] = []
+      let level: string | null = belowLevel.id as string
+      while (level !== null) {
+        const slab = slabBelowPoint(level, record, prop.x, prop.z)
+        if (!slab) break
+        storeys.push(slab)
+        const shuttered = slab.formworkType !== undefined && slab.formworkType !== 'none'
+        if (!shuttered) break
+        const next = getLevelBelow(level, record)
+        level = next ? (next.id as string) : null
+      }
+      if (storeys.length === 0) continue
+
+      for (const slab of storeys) {
+        const capacity = slab.loadCapacityKnM2
+        if (capacity === undefined) {
+          blocked.push({
+            invariant: 'PROPS_ONTO_SLAB_BELOW',
+            needs: `a load capacity on ${slab.id} — the prop reaction ${evidence.loadKn.toFixed(1)} kN cannot be compared without what the slab below may carry`,
+            elementIds: [element.id],
+          })
+          continue
+        }
+        if (pressureKnM2 <= capacity + 1e-9) continue
+        const utilisation = pressureKnM2 / capacity
+        // The propped storeys the load is carried through — all but the last,
+        // which terminates the walk. Each is itself still on props, so the load
+        // from above goes through its own falsework rather than stopping there.
+        const propped = storeys.slice(0, -1)
+        const through =
+          propped.length > 0
+            ? ` The load is carried through ${propped.length} propped ${propped.length === 1 ? 'storey' : 'storeys'}: ${propped
+                .map((entry) => {
+                  const cap = entry.loadCapacityKnM2
+                  return `${entry.id} at ${cap ? `${((pressureKnM2 / cap) * 100).toFixed(0)}%` : 'no capacity'}`
+                })
+                .join(', ')}.`
+            : ''
+        findings.push(
+          finding(
+            'PROPS_ONTO_SLAB_BELOW',
+            'error',
+            [element.id, slab.id as AnyNodeId],
+            `${element.id}: a prop at ${prop.x.toFixed(2)}, ${prop.z.toFixed(2)} transmits ${evidence.loadKn.toFixed(1)} kN over ${evidence.cellM2.toFixed(2)} m² — ${pressureKnM2.toFixed(1)} kN/m² — onto ${slab.id}, which is rated ${capacity.toFixed(1)} kN/m², so the reaction is at ${(utilisation * 100).toFixed(0)}% of what the slab below may carry.${through}`,
+            { alongM: prop.x, elevationM: prop.z },
+          ),
+        )
+      }
+    }
+  }
+  return { findings, blocked }
+}
+
+/**
+ * Formwork that crosses the site boundary, or encroaches on its setback.
+ *
+ * The site's polygon is the boundary the whole job has to stay inside, and the
+ * setback (group 9) is the band inside it that formwork, access scaffold and
+ * working clearances must also keep clear of. The element's plan footprint is
+ * what is compared — the formwork itself is the part of the scene that has
+ * geometry, and scaffold and clearances are exactly the inputs the check names
+ * when they are absent.
+ *
+ * A boundary crossing and a setback encroachment are reported as separate
+ * findings: the first is a thing that cannot be built as specified, the second a
+ * restriction somebody has to accept, and merging them would bury the difference
+ * between "off the site" and "inside it but too close to the line".
+ */
+function formworkOutsideBoundary(
+  elements: readonly CastableElement[],
+  nodes: readonly AnyNode[],
+): { findings: Finding[]; blocked: NotCheckedEntry[] } {
+  const site = nodes.find((node) => node?.type === 'site') as SiteNode | undefined
+  const polygon = site?.polygon?.points ?? []
+  const blocked: NotCheckedEntry[] =
+    polygon.length < 3
+      ? [
+          {
+            invariant: 'FORMWORK_OUTSIDE_BOUNDARY',
+            needs:
+              'a site boundary — add a site node with a polygon, and the formwork is checked against it',
+          },
+        ]
+      : []
+  if (polygon.length < 3) return { findings: [], blocked }
+
+  const setback = site?.setback ?? 0
+  const findings: Finding[] = []
+  for (const element of elements) {
+    const outline = outlineOf(element)
+    // The furthest any footprint vertex lies beyond the boundary, and the
+    // shallowest any vertex sits inside the setback band.
+    let maxCrossM = 0
+    let maxEncroachM = 0
+    for (const vertex of outline) {
+      if (!pointInPolygon(vertex.x, vertex.y, polygon)) {
+        maxCrossM = Math.max(maxCrossM, distanceToPolygon(vertex.x, vertex.y, polygon))
+      } else if (setback > 0) {
+        const distance = distanceToPolygon(vertex.x, vertex.y, polygon)
+        if (distance < setback) maxEncroachM = Math.max(maxEncroachM, setback - distance)
+      }
+    }
+    if (maxCrossM > 0) {
+      findings.push(
+        finding(
+          'FORMWORK_OUTSIDE_BOUNDARY',
+          'error',
+          [element.id],
+          `${element.id}: the formwork footprint extends ${maxCrossM.toFixed(2)} m past the site boundary. The element has to move inside it, or the boundary as recorded is wrong.`,
+        ),
+      )
+    }
+    if (maxEncroachM > 0) {
+      findings.push(
+        finding(
+          'FORMWORK_OUTSIDE_BOUNDARY',
+          'warning',
+          [element.id],
+          `${element.id}: the formwork footprint sits ${maxEncroachM.toFixed(2)} m inside the site’s ${setback.toFixed(1)} m setback — inside the boundary, but within the band the scaffold and working clearances need.`,
+        ),
+      )
+    }
+  }
+  return { findings, blocked }
+}
+
+/** The distance from a point to the nearest edge of a polygon, m. */
+function distanceToPolygon(px: number, pz: number, polygon: Array<[number, number]>): number {
+  let best = Number.POSITIVE_INFINITY
+  for (let i = 0; i < polygon.length; i++) {
+    const [ax, az] = polygon[i] as [number, number]
+    const [bx, bz] = polygon[(i + 1) % polygon.length] as [number, number]
+    const dx = bx - ax
+    const dz = bz - az
+    const lengthSq = dx * dx + dz * dz
+    const t =
+      lengthSq < 1e-18 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / lengthSq))
+    const distance = Math.hypot(px - (ax + dx * t), pz - (az + dz * t))
+    if (distance < best) best = distance
+  }
+  return best
+}
+
+/**
  * The assertions this scene cannot make, and what each one would need.
  *
  * Declared rather than omitted. A report that lists only what it checked reads as
@@ -1777,23 +2155,31 @@ function unavailable(
   hasGangs: boolean,
   crane: FormworkCraneSettings | undefined,
   hasRiseRates: boolean,
+  hasProps: boolean,
 ) {
   // A recorded crane with an empty chart is no crane: `craneCapacityAtM` reads nothing off
   // it, so a check that treated the group's presence as the input would report a scene as
   // checked against a machine with no capacity anywhere.
   const hasCrane = (crane?.capacityCurve ?? []).length > 0
   const out: ValidationReport['notChecked'] = [
-    { invariant: 'TIES_THROUGH_REBAR', needs: 'rebar geometry — no reinforcement is modelled' },
-    {
-      invariant: 'PROPS_ONTO_SLAB_BELOW',
-      needs:
-        'the slab below’s capacity at the prop position — falsework reactions are not checked against it',
-    },
     {
       invariant: 'CURVE_RADIUS_BELOW_SYSTEM_MINIMUM',
       needs: 'a minimum radius per system — the catalogs carry no such field',
     },
   ]
+  // The tie-versus-rebar and prop-versus-capacity checks report their own silences
+  // from the elements they examined — see `tiesThroughRebar` and
+  // `propsOntoSlabBelow` — because a partially-populated scene has to name which
+  // elements it could not cover, which a whole-scope flag cannot. The one silence
+  // left for this list is the props evidence itself: a scope with no falsework has
+  // no prop to check, and nothing per element to hang that on.
+  if (!hasProps) {
+    out.push({
+      invariant: 'PROPS_ONTO_SLAB_BELOW',
+      needs:
+        'the props under each slab — pass `propsByElement` from the same solve the report prints; a scope with no falsework has no reaction to compare',
+    })
+  }
   if (!hasAcquisition) {
     // Three different silences reach here — no pour dates, no rack recorded, or a programme
     // too partial to sweep — and none of them can be told apart from this side. Naming the
@@ -1959,6 +2345,14 @@ export function validateFormwork(
       options.riseRates ?? new Map<AnyNodeId, RiseRateLimit>(),
       new Set(scoped.map((element) => element.id)),
     ),
+    ...tiesThroughRebar(scoped, byId, tieFields).findings,
+    ...propsOntoSlabBelow(
+      scoped,
+      byId,
+      [...nodes],
+      options.propsByElement ?? new Map<AnyNodeId, PropEvidence>(),
+    ).findings,
+    ...formworkOutsideBoundary(scoped, [...nodes]).findings,
   ]
 
   // Errors first, then by element, so the list reads in the order somebody would
@@ -1976,16 +2370,27 @@ export function validateFormwork(
     errorCount: findings.filter((entry) => entry.severity === 'error').length,
     warningCount: findings.filter((entry) => entry.severity === 'warning').length,
     elementIds: scoped.map((element) => element.id).sort(),
-    notChecked: unavailable(
-      packs.size > 0,
-      envelopes.size > 0,
-      systems.size > 0,
-      tieFields.size > 0,
-      options.acquisition !== undefined,
-      gangs.size > 0,
-      options.crane,
-      (options.riseRates ?? new Map()).size > 0,
-    ),
+    notChecked: [
+      ...unavailable(
+        packs.size > 0,
+        envelopes.size > 0,
+        systems.size > 0,
+        tieFields.size > 0,
+        options.acquisition !== undefined,
+        gangs.size > 0,
+        options.crane,
+        (options.riseRates ?? new Map()).size > 0,
+        (options.propsByElement ?? new Map()).size > 0,
+      ),
+      ...tiesThroughRebar(scoped, byId, tieFields).blocked,
+      ...propsOntoSlabBelow(
+        scoped,
+        byId,
+        [...nodes],
+        options.propsByElement ?? new Map<AnyNodeId, PropEvidence>(),
+      ).blocked,
+      ...formworkOutsideBoundary(scoped, [...nodes]).blocked,
+    ],
   }
 }
 

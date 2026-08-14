@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test'
 import { ColumnNode } from '../../../schema/nodes/column'
 import { ConstructionJointNode } from '../../../schema/nodes/construction-joint'
+import { LevelNode } from '../../../schema/nodes/level'
+import { SiteNode } from '../../../schema/nodes/site'
 import { SlabNode } from '../../../schema/nodes/slab'
 import { WallNode } from '../../../schema/nodes/wall'
 import { WindowNode } from '../../../schema/nodes/window'
@@ -1718,5 +1720,303 @@ describe('the report', () => {
     expect(report.warningCount).toBeGreaterThan(0)
     expect(report.errorCount).toBe(0)
     expect(failingElementIds(report)).toEqual([])
+  })
+})
+
+describe('ties through the reinforcement cage', () => {
+  /** A 5 m wall with a stated bar every metre, and the grid that was drilled. */
+  function tiedWall(overrides: Partial<Parameters<typeof WallNode.parse>[0]> = {}) {
+    return wall({
+      end: [5, 0],
+      reinforcement: {
+        arrangement: { diameter: 0.016, spacing: 1, cover: 0.03, layers: 1 },
+      },
+      ...overrides,
+    })
+  }
+  const grid = (w: { id: string }, holes: Array<{ alongM: number; elevationM: number }>) =>
+    new Map([[w.id as AnyNodeId, [{ fromM: 0, toM: 5, holes }]]])
+
+  it('fires on a tie whose station coincides with a bar, and names a clear alternative', () => {
+    const w = tiedWall()
+    // Bars sit at 0, 1, 2, 3, 4 m. A tie drilled at exactly 1 m fouls the bar
+    // there; the station at 1.5 m clears every bar (0.5 m from the nearest).
+    const report = validateFormwork([w] as AnyNode[], {
+      tieFields: grid(w, [
+        { alongM: 1, elevationM: 1 },
+        { alongM: 1.5, elevationM: 1 },
+      ]),
+    })
+    const found = report.findings.filter((f) => f.invariant === 'TIES_THROUGH_REBAR')
+    expect(found.length).toBe(1)
+    expect(found[0]?.severity).toBe('warning')
+    expect(found[0]?.message).toContain('1.00 m along')
+    expect(found[0]?.message).toContain('16 mm bar')
+    expect(found[0]?.message).toContain('1.50 m along')
+    expect(found[0]?.locus?.alongM).toBe(1)
+  })
+
+  it('is an error with no alternative where every station fouls the cage', () => {
+    const w = tiedWall()
+    const report = validateFormwork([w] as AnyNode[], {
+      tieFields: grid(w, [
+        { alongM: 1, elevationM: 1 },
+        { alongM: 2, elevationM: 1 },
+      ]),
+    })
+    const found = report.findings.filter((f) => f.invariant === 'TIES_THROUGH_REBAR')
+    expect(found.length).toBe(2)
+    for (const finding of found) {
+      expect(finding.severity).toBe('error')
+      expect(finding.message).toContain('cannot be relocated')
+    }
+  })
+
+  it('states the count, so a broadly incompatible cage reads differently from one awkward tie', () => {
+    const w = tiedWall()
+    const report = validateFormwork([w] as AnyNode[], {
+      tieFields: grid(w, [
+        { alongM: 1, elevationM: 1 },
+        { alongM: 2, elevationM: 1 },
+        { alongM: 3, elevationM: 1 },
+        { alongM: 4.5, elevationM: 1 },
+      ]),
+    })
+    const found = report.findings.filter((f) => f.invariant === 'TIES_THROUGH_REBAR')
+    expect(found.length).toBe(3)
+    expect(found[0]?.message).toContain('3 of 4 ties')
+  })
+
+  it('reads explicit bars and honours their diameters', () => {
+    const w = tiedWall({
+      reinforcement: { bars: [{ along: 1, through: 0.03, diameter: 0.02 }] },
+    })
+    const report = validateFormwork([w] as AnyNode[], {
+      tieFields: grid(w, [{ alongM: 1, elevationM: 1 }]),
+    })
+    const found = report.findings.filter((f) => f.invariant === 'TIES_THROUGH_REBAR')
+    expect(found.length).toBe(1)
+    expect(found[0]?.message).toContain('20 mm bar')
+  })
+
+  it('is silent when every station clears the cage', () => {
+    const w = tiedWall()
+    const report = validateFormwork([w] as AnyNode[], {
+      tieFields: grid(w, [{ alongM: 1.5, elevationM: 1 }]),
+    })
+    expect(report.findings.some((f) => f.invariant === 'TIES_THROUGH_REBAR')).toBe(false)
+  })
+
+  it('declares itself unrun where a drilled grid has no cage, and names the elements when partial', () => {
+    const drilled = tiedWall()
+    const bare = wall({ end: [5, 0] })
+    const whole = validateFormwork([bare] as AnyNode[], {
+      tieFields: grid(bare, [{ alongM: 1, elevationM: 1 }]),
+    })
+    const entry = whole.notChecked.find((e) => e.invariant === 'TIES_THROUGH_REBAR')
+    expect(entry).toBeDefined()
+    expect(entry?.elementIds).toBeUndefined()
+    expect(entry?.needs).toContain('reinforcement')
+
+    const partial = validateFormwork([drilled, bare] as AnyNode[], {
+      tieFields: new Map([
+        [drilled.id as AnyNodeId, [{ fromM: 0, toM: 5, holes: [{ alongM: 1, elevationM: 1 }] }]],
+        [bare.id as AnyNodeId, [{ fromM: 0, toM: 5, holes: [{ alongM: 1, elevationM: 1 }] }]],
+      ]),
+    })
+    const partialEntry = partial.notChecked.find((e) => e.invariant === 'TIES_THROUGH_REBAR')
+    expect(partialEntry?.elementIds).toContain(bare.id as AnyNodeId)
+    expect(partialEntry?.elementIds).not.toContain(drilled.id as AnyNodeId)
+  })
+})
+
+describe('props onto the slab below', () => {
+  function level(id: string, ordinal: number): LevelNode {
+    return LevelNode.parse({ id, type: 'level', level: ordinal, height: 3 })
+  }
+  function slab(
+    id: string,
+    parentId: string,
+    overrides: Partial<Parameters<typeof SlabNode.parse>[0]> = {},
+  ) {
+    return SlabNode.parse({
+      id,
+      type: 'slab',
+      parentId,
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 6],
+        [0, 6],
+      ],
+      thickness: 0.2,
+      elevation: 3,
+      ...overrides,
+    })
+  }
+
+  it('errors where a prop overloads the slab below, naming reaction, capacity and utilisation', () => {
+    const below = slab('slab_below', 'level_1', { loadCapacityKnM2: 20 })
+    const above = slab('slab_above', 'level_2', { formworkType: 'plywood' })
+    const report = validateFormwork(
+      [level('level_1', 0), level('level_2', 1), below, above] as unknown as AnyNode[],
+      {
+        propsByElement: new Map([
+          [above.id as AnyNodeId, { props: [{ x: 4, z: 3 }], loadKn: 60, cellM2: 2 }],
+        ]),
+      },
+    )
+    const found = report.findings.filter((f) => f.invariant === 'PROPS_ONTO_SLAB_BELOW')
+    expect(found.length).toBe(1)
+    expect(found[0]?.elementIds).toContain('slab_below')
+    expect(found[0]?.message).toContain('30.0 kN/m²')
+    expect(found[0]?.message).toContain('20.0 kN/m²')
+    expect(found[0]?.message).toContain('150%')
+  })
+
+  it('is silent where the reaction fits the slab below', () => {
+    const below = slab('slab_below', 'level_1', { loadCapacityKnM2: 40 })
+    const above = slab('slab_above', 'level_2', { formworkType: 'plywood' })
+    const report = validateFormwork(
+      [level('level_1', 0), level('level_2', 1), below, above] as unknown as AnyNode[],
+      {
+        propsByElement: new Map([
+          [above.id as AnyNodeId, { props: [{ x: 4, z: 3 }], loadKn: 60, cellM2: 2 }],
+        ]),
+      },
+    )
+    expect(report.findings.some((f) => f.invariant === 'PROPS_ONTO_SLAB_BELOW')).toBe(false)
+  })
+
+  it('names each storey the load passes through when the slab below is itself still propped', () => {
+    // Two propped storeys below: the ground slab is not shuttered, so the walk
+    // terminates at the first slab — one storey, not a chain.
+    const first = slab('slab_first', 'level_1', { formworkType: 'plywood', loadCapacityKnM2: 20 })
+    const ground = slab('slab_ground', 'level_0', { loadCapacityKnM2: 30 })
+    const above = slab('slab_above', 'level_2', { formworkType: 'plywood' })
+    const report = validateFormwork(
+      [
+        level('level_0', 0),
+        level('level_1', 1),
+        level('level_2', 2),
+        ground,
+        first,
+        above,
+      ] as unknown as AnyNode[],
+      {
+        propsByElement: new Map([
+          [above.id as AnyNodeId, { props: [{ x: 4, z: 3 }], loadKn: 60, cellM2: 2 }],
+        ]),
+      },
+    )
+    const found = report.findings.filter((f) => f.invariant === 'PROPS_ONTO_SLAB_BELOW')
+    expect(found.length).toBe(1)
+    expect(found[0]?.message).toContain('slab_first')
+    // The ground slab is not shuttered, so the load terminates there and the
+    // finding reports one storey, not a chain through the ground.
+    expect(found[0]?.message).not.toContain('slab_ground')
+  })
+
+  it('reports not performed where the slab below has no stated capacity, naming the slab', () => {
+    const below = slab('slab_below', 'level_1')
+    const above = slab('slab_above', 'level_2', { formworkType: 'plywood' })
+    const report = validateFormwork(
+      [level('level_1', 0), level('level_2', 1), below, above] as unknown as AnyNode[],
+      {
+        propsByElement: new Map([
+          [above.id as AnyNodeId, { props: [{ x: 4, z: 3 }], loadKn: 60, cellM2: 2 }],
+        ]),
+      },
+    )
+    expect(report.findings.some((f) => f.invariant === 'PROPS_ONTO_SLAB_BELOW')).toBe(false)
+    const entry = report.notChecked.find((e) => e.invariant === 'PROPS_ONTO_SLAB_BELOW')
+    expect(entry?.elementIds).toContain(above.id as AnyNodeId)
+    expect(entry?.needs).toContain('slab_below')
+  })
+
+  it('declares itself unrun where no props evidence is passed at all', () => {
+    const below = slab('slab_below', 'level_1', { loadCapacityKnM2: 20 })
+    const above = slab('slab_above', 'level_2', { formworkType: 'plywood' })
+    const report = validateFormwork([
+      level('level_1', 0),
+      level('level_2', 1),
+      below,
+      above,
+    ] as unknown as AnyNode[])
+    const entry = report.notChecked.find((e) => e.invariant === 'PROPS_ONTO_SLAB_BELOW')
+    expect(entry).toBeDefined()
+    expect(entry?.needs).toContain('propsByElement')
+  })
+})
+
+describe('formwork outside the site boundary', () => {
+  function site(id: string, points: Array<[number, number]>, setback?: number): SiteNode {
+    return SiteNode.parse({
+      id,
+      type: 'site',
+      polygon: { type: 'polygon', points },
+      ...(setback === undefined ? {} : { setback }),
+    })
+  }
+
+  it('errors where the footprint crosses the boundary, naming the amount', () => {
+    const siteNode = site('site_1', [
+      [0, 0],
+      [10, 0],
+      [10, 10],
+      [0, 10],
+    ])
+    // The wall runs from 8 to 15, so its end reaches 5 m past the east edge.
+    const w = wall({ start: [8, 5], end: [15, 5] })
+    const report = validateFormwork([siteNode, w] as AnyNode[])
+    const found = report.findings.filter((f) => f.invariant === 'FORMWORK_OUTSIDE_BOUNDARY')
+    expect(found.length).toBe(1)
+    expect(found[0]?.severity).toBe('error')
+    expect(found[0]?.message).toContain('5.00 m past')
+  })
+
+  it('reports a setback encroachment as a separate, warning finding', () => {
+    const siteNode = site(
+      'site_1',
+      [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+      ],
+      2,
+    )
+    // Inside the boundary, but its near edge sits 0.5 m from it — inside the 2 m
+    // setback band, without crossing the line.
+    const w = wall({ start: [0.5, 5], end: [4, 5] })
+    const report = validateFormwork([siteNode, w] as AnyNode[])
+    const found = report.findings.filter((f) => f.invariant === 'FORMWORK_OUTSIDE_BOUNDARY')
+    expect(found.length).toBe(1)
+    expect(found[0]?.severity).toBe('warning')
+    expect(found[0]?.message).toContain('setback')
+  })
+
+  it('is silent where the footprint sits inside the boundary and clear of the setback', () => {
+    const siteNode = site(
+      'site_1',
+      [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+      ],
+      2,
+    )
+    const w = wall({ start: [3, 5], end: [7, 5] })
+    const report = validateFormwork([siteNode, w] as AnyNode[])
+    expect(report.findings.some((f) => f.invariant === 'FORMWORK_OUTSIDE_BOUNDARY')).toBe(false)
+  })
+
+  it('declares itself unrun where no site boundary exists', () => {
+    const w = wall()
+    const report = validateFormwork([w] as AnyNode[])
+    const entry = report.notChecked.find((e) => e.invariant === 'FORMWORK_OUTSIDE_BOUNDARY')
+    expect(entry).toBeDefined()
+    expect(entry?.needs).toContain('site')
   })
 })

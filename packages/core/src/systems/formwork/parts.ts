@@ -1,6 +1,6 @@
 import type { FormworkPartOverride } from '../../schema/nodes/formwork-assembly'
+import { type Verification, weakestVerification } from './catalog/types'
 import type { FaceRole } from './coverage/types'
-import { weakestVerification, type Verification } from './catalog/types'
 
 /**
  * What a shutter is made of, part by part.
@@ -604,7 +604,11 @@ export function bomLines(parts: readonly FormworkPart[]): BomLine[] {
   return [...lines.values()]
     .map(({ line, weightKg, weighable, verification }) =>
       weighable
-        ? { ...line, totalWeightKg: weightKg, ...(verification === undefined ? {} : { verification }) }
+        ? {
+            ...line,
+            totalWeightKg: weightKg,
+            ...(verification === undefined ? {} : { verification }),
+          }
         : { ...line, ...(verification === undefined ? {} : { verification }) },
     )
     .sort(

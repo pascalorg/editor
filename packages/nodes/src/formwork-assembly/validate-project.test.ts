@@ -480,6 +480,47 @@ describe('validateProjectFormwork', () => {
     expect(unchecked(nodes)).toContain('UNFORMABLE_STRIP')
   })
 
+  test('a slab’s own falsework evidence reaches the prop-versus-capacity check', () => {
+    // Two storeys: the decked slab is propped off the slab below, which carries a
+    // stated capacity. The check must read the props out of the solve's own
+    // evidence — a validator that re-derived the grid would not be checking what
+    // the parts table drew.
+    const nodes = sceneOf(
+      makeSlab('slab_above', { parentId: 'level_2', loadCapacityKnM2: 200 }),
+      makeAssembly('formwork-assembly_1', 'slab_above'),
+    )
+    nodes.level_2 = {
+      object: 'node',
+      id: 'level_2',
+      type: 'level',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['slab_above'],
+      elevation: 6,
+      height: 6,
+      level: 1,
+    } as unknown as AnyNode
+    // The slab below, propped off the ground: it has a real capacity and the
+    // falsework above stands on it.
+    nodes.slab_below = makeSlab('slab_below', {
+      parentId: 'level_1',
+      loadCapacityKnM2: 0.5,
+      formworkType: 'none',
+    }) as unknown as AnyNode
+
+    const shutter = solveProjectFormwork(nodes).elements[0]?.shutters[0]
+    expect(shutter?.evidence.falsework).toBeDefined()
+    expect((shutter?.evidence.falsework?.props ?? []).length).toBeGreaterThan(0)
+
+    const validation = validateProjectFormwork(nodes)
+    // The deck's own reaction is huge against a 0.5 kN/m² slab, so the prop check
+    // fires and names the slab below.
+    const found = validation.report.findings.filter((f) => f.invariant === 'PROPS_ONTO_SLAB_BELOW')
+    expect(found.length).toBeGreaterThan(0)
+    expect(found[0]?.message).toContain('slab_below')
+  })
+
   test('scopes findings to a level while reading the whole scene for topology', () => {
     const nodes = sceneOf(makeWall('wall_1'), makeAssembly('formwork-assembly_1', 'wall_1'))
     nodes.wall_2 = makeWall('wall_2', {

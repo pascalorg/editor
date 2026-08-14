@@ -2,6 +2,7 @@ import type {
   FaceGangs,
   FormworkSystem,
   PressureEnvelope,
+  PropEvidence,
   RiseRateLimit,
   StripPack,
   TieField,
@@ -77,6 +78,7 @@ export function validateProjectFormwork(
   const tieFields = new Map<AnyNodeId, readonly TieField[]>()
   const gangs = new Map<AnyNodeId, readonly FaceGangs[]>()
   const riseRates = new Map<AnyNodeId, RiseRateLimit>()
+  const propsByElement = new Map<AnyNodeId, PropEvidence>()
   // A shortage names a catalog id and the pours that overlap on it, and a pour id is an
   // assembly id — which the validator never sees, because it reads castable elements. This
   // is the only layer that holds both, the same reason `bomHire`'s `targetsByMark` is built
@@ -123,6 +125,12 @@ export function validateProjectFormwork(
     const riseRate = element.shutters.find((shutter) => shutter.evidence.riseRate)?.evidence
       .riseRate
     if (riseRate) riseRates.set(id, riseRate)
+    // A slab has one falsework design for the whole pour, so the first shutter
+    // that carries one is the element's. The props reach down to the slab below,
+    // which is a different element — the check reads both from the node graph.
+    const falsework = element.shutters.find((shutter) => shutter.evidence.falsework)?.evidence
+      .falsework
+    if (falsework) propsByElement.set(id, falsework)
   }
 
   return {
@@ -135,6 +143,7 @@ export function validateProjectFormwork(
       tieFields,
       gangs,
       riseRates,
+      propsByElement,
       // The project's permitted joints, so the off-permitted-elevation check reads the
       // same data the split snapped to — the wire that made a dormant check real.
       limits: pourLimitsFromSettings(settings),

@@ -28,6 +28,8 @@ export {
   type FormworkWriteTool,
   INVARIANT_LABELS,
   type InvariantId,
+  type NotCheckedEntry,
+  type PropEvidence,
   type RemedyKind,
   type TieField,
   type ValidationReport,

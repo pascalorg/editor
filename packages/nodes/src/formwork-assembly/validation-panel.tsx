@@ -456,6 +456,11 @@ export function FormworkValidationPanel() {
                 {INVARIANT_LABELS[entry.invariant as InvariantId] ?? entry.invariant}
               </div>
               <div className="text-[10px] text-muted-foreground/80 leading-snug">{entry.needs}</div>
+              {entry.elementIds && entry.elementIds.length > 0 && (
+                <div className="text-[10px] text-foreground/50">
+                  On: {entry.elementIds.join(', ')}
+                </div>
+              )}
             </div>
           ))}
         </div>

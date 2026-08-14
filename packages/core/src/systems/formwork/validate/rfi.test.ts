@@ -71,17 +71,18 @@ describe('who answers it is a judgement, not a field on the finding', () => {
 
   it('asks about half of them, and the silent half is the deliberate part', () => {
     // The proportion is the result this module reports. If every finding raised a
-    // question the table would be doing no work, and the ten it stays quiet about are
-    // the contractor's own temporary-works decisions.
+    // question the table would be doing no work, and the thirteen it stays quiet
+    // about are the contractor's own temporary-works decisions.
     //
-    // Ten of the eleven templates are reached from a bare finding. The eleventh,
-    // LIFT_JOINT_OFF_PERMITTED_ELEVATION, is the one invariant whose *default* remedy is
-    // argument-complete, so a bare instance is suppressed by the write rule and it
-    // becomes a question only on the element where no cap lands the joints on the set.
+    // Thirteen of the fourteen templates are reached from a bare finding. The
+    // fourteenth, LIFT_JOINT_OFF_PERMITTED_ELEVATION, is the one invariant whose
+    // *default* remedy is argument-complete, so a bare instance is suppressed by the
+    // write rule and it becomes a question only on the element where no cap lands
+    // the joints on the set.
     const asked = (Object.keys(INVARIANT_LABELS) as InvariantId[]).filter(
       (invariant) => formworkRfiCandidates([bare(invariant)]).length > 0,
     )
-    expect(asked.length).toBe(10)
+    expect(asked.length).toBe(13)
     expect(asked).not.toContain('LIFT_JOINT_OFF_PERMITTED_ELEVATION')
     expect(
       formworkRfiCandidates([

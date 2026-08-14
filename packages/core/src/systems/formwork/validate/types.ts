@@ -77,6 +77,12 @@ export type InvariantId =
   | 'PANEL_PRESSURE_OVER_RATING'
   /** The concrete cannot arrive fast enough to rise at the rate the project stated. */
   | 'POUR_RATE_OVER_CONCRETE_SUPPLY'
+  /** A tie hole intersects a reinforcing bar, or cannot be moved clear of one. */
+  | 'TIES_THROUGH_REBAR'
+  /** A prop's reaction exceeds what the slab it stands on may safely carry. */
+  | 'PROPS_ONTO_SLAB_BELOW'
+  /** Formwork extends past the site boundary, or into its stated setback. */
+  | 'FORMWORK_OUTSIDE_BOUNDARY'
 
 /**
  * One stretch a through-tie could pass over, and the stations at which it can.
@@ -195,15 +201,46 @@ export interface Finding {
 }
 
 /**
+ * The props under one slab soffit, as the falsework evidence carries them.
+ *
+ * The validator is given the positions, the reaction and the tributary cell from
+ * the solve rather than re-deriving the grid, for the same reason the packs and
+ * envelopes are passed in: a second design pass would be a second layout, and a
+ * validator that disagreed with the parts table about where a prop stands is
+ * worse than one that said nothing.
+ */
+export interface PropEvidence {
+  /** Prop plan positions, in the slab's own XZ, m. */
+  props: ReadonlyArray<{ x: number; z: number }>
+  /** The reaction each prop carries, kN. */
+  loadKn: number
+  /** The tributary cell the prop was checked against, m². */
+  cellM2: number
+}
+
+/**
+ * One assertion this scope could not run, and the input it wanted.
+ *
+ * `elementIds` is set where a check ran on the elements that carry the data and
+ * the named remainder could not be covered — the partial-population case — and
+ * absent where the whole check was blocked, since there the input is missing
+ * everywhere rather than on particular elements.
+ */
+export interface NotCheckedEntry {
+  invariant: InvariantId | string
+  needs: string
+  elementIds?: AnyNodeId[]
+}
+
+/**
  * What a scope's validation found, and — as importantly — what it could not look
  * at.
  *
  * `notChecked` exists because a validation report that lists only failures reads
  * as a clean bill of health for everything it never examined. Some of the plan's
- * assertions need data this scene has no schema for (rebar geometry, a slab's
- * capacity at a prop position, a system's minimum radius), and an unchecked
- * assertion silently absent is how a user comes to believe the shutter was
- * checked against rebar it was never compared to.
+ * assertions need data this scene does not carry (a system's minimum radius), and
+ * an unchecked assertion silently absent is how a user comes to believe the
+ * shutter was checked against rebar it was never compared to.
  *
  * The entries move as the schema grows. A crane's load chart was in this list
  * until the settings gained one, and the check it blocked now runs wherever a
@@ -217,7 +254,7 @@ export interface ValidationReport {
   /** Elements that were examined. A scope with none is not a scope that passed. */
   elementIds: AnyNodeId[]
   /** Invariants that could not run here, and the input each one wanted. */
-  notChecked: Array<{ invariant: InvariantId | string; needs: string }>
+  notChecked: NotCheckedEntry[]
 }
 
 export const INVARIANT_LABELS: Record<InvariantId, string> = {
@@ -244,4 +281,7 @@ export const INVARIANT_LABELS: Record<InvariantId, string> = {
   GANG_HEADROOM_OVER_HOOK_HEIGHT: 'A gang’s slings want more height than the hook has',
   PANEL_PRESSURE_OVER_RATING: 'Pour pressure over what the panels are rated for',
   POUR_RATE_OVER_CONCRETE_SUPPLY: 'Stated rate of rise faster than the concrete arrives',
+  TIES_THROUGH_REBAR: 'A tie passes through the reinforcement',
+  PROPS_ONTO_SLAB_BELOW: 'A prop overloads what it stands on',
+  FORMWORK_OUTSIDE_BOUNDARY: 'Formwork crosses the site boundary',
 }

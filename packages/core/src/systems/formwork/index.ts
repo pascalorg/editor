@@ -714,6 +714,8 @@ export {
   INVARIANT_LABELS,
   type InvariantId,
   mechanicallyFixable,
+  type NotCheckedEntry,
+  type PropEvidence,
   type RemedyKind,
   RFI_ADDRESSEE_LABELS,
   type RfiAddressee,

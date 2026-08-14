@@ -174,6 +174,18 @@ const REMEDIES: Record<InvariantId, FormworkRemedy> = {
     field: 'riseRateMH',
     note: 'Pour slower, warm the mix, or stiffen the consistency — the frame is rated what it is rated and no arrangement of it carries more. Only the rate is a call, and it is a project setting, so it re-designs every shutter in the scene. The finding carries the rate that clears this one where its code inverts.',
   },
+  TIES_THROUGH_REBAR: {
+    kind: 'none',
+    note: 'The cage is the engineer’s, and no write here moves a bar. The tie can move within the grid where the finding says one is clear; where it cannot, the answer is a different bar arrangement, a different tie grid, or a different system — all design decisions, and a fixed grid with no clear position is the proof that one of them has to change.',
+  },
+  PROPS_ONTO_SLAB_BELOW: {
+    kind: 'none',
+    note: 'The capacity is a property of the slab below, and no write here strengthens it. Where backpropping is possible the finding names the storeys the load must be carried through; otherwise the prop grid tightens, the slab is poured in stages, or a stiffer falsework stage is chosen — all design decisions the report cannot apply for the reader.',
+  },
+  FORMWORK_OUTSIDE_BOUNDARY: {
+    kind: 'none',
+    note: 'The boundary is a fact of the site and no write here moves it. The formwork has to stay inside it — the element moves, the scaffold is set differently, or the boundary is wrong as recorded — and each of those is a decision about the world rather than a call this feature makes.',
+  },
 }
 
 /**
