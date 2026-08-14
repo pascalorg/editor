@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
-    "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#4cd28a0347c2038bd96eb34d2b39377e585fda84",
+    "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#39f1916213de6fa8e65388d771839c5f9834fea1",
     "@mint/pascal-plugin": "github:mintdotgg/mint-pascal-plugin#902c546dbaece6b31455c0dc394afe6b9cd136fe",
     "@node-rs/argon2": "^2.0.2",
     "@number-flow/react": "^0.6.0",
