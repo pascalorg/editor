@@ -14,6 +14,8 @@ import { BeamNode } from './schema'
 
 const SIDE_HANDLE_OFFSET = 0.27
 const SIDE_HANDLE_MIN_OFFSET = 0.33
+const DEPTH_HANDLE_OFFSET = 0.45
+const MIN_BEAM_DEPTH = 0.2
 
 function beamMidpointFrame(n: BeamNodeType): {
   midX: number
@@ -79,7 +81,37 @@ function beamCornerPicker(endpoint: 'start' | 'end'): HandleDescriptor<BeamNodeT
   }
 }
 
+// Depth arrow — anchored at the soffit (Y = elevation), grows upward so
+// the side shutters get taller. Sits over the beam midpoint at the top
+// edge with enough clearance to clear the side-move arrows that hug the
+// body; `rotationY` orients the chevron's broad face along the beam's
+// perpendicular so it reads frontally from either side.
+function beamDepthHandle(): HandleDescriptor<BeamNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: MIN_BEAM_DEPTH,
+    // Drives the floating dimension pill and suppresses the arrow's own
+    // inline chip, matching the fence/wall height handles.
+    measureLabel: 'depth',
+    currentValue: (n: BeamNodeType) => n.depth ?? 0.6,
+    apply: (_n: BeamNodeType, newDepth: number) => ({ depth: newDepth }),
+    placement: {
+      position: (n: BeamNodeType) => {
+        const { midX, midZ, normalX, normalZ } = beamMidpointFrame(n)
+        return [midX, (n.elevation ?? 0) + (n.depth ?? 0.6) + DEPTH_HANDLE_OFFSET, midZ]
+      },
+      rotationY: (n: BeamNodeType) => {
+        const { normalX, normalZ } = beamMidpointFrame(n)
+        return Math.atan2(-normalZ, normalX)
+      },
+    },
+  }
+}
+
 const beamHandles = (): HandleDescriptor<BeamNodeType>[] => [
+  beamDepthHandle(),
   beamSideMoveHandle('front'),
   beamSideMoveHandle('back'),
   beamCornerPicker('start'),
