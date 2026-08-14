@@ -30,12 +30,20 @@ export const SiteNode = BaseNode.extend({
       [-15, 15],
     ],
   }),
+  /**
+   * How far formwork, its access scaffold and working/striking clearances must
+   * stay inside the boundary, m. The boundary itself is `polygon`. Optional
+   * project data for the scaffold-versus-boundary check; nothing reads it yet,
+   * and stating it changes no other output.
+   */
+  setback: z.number().finite().nonnegative().max(1000).optional(),
   // terrain: TerrainData,
   children: z.array(z.string()).default([]),
 }).describe(
   dedent`
   Site node - used to represent a site
-  - polygon: polygon data
+  - polygon: polygon data (the site boundary)
+  - setback: how far formwork, access scaffold and working/striking clearances must stay inside the boundary, m
   - children: array of child node ids (buildings, items)
   `,
 )

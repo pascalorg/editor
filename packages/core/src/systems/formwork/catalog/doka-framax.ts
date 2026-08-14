@@ -533,6 +533,9 @@ export const DOKA_FRAMAX_XLIFE: FormworkSystem = {
   manufacturer: 'Doka',
   label: 'Doka Framax Xlife (steel)',
   seeded: true,
+  // Walls and columns are both rated on the panels (80/100 kN/m² walls, 90 kN/m²
+  // columns); a soffit is ply and props and no system's data is used to form one.
+  supports: { walls: true, columns: true, slabs: false },
   frameDepthMm: 120,
   panels: [...PANELS, ...UNIVERSAL_PANELS],
   corners: CORNERS,

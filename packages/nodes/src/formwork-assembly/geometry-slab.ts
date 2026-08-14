@@ -115,7 +115,7 @@ function beamSpec(
     kind: 'joist',
     member,
     locus,
-    ...(beam ? { catalogId: beam.id } : {}),
+    ...(beam ? { catalogId: beam.id, verification: beam.verification } : {}),
     description: beam
       ? `${beam.label}, ${Math.round(lengthM * 1000)} mm`
       : `${label} ${Math.round(lengthM * 1000)} mm`,
@@ -199,7 +199,9 @@ export function buildSlabFormwork(
             locus: { on: 'grid', xMm: (x - xStep / 2) * 1000, zMm: (z - zStep / 2) * 1000 },
             widthMm: xStep * 1000,
             heightMm: zStep * 1000,
-            ...(falsework.sheathing ? { catalogId: falsework.sheathing.id } : {}),
+            ...(falsework.sheathing
+              ? { catalogId: falsework.sheathing.id, verification: falsework.sheathing.verification }
+              : {}),
             description: falsework.sheathing
               ? `${falsework.sheathing.label}, ${Math.round(xStep * 1000)} × ${Math.round(zStep * 1000)} mm`
               : `Deck sheet ${Math.round(xStep * 1000)} × ${Math.round(zStep * 1000)} mm`,
@@ -284,7 +286,9 @@ export function buildSlabFormwork(
           {
             kind: 'prop',
             locus: { on: 'grid', xMm: x * 1000, zMm: z * 1000 },
-            ...(falsework.props ? { catalogId: falsework.props.id } : {}),
+            ...(falsework.props
+              ? { catalogId: falsework.props.id, verification: falsework.props.verification }
+              : {}),
             description: falsework.props
               ? `${falsework.props.label}, extended ${Math.round(propLength * 1000)} mm`
               : `Prop ${Math.round(propLength * 1000)} mm`,

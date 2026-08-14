@@ -2286,6 +2286,61 @@ describe('projectFormworkCaveats', () => {
 
     expect(projectFormworkCaveats(solution).some((c) => c.includes('Walers, ties'))).toBe(false)
   })
+
+  test('a bill on a secondary system carries its weakest level, naming the lines (8.3)', () => {
+    // TRIO's panels were read off dealer listings, so a takeoff built from them is
+    // secondary — the fold's point: the level travels from the catalog value to the
+    // line to the takeoff, and the sentence names the lines at that level.
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { systemId: 'peri-trio' }),
+        ),
+        { parts: { systemId: 'peri-trio' } },
+      ),
+    )
+
+    expect(solution.bom.some((line) => line.verification === 'secondary')).toBe(true)
+    expect(
+      projectFormworkCaveats(solution).some(
+        (c) => c.includes('secondary') && c.includes('dealer or secondary listing'),
+      ),
+    ).toBe(true)
+  })
+
+  test("the fold takes the weakest line, not the system's headline (8.3)", () => {
+    // Framax's panels came off Doka's own item list, so they are certified — but the
+    // waler values were read off a dealer listing, so the takeoff is secondary even
+    // though the system's headline is certified. The fold's point: one weak line makes
+    // the total weak, and the caveat names the lines at that level.
+    const solution = solveProjectFormwork(steelWallScene())
+    const caveats = projectFormworkCaveats(solution)
+
+    const panelLines = solution.bom.filter((line) =>
+      line.catalogId?.startsWith('doka-framax-panel'),
+    )
+    expect(panelLines.length).toBeGreaterThan(0)
+    expect(panelLines.every((line) => line.verification === 'certified')).toBe(true)
+    expect(solution.bom.some((line) => line.verification === 'secondary')).toBe(true)
+    expect(caveats.some((c) => c.includes('dealer or secondary listing'))).toBe(true)
+    expect(caveats.some((c) => c.includes('h20-doka-permissible'))).toBe(true)
+  })
+
+  test('a slab on the default film-faced ply is unverified, and named (8.3)', () => {
+    // The default sheathing is the unverified typical band, so every ordinary deck
+    // depends on it — which is exactly the constant the fold has to name.
+    const solution = solveProjectFormwork(
+      sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0)),
+    )
+
+    expect(solution.bom.some((line) => line.verification === 'unverified')).toBe(true)
+    expect(
+      projectFormworkCaveats(solution).some(
+        (c) => c.includes('unverified') && c.includes('film-faced-ply-18'),
+      ),
+    ).toBe(true)
+  })
 })
 
 describe('the pour plan — permitted joint elevations', () => {
@@ -2347,5 +2402,70 @@ describe('the pour plan — permitted joint elevations', () => {
     )
 
     expect(solution.pours).toBeUndefined()
+  })
+})
+
+describe('the deferred-clash inputs (group 9)', () => {
+  test('stating reinforcement, slab capacity or a setback changes no quantity, cost, date or finding', () => {
+    // The whole contract of these inputs, and why they are optional fields on existing nodes
+    // rather than a new kind: they exist so a project *can* state the data the clash checks
+    // need, and the checks are a later group — so today they are read by nothing, and a
+    // project that states all of them must solve exactly like the pre-change fixture that
+    // states none. This is the regression the scenario promises: the same bill, the same
+    // money, the same dates, the same findings.
+    const plain = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeSlab('slab_1'),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0),
+      makeAssembly('formwork-assembly_2', 'slab_1', 0, 0),
+    )
+    const stated: Record<string, AnyNode> = {
+      ...plain,
+      // The site the settings node is parented to, now carrying a stated boundary setback.
+      site_1: {
+        object: 'node',
+        id: 'site_1',
+        type: 'site',
+        parentId: null,
+        visible: true,
+        metadata: {},
+        children: [],
+        polygon: {
+          type: 'polygon',
+          points: [
+            [-20, -20],
+            [20, -20],
+            [20, 20],
+            [-20, 20],
+          ],
+        },
+        setback: 2,
+      } as unknown as AnyNode,
+    }
+    ;(stated.wall_1 as WallNode).reinforcement = {
+      arrangement: { diameter: 0.016, spacing: 0.2, cover: 0.04 },
+    }
+    ;(stated.slab_1 as SlabNode).loadCapacityKnM2 = 7.5
+
+    const settings = {
+      stock: { owned: {} },
+      pressureStandard: 'BS_8110',
+      schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+      rates: { byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } } },
+    }
+    const without = solveProjectFormwork(withSettings(plain, settings))
+    const withInputs = solveProjectFormwork(withSettings(stated, settings))
+
+    // The derived surfaces — not `elements[].host`, which embeds the raw node and would
+    // rightly show the stated field.
+    expect(withInputs.bom).toEqual(without.bom)
+    expect(withInputs.totalWeightKg).toBe(without.totalWeightKg)
+    expect(withInputs.shutterCount).toBe(without.shutterCount)
+    expect(withInputs.cost).toEqual(without.cost)
+    expect(withInputs.hire).toEqual(without.hire)
+    expect(withInputs.schedule).toEqual(without.schedule)
+    expect(withInputs.incomplete).toEqual(without.incomplete)
+    expect(withInputs.rejected).toEqual(without.rejected)
+    expect(projectFormworkCaveats(withInputs)).toEqual(projectFormworkCaveats(without))
   })
 })

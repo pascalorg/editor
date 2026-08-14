@@ -26,6 +26,8 @@ import {
   fillerForGap,
   panelWidthsMm,
   permissiblePressureKnM2,
+  systemSupportsKind,
+  weakestVerification,
 } from './types'
 
 /**
@@ -135,17 +137,63 @@ describe('seeded and unseeded', () => {
     }
   })
 
-  it('every seeded panel carries a rated pressure — a system without one is unseeded', () => {
-    // The spec's rule in registry form: a system "with no rated pressure" must read as
-    // unseeded, because a system with no stated limit would pass every pressure check.
-    // Seeded is therefore exactly "full data including a rated pressure on every panel" —
-    // a partially filled entry has no business in the seeded half of the registry.
+  it('folds weakest-wins across levels (8.3)', () => {
+    // The fold a result inherits from its constants: one unverified input makes the
+    // result unverified, one secondary input makes it secondary, and an empty set has
+    // nothing to report. Derived sits between certified and secondary — a method over
+    // cited inputs is auditable, a dealer listing is a document of uncertain authority.
+    expect(weakestVerification(['certified', 'certified'])).toBe('certified')
+    expect(weakestVerification(['certified', 'derived'])).toBe('derived')
+    expect(weakestVerification(['certified', 'secondary'])).toBe('secondary')
+    expect(weakestVerification(['certified', 'derived', 'secondary', 'unverified'])).toBe(
+      'unverified',
+    )
+    expect(weakestVerification(['derived', 'secondary', 'unverified'])).toBe('unverified')
+    expect(weakestVerification([])).toBeUndefined()
+  })
+
+  it('every supported kind of every seeded system carries its rating — a supported kind without one is unseeded', () => {
+    // The spec's rule in registry form, generalised by the capability decision: a system
+    // "with no rated pressure" must read as unseeded, because a system with no stated
+    // limit would pass every pressure check. Seeded is therefore exactly "full data
+    // including the rating for every kind it supports" — a partially filled entry has no
+    // business in the seeded half of the registry, and a column-only system with a column
+    // rating is seeded rather than punished for not selling walls.
     for (const system of SEEDED_SYSTEMS) {
       expect(system.panels.length).toBeGreaterThan(0)
       for (const panel of system.panels) {
-        expect(panel.pressure.wallsKnM2).toBeGreaterThan(0)
+        if (system.supports.walls) expect(panel.pressure.wallsKnM2).toBeGreaterThan(0)
+        if (system.supports.columns) expect(panel.pressure.columnsKnM2).toBeGreaterThan(0)
       }
+      // A soffit capacity is a beam/prop table that does not exist yet, so no seeded
+      // system may claim slabs until it does — a seeded system supporting slabs without
+      // a soffit shape would be a pressure engine with nothing to check a slab against.
+      expect(system.supports.slabs).toBe(false)
     }
+  })
+
+  it('a seeded system refuses a kind it does not support, and forms the ones it does', () => {
+    for (const system of SEEDED_SYSTEMS) {
+      expect(systemSupportsKind(system, 'wall')).toBe(system.supports.walls)
+      expect(systemSupportsKind(system, 'column')).toBe(system.supports.columns)
+      expect(systemSupportsKind(system, 'slab')).toBe(false)
+    }
+    // The shipped pair forms walls and columns and nothing else.
+    expect(systemSupportsKind(DOKA_FRAMAX_XLIFE, 'wall')).toBe(true)
+    expect(systemSupportsKind(DOKA_FRAMAX_XLIFE, 'column')).toBe(true)
+    expect(systemSupportsKind(PERI_TRIO, 'slab')).toBe(false)
+  })
+
+  it('the unseeded registrations state what they would form', () => {
+    // The capability is recorded even where the data is not: a seed would have to rate
+    // exactly the kinds each registration claims, and the refusal names the same kinds.
+    const supports = (id: string) => formworkSystem(id)?.supports
+    expect(supports('peri-srs')).toEqual({ walls: false, columns: true, slabs: false })
+    expect(supports('peri-quattro')).toEqual({ walls: false, columns: true, slabs: false })
+    expect(supports('peri-skydeck')).toEqual({ walls: false, columns: false, slabs: true })
+    expect(supports('peri-multiflex')).toEqual({ walls: false, columns: false, slabs: true })
+    expect(supports('mivan-generic')).toEqual({ walls: true, columns: false, slabs: true })
+    expect(supports('doka-frami')).toEqual({ walls: true, columns: true, slabs: false })
   })
 
   it('the default system is seeded, so an unconfigured project still designs', () => {

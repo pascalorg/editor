@@ -177,6 +177,62 @@ export type WallAssemblyDatumReference = {
   offset: number
 }
 
+/**
+ * One reinforcing bar in an element, positioned in the element's own frame.
+ *
+ * A wall's bars run within its plane: `along` is the distance from the start
+ * end and `through` the distance from the reference face (the interior face
+ * for a wall with one), which is the frame the tie grid is laid out in — the
+ * two grids are checked against each other by overlaying them, so they have to
+ * share one. `diameter` is what a tie's hole has to clear.
+ */
+export const ReinforcementBar = z.object({
+  /** Distance along the element from its start, m. */
+  along: z.number().finite(),
+  /** Distance through the element from the reference face, m. */
+  through: z.number().finite(),
+  /** Bar diameter, m. */
+  diameter: z.number().finite().positive(),
+})
+export type ReinforcementBar = z.infer<typeof ReinforcementBar>
+
+/**
+ * A bar arrangement, from which positions derive — the compact way a drawing
+ * says "T16 at 200" rather than listing every bar.
+ *
+ * `spacing` is along the element and `layers` the number of parallel planes
+ * through the thickness, so positions are derived by stepping `along` by
+ * `spacing` in each of `layers` planes offset `cover` (and `cover + diameter`
+ * where there are two) from the reference face.
+ */
+export const ReinforcementArrangement = z.object({
+  /** Bar diameter, m. */
+  diameter: z.number().finite().positive(),
+  /** Bar spacing along the element, m. */
+  spacing: z.number().finite().positive(),
+  /** Cover to the reference face, m. */
+  cover: z.number().finite().nonnegative(),
+  /** Parallel layers through the thickness, 1 or 2 in a wall. */
+  layers: z.number().int().min(1).max(4).default(1),
+})
+export type ReinforcementArrangement = z.infer<typeof ReinforcementArrangement>
+
+/**
+ * Reinforcement geometry for an element, for the tie-versus-reinforcement
+ * check — either the bars themselves or the arrangement they derive from.
+ *
+ * Optional and read by nothing yet: the deferred-clash checks are a later
+ * group, and this field exists so a project *can* state the data without any
+ * other behaviour changing (group 9's contract). Both members are optional
+ * because a stated object with neither is a claim nothing is modelled as
+ * explicitly as not stating it at all.
+ */
+export const ReinforcementGeometry = z.object({
+  bars: z.array(ReinforcementBar).max(10_000).optional(),
+  arrangement: ReinforcementArrangement.optional(),
+})
+export type ReinforcementGeometry = z.infer<typeof ReinforcementGeometry>
+
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
@@ -222,6 +278,12 @@ export const WallNode = BaseNode.extend({
   // Space detection for cutaway mode
   frontSide: z.enum(['interior', 'exterior', 'unknown']).default('unknown'),
   backSide: z.enum(['interior', 'exterior', 'unknown']).default('unknown'),
+  /**
+   * Reinforcement geometry for the tie-versus-reinforcement check, in the
+   * element's own frame — see `ReinforcementGeometry`. Optional project data;
+   * nothing reads it yet, and stating it changes no other output.
+   */
+  reinforcement: ReinforcementGeometry.optional(),
   ...ShutteringFields,
   ...CastableFields,
 }).describe(

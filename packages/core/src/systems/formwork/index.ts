@@ -80,6 +80,7 @@ export {
   seededFormworkSystem,
   sheathingType,
   sheetStock,
+  systemSupportsKind,
   type TieHoleGrid,
   type TieType,
   TRIO_PRACTICAL_PRESSURE_KN_M2,
@@ -87,6 +88,7 @@ export {
   type UnseededFormworkSystem,
   unfittableCorners,
   type Verification,
+  weakestVerification,
 } from './catalog'
 export {
   COMMITMENT_GAP_LABELS,

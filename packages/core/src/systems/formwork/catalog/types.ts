@@ -336,6 +336,20 @@ export interface FormworkSystem {
    * layout refuse the ones with nothing to build from.
    */
   seeded: true
+  /**
+   * Which element kinds this system forms. A wall system carries a wall rating
+   * and a column system a column one, and a soffit system carries beam/prop
+   * capacities rather than a pressure at all — so a system used on a kind it does
+   * not support is refused (`'system-kind'`) rather than approximated with data
+   * it does not have. A seeded system must carry the rating for every kind it
+   * supports (the per-kind invariant), and no seeded system supports slabs until
+   * a soffit capacity shape exists.
+   */
+  supports: {
+    walls: boolean
+    columns: boolean
+    slabs: boolean
+  }
   /** Constant frame depth, repeated here so a layout can read it without a panel. */
   frameDepthMm: number
   panels: readonly PanelType[]
@@ -373,6 +387,15 @@ export interface UnseededFormworkSystem {
   label: string
   seeded: false
   /**
+   * Which element kinds this system forms, stated up front so the registration
+   * records what a seed would have to rate (and what the refusal would name).
+   */
+  supports: {
+    walls: boolean
+    columns: boolean
+    slabs: boolean
+  }
+  /**
    * Which document has to be bought or fetched before this can be designed
    * against, so the gap is actionable rather than merely disclosed.
    */
@@ -396,6 +419,52 @@ export function panelWidthsMm(system: FormworkSystem): number[] {
 /** Every distinct panel height in a system, ascending. */
 export function panelHeightsMm(system: FormworkSystem): number[] {
   return [...new Set(system.panels.map((panel) => panel.heightMm))].sort((a, b) => a - b)
+}
+
+/**
+/**
+ * The weakest verification level in a set — the fold a result inherits from the
+ * constants it depends on (OpenSpec 8.3).
+ *
+ * `certified > derived > secondary > unverified`, so the weakest of the four is
+ * the least trustworthy constant the result rests on; a result built from five
+ * certified values and one unverified one is unverified, and a result from five
+ * certified and one secondary is secondary. `undefined` for an empty set — a
+ * result with no catalog dependency has nothing to report. The caller that
+ * carries the fold names the constants at the returned level, because the level
+ * without the responsible constants is a verdict with no evidence.
+ */
+export function weakestVerification(
+  levels: readonly Verification[],
+): Verification | undefined {
+  const order: Record<Verification, number> = {
+    certified: 0,
+    derived: 1,
+    secondary: 2,
+    unverified: 3,
+  }
+  let weakest: Verification | undefined
+  for (const level of levels) {
+    if (weakest === undefined || order[level] > order[weakest]) weakest = level
+  }
+  return weakest
+}
+
+/**
+ * Whether a system forms an element kind — the capability the `'system-kind'`
+ * refusal reads.
+ *
+ * Slabs are deliberately the third kind here even though no seeded system
+ * supports them yet: a soffit system's capacity is a beam/prop table rather than
+ * a pressure, and the shape for it does not exist, so the invariant pins
+ * `supports.slabs` false on every seeded system until it does. Walls and columns
+ * are the two a seeded system can honestly claim today.
+ */
+export function systemSupportsKind(
+  system: Pick<FormworkSystem, 'supports'>,
+  kind: 'wall' | 'column' | 'slab',
+): boolean {
+  return system.supports[kind === 'wall' ? 'walls' : kind === 'column' ? 'columns' : 'slabs']
 }
 
 /**

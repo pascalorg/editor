@@ -1,5 +1,6 @@
 import type { FormworkPartOverride } from '../../schema/nodes/formwork-assembly'
 import type { FaceRole } from './coverage/types'
+import { weakestVerification, type Verification } from './catalog/types'
 
 /**
  * What a shutter is made of, part by part.
@@ -136,6 +137,12 @@ interface PartCommon {
   /** Set by an override: kept in the list rather than dropped, so the table can show it struck out. */
   omitted?: true
   note?: string
+  /**
+   * The catalog value's verification level, attached where the part is emitted so
+   * the fold can travel to the bill (8.3). Absent for a site-made part, which
+   * depends on no catalog entry.
+   */
+  verification?: Verification
 }
 
 /**
@@ -520,6 +527,12 @@ export interface BomLine {
   totalWeightKg?: number
   /** The marks this line covers, so a quantity can be traced back to the drawing. */
   marks: string[]
+  /**
+   * The weakest verification among the catalog values this line was built from,
+   * attached where the part is emitted so the level travels with the bill (8.3).
+   * Absent where the line is site-made and depends on no catalog entry.
+   */
+  verification?: Verification
 }
 
 function unitOf(part: FormworkPart): string {
@@ -549,6 +562,8 @@ export function bomLines(parts: readonly FormworkPart[]): BomLine[] {
     weightKg: number
     /** False as soon as one part in the line has no stated weight, which voids the total. */
     weighable: boolean
+    /** The weakest verification across the line's parts — what the line inherits (8.3). */
+    verification?: Verification
   }
   const lines = new Map<string, Accumulator>()
   for (const part of parts) {
@@ -578,10 +593,19 @@ export function bomLines(parts: readonly FormworkPart[]): BomLine[] {
     entry.line.marks.push(part.mark)
     if (part.weightKg === undefined) entry.weighable = false
     else entry.weightKg += part.weightKg * quantity
+    if (part.verification !== undefined) {
+      entry.verification = weakestVerification(
+        [entry.verification, part.verification].filter(
+          (level): level is Verification => level !== undefined,
+        ),
+      )
+    }
   }
   return [...lines.values()]
-    .map(({ line, weightKg, weighable }) =>
-      weighable ? { ...line, totalWeightKg: weightKg } : line,
+    .map(({ line, weightKg, weighable, verification }) =>
+      weighable
+        ? { ...line, totalWeightKg: weightKg, ...(verification === undefined ? {} : { verification }) }
+        : { ...line, ...(verification === undefined ? {} : { verification }) },
     )
     .sort(
       (a, b) =>

@@ -44,6 +44,12 @@ export const SlabNode = BaseNode.extend({
   edgeFaceCount: z.number().int().min(1).max(2).optional(),
   /** Height of the soffit above the floor it is propped off, in meters. */
   soffitHeightAboveSupport: z.number().finite().nonnegative().optional(),
+  /**
+   * In-situ load capacity of the slab, kN/m² — what a prop standing on it may
+   * safely transmit to it. Optional project data for the prop-versus-capacity
+   * check; nothing reads it yet, and stating it changes no other output.
+   */
+  loadCapacityKnM2: z.number().finite().positive().max(100_000).optional(),
   ...ShutteringFields,
   ...CastableFields,
 }).describe(
@@ -59,6 +65,7 @@ export const SlabNode = BaseNode.extend({
   - autoFromWalls: whether the slab is automatically generated from a closed wall loop
   - edgeFaceCount: rim faces to form — 2 for an upstand or a downstand edge beam
   - soffitHeightAboveSupport: soffit height above the floor it is propped off, in meters
+  - loadCapacityKnM2: in-situ load capacity of the slab, kN/m² — what a prop standing on it may safely transmit to it (optional project data for the prop-versus-capacity check)
   ${SHUTTERING_FIELD_DOCS}
   ${CASTABLE_FIELD_DOCS}
   `,

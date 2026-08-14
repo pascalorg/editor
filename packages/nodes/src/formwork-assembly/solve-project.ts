@@ -71,9 +71,12 @@ import {
   strikeTargetForPartKind,
   strikingInputFor,
   strikingStandardFor,
+  systemSupportsKind,
   toCastableElement,
+  type Verification,
   unformable,
   unformableCaveats,
+  weakestVerification,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { type CastableHostNode, pourUnitsForHost } from './attach'
@@ -393,19 +396,27 @@ function repeatedFloorCycle(elements: readonly SolvedElement[]): {
 }
 
 /**
- * The first registered-but-unseeded system a host's assemblies resolve to, or
- * `undefined` where every assembly resolves to a seeded system.
+ * The first system a host's assemblies resolve to that cannot form it, or `undefined`
+ * where every assembly resolves to a seeded system that can.
  *
  * The resolution is the same chain the layout uses — the assembly's own `systemId`, then
  * the project's, then the shipped default — so a refusal here names the same system the
  * design would have laid out. A host with no assemblies is refused on the project default,
  * because that is the system its shutters would have been raised in.
+ *
+ * Two faults share the channel: a registered system with no data (`unseeded`), and a
+ * seeded system that does not form this element's kind (`system-kind`) — a wall under a
+ * column-only system would be laid out from panels that do not exist for walls, the same
+ * invented layout the unseeded refusal blocks, reached through the back door once a column
+ * system is seeded. Slabs are deliberately not kind-checked: a soffit is ply and props and
+ * no system's data is used to form one, so a stated system on a slab is a configuration
+ * the slab ignores rather than a refusal.
  */
-function unseededSystemOnHost(
+function systemRefusalOnHost(
   host: CastableHostNode,
   nodes: Record<string, AnyNode>,
   settings: FormworkSettings,
-): string | undefined {
+): { systemId: string; unseeded: boolean } | undefined {
   const assemblyIds = formworkAssembliesOnHost(host.id as string, nodes)
   const resolve = (systemId: string | undefined) =>
     formworkSystem(systemId ?? settings.parts.systemId ?? DEFAULT_FORMWORK_SYSTEM_ID)
@@ -415,7 +426,11 @@ function unseededSystemOnHost(
       : [undefined]
   for (const id of ids) {
     const entry = resolve(id)
-    if (entry && !entry.seeded) return entry.id
+    if (!entry) continue
+    if (!entry.seeded) return { systemId: entry.id, unseeded: true }
+    if (host.type !== 'slab' && !systemSupportsKind(entry, host.type)) {
+      return { systemId: entry.id, unseeded: false }
+    }
   }
   return undefined
 }
@@ -481,19 +496,20 @@ export function solveProjectFormwork(
       continue
     }
     // The other refusal before the shutter solve: a configured panel system that is registered
-    // but carries no design data. `formworkSystem` resolves an unseeded id instead of
-    // returning `undefined`, so this is the one place that difference is read — an unregistered
-    // id still falls back to the conventional shutter, while a registered one with no data
-    // must be refused rather than laid out in invented panels. Naming the id is the whole
-    // sentence: the remedy is seeding that datasheet or choosing a system with data, and
-    // neither is guessable from a count.
-    const unseededSystemId = unseededSystemOnHost(host, nodes, settings)
-    if (unseededSystemId !== undefined) {
+    // but carries no design data, or that is seeded and does not form this element's kind.
+    // `formworkSystem` resolves an unseeded id instead of returning `undefined`, so this is
+    // the one place that difference is read — an unregistered id still falls back to the
+    // conventional shutter, while a registered one with nothing to build from must be refused
+    // rather than laid out in invented panels. Naming the id is the whole sentence: the remedy
+    // is seeding that datasheet or choosing a system that forms this element, and neither is
+    // guessable from a count.
+    const systemRefusal = systemRefusalOnHost(host, nodes, settings)
+    if (systemRefusal !== undefined) {
       rejected.push({
         elementId: host.id as AnyNodeId,
         kind: host.type,
-        reason: 'system-unseeded',
-        systemId: unseededSystemId,
+        reason: systemRefusal.unseeded ? 'system-unseeded' : 'system-kind',
+        systemId: systemRefusal.systemId,
       })
       continue
     }
@@ -836,6 +852,30 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   // the bill's tonnage is what passes through the job and a pick is one hook load, and a reader
   // who has just been told the total is incomplete is the reader about to size a crane on it.
   if (solution.lifts) out.push(...formworkLiftCaveats(solution.lifts))
+  // The weakest verification across the bill, reported as one sentence naming the lines at
+  // that level (8.3). This is the takeoff's own fold: every line carries the level its catalog
+  // values were built from, and a total resting on a secondary or unverified number is a number
+  // a reader must not sign. Beside the weight and the lifting sentences, because it is the same
+  // kind of claim — a figure that is a floor rather than an answer. Absent where every line is
+  // certified: a fully certified takeoff is told nothing, which is the point of the fold.
+  const levels = solution.bom
+    .map((line) => line.verification)
+    .filter((level) => level !== undefined)
+  const weakest = weakestVerification(levels as Verification[])
+  if (weakest !== undefined && weakest !== 'certified') {
+    const atLevel = solution.bom.filter((line) => line.verification === weakest)
+    const names = atLevel.map((line) => line.catalogId ?? line.description).slice(0, 5)
+    const label: Record<Exclude<Verification, 'certified'>, string> = {
+      derived: 'derived by a stated method from cited values',
+      secondary:
+        "read off a dealer or secondary listing rather than the manufacturer's own table",
+      unverified:
+        'unverified — arrived at by stated reasoning with nothing published to check it against',
+    }
+    out.push(
+      `The ${names.length === 1 ? 'line' : 'lines'} ${names.join(', ')} ${names.length === 1 ? 'is built from values that are' : 'are built from values that are'} ${label[weakest]}. The takeoff as a whole is ${weakest}, so its figures carry that level until the cited document is transcribed.`,
+    )
+  }
   if (solution.supply && solution.supply.ownedQuantity > 0) {
     out.push(
       'The owned/hired split is for this scope alone. The same owned stock serves the next pour once it is stripped, so two scopes’ owned figures are not a total.',

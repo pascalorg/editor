@@ -221,7 +221,7 @@ function cornerSpec(
       stationMm: entry.leg.alongM * 1000,
       towardEnd: entry.leg.towardEnd,
     },
-    ...(fit ? { catalogId: fit.corner.id } : {}),
+    ...(fit ? { catalogId: fit.corner.id, verification: fit.corner.verification } : {}),
     description: fit
       ? fit.corner.label
       : `Cut-to-fit ${entry.corner.side} corner, ${Math.round(entry.corner.angleDeg)}°`,
@@ -260,6 +260,7 @@ function pieceSpec(
       kind: 'panel',
       locus,
       catalogId: piece.panel.id,
+      verification: piece.panel.verification,
       description: piece.panel.label,
       provenance: 'standard',
       weightKg: piece.panel.weightKg,
@@ -274,6 +275,7 @@ function pieceSpec(
       kind: 'filler',
       locus,
       catalogId: piece.filler.id,
+      verification: piece.filler.verification,
       description: piece.filler.label,
       provenance: piece.filler.madeFrom === 'site-cut' ? 'bespoke' : 'standard',
       weightKg: piece.filler.weightKg,
@@ -832,7 +834,9 @@ export function buildWallFormwork(
           elevationMm: (station.y - baseY) * 1000,
           stationMm: (station.x - spanStart) * 1000,
         },
-        ...(design.tie ? { catalogId: design.tie.id } : {}),
+        ...(design.tie
+          ? { catalogId: design.tie.id, verification: design.tie.verification }
+          : {}),
         description: design.tie
           ? `${design.tie.label}, ${Math.round(tieLengthMm)} mm`
           : `Through-tie ${Math.round(tieLengthMm)} mm`,
@@ -896,7 +900,9 @@ export function buildWallFormwork(
               elevationMm: (y - baseY) * 1000,
               stationMm: (run.lo - spanStart) * 1000,
             },
-            ...(design.beam ? { catalogId: design.beam.id } : {}),
+            ...(design.beam
+              ? { catalogId: design.beam.id, verification: design.beam.verification }
+              : {}),
             description: design.beam
               ? `${design.beam.label}, ${Math.round(runLength * 1000)} mm`
               : `Waler ${Math.round(runLength * 1000)} mm`,
