@@ -92,7 +92,11 @@ component you edited is mounted, whether the store you gated on is ever written,
 or whether your listener runs before the tool's own. Those are the failures the
 suite structurally cannot see, so anything that touches UI wiring, keyboard
 handling or a store gate needs a run in the browser (`bun restart`, `:3002`)
-before it is called done.
+before it is called done. Two dev-only handles turn that check into a
+measurement rather than a squint at a screenshot:
+`window.__pascalCameraControls()` returns the live `CameraControlsImpl` (a
+getter — drei recreates the impl when the default camera changes, so never cache
+it), and `globalThis.__pascalNodeRegistry` is the loaded kind registry.
 
 Three things about actually getting the app up:
 
@@ -267,6 +271,41 @@ Consequences worth knowing before you touch copy:
   — `i18n-core.ts` is the server-safe half and must stay free of `'use client'`,
   the same rule `scene-migrations.ts` lives under.
 
+## The two views are two renderers, not one scene drawn twice
+
+`viewMode` (`2d` / `3d` / `split`) switches between an SVG floorplan
+(`components/editor/floorplan-panel.tsx` plus the layers in
+`components/editor-2d/`) and the R3F canvas. They share the scene store and
+nothing else: the 2D view derives its own geometry from node data and owns its
+own viewport (`centerX` / `centerY` / `width` in viewBox units), while the 3D
+view has a camera. `tools.md`'s "2D ↔ 3D behavioral parity" is the tool-level
+consequence; three structural ones sit underneath it.
+
+- **The 3D canvas may never have mounted.** Both panes stay in the DOM, hidden
+  with `display: none` (`ViewerCanvas` in `components/editor/index.tsx`), so the
+  WebGL context survives a view switch. But R3F only creates its root once the
+  container measures non-zero, so a session that *opens* in 2D-only never mounts
+  it: no `CustomCameraControls`, and `sceneRegistry` — filled by `useRegistry`
+  from inside the R3F tree — is **empty**. Any feature that reads the registry or
+  the camera needs its own 2D answer, not a 3D call the floorplan mirrors.
+  Worked example: `camera-controls:zoom-extents` / `:zoom-selection` are handled
+  twice, in `custom-camera-controls.tsx` and in the floorplan, each standing down
+  when the other owns the view.
+- **The coupling is a lossy pose bridge, not shared state.**
+  `floorplan-camera-sync.ts` translates between a `CameraPose` and a
+  `NavigationSyncPose` of `{ target, azimuth, viewWidth }` — pitch and projection
+  do not survive the trip, and `viewWidth` is measured against the *publishing*
+  pane's aspect ratio, so in split view the follower is an approximation. Moving
+  one view to drive the other is fine for keeping them roughly in step and wrong
+  as a way to implement a framing or fitting feature.
+- **Not everything rendered is model content.** Renderers mark presentation-only
+  geometry `userData.pascalExport = 'strip'` — the site's 800 m horizon disc is
+  the one that bites, because unfiltered it *is* the scene's bounding box.
+  `lib/glb-export.ts` prunes on that marker; so must anything else that measures
+  the scene (`lib/zoom-framing.ts` is the other caller). The export prune is the
+  reference list for what else to exclude: off-`SCENE_LAYER` overlays, and
+  hitboxes whose invisibility lives on `material.visible`.
+
 ## Editor interaction: what is actually wired
 
 `interaction-scope.md` describes the target model. One dev-mode hazard and three
@@ -299,6 +338,13 @@ check them before building on any of the four.
   refusal must use **capture** on `window` and `stopImmediatePropagation` —
   `preventDefault` alone does not stop a sibling listener. Precedent:
   `handleSessionGroupKeyDown` and `handleMeasurementInputKeyDown`.
+- **`use-keyboard`'s single-letter arms are one long `e.key` chain**, so a new
+  shifted binding has to be the stricter match *and* sit above the plain-letter
+  arm it shares a key with. Match on `e.code` (`'KeyZ'`) rather than the shifted
+  character: with Caps Lock on, Shift+Z reports `e.key === 'z'` and falls through
+  to the zones layer. Precedent: `handleSessionGroupKeyDown`, `isZoomShortcut`.
+  Note also that a bare Shift keydown already cycles the snapping mode whenever a
+  snap context is live, so *every* Shift chord fires that too.
 - **`DimensionPill` is not on screen during drafting.** Each drafting tool draws
   its own in-scene label (`DraftMeasurementLabel`); the pill only mounts in a
   *selected* node's floating action menu. A readout added to it is invisible for
