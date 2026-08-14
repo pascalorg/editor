@@ -54,10 +54,36 @@ export type PrecedenceReason =
   | 'lift'
   /** The project stated an explicit cast order across the two elements. */
   | 'cast-order'
+  /** Alternate-bay construction — adjacent bays are cast in different intervals. */
+  | 'alternate-bay'
 
 export const PRECEDENCE_REASON_LABELS: Record<PrecedenceReason, string> = {
   lift: 'The upper lift’s formwork bears on the lift below, which has to be struck first',
   'cast-order': 'The project states an explicit cast order across these elements',
+  'alternate-bay': 'Alternate-bay construction — the adjacent bay is cast in a later interval',
+}
+
+/**
+ * Which bays of an alternate-bay element go first, in site bay numbering from 1.
+ * Odd bays first is the usual practice: the infill bays key off the ones either side.
+ */
+export type AlternateBayParity = 'odd-bays-first' | 'even-bays-first'
+
+export const ALTERNATE_BAY_PARITY_LABELS: Record<AlternateBayParity, string> = {
+  'odd-bays-first': 'odd-numbered bays first, even bays as infill',
+  'even-bays-first': 'even-numbered bays first, odd bays as infill',
+}
+
+/** One element's alternate-bay answer: what was stated and which bays it puts first. */
+export interface AlternateBayPlan {
+  elementId: string
+  parity: AlternateBayParity
+  /**
+   * True when the parity came from the stated dates rather than the default. A parity
+   * read off the programme is a claim the project made; a defaulted one is the usual
+   * practice applied because nothing contradicted it.
+   */
+  fromDates: boolean
 }
 
 /** One stated dependency between two pours, with the reason it exists. */
@@ -126,6 +152,8 @@ export interface SequenceablePour {
   castOrder?: number
   /** The element's monolithic pour group, where it has one. */
   pourId?: string
+  /** The element is cast in alternate bays — resolved from the element or the project. */
+  alternateBays?: boolean
 }
 
 /** One pour in the sequence: what it waits on, what waits on it, and how far it can move. */
@@ -188,6 +216,11 @@ export interface FormworkSequence {
   /** The span a move is measured within: the programme's own first and last day. */
   windowFrom?: string
   windowTo?: string
+  /**
+   * The alternate-bay plans, one per element that stated it (directly or through the
+   * project's pours settings). Absent where no element is cast in alternate bays.
+   */
+  alternateBays?: AlternateBayPlan[]
   gaps: SequenceGap[]
 }
 
@@ -434,6 +467,71 @@ export function formworkSequence(
   }
   edges.push(...castOrderEdges(ranges))
 
+  const datesByGroup = new Map<string, NodeDates>()
+  for (const group of groups) {
+    const own = perGroupGaps.get(group.id) as SequenceGap[]
+    const dates = datesFor(group.members, scheduleById, own)
+    if (dates === undefined) own.push('no-pour-date')
+    else datesByGroup.set(group.id, dates)
+  }
+
+  // Alternate-bay construction. Adjacent bays of one element are ordered so no two of
+  // them share a pour interval, which is an ordering this module states as edges — the
+  // same shape cast order takes — rather than as dates. The parity is read off the
+  // stated dates where they decide it, and otherwise the site's usual practice: odd
+  // bays first, the even ones keyed off the cast either side of them.
+  const alternateBays: AlternateBayPlan[] = []
+  const byElement = new Map<string, SequenceablePour[]>()
+  for (const pour of pours) {
+    if (pour.alternateBays !== true) continue
+    byElement.set(pour.elementId, [...(byElement.get(pour.elementId) ?? []), pour])
+  }
+  for (const [elementId, elementPours] of byElement) {
+    // Per lift: bays are adjacent within a lift, and a lift of one bay needs no ordering.
+    const byLift = new Map<number, SequenceablePour[]>()
+    for (const pour of elementPours) {
+      byLift.set(pour.liftIndex, [...(byLift.get(pour.liftIndex) ?? []), pour])
+    }
+    const adjacent: Array<[SequenceablePour, SequenceablePour]> = []
+    for (const lift of byLift.values()) {
+      const ordered = [...lift].sort((a, b) => a.segmentIndex - b.segmentIndex)
+      for (let i = 1; i < ordered.length; i++) {
+        adjacent.push([ordered[i - 1] as SequenceablePour, ordered[i] as SequenceablePour])
+      }
+    }
+    if (adjacent.length === 0) continue
+
+    let parity: AlternateBayParity = 'odd-bays-first'
+    let fromDates = false
+    for (const [lower, upper] of adjacent) {
+      const before = datesByGroup.get(groupIdByPour.get(lower.id) as string)
+      const after = datesByGroup.get(groupIdByPour.get(upper.id) as string)
+      if (before === undefined || after === undefined || before.pourDay === after.pourDay) continue
+      const earlierOdd =
+        before.pourDay < after.pourDay ? lower.segmentIndex % 2 === 0 : upper.segmentIndex % 2 === 0
+      parity = earlierOdd ? 'odd-bays-first' : 'even-bays-first'
+      fromDates = true
+      break
+    }
+
+    for (const [lower, upper] of adjacent) {
+      const oddFirst = lower.segmentIndex % 2 === 0
+      const first =
+        parity === 'odd-bays-first' ? (oddFirst ? lower : upper) : oddFirst ? upper : lower
+      const second = first === lower ? upper : lower
+      const from = groupIdByPour.get(first.id) as string
+      const to = groupIdByPour.get(second.id) as string
+      if (from === to) continue
+      edges.push({
+        from,
+        to,
+        reason: 'alternate-bay',
+        because: `${elementId} is cast in alternate bays — bay ${first.segmentIndex + 1} is cast before the adjacent bay ${second.segmentIndex + 1}`,
+      })
+    }
+    alternateBays.push({ elementId, parity, fromDates })
+  }
+
   const predecessors = new Map<string, PrecedenceEdge[]>()
   const successors = new Map<string, PrecedenceEdge[]>()
   for (const edge of edges) {
@@ -442,13 +540,6 @@ export function formworkSequence(
   }
   if (edges.length === 0 && groups.length > 1) gaps.add('nothing-sequenced')
 
-  const datesByGroup = new Map<string, NodeDates>()
-  for (const group of groups) {
-    const own = perGroupGaps.get(group.id) as SequenceGap[]
-    const dates = datesFor(group.members, scheduleById, own)
-    if (dates === undefined) own.push('no-pour-date')
-    else datesByGroup.set(group.id, dates)
-  }
   for (const own of perGroupGaps.values()) for (const gap of own) gaps.add(gap)
 
   // The span a move is measured inside: the stated programme's own first and last day. A pour
@@ -483,7 +574,11 @@ export function formworkSequence(
       message:
         edge.reason === 'lift'
           ? `${edge.to} is poured ${required - after.pourDay} ${required - after.pourDay === 1 ? 'day' : 'days'} before ${edge.from} is struck, and its formwork bears on it`
-          : `${edge.to} is poured before ${edge.from}, which the stated cast order puts first`,
+          : `${edge.to} is poured before ${edge.from}, which ${
+              edge.reason === 'alternate-bay'
+                ? 'alternate-bay construction'
+                : 'the stated cast order'
+            } puts first`,
     })
   }
 
@@ -527,7 +622,8 @@ export function formworkSequence(
         if (!own.includes('neighbour-undated')) own.push('neighbour-undated')
         continue
       }
-      if (edge.reason === 'cast-order') earliest = Math.max(earliest, before.pourDay)
+      if (edge.reason === 'cast-order' || edge.reason === 'alternate-bay')
+        earliest = Math.max(earliest, before.pourDay)
       else if (before.strikeDay === undefined) {
         if (!own.includes('predecessor-never-struck')) own.push('predecessor-never-struck')
       } else earliest = Math.max(earliest, before.strikeDay + leadDays)
@@ -538,7 +634,8 @@ export function formworkSequence(
         if (!own.includes('neighbour-undated')) own.push('neighbour-undated')
         continue
       }
-      if (edge.reason === 'cast-order') latest = Math.min(latest, after.pourDay)
+      if (edge.reason === 'cast-order' || edge.reason === 'alternate-bay')
+        latest = Math.min(latest, after.pourDay)
       else if (dates.strikeDay === undefined) {
         // Nothing here is struck, so this pour never releases the lift above. The successor's
         // own gap says so; there is no bound to add from this side.
@@ -565,6 +662,7 @@ export function formworkSequence(
     conflicts,
     ...(windowFrom === undefined ? {} : { windowFrom }),
     ...(windowTo === undefined ? {} : { windowTo }),
+    ...(alternateBays.length === 0 ? {} : { alternateBays }),
     gaps: [...gaps],
   }
 }
@@ -613,6 +711,15 @@ export function formworkSequenceCaveats(sequence: FormworkSequence): string[] {
     const worst = [...sequence.conflicts].sort((a, b) => b.shortfallDays - a.shortfallDays)[0]
     out.push(
       `${sequence.conflicts.length} stated ${sequence.conflicts.length === 1 ? 'dependency is' : 'dependencies are'} already broken by the programme’s own dates — ${worst?.message}. Those pours show negative float, which is how many days the programme is infeasible by rather than an allowance.`,
+    )
+  }
+  for (const plan of sequence.alternateBays ?? []) {
+    out.push(
+      `${plan.elementId} is cast in alternate bays, ${ALTERNATE_BAY_PARITY_LABELS[plan.parity]}${
+        plan.fromDates
+          ? ' — the parity read off the stated pour dates.'
+          : ' — the default practice, because no stated date decides it.'
+      } No two adjacent bays are poured in the same interval.`,
     )
   }
   if (sequence.gaps.includes('monolithic-dates-differ')) {

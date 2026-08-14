@@ -627,6 +627,9 @@ export {
   unknownAssembly,
 } from './schedule-patch'
 export {
+  ALTERNATE_BAY_PARITY_LABELS,
+  type AlternateBayParity,
+  type AlternateBayPlan,
   type FormworkSequence,
   floatForPourId,
   formworkSequence,

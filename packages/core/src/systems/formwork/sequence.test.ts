@@ -40,6 +40,7 @@ function pour(
     segmentIndex?: number
     castOrder?: number
     pourId?: string
+    alternateBays?: boolean
     pourAt?: string
     strikeDays?: number
   } = {},
@@ -53,6 +54,7 @@ function pour(
       liftIndex: options.liftIndex ?? 0,
       ...(options.castOrder === undefined ? {} : { castOrder: options.castOrder }),
       ...(options.pourId === undefined ? {} : { pourId: options.pourId }),
+      ...(options.alternateBays === undefined ? {} : { alternateBays: options.alternateBays }),
     },
     schedulable: {
       id,
@@ -433,5 +435,111 @@ describe('formworkSequenceCaveats', () => {
 
   test('an empty scope has nothing to say', () => {
     expect(formworkSequenceCaveats(sequenceOf([]))).toEqual([])
+  })
+})
+
+describe('formworkSequence — alternate bays', () => {
+  test('adjacent bays are ordered so no two share an interval, odd bays first by default', () => {
+    // The spec's own scenario: alternate-bay construction stated, three bays in one lift,
+    // and the sequence orders bay 1 before bay 2 and bay 3 before bay 2 — bay 2 is the
+    // infill pour between the two either side of it.
+    const sequence = sequenceOf([
+      pour('a_0', 'wall_1', { segmentIndex: 0, alternateBays: true, pourAt: '2026-03-02' }),
+      pour('a_1', 'wall_1', { segmentIndex: 1, alternateBays: true, pourAt: '2026-03-16' }),
+      pour('a_2', 'wall_1', { segmentIndex: 2, alternateBays: true, pourAt: '2026-03-04' }),
+    ])
+
+    const bayEdges = sequence.edges.filter((edge) => edge.reason === 'alternate-bay')
+    expect(bayEdges.map((edge) => `${edge.from}->${edge.to}`).sort()).toEqual([
+      'a_0->a_1',
+      'a_2->a_1',
+    ])
+    expect(sequence.alternateBays).toEqual([
+      { elementId: 'wall_1', parity: 'odd-bays-first', fromDates: true },
+    ])
+  })
+
+  test('the parity is reported when nothing is dated and the default practice applies', () => {
+    // Undated bays still get their order — the edges exist without dates — and the plan
+    // says the parity is the default rather than read off the programme.
+    const sequence = sequenceOf([
+      pour('a_0', 'wall_1', { segmentIndex: 0, alternateBays: true, pourAt: '2026-03-02' }),
+      pour('a_1', 'wall_1', { segmentIndex: 1, alternateBays: true, pourAt: '2026-03-16' }),
+      pour('a_2', 'wall_1', { segmentIndex: 2, alternateBays: true, pourAt: '2026-03-04' }),
+      pour('b_0', 'wall_2', { segmentIndex: 0, alternateBays: true, pourAt: '2026-03-02' }),
+      pour('b_1', 'wall_2', { segmentIndex: 1, alternateBays: true, pourAt: '2026-03-02' }),
+    ])
+
+    const wall2 = sequence.alternateBays?.find((plan) => plan.elementId === 'wall_2')
+    expect(wall2).toMatchObject({ parity: 'odd-bays-first', fromDates: false })
+    const caveats = formworkSequenceCaveats(sequence)
+    expect(caveats.join(' ')).toContain('wall_2 is cast in alternate bays')
+    expect(caveats.join(' ')).toContain('odd-numbered bays first')
+    expect(caveats.join(' ')).toContain('default practice')
+  })
+
+  test('the stated dates decide the parity when they run the other way', () => {
+    // Bay 2 dated before bays 1 and 3: the programme has even bays first, and the plan
+    // reports that parity rather than the default.
+    const sequence = sequenceOf([
+      pour('a_0', 'wall_1', { segmentIndex: 0, alternateBays: true, pourAt: '2026-03-10' }),
+      pour('a_1', 'wall_1', { segmentIndex: 1, alternateBays: true, pourAt: '2026-03-02' }),
+      pour('a_2', 'wall_1', { segmentIndex: 2, alternateBays: true, pourAt: '2026-03-12' }),
+    ])
+
+    expect(sequence.alternateBays).toEqual([
+      { elementId: 'wall_1', parity: 'even-bays-first', fromDates: true },
+    ])
+    const bayEdges = sequence.edges.filter((edge) => edge.reason === 'alternate-bay')
+    expect(bayEdges.map((edge) => `${edge.from}->${edge.to}`).sort()).toEqual([
+      'a_1->a_0',
+      'a_1->a_2',
+    ])
+  })
+
+  test('a programme that pours the later bay first is a conflict, not a re-parity', () => {
+    // The dates decide the parity, and then contradict it on the other pair: bay 2 is
+    // dated before bay 1, so bay 2 goes first, but bay 3 is dated before bay 2 as well —
+    // an odd bay before an even one, which no parity admits. That pair is a conflict.
+    const sequence = sequenceOf([
+      pour('a_0', 'wall_1', { segmentIndex: 0, alternateBays: true, pourAt: '2026-03-10' }),
+      pour('a_1', 'wall_1', { segmentIndex: 1, alternateBays: true, pourAt: '2026-03-08' }),
+      pour('a_2', 'wall_1', { segmentIndex: 2, alternateBays: true, pourAt: '2026-03-06' }),
+    ])
+
+    expect(sequence.alternateBays?.[0]?.parity).toBe('even-bays-first')
+    const bayConflicts = sequence.conflicts.filter(
+      (conflict) => conflict.edge.reason === 'alternate-bay',
+    )
+    expect(bayConflicts).toHaveLength(1)
+    expect(bayConflicts[0]?.message).toContain('alternate-bay construction')
+  })
+
+  test('an element that does not state it is untouched', () => {
+    // The unchanged-figure half of the contract: no flag, no edges, no plan — the same
+    // sequence an unconfigured project gets today.
+    const sequence = sequenceOf([
+      pour('a_0', 'wall_1', { segmentIndex: 0, pourAt: '2026-03-02' }),
+      pour('a_1', 'wall_1', { segmentIndex: 1, pourAt: '2026-03-04' }),
+      pour('b_0', 'wall_2', { segmentIndex: 0, alternateBays: true, pourAt: '2026-03-02' }),
+      pour('b_1', 'wall_2', { segmentIndex: 1, alternateBays: true, pourAt: '2026-03-16' }),
+    ])
+
+    expect(sequence.alternateBays?.map((plan) => plan.elementId)).toEqual(['wall_2'])
+    expect(
+      sequence.edges.filter((edge) => edge.reason === 'alternate-bay' && edge.to === 'a_1'),
+    ).toEqual([])
+  })
+
+  test('a one-bay element states nothing to order', () => {
+    // One bay has no adjacent bay, so the statement produces no plan — reporting a parity
+    // for it would be claiming an order that does not exist.
+    const sequence = sequenceOf([
+      pour('a_0', 'wall_1', { segmentIndex: 0, alternateBays: true, pourAt: '2026-03-02' }),
+      pour('b_0', 'wall_2', { segmentIndex: 0, pourAt: '2026-03-04' }),
+    ])
+
+    expect(sequence.alternateBays).toBeUndefined()
+    expect(sequence.edges).toHaveLength(0)
   })
 })

@@ -41,6 +41,12 @@ export const CastableFields = {
   castOrder: z.number().int().optional(),
   /** Elements sharing a `pourId` are cast monolithically — no joint between them. */
   pourId: z.string().trim().max(120).optional(),
+  /**
+   * This element is cast in alternate bays: no two adjacent segments share a pour
+   * interval, so the sequence orders odd bays before even (or the reverse) and
+   * reports which. Overrides `pours.alternateBays` for this element.
+   */
+  alternateBays: z.boolean().optional(),
   formworkMode: FormworkMode.optional(),
   /** Which face is against earth/an existing structure, so cannot be formed or tied through. */
   againstEarthSide: ConcreteFaceSide.optional(),
@@ -87,6 +93,7 @@ export const SHUTTERING_FIELD_DOCS = dedent`
 export const CASTABLE_FIELD_DOCS = dedent`
   - castOrder: pour sequence; lower is cast first. Drives which faces need stop-ends
   - pourId: elements sharing a pourId are cast monolithically, with no joint between them
+  - alternateBays: this element is cast in alternate bays, so no two adjacent segments share a pour interval; overrides the project's pours.alternateBays
   - formworkMode: form both faces, one face (the other braced/against earth), or none
   - againstEarthSide: face cast against earth or an existing structure
   - topSurface: whether the top is screeded open, formed, or cast against a soffit, plus its slope

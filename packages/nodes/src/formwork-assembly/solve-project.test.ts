@@ -1395,6 +1395,63 @@ describe('what has to happen before what', () => {
     expect(solveProjectFormwork(steelWallScene()).sequence).toBeUndefined()
   })
 
+  test('alternate bays stated on the wall order its segments and report the parity', () => {
+    // The join only this layer can make, cast order's reason again: the statement is on the
+    // element, a pour is a shutter, and the sequence reads the flag through the walk.
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', { alternateBays: true } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_2', 'wall_1', 1, 0, { pourAt: '2026-03-16' }),
+        ),
+        leads,
+      ),
+    )
+
+    expect(solution.sequence?.edges).toEqual([
+      expect.objectContaining({
+        from: 'formwork-assembly_1',
+        to: 'formwork-assembly_2',
+        reason: 'alternate-bay',
+      }),
+    ])
+    expect(solution.sequence?.alternateBays).toEqual([
+      { elementId: 'wall_1', parity: 'odd-bays-first', fromDates: true },
+    ])
+  })
+
+  test('a project-wide alternate-bay statement reaches every element that does not opt out', () => {
+    // The pours settings group states it for the job; an element's own false is the one
+    // wall on the job that is not built that way.
+    const solution = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1', {}),
+          makeWall('wall_2', {
+            start: [0, 4],
+            end: [6, 4],
+            alternateBays: false,
+          } as Partial<WallNode>),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_2', 'wall_1', 1, 0, { pourAt: '2026-03-16' }),
+          makeAssembly('formwork-assembly_3', 'wall_2', 0, 0, { pourAt: '2026-03-02' }),
+          makeAssembly('formwork-assembly_4', 'wall_2', 1, 0, { pourAt: '2026-03-16' }),
+        ),
+        { ...leads, pours: { alternateBays: true } },
+      ),
+    )
+
+    expect(solution.sequence?.alternateBays?.map((plan) => plan.elementId)).toEqual(['wall_1'])
+    expect(solution.sequence?.edges).toEqual([
+      expect.objectContaining({
+        from: 'formwork-assembly_1',
+        to: 'formwork-assembly_2',
+        reason: 'alternate-bay',
+      }),
+    ])
+  })
+
   test('the resequencing answer names the pour to move instead of the panels to buy', () => {
     // The end of the chain: short on the peak day, and one of the two pours has float. The answer
     // is a move rather than an order, and the reader gets both. The rack holds exactly one pour's

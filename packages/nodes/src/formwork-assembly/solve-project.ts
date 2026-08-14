@@ -513,7 +513,11 @@ export function solveProjectFormwork(
   const committable: CommittablePour[] = []
   for (const element of elements) {
     const hostKind = element.host.type as 'wall' | 'column' | 'slab'
-    const host = element.host as CastableHostNode & { castOrder?: number; pourId?: string }
+    const host = element.host as CastableHostNode & {
+      castOrder?: number
+      pourId?: string
+      alternateBays?: boolean
+    }
     for (const shutter of element.shutters) {
       const targets = new Set<StrikeTarget>()
       for (const part of shutter.parts) {
@@ -540,6 +544,11 @@ export function solveProjectFormwork(
         liftIndex: shutter.assembly.liftIndex ?? 0,
         ...(host.castOrder === undefined ? {} : { castOrder: host.castOrder }),
         ...(host.pourId === undefined ? {} : { pourId: host.pourId }),
+        // The element's own statement overrides the project's, so an element can be the
+        // one alternate-bay wall on a job that is not, or opt out on a job that is.
+        ...(host.alternateBays === undefined && settings.pours?.alternateBays === undefined
+          ? {}
+          : { alternateBays: host.alternateBays ?? settings.pours?.alternateBays === true }),
       })
       committable.push({
         id,
