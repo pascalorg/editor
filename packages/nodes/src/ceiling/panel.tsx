@@ -55,7 +55,7 @@ export function CeilingPanel() {
     const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
     return parent?.type === 'level'
       ? getCeilingClampBound(parent.id, s.nodes, node?.polygon ?? [])
-      : 6
+      : Number.POSITIVE_INFINITY
   })
 
   // Effective height: the stored custom height, or — for follows-mode
