@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { type BomCost, bomCost, bomCostCaveats, type RateTable } from './cost'
 import type { BomHire, HireLine } from './hire'
 import type { BomLine } from './parts'
+import type { FormworkSchedule } from './schedule'
 import { bomSupply } from './supply'
 
 /**
@@ -48,6 +49,17 @@ const heldFor = (lines: readonly BomLine[], hours: number | undefined): BomHire 
 const rates = (over: Partial<RateTable> = {}): RateTable => ({
   currency: 'GBP',
   byCatalogId: { 'framax-0.60x2.70': { purchasePerUnit: 200, rentalPercentPerMonth: 3 } },
+  ...over,
+})
+
+/** A programme whose span is whatever the test states, dated or not. */
+const scheduleFixture = (over: Partial<FormworkSchedule> = {}): FormworkSchedule => ({
+  pours: [],
+  scheduledCount: 0,
+  unscheduled: [],
+  earliestOnly: false,
+  complete: true,
+  gaps: [],
   ...over,
 })
 
@@ -316,6 +328,163 @@ describe('bomCost', () => {
     expect(neither.ownedQuantityExcluded).toBe(10)
   })
 
+  it('charges uses past the stated life as the replacement the overrun implies', () => {
+    // 150 fittings against a life of 100: the panel does not survive the job. The first
+    // 100 uses amortise to the residual (£200 − £20 = £180), and the 50 past are one
+    // whole replacement at list (£200) — £380. A per-use charge past the life would have
+    // been £270 for a panel that no longer exists, which is the silent unbounded life
+    // this test exists against.
+    const bom = [line({ quantity: 150 })]
+    const table = rates({
+      byCatalogId: {
+        'framax-0.60x2.70': { purchasePerUnit: 200, expectedUses: 100, residualPerUnit: 20 },
+      },
+    })
+
+    const cost = bomCost(
+      bom,
+      table,
+      heldFor(bom, 2 * 24),
+      bomSupply(bom, { 'framax-0.60x2.70': 150 }),
+    )
+
+    expect(cost.lines[0]?.overrun).toEqual({
+      uses: 150,
+      life: 100,
+      replacements: 1,
+      replacementCost: 200,
+    })
+    expect(cost.ownedCost).toBeCloseTo(380, 6)
+    expect(cost.overruns).toHaveLength(1)
+    // Still owned-stock money: the yard replacing its own dead panel is a capital
+    // decision, reported beside the cash total rather than inside it.
+    expect(cost.totalCost).toBe(0)
+  })
+
+  it('names two replacements where the overrun spans two whole lives', () => {
+    // 250 uses against a life of 100: one asset survives the first 100, and the 150 past
+    // it are two whole new assets, not a per-use price for either.
+    const bom = [line({ quantity: 250 })]
+    const table = rates({
+      byCatalogId: {
+        'framax-0.60x2.70': { purchasePerUnit: 200, expectedUses: 100, residualPerUnit: 20 },
+      },
+    })
+
+    const cost = bomCost(
+      bom,
+      table,
+      heldFor(bom, 2 * 24),
+      bomSupply(bom, { 'framax-0.60x2.70': 250 }),
+    )
+
+    expect(cost.lines[0]?.overrun?.replacements).toBe(2)
+    expect(cost.ownedCost).toBeCloseTo(180 + 400, 6)
+  })
+
+  it('reports no overrun where the uses stay inside the life', () => {
+    // The line at exactly its life is the boundary: 100 uses against a life of 100 is a
+    // full life and not a death mid-job, so there is nothing to buy.
+    const bom = [line({ quantity: 100 })]
+    const table = rates({
+      byCatalogId: {
+        'framax-0.60x2.70': { purchasePerUnit: 200, expectedUses: 100, residualPerUnit: 20 },
+      },
+    })
+
+    const cost = bomCost(
+      bom,
+      table,
+      heldFor(bom, 2 * 24),
+      bomSupply(bom, { 'framax-0.60x2.70': 100 }),
+    )
+
+    expect(cost.lines[0]?.overrun).toBeUndefined()
+    expect(cost.overruns).toEqual([])
+    expect(cost.ownedCost).toBeCloseTo(180, 6)
+  })
+
+  it('reports finance beside the cash total, and the cash total does not move', () => {
+    // £60 of hire held over the programme the project actually stated — plant first
+    // wanted 5 January, last free 31 March (85 days) — at 8 % a year is a separate
+    // figure, and the total it sits beside is unchanged by its presence. That is the
+    // whole scenario: a cash total a reader can reconcile against an invoice.
+    const bom = [line({ quantity: 10 })]
+    const cost = bomCost(
+      bom,
+      rates({ financeRatePerAnnum: 8 }),
+      heldFor(bom, 30 * 24),
+      bomSupply(bom, {}),
+      scheduleFixture({
+        firstErectAt: '2026-01-05',
+        lastReleaseAt: '2026-03-31',
+      }),
+    )
+
+    expect(cost.totalCost).toBeCloseTo(60, 6)
+    expect(cost.financeCost).toBeCloseTo(60 * 0.08 * (85 / 365), 6)
+    expect(cost.financeNote).toContain('8% a year')
+    expect(cost.financeNote).toContain('2026-01-05')
+    expect(cost.financeNote).toContain('2026-03-31')
+    expect(cost.financeNote).toContain('outside the cash total')
+  })
+
+  it('names the undated pours the period left out', () => {
+    // The period is the programme's own span, and a programme with undated pours does
+    // not place them: the figure has to say which pours were excluded, or a reader
+    // counts a window over half the job as a window over the job.
+    const bom = [line({ quantity: 10 })]
+    const cost = bomCost(
+      bom,
+      rates({ financeRatePerAnnum: 8 }),
+      heldFor(bom, 30 * 24),
+      bomSupply(bom, {}),
+      scheduleFixture({
+        firstErectAt: '2026-01-05',
+        lastReleaseAt: '2026-03-31',
+        pours: [
+          { id: 'pour_a', pourAt: '2026-02-01', strikes: [] },
+          { id: 'pour_b', strikes: [] },
+        ],
+        scheduledCount: 1,
+        unscheduled: [{ id: 'pour_b', strikes: [] }],
+      }),
+    )
+
+    expect(cost.financeNote).toContain('1 of 2 pours have no date')
+    expect(cost.financeNote).toContain('pour_b')
+  })
+
+  it('reports no finance figure where no rate is stated', () => {
+    // The gate the spec states outright: no rate means no figure and no assumed rate.
+    const bom = [line({ quantity: 10 })]
+    const cost = bomCost(
+      bom,
+      rates(),
+      heldFor(bom, 30 * 24),
+      bomSupply(bom, {}),
+      scheduleFixture({ firstErectAt: '2026-01-05', lastReleaseAt: '2026-03-31' }),
+    )
+
+    expect(cost.financeCost).toBeUndefined()
+    expect(cost.financeNote).toBeUndefined()
+  })
+
+  it('reports no finance figure where the programme states no span', () => {
+    // A rate and no dates is a rate and no period: the programme is where the period
+    // would have to come from, and this engine does not invent dates.
+    const bom = [line({ quantity: 10 })]
+    const cost = bomCost(
+      bom,
+      rates({ financeRatePerAnnum: 8 }),
+      heldFor(bom, 30 * 24),
+      bomSupply(bom, {}),
+    )
+
+    expect(cost.financeCost).toBeUndefined()
+    expect(cost.financeNote).toBeUndefined()
+  })
+
   it('states both bases in the caveat where a table holds a life for some parts only', () => {
     // A yard fills a rate table a part at a time, so one job charges its panels over a life
     // and its ties at a transfer price. One owned figure made of two bases is a number a
@@ -570,6 +739,7 @@ describe('bomCostCaveats', () => {
     totalCost: 100,
     linesAtMinimum: [],
     ownedQuantityExcluded: 0,
+    overruns: [],
     complete: true,
     gaps: [],
     ...over,
@@ -616,5 +786,45 @@ describe('bomCostCaveats', () => {
     const out = bomCostCaveats(priced({ rechargeCost: 400 }))
 
     expect(out.some((message) => message.includes('do not go back as stock'))).toBe(true)
+  })
+
+  it('names the line, the uses and the life where an asset outlives its life', () => {
+    const out = bomCostCaveats(
+      priced({
+        overruns: [
+          {
+            line: line({ quantity: 150 }),
+            gaps: [],
+            overrun: { uses: 150, life: 100, replacements: 1, replacementCost: 200 },
+          },
+        ],
+      }),
+    )
+
+    expect(
+      out.some(
+        (message) =>
+          message.includes('used 150 times against a stated life of 100') &&
+          message.includes('1 replacement') &&
+          message.includes('framax-0.60x2.70'),
+      ),
+    ).toBe(true)
+  })
+
+  it('leads the finance figure with its money, beside and outside the total', () => {
+    const out = bomCostCaveats(
+      priced({ financeCost: 12.34, financeNote: 'The period the programme states.' }),
+    )
+
+    // The fixture carries no currency, so the figure renders as a bare number — which is
+    // the point of the sentence that follows: it says what the figure was computed over.
+    expect(out[1]).toContain('12.34 of finance')
+    expect(out[1]).toContain('The period the programme states.')
+  })
+
+  it('says nothing about finance where no figure was computed', () => {
+    const out = bomCostCaveats(priced())
+
+    expect(out.some((message) => message.includes('finance'))).toBe(false)
   })
 })

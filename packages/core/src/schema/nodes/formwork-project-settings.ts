@@ -304,6 +304,16 @@ export const FormworkRateSettings = z.object({
    * minimum is charged for 28, which is most of the cost of a fast cycle.
    */
   minHireDays: z.number().int().positive().max(3650).optional(),
+  /**
+   * The cost of capital, percent per annum — what the money this job ties up in
+   * formwork costs while it is out.
+   *
+   * On the rate group rather than beside the other figures because it is money and the
+   * currency is stated once, above. It prices nothing on its own and nothing assumes it:
+   * absent means the takeoff carries no finance figure at all, which is the only reading
+   * a figure that depends on a rate nobody stated can have.
+   */
+  financeRatePerAnnum: z.number().finite().positive().max(100).optional(),
   /** Rate per catalog id — `{ 'framax-xlife-0.60x2.70': { purchasePerUnit: 210 } }`. */
   byCatalogId: z.record(z.string().trim().max(120), PartRate).optional(),
   /**

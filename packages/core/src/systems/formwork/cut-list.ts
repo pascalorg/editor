@@ -90,6 +90,22 @@ export interface FormworkCutList {
    * buys two and one of them is a typo".
    */
   unknownStockIds: string[]
+  /**
+   * How many times the same cut-piece set recurs in the scope — the number of identical
+   * levels the boards were detected across. 1 is the ordinary case and means no reuse
+   * was recognised.
+   *
+   * Where this is greater than 1 the nest covers one cycle's boards and the sheet
+   * counts in `list.order` are the *purchase* for the repeated floor: one set plus the
+   * replacements a stated sheet life implies, never one set per level. See
+   * `reuseNote`, which is the sentence a reader challenges.
+   */
+  cycles: number
+  /**
+   * What the repeated-floor counts assumed, present only where `cycles` is greater
+   * than 1 — so a reader can argue with the reuse rather than accept it silently.
+   */
+  reuseNote?: string
   /** False where the nest is short, an id names nothing, or an offcut is racked. */
   complete: boolean
 }
@@ -111,10 +127,53 @@ function areaM2(mm2: number): number {
  * pieces: four 380 × 2400 boards are one bill line and four rectangles, and a nest over the
  * line would place one board and buy a sheet for it.
  */
+export interface FormworkCutListOptions {
+  /**
+   * How many times the passed boards repeat in the scope — how many identical levels
+   * they were detected across. 1 means no repetition and changes nothing. Where it is
+   * greater than 1 the caller passes ONE cycle's boards and the counts below are the
+   * purchase for the repeated floor, not the boards' own nest.
+   */
+  cycles?: number
+  /**
+   * Stated sheet life in pours, per sheet id — the project's own figure from its rate
+   * table. A size with no life here is bought fresh for every cycle, which is exactly
+   * what the cut list did before this option existed, so stating a life can only ever
+   * buy fewer sheets.
+   */
+  sheetLives?: Readonly<Record<string, number>>
+}
+
+/**
+ * The sheets a scope's boards nest out of, or `undefined` where it has no boards.
+ *
+ * Absent rather than an empty nest, following `formworkLifts`: a steel-panel job with no
+ * cut ply in it has no cutting to do, and a cut list of zero sheets reads as a job whose
+ * ply is free rather than as a job with no ply in it.
+ *
+ * Takes the parts rather than the bill, and that is the one decision here worth stating.
+ * `bomLines` groups boards of one size into a line with a quantity, and a nest needs the
+ * pieces: four 380 × 2400 boards are one bill line and four rectangles, and a nest over the
+ * line would place one board and buy a sheet for it.
+ *
+ * ## One cycle, when the floor repeats
+ *
+ * `options.cycles` is the repeated-floor case (OpenSpec 6.4): the caller detected that the
+ * scope is one board set repeated across identical levels, and passes one cycle's boards
+ * with the count. The nest then covers the boards that are actually cut — one cycle's — and
+ * the sheet counts are the purchase for the whole repeated floor: one set plus the
+ * replacements the stated life implies. The reuse is stated in `reuseNote` so a reader can
+ * challenge it, which is the whole point of recognising it at all. A size without a stated
+ * life is bought for every cycle, unchanged from before, so the option is monotone: it can
+ * only ever report fewer sheets than nesting every board, and reports the same number when
+ * nothing is stated.
+ */
 export function formworkCutList(
   parts: readonly FormworkPart[],
   sheets: FormworkSheetSettings,
+  options: FormworkCutListOptions = {},
 ): FormworkCutList | undefined {
+  const cycles = options.cycles ?? 1
   const pieces: CutPiece[] = []
   let boardAreaMm2 = 0
   for (const part of parts) {
@@ -149,13 +208,49 @@ export function formworkCutList(
   })
   const list = choice.list
 
+  // The purchase for a repeated floor: per-cycle sheets times the number of sets the
+  // stated life implies. One set serves `life` pours; `cycles` pours need ceil(cycles / life)
+  // sets, and a size with no stated life needs one set per cycle — the number the nest of
+  // every level would have bought, so nothing here can raise a count.
+  const factor = (sheetId: string) =>
+    cycles <= 1 ? 1 : Math.max(1, Math.ceil(cycles / (options.sheetLives?.[sheetId] ?? 1)))
+  const scale = (entries: ReadonlyArray<{ sheetId: string; sheets: number }> | undefined) =>
+    entries?.map((entry) => ({
+      sheetId: entry.sheetId,
+      sheets: entry.sheets * factor(entry.sheetId),
+    }))
+  const reuseNote =
+    cycles <= 1
+      ? undefined
+      : (() => {
+          const lives = stated
+            .filter((id) => options.sheetLives?.[id] !== undefined)
+            .map((id) => `${id} at ${options.sheetLives?.[id]} pours = ${factor(id)} sets`)
+          const unstated = stated.filter((id) => options.sheetLives?.[id] === undefined)
+          const lifeSentence =
+            lives.length > 0 ? `The stated life makes the purchase ${lives.join(', ')}.` : ''
+          const unstatedSentence =
+            unstated.length > 0
+              ? `${unstated.join(', ')} ${unstated.length === 1 ? 'has' : 'have'} no stated life, so ${unstated.length === 1 ? 'it is' : 'they are'} bought fresh for every one of the ${cycles} pours — the same count as nesting every level, which is what the cut list always did; state a sheet life to get the replacement credit.`
+              : ''
+          return `The cut pieces are identical across ${cycles} levels, so they are nested once and cut once — the counts above buy one set plus the replacements the stated sheet life implies, never one set per level. ${lifeSentence}${unstatedSentence}`.trim()
+        })()
+
   return {
-    list,
+    list: {
+      ...list,
+      order: scale(list.order) ?? [],
+      ...(list.orderWithAllowance === undefined
+        ? {}
+        : { orderWithAllowance: scale(list.orderWithAllowance) ?? [] }),
+    },
     boardCount: pieces.length,
     boardAreaM2: areaM2(boardAreaMm2),
     stockIds: choice.stockIds,
     droppedStockIds: choice.droppedStockIds,
     unknownStockIds,
+    cycles,
+    ...(reuseNote ? { reuseNote } : {}),
     complete: list.complete && unknownStockIds.length === 0,
   }
 }
@@ -189,6 +284,10 @@ export function formworkCutListCaveats(cut: FormworkCutList): string[] {
       `${cut.unknownStockIds.join(', ')} ${cut.unknownStockIds.length === 1 ? 'names' : 'name'} no sheet in the catalog, so ${cut.unknownStockIds.length === 1 ? 'it is' : 'they are'} recorded and nesting nothing. Correct the stated stock — a sheet size that resolves to nothing cannot hold a board, and the boards it would have held are refused instead.`,
     )
   }
+  // Straight after the count, because it is the sentence the count is read against: the
+  // boards are cut once and the counts are the purchase for the repeated floor, not one
+  // set per level. Absent on the ordinary single-floor scope, where nothing was assumed.
+  if (cut.reuseNote) out.push(cut.reuseNote)
   out.push(...cutListCaveats(cut.list))
   return out
 }

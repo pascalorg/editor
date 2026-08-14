@@ -219,6 +219,7 @@ export {
 export {
   FORMWORK_CUT_SHEET_DESCRIPTION,
   type FormworkCutList,
+  type FormworkCutListOptions,
   formworkCutList,
   formworkCutListCaveats,
 } from './cut-list'

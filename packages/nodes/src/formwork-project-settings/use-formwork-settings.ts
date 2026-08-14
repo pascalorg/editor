@@ -201,6 +201,7 @@ export function setFormworkRate(
 export function setFormworkRateTerms(patch: {
   currency?: string | null
   minHireDays?: number | null
+  financeRatePerAnnum?: number | null
 }): void {
   writeFormworkSettings(
     (node) =>
@@ -210,8 +211,15 @@ export function setFormworkRateTerms(patch: {
           {
             ...('currency' in patch ? { currency: patch.currency ?? undefined } : {}),
             ...('minHireDays' in patch ? { minHireDays: patch.minHireDays ?? undefined } : {}),
+            ...('financeRatePerAnnum' in patch
+              ? { financeRatePerAnnum: patch.financeRatePerAnnum ?? undefined }
+              : {}),
           },
-          { currency: 'currency' in patch, minHireDays: 'minHireDays' in patch },
+          {
+            currency: 'currency' in patch,
+            minHireDays: 'minHireDays' in patch,
+            financeRatePerAnnum: 'financeRatePerAnnum' in patch,
+          },
         ),
       }) as Partial<AnyNode>,
   )

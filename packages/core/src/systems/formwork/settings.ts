@@ -240,6 +240,9 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
       ? {
           ...(node.rates.currency === undefined ? {} : { currency: node.rates.currency }),
           ...(node.rates.minHireDays === undefined ? {} : { minHireDays: node.rates.minHireDays }),
+          ...(node.rates.financeRatePerAnnum === undefined
+            ? {}
+            : { financeRatePerAnnum: node.rates.financeRatePerAnnum }),
           byCatalogId: node.rates.byCatalogId ?? {},
           ...(node.rates.transportPerLoad === undefined
             ? {}
@@ -431,6 +434,7 @@ export function mergeFormworkRates(
   patch: {
     currency?: string | undefined
     minHireDays?: number | undefined
+    financeRatePerAnnum?: number | undefined
     gangRatePerHour?: number | undefined
     transportPerLoad?: number | undefined
     cranePerHour?: number | undefined
@@ -440,6 +444,7 @@ export function mergeFormworkRates(
   stated: {
     currency?: boolean
     minHireDays?: boolean
+    financeRatePerAnnum?: boolean
     gangRatePerHour?: boolean
     transportPerLoad?: boolean
     cranePerHour?: boolean
@@ -468,6 +473,9 @@ export function mergeFormworkRates(
   const minHireDays = stated.minHireDays
     ? patch.minHireDays
     : (patch.minHireDays ?? current?.minHireDays)
+  const financeRate = stated.financeRatePerAnnum
+    ? patch.financeRatePerAnnum
+    : (patch.financeRatePerAnnum ?? current?.financeRatePerAnnum)
   const gangRate = stated.gangRatePerHour
     ? patch.gangRatePerHour
     : (patch.gangRatePerHour ?? current?.gangRatePerHour)
@@ -479,6 +487,7 @@ export function mergeFormworkRates(
     : (patch.cranePerHour ?? current?.cranePerHour)
   if (currency !== undefined) out.currency = currency
   if (minHireDays !== undefined) out.minHireDays = minHireDays
+  if (financeRate !== undefined) out.financeRatePerAnnum = financeRate
   if (gangRate !== undefined) out.gangRatePerHour = gangRate
   if (perLoad !== undefined) out.transportPerLoad = perLoad
   if (perHour !== undefined) out.cranePerHour = perHour

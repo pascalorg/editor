@@ -209,6 +209,56 @@ describe('formworkCutList', () => {
     ).toBeUndefined()
   })
 
+  it('covers a repeated floor once: one set plus the replacements the stated life implies', () => {
+    // Two identical levels' boards, one cycle passed with cycles=2 (OpenSpec 6.4). A life of
+    // 2 pours means one set serves both pours, so the purchase is one cycle's sheets; without
+    // a stated life the full two sets are bought, which is exactly what nesting every level
+    // always produced — the option can only buy fewer, never more.
+    const cycle = [board(0, 600, 2400), board(900, 600, 2400)]
+    const single = formworkCutList(cycle, { stockIds: [PLAIN] })
+    const reused = formworkCutList(
+      cycle,
+      { stockIds: [PLAIN] },
+      {
+        cycles: 2,
+        sheetLives: { [PLAIN]: 2 },
+      },
+    )
+    const fresh = formworkCutList(cycle, { stockIds: [PLAIN] }, { cycles: 2 })
+
+    expect(single?.list.order).toEqual([{ sheetId: PLAIN, sheets: 1 }])
+    expect(reused?.cycles).toBe(2)
+    expect(reused?.list.order).toEqual([{ sheetId: PLAIN, sheets: 1 }])
+    expect(fresh?.list.order).toEqual([{ sheetId: PLAIN, sheets: 2 }])
+    // Nesting both levels' boards is the pre-option answer, and the no-life case matches it.
+    expect(formworkCutList([...cycle, ...cycle], { stockIds: [PLAIN] })?.list.order).toEqual([
+      { sheetId: PLAIN, sheets: 2 },
+    ])
+  })
+
+  it('states the reuse assumed, and names the size missing a life', () => {
+    const cycle = [board(0, 600, 2400)]
+    const reused = formworkCutList(cycle, { stockIds: [PLAIN] }, { cycles: 3 })
+    const lived = formworkCutList(
+      cycle,
+      { stockIds: [PLAIN] },
+      {
+        cycles: 3,
+        sheetLives: { [PLAIN]: 2 },
+      },
+    )
+
+    expect(formworkCutListCaveats(reused!).some((line) => line.includes('3 levels'))).toBe(true)
+    expect(formworkCutListCaveats(reused!).some((line) => line.includes('no stated life'))).toBe(
+      true,
+    )
+    expect(formworkCutListCaveats(lived!).some((line) => line.includes('2 sets'))).toBe(true)
+    // The reuse sentence is absent on an ordinary single-floor scope: nothing was assumed.
+    expect(formworkCutListCaveats(formworkCutList(cycle, { stockIds: [PLAIN] })!)).not.toContain(
+      'nested once',
+    )
+  })
+
   it('turns no board, whatever it is for', () => {
     // Every one of these is a form face — a box-out reveal takes the pour's pressure exactly
     // as a wall board does — so a board across the grain is a different product.

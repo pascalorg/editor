@@ -413,7 +413,11 @@ export function RateTableField({
   /** `undefined` for the whole rate removes the id; `null` for a field clears it. */
   onSetRate: (catalogId: string, patch: Record<string, number | null> | undefined) => void
   /** The agreement's own terms. `null` clears. */
-  onSetTerms: (patch: { currency?: string | null; minHireDays?: number | null }) => void
+  onSetTerms: (patch: {
+    currency?: string | null
+    minHireDays?: number | null
+    financeRatePerAnnum?: number | null
+  }) => void
   options: ReadonlyArray<{ id: string; label: string; family: string }>
   /** `undefined` where the project has recorded no rates at all. */
   rates: FormworkRateSettings | undefined
@@ -488,6 +492,27 @@ export function RateTableField({
           type="number"
         />
         <span className="w-10 shrink-0 text-muted-foreground/70">days</span>
+      </label>
+      <label className="flex items-center gap-2" htmlFor={`${currencyId}-finance`}>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">Finance</span>
+        <input
+          className="h-7 w-[4.5rem] shrink-0 rounded-md border border-border/50 bg-[#2C2C2E] px-1.5 text-right font-mono outline-none"
+          defaultValue={rates?.financeRatePerAnnum ?? ''}
+          id={`${currencyId}-finance`}
+          key={`finance-${rates?.financeRatePerAnnum ?? 'unset'}`}
+          min={0}
+          onBlur={(event) => {
+            const raw = event.currentTarget.value.trim()
+            const parsed = Number.parseFloat(raw)
+            if (raw === '' || !Number.isFinite(parsed) || parsed < 0)
+              onSetTerms({ financeRatePerAnnum: null })
+            else onSetTerms({ financeRatePerAnnum: parsed })
+          }}
+          placeholder="none"
+          step={0.5}
+          type="number"
+        />
+        <span className="w-10 shrink-0 text-muted-foreground/70">%/yr</span>
       </label>
       <p className="text-[10px] text-muted-foreground/70 leading-snug">
         A wall form struck in 12 hours against a 28-day minimum is charged for 28 days, so the

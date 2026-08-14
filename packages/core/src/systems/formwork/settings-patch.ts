@@ -519,6 +519,15 @@ const RATES_PATCH = z.object({
     .describe(
       "the agreement's minimum hire period, days. On a fast cycle this is most of the cost: a wall form struck in 12 hours against a 28-day minimum is charged for 28 days",
     ),
+  financeRatePerAnnum: z
+    .number()
+    .positive()
+    .max(100)
+    .nullable()
+    .optional()
+    .describe(
+      'the cost of capital, percent per annum — what the money this job ties up in formwork costs while it is out. Reported as a figure beside the cash total, never inside it: the period is the stated programme’s own span, from first delivery to last release. Ask the user for the rate; with none stated the takeoff carries no finance figure at all, and a rate you invented would be a price nobody quoted',
+    ),
   gangRatePerHour: z
     .number()
     .positive()
@@ -1111,6 +1120,9 @@ export function applyFormworkSettingsPatch(
       {
         ...(rates.currency === undefined ? {} : { currency: rates.currency ?? undefined }),
         ...(rates.minHireDays === undefined ? {} : { minHireDays: rates.minHireDays ?? undefined }),
+        ...(rates.financeRatePerAnnum === undefined
+          ? {}
+          : { financeRatePerAnnum: rates.financeRatePerAnnum ?? undefined }),
         ...(rates.gangRatePerHour === undefined
           ? {}
           : { gangRatePerHour: rates.gangRatePerHour ?? undefined }),
@@ -1125,6 +1137,7 @@ export function applyFormworkSettingsPatch(
       {
         currency: rates.currency !== undefined,
         minHireDays: rates.minHireDays !== undefined,
+        financeRatePerAnnum: rates.financeRatePerAnnum !== undefined,
         gangRatePerHour: rates.gangRatePerHour !== undefined,
         transportPerLoad: rates.transportPerLoad !== undefined,
         cranePerHour: rates.cranePerHour !== undefined,

@@ -915,6 +915,57 @@ describe('what the bill costs to hold', () => {
     expect(tie?.totalCost).toBeUndefined()
     expect(solution.cost?.complete).toBe(false)
   })
+
+  test('a stated finance rate prices the money the job ties up, outside the cash total', () => {
+    // The scenario whole: the rate is on the table, the programme is dated, and the
+    // finance figure is computed over the programme's own span — beside the cash total,
+    // never inside it, so a total that has to reconcile against an invoice still can.
+    const dated = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+    )
+    const base = {
+      stock: { owned: {} },
+      pressureStandard: 'BS_8110',
+      schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+      rates: { byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } } },
+    }
+    const plain = solveProjectFormwork(withSettings(dated, base))
+    const financed = solveProjectFormwork(
+      withSettings(dated, { ...base, rates: { ...base.rates, financeRatePerAnnum: 8 } }),
+    )
+
+    expect(financed.schedule?.firstErectAt).toBe('2026-03-01')
+    expect(financed.cost?.financeCost).toBeGreaterThan(0)
+    expect(financed.cost?.financeNote).toContain('8% a year')
+    // The cash total is unchanged by the finance figure's presence, which is the whole
+    // point of reporting it beside rather than inside.
+    expect(financed.cost?.totalCost).toBeCloseTo(plain.cost?.totalCost ?? 0, 6)
+    expect(projectFormworkCaveats(financed).some((c) => c.includes('outside the cash total'))).toBe(
+      true,
+    )
+  })
+
+  test('no finance rate means no finance figure, even on a dated programme', () => {
+    // The rate is the only gate: a dated programme with no rate gets no finance figure,
+    // because a figure that depends on a rate nobody stated would be a rate assumed.
+    const dated = sceneOf(
+      makeWall('wall_1', { formworkType: 'steel-panel' } as Partial<WallNode>),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, { pourAt: '2026-03-02' }),
+    )
+    const solution = solveProjectFormwork(
+      withSettings(dated, {
+        stock: { owned: {} },
+        pressureStandard: 'BS_8110',
+        schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+        rates: { byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } } },
+      }),
+    )
+
+    expect(solution.schedule?.firstErectAt).toBe('2026-03-01')
+    expect(solution.cost?.financeCost).toBeUndefined()
+    expect(solution.cost?.financeNote).toBeUndefined()
+  })
 })
 
 describe('what the bill costs to form', () => {
@@ -2048,6 +2099,65 @@ describe('the sheets the ply comes out of', () => {
     expect(
       projectFormworkCaveats(solution).some((c) => c.includes('names no sheet in the catalog')),
     ).toBe(true)
+  })
+
+  test('one repeated floor is nested once, and the purchase is the cycle count, not the board count', () => {
+    // 6.4: two identical decks on two levels. The boards are the same rectangles twice,
+    // so the nest covers one cycle and the counts are the purchase for the repeated
+    // floor — never one set per level. The reuse is claimed out loud in the caveats,
+    // because a purchasing figure a reader cannot argue with is a figure they accept
+    // wrong. No stated life means every cycle buys its own set — the count the nest of
+    // every level always produced, so nothing is lost by recognising the repeat.
+    const two = sceneOf(
+      makeSlab('slab_1'),
+      makeAssembly('formwork-assembly_1', 'slab_1', 0, 0),
+      makeSlab('slab_2', { parentId: 'level_2' } as Partial<SlabNode>),
+      makeAssembly('formwork-assembly_2', 'slab_2', 0, 0),
+    )
+    const repeated = solveProjectFormwork(withSettings(two, { sheets: SHEETS }))
+    const single = solveProjectFormwork(withSettings(plywoodSlabScene(), { sheets: SHEETS }))
+
+    expect(repeated.cutList?.cycles).toBe(2)
+    expect(repeated.cutList?.boardCount).toBe(single.cutList?.boardCount)
+    expect(repeated.cutList?.list.order[0]?.sheets).toBe(
+      (single.cutList?.list.order[0]?.sheets ?? 0) * 2,
+    )
+    expect(repeated.cutList?.reuseNote).toContain('identical across 2 levels')
+    expect(
+      projectFormworkCaveats(repeated).some((c) => c.includes('nested once and cut once')),
+    ).toBe(true)
+  })
+
+  test('a stated sheet life buys the replacement sets the pours imply, not a set per pour', () => {
+    // The life is the sheet's own rate: 2 pours per set means 2 identical levels buy
+    // one set where no life buys two. The monotone property — stating a life can only
+    // ever buy fewer sheets — is what makes it safe to assume in the solver rather
+    // than to ask about.
+    const RATED = {
+      currency: 'GBP',
+      byCatalogId: { 'ply-1220x2440x18-plain': { purchasePerUnit: 10, expectedUses: 2 } },
+    }
+    const two = sceneOf(
+      makeSlab('slab_1'),
+      makeAssembly('formwork-assembly_1', 'slab_1', 0, 0),
+      makeSlab('slab_2', { parentId: 'level_2' } as Partial<SlabNode>),
+      makeAssembly('formwork-assembly_2', 'slab_2', 0, 0),
+    )
+    const solution = solveProjectFormwork(withSettings(two, { sheets: SHEETS, rates: RATED }))
+    const single = solveProjectFormwork(
+      withSettings(plywoodSlabScene(), { sheets: SHEETS, rates: RATED }),
+    )
+
+    expect(solution.cutList?.cycles).toBe(2)
+    expect(solution.cutList?.list.order[0]?.sheets).toBe(single.cutList?.list.order[0]?.sheets)
+    expect(solution.cutList?.reuseNote).toContain('2 pours')
+  })
+
+  test('a one-off floor is not a repeated floor, and says so by saying nothing', () => {
+    const solution = solveProjectFormwork(withSettings(plywoodSlabScene(), { sheets: SHEETS }))
+
+    expect(solution.cutList?.cycles).toBe(1)
+    expect(solution.cutList?.reuseNote).toBeUndefined()
   })
 })
 

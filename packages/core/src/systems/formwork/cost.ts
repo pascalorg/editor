@@ -1,6 +1,7 @@
 import type { PartRate } from '../../schema/nodes/formwork-project-settings'
 import type { BomHire, HireLine } from './hire'
 import type { BomLine } from './parts'
+import { calendarDayNumber, type FormworkSchedule } from './schedule'
 import type { BomSupply, SupplyLine } from './supply'
 
 /**
@@ -73,6 +74,16 @@ export interface RateTable {
   currency?: string
   /** The agreement's minimum hire period, days. */
   minHireDays?: number
+  /**
+   * The cost of capital, percent per annum — what the money this job ties up in
+   * formwork costs while it is out.
+   *
+   * A rate and nothing else: the period is the programme's own span, read off the
+   * schedule, because spend-to-recovery is a question about when the money goes out and
+   * comes back, and this engine will not invent dates it has not been given. Absent here
+   * means no finance figure at all, never a rate assumed.
+   */
+  financeRatePerAnnum?: number
   byCatalogId: Readonly<Record<string, PartRate>>
   /**
    * One delivery load, one way, and an hour of a mobile crane.
@@ -159,6 +170,18 @@ export interface CostLine {
   ownedCost?: number
   /** Which basis produced `ownedCost`. Absent where nothing owned was charged. */
   ownedBasis?: OwnedBasis
+  /**
+   * Set where the line's total fittings exceed the stated life — the asset did not
+   * survive the job.
+   *
+   * The charge stops being per use beyond the life and becomes the replacement the
+   * overrun implies, because a per-use charge past the life prices a panel that is
+   * dead. `uses` is the line's owned quantity (total fittings — each fitting is one
+   * use), `life` is the stated `expectedUses`, `replacements` is how many whole new
+   * assets the overrun consumed — `ceil((uses − life) / life)` — and `replacementCost`
+   * is those new assets at list, which is the money the overrun added.
+   */
+  overrun?: { uses: number; life: number; replacements: number; replacementCost: number }
   /** Hire, recharge and consumed. Deliberately without `ownedCost` — that is not cash. */
   totalCost?: number
   /**
@@ -208,6 +231,20 @@ export interface BomCost {
    * rather than that the yard owns nothing.
    */
   ownedQuantityExcluded: number
+  /**
+   * Lines whose total fittings outlive the stated life, with the replacement each
+   * overrun implies. Empty is the ordinary case, where nothing outlived its life.
+   */
+  overruns: CostLine[]
+  /**
+   * The cost of capital on the money this takeoff ties up, over the period the stated
+   * programme spans. Outside `totalCost` on purpose and reported beside it, because a
+   * cash total a reader cannot reconcile against an invoice is a cash total with no
+   * purpose.
+   */
+  financeCost?: number
+  /** The sentence that makes `financeCost` auditable: the rate, the period, the pours it excluded. */
+  financeNote?: string
   /**
    * False where any line could not be priced. The total is then the sum of what could
    * be, which is a floor rather than a price.
@@ -263,6 +300,7 @@ export function bomCost(
   rates: RateTable,
   hire: BomHire,
   supply: BomSupply | undefined,
+  schedule?: FormworkSchedule,
 ): BomCost {
   const bySupply = new Map<BomLine, SupplyLine>((supply?.lines ?? []).map((e) => [e.line, e]))
   const byHire = new Map<BomLine, HireLine>(hire.lines.map((e) => [e.line, e]))
@@ -322,6 +360,9 @@ export function bomCost(
     // no period is left uncharged for the same reason a hired one is.
     let ownedCost: number | undefined
     let ownedBasis: OwnedBasis | undefined
+    let overrun:
+      | { uses: number; life: number; replacements: number; replacementCost: number }
+      | undefined
     if (ownedQuantity > 0) {
       const perUse = perUseCost(rate)
       if (perUse !== undefined) {
@@ -329,7 +370,24 @@ export function bomCost(
         // a weekend costs what it costs used once. That is the whole difference between a
         // life and a hire term, and it is why the two bases are named rather than summed
         // into one figure a reader would have to reverse-engineer.
-        ownedCost = perUse * ownedQuantity
+        //
+        // Uses past the stated life are not more uses — the asset is dead, so the overrun
+        // is charged as the replacement it implies (7.5): `ceil((uses − life) / life)` whole
+        // new assets at list, after the first life is amortised to its residual. A per-use
+        // charge past the life is a price for a panel that no longer exists, which is the
+        // silent unbounded life this block exists to refuse.
+        const life = rate.expectedUses as number
+        // `perUse` is only defined where `purchasePerUnit` is, so this is safe — the
+        // assertion is for the compiler, which cannot see through `perUseCost`.
+        const list = rate.purchasePerUnit as number
+        if (ownedQuantity <= life) {
+          ownedCost = perUse * ownedQuantity
+        } else {
+          const replacements = Math.ceil((ownedQuantity - life) / life)
+          const replacementCost = list * replacements
+          ownedCost = perUse * life + replacementCost
+          overrun = { uses: ownedQuantity, life, replacements, replacementCost }
+        }
         ownedBasis = 'amortised'
       } else if (monthly === undefined) gaps.push('no-rental-rate')
       else if (days === undefined) gaps.push('hired-but-never-struck')
@@ -361,6 +419,7 @@ export function bomCost(
       ...(consumedCost === undefined ? {} : { consumedCost }),
       ...(ownedCost === undefined ? {} : { ownedCost }),
       ...(ownedBasis === undefined ? {} : { ownedBasis }),
+      ...(overrun === undefined ? {} : { overrun }),
       ...(priced.length > 0 ? { totalCost: priced.reduce((a, b) => a + b, 0) } : {}),
       ...(chargedDays === undefined ? {} : { chargedDays }),
       ...(atMinimumPeriod ? { atMinimumPeriod } : {}),
@@ -387,6 +446,37 @@ export function bomCost(
     if (owned > 0 && entry.ownedCost === undefined) ownedQuantityExcluded += owned
     for (const gap of entry.gaps) gaps.add(gap)
   }
+  const overruns = costLines.filter((entry) => entry.overrun !== undefined)
+
+  // The cost of capital on the money the job ties up, outside the cash total. The period
+  // is spend-to-recovery read off the programme: the money is out from the day the first
+  // plant is wanted on site to the day the last of it is free, which is the conservative
+  // bound when recovery is not modelled — the job's whole span. No stated rate means no
+  // figure at all, and no span means no figure either: a period this engine cannot
+  // derive from stated dates would be a date it invented.
+  const totalCost = hireCost + rechargeCost + consumedCost
+  let financeCost: number | undefined
+  let financeNote: string | undefined
+  if (rates.financeRatePerAnnum !== undefined && schedule !== undefined) {
+    const spanDays =
+      schedule.firstErectAt === undefined || schedule.lastReleaseAt === undefined
+        ? undefined
+        : calendarDayNumber(schedule.lastReleaseAt) === undefined ||
+            calendarDayNumber(schedule.firstErectAt) === undefined
+          ? undefined
+          : calendarDayNumber(schedule.lastReleaseAt)! - calendarDayNumber(schedule.firstErectAt)!
+    if (spanDays !== undefined && spanDays > 0) {
+      financeCost = totalCost * (rates.financeRatePerAnnum / 100) * (spanDays / 365)
+      const undated = schedule.unscheduled
+      const undatedSentence =
+        undated.length === 0
+          ? ''
+          : ` ${undated.length} of ${schedule.pours.length} pours have no date and are not in that period${undated.length === 1 ? '' : ':'}${undated.length === 1 ? ` — ${undated[0]?.id}` : ` ${undated.map((pour) => pour.id).join(', ')}`}.`
+      financeNote =
+        `The money this takeoff ties up is charged at ${rates.financeRatePerAnnum}% a year over the period the programme states — plant first wanted on ${schedule.firstErectAt}, last free on ${schedule.lastReleaseAt} (${spanDays} days).` +
+        `${undatedSentence} It is outside the cash total, because a figure folded in could not be reconciled against an invoice.`
+    }
+  }
 
   return {
     ...(rates.currency === undefined ? {} : { currency: rates.currency }),
@@ -394,12 +484,15 @@ export function bomCost(
     hireCost,
     rechargeCost,
     consumedCost,
-    totalCost: hireCost + rechargeCost + consumedCost,
+    totalCost,
     ownedCost,
     ownedAmortisedCost,
     ownedRechargeCost,
     linesAtMinimum: costLines.filter((entry) => entry.atMinimumPeriod),
     ownedQuantityExcluded,
+    overruns,
+    ...(financeCost === undefined ? {} : { financeCost }),
+    ...(financeNote === undefined ? {} : { financeNote }),
     complete: gaps.size === 0,
     gaps: [...gaps],
   }
@@ -458,8 +551,14 @@ export function bomCostCaveats(cost: BomCost): string[] {
   const out: string[] = []
   if (cost.lines.length === 0) return out
   out.push(
-    'This is what the formwork costs to hold: hire, recharges and what is spent. It is not the cost of forming the job — there is no labour, no transport and no finance in it, and labour is normally the largest of those.',
+    'This is what the formwork costs to hold: hire, recharges and what is spent. It is not the cost of forming the job — there is no labour and no transport in it, and labour is normally the largest of those.',
   )
+  // The finance figure read against the total, straight after the preamble that defines
+  // what the total is. Absent until a rate is stated, so a takeoff with no rate is told
+  // nothing it cannot verify.
+  if (cost.financeCost !== undefined && cost.financeNote !== undefined) {
+    out.push(`${formatMoney(cost.financeCost, cost.currency)} of finance — ${cost.financeNote}`)
+  }
   if (cost.ownedCost > 0) {
     const both = cost.ownedAmortisedCost > 0 && cost.ownedRechargeCost > 0
     const basis = both
@@ -475,6 +574,18 @@ export function bomCostCaveats(cost: BomCost): string[] {
     out.push(
       `${cost.ownedQuantityExcluded} parts off the yard's own rack could not be charged at all, because there is no hire rate to charge them at or nothing strikes them. Those parts appear in this job at nothing, which makes owning them look free.`,
     )
+  }
+  if (cost.overruns.length > 0) {
+    // The asset died mid-job. Named per line rather than folded into a count, because the
+    // remedy is a purchasing decision about that part: the uses past the life are charged
+    // as whole replacements at list, and a reader has to see which line, how far past and
+    // for what money to argue with it.
+    for (const entry of cost.overruns) {
+      const o = entry.overrun as NonNullable<typeof entry.overrun>
+      out.push(
+        `${entry.line.catalogId} was used ${o.uses} times against a stated life of ${o.life}, so the ${o.uses - o.life} uses past it are charged as ${o.replacements} ${o.replacements === 1 ? 'replacement' : 'replacements'} at ${formatMoney(o.replacementCost, cost.currency)} rather than as further uses of an asset that is spent. That is the purchase the overrun implies — order it, or the next job is short of ${entry.line.catalogId}.`,
+      )
+    }
   }
   if (!cost.complete) {
     const reasons = cost.gaps.map((gap) => COST_GAP_LABELS[gap].toLowerCase()).join('; ')

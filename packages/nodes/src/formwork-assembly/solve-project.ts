@@ -10,8 +10,10 @@ import type {
   FormworkAcquisition,
   FormworkCommitments,
   FormworkCutList,
+  FormworkCutListOptions,
   FormworkLifts,
   FormworkLogistics,
+  FormworkPart,
   FormworkPours,
   FormworkResequence,
   FormworkSchedule,
@@ -344,6 +346,53 @@ function isCastable(node: AnyNode | undefined): node is CastableHostNode {
 }
 
 /**
+ * The repeated-floor detection for the cut list (OpenSpec 6.4): whether the scope's
+ * board-bearing levels carry identical cut-piece sets, and one cycle's boards when they do.
+ *
+ * A level's fingerprint is its boards' rectangles, sorted — identical geometry is the only
+ * signal the model has that a pour repeats. Two identical walls on one level sit inside the
+ * same fingerprint by design: they are simultaneous, not reusable against each other, and
+ * the *levels* are what must match. Only where every board-bearing level shares one
+ * fingerprint is reuse claimed, so a scope with one bespoke floor among repeated ones stays
+ * conservative — a reuse claim over part of the scope would need per-fingerprint purchase
+ * counts, and the cut list is a purchasing figure a reader is likelier to argue with than
+ * accept. The reuse itself is a claim the surfaces state, not one they bury.
+ */
+function repeatedFloorCycle(elements: readonly SolvedElement[]): {
+  cycles: number
+  parts?: FormworkPart[]
+} {
+  const byLevel = new Map<string, { parts: FormworkPart[]; rectangles: string[] }>()
+  for (const element of elements) {
+    const levelId = (element.host.parentId as string | undefined) ?? ''
+    let bucket = byLevel.get(levelId)
+    if (!bucket) {
+      bucket = { parts: [], rectangles: [] }
+      byLevel.set(levelId, bucket)
+    }
+    for (const shutter of element.shutters) {
+      for (const part of shutter.parts) {
+        if (part.kind !== 'ply-piece' || part.omitted) continue
+        bucket.parts.push(part)
+        bucket.rectangles.push(`${part.widthMm}x${part.heightMm}`)
+      }
+    }
+  }
+  const fingerprints = new Map<string, { parts: FormworkPart[]; count: number }>()
+  for (const bucket of byLevel.values()) {
+    if (bucket.rectangles.length === 0) continue
+    const fingerprint = bucket.rectangles.sort().join(';')
+    const existing = fingerprints.get(fingerprint)
+    if (existing) existing.count++
+    else fingerprints.set(fingerprint, { parts: bucket.parts, count: 1 })
+  }
+  if (fingerprints.size !== 1) return { cycles: 1 }
+  const entry = [...fingerprints.values()][0]
+  if (!entry || entry.count <= 1) return { cycles: 1 }
+  return { cycles: entry.count, parts: entry.parts }
+}
+
+/**
  * The first registered-but-unseeded system a host's assemblies resolve to, or
  * `undefined` where every assembly resolves to a seeded system.
  *
@@ -667,7 +716,25 @@ export function solveProjectFormwork(
   // grouped them: four boards of one size are one line with a quantity of four, and nesting the
   // line would place one board and buy a sheet for it. Not a second sweep of the scene — the same
   // array the bill was built from.
-  const cutList = settings.sheets ? formworkCutList(everyPart, settings.sheets) : undefined
+  //
+  // Where the scope is one repeated floor, the nest covers one cycle's boards and the counts
+  // are the purchase for the whole repetition — see `repeatedFloorCycle` and 6.4.
+  const repeatedFloor = repeatedFloorCycle(elements)
+  const sheetLives: Record<string, number> = {}
+  for (const id of settings.sheets?.stockIds ?? []) {
+    const uses = settings.rates?.byCatalogId[id]?.expectedUses
+    if (uses !== undefined) sheetLives[id] = uses
+  }
+  const cutList = settings.sheets
+    ? formworkCutList(
+        repeatedFloor.cycles > 1 && repeatedFloor.parts ? repeatedFloor.parts : everyPart,
+        settings.sheets,
+        {
+          ...(repeatedFloor.cycles > 1 ? { cycles: repeatedFloor.cycles } : {}),
+          ...(Object.keys(sheetLives).length > 0 ? { sheetLives } : {}),
+        } satisfies FormworkCutListOptions,
+      )
+    : undefined
   const resequence =
     sequence && acquisition && acquisition.shortfalls.length > 0
       ? formworkResequence(
@@ -690,7 +757,12 @@ export function solveProjectFormwork(
     // parts, so a cost and the quantity it prices cannot disagree. `supply` is passed
     // through as it stands, including absent: a project with rates and no stock list has
     // said it owns none of this, which is a different claim from having said nothing.
-    ...(settings.rates ? { cost: bomCost(bom, settings.rates, hire, supply) } : {}),
+    // The schedule goes in for the finance figure only: the spend-to-recovery period is
+    // the programme's own span, and a cost that is outside the cash total still has to
+    // say what it was computed over.
+    ...(settings.rates
+      ? { cost: bomCost(bom, settings.rates, hire, supply, anyDated ? schedule : undefined) }
+      : {}),
     // Off the same bill as the money, so the hours and the price are counted over the same
     // quantities. The bill is the right multiplicand for a reason worth stating where it is
     // used: a project bill is built from every shutter's parts, so a panel type fitted on
