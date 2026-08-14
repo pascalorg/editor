@@ -20,6 +20,7 @@ import {
   Ghost,
   Layers,
   Layers2,
+  Maximize,
   Palette,
   PenLine,
   SlidersHorizontal,
@@ -465,6 +466,17 @@ export const ViewerControlsBar = ({
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               src="/icons/topview.webp"
             />
+          </ActionButton>
+
+          <ActionButton
+            className="hover:bg-foreground/5"
+            label="Zoom extents"
+            onClick={() => emitter.emit('camera-controls:zoom-extents')}
+            size="icon"
+            tooltipSide="top"
+            variant="ghost"
+          >
+            <Maximize className="h-5 w-5" />
           </ActionButton>
         </div>
       </TooltipProvider>

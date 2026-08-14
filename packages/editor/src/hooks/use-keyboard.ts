@@ -103,6 +103,18 @@ function rotateGroupSelection(direction: 1 | -1): boolean {
   return true
 }
 
+// The zoom-framing shortcuts sit one arm above the plain `z` (zones) and `f`
+// (furnish) arms in the same chain, so they have to be the stricter match. They
+// key off `e.code` rather than `e.key` for that: with Caps Lock on, Shift+Z
+// reports `e.key === 'z'` and would fall through to the zones layer.
+function isZoomShortcut(event: KeyboardEvent, code: 'KeyF' | 'KeyZ') {
+  return (
+    event.code === code &&
+    event.shiftKey &&
+    !(event.metaKey || event.ctrlKey || event.altKey || event.repeat)
+  )
+}
+
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
 // so that the global Escape handler knows not to also switch to select mode.
 let _toolCancelConsumed = false
@@ -348,6 +360,17 @@ export const useKeyboard = ({
         if (!_toolCancelConsumed) {
           exitToSelectAfterUnconsumedCancel()
         }
+      } else if (isZoomShortcut(e, 'KeyF')) {
+        // Zoom to the selection, Rhino's ZoomSelected. Shifted because plain F
+        // is the furnish layer; the letter still reads as "frame". With nothing
+        // selected the handlers fall through to zoom extents.
+        e.preventDefault()
+        emitter.emit('camera-controls:zoom-selection')
+      } else if (isZoomShortcut(e, 'KeyZ')) {
+        // Zoom extents. Shift+Z is SketchUp's binding for the same thing, and
+        // plain Z is the zones layer here.
+        e.preventDefault()
+        emitter.emit('camera-controls:zoom-extents')
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')

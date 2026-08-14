@@ -225,6 +225,17 @@ type CameraControlEvents = {
   'camera-controls:orbit-cw': undefined
   'camera-controls:orbit-ccw': undefined
   'camera-controls:fit-scene': CameraControlFitSceneEvent
+  /**
+   * Frame everything visible, keeping the current view direction (Rhino's
+   * "zoom extents"). Handled by whichever view is on screen: the 3D camera
+   * controls, or the floorplan in 2D-only mode where the canvas never mounts.
+   */
+  'camera-controls:zoom-extents': undefined
+  /**
+   * Frame the current selection the same way. Falls back to zoom-extents when
+   * nothing is selected, so the shortcut is never a dead key.
+   */
+  'camera-controls:zoom-selection': undefined
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
   'camera-controls:apply-pose': CameraPose
   'camera-controls:cancel-pose': undefined

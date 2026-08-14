@@ -12,12 +12,13 @@ import {
 import { GRID_LAYER, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box3,
   type Camera,
   type OrthographicCamera,
   type PerspectiveCamera,
+  Sphere,
   Spherical,
   Vector3,
 } from 'three'
@@ -32,6 +33,11 @@ import {
 } from '../../lib/camera-pose'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
+import {
+  collectNodeBounds,
+  collectSceneBounds,
+  resolveZoomSelectionIds,
+} from '../../lib/zoom-framing'
 import { publishCameraPose } from '../../store/camera-pose-store'
 import useEditor from '../../store/use-editor'
 import {
@@ -50,7 +56,16 @@ const tempSize = new Vector3()
 const tempTarget = new Vector3()
 const transitionFreezePosition = new Vector3()
 const transitionFreezeTarget = new Vector3()
+const zoomFitBox = new Box3()
+const zoomFitSphere = new Sphere()
 const keyboardPanSpherical = new Spherical()
+const DEFAULT_MAX_CAMERA_DISTANCE = 100
+// Breathing room around the framed bounds. The bounding sphere of a box is
+// already generous, so this only keeps the subject off the viewport edge.
+const ZOOM_FIT_PADDING = 1.08
+// Framing a doorknob at its true radius would ask for a distance below
+// `minDistance` and land the camera inside neighbouring geometry.
+const ZOOM_FIT_MIN_RADIUS = 0.75
 const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
 const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
 const KEYBOARD_PAN_VIEW_WIDTH_PER_SECOND = 0.65
@@ -356,6 +371,7 @@ export const CustomCameraControls = () => {
     plan: CameraPoseApplicationPlan
   } | null>(null)
   const suppressPoseEvents = useRef(false)
+  const [maxCameraDistance, setMaxCameraDistance] = useState(DEFAULT_MAX_CAMERA_DISTANCE)
   const keyboardPanKeys = useRef<KeyboardPanState>({
     forward: false,
     backward: false,
@@ -581,6 +597,45 @@ export const CustomCameraControls = () => {
       )
     },
     [isPreviewMode, isFirstPersonMode],
+  )
+
+  // Rhino's zoom-extents / zoom-selected: pull the camera back until `box` fits,
+  // keeping the current view direction. `fitToSphere` is the only camera-controls
+  // fit that does — `fitToBox` snaps the orbit to the nearest axis first, which
+  // would drop a 3/4 view onto a flat elevation on every press.
+  const fitToBounds = useCallback(
+    (box: Box3) => {
+      const control = controls.current
+      if (isFirstPersonMode || !control) return
+
+      // A saved-view interpolation writes `setLookAt` every frame in `useFrame`
+      // and would fight the transition we're about to start.
+      cancelPoseApplication()
+
+      if (box.isEmpty()) {
+        control.setLookAt(20, 20, 20, 0, 0, 0, true)
+        return
+      }
+
+      box.getBoundingSphere(zoomFitSphere)
+      zoomFitSphere.radius = Math.max(zoomFitSphere.radius * ZOOM_FIT_PADDING, ZOOM_FIT_MIN_RADIUS)
+
+      // `dollyTo` clamps to `maxDistance`, so a site wider than the default
+      // 100 m orbit ceiling would frame only its middle. Raise the ceiling to
+      // what this scene actually needs and leave it there — the user asked to
+      // see the whole thing, and pulling them back in on the next scroll would
+      // undo that. Kept in state so drei's next render doesn't reset the prop.
+      if (isPerspectiveCamera(camera)) {
+        const required = control.getDistanceToFitSphere(zoomFitSphere.radius)
+        if (Number.isFinite(required) && required > control.maxDistance) {
+          control.maxDistance = required
+          setMaxCameraDistance(required)
+        }
+      }
+
+      void control.fitToSphere(zoomFitSphere, true)
+    },
+    [camera, cancelPoseApplication, isFirstPersonMode],
   )
 
   const publishCurrentPose = useCallback(() => {
@@ -1247,8 +1302,38 @@ export const CustomCameraControls = () => {
       controls.current.setLookAt(cx + distance * 0.7, height, cz + distance * 0.7, cx, 0, cz, true)
     }
 
+    // The floorplan answers these two events in 2D-only mode: it has to, since
+    // an R3F canvas that was never sized never mounted this component. Once the
+    // user has visited 3D both listeners exist, so stand down rather than fit a
+    // hidden camera and publish a pose that fights the floorplan's own fit.
+    const isFloorplanOwned = () => useEditor.getState().viewMode === '2d'
+
+    const handleZoomExtents = () => {
+      if (isFloorplanOwned()) return
+      fitToBounds(collectSceneBounds(zoomFitBox))
+    }
+
+    const handleZoomSelection = () => {
+      if (isFloorplanOwned()) return
+      const ids = resolveZoomSelectionIds()
+      if (ids.length === 0) {
+        handleZoomExtents()
+        return
+      }
+      const box = collectNodeBounds(zoomFitBox, ids)
+      // Selected but not rendered (a node on a hidden level): framing the whole
+      // scene is a better answer than snapping to the default pose.
+      if (box.isEmpty()) {
+        handleZoomExtents()
+        return
+      }
+      fitToBounds(box)
+    }
+
     emitter.on('camera-controls:capture', handleNodeCapture)
     emitter.on('camera-controls:focus', handleNodeFocus)
+    emitter.on('camera-controls:zoom-extents', handleZoomExtents)
+    emitter.on('camera-controls:zoom-selection', handleZoomSelection)
     emitter.on('camera-controls:view', handleNodeView)
     emitter.on('camera-controls:top-view', handleTopView)
     emitter.on('camera-controls:orbit-cw', handleOrbitCW)
@@ -1258,13 +1343,15 @@ export const CustomCameraControls = () => {
     return () => {
       emitter.off('camera-controls:capture', handleNodeCapture)
       emitter.off('camera-controls:focus', handleNodeFocus)
+      emitter.off('camera-controls:zoom-extents', handleZoomExtents)
+      emitter.off('camera-controls:zoom-selection', handleZoomSelection)
       emitter.off('camera-controls:view', handleNodeView)
       emitter.off('camera-controls:top-view', handleTopView)
       emitter.off('camera-controls:orbit-cw', handleOrbitCW)
       emitter.off('camera-controls:orbit-ccw', handleOrbitCCW)
       emitter.off('camera-controls:fit-scene', handleFitScene)
     }
-  }, [focusNode, isPreviewMode, isFirstPersonMode])
+  }, [fitToBounds, focusNode, isPreviewMode, isFirstPersonMode])
 
   const onTransitionStart = useCallback(() => {
     cameraDraggingLifecycle.begin()
@@ -1299,7 +1386,7 @@ export const CustomCameraControls = () => {
   return (
     <CameraControls
       makeDefault
-      maxDistance={100}
+      maxDistance={maxCameraDistance}
       maxPolarAngle={maxPolarAngle}
       minDistance={minDistance}
       minPolarAngle={0}

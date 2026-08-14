@@ -99,6 +99,7 @@ import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
+import { resolveZoomSelectionIds } from '../../lib/zoom-framing'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
@@ -959,6 +960,67 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
   }
 
   return candidateIds.filter((id) => hitIds.has(id) || hitIdsFromData.has(id))
+}
+
+/**
+ * Bounds of the given nodes as they are drawn, in viewBox units — the space
+ * `FloorplanViewport` is expressed in, so the result can be framed directly.
+ *
+ * Measured from the DOM rather than from node data because only the DOM knows a
+ * node's drawn footprint: an item is a bare `position` in the scene graph, and
+ * framing that would zoom to a point. Screen and viewBox space differ by scale
+ * and translation alone — the view rotation sits on an inner group — so an
+ * axis-aligned screen rect maps to an axis-aligned viewBox rect exactly.
+ */
+function measureFloorplanNodesViewBox(svg: SVGSVGElement, ids: readonly string[]) {
+  const scene = svg.querySelector<SVGGElement>('[data-floorplan-scene]')
+  const screenToViewBox = svg.getScreenCTM()?.inverse()
+  if (!(scene && screenToViewBox) || ids.length === 0) {
+    return null
+  }
+
+  const wanted = new Set(ids)
+  const point = svg.createSVGPoint()
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+
+  for (const element of scene.querySelectorAll<SVGGraphicsElement>('[data-node-id]')) {
+    const id = element.getAttribute('data-node-id')
+    if (!id || !wanted.has(id)) {
+      continue
+    }
+
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 && rect.height <= 0) {
+      continue
+    }
+
+    for (const [clientX, clientY] of [
+      [rect.left, rect.top],
+      [rect.right, rect.bottom],
+    ] as const) {
+      point.x = clientX
+      point.y = clientY
+      const mapped = point.matrixTransform(screenToViewBox)
+      minX = Math.min(minX, mapped.x)
+      maxX = Math.max(maxX, mapped.x)
+      minY = Math.min(minY, mapped.y)
+      maxY = Math.max(maxY, mapped.y)
+    }
+  }
+
+  if (!(Number.isFinite(minX) && Number.isFinite(minY))) {
+    return null
+  }
+
+  return {
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+    width: maxX - minX,
+    height: maxY - minY,
+  }
 }
 
 function swallowNextFloorplanScreenSelectionClick() {
@@ -7456,6 +7518,64 @@ export function FloorplanPanel({
     smoothFloorplanNavigationView(localCenter, nextUserRotationDeg, currentViewport.width)
     publishFloorplanNavigationPose(localCenter, nextUserRotationDeg, currentViewport.width)
   }, [buildingRotationDeg, publishFloorplanNavigationPose, smoothFloorplanNavigationView])
+
+  // Zoom extents / zoom to selection, in 2D-only mode where the 3D camera
+  // controls that normally own these commands have never mounted (R3F skips a
+  // canvas that has never been sized). The published pose keeps the hidden
+  // camera in step, exactly as align-to-north does.
+  const zoomFloorplanTo = useCallback(
+    (centerSvg: SvgPoint, viewWidth: number) => {
+      const userRotationDeg = latestFloorplanUserRotationDegRef.current
+      const sceneRotationDeg = FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
+      const localCenter = rotateSvgPoint(centerSvg, -sceneRotationDeg)
+
+      smoothFloorplanNavigationView(localCenter, userRotationDeg, viewWidth)
+      publishFloorplanNavigationPose(localCenter, userRotationDeg, viewWidth)
+    },
+    [buildingRotationDeg, publishFloorplanNavigationPose, smoothFloorplanNavigationView],
+  )
+
+  useEffect(() => {
+    const zoomExtents = () => {
+      if (useEditor.getState().viewMode !== '2d') return
+      // `fittedViewport` is already the whole-model box, padded and widened to
+      // the panel's aspect ratio — the same framing a freshly opened plan gets.
+      const fitted = latestFittedViewportRef.current
+      if (!fitted) return
+      zoomFloorplanTo({ x: fitted.centerX, y: fitted.centerY }, fitted.width)
+    }
+
+    const zoomSelection = () => {
+      if (useEditor.getState().viewMode !== '2d') return
+      const svg = svgRef.current
+      const bounds = svg ? measureFloorplanNodesViewBox(svg, resolveZoomSelectionIds()) : null
+      // Nothing selected, or nothing of the selection is drawn on this plan
+      // (a node on another level): framing everything beats doing nothing.
+      if (!bounds) {
+        zoomExtents()
+        return
+      }
+
+      // Same widening as `fittedViewport`, so a wide-and-short selection ends
+      // up fully inside the panel rather than cropped top and bottom. The
+      // width is clamped against the fitted view inside the navigation call,
+      // which is what keeps this in step with the wheel's zoom limits.
+      zoomFloorplanTo(
+        { x: bounds.centerX, y: bounds.centerY },
+        Math.max(
+          bounds.width + FLOORPLAN_PADDING * 2,
+          (bounds.height + FLOORPLAN_PADDING * 2) * svgAspectRatio,
+        ),
+      )
+    }
+
+    emitter.on('camera-controls:zoom-extents', zoomExtents)
+    emitter.on('camera-controls:zoom-selection', zoomSelection)
+    return () => {
+      emitter.off('camera-controls:zoom-extents', zoomExtents)
+      emitter.off('camera-controls:zoom-selection', zoomSelection)
+    }
+  }, [svgAspectRatio, zoomFloorplanTo])
 
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null

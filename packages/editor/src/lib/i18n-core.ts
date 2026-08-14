@@ -2290,6 +2290,13 @@ const tr: Record<string, string> = {
   'Fence reference': 'Çit referansı',
   'Editor-only. Plain click a member later to reselect the whole group. Not saved with the project.':
     'Yalnızca editörde geçerli. Daha sonra bir üyeye normal tıklamak tüm grubu yeniden seçer. Projeyle birlikte kaydedilmez.',
+  'Zoom extents': 'Tümüne sığdır',
+  'Zoom to the selection': 'Seçime yakınlaş',
+  'Zoom to the whole model': 'Modelin tamamına yakınlaş',
+  'Pulls back until the selected objects fill the view, keeping the current viewing angle. With nothing selected it frames the whole model.':
+    'Bakış açısını koruyarak, seçili nesneler görünümü dolduracak kadar geri çekilir. Hiçbir şey seçili değilse modelin tamamını çerçeveler.',
+  'Frames everything visible. Works in the 2D plan and the 3D view alike.':
+    'Görünen her şeyi çerçeveler. Hem 2B planda hem de 3B görünümde çalışır.',
 }
 
 function translateDynamicText(text: string): string | null {

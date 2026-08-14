@@ -1,6 +1,7 @@
 'use client'
 
 import { emitter } from '@pascal-app/core'
+import { Maximize } from 'lucide-react'
 import Image from 'next/image'
 import useEditor from '../../../store/use-editor'
 import { ActionButton } from './action-button'
@@ -80,6 +81,18 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
           />
         </ActionButton>
       )}
+
+      {/* Zoom extents — the 2D plan answers it itself, so unlike top view this
+          one stays useful without the 3D canvas. */}
+      <ActionButton
+        className="hover:bg-foreground/5"
+        label="Zoom extents"
+        onClick={() => emitter.emit('camera-controls:zoom-extents')}
+        size="icon"
+        variant="ghost"
+      >
+        <Maximize className="h-[18px] w-[18px] opacity-70 transition-opacity group-hover:opacity-100" />
+      </ActionButton>
     </div>
   )
 }

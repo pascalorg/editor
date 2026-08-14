@@ -14,7 +14,7 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the stand
 | `packages/cad-import` | DXF → CAD underlay geometry. Pure logic, no DOM, no React |
 | `packages/ifc-converter` | IFC → scene-graph conversion (`web-ifc`). Pure logic, no DOM, no React |
 | `packages/ui` | `@repo/ui` — internal shared primitives, private, not published |
-| `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools |
+| `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools, and owns the scene API (`app/api/scenes/*`, backed by `@pascal-app/mcp/storage` via `lib/scene-store-server.ts`) |
 | `apps/ifc-converter` | Next app wrapping `packages/ifc-converter` (:3003) |
 | `tooling/` | Release scripts and the shared tsconfig base |
 
@@ -59,7 +59,7 @@ bunx turbo run test --force                              # ignore the turbo cach
 cd packages/editor && bunx tsgo --noEmit                 # type-check one package
 ```
 
-Four things that will mislead you if you don't know them:
+Five things that will mislead you if you don't know them:
 
 - **`bun test` is not `bun run test`.** Bare `bun test` hits Bun's built-in
   runner, which walks the whole repo from source (~365 files) and ignores turbo
@@ -79,6 +79,13 @@ Four things that will mislead you if you don't know them:
 - **`turbo run test` depends on `^build`**, so a package tests against the last
   built `dist` of its dependencies. After editing a dependency, rebuild it or
   the consumer's tests run against stale code.
+- **The dev server sees `packages/editor` from source and everything else from
+  `dist`.** Only `editor` exports `./src/index.tsx`; `core`, `viewer`, `nodes`,
+  `mcp`, `cad-import` and `ifc-converter` all export `./dist/index.js`. So an
+  editor-package edit hot-reloads, while a change to a schema, a registry
+  capability or a node kind does nothing at `:3002` until you rebuild that
+  package (`bunx turbo run build --filter=@pascal-app/core`). "My change had no
+  effect" is usually this.
 
 A green suite says the pure logic is right. It says nothing about whether the
 component you edited is mounted, whether the store you gated on is ever written,
@@ -106,21 +113,28 @@ Three things about actually getting the app up:
   on it — confirm with
   `document.querySelector('canvas').clientWidth` before blaming your diff.
 
-## State: three stores, one per layer
+## State: three authoritative stores, one per layer
 
-Each layer owns exactly one Zustand store, and the layer boundaries below are
-enforced by which store a file is allowed to touch.
+Each layer owns one *authoritative* Zustand store, and the layer boundaries
+below are enforced by which store a file is allowed to touch.
 
 | Store | Lives in | Owns |
 |---|---|---|
-| `useScene` | `packages/core/src/store/use-scene.ts` | Scene data: `nodes`, root ids, `collections`, dirty tracking, CRUD. The only persisted store. |
+| `useScene` | `packages/core/src/store/use-scene.ts` | Scene data: `nodes`, root ids, `collections`, dirty tracking, CRUD. The only store persisted *into the scene file*. |
 | `useViewer` | `packages/viewer/src/store/use-viewer.ts` | Presentation: building/level/zone selection, level display mode, camera mode. |
 | `useEditor` | `packages/editor/src/store/use-editor.tsx` | Editing: active tool, mode, view mode, structure layer, panel state. |
+
+These three are not the only stores — roughly twenty more exist
+(`packages/editor/src/store/use-*`, `packages/core/src/store/use-live-*`).
+Those are ephemeral per-gesture channels: live transforms, draft previews,
+snap indicators. They are deliberately neither persisted nor history-tracked,
+and adding one for a new gesture is normal. What the table pins down is where
+*durable* state of each kind belongs.
 
 Subscribe in components (`useScene((s) => s.nodes)`); use `getState()` outside
 React (systems, callbacks, tool handlers).
 
-Two things that bite:
+Three things that bite:
 
 - **Undo is Zundo `temporal`, not a command stack.** Every tracked `set` pushes
   a history entry, so a multi-step mutation must be wrapped:
@@ -138,6 +152,16 @@ Two things that bite:
   reverts to defaults on reopen. This exact bug class shipped twice already
   (materials and collections, `CHANGELOG.md` #597). `clone-scene-graph.ts` and
   `use-scene.ts`'s load path are the two places to check.
+- **A new persisted field on `useEditor` will not survive a reload.** That store
+  persists with `skipHydration: true` and rehydrates from an effect in
+  `components/editor/index.tsx`; the app's startup writes reach the store first,
+  so the persist middleware saves the still-default state over what was on disk
+  before it is ever read. Fields the UI re-sets every boot (`tool`, `phase`)
+  never notice, which is why the bug stayed invisible. Anything the *user* sets
+  and expects back after a reload needs its own store with ordinary synchronous
+  hydration — `store/use-sticky-defaults.ts` is the worked example. Verify by
+  seeding `localStorage` by hand, reloading, and reading the value back; a
+  manual `persist.rehydrate()` will restore it correctly and prove nothing.
 
 Loaded scenes run through migrations. `packages/core/src/utils/scene-migrations.ts`
 is a **server-safe barrel** — everything it exports must stay pure data logic
@@ -158,6 +182,18 @@ Consequence: when adding a kind, **do not** add dispatch branches. Contribute
 holds the whole vertical slice for one kind (`schema.ts`, `definition.ts`,
 `renderer.tsx`, `tool.tsx`, `system.tsx`, `floorplan.ts`, `paint.ts`,
 `preview.tsx`, `parametrics.ts` — as applicable).
+
+**A build tool's starting parameters come from `useEditor.toolDefaults[kind]`,
+never from the tool's own constants.** Two things write that entry, in
+priority order: a caller staging a preset immediately before `setTool`, and
+`setTool` itself seeding from the sticky memory (what the kind was last used
+at) when nothing is staged. A kind opts into the memory by declaring
+`capabilities.stickyParams` — an allowlist, so placement and identity fields
+(`position`, a wall's `start`/`end`, a slab's polygon) can never travel to the
+next instance, and a kind that later gains a field fails safe. Kinds whose
+parameters are nearly all sticky derive the list with `stickyParamsFromSchema`
+rather than spelling sixty keys. A tool that hardcodes its defaults instead of
+merging the entry silently opts out of both preset placement and the memory.
 
 ## How the app composes the editor, and who owns the theme
 
@@ -197,12 +233,56 @@ Two consequences worth internalising:
   `pascalorg/private-editor`.** Chrome that is product- or brand-specific
   belongs in `apps/editor`; only generic, embedder-safe changes go in the
   package.
+- **Both themes are real; the chrome was written dark-first.** `globals.css`
+  defines the light palette on `:root` and the dark one under `.dark`, so
+  semantic classes (`bg-accent`, `text-foreground`, `text-muted-foreground`)
+  flip correctly and hardcoded ones do not. Three spellings look fine in dark
+  and break in light: a literal dark surface (`bg-[#2C2C2E]`) under token text,
+  which lands dark-on-dark; a bare `text-white` on a token surface, which lands
+  white-on-white; and `bg-white/10` / `border-white/10` used as a raised
+  surface, which vanishes. Use `bg-accent` and `foreground/N` instead, and pair
+  light tints with a `dark:` counterpart (`text-red-700 dark:text-red-400`).
+  Only chrome that is deliberately dark in both themes — the snapshot HUD, the
+  crash screen — may hold a literal, and then it owns its own text colour too.
+  Eyeballing dark mode proves nothing about light; check both.
+
+## Localisation
+
+UI copy is written in English inline and translated on the way out. There are
+no message keys: `packages/editor/src/lib/i18n-core.ts` holds a `tr` dictionary
+keyed by **exact English source strings**, and `translateReactNode` walks the
+rendered React tree swapping matching string children at render time.
+
+Consequences worth knowing before you touch copy:
+
+- A string assembled at runtime (template literal, concatenation) can never
+  match a dictionary entry. Write the literal, then add it to `tr`.
+- `panel-wrapper.tsx`, `popover.tsx` and `tooltip.tsx` already translate their
+  children, so wrapping content inside them in `<LocalizedContent>` again is
+  redundant.
+- **The default locale is `tr`, not `en`** (`lib/ui-preferences.tsx`), persisted
+  to `localStorage` and mirrored to `pascal-locale` / `pascal-theme` cookies by
+  `UiPreferencesSync`. Server Components read that cookie directly and wrap in
+  `ServerLocalizedContent`, importing from the `@pascal-app/editor/i18n` subpath
+  — `i18n-core.ts` is the server-safe half and must stay free of `'use client'`,
+  the same rule `scene-migrations.ts` lives under.
 
 ## Editor interaction: what is actually wired
 
-`interaction-scope.md` describes the target model. Three gaps between that model
-and today's code have each cost a wrong assumption; check them before building on
-any of the three.
+`interaction-scope.md` describes the target model. One dev-mode hazard and three
+gaps between that model and today's code have each cost a wrong assumption;
+check them before building on any of the four.
+
+- **React StrictMode fires every tool's unmount cleanup right after it mounts.**
+  `reactStrictMode` is unset in `apps/editor/next.config.ts`, so Next's default
+  (on) applies in dev and effects run mount → cleanup → mount. Every drawn kind
+  registers `useEffect(() => () => …, [])` to drop its `toolDefaults` entry on
+  deactivation; done unconditionally, that cleanup wipes the entry the
+  activation just staged, moments before the tool reads it. The failure is
+  dev-only and silent — the tool simply draws at its fallback dimensions.
+  `lib/tool-defaults.ts`'s `clearToolDefaultsOnDeactivate` is the guard: it
+  clears only when `useEditor.tool` has actually moved on. Any new unmount-only
+  cleanup that tears down state a mount depends on has the same hazard.
 
 - **Drafting tools do not open a scope.** `InteractionScope` has a `drafting`
   kind, but `wall`, `fence`, `slab`, `ceiling`, `zone` and `roof` tools never

@@ -235,6 +235,16 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         action: 'Orbit camera',
         note: 'Drag with the right mouse button.',
       },
+      {
+        keys: ['Shift', 'F'],
+        action: 'Zoom to the selection',
+        note: 'Pulls back until the selected objects fill the view, keeping the current viewing angle. With nothing selected it frames the whole model.',
+      },
+      {
+        keys: ['Shift', 'Z'],
+        action: 'Zoom to the whole model',
+        note: 'Frames everything visible. Works in the 2D plan and the 3D view alike.',
+      },
     ],
   },
 ]
