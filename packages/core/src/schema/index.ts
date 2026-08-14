@@ -33,6 +33,12 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
+export {
+  type AutoDownspoutPlacement,
+  type AutomaticDownspoutInput,
+  planAutomaticDownspouts,
+  resolveAutomaticDownspoutLength,
+} from './nodes/automatic-downspout'
 export { BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
 export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
@@ -86,7 +92,11 @@ export {
   type DormerSurfaceMaterialSpec,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
-export { DownspoutNode } from './nodes/downspout'
+export {
+  DownspoutNode,
+  defaultDownspoutMetadata,
+  isDefaultDownspoutNode,
+} from './nodes/downspout'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'
 export { DuctTerminalNode } from './nodes/duct-terminal'
@@ -99,7 +109,21 @@ export {
 export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
-export { GutterNode, GutterOutlet } from './nodes/gutter'
+export {
+  computeGutterEaveY,
+  createDefaultGuttersForSegment,
+  GUTTER_EAVE_TUCK_INWARD,
+  GUTTER_EAVE_TUCK_UP,
+  type GutterEaveSide,
+  GutterNode,
+  GutterOutlet,
+  type GutterRun,
+  getDefaultGutterSide,
+  getGutterRunsForSegment,
+  hasAutoGutterMetadata,
+  isAutoGutterEnabled,
+  isDefaultGutterNode,
+} from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export type {
   AnimationEffect,

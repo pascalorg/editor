@@ -3,12 +3,25 @@ import {
   type AnyNode,
   type AnyNodeId,
   AnyNode as AnyNodeSchema,
+  createDefaultGuttersForSegment,
   createDefaultRidgeVentsForSegment,
+  type DownspoutNode,
+  DownspoutNode as DownspoutNodeSchema,
+  defaultDownspoutMetadata,
+  type GutterEaveSide,
+  type GutterNode,
+  generateId,
+  getDefaultGutterSide,
   getEffectiveWallSurfaceMaterial,
   getWallSurfaceMaterialSignature,
+  isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
+  isDefaultDownspoutNode,
+  isDefaultGutterNode,
   isDefaultRidgeVentNode,
+  planAutomaticDownspouts,
   type RoofSegmentNode,
+  resolveAutomaticDownspoutLength,
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
@@ -42,6 +55,19 @@ const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
   'dutchHipWidthRatio',
   'dutchWaistLengthRatio',
   'dutchGabletRake',
+])
+
+const DEFAULT_GUTTER_REFRESH_FIELDS = new Set<string>([
+  'metadata',
+  'position',
+  'rotation',
+  'roofType',
+  'width',
+  'depth',
+  'wallHeight',
+  'pitch',
+  'overhang',
+  'trim',
 ])
 
 type ZodCheckLike = {
@@ -567,6 +593,274 @@ function refreshDefaultRidgeVentsForSegment(
   return nextVents.map((vent) => vent.id as AnyNodeId)
 }
 
+function shouldRefreshDefaultGutters(data: Partial<AnyNode>) {
+  return Object.keys(data).some((key) => DEFAULT_GUTTER_REFRESH_FIELDS.has(key))
+}
+
+type DefaultGutterRefreshResult = {
+  dirtyIds: AnyNodeId[]
+  deletedIds: AnyNodeId[]
+}
+
+function refreshDefaultGuttersForSegment(
+  nextNodes: Record<AnyNodeId, AnyNode>,
+  segment: RoofSegmentNode,
+  roofSegments: readonly RoofSegmentNode[],
+): DefaultGutterRefreshResult {
+  const childIds = Array.isArray(segment.children) ? (segment.children as AnyNodeId[]) : []
+  const existingIds = childIds.filter((childId) =>
+    isDefaultGutterNode(nextNodes[childId], segment.id),
+  )
+  if (!isAutoGutterEnabled(segment, nextNodes) && existingIds.length === 0) {
+    return { dirtyIds: [], deletedIds: [] }
+  }
+
+  const existingBySide = new Map<GutterEaveSide, AnyNodeId[]>()
+  for (const id of existingIds) {
+    const side = getDefaultGutterSide(nextNodes[id], segment.id)
+    if (!side) continue
+    const ids = existingBySide.get(side) ?? []
+    ids.push(id)
+    existingBySide.set(side, ids)
+  }
+
+  const desiredGutters = isAutoGutterEnabled(segment, nextNodes)
+    ? createDefaultGuttersForSegment(segment, roofSegments)
+    : []
+  const desiredChildIds: AnyNodeId[] = []
+  const dirtyIds: AnyNodeId[] = []
+
+  for (const desired of desiredGutters) {
+    const side = getDefaultGutterSide(desired, segment.id)
+    if (!side) continue
+    const matchingIds = existingBySide.get(side)
+    const existingId = matchingIds?.shift()
+
+    if (existingId) {
+      const existing = nextNodes[existingId] as GutterNode
+      nextNodes[existingId] = {
+        ...existing,
+        parentId: segment.id,
+        roofSegmentId: segment.id,
+        position: desired.position,
+        rotation: desired.rotation,
+        length: desired.length,
+      } as AnyNode
+      desiredChildIds.push(existingId)
+      dirtyIds.push(existingId)
+      continue
+    }
+
+    const desiredId = desired.id as AnyNodeId
+    nextNodes[desiredId] = { ...desired, parentId: segment.id } as AnyNode
+    desiredChildIds.push(desiredId)
+    dirtyIds.push(desiredId)
+  }
+
+  const retainedIdSet = new Set(desiredChildIds)
+  const deletedIds = existingIds.filter((id) => !retainedIdSet.has(id))
+  const deletedGutterIds = new Set(deletedIds)
+  for (const [nodeId, node] of Object.entries(nextNodes) as [AnyNodeId, AnyNode][]) {
+    if (
+      node.type === 'downspout' &&
+      node.gutterId &&
+      deletedGutterIds.has(node.gutterId as AnyNodeId)
+    ) {
+      deletedIds.push(nodeId)
+    }
+  }
+
+  const deletedIdSet = new Set(deletedIds)
+  for (const id of deletedIds) delete nextNodes[id]
+
+  nextNodes[segment.id as AnyNodeId] = {
+    ...segment,
+    children: [
+      ...childIds.filter((childId) => !deletedIdSet.has(childId) && !existingIds.includes(childId)),
+      ...desiredChildIds,
+    ],
+  } as AnyNode
+
+  return { dirtyIds, deletedIds }
+}
+
+function getRoofSegments(
+  nextNodes: Record<AnyNodeId, AnyNode>,
+  segment: RoofSegmentNode,
+): RoofSegmentNode[] {
+  const roof = segment.parentId ? nextNodes[segment.parentId as AnyNodeId] : undefined
+  if (!(roof && roof.type === 'roof')) return [segment]
+  return (roof.children ?? [])
+    .map((childId) => nextNodes[childId as AnyNodeId])
+    .filter((node): node is RoofSegmentNode => node?.type === 'roof-segment')
+}
+
+function refreshDefaultDownspoutsForRoof(
+  nextNodes: Record<AnyNodeId, AnyNode>,
+  roofSegments: readonly RoofSegmentNode[],
+): DefaultGutterRefreshResult {
+  const gutters = roofSegments.flatMap((segment) => {
+    const current = nextNodes[segment.id as AnyNodeId]
+    if (current?.type !== 'roof-segment') return []
+    return (current.children ?? [])
+      .map((childId) => nextNodes[childId as AnyNodeId])
+      .filter(
+        (node): node is GutterNode =>
+          node?.type === 'gutter' && isDefaultGutterNode(node, current.id),
+      )
+  })
+  const gutterById = new Map<string, GutterNode>(gutters.map((gutter) => [gutter.id, gutter]))
+  const downspouts = Object.values(nextNodes).filter(
+    (node): node is DownspoutNode =>
+      node?.type === 'downspout' && Boolean(node.gutterId && gutterById.has(node.gutterId)),
+  )
+  const generated = downspouts.filter((downspout) => isDefaultDownspoutNode(downspout))
+  const manual = downspouts.filter((downspout) => !isDefaultDownspoutNode(downspout))
+  const placements = planAutomaticDownspouts({
+    segments: roofSegments,
+    gutters,
+    downspouts: manual,
+  })
+  const segmentById = new Map<string, RoofSegmentNode>(
+    roofSegments.map((segment) => [segment.id, segment]),
+  )
+  const availableByGutter = new Map<string, DownspoutNode[]>()
+  for (const downspout of generated) {
+    if (!downspout.gutterId) continue
+    const available = availableByGutter.get(downspout.gutterId) ?? []
+    available.push(downspout)
+    availableByGutter.set(downspout.gutterId, available)
+  }
+
+  const retainedIds = new Set<AnyNodeId>()
+  const retainedOutletIds = new Set<string>()
+  const dirtyIds = new Set<AnyNodeId>()
+  const deletedIds: AnyNodeId[] = []
+  const outletsByGutter = new Map(gutters.map((gutter) => [gutter.id, [...(gutter.outlets ?? [])]]))
+
+  for (const placement of placements) {
+    const gutter = gutterById.get(placement.gutterId)
+    if (!gutter?.roofSegmentId) continue
+    const segment = segmentById.get(gutter.roofSegmentId)
+    if (!segment) continue
+    const outlets = outletsByGutter.get(gutter.id) ?? []
+    const available = availableByGutter.get(gutter.id) ?? []
+    let bestIndex = -1
+    let bestDistance = Number.POSITIVE_INFINITY
+    for (let index = 0; index < available.length; index++) {
+      const candidate = available[index]!
+      const outlet = outlets.find((entry) => entry.id === candidate.outletId)
+      const distance = outlet ? Math.abs(outlet.offset - placement.offset) : 0
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestIndex = index
+      }
+    }
+
+    const existing = bestIndex >= 0 ? available.splice(bestIndex, 1)[0] : undefined
+    const outletId = existing?.outletId ?? generateId('outlet')
+    const outletIndex = outlets.findIndex((outlet) => outlet.id === outletId)
+    const outlet = {
+      id: outletId,
+      offset: placement.offset,
+      diameter: 0.07,
+      generatedBy: 'default-downspout' as const,
+    }
+    if (outletIndex >= 0) outlets[outletIndex] = { ...outlets[outletIndex]!, ...outlet }
+    else outlets.push(outlet)
+    outletsByGutter.set(gutter.id, outlets)
+    retainedOutletIds.add(outletId)
+
+    const length = resolveAutomaticDownspoutLength(nextNodes, segment, gutter, placement.offset)
+    const downspout = existing
+      ? ({
+          ...existing,
+          parentId: segment.id,
+          gutterId: gutter.id,
+          outletId,
+          length,
+        } as DownspoutNode)
+      : DownspoutNodeSchema.parse({
+          name: 'Downspout',
+          parentId: segment.id,
+          gutterId: gutter.id,
+          outletId,
+          length,
+          diameter: outlet.diameter,
+          metadata: defaultDownspoutMetadata(),
+        })
+    nextNodes[downspout.id as AnyNodeId] = downspout as AnyNode
+    retainedIds.add(downspout.id as AnyNodeId)
+    dirtyIds.add(downspout.id as AnyNodeId)
+
+    const currentSegment = nextNodes[segment.id as AnyNodeId]
+    if (currentSegment?.type === 'roof-segment') {
+      nextNodes[segment.id as AnyNodeId] = {
+        ...currentSegment,
+        children: Array.from(new Set([...(currentSegment.children ?? []), downspout.id])),
+      } as AnyNode
+      dirtyIds.add(segment.id as AnyNodeId)
+    }
+  }
+
+  for (const [gutterId, outlets] of outletsByGutter) {
+    const gutter = nextNodes[gutterId as AnyNodeId]
+    if (gutter?.type !== 'gutter') continue
+    nextNodes[gutterId as AnyNodeId] = {
+      ...gutter,
+      outlets: outlets.filter(
+        (outlet) => outlet.generatedBy !== 'default-downspout' || retainedOutletIds.has(outlet.id),
+      ),
+    } as AnyNode
+    dirtyIds.add(gutterId as AnyNodeId)
+  }
+
+  for (const downspout of generated) {
+    const downspoutId = downspout.id as AnyNodeId
+    if (retainedIds.has(downspoutId)) continue
+    const gutter = downspout.gutterId ? nextNodes[downspout.gutterId as AnyNodeId] : undefined
+    if (gutter?.type === 'gutter' && downspout.outletId) {
+      nextNodes[gutter.id as AnyNodeId] = {
+        ...gutter,
+        outlets: (gutter.outlets ?? []).filter((outlet) => outlet.id !== downspout.outletId),
+      } as AnyNode
+      dirtyIds.add(gutter.id as AnyNodeId)
+    }
+    const parent = downspout.parentId ? nextNodes[downspout.parentId as AnyNodeId] : undefined
+    if (parent?.type === 'roof-segment') {
+      nextNodes[parent.id as AnyNodeId] = {
+        ...parent,
+        children: (parent.children ?? []).filter((childId) => childId !== downspout.id),
+      } as AnyNode
+      dirtyIds.add(parent.id as AnyNodeId)
+    }
+    delete nextNodes[downspoutId]
+    deletedIds.push(downspoutId)
+  }
+
+  return { dirtyIds: [...dirtyIds], deletedIds }
+}
+
+function refreshDefaultGuttersForRoof(
+  nextNodes: Record<AnyNodeId, AnyNode>,
+  segment: RoofSegmentNode,
+): DefaultGutterRefreshResult {
+  const roofSegments = getRoofSegments(nextNodes, segment)
+  const dirtyIds: AnyNodeId[] = []
+  const deletedIds: AnyNodeId[] = []
+  for (const roofSegment of roofSegments) {
+    const current = nextNodes[roofSegment.id as AnyNodeId]
+    if (current?.type !== 'roof-segment') continue
+    const result = refreshDefaultGuttersForSegment(nextNodes, current, roofSegments)
+    dirtyIds.push(...result.dirtyIds)
+    deletedIds.push(...result.deletedIds)
+  }
+  const downspoutResult = refreshDefaultDownspoutsForRoof(nextNodes, roofSegments)
+  dirtyIds.push(...downspoutResult.dirtyIds)
+  deletedIds.push(...downspoutResult.deletedIds)
+  return { dirtyIds, deletedIds }
+}
+
 // Track pending RAF for updateNodesAction to prevent multiple queued callbacks
 let pendingRafId: number | null = null
 let pendingUpdates: Set<AnyNodeId> = new Set()
@@ -786,6 +1080,8 @@ const createNodesActionImpl = (
   ops: NodeCreateOp[],
 ) => {
   if (get().readOnly) return
+  const extraNodesToMarkDirty = new Set<AnyNodeId>()
+  const extraNodesToClearDirty = new Set<AnyNodeId>()
   set((state) => {
     const nextNodes = { ...state.nodes }
     const nextRootIds = [...state.rootNodeIds]
@@ -824,6 +1120,20 @@ const createNodesActionImpl = (
       }
     }
 
+    const refreshedRoofIds = new Set<AnyNodeId>()
+    for (const { node } of ops) {
+      const segment = nextNodes[node.id as AnyNodeId]
+      if (segment?.type !== 'roof-segment') continue
+      const roofId = segment.parentId as AnyNodeId | null
+      if (roofId && refreshedRoofIds.has(roofId)) continue
+      if (roofId) refreshedRoofIds.add(roofId)
+      const result = refreshDefaultGuttersForRoof(nextNodes, segment)
+      for (const gutterId of result.dirtyIds) extraNodesToMarkDirty.add(gutterId)
+      for (const deletedId of result.deletedIds) extraNodesToClearDirty.add(deletedId)
+    }
+
+    addActiveSceneCommitNodeIds([...extraNodesToMarkDirty, ...extraNodesToClearDirty])
+
     return { nodes: nextNodes, rootNodeIds: nextRootIds }
   })
 
@@ -833,6 +1143,8 @@ const createNodesActionImpl = (
     if (parentId) get().markDirty(parentId)
     else if (node.parentId) get().markDirty(node.parentId as AnyNodeId)
   })
+  for (const id of extraNodesToMarkDirty) get().markDirty(id)
+  for (const id of extraNodesToClearDirty) get().clearDirty(id)
 }
 
 const applyNodeChangesActionImpl = (
@@ -846,6 +1158,7 @@ const applyNodeChangesActionImpl = (
   const updateOps = changes.update ?? []
   const deleteOps = changes.delete ?? []
   const nodesToMarkDirty = new Set<AnyNodeId>()
+  const nodesToClearDirty = new Set<AnyNodeId>()
   const parentsToMarkDirty = new Set<AnyNodeId>()
 
   set((state) => {
@@ -853,6 +1166,7 @@ const applyNodeChangesActionImpl = (
     const nextCollections = { ...state.collections }
     const nextRootIds = [...state.rootNodeIds]
     let resolvedRootIds = nextRootIds
+    const roofsToRefresh = new Set<AnyNodeId>()
 
     for (const { id, data } of updateOps) {
       const currentNode = nextNodes[id]
@@ -887,6 +1201,12 @@ const applyNodeChangesActionImpl = (
           nodesToMarkDirty.add(ventId)
         }
       }
+      const currentSegment = nextNodes[id]
+      if (currentSegment?.type === 'roof-segment' && shouldRefreshDefaultGutters(data)) {
+        const result = refreshDefaultGuttersForRoof(nextNodes, currentSegment)
+        for (const gutterId of result.dirtyIds) nodesToMarkDirty.add(gutterId)
+        for (const deletedId of result.deletedIds) nodesToClearDirty.add(deletedId)
+      }
       nodesToMarkDirty.add(id)
     }
 
@@ -896,6 +1216,9 @@ const applyNodeChangesActionImpl = (
 
       nextNodes[newNode.id as AnyNodeId] = newNode
       nodesToMarkDirty.add(newNode.id as AnyNodeId)
+      if (newNode.type === 'roof-segment' && effectiveParentId) {
+        roofsToRefresh.add(effectiveParentId)
+      }
 
       if (effectiveParentId && nextNodes[effectiveParentId]) {
         const parent = nextNodes[effectiveParentId]
@@ -925,6 +1248,13 @@ const applyNodeChangesActionImpl = (
 
     for (const id of deleteOps) {
       collectDelete(id)
+    }
+
+    for (const id of allIdsToDelete) {
+      const node = nextNodes[id]
+      if (node?.type === 'roof-segment' && node.parentId) {
+        roofsToRefresh.add(node.parentId as AnyNodeId)
+      }
     }
 
     for (const id of allIdsToDelete) {
@@ -960,13 +1290,33 @@ const applyNodeChangesActionImpl = (
       delete nextNodes[id]
     }
 
-    addActiveSceneCommitNodeIds([...allIdsToDelete, ...nodesToMarkDirty, ...parentsToMarkDirty])
+    for (const roofId of roofsToRefresh) {
+      const roof = nextNodes[roofId]
+      if (!(roof && roof.type === 'roof')) continue
+      const segment = (roof.children ?? [])
+        .map((childId) => nextNodes[childId as AnyNodeId])
+        .find((node): node is RoofSegmentNode => node?.type === 'roof-segment')
+      if (!segment) continue
+      const result = refreshDefaultGuttersForRoof(nextNodes, segment)
+      for (const gutterId of result.dirtyIds) nodesToMarkDirty.add(gutterId)
+      for (const deletedId of result.deletedIds) nodesToClearDirty.add(deletedId)
+    }
+
+    addActiveSceneCommitNodeIds([
+      ...allIdsToDelete,
+      ...nodesToMarkDirty,
+      ...nodesToClearDirty,
+      ...parentsToMarkDirty,
+    ])
 
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
   for (const id of nodesToMarkDirty) {
     get().markDirty(id)
+  }
+  for (const id of nodesToClearDirty) {
+    get().clearDirty(id)
   }
   for (const id of parentsToMarkDirty) {
     get().markDirty(id)
@@ -987,6 +1337,7 @@ const updateNodesActionImpl = (
   if (get().readOnly) return
   const parentsToUpdate = new Set<AnyNodeId>()
   const extraNodesToUpdate = new Set<AnyNodeId>()
+  const extraNodesToDelete = new Set<AnyNodeId>()
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -1039,12 +1390,19 @@ const updateNodesActionImpl = (
           extraNodesToUpdate.add(ventId)
         }
       }
+      const currentSegment = nextNodes[id]
+      if (currentSegment?.type === 'roof-segment' && shouldRefreshDefaultGutters(data)) {
+        const result = refreshDefaultGuttersForRoof(nextNodes, currentSegment)
+        for (const gutterId of result.dirtyIds) extraNodesToUpdate.add(gutterId)
+        for (const deletedId of result.deletedIds) extraNodesToDelete.add(deletedId)
+      }
     }
 
     addActiveSceneCommitNodeIds([
       ...updates.map(({ id }) => id),
       ...parentsToUpdate,
       ...extraNodesToUpdate,
+      ...extraNodesToDelete,
     ])
 
     return { nodes: nextNodes }
@@ -1059,6 +1417,9 @@ const updateNodesActionImpl = (
   }
   for (const id of extraNodesToUpdate) {
     pendingUpdates.add(id)
+  }
+  for (const id of extraNodesToDelete) {
+    get().clearDirty(id)
   }
 
   if (pendingRafId !== null) {
@@ -1110,6 +1471,13 @@ const deleteNodesActionImpl = (
     for (const id of ids) collect(id)
     for (const plan of mergePlans) {
       allIds.add(plan.secondaryWallId)
+    }
+    const affectedRoofIds = new Set<AnyNodeId>()
+    for (const id of allIds) {
+      const node = nextNodes[id]
+      if (node?.type === 'roof-segment' && node.parentId) {
+        affectedRoofIds.add(node.parentId as AnyNodeId)
+      }
     }
     for (const id of allIds) deletedIds.add(id)
 
@@ -1213,7 +1581,19 @@ const deleteNodesActionImpl = (
       delete nextNodes[id]
     }
 
-    addActiveSceneCommitNodeIds([...allIds, ...parentsToMarkDirty, ...nodesToMarkDirty])
+    for (const roofId of affectedRoofIds) {
+      const roof = nextNodes[roofId]
+      if (!(roof && roof.type === 'roof')) continue
+      const segment = (roof.children ?? [])
+        .map((childId) => nextNodes[childId as AnyNodeId])
+        .find((node): node is RoofSegmentNode => node?.type === 'roof-segment')
+      if (!segment) continue
+      const result = refreshDefaultGuttersForRoof(nextNodes, segment)
+      for (const gutterId of result.dirtyIds) nodesToMarkDirty.add(gutterId)
+      for (const deletedId of result.deletedIds) deletedIds.add(deletedId)
+    }
+
+    addActiveSceneCommitNodeIds([...deletedIds, ...parentsToMarkDirty, ...nodesToMarkDirty])
 
     return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
   })

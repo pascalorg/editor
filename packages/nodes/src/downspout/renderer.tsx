@@ -4,7 +4,9 @@ import {
   type AnyNodeId,
   type DownspoutNode,
   type GutterNode,
+  isDefaultDownspoutNode,
   type RoofSegmentNode,
+  resolveAutomaticDownspoutLength,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
@@ -97,6 +99,19 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
       ? ({ ...segment, ...segmentOverrides } as RoofSegmentNode)
       : segment
     : undefined
+  const nodes = useScene((s) => s.nodes)
+  const outletOffset = effectiveGutter?.outlets?.find(
+    (outlet) => outlet.id === node.outletId,
+  )?.offset
+  const effectiveLength =
+    isDefaultDownspoutNode(node) &&
+    effectiveGutter &&
+    effectiveSegment &&
+    outletOffset !== undefined
+      ? resolveAutomaticDownspoutLength(nodes, effectiveSegment, effectiveGutter, outletOffset)
+      : node.length
+  const effectiveNode =
+    effectiveLength === node.length ? node : ({ ...node, length: effectiveLength } as DownspoutNode)
 
   // Routing back to the wall — memoised on the gutter/segment values
   // that actually move the jog or the collar bore, so the pipe geometry
@@ -121,15 +136,15 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
-    () => buildDownspoutGeometry(node, routing),
+    () => buildDownspoutGeometry(effectiveNode, routing),
     [
-      node.length,
-      node.diameter,
-      node.standoff,
-      node.shape,
-      node.strapStyle,
-      node.strapSpacing,
-      node.terminal,
+      effectiveNode.length,
+      effectiveNode.diameter,
+      effectiveNode.standoff,
+      effectiveNode.shape,
+      effectiveNode.strapStyle,
+      effectiveNode.strapSpacing,
+      effectiveNode.terminal,
       routing,
     ],
   )

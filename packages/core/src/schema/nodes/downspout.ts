@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+const DEFAULT_DOWNSPOUT_GENERATOR = 'default-downspout'
+
 export const DownspoutNode = BaseNode.extend({
   id: objectId('downspout'),
   type: nodeType('downspout'),
@@ -72,3 +74,21 @@ export const DownspoutNode = BaseNode.extend({
 )
 
 export type DownspoutNode = z.infer<typeof DownspoutNode>
+
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>
+  }
+  return {}
+}
+
+export function defaultDownspoutMetadata() {
+  return { generatedBy: DEFAULT_DOWNSPOUT_GENERATOR }
+}
+
+export function isDefaultDownspoutNode(node: unknown, gutterId?: string): node is DownspoutNode {
+  const parsed = DownspoutNode.safeParse(node)
+  if (!parsed.success) return false
+  if (gutterId && parsed.data.gutterId !== gutterId) return false
+  return metadataRecord(parsed.data.metadata).generatedBy === DEFAULT_DOWNSPOUT_GENERATOR
+}

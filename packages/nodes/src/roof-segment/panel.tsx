@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   createDefaultRidgeVentsForSegment,
+  isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
   ROOF_SHAPE_DEFAULTS,
@@ -76,6 +77,13 @@ export default function RoofSegmentPanel() {
       : undefined
     if (current?.type !== 'roof-segment') return false
     return isAutoRidgeVentEnabled(current, s.nodes)
+  })
+  const autoGutterEnabled = useScene((s) => {
+    const current = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined)
+      : undefined
+    if (current?.type !== 'roof-segment') return false
+    return isAutoGutterEnabled(current, s.nodes)
   })
 
   const handleUpdate = useCallback(
@@ -205,6 +213,19 @@ export default function RoofSegmentPanel() {
     [selectedId],
   )
 
+  const handleAutoGutterToggle = useCallback(
+    (checked: boolean) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const current = scene.nodes[selectedId as AnyNodeId] as RoofSegmentNode | undefined
+      if (current?.type !== 'roof-segment') return
+      scene.updateNode(selectedId as AnyNodeId, {
+        metadata: { ...metadataRecord(current.metadata), autoGutter: checked },
+      })
+    },
+    [selectedId],
+  )
+
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
@@ -247,6 +268,14 @@ export default function RoofSegmentPanel() {
             onChange={handleAutoRidgeVentToggle}
           />
         )}
+      </PanelSection>
+
+      <PanelSection title="Drainage">
+        <ToggleControl
+          checked={autoGutterEnabled}
+          label="Auto gutters"
+          onChange={handleAutoGutterToggle}
+        />
       </PanelSection>
 
       <PanelSection title="Footprint">
