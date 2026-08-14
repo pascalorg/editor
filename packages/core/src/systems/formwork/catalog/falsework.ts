@@ -286,20 +286,19 @@ export const FILM_FACED_PLY_21MM: SheathingType = {
 }
 
 const WISA_SOURCE =
-  "UPM WISA-Form Birch product datasheet 08/2015 (PEFC/02-31-112) — characteristic bending and mean modulus of elasticity published per grain direction; ÷1.3 per the sheet's own material partial factor to the permissible basis; rolling shear not published, carried at 2.4 N/mm² from the design.md §2.2 band"
+  "UPM WISA-Form Birch product datasheet 08/2015 (PEFC/02-31-112) for bending and mean modulus of elasticity per grain direction, and Handbook of Finnish Plywood Table 3-7 for planar (rolling) shear per thickness and direction — all characteristic, ÷1.3 per the datasheet's stated material partial factor to the permissible basis"
 
 /**
- * WISA-Form Birch — the first manufacturer-published metric entry, closing the
- * f_m / E_mean half of open item 3.
+ * WISA-Form Birch — the fully published metric entry, closing open item 3.
  *
  * The datasheet tabulates characteristic bending strength and mean modulus of
- * elasticity for the face grain parallel and perpendicular to the span, so both
- * directions are transcribed rather than factored from one (the `weaker()`
- * approximation the generic entries use). Characteristic bending is divided by
- * the sheet's own material partial factor (1.3) to sit on the permissible basis
- * the design checks against. Rolling shear is not in the datasheet: it is
- * carried at 2.4 N/mm² — the mid-range of design.md's stated band — and the
- * entry stays `secondary`, not `certified`, for that reason.
+ * elasticity for the face grain parallel and perpendicular to the span, and the
+ * Handbook of Finnish Plywood (the reference the datasheet itself cites) Table
+ * 3-7 tabulates planar (rolling) shear per thickness and direction — so every
+ * input is transcribed per direction rather than factored from one, and the
+ * `weaker()` approximation the generic entries use is not needed. Characteristic
+ * values are divided by the datasheet's stated material partial factor (1.3) to
+ * sit on the permissible basis the design checks against.
  */
 export const WISA_FORM_BIRCH_18MM: SheathingType = {
   id: 'wisa-form-birch-18',
@@ -310,8 +309,8 @@ export const WISA_FORM_BIRCH_18MM: SheathingType = {
   catalogSource: WISA_SOURCE,
   verification: 'secondary',
   thicknessMm: 18,
-  acrossSupports: fromMetric(18, 40.2 / 1.3, 2.4, 10048),
-  parallelToSupports: fromMetric(18, 34.1 / 1.3, 2.4, 7452),
+  acrossSupports: fromMetric(18, 40.2 / 1.3, 2.67 / 1.3, 10048),
+  parallelToSupports: fromMetric(18, 34.1 / 1.3, 2.34 / 1.3, 7452),
   capacityBasis: 'permissible',
   sourceRef: WISA_SOURCE,
 }
@@ -326,8 +325,8 @@ export const WISA_FORM_BIRCH_21MM: SheathingType = {
   catalogSource: WISA_SOURCE,
   verification: 'secondary',
   thicknessMm: 21,
-  acrossSupports: fromMetric(21, 39.4 / 1.3, 2.4, 9858),
-  parallelToSupports: fromMetric(21, 34.3 / 1.3, 2.4, 7642),
+  acrossSupports: fromMetric(21, 39.4 / 1.3, 2.59 / 1.3, 9858),
+  parallelToSupports: fromMetric(21, 34.3 / 1.3, 2.41 / 1.3, 7642),
   capacityBasis: 'permissible',
   sourceRef: WISA_SOURCE,
 }

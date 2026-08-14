@@ -117,11 +117,12 @@ describe('the verification vocabulary (8.1–8.2)', () => {
     expect(shear('plyform-structural-i-3-4')).toBeGreaterThan(shear('plyform-class-i-3-4'))
   })
 
-  it('the WISA-Form Birch entries transcribe the manufacturer datasheet, and say what it does not publish (3)', () => {
-    // Open item 3's first close: f_m and E_mean come off the UPM datasheet per
-    // grain direction instead of the stated typical band, and the entry is
-    // `secondary` rather than `certified` because the datasheet does not
-    // publish rolling shear.
+  it('the WISA-Form Birch entries transcribe published values for every input, per direction (3)', () => {
+    // Open item 3's close: bending and stiffness off the UPM datasheet and
+    // rolling shear off the Handbook of Finnish Plywood Table 3-7, all per
+    // grain direction — nothing factored from one direction by the `weaker()`
+    // approximation. The entry stays `secondary` because the conversion to the
+    // permissible basis (÷1.3) is our arithmetic, not the sheet's.
     const wisa = SHEATHING_TYPES.filter((sheet) => sheet.id.startsWith('wisa-form-birch-'))
     expect(wisa.map((sheet) => sheet.id).sort()).toEqual([
       'wisa-form-birch-18',
@@ -130,11 +131,12 @@ describe('the verification vocabulary (8.1–8.2)', () => {
     for (const sheet of wisa) {
       expect(sheet.verification).toBe('secondary')
       expect(sheet.catalogSource).toMatch(/WISA-Form Birch/i)
-      expect(sheet.catalogSource).toMatch(/rolling shear not published/i)
+      expect(sheet.catalogSource).toMatch(/Handbook of Finnish Plywood/i)
       // The two directions are published independently, not factored from one.
       expect(sheet.parallelToSupports.momentKnMPerM).toBeLessThan(
         sheet.acrossSupports.momentKnMPerM,
       )
+      expect(sheet.parallelToSupports.shearKnPerM).toBeLessThan(sheet.acrossSupports.shearKnPerM)
     }
   })
 
