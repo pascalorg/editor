@@ -36,7 +36,7 @@ export function OpeningDocumentationFields({
           Mark
         </span>
         <input
-          className="h-8 rounded-lg border border-border/50 bg-[#2C2C2E] px-2.5 font-mono text-foreground text-xs outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-orange-400/60"
+          className="h-8 rounded-lg border border-border/50 bg-accent px-2.5 font-mono text-foreground text-xs outline-none transition-colors placeholder:text-muted-foreground/50 focus:border-orange-400/60"
           defaultValue={mark ?? ''}
           key={`mark:${mark ?? ''}`}
           maxLength={16}
@@ -60,7 +60,7 @@ export function OpeningDocumentationFields({
             Construction
           </span>
           <select
-            className="h-8 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground text-xs outline-none focus:border-orange-400/60"
+            className="h-8 rounded-lg border border-border/50 bg-accent px-2 text-foreground text-xs outline-none focus:border-orange-400/60"
             onChange={(event) => {
               const next = event.currentTarget.value as 'framed' | 'masonry'
               onChange({
@@ -82,7 +82,7 @@ export function OpeningDocumentationFields({
             Dimension to
           </span>
           <select
-            className="h-8 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground text-xs outline-none focus:border-orange-400/60"
+            className="h-8 rounded-lg border border-border/50 bg-accent px-2 text-foreground text-xs outline-none focus:border-orange-400/60"
             onChange={(event) =>
               onChange({
                 dimensionReference: event.currentTarget
@@ -158,7 +158,7 @@ function OptionalMeterInput({
       <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
         {label}
       </span>
-      <div className="flex h-8 items-center rounded-lg border border-border/50 bg-[#2C2C2E] focus-within:border-orange-400/60">
+      <div className="flex h-8 items-center rounded-lg border border-border/50 bg-accent focus-within:border-orange-400/60">
         <input
           className="min-w-0 flex-1 bg-transparent px-2 font-mono text-foreground text-xs outline-none placeholder:text-muted-foreground/50"
           defaultValue={displayValue}

@@ -87,7 +87,7 @@ const EMPTY_MODULES: CabinetModuleNodeType[] = []
 const EMPTY_MODULE_IDS: AnyNodeId[] = []
 
 const PRESET_BUTTON_CLASS =
-  'flex h-9 items-center justify-center rounded-md border border-border/40 bg-[#252527] px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-[#303033]'
+  'flex h-9 items-center justify-center rounded-md border border-border/40 bg-accent/50 px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-accent-foreground/10'
 
 export default function CabinetPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -526,7 +526,7 @@ export default function CabinetPanel() {
                     ? 'Close cabinet'
                     : 'Open cabinet'
               }
-              className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-[#3e3e3e]"
+              className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-accent px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-accent-foreground/10"
               onClick={() => {
                 if (isAnimating) {
                   stopAnimation()

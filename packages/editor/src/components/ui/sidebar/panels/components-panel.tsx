@@ -226,7 +226,7 @@ export function ComponentsPanel() {
       )}
 
       {!canPlace && sortedDefinitions.length > 0 ? (
-        <p className="mt-4 text-center text-amber-300/80 text-xs">
+        <p className="mt-4 text-center text-amber-700 dark:text-amber-300/80 text-xs">
           Select a level before placing a component.
         </p>
       ) : null}

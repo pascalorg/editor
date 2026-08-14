@@ -223,7 +223,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
           <div
             className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
               altPressed
-                ? 'border-amber-500/70 bg-amber-500/15 text-amber-100'
+                ? 'border-amber-500/70 bg-amber-500/15 text-amber-800 dark:text-amber-100'
                 : 'border-border/70 bg-background/90 text-foreground/80'
             }`}
           >

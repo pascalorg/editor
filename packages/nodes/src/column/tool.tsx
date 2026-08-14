@@ -11,6 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  clearToolDefaultsOnDeactivate,
   getFloorStackPreviewPosition,
   isAlignmentGuideActive,
   isGridSnapActive,
@@ -40,13 +41,24 @@ import { ColumnPreview } from './renderer'
 
 const DEFAULT_COLUMN_PRESET_ID = 'basicPillar' satisfies ColumnPresetId
 
-function createColumnFromPreset(presetId: ColumnPresetId, position: [number, number, number]) {
+/**
+ * `defaults` carries the shape the user last worked a column into (via
+ * `toolDefaults.column`, seeded from the sticky memory on tool activation)
+ * or a staged preset's parameters. It is applied over the base preset so a
+ * plain shaft stays plain across placements.
+ */
+function createColumnFromPreset(
+  presetId: ColumnPresetId,
+  position: [number, number, number],
+  defaults: Readonly<Record<string, unknown>> = {},
+) {
   const { label, ...preset } = COLUMN_PRESETS[presetId]
   return ColumnNode.parse({
     name: label,
     position,
     rotation: 0,
     ...preset,
+    ...defaults,
   })
 }
 
@@ -68,8 +80,18 @@ const ColumnTool = () => {
   const [cursorVisible, setCursorVisible] = useState(false)
 
   // Default-preset column for the placement ghost — matches exactly what the
-  // commit creates (`basicPillar`), so the preview is faithful.
-  const previewNode = useMemo(() => createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, [0, 0, 0]), [])
+  // commit creates (`basicPillar` under the active tool defaults), so the
+  // preview is faithful right down to the remembered shaft profile.
+  const columnDefaults = useEditor((state) => state.toolDefaults.column)
+  const previewNode = useMemo(
+    () => createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, [0, 0, 0], columnDefaults),
+    [columnDefaults],
+  )
+
+  // Drop the staged entry on deactivation, like every other drawn kind, so a
+  // preset placed once doesn't outlive its activation. `setTool` re-seeds
+  // from the sticky memory next time the tool is picked. Unmount-only.
+  useEffect(() => () => clearToolDefaultsOnDeactivate('column'), [])
 
   useEffect(() => {
     if (!activeLevelId) return
@@ -168,7 +190,11 @@ const ColumnTool = () => {
         : fallbackPosition
 
       const column = ColumnNode.parse({
-        ...createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position),
+        ...createColumnFromPreset(
+          DEFAULT_COLUMN_PRESET_ID,
+          position,
+          useEditor.getState().toolDefaults.column,
+        ),
         parentId: activeLevelId,
       })
       const committedColumn = ColumnNode.parse({

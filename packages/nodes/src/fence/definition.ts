@@ -308,6 +308,23 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   }),
 
   capabilities: {
+    // The span the user draws changes every time; how the fence is built —
+    // height, post rhythm, infill style — is what should carry over.
+    stickyParams: [
+      'height',
+      'thickness',
+      'baseHeight',
+      'postSpacing',
+      'postSize',
+      'topRailHeight',
+      'groundClearance',
+      'edgeInset',
+      'slatGap',
+      'postCap',
+      'baseStyle',
+      'showInfill',
+      'style',
+    ],
     selectable: { hitVolume: 'bbox' },
     surfaces: { sides: { faces: 'all' } },
     duplicable: true,

@@ -11198,7 +11198,7 @@ export function FloorplanPanel({
               }}
             >
               <div className="mb-3 flex items-start gap-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-white/5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border bg-foreground/5">
                   <Ruler className="h-4 w-4 text-foreground/80" />
                 </div>
                 <div className="min-w-0">
@@ -11210,7 +11210,7 @@ export function FloorplanPanel({
                 </div>
               </div>
 
-              <div className="mb-3 rounded-xl border border-border/70 bg-white/5 px-3 py-2">
+              <div className="mb-3 rounded-xl border border-border/70 bg-foreground/5 px-3 py-2">
                 <div className="text-[11px] text-muted-foreground uppercase tracking-wide">
                   Drawn line
                 </div>
@@ -11273,7 +11273,7 @@ export function FloorplanPanel({
 
               <div className="mt-4 flex justify-end gap-2">
                 <button
-                  className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-white/8 hover:text-foreground"
+                  className="h-8 rounded-lg border border-border px-3 font-medium text-muted-foreground text-xs transition hover:bg-foreground/8 hover:text-foreground"
                   onClick={() => setPendingReferenceScale(null)}
                   type="button"
                 >

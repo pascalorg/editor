@@ -132,11 +132,11 @@ export default function DownspoutsPanel() {
       <div className="flex flex-col gap-1">
         {downspouts.map((d, i) => (
           <div
-            className="flex items-center justify-between rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-foreground text-sm"
+            className="flex items-center justify-between rounded-lg border border-border/50 bg-accent px-3 py-2 text-foreground text-sm"
             key={d.id}
           >
             <button
-              className="flex-1 truncate text-left transition-colors hover:text-white"
+              className="flex-1 truncate text-left transition-colors hover:text-foreground"
               onClick={() => handleSelectDownspout(d.id as AnyNodeId)}
               type="button"
             >
@@ -144,7 +144,7 @@ export default function DownspoutsPanel() {
             </button>
             <button
               aria-label="Remove downspout"
-              className="ml-2 text-muted-foreground text-xs transition-colors hover:text-red-400"
+              className="ml-2 text-muted-foreground text-xs transition-colors hover:text-red-600 dark:hover:text-red-400"
               onClick={() => handleRemove(d)}
               type="button"
             >

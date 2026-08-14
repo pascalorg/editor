@@ -338,7 +338,7 @@ export function CabinetRunPanel({
         <div className="flex flex-col gap-2 px-1 pb-2">
           {sortedModules.map((module, index) => (
             <div
-              className="flex items-center justify-between rounded-lg border border-border/40 bg-[#252527] px-2 py-2"
+              className="flex items-center justify-between rounded-lg border border-border/40 bg-accent/50 px-2 py-2"
               key={module.id}
             >
               <button
@@ -354,7 +354,7 @@ export function CabinetRunPanel({
                 </div>
               </button>
               <button
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-200 disabled:opacity-30"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-700 dark:text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-200 disabled:opacity-30"
                 disabled={modules.length <= 1}
                 onClick={() => deleteModule(module)}
                 type="button"

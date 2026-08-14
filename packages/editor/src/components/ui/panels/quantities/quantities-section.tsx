@@ -40,7 +40,7 @@ export function QuantitiesSection() {
         </span>
         <button
           aria-label="Export quantities as CSV"
-          className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-30"
+          className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-30"
           disabled={!(takeoff && hasRows)}
           onClick={() => takeoff && downloadQuantityCsv(takeoff)}
           title="Export CSV"

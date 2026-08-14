@@ -21,6 +21,7 @@ import {
   CursorSphere,
   chainEndJoinsExistingWall,
   clearPlacementSurface,
+  clearToolDefaultsOnDeactivate,
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
@@ -494,7 +495,7 @@ export const WallTool: React.FC = () => {
 
   // Clear preset-seeded defaults on deactivation so a later manual wall draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
+  useEffect(() => () => clearToolDefaultsOnDeactivate('wall'), [])
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]

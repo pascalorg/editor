@@ -327,7 +327,7 @@ export default function TurbineVentPanel() {
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={handleDelete}
           />

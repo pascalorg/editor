@@ -90,7 +90,7 @@ export function SunStudySection() {
     <label className="flex items-center gap-2 px-3 py-1 text-xs">
       <span className="w-20 shrink-0 text-muted-foreground">{label}</span>
       <input
-        className="min-w-0 flex-1 rounded bg-white/5 px-1.5 py-0.5 text-right text-foreground tabular-nums outline-none focus:bg-white/10"
+        className="min-w-0 flex-1 rounded bg-foreground/5 px-1.5 py-0.5 text-right text-foreground tabular-nums outline-none focus:bg-foreground/10"
         defaultValue={value ?? ''}
         inputMode="decimal"
         key={`${label}-${value ?? ''}`}
@@ -128,7 +128,7 @@ export function SunStudySection() {
             'ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] transition-colors',
             enabled
               ? 'bg-primary/20 text-foreground'
-              : 'text-muted-foreground/70 hover:bg-white/10 hover:text-foreground',
+              : 'text-muted-foreground/70 hover:bg-foreground/10 hover:text-foreground',
             !located && 'pointer-events-none opacity-40',
           )}
           disabled={!located}
@@ -188,7 +188,7 @@ export function SunStudySection() {
           <label className="flex items-center gap-2 px-3 py-1 text-xs">
             <span className="w-20 shrink-0 text-muted-foreground">Date</span>
             <input
-              className="min-w-0 flex-1 rounded bg-white/5 px-1.5 py-0.5 text-foreground outline-none focus:bg-white/10 [color-scheme:dark]"
+              className="min-w-0 flex-1 rounded bg-foreground/5 px-1.5 py-0.5 text-foreground outline-none focus:bg-foreground/10 [color-scheme:dark]"
               onChange={(event) => {
                 const [year, month, day] = event.target.value.split('-').map(Number)
                 if (!(year && month && day)) return

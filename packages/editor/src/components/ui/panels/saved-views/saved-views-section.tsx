@@ -43,7 +43,7 @@ export function SavedViewsSection() {
         </span>
         <button
           aria-label="Save current view"
-          className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground"
+          className="ml-auto shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
           onClick={handleCapture}
           title="Save current view"
           type="button"
@@ -61,15 +61,15 @@ export function SavedViewsSection() {
           {list.map((view, index) => (
             <li
               className={cn(
-                'group flex items-center gap-1.5 px-3 py-1 transition-colors hover:bg-white/5',
-                activeId === view.id && 'bg-white/5',
+                'group flex items-center gap-1.5 px-3 py-1 transition-colors hover:bg-foreground/5',
+                activeId === view.id && 'bg-foreground/5',
               )}
               key={view.id}
             >
               {editingId === view.id ? (
                 <input
                   autoFocus
-                  className="min-w-0 flex-1 rounded bg-white/10 px-1 py-0.5 text-foreground text-xs outline-none"
+                  className="min-w-0 flex-1 rounded bg-foreground/10 px-1 py-0.5 text-foreground text-xs outline-none"
                   defaultValue={view.name}
                   onBlur={(event) => {
                     const name = event.target.value.trim()
@@ -101,7 +101,7 @@ export function SavedViewsSection() {
               <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                 <button
                   aria-label="Move view up"
-                  className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-25"
+                  className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-25"
                   disabled={index === 0}
                   onClick={() => moveSavedView(index, index - 1)}
                   title="Move up"
@@ -111,7 +111,7 @@ export function SavedViewsSection() {
                 </button>
                 <button
                   aria-label="Move view down"
-                  className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-25"
+                  className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-25"
                   disabled={index === list.length - 1}
                   onClick={() => moveSavedView(index, index + 1)}
                   title="Move down"
@@ -121,7 +121,7 @@ export function SavedViewsSection() {
                 </button>
                 <button
                   aria-label="Update view from current state"
-                  className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-white/10 hover:text-foreground"
+                  className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-foreground/10 hover:text-foreground"
                   onClick={() => updateSavedViewFromCurrentState(view.id)}
                   title="Update from current view"
                   type="button"
@@ -130,7 +130,7 @@ export function SavedViewsSection() {
                 </button>
                 <button
                   aria-label="Delete view"
-                  className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-white/10 hover:text-destructive"
+                  className="rounded p-0.5 text-muted-foreground/50 transition-colors hover:bg-foreground/10 hover:text-destructive"
                   onClick={() => {
                     deleteSavedView(view.id)
                     if (activeId === view.id) setActiveId(null)

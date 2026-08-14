@@ -1645,6 +1645,24 @@ export type Capabilities = {
    * tool. Read via the `isDrawnViaTool(def)` helper. Default `false`.
    */
   drawTool?: boolean
+  /**
+   * Schema keys whose last-used values are remembered per kind and replayed
+   * as the starting parameters of the next instance — so a wall drawn at
+   * 0.25 m keeps that thickness, and a column switched to a plain shaft
+   * places plain next time.
+   *
+   * An allowlist, deliberately: placement and identity fields (`position`,
+   * a wall's `start`/`end`, a slab's polygon) must never travel to the next
+   * instance, and an allowlist fails safe when a kind later gains a field.
+   * Kinds whose parameters are nearly all sticky (column has ~60 shape
+   * fields) derive the list from their own schema minus an exclusion set
+   * rather than spelling every key — see `stickyParamsFromSchema`.
+   *
+   * Omit for kinds with no reusable parameters. Consumed by the editor's
+   * sticky-defaults subscription, which seeds `toolDefaults` on tool
+   * activation.
+   */
+  stickyParams?: readonly string[]
 }
 
 /**

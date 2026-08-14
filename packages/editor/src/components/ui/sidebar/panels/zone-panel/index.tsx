@@ -197,14 +197,14 @@ export function ZonePanel() {
           />
           <ActionButton
             className="w-full flex-none"
-            icon={<Trash2 className="h-4 w-4 text-red-400" />}
+            icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={() => deleteSelectedZone(false)}
             type="button"
           />
           <ActionButton
             className="w-full flex-none"
-            icon={<Trash2 className="h-4 w-4 text-red-400" />}
+            icon={<Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />}
             label="Delete with contents"
             onClick={() => deleteSelectedZone(true)}
             type="button"

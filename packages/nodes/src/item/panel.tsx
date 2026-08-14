@@ -204,8 +204,8 @@ export default function ItemPanel() {
           <button
             className={
               uniformScale
-                ? 'flex h-6 w-6 items-center justify-center rounded-md bg-[#3e3e3e] text-muted-foreground transition-colors hover:text-foreground'
-                : 'flex h-6 w-6 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground'
+                ? 'flex h-6 w-6 items-center justify-center rounded-md bg-accent-foreground/10 text-muted-foreground transition-colors hover:text-foreground'
+                : 'flex h-6 w-6 items-center justify-center rounded-md bg-accent text-muted-foreground transition-colors hover:bg-accent-foreground/10 hover:text-foreground'
             }
             onClick={() => setUniformScale((v) => !v)}
             type="button"
@@ -288,7 +288,7 @@ export default function ItemPanel() {
           {(() => {
             const [w, h, d] = getScaledDimensions(node)
             return (
-              <span className="font-mono text-white">
+              <span className="font-mono text-foreground">
                 {Math.round(w * 100) / 100}×{Math.round(h * 100) / 100}×{Math.round(d * 100) / 100}
               </span>
             )
@@ -317,7 +317,7 @@ export default function ItemPanel() {
           />
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={handleDelete}
           />

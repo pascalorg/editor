@@ -180,7 +180,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
           className={cn(
             'flex h-6 w-6 cursor-pointer items-center justify-center rounded transition-colors',
             isEditing
-              ? 'bg-orange-500/20 text-orange-400'
+              ? 'bg-orange-500/20 text-orange-600 dark:text-orange-400'
               : 'text-muted-foreground hover:bg-accent',
           )}
           onClick={handleToggleEdit}
@@ -236,7 +236,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
                   className={cn(
                     'flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded',
                     points.length > 3
-                      ? 'text-muted-foreground hover:bg-red-500/20 hover:text-red-400'
+                      ? 'text-muted-foreground hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-400'
                       : 'cursor-not-allowed text-muted-foreground/30',
                   )}
                   disabled={points.length <= 3}
@@ -1070,7 +1070,7 @@ const LayerToggle = memo(function LayerToggle() {
           'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
           activeTab === 'structure'
             ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
         )}
         onClick={() => {
           setPhase('structure')
@@ -1107,7 +1107,7 @@ const LayerToggle = memo(function LayerToggle() {
           'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
           activeTab === 'furnish'
             ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
         )}
         onClick={() => {
           setPhase('furnish')
@@ -1143,7 +1143,7 @@ const LayerToggle = memo(function LayerToggle() {
           'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
           activeTab === 'zones'
             ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
         )}
         onClick={() => {
           setPhase('structure')

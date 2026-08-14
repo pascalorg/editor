@@ -410,7 +410,7 @@ export function ContextualHelperPanel({
             <div
               className={cn(
                 'text-xs leading-5',
-                hint.active ? 'font-medium text-white' : 'text-muted-foreground',
+                hint.active ? 'font-medium text-foreground' : 'text-muted-foreground',
               )}
             >
               {hint.label}

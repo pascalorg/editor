@@ -180,17 +180,17 @@ function LevelRow({
         <div
           className={cn(
             'flex items-center rounded-lg transition-colors',
-            isDragging && 'bg-white/10 text-foreground shadow-lg',
+            isDragging && 'bg-foreground/10 text-foreground shadow-lg',
             isSelected
-              ? 'bg-white/10 text-foreground'
-              : 'text-muted-foreground/70 hover:bg-white/5 hover:text-muted-foreground',
+              ? 'bg-foreground/10 text-foreground'
+              : 'text-muted-foreground/70 hover:bg-foreground/5 hover:text-muted-foreground',
           )}
         >
           <button
             {...dragHandleProps}
             aria-label={`Reorder ${getLevelDisplayName(level)}`}
             className={cn(
-              'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
+              'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
             )}
             onClick={(e) => {
@@ -221,7 +221,7 @@ function LevelRow({
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground/50 tabular-nums transition-colors hover:bg-white/5 hover:text-foreground"
+                className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground/80 tabular-nums transition-colors hover:bg-foreground/5 hover:text-foreground"
                 onClick={(e) => e.stopPropagation()}
                 title="Level height"
                 type="button"
@@ -272,7 +272,7 @@ function LevelRow({
             </PopoverTrigger>
             <PopoverContent align="start" className="w-44 p-1" side="right" sideOffset={8}>
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-foreground/10 hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation()
                   onDuplicate()
@@ -283,7 +283,7 @@ function LevelRow({
                 Duplicate level
               </button>
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-foreground/10 hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation()
                   setDuplicateDialogOpen(true)
@@ -295,7 +295,7 @@ function LevelRow({
               </button>
               {onPaste && (
                 <button
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-foreground/10 hover:text-foreground"
                   onClick={(e) => {
                     e.stopPropagation()
                     onPaste()
@@ -307,7 +307,7 @@ function LevelRow({
                 </button>
               )}
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-red-400"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-foreground/10 hover:text-red-600 dark:hover:text-red-400"
                 onClick={(e) => {
                   e.stopPropagation()
                   onRequestDelete()

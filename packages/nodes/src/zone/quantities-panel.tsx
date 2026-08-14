@@ -181,7 +181,7 @@ function RoomTextField({
   }
 
   return (
-    <label className="flex h-10 items-center gap-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm">
+    <label className="flex h-10 items-center gap-3 rounded-lg border border-border/50 bg-accent px-3 text-sm">
       <span className="shrink-0 text-muted-foreground">{label}</span>
       <input
         className="min-w-0 flex-1 bg-transparent text-right text-foreground outline-none selection:bg-primary/30"
@@ -213,10 +213,10 @@ function RoomSelect({
   value: string
 }) {
   return (
-    <label className="flex h-10 items-center justify-between gap-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm">
+    <label className="flex h-10 items-center justify-between gap-3 rounded-lg border border-border/50 bg-accent px-3 text-sm">
       <span className="text-muted-foreground">{label}</span>
       <select
-        className="min-w-0 rounded-md border border-border/50 bg-[#232325] px-2 py-1 text-foreground text-xs outline-none"
+        className="min-w-0 rounded-md border border-border/50 bg-accent/50 px-2 py-1 text-foreground text-xs outline-none"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >

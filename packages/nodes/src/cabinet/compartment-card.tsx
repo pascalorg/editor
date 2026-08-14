@@ -95,10 +95,10 @@ const DOOR_TYPE_OPTIONS = [
 ] as const
 
 const ICON_BUTTON_CLASS =
-  'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/40 bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#343437] hover:text-foreground disabled:opacity-30 disabled:hover:bg-[#2C2C2E] disabled:hover:text-muted-foreground'
+  'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/40 bg-accent text-muted-foreground transition-colors hover:bg-accent-foreground/10 hover:text-foreground disabled:opacity-30 disabled:hover:bg-accent disabled:hover:text-muted-foreground'
 
 const STEPPER_BUTTON_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-md border border-border/40 bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#343437] hover:text-foreground'
+  'flex h-8 w-8 items-center justify-center rounded-md border border-border/40 bg-accent text-muted-foreground transition-colors hover:bg-accent-foreground/10 hover:text-foreground'
 
 function Stepper({
   label,
@@ -156,7 +156,7 @@ function CompartmentTypeControl({
       ? [...COMPARTMENT_TYPE_CONTROL_OPTIONS, HOOD_TYPE_OPTION]
       : COMPARTMENT_TYPE_CONTROL_OPTIONS
   return (
-    <div className="grid w-full grid-cols-3 gap-1 rounded-lg border border-border/50 bg-[#2C2C2E] p-[3px]">
+    <div className="grid w-full grid-cols-3 gap-1 rounded-lg border border-border/50 bg-accent p-[3px]">
       {options.map((option) => {
         const isSelected = value === option.value
         return (
@@ -164,8 +164,8 @@ function CompartmentTypeControl({
             className={[
               'flex h-8 items-center justify-center rounded-md text-xs font-medium transition-all duration-200',
               isSelected
-                ? 'bg-[#3e3e3e] text-foreground shadow-sm ring-1 ring-border/50'
-                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                ? 'bg-accent-foreground/10 text-foreground shadow-sm ring-1 ring-border/50'
+                : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
             ].join(' ')}
             key={option.value}
             onClick={() => onChange(option.value)}
@@ -213,7 +213,7 @@ export function CompartmentCard({
   const isHood = isHoodCompartmentType(type)
   const isCooktop = isCooktopCompartmentType(type)
   return (
-    <div className="rounded-lg border border-border/40 bg-[#252527] p-2">
+    <div className="rounded-lg border border-border/40 bg-accent/50 p-2">
       <div className="flex items-center justify-between pb-1.5">
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {displayIndex === 0
@@ -240,7 +240,7 @@ export function CompartmentCard({
             <ArrowDown className="h-3.5 w-3.5" />
           </button>
           <button
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-200 disabled:opacity-30 disabled:hover:bg-red-500/8"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-700 dark:text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-700 dark:hover:text-red-200 disabled:opacity-30 disabled:hover:bg-red-500/8"
             disabled={total <= 1}
             onClick={onRemove}
             type="button"

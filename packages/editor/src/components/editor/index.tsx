@@ -24,6 +24,7 @@ import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useMeasurementInputBridge } from '../../hooks/use-measurement-input-bridge'
+import { useStickyToolDefaults } from '../../hooks/use-sticky-tool-defaults'
 import { LocalizedContent, translate, useTranslation } from '../../lib/i18n'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
 import {
@@ -525,7 +526,7 @@ function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
         <ShortcutSequence keys={hint.keys} />
         {hint.alternativeKeys ? (
           <>
-            <span className="text-[10px] text-muted-foreground/40">/</span>
+            <span className="text-[10px] text-muted-foreground/70">/</span>
             <ShortcutSequence keys={hint.alternativeKeys} />
           </>
         ) : null}
@@ -726,7 +727,7 @@ function PaintCursorBadge({
             </span>
           ) : (
             <span
-              className="-right-1 -bottom-1 absolute h-3.5 w-3.5 rounded-full border border-white/70 bg-cover bg-center shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
+              className="-right-1 -bottom-1 absolute h-3.5 w-3.5 rounded-full border border-foreground/70 bg-cover bg-center shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
               style={{
                 backgroundColor: swatchColor,
                 backgroundImage: swatchImageUrl
@@ -736,7 +737,7 @@ function PaintCursorBadge({
             />
           )
         ) : state === 'blocked' ? (
-          <span className="-right-1 -bottom-1 absolute flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white/30 bg-zinc-950 text-rose-300 shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
+          <span className="-right-1 -bottom-1 absolute flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white/30 bg-zinc-950 text-rose-700 dark:text-rose-300 shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
             <Icon
               aria-hidden="true"
               color="currentColor"
@@ -1206,6 +1207,7 @@ export default function Editor({
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
   useMeasurementInputBridge()
+  useStickyToolDefaults()
 
   const { isLoadingSceneRef } = useAutoSave({
     onSave,

@@ -14,6 +14,7 @@ import {
   CursorSphere,
   clearPlacementSurface,
   clearSlabSnapFeedback,
+  clearToolDefaultsOnDeactivate,
   EDITOR_LAYER,
   type HorizontalConstructionPlane,
   isAngleSnapActive,
@@ -95,7 +96,7 @@ export const SlabTool: React.FC = () => {
 
   // Clear preset-seeded defaults on deactivation so a later manual slab draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('slab', null), [])
+  useEffect(() => () => clearToolDefaultsOnDeactivate('slab'), [])
 
   useEffect(
     () => () => {

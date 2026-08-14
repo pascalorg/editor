@@ -281,7 +281,7 @@ function LegacyItemsPanel({
                     'cursor-pointer rounded-md px-2 py-0.5 font-medium text-xs transition-colors',
                     activePlacementTag === null
                       ? 'bg-blue-500 text-white'
-                      : 'bg-blue-950/50 text-blue-300 hover:bg-blue-900/60 hover:text-blue-200',
+                      : 'bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-900/60 hover:text-blue-200',
                   )}
                   onClick={() => setActivePlacementTag(null)}
                   type="button"
@@ -299,8 +299,8 @@ function LegacyItemsPanel({
                         isActive
                           ? 'bg-blue-500 text-white'
                           : isEmpty
-                            ? 'cursor-not-allowed bg-zinc-800 text-zinc-500'
-                            : 'bg-blue-950/50 text-blue-300 hover:bg-blue-900/60 hover:text-blue-200',
+                            ? 'cursor-not-allowed bg-muted text-muted-foreground/50'
+                            : 'bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-900/60 hover:text-blue-200',
                       )}
                       disabled={isEmpty}
                       key={tag}
@@ -314,7 +314,7 @@ function LegacyItemsPanel({
                           isActive
                             ? 'text-blue-200'
                             : isEmpty
-                              ? 'text-zinc-600'
+                              ? 'text-muted-foreground/50'
                               : 'text-blue-500/70',
                         )}
                       >
@@ -339,7 +339,7 @@ function LegacyItemsPanel({
                         isActive
                           ? 'bg-violet-500 text-white'
                           : isEmpty
-                            ? 'cursor-not-allowed bg-zinc-800 text-zinc-500'
+                            ? 'cursor-not-allowed bg-muted text-muted-foreground/50'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
                       )}
                       disabled={isEmpty}
@@ -354,8 +354,8 @@ function LegacyItemsPanel({
                           isActive
                             ? 'text-violet-200'
                             : isEmpty
-                              ? 'text-zinc-600'
-                              : 'text-zinc-500/70',
+                              ? 'text-muted-foreground/50'
+                              : 'text-muted-foreground/70',
                         )}
                       >
                         {count}

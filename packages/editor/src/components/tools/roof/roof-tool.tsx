@@ -29,6 +29,7 @@ import {
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { clearToolDefaultsOnDeactivate } from '../../../lib/tool-defaults'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor, { isGridSnapActive } from '../../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
@@ -380,7 +381,7 @@ export const RoofTool: React.FC = () => {
 
   // Clear preset-seeded defaults on deactivation so a later manual roof draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('roof', null), [])
+  useEffect(() => () => clearToolDefaultsOnDeactivate('roof'), [])
 
   const corner1Ref = useRef<[number, number, number] | null>(null)
   const [preview, setPreview] = useState<PreviewState>({

@@ -76,6 +76,7 @@ import {
 } from '../lib/snapping-mode'
 import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
+import { getStickyParamsForKind } from './use-sticky-defaults'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'build'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
@@ -1042,7 +1043,18 @@ const useEditor = create<EditorState>()(
         syncBrushModeScope(mode)
       },
       tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
-      setTool: (tool) => set({ tool }),
+      setTool: (tool) =>
+        set((state) => {
+          // Seed the tool with the parameters its kind was last used at, so
+          // the next wall starts at the thickness the last one ended up
+          // with. An entry staged by the caller — a saved preset, the
+          // measurement kind picker — is left alone: it was chosen for this
+          // specific activation and outranks the memory.
+          if (!tool || state.toolDefaults[tool]) return { tool }
+          const remembered = getStickyParamsForKind(tool)
+          if (!remembered) return { tool }
+          return { tool, toolDefaults: { ...state.toolDefaults, [tool]: remembered } }
+        }),
       toolDefaults: {},
       wallAlignment: 'center',
       setWallAlignment: (wallAlignment) => set({ wallAlignment }),

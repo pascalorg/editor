@@ -290,6 +290,9 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   }),
 
   capabilities: {
+    // Build parameters the slab tool already merges. The polygon, its holes
+    // and the elevation describe this slab, not the next one.
+    stickyParams: ['thickness', 'recessed', 'recessedRimElevation', 'fillToTerrain'],
     selectable: { hitVolume: 'bbox' },
     surfaces: {
       top: { height: (n) => (n as SlabNode).elevation },

@@ -86,7 +86,7 @@ export function MultiSelectionPanel({ footer }: { footer?: React.ReactNode }) {
             onClick={() => duplicateSelectionAndPickUp()}
           />
           <ActionButton
-            className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+            className="border-red-500/40 text-red-700 dark:text-red-200 hover:bg-red-500/15"
             icon={<Trash2 className="h-4 w-4" />}
             label="Delete"
             onClick={() => deleteSelection()}

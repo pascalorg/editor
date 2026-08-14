@@ -167,7 +167,7 @@ export function LocationMap({
         <div className="relative min-w-0 flex-1">
           <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-1.5 h-3 w-3 text-muted-foreground/60" />
           <input
-            className="w-full rounded bg-white/5 py-1 pr-1.5 pl-6 text-foreground text-xs outline-none focus:bg-white/10"
+            className="w-full rounded bg-foreground/5 py-1 pr-1.5 pl-6 text-foreground text-xs outline-none focus:bg-foreground/10"
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               // The editor's shortcuts listen on window; without this every
@@ -181,7 +181,7 @@ export function LocationMap({
         </div>
         <button
           aria-label="Search"
-          className="shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-40"
+          className="shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-40"
           disabled={searching || !query.trim()}
           onClick={() => void search()}
           type="button"
@@ -195,7 +195,7 @@ export function LocationMap({
       </div>
 
       <div
-        className="relative touch-none overflow-hidden rounded border border-border/50 bg-white/5"
+        className="relative touch-none overflow-hidden rounded border border-border/50 bg-foreground/5"
         onPointerCancel={() => {
           dragRef.current = null
         }}

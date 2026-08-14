@@ -19,6 +19,7 @@ import {
 import {
   CursorSphere,
   clearPlacementSurface,
+  clearToolDefaultsOnDeactivate,
   createFenceOnCurrentLevel,
   createSplineFenceOnCurrentLevel,
   EDITOR_LAYER,
@@ -486,7 +487,7 @@ const StraightFenceTool: React.FC = () => {
   // Scope seeded defaults to this tool session: clear on deactivation so a
   // later manual fence draw isn't drawn with a stale preset's parameters.
   // Unmount-only (empty deps) — the [unit] effect below must not clear it.
-  useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
+  useEffect(() => () => clearToolDefaultsOnDeactivate('fence'), [])
 
   useEffect(() => {
     let previousFenceEnd: FencePlanPoint | null = null
@@ -822,7 +823,7 @@ const SplineFenceDraft: React.FC = () => {
   }, [cursor, draftPoints])
   useEffect(() => () => useFenceCurveDraft.getState().reset(), [])
 
-  useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
+  useEffect(() => () => clearToolDefaultsOnDeactivate('fence'), [])
 
   useEffect(() => {
     const snapPoint = (local: FencePlanPoint): FencePlanPoint => {

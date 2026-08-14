@@ -36,7 +36,7 @@ export function CollectionsSection() {
           const isLocked = collection.locked === true
           return (
             <li
-              className="flex items-center gap-2 px-3 py-1 transition-colors hover:bg-white/5"
+              className="flex items-center gap-2 px-3 py-1 transition-colors hover:bg-foreground/5"
               key={collection.id}
             >
               <span
@@ -58,7 +58,7 @@ export function CollectionsSection() {
               <button
                 aria-label={isHidden ? 'Show collection' : 'Hide collection'}
                 className={cn(
-                  'shrink-0 rounded p-0.5 transition-colors hover:bg-white/10',
+                  'shrink-0 rounded p-0.5 transition-colors hover:bg-foreground/10',
                   isHidden ? 'text-foreground' : 'text-muted-foreground/50',
                 )}
                 onClick={() => updateCollection(collection.id, { visible: isHidden })}
@@ -70,7 +70,7 @@ export function CollectionsSection() {
               <button
                 aria-label={isLocked ? 'Unlock collection' : 'Lock collection'}
                 className={cn(
-                  'shrink-0 rounded p-0.5 transition-colors hover:bg-white/10',
+                  'shrink-0 rounded p-0.5 transition-colors hover:bg-foreground/10',
                   isLocked ? 'text-foreground' : 'text-muted-foreground/50',
                 )}
                 onClick={() => updateCollection(collection.id, { locked: !isLocked })}

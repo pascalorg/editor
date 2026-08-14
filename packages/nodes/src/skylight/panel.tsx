@@ -274,7 +274,7 @@ export default function SkylightPanel() {
                   'flex min-h-12 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
                   isSelected
                     ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                    : 'border-border/50 bg-accent text-muted-foreground hover:bg-accent-foreground/10 hover:text-foreground',
                 )}
                 key={skylightType}
                 onClick={() => handleTypeChange(skylightType)}
@@ -573,7 +573,7 @@ export default function SkylightPanel() {
         <ActionGroup>
           <ActionButton
             className="hover:bg-red-500/20"
-            icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
+            icon={<Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />}
             label="Delete"
             onClick={handleDelete}
           />

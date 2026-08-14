@@ -22,6 +22,7 @@ export {
   getHostRefFields,
   getNodePluginId,
   getSelectableKinds,
+  getStickyParams,
   hasRegistry3DMoveTool,
   isDrawnViaTool,
   isDrawnViaToolKind,
@@ -38,6 +39,7 @@ export {
   registerNode,
   resolveFacingIndicator,
   setPluginDiscovery,
+  stickyParamsFromSchema,
 } from './registry'
 export {
   type CascadeContext,

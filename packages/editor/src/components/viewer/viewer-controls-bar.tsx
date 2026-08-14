@@ -107,7 +107,7 @@ function VisibilityMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <ActionButton
-          className="hover:bg-white/5 hover:text-foreground"
+          className="hover:bg-foreground/5 hover:text-foreground"
           label="Visibility"
           size="icon"
           tooltipSide="top"
@@ -164,7 +164,7 @@ function DisplayMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <ActionButton
-          className="hover:bg-white/5 hover:text-foreground"
+          className="hover:bg-foreground/5 hover:text-foreground"
           label="Display settings"
           size="icon"
           tooltipSide="top"
@@ -356,8 +356,8 @@ export const ViewerControlsBar = ({
           <ActionButton
             className={
               levelMode === 'stacked'
-                ? 'hover:bg-white/5 hover:text-amber-400'
-                : 'bg-amber-500/20 text-amber-400'
+                ? 'hover:bg-foreground/5 hover:text-amber-600 dark:hover:text-amber-400'
+                : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
             }
             label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
             onClick={() => {
@@ -380,8 +380,8 @@ export const ViewerControlsBar = ({
             <ActionButton
               className={
                 safeWallMode === 'cutaway'
-                  ? 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0'
-                  : 'bg-white/10'
+                  ? 'opacity-60 grayscale hover:bg-foreground/5 hover:opacity-100 hover:grayscale-0'
+                  : 'bg-foreground/10'
               }
               label={`Walls: ${wallModeConfig[safeWallMode].label}`}
               onClick={() => {
@@ -407,8 +407,8 @@ export const ViewerControlsBar = ({
           <ActionButton
             className={
               walkthroughActive
-                ? 'bg-emerald-500/20 text-emerald-400'
-                : 'hover:bg-white/5 hover:text-emerald-400'
+                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                : 'hover:bg-foreground/5 hover:text-emerald-700 dark:hover:text-emerald-400'
             }
             label={`Walkthrough: ${walkthroughActive ? 'On' : 'Off'}`}
             onClick={onWalkthroughToggle}
@@ -423,7 +423,7 @@ export const ViewerControlsBar = ({
 
           {/* Camera actions */}
           <ActionButton
-            className="group hidden hover:bg-white/5 sm:inline-flex"
+            className="group hidden hover:bg-foreground/5 sm:inline-flex"
             label="Orbit left"
             onClick={() => emitter.emit('camera-controls:orbit-ccw')}
             size="icon"
@@ -438,7 +438,7 @@ export const ViewerControlsBar = ({
           </ActionButton>
 
           <ActionButton
-            className="group hidden hover:bg-white/5 sm:inline-flex"
+            className="group hidden hover:bg-foreground/5 sm:inline-flex"
             label="Orbit right"
             onClick={() => emitter.emit('camera-controls:orbit-cw')}
             size="icon"
@@ -453,7 +453,7 @@ export const ViewerControlsBar = ({
           </ActionButton>
 
           <ActionButton
-            className="group hover:bg-white/5"
+            className="group hover:bg-foreground/5"
             label="Top view"
             onClick={() => emitter.emit('camera-controls:top-view')}
             size="icon"

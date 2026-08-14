@@ -148,6 +148,9 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   }),
 
   capabilities: {
+    // The ceiling tool merges its drop height; the traced polygon does not
+    // travel to the next ceiling.
+    stickyParams: ['height'],
     selectable: { hitVolume: 'bbox' },
     surfaces: {
       top: {

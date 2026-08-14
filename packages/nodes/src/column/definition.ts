@@ -4,6 +4,7 @@ import {
   type GroupMoveSnapArgs,
   type HandleDescriptor,
   type NodeDefinition,
+  stickyParamsFromSchema,
 } from '@pascal-app/core'
 import { countQuantities } from '../shared/count-quantities'
 import {
@@ -35,6 +36,15 @@ const MIN_COLUMN_RADIUS = 0.05
 const MIN_BRACE_DIMENSION = 0.04
 const MIN_BRACE_BOTTOM_SPREAD = 0.2
 const MIN_BRACE_TOP_SPREAD = 0
+
+// `supportSlabId` names the slab this instance stands on; material and slot
+// assignments come from the paint system, not from the build tool.
+const COLUMN_STICKY_PARAMS = stickyParamsFromSchema(ColumnNodeSchema.shape, [
+  'supportSlabId',
+  'material',
+  'materialPreset',
+  'slots',
+])
 
 const ROUND_CROSS_SECTIONS = new Set<ColumnNodeType['crossSection']>([
   'round',
@@ -350,6 +360,11 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Every shape field is worth carrying to the next column — the shaft
+    // profile, the support style, the capital, the ~60 carving knobs. Only
+    // the host slab reference and the material assignment are per-instance,
+    // so the list is the schema minus those rather than 60 spelled keys.
+    stickyParams: COLUMN_STICKY_PARAMS,
     // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
     // mode-driven snapping the overhaul standardised). 2D move keeps using
     // `floorplanMoveTarget`, which wins the 2D move dispatch.

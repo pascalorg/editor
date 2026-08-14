@@ -73,6 +73,12 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // ALT-detach). Omitting `movable` keeps the legacy MoveWallTool via
     // capability-driven dispatch.
     selectable: { hitVolume: 'bbox' },
+    // The two build parameters the wall tool already accepts as tool
+    // defaults. `start`/`end`/`curveOffset` describe where this wall was
+    // drawn, and the support fields bind it to one slab, so none of them
+    // travel. Materials stay out on purpose: they come from the paint
+    // tool, and a painted wall should not repaint the next one.
+    stickyParams: ['thickness', 'height'],
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
       sides: { faces: 'all' },

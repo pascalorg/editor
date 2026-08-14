@@ -16,7 +16,7 @@ interface MobileSelectionBarProps {
 }
 
 const ACTION_BTN =
-  'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground'
+  'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/8 hover:text-foreground'
 
 export function MobileSelectionBar({
   node,
@@ -34,7 +34,7 @@ export function MobileSelectionBar({
       <button
         aria-label={`Edit ${label}`}
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-white/8',
+          'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-foreground/8',
         )}
         onClick={onEdit}
         type="button"
@@ -74,7 +74,7 @@ export function MobileSelectionBar({
         </button>
         <button
           aria-label="Delete"
-          className={cn(ACTION_BTN, 'hover:bg-red-500/15 hover:text-red-400')}
+          className={cn(ACTION_BTN, 'hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400')}
           onClick={(e) => {
             stop(e)
             onDelete()

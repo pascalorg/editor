@@ -29,24 +29,24 @@ const controls: ControlConfig[] = [
     imageSrc: '/icons/select.webp',
     label: 'Select',
     shortcut: 'V',
-    color: 'hover:bg-blue-500/20 hover:text-blue-400',
-    activeColor: 'bg-blue-500/20 text-blue-400',
+    color: 'hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400',
+    activeColor: 'bg-blue-500/20 text-blue-600 dark:text-blue-400',
   },
   {
     id: 'zone',
     imageSrc: '/icons/zone.webp',
     label: 'Zone',
     shortcut: 'Z',
-    color: 'hover:bg-green-500/20 hover:text-green-400',
-    activeColor: 'bg-green-500/20 text-green-400',
+    color: 'hover:bg-green-500/20 hover:text-green-700 dark:hover:text-green-400',
+    activeColor: 'bg-green-500/20 text-green-700 dark:text-green-400',
   },
   {
     id: 'delete',
     icon: Trash2,
     label: 'Delete',
     shortcut: 'X',
-    color: 'hover:bg-red-500/20 hover:text-red-400',
-    activeColor: 'bg-red-500/20 text-red-400',
+    color: 'hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-400',
+    activeColor: 'bg-red-500/20 text-red-600 dark:text-red-400',
   },
 ]
 
@@ -115,8 +115,8 @@ export function ControlModes() {
                 'group text-muted-foreground',
                 !(isImageMode || isActive) && c.color,
                 !isImageMode && isActive && c.activeColor,
-                isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
-                isImageMode && !isActive && 'hover:bg-white/5',
+                isImageMode && isActive && 'bg-foreground/10 hover:bg-foreground/10',
+                isImageMode && !isActive && 'hover:bg-foreground/5',
               )}
               label={c.label}
               onClick={() => handleClick(c.id)}

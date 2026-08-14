@@ -257,6 +257,48 @@ export function isDrawnViaToolKind(kind: string): boolean {
   return def ? isDrawnViaTool(def) : false
 }
 
+/**
+ * Fields that can never be sticky, whatever the kind: identity, scene
+ * placement, and the parent/child wiring. Replaying any of these onto the
+ * next instance would drop it at the previous one's location — or worse,
+ * hand it the previous one's id.
+ */
+const NEVER_STICKY_FIELDS: ReadonlySet<string> = new Set([
+  'id',
+  'type',
+  'name',
+  'position',
+  'rotation',
+  'parentId',
+  'children',
+])
+
+/**
+ * Every key of `shape` except the universally non-sticky ones and the
+ * kind's own `exclude` set. For kinds whose parameters are nearly all
+ * sticky — column's ~60 shape fields, cabinet's carcass options — this is
+ * shorter and harder to get stale than spelling the allowlist out.
+ *
+ * The exclusion set is where a kind names its *geometry* fields (a wall's
+ * `start`/`end`, a slab's polygon): they describe where this instance was
+ * drawn, not how the next one should start.
+ */
+export function stickyParamsFromSchema(
+  shape: Readonly<Record<string, unknown>>,
+  exclude: readonly string[] = [],
+): readonly string[] {
+  const excluded = new Set(exclude)
+  return Object.keys(shape).filter((key) => !NEVER_STICKY_FIELDS.has(key) && !excluded.has(key))
+}
+
+/**
+ * The sticky parameter allowlist for a kind, or an empty array when the
+ * kind declares none. See `Capabilities.stickyParams`.
+ */
+export function getStickyParams(def: AnyNodeDefinition): readonly string[] {
+  return def.capabilities.stickyParams ?? []
+}
+
 export async function loadPlugin(plugin: Plugin): Promise<void> {
   if (plugin.apiVersion !== HOST_API_VERSION) {
     throw new Error(

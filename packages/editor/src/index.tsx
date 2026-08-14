@@ -593,6 +593,7 @@ export {
   resolveFlattenTarget,
   sculptFieldForSite,
 } from './lib/terrain-sculpt'
+export { clearToolDefaultsOnDeactivate } from './lib/tool-defaults'
 export {
   UI_PREFERENCES_STORAGE_KEY,
   type UiLocale,

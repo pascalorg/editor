@@ -12,6 +12,7 @@ import {
 import {
   CursorSphere,
   clearCeilingSnapFeedback,
+  clearToolDefaultsOnDeactivate,
   EDITOR_LAYER,
   isAngleSnapActive,
   isGridSnapActive,
@@ -70,7 +71,7 @@ export const CeilingTool: React.FC = () => {
 
   // Clear preset-seeded defaults on deactivation so a later manual ceiling
   // draw isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('ceiling', null), [])
+  useEffect(() => () => clearToolDefaultsOnDeactivate('ceiling'), [])
 
   useEffect(() => () => clearCeilingSnapFeedback(), [])
 

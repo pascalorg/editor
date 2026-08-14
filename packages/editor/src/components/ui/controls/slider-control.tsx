@@ -281,7 +281,7 @@ export function SliderControl({
     <div
       className={cn(
         'group flex h-7 w-full select-none items-center rounded-lg px-2 transition-colors',
-        isDragging ? 'bg-white/5' : 'hover:bg-white/5',
+        isDragging ? 'bg-foreground/5' : 'hover:bg-foreground/5',
         className,
       )}
       onMouseEnter={() => setIsHovered(true)}
