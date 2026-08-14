@@ -11,8 +11,10 @@ import {
   type Finding,
   failingElementIds,
   formworkRfiCandidates,
+  formworkSettingsFor,
   INVARIANT_LABELS,
   type InvariantId,
+  pourLimitsFromSettings,
   RFI_ADDRESSEE_LABELS,
   type RfiCandidate,
   remedySummary,
@@ -138,10 +140,16 @@ function useApplyFix(report: ReturnType<typeof useProjectValidation>['report'], 
         const updated = after.nodes[elementId] as CastableHostNode | undefined
         if (!updated) return
         const levelNodes = Object.values(after.nodes) as AnyNode[]
+        const limits = pourLimitsFromSettings(formworkSettingsFor(levelNodes))
         const existing = formworkAssembliesOnHost(elementId as string, after.nodes)
           .map((id) => after.nodes[id] as unknown as FormworkAssemblyNode)
           .filter(Boolean)
-        const { create, keep, orphan } = reconcileFormworkNodes(updated, existing, levelNodes)
+        const { create, keep, orphan } = reconcileFormworkNodes(
+          updated,
+          existing,
+          levelNodes,
+          limits,
+        )
         for (const assembly of create) after.createNode(assembly, elementId as AnyNodeId)
         for (const assembly of orphan) after.deleteNode(assembly.id as AnyNodeId)
         // The survivors were built against the old split, so their geometry is stale even

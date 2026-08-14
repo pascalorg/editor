@@ -537,6 +537,11 @@ function unitOf(part: FormworkPart): string {
  *
  * Omitted parts are left out of the quantities and out of the marks: the line is
  * what gets ordered, and the parts table is where an omission is shown.
+ *
+ * A corner leg that does not own its unit is left out too: both walls at a junction
+ * draw a leg, but exactly one of them bills the corner, so a bill that counted both
+ * would order every corner in the building twice. The shared leg is still in the
+ * parts table — the hardware really is on both faces — it just is not ordered again.
  */
 export function bomLines(parts: readonly FormworkPart[]): BomLine[] {
   interface Accumulator {
@@ -548,6 +553,7 @@ export function bomLines(parts: readonly FormworkPart[]): BomLine[] {
   const lines = new Map<string, Accumulator>()
   for (const part of parts) {
     if (part.omitted) continue
+    if (part.kind === 'corner' && !part.owned) continue
     const unit = unitOf(part)
     const key = [part.kind, part.catalogId ?? '', part.description, part.provenance, unit].join(' ')
     let entry = lines.get(key)

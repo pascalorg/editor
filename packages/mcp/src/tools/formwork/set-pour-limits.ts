@@ -2,6 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   applyPourLimitsPatch,
   describePourSplit,
+  formworkSettingsFor,
+  pourLimitsFromSettings,
   pourLimitsPatchInput,
   SET_POUR_LIMITS_DESCRIPTION,
 } from '@pascal-app/core/formwork'
@@ -73,7 +75,11 @@ export function registerSetPourLimits(server: McpServer, bridge: SceneOperations
 
       const after = sceneNodeList(bridge)
       const updated = (after.find((node) => node.id === elementId) ?? host) as typeof host
-      const units = pourUnitsForHost(updated, after)
+      const units = pourUnitsForHost(
+        updated,
+        after,
+        pourLimitsFromSettings(formworkSettingsFor(after)),
+      )
       const shutterCount = after.filter(
         (node) => node.type === 'formwork-assembly' && node.parentId === elementId,
       ).length

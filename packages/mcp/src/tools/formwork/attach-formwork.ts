@@ -2,7 +2,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   ATTACH_FORMWORK_DESCRIPTION,
   describeFormworkReconciliation,
+  formworkSettingsFor,
   noFormworkTypeSet,
+  pourLimitsFromSettings,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId, FormworkAssemblyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint/headless'
@@ -79,10 +81,11 @@ export function registerAttachFormwork(server: McpServer, bridge: SceneOperation
       }
 
       const levelNodes = sceneNodeList(bridge)
+      const limits = pourLimitsFromSettings(formworkSettingsFor(levelNodes))
       const existing = levelNodes
         .filter((node) => node.type === 'formwork-assembly' && node.parentId === elementId)
         .map((node) => node as unknown as FormworkAssemblyNode)
-      const { create, keep, orphan } = reconcileFormworkNodes(host, existing, levelNodes)
+      const { create, keep, orphan } = reconcileFormworkNodes(host, existing, levelNodes, limits)
       const discarded = orphan.reduce(
         (total, assembly) => total + Object.keys(assembly.partOverrides ?? {}).length,
         0,

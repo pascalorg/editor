@@ -948,3 +948,98 @@ export function LabourNormField({
     </div>
   )
 }
+
+/**
+ * The elevations a lift joint is allowed to land on.
+ *
+ * A list rather than one number, because an element is usually split once a storey:
+ * the undersides of slabs and beams, the tops of slabs, and the storey breaks a lift
+ * may stop on all go in the same list, and every one of them is a place the solver
+ * can legitimately cut. Nothing is assumed, for the rates' reason and one sharper:
+ * a default of "anywhere" is what the solver already does, and stating it would make
+ * the "no permitted joint satisfies the limits" conflict impossible to reach.
+ *
+ * The list is edited one line at a time, like the rack — adding a joint must not
+ * forget the ones already stated, which is exactly the case the group merge would
+ * lose. Order is not significant here (the splitter picks the nearest in reach),
+ * unlike the sheet stock where the order is the preference, so lines are shown as
+ * stated rather than sorted.
+ */
+export function PermittedJointsField({
+  elevations,
+  onSet,
+}: {
+  /** The stated elevations in metres. `undefined` means nobody has said. */
+  elevations: readonly number[] | undefined
+  /** The whole list. `undefined` hands the field back to unstated. */
+  onSet: (elevations: number[] | undefined) => void
+}) {
+  const addId = useId()
+  const lines = elevations ?? []
+
+  return (
+    <div className="flex flex-col gap-1 px-1 text-xs">
+      {lines.length === 0 && (
+        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+          No permitted joint stated, so every lift boundary is the solver's own uniform cut,
+          labelled solver-chosen rather than as a project decision. Add the slab and beam
+          undersides, the slab tops and the storey breaks a lift may stop on.
+        </p>
+      )}
+
+      {lines.map((elevation, index) => (
+        <div className="flex items-center gap-2" key={`${elevation}-${index}`}>
+          <span className="shrink-0 font-mono text-muted-foreground/70">{index + 1}</span>
+          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
+            {elevation}
+          </span>
+          <span className="w-6 shrink-0 text-muted-foreground/70">m</span>
+          <button
+            className="shrink-0 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              const next = lines.filter((entry) => entry !== elevation)
+              // Back to unstated on the last line, rather than to a stated empty list: a
+              // list of no joints and nobody having said are the same claim.
+              onSet(next.length === 0 ? undefined : next)
+            }}
+            type="button"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+
+      <label className="flex items-center gap-2" htmlFor={addId}>
+        <span className="shrink-0 text-muted-foreground">Add</span>
+        <input
+          className="h-7 w-20 shrink-0 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-right font-mono outline-none"
+          id={addId}
+          max={200}
+          min={0.01}
+          onBlur={(event) => {
+            const raw = event.currentTarget.value.trim()
+            const parsed = Number.parseFloat(raw)
+            if (raw === '' || !Number.isFinite(parsed)) return
+            if (parsed <= 0 || parsed > 200) return
+            if (lines.includes(parsed)) return
+            event.currentTarget.value = ''
+            onSet([...lines, parsed])
+          }}
+          placeholder="m above base"
+          step={0.1}
+          type="number"
+        />
+      </label>
+
+      {lines.length > 0 && (
+        <button
+          className="self-start rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+          onClick={() => onSet(undefined)}
+          type="button"
+        >
+          Back to nobody having said
+        </button>
+      )}
+    </div>
+  )
+}

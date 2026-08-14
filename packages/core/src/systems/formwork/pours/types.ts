@@ -59,6 +59,46 @@ export interface PourLift {
   hasJointBelow: boolean
   /** Set when the lift joint was moved to a permitted elevation. */
   snappedTo?: number
+  /**
+   * Who decided the joint below this lift. The distinction the whole Phase 2 contract
+   * hangs on: a boundary the project stated and one the solver chose are not the same
+   * decision, and a boundary the solver had to place somewhere the project did not permit
+   * is a conflict rather than a design.
+   *
+   * Absent on the bottom lift, which has no joint below it.
+   */
+  jointSource?: /** The engineer drew it — a required joint, which is a cut whatever the caps say. */
+    | 'specified'
+    /** The solver moved a uniform cut onto a stated permitted elevation. */
+    | 'permitted'
+    /** The solver's own uniform grid, with no permitted set stated to snap to. */
+    | 'solver'
+    /** A permitted set was stated but this boundary is on none of it — the conflict. */
+    | 'off-permitted'
+}
+
+/**
+ * A lift boundary the split needed that no permitted elevation satisfies.
+ *
+ * The answer to "the element must be split, and the project has said where a joint may
+ * go, and this boundary is on none of it". Carried separately from the lift rather than
+ * only as `jointSource: 'off-permitted'` because it has to travel up to the project
+ * solution as a finding, and a finding wants the limit and the permitted set named next
+ * to it — a boundary and its remedy are one sentence.
+ */
+export interface PourLiftConflict {
+  elementId: AnyNodeId
+  /** The lift whose joint below it is the conflict. */
+  liftIndex: number
+  /** Where the split put it, m above the element base. */
+  boundaryElevation: number
+  /**
+   * The lift cap that forced a boundary — the figure that made the split impossible to
+   * satisfy on the permitted set, m. What the report names as "the limit".
+   */
+  maxLiftHeight: number
+  /** The stated permitted elevations the boundary is on none of, for the report to name. */
+  permittedJointElevations: readonly number[]
 }
 
 export interface PourUnit {

@@ -4,6 +4,8 @@ import {
   FIX_FORMWORK_FINDING_DESCRIPTION,
   findingByKey,
   fixFindingInput,
+  formworkSettingsFor,
+  pourLimitsFromSettings,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId, FormworkAssemblyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint/headless'
@@ -102,13 +104,19 @@ export function registerFixFormworkFinding(server: McpServer, bridge: SceneOpera
         const levelNodes = sceneNodeList(bridge).map((node) =>
           node.id === plan.elementId ? ({ ...node, ...patch.writes } as AnyNode) : node,
         )
+        const limits = pourLimitsFromSettings(formworkSettingsFor(levelNodes))
         const updated = levelNodes.find((node) => node.id === plan.elementId) as Parameters<
           typeof reconcileFormworkNodes
         >[0]
         const existing = levelNodes
           .filter((node) => node.type === 'formwork-assembly' && node.parentId === plan.elementId)
           .map((node) => node as unknown as FormworkAssemblyNode)
-        const { create, keep, orphan } = reconcileFormworkNodes(updated, existing, levelNodes)
+        const { create, keep, orphan } = reconcileFormworkNodes(
+          updated,
+          existing,
+          levelNodes,
+          limits,
+        )
         rebuilt = keep.length + create.length
         patches.push(
           ...orphan.map(

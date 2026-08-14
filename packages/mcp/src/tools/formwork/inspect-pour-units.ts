@@ -1,9 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   describePourSplit,
+  formworkSettingsFor,
   INSPECT_POUR_UNITS_DESCRIPTION,
   POUR_CUT_REASON_LABELS,
   type PourCutReason,
+  pourLimitsFromSettings,
 } from '@pascal-app/core/formwork'
 import {
   formworkCoverageCaveat,
@@ -73,7 +75,7 @@ export function registerInspectPourUnits(server: McpServer, bridge: SceneOperati
       if ('isError' in host) return host
 
       const all = sceneNodeList(bridge)
-      const units = pourUnitsForHost(host, all)
+      const units = pourUnitsForHost(host, all, pourLimitsFromSettings(formworkSettingsFor(all)))
       const shutterCount = all.filter(
         (node) => node.type === 'formwork-assembly' && node.parentId === elementId,
       ).length

@@ -618,6 +618,64 @@ describe('applyFormworkSettingsPatch — the sheets the ply comes out of', () =>
   })
 })
 
+describe('applyFormworkSettingsPatch — where a joint may land', () => {
+  test('a permitted elevation and a tolerance are one group', () => {
+    const result = apply(undefined, {
+      pours: { permittedJointElevations: [4.6, 9], jointSnapTolerance: 0.5 },
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.writes?.pours).toEqual({
+      permittedJointElevations: [4.6, 9],
+      jointSnapTolerance: 0.5,
+    })
+    expect(result.changed).toContain('pours')
+  })
+
+  test('a tolerance arriving later does not delete the elevations stated before it', () => {
+    const result = apply(node({ pours: { permittedJointElevations: [4.6] } }), {
+      pours: { jointSnapTolerance: 0.5 },
+    })
+
+    expect(result.writes?.pours).toEqual({
+      permittedJointElevations: [4.6],
+      jointSnapTolerance: 0.5,
+    })
+  })
+
+  test('null unstates one figure and leaves the other where it is', () => {
+    const result = apply(
+      node({ pours: { permittedJointElevations: [4.6], jointSnapTolerance: 0.5 } }),
+      { pours: { permittedJointElevations: null } },
+    )
+
+    expect(result.writes?.pours).toEqual({ jointSnapTolerance: 0.5 })
+  })
+
+  test('an emptied group is undefined, which the write paths delete', () => {
+    const result = apply(node({ pours: { permittedJointElevations: [4.6] } }), {
+      pours: { permittedJointElevations: null, jointSnapTolerance: null },
+    })
+
+    expect(result.writes).toHaveProperty('pours')
+    expect(result.writes?.pours).toBeUndefined()
+  })
+
+  test('a negative elevation is refused by the schema', () => {
+    expect(
+      FormworkSettingsPatch.safeParse({ pours: { permittedJointElevations: [-1] } }).success,
+    ).toBe(false)
+  })
+
+  test('a snap tolerance wider than the strip it exists for is refused', () => {
+    // 0.3 m is the strip below a slab soffit that is too shallow to form; a tolerance
+    // of a storey height would move joints past a whole floor.
+    expect(FormworkSettingsPatch.safeParse({ pours: { jointSnapTolerance: 20 } }).success).toBe(
+      false,
+    )
+  })
+})
+
 describe('formworkSettingsReport', () => {
   test('reports the assumed defaults as assumed on an untouched project', () => {
     const report = formworkSettingsReport(undefined)
@@ -748,5 +806,22 @@ describe('formworkSettingsReport', () => {
 
     expect(report.resolved.curing).toEqual({})
     expect(report.assumedDefaults).not.toHaveProperty('surfaceTemperatureC')
+  })
+
+  test('an unstated pour set reads as null, which is the solver doing the splitting', () => {
+    // Absent is a real state here, not a gap in the report: "no permitted joints stated"
+    // is scenario 3, and a surface reading this must be able to tell it from a stated set.
+    const report = formworkSettingsReport(node({ placement: { riseRateMH: 2 } }))
+
+    expect(report.resolved.pours).toBeNull()
+    expect(report.stated?.pours).toBeNull()
+  })
+
+  test('a stated pour set is echoed in both halves of the report', () => {
+    const pours = { permittedJointElevations: [4.6, 9], jointSnapTolerance: 0.5 }
+    const report = formworkSettingsReport(node({ pours }))
+
+    expect(report.resolved.pours).toEqual(pours)
+    expect(report.stated?.pours).toEqual(pours)
   })
 })

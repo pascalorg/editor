@@ -23,7 +23,9 @@ import {
   formworkSystem,
   gangFace,
   layOutFace,
+  type PourLimits,
   type PourUnit,
+  pourLimitsFromSettings,
   pourUnitsInScene,
   type StripPack,
   type StripPiece,
@@ -157,8 +159,9 @@ function resolvePourUnit(
   element: CastableElement,
   node: FormworkAssemblyNode,
   levelNodes: AnyNode[],
+  limits: PourLimits,
 ): PourUnit | undefined {
-  const units = pourUnitsInScene(element, levelNodes)
+  const units = pourUnitsInScene(element, levelNodes, limits)
   if (units.length <= 1) return undefined
   return units.find(
     (unit) => unit.segmentIndex === node.segmentIndex && unit.liftIndex === node.liftIndex,
@@ -446,7 +449,11 @@ export function resolveFormworkScope(
   const elements = collectCastableElements(levelNodes)
   const element = elements.find((e) => e.id === host.id)
   if (!element) return null
-  const unit = resolvePourUnit(element, node, levelNodes)
+  const settings = resolveFormworkSettings(host, ctx)
+  // The project's permitted joints, so the shutter the screen draws lands on the same
+  // boundaries the solve's count and the pours report claim. Resolved before the unit so
+  // the two can't drift apart.
+  const unit = resolvePourUnit(element, node, levelNodes, pourLimitsFromSettings(settings))
   const coverage = classifyElementFaces(element, findAbutments(elements), {
     neighbours: elements,
     junctions: findJunctions(elements),
@@ -460,6 +467,6 @@ export function resolveFormworkScope(
     isFormed: (role: FaceRole) => formed.has(role),
     faceOf: (role: FaceRole) => byRole.get(role),
     corners: coverage.corners,
-    settings: resolveFormworkSettings(host, ctx),
+    settings,
   }
 }

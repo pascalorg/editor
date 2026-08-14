@@ -283,6 +283,31 @@ describe('the bill', () => {
     expect(line?.marks).toEqual([parts[1]?.mark as string])
   })
 
+  test('a corner is billed once even though both walls draw a leg', () => {
+    // At a junction each wall emits its own leg, but `owned` says which one buys the
+    // unit. Counting both legs orders every corner in the building twice, so the bill
+    // keeps only the owner's leg — the shared one is still in the parts table, just
+    // not ordered again.
+    const corner = (owned: boolean): FormworkPartSpec => ({
+      kind: 'corner',
+      side: 'inside',
+      locus: { on: 'run', face: 'side-a', stationMm: 4000, towardEnd: true },
+      catalogId: 'framax-corner-588132500',
+      description: 'Framax Xlife inside corner',
+      provenance: 'standard',
+      weightKg: 21,
+      heightMm: 2700,
+      legLengthsMm: [180, 300],
+      owned,
+    })
+    const lines = bomLines(withMarks([corner(true), corner(false)]))
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]?.quantity).toBe(1)
+    expect(lines[0]?.totalWeightKg).toBe(21)
+    expect(lines[0]?.marks).toHaveLength(1)
+  })
+
   test('a consumable is billed in its own unit and its own quantity', () => {
     const [line] = bomLines(
       withMarks([

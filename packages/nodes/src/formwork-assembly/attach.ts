@@ -1,4 +1,9 @@
-import { type PourUnit, pourUnitsInScene, toCastableElement } from '@pascal-app/core/formwork'
+import {
+  type PourLimits,
+  type PourUnit,
+  pourUnitsInScene,
+  toCastableElement,
+} from '@pascal-app/core/formwork'
 import {
   type AnyNode,
   type ColumnNode,
@@ -72,13 +77,16 @@ export function buildFormworkNode(host: CastableHostNode): FormworkAssemblyNode 
  * capped at 3 m lifts needs three of them and not one 9 m one that could never
  * be built. `levelNodes` is needed because the split reads the element's
  * expansion and isolation joints, which are level children rather than children
- * of the element.
+ * of the element. `limits` is the resolved project limits where the caller has
+ * them, so the assemblies agree with the solve's count — pass nothing to split
+ * against the element's joints alone.
  */
 export function buildFormworkNodes(
   host: CastableHostNode,
   levelNodes: AnyNode[] = [],
+  limits: PourLimits = {},
 ): FormworkAssemblyNode[] {
-  const units = pourUnitsForHost(host, levelNodes)
+  const units = pourUnitsForHost(host, levelNodes, limits)
   if (units.length === 0) return [buildFormworkNode(host)]
   return units.map((unit) => assemblyFor(host, unit.segmentIndex, unit.liftIndex))
 }
@@ -88,10 +96,14 @@ export function buildFormworkNodes(
  * this to say how many shutters the button is about to create — an element that
  * silently gains six assemblies from one click is a surprise worth pre-empting.
  */
-export function pourUnitsForHost(host: CastableHostNode, levelNodes: AnyNode[] = []): PourUnit[] {
+export function pourUnitsForHost(
+  host: CastableHostNode,
+  levelNodes: AnyNode[] = [],
+  limits: PourLimits = {},
+): PourUnit[] {
   const element = toCastableElement(host as AnyNode)
   if (!element) return []
-  return pourUnitsInScene(element, levelNodes)
+  return pourUnitsInScene(element, levelNodes, limits)
 }
 
 /** A pour unit's identity: what makes two shutters the same shutter. */
@@ -138,8 +150,9 @@ export function reconcileFormworkNodes(
   host: CastableHostNode,
   existing: readonly FormworkAssemblyNode[],
   levelNodes: AnyNode[] = [],
+  limits: PourLimits = {},
 ): FormworkReconciliation {
-  const units = pourUnitsForHost(host, levelNodes)
+  const units = pourUnitsForHost(host, levelNodes, limits)
   const wanted = new Map<string, { segmentIndex: number; liftIndex: number }>()
   if (units.length === 0) {
     // Same fallback as `buildFormworkNodes`: a host the splitter cannot read is

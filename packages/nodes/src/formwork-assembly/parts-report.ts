@@ -8,9 +8,11 @@ import {
   bomLines,
   bomWeightKg,
   duplicateMarks,
+  formworkSettingsFor,
   orphanedOverrides,
   overUtilisedParts,
   partLabel,
+  pourLimitsFromSettings,
   worstUtilisation,
 } from '@pascal-app/core/formwork'
 import type { AnyNode } from '@pascal-app/core/schema'
@@ -169,7 +171,11 @@ export function coverageCaveatForHost(
   nodes: Record<string, AnyNode>,
   shutterCount: number,
 ): string | undefined {
-  const units = pourUnitsForHost(host, Object.values(nodes))
+  const units = pourUnitsForHost(
+    host,
+    Object.values(nodes),
+    pourLimitsFromSettings(formworkSettingsFor(Object.values(nodes))),
+  )
   return formworkCoverageCaveat(host.id as string, shutterCount, Math.max(1, units.length))
 }
 

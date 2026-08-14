@@ -8,6 +8,7 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
+import { formworkSettingsFor, pourLimitsFromSettings } from '@pascal-app/core/formwork'
 import {
   ActionButton,
   getLinearUnitLabel,
@@ -123,7 +124,14 @@ export function useFormworkHost<T extends CastableHostNode>(
   const pourUnitCount = useScene((s) => {
     const host = hostId ? (s.nodes[hostId] as CastableHostNode | undefined) : undefined
     if (!host) return 1
-    return Math.max(1, pourUnitsForHost(host, Object.values(s.nodes)).length)
+    return Math.max(
+      1,
+      pourUnitsForHost(
+        host,
+        Object.values(s.nodes),
+        pourLimitsFromSettings(formworkSettingsFor(Object.values(s.nodes))),
+      ).length,
+    )
   })
 
   const nodeRef = useRef(node)
@@ -158,10 +166,11 @@ export function useFormworkHost<T extends CastableHostNode>(
     runAsSingleSceneHistoryStep(useScene, () => {
       const scene = useScene.getState()
       const levelNodes = Object.values(scene.nodes)
+      const limits = pourLimitsFromSettings(formworkSettingsFor(levelNodes))
       const existing = formworkAssembliesOnHost(n.id as string, scene.nodes)
         .map((id) => scene.nodes[id] as unknown as FormworkAssemblyNode)
         .filter(Boolean)
-      const { create, keep, orphan } = reconcileFormworkNodes(n, existing, levelNodes)
+      const { create, keep, orphan } = reconcileFormworkNodes(n, existing, levelNodes, limits)
       for (const assembly of create) scene.createNode(assembly, n.id)
       for (const assembly of orphan) scene.deleteNode(assembly.id as AnyNodeId)
       // The survivors were built against the old split, so their geometry is

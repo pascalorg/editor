@@ -7,7 +7,11 @@ import type {
   TieField,
   ValidationReport,
 } from '@pascal-app/core/formwork'
-import { formworkSettingsFor, validateFormwork } from '@pascal-app/core/formwork'
+import {
+  formworkSettingsFor,
+  pourLimitsFromSettings,
+  validateFormwork,
+} from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import type { ProjectFormworkScope } from './solve-project'
 import { solveProjectFormwork } from './solve-project'
@@ -131,6 +135,9 @@ export function validateProjectFormwork(
       tieFields,
       gangs,
       riseRates,
+      // The project's permitted joints, so the off-permitted-elevation check reads the
+      // same data the split snapped to — the wire that made a dormant check real.
+      limits: pourLimitsFromSettings(settings),
       // The scene's crane, read here and not per element: a load chart is a fact about the
       // site, and the same machine lifts every gang on it. Absent where nobody recorded one,
       // which the report says rather than checking every pick against a machine on hire

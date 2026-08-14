@@ -5,12 +5,14 @@ import type {
   BomLine,
   BomSupply,
   CommittablePour,
+  ElementCoverage,
   ElementGangs,
   FormworkAcquisition,
   FormworkCommitments,
   FormworkCutList,
   FormworkLifts,
   FormworkLogistics,
+  FormworkPours,
   FormworkResequence,
   FormworkSchedule,
   FormworkSequence,
@@ -32,7 +34,11 @@ import {
   bomLines,
   bomSupply,
   bomWeightKg,
+  classifyElementFaces,
+  collectCastableElements,
   committedPourIds,
+  findAbutments,
+  findJunctions,
   formworkAcquisition,
   formworkCommitmentCaveats,
   formworkCommitments,
@@ -42,6 +48,8 @@ import {
   formworkLifts,
   formworkLogistics,
   formworkLogisticsCaveats,
+  formworkPours,
+  formworkPoursCaveats,
   formworkResequence,
   formworkSchedule,
   formworkScheduleCaveats,
@@ -53,10 +61,12 @@ import {
   isReturnableLine,
   isSubstitutedStrikingStandard,
   overUtilisedParts,
+  pourLimitsFromSettings,
   resequenceCaveats,
   strikeTargetForPartKind,
   strikingInputFor,
   strikingStandardFor,
+  toCastableElement,
   unformable,
   unformableCaveats,
 } from '@pascal-app/core/formwork'
@@ -87,6 +97,8 @@ const CASTABLE_TYPES = ['wall', 'column', 'slab'] as const
 /** One element's contribution to the job, and whether it is fully formed. */
 export interface SolvedElement {
   host: CastableHostNode
+  /** Face topology and area classification shared by drawings, validation and totals. */
+  topology: ElementCoverage
   shutters: SolvedShutter[]
   /** How many pours the element is cast in, which is how many shutters it needs. */
   pourUnitCount: number
@@ -302,6 +314,13 @@ export interface ProjectFormwork {
    * short bill indistinguishable from a cheap one.
    */
   rejected: Unformable[]
+  /**
+   * The pour plan the solution was designed against — every split element's lifts with
+   * how each joint was decided, and the boundaries a stated permitted set could not
+   * satisfy. Present wherever anything was split into more than one lift; absent only
+   * when every element forms one pour, in which case there is nothing to label.
+   */
+  pours?: FormworkPours
 }
 
 /**
@@ -354,6 +373,21 @@ export function solveProjectFormwork(
   scope: ProjectFormworkScope = {},
 ): ProjectFormwork {
   const allNodes = Object.values(nodes)
+  const castables = collectCastableElements(allNodes)
+  const settings = formworkSettingsFor(allNodes)
+  // The part of the settings the split reads, resolved once and passed to every count
+  // that must agree: the pour-unit counts below, the layout's `resolveFormworkScope`,
+  // and the pours report. Two derivations of one settings group is how a split comes to
+  // snap against one copy while the validator checks another.
+  const pourLimits = pourLimitsFromSettings(settings)
+  const abutments = findAbutments(castables)
+  const junctions = findJunctions(castables)
+  const topologyById = new Map(
+    castables.map((element) => [
+      element.id,
+      classifyElementFaces(element, abutments, { neighbours: castables, junctions }),
+    ]),
+  )
   const elements: SolvedElement[] = []
   const rejected: Unformable[] = []
   for (const host of hostsInScope(nodes, scope)) {
@@ -367,9 +401,12 @@ export function solveProjectFormwork(
     }
     const shutters = solveShuttersForHost(host, nodes)
     if (shutters.length === 0) continue
-    const pourUnitCount = Math.max(1, pourUnitsForHost(host, allNodes).length)
+    const pourUnitCount = Math.max(1, pourUnitsForHost(host, allNodes, pourLimits).length)
+    const topology = topologyById.get(host.id as AnyNodeId)
+    if (!topology) continue
     elements.push({
       host,
+      topology,
       shutters,
       pourUnitCount,
       coversWholePour: shutters.length === pourUnitCount,
@@ -381,7 +418,20 @@ export function solveProjectFormwork(
   )
   const bom = bomLines(everyPart)
   const weight = bomWeightKg(bom)
-  const settings = formworkSettingsFor(allNodes)
+
+  // The pour plan, off the same limits the counts above used. Over the solved elements
+  // rather than every castable, because an element nobody has formed yet has no split
+  // to report — and off the elements' hosts so a conflict names the element the takeoff
+  // actually carries. The hosts were all `unformable`-checked above, so every one
+  // converts to a castable element.
+  const pourPlan = formworkPours(
+    elements.flatMap((element) => {
+      const castable = toCastableElement(element.host as never)
+      return castable ? [castable] : []
+    }),
+    allNodes,
+    pourLimits,
+  )
 
   // Mark → what that mark is struck as, which is the only join between a striking
   // table and a bill. Built here because this is the layer that knows a part's host:
@@ -617,6 +667,7 @@ export function solveProjectFormwork(
     beyondCapacityMarks,
     shutterCount: elements.reduce((total, element) => total + element.shutters.length, 0),
     rejected,
+    ...(pourPlan.elements.length > 0 || pourPlan.conflicts.length > 0 ? { pours: pourPlan } : {}),
   }
 }
 
@@ -751,6 +802,11 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   // that has actually been agreed — read the other way round, a reader takes the committed
   // quantity for the requirement and orders short by every uncommitted pour.
   if (solution.commitments) out.push(...formworkCommitmentCaveats(solution.commitments))
+  // The pour plan's conflicts, where a stated permitted set could not satisfy a split —
+  // a boundary the solver had to place where none was permitted. Late, because it
+  // contradicts a design figure the reader has just been walked through, and it needs
+  // the whole plan behind it to read as the conflict it is rather than as a complaint.
+  if (solution.pours) out.push(...formworkPoursCaveats(solution.pours))
   return out
 }
 

@@ -10,6 +10,7 @@ import {
   type PourUnit,
   PRESSURE_STANDARD_LABELS,
   type PressureEnvelope,
+  pourLimitsFromSettings,
   pourUnitsInScene,
   type SpanGoverning,
   type TieRow,
@@ -91,7 +92,7 @@ function useHostPours(hostId: AnyNodeId | undefined): {
     return {
       host,
       settings,
-      units: pourUnitsInScene(element, Object.values(nodes)),
+      units: pourUnitsInScene(element, Object.values(nodes), pourLimitsFromSettings(settings)),
     }
   }, [nodes, hostId])
 }

@@ -662,6 +662,43 @@ export const ConcreteSupplySettings = z.object({
 export type ConcreteSupplySettings = z.infer<typeof ConcreteSupplySettings>
 
 /**
+ * Where a lift joint may land — the project's answer to how an element is poured.
+ *
+ * The pour split's `PourLimits.permittedJointElevations` and `jointSnapTolerance` have
+ * had no schema home on the project, which is why the snap and the off-permitted
+ * validator check were dead in the running app: an engineer stated nothing and the
+ * splitter never saw anything. `placement.riseRateMH` says how fast concrete rises
+ * and `construction-joint` nodes say where an *engineer* drew a joint; this is the
+ * structural answer the solver needs beside both — the undersides of slabs and beams,
+ * the tops of slabs, and the storey breaks a lift is allowed to stop on.
+ *
+ * Stated as project data rather than inferred: a wall capped at 3 m lifts is not
+ * permitted a joint at every 3 m, and a default of "anywhere" is the current behaviour
+ * stated backwards. Absent means the solver's own split, which is honest and what an
+ * unconfigured project already gets.
+ */
+export const FormworkPourSettings = z.object({
+  /**
+   * Elevations a lift joint is allowed to land on, m above each element's base — the
+   * undersides of slabs and beams, the tops of slabs, and existing joint nodes. A
+   * uniform split rarely lands on one, so cuts snap to the nearest within
+   * `jointSnapTolerance`; where the stated set can satisfy no boundary the split
+   * reports a conflict rather than quietly placing a joint where none is permitted.
+   *
+   * Per-storey breaks go in the same list: the elevation is above the element's base,
+   * so a storey joint is the storey height to the engineer who drew the element.
+   */
+  permittedJointElevations: z.array(z.number().finite().positive().max(200)).optional(),
+  /**
+   * How far a lift joint may move to reach a permitted elevation, m. Absent means the
+   * engine's 0.3 m, which is the strip below a slab soffit that is too shallow to form
+   * or vibrate.
+   */
+  jointSnapTolerance: z.number().finite().positive().max(10).optional(),
+})
+export type FormworkPourSettings = z.infer<typeof FormworkPourSettings>
+
+/**
  * How the concrete is cured, which is what decides when the form comes off.
  *
  * A separate group from `placement` rather than three more fields in it, because it
@@ -717,6 +754,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   logistics: FormworkLogisticsSettings.optional(),
   sheets: FormworkSheetSettings.optional(),
   concreteSupply: ConcreteSupplySettings.optional(),
+  pours: FormworkPourSettings.optional(),
 }).describe(
   dedent`
   Formwork project settings - the pour every shutter in the scene is designed against. One per scene.
@@ -735,6 +773,7 @@ export const FormworkProjectSettingsNode = BaseNode.extend({
   - crane: the site's own crane — its load chart as capacity against radius, the height under the hook, the widest gang that can be moved, and the minimum sling angle. A capacity curve rather than a rating because a tower crane rated 8 t lifts 2.2 t at the jib tip, and a gang is checked at the radius it is actually set at. Absent means each face is grouped as one gang and nothing is checked against a lift — there is no conservative default crane, and a shipped curve would pass gangs that do not lift and fail gangs that do
   - logistics: what one lorry carries and how many minutes of hook time a pick takes, which is what turns a bill's weight into loads and a lifting schedule into crane hours. The two costs every total in this model has excluded since the money arrived, and both figures are facts about this job's own plant rather than about a product: a payload is the lorry the yard sends and a cycle time is this crew on this crane. Absent means the takeoff carries no transport and no craneage at all, as an absent norm means it carries no hours
   - concreteSupply: how fast the concrete can arrive — the batching plant's output and the pump or skip's placing rate, m³/h. The third limit on a rise rate, beside the rate the project states and the pressure the panels are rated for: a 6 m² pour at 2 m/h wants 12 m³/h, and a plant sending 8 makes it 1.33 whatever the programme says. Two fields because they are two constraints in series and the slower governs, and a reader told only the answer cannot tell whether to ring the supplier or hire a bigger pump. Absent means the check is not performed rather than passed
+  - pours: where a lift joint may land — the permitted joint elevations above each element's base (slab soffits, slab tops, storey breaks) and how far a cut may move to reach one. What the pour split snaps to and what the off-permitted check verifies against; absent means the solver's own uniform split, and a stated set that satisfies no boundary is reported as a conflict rather than silently placed
   - sheets: the sheet stock the yard buys its ply out of, plus what it racks the remainder of and how much it loses to handling. Separate from parts.sheathingId because that names a grade and a grade has no size — only sheet stock carries a width and a length, and which one a job buys is a commercial fact about the job. This is what turns the cut boards on the bill into sheets to order; the sheets are a purchasing figure beside the bill rather than a line in it, because the boards are already billed. Absent means no cut list at all
   `,
 )

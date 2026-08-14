@@ -34,6 +34,7 @@ import {
   formworkPartsQueryInput,
   formworkRfiCandidates,
   formworkSettings,
+  formworkSettingsFor,
   formworkSettingsPatchInput,
   formworkSettingsReport,
   INSPECT_FORMWORK_PARTS_DESCRIPTION,
@@ -51,6 +52,7 @@ import {
   partByMark,
   partLabel,
   pourDatePatchInput,
+  pourLimitsFromSettings,
   pourLimitsPatchInput,
   RESEQUENCE_REFUSAL_LABELS,
   RFI_ADDRESSEE_LABELS,
@@ -556,7 +558,12 @@ export function buildTools(
         // change tells the model to call it again, so the second call is the
         // expected case rather than the mistake.
         const existing = shuttersOnHost(elementId)
-        const { create, keep, orphan } = reconcileFormworkNodes(host, existing, levelNodes)
+        const { create, keep, orphan } = reconcileFormworkNodes(
+          host,
+          existing,
+          levelNodes,
+          pourLimitsFromSettings(formworkSettingsFor(levelNodes)),
+        )
         const discarded = orphan.reduce(
           (total, assembly) => total + Object.keys(assembly.partOverrides ?? {}).length,
           0,
@@ -618,6 +625,7 @@ export function buildTools(
         const units = pourUnitsForHost(
           element as unknown as Parameters<typeof pourUnitsForHost>[0],
           Object.values(graph.nodes) as AnyNode[],
+          pourLimitsFromSettings(formworkSettingsFor(Object.values(graph.nodes))),
         )
         const mismatch = shutterMismatch(elementId, Math.max(1, units.length))
         return [`ok — ${describePourSplit(units)}`, result.caveat, mismatch]
@@ -1671,7 +1679,12 @@ export function buildTools(
           const levelNodes = Object.values(graph.nodes) as AnyNode[]
           const host = element as unknown as Parameters<typeof reconcileFormworkNodes>[0]
           const existing = shuttersOnHost(plan.elementId as string)
-          const { create, keep, orphan } = reconcileFormworkNodes(host, existing, levelNodes)
+          const { create, keep, orphan } = reconcileFormworkNodes(
+            host,
+            existing,
+            levelNodes,
+            pourLimitsFromSettings(formworkSettingsFor(levelNodes)),
+          )
           rebuilt = keep.length + create.length
           for (const assembly of orphan) {
             delete graph.nodes[assembly.id as keyof typeof graph.nodes]
@@ -1765,6 +1778,7 @@ export function buildTools(
         const units = pourUnitsForHost(
           element as unknown as Parameters<typeof pourUnitsForHost>[0],
           Object.values(graph.nodes) as AnyNode[],
+          pourLimitsFromSettings(formworkSettingsFor(Object.values(graph.nodes))),
         )
         return JSON.stringify({
           kind: element.type,

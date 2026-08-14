@@ -155,6 +155,19 @@ export interface FormworkSettings {
    * and the surfaces say which figure is missing.
    */
   concreteSupply: NonNullable<FormworkProjectSettingsNode['concreteSupply']> | undefined
+  /**
+   * Where a lift joint may land, or `undefined` where nobody has said.
+   *
+   * The ninth undefaulted field, and the only structural one. The commercial groups
+   * above are undefaulted because a default would invent a price or a delivery; this is
+   * undefaulted because a default would be a *claim about the structure*. Permitting a
+   * joint everywhere is what an unconfigured project already gets from the solver's own
+   * uniform split, but stating it as a resolved default would turn the "no permitted
+   * joint satisfies the limits" conflict into something that can never be reported — the
+   * solver would always be right. So absent means the split is the solver's own, and the
+   * surfaces label each boundary as solver-chosen rather than as a project decision.
+   */
+  pours: NonNullable<FormworkProjectSettingsNode['pours']> | undefined
 }
 
 /**
@@ -182,6 +195,7 @@ export const DEFAULT_FORMWORK_SETTINGS: FormworkSettings = {
   logistics: undefined,
   sheets: undefined,
   concreteSupply: undefined,
+  pours: undefined,
 }
 
 /**
@@ -254,6 +268,7 @@ export function formworkSettings(node: FormworkProjectSettingsNode | undefined):
     logistics: node.logistics,
     sheets: node.sheets,
     concreteSupply: node.concreteSupply,
+    pours: node.pours,
   }
 }
 
@@ -295,6 +310,7 @@ export type FormworkSettingsGroup =
   | 'logistics'
   | 'sheets'
   | 'concreteSupply'
+  | 'pours'
 
 /**
  * Merge a patch into one of the settings sub-objects, returning the value to write

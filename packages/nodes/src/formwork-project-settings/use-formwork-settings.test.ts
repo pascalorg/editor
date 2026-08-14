@@ -434,6 +434,46 @@ describe('formwork settings write — the deliveries and the crane hours', () =>
   })
 })
 
+describe('formwork settings write — where a lift joint may land', () => {
+  beforeEach(seedScene)
+
+  test('a permitted elevation and a tolerance land on the pours group together', () => {
+    setFormworkSettingsGroupField('pours', {
+      permittedJointElevations: [4.6, 9],
+      jointSnapTolerance: 0.5,
+    })
+
+    expect(settings()?.pours).toEqual({
+      permittedJointElevations: [4.6, 9],
+      jointSnapTolerance: 0.5,
+    })
+  })
+
+  test('adding a joint does not forget the ones already stated', () => {
+    setFormworkSettingsGroupField('pours', { permittedJointElevations: [4.6] })
+    setFormworkSettingsGroupField('pours', { permittedJointElevations: [4.6, 9] })
+
+    expect(settings()?.pours).toEqual({ permittedJointElevations: [4.6, 9] })
+  })
+
+  test('undefined hands one figure back without unstating the other', () => {
+    setFormworkSettingsGroupField('pours', {
+      permittedJointElevations: [4.6],
+      jointSnapTolerance: 0.5,
+    })
+    setFormworkSettingsGroupField('pours', { jointSnapTolerance: undefined })
+
+    expect(settings()?.pours).toEqual({ permittedJointElevations: [4.6] })
+  })
+
+  test('an emptied group is unstated rather than a stated empty set', () => {
+    setFormworkSettingsGroupField('pours', { permittedJointElevations: [4.6] })
+    setFormworkSettingsGroupField('pours', { permittedJointElevations: undefined })
+
+    expect(settings()?.pours).toBeUndefined()
+  })
+})
+
 describe('formwork settings write — the sheets the ply is cut from', () => {
   beforeEach(seedScene)
 

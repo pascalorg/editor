@@ -16,6 +16,7 @@ import {
   DEFAULT_PROP_ID,
   DEFAULT_REBAR_KN_M3,
   DEFAULT_SHEATHING_ID,
+  DEFAULT_SNAP_TOLERANCE,
   DEFAULT_UNIT_WEIGHT_KN_M3,
   DIN_DEFAULT_REFERENCE_TEMPERATURE_C,
   DIN_MAX_RISE_RATE_MH,
@@ -44,6 +45,7 @@ import {
   OptionalNumberField,
   OptionalSelectField,
   OptionalToggleField,
+  PermittedJointsField,
   RateTableField,
   SheetStockField,
   StockRackField,
@@ -147,6 +149,7 @@ export function FormworkSettingsPanel() {
   const logistics = node?.logistics ?? {}
   const sheets = node?.sheets ?? {}
   const concreteSupply = node?.concreteSupply ?? {}
+  const pours = node?.pours ?? {}
   const stated = node !== undefined
 
   return (
@@ -266,6 +269,38 @@ export function FormworkSettingsPanel() {
           of the three, buildability reports it as a warning rather than an error — the form is
           over-built rather than overloaded, because the pressure it was designed for is one this
           pour never develops.
+        </GroupNote>
+      </PanelSection>
+
+      <PanelSection defaultExpanded={false} title="Pours">
+        <GroupNote>
+          Where a lift joint may land — the one structural answer in this panel. A wall capped at 3
+          m lifts is not permitted a joint at every 3 m, and nothing here is assumed for a sharper
+          reason than the rest: a default of "anywhere" is what the solver already does, and stating
+          it would make the conflict this group exists to report impossible to reach.
+        </GroupNote>
+        <PermittedJointsField
+          elevations={pours.permittedJointElevations}
+          onSet={(elevations) => setGroupField('pours', { permittedJointElevations: elevations })}
+        />
+        <OptionalNumberField
+          assumed={String(DEFAULT_SNAP_TOLERANCE)}
+          hint="How far a cut may move to reach a permitted elevation. The assumed figure is the strip below a slab soffit that is too shallow to form or vibrate; a tolerance of a storey height would move joints past a whole floor."
+          label="Snap to within"
+          max={10}
+          min={0.01}
+          onChange={(value) => setGroupField('pours', { jointSnapTolerance: value })}
+          step={0.1}
+          unit="m"
+          value={pours.jointSnapTolerance}
+        />
+        <GroupNote>
+          Every boundary the split produces is labelled with who decided it — a joint the engineer
+          drew, one the solver moved onto a stated elevation, the solver's own uniform cut, or a
+          boundary that reached none of the permitted set. That last one is reported as a conflict
+          naming the lift cap and the permitted joints it is on none of, rather than silently
+          placed: the fix is usually more permitted joints, and the fix for a boundary merely near
+          one is a wider tolerance, and the two are not the same conversation.
         </GroupNote>
       </PanelSection>
 

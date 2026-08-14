@@ -1,5 +1,17 @@
 export { type JointSpec, jointsForElement } from './joints'
-export { splitIntoLifts } from './lifts'
+export {
+  DEFAULT_SNAP_TOLERANCE,
+  pourLiftConflicts,
+  resolveMaxLiftHeight,
+  splitIntoLifts,
+} from './lifts'
+export { pourLimitsFromSettings } from './limits'
+export {
+  type FormworkPours,
+  type FormworkPoursElement,
+  formworkPours,
+  formworkPoursCaveats,
+} from './report'
 export {
   isTopmostLift,
   reachesElementEnd,
@@ -11,6 +23,7 @@ export {
   POUR_CUT_REASON_LABELS,
   type PourCutReason,
   type PourLift,
+  type PourLiftConflict,
   type PourLimits,
   type PourSegment,
   type PourUnit,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { WallNode } from '../../../schema/nodes/wall'
 import type { CastableElement } from '../coverage/elements'
 import { toCastableElement } from '../coverage/elements'
-import { splitIntoLifts } from './lifts'
+import { pourLiftConflicts, resolveMaxLiftHeight, splitIntoLifts } from './lifts'
 
 function element(overrides: Partial<Parameters<typeof WallNode.parse>[0]> = {}): CastableElement {
   const wall = WallNode.parse({
@@ -137,6 +137,109 @@ describe('snapping to permitted elevations', () => {
     })
     expect(lifts).toHaveLength(1)
     expect(lifts[0]?.topElevation).toBe(9)
+  })
+})
+
+describe('joint sourcing', () => {
+  it('labels a joint the engineer drew as specified', () => {
+    const lifts = splitIntoLifts(element({ height: 9 }), {
+      requiredJointElevations: [4.6],
+    })
+    const above = lifts.find((lift) => lift.baseElevation === 4.6)
+    expect(above?.jointSource).toBe('specified')
+    expect(above?.snappedTo).toBe(4.6)
+  })
+
+  it('labels an unsnapped uniform cut as solver-chosen when no set was stated', () => {
+    const lifts = splitIntoLifts(element({ height: 9 }), { maxLiftHeight: 4 })
+    expect(lifts[1]?.jointSource).toBe('solver')
+  })
+
+  it('labels a cut snapped onto a stated permitted elevation as permitted', () => {
+    const lifts = splitIntoLifts(element({ height: 9 }), {
+      maxLiftHeight: 5,
+      permittedJointElevations: [4.6],
+      jointSnapTolerance: 0.3,
+    })
+    expect(lifts[1]?.jointSource).toBe('permitted')
+    expect(lifts[1]?.snappedTo).toBe(4.6)
+  })
+
+  it('labels a boundary on none of the stated set as off-permitted', () => {
+    // Uniform puts the joint at 4.5; the stated permitted set has nothing in reach.
+    const lifts = splitIntoLifts(element({ height: 9 }), {
+      maxLiftHeight: 5,
+      permittedJointElevations: [7],
+      jointSnapTolerance: 0.3,
+    })
+    expect(lifts[1]?.jointSource).toBe('off-permitted')
+  })
+
+  it('reads a cut that missed only an engineer-drawn joint as solver, not a conflict', () => {
+    // The off-permitted test is against the project's own set, not the merged one —
+    // a required joint is permitted by construction, so missing it is not a conflict.
+    const lifts = splitIntoLifts(element({ height: 9 }), {
+      maxLiftHeight: 4,
+      requiredJointElevations: [4.6],
+      jointSnapTolerance: 0.3,
+    })
+    expect(lifts.map((l) => l.baseElevation)).toEqual([0, 3, 4.6, 6])
+    expect(lifts[1]?.jointSource).toBe('solver')
+    expect(lifts.every((l) => l.jointSource !== 'off-permitted')).toBe(true)
+  })
+
+  it('leaves the bottom lift unlabelled, since it carries no joint', () => {
+    const lifts = splitIntoLifts(element({ height: 9 }), { maxLiftHeight: 4 })
+    expect(lifts[0]?.jointSource).toBeUndefined()
+  })
+})
+
+describe('pourLiftConflicts', () => {
+  it('names an off-permitted boundary, with the cap and the stated set', () => {
+    const lifts = splitIntoLifts(element({ height: 9 }), {
+      maxLiftHeight: 5,
+      permittedJointElevations: [7],
+      jointSnapTolerance: 0.3,
+    })
+    const conflicts = pourLiftConflicts('wall_1', lifts, { permittedJointElevations: [7] }, 5)
+
+    expect(conflicts).toEqual([
+      {
+        elementId: 'wall_1',
+        liftIndex: 1,
+        boundaryElevation: 4.5,
+        maxLiftHeight: 5,
+        permittedJointElevations: [7],
+      },
+    ])
+  })
+
+  it('reports nothing when every boundary landed on a permitted elevation', () => {
+    const lifts = splitIntoLifts(element({ height: 9 }), {
+      maxLiftHeight: 5,
+      permittedJointElevations: [4.6],
+      jointSnapTolerance: 0.3,
+    })
+    const conflicts = pourLiftConflicts('wall_1', lifts, { permittedJointElevations: [4.6] }, 5)
+
+    expect(conflicts).toEqual([])
+  })
+
+  it('reports nothing when no permitted set was stated, whatever the solver did', () => {
+    // Scenario 3: solver-chosen boundaries with no stated joints are not conflicts.
+    const lifts = splitIntoLifts(element({ height: 9 }), { maxLiftHeight: 4 })
+    const conflicts = pourLiftConflicts('wall_1', lifts, {}, 4)
+
+    expect(conflicts).toEqual([])
+  })
+
+  it('reports nothing on a lift that is not off-permitted, even on a stated set', () => {
+    const lifts = splitIntoLifts(element({ height: 9 }), {
+      maxLiftHeight: 5,
+      requiredJointElevations: [4.6],
+    })
+    const conflicts = pourLiftConflicts('wall_1', lifts, {}, resolveMaxLiftHeight(element(), {}))
+    expect(conflicts).toEqual([])
   })
 })
 

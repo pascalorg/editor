@@ -3,7 +3,7 @@ import type { AnyNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core'
 import type { FormworkAcquisition } from '@pascal-app/core/formwork'
 import { acquireCaveats } from '@pascal-app/core/formwork'
 import type { FormworkAssemblyNode } from './schema'
-import { projectFormworkCaveats, solveProjectFormwork } from './solve-project'
+import { projectFormworkCaveats, type SolvedElement, solveProjectFormwork } from './solve-project'
 
 /**
  * The job's formwork rather than one element's.
@@ -220,6 +220,33 @@ describe('solveProjectFormwork', () => {
     }
   })
 
+  test('is pure across repeated runs, wall-clock time and ambient locale', () => {
+    const scene = withSettings(steelWallScene(), {
+      pressureStandard: 'BS_8110',
+      schedule: { erectionLeadDays: 1, returnLeadDays: 1 },
+      stock: { owned: { [PANEL_ID]: 4 } },
+      rates: { currency: 'GBP', byCatalogId: { [PANEL_ID]: { rentalPerUnitPerMonth: 10 } } },
+    })
+    const realNow = Date.now
+    const realLocale = Intl.DateTimeFormat
+    try {
+      Date.now = () => new Date('1999-01-01T00:00:00Z').getTime()
+      Object.defineProperty(Intl, 'DateTimeFormat', { value: undefined, configurable: true })
+      const first = solveProjectFormwork(scene)
+
+      Date.now = () => new Date('2099-12-31T00:00:00Z').getTime()
+      Object.defineProperty(Intl, 'DateTimeFormat', {
+        value: realLocale,
+        configurable: true,
+      })
+
+      expect(solveProjectFormwork(scene)).toEqual(first)
+    } finally {
+      Date.now = realNow
+      Object.defineProperty(Intl, 'DateTimeFormat', { value: realLocale, configurable: true })
+    }
+  })
+
   test('two walls of the same system bill as one order, not two takeoffs', () => {
     // The reason this exists at all. The same panel type on two walls is one line on
     // a delivery note, and per-element bills cannot be added up afterwards.
@@ -322,6 +349,91 @@ describe('solveProjectFormwork', () => {
     expect(solution.elements[0]?.coversWholePour).toBe(true)
     expect(solution.incomplete).toEqual([])
     expect(solution.shutterCount).toBe(3)
+  })
+
+  test('carries face topology on the solved element', () => {
+    const wall = makeWall('wall_1', { againstEarthSide: 'b' } as Partial<WallNode>)
+    const solution = solveProjectFormwork(
+      sceneOf(wall, makeAssembly('formwork-assembly_1', 'wall_1', 0, 0)),
+    )
+    const byRole = new Map(solution.elements[0]?.topology.faces.map((face) => [face.role, face]))
+
+    expect(byRole.get('side-a')?.formed).toBe(true)
+    expect(byRole.get('side-b')).toMatchObject({
+      formed: false,
+      reason: 'AGAINST_EARTH',
+      measuredArea: 0,
+    })
+  })
+
+  test('a shared monolithic face is counted once in area, panels and cost', () => {
+    // Two walls meet at an L and are poured together. Each draws its own corner leg ("the
+    // hardware lands on both faces") but exactly one bills the unit — a bill that counted
+    // both would order every corner in the building twice. The monolithic end is a meeting,
+    // not a poured face: neither wall reports area for it, so there is no flat surface to
+    // double-count.
+    const wallA = makeWall('wall_a', {
+      start: [0, 0],
+      end: [6, 0],
+      formworkType: 'steel-panel',
+      pourId: 'P1',
+      castOrder: 1,
+    } as Partial<WallNode>)
+    const wallB = makeWall('wall_b', {
+      start: [6, 0],
+      end: [6, 6],
+      formworkType: 'steel-panel',
+      pourId: 'P1',
+      castOrder: 2,
+    } as Partial<WallNode>)
+    const solution = solveProjectFormwork(
+      sceneOf(
+        wallA,
+        wallB,
+        makeAssembly('formwork-assembly_1', 'wall_a', 0, 0),
+        makeAssembly('formwork-assembly_2', 'wall_b', 0, 0),
+      ),
+    )
+
+    // Panels and cost: each kind of corner unit appears exactly once in the bill.
+    const corners = solution.bom.filter((line) => line.kind === 'corner')
+    expect(corners.map((line) => line.quantity)).toEqual([1, 1])
+    // A bill line's marks are the parts that landed on it: a single unit leaves one mark.
+    expect(corners.map((line) => line.marks.length)).toEqual([1, 1])
+
+    // Area: the monolithic end of each wall is a meeting, so neither reports area for it.
+    const byRole = (id: string) =>
+      new Map(
+        solution.elements
+          .find((element) => element.host.id === id)
+          ?.topology.faces.map((face) => [face.role, face]),
+      )
+    expect(byRole('wall_a').get('end-end')).toMatchObject({
+      formed: false,
+      reason: 'MONOLITHIC_CONTINUATION',
+      measuredArea: 0,
+    })
+    expect(byRole('wall_b').get('end-start')).toMatchObject({
+      formed: false,
+      reason: 'MONOLITHIC_CONTINUATION',
+      measuredArea: 0,
+    })
+  })
+
+  test('an unformed face appears in no layout and no area total', () => {
+    const wall = makeWall('wall_1', { againstEarthSide: 'b' } as Partial<WallNode>)
+    const solution = solveProjectFormwork(
+      sceneOf(wall, makeAssembly('formwork-assembly_1', 'wall_1', 0, 0)),
+    )
+    const element = solution.elements[0] as SolvedElement
+    const byRole = new Map(element.topology.faces.map((face) => [face.role, face]))
+
+    expect(byRole.get('side-b')).toMatchObject({ formed: false, reason: 'AGAINST_EARTH' })
+    expect(byRole.get('side-b')?.measuredArea).toBe(0)
+    // No panel, waler or tie is drawn for the unformed face: every mark names face A.
+    const marks = element.shutters.flatMap((shutter) => shutter.parts).map((part) => part.mark)
+    expect(marks.filter((mark) => mark.startsWith('P-B-')).length).toBe(0)
+    expect(marks.some((mark) => mark.startsWith('P-A-'))).toBe(true)
   })
 
   test('a degenerate element is rejected with its reason, and the rest of the job still solves', () => {
@@ -1929,5 +2041,67 @@ describe('projectFormworkCaveats', () => {
     )
 
     expect(projectFormworkCaveats(solution).some((c) => c.includes('Walers, ties'))).toBe(false)
+  })
+})
+
+describe('the pour plan — permitted joint elevations', () => {
+  const tallWall = () => makeWall('wall_1', { height: 9, maxLiftHeight: 5 } as Partial<WallNode>)
+
+  function solve(pours: Record<string, unknown> | undefined) {
+    const scene = sceneOf(
+      tallWall(),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0),
+      makeAssembly('formwork-assembly_2', 'wall_1', 0, 1),
+      makeAssembly('formwork-assembly_3', 'wall_1', 0, 2),
+    )
+    return solveProjectFormwork(pours ? withSettings(scene, { pours }) : scene)
+  }
+
+  test('scenario 1 — every boundary lands on a permitted elevation when one is in reach', () => {
+    const solution = solve({ permittedJointElevations: [4.6], jointSnapTolerance: 0.3 })
+
+    expect(solution.pours).toBeDefined()
+    expect(solution.pours?.permittedJointElevations).toEqual([4.6])
+    expect(solution.pours?.conflicts).toEqual([])
+    // Uniform would put the joint at 4.5; the permitted set pulls it to 4.6.
+    expect(solution.pours?.elements[0]?.lifts.map((lift) => lift.baseElevation)).toEqual([0, 4.6])
+    expect(solution.pours?.elements[0]?.lifts[1]).toMatchObject({
+      snappedTo: 4.6,
+      jointSource: 'permitted',
+    })
+  })
+
+  test('scenario 2 — no permitted joint in reach is a conflict naming the limit and the set', () => {
+    const solution = solve({ permittedJointElevations: [7], jointSnapTolerance: 0.3 })
+
+    expect(solution.pours?.conflicts).toHaveLength(1)
+    const conflict = solution.pours?.conflicts[0]
+    expect(conflict?.elementId).toBe('wall_1')
+    // The split still places the boundary; it reports rather than silently forcing one.
+    expect(conflict?.boundaryElevation).toBe(4.5)
+    expect(conflict?.maxLiftHeight).toBe(5)
+    expect(conflict?.permittedJointElevations).toEqual([7])
+    // And the caveat reads as the two-part remedy: more joints, or a wider tolerance.
+    const caveats = projectFormworkCaveats(solution)
+    expect(caveats.some((c) => c.includes('none of the permitted'))).toBe(true)
+  })
+
+  test('scenario 3 — no stated joints splits from the limits and labels the boundaries solver-chosen', () => {
+    const solution = solve(undefined)
+
+    expect(solution.pours).toBeDefined()
+    expect(solution.pours?.permittedJointElevations).toBeNull()
+    expect(solution.pours?.conflicts).toEqual([])
+    expect(solution.pours?.elements[0]?.lifts.map((lift) => lift.baseElevation)).toEqual([0, 4.5])
+    expect(solution.pours?.elements[0]?.lifts[1]?.jointSource).toBe('solver')
+  })
+
+  test('an element cast in one lift is not in the report at all', () => {
+    const wall = makeWall('wall_1', { height: 3 })
+    const solution = solveProjectFormwork(
+      sceneOf(wall, makeAssembly('formwork-assembly_1', 'wall_1', 0, 0)),
+    )
+
+    expect(solution.pours).toBeUndefined()
   })
 })

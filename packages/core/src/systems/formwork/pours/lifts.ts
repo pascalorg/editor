@@ -1,5 +1,5 @@
 import type { CastableElement } from '../coverage/elements'
-import type { PourLift, PourLimits } from './types'
+import type { PourLift, PourLiftConflict, PourLimits } from './types'
 
 /**
  * Vertical split — solver Phase 2.
@@ -14,10 +14,16 @@ import type { PourLift, PourLimits } from './types'
  * same fill height, which is what makes one tie grid reusable across them; the
  * snap then moves joints onto permitted elevations, because a lift joint landing
  * 200 mm below a slab soffit leaves a strip too shallow to form or vibrate.
+ *
+ * Every joint below a lift is labelled with who decided it. The permitted set a
+ * project states is the only source that can be *disobeyed*, so a boundary the
+ * solver has to place on none of it is not silently dropped or left unlabelled —
+ * it is marked `off-permitted` and `pourLiftConflicts` turns that into a finding.
  */
 
 const MIN_LIFT_HEIGHT = 1e-3
-const DEFAULT_SNAP_TOLERANCE = 0.3
+/** The strip below a slab soffit that is too shallow to form or vibrate, m. */
+export const DEFAULT_SNAP_TOLERANCE = 0.3
 
 /** The permitted elevation nearest `elevation`, if one is within tolerance. */
 function snapElevation(
@@ -37,6 +43,17 @@ function snapElevation(
   return best
 }
 
+/** The element's own cap and the project limit, resolved to the one that governs. */
+export function resolveMaxLiftHeight(
+  element: CastableElement,
+  limits: PourLimits,
+): number | undefined {
+  const caps = [limits.maxLiftHeight, element.maxLiftHeight].filter(
+    (value): value is number => value !== undefined && value > MIN_LIFT_HEIGHT,
+  )
+  return caps.length === 0 ? undefined : Math.min(...caps)
+}
+
 export function splitIntoLifts(element: CastableElement, limits: PourLimits = {}): PourLift[] {
   const height = element.height
   const wholeElement: PourLift[] = [
@@ -54,10 +71,7 @@ export function splitIntoLifts(element: CastableElement, limits: PourLimits = {}
   // The element's own cap and the project limit are both ceilings, so the
   // tighter one governs — a wall the engineer capped at 2 m is not permitted a
   // 3 m lift just because the project allows one.
-  const caps = [limits.maxLiftHeight, element.maxLiftHeight].filter(
-    (value): value is number => value !== undefined && value > MIN_LIFT_HEIGHT,
-  )
-  const maxLift = caps.length === 0 ? undefined : Math.min(...caps)
+  const maxLift = resolveMaxLiftHeight(element, limits)
   if (required.length === 0 && (maxLift === undefined || height <= maxLift)) return wholeElement
 
   // No cap, or a cap the element is already inside: the uniform division is the
@@ -69,15 +83,24 @@ export function splitIntoLifts(element: CastableElement, limits: PourLimits = {}
   // cut snaps onto it and the duplicate collapse below removes it.
   const permitted = [...(limits.permittedJointElevations ?? []), ...required]
   const tolerance = limits.jointSnapTolerance ?? DEFAULT_SNAP_TOLERANCE
+  // The project's own set, which is what "off-permitted" is measured against: a uniform
+  // cut that misses only a joint the engineer drew is not a conflict, because there was
+  // no permitted set to be on.
+  const projectPermitted = limits.permittedJointElevations ?? []
 
   // Interior joint elevations only — the element's own base and top are fixed
   // by the structure, not by the split, so they are never snapped.
-  const joints: Array<{ elevation: number; snappedTo?: number }> = []
+  const joints: Array<{
+    elevation: number
+    snappedTo?: number
+    jointSource: NonNullable<PourLift['jointSource']>
+  }> = []
   // `snappedTo: elevation` rather than left blank: it means "this joint is on an
   // elevation the structure offers", which a specified joint is by definition, and the
   // off-permitted-elevation warning reads exactly that field — blank here would have it
   // fault the engineer's own joint for being where the engineer put it.
-  for (const elevation of required) joints.push({ elevation, snappedTo: elevation })
+  for (const elevation of required)
+    joints.push({ elevation, snappedTo: elevation, jointSource: 'specified' })
   for (let index = 1; index < count; index++) {
     const uniformElevation = uniform * index
     const snapped =
@@ -85,6 +108,10 @@ export function splitIntoLifts(element: CastableElement, limits: PourLimits = {}
     joints.push({
       elevation: snapped ?? uniformElevation,
       snappedTo: snapped,
+      // A uniform cut is the solver's by default. It only becomes a permitted boundary
+      // when it actually snapped, and it becomes a *conflict* when a permitted set was
+      // stated and this boundary is on none of it.
+      jointSource: snapped ? 'permitted' : projectPermitted.length > 0 ? 'off-permitted' : 'solver',
     })
   }
 
@@ -120,8 +147,37 @@ export function splitIntoLifts(element: CastableElement, limits: PourLimits = {}
       topElevation: distinct[index + 1]?.elevation ?? height,
       hasJointBelow: true,
       snappedTo: joint.snappedTo,
+      jointSource: joint.jointSource,
     })
   }
 
   return lifts
+}
+
+/**
+ * The off-permitted boundaries of a produced split, as findings.
+ *
+ * `limits` is the project's own set and `maxLiftHeight` the resolved cap, so a conflict
+ * can name both halves of the problem: the limit that forced a boundary, and the
+ * permitted joints the boundary is on none of.
+ */
+export function pourLiftConflicts(
+  elementId: CastableElement['id'],
+  lifts: readonly PourLift[],
+  limits: PourLimits,
+  maxLiftHeight: number | undefined,
+): PourLiftConflict[] {
+  const permitted = limits.permittedJointElevations ?? []
+  const out: PourLiftConflict[] = []
+  for (const lift of lifts) {
+    if (!lift.hasJointBelow || lift.jointSource !== 'off-permitted') continue
+    out.push({
+      elementId,
+      liftIndex: lift.index,
+      boundaryElevation: lift.baseElevation,
+      maxLiftHeight: maxLiftHeight ?? 0,
+      permittedJointElevations: permitted,
+    })
+  }
+  return out
 }
