@@ -20,9 +20,17 @@ describe('the shipped rule sets', () => {
     expect(Object.keys(MEASUREMENT_STANDARDS).sort()).toEqual([...ALL_IDS].sort())
   })
 
-  it('flags the two standards whose clause text was never obtained', () => {
+  it('flags the standard whose clause text was never obtained', () => {
+    // CESMM4 Class G was verified against the full text on 2026-08-15 (voids
+    // ≤ 0.5 m², not the 1.00 m² the plan had lumped it in with); POMI's
+    // "no deduction ≤ 1.00 m²" reading is still widely-reported-but-unretrieved.
     const unverified = ALL_IDS.filter((id) => measurementStandard(id).verification === 'unverified')
-    expect(unverified.sort()).toEqual(['CESMM4', 'POMI'])
+    expect(unverified.sort()).toEqual(['POMI'])
+    expect(measurementStandard('CESMM4').verification).toBe('certified')
+    expect(measurementStandard('CESMM4').openings).toEqual({
+      kind: 'deduct-above-area',
+      thresholdSqM: 0.5,
+    })
   })
 
   it('defaults to a certified standard', () => {

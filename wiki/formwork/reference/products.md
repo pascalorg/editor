@@ -566,7 +566,7 @@ Modifiers to include as multipliers: **first use x1.5–2.0 (learning + fabricat
 
 Three NRM2 rules with real software consequences: **openings are "extra over" counted in `nr` by area band, not deducted in m²**; the **500 mm threshold flips the unit from m to m²**; and **kickers are measured once along the centre line but priced for both faces**.
 
-**CESMM (Class G, Concrete Ancillaries)** ⚠️ — I could not retrieve the clause text. Structure: formwork classified by **finish (rough/fair/other stated)** x **surface orientation (horizontal / sloping ≤ or > 1:4 / vertical / curved to one or two directions)** x **width band (≤0.1 m, 0.1–0.2 m, 0.2–0.4 m, 0.4–1.22 m, >1.22 m stated)**; measured m² (or m / nr for narrow widths); **voids ≤ 0.5 m² not deducted** ⚠️ — verify before use.
+**CESMM4 (Class G, Concrete Ancillaries)** ✅ — void threshold verified 2026-08-15 against the CESMM4 full text (ICE Publishing ISBN 978-0-7277-5751-7) and the CESMM3 OCR text, which agree: measurement rule — *"No deduction from the areas measured shall be made for openings and holes each not exceeding 0.5 m² in area"* (the same 0.5 m² threshold appears in the timber-decking rule). **Correction to the plan's §12 note:** the "no deduction ≤ 1.00 m²" figure is HKSMM4's; CESMM Class G sits at **0.5 m²**. Structure: formwork classified by **finish (rough/fair/other stated)** x **surface orientation (horizontal / sloping ≤ or > 1:4 / vertical / curved to one or two directions)** x **width band (≤0.1 m, 0.1–0.2 m, 0.2–0.4 m, 0.4–1.22 m, >1.22 m stated)**; measured m² (or m / nr for narrow widths).
 
 **POMI (Principles of Measurement International)** ⚠️ — not verified; generally measures formwork as contact area with no deduction for voids **≤ 1.00 m²** ⚠️.
 
@@ -868,6 +868,6 @@ PanelLayout:  { wall_id, start_corner_ref, direction, lift_id,
 1. **Frami Xlife and Alu-Framax item lists** — enumerate `https://www.doka.com/_ext/downloads/itemlists/en/{n}.pdf`; that PDF family is the single highest-value machine-readable source I found and covers every Doka system with article numbers, weights and dimensions.
 2. **PERI SKYDECK, MULTIFLEX, SRS, QUATTRO, SRU/SRZ** — same brochure pattern as TRIO (`/dam/jcr:.../<system>.pdf` on any PERI country site).
 3. **Framax Xlife permissible pressure** — the item list omits it; get "Framax Xlife User Information".
-4. **CESMM4 Class G and POMI clause text** — my width-band and void-deduction figures for these two are unverified.
+4. **POMI clause text** — CESMM4 Class G is now verified (voids ≤ 0.5 m², width bands); **POMI is still unverified** — the "no deduction ≤ 1.00 m²" reading is widely reported but no clause text was found. Note the plan's EN 13670 citation is also off: striking is **§5.7 "Removal of formwork and falsework"** (not §5.5, which is "Special formwork"), and the clause requires concrete to have "gained sufficient strength… to resist damage" before removal.
 5. **ULMA ORMA pressure rating** — the 80 kN/m² figure was an echo of my own query, not a source. Discard it.
 6. **RMD Superslim: the nine lengths and the moment-vs-restraint curve** — needs the actual technical data sheet from `altrad-coffrage.com`.

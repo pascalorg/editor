@@ -78,7 +78,15 @@ const HKSMM4: MeasurementStandard = {
 }
 
 /**
- * CESMM4 Class G. Clause text unretrieved — the void threshold is unconfirmed.
+ * CESMM4 Class G. Measurement rule: "No deduction from the areas measured
+ * shall be made for openings and holes each not exceeding 0.5 m² in area" —
+ * the formwork rule in Class G, confirmed 2026-08-15 across the CESMM4 full
+ * text (ICE Publishing ISBN 978-0-7277-5751-7) and the CESMM3 OCR text, which
+ * agree, and echoed by the timber-decking rule (same 0.5 m² threshold).
+ *
+ * This corrects the plan's §12 note, which had lumped CESMM4 in with POMI's
+ * "no deduction ≤ 1.00 m²" reading: the 1.00 m² figure is HKSMM4's; CESMM
+ * Class G sits at 0.5 m².
  *
  * No `narrowWidth`: Class G is reported to band *every* width (≤0.1, 0.1–0.2,
  * 0.2–0.4, 0.4–1.22, >1.22 m), which classifies an m² item rather than
@@ -88,8 +96,9 @@ const HKSMM4: MeasurementStandard = {
 const CESMM4: MeasurementStandard = {
   id: 'CESMM4',
   label: 'CESMM4 Class G (Concrete Ancillaries)',
-  sourceRef: 'CESMM4 Class G — clause text not obtained',
-  verification: 'unverified',
+  sourceRef:
+    'CESMM4 Class G — measurement rule, openings and holes not exceeding 0.5 m² in area (ISBN 978-0-7277-5751-7)',
+  verification: 'certified',
   openings: { kind: 'deduct-above-area', thresholdSqM: 0.5 },
   revealsMeasured: true,
 }
