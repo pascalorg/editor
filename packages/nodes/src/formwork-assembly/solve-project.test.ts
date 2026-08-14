@@ -481,6 +481,83 @@ describe('solveProjectFormwork', () => {
     ).toBe(true)
   })
 
+  test('an element on a registered-but-unseeded system is rejected with the id named', () => {
+    // The refusal group 4.1 exists for. Before the unseeded registrations, a stated id
+    // either resolved to a full system or to nothing, and nothing fell back to a
+    // conventional ply shutter silently — a layout of panels nobody has transcribed. A
+    // registered id with no data must refuse instead, and the refusal has to name the
+    // identifier, because the remedy is seeding that datasheet.
+    const scene = sceneOf(
+      makeWall('wall_1'),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, {
+        systemId: 'mivan-generic',
+      } as Partial<FormworkAssemblyNode>),
+    )
+    const solution = solveProjectFormwork(scene)
+
+    expect(solution.rejected).toMatchObject([
+      {
+        elementId: 'wall_1',
+        kind: 'wall',
+        reason: 'system-unseeded',
+        systemId: 'mivan-generic',
+      },
+    ])
+    expect(solution.elements).toEqual([])
+    expect(solution.shutterCount).toBe(0)
+    expect(solution.bom).toEqual([])
+    expect(projectFormworkCaveats(solution).some((line) => line.includes('mivan-generic'))).toBe(
+      true,
+    )
+  })
+
+  test('a project-level unseeded system rejects every element, and a seeded one rescues the rest', () => {
+    // The project choice reaches every shutter that has not named its own, so one
+    // unseeded `parts.systemId` is a whole level refused — and the element beside it
+    // that names a seeded system still solves, exactly as a degenerate element does not
+    // stop the project.
+    const unseeded = solveProjectFormwork(
+      withSettings(
+        sceneOf(
+          makeWall('wall_1'),
+          makeWall('wall_2'),
+          makeAssembly('formwork-assembly_1', 'wall_1', 0, 0),
+          makeAssembly('formwork-assembly_2', 'wall_2', 0, 0, {
+            systemId: 'peri-trio',
+          } as Partial<FormworkAssemblyNode>),
+        ),
+        { parts: { systemId: 'peri-quattro' } },
+      ),
+    )
+
+    expect(unseeded.rejected).toMatchObject([
+      {
+        elementId: 'wall_1',
+        reason: 'system-unseeded',
+        systemId: 'peri-quattro',
+      },
+    ])
+    // The element that named its own seeded system still forms — the refusal is per
+    // element, not a state that poisons the scope.
+    expect(unseeded.elements.map((element) => element.host.id)).toEqual(['wall_2'])
+  })
+
+  test('an unregistered id still falls back rather than refusing, because it is a different fault', () => {
+    // 4.1 is about registered-but-unseeded: an id that is not registered at all is a
+    // stale scene or a typo, and the write paths already refuse those — the fallback is
+    // the historical behaviour left alone rather than a claim that the id is real.
+    const scene = sceneOf(
+      makeWall('wall_1'),
+      makeAssembly('formwork-assembly_1', 'wall_1', 0, 0, {
+        systemId: 'nope-9000',
+      } as Partial<FormworkAssemblyNode>),
+    )
+    const solution = solveProjectFormwork(scene)
+
+    expect(solution.rejected).toEqual([])
+    expect(solution.shutterCount).toBeGreaterThan(0)
+  })
+
   test('a per-part omission reaches the project bill', () => {
     // The decisions live on the assembly, so a project-scope aggregation that solved
     // its own way would quietly re-order everything a yard had taken off the list.

@@ -20,7 +20,6 @@ import {
   findJunctions,
   fitCorner,
   formworkSettings,
-  formworkSystem,
   gangFace,
   layOutFace,
   type PourLimits,
@@ -29,6 +28,7 @@ import {
   pourUnitsInScene,
   type StripPack,
   type StripPiece,
+  seededFormworkSystem,
   tieHoles,
 } from '@pascal-app/core/formwork'
 import type { GeometryContext } from '@pascal-app/core/registry'
@@ -213,7 +213,7 @@ export interface CornerRun {
  */
 export function cornerRuns(corners: readonly ElementCorner[], face: 'a' | 'b'): CornerRun[] {
   const out: CornerRun[] = []
-  const system = formworkSystem(DEFAULT_FORMWORK_SYSTEM_ID)
+  const system = seededFormworkSystem(DEFAULT_FORMWORK_SYSTEM_ID)
   for (const entry of corners) {
     if (!entry.formed || entry.leg.face !== face) continue
     // A real unit's legs come from the catalog. Where the system sweeps no unit
@@ -246,12 +246,18 @@ export function cornerRuns(corners: readonly ElementCorner[], face: 'a' | 'b'): 
  * Takes the id rather than the node because the design report resolves the same
  * system without an assembly in hand — it reports on a host whose shutter has not
  * been generated yet.
+ *
+ * Resolves seeded systems only: a registered-but-unseeded id is not a system a
+ * layout can be drawn in, and returning `undefined` for it would silently fall
+ * back to the conventional shutter — the refusal is the solver's to report, so
+ * the layout must refuse too. `buildFormwork` makes that refusal before any of
+ * these paths run.
  */
 export function assemblySystem(
   settings: FormworkSettings,
   systemId: string | undefined,
 ): FormworkSystem | undefined {
-  return formworkSystem(systemId ?? settings.parts.systemId ?? DEFAULT_FORMWORK_SYSTEM_ID)
+  return seededFormworkSystem(systemId ?? settings.parts.systemId ?? DEFAULT_FORMWORK_SYSTEM_ID)
 }
 
 /** One piece as it is set: a span along the element inside one course. */

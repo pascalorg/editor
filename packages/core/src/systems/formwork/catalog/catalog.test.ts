@@ -8,7 +8,13 @@ import {
   FRAMAX_COLUMN,
 } from './columns'
 import { DOKA_FRAMAX_XLIFE } from './doka-framax'
-import { FORMWORK_SYSTEMS, formworkSystem } from './index'
+import {
+  DEFAULT_FORMWORK_SYSTEM_ID,
+  FORMWORK_SYSTEMS,
+  type FormworkSystem,
+  formworkSystem,
+  seededFormworkSystem,
+} from './index'
 import { fitCorner, unfittableCorners } from './junction-fit'
 import { PERI_TRIO } from './peri-trio'
 import { expectedReusesForFilm, SHEET_STOCK } from './sheets'
@@ -27,18 +33,23 @@ import {
  * break the outside-longer-than-inside rule, a gap the cascade cannot fill.
  */
 
+const SEEDED_SYSTEMS = Object.values(FORMWORK_SYSTEMS).filter((system) => system.seeded)
+
+/** Every published design value in a seeded entry must say where it came from. */
+function expectSourced(system: FormworkSystem) {
+  for (const part of [...system.panels, ...system.corners, ...system.fillers, ...system.ties]) {
+    expect(part.catalogSource.length).toBeGreaterThan(0)
+    expect(part.verification).toBeDefined()
+  }
+}
+
 describe('every shipped entry is sourced', () => {
   it('names the list each part was read from', () => {
-    for (const system of Object.values(FORMWORK_SYSTEMS)) {
-      for (const part of [...system.panels, ...system.corners, ...system.fillers, ...system.ties]) {
-        expect(part.catalogSource.length).toBeGreaterThan(0)
-        expect(part.verification).toBeDefined()
-      }
-    }
+    for (const system of SEEDED_SYSTEMS) expectSourced(system)
   })
 
   it('says which pressure code every rating was certified against', () => {
-    for (const system of Object.values(FORMWORK_SYSTEMS)) {
+    for (const system of SEEDED_SYSTEMS) {
       for (const panel of system.panels) {
         expect(panel.pressure.pressureStandard).toBeDefined()
         expect(panel.pressure.sourceRef.length).toBeGreaterThan(0)
@@ -49,12 +60,55 @@ describe('every shipped entry is sourced', () => {
   })
 
   it('states the basis of every tie capacity', () => {
-    for (const system of Object.values(FORMWORK_SYSTEMS)) {
+    for (const system of SEEDED_SYSTEMS) {
       for (const tie of system.ties) {
         expect(['permissible', 'ultimate', 'design']).toContain(tie.capacityBasis)
         expect(tie.capacityKn).toBeGreaterThan(0)
       }
     }
+  })
+})
+
+describe('seeded and unseeded', () => {
+  it('registers the unseeded panel systems the plan names', () => {
+    for (const id of [
+      'mivan-generic',
+      'peri-srs',
+      'peri-quattro',
+      'peri-skydeck',
+      'peri-multiflex',
+      'doka-frami',
+    ]) {
+      const entry = formworkSystem(id)
+      expect(entry?.seeded).toBe(false)
+      // The refusal names the identifier, so a registration without one is worthless.
+      expect(entry?.unseededReason.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('an unseeded system publishes no design value to be sourced', () => {
+    for (const system of Object.values(FORMWORK_SYSTEMS)) {
+      if (system.seeded) continue
+      expect('panels' in system).toBe(false)
+      expect(system.verification).toBe('unverified')
+    }
+  })
+
+  it('every seeded panel carries a rated pressure — a system without one is unseeded', () => {
+    // The spec's rule in registry form: a system "with no rated pressure" must read as
+    // unseeded, because a system with no stated limit would pass every pressure check.
+    // Seeded is therefore exactly "full data including a rated pressure on every panel" —
+    // a partially filled entry has no business in the seeded half of the registry.
+    for (const system of SEEDED_SYSTEMS) {
+      expect(system.panels.length).toBeGreaterThan(0)
+      for (const panel of system.panels) {
+        expect(panel.pressure.wallsKnM2).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('the default system is seeded, so an unconfigured project still designs', () => {
+    expect(formworkSystem(DEFAULT_FORMWORK_SYSTEM_ID)?.seeded).toBe(true)
   })
 })
 
@@ -325,5 +379,13 @@ describe('the registry', () => {
   it('resolves a system by id and nothing by an unknown one', () => {
     expect(formworkSystem('peri-trio')?.manufacturer).toBe('PERI')
     expect(formworkSystem('nope')).toBeUndefined()
+  })
+
+  it('resolves an unseeded id to its registration rather than to nothing', () => {
+    expect(formworkSystem('mivan-generic')?.seeded).toBe(false)
+    // The seeded-only lookup is where the layout paths go, so an unseeded id can never
+    // be laid out by accident.
+    expect(seededFormworkSystem('mivan-generic')).toBeUndefined()
+    expect(seededFormworkSystem('peri-trio')?.manufacturer).toBe('PERI')
   })
 })

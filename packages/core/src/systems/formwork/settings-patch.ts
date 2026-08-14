@@ -364,6 +364,9 @@ const BRACING_PATCH = z.object({
  * span was solved against another one.
  */
 const SYSTEM_IDS = Object.keys(FORMWORK_SYSTEMS)
+const UNSEEDED_SYSTEM_IDS = Object.values(FORMWORK_SYSTEMS)
+  .filter((system) => !system.seeded)
+  .map((system) => system.id)
 const SHEATHING_IDS = SHEATHING_TYPES.map((entry) => entry.id)
 const BEAM_IDS = FALSEWORK_BEAMS.map((entry) => entry.id)
 const PROP_IDS = PROP_TYPES.map((entry) => entry.id)
@@ -374,7 +377,9 @@ const PART_PATCH = z.object({
     .max(120)
     .nullable()
     .optional()
-    .describe(`panel system for wall and column forms; one of: ${SYSTEM_IDS.join(', ')}`),
+    .describe(
+      `panel system for wall and column forms; one of: ${SYSTEM_IDS.join(', ')}. ${UNSEEDED_SYSTEM_IDS.join(', ')} ${UNSEEDED_SYSTEM_IDS.length === 1 ? 'is registered but carries no design data, so it cannot be designed against' : 'are registered but carry no design data, so they cannot be designed against'} — an element configured to one is refused with the id named until the datasheet is seeded, so do not propose it.`,
+    ),
   sheathingId: z
     .string()
     .max(120)

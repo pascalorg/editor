@@ -312,6 +312,14 @@ export interface FormworkSystem {
   id: string
   manufacturer: string
   label: string
+  /**
+   * True where this entry carries the full design data below. A registered system
+   * without it is `UnseededFormworkSystem`: it names a real product nobody has
+   * transcribed yet, and designing against one would be a layout of invented
+   * panels. The flag is what lets the surfaces list both kinds together and the
+   * layout refuse the ones with nothing to build from.
+   */
+  seeded: true
   /** Constant frame depth, repeated here so a layout can read it without a panel. */
   frameDepthMm: number
   panels: readonly PanelType[]
@@ -327,6 +335,42 @@ export interface FormworkSystem {
   verification: Verification
   sourceRef: string
 }
+
+/**
+ * A registered system with no design data behind it yet.
+ *
+ * The registry carries more than the two shipped systems: a project that states
+ * `mivan-generic` is naming a real product, and an id that resolves to nothing is
+ * the failure mode where the design chain silently falls back to a default. So the
+ * id, the manufacturer and the label are registered — and deliberately nothing
+ * else, because every panel size, weight and rating an entry like this would carry
+ * has to come off a cited datasheet, and none has been bought or transcribed yet.
+ *
+ * The difference from a `FormworkSystem` is the whole point: an unseeded system
+ * must refuse to be designed against rather than approximate one, and it must say
+ * so with the identifier named — the same refusal `unformable` applies to geometry
+ * it cannot form.
+ */
+export interface UnseededFormworkSystem {
+  id: string
+  manufacturer: string
+  label: string
+  seeded: false
+  /**
+   * Which document has to be bought or fetched before this can be designed
+   * against, so the gap is actionable rather than merely disclosed.
+   */
+  unseededReason: string
+  verification: Verification
+  /** The document the registration itself was read from — the product's own name, not a design value. */
+  sourceRef: string
+}
+
+/**
+ * Every system a project may name: the ones with data to design against and the
+ * ones registered as a real product with none yet.
+ */
+export type RegisteredFormworkSystem = FormworkSystem | UnseededFormworkSystem
 
 /** Every distinct panel width in a system, ascending — the layout's alphabet. */
 export function panelWidthsMm(system: FormworkSystem): number[] {

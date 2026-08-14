@@ -9,10 +9,10 @@ import {
   FACE_REASON_LABELS,
   faceMeasurementLabel,
   fitCorner,
-  formworkSystem,
   type MeasurementStandardId,
   measurementStandard,
   resolveCeilingHeight,
+  seededFormworkSystem,
 } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -179,7 +179,7 @@ function formworkCoverage(
   const standard = measurementStandard(standardId)
   const coverage = coverageForElement(host.id as AnyNodeId, siblings, { standard })
   if (!coverage) return undefined
-  const system = formworkSystem(DEFAULT_FORMWORK_SYSTEM_ID)
+  const system = seededFormworkSystem(DEFAULT_FORMWORK_SYSTEM_ID)
 
   return {
     faces: coverage.faces.map((face) => ({

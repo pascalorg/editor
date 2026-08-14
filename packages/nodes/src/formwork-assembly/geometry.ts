@@ -1,3 +1,4 @@
+import { DEFAULT_FORMWORK_SYSTEM_ID, formworkSystem } from '@pascal-app/core/formwork'
 import type { GeometryContext } from '@pascal-app/core/registry'
 import type { AnyNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core/schema'
 import { Group } from 'three'
@@ -45,6 +46,14 @@ export function buildFormwork(
 
   const scope = resolveFormworkScope(castable, node, ctx)
   if (!scope) return null
+  // A registered-but-unseeded system must not be drawn as a conventional shutter,
+  // which is what `assemblySystem` returning `undefined` would silently produce.
+  // The refusal itself is the solve's to report, with the id named; this is the
+  // drawing path refusing to invent panels in a system nobody has transcribed.
+  const resolved = formworkSystem(
+    node.systemId ?? scope.settings.parts.systemId ?? DEFAULT_FORMWORK_SYSTEM_ID,
+  )
+  if (resolved && !resolved.seeded) return null
   const material = panelMaterial(castable)
 
   if (host.type === 'column') return buildColumnFormwork(host as ColumnNode, node, scope, material)

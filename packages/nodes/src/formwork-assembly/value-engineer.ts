@@ -82,7 +82,7 @@ import {
  * warning will apply it, and applying it changes the panel system of every wall in scope.
  */
 export const FORMWORK_VALUE_DESCRIPTION =
-  'Weigh this job against the other panel systems in the catalog. Each option is the whole scope re-solved in that system — a genuinely different layout, so the panel count, the fittings, the tonnage, the picks and any shortage all move — reported as a difference from the build in use now, with money where the project has rates and hours where it has output norms. Read it before quoting a takeoff nobody has costed a second way. It is not a quotation: there is no availability, lead time, minimum hire quantity or account discount in it. Taking an option is one write, set_formwork_settings parts.systemId, and it changes the system for every shutter that has not named its own.'
+  'Weigh this job against the other panel systems in the catalog. Each option is the whole scope re-solved in that system — a genuinely different layout, so the panel count, the fittings, the tonnage, the picks and any shortage all move — reported as a difference from the build in use now, with money where the project has rates and hours where it has output norms. Read it before quoting a takeoff nobody has costed a second way. A registered system with no design data is reported as unavailable rather than offered, because it cannot be laid out in — never propose one. It is not a quotation: there is no availability, lead time, minimum hire quantity or account discount in it. Taking an option is one write, set_formwork_settings parts.systemId, and it changes the system for every shutter that has not named its own.'
 
 /** Why a scope has no system options to weigh. */
 export type ValueRefusal =
@@ -213,6 +213,12 @@ export interface FormworkValueEngineering {
   options: ValueOption[]
   /** Options cheaper than the current build, which is the list worth reading. */
   cheaper: ValueOption[]
+  /**
+   * Registered systems with no design data behind them. Not alternatives, and
+   * listed so a reader does not ask why a product it has heard of is missing
+   * from the comparison — it is unavailable, not unconsidered.
+   */
+  unseededSystemIds: string[]
   /** Present where no option is offered. */
   refusal?: ValueRefusal
 }
@@ -271,9 +277,13 @@ export function formworkValueOptions(
     currentSystemIds,
     options: [],
     cheaper: [],
+    unseededSystemIds: Object.values(FORMWORK_SYSTEMS)
+      .filter((system) => !system.seeded)
+      .map((system) => system.id),
   }
   if (solution.shutterCount === 0) return { ...base, refusal: 'nothing-formed' }
-  if (Object.keys(FORMWORK_SYSTEMS).length < 2) {
+  const seededCount = Object.values(FORMWORK_SYSTEMS).filter((system) => system.seeded).length
+  if (seededCount < 2) {
     return { ...base, refusal: 'single-system-catalog' }
   }
 
@@ -282,6 +292,10 @@ export function formworkValueOptions(
   )
   const options: ValueOption[] = []
   for (const system of Object.values(FORMWORK_SYSTEMS)) {
+    // An unseeded registration is never an alternative: it has no design data to
+    // solve against, so a candidate in it forms nothing and reports a bill of zero.
+    // It is listed on the read as unavailable rather than silently absent.
+    if (!system.seeded) continue
     // A system already in use is not an alternative to itself. On a mixed job the other half of
     // the mixture *is* an option, because standardising on it is a real change — so this
     // excludes a system only where it is the single one in use.
@@ -395,6 +409,12 @@ export function valueCaveats(value: FormworkValueEngineering): string[] {
     return out
   }
   if (value.options.length === 0) return out
+
+  if (value.unseededSystemIds.length > 0) {
+    out.push(
+      `${value.unseededSystemIds.join(', ')} ${value.unseededSystemIds.length === 1 ? 'is registered but carries no design data, so it is not compared here' : 'are registered but carry no design data, so they are not compared here'} — unavailable until the datasheet behind it is seeded, not unconsidered.`,
+    )
+  }
 
   const beyond = value.options.filter((option) => option.beyondCapacity > 0)
   if (beyond.length > 0) {

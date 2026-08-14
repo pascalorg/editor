@@ -103,8 +103,12 @@ const MEASUREMENT_OPTIONS = Object.values(MEASUREMENT_STANDARDS).map((standard) 
 }))
 
 const SYSTEM_OPTIONS = Object.values(FORMWORK_SYSTEMS).map((system) => ({
-  label: system.label,
+  label: system.seeded ? system.label : `${system.label} — registered, no design data yet`,
   value: system.id,
+  // An unseeded registration is shown so a project that already named it can see what
+  // it resolved to, and refused as a fresh choice — designing against it would lay out
+  // panels that do not exist.
+  disabled: !system.seeded,
 }))
 
 const SHEATHING_OPTIONS = SHEATHING_TYPES.map((sheathing) => ({
@@ -629,7 +633,7 @@ export function FormworkSettingsPanel() {
         </GroupNote>
         <OptionalSelectField
           assumedLabel={labelFor(SYSTEM_OPTIONS, DEFAULT_FORMWORK_SYSTEM_ID)}
-          hint="Panel system for wall and column forms. The layout works in its widths, its corners and its tie holes, so this changes the drawing and not just the rating."
+          hint="Panel system for wall and column forms. The layout works in its widths, its corners and its tie holes, so this changes the drawing and not just the rating. A system listed as having no design data is registered but not transcribable yet — picking one would draw panels that do not exist, so it cannot be selected."
           label="System"
           onChange={(value) => setGroupField('parts', { systemId: value })}
           options={SYSTEM_OPTIONS}

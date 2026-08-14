@@ -23,9 +23,9 @@ Each of these lands in `solve-project.ts` or in the core phase module it calls, 
 
 ## 4. Catalog seed
 
-- [ ] 4.1 Make a registered-but-unseeded system refuse to design rather than fall back: element reported undesignable with the identifier named, no layout or quantity produced, and a panel system missing its rated pressure treated as unseeded
-- [ ] 4.2 Report seeded/unseeded state wherever selectable systems are listed, on all three surfaces
-- [ ] 4.3 Require source and verification level on every published design value in a catalog entry; a value with neither is not publishable
+- [x] 4.1 Make a registered-but-unseeded system refuse to design rather than fall back: element reported undesignable with the identifier named, no layout or quantity produced, and a panel system missing its rated pressure treated as unseeded — **shipped**, the six unseeded systems (`mivan-generic`, `peri-srs`, `peri-quattro`, `peri-skydeck`, `peri-multiflex`, `doka-frami`) are registered in `catalog/systems.ts` as `seeded: false`, each naming the datasheet it needs; `formworkSystem` resolves them so a stated id is never "unknown", and `seededFormworkSystem` is the lookup every layout path reads so an unseeded id can never be drawn by accident; `solveProjectFormwork` rejects the element with `reason: 'system-unseeded'` and the identifier named (`unformableCaveats` names the id and the remedy), and `buildFormwork` refuses to draw a conventional shutter under one; a panel missing its rated pressure is unseeded by registry rule — a seeded entry must carry `pressure.wallsKnM2 > 0` on every panel, which the catalog test pins
+- [x] 4.2 Report seeded/unseeded state wherever selectable systems are listed, on all three surfaces — **shipped**, the settings panel's system selector lists unseeded systems disabled with "registered, no design data yet" and a hint saying why (a project that already named one still sees what it resolved to); `compare_formwork_systems` excludes unseeded systems from the options and reports them as `unseededSystemIds` with a caveat sentence on both AI surfaces; and `set_formwork_settings`'s systemId description names the unseeded ids so a model never proposes one
+- [x] 4.3 Require source and verification level on every published design value in a catalog entry; a value with neither is not publishable — **shipped**, the types already required `sourceRef`/`catalogSource`/`verification` on every published value and the registry tests now enforce it across every seeded entry — each part names its list and verification, each rating its pressure standard, basis and sourceRef — so a value without both cannot be published
 - [ ] 4.4 Seed `mivan-generic` with its rated pressure, panel sizes, weights, tie arrangement and accessories, each cited
 - [ ] 4.5 Seed the full APA grade set, with metric film-faced plywood values marked `derived` where converted and the conversion stated
 - [ ] 4.6 Seed PERI SRS, QUATTRO, SKYDECK and MULTIFLEX, and Doka Frami, from vendor datasheets, each value cited
@@ -44,7 +44,7 @@ Each of these lands in `solve-project.ts` or in the core phase module it calls, 
 ## 6. Cut set-covering and trim
 
 - [x] 6.1 Search combinations of the stated purchasable sheet sizes with a stated objective (least cost or least waste), reporting the objective, the counts per size and the offcut area
-- [ ] 6.2 Regression guard: a single stated sheet size reproduces today's cut solution exactly
+- [x] 6.2 Regression guard: a single stated sheet size reproduces today's cut solution exactly — **shipped**, `chooseNestStock` returns the plain nest untouched for a single stated size, and `cut-search.test.ts` now pins that `choice.list` equals `nestCutPieces` exactly — the sheets, placements and offcuts are identical, so a job stating one size buys precisely what it did before the search existed
 - [x] 6.3 Report an uncuttable piece with its dimensions and the largest stated sheet, excluded from the counts rather than silently absent
 - [ ] 6.4 Cover a repeated floor once — sheets per cycle plus the replacements the stated life implies — and state the reuse assumed
 - [x] 6.5 Per-cut-edge trim allowance applied in placement, with the offcut area distinguishing trim loss from unused sheet area; no stated allowance means none applied

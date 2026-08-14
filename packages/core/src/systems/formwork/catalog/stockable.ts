@@ -36,14 +36,19 @@ export interface StockableCatalogPart {
  * what keeps the cut piece off the rack, not this list.
  */
 export const STOCKABLE_CATALOG_PARTS: readonly StockableCatalogPart[] = [
-  ...Object.values(FORMWORK_SYSTEMS).flatMap((system) =>
-    [...system.panels, ...system.corners, ...system.fillers, ...system.ties].map((entry) => ({
-      id: entry.id,
-      label: entry.label,
-      family: system.label,
-      weightKg: entry.weightKg,
-    })),
-  ),
+  // Seeded systems only: an unseeded registration carries no panels, corners,
+  // fillers or ties, so there is nothing of it a bill line could carry and nothing
+  // a yard could own.
+  ...Object.values(FORMWORK_SYSTEMS)
+    .filter((system) => system.seeded)
+    .flatMap((system) =>
+      [...system.panels, ...system.corners, ...system.fillers, ...system.ties].map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        family: system.label,
+        weightKg: entry.weightKg,
+      })),
+    ),
   ...COLUMN_FORMS.map((entry) => ({
     id: entry.id,
     label: entry.label,

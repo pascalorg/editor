@@ -532,6 +532,7 @@ export const DOKA_FRAMAX_XLIFE: FormworkSystem = {
   id: 'doka-framax-xlife',
   manufacturer: 'Doka',
   label: 'Doka Framax Xlife (steel)',
+  seeded: true,
   frameDepthMm: 120,
   panels: [...PANELS, ...UNIVERSAL_PANELS],
   corners: CORNERS,

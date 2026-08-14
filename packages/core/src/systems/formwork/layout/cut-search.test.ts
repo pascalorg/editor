@@ -272,6 +272,17 @@ describe('chooseNestStock', () => {
     expect(choice.subsetsTried).toBe(0)
   })
 
+  it("a single stated size reproduces today's cut exactly", () => {
+    // The regression guard on the whole search (6.2): with one size there is nothing to
+    // search, and the subset sweep must not move the nest the plain placer produced — the
+    // sheets, the placements and the offcuts are identical to `nestCutPieces` itself, so
+    // a job that states one size buys exactly what it did before the search existed.
+    const plainNest = nestCutPieces(beatable, [plain])
+    const choice = chooseNestStock(beatable, [plain])
+    expect(choice.list).toEqual(plainNest)
+    expect(choice.baseline.sheets).toBe(plainNest.sheets.length)
+  })
+
   it('drops a size the job buys less ply without', () => {
     // Boards that all fit the small sheet: opening a 1500 × 3000 for any of them buys
     // 4.5 m² where 2.98 would do, so the mix that uses it can only lose.

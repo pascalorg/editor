@@ -1843,6 +1843,7 @@ export function buildTools(
           scope: levelId ?? (elementIds ? 'the elements named' : 'whole scene'),
           currentSystemIds: value.currentSystemIds,
           currency: value.currency ?? null,
+          unseededSystemIds: value.unseededSystemIds,
           options: value.options.map((option) => ({
             ...option,
             verdictLabel: VALUE_VERDICT_LABELS[option.verdict],

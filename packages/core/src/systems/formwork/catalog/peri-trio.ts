@@ -523,6 +523,7 @@ export const PERI_TRIO: FormworkSystem = {
   id: 'peri-trio',
   manufacturer: 'PERI',
   label: 'PERI TRIO (steel)',
+  seeded: true,
   frameDepthMm: 120,
   panels: [...PANELS, ...MULTI_PANELS],
   corners: CORNERS,

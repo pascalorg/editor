@@ -38,6 +38,8 @@ export const compareFormworkSystemsOutput = {
     }),
   ),
   cheaperCount: z.number(),
+  /** Registered systems with no design data — present but never offered. */
+  unseededSystemIds: z.array(z.string()),
   refusalReason: z.string().optional(),
   caveats: z.array(z.string()),
 }
@@ -106,6 +108,7 @@ export function registerCompareFormworkSystems(server: McpServer, bridge: SceneO
         scope: levelId ?? (elementIds ? 'the elements named' : 'whole scene'),
         currentSystemIds: value.currentSystemIds,
         ...(value.currency === undefined ? {} : { currency: value.currency }),
+        unseededSystemIds: value.unseededSystemIds,
         options: value.options.map((option) => ({
           key: option.key,
           systemId: option.systemId,

@@ -1933,6 +1933,7 @@ describe('compare_formwork_systems', () => {
     scope: string
     currentSystemIds: string[]
     currency: string | null
+    unseededSystemIds: string[]
     options: Array<{
       key: string
       systemId: string
@@ -1962,6 +1963,22 @@ describe('compare_formwork_systems', () => {
     expect(option?.fittings.delta).not.toBe(0)
     expect(option?.gaps).toContain('no-rates')
     expect(reply.caveats.join(' ')).toContain('set_formwork_settings parts.systemId')
+  })
+
+  test('a registered-but-unseeded system is reported as unavailable, not offered', async () => {
+    const { tools } = scene()
+    await shutter(tools, 'wall_1')
+
+    const reply = JSON.parse(await call(tools, 'compare_formwork_systems', {})) as ValueReply
+
+    // The registered systems with no transcribed datasheet are named and excluded from the
+    // options — a model that does not see them might propose one, and an element configured
+    // to one is refused.
+    expect(reply.unseededSystemIds).toEqual(
+      expect.arrayContaining(['mivan-generic', 'peri-quattro', 'doka-frami']),
+    )
+    expect(reply.options.map((option) => option.systemId)).not.toContain('mivan-generic')
+    expect(reply.caveats.join(' ')).toContain('not compared here')
   })
 
   test('a scope with nothing formed is refused rather than compared against nothing', async () => {

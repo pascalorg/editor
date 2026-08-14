@@ -122,7 +122,7 @@ export function OptionalSelectField<T extends string>({
   hint?: string
   label: string
   onChange: (value: T | undefined) => void
-  options: ReadonlyArray<{ label: string; value: T }>
+  options: ReadonlyArray<{ label: string; value: T; disabled?: boolean }>
   value: T | undefined
 }) {
   const id = useId()
@@ -138,7 +138,7 @@ export function OptionalSelectField<T extends string>({
         >
           <option value="">Assumed — {assumedLabel}</option>
           {options.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option disabled={option.disabled} key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}

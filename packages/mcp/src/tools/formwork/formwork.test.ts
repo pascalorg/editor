@@ -3803,6 +3803,7 @@ describe('the formwork MCP tools', () => {
       scope: string
       currentSystemIds: string[]
       currency?: string
+      unseededSystemIds: string[]
       options: Array<{
         key: string
         systemId: string
@@ -3832,6 +3833,19 @@ describe('the formwork MCP tools', () => {
       // the fitting count, and a delta of zero here is the cheap implementation.
       expect(option?.fittings.delta).not.toBe(0)
       expect(reply.caveats.join(' ')).toContain('set_formwork_settings parts.systemId')
+    })
+
+    test('a registered-but-unseeded system is reported as unavailable, not offered', async () => {
+      load(tallWall())
+      await call('attach_formwork', { elementId: 'wall_1' })
+
+      const reply = await call<ValueReply>('compare_formwork_systems')
+
+      expect(reply.unseededSystemIds).toEqual(
+        expect.arrayContaining(['mivan-generic', 'peri-quattro', 'doka-frami']),
+      )
+      expect(reply.options.map((option) => option.systemId)).not.toContain('mivan-generic')
+      expect(reply.caveats.join(' ')).toContain('not compared here')
     })
 
     test('an unpriced project gets the quantities and no money', async () => {

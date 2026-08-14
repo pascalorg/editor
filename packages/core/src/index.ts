@@ -553,6 +553,7 @@ export {
   type SurfaceClass,
   scaleTrimContributions,
   scopeToPourUnit,
+  seededFormworkSystem,
   sheetStock,
   sideFaceTrim,
   slopeBandLabel,

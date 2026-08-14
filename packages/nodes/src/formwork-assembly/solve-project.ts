@@ -17,6 +17,7 @@ import type {
   FormworkSchedule,
   FormworkSequence,
   FormworkSetCount,
+  FormworkSettings,
   PourQuantities,
   SchedulablePour,
   SequenceablePour,
@@ -37,6 +38,7 @@ import {
   classifyElementFaces,
   collectCastableElements,
   committedPourIds,
+  DEFAULT_FORMWORK_SYSTEM_ID,
   findAbutments,
   findJunctions,
   formworkAcquisition,
@@ -58,6 +60,7 @@ import {
   formworkSetCaveats,
   formworkSetCount,
   formworkSettingsFor,
+  formworkSystem,
   isReturnableLine,
   isSubstitutedStrikingStandard,
   overUtilisedParts,
@@ -72,6 +75,7 @@ import {
 } from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { type CastableHostNode, pourUnitsForHost } from './attach'
+import { formworkAssembliesOnHost } from './dirty-scope'
 import { type SolvedShutter, solveShuttersForHost } from './solve'
 
 /**
@@ -340,6 +344,34 @@ function isCastable(node: AnyNode | undefined): node is CastableHostNode {
 }
 
 /**
+ * The first registered-but-unseeded system a host's assemblies resolve to, or
+ * `undefined` where every assembly resolves to a seeded system.
+ *
+ * The resolution is the same chain the layout uses — the assembly's own `systemId`, then
+ * the project's, then the shipped default — so a refusal here names the same system the
+ * design would have laid out. A host with no assemblies is refused on the project default,
+ * because that is the system its shutters would have been raised in.
+ */
+function unseededSystemOnHost(
+  host: CastableHostNode,
+  nodes: Record<string, AnyNode>,
+  settings: FormworkSettings,
+): string | undefined {
+  const assemblyIds = formworkAssembliesOnHost(host.id as string, nodes)
+  const resolve = (systemId: string | undefined) =>
+    formworkSystem(systemId ?? settings.parts.systemId ?? DEFAULT_FORMWORK_SYSTEM_ID)
+  const ids =
+    assemblyIds.length > 0
+      ? assemblyIds.map((id) => (nodes[id] as { systemId?: string } | undefined)?.systemId)
+      : [undefined]
+  for (const id of ids) {
+    const entry = resolve(id)
+    if (entry && !entry.seeded) return entry.id
+  }
+  return undefined
+}
+
+/**
  * Elements in scope, in a stable order.
  *
  * Sorted by id rather than left in node-map order because the node map's order is
@@ -397,6 +429,23 @@ export function solveProjectFormwork(
     const refusal = unformable(host)
     if (refusal) {
       rejected.push(refusal)
+      continue
+    }
+    // The other refusal before the shutter solve: a configured panel system that is registered
+    // but carries no design data. `formworkSystem` resolves an unseeded id instead of
+    // returning `undefined`, so this is the one place that difference is read — an unregistered
+    // id still falls back to the conventional shutter, while a registered one with no data
+    // must be refused rather than laid out in invented panels. Naming the id is the whole
+    // sentence: the remedy is seeding that datasheet or choosing a system with data, and
+    // neither is guessable from a count.
+    const unseededSystemId = unseededSystemOnHost(host, nodes, settings)
+    if (unseededSystemId !== undefined) {
+      rejected.push({
+        elementId: host.id as AnyNodeId,
+        kind: host.type,
+        reason: 'system-unseeded',
+        systemId: unseededSystemId,
+      })
       continue
     }
     const shutters = solveShuttersForHost(host, nodes)
