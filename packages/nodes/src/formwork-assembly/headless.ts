@@ -31,6 +31,16 @@ export {
   plannedMove,
 } from './apply-move'
 export {
+  FORMWORK_SAVINGS_DESCRIPTION,
+  type FormworkSavingOutcome,
+  type FormworkSavingPlan,
+  formworkSavings,
+  type KeyedSaving,
+  keyedSavings,
+  plannedSaving,
+  savingOutcome,
+} from './apply-saving'
+export {
   type CastableHostNode,
   type FormworkReconciliation,
   pourUnitsForHost,

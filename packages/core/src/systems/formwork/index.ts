@@ -605,6 +605,25 @@ export {
   resequenceCaveats,
 } from './resequence'
 export {
+  APPLY_SAVING_DESCRIPTION,
+  type ApplySavingPatch,
+  ApplySavingPatch as ApplySavingPatchSchema,
+  applySavingInput,
+  type FormworkSavings,
+  noSuchSaving,
+  SAVING_CLASS_LABELS,
+  SAVING_CLASSES,
+  type SavingAxis,
+  type SavingClass,
+  type SavingClassOutcome,
+  type SavingClassRefusal,
+  type SavingProposal,
+  type SavingWrite,
+  savingByKey,
+  savingCaveats,
+  savingKey,
+} from './saving-patch'
+export {
   calendarDayNumber,
   type FormworkSchedule,
   formworkSchedule,
