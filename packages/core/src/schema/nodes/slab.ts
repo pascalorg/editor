@@ -10,6 +10,7 @@ import {
 import { MaterialSchema } from '../material'
 import { ConstructionJointNode } from './construction-joint'
 import { FormworkAssemblyNode } from './formwork-assembly'
+import { FormworkBoxOutNode } from './formwork-box-out'
 import { SurfaceHoleMetadata } from './surface-hole-metadata'
 
 // Edit-time floor for `thickness` — a thinner slab z-fights the ceiling's
@@ -21,7 +22,13 @@ export const SlabNode = BaseNode.extend({
   id: objectId('slab'),
   type: nodeType('slab'),
   children: z
-    .array(z.union([FormworkAssemblyNode.shape.id, ConstructionJointNode.shape.id]))
+    .array(
+      z.union([
+        FormworkAssemblyNode.shape.id,
+        FormworkBoxOutNode.shape.id,
+        ConstructionJointNode.shape.id,
+      ]),
+    )
     .default([]),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),

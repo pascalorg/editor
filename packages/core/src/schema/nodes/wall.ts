@@ -11,6 +11,7 @@ import { MaterialSchema } from '../material'
 import { ConstructionJointNode } from './construction-joint'
 import { DoorNode } from './door'
 import { FormworkAssemblyNode } from './formwork-assembly'
+import { FormworkBoxOutNode } from './formwork-box-out'
 import { ItemNode } from './item'
 import { WindowNode } from './window'
 
@@ -243,6 +244,7 @@ export const WallNode = BaseNode.extend({
         DoorNode.shape.id,
         WindowNode.shape.id,
         FormworkAssemblyNode.shape.id,
+        FormworkBoxOutNode.shape.id,
         ConstructionJointNode.shape.id,
       ]),
     )
