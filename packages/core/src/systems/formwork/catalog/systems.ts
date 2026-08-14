@@ -57,8 +57,8 @@ const UNSEEDED_SYSTEMS: Record<string, UnseededFormworkSystem> = {
     'Doka',
     'Doka Frami panel system',
     { walls: true, columns: true, slabs: false, beams: true },
-    "Frami is Doka's small-area wall/foundation panel line; Doka's own literature permits 40 kN/m² of fresh concrete pressure on it, with a 0.75 m grid at 0.60/1.20/1.50 m heights. The panel item list (weights, article numbers) sits in a Doka PDF that has not been transcribed — the pressure and grid alone cannot seed a layout.",
-    'Doka Frami product documentation (40 kN/m² permitted pressure)',
+    "Frami is Doka's small-area wall/foundation panel line; Doka's own literature permits 40 kN/m² of fresh concrete pressure on it, with a 0.75 m grid at 0.60/1.20/1.50 m heights. The panel item list (weights, article numbers) sits in the Doka Frami Xlife item list 189962 (direct.doka.com/_ext/downloads/itemlists/en/189962.pdf — a PDF that must be read in hand before transcription, because regular and universal panels share nominal sizes at different weights). The pressure and grid alone cannot seed a layout.",
+    'Doka Frami Xlife item list 189962 (direct.doka.com) — 40 kN/m² permitted pressure, 0.75 m tie grid; the panel item table awaits transcription from the PDF',
   ),
 }
 

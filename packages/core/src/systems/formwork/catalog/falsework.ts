@@ -285,9 +285,58 @@ export const FILM_FACED_PLY_21MM: SheathingType = {
   sourceRef: METRIC_PLY_SOURCE,
 }
 
+const WISA_SOURCE =
+  "UPM WISA-Form Birch product datasheet 08/2015 (PEFC/02-31-112) — characteristic bending and mean modulus of elasticity published per grain direction; ÷1.3 per the sheet's own material partial factor to the permissible basis; rolling shear not published, carried at 2.4 N/mm² from the design.md §2.2 band"
+
+/**
+ * WISA-Form Birch — the first manufacturer-published metric entry, closing the
+ * f_m / E_mean half of open item 3.
+ *
+ * The datasheet tabulates characteristic bending strength and mean modulus of
+ * elasticity for the face grain parallel and perpendicular to the span, so both
+ * directions are transcribed rather than factored from one (the `weaker()`
+ * approximation the generic entries use). Characteristic bending is divided by
+ * the sheet's own material partial factor (1.3) to sit on the permissible basis
+ * the design checks against. Rolling shear is not in the datasheet: it is
+ * carried at 2.4 N/mm² — the mid-range of design.md's stated band — and the
+ * entry stays `secondary`, not `certified`, for that reason.
+ */
+export const WISA_FORM_BIRCH_18MM: SheathingType = {
+  id: 'wisa-form-birch-18',
+  manufacturer: 'UPM',
+  systemFamily: 'film-faced birch plywood',
+  label: 'WISA-Form Birch 18 mm',
+  weightKg: 12.6,
+  catalogSource: WISA_SOURCE,
+  verification: 'secondary',
+  thicknessMm: 18,
+  acrossSupports: fromMetric(18, 40.2 / 1.3, 2.4, 10048),
+  parallelToSupports: fromMetric(18, 34.1 / 1.3, 2.4, 7452),
+  capacityBasis: 'permissible',
+  sourceRef: WISA_SOURCE,
+}
+
+/** The 21 mm WISA-Form Birch, same datasheet, same conversion. */
+export const WISA_FORM_BIRCH_21MM: SheathingType = {
+  id: 'wisa-form-birch-21',
+  manufacturer: 'UPM',
+  systemFamily: 'film-faced birch plywood',
+  label: 'WISA-Form Birch 21 mm',
+  weightKg: 14.7,
+  catalogSource: WISA_SOURCE,
+  verification: 'secondary',
+  thicknessMm: 21,
+  acrossSupports: fromMetric(21, 39.4 / 1.3, 2.4, 9858),
+  parallelToSupports: fromMetric(21, 34.3 / 1.3, 2.4, 7642),
+  capacityBasis: 'permissible',
+  sourceRef: WISA_SOURCE,
+}
+
 export const SHEATHING_TYPES: readonly SheathingType[] = [
   FILM_FACED_PLY_18MM,
   FILM_FACED_PLY_21MM,
+  WISA_FORM_BIRCH_18MM,
+  WISA_FORM_BIRCH_21MM,
   PLYFORM_CLASS_I_19MM,
   PLYFORM_CLASS_II_19MM,
   PLYFORM_STRUCTURAL_I_19MM,

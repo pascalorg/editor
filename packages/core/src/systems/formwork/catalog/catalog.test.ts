@@ -117,6 +117,27 @@ describe('the verification vocabulary (8.1–8.2)', () => {
     expect(shear('plyform-structural-i-3-4')).toBeGreaterThan(shear('plyform-class-i-3-4'))
   })
 
+  it('the WISA-Form Birch entries transcribe the manufacturer datasheet, and say what it does not publish (3)', () => {
+    // Open item 3's first close: f_m and E_mean come off the UPM datasheet per
+    // grain direction instead of the stated typical band, and the entry is
+    // `secondary` rather than `certified` because the datasheet does not
+    // publish rolling shear.
+    const wisa = SHEATHING_TYPES.filter((sheet) => sheet.id.startsWith('wisa-form-birch-'))
+    expect(wisa.map((sheet) => sheet.id).sort()).toEqual([
+      'wisa-form-birch-18',
+      'wisa-form-birch-21',
+    ])
+    for (const sheet of wisa) {
+      expect(sheet.verification).toBe('secondary')
+      expect(sheet.catalogSource).toMatch(/WISA-Form Birch/i)
+      expect(sheet.catalogSource).toMatch(/rolling shear not published/i)
+      // The two directions are published independently, not factored from one.
+      expect(sheet.parallelToSupports.momentKnMPerM).toBeLessThan(
+        sheet.acrossSupports.momentKnMPerM,
+      )
+    }
+  })
+
   it('an unverified value names what would certify it', () => {
     // The actionable half of the level: a gap that names the document that closes it
     // is procurement; a gap that names nothing is a number nobody can act on.

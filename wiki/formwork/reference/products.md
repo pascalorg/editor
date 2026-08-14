@@ -226,8 +226,33 @@ Misc: triangular ledge 2.70m `588170000` 0.38 kg · frontal triangular ledge `58
 
 ⚠️ Framax Xlife permissible fresh concrete pressure is widely quoted as **60 kN/m²** (Framax Xlife *plus* higher); the item list does not state it. Verify against Doka's "Framax Xlife User Information" before hardcoding.
 
-### 1.3 Doka Frami Xlife / Alu-Framax ❌
-Could not retrieve verified tables. **Frami Xlife** is the hand-set (crane-independent) light system: widths typically 0.30/0.45/0.60/0.75/0.90 m, heights 0.60/0.90/1.20/1.50/2.70 m, ~**50 kN/m²**, panel weights ~30–60 kg to stay manually handleable — treat all of this as unverified. **Alu-Framax Xlife** mirrors Framax geometry (same 15 cm grid, same accessories) in aluminium at roughly **60–65 % of steel weight**. Get real numbers from the Doka item lists at `https://www.doka.com/_ext/downloads/itemlists/...` (the `/me/91.pdf` pattern works; each system group has its own numbered PDF).
+### 1.3 Doka Frami Xlife / Alu-Framax ⚠️
+**Frami Xlife** — the hand-set (crane-independent) light system, transcribed 2026-08-15 from the official Doka item list `https://direct.doka.com/_ext/downloads/itemlists/en/189962.pdf` and the user manual `999806241_2014_09_online` (PT edition). Permitted fresh-concrete pressure **σhk,max = 40 kN/m² (DIN 18218)**, 67.5 kN/m² hydrostatic cap; tie grid at 0.75 m centres.
+
+Standard panels (width × height, weight, article no.):
+
+| Panel | kg | Art. no. | | Panel | kg | Art. no. |
+|---|---|---|---|---|---|---|
+| 0.90×1.20 | 39.0 | 588401500 | | 0.90×1.50 | 46.5 | 588406500 |
+| 0.75×1.20 | 33.5 | 588447500 | | 0.75×1.50 | 41.3 | 588448500 |
+| 0.60×1.20 | 29.5 | 588463500 | | 0.60×1.50 | 35.5 | 588464500 |
+| 0.45×1.20 | 24.0 | 588404500 | | 0.45×1.50 | 28.9 | 588409500 |
+| 0.30×1.20 | 19.5 | 588405500 | | 0.30×1.50 | 24.8 | 588410500 |
+| 0.90×2.70 | 79.2 | 588481500 | | 0.90×3.00 | 86.5 | 588411500 |
+| 0.75×2.70 | 69.5 | 588449500 | | 0.75×3.00 | 76.5 | 588412500 |
+| 0.60×2.70 | 60.5 | 588465500 | | 0.60×3.00 | 65.0 | 588413500 |
+| 0.45×2.70 | 49.5 | 588482500 | | 0.45×3.00 | 54.3 | 588414500 |
+| 0.30×2.70 | 40.3 | 588483500 | | 0.30×3.00 | 45.0 | 588415500 |
+
+Universal panels (tie-slot profiles): 0.75×1.20 = 39.0 kg (588402500), 0.75×1.50 = 49.5 (588407500), 0.75×2.70 = 83.5 (588484500), 0.75×3.00 = 93.0 (588416500), 0.90×1.20 = 49.0 (588423500), 0.90×1.50 = 61.0 (588424500), 0.90×2.70 = 106.4 (588427500), 0.90×3.00 = 117.5 (588428500).
+
+Corners (leg 20 cm): inside 1.20/1.50/2.70/3.00 m = 25.3/30.7/51.6/57.4 kg (588471000/588472000/588485000/588417000); outside = 11.0/12.9/23.8/25.0 kg (588459000/588460000/588461000/588418000); hinged inside I 1.20/1.50 = 34.1/40.8 kg (588425500/588426500); hinged outside A 1.20/1.50 = 12.9/16.0 kg (588419000/588420000).
+
+Key hardware: Frami clamp 1.2 kg (588433000), aligning clamp 3.2 (588435000), adjustable clamp 3.6 (588436000), wedge clamp 1.1 (588441000), universal waling 0.70/1.25 m = 3.7/6.4 kg (588439000/588440000), anchor waling 0.40 m = 4.4 kg (588489000), flat tie rod 10–80 cm = 2.1 kg (588475000), express anchor 16×125 mm = 0.31 kg (588631000), panel shoe 1.3 (588490000), lifting hook 7.5 (588438000); fitting timbers (Passholz) 10/5/3/2 × 9 cm at 1.50 m = 6.0/3.0/1.9/1.2 kg (176035000/176034000/176033000/176032000) and at 2.70 m = 12.3/6.1/3.7/2.5 kg (176083000/176082000/176081000/176080000); plywood supports 27/21/18 mm = 2.0/2.1/2.2 kg (588473000/588474000/588499000).
+
+❌ Still missing for a catalog seed: the tie-hole **dimension chains** per panel and the tie/anchor capacities — both sit in the manual's dimensioned drawings, which the PDF text layer does not carry. Do not seed the panel set until those are read, because the layout places ties only where a panel's `tieHoles` say the frame was drilled.
+
+**Alu-Framax Xlife** ⚠️ — mirrors Framax geometry (same 15 cm grid, same accessories) in aluminium at roughly **60–65 % of steel weight**; item list not yet transcribed.
 
 ### 1.4 MEVA / ULMA / Faresin
 - **MEVA Mammut 350** ⚠️: *"Permissible fresh concrete pressure (to DIN 18218) over entire surface of **100 kN/m²**"*, heights **350, 300, 250, 125 cm**, max panel contact area **8.75 m² (350 x 250 cm)** — the largest single panel in common use. Source: `https://www.meva.net/en-gb/products/mammut-350/`. MEVA's differentiators for your model: **alkus all-plastic formlining** (no plywood; different reuse economics — no ply replacement line item) and the **DW20 tie at only one tie per 2.5 m²**.
