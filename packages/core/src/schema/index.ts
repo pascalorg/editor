@@ -96,6 +96,7 @@ export {
   DownspoutNode,
   defaultDownspoutMetadata,
   isDefaultDownspoutNode,
+  usesAutomaticDownspoutLength,
 } from './nodes/downspout'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'
@@ -145,7 +146,9 @@ export {
 } from './nodes/item'
 export {
   LeanToConnectionMode,
+  LeanToEndCondition,
   LeanToExtensionNode,
+  LeanToResizeLock,
   LeanToRoofEdge,
 } from './nodes/lean-to-extension'
 export { LevelNode } from './nodes/level'

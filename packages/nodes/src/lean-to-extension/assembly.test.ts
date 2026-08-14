@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  BuildingNode,
   getRoofSegmentVisibleTopBounds,
   LeanToExtensionNode,
+  LevelNode,
   RoofNode,
+  resolveAutomaticDownspoutLength,
   SlabNode,
   spatialGridManager,
   WallNode,
@@ -77,6 +80,7 @@ describe('lean-to assembly', () => {
     expect(assembly.downspout.outletId).toBe(assembly.gutter.outlets[0]?.id)
     expect(assembly.downspout.strapStyle).toBe('none')
     expect(assembly.downspout.terminal).toBe('straight')
+    expect(assembly.downspout.lengthMode).toBe('to-ground')
 
     expect(assembly.posts).toHaveLength(4)
     for (const [index, post] of assembly.posts.entries()) {
@@ -88,6 +92,35 @@ describe('lean-to assembly', () => {
       expect(post.depth).toBe(0.14)
       expect(isManagedLeanToPost(post, leanTo.id)).toBe(true)
     }
+  })
+
+  test('resolves a managed upper-storey downspout to world ground', () => {
+    const building = BuildingNode.parse({ id: 'building_test', position: [0, 1, 0] })
+    const level = LevelNode.parse({
+      id: 'level_upper',
+      parentId: building.id,
+      level: 1,
+      baseElevation: 3,
+    })
+    const wall = WallNode.parse({
+      id: 'wall_upper',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const leanTo = LeanToExtensionNode.parse({ parentId: wall.id, position: [2, 0, 0.05] })
+    const assembly = createLeanToAssembly(leanTo)
+    const nodes = Object.fromEntries(
+      [building, level, wall, assembly.extension, ...assembly.children].map((node) => [
+        node.id,
+        node,
+      ]),
+    ) as Record<string, AnyNode>
+    const outlet = assembly.gutter.outlets[0]!
+
+    expect(
+      resolveAutomaticDownspoutLength(nodes, assembly.segment, assembly.gutter, outlet.offset),
+    ).toBeGreaterThan(5)
   })
 
   test('matches the connected roof material without changing the host roof', () => {

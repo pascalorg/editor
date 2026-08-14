@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { createLeanToAssembly } from './assembly'
 import { resolveLeanToWallPlacement } from './layout'
+import { leanToPlacementConflicts } from './placement-validation'
 import {
   applyLeanToRoofAttachment,
   applyLeanToWallAutoSpan,
@@ -70,9 +71,10 @@ const FloorplanLeanToExtensionTool = ({
       if (!wallPlacement) return null
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const attachment = resolveLeanToRoofAttachment(wallPlacement, hit.wall, nodes)
-      return attachment
+      const node = attachment
         ? applyLeanToRoofAttachment(wallPlacement, attachment)
         : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), hit.wall)
+      return leanToPlacementConflicts(node, hit.wall, nodes).length === 0 ? node : null
     }
     const update = (event: PointerEvent) => {
       consume(event)

@@ -9,11 +9,12 @@ import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildLeanToExtensionFloorplan } from './floorplan'
 import { buildLeanToExtensionGeometry, leanToExtensionGeometryKey } from './geometry'
 import { leanToExtensionParametrics } from './parametrics'
-import { LeanToExtensionNode } from './schema'
 import { applyLeanToRoofAttachment, resolveLeanToRoofAttachment } from './roof-attachment'
+import { LeanToExtensionNode } from './schema'
 
 const HEIGHT_HANDLE_OFFSET = 0.25
 const ROOF_EDGE_SNAP_TOLERANCE = 0.3
+const PROJECTION_HANDLE_HEIGHT = 0.2
 
 function resolveHostWall(node: LeanToExtensionNode, sceneApi: SceneApi): WallNode | null {
   if (!node.parentId) return null
@@ -66,8 +67,17 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
           shingleThickness: connected.shingleThickness,
         }
       }
+      const lowEdge = node.highEdgeHeight - node.projection * Math.tan((node.pitch * Math.PI) / 180)
       return {
         highEdgeHeight: newValue,
+        ...(node.resizeLock === 'preserve-low-edge'
+          ? {
+              pitch: Math.max(
+                1,
+                Math.min(45, (Math.atan2(newValue - lowEdge, node.projection) * 180) / Math.PI),
+              ),
+            }
+          : {}),
         connectionMode: 'manual',
         hostRoofId: undefined,
         hostRoofSegmentId: undefined,
@@ -83,10 +93,29 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
 }
 
 const leanToExtensionHandles: HandleDescriptor<LeanToExtensionNode>[] = [highEdgeHeightHandle()]
+leanToExtensionHandles.push({
+  kind: 'linear-resize',
+  axis: 'z',
+  anchor: 'min',
+  min: 0.5,
+  max: 10,
+  currentValue: (node) => node.projection,
+  apply: (node, projection) => {
+    const lowEdge = node.highEdgeHeight - node.projection * Math.tan((node.pitch * Math.PI) / 180)
+    return {
+      projection,
+      ...(node.resizeLock === 'preserve-low-edge'
+        ? { highEdgeHeight: lowEdge + projection * Math.tan((node.pitch * Math.PI) / 180) }
+        : {}),
+    }
+  },
+  placement: { position: (node) => [0, PROJECTION_HANDLE_HEIGHT, node.projection] },
+  measureLabel: 'Projection',
+})
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',
@@ -104,6 +133,7 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    roofExtension: true,
   },
   relations: {
     cascadeDelete: 'descendants',

@@ -37,8 +37,6 @@ type MepToolKind =
   | 'pipe-fitting'
   | 'pipe-trap'
 
-const ROOF_EXTENSION_KINDS = new Set(['lean-to-extension'])
-
 type BuildType = {
   /** Selection id — equals `kind` for tool types, `'painting'` for paint mode, `'mep'` for the MEP group. */
   id: string
@@ -92,7 +90,7 @@ function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
     const extension = getFloorplanNodeExtension(definition)
     if (
       baseKinds.has(kind) ||
-      ROOF_EXTENSION_KINDS.has(kind) ||
+      definition.capabilities.roofExtension ||
       !extension?.tool ||
       !isFloorplanToolAvailableInMode(extension.availableModes, floorplanMode) ||
       !presentation ||
@@ -246,7 +244,7 @@ export function BuildTab() {
     if (!registryReady) return []
     const features: RoofFeature[] = []
     for (const [kind, def] of nodeRegistry.entries()) {
-      if (def.capabilities.roofAccessory === undefined && !ROOF_EXTENSION_KINDS.has(kind)) {
+      if (def.capabilities.roofAccessory === undefined && !def.capabilities.roofExtension) {
         continue
       }
       // Door / window declare `roofAccessory` for the wall-face cut but

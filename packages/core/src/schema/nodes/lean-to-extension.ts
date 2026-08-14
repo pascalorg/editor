@@ -6,6 +6,12 @@ import { RoofNode } from './roof'
 
 export const LeanToConnectionMode = z.enum(['auto', 'manual'])
 export const LeanToRoofEdge = z.enum(['+X', '-X', '+Z', '-Z'])
+export const LeanToResizeLock = z.enum([
+  'preserve-high-edge',
+  'preserve-low-edge',
+  'preserve-pitch',
+])
+export const LeanToEndCondition = z.enum(['open', 'wall-abutment', 'joined'])
 export type LeanToConnectionMode = z.infer<typeof LeanToConnectionMode>
 export type LeanToRoofEdge = z.infer<typeof LeanToRoofEdge>
 
@@ -21,6 +27,11 @@ export const LeanToExtensionNode = BaseNode.extend({
   projection: z.number().min(0.5).max(10).default(2.5),
   highEdgeHeight: z.number().min(0.8).max(10).default(2.8),
   pitch: z.number().min(1).max(45).default(10),
+  resizeLock: LeanToResizeLock.default('preserve-high-edge'),
+  leftEndCondition: LeanToEndCondition.default('open'),
+  rightEndCondition: LeanToEndCondition.default('open'),
+  highSideFlashing: z.boolean().default(true),
+  sideFlashing: z.boolean().default(true),
 
   connectionMode: LeanToConnectionMode.default('auto'),
   hostRoofId: RoofNode.shape.id.optional(),

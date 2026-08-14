@@ -1,10 +1,10 @@
 # Tools
 
-*Editor tools structure in `apps/editor`.*
+*Editor tools and registry-owned placement interactions.*
 
-Applies to: `apps/editor/components/tools/**`.
+Applies to: `apps/editor/components/tools/**` and `packages/nodes/src/*/{tool,floorplan-tool}.tsx`.
 
-Tools are React components that capture user input (pointer, keyboard) and translate it into `useScene` mutations. They live exclusively in `apps/editor/components/tools/`.
+Tools are React components that capture user input (pointer, keyboard) and translate it into `useScene` mutations. Cross-kind and application-level tools live in `apps/editor/components/tools/`. A registry-owned node kind may colocate its 3D `def.tool` and floorplan tool extension in `packages/nodes/src/<kind>/`; this keeps the complete kind registration removable and discoverable as one unit. These components may consume the public editor interaction APIs, but must not add app-specific state or import from `apps/editor`.
 
 ## Lifecycle
 

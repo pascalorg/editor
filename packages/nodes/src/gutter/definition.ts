@@ -134,7 +134,7 @@ const gutterHandles: HandleDescriptor<GutterNodeType>[] = [
  */
 export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   kind: 'gutter',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: GutterNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -182,7 +182,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   presentation: {
     label: 'Gutter',
     description: 'Rain-water channel running along the eave of a roof segment.',
-    icon: { kind: 'url', src: '/icons/gutter.webp' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 122,
   },

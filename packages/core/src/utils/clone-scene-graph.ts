@@ -97,10 +97,7 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
         | undefined
     }
 
-    if (
-      'hostRoofSegmentId' in clonedNode &&
-      typeof clonedNode.hostRoofSegmentId === 'string'
-    ) {
+    if ('hostRoofSegmentId' in clonedNode && typeof clonedNode.hostRoofSegmentId === 'string') {
       ;(clonedNode as Record<string, unknown>).hostRoofSegmentId = idMap.get(
         clonedNode.hostRoofSegmentId,
       ) as string | undefined

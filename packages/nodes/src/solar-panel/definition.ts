@@ -273,7 +273,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   presentation: {
     label: 'Solar Panel',
     description: 'Grid of photovoltaic panels mounted on a roof segment.',
-    icon: { kind: 'url', src: '/icons/solar-panel.webp' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 123,
   },

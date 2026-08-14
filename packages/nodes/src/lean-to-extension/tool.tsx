@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react'
 import { createLeanToAssembly } from './assembly'
 import { leanToExtensionGeometryKey } from './geometry'
 import { leanToWallLocalPose, resolveLeanToWallPlacement } from './layout'
+import { leanToPlacementConflicts } from './placement-validation'
 import LeanToExtensionPreview from './preview'
 import {
   applyLeanToRoofAttachment,
@@ -78,6 +79,10 @@ const LeanToExtensionTool = () => {
       const node = attachment
         ? applyLeanToRoofAttachment(wallPlacement, attachment)
         : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), event.node)
+      if (leanToPlacementConflicts(node, event.node, nodes).length > 0) {
+        setPreview(null)
+        return null
+      }
       const pose = leanToWallLocalPose(event.node, node, resolveBaseY(event.node))
       setPreview((current) => ({
         node:

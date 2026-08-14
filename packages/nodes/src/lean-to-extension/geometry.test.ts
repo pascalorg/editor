@@ -13,13 +13,23 @@ describe('lean-to extension geometry', () => {
     expect(names).toContain('lean-to-preview-roof')
     expect(names).toContain('lean-to-ledger')
     expect(names).toContain('lean-to-front-beam')
-    expect(names).not.toContain('lean-to-wall-flashing')
+    expect(names).toContain('lean-to-high-side-flashing')
     expect(names.some((name) => name.includes('gutter'))).toBe(false)
     expect(names.some((name) => name.includes('downspout'))).toBe(false)
     expect(names.filter((name) => name.startsWith('lean-to-post-'))).toHaveLength(3)
     expect(
       names.filter((name) => name.startsWith('lean-to-rafter-')).length,
     ).toBeGreaterThanOrEqual(3)
+  })
+
+  test('models side flashing for abutting ends only', () => {
+    const node = LeanToExtensionNode.parse({
+      leftEndCondition: 'wall-abutment',
+      rightEndCondition: 'open',
+    })
+    const group = buildLeanToExtensionGeometry(node)
+    expect(group.getObjectByName('lean-to-left-side-flashing')).toBeDefined()
+    expect(group.getObjectByName('lean-to-right-side-flashing')).toBeUndefined()
   })
 
   test('leaves the roof and posts to real child nodes in scene geometry', () => {

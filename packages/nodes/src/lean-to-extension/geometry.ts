@@ -28,6 +28,10 @@ export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
     node.postDepth,
     node.postCount,
     node.postInset,
+    node.highSideFlashing,
+    node.sideFlashing,
+    node.leftEndCondition,
+    node.rightEndCondition,
   ])
 }
 
@@ -90,6 +94,39 @@ export function buildLeanToExtensionGeometry(
     colorPreset,
     sceneTheme,
   })
+
+  if (node.highSideFlashing) {
+    addBox(group, {
+      name: 'lean-to-high-side-flashing',
+      size: [layout.span + 2 * node.sideOverhang, 0.14, 0.025],
+      position: [0, layout.highEdgeHeight + 0.055, -0.0125],
+      role: 'roof',
+      colorPreset,
+      sceneTheme,
+    })
+  }
+
+  if (node.sideFlashing) {
+    for (const [side, condition] of [
+      [-1, node.leftEndCondition],
+      [1, node.rightEndCondition],
+    ] as const) {
+      if (condition === 'open') continue
+      addBox(group, {
+        name: `lean-to-${side < 0 ? 'left' : 'right'}-side-flashing`,
+        size: [0.025, 0.12, layout.slopeLength],
+        position: [
+          side * (layout.span / 2 + node.sideOverhang),
+          layout.roofCenterY + 0.04,
+          layout.roofCenterZ,
+        ],
+        rotationX: layout.pitchRadians,
+        role: 'roof',
+        colorPreset,
+        sceneTheme,
+      })
+    }
+  }
 
   addBox(group, {
     name: 'lean-to-front-beam',

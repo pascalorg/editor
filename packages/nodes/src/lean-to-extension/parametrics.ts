@@ -2,20 +2,33 @@ import type { LeanToExtensionNode, ParametricDescriptor } from '@pascal-app/core
 import { MIN_LEAN_TO_POST_HEIGHT, resolveLeanToLayout } from './layout'
 
 export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNode> = {
-  derive: (_next, patch) => ({
-    ...(patch.connectionMode === 'manual'
-      ? {
-          hostRoofId: undefined,
-          hostRoofSegmentId: undefined,
-          hostRoofEdge: undefined,
-          connectionInset: 0,
-        }
-      : {}),
-    ...('roofThickness' in patch || 'shingleThickness' in patch
-      ? { matchHostRoofStructure: false }
-      : {}),
-    ...('span' in patch ? { autoSpan: false } : {}),
-  }),
+  derive: (next, patch, previous = next) => {
+    const currentLowEdge =
+      previous.highEdgeHeight - previous.projection * Math.tan((previous.pitch * Math.PI) / 180)
+    const preserveLowEdge = next.resizeLock === 'preserve-low-edge'
+    const resizedProjection = patch.projection ?? next.projection
+    const resizedPitch = patch.pitch ?? next.pitch
+    return {
+      ...(patch.connectionMode === 'manual'
+        ? {
+            hostRoofId: undefined,
+            hostRoofSegmentId: undefined,
+            hostRoofEdge: undefined,
+            connectionInset: 0,
+          }
+        : {}),
+      ...('roofThickness' in patch || 'shingleThickness' in patch
+        ? { matchHostRoofStructure: false }
+        : {}),
+      ...('span' in patch ? { autoSpan: false } : {}),
+      ...(preserveLowEdge && ('projection' in patch || 'pitch' in patch)
+        ? {
+            highEdgeHeight:
+              currentLowEdge + resizedProjection * Math.tan((resizedPitch * Math.PI) / 180),
+          }
+        : {}),
+    }
+  },
   groups: [
     {
       label: 'Roof',
@@ -42,6 +55,11 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           min: 0.5,
           max: 10,
           step: 0.1,
+        },
+        {
+          key: 'resizeLock',
+          kind: 'enum',
+          options: ['preserve-high-edge', 'preserve-low-edge', 'preserve-pitch'],
         },
         {
           key: 'highEdgeHeight',
@@ -103,6 +121,18 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           min: 0,
           max: 1.5,
           step: 0.05,
+        },
+        { key: 'highSideFlashing', kind: 'boolean' },
+        { key: 'sideFlashing', kind: 'boolean' },
+        {
+          key: 'leftEndCondition',
+          kind: 'enum',
+          options: ['open', 'wall-abutment', 'joined'],
+        },
+        {
+          key: 'rightEndCondition',
+          kind: 'enum',
+          options: ['open', 'wall-abutment', 'joined'],
         },
       ],
     },

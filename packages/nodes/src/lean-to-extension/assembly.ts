@@ -25,7 +25,6 @@ import { resolveLeanToLayout } from './layout'
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
 const POST_INDEX_KEY = 'leanToPostIndex'
-const DEFAULT_GROUND_CLEARANCE = 0.08
 const POST_GUTTER_CLEARANCE = 0.02
 const POST_GROUND_EMBED = 0.02
 const POST_BEAM_EMBED = 0.02
@@ -292,15 +291,14 @@ export function leanToGutterLayoutPatch(
 }
 
 export function leanToDownspoutLayoutPatch(
-  segment: RoofSegmentNodeType,
+  _segment: RoofSegmentNodeType,
   gutter: GutterNodeType,
-): Pick<DownspoutNodeType, 'length' | 'diameter' | 'gutterId'> {
-  const snap = resolveEaveSnap(segment, 0, segment.depth / 2)
+): Pick<DownspoutNodeType, 'diameter' | 'gutterId' | 'lengthMode'> {
   const outlet = gutter.outlets[0]
   return {
-    length: Math.max(0.2, segment.position[1] + snap.eaveY - DEFAULT_GROUND_CLEARANCE),
     diameter: outlet?.diameter ?? 0.07,
     gutterId: gutter.id,
+    lengthMode: 'to-ground',
   }
 }
 
@@ -364,6 +362,7 @@ export function createManagedLeanToRoofAssembly(
     name: 'Lean-to Downspout',
     parentId: segment.id,
     outletId,
+    lengthMode: 'to-ground',
     strapStyle: 'none',
     terminal: 'straight',
     metadata: managedMetadata(leanTo, 'downspout'),

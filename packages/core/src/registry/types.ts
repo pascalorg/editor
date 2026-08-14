@@ -1521,6 +1521,8 @@ export type Capabilities = {
     nodes?: Readonly<Record<string, AnyNode>>,
   ) => { size: [number, number, number]; center?: [number, number, number]; centerY?: number }
   roofAccessory?: RoofAccessoryConfig
+  /** A roof-related structure surfaced with roof accessories in build palettes. */
+  roofExtension?: boolean
   /**
    * Kind cuts a hole in the ceiling surface it is attached to (e.g. recessed
    * downlights). The viewer's `CeilingSystem` calls this for each child of a
@@ -2134,7 +2136,7 @@ export type ParametricDescriptor<N> = {
    * Direct store/MCP writes bypass it — keep real invariants in
    * `invariants`.
    */
-  derive?: (next: N, patch: Partial<N>) => Partial<N>
+  derive?: (next: N, patch: Partial<N>, previous?: N) => Partial<N>
   /**
    * Cross-node companion to `derive`: after an inspector edit lands on
    * this node, return patches for OTHER nodes that must follow to keep

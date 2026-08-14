@@ -32,6 +32,7 @@ export const DownspoutNode = BaseNode.extend({
   // tool can default to the gutter's eave-Y minus building floor on
   // commit so the user doesn't have to set it on every drop.
   length: z.number().default(2.5),
+  lengthMode: z.enum(['to-ground', 'manual']).optional(),
   // Bore diameter, default 0.07 m ≈ 3″ to match the gutter outlet
   // default. Larger downspouts are common on commercial gutters.
   diameter: z.number().default(0.07),
@@ -91,4 +92,11 @@ export function isDefaultDownspoutNode(node: unknown, gutterId?: string): node i
   if (!parsed.success) return false
   if (gutterId && parsed.data.gutterId !== gutterId) return false
   return metadataRecord(parsed.data.metadata).generatedBy === DEFAULT_DOWNSPOUT_GENERATOR
+}
+
+export function usesAutomaticDownspoutLength(node: DownspoutNode): boolean {
+  return (
+    node.lengthMode === 'to-ground' ||
+    (node.lengthMode === undefined && isDefaultDownspoutNode(node))
+  )
 }

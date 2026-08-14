@@ -7,13 +7,14 @@ import {
   type DownspoutNode,
   type GutterNode,
   type LeanToExtensionNode,
+  pauseSceneHistory,
   type RoofNode,
   type RoofSegmentNode,
+  resumeSceneHistory,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import {
   createManagedLeanToPost,
   createManagedLeanToRoofAssembly,
@@ -96,9 +97,9 @@ function downspoutNeedsLayoutUpdate(
 ) {
   const expected = leanToDownspoutLayoutPatch(segment, gutter)
   return (
-    downspout.length !== expected.length ||
     downspout.diameter !== expected.diameter ||
-    downspout.gutterId !== expected.gutterId
+    downspout.gutterId !== expected.gutterId ||
+    downspout.lengthMode !== expected.lengthMode
   )
 }
 
@@ -192,25 +193,11 @@ function resolveEffectiveLeanTo(
     : clearLeanToRoofAttachment(wallSpanningLeanTo)
 }
 
-const LeanToExtensionSystem = () => {
-  const signaturesRef = useRef(new Map<AnyNodeId, string>())
-  const nodesRef = useRef<Record<AnyNodeId, AnyNode> | null>(null)
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the revision intentionally triggers a rebuild after geometry implementation changes.
-  useEffect(() => {
-    void LEAN_TO_EXTENSION_GEOMETRY_REVISION
-    for (const node of Object.values(useScene.getState().nodes)) {
-      if (node.type === 'lean-to-extension') {
-        useScene.getState().markDirty(node.id as AnyNodeId)
-      }
-    }
-  }, [LEAN_TO_EXTENSION_GEOMETRY_REVISION])
-
-  useFrame(() => {
+export function initializeLeanToExtensionSync() {
+  const signatures = new Map<AnyNodeId, string>()
+  let syncing = false
+  const reconcile = () => {
     const scene = useScene.getState()
-    if (nodesRef.current === scene.nodes) return
-    nodesRef.current = scene.nodes
-    const signatures = signaturesRef.current
     const liveIds = new Set<AnyNodeId>()
 
     for (const candidate of Object.values(scene.nodes)) {
@@ -374,11 +361,14 @@ const LeanToExtensionSystem = () => {
       }
 
       if (create.length > 0 || update.length > 0 || remove.length > 0) {
-        const temporal = useScene.temporal.getState()
-        const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
-        if (wasTracking) temporal.pause()
-        scene.applyNodeChanges({ create, update, delete: remove })
-        if (wasTracking) temporal.resume()
+        syncing = true
+        pauseSceneHistory(useScene)
+        try {
+          scene.applyNodeChanges({ create, update, delete: remove })
+        } finally {
+          resumeSceneHistory(useScene)
+          syncing = false
+        }
       }
       signatures.set(id, signature)
     }
@@ -386,7 +376,22 @@ const LeanToExtensionSystem = () => {
     for (const id of signatures.keys()) {
       if (!liveIds.has(id)) signatures.delete(id)
     }
+  }
+
+  reconcile()
+  return useScene.subscribe((state, previous) => {
+    if (!syncing && state.nodes !== previous.nodes) reconcile()
   })
+}
+
+const LeanToExtensionSystem = () => {
+  useEffect(() => {
+    void LEAN_TO_EXTENSION_GEOMETRY_REVISION
+    for (const node of Object.values(useScene.getState().nodes)) {
+      if (node.type === 'lean-to-extension') useScene.getState().markDirty(node.id as AnyNodeId)
+    }
+    return initializeLeanToExtensionSync()
+  }, [])
 
   return null
 }

@@ -1,3 +1,4 @@
+import { getWallBaseElevationForNodes } from '../../hooks/spatial-grid/spatial-grid-manager'
 import { heightAt } from '../../lib/terrain-field'
 import { persistedTerrainFieldOf } from '../../lib/terrain-source'
 import { getLevelElevations } from '../../services/storey'
@@ -5,10 +6,12 @@ import type { AnyNode, AnyNodeId } from '../types'
 import type { BuildingNode } from './building'
 import type { DownspoutNode } from './downspout'
 import { computeGutterEaveY, type GutterNode } from './gutter'
+import type { LeanToExtensionNode } from './lean-to-extension'
 import type { LevelNode } from './level'
 import type { RoofNode } from './roof'
 import type { RoofSegmentNode } from './roof-segment'
 import type { SiteNode } from './site'
+import type { WallNode } from './wall'
 
 const DEFAULT_MAX_RUN_PER_DOWNSPOUT_M = 10
 const OUTLET_END_INSET_M = 0.16
@@ -82,7 +85,12 @@ export function resolveAutomaticDownspoutLength(
 ): number {
   const roofCandidate = segment.parentId ? nodes[segment.parentId as AnyNodeId] : undefined
   const roof = roofCandidate?.type === 'roof' ? (roofCandidate as RoofNode) : undefined
-  const levelCandidate = roof?.parentId ? nodes[roof.parentId as AnyNodeId] : undefined
+  const roofParent = roof?.parentId ? nodes[roof.parentId as AnyNodeId] : undefined
+  const leanTo =
+    roofParent?.type === 'lean-to-extension' ? (roofParent as LeanToExtensionNode) : undefined
+  const wallCandidate = leanTo?.parentId ? nodes[leanTo.parentId as AnyNodeId] : undefined
+  const wall = wallCandidate?.type === 'wall' ? (wallCandidate as WallNode) : undefined
+  const levelCandidate = wall?.parentId ? nodes[wall.parentId as AnyNodeId] : roofParent
   const level = levelCandidate?.type === 'level' ? (levelCandidate as LevelNode) : undefined
   const buildingCandidate = level?.parentId ? nodes[level.parentId as AnyNodeId] : undefined
   const building =
@@ -98,7 +106,14 @@ export function resolveAutomaticDownspoutLength(
       Math.cos(gutterRotation) * gutterFloorMidZ(gutter),
   ]
   const roofPoint = rotateAndTranslate(gutterFloorPoint, segment.position, segment.rotation ?? 0)
-  const levelPoint = rotateAndTranslate(roofPoint, roof?.position, roof?.rotation ?? 0)
+  const leanToPoint = rotateAndTranslate(roofPoint, roof?.position, roof?.rotation ?? 0)
+  const wallLocalPoint = leanTo
+    ? rotateAndTranslate(leanToPoint, leanTo.position, leanTo.rotation[1])
+    : leanToPoint
+  const wallAngle = wall ? Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0]) : 0
+  const levelPoint = wall
+    ? rotateAndTranslate(wallLocalPoint, [wall.start[0], 0, wall.start[1]], -wallAngle)
+    : wallLocalPoint
   const buildingRotation = building?.rotation?.[1] ?? 0
   const worldPoint = rotateAndTranslate(levelPoint, building?.position, buildingRotation)
 
@@ -109,6 +124,8 @@ export function resolveAutomaticDownspoutLength(
   const outletWorldY =
     (building?.position?.[1] ?? 0) +
     levelBaseY +
+    (wall ? getWallBaseElevationForNodes(wall, nodes) : 0) +
+    (leanTo?.position[1] ?? 0) +
     (roof?.position?.[1] ?? 0) +
     (segment.position?.[1] ?? 0) +
     computeGutterEaveY(segment) -

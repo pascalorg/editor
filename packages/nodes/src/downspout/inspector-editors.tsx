@@ -66,7 +66,18 @@ export function DownspoutPositionEditor({ node }: { node: DownspoutNode }) {
   const handleCommit = (offset: number) => {
     // Commit once to the store, then drop the override.
     const state = useScene.getState()
-    state.updateNode(gutterId, { outlets: withOffset(offset) })
+    const outlets = withOffset(offset).map((entry) =>
+      entry.id === node.outletId ? { ...entry, generatedBy: undefined } : entry,
+    )
+    const metadata =
+      node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
+        ? { ...node.metadata }
+        : {}
+    delete metadata.generatedBy
+    state.updateNodes([
+      { id: gutterId, data: { outlets } },
+      { id: node.id as AnyNodeId, data: { metadata: metadata as DownspoutNode['metadata'] } },
+    ])
     useLiveNodeOverrides.getState().clear(gutterId)
     state.markDirty(gutterId)
   }
