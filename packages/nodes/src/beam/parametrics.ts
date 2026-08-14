@@ -5,9 +5,11 @@ import type { BeamNode } from './schema'
  * Inspector descriptor for beam.
  *
  * Length is derived from `start`/`end`, so it is not a number input the way
- * width and depth are — the endpoints are moved spatially. The formwork fields
- * (formworkType, tie/waler spacing) live on the node and flow to the assembly
- * exactly as they do for a wall, so they are exposed here too.
+ * width and depth are — the centreline is drawn with the placement tool and
+ * moved whole by the generic move (delete and re-draw to change its length;
+ * endpoint drag is a future affordance). The formwork fields (formworkType,
+ * tie/waler spacing) live on the node and flow to the assembly exactly as they
+ * do for a wall, so they are exposed here too.
  */
 export const beamParametrics: ParametricDescriptor<BeamNode> = {
   groups: [

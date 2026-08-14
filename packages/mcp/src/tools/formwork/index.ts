@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../../operations'
+import { registerAddBoxOut } from './add-box-out'
 import { registerApplyPourMove } from './apply-pour-move'
 import { registerApplySaving } from './apply-saving'
 import { registerAttachFormwork } from './attach-formwork'
@@ -199,6 +200,7 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerSetFormworkPart(server, operations)
   registerSetPourLimits(server, operations)
   registerInspectPourUnits(server, operations)
+  registerAddBoxOut(server, operations)
   registerAttachFormwork(server, operations)
   registerSetPourDate(server, operations)
   registerCommitPour(server, operations)

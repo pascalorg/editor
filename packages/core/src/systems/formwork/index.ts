@@ -10,6 +10,12 @@ export {
 } from './acquire'
 export { type BomCsvScope, bomCsv, bomCsvFilename } from './bom-csv'
 export {
+  ADD_BOX_OUT_DESCRIPTION,
+  type AddBoxOutInput,
+  BOX_OUT_HOST_TYPES,
+  buildBoxOutNode,
+} from './box-out'
+export {
   ADJUSTABLE_COLUMN_CLAMPS,
   type CapacityBasis,
   type CatalogEntry,

@@ -774,6 +774,7 @@ describe('the formwork MCP tools', () => {
         'set_pour_limits',
         'inspect_pour_units',
         'attach_formwork',
+        'add_box_out',
         'set_pour_date',
         'commit_pour',
         'apply_pour_move',
@@ -782,6 +783,56 @@ describe('the formwork MCP tools', () => {
         'apply_saving',
       ]),
     )
+  })
+
+  test('adds a box-out to a wall — parented, in the host children, and read as an opening', async () => {
+    load(walledWithOpening())
+
+    const reply = await call<{
+      boxOutId: string
+      hostId: string
+      width: number
+      height: number
+      message: string
+    }>('add_box_out', {
+      elementId: 'wall_1',
+      position: [2.5, 1.5, 0],
+      width: 0.4,
+      height: 0.6,
+      draftAngleDeg: 1.5,
+      chamferStrips: true,
+    })
+
+    expect(reply.hostId).toBe('wall_1')
+    expect(reply.message).toContain('1.5° draft')
+    expect(reply.message).toContain('chamfer strips')
+
+    // The void lands as a child of its host — the parent the shutter reads
+    // openings by, and the parent a scene load requires a node to have.
+    const nodes = bridge.getNodes() as unknown as Record<string, Record<string, unknown>>
+    const boxOut = nodes[reply.boxOutId]
+    expect(boxOut).toBeDefined()
+    expect(boxOut.parentId).toBe('wall_1')
+    expect(boxOut.type).toBe('formwork-box-out')
+    expect(boxOut.draftAngleDeg).toBe(1.5)
+    expect(boxOut.chamferStrips).toBe(true)
+    expect((nodes.wall_1.children as string[]).includes(reply.boxOutId)).toBe(true)
+
+    // The engine sees the void: the wall's coverage now carries an extra opening.
+    const bill = await call<BillReply>('inspect_project_formwork')
+    expect(bill.elements.some((element) => element.id === 'wall_1')).toBe(true)
+  })
+
+  test('refuses a box-out on anything but a wall or a slab, naming the constraint', async () => {
+    load(walledWithOpening())
+
+    const refused = await client.callTool({
+      name: 'add_box_out',
+      arguments: { elementId: 'level_1', position: [1, 1, 0], width: 0.4, height: 0.6 },
+    })
+    expect(refused.isError).toBe(true)
+    const text = (refused.content as Array<{ text: string }>)[0]?.text ?? ''
+    expect(text).toContain('wall or a slab')
   })
 
   test('solves a wall in a process with no DOM, and bills it', async () => {

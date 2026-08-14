@@ -13,6 +13,7 @@ import { BeamNode } from './schema'
  */
 export const beamDefinition: NodeDefinition<typeof BeamNode> = {
   kind: 'beam',
+  snapProfile: 'structural',
   schemaVersion: 1,
   category: 'structure',
   schema: BeamNode,
@@ -34,11 +35,28 @@ export const beamDefinition: NodeDefinition<typeof BeamNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
+    // mode-driven snapping the overhaul standardised). Endpoint drag would be
+    // nicer than translate-and-re-draw, but the beam is a centreline element
+    // with no bespoke mover yet, and the generic move is what makes a placed
+    // beam adjustable at all.
+    movable: {
+      axes: ['x', 'z'],
+      gridSnap: true,
+    },
   },
 
   geometry: buildBeamBody,
 
   parametrics: beamParametrics,
+
+  // Two-click centreline draw, the wall convention a beam runs on.
+  tool: () => import('./tool'),
+  toolHints: [
+    { key: 'Left click', label: 'Start beam' },
+    { key: 'Left click again', label: 'End beam' },
+    { key: 'Esc', label: 'Cancel' },
+  ],
 
   presentation: {
     label: 'Beam',

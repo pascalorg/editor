@@ -2,6 +2,7 @@ import { createAmazonBedrock } from '@ai-sdk/amazon-bedrock'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import {
   ACQUIRE_GAP_LABELS,
+  ADD_BOX_OUT_DESCRIPTION,
   APPLY_POUR_MOVE_DESCRIPTION,
   APPLY_SAVING_DESCRIPTION,
   ATTACH_FORMWORK_DESCRIPTION,
@@ -13,6 +14,7 @@ import {
   applyPourLimitsPatch,
   applyPourMoveInput,
   applySavingInput,
+  buildBoxOutNode,
   COMMIT_POUR_DESCRIPTION,
   COMMITMENT_GAP_LABELS,
   COST_GAP_LABELS,
@@ -133,7 +135,11 @@ export const SYSTEM_PROMPT =
   'A tall or long wall or column is not cast in one go: set_pour_limits splits it into pour units, ' +
   'each of which is one shutter erected, poured and struck on its own, with a construction ' +
   'joint between them. A slab is one pour unit — bay-splitting it is a polygon partition, not a ' +
-  'cut along a centreline, so the length and volume caps do not apply to it. inspect_pour_units ' +
+  'cut along a centreline, so the length and volume caps do not apply to it. A penetration that ' +
+  'is neither a door nor a window — a pipe sleeve, a cable penetration, a light shaft — is a ' +
+  'void, and add_box_out records it on the wall or slab it passes through: the shutter cuts ' +
+  'around it and returns the reveals, so ask where the user wants the void and its clear size ' +
+  'rather than inventing either. inspect_pour_units ' +
   'explains that split and its concrete volumes. Do ' +
   'not invent lift heights or bay lengths — they come from tie capacity, the pressure ' +
   'envelope, and the batch-plant supply rate, so ask. ' +
@@ -611,6 +617,46 @@ export function buildTools(
           discardedPartDecisions: discarded,
           joints: joints.length,
         })
+      },
+    }),
+    add_box_out: tool({
+      description: ADD_BOX_OUT_DESCRIPTION,
+      inputSchema: z.object({
+        elementId: z.string().min(1),
+        position: z.tuple([z.number(), z.number(), z.number()]),
+        width: z.number().positive(),
+        height: z.number().positive(),
+        draftAngleDeg: z.number().min(0).max(10).optional(),
+        chamferStrips: z.boolean().optional(),
+      }),
+      execute: async ({ elementId, position, width, height, draftAngleDeg, chamferStrips }) => {
+        toolCalls.push({
+          name: 'add_box_out',
+          input: { elementId, position, width, height, draftAngleDeg, chamferStrips },
+        })
+        const host = graph.nodes[elementId as keyof typeof graph.nodes] as AnyNode | undefined
+        if (host === undefined) {
+          return `Error: no element with id ${elementId}. Call list_castable_elements and read the id of the wall or slab the void is in.`
+        }
+        const built = buildBoxOutNode(host, {
+          elementId,
+          position,
+          width,
+          height,
+          draftAngleDeg,
+          chamferStrips,
+        })
+        if ('error' in built) return built.error
+        // Parented before the reply, exactly as the settings node is: a void whose
+        // parent is not in the graph would survive the reply and vanish on the next
+        // load — the loader sweeps any node whose parent is not in the scene.
+        graph.nodes[built.node.id as keyof typeof graph.nodes] = built.node as unknown as AnyNode
+        ;(host as unknown as { children?: string[] }).children = [
+          ...((host as unknown as { children?: string[] }).children ?? []),
+          built.node.id,
+        ]
+        onMutate()
+        return `ok — box-out ${built.node.id} created in ${elementId}; the host shutter re-cuts around the ${width} × ${height} m void${draftAngleDeg !== undefined ? ` at ${draftAngleDeg}° draft` : ''}${chamferStrips ? ' with chamfer strips' : ''} and the four reveals are on the parts list.`
       },
     }),
     set_pour_limits: tool({
