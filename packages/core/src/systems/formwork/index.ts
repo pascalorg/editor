@@ -56,6 +56,7 @@ export {
   PERI_TRIO,
   type PermissiblePressure,
   PLYFORM_CLASS_I_19MM,
+  PLYFORM_CLASS_II_19MM,
   PLYFORM_STRUCTURAL_I_19MM,
   PROP_TYPES,
   type PropCapacityRow,

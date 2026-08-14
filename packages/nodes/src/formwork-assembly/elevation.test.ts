@@ -393,4 +393,23 @@ describe('elevationSvg', () => {
     expect(svg).toContain('P&lt;A&gt;')
     expect(svg).not.toContain('P<A>')
   })
+
+  test('states the drawing verification level on the face when it is not certified (8.5)', () => {
+    const built = requireElevation(makeWall())
+    const svg = elevationSvg(
+      [{ title: 'Pour 1, lift 1', elevation: built.elevation }],
+      'W1',
+      'These figures are drawn from catalog values that are unverified — arrived at by stated reasoning.',
+    )
+
+    expect(svg).toContain('unverified')
+    expect(svg).toContain('catalog values')
+  })
+
+  test('a certified drawing is told nothing on the face (8.5)', () => {
+    const built = requireElevation(makeWall())
+    const svg = elevationSvg([{ title: 'Pour 1, lift 1', elevation: built.elevation }], 'W1')
+
+    expect(svg).not.toContain('unverified')
+  })
 })

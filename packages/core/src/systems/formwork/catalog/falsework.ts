@@ -68,6 +68,25 @@ export interface FalseworkBeamType extends CatalogEntry {
   cutToLengthSupported: boolean
   capacityBasis: CapacityBasis
   sourceRef: string
+  /**
+   * A second published capacity for the same beam on another basis, when two
+   * sources disagree (4.7).
+   *
+   * Recorded because a conflict is a fact about the entry, not a transcription
+   * error: H20 is published at 5 kNm permissible and at 11 kNm design, and
+   * comparing either to a load on the wrong basis over-spans a deck by a factor
+   * of two. The entry designs on `momentKnM`/`shearKn` (the conservative basis)
+   * and reports the disagreement wherever it governs.
+   */
+  conflict?: {
+    /** What the other source calls the value, so the report can name it plainly. */
+    label: string
+    momentKnM: number
+    shearKn: number
+    capacityBasis: CapacityBasis
+    /** The document the conflicting pair was read from. */
+    source: string
+  }
 }
 
 /**
@@ -211,6 +230,22 @@ export const PLYFORM_STRUCTURAL_I_19MM: SheathingType = {
   sourceRef: PLY_SOURCE,
 }
 
+/** Plyform Class II, 3/4″ — the third APA grade, from the same Table 12 row. */
+export const PLYFORM_CLASS_II_19MM: SheathingType = {
+  id: 'plyform-class-ii-3-4',
+  manufacturer: 'APA',
+  systemFamily: 'Plyform',
+  label: 'Plyform Class II, 3/4 in (19 mm)',
+  weightKg: 10.7,
+  catalogSource: 'APA Concrete Forming Design/Construction Guide, Tables 12–13',
+  verification: 'derived',
+  thicknessMm: 19.05,
+  acrossSupports: fromApa(0.454, 6.631, 0.198, 1930, 72, 1_650_000),
+  parallelToSupports: fromApa(0.392, 4.049, 0.075, 1930, 72, 1_650_000),
+  capacityBasis: 'permissible',
+  sourceRef: PLY_SOURCE,
+}
+
 /**
  * 18 mm film-faced ply on the mid-range of design.md's stated band — `f_m` 30,
  * rolling shear 2.4, `E_mean` 7500.
@@ -254,6 +289,7 @@ export const SHEATHING_TYPES: readonly SheathingType[] = [
   FILM_FACED_PLY_18MM,
   FILM_FACED_PLY_21MM,
   PLYFORM_CLASS_I_19MM,
+  PLYFORM_CLASS_II_19MM,
   PLYFORM_STRUCTURAL_I_19MM,
 ]
 
@@ -290,6 +326,18 @@ export const H20_BEAM: FalseworkBeamType = {
   cutToLengthSupported: true,
   capacityBasis: 'permissible',
   sourceRef: 'wiki/formwork/reference/products.md §2.2 — permissible/design conflict recorded',
+  // products.md §2.2: PERI-branded sheets publish 11 kNm / 24 kN as characteristic
+  // resistances. Taking those against a working load over-spans by about two, so the
+  // permissible pair above is what designs use and this is recorded rather than
+  // resolved — the disagreement is reported wherever the beam governs (4.7).
+  conflict: {
+    label: 'PERI-branded H20 sheet (characteristic resistances)',
+    momentKnM: 11,
+    shearKn: 24,
+    capacityBasis: 'design',
+    source:
+      'wiki/formwork/reference/products.md §2.2 — apacsafety.com H20 datasheet, resistance/characteristic values',
+  },
 }
 
 /** H16 — the shallower beam, scaled on section rather than published separately. */

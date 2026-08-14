@@ -97,6 +97,26 @@ describe('the verification vocabulary (8.1–8.2)', () => {
     }
   })
 
+  it('ships the full APA Plyform grade set at 3/4″, ordered Class I > Class II > Structural I (4.5)', () => {
+    // The three APA grades at the thickness the worked example is built on, so a
+    // project can state which grade it buys rather than taking the strongest as the
+    // only one. Class II is the middle grade: its section is lighter than Class I's
+    // in both orientations, and Structural I is the stronger rolling-shear ply.
+    const classes = SHEATHING_TYPES.filter((sheet) => sheet.id.startsWith('plyform-'))
+    const byId = Object.fromEntries(classes.map((sheet) => [sheet.id, sheet]))
+    expect(Object.keys(byId).sort()).toEqual([
+      'plyform-class-i-3-4',
+      'plyform-class-ii-3-4',
+      'plyform-structural-i-3-4',
+    ])
+    const across = (id: string) => byId[id]?.acrossSupports.momentKnMPerM as number
+    // Class I is stiffer than Class II across the grain; Structural I's edge is its
+    // rolling shear, not its bending.
+    expect(across('plyform-class-i-3-4')).toBeGreaterThan(across('plyform-class-ii-3-4'))
+    const shear = (id: string) => byId[id]?.acrossSupports.shearKnPerM as number
+    expect(shear('plyform-structural-i-3-4')).toBeGreaterThan(shear('plyform-class-i-3-4'))
+  })
+
   it('an unverified value names what would certify it', () => {
     // The actionable half of the level: a gap that names the document that closes it
     // is procurement; a gap that names nothing is a number nobody can act on.

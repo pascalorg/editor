@@ -222,4 +222,27 @@ describe('cutSheetSvg', () => {
     expect(svg).toContain('Cut sheet — A &amp; B')
     expect(svg).not.toContain('<1>')
   })
+
+  test('states the takeoff verification level on the face when it is not certified (8.5)', () => {
+    // The printed sheet is what gets emailed on, so the figures' level has to travel with
+    // the file — and a sheet that never says its numbers are unverified reads as certified.
+    const sheet = nested([{ mark: 'P1', widthMm: 600, heightMm: 2400 }])
+    const svg = cutSheetSvg(
+      [{ sheet, plan: sheetCutSequence(sheet) }],
+      'Level 1',
+      [],
+      'The takeoff as a whole is unverified, so its figures carry that level.',
+    )
+
+    expect(svg).toContain('unverified')
+    expect(svg).toContain('figures carry that level')
+  })
+
+  test('a certified takeoff is told nothing on the face, which is the point of the fold (8.5)', () => {
+    const sheet = nested([{ mark: 'P1', widthMm: 600, heightMm: 2400 }])
+    const svg = cutSheetSvg([{ sheet, plan: sheetCutSequence(sheet) }], 'Level 1')
+
+    expect(svg).not.toContain('unverified')
+    expect(svg).not.toContain('figures carry that level')
+  })
 })

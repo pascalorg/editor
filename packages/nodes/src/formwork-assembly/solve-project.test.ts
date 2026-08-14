@@ -3,7 +3,12 @@ import type { AnyNode, ColumnNode, SlabNode, WallNode } from '@pascal-app/core'
 import type { FormworkAcquisition } from '@pascal-app/core/formwork'
 import { acquireCaveats } from '@pascal-app/core/formwork'
 import type { FormworkAssemblyNode } from './schema'
-import { projectFormworkCaveats, type SolvedElement, solveProjectFormwork } from './solve-project'
+import {
+  projectFormworkCaveats,
+  type SolvedElement,
+  solveProjectFormwork,
+  takeoffVerificationNote,
+} from './solve-project'
 
 /**
  * The job's formwork rather than one element's.
@@ -2340,6 +2345,65 @@ describe('projectFormworkCaveats', () => {
         (c) => c.includes('unverified') && c.includes('film-faced-ply-18'),
       ),
     ).toBe(true)
+  })
+
+  test('takeoffVerificationNote is the caveat one wording, and the drawings print it (8.5)', () => {
+    // The note is what the drawings and the CSV print on their face; it has to be the
+    // same sentence the caveats list carries, or a document and the panel disagree about
+    // the level of the same figures. The absent-when-certified branch is the core fold's
+    // own rule (`weakestVerification` in catalog.test.ts), which every consumer shares.
+    const solution = solveProjectFormwork(
+      sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0)),
+    )
+    const caveat = projectFormworkCaveats(solution).find((c) => c.includes('unverified'))
+    expect(takeoffVerificationNote(solution)).toBe(caveat)
+    expect(takeoffVerificationNote(solution)).toContain('film-faced-ply-18')
+  })
+
+  test('certifying a constant changes the level with the number, each named (8.8)', () => {
+    // The attribution claim: the only input that changed between the two solves is the
+    // sheathing constant, so the movement in the takeoff's level is attributable to the
+    // certification rather than an unexplained shift — the constant is named in the before
+    // state (the unverified note) and named out of the after state, with the level that
+    // replaced it belonging to a different, named constant. The settings node sits on the
+    // level so both readers find it: the geometry climbs the host's ancestors and the
+    // takeoff scans the scene, and a constant only one of them can see would move the
+    // parts and not the bill or the reverse.
+    const slab = (sheathingId: string) => {
+      const nodes = sceneOf(makeSlab('slab_1'), makeAssembly('formwork-assembly_1', 'slab_1', 0, 0))
+      const level = nodes.level_1 as unknown as { children: string[] }
+      level.children = [...level.children, 'formwork-settings_1']
+      nodes['formwork-settings_1'] = {
+        object: 'node',
+        id: 'formwork-settings_1',
+        type: 'formwork-settings',
+        parentId: 'level_1',
+        visible: true,
+        metadata: {},
+        children: [],
+        parts: { sheathingId },
+      } as unknown as AnyNode
+      return solveProjectFormwork(nodes)
+    }
+    const provisional = slab('film-faced-ply-18')
+    const certified = slab('plyform-class-i-3-4')
+
+    const provisionalNote = takeoffVerificationNote(provisional)
+    const certifiedNote = takeoffVerificationNote(certified)
+    expect(provisionalNote).toContain('film-faced-ply-18')
+    expect(provisionalNote).toContain('unverified')
+    // The certified grade carries derived values, so the deck no longer drags the takeoff
+    // down to unverified — what is left is the H20 beam's secondary, a different constant,
+    // and the fold says so rather than silently improving the takeoff's level.
+    expect(certifiedNote).not.toContain('unverified')
+    expect(certifiedNote).not.toContain('film-faced-ply-18')
+    expect(certifiedNote).toContain('secondary')
+    // The level follows the constant down to the parts: provisional sheathing parts are
+    // unverified, the same scene on the certified grade has none.
+    const provisionalParts = provisional.elements[0]?.shutters[0]?.parts ?? []
+    const certifiedParts = certified.elements[0]?.shutters[0]?.parts ?? []
+    expect(provisionalParts.some((part) => part.verification === 'unverified')).toBe(true)
+    expect(certifiedParts.some((part) => part.verification === 'unverified')).toBe(false)
   })
 })
 

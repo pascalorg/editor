@@ -12,6 +12,8 @@ import {
   COMMITMENT_GAP_LABELS,
   COST_GAP_LABELS,
   CUT_GAP_LABELS,
+  FORMWORK_SYSTEMS,
+  type FormworkSavings,
   formatMoney,
   LABOUR_GAP_LABELS,
   LOGISTICS_GAP_LABELS,
@@ -19,10 +21,13 @@ import {
   PART_KIND_LABELS,
   PRECEDENCE_REASON_LABELS,
   RESEQUENCE_REFUSAL_LABELS,
+  SAVING_CLASS_LABELS,
+  SAVING_CLASSES,
   SCHEDULE_GAP_LABELS,
   SEQUENCE_GAP_LABELS,
   STRIKE_TARGET_LABELS,
   STRIKING_STANDARD_LABELS,
+  savingCaveats,
   scheduleInPourOrder,
   scheduleOccupancyDays,
 } from '@pascal-app/core/formwork'
@@ -30,10 +35,22 @@ import { ActionButton, downloadText, PanelSection } from '@pascal-app/editor'
 import { Download } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { type FormworkMoveOutcome, moveOutcome, plannedMove } from './apply-move'
+import { type FormworkSavingOutcome, plannedSaving, savingOutcome } from './apply-saving'
 import { FormworkCutSheet } from './cut-sheet'
 import { Note, Readout, Section, WarningLine } from './report-ui'
-import { type ProjectFormwork, projectFormworkCaveats, solveProjectFormwork } from './solve-project'
-import { takeoffCsv, useProjectFormwork, useTakeoffLevels, useValueOptions } from './takeoff'
+import {
+  type ProjectFormwork,
+  projectFormworkCaveats,
+  solveProjectFormwork,
+  takeoffVerificationNote,
+} from './solve-project'
+import {
+  takeoffCsv,
+  useProjectFormwork,
+  useSavings,
+  useTakeoffLevels,
+  useValueOptions,
+} from './takeoff'
 import {
   VALUE_GAP_LABELS,
   VALUE_REFUSAL_LABELS,
@@ -159,6 +176,67 @@ function useApplyMove(solution: ProjectFormwork, levelId?: string) {
 }
 
 /**
+ * Taking a saving, and then measuring it.
+ *
+ * The same division `useApplyMove` draws, and the same second half: the proposal was priced on a
+ * solve, the write lands in the scene, and the verdict comes from re-solving the store's nodes
+ * rather than from the claim. A substitution writes the candidate system onto every shutter in
+ * scope in one history step; a cycle is the move's own dated writes through the same gate a
+ * hand-made `set_pour_date` passes. Nothing here commits, hires or orders anything — a saving
+ * records a design decision, and the commitment to a supplier remains a separate act.
+ */
+function useApplySaving(
+  solution: ProjectFormwork,
+  levelId: string | undefined,
+  savings: FormworkSavings | undefined,
+) {
+  return useCallback(
+    (key: string): FormworkSavingOutcome | { refusal: string } => {
+      if (savings === undefined) return { refusal: 'Read the savings first.' }
+      const plan = plannedSaving(savings, solution, key)
+      if (plan.refusal !== undefined) return { refusal: plan.refusal }
+
+      const writes: Array<{ id: AnyNodeId; patch: Partial<AnyNode> }> = []
+      if (plan.class === 'substitution') {
+        for (const write of plan.writes ?? []) {
+          const id = write.assemblyId as AnyNodeId
+          if (useScene.getState().nodes[id] === undefined) {
+            return { refusal: `${write.assemblyId} is no longer in the scene.` }
+          }
+          if (FORMWORK_SYSTEMS[write.systemId] === undefined) {
+            return { refusal: `${write.systemId} is not a registered formwork system.` }
+          }
+          writes.push({ id, patch: { systemId: write.systemId } as Partial<AnyNode> })
+        }
+      } else {
+        // A cycle is the move's own writes, through the same gate a hand-made set_pour_date
+        // passes — the shift is arithmetic on a date the project stated.
+        for (const write of plan.movePlan?.writes ?? []) {
+          const id = write.assemblyId as AnyNodeId
+          if (useScene.getState().nodes[id] === undefined) {
+            return { refusal: `${write.assemblyId} is no longer in the scene.` }
+          }
+          const dated = applyPourDatePatch({ pourAt: write.pourAt })
+          if (dated.error !== undefined) return { refusal: dated.error }
+          writes.push({ id, patch: dated.writes as Partial<AnyNode> })
+        }
+      }
+
+      runAsSingleSceneHistoryStep(useScene, () => {
+        const scene = useScene.getState()
+        for (const write of writes) scene.updateNode(write.id, write.patch)
+      })
+
+      const after = solveProjectFormwork(useScene.getState().nodes as Record<string, AnyNode>, {
+        parentId: levelId,
+      })
+      return savingOutcome(solution, after, plan)
+    },
+    [levelId, solution, savings],
+  )
+}
+
+/**
  * What the last move did, held at panel level rather than on the row.
  *
  * `FixOutcomeNote`'s reason: a move that works removes its own row — the shortage it was against
@@ -180,6 +258,27 @@ function MoveOutcomeNote({ taken }: { taken: TakenMove }) {
       {'refusal' in result || !booked
         ? ''
         : ' The new day is booked, so the takeoff will not offer to move this pour again and will report it if the date changes.'}
+    </div>
+  )
+}
+
+interface TakenSaving {
+  result: FormworkSavingOutcome | { refusal: string }
+}
+
+/** What the last saving measured, in the same colours the move's verdict uses. */
+function SavingOutcomeNote({ taken }: { taken: TakenSaving }) {
+  const { result } = taken
+  const bad = 'refusal' in result || !result.achieved || result.unmeasured !== undefined
+  return (
+    <div
+      className={
+        bad
+          ? 'px-1 text-[10px] text-amber-500/90 leading-snug'
+          : 'px-1 text-[10px] text-emerald-400/90 leading-snug'
+      }
+    >
+      {'refusal' in result ? result.refusal : result.message}
     </div>
   )
 }
@@ -225,6 +324,10 @@ export function FormworkTakeoffPanel() {
   const [taken, setTaken] = useState<TakenMove | undefined>(undefined)
   const [compare, setCompare] = useState(false)
   const value = useValueOptions(solution, { levelId: scopedLevel?.id }, compare)
+  const [savingsAsked, setSavingsAsked] = useState(false)
+  const savings = useSavings(solution, { levelId: scopedLevel?.id }, savingsAsked)
+  const applySaving = useApplySaving(solution, scopedLevel?.id, savings)
+  const [savingTaken, setSavingTaken] = useState<TakenSaving | undefined>(undefined)
   const takeMove = (key: string, book: boolean) =>
     setTaken({ result: applyMove(key, book), booked: book })
 
@@ -1219,6 +1322,7 @@ export function FormworkTakeoffPanel() {
                 sheetIndex={cutSheetIndex}
                 sheets={cutList.list.sheets}
                 subject={subject}
+                verificationNote={takeoffVerificationNote(solution)}
               />
             )}
           </div>
@@ -1280,6 +1384,74 @@ export function FormworkTakeoffPanel() {
                 <Note key={caveat}>{caveat}</Note>
               ))}
             </Section>
+          )}
+        </PanelSection>
+      )}
+
+      {/* The savings read is the same class of cost as the comparison above — every
+          substitution is the whole scope re-solved in another system — so it is behind a
+          button for the same reason, and it is the one section here whose rows can be taken. */}
+      {solution.shutterCount > 0 && (
+        <PanelSection title="Savings">
+          {savings === undefined ? (
+            <div className="space-y-1.5">
+              <ActionButton label="Find savings" onClick={() => setSavingsAsked(true)} />
+              <Note>
+                The cheaper ways to form this scope, each priced from the same cost model as the
+                printed total and keyed by the decision it proposes rather than by the money. A
+                substitution is a second solve per system, so this runs when you ask for it — and
+                taking one records a design decision, never a hire or an order.
+              </Note>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {savings.proposals.length === 0 ? (
+                <Note>
+                  No saving is offered here —{' '}
+                  {SAVING_CLASSES.map((savingClass) => {
+                    const refusal = savings.classes[savingClass]?.refusal
+                    if (refusal === undefined) return null
+                    return `${SAVING_CLASS_LABELS[savingClass]}: ${
+                      refusal.kind === 'nothing-cheaper' ? refusal.note : refusal.needs
+                    }`
+                  })
+                    .filter(Boolean)
+                    .join(' ')}
+                </Note>
+              ) : (
+                savings.proposals.map((proposal) => (
+                  <div className="space-y-0.5 border-border/30 border-t pt-1" key={proposal.key}>
+                    <Readout
+                      label={SAVING_CLASS_LABELS[proposal.class]}
+                      value={
+                        proposal.saving === undefined
+                          ? '—'
+                          : formatMoney(
+                              -proposal.saving.delta,
+                              proposal.currency ?? savings.currency,
+                            )
+                      }
+                      value2={proposal.description}
+                    />
+                    {proposal.tradeOffs.map((axis) => (
+                      <div className="text-[10px] text-muted-foreground" key={axis.label}>
+                        {axis.label} {axis.from} → {axis.to} {axis.unit}
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-1.5">
+                      <ActionButton
+                        label="Take this saving"
+                        onClick={() => setSavingTaken({ result: applySaving(proposal.key) })}
+                      />
+                      {savingTaken !== undefined && <SavingOutcomeNote taken={savingTaken} />}
+                    </div>
+                  </div>
+                ))
+              )}
+              {savingCaveats(savings).map((caveat) => (
+                <Note key={caveat}>{caveat}</Note>
+              ))}
+            </div>
           )}
         </PanelSection>
       )}

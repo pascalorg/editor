@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../../operations'
 import { registerApplyPourMove } from './apply-pour-move'
+import { registerApplySaving } from './apply-saving'
 import { registerAttachFormwork } from './attach-formwork'
 import { registerCommitPour } from './commit-pour'
 import { registerCompareFormworkSystems } from './compare-formwork-systems'
@@ -8,6 +9,7 @@ import { registerFixFormworkFinding } from './fix-formwork-finding'
 import { registerFormworkCutSheet } from './formwork-cut-sheet'
 import { registerFormworkElevation } from './formwork-elevation'
 import { registerFormworkRfis } from './formwork-rfis'
+import { registerFormworkSavings } from './formwork-savings'
 import { registerInspectFormworkParts } from './inspect-formwork-parts'
 import { registerInspectFormworkSettings } from './inspect-formwork-settings'
 import { registerInspectPourUnits } from './inspect-pour-units'
@@ -202,9 +204,12 @@ export function registerFormworkTools(server: McpServer, operations: SceneOperat
   registerCommitPour(server, operations)
   registerApplyPourMove(server, operations)
   registerCompareFormworkSystems(server, operations)
+  registerFormworkSavings(server, operations)
+  registerApplySaving(server, operations)
 }
 
 export { applyPourMoveOutput } from './apply-pour-move'
+export { applySavingOutput } from './apply-saving'
 export { attachFormworkOutput } from './attach-formwork'
 export { commitPourOutput } from './commit-pour'
 export { compareFormworkSystemsOutput } from './compare-formwork-systems'
@@ -212,6 +217,7 @@ export { fixFormworkFindingOutput } from './fix-formwork-finding'
 export { formworkCutSheetOutput } from './formwork-cut-sheet'
 export { formworkElevationOutput } from './formwork-elevation'
 export { formworkRfisOutput } from './formwork-rfis'
+export { formworkSavingsOutput } from './formwork-savings'
 export { inspectFormworkPartsOutput } from './inspect-formwork-parts'
 export { inspectFormworkSettingsOutput } from './inspect-formwork-settings'
 export { inspectPourUnitsOutput } from './inspect-pour-units'

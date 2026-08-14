@@ -73,9 +73,9 @@ import {
   strikingStandardFor,
   systemSupportsKind,
   toCastableElement,
-  type Verification,
   unformable,
   unformableCaveats,
+  type Verification,
   weakestVerification,
 } from '@pascal-app/core/formwork'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
@@ -858,24 +858,8 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   // a reader must not sign. Beside the weight and the lifting sentences, because it is the same
   // kind of claim — a figure that is a floor rather than an answer. Absent where every line is
   // certified: a fully certified takeoff is told nothing, which is the point of the fold.
-  const levels = solution.bom
-    .map((line) => line.verification)
-    .filter((level) => level !== undefined)
-  const weakest = weakestVerification(levels as Verification[])
-  if (weakest !== undefined && weakest !== 'certified') {
-    const atLevel = solution.bom.filter((line) => line.verification === weakest)
-    const names = atLevel.map((line) => line.catalogId ?? line.description).slice(0, 5)
-    const label: Record<Exclude<Verification, 'certified'>, string> = {
-      derived: 'derived by a stated method from cited values',
-      secondary:
-        "read off a dealer or secondary listing rather than the manufacturer's own table",
-      unverified:
-        'unverified — arrived at by stated reasoning with nothing published to check it against',
-    }
-    out.push(
-      `The ${names.length === 1 ? 'line' : 'lines'} ${names.join(', ')} ${names.length === 1 ? 'is built from values that are' : 'are built from values that are'} ${label[weakest]}. The takeoff as a whole is ${weakest}, so its figures carry that level until the cited document is transcribed.`,
-    )
-  }
+  const note = takeoffVerificationNote(solution)
+  if (note !== undefined) out.push(note)
   if (solution.supply && solution.supply.ownedQuantity > 0) {
     out.push(
       'The owned/hired split is for this scope alone. The same owned stock serves the next pour once it is stripped, so two scopes’ owned figures are not a total.',
@@ -978,6 +962,32 @@ export function projectFormworkCaveats(solution: ProjectFormwork): string[] {
   // the whole plan behind it to read as the conflict it is rather than as a complaint.
   if (solution.pours) out.push(...formworkPoursCaveats(solution.pours))
   return out
+}
+
+/**
+ * The takeoff's weakest verification level as one sentence, or `undefined` where
+ * every line is certified.
+ *
+ * The one wording for the takeoff's verification claim, so the caveats list, the CSV,
+ * and every printed document state it in the same terms (8.5). A document carries its
+ * figures' level on its own face rather than only in the application that made it,
+ * because the printed sheet is what gets emailed on.
+ */
+export function takeoffVerificationNote(solution: ProjectFormwork): string | undefined {
+  const levels = solution.bom
+    .map((line) => line.verification)
+    .filter((level) => level !== undefined)
+  const weakest = weakestVerification(levels as Verification[])
+  if (weakest === undefined || weakest === 'certified') return undefined
+  const atLevel = solution.bom.filter((line) => line.verification === weakest)
+  const names = atLevel.map((line) => line.catalogId ?? line.description).slice(0, 5)
+  const label: Record<Exclude<Verification, 'certified'>, string> = {
+    derived: 'derived by a stated method from cited values',
+    secondary: "read off a dealer or secondary listing rather than the manufacturer's own table",
+    unverified:
+      'unverified — arrived at by stated reasoning with nothing published to check it against',
+  }
+  return `The ${names.length === 1 ? 'line' : 'lines'} ${names.join(', ')} ${names.length === 1 ? 'is built from values that are' : 'are built from values that are'} ${label[weakest]}. The takeoff as a whole is ${weakest}, so its figures carry that level until the cited document is transcribed.`
 }
 
 /** The elements a scope names, for a caller that only needs the count. */

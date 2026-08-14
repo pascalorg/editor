@@ -1,7 +1,12 @@
 'use client'
 
 import type { AnyNodeId } from '@pascal-app/core'
-import { elevationCaveats, type ShutterElevation } from '@pascal-app/core/formwork'
+import {
+  elevationCaveats,
+  type ShutterElevation,
+  type Verification,
+  weakestVerification,
+} from '@pascal-app/core/formwork'
 import { ActionButton, downloadText } from '@pascal-app/editor'
 import { Download } from 'lucide-react'
 import { useState } from 'react'
@@ -182,11 +187,14 @@ export function FormworkElevation({
   choices,
   onChoiceChange,
   subject,
+  verificationNote,
 }: {
   choiceIndex: number
   choices: readonly ElevationChoice[]
   onChoiceChange: (index: number) => void
   subject: string
+  /** The takeoff's weakest verification level, to state on the issued drawing (8.5). */
+  verificationNote?: string
 }) {
   if (choices.length === 0) return null
   // A pour deleted out from under the selector — a lift-height edit, a scope change — would
@@ -247,7 +255,7 @@ export function FormworkElevation({
         label="Download elevation"
         onClick={() =>
           downloadText(
-            elevationSvg(pages, subject),
+            elevationSvg(pages, subject, verificationNote),
             `shutter-elevation-${subject.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.svg`,
             'image/svg+xml;charset=utf-8',
           )
@@ -285,12 +293,27 @@ export function FormworkElevationSection({ hostId }: { hostId: AnyNodeId | undef
   }
   if (choices.length === 0) return null
 
+  // The drawing's own fold, at the element scope the drawing is issued for: the weakest
+  // level across the parts on this shutter, named on the face the way the takeoff names it
+  // (8.5). A site-made part depends on no catalog entry and carries no level, so only the
+  // bought parts count — which is the honest fold for figures drawn from the catalog.
+  const levels = shutters
+    .flatMap((shutter) => shutter.parts)
+    .map((part) => part.verification)
+    .filter((level) => level !== undefined)
+  const weakest = weakestVerification(levels as Verification[])
+  const verificationNote =
+    weakest === undefined || weakest === 'certified'
+      ? undefined
+      : `These figures are drawn from catalog values that are ${weakest === 'derived' ? 'derived by a stated method from cited values' : weakest === 'secondary' ? "read off a dealer or secondary listing rather than the manufacturer's own table" : 'unverified — arrived at by stated reasoning with nothing published to check it against'}. The drawing carries that level until the cited document is transcribed.`
+
   return (
     <FormworkElevation
       choiceIndex={choiceIndex}
       choices={choices}
       onChoiceChange={setChoiceIndex}
       subject={`wall ${hostId ?? ''}`.trim()}
+      verificationNote={verificationNote}
     />
   )
 }

@@ -1999,3 +1999,178 @@ describe('compare_formwork_systems', () => {
     expect(reply).toContain('no level with id wall_1')
   })
 })
+
+/**
+ * The cheaper way to form this job, and taking it, from the chat surface.
+ *
+ * `apply-saving.test.ts` owns the derivation and the plan/measure pair; what only this
+ * surface can get wrong is the shape the model reads and the write it can commit: a
+ * proposal whose key does not come from the same reply as its figures, a class that
+ * answers with silence instead of the spec's two-branch refusal, and an apply that
+ * writes a decision the scene has already moved past.
+ */
+describe('formwork_savings', () => {
+  interface SavingsReply {
+    scope: string
+    currency: string | null
+    proposals: Array<{
+      class: string
+      key: string
+      target: string
+      alternative: string
+      saving?: { label: string; from: number; to: number; delta: number; unit: string }
+      tradeOffs: Array<{ label: string; from: number; to: number; delta: number; unit: string }>
+      write: string
+    }>
+    classes: Record<
+      string,
+      { proposals: unknown[]; refusal?: { kind: string; note?: string; needs?: string } }
+    >
+    caveats: string[]
+  }
+
+  const shutterIds = (graph: SceneGraph): string[] =>
+    Object.values(graph.nodes as unknown as Record<string, { id: string; type: string }>)
+      .filter((node) => node.type === 'formwork-assembly')
+      .map((node) => node.id)
+
+  /** Three walls in cast order, two on one day, a rack one short of the peak — priced or not. */
+  const shortWithRates = async (priced: boolean) => {
+    const built = async (settings: Record<string, unknown>) => {
+      const { graph, tools } = scene()
+      for (const [index, elementId] of ['wall_1', 'wall_2', 'wall_3'].entries()) {
+        await shutter(tools, elementId)
+        await call(tools, 'set_element_construction', { elementId, castOrder: index + 1 })
+      }
+      await call(tools, 'set_formwork_settings', { schedule: { returnLeadDays: 3 }, ...settings })
+      const dates = ['2026-03-02', '2026-03-02', '2026-04-06']
+      for (const [index, id] of shutterIds(graph).entries())
+        await call(tools, 'set_pour_date', { assemblyId: id, pourAt: dates[index] as string })
+      return { graph, tools, solved: await project(tools) }
+    }
+    const empty = await built({ stock: { owned: {} } })
+    const panel = empty.solved.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+    const short = await built({
+      stock: { owned: { [panel.catalogId]: panel.mostAtOnce - 1 } },
+      ...(priced
+        ? {
+            rates: {
+              currency: 'GBP',
+              byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } },
+            },
+          }
+        : {}),
+    })
+    return { graph: short.graph, tools: short.tools, panel }
+  }
+
+  test('a priced dated scope offers a cycle saving, keyed so the write takes it whole', async () => {
+    const { tools } = await shortWithRates(true)
+
+    const reply = JSON.parse(await call(tools, 'formwork_savings', {})) as SavingsReply
+
+    const cycle = reply.proposals.filter((proposal) => proposal.class === 'cycle')
+    expect(cycle.length).toBeGreaterThan(0)
+    const proposal = cycle[0] as {
+      key: string
+      saving: { label: string; from: number; to: number; delta: number; unit: string }
+      write: string
+    }
+    expect(proposal.write).toBe('pour-move')
+    expect(proposal.saving.to).toBe(0)
+    expect(proposal.saving.delta).toBeLessThan(0)
+    expect(reply.caveats.join(' ')).toContain('no total of them is offered')
+  })
+
+  test('an unpriced dated scope says the cycle class needs the hire rates, not that nothing clears', async () => {
+    const { tools } = await shortWithRates(false)
+
+    const reply = JSON.parse(await call(tools, 'formwork_savings', {})) as SavingsReply
+
+    expect(reply.proposals.filter((entry) => entry.class === 'cycle')).toEqual([])
+    expect(reply.classes.cycle.refusal?.kind).toBe('missing-input')
+    expect(reply.classes.cycle.refusal?.needs).toContain('hire rates')
+  })
+})
+
+describe('apply_saving', () => {
+  interface ApplySavingReply {
+    savingKey: string
+    class: string
+    achieved: boolean
+    predicted: { amount: number; currency: string | null } | null
+    measured: { amount: number; currency: string | null } | null
+    unmeasured: string | null
+    moved?: Array<{ assemblyId: string; from: string; to: string }>
+    message: string
+  }
+
+  const dateOf = (graph: SceneGraph, id: string) =>
+    (graph.nodes as unknown as Record<string, { pourAt?: string }>)[id]?.pourAt
+
+  const shutterIds = (graph: SceneGraph): string[] =>
+    Object.values(graph.nodes as unknown as Record<string, { id: string; type: string }>)
+      .filter((node) => node.type === 'formwork-assembly')
+      .map((node) => node.id)
+
+  const pricedShort = async () => {
+    const built = async (settings: Record<string, unknown>) => {
+      const { graph, tools } = scene()
+      for (const [index, elementId] of ['wall_1', 'wall_2', 'wall_3'].entries()) {
+        await shutter(tools, elementId)
+        await call(tools, 'set_element_construction', { elementId, castOrder: index + 1 })
+      }
+      await call(tools, 'set_formwork_settings', { schedule: { returnLeadDays: 3 }, ...settings })
+      const dates = ['2026-03-02', '2026-03-02', '2026-04-06']
+      for (const [index, id] of shutterIds(graph).entries())
+        await call(tools, 'set_pour_date', { assemblyId: id, pourAt: dates[index] as string })
+      return { graph, tools }
+    }
+    const empty = await built({ stock: { owned: {} } })
+    const emptySolved = await project(empty.tools)
+    const panel = emptySolved.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+    const short = await built({
+      stock: { owned: { [panel.catalogId]: panel.mostAtOnce - 1 } },
+      rates: {
+        currency: 'GBP',
+        byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 30 } },
+      },
+    })
+    const savings = JSON.parse(await call(short.tools, 'formwork_savings', {})) as {
+      proposals: Array<{ class: string; key: string }>
+    }
+    const proposal = savings.proposals.find((entry) => entry.class === 'cycle') as {
+      key: string
+    }
+    return { graph: short.graph, tools: short.tools, proposal }
+  }
+
+  test('the key the read printed is the key this takes, and every date it named lands', async () => {
+    const { graph, tools, proposal } = await pricedShort()
+
+    const reply = JSON.parse(
+      await call(tools, 'apply_saving', { savingKey: proposal.key }),
+    ) as ApplySavingReply
+
+    expect(reply.savingKey).toBe(proposal.key)
+    expect(reply.achieved).toBe(true)
+    expect(reply.moved?.length).toBeGreaterThan(0)
+    for (const write of reply.moved ?? []) expect(dateOf(graph, write.assemblyId)).toBe(write.to)
+    // The figure quoted is measured off a second solve, not read back off the proposal.
+    expect(reply.measured?.amount).toBeGreaterThan(0)
+    expect(reply.message).toContain('measured')
+  })
+
+  test('a key the scene has moved past is refused rather than written', async () => {
+    const { graph, tools, proposal } = await pricedShort()
+    await call(tools, 'apply_saving', { savingKey: proposal.key })
+    const dates = Object.fromEntries(
+      shutterIds(graph).map((id) => [id, dateOf(graph, id)] as const),
+    )
+
+    const again = await call(tools, 'apply_saving', { savingKey: proposal.key })
+
+    expect(again).toContain('superseded')
+    for (const [id, pourAt] of Object.entries(dates)) expect(dateOf(graph, id)).toBe(pourAt)
+  })
+})

@@ -6,7 +6,7 @@ import {
   STOCKABLE_CATALOG_PARTS,
   savingKey,
 } from '@pascal-app/core/formwork'
-import { formworkSavings, plannedSaving, savingOutcome } from './apply-saving'
+import { formworkSavings, keyedSavings, plannedSaving, savingOutcome } from './apply-saving'
 import type { FormworkAssemblyNode } from './schema'
 import { type ProjectFormwork, solveProjectFormwork } from './solve-project'
 
@@ -235,6 +235,34 @@ describe('formworkSavings', () => {
     ] as const) {
       expect(savings.classes[savingClass]).toBeDefined()
     }
+  })
+})
+
+describe('the savings parity contract (13.4)', () => {
+  test('the read is stable across re-derivation, and the write gate accepts a key from that read', () => {
+    // The claim the three surfaces share: every one of them prints `keyedSavings` off one
+    // `formworkSavings` call and gates the write through the same `plannedSaving`, so the
+    // parity contract is that the read reproduces itself and that a key taken from it is
+    // accepted rather than refused. A key that only worked on the surface that produced it
+    // would break the round trip the pair exists for.
+    const nodes = shortScene(true)
+    const solution = solveProjectFormwork(nodes)
+
+    const first = keyedSavings(formworkSavings(nodes, {}, solution))
+    const again = keyedSavings(formworkSavings(nodes, {}, solveProjectFormwork(nodes)))
+
+    expect(first.length).toBeGreaterThan(0)
+    expect(again.map((entry) => entry.key)).toEqual(first.map((entry) => entry.key))
+    for (const proposal of first) {
+      const same = again.find((entry) => entry.key === proposal.key)
+      expect(same?.saving).toEqual(proposal.saving)
+      expect(same?.tradeOffs).toEqual(proposal.tradeOffs)
+      expect(same?.description).toBe(proposal.description)
+    }
+
+    const read = formworkSavings(nodes, {}, solution)
+    const plan = plannedSaving(read, solution, first[0]?.key as string)
+    expect(plan.refusal).toBeUndefined()
   })
 })
 

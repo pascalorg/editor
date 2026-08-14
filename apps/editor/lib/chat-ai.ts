@@ -3,6 +3,7 @@ import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import {
   ACQUIRE_GAP_LABELS,
   APPLY_POUR_MOVE_DESCRIPTION,
+  APPLY_SAVING_DESCRIPTION,
   ATTACH_FORMWORK_DESCRIPTION,
   applyCommitPourPatch,
   applyConstructionPatch,
@@ -11,6 +12,7 @@ import {
   applyPourDatePatch,
   applyPourLimitsPatch,
   applyPourMoveInput,
+  applySavingInput,
   COMMIT_POUR_DESCRIPTION,
   COMMITMENT_GAP_LABELS,
   COST_GAP_LABELS,
@@ -27,6 +29,7 @@ import {
   FORMWORK_CUT_SHEET_DESCRIPTION,
   FORMWORK_ELEVATION_DESCRIPTION,
   FORMWORK_RFI_DESCRIPTION,
+  FORMWORK_SYSTEMS,
   findFormworkSettingsNode,
   findingByKey,
   fixFindingInput,
@@ -76,19 +79,24 @@ import type { AnyNode, FormworkAssemblyNode } from '@pascal-app/core/schema'
 import { buildSolverJointNodes } from '@pascal-app/nodes/construction-joint/headless'
 import {
   castableHostIds,
+  FORMWORK_SAVINGS_DESCRIPTION,
   FORMWORK_VALUE_DESCRIPTION,
   findingsWithRemedies,
   fixOutcome,
   formworkCoverageCaveat,
   formworkPartsReport,
+  formworkSavings,
   formworkValueOptions,
   moveOutcome,
   noSuchFinding,
   plannedFix,
   plannedMove,
+  plannedSaving,
   pourUnitsForHost,
   projectFormworkCaveats,
   reconcileFormworkNodes,
+  savingCaveats,
+  savingOutcome,
   shutterElevations,
   solveProjectFormwork,
   solveShuttersForHost,
@@ -1850,6 +1858,109 @@ export function buildTools(
           })),
           cheaperCount: value.cheaper.length,
           caveats: valueCaveats(value),
+        })
+      },
+    }),
+    formwork_savings: tool({
+      description: FORMWORK_SAVINGS_DESCRIPTION,
+      inputSchema: z.object({
+        levelId: z
+          .string()
+          .optional()
+          .describe('a level id for one level; omit for the whole scene'),
+        elementIds: z
+          .array(z.string())
+          .max(500)
+          .optional()
+          .describe('only these elements — for a selection the user named'),
+      }),
+      execute: async ({ elementIds, levelId }) => {
+        toolCalls.push({ name: 'formwork_savings', input: { elementIds, levelId } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        if (levelId !== undefined && nodes[levelId]?.type !== 'level') {
+          return `Error: no level with id ${levelId}. Call list_castable_elements and read the parentId of the elements you mean.`
+        }
+        const scope = { hostIds: elementIds, parentId: levelId }
+        const savings = formworkSavings(nodes, scope, solveProjectFormwork(nodes, scope))
+        return JSON.stringify({
+          scope: levelId ?? (elementIds ? 'the elements named' : 'whole scene'),
+          currency: savings.currency ?? null,
+          proposals: savings.proposals,
+          classes: savings.classes,
+          caveats: savingCaveats(savings),
+        })
+      },
+    }),
+    apply_saving: tool({
+      description: APPLY_SAVING_DESCRIPTION,
+      inputSchema: z.object(applySavingInput),
+      execute: async ({ savingKey: key }) => {
+        toolCalls.push({ name: 'apply_saving', input: { savingKey: key } })
+        const nodes = graph.nodes as unknown as Record<string, AnyNode>
+        const before = solveProjectFormwork(nodes)
+        const savings = formworkSavings(nodes, {}, before)
+        const plan = plannedSaving(savings, before, key)
+        // The likeliest cause is a superseded proposal rather than a bad key — the decision it
+        // named no longer exists — so the refusal names the re-read.
+        if (plan.refusal !== undefined) return plan.refusal
+
+        if (plan.class === 'substitution') {
+          // Every assembly validated before any of them is written: a substitution that half
+          // landed prices as neither the old design nor the new one, and the spec refuses a
+          // partial application outright.
+          for (const write of plan.writes ?? []) {
+            const assembly = nodes[write.assemblyId]
+            if (assembly === undefined || assembly.type !== 'formwork-assembly') {
+              return unknownAssembly(write.assemblyId)
+            }
+            if (FORMWORK_SYSTEMS[write.systemId] === undefined) {
+              return `Error: ${write.systemId} is not a registered formwork system.`
+            }
+            ;(assembly as unknown as Record<string, unknown>).systemId = write.systemId
+          }
+        } else {
+          // A cycle is the move's own writes, through the same gate a hand-made set_pour_date
+          // passes — the shift is arithmetic on a date the project stated.
+          const dated: Array<{ target: Record<string, unknown>; pourAt: string }> = []
+          for (const write of plan.movePlan?.writes ?? []) {
+            const assembly = nodes[write.assemblyId]
+            if (assembly === undefined || assembly.type !== 'formwork-assembly') {
+              return unknownAssembly(write.assemblyId)
+            }
+            const patch = applyPourDatePatch({ pourAt: write.pourAt })
+            if (patch.error !== undefined) return patch.error
+            if (patch.writes.pourAt === undefined) return `Error: ${write.pourAt} wrote no date.`
+            dated.push({
+              target: assembly as unknown as Record<string, unknown>,
+              pourAt: patch.writes.pourAt,
+            })
+          }
+          for (const write of dated) write.target.pourAt = write.pourAt
+        }
+        onMutate()
+
+        // The claim this tool makes, read from the scene the write produced rather than from the
+        // proposal that produced it: the proposal was priced on a solve, and a verdict taken off
+        // its own figures would only ever agree with itself.
+        const after = solveProjectFormwork(graph.nodes as unknown as Record<string, AnyNode>)
+        const outcome = savingOutcome(before, after, plan)
+        return JSON.stringify({
+          savingKey: key,
+          class: plan.class,
+          achieved: outcome.achieved,
+          predicted: outcome.predicted ?? null,
+          measured: outcome.measured ?? null,
+          unmeasured: outcome.unmeasured ?? null,
+          ...(plan.class === 'substitution'
+            ? { systemWrites: plan.writes }
+            : {
+                moved: (plan.movePlan?.writes ?? []).map((write) => ({
+                  assemblyId: write.assemblyId,
+                  from: write.wasPourAt,
+                  to: write.pourAt,
+                })),
+              }),
+          message: outcome.message,
         })
       },
     }),

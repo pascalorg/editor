@@ -1,8 +1,9 @@
 'use client'
 
 import { type AnyNode, getLevelDisplayName, type LevelNode, useScene } from '@pascal-app/core'
-import { bomCsv, bomCsvFilename } from '@pascal-app/core/formwork'
+import { bomCsv, bomCsvFilename, type FormworkSavings } from '@pascal-app/core/formwork'
 import { useMemo } from 'react'
+import { formworkSavings } from './apply-saving'
 import { type ProjectFormwork, projectFormworkCaveats, solveProjectFormwork } from './solve-project'
 import { type FormworkValueEngineering, formworkValueOptions } from './value-engineer'
 
@@ -82,6 +83,27 @@ export function useValueOptions(
     () =>
       asked
         ? formworkValueOptions(nodes as Record<string, AnyNode>, { parentId: levelId }, solution)
+        : undefined,
+    [asked, nodes, levelId, solution],
+  )
+}
+
+/**
+ * The savings this scope admits — on request, not on read, for the same reason as
+ * `useValueOptions`: a substitution is the whole scope re-solved in every other system,
+ * and a takeoff that carried its savings would pay for that solve on every read.
+ */
+export function useSavings(
+  solution: ProjectFormwork,
+  scope: TakeoffScope,
+  asked: boolean,
+): FormworkSavings | undefined {
+  const nodes = useScene((s) => s.nodes)
+  const levelId = scope.levelId
+  return useMemo(
+    () =>
+      asked
+        ? formworkSavings(nodes as Record<string, AnyNode>, { parentId: levelId }, solution)
         : undefined,
     [asked, nodes, levelId, solution],
   )

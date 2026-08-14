@@ -268,6 +268,7 @@ export function cutSheetSvg(
   pages: readonly CutSheetPage[],
   subject: string,
   oversize: readonly { mark: string; widthMm: number; heightMm: number }[] = [],
+  verificationNote?: string,
 ): string {
   const pageWidthMm = Math.max(MIN_PAGE_WIDTH_MM, ...pages.map((page) => page.sheet.widthMm))
   const c = CUT_SHEET_COLORS
@@ -313,6 +314,11 @@ export function cutSheetSvg(
     `<rect x="${-BLOCK_PAD_MM}" y="${-BLOCK_PAD_MM}" width="${pageWidthMm + BLOCK_PAD_MM * 2}" height="${heightMm + BLOCK_PAD_MM}" fill="#0c0c0d"/>`,
     `<text x="0" y="0" fill="${c.title}" font-size="${TITLE_MM}" font-family="monospace">Cut sheet — ${escapeXml(subject)}</text>`,
     `<text x="0" y="${TITLE_MM}" fill="${c.dim}" font-size="${DIM_MM}" font-family="monospace">Dimensions in mm from the sheet's own corner. Cut in the order numbered; each cut runs only as far as the drawing shows. The boards are already on the bill — the sheets are what they are cut from.</text>`,
+    ...(verificationNote === undefined
+      ? []
+      : [
+          `<text x="0" y="${TITLE_MM * 2}" fill="${c.refusal}" font-size="${DIM_MM}" font-family="monospace">${escapeXml(verificationNote)}</text>`,
+        ]),
     ...blocks,
     '</svg>',
   ].join('\n')

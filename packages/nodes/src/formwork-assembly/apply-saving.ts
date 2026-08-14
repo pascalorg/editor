@@ -498,12 +498,15 @@ export function savingOutcome(
   }
 
   // Cycle: the hire the move avoided, read off the acquisition's own lines in both solves.
-  const beforeHire = before.acquisition?.lines.find(
-    (line) => line.catalogId === plan.catalogId,
-  )?.hireCost
-  const afterHire = after.acquisition?.lines.find(
-    (line) => line.catalogId === plan.catalogId,
-  )?.hireCost
+  const beforeLine = before.acquisition?.lines.find((line) => line.catalogId === plan.catalogId)
+  const afterLine = after.acquisition?.lines.find((line) => line.catalogId === plan.catalogId)
+  const beforeHire = beforeLine?.hireCost
+  // A line whose shortage the move cleared is still a line — the item is still a peak, it just
+  // has nothing to hire — and the acquisition emits no hireCost against it. That zero is the
+  // measurement, the hire that was never placed. Only a line that is still short and unpriced,
+  // or a line gone from the acquisition entirely, is unmeasurable.
+  const afterHire =
+    afterLine === undefined ? undefined : afterLine.shortfall === 0 ? 0 : afterLine.hireCost
   if (beforeHire === undefined || afterHire === undefined) {
     return unmeasured(
       plan,

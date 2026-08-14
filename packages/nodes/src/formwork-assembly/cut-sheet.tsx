@@ -136,12 +136,15 @@ export function FormworkCutSheet({
   sheetIndex,
   sheets,
   subject,
+  verificationNote,
 }: {
   onSheetChange: (index: number) => void
   oversize: readonly { mark: string; widthMm: number; heightMm: number }[]
   sheetIndex: number
   sheets: readonly NestedSheet[]
   subject: string
+  /** The takeoff's weakest verification level, to state on the printed sheet (8.5). */
+  verificationNote?: string
 }) {
   if (sheets.length === 0) return null
   // A sheet deleted out from under the selector — a scope change, a settings edit — would
@@ -212,6 +215,7 @@ export function FormworkCutSheet({
               sheets.map((entry) => ({ sheet: entry, plan: sheetCutSequence(entry) })),
               subject,
               oversize,
+              verificationNote,
             ),
             `cut-sheet-${subject.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.svg`,
             'image/svg+xml;charset=utf-8',

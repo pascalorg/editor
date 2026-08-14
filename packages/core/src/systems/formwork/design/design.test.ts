@@ -209,6 +209,22 @@ describe('H20 beam against the design.md worked spans', () => {
     expect(H20_BEAM.momentKnM).toBe(5)
     expect(H20_BEAM.shearKn).toBe(11)
   })
+
+  it('records both published capacities with both sources, designing on the conservative one (4.7)', () => {
+    // The conflict is a fact about the entry, not a transcription slip: another source
+    // publishes 11 kNm / 24 kN on a design basis, and taking those against a working
+    // load over-spans a deck by about two. The entry designs on the permissible pair
+    // and carries the other pair with its own basis and its own document, so a reader
+    // of the conservative answer can see what was not taken and why.
+    expect(H20_BEAM.conflict).toBeDefined()
+    expect(H20_BEAM.conflict?.momentKnM).toBe(11)
+    expect(H20_BEAM.conflict?.shearKn).toBe(24)
+    expect(H20_BEAM.conflict?.capacityBasis).toBe('design')
+    expect(H20_BEAM.conflict?.source.length).toBeGreaterThan(0)
+    // The conservative pair is strictly the smaller one in both axes.
+    expect(H20_BEAM.momentKnM).toBeLessThan(H20_BEAM.conflict?.momentKnM as number)
+    expect(H20_BEAM.shearKn).toBeLessThan(H20_BEAM.conflict?.shearKn as number)
+  })
 })
 
 describe('beam stock lengths', () => {

@@ -270,7 +270,11 @@ export interface ElevationPage {
  * sheet rather than only on screen for the same reason the cut sheet's are: this is the
  * document that gets emailed on, and the frame it is set out in has to travel with it.
  */
-export function elevationSvg(pages: readonly ElevationPage[], subject: string): string {
+export function elevationSvg(
+  pages: readonly ElevationPage[],
+  subject: string,
+  verificationNote?: string,
+): string {
   const pageWidthMm = Math.max(MIN_PAGE_WIDTH_MM, ...pages.map((page) => page.elevation.runMm))
   const c = ELEVATION_COLORS
   const blocks: string[] = []
@@ -305,6 +309,11 @@ export function elevationSvg(pages: readonly ElevationPage[], subject: string): 
     `<rect x="${-BLOCK_PAD_MM}" y="${-BLOCK_PAD_MM}" width="${pageWidthMm + BLOCK_PAD_MM * 2}" height="${totalMm + BLOCK_PAD_MM}" fill="${c.ground}"/>`,
     `<text x="0" y="0" fill="${c.title}" font-size="${TITLE_MM}" font-family="monospace">Shutter elevation — ${escapeXml(subject)}</text>`,
     `<text x="0" y="${TITLE_MM}" fill="${c.dim}" font-size="${DIM_MM}" font-family="monospace">The shutter face as it is set. Circles are tie holes; a cross is a station the grid offers that this wall cannot use. The dashed green line is the top of the concrete — the panels above it are freeboard.</text>`,
+    ...(verificationNote === undefined
+      ? []
+      : [
+          `<text x="0" y="${TITLE_MM * 2}" fill="${c.cutEdge}" font-size="${DIM_MM}" font-family="monospace">${escapeXml(verificationNote)}</text>`,
+        ]),
     ...blocks,
     '</svg>',
   ].join('\n')

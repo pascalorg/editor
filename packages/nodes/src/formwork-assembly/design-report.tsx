@@ -15,6 +15,8 @@ import {
   type SpanGoverning,
   type TieRow,
   toCastableElement,
+  type Verification,
+  weakestVerification,
 } from '@pascal-app/core/formwork'
 import { cn, formatLinearMeasurement } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -220,7 +222,7 @@ function WallReport({
         <MemberRow
           design={design.waler}
           label="Walers"
-          note={design.beam ? `${design.beam.label}.` : undefined}
+          note={beamNote(design.beam)}
           unitSystem={unitSystem}
         />
         {/* The tie is the one member with no span of its own — it is hardware
@@ -283,6 +285,13 @@ function WallReport({
       </Section>
 
       <Warnings warnings={design.warnings} />
+      <VerificationNote
+        entries={[
+          { label: design.sheathing?.label ?? '', verification: design.sheathing?.verification },
+          { label: design.beam?.label ?? '', verification: design.beam?.verification },
+          { label: design.tie?.label ?? '', verification: design.tie?.verification },
+        ]}
+      />
     </div>
   )
 }
@@ -360,6 +369,12 @@ function ColumnReport({
       </Section>
 
       <Warnings warnings={schedule.warnings} />
+      <VerificationNote
+        entries={[
+          { label: schedule.clamp?.label ?? '', verification: schedule.clamp?.verification },
+          { label: form?.label ?? '', verification: form?.verification },
+        ]}
+      />
     </div>
   )
 }
@@ -426,7 +441,7 @@ function SlabReport({
         <MemberRow
           design={design.bearer}
           label="Bearers"
-          note={design.beam ? `${design.beam.label}.` : undefined}
+          note={beamNote(design.beam)}
           unitSystem={unitSystem}
         />
         <MemberRow design={design.propSpacing} label="Prop pitch" unitSystem={unitSystem} />
@@ -454,6 +469,13 @@ function SlabReport({
       </Section>
 
       <Warnings warnings={design.warnings} />
+      <VerificationNote
+        entries={[
+          { label: design.sheathing?.label ?? '', verification: design.sheathing?.verification },
+          { label: design.beam?.label ?? '', verification: design.beam?.verification },
+          { label: design.props?.label ?? '', verification: design.props?.verification },
+        ]}
+      />
     </div>
   )
 }
@@ -643,6 +665,64 @@ function ClampRowLine({
 
 function capacityLabel(capacityKn: number): string {
   return Number.isFinite(capacityKn) ? `${capacityKn.toFixed(0)} kN` : 'no rated capacity'
+}
+
+/**
+ * The beam's label, and the second published capacity where two sources disagree
+ * (4.7).
+ *
+ * The conflict is reported wherever the beam governs, not only in the catalog: a
+ * spacing solved on the permissible pair is the safe answer, and the reader has to
+ * see that another source publishes a larger number on a different basis or the
+ * disagreement reads as an unexplained conservatism.
+ */
+function beamNote(
+  beam:
+    | {
+        label: string
+        conflict?: { label: string; momentKnM: number; shearKn: number; capacityBasis: string }
+      }
+    | undefined,
+): string | undefined {
+  if (!beam) return undefined
+  const base = `${beam.label}.`
+  if (!beam.conflict) return base
+  return `${base} ${beam.conflict.label} publishes ${beam.conflict.momentKnM.toFixed(0)} kNm / ${beam.conflict.shearKn.toFixed(0)} kN on a ${beam.conflict.capacityBasis} basis — the ${base.replace('.', '')} figures above are the permissible pair, which is the conservative answer where the two disagree.`
+}
+
+/**
+ * The weakest verification across the catalog entries this design was solved from,
+ * as one note (8.5).
+ *
+ * The design report's own fold, at the element scope the report is read at: every
+ * member figure here was solved from the named entries, so the report carries their
+ * weakest level on its face the way the takeoff and the drawings do. Absent where
+ * every named entry is certified, or where none carries a level.
+ */
+function VerificationNote({
+  entries,
+}: {
+  entries: ReadonlyArray<{ label: string; verification?: string }>
+}) {
+  const levels = entries
+    .map((entry) => entry.verification)
+    .filter((level) => level !== undefined) as Verification[]
+  const weakest = weakestVerification(levels)
+  if (weakest === undefined || weakest === 'certified') return null
+  const atLevel = entries.filter((entry) => entry.verification === weakest)
+  const names = atLevel.map((entry) => entry.label).slice(0, 5)
+  const label: Record<Exclude<Verification, 'certified'>, string> = {
+    derived: 'derived by a stated method from cited values',
+    secondary: "read off a dealer or secondary listing rather than the manufacturer's own table",
+    unverified:
+      'unverified — arrived at by stated reasoning with nothing published to check it against',
+  }
+  return (
+    <Note>
+      These figures are designed from {names.join(', ')} — {label[weakest]}. The design as a whole
+      is {weakest}, so its figures carry that level until the cited document is transcribed.
+    </Note>
+  )
 }
 
 /**

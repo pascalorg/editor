@@ -778,6 +778,8 @@ describe('the formwork MCP tools', () => {
         'commit_pour',
         'apply_pour_move',
         'compare_formwork_systems',
+        'formwork_savings',
+        'apply_saving',
       ]),
     )
   })
@@ -3868,6 +3870,143 @@ describe('the formwork MCP tools', () => {
 
       expect(result.isError).toBe(true)
       expect((result.content as Array<{ text: string }>)[0]?.text?.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('the savings pair', () => {
+    interface SavingsReply {
+      scope: string
+      currency?: string
+      proposals: Array<{
+        class: string
+        key: string
+        target: string
+        alternative: string
+        saving?: { label: string; from: number; to: number; delta: number; unit: string }
+        tradeOffs: Array<{ label: string; from: number; to: number; delta: number; unit: string }>
+        write: string
+      }>
+      classes: Record<
+        string,
+        { proposals: unknown[]; refusal?: { kind: string; note?: string; needs?: string } }
+      >
+      caveats: string[]
+    }
+
+    interface ApplySavingReply {
+      savingKey: string
+      class: string
+      achieved: boolean
+      predicted?: { amount: number; currency?: string }
+      measured?: { amount: number; currency?: string }
+      unmeasured?: string
+      moved?: Array<{ assemblyId: string; from: string; to: string }>
+      message: string
+    }
+
+    const dateOf = (id: string) =>
+      (bridge.getNodes()[id as AnyNodeId] as unknown as { pourAt?: string }).pourAt
+
+    /** Three walls in cast order, two on one day, a rack one short of the peak — the move scene, priced or not. */
+    const shortWithRates = async (priced: boolean) => {
+      const built = async (settings: Record<string, unknown>) => {
+        load(withSettings(threeWalls(), { schedule: { returnLeadDays: 3 }, ...settings }))
+        for (const [index, elementId] of ['wall_1', 'wall_2', 'wall_3'].entries()) {
+          await call('attach_formwork', { elementId })
+          await call('set_element_construction', { elementId, castOrder: index + 1 })
+        }
+        const ids = (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+          .filter((node) => node.type === 'formwork-assembly')
+          .map((node) => node.id as string)
+        for (const [index, id] of ids.entries()) {
+          await call('set_pour_date', {
+            assemblyId: id,
+            pourAt: ['2026-03-02', '2026-03-02', '2026-04-06'][index],
+          })
+        }
+        return await call<BillReply>('inspect_project_formwork')
+      }
+      const empty = await built({ stock: { owned: {} } })
+      const panel = empty.sets?.items[0] as { catalogId: string; mostAtOnce: number }
+      const short = await built({
+        stock: { owned: { [panel.catalogId]: panel.mostAtOnce - 1 } },
+        ...(priced
+          ? {
+              rates: {
+                currency: 'GBP',
+                byCatalogId: { [panel.catalogId]: { rentalPerUnitPerMonth: 10 } },
+              },
+            }
+          : {}),
+      })
+      return { panel, short }
+    }
+
+    test('a priced scope offers a cycle saving, and the key the read printed is the key the write takes', async () => {
+      // The round trip the pair exists for, on the MCP surface: the read prices a move off the
+      // hire it avoids, the write lands the same dates the proposal named, and the measurement
+      // comes from a second solve rather than the proposal's own arithmetic.
+      await shortWithRates(true)
+
+      const read = await call<SavingsReply>('formwork_savings')
+      const cycle = read.proposals.filter((proposal) => proposal.class === 'cycle')
+      expect(cycle.length).toBeGreaterThan(0)
+      const proposal = cycle[0] as {
+        key: string
+        alternative: string
+        saving: { label: string; from: number; to: number; delta: number; unit: string }
+        write: string
+      }
+      expect(proposal.write).toBe('pour-move')
+      expect(proposal.saving.to).toBe(0)
+      expect(proposal.saving.delta).toBeLessThan(0)
+      expect(read.caveats.join(' ')).toContain('no total of them is offered')
+
+      const applied = await call<ApplySavingReply>('apply_saving', { savingKey: proposal.key })
+
+      expect(applied.savingKey).toBe(proposal.key)
+      expect(applied.achieved).toBe(true)
+      expect(applied.moved?.length).toBeGreaterThan(0)
+      for (const write of applied.moved ?? []) expect(dateOf(write.assemblyId)).toBe(write.to)
+      expect(applied.measured?.amount).toBeGreaterThan(0)
+      expect(applied.predicted?.amount).toBeGreaterThan(0)
+    })
+
+    test('a saving key the scene has moved past is refused rather than written twice', async () => {
+      // The same key twice. After the first write the move it named is already taken, so the
+      // second call is a proposal for a decision that no longer exists — and taking it again
+      // would date a pour against arithmetic nobody can reproduce.
+      await shortWithRates(true)
+      const read = await call<SavingsReply>('formwork_savings')
+      const proposal = read.proposals.find((entry) => entry.class === 'cycle') as { key: string }
+      await call('apply_saving', { savingKey: proposal.key })
+      const dates = Object.fromEntries(
+        (Object.values(bridge.getNodes()) as unknown as AnyNode[])
+          .filter((node) => node.type === 'formwork-assembly')
+          .map((node) => [node.id as string, dateOf(node.id as string)] as const),
+      )
+
+      const again = await client.callTool({
+        name: 'apply_saving',
+        arguments: { savingKey: proposal.key },
+      })
+
+      expect(again.isError).toBe(true)
+      expect((again.content as Array<{ text: string }>)[0]?.text).toContain('superseded')
+      for (const [id, pourAt] of Object.entries(dates)) expect(dateOf(id)).toBe(pourAt)
+    })
+
+    test('an unpriced dated scope says the cycle class needs the hire rates, not that nothing clears', async () => {
+      // The two refusals a class can give, and the one that must not be chosen here: the move
+      // exists and would clear the shortage, so "nothing cheaper" is a lie — the missing input
+      // is the money the saving is priced off.
+      await shortWithRates(false)
+
+      const read = await call<SavingsReply>('formwork_savings')
+
+      expect(read.proposals.filter((entry) => entry.class === 'cycle')).toEqual([])
+      expect(read.classes.cycle.refusal?.kind).toBe('missing-input')
+      expect(read.classes.cycle.refusal?.needs).toContain('hire rates')
     })
   })
 })
