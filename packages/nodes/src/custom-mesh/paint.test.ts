@@ -7,7 +7,7 @@ import {
 } from '@pascal-app/core'
 import { customMeshPaint } from './paint'
 
-describe('custom mesh face paint', () => {
+describe('custom mesh slot paint', () => {
   let node: CustomMeshNode
 
   beforeEach(() => {
@@ -26,41 +26,46 @@ describe('custom mesh face paint', () => {
     useScene.temporal.getState().clear()
   })
 
-  test('paints one face and reuses the same object slot on another face', () => {
+  test('paints the Body slot across the untouched mesh', () => {
     customMeshPaint.commit?.({
       node,
-      role: 'face_f-top',
+      role: 'body',
       material: undefined,
       materialPreset: 'library:metal-steel',
     })
     let painted = useScene.getState().nodes[node.id]
     expect(painted?.type).toBe('custom-mesh')
     if (painted?.type !== 'custom-mesh') return
-    expect(painted.topology.faces.find((face) => face.id === 'f-top')?.materialSlot).toBe(
-      'material-1',
-    )
-    expect(painted.topology.faces.find((face) => face.id === 'f-front')?.materialSlot).toBe('body')
-    expect(painted.slots).toEqual({
-      body: 'library:concrete-drywall',
-      'material-1': 'library:metal-steel',
-    })
+    expect(painted.topology).toEqual(node.topology)
+    expect(painted.topology.faces.every((face) => face.materialSlot === 'body')).toBe(true)
+    expect(painted.slots).toEqual({ body: 'library:metal-steel' })
+  })
+
+  test('painting a named slot updates every assigned face without changing assignments', () => {
+    node = {
+      ...node,
+      slotNames: { ...node.slotNames, trim: 'Trim' },
+      slots: { trim: 'library:wood' },
+      topology: {
+        ...node.topology,
+        faces: node.topology.faces.map((face, index) =>
+          index < 2 ? { ...face, materialSlot: 'trim' } : face,
+        ),
+      },
+    }
+    useScene.setState({ nodes: { [node.id]: node } })
 
     customMeshPaint.commit?.({
-      node: painted,
-      role: 'face_f-front',
+      node,
+      role: 'trim',
       material: undefined,
       materialPreset: 'library:metal-steel',
     })
-    painted = useScene.getState().nodes[node.id]
+    const painted = useScene.getState().nodes[node.id]
     expect(painted?.type).toBe('custom-mesh')
     if (painted?.type !== 'custom-mesh') return
-    expect(painted.topology.faces.find((face) => face.id === 'f-front')?.materialSlot).toBe(
-      'material-1',
-    )
-    expect(painted.slots).toEqual({
-      body: 'library:concrete-drywall',
-      'material-1': 'library:metal-steel',
-    })
+    expect(painted.topology).toEqual(node.topology)
+    expect(painted.slots).toEqual({ trim: 'library:metal-steel' })
   })
 
   test('reuses a structurally matching scene material instead of creating one', () => {
@@ -74,7 +79,7 @@ describe('custom mesh face paint', () => {
 
     customMeshPaint.commit?.({
       node,
-      role: 'face_f-top',
+      role: 'body',
       material,
       materialPreset: undefined,
     })
@@ -84,17 +89,16 @@ describe('custom mesh face paint', () => {
     if (painted?.type !== 'custom-mesh') return
     expect(Object.keys(useScene.getState().materials)).toEqual([materialId])
     expect(painted.slots).toEqual({
-      body: 'library:concrete-drywall',
-      'material-1': toSceneMaterialRef(materialId),
+      body: toSceneMaterialRef(materialId),
     })
   })
 
-  test('commits the face and a new reusable scene material in one undo step', () => {
+  test('commits the slot and a new reusable scene material in one undo step', () => {
     const material = { preset: 'custom' as const, properties: { color: '#c2410c' } }
 
     customMeshPaint.commit?.({
       node,
-      role: 'face_f-top',
+      role: 'body',
       material,
       materialPreset: undefined,
     })
@@ -112,7 +116,7 @@ describe('custom mesh face paint', () => {
 
     customMeshPaint.commit?.({
       node,
-      role: 'face_f-top',
+      role: 'body',
       material: { preset: 'custom', properties: { color: '#c2410c' } },
       materialPreset: undefined,
     })
@@ -125,7 +129,7 @@ describe('custom mesh face paint', () => {
   test('does not create an orphan material for a semantic no-op', () => {
     customMeshPaint.commit?.({
       node,
-      role: 'face_f-top',
+      role: 'body',
       material: undefined,
       materialPreset: undefined,
     })
@@ -135,7 +139,7 @@ describe('custom mesh face paint', () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
   })
 
-  test('reuses the body slot when painting with its material reference', () => {
+  test('painting a named slot does not collapse it into Body when materials match', () => {
     const topology = {
       ...node.topology,
       faces: node.topology.faces.map((face) =>
@@ -148,7 +152,7 @@ describe('custom mesh face paint', () => {
 
     customMeshPaint.commit?.({
       node,
-      role: 'face_f-top',
+      role: 'accent',
       material: undefined,
       materialPreset: 'library:metal-steel',
     })
@@ -156,24 +160,31 @@ describe('custom mesh face paint', () => {
     const painted = useScene.getState().nodes[node.id]
     expect(painted?.type).toBe('custom-mesh')
     if (painted?.type !== 'custom-mesh') return
-    expect(painted.topology.faces.find((face) => face.id === 'f-top')?.materialSlot).toBe('body')
-    expect(painted.slots).toEqual({ body: 'library:metal-steel', accent: 'library:wood' })
+    expect(painted.topology.faces.find((face) => face.id === 'f-top')?.materialSlot).toBe('accent')
+    expect(painted.slots).toEqual({
+      body: 'library:metal-steel',
+      accent: 'library:metal-steel',
+    })
   })
 
-  test('eraser returns only the painted face to body', () => {
-    customMeshPaint.commit?.({
-      node,
-      role: 'face_f-top',
-      material: undefined,
-      materialPreset: 'library:metal-steel',
-    })
-    const painted = useScene.getState().nodes[node.id]
-    expect(painted?.type).toBe('custom-mesh')
-    if (painted?.type !== 'custom-mesh') return
+  test('eraser clears a named slot binding without changing face assignments', () => {
+    const topology = {
+      ...node.topology,
+      faces: node.topology.faces.map((face) =>
+        face.id === 'f-top' ? { ...face, materialSlot: 'accent' } : face,
+      ),
+    }
+    node = {
+      ...node,
+      topology,
+      slotNames: { ...node.slotNames, accent: 'Accent' },
+      slots: { accent: 'library:metal-steel' },
+    }
+    useScene.setState({ nodes: { [node.id]: node } })
 
     customMeshPaint.commit?.({
-      node: painted,
-      role: 'face_f-top',
+      node,
+      role: 'accent',
       material: undefined,
       materialPreset: undefined,
     })
@@ -181,6 +192,7 @@ describe('custom mesh face paint', () => {
     const erased = useScene.getState().nodes[node.id]
     expect(erased?.type).toBe('custom-mesh')
     if (erased?.type !== 'custom-mesh') return
-    expect(erased.topology.faces.find((face) => face.id === 'f-top')?.materialSlot).toBe('body')
+    expect(erased.topology.faces.find((face) => face.id === 'f-top')?.materialSlot).toBe('accent')
+    expect(erased.slots).toBeUndefined()
   })
 })

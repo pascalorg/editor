@@ -13,8 +13,8 @@ function slotLabel(slotId: string): string {
 }
 
 export function customMeshSlots(node: CustomMeshNode): SlotDeclaration[] {
-  return customMeshMaterialSlotIds(node.topology, node.slots).map((slotId) => ({
+  return customMeshMaterialSlotIds(node.topology, node.slots, node.slotNames).map((slotId) => ({
     slotId,
-    label: slotLabel(slotId),
+    label: node.slotNames?.[slotId]?.trim() || slotLabel(slotId),
   }))
 }

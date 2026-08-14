@@ -104,7 +104,7 @@ type CustomMeshNode = {
 };
 ```
 
-The initial custom mesh keeps every face on `materialSlot: "body"`. Its `body` slot resolves to one reusable scene/library material, preserving the current one-material default. Adding another material creates a new stable slot ID and maps it to a `MaterialRef`; assigning faces changes only their `materialSlot` string.
+The initial custom mesh keeps every face on `materialSlot: "body"`. Its unbound `body` slot resolves to the shared wall-role default color. Adding another material creates a new stable slot ID and maps it to a reusable `MaterialRef`; assigning faces changes only their `materialSlot` string.
 
 The current schema already has this shape in [`custom-mesh.ts`](../packages/core/src/schema/nodes/custom-mesh.ts). No face should store copied shader/color/texture properties.
 

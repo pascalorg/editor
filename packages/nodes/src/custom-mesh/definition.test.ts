@@ -3,10 +3,9 @@ import { CustomMeshNode } from '@pascal-app/core'
 import { customMeshDefinition } from './definition'
 
 describe('custom mesh placement bounds', () => {
-  test('starts with a reusable body material', () => {
-    expect(customMeshDefinition.defaults().slots).toEqual({
-      body: 'library:concrete-drywall',
-    })
+  test('starts with the shared default wall-role material', () => {
+    expect(customMeshDefinition.defaults().slots).toEqual({})
+    expect(customMeshDefinition.defaults().slotNames).toEqual({ body: 'Body' })
   })
 
   test('uses the dedicated editable-cube icon in the build palette', () => {
@@ -26,10 +25,11 @@ describe('custom mesh placement bounds', () => {
     expect(customMeshDefinition.parametrics?.customPanel).toBeFunction()
   })
 
-  test('keeps paint face-scoped instead of exposing object-slot fan-out', () => {
+  test('exposes named slots and paints the assigned slot binding', () => {
     const base = CustomMeshNode.parse({
       name: 'Paintable mesh',
       slots: { accent: 'library:preset-softwhite' },
+      slotNames: { body: 'Body', accent: 'Trim' },
     })
     const node = {
       ...base,
@@ -43,26 +43,21 @@ describe('custom mesh placement bounds', () => {
     }
     const paint = customMeshDefinition.capabilities.paint
 
-    expect(customMeshDefinition.capabilities.slots).toBeUndefined()
+    expect(customMeshDefinition.capabilities.slots?.(node)).toEqual([
+      { slotId: 'body', label: 'Body' },
+      { slotId: 'accent', label: 'Trim' },
+    ])
     expect(paint?.commit).toBeFunction()
     expect(
       paint?.buildPatch({
         node,
-        role: 'face_f-bottom',
+        role: 'accent',
         material: undefined,
         materialPreset: 'library:metal-steel',
       }),
     ).toEqual({
-      topology: {
-        ...node.topology,
-        faces: node.topology.faces.map((face) =>
-          face.id === 'f-bottom' ? { ...face, materialSlot: 'material-1' } : face,
-        ),
-      },
       slots: {
-        body: 'library:concrete-drywall',
-        accent: 'library:preset-softwhite',
-        'material-1': 'library:metal-steel',
+        accent: 'library:metal-steel',
       },
     })
   })

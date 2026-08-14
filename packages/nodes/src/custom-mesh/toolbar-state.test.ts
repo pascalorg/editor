@@ -2,9 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   customMeshBevelWidthFromDrag,
   customMeshComponentStatus,
+  customMeshGizmoDimensions,
   customMeshOperationAvailability,
   customMeshScaleFactorFromDrag,
   customMeshScaleFactors,
+  customMeshToolbarOffset,
   formatCustomMeshSelectionStatus,
 } from './toolbar-state'
 
@@ -66,5 +68,18 @@ describe('custom mesh toolbar state', () => {
     expect(customMeshBevelWidthFromDrag(60, 80, 2, 1000)).toBeCloseTo(0.2)
     expect(customMeshBevelWidthFromDrag(0, 0, 2, 1000)).toBe(0)
     expect(customMeshBevelWidthFromDrag(10, 0, 2, 0)).toBe(20)
+  })
+
+  test('keeps the floating toolbar clear of the vertical transform handle', () => {
+    const topologyExtent = 2.4
+    const gizmoLength = Math.min(1.15, Math.max(0.42, topologyExtent * 0.29))
+    const toolbarOffset = customMeshToolbarOffset(topologyExtent, gizmoLength)
+    const scaleHandleReach = gizmoLength * 1.2
+
+    expect(toolbarOffset - scaleHandleReach).toBeGreaterThanOrEqual(0.3)
+  })
+
+  test('keeps every transform-gizmo dimension constant while topology moves', () => {
+    expect(customMeshGizmoDimensions(3.4)).toEqual(customMeshGizmoDimensions(2.4))
   })
 })

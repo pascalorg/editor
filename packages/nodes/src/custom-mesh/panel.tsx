@@ -18,19 +18,25 @@ import {
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Check, Move, Trash2 } from 'lucide-react'
+import { Check, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import useCustomMeshEditSession from './edit-session'
 import {
   assignCustomMeshMaterial,
+  CUSTOM_MESH_BODY_SLOT_ID,
   collectReusableCustomMeshMaterialRefs,
+  createCustomMeshMaterialSlot,
   customMeshMaterialSelection,
   removeCustomMeshMaterialSlot,
+  renameCustomMeshMaterialSlot,
   selectCustomMeshFacesByMaterialSlot,
+  setCustomMeshMaterialSlot,
 } from './material-slots'
 import { customMeshSlots } from './slots'
 
 const REUSABLE_MATERIAL_REF_SEPARATOR = '\u001f'
+const SLOT_TRAILING_ACTION_CLASS =
+  'm-2 ml-0 flex w-8 shrink-0 items-center justify-center rounded-md'
 
 function materialRefLabel(
   ref: string | undefined,
@@ -156,7 +162,8 @@ export default function CustomMeshPanel() {
   )
   const slotDeclarations = customMeshSlots(node)
   const activeSlotId =
-    sessionNodeId === node.id ? activeMaterialSlotId : materialSelection.activeSlotId
+    (sessionNodeId === node.id ? activeMaterialSlotId : materialSelection.activeSlotId) ??
+    CUSTOM_MESH_BODY_SLOT_ID
   const activeSlotRef = activeSlotId ? node.slots?.[activeSlotId] : undefined
   const canOperateOnFaces = editing && selection.mode === 'face'
   const faceCountBySlot = new Map<string, number>()
@@ -169,19 +176,33 @@ export default function CustomMeshPanel() {
   }
 
   const chooseReusableMaterial = (materialRef: string) => {
-    if (!(materialRef && selectedFaceIds.length > 0)) return
-    const result = assignCustomMeshMaterial(node.topology, node.slots, selectedFaceIds, {
-      kind: 'material',
-      materialRef,
-    })
+    if (!(activeSlotId && materialRef)) return
+    const result = setCustomMeshMaterialSlot(node.slots, activeSlotId, materialRef)
     if (result.changed) {
       useScene.getState().updateNode(node.id, {
-        topology: result.topology,
         slots: result.slots,
       })
       triggerSFX('sfx:menu-click')
     }
+  }
+
+  const addMaterialSlot = () => {
+    const result = createCustomMeshMaterialSlot(node.topology, node.slots, node.slotNames)
+    useScene.getState().updateNode(node.id, { slotNames: result.slotNames })
     useCustomMeshEditSession.getState().setActiveMaterialSlot(node.id, result.slotId)
+    triggerSFX('sfx:menu-click')
+  }
+
+  const renameMaterialSlot = (slotId: string, name: string) => {
+    const slotNames = renameCustomMeshMaterialSlot(
+      node.topology,
+      node.slots,
+      node.slotNames,
+      slotId,
+      name,
+    )
+    if (slotNames === node.slotNames) return
+    useScene.getState().updateNode(node.id, { slotNames })
   }
 
   const reusableMaterialLabel = (ref: string) => {
@@ -194,10 +215,16 @@ export default function CustomMeshPanel() {
 
   const assignMaterial = () => {
     if (!activeSlotId) return
-    const result = assignCustomMeshMaterial(node.topology, node.slots, selectedFaceIds, {
-      kind: 'slot',
-      slotId: activeSlotId,
-    })
+    const result = assignCustomMeshMaterial(
+      node.topology,
+      node.slots,
+      selectedFaceIds,
+      {
+        kind: 'slot',
+        slotId: activeSlotId,
+      },
+      node.slotNames,
+    )
     if (!result.changed) return
     useScene.getState().updateNode(node.id, {
       topology: result.topology,
@@ -226,11 +253,12 @@ export default function CustomMeshPanel() {
   }
 
   const removeMaterialSlot = (slotId: string) => {
-    const result = removeCustomMeshMaterialSlot(node.topology, node.slots, slotId)
+    const result = removeCustomMeshMaterialSlot(node.topology, node.slots, slotId, node.slotNames)
     if (!result.changed) return
     useScene.getState().updateNode(node.id, {
       topology: result.topology,
       slots: result.slots,
+      slotNames: result.slotNames,
     })
     useCustomMeshEditSession.getState().setActiveMaterialSlot(node.id, result.fallbackSlotId)
     triggerSFX('sfx:menu-click')
@@ -243,8 +271,8 @@ export default function CustomMeshPanel() {
       : materialSelection.kind === 'empty'
         ? 'No faces selected'
         : materialSelection.kind === 'mixed'
-          ? `${selectedFaceIds.length} faces · Mixed materials`
-          : `${selectedFaceIds.length} ${selectedFaceIds.length === 1 ? 'face' : 'faces'} · ${materialRefLabel(node.slots?.[materialSelection.slotId], sceneMaterials)}`
+          ? `${selectedFaceIds.length} faces · Mixed slots`
+          : `${selectedFaceIds.length} ${selectedFaceIds.length === 1 ? 'face' : 'faces'} · ${slotDeclarations.find((slot) => slot.slotId === materialSelection.slotId)?.label ?? materialSelection.slotId}`
 
   return (
     <PanelWrapper
@@ -275,9 +303,18 @@ export default function CustomMeshPanel() {
         ))}
       </PanelSection>
 
-      <PanelSection title="Face Materials">
+      <PanelSection title="Slots">
         <div className="rounded-md border border-border/50 bg-background/40 px-2.5 py-2 text-muted-foreground text-xs">
           {selectionLabel}
+        </div>
+
+        <div className="mt-2 flex justify-end">
+          <ActionButton
+            disabled={!editing || readOnly}
+            icon={<Plus className="h-3.5 w-3.5" />}
+            label="Add slot"
+            onClick={addMaterialSlot}
+          />
         </div>
 
         <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-border/60 bg-[#252527]">
@@ -295,10 +332,10 @@ export default function CustomMeshPanel() {
                 key={slot.slotId}
               >
                 <button
-                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left disabled:cursor-default"
+                  className="flex w-12 shrink-0 items-center justify-center disabled:cursor-default"
                   aria-label={`${slot.label}: ${materialLabel}`}
                   aria-pressed={active}
-                  disabled={!canOperateOnFaces}
+                  disabled={!editing}
                   onClick={() => chooseSlot(slot.slotId)}
                   type="button"
                 >
@@ -309,21 +346,41 @@ export default function CustomMeshPanel() {
                       backgroundImage: preview.imageUrl ? `url(${preview.imageUrl})` : undefined,
                     }}
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-foreground text-xs">
-                      {materialLabel}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
-                      {slot.label} · {faceCount} {faceCount === 1 ? 'face' : 'faces'}
-                    </span>
-                  </span>
-                  {active ? <Check aria-hidden="true" className="h-4 w-4 text-primary" /> : null}
                 </button>
 
-                {index > 0 ? (
+                <span className="flex min-w-0 flex-1 flex-col justify-center py-1.5">
+                  <input
+                    aria-label={`Rename ${slot.label} slot`}
+                    className="h-5 min-w-0 rounded bg-transparent px-1 font-medium text-foreground text-xs outline-none focus:bg-background/70 focus:ring-1 focus:ring-primary/50 disabled:cursor-not-allowed"
+                    defaultValue={slot.label}
+                    disabled={readOnly}
+                    key={`${slot.slotId}:${slot.label}`}
+                    onBlur={(event) => {
+                      if (!event.currentTarget.value.trim()) event.currentTarget.value = slot.label
+                      renameMaterialSlot(slot.slotId, event.currentTarget.value)
+                    }}
+                    onFocus={() => chooseSlot(slot.slotId)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') event.currentTarget.blur()
+                      if (event.key === 'Escape') {
+                        event.currentTarget.value = slot.label
+                        event.currentTarget.blur()
+                      }
+                    }}
+                  />
+                  <span className="truncate px-1 text-[10px] text-muted-foreground">
+                    {materialLabel} · {faceCount} {faceCount === 1 ? 'face' : 'faces'}
+                  </span>
+                </span>
+
+                {slot.slotId === CUSTOM_MESH_BODY_SLOT_ID ? (
+                  <span className={`${SLOT_TRAILING_ACTION_CLASS} text-primary`}>
+                    {active ? <Check aria-hidden="true" className="h-4 w-4" /> : null}
+                  </span>
+                ) : (
                   <button
-                    className="m-2 ml-0 flex w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                    aria-label={`Delete ${materialLabel} from face materials`}
+                    className={`${SLOT_TRAILING_ACTION_CLASS} text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground`}
+                    aria-label={`Delete ${slot.label} slot`}
                     disabled={readOnly}
                     onClick={() => removeMaterialSlot(slot.slotId)}
                     title="Delete material slot and use Body on its faces"
@@ -331,7 +388,7 @@ export default function CustomMeshPanel() {
                   >
                     <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
                   </button>
-                ) : null}
+                )}
               </div>
             )
           })}
@@ -342,24 +399,15 @@ export default function CustomMeshPanel() {
             className="mb-1 block font-medium text-[10px] text-muted-foreground uppercase tracking-wider"
             htmlFor={`custom-mesh-reusable-material-${node.id}`}
           >
-            Reusable material
+            Active slot material
           </label>
           <select
             className="h-9 w-full rounded-md border border-border/60 bg-[#2C2C2E] px-2.5 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={
-              !canOperateOnFaces ||
-              readOnly ||
-              selectedFaceIds.length === 0 ||
-              reusableMaterialRefs.length === 0
-            }
+            disabled={!editing || readOnly || !activeSlotId || reusableMaterialRefs.length === 0}
             id={`custom-mesh-reusable-material-${node.id}`}
             onChange={(event) => chooseReusableMaterial(event.target.value)}
             value={
-              materialSelection.kind !== 'mixed' &&
-              activeSlotRef &&
-              reusableMaterialRefs.includes(activeSlotRef)
-                ? activeSlotRef
-                : ''
+              activeSlotRef && reusableMaterialRefs.includes(activeSlotRef) ? activeSlotRef : ''
             }
           >
             <option value="">

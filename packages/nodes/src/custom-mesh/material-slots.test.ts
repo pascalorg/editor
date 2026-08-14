@@ -3,10 +3,13 @@ import { createBoxCustomMeshTopology } from '@pascal-app/core'
 import {
   assignCustomMeshMaterial,
   collectReusableCustomMeshMaterialRefs,
+  createCustomMeshMaterialSlot,
   customMeshMaterialSelection,
   customMeshMaterialSlotIds,
   removeCustomMeshMaterialSlot,
+  renameCustomMeshMaterialSlot,
   selectCustomMeshFacesByMaterialSlot,
+  setCustomMeshMaterialSlot,
 } from './material-slots'
 
 describe('custom mesh material slots', () => {
@@ -38,6 +41,31 @@ describe('custom mesh material slots', () => {
         body: 'scene:body',
       }),
     ).toEqual(['body', 'accent', 'orphaned'])
+  })
+
+  test('creates and renames an unbound slot independently from its material', () => {
+    const topology = createBoxCustomMeshTopology()
+    const created = createCustomMeshMaterialSlot(topology, {}, { body: 'Body' })
+
+    expect(created).toEqual({
+      slotId: 'slot-1',
+      slotNames: { body: 'Body', 'slot-1': 'Slot 1' },
+    })
+    expect(
+      renameCustomMeshMaterialSlot(topology, {}, created.slotNames, created.slotId, ' Trim '),
+    ).toEqual({ body: 'Body', 'slot-1': 'Trim' })
+  })
+
+  test('updates a slot material without changing face assignments', () => {
+    const slots = { body: 'library:wood' }
+    expect(setCustomMeshMaterialSlot(slots, 'body', 'library:metal-steel')).toEqual({
+      slots: { body: 'library:metal-steel' },
+      changed: true,
+    })
+    expect(setCustomMeshMaterialSlot(slots, 'body', undefined)).toEqual({
+      slots: undefined,
+      changed: true,
+    })
   })
 
   test('reports single and mixed face assignments using the active face', () => {
@@ -86,6 +114,7 @@ describe('custom mesh material slots', () => {
       topology,
       { body: 'scene:body', accent: 'scene:accent', trim: 'scene:trim' },
       'accent',
+      { body: 'Body', accent: 'Accent', trim: 'Trim' },
     )
 
     expect(result.changed).toBe(true)
@@ -95,6 +124,7 @@ describe('custom mesh material slots', () => {
       'body',
     ])
     expect(result.slots).toEqual({ body: 'scene:body', trim: 'scene:trim' })
+    expect(result.slotNames).toEqual({ body: 'Body', trim: 'Trim' })
     expect(topology.faces[1].materialSlot).toBe('accent')
   })
 
@@ -133,49 +163,16 @@ describe('custom mesh material slots', () => {
     expect(topology.faces[0].materialSlot).toBe('body')
   })
 
-  test('reuses a slot by material identity and allocates only when needed', () => {
-    const topology = createBoxCustomMeshTopology()
-    const existing = assignCustomMeshMaterial(topology, { accent: 'scene:accent' }, ['f-top'], {
-      kind: 'material',
-      materialRef: 'scene:accent',
-    })
-    expect(existing.slotId).toBe('accent')
-    expect(existing.slots).toEqual({ accent: 'scene:accent' })
-
-    const added = assignCustomMeshMaterial(existing.topology, existing.slots, ['f-front'], {
-      kind: 'material',
-      materialRef: 'library:oak',
-    })
-    expect(added.slotId).toBe('material-1')
-    expect(added.slots).toEqual({
-      accent: 'scene:accent',
-      'material-1': 'library:oak',
-    })
-  })
-
-  test('prefers the canonical body slot when duplicate bindings already exist', () => {
-    const topology = createBoxCustomMeshTopology()
-    const result = assignCustomMeshMaterial(
-      topology,
-      { accent: 'scene:shared', body: 'scene:shared' },
-      ['f-top'],
-      { kind: 'material', materialRef: 'scene:shared' },
-    )
-
-    expect(result.slotId).toBe('body')
-    expect(result.changed).toBe(false)
-  })
-
-  test('does not allocate or mutate for an empty or no-op assignment', () => {
+  test('does not mutate for an empty or no-op assignment', () => {
     const topology = createBoxCustomMeshTopology()
     const empty = assignCustomMeshMaterial(topology, undefined, [], {
-      kind: 'material',
-      materialRef: 'scene:accent',
+      kind: 'slot',
+      slotId: 'body',
     })
     expect(empty).toEqual({
       topology,
       slots: undefined,
-      slotId: 'material-1',
+      slotId: 'body',
       changed: false,
     })
 

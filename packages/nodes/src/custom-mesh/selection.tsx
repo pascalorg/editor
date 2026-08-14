@@ -97,9 +97,11 @@ import {
 import {
   customMeshBevelWidthFromDrag,
   customMeshComponentStatus,
+  customMeshGizmoDimensions,
   customMeshOperationAvailability,
   customMeshScaleFactorFromDrag,
   customMeshScaleFactors,
+  customMeshToolbarOffset,
   formatCustomMeshSelectionStatus,
 } from './toolbar-state'
 
@@ -1288,11 +1290,12 @@ function CustomMeshEditor({
   const extent = topologyExtent(displayTopology)
   const componentRadius = Math.min(0.055, Math.max(0.022, extent * 0.011))
   const gizmoOrigin = selectionCentroid(displayTopology, selection)
-  const gizmoLength = Math.min(1.15, Math.max(0.42, extent * 0.29))
-  const gizmoRadius = Math.min(0.04, Math.max(0.014, extent * 0.009))
-  const rotationGizmoRadius = gizmoLength * 0.65
-  const planeHandleSize = gizmoLength * 0.2
-  const planeHandleOffset = gizmoLength * 0.25
+  const gizmoDimensions = customMeshGizmoDimensions(extent)
+  const gizmoLength = gizmoDimensions.length
+  const gizmoRadius = gizmoDimensions.radius
+  const rotationGizmoRadius = gizmoDimensions.rotationRadius
+  const planeHandleSize = gizmoDimensions.planeHandleSize
+  const planeHandleOffset = gizmoDimensions.planeHandleOffset
   const vertexById = useMemo(() => topologyVertexMap(displayTopology), [displayTopology])
   const menuAnchor = useMemo<Point>(() => {
     const xs = displayTopology.vertices.map((vertex) => vertex.position[0])
@@ -1300,10 +1303,10 @@ function CustomMeshEditor({
     const zs = displayTopology.vertices.map((vertex) => vertex.position[2])
     return [
       (Math.min(...xs) + Math.max(...xs)) / 2,
-      Math.max(...ys) + Math.min(1.4, Math.max(0.9, extent * 0.25)),
+      Math.max(...ys) + customMeshToolbarOffset(extent, gizmoLength),
       (Math.min(...zs) + Math.max(...zs)) / 2,
     ]
-  }, [displayTopology, extent])
+  }, [displayTopology, extent, gizmoLength])
 
   useFrame((state) => {
     const outer = outerRef.current

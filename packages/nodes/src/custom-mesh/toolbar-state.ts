@@ -10,6 +10,22 @@ export type CustomMeshOperationAvailability = {
   bevel: boolean
 }
 
+export type CustomMeshGizmoDimensions = {
+  length: number
+  radius: number
+  rotationRadius: number
+  planeHandleSize: number
+  planeHandleOffset: number
+}
+
+const FIXED_CUSTOM_MESH_GIZMO_DIMENSIONS: CustomMeshGizmoDimensions = {
+  length: 0.7,
+  radius: 0.022,
+  rotationRadius: 0.455,
+  planeHandleSize: 0.14,
+  planeHandleOffset: 0.175,
+}
+
 export function customMeshOperationAvailability(
   mode: CustomMeshToolbarMode,
   selectedCount: number,
@@ -74,6 +90,16 @@ export function customMeshScaleFactorFromDrag(
     factor = Math.round(factor / snapStep) * snapStep
   }
   return Math.max(0.01, factor)
+}
+
+export function customMeshGizmoDimensions(_topologyExtent: number): CustomMeshGizmoDimensions {
+  return FIXED_CUSTOM_MESH_GIZMO_DIMENSIONS
+}
+
+export function customMeshToolbarOffset(topologyExtent: number, gizmoLength: number): number {
+  const meshRelativeOffset = Math.min(1.4, Math.max(0.9, topologyExtent * 0.25))
+  const scaleHandleReach = gizmoLength * 1.2
+  return Math.max(meshRelativeOffset, scaleHandleReach + 0.31)
 }
 
 export function customMeshBevelWidthFromDrag(

@@ -7,6 +7,16 @@ import { buildCustomMeshGeometry } from './geometry'
 import { customMeshPaint } from './paint'
 
 describe('buildCustomMeshGeometry', () => {
+  test('uses the shared wall-role material for an unpainted body', () => {
+    const node = CustomMeshNode.parse({ name: 'Default mesh' })
+    const group = buildCustomMeshGeometry(node)
+    const mesh = group.getObjectByName('custom-mesh-body')
+
+    expect(mesh).toBeInstanceOf(Mesh)
+    if (!(mesh instanceof Mesh) || !Array.isArray(mesh.material)) return
+    expect(mesh.material[0]).toBe(createSurfaceRoleMaterial('wall', 'clay'))
+  })
+
   test('uses the active theme role when the body material cannot resolve', () => {
     const node = CustomMeshNode.parse({
       name: 'Themed mesh',
@@ -64,8 +74,16 @@ describe('buildCustomMeshGeometry', () => {
     expect(mesh.userData.slotIds).toEqual(['body', 'accent'])
   })
 
-  test('resolves every default-box surface to its stable topology face', () => {
-    const node = CustomMeshNode.parse({ name: 'Raycast mesh' })
+  test('resolves every default-box surface to its assigned material slot', () => {
+    const base = CustomMeshNode.parse({ name: 'Raycast mesh' })
+    const node = {
+      ...base,
+      topology: {
+        ...base.topology,
+        faces: base.topology.faces.map((face) => ({ ...face, materialSlot: face.id })),
+      },
+      slotNames: Object.fromEntries(base.topology.faces.map((face) => [face.id, face.id])),
+    }
     const group = buildCustomMeshGeometry(node)
     const mesh = group.getObjectByName('custom-mesh-body')
 
@@ -88,12 +106,22 @@ describe('buildCustomMeshGeometry', () => {
           materialIndex: 0,
           ray: new Ray(new Vector3(...origin), new Vector3(...direction)),
         }),
-      ).toBe(`face_${faceId}`)
+      ).toBe(faceId)
     }
   })
 
   test('resolves a face through the rendered mesh world transform', () => {
-    const node = CustomMeshNode.parse({ name: 'Transformed raycast mesh' })
+    const base = CustomMeshNode.parse({ name: 'Transformed raycast mesh' })
+    const node = {
+      ...base,
+      topology: {
+        ...base.topology,
+        faces: base.topology.faces.map((face) =>
+          face.id === 'f-front' ? { ...face, materialSlot: 'front' } : face,
+        ),
+      },
+      slotNames: { ...base.slotNames, front: 'Front' },
+    }
     const group = buildCustomMeshGeometry(node)
     const mesh = group.getObjectByName('custom-mesh-body')
 
@@ -112,7 +140,7 @@ describe('buildCustomMeshGeometry', () => {
         materialIndex: 0,
         ray: new Ray(origin, direction),
       }),
-    ).toBe('face_f-front')
+    ).toBe('front')
   })
 
   test('omits malformed faces from geometry and paint hit metadata', () => {
@@ -141,7 +169,7 @@ describe('buildCustomMeshGeometry', () => {
     ).toBe(false)
   })
 
-  test('resolves and previews only the hit topology face', () => {
+  test('resolves and previews every face assigned to the hit slot', () => {
     const base = CustomMeshNode.parse({
       name: 'Preview mesh',
       slots: { accent: 'library:preset-softwhite' },
@@ -152,7 +180,7 @@ describe('buildCustomMeshGeometry', () => {
         ...base.topology,
         faces: base.topology.faces.map((face, index) => ({
           ...face,
-          materialSlot: index === 1 ? 'accent' : 'body',
+          materialSlot: index === 1 || index === 2 ? 'accent' : 'body',
         })),
       },
     }
@@ -168,7 +196,7 @@ describe('buildCustomMeshGeometry', () => {
       materialIndex: 1,
       ray: new Ray(new Vector3(0, 10, 0), new Vector3(0, -1, 0)),
     })
-    expect(role).toBe('face_f-top')
+    expect(role).toBe('accent')
     expect(Array.isArray(mesh.material)).toBe(true)
     if (!Array.isArray(mesh.material)) return
     const previous = mesh.material
@@ -191,6 +219,7 @@ describe('buildCustomMeshGeometry', () => {
     expect(mesh.material).toHaveLength(previous.length + 1)
     expect(mesh.geometry.groups[0]?.materialIndex).toBe(previousGroupIndices[0])
     expect(mesh.geometry.groups[1]?.materialIndex).toBe(previous.length)
+    expect(mesh.geometry.groups[2]?.materialIndex).toBe(previous.length)
     restore?.()
     expect(mesh.material).toBe(previous)
     expect(mesh.geometry.groups.map((group) => group.materialIndex)).toEqual(previousGroupIndices)
@@ -223,7 +252,7 @@ describe('buildCustomMeshGeometry', () => {
 
     const restore = customMeshPaint.applyPreview({
       node,
-      role: 'face_f-top',
+      role: 'accent',
       material: {
         preset: 'custom',
         properties: { color: '#c2410c' },

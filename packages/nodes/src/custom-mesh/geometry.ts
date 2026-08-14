@@ -85,7 +85,7 @@ export function buildCustomMeshGeometry(
   const normals: number[] = []
   const uvs: number[] = []
   const faceRanges: { faceId: string; start: number; count: number }[] = []
-  const slotIds = customMeshMaterialSlotIds(node.topology, node.slots)
+  const slotIds = customMeshMaterialSlotIds(node.topology, node.slots, node.slotNames)
   const materialIndexBySlotId = new Map(slotIds.map((slotId, index) => [slotId, index]))
   const faceNormals = new Map(
     node.topology.faces.flatMap((face) => {

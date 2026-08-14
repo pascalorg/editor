@@ -1,15 +1,16 @@
 import {
-  CUSTOM_MESH_BODY_MATERIAL_REF,
   type CustomMeshNode as CustomMeshNodeType,
   createBoxCustomMeshTopology,
   type NodeDefinition,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { customMeshContextualHelp } from './contextual-help'
 import { buildCustomMeshFloorplan } from './floorplan'
 import { buildCustomMeshGeometry } from './geometry'
 import { customMeshPaint } from './paint'
 import { customMeshParametrics } from './parametrics'
 import { CustomMeshNode } from './schema'
+import { customMeshSlots } from './slots'
 
 export function customMeshBounds(node: CustomMeshNodeType) {
   const xs = node.topology.vertices.map((vertex) => vertex.position[0])
@@ -45,7 +46,7 @@ function footprintPosition(node: CustomMeshNodeType, center: [number, number, nu
 
 export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
   kind: 'custom-mesh',
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: CustomMeshNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -55,6 +56,7 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
       tool: () => import('./tool'),
       preferredView: '3d',
     } satisfies FloorplanNodeExtension<CustomMeshNodeType>,
+    'pascal:editor/contextual-help': customMeshContextualHelp,
   },
 
   defaults: () => ({
@@ -65,7 +67,8 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
     position: [0, 0, 0],
     rotation: 0,
     topology: createBoxCustomMeshTopology(),
-    slots: { body: CUSTOM_MESH_BODY_MATERIAL_REF },
+    slots: {},
+    slotNames: { body: 'Body' },
   }),
 
   capabilities: {
@@ -96,6 +99,7 @@ export const customMeshDefinition: NodeDefinition<typeof CustomMeshNode> = {
       collides: true,
     },
     paint: customMeshPaint,
+    slots: (rawNode) => customMeshSlots(rawNode as CustomMeshNodeType),
   },
 
   geometry: buildCustomMeshGeometry,

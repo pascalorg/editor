@@ -34,8 +34,6 @@ export type CustomMeshTopologyIssue = {
   message: string
 }
 
-export const CUSTOM_MESH_BODY_MATERIAL_REF = 'library:concrete-drywall'
-
 export function customMeshUndirectedEdgeKey(a: string, b: string) {
   return a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`
 }
@@ -162,18 +160,15 @@ export const CustomMeshNode = BaseNode.extend({
   rotation: z.number().default(0),
   supportSlabId: z.string().optional(),
   topology: CustomMeshTopology.default(createBoxCustomMeshTopology),
-  slots: z
-    .record(z.string(), z.string())
-    .default({})
-    .transform(
-      (slots): Record<string, string> => ({ body: CUSTOM_MESH_BODY_MATERIAL_REF, ...slots }),
-    ),
+  slots: z.record(z.string(), z.string()).default({}),
+  slotNames: z.record(z.string(), z.string().min(1)).default({ body: 'Body' }),
 }).describe(dedent`
   Custom mesh node - a topology-backed editable solid.
   - topology: persistent vertices, edges, and ordered face loops with stable IDs
   - position/rotation: level-local placement transform
   - supportSlabId: persisted placement surface that prevents later slabs from lifting the mesh
-  - slots: material references keyed by face materialSlot; body always starts reusable
+  - slots: material references keyed by face materialSlot; an unbound body uses the wall-role default
+  - slotNames: user-facing names for stable material slots; body is the permanent default slot
 `)
 
 export type CustomMeshNode = z.infer<typeof CustomMeshNode>

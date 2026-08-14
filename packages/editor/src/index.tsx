@@ -312,6 +312,12 @@ export {
   resolveCeilingPlanPointSnap,
 } from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
+export type { ContextualShortcutHint } from './lib/contextual-help'
+export {
+  CONTEXTUAL_HELP_NODE_EXTENSION_KEY,
+  type ContextualHelpNodeExtension,
+  getContextualHelpNodeExtension,
+} from './lib/contextual-help-extension'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {
   CONTINUATION_PROFILES,

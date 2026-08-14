@@ -8,15 +8,14 @@ import {
 export const CUSTOM_MESH_BODY_SLOT_ID = 'body'
 
 export type CustomMeshMaterialSlots = Record<string, MaterialRef> | undefined
+export type CustomMeshMaterialSlotNames = Record<string, string> | undefined
 
 export type CustomMeshMaterialSelection =
   | { kind: 'empty'; activeSlotId: null }
   | { kind: 'single'; activeSlotId: string; slotId: string }
   | { kind: 'mixed'; activeSlotId: string | null }
 
-export type CustomMeshMaterialAssignment =
-  | { kind: 'slot'; slotId: string }
-  | { kind: 'material'; materialRef: MaterialRef }
+export type CustomMeshMaterialAssignment = { kind: 'slot'; slotId: string }
 
 export type CustomMeshMaterialAssignmentResult = {
   topology: CustomMeshTopology
@@ -28,8 +27,19 @@ export type CustomMeshMaterialAssignmentResult = {
 export type CustomMeshMaterialSlotRemovalResult = {
   topology: CustomMeshTopology
   slots: CustomMeshMaterialSlots
+  slotNames: CustomMeshMaterialSlotNames
   fallbackSlotId: string
   changed: boolean
+}
+
+export type CustomMeshMaterialSlotUpdateResult = {
+  slots: CustomMeshMaterialSlots
+  changed: boolean
+}
+
+export type CustomMeshMaterialSlotCreationResult = {
+  slotId: string
+  slotNames: Record<string, string>
 }
 
 function materialSlotsFromNode(node: unknown): Record<string, unknown> | null {
@@ -59,11 +69,63 @@ export function collectReusableCustomMeshMaterialRefs(
 export function customMeshMaterialSlotIds(
   topology: CustomMeshTopology,
   slots: CustomMeshMaterialSlots,
+  slotNames?: CustomMeshMaterialSlotNames,
 ): string[] {
   const slotIds = new Set<string>([CUSTOM_MESH_BODY_SLOT_ID])
+  for (const slotId of Object.keys(slotNames ?? {})) slotIds.add(slotId)
   for (const slotId of Object.keys(slots ?? {})) slotIds.add(slotId)
   for (const face of topology.faces) slotIds.add(face.materialSlot)
   return [...slotIds]
+}
+
+export function createCustomMeshMaterialSlot(
+  topology: CustomMeshTopology,
+  slots: CustomMeshMaterialSlots,
+  slotNames: CustomMeshMaterialSlotNames,
+): CustomMeshMaterialSlotCreationResult {
+  const used = new Set(customMeshMaterialSlotIds(topology, slots, slotNames))
+  let index = 1
+  while (used.has(`slot-${index}`)) index += 1
+  const slotId = `slot-${index}`
+  return {
+    slotId,
+    slotNames: { ...slotNames, [slotId]: `Slot ${index}` },
+  }
+}
+
+export function renameCustomMeshMaterialSlot(
+  topology: CustomMeshTopology,
+  slots: CustomMeshMaterialSlots,
+  slotNames: CustomMeshMaterialSlotNames,
+  slotId: string,
+  name: string,
+): CustomMeshMaterialSlotNames {
+  const nextName = name.trim()
+  if (
+    !nextName ||
+    !customMeshMaterialSlotIds(topology, slots, slotNames).includes(slotId) ||
+    slotNames?.[slotId] === nextName
+  ) {
+    return slotNames
+  }
+  return { ...slotNames, [slotId]: nextName }
+}
+
+export function setCustomMeshMaterialSlot(
+  slots: CustomMeshMaterialSlots,
+  slotId: string,
+  materialRef: MaterialRef | undefined,
+): CustomMeshMaterialSlotUpdateResult {
+  if (materialRef) {
+    if (slots?.[slotId] === materialRef) return { slots, changed: false }
+    return { slots: { ...slots, [slotId]: materialRef }, changed: true }
+  }
+  if (!Object.hasOwn(slots ?? {}, slotId)) return { slots, changed: false }
+  const retainedEntries = Object.entries(slots ?? {}).filter(([candidate]) => candidate !== slotId)
+  return {
+    slots: retainedEntries.length > 0 ? Object.fromEntries(retainedEntries) : undefined,
+    changed: true,
+  }
 }
 
 export function customMeshMaterialSelection(
@@ -95,20 +157,25 @@ export function removeCustomMeshMaterialSlot(
   topology: CustomMeshTopology,
   slots: CustomMeshMaterialSlots,
   slotId: string,
+  slotNames?: CustomMeshMaterialSlotNames,
 ): CustomMeshMaterialSlotRemovalResult {
-  const slotIds = customMeshMaterialSlotIds(topology, slots)
+  const slotIds = customMeshMaterialSlotIds(topology, slots, slotNames)
   const fallbackSlotId = slotIds[0] ?? CUSTOM_MESH_BODY_SLOT_ID
   if (slotId === fallbackSlotId || !slotIds.includes(slotId)) {
-    return { topology, slots, fallbackSlotId, changed: false }
+    return { topology, slots, slotNames, fallbackSlotId, changed: false }
   }
 
   const remapsFaces = topology.faces.some((face) => face.materialSlot === slotId)
   const removesBinding = Object.hasOwn(slots ?? {}, slotId)
-  if (!(remapsFaces || removesBinding)) {
-    return { topology, slots, fallbackSlotId, changed: false }
+  const removesName = Object.hasOwn(slotNames ?? {}, slotId)
+  if (!(remapsFaces || removesBinding || removesName)) {
+    return { topology, slots, slotNames, fallbackSlotId, changed: false }
   }
 
   const retainedEntries = Object.entries(slots ?? {}).filter(([candidate]) => candidate !== slotId)
+  const retainedNames = Object.entries(slotNames ?? {}).filter(
+    ([candidate]) => candidate !== slotId,
+  )
   return {
     topology: remapsFaces
       ? {
@@ -119,6 +186,7 @@ export function removeCustomMeshMaterialSlot(
         }
       : topology,
     slots: retainedEntries.length > 0 ? Object.fromEntries(retainedEntries) : undefined,
+    slotNames: retainedNames.length > 0 ? Object.fromEntries(retainedNames) : undefined,
     fallbackSlotId,
     changed: true,
   }
@@ -146,49 +214,18 @@ export function selectCustomMeshFacesByMaterialSlot(
   ]
 }
 
-function findSlotIdForMaterialRef(
-  topology: CustomMeshTopology,
-  slots: CustomMeshMaterialSlots,
-  materialRef: MaterialRef,
-): string | null {
-  return (
-    customMeshMaterialSlotIds(topology, slots).find((slotId) => slots?.[slotId] === materialRef) ??
-    null
-  )
-}
-
-function allocateMaterialSlotId(
-  topology: CustomMeshTopology,
-  slots: CustomMeshMaterialSlots,
-): string {
-  const used = new Set(customMeshMaterialSlotIds(topology, slots))
-  let index = 1
-  while (used.has(`material-${index}`)) index += 1
-  return `material-${index}`
-}
-
 export function assignCustomMeshMaterial(
   topology: CustomMeshTopology,
   slots: CustomMeshMaterialSlots,
   selectedFaceIds: readonly string[],
   assignment: CustomMeshMaterialAssignment,
+  slotNames?: CustomMeshMaterialSlotNames,
 ): CustomMeshMaterialAssignmentResult {
   const selected = new Set(selectedFaceIds)
   const hasSelectedFace = topology.faces.some((face) => selected.has(face.id))
-  let nextSlots = slots
-  let slotId: string
-
-  if (assignment.kind === 'slot') {
-    slotId = assignment.slotId
-    if (!customMeshMaterialSlotIds(topology, slots).includes(slotId)) {
-      return { topology, slots, slotId, changed: false }
-    }
-  } else {
-    const existingSlotId = findSlotIdForMaterialRef(topology, slots, assignment.materialRef)
-    slotId = existingSlotId ?? allocateMaterialSlotId(topology, slots)
-    if (!existingSlotId && hasSelectedFace) {
-      nextSlots = { ...slots, [slotId]: assignment.materialRef }
-    }
+  const slotId = assignment.slotId
+  if (!customMeshMaterialSlotIds(topology, slots, slotNames).includes(slotId)) {
+    return { topology, slots, slotId, changed: false }
   }
 
   if (!hasSelectedFace) return { topology, slots, slotId, changed: false }
@@ -203,7 +240,7 @@ export function assignCustomMeshMaterial(
         selected.has(face.id) ? { ...face, materialSlot: slotId } : face,
       ),
     },
-    slots: nextSlots,
+    slots,
     slotId,
     changed: true,
   }
