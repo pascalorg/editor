@@ -108,6 +108,9 @@ export function useAutoSave({
     // collection change still triggers a save.
     let lastCollectionsRef = useScene.getState().collections
     let lastSavedViewsRef = useScene.getState().savedViews
+    // Comments are the one tracked bag that is *not* in the undo history, so
+    // reference tracking here is the only thing that gets a new thread saved.
+    let lastCommentsRef = useScene.getState().comments
     let lastDefinitionsRef = useScene.getState().definitions
     let lastMaterialsRef = useScene.getState().materials
     let lastInstalledPluginsRef = useScene.getState().installedPlugins
@@ -124,6 +127,7 @@ export function useAutoSave({
         rootNodeIds,
         collections,
         savedViews,
+        comments,
         definitions,
         materials,
         installedPlugins,
@@ -133,6 +137,7 @@ export function useAutoSave({
         rootNodeIds,
         collections,
         savedViews,
+        comments,
         definitions,
         materials,
         installedPlugins,
@@ -184,6 +189,7 @@ export function useAutoSave({
         storedNodeCount.trackLoadedGraph(Object.keys(state.nodes).length)
         lastCollectionsRef = state.collections
         lastSavedViewsRef = state.savedViews
+        lastCommentsRef = state.comments
         lastDefinitionsRef = state.definitions
         lastMaterialsRef = state.materials
         lastInstalledPluginsRef = state.installedPlugins
@@ -195,6 +201,7 @@ export function useAutoSave({
         lastNodesSnapshot = JSON.stringify(state.nodes)
         lastCollectionsRef = state.collections
         lastSavedViewsRef = state.savedViews
+        lastCommentsRef = state.comments
         lastDefinitionsRef = state.definitions
         lastMaterialsRef = state.materials
         lastInstalledPluginsRef = state.installedPlugins
@@ -206,6 +213,7 @@ export function useAutoSave({
         currentNodesSnapshot !== lastNodesSnapshot ||
         state.collections !== lastCollectionsRef ||
         state.savedViews !== lastSavedViewsRef ||
+        state.comments !== lastCommentsRef ||
         state.definitions !== lastDefinitionsRef ||
         state.materials !== lastMaterialsRef ||
         state.installedPlugins !== lastInstalledPluginsRef
@@ -214,6 +222,7 @@ export function useAutoSave({
       lastNodesSnapshot = currentNodesSnapshot
       lastCollectionsRef = state.collections
       lastSavedViewsRef = state.savedViews
+      lastCommentsRef = state.comments
       lastDefinitionsRef = state.definitions
       lastMaterialsRef = state.materials
       lastInstalledPluginsRef = state.installedPlugins
@@ -246,6 +255,7 @@ export function useAutoSave({
         rootNodeIds,
         collections,
         savedViews,
+        comments,
         definitions,
         materials,
         installedPlugins,
@@ -266,6 +276,7 @@ export function useAutoSave({
         rootNodeIds,
         collections,
         savedViews,
+        comments,
         definitions,
         materials,
         installedPlugins,

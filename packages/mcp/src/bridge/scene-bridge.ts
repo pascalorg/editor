@@ -80,6 +80,7 @@ export class SceneBridge {
         rootNodeIds: state.rootNodeIds,
         collections: state.collections ?? {},
         savedViews: state.savedViews ?? {},
+        comments: state.comments ?? {},
         definitions: state.definitions ?? {},
         materials: state.materials ?? {},
         ...(state.hasExplicitPluginInstallState || state.installedPlugins.length > 0
@@ -133,6 +134,7 @@ export class SceneBridge {
       value && typeof value === 'object' && !Array.isArray(value) ? value : undefined
     const collections = record(obj.collections) as NonNullable<SetSceneExtra>['collections']
     const savedViews = record(obj.savedViews) as NonNullable<SetSceneExtra>['savedViews']
+    const comments = record(obj.comments) as NonNullable<SetSceneExtra>['comments']
     const definitions = record(obj.definitions) as NonNullable<SetSceneExtra>['definitions']
     const materials = record(obj.materials) as NonNullable<SetSceneExtra>['materials']
     const installedPlugins = Array.isArray(obj.installedPlugins)
@@ -148,6 +150,7 @@ export class SceneBridge {
     this.setScene(nodes as Record<AnyNodeId, AnyNode>, rootNodeIds as AnyNodeId[], {
       ...(collections && { collections }),
       ...(savedViews && { savedViews }),
+      ...(comments && { comments }),
       ...(definitions && { definitions }),
       ...(materials && { materials }),
       ...(installedPlugins && { installedPlugins, hasExplicitPluginInstallState: true }),

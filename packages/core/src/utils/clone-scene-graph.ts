@@ -6,6 +6,7 @@ import {
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
+import type { CommentId, CommentThread } from '../schema/comments'
 import type { Definition, DefinitionId } from '../schema/definitions'
 import type { SavedView, SavedViewId } from '../schema/saved-views'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
@@ -15,6 +16,7 @@ export type SceneGraph = {
   rootNodeIds: AnyNodeId[]
   collections?: Record<CollectionId, Collection>
   savedViews?: Record<SavedViewId, SavedView>
+  comments?: Record<CommentId, CommentThread>
   definitions?: Record<DefinitionId, Definition>
   materials?: Record<SceneMaterialId, SceneMaterial>
   installedPlugins?: string[]
@@ -38,8 +40,16 @@ function extractIdPrefix(id: string): string {
  * - Multi-scene in-memory scenarios
  */
 export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
-  const { nodes, rootNodeIds, collections, savedViews, definitions, materials, installedPlugins } =
-    sceneGraph
+  const {
+    nodes,
+    rootNodeIds,
+    collections,
+    savedViews,
+    comments,
+    definitions,
+    materials,
+    installedPlugins,
+  } = sceneGraph
 
   // Build ID mapping: old ID -> new ID
   const idMap = new Map<string, string>()
@@ -206,6 +216,32 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     }
   }
 
+  // Clone and remap comment threads. A thread pinned to a node that did not
+  // survive into this clone is dropped rather than kept dangling: the feedback
+  // was about that element, and a pin with no anchor cannot be drawn.
+  let clonedComments: Record<CommentId, CommentThread> | undefined
+  if (comments) {
+    clonedComments = {} as Record<CommentId, CommentThread>
+    for (const thread of Object.values(comments)) {
+      const cloned: CommentThread = structuredClone(thread)
+
+      if (cloned.anchor.kind === 'node') {
+        const nodeId = idMap.get(cloned.anchor.nodeId) as AnyNodeId | undefined
+        if (!nodeId) continue
+        cloned.anchor = { ...cloned.anchor, nodeId }
+      }
+      if (cloned.levelId) {
+        const levelId = idMap.get(cloned.levelId) as AnyNodeId | undefined
+        if (levelId) cloned.levelId = levelId
+        else delete cloned.levelId
+      }
+
+      const id = generateId('comment') as CommentId
+      cloned.id = id
+      clonedComments[id] = cloned
+    }
+  }
+
   let clonedDefinitions: Record<DefinitionId, Definition> | undefined
   if (definitions) {
     clonedDefinitions = {} as Record<DefinitionId, Definition>
@@ -226,6 +262,7 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     rootNodeIds: clonedRootNodeIds,
     ...(clonedCollections && { collections: clonedCollections }),
     ...(clonedSavedViews && { savedViews: clonedSavedViews }),
+    ...(clonedComments && { comments: clonedComments }),
     ...(clonedDefinitions && { definitions: clonedDefinitions }),
     // Material ids are deliberately *not* remapped. Nodes point at these
     // through `slots` values shaped `scene:mat_…` — opaque strings that the
@@ -373,8 +410,16 @@ export function forkSceneGraph(
     return cloneSceneGraph(sceneGraph)
   }
 
-  const { nodes, rootNodeIds, collections, savedViews, definitions, materials, installedPlugins } =
-    sceneGraph
+  const {
+    nodes,
+    rootNodeIds,
+    collections,
+    savedViews,
+    comments,
+    definitions,
+    materials,
+    installedPlugins,
+  } = sceneGraph
 
   // First, identify scan and guide node IDs to exclude (user-uploaded imagery)
   const excludedNodeIds = new Set<string>()
@@ -461,6 +506,9 @@ export function forkSceneGraph(
     // and collection references, and drops the ones whose target didn't survive
     // the filter above.
     ...(savedViews && { savedViews }),
+    // Same reasoning as saved views: `cloneSceneGraph` drops the threads whose
+    // anchor node was filtered out above, so no pre-filter is needed here.
+    ...(comments && { comments }),
     ...(filteredDefinitions && { definitions: filteredDefinitions }),
     // Kept whole rather than filtered to the surviving nodes: a palette entry
     // is authored content in its own right, and dropping the scan node that

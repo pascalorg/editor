@@ -9,6 +9,14 @@ import { cloneNodesInto, collectSubtree } from '../registry/subtree'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
+import type {
+  CommentAuthor,
+  CommentId,
+  CommentReply,
+  CommentReplyId,
+  CommentThread,
+} from '../schema/comments'
+import { generateCommentId, generateCommentReplyId, normalizeComments } from '../schema/comments'
 import {
   type Definition,
   type DefinitionId,
@@ -1290,12 +1298,15 @@ export type SceneState = {
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
   savedViews: Record<SavedViewId, SavedView>
+  comments: Record<CommentId, CommentThread>
   definitions: Record<DefinitionId, Definition>
   materials: Record<SceneMaterialId, SceneMaterial>
   installedPlugins: string[]
   hasExplicitPluginInstallState: boolean
 
-  // 5. Read-only lock — when true all create/update/delete operations are no-ops
+  // 5. Read-only lock — when true all create/update/delete operations are no-ops.
+  //    Comment actions are deliberately exempt: the point of a view-only share
+  //    link is that the visitor can still leave feedback.
   readOnly: boolean
   setReadOnly: (readOnly: boolean) => void
 
@@ -1309,6 +1320,7 @@ export type SceneState = {
     extra?: {
       collections?: Record<CollectionId, Collection>
       savedViews?: Record<SavedViewId, SavedView>
+      comments?: Record<CommentId, CommentThread>
       definitions?: Record<DefinitionId, Definition>
       materials?: Record<SceneMaterialId, SceneMaterial>
       installedPlugins?: string[]
@@ -1339,6 +1351,25 @@ export type SceneState = {
   updateSavedView: (id: SavedViewId, data: Partial<Omit<SavedView, 'id'>>) => void
   deleteSavedView: (id: SavedViewId) => void
   moveSavedView: (fromIndex: number, toIndex: number) => void
+
+  // Comment actions — exempt from `readOnly`, see the field's note
+  createComment: (
+    thread: Omit<CommentThread, 'id' | 'createdAt' | 'replies'> &
+      Partial<Pick<CommentThread, 'createdAt' | 'replies'>>,
+  ) => CommentId
+  updateComment: (id: CommentId, data: Partial<Omit<CommentThread, 'id' | 'replies'>>) => void
+  deleteComment: (id: CommentId) => void
+  setCommentResolved: (id: CommentId, resolved: boolean, by?: CommentAuthor) => void
+  addCommentReply: (
+    id: CommentId,
+    reply: Omit<CommentReply, 'id' | 'createdAt'> & Partial<Pick<CommentReply, 'createdAt'>>,
+  ) => CommentReplyId | null
+  updateCommentReply: (
+    id: CommentId,
+    replyId: CommentReplyId,
+    data: Partial<Omit<CommentReply, 'id'>>,
+  ) => void
+  deleteCommentReply: (id: CommentId, replyId: CommentReplyId) => void
 
   // Collection actions
   createCollection: (name: string, nodeIds?: AnyNodeId[]) => CollectionId
@@ -1425,6 +1456,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
       savedViews: {} as Record<SavedViewId, SavedView>,
+      comments: {} as Record<CommentId, CommentThread>,
       definitions: {} as Record<DefinitionId, Definition>,
       materials: {} as Record<SceneMaterialId, SceneMaterial>,
       installedPlugins: [],
@@ -1441,6 +1473,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           dirtyNodes: new Set<AnyNodeId>(),
           collections: {},
           savedViews: {},
+          comments: {},
           definitions: {},
           materials: {},
           installedPlugins: [],
@@ -1504,6 +1537,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           dirtyNodes: new Set<AnyNodeId>(),
           collections: extra?.collections ?? {},
           savedViews: normalizeSavedViews(extra?.savedViews),
+          comments: normalizeComments(extra?.comments),
           definitions: normalizedDefinitions,
           materials,
           installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
@@ -1641,6 +1675,109 @@ const useScene: UseSceneStore = create<SceneState>()(
             if (view) next[patch.id] = { ...view, order: patch.order }
           }
           return { savedViews: next }
+        })
+      },
+
+      // --- COMMENTS ---
+      //
+      // No `readOnly` guard anywhere in this block, and no history entry: a
+      // comment is feedback about the model, not an edit to it. Undo must not
+      // swallow one, and a view-only visitor must still be able to leave one.
+      // `comments` is kept out of the zundo partialize to get both.
+
+      createComment: (thread) => {
+        const id = generateCommentId()
+        set((state) => ({
+          comments: {
+            ...state.comments,
+            [id]: {
+              ...thread,
+              id,
+              createdAt: thread.createdAt ?? new Date().toISOString(),
+              replies: thread.replies ?? [],
+            },
+          },
+        }))
+        return id
+      },
+
+      updateComment: (id, data) => {
+        set((state) => {
+          const thread = state.comments[id]
+          if (!thread) return state
+          return { comments: { ...state.comments, [id]: { ...thread, ...data, id } } }
+        })
+      },
+
+      deleteComment: (id) => {
+        set((state) => {
+          if (!state.comments[id]) return state
+          const next = { ...state.comments }
+          delete next[id]
+          return { comments: next }
+        })
+      },
+
+      setCommentResolved: (id, resolved, by) => {
+        set((state) => {
+          const thread = state.comments[id]
+          if (!thread) return state
+          const next = { ...thread }
+          if (resolved) {
+            next.resolved = true
+            next.resolvedAt = new Date().toISOString()
+            if (by) next.resolvedBy = by
+          } else {
+            // Delete rather than write `false`: an unresolved thread carries no
+            // resolved fields at all, which is what `normalizeComments` emits.
+            delete next.resolved
+            delete next.resolvedAt
+            delete next.resolvedBy
+          }
+          return { comments: { ...state.comments, [id]: next } }
+        })
+      },
+
+      addCommentReply: (id, reply) => {
+        if (!get().comments[id]) return null
+        const replyId = generateCommentReplyId()
+        set((state) => {
+          const thread = state.comments[id]
+          if (!thread) return state
+          const next: CommentReply = {
+            ...reply,
+            id: replyId,
+            createdAt: reply.createdAt ?? new Date().toISOString(),
+          }
+          return {
+            comments: {
+              ...state.comments,
+              [id]: { ...thread, replies: [...thread.replies, next] },
+            },
+          }
+        })
+        return replyId
+      },
+
+      updateCommentReply: (id, replyId, data) => {
+        set((state) => {
+          const thread = state.comments[id]
+          if (!thread) return state
+          const index = thread.replies.findIndex((reply) => reply.id === replyId)
+          if (index === -1) return state
+          const replies = [...thread.replies]
+          replies[index] = { ...replies[index], ...data, id: replyId } as CommentReply
+          return { comments: { ...state.comments, [id]: { ...thread, replies } } }
+        })
+      },
+
+      deleteCommentReply: (id, replyId) => {
+        set((state) => {
+          const thread = state.comments[id]
+          if (!thread) return state
+          const replies = thread.replies.filter((reply) => reply.id !== replyId)
+          if (replies.length === thread.replies.length) return state
+          return { comments: { ...state.comments, [id]: { ...thread, replies } } }
         })
       },
 
@@ -2366,11 +2503,16 @@ export function applySceneSnapshot(
   if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) {
     throw new Error('Cannot replace the scene snapshot during an active interaction')
   }
+  // Comments are not part of the history snapshot, and `setScene` resets every
+  // scene-side bag it isn't handed. Carrying them through keeps a snapshot
+  // replacement from silently dropping feedback that was never an edit.
+  const comments = useScene.getState().comments
   pauseSceneHistory(useScene)
   try {
     useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
       collections: snapshot.collections,
       savedViews: snapshot.savedViews,
+      comments,
       definitions: snapshot.definitions,
       installedPlugins: snapshot.installedPlugins,
       materials: snapshot.materials,

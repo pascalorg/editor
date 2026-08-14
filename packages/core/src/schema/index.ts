@@ -13,6 +13,20 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 export { CameraSchema } from './camera'
 // Collections
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
+// Comments
+export {
+  type CommentAnchor,
+  type CommentAuthor,
+  type CommentId,
+  type CommentReply,
+  type CommentReplyId,
+  type CommentThread,
+  generateCommentId,
+  generateCommentReplyId,
+  normalizeComments,
+  resolveCommentAnchorPosition,
+  sortCommentThreads,
+} from './comments'
 // Definitions
 export {
   Definition,

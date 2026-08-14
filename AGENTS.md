@@ -156,6 +156,15 @@ Three things that bite:
   reverts to defaults on reopen. This exact bug class shipped twice already
   (materials and collections, `CHANGELOG.md` #597). `clone-scene-graph.ts` and
   `use-scene.ts`'s load path are the two places to check.
+- **`comments` is persisted but deliberately *not* history-tracked**, and it is
+  the only scene-side bag exempt from the `readOnly` lock. A comment is feedback
+  about the model, not an edit to it: undo must not swallow one, and a
+  view-only share-link visitor must still be able to leave one. Two consequences
+  follow. It is absent from the zundo partialize, so `SceneSnapshot` does not
+  carry it and `applySceneSnapshot` has to thread the current bag through by
+  hand or a snapshot replacement wipes it. And reference tracking in
+  `use-auto-save.ts` is the *only* thing that gets a new thread saved — there is
+  no history entry to notice.
 - **A new persisted field on `useEditor` will not survive a reload.** That store
   persists with `skipHydration: true` and rehydrates from an effect in
   `components/editor/index.tsx`; the app's startup writes reach the store first,

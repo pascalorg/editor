@@ -22,6 +22,7 @@ test('an omitted field signs the same as its applied default', () => {
       graph({
         collections: {},
         savedViews: {},
+        comments: {},
         definitions: {},
         materials: {},
         installedPlugins: [],
@@ -66,6 +67,25 @@ test('changing any signed field changes the signature', () => {
             name: 'Entry',
             order: 0,
             camera: { position: [1, 1, 1], target: [0, 0, 0], projection: 'perspective' },
+          },
+        },
+      }),
+    ),
+  ).not.toBe(base)
+  // Comments are the field most exposed to this: they are the only tracked bag
+  // outside the undo history, so leaving a comment is often the *only* change
+  // in a save body.
+  expect(
+    sceneGraphSignature(
+      graph({
+        comments: {
+          comment_1: {
+            id: 'comment_1',
+            anchor: { kind: 'point', position: [1, 0, 2] },
+            author: { name: 'Ada' },
+            body: 'check this',
+            createdAt: '2026-08-01T09:00:00.000Z',
+            replies: [],
           },
         },
       }),

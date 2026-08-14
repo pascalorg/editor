@@ -22,6 +22,7 @@ export type SceneGraph = {
   // payloads (and callers that only build nodes) stay valid.
   collections?: Record<string, unknown>
   savedViews?: Record<string, unknown>
+  comments?: Record<string, unknown>
   definitions?: Record<string, unknown>
   materials?: Record<string, unknown>
   installedPlugins?: string[]
@@ -392,6 +393,7 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
       rootNodeIds,
       collections,
       savedViews,
+      comments,
       definitions,
       materials,
       installedPlugins,
@@ -399,6 +401,7 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
     useScene.getState().setScene(nodes as any, rootNodeIds as any, {
       collections: collections as any,
       savedViews: savedViews as any,
+      comments: comments as any,
       definitions: definitions as any,
       materials: materials as any,
       installedPlugins: installedPlugins ?? defaultInstalledPlugins,

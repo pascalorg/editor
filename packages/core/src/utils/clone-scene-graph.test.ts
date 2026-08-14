@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CollectionId } from '../schema/collections'
+import type { CommentId, CommentReplyId } from '../schema/comments'
 import type { DefinitionId } from '../schema/definitions'
 import type { SavedViewId } from '../schema/saved-views'
 import type { SceneMaterialId } from '../schema/scene-material'
@@ -392,5 +393,114 @@ describe('saved view clone references', () => {
   test('a graph without saved views clones without inventing the key', () => {
     const cloned = cloneSceneGraph(makeSceneGraph())
     expect(cloned.savedViews).toBeUndefined()
+  })
+})
+
+describe('comment clone references', () => {
+  function graphWithComments(): SceneGraph {
+    const base = makeSceneGraph()
+    return {
+      ...base,
+      comments: {
+        ['comment_pinned' as CommentId]: {
+          id: 'comment_pinned' as CommentId,
+          anchor: { kind: 'node', nodeId: 'wall_1' as AnyNodeId, offset: [0, 1.2, 0] },
+          author: { name: 'Ada' },
+          body: 'Bu duvar çok ince',
+          createdAt: '2026-08-01T09:00:00.000Z',
+          levelId: 'level_1' as AnyNodeId,
+          replies: [
+            {
+              id: 'comment-reply_1' as CommentReplyId,
+              author: { name: 'Bo' },
+              body: '20 cm yapalım',
+              createdAt: '2026-08-01T10:00:00.000Z',
+            },
+          ],
+        },
+        ['comment_loose' as CommentId]: {
+          id: 'comment_loose' as CommentId,
+          anchor: { kind: 'point', position: [3, 0, 4] },
+          author: { name: 'Ada' },
+          body: 'Burada bir giriş olmalı',
+          createdAt: '2026-08-02T09:00:00.000Z',
+          replies: [],
+        },
+      },
+    }
+  }
+
+  test('cloneSceneGraph mints a fresh thread id and keeps the payload', () => {
+    const cloned = cloneSceneGraph(graphWithComments())
+    const threads = Object.values(cloned.comments ?? {})
+
+    expect(threads).toHaveLength(2)
+    for (const thread of threads) {
+      expect(thread.id.startsWith('comment_')).toBe(true)
+      expect(thread.id).not.toBe('comment_pinned')
+      expect(thread.id).not.toBe('comment_loose')
+      // The record key and the entry's own id must agree, or lookups miss.
+      expect(cloned.comments?.[thread.id]).toBe(thread)
+    }
+
+    const pinned = threads.find((thread) => thread.anchor.kind === 'node')
+    expect(pinned?.body).toBe('Bu duvar çok ince')
+    expect(pinned?.replies).toHaveLength(1)
+    expect(pinned?.replies[0]?.body).toBe('20 cm yapalım')
+  })
+
+  test('remaps a node anchor and its level onto the cloned nodes', () => {
+    const cloned = cloneSceneGraph(graphWithComments())
+    const pinned = Object.values(cloned.comments ?? {}).find(
+      (thread) => thread.anchor.kind === 'node',
+    )
+
+    expect(pinned).toBeDefined()
+    if (pinned?.anchor.kind !== 'node') throw new Error('expected a node anchor')
+    expect(pinned.anchor.nodeId).not.toBe('wall_1')
+    expect(cloned.nodes[pinned.anchor.nodeId]?.type).toBe('wall')
+    expect(pinned.anchor.offset).toEqual([0, 1.2, 0])
+    expect(pinned.levelId).not.toBe('level_1')
+    expect(cloned.nodes[pinned.levelId as AnyNodeId]?.type).toBe('level')
+  })
+
+  test('a point anchor survives the clone untouched', () => {
+    const cloned = cloneSceneGraph(graphWithComments())
+    const loose = Object.values(cloned.comments ?? {}).find(
+      (thread) => thread.anchor.kind === 'point',
+    )
+
+    if (loose?.anchor.kind !== 'point') throw new Error('expected a point anchor')
+    expect(loose.anchor.position).toEqual([3, 0, 4])
+  })
+
+  test('a thread pinned to a node the fork stripped is dropped, not left dangling', () => {
+    const base = graphWithComments()
+    const orphan = {
+      ...Object.values(base.comments ?? {})[0]!,
+      id: 'comment_onscan' as CommentId,
+      anchor: { kind: 'node', nodeId: 'scan_1' as AnyNodeId } as const,
+    }
+    const forked = forkSceneGraph({
+      ...base,
+      comments: { ...base.comments, [orphan.id]: orphan },
+    })
+
+    const threads = Object.values(forked.comments ?? {})
+    expect(threads).toHaveLength(2)
+    for (const thread of threads) {
+      if (thread.anchor.kind !== 'node') continue
+      expect(forked.nodes[thread.anchor.nodeId]).toBeDefined()
+    }
+  })
+
+  test('forkSceneGraph carries comments through its clone boundary', () => {
+    const forked = forkSceneGraph(graphWithComments())
+    expect(Object.values(forked.comments ?? {})).toHaveLength(2)
+  })
+
+  test('a graph without comments clones without inventing the key', () => {
+    const cloned = cloneSceneGraph(makeSceneGraph())
+    expect(cloned.comments).toBeUndefined()
   })
 })
