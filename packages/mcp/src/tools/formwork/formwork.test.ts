@@ -698,6 +698,57 @@ function threeKinds(): Record<string, unknown> {
   }
 }
 
+/** A single beam on a level, already told it is steel-panel — the attach path a beam runs. */
+function beamScene(): Record<string, unknown> {
+  return {
+    site_1: {
+      object: 'node',
+      id: 'site_1',
+      type: 'site',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['building_1'],
+    },
+    building_1: {
+      object: 'node',
+      id: 'building_1',
+      type: 'building',
+      parentId: 'site_1',
+      visible: true,
+      metadata: {},
+      children: ['level_1'],
+    },
+    level_1: {
+      object: 'node',
+      id: 'level_1',
+      type: 'level',
+      parentId: 'building_1',
+      visible: true,
+      metadata: {},
+      children: ['beam_1'],
+      elevation: 0,
+      height: 6,
+      level: 0,
+    },
+    beam_1: {
+      object: 'node',
+      id: 'beam_1',
+      type: 'beam',
+      parentId: 'level_1',
+      visible: true,
+      metadata: {},
+      children: [],
+      start: [0, 0],
+      end: [6, 0],
+      width: 0.3,
+      depth: 0.6,
+      elevation: 3,
+      formworkType: 'steel-panel',
+    },
+  }
+}
+
 /** The project's recorded rack, which is what the bill splits owned from hired against. */
 function withStock(
   nodes: Record<string, unknown>,
@@ -2235,6 +2286,31 @@ describe('the formwork MCP tools', () => {
       expect(reply.coversWholeElement).toBe(true)
       expect(reply.duplicateMarks).toEqual([])
       expect(reply.staleEdits).toEqual([])
+    })
+
+    test('a beam resolves to its two machines: side shutters and a propped soffit', async () => {
+      // The end-to-end join for the fourth castable kind: a beam's shutter is a wall
+      // chain lying on its side (the two side shutters, tied across the width) plus
+      // falsework under the soffit (bearers and props off the floor below) — both
+      // solved by the same design that bills a wall's panels. If either machine were
+      // missing, the parts list would still be plausible — a bill of only sides would
+      // total cleanly and omit the propping entirely.
+      load(beamScene())
+
+      await call('attach_formwork', { elementId: 'beam_1' })
+      const reply = await call<PartsReply>('inspect_formwork_parts', { elementId: 'beam_1' })
+
+      expect(reply.kind).toBe('beam')
+      expect(reply.shutters[0]?.partCount).toBeGreaterThan(0)
+      expect(reply.coversWholeElement).toBe(true)
+      // The two machines both land: panels (the sides) and the soffit falsework
+      // (bearers + props) are different part kinds on the same shutter.
+      const kinds = new Set(reply.shutters.flatMap((shutter) => shutter.parts.map((p) => p.kind)))
+      expect(kinds.has('panel')).toBe(true)
+      expect(kinds.has('prop')).toBe(true)
+      expect(reply.bom.length).toBeGreaterThan(0)
+      expect(reply.totalWeightKg).toBeGreaterThan(0)
+      expect(reply.duplicateMarks).toEqual([])
     })
 
     test('the kind filter trims the list and leaves the bill whole', async () => {
