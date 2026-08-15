@@ -131,6 +131,16 @@ describe('read_cad_drawing', () => {
     await expect(register()({ path: '/nonexistent/plan.dxf' })).rejects.toThrow(/Could not read/)
   })
 
+  // A real session went wrong here: the user attached a DXF to the chat, the
+  // tool found nothing at that path, and the agent concluded the upload had
+  // failed and asked for the file again. It had not failed — this tool never
+  // receives uploads, so the miss has to say so.
+  test('a missing file says uploads are not how this tool gets a file', async () => {
+    await expect(register()({ path: '/nonexistent/plan.dxf' })).rejects.toThrow(
+      /never receives uploads/,
+    )
+  })
+
   test('reports an unparseable file with an actionable message', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'pascal-cad-'))
     const path = join(dir, 'binary.dxf')

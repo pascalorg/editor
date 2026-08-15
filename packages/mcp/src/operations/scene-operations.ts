@@ -13,6 +13,9 @@ import type {
 } from '@pascal-app/core/schema'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
+  AgentRequest,
+  AgentRequestCreateOptions,
+  AgentRequestListOptions,
   ProjectCreateOptions,
   ProjectStatus,
   SceneEvent,
@@ -36,6 +39,7 @@ export interface SceneOperations {
   readonly hasStore: boolean
   readonly hasSceneEvents: boolean
   readonly canAppendSceneEvents: boolean
+  readonly canServeAgentRequests: boolean
   readonly canListSceneEvents: boolean
   readonly canCreateProject: boolean
   readonly canGetProjectStatus: boolean
@@ -91,6 +95,10 @@ export interface SceneOperations {
   renameStoredScene(id: string, newName: string, options?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null>
   listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]>
+  createAgentRequest(options: AgentRequestCreateOptions): Promise<AgentRequest | null>
+  claimNextAgentRequest(sceneId?: string): Promise<AgentRequest | null>
+  answerAgentRequest(requestId: number, answer: string): Promise<AgentRequest | null>
+  listAgentRequests(sceneId: string, options?: AgentRequestListOptions): Promise<AgentRequest[]>
 }
 
 export function createSceneOperations(options: CreateSceneOperationsOptions): SceneOperations {
@@ -116,6 +124,13 @@ class SceneOperationsFacade implements SceneOperations {
 
   get hasSceneEvents(): boolean {
     return this.canAppendSceneEvents && this.canListSceneEvents
+  }
+
+  get canServeAgentRequests(): boolean {
+    return (
+      typeof this.#store?.createAgentRequest === 'function' &&
+      typeof this.#store?.claimNextAgentRequest === 'function'
+    )
   }
 
   get canAppendSceneEvents(): boolean {
@@ -333,6 +348,33 @@ class SceneOperationsFacade implements SceneOperations {
     options?: SceneMutateOptions,
   ): Promise<SceneMeta> {
     return this.requireStore().rename(id, newName, options)
+  }
+
+  async createAgentRequest(options: AgentRequestCreateOptions): Promise<AgentRequest | null> {
+    const store = this.requireStore()
+    if (!store.createAgentRequest) return null
+    return store.createAgentRequest(options)
+  }
+
+  async claimNextAgentRequest(sceneId?: string): Promise<AgentRequest | null> {
+    const store = this.requireStore()
+    if (!store.claimNextAgentRequest) return null
+    return store.claimNextAgentRequest(sceneId)
+  }
+
+  async answerAgentRequest(requestId: number, answer: string): Promise<AgentRequest | null> {
+    const store = this.requireStore()
+    if (!store.answerAgentRequest) return null
+    return store.answerAgentRequest(requestId, answer)
+  }
+
+  async listAgentRequests(
+    sceneId: string,
+    options?: AgentRequestListOptions,
+  ): Promise<AgentRequest[]> {
+    const store = this.requireStore()
+    if (!store.listAgentRequests) return []
+    return store.listAgentRequests(sceneId, options)
   }
 
   async appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null> {

@@ -253,6 +253,7 @@ export {
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 export { AgentActivitySection } from './components/ui/panels/agent/agent-activity-section'
+export { AgentPromptBox } from './components/ui/panels/agent/agent-prompt-box'
 export { CadUnderlayPanel } from './components/ui/panels/cad-underlay-panel'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'

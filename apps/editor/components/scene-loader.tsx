@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from './editor-top-bar'
 import { ShareLinkButton } from './share-link-button'
+import { useAgentPrompts } from './use-agent-prompts'
 import { useSceneCollaboration } from './use-scene-collaboration'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -141,6 +142,8 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     setConflict(false)
     setSaveError(null)
   }, [])
+  useAgentPrompts(meta.id)
+
   const { receiveCollaborationEvent, waitForCollaboration } = useSceneCollaboration({
     initialGraph: initialScene,
     sceneId: meta.id,

@@ -12,6 +12,7 @@ import { registerDeleteNode } from './delete-node'
 import { registerDescribeNode } from './describe-node'
 import { registerDescribeNodeType } from './describe-node-type'
 import { registerDuplicateLevel } from './duplicate-level'
+import { registerEditorRequestTools } from './editor-requests'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
 import { registerFindNodes } from './find-nodes'
@@ -72,6 +73,7 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)
   if (operations.hasStore) {
+    registerEditorRequestTools(server, operations)
     registerSceneLifecycleTools(server, operations)
     registerVariantTools(server, operations)
     registerPhotoToSceneTool(server, operations)

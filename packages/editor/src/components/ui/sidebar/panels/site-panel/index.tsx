@@ -57,6 +57,7 @@ import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { CollectionsSection } from '../../../panels/collections/collections-section'
 import { AgentActivitySection } from '../../../panels/agent/agent-activity-section'
+import { AgentPromptBox } from '../../../panels/agent/agent-prompt-box'
 import { CommentsSection } from '../../../panels/comments/comments-section'
 import { SavedViewsSection } from '../../../panels/saved-views/saved-views-section'
 import { ImportCadDialog } from '../../../dialogs/import-cad-dialog'
@@ -1724,6 +1725,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
           <CommentsSection />
 
           {/* Agent activity — what the connected MCP client has been doing. */}
+          <AgentPromptBox />
           <AgentActivitySection />
 
           {/* Collections — above the buildings tree because a hidden collection

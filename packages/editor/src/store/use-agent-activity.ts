@@ -39,6 +39,24 @@ export type PendingAgentChange = {
   previousGraph: SceneGraph
 }
 
+/**
+ * A prompt the user typed in the editor, and what became of it.
+ *
+ * MCP is client-driven — the editor cannot message a connected agent — so the
+ * prompt goes into a queue the agent polls with `await_editor_request`. Which
+ * means "sent" and "read" are genuinely different states here, and the user has
+ * to be able to see that nothing has picked their prompt up yet.
+ */
+export type AgentPrompt = {
+  requestId: number
+  prompt: string
+  status: 'pending' | 'claimed' | 'answered'
+  answer: string | null
+  createdAt: string
+  /** When an agent took it. Null while still queued. */
+  claimedAt: string | null
+}
+
 const MAX_ENTRIES = 50
 
 type AgentActivityState = {
@@ -54,12 +72,22 @@ type AgentActivityState = {
   autoApply: boolean
   /** Whether a live event stream is currently connected. */
   connected: boolean
+  /** Prompts sent from the editor, oldest first. */
+  prompts: AgentPrompt[]
+  /**
+   * Installed by the host app, which owns the transport. Absent in an embedder
+   * that has no queue endpoint — the prompt box then does not render at all,
+   * rather than offering a box that silently drops what is typed into it.
+   */
+  sendPrompt: ((prompt: string) => Promise<void>) | null
 
   recordEntry: (entry: AgentActivityEntry) => void
   updateEntryStatus: (id: number, status: AgentActivityEntry['status']) => void
   setPending: (pending: PendingAgentChange | null) => void
   setAutoApply: (autoApply: boolean) => void
   setConnected: (connected: boolean) => void
+  setPrompts: (prompts: AgentPrompt[]) => void
+  setSendPrompt: (send: ((prompt: string) => Promise<void>) | null) => void
   clear: () => void
 }
 
@@ -73,6 +101,8 @@ const useAgentActivity = create<AgentActivityState>((set) => ({
   pending: null,
   autoApply: false,
   connected: false,
+  prompts: [],
+  sendPrompt: null,
 
   recordEntry: (entry) =>
     set((state) => {
@@ -90,7 +120,9 @@ const useAgentActivity = create<AgentActivityState>((set) => ({
   setPending: (pending) => set({ pending }),
   setAutoApply: (autoApply) => set({ autoApply }),
   setConnected: (connected) => set({ connected }),
-  clear: () => set({ entries: [], pending: null }),
+  setPrompts: (prompts) => set({ prompts }),
+  setSendPrompt: (sendPrompt) => set({ sendPrompt }),
+  clear: () => set({ entries: [], pending: null, prompts: [] }),
 }))
 
 export default useAgentActivity

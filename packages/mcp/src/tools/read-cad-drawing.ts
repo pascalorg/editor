@@ -30,7 +30,11 @@ const MAX_FILE_BYTES = 200 * 1024 * 1024
 const MAX_RETURNED_SEGMENTS = 4000
 
 export const readCadDrawingInput = {
-  path: z.string().describe('Absolute path to an ASCII DXF file on the server host.'),
+  path: z
+    .string()
+    .describe(
+      'Absolute path to an ASCII DXF file **on the machine running this server**. This tool does not receive uploads: a file attached to your chat lives in the client and never becomes a path here. If the user attached one, ask them to save it to disk and give you the path.',
+    ),
   layers: z
     .array(z.string())
     .optional()
@@ -84,7 +88,7 @@ export function registerReadCadDrawing(server: McpServer): void {
     {
       title: 'Read CAD drawing',
       description:
-        'Parse a DXF and report its layers, units, extent and line work. Call it once without `layers` to see the layer names and how much geometry each carries, then again naming the structural ones to get their coordinates — which you can turn into walls with create_wall. Layer names carry the meaning: a layer called ARK_Duvar_Dış is exterior walls, ARK_Tefriş is furniture.',
+        'Parse a DXF and report its layers, units, extent and line work. Takes a path on the server host — it cannot read a file attached to the chat. Call it once without `layers` to see the layer names and how much geometry each carries, then again naming the structural ones to get their coordinates — which you can turn into walls with create_wall. Layer names carry the meaning: a layer called ARK_Duvar_Dış is exterior walls, ARK_Tefriş is furniture. Check `units` against the geometry before building: a drawing that declares the wrong unit is common, so confirm `metersPerUnit` gives a believable wall thickness and facade length before trusting it.',
       inputSchema: readCadDrawingInput,
       outputSchema: readCadDrawingOutput,
     },
@@ -101,7 +105,14 @@ export function registerReadCadDrawing(server: McpServer): void {
         source = bytes.toString('utf8')
       } catch (err) {
         if (err && typeof err === 'object' && 'code' in err) {
-          throwMcpError(ErrorCode.InvalidParams, `Could not read ${path}: ${String(err.code)}`)
+          const hint =
+            String(err.code) === 'ENOENT'
+              ? " This tool reads the server host's own filesystem and never receives uploads, so a file attached to the chat will not be here. Ask the user for an absolute path to a saved copy."
+              : ''
+          throwMcpError(
+            ErrorCode.InvalidParams,
+            `Could not read ${path}: ${String(err.code)}.${hint}`,
+          )
         }
         throw err
       }

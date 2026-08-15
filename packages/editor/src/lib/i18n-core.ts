@@ -1949,6 +1949,13 @@ const tr: Record<string, string> = {
   'Live scene stream connected': 'Canlı sahne akışı bağlı',
   'No live scene stream': 'Canlı sahne akışı yok',
   'Apply agent changes without asking': 'Ajan değişikliklerini sormadan uygula',
+  // Agent prompt box
+  'Ask the agent to change the model…': 'Ajandan modeli değiştirmesini isteyin…',
+  'Send to the agent': 'Ajana gönder',
+  'Agent is working on it': 'Ajan üzerinde çalışıyor',
+  'Waiting for an agent': 'Bir ajan bekleniyor',
+  'The agent stopped without answering': 'Ajan yanıt vermeden durdu',
+  'Could not send the prompt': 'İstek gönderilemedi',
   "Connect a Claude client to this scene's MCP server. Every tool it runs shows up here, and scene changes wait for your approval.":
     'Bu sahnenin MCP sunucusuna bir Claude istemcisi bağlayın. Çalıştırdığı her araç burada görünür, sahne değişiklikleri de onayınızı bekler.',
   'The agent changed the scene': 'Ajan sahneyi değiştirdi',

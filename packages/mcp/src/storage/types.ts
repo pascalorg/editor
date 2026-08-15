@@ -89,6 +89,39 @@ export interface SceneEventListOptions {
   limit?: number
 }
 
+/**
+ * A prompt typed in the editor, waiting for an agent to pick it up.
+ *
+ * MCP is client-driven: a server cannot start a conversation, so the editor
+ * cannot simply "send a message to Claude". This queue is the way round it. The
+ * editor writes a row; an agent that is already running calls
+ * `await_editor_request`, which claims the row and hands the prompt back as
+ * tool output. Both processes already share this database, which is how live
+ * sync reaches the editor in the other direction.
+ */
+export type AgentRequestStatus = 'pending' | 'claimed' | 'answered'
+
+export interface AgentRequest {
+  requestId: number
+  sceneId: SceneId
+  prompt: string
+  status: AgentRequestStatus
+  createdAt: string
+  claimedAt: string | null
+  answer: string | null
+  answeredAt: string | null
+}
+
+export interface AgentRequestCreateOptions {
+  sceneId: SceneId
+  prompt: string
+}
+
+export interface AgentRequestListOptions {
+  limit?: number
+  afterRequestId?: number
+}
+
 export interface ProjectCreateOptions {
   id?: SceneId
   name: string
@@ -129,6 +162,11 @@ export interface SceneStore {
   rename(id: SceneId, newName: string, opts?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent?(opts: SceneEventAppendOptions): Promise<SceneEvent>
   listSceneEvents?(sceneId: SceneId, opts?: SceneEventListOptions): Promise<SceneEvent[]>
+  createAgentRequest?(opts: AgentRequestCreateOptions): Promise<AgentRequest>
+  /** Atomically take the oldest pending request, so two agents cannot claim one. */
+  claimNextAgentRequest?(sceneId?: SceneId): Promise<AgentRequest | null>
+  answerAgentRequest?(requestId: number, answer: string): Promise<AgentRequest | null>
+  listAgentRequests?(sceneId: SceneId, opts?: AgentRequestListOptions): Promise<AgentRequest[]>
 }
 
 export class SceneNotFoundError extends Error {

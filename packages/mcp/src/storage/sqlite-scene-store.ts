@@ -7,6 +7,10 @@ import { z } from 'zod'
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite-driver'
 import {
+  type AgentRequest,
+  type AgentRequestCreateOptions,
+  type AgentRequestListOptions,
+  type AgentRequestStatus,
   type ProjectCreateOptions,
   type ProjectStatus,
   type SceneEvent,
@@ -59,6 +63,17 @@ interface SceneEventRow {
   kind: string
   created_at: string
   graph_json: string
+}
+
+interface AgentRequestRow {
+  request_id: number
+  scene_id: string
+  prompt: string
+  status: AgentRequestStatus
+  created_at: string
+  claimed_at: string | null
+  answer: string | null
+  answered_at: string | null
 }
 
 interface ProjectPlaceholder {
@@ -264,6 +279,19 @@ function parseGraph(raw: string, context: string): SceneGraph {
 function asSceneRow(value: unknown): SceneRow | null {
   if (!value || typeof value !== 'object') return null
   return value as SceneRow
+}
+
+function rowToAgentRequest(row: AgentRequestRow): AgentRequest {
+  return {
+    requestId: Number(row.request_id),
+    sceneId: row.scene_id,
+    prompt: row.prompt,
+    status: row.status,
+    createdAt: row.created_at,
+    claimedAt: row.claimed_at ?? null,
+    answer: row.answer ?? null,
+    answeredAt: row.answered_at ?? null,
+  }
 }
 
 function rowToSceneEvent(row: SceneEventRow): SceneEvent {
@@ -596,6 +624,104 @@ export class SqliteSceneStore implements SceneStore {
     return rows.map((row) => rowToSceneEvent(row as SceneEventRow))
   }
 
+  async createAgentRequest(opts: AgentRequestCreateOptions): Promise<AgentRequest> {
+    return this.withWriteTransaction((db) => {
+      const safeId = sanitizeSlug(opts.sceneId)
+      if (!this.getRow(db, safeId)) {
+        throw new SceneNotFoundError(`Scene "${safeId}" not found`)
+      }
+      const prompt = opts.prompt.trim()
+      if (!prompt) throw new Error('agent request prompt must not be empty')
+
+      const now = new Date().toISOString()
+      const result = db
+        .query(
+          `INSERT INTO agent_requests (scene_id, prompt, status, created_at)
+           VALUES (?, ?, 'pending', ?)`,
+        )
+        .run(safeId, prompt, now)
+
+      return {
+        requestId: Number(result.lastInsertRowid),
+        sceneId: safeId,
+        prompt,
+        status: 'pending' as const,
+        createdAt: now,
+        claimedAt: null,
+        answer: null,
+        answeredAt: null,
+      }
+    })
+  }
+
+  /**
+   * Take the oldest pending request. The select and the update share one write
+   * transaction, so two agents polling at once cannot both claim the same row.
+   */
+  async claimNextAgentRequest(sceneId?: string): Promise<AgentRequest | null> {
+    return this.withWriteTransaction((db) => {
+      const safeId = sceneId ? sanitizeSlug(sceneId) : null
+      const row = (
+        safeId
+          ? db
+              .query(
+                `SELECT * FROM agent_requests
+                  WHERE status = 'pending' AND scene_id = ?
+                  ORDER BY request_id ASC LIMIT 1`,
+              )
+              .all(safeId)
+          : db
+              .query(
+                `SELECT * FROM agent_requests
+                  WHERE status = 'pending'
+                  ORDER BY request_id ASC LIMIT 1`,
+              )
+              .all()
+      )[0] as AgentRequestRow | undefined
+      if (!row) return null
+
+      const now = new Date().toISOString()
+      db.query(
+        `UPDATE agent_requests SET status = 'claimed', claimed_at = ? WHERE request_id = ?`,
+      ).run(now, row.request_id)
+      return rowToAgentRequest({ ...row, status: 'claimed', claimed_at: now })
+    })
+  }
+
+  async answerAgentRequest(requestId: number, answer: string): Promise<AgentRequest | null> {
+    return this.withWriteTransaction((db) => {
+      const now = new Date().toISOString()
+      db.query(
+        `UPDATE agent_requests SET status = 'answered', answer = ?, answered_at = ?
+          WHERE request_id = ?`,
+      ).run(answer, now, requestId)
+      const row = db.query('SELECT * FROM agent_requests WHERE request_id = ?').all(requestId)[0] as
+        | AgentRequestRow
+        | undefined
+      return row ? rowToAgentRequest(row) : null
+    })
+  }
+
+  async listAgentRequests(
+    sceneId: string,
+    opts: AgentRequestListOptions = {},
+  ): Promise<AgentRequest[]> {
+    const afterRequestId = Math.max(0, opts.afterRequestId ?? 0)
+    const requestedLimit = opts.limit ?? 50
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : 50
+    const db = await this.database()
+    const rows = db
+      .query(
+        `SELECT * FROM agent_requests
+          WHERE scene_id = ? AND request_id > ?
+          ORDER BY request_id ASC
+          LIMIT ?`,
+      )
+      .all(sanitizeSlug(sceneId), afterRequestId, limit)
+
+    return rows.map((row) => rowToAgentRequest(row as AgentRequestRow))
+  }
+
   close(): void {
     this.db?.close()
     this.db = null
@@ -664,6 +790,24 @@ export class SqliteSceneStore implements SceneStore {
 
       CREATE INDEX IF NOT EXISTS scene_events_scene_event_idx
         ON scene_events(scene_id, event_id);
+
+      CREATE TABLE IF NOT EXISTS agent_requests (
+        request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scene_id TEXT NOT NULL,
+        prompt TEXT NOT NULL CHECK (length(prompt) >= 1),
+        status TEXT NOT NULL CHECK (status IN ('pending', 'claimed', 'answered')),
+        created_at TEXT NOT NULL,
+        claimed_at TEXT,
+        answer TEXT,
+        answered_at TEXT,
+        FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS agent_requests_pending_idx
+        ON agent_requests(status, request_id);
+
+      CREATE INDEX IF NOT EXISTS agent_requests_scene_idx
+        ON agent_requests(scene_id, request_id);
     `)
   }
 
