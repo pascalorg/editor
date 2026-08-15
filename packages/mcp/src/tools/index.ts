@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../operations'
+import { registerAddDimension } from './add-dimension'
 import { registerApplyPatch } from './apply-patch'
 import { registerCheckCollisions } from './check-collisions'
 import { registerConstructionTools } from './construction-tools'
@@ -64,6 +65,7 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerDescribeNodeType(server)
   registerListMaterials(server)
   registerPaintSurfaces(server, operations)
+  registerAddDimension(server, operations)
   registerValidateScene(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)
