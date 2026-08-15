@@ -20,6 +20,8 @@ import {
   tangentReshapeInfo,
 } from '../lib/interaction/scope'
 
+export type DefinitionEditScope = Extract<InteractionScope, { kind: 'definition-edit' }>
+
 // The authoritative interaction state machine. A single owner holds exactly one
 // scope at a time. `begin` enters an interaction (atomically replacing any prior
 // one — a single owner, no producer races), `update` narrows the live payload,
@@ -29,6 +31,7 @@ import {
 
 export type InteractionScopeState = {
   scope: InteractionScope
+  definitionEditContext: DefinitionEditScope | null
   // Enter an interaction. If one is already active it is ended first, so the
   // store is always single-owner.
   begin: (scope: ActiveInteractionScope) => void
@@ -43,25 +46,44 @@ export type InteractionScopeState = {
   // driven from independent legacy flag clears, so clearing one flag (e.g. a
   // fence curve) cannot stomp an unrelated active scope (e.g. a wall move).
   endIf: (match: (scope: ActiveInteractionScope) => boolean) => void
+  exitDefinitionEdit: () => void
 }
 
 const useInteractionScope = create<InteractionScopeState>((set, get) => ({
   scope: IDLE_SCOPE,
-  begin: (scope) => set({ scope }),
+  definitionEditContext: null,
+  begin: (scope) =>
+    set(scope.kind === 'definition-edit' ? { scope, definitionEditContext: scope } : { scope }),
   update: (patch) =>
     set((state) => {
       if (state.scope.kind === 'idle') return state
       if ('kind' in patch && patch.kind !== state.scope.kind) return state
-      return { scope: { ...state.scope, ...patch } as InteractionScope }
+      const scope = { ...state.scope, ...patch } as InteractionScope
+      return scope.kind === 'definition-edit' ? { scope, definitionEditContext: scope } : { scope }
     }),
   end: () => {
-    if (get().scope.kind === 'idle') return
-    set({ scope: IDLE_SCOPE })
+    const state = get()
+    if (state.scope.kind === 'idle') return
+    if (state.scope.kind === 'definition-edit') {
+      set({ scope: IDLE_SCOPE, definitionEditContext: null })
+      return
+    }
+    set({ scope: state.definitionEditContext ?? IDLE_SCOPE })
   },
   endIf: (match) => {
-    const scope = get().scope
+    const state = get()
+    const scope = state.scope
     if (scope.kind === 'idle') return
-    if (match(scope)) set({ scope: IDLE_SCOPE })
+    if (!match(scope)) return
+    if (scope.kind === 'definition-edit') {
+      set({ scope: IDLE_SCOPE, definitionEditContext: null })
+      return
+    }
+    set({ scope: state.definitionEditContext ?? IDLE_SCOPE })
+  },
+  exitDefinitionEdit: () => {
+    if (!get().definitionEditContext) return
+    set({ scope: IDLE_SCOPE, definitionEditContext: null })
   },
 }))
 
@@ -136,5 +158,11 @@ export const useMovingNode = (): AnyNode | null => useInteractionScope((s) => mo
 // Imperative (non-React) read for event handlers / effects.
 export const getMovingNode = (): AnyNode | null =>
   movingNodeOf(useInteractionScope.getState().scope)
+
+export const useDefinitionEditContext = (): DefinitionEditScope | null =>
+  useInteractionScope((state) => state.definitionEditContext)
+
+export const getDefinitionEditContext = (): DefinitionEditScope | null =>
+  useInteractionScope.getState().definitionEditContext
 
 export default useInteractionScope

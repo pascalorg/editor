@@ -27,6 +27,14 @@ export {
   resolveCommentAnchorPosition,
   sortCommentThreads,
 } from './comments'
+export {
+  analyzeDefinitionGraph,
+  collectDefinitionSubtreeNodeIds,
+  type DefinitionGraphAnalysis,
+  type DefinitionGraphNode,
+  type MissingDefinitionReference,
+  wouldCreateDefinitionCycle,
+} from './definition-graph'
 // Definitions
 export {
   Definition,

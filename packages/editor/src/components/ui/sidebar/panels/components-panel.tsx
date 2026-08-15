@@ -8,6 +8,7 @@ import {
   pauseSceneHistory,
   resumeSceneHistory,
   useScene,
+  wouldCreateDefinitionCycle,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Boxes, PackagePlus, Trash2 } from 'lucide-react'
@@ -16,6 +17,7 @@ import { createDefinitionThumbnail } from '../../../../lib/component-actions'
 import { LocalizedContent } from '../../../../lib/i18n'
 import { triggerSFX } from '../../../../lib/sfx-bus'
 import useEditor from '../../../../store/use-editor'
+import { useDefinitionEditContext } from '../../../../store/use-interaction-scope'
 import { Button } from '../../primitives/button'
 import { Input } from '../../primitives/input'
 
@@ -136,6 +138,7 @@ export function ComponentsPanel() {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
   const setMovingNode = useEditor((state) => state.setMovingNode)
+  const definitionEditContext = useDefinitionEditContext()
 
   const sortedDefinitions = useMemo(
     () => Object.values(definitions).sort((a, b) => a.name.localeCompare(b.name)),
@@ -149,20 +152,32 @@ export function ComponentsPanel() {
     }
     return counts
   }, [nodes])
-  const canPlace = activeLevelId ? nodes[activeLevelId]?.type === 'level' : false
+  const placementParentId = definitionEditContext?.rootNodeId ?? activeLevelId
+  const canPlace = placementParentId ? nodes[placementParentId]?.type === 'level' : false
+
+  const placementWouldCycle = (definitionId: DefinitionId) =>
+    definitionEditContext
+      ? wouldCreateDefinitionCycle(
+          definitions,
+          nodes,
+          definitionEditContext.definitionId,
+          definitionId,
+        )
+      : false
 
   const handlePlace = (definition: Definition) => {
-    if (!(activeLevelId && nodes[activeLevelId]?.type === 'level')) return
+    if (!(placementParentId && nodes[placementParentId]?.type === 'level')) return
+    if (placementWouldCycle(definition.id)) return
     const instance = InstanceNode.parse({
       definitionId: definition.id,
       name: definition.name,
-      parentId: activeLevelId,
+      parentId: placementParentId,
       metadata: { isNew: true },
     })
 
     pauseSceneHistory(useScene)
     try {
-      useScene.getState().createNode(instance, activeLevelId as AnyNodeId)
+      useScene.getState().createNode(instance, placementParentId as AnyNodeId)
     } finally {
       resumeSceneHistory(useScene)
     }
@@ -207,7 +222,7 @@ export function ComponentsPanel() {
         <div className="grid grid-cols-2 gap-3">
           {sortedDefinitions.map((definition) => (
             <DefinitionCard
-              canPlace={canPlace}
+              canPlace={canPlace && !placementWouldCycle(definition.id)}
               definition={definition}
               instanceCount={instanceCounts.get(definition.id) ?? 0}
               key={definition.id}

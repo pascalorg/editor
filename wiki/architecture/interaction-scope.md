@@ -92,6 +92,8 @@ the node's `asset.attachTo` plus whether a candidate exposes a top surface.
 `isCandidateInHotSet(scope, placedAttachClass, candidate)` lifts this to a whole scope:
 
 - `idle` → `true` (selection/phase filtering stays in the selection manager; the hot-set only narrows what an *active* interaction can target).
+- `definition-edit` → `true`, with the selection manager restricting targets to
+  the active definition subtree.
 - `placing` / `moving` → `isPickableForAttach`, or `true` when `placedAttachClass` is `null`.
 - every other active scope → `false`: nothing in the scene is a placement target, so the interaction body's own raycast owns the pointer.
 
@@ -108,16 +110,19 @@ module pure and unit-testable without the scene or registry.
 any non-idle scope, scene objects stay visible but non-pickable, and DOM/HUD
 overlays step back differentiated by how distracting they are.
 
-| Overlay | Idle | Any active scope |
-|---|---|---|
-| Zone labels | shown | hidden (not a primary editing concern) |
-| Context badges (hover name pills) | shown | faded + `pointer-events: none` |
-| Conflicting controls (other objects' handles, floating action menu) | shown | hidden |
-| Scene objects pickable | yes | no (the hot-set owns targeting; context preserved, can't grab the wrong thing) |
-| Active affordances (ghost, snap guides, dimension labels, the active handle) | shown | shown |
-| Contextual control HUD interactive | yes | yes (it *is* the active interaction's own controls — exempt from the pointer-events step-back) |
+| Overlay | Idle | Gesture scope | Definition edit |
+|---|---|---|---|
+| Zone labels | shown | hidden | hidden |
+| Context badges (hover name pills) | shown | faded + `pointer-events: none` | faded + `pointer-events: none` |
+| Conflicting controls (other objects' handles, floating action menu) | shown | hidden | shown for definition members |
+| Scene objects pickable | yes | no | yes, filtered to the definition subtree |
+| Active affordances (ghost, snap guides, dimension labels, the active handle) | shown | shown | shown |
+| Contextual control HUD interactive | yes | yes | yes |
 
-The policy is binary (`IDLE_POLICY` vs `ACTIVE_POLICY`) keyed on `isActive`.
+The definition-edit policy is the intentional exception to the normal active
+policy: it is a long-lived selection context, not a pointer-owning gesture.
+Transient gestures replace the visible scope while they run, then
+`useInteractionScope` restores the definition-edit context on `end`.
 
 ---
 
@@ -188,7 +193,7 @@ independent flag clear can't stomp an unrelated scope) to keep the scope in sync
 
 ## Rules
 
-- **One owner, one scope.** Only `useInteractionScope` writes the scope, and only via `begin`/`update`/`end`/`endIf`. Never reconstruct interaction state from a private combination of flags.
+- **One owner, one scope.** Only `useInteractionScope` writes the scope, and only via `begin`/`update`/`end`/`endIf`. Never reconstruct interaction state from a private combination of flags. `definitionEditContext` is the store-owned return context for nested gestures, not a second independently writable interaction flag.
 - **One reshape driver.** A floorplan-driven reshape is previewed and committed
   by its floor-plan affordance; a tool-driven reshape is owned by the framework
   tool. Gate interaction bodies with the driver so both cannot act on one

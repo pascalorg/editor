@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../registry'
+import { analyzeDefinitionGraph } from '../schema/definition-graph'
 import { Definition, type DefinitionId } from '../schema/definitions'
 import { AnyNode, type AnyNodeType } from '../schema/types'
 import { healSceneNodes } from '../utils/heal-scene-graph'
@@ -189,6 +190,25 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       code: 'invalid_installed_plugins',
       message: 'Ignored invalid "installedPlugins" — expected an array of plugin IDs.',
     })
+  }
+
+  if (definitions) {
+    const definitionGraph = analyzeDefinitionGraph(definitions, nodes)
+    for (const reference of definitionGraph.missingReferences) {
+      errors.push({
+        severity: 'error',
+        code: 'missing_definition_reference',
+        message: `Definition "${reference.definitionId}" contains instance "${reference.nodeId}" referencing missing definition "${reference.referencedDefinitionId}".`,
+        nodeId: reference.nodeId,
+      })
+    }
+    for (const cycle of definitionGraph.cycles) {
+      errors.push({
+        severity: 'error',
+        code: 'definition_cycle',
+        message: `Component definitions contain a cycle: ${cycle.join(' -> ')}.`,
+      })
+    }
   }
 
   if (strippedChildRefs > 0 || droppedWallIds.length > 0) {

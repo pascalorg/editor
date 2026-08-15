@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  collectDefinitionSubtreeNodeIds,
   createSceneApi,
   emitter,
   type GridEvent,
@@ -74,6 +75,7 @@ import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
 import useInteractionScope, {
+  getDefinitionEditContext,
   getEditingHole,
   getMovingNode,
   useIsCurveReshape,
@@ -93,6 +95,12 @@ const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   if (!currentLevelId) return true // No level selected, allow all
   const nodeLevelId = resolveLevelId(node, useScene.getState().nodes)
   return nodeLevelId === currentLevelId
+}
+
+function isNodeInDefinitionEditContext(nodeId: string): boolean {
+  const context = getDefinitionEditContext()
+  if (!context) return false
+  return collectDefinitionSubtreeNodeIds(useScene.getState().nodes, context.rootNodeId).has(nodeId)
 }
 
 type SelectableNodeType =
@@ -1550,6 +1558,34 @@ export const SelectionManager = () => {
       const activeScope = useInteractionScope.getState().scope
       if (activeScope.kind === 'reshaping' && activeScope.reshape === 'endpoint') return
 
+      const definitionEditContext = getDefinitionEditContext()
+      if (definitionEditContext) {
+        const node = resolveCanvasSelectionNode({
+          node: resolveSelectModeNodeTarget(event),
+          nodes: useScene.getState().nodes,
+          selectedIds: useViewer.getState().selection.selectedIds,
+        })
+        if (!isNodeInDefinitionEditContext(node.id) || isNodeLockedForSelection(node.id)) return
+        event.stopPropagation()
+        clickHandledRef.current = true
+        setTimeout(() => {
+          clickHandledRef.current = false
+        }, 50)
+        if (dispatchSceneAction(node, getEventObject(event))) return
+        const selection = useViewer.getState().selection
+        useViewer.getState().setSelection({
+          selectedIds: computeNextIds(
+            node,
+            selection.selectedIds,
+            event.nativeEvent,
+            modifierKeysRef.current,
+            selection.selectedIds,
+          ),
+        })
+        emitCanvasNodeSelection(node)
+        return
+      }
+
       if (dispatchSceneAction(event.node, getEventObject(event))) {
         event.stopPropagation()
         clickHandledRef.current = true
@@ -1766,6 +1802,11 @@ export const SelectionManager = () => {
       if (boxSelectHandled) return
       const nativeEvent = event.nativeEvent
       if (nativeEvent?.metaKey || nativeEvent?.ctrlKey || nativeEvent?.shiftKey) return
+      if (getDefinitionEditContext()) {
+        useViewer.getState().setSelection({ selectedIds: [] })
+        useEditor.getState().setSelectedMaterialTarget(null)
+        return
+      }
       const { phase, structureLayer } = useEditor.getState()
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
@@ -1803,6 +1844,8 @@ export const SelectionManager = () => {
         nodes: useScene.getState().nodes,
         selectedIds: useViewer.getState().selection.selectedIds,
       })
+      const definitionEditContext = getDefinitionEditContext()
+      if (definitionEditContext && !isNodeInDefinitionEditContext(node.id)) return
       const currentPhase = useEditor.getState().phase
 
       // Ignore site/building if we are already inside a building
@@ -1841,11 +1884,28 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      let node = resolveCanvasSelectionNode({
+      const node = resolveCanvasSelectionNode({
         node: resolveSelectModeNodeTarget(event),
         nodes: useScene.getState().nodes,
         selectedIds: useViewer.getState().selection.selectedIds,
       })
+
+      if (getDefinitionEditContext()) return
+      if (node.type === 'instance') {
+        const definition = useScene.getState().definitions[node.definitionId]
+        if (!definition) return
+        event.stopPropagation()
+        useEditor.getState().setMode('select')
+        useInteractionScope.getState().begin({
+          kind: 'definition-edit',
+          instanceId: node.id,
+          definitionId: definition.id,
+          rootNodeId: definition.rootNodeId,
+        })
+        useViewer.getState().setSelection({ selectedIds: [definition.rootNodeId] })
+        useViewer.setState({ hoveredId: null })
+        return
+      }
 
       const currentPhase = useEditor.getState().phase
 

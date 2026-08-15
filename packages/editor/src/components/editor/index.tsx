@@ -72,6 +72,8 @@ import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { AgentReviewBar } from './agent-review-bar'
 import { CommentLayer3D } from './comment-layer-3d'
 import { CustomCameraControls } from './custom-camera-controls'
+import { DefinitionEditHud } from './definition-edit-hud'
+import { DefinitionEditIsolation } from './definition-edit-isolation'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
@@ -793,6 +795,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   return (
     <>
       <SceneEnvironment />
+      <DefinitionEditIsolation />
       {!(isFirstPersonMode || isStudioMode || isCaptureMode) && <SelectionManager />}
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
@@ -1105,6 +1108,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           2d / 3d / split alike) can anchor to this container's bottom-left. */}
       <div className="relative flex h-full" ref={setViewerAreaNode}>
         <QuickMeasurementHud />
+        <DefinitionEditHud />
         <TypedDimensionHud />
         {/* Approve / reject gate for a scene change an MCP agent just made.
             Renders nothing until one is pending. */}

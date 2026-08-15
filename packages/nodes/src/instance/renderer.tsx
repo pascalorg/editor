@@ -13,6 +13,7 @@ import {
 import { useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
+import { useIsInsideDefinitionSource } from './definition-source-context'
 import { useDefinitionRenderData } from './render-cache'
 
 const NO_RAYCAST = () => {}
@@ -23,6 +24,7 @@ export default function InstanceRenderer({ node }: { node: InstanceNode }) {
   useRegistry(node.id, 'instance', registeredRef)
 
   const data = useDefinitionRenderData(node.definitionId)
+  const insideDefinitionSource = useIsInsideDefinitionSource()
   const liveTransform = useLiveTransforms((state) => state.get(node.id as AnyNodeId))
   const liveOverride = useLiveNodeOverrides((state) => state.overrides.get(node.id))
   const collectionMembership = useScene((state) =>
@@ -56,7 +58,10 @@ export default function InstanceRenderer({ node }: { node: InstanceNode }) {
     !Array.isArray(node.metadata) &&
     node.metadata.isNew === true
   const showGeometry =
-    active || isExporting || (freshPlacement && Boolean(liveTransform || liveOverride))
+    insideDefinitionSource ||
+    active ||
+    isExporting ||
+    (freshPlacement && Boolean(liveTransform || liveOverride))
 
   return (
     <group

@@ -1,4 +1,12 @@
-import { AnyNode, AssetUrl, BaseNode, Definition, SceneMaterial } from '@pascal-app/core/schema'
+import {
+  AnyNode,
+  AssetUrl,
+  analyzeDefinitionGraph,
+  BaseNode,
+  Definition,
+  type DefinitionId,
+  SceneMaterial,
+} from '@pascal-app/core/schema'
 import { z } from 'zod'
 
 /**
@@ -158,6 +166,33 @@ export const apiGraphSchema = z
           message: issue.message,
         })
       }
+    }
+
+    const parsedDefinitions = {} as Record<DefinitionId, Definition>
+    for (const [definitionId, definition] of Object.entries(value.definitions ?? {})) {
+      const result = Definition.safeParse(definition)
+      if (
+        result.success &&
+        result.data.id === definitionId &&
+        value.nodes[result.data.rootNodeId]
+      ) {
+        parsedDefinitions[result.data.id] = result.data
+      }
+    }
+    const definitionGraph = analyzeDefinitionGraph(parsedDefinitions, value.nodes)
+    for (const reference of definitionGraph.missingReferences) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['nodes', reference.nodeId, 'definitionId'],
+        message: `Referenced definition "${reference.referencedDefinitionId}" does not exist`,
+      })
+    }
+    for (const cycle of definitionGraph.cycles) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['definitions', cycle[0] ?? ''],
+        message: `Component definitions must not contain cycles (${cycle.join(' -> ')})`,
+      })
     }
 
     // Ids of foreign nodes in this graph. Builtin container schemas name the

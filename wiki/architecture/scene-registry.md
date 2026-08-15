@@ -63,6 +63,18 @@ for (const id of sceneRegistry.byType.wall) {
 - **Don't mutate the registry manually.** Only `useRegistry` should add/remove entries. Systems and selection managers are read-only consumers.
 - **Core systems must not use the registry.** They work with plain node data. Only viewer systems and selection managers may do Three.js object lookups.
 
+## Component definition sources
+
+Reusable component instances do not register every expanded child once per
+instance. Each scene instance registers only its own `instance_*` anchor, while
+the detached definition subtree is rendered once by `InstanceSystem` and keeps
+the normal one-registration-per-node-ID contract. Idle instances consume a
+captured render snapshot through batches. In definition edit mode that single
+source subtree is moved into the chosen instance's transform and made visible;
+selection therefore still resolves each definition node ID to exactly one live
+object. Do not widen `sceneRegistry.nodes` to `Map<string, Object3D[]>` for
+component expansion.
+
 ## Outliner Sync
 
 The `outliner` in `useViewer` holds live `Object3D[]` arrays used by the post-processing outline pass. Selection managers sync them imperatively for performance (array mutation rather than new allocations):

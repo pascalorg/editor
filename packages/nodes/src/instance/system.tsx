@@ -9,10 +9,12 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { useDefinitionEditContext } from '@pascal-app/editor'
 import { NodeRenderer, useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { type InstancedMesh, type Material, Matrix4, type Object3D } from 'three'
+import { DefinitionSourceProvider } from './definition-source-context'
 import {
   clearDefinitionRenderData,
   hasDefinitionRenderData,
@@ -24,6 +26,59 @@ import { captureDefinitionRenderData } from './render-data'
 type MatrixSnapshot = {
   elements: number[]
   visible: boolean
+}
+
+type MaterialSlot = Material | Material[]
+
+const DEFINITION_CONTEXT_OPACITY = 0.18
+const DEFINITION_CONTEXT_MAP_KEYS = [
+  'map',
+  'normalMap',
+  'roughnessMap',
+  'metalnessMap',
+  'aoMap',
+  'emissiveMap',
+  'bumpMap',
+  'displacementMap',
+  'alphaMap',
+  'lightMap',
+] as const
+const definitionContextMaterialCache = new WeakMap<
+  Material,
+  { clone: Material; map: unknown; version: number }
+>()
+
+function getDefinitionContextMaterial(base: Material): Material {
+  const baseMap = (base as { map?: unknown }).map ?? null
+  const cached = definitionContextMaterialCache.get(base)
+  if (cached && cached.map === baseMap && cached.version === base.version) return cached.clone
+
+  const clone = base.clone()
+  const source = base as unknown as Record<string, unknown>
+  const target = clone as unknown as Record<string, unknown>
+  // WebGPU node-material clones drop texture nodes, so preserve the source maps.
+  for (const key of DEFINITION_CONTEXT_MAP_KEYS) {
+    if (source[key]) target[key] = source[key]
+  }
+  clone.transparent = true
+  clone.opacity = Math.min(base.opacity, DEFINITION_CONTEXT_OPACITY)
+  clone.depthWrite = false
+  clone.userData = { ...base.userData, __pascalDefinitionContext: true }
+  clone.needsUpdate = true
+  definitionContextMaterialCache.set(base, { clone, map: baseMap, version: base.version })
+  return clone
+}
+
+function getDefinitionContextMaterialSlot(material: MaterialSlot): MaterialSlot {
+  return Array.isArray(material)
+    ? material.map(getDefinitionContextMaterial)
+    : getDefinitionContextMaterial(material)
+}
+
+function materialSlotKey(material: MaterialSlot): string {
+  return (Array.isArray(material) ? material : [material])
+    .map((entry) => `${entry.uuid}:${entry.version}`)
+    .join(',')
 }
 
 function isFreshPlacement(node: InstanceNode): boolean {
@@ -47,9 +102,11 @@ function isVisibleInHierarchy(object: Object3D): boolean {
 function DefinitionSource({
   definitionId,
   rootNodeId,
+  editingInstanceId,
 }: {
   definitionId: DefinitionId
   rootNodeId: AnyNodeId
+  editingInstanceId: AnyNodeId | null
 }) {
   const ref = useRef<Object3D>(null!)
   const owner = useRef(Symbol(definitionId)).current
@@ -57,6 +114,7 @@ function DefinitionSource({
   const frameCount = useRef(0)
   const nodes = useScene((state) => state.nodes)
   const geometryRevision = useViewer((state) => state.geometryRevision)
+  const editing = editingInstanceId !== null
   const subtreeSignature = useMemo(() => {
     const parts: string[] = []
     const pending = [rootNodeId]
@@ -95,29 +153,68 @@ function DefinitionSource({
     [definitionId, owner],
   )
 
+  const syncEditTransform = useCallback(() => {
+    if (!(editing && editingInstanceId && ref.current)) return
+    const instanceAnchor = sceneRegistry.nodes.get(editingInstanceId)
+    if (!instanceAnchor) return
+    instanceAnchor.updateWorldMatrix(true, false)
+    const parent = ref.current.parent
+    if (parent) {
+      parent.updateWorldMatrix(true, false)
+      ref.current.matrix.copy(parent.matrixWorld).invert().multiply(instanceAnchor.matrixWorld)
+    } else {
+      ref.current.matrix.copy(instanceAnchor.matrixWorld)
+    }
+    ref.current.matrixWorldNeedsUpdate = true
+  }, [editing, editingInstanceId])
+
+  useLayoutEffect(() => {
+    syncEditTransform()
+  }, [syncEditTransform])
+
   useFrame(() => {
+    syncEditTransform()
     frameCount.current += 1
     if (frameCount.current <= 5 || frameCount.current % 30 === 0) capture()
   })
 
   return (
-    <group ref={ref} userData={{ measurementSurface: false }} visible={false}>
-      <NodeRenderer nodeId={rootNodeId} />
+    <group
+      matrixAutoUpdate={false}
+      ref={ref}
+      userData={{
+        definitionEditSource: editing ? definitionId : undefined,
+        measurementSurface: false,
+      }}
+      visible={editing}
+    >
+      <DefinitionSourceProvider>
+        <NodeRenderer nodeId={rootNodeId} />
+      </DefinitionSourceProvider>
     </group>
   )
 }
 
 function DefinitionBatch({
   definitionId,
+  faded,
   nodes,
 }: {
   definitionId: DefinitionId
+  faded: boolean
   nodes: InstanceNode[]
 }) {
   const data = useDefinitionRenderData(definitionId)
   const meshRefs = useRef<Array<InstancedMesh | null>>([])
   const snapshots = useRef(new Map<string, MatrixSnapshot>())
   const capacity = Math.max(16, Math.ceil(nodes.length / 32) * 32)
+  const materials = useMemo(
+    () =>
+      data?.parts.map((part) =>
+        faded ? getDefinitionContextMaterialSlot(part.material) : part.material,
+      ) ?? [],
+    [data, faded],
+  )
 
   const writeMatrices = useCallback(() => {
     if (!data) return
@@ -192,18 +289,24 @@ function DefinitionBatch({
     <>
       {data.parts.map((part, index) => (
         <instancedMesh
-          args={[part.geometry, part.material as Material, capacity]}
+          args={[part.geometry, (materials[index] ?? part.material) as Material, capacity]}
           castShadow={part.castShadow}
           dispose={null}
           frustumCulled={false}
-          key={part.key}
+          key={`${part.key}:${faded ? 'faded' : 'normal'}:${materialSlotKey(
+            materials[index] ?? part.material,
+          )}`}
           name={`definition:${definitionId}:${part.name || index}`}
           receiveShadow={part.receiveShadow}
           ref={(mesh) => {
             meshRefs.current[index] = mesh
           }}
           renderOrder={part.renderOrder}
-          userData={{ definitionId, instanceNodeIds: [], measurementSurface: true }}
+          userData={{
+            definitionId,
+            instanceNodeIds: [],
+            measurementSurface: true,
+          }}
         />
       ))}
     </>
@@ -219,6 +322,7 @@ export default function InstanceSystem() {
   const previewSelectedIds = useViewer((state) => state.previewSelectedIds)
   const externalSelectedIds = useViewer((state) => state.externalSelectedIds)
   const isExporting = useViewer((state) => state.isExporting)
+  const definitionEditContext = useDefinitionEditContext()
 
   const allInstances = useMemo(
     () => Object.values(sceneNodes).filter((node) => node.type === 'instance') as InstanceNode[],
@@ -243,11 +347,27 @@ export default function InstanceSystem() {
       ...externalSelectedIds,
     ])
     const membership = buildCollectionMembershipIndex(collections)
+    const editingSubtreeIds = new Set<AnyNodeId>()
+    if (definitionEditContext) {
+      const pending = [definitionEditContext.rootNodeId]
+      while (pending.length > 0) {
+        const id = pending.pop()
+        if (!id || editingSubtreeIds.has(id)) continue
+        const node = sceneNodes[id]
+        if (!node) continue
+        editingSubtreeIds.add(id)
+        if ('children' in node && Array.isArray(node.children)) {
+          pending.push(...(node.children as AnyNodeId[]))
+        }
+      }
+    }
     const map = new Map<DefinitionId, InstanceNode[]>()
     if (isExporting) return map
     for (const node of allInstances) {
       if (
         activeIds.has(node.id) ||
+        node.id === definitionEditContext?.instanceId ||
+        editingSubtreeIds.has(node.id) ||
         isFreshPlacement(node) ||
         node.visible === false ||
         isHiddenByCollections(membership, node.id) ||
@@ -264,10 +384,12 @@ export default function InstanceSystem() {
     allInstances,
     collections,
     definitions,
+    definitionEditContext,
     externalSelectedIds,
     hoveredId,
     isExporting,
     previewSelectedIds,
+    sceneNodes,
     selectedIds,
   ])
 
@@ -291,6 +413,11 @@ export default function InstanceSystem() {
         return (
           <DefinitionSource
             definitionId={definitionId}
+            editingInstanceId={
+              definitionEditContext?.definitionId === definitionId
+                ? definitionEditContext.instanceId
+                : null
+            }
             key={`definition-source:${definitionId}`}
             rootNodeId={definition.rootNodeId}
           />
@@ -299,6 +426,7 @@ export default function InstanceSystem() {
       {Array.from(batches, ([definitionId, nodes]) => (
         <DefinitionBatch
           definitionId={definitionId}
+          faded={definitionEditContext !== null}
           key={`definition-batch:${definitionId}`}
           nodes={nodes}
         />

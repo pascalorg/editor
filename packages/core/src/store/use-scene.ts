@@ -17,6 +17,7 @@ import type {
   CommentThread,
 } from '../schema/comments'
 import { generateCommentId, generateCommentReplyId, normalizeComments } from '../schema/comments'
+import { analyzeDefinitionGraph } from '../schema/definition-graph'
 import {
   type Definition,
   type DefinitionId,
@@ -1215,7 +1216,40 @@ function normalizeDefinitions(
     }
     normalized[parsed.data.id] = parsed.data
   }
+  while (true) {
+    const { cycles, missingReferences } = analyzeDefinitionGraph(normalized, nodes)
+    const invalidDefinitionIds = new Set<DefinitionId>()
+    for (const reference of missingReferences) {
+      console.warn(
+        '[Scene] Ignoring component definition with a missing nested reference',
+        reference.definitionId,
+        reference.referencedDefinitionId,
+      )
+      invalidDefinitionIds.add(reference.definitionId)
+    }
+    for (const cycle of cycles) {
+      console.warn('[Scene] Ignoring cyclic component definitions', cycle.join(' -> '))
+      for (const definitionId of cycle) invalidDefinitionIds.add(definitionId)
+    }
+    if (invalidDefinitionIds.size === 0) break
+    for (const definitionId of invalidDefinitionIds) delete normalized[definitionId]
+  }
   return normalized
+}
+
+function assertValidDefinitionGraph(
+  definitions: Record<DefinitionId, Definition>,
+  nodes: Record<AnyNodeId, AnyNode>,
+) {
+  const { cycles, missingReferences } = analyzeDefinitionGraph(definitions, nodes)
+  const missing = missingReferences[0]
+  if (missing) {
+    throw new Error(
+      `Definition ${missing.definitionId} references missing definition ${missing.referencedDefinitionId}`,
+    )
+  }
+  const cycle = cycles[0]
+  if (cycle) throw new Error(`Component definition cycle: ${cycle.join(' -> ')}`)
 }
 
 function uniqueDefinitionName(
@@ -1883,9 +1917,11 @@ const useScene: UseSceneStore = create<SceneState>()(
         if (!get().nodes[parsed.rootNodeId]) {
           throw new Error(`Definition root node not found: ${parsed.rootNodeId}`)
         }
-        set((state) => ({
-          definitions: { ...state.definitions, [parsed.id]: parsed },
-        }))
+        set((state) => {
+          const definitions = { ...state.definitions, [parsed.id]: parsed }
+          assertValidDefinitionGraph(definitions, state.nodes)
+          return { definitions }
+        })
       },
 
       updateDefinition: (id, data) => {
@@ -1897,7 +1933,9 @@ const useScene: UseSceneStore = create<SceneState>()(
           if (!state.nodes[parsed.rootNodeId]) {
             throw new Error(`Definition root node not found: ${parsed.rootNodeId}`)
           }
-          return { definitions: { ...state.definitions, [id]: parsed } }
+          const definitions = { ...state.definitions, [id]: parsed }
+          assertValidDefinitionGraph(definitions, state.nodes)
+          return { definitions }
         })
       },
 

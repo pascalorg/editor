@@ -54,6 +54,16 @@ const ACTIVE_POLICY: OverlayPolicy = {
   contextualHudInteractive: true,
 }
 
+const DEFINITION_EDIT_POLICY: OverlayPolicy = {
+  zoneLabels: 'hidden',
+  contextBadges: 'faded',
+  conflictingControls: 'shown',
+  sceneObjectsPickable: true,
+  activeAffordances: 'shown',
+  contextualHudInteractive: true,
+}
+
 export function resolveOverlayPolicy(scope: InteractionScope): OverlayPolicy {
+  if (scope.kind === 'definition-edit') return DEFINITION_EDIT_POLICY
   return isActive(scope) ? ACTIVE_POLICY : IDLE_POLICY
 }

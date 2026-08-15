@@ -58,7 +58,7 @@ export function isCandidateInHotSet(
   placedAttachClass: AttachClass | null,
   candidate: HotSetCandidate,
 ): boolean {
-  if (scope.kind === 'idle') return true
+  if (scope.kind === 'idle' || scope.kind === 'definition-edit') return true
   if (scope.kind === 'placing' || scope.kind === 'moving') {
     if (placedAttachClass === null) return true
     return isPickableForAttach(placedAttachClass, candidate)

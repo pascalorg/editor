@@ -10,7 +10,7 @@
 // combinations unrepresentable: a scope is exactly one interaction at a time,
 // and `idle` carries no interaction payload at all.
 
-import type { AnyNode } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, DefinitionId } from '@pascal-app/core'
 
 export type InteractionView = '2d' | '3d'
 export type ReshapeDriver = 'tool' | 'floorplan'
@@ -57,6 +57,15 @@ export type InteractionScope =
     }
   // Marquee selection drag.
   | { kind: 'box-select' }
+  // Long-lived in-place editing context for a reusable component definition.
+  // Transient gestures may temporarily replace this visible scope; the
+  // interaction store restores it when those gestures end.
+  | {
+      kind: 'definition-edit'
+      instanceId: AnyNodeId
+      definitionId: DefinitionId
+      rootNodeId: AnyNodeId
+    }
   // Material paint application.
   | { kind: 'painting' }
   // Terrain sculpting. Held for the whole time the sculpt tool is armed, not
@@ -108,7 +117,7 @@ export function movingNodeOf(scope: InteractionScope): AnyNode | null {
 // a different object — the picking choke point should not route a hover/click
 // to selection while this is false.
 export function selectionEnabled(scope: InteractionScope): boolean {
-  return scope.kind === 'idle'
+  return scope.kind === 'idle' || scope.kind === 'definition-edit'
 }
 
 // Derived views of the scope that mirror the legacy `useEditor` flags they

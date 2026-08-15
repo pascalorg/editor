@@ -674,12 +674,15 @@ export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-p
 export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export { default as useFloorplanMode } from './store/use-floorplan-mode'
+export type { DefinitionEditScope } from './store/use-interaction-scope'
 export {
   default as useInteractionScope,
+  getDefinitionEditContext,
   getEditingHole,
   getIsCurveReshape,
   getMovingNode,
   useActiveHandleDrag,
+  useDefinitionEditContext,
   useEditingHole,
   useEndpointReshape,
   useIsCurveReshape,
