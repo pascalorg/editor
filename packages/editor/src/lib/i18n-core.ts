@@ -1942,6 +1942,20 @@ const tr: Record<string, string> = {
   'Delete comment': 'Yorumu sil',
   'Close comment': 'Yorumu kapat',
   'Hide resolved': 'Çözülenleri gizle',
+  // Agent activity
+  'Agent activity': 'Ajan etkinliği',
+  Connected: 'Bağlı',
+  Offline: 'Çevrimdışı',
+  'Live scene stream connected': 'Canlı sahne akışı bağlı',
+  'No live scene stream': 'Canlı sahne akışı yok',
+  'Apply agent changes without asking': 'Ajan değişikliklerini sormadan uygula',
+  "Connect a Claude client to this scene's MCP server. Every tool it runs shows up here, and scene changes wait for your approval.":
+    'Bu sahnenin MCP sunucusuna bir Claude istemcisi bağlayın. Çalıştırdığı her araç burada görünür, sahne değişiklikleri de onayınızı bekler.',
+  'The agent changed the scene': 'Ajan sahneyi değiştirdi',
+  'no change in node count': 'düğüm sayısı değişmedi',
+  Reject: 'Reddet',
+  'Rejecting restores the scene; the agent is not told':
+    'Reddetmek sahneyi geri alır; ajana bildirilmez',
   // Share links
   Share: 'Paylaş',
   'Creating link…': 'Bağlantı oluşturuluyor…',

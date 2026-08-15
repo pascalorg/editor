@@ -4,12 +4,13 @@
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
 import {
-  applySceneGraphToEditor,
   Editor,
   QuantitiesPanel,
+  receiveAgentSceneChange,
   type SceneGraph,
   type SidebarTab,
   SunStudyPanel,
+  useAgentActivity,
   useTranslation,
 } from '@pascal-app/editor'
 import { Hammer, Layers, Sigma, Sun } from 'lucide-react'
@@ -174,6 +175,8 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
   useEffect(() => {
     const source = new EventSource(`/api/scenes/${meta.id}/events`)
+    const activity = useAgentActivity.getState()
+    activity.setConnected(true)
 
     source.addEventListener('scene', (event) => {
       let payload: LiveSceneEvent
@@ -186,20 +189,34 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       if (payload.version <= versionRef.current) return
 
       versionRef.current = payload.version
-      lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
-      suppressRemoteSaveUntilRef.current = Date.now() + 2500
-      applySceneGraphToEditor(payload.graph)
+      // Echo bookkeeping only advances for a change we actually applied. A
+      // held proposal must leave it alone, or accepting it later reads as a
+      // local edit and gets saved back over the agent's own version.
+      const applied = receiveAgentSceneChange({
+        eventId: payload.eventId,
+        kind: payload.kind,
+        version: payload.version,
+        graph: payload.graph,
+      })
+      if (applied) {
+        lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
+        suppressRemoteSaveUntilRef.current = Date.now() + 2500
+      }
       setConflict(false)
       setSaveError(null)
     })
 
     source.addEventListener('error', () => {
       if (source.readyState === EventSource.CLOSED) {
+        useAgentActivity.getState().setConnected(false)
         setSaveError('Live scene connection closed')
       }
     })
 
-    return () => source.close()
+    return () => {
+      useAgentActivity.getState().setConnected(false)
+      source.close()
+    }
   }, [meta.id])
 
   const handleThumb = useCallback(

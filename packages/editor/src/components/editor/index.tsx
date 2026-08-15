@@ -69,6 +69,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { AgentReviewBar } from './agent-review-bar'
 import { CommentLayer3D } from './comment-layer-3d'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
@@ -1105,6 +1106,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
       <div className="relative flex h-full" ref={setViewerAreaNode}>
         <QuickMeasurementHud />
         <TypedDimensionHud />
+        {/* Approve / reject gate for a scene change an MCP agent just made.
+            Renders nothing until one is pending. */}
+        <AgentReviewBar />
         <DeleteConfirmationDialog />
         {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
         <div

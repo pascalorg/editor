@@ -251,6 +251,7 @@ export {
 } from './components/ui/dialogs/import-cad-dialog'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
+export { AgentActivitySection } from './components/ui/panels/agent/agent-activity-section'
 export { CadUnderlayPanel } from './components/ui/panels/cad-underlay-panel'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
@@ -326,6 +327,15 @@ export {
   type PlacementSurface,
   publishPlacementSurface,
 } from './lib/active-placement-surface'
+// Live MCP scene changes route through here rather than through
+// `applySceneGraphToEditor`: the agent path needs review + single-undo, which
+// that function's `clearSceneHistory()` actively defeats.
+export {
+  applyAgentSceneGraph,
+  applyPendingAgentChange,
+  receiveAgentSceneChange,
+  rejectPendingAgentChange,
+} from './lib/agent-changes'
 export {
   type ArrayCommand,
   buildArrayOffsets,
@@ -623,6 +633,7 @@ export {
   snapWorldXZForActiveBuilding,
 } from './lib/world-grid-snap'
 export { subscribeCameraPose } from './store/camera-pose-store'
+export { default as useAgentActivity } from './store/use-agent-activity'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export {
   default as useArrayDuplicate,
