@@ -400,6 +400,7 @@ function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
   return handles
 }
 
+import { stairSlots } from '@pascal-app/core'
 import {
   computeStairSegmentFloorStackTransforms,
   getStairFloorPlacedFootprints,
@@ -417,7 +418,6 @@ import { stairFloorplanMoveTarget } from './floorplan-move'
 import { stairPaint } from './paint'
 import { stairParametrics } from './parametrics'
 import { StairNode } from './schema'
-import { stairSlots } from './slots'
 
 /**
  * Stair — Stage A. Composite node like roof: owns overall framing,

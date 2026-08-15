@@ -1,7 +1,12 @@
 'use client'
 
 import {
+  COLUMN_BASE_DEFAULT,
+  COLUMN_CAPITAL_DEFAULT,
+  COLUMN_FRAME_DEFAULT,
+  COLUMN_SHAFT_DEFAULT,
   type ColumnNode,
+  type ColumnSlotId,
   useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
@@ -25,13 +30,6 @@ import {
 } from '@pascal-app/viewer'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
-import {
-  COLUMN_BASE_DEFAULT,
-  COLUMN_CAPITAL_DEFAULT,
-  COLUMN_FRAME_DEFAULT,
-  COLUMN_SHAFT_DEFAULT,
-  type ColumnSlotId,
-} from './slots'
 
 type ColumnSlotMaterials = Record<ColumnSlotId, Material>
 type SceneMaterials = ReturnType<typeof useScene.getState>['materials']

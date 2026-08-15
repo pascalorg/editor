@@ -1,6 +1,8 @@
 import {
   type CabinetModuleNode,
   type CabinetNode,
+  type CabinetSlotId,
+  cabinetSlots,
   type GeometryContext,
   getMaterialPresetByRef,
   type MaterialSchema,
@@ -30,7 +32,6 @@ import {
   type Object3D,
   Shape,
 } from 'three'
-import { type CabinetSlotId, cabinetSlots } from '../slots'
 
 export type CabinetGeometryNode = CabinetNode | CabinetModuleNode
 export type CabinetSlotMaterials = Record<CabinetSlotId, Material>

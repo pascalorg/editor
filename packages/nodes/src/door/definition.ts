@@ -6,6 +6,7 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import { doorSlots } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { countQuantities } from '../shared/count-quantities'
 import {
@@ -25,7 +26,6 @@ import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
 import { DoorNode } from './schema'
-import { doorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24

@@ -1,4 +1,10 @@
-import { type AnyNodeId, type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  FENCE_SLOT_DEFAULTS,
+  type FenceSlotId,
+  type GeometryContext,
+  getMaterialPresetByRef,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   type ColorPreset,
@@ -13,7 +19,6 @@ import {
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 import { resolveFenceLiftElevation } from './lift'
 import type { FenceNode } from './schema'
-import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
 
 /**
  * Stage B builder for fence. Splits the geometry into four paintable slots —

@@ -11,7 +11,7 @@ import type {
   NodeDefinition,
   SceneApi,
 } from '@pascal-app/core'
-import { findLevelAncestorId, selectionProxyIdFromMetadata } from '@pascal-app/core'
+import { cabinetSlots, findLevelAncestorId, selectionProxyIdFromMetadata } from '@pascal-app/core'
 import { bakeCabinetAnimationClip } from './animation'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
@@ -52,7 +52,6 @@ import {
 } from './run-ops'
 import { cabinetSceneAction } from './scene-action'
 import { CabinetModuleNode, CabinetNode } from './schema'
-import { cabinetSlots } from './slots'
 import {
   backAnchoredModuleZ,
   isHoodCompartmentType,

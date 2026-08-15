@@ -1,5 +1,5 @@
-import { type AnyNode, type NodeDefinition, useScene } from '@pascal-app/core'
-import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
+import { type AnyNode, ductBodySlots, type NodeDefinition, useScene } from '@pascal-app/core'
+import { ductBodyPaint } from '../shared/duct-body-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
 import { buildDuctSegmentFloorplan } from './floorplan'

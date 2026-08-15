@@ -3,8 +3,12 @@
 import {
   type AnyNodeId,
   resolveStairTotalRise,
+  STAIR_BODY_SLOT_DEFAULT,
+  STAIR_RAILING_SLOT_DEFAULT,
+  STAIR_TREADS_SLOT_DEFAULT,
   type StairNode,
   type StairSegmentNode,
+  type StairSlotId,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
@@ -22,12 +26,6 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
-import {
-  STAIR_BODY_SLOT_DEFAULT,
-  STAIR_RAILING_SLOT_DEFAULT,
-  STAIR_TREADS_SLOT_DEFAULT,
-  type StairSlotId,
-} from './slots'
 
 type SegmentTransform = {
   position: [number, number, number]

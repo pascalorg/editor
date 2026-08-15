@@ -1,7 +1,12 @@
-import type { AnyNode, PaintPreviewArgs, PaintResolveArgs, StairNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  PaintPreviewArgs,
+  PaintResolveArgs,
+  StairNode,
+  StairSlotId,
+} from '@pascal-app/core'
 import type { Mesh, Object3D } from 'three'
 import { buildSlotPreviewMaterial, createSlotPaintCapability } from '../shared/slot-paint'
-import type { StairSlotId } from './slots'
 
 function isStairSlotId(value: unknown): value is StairSlotId {
   return value === 'treads' || value === 'body' || value === 'railing'

@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   type CeilingNode as CeilingNodeType,
+  ceilingSlots,
   getCeilingClampBound,
   type HandleDescriptor,
   type NodeDefinition,
@@ -26,7 +27,6 @@ import { ceilingPaint } from './paint'
 import { ceilingParametrics } from './parametrics'
 import { ceilingQuantities } from './quantities'
 import { CeilingNode } from './schema'
-import { ceilingSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
 const MIN_CEILING_HEIGHT = 0.5

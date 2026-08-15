@@ -336,6 +336,7 @@ export {
   type SceneOperationPatch,
   type ScenePatch,
 } from './store/use-scene'
+export * from './surface-slots'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
   type ElevatorDoorSide,

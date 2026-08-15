@@ -1,5 +1,6 @@
 import {
   type FenceNode as FenceNodeType,
+  fenceSlots,
   getFenceControlHandle,
   type HandleDescriptor,
   isSplineFence,
@@ -24,7 +25,6 @@ import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from './
 import { fencePaint } from './paint'
 import { fenceParametrics } from './parametrics'
 import { FenceNode } from './schema'
-import { fenceSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.27
 const SIDE_HANDLE_MIN_OFFSET = 0.33

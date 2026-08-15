@@ -15,7 +15,9 @@ import { registerExportJson } from './export-json'
 import { registerFindNodes } from './find-nodes'
 import { registerGetNode } from './get-node'
 import { registerGetScene } from './get-scene'
+import { registerListMaterials } from './list-materials'
 import { registerMeasure } from './measure'
+import { registerPaintSurfaces } from './paint-surfaces'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerPlaceItem } from './place-item'
 import { registerReadCadDrawing } from './read-cad-drawing'
@@ -60,6 +62,8 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerExportGlb(server, operations)
   registerReadCadDrawing(server)
   registerDescribeNodeType(server)
+  registerListMaterials(server)
+  registerPaintSurfaces(server, operations)
   registerValidateScene(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)

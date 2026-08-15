@@ -1,6 +1,7 @@
 import {
   ColumnNode as ColumnNodeSchema,
   type ColumnNode as ColumnNodeType,
+  columnSlots,
   type GroupMoveSnapArgs,
   type HandleDescriptor,
   type NodeDefinition,
@@ -17,7 +18,6 @@ import { columnFloorplanMoveTarget } from './floorplan-move'
 import { columnPaint } from './paint'
 import { columnParametrics } from './parametrics'
 import { ColumnNode } from './schema'
-import { columnSlots } from './slots'
 
 // Limits + offsets shared with the in-world arrows. Mirrors the floors
 // the renderer clamps to (`Math.max(0.2, node.height)` etc.) so a drag

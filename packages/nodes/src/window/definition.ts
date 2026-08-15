@@ -6,6 +6,7 @@ import type {
   WallNode,
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
+import { windowSlots } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { countQuantities } from '../shared/count-quantities'
 import {
@@ -24,7 +25,6 @@ import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowPaint } from './paint'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
-import { windowSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24

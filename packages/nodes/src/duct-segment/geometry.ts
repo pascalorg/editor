@@ -1,4 +1,5 @@
 import type { GeometryContext } from '@pascal-app/core'
+import { DUCT_BODY_SLOT_DEFAULT, DUCT_BODY_SLOT_ID } from '@pascal-app/core'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -22,7 +23,6 @@ import {
   TubeGeometry,
   Vector3,
 } from 'three'
-import { DUCT_BODY_SLOT_DEFAULT, DUCT_BODY_SLOT_ID } from '../shared/duct-body-paint'
 import type { DuctSegmentNode } from './schema'
 
 export const INCHES_TO_METERS = 0.0254

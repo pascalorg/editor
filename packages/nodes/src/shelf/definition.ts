@@ -1,4 +1,5 @@
 import type { HandleDescriptor, NodeDefinition, ShelfNode as ShelfNodeType } from '@pascal-app/core'
+import { shelfSlots } from '@pascal-app/core'
 import { sanitizeShelfDimensions } from './dimensions'
 import { buildShelfFloorplan } from './floorplan'
 import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
@@ -7,7 +8,6 @@ import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
 import { shelfPaint } from './paint'
 import { shelfParametrics } from './parametrics'
 import { ShelfNode } from './schema'
-import { shelfSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.18
 const HEIGHT_HANDLE_OFFSET = 0.22

@@ -8,7 +8,10 @@ import {
   getRenderableSlabPolygon,
   type LevelNode,
   type SiteNode,
+  SLAB_SIDE_SLOT_DEFAULT,
+  SLAB_TOP_SLOT_DEFAULT,
   type SlabNode,
+  type SlabSlotId,
   slabPolygonContextFromGeometry,
   surfaceHeightAt,
   terrainFieldOf,
@@ -36,7 +39,6 @@ import {
   Vector3,
 } from 'three'
 import { creaseCrossings } from '../site/terrain-drape'
-import { SLAB_SIDE_SLOT_DEFAULT, SLAB_TOP_SLOT_DEFAULT, type SlabSlotId } from './slots'
 
 /**
  * Stage B builder for slab. Reuses `generateSlabGeometry` (pure

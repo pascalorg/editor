@@ -1,4 +1,5 @@
 import type { AnyNodeId, NodeDefinition } from '@pascal-app/core'
+import { wallSlots } from '@pascal-app/core'
 import { type FloorplanNodeExtension, useEditor } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
@@ -15,7 +16,6 @@ import { wallParametrics } from './parametrics'
 import { wallQuantities } from './quantities'
 import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'
-import { wallSlots } from './slots'
 
 /**
  * Wall — the Phase 3 stress test of the registry-driven node model.

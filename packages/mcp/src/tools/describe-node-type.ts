@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { surfaceSlotsForKind } from '@pascal-app/core'
 import { AnyNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import { ErrorCode, throwMcpError } from './errors'
@@ -89,6 +90,12 @@ export const describeNodeTypeOutput = {
       type: z.string(),
       fieldCount: z.number(),
       required: z.array(z.string()),
+      /** True when the kind has paintable surfaces — ask for it to see them. */
+      paintable: z.boolean(),
+      /** Present only for kinds named in `types`. Slot ids `paint_surfaces` accepts. */
+      slots: z
+        .array(z.object({ slotId: z.string(), label: z.string(), default: z.string().optional() }))
+        .optional(),
       /** Present only for kinds named in `types`. JSON Schema for one node object. */
       schema: z.record(z.string(), z.unknown()).optional(),
     }),
@@ -104,7 +111,7 @@ export function registerDescribeNodeType(server: McpServer): void {
     {
       title: 'Describe node type',
       description:
-        "Get the field schema for a scene node kind, as JSON Schema. Read this before using `apply_patch` to create a kind that has no dedicated tool — column, skylight, chimney, fence, elevator, cabinet, gutter, solar panel, vents, duct and pipe runs, structural grids, section planes, dimensions. Call with no arguments first for the index of every kind, then ask for the specific ones you need. The schemas are read from the editor's own definitions, so they match exactly what `apply_patch` accepts.",
+        "Get the field schema for a scene node kind, as JSON Schema, plus the paintable surfaces it exposes. Read this before using `apply_patch` to create a kind that has no dedicated tool — column, skylight, chimney, fence, elevator, cabinet, gutter, solar panel, vents, duct and pipe runs, structural grids, section planes, dimensions — and before `paint_surfaces`, for the kind's slot ids. Call with no arguments first for the index of every kind, then ask for the specific ones you need. Everything is read from the editor's own definitions, so it matches exactly what `apply_patch` and `paint_surfaces` accept.",
       inputSchema: describeNodeTypeInput,
       outputSchema: describeNodeTypeOutput,
     },
@@ -129,20 +136,23 @@ export function registerDescribeNodeType(server: McpServer): void {
         const schema = jsonSchemaFor(entry.option)
         const properties = (schema.properties ?? {}) as Record<string, unknown>
         const required = Array.isArray(schema.required) ? (schema.required as string[]) : []
+        const slots = surfaceSlotsForKind(entry.kind)
         const base = {
           type: entry.kind,
           fieldCount: Object.keys(properties).length,
           required,
+          paintable: slots.length > 0,
         }
         if (!wanted.has(entry.kind)) return base
 
+        const detail = slots.length > 0 ? { ...base, slots } : base
         const cost = JSON.stringify(schema).length
         if (cost > budget) {
           omitted.push(entry.kind)
-          return base
+          return detail
         }
         budget -= cost
-        return { ...base, schema }
+        return { ...detail, schema }
       })
 
       const payload = { types: result, omitted }

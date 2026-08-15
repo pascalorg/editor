@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
-import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
+import { ductBodySlots } from '@pascal-app/core'
+import { ductBodyPaint } from '../shared/duct-body-paint'
 import { rotateFittingNode } from '../shared/fitting-rotation'
 import { buildDuctFittingFloorplan } from './floorplan'
 import { buildDuctFittingGeometry } from './geometry'

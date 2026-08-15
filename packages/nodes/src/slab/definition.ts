@@ -8,6 +8,7 @@ import {
   pointInPolygon2D,
   type SceneApi,
   type SlabNode as SlabNodeType,
+  slabSlots,
   syncStairRises,
 } from '@pascal-app/core'
 import {
@@ -37,7 +38,6 @@ import { slabParametrics } from './parametrics'
 import { slabQuantities } from './quantities'
 import { slabQuickMeasurement } from './quick-measurement'
 import { SlabNode } from './schema'
-import { slabSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
 const MIN_SLAB_ELEVATION = -1

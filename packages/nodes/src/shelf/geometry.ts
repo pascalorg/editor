@@ -1,4 +1,9 @@
-import { type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
+import {
+  type GeometryContext,
+  getMaterialPresetByRef,
+  SHELF_SLOT_DEFAULT_COLOR,
+  type ShelfSlotId,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   createDefaultMaterial,
@@ -9,7 +14,6 @@ import {
 import { BoxGeometry, Group, type Material, Mesh } from 'three'
 import { sanitizeShelfDimensions } from './dimensions'
 import type { ShelfNode } from './schema'
-import { SHELF_SLOT_DEFAULT_COLOR, type ShelfSlotId } from './slots'
 
 /**
  * Pure shelf geometry builder. Takes a `ShelfNode` and returns a `Group`
