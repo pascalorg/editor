@@ -8,6 +8,7 @@ import { registerCreateWall } from './create-wall'
 import { registerCutOpening } from './cut-opening'
 import { registerDeleteNode } from './delete-node'
 import { registerDescribeNode } from './describe-node'
+import { registerDescribeNodeType } from './describe-node-type'
 import { registerDuplicateLevel } from './duplicate-level'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
@@ -58,6 +59,7 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerExportJson(server, operations)
   registerExportGlb(server, operations)
   registerReadCadDrawing(server)
+  registerDescribeNodeType(server)
   registerValidateScene(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)
