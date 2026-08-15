@@ -203,6 +203,16 @@ holds the whole vertical slice for one kind (`schema.ts`, `definition.ts`,
 `renderer.tsx`, `tool.tsx`, `system.tsx`, `floorplan.ts`, `paint.ts`,
 `preview.tsx`, `parametrics.ts` — as applicable).
 
+**The registry is empty everywhere `packages/nodes` is not loaded.** Nothing
+registers kinds server-side, so in the MCP server process and in API routes
+`nodeRegistry.get(...)` returns `undefined` for every kind — not just plugin
+ones. Anything below the nodes layer that needs per-kind knowledge therefore
+cannot read it from a definition, and the answer is to move the data down into
+`core` rather than hand-write a second table that goes stale. Worked example:
+paintable surface declarations used to sit one per kind folder and now live in
+`packages/core/src/surface-slots.ts`, which `NodeDefinition.slots` reads from
+and the MCP material tools read directly.
+
 **A build tool's starting parameters come from `useEditor.toolDefaults[kind]`,
 never from the tool's own constants.** Two things write that entry, in
 priority order: a caller staging a preset immediately before `setTool`, and
@@ -370,6 +380,52 @@ check them before building on any of the four.
 `CollectionsPopover` is exported from the package but mounted nowhere in this
 app — check a UI surface is actually rendered before extending it.
 
+## `packages/mcp`: a second process, not a module the app calls
+
+The MCP server (`packages/mcp/src/tools/`, ~55 tools registered in
+`tools/index.ts`) runs as its own stdio process started by the user's Claude
+client. It is **not** imported by the running editor. The two share exactly one
+thing: the SQLite database, resolved from `PASCAL_DB_PATH`, then
+`PASCAL_DATA_DIR/pascal.db`, defaulting to `$HOME/.pascal/data/pascal.db`.
+
+That shared database is the whole coupling, and it runs in both directions.
+Server → editor: a mutating tool calls `publishLiveSceneSnapshot(bridge, kind)`,
+which saves the scene *and* appends a `scene_events` row, which the editor
+receives over SSE at `/api/scenes/[id]/events`. Editor → server: the agent
+prompt box writes an `agent_requests` row that the server's
+`await_editor_request` tool claims — MCP is client-driven, so a server can never
+start a conversation, and a queue an already-running agent polls is the way
+round it.
+
+Four things that will cost you an hour each:
+
+- **Tools reach the scene through `SceneOperations`, not the store.** The bridge
+  (`bridge/scene-bridge.ts`) wraps the real `useScene`, so undo works, but a
+  tool only sees what `operations/scene-operations.ts` exposes. Scene-side state
+  that is not a node — comments, the material palette, saved views — needs an
+  accessor added there before any tool can read it, and their absence is silent:
+  the node accessors simply look past them.
+- **Store methods are optional and capability-gated.** `SceneStore` declares
+  persistence methods as `?`, and `SceneOperations` exposes `hasStore` /
+  `canAppendSceneEvents` / `canServeAgentRequests` derived from `typeof … ===
+  'function'`. Register a tool that needs the store inside the `hasStore` branch
+  and check the matching flag in the handler.
+- **Reusing a node schema's field as an optional tool input keeps its default.**
+  `SomeNode.shape.mode.optional()` still resolves `undefined` to the schema's
+  default in zod 4, so an omitted argument becomes indistinguishable from an
+  explicit one and quietly beats any "if the caller said nothing, decide"
+  logic. `.unwrap()` first.
+- **`@pascal-app/core` is a devDependency here but imported at runtime by ~81
+  files**, and the build is plain `tsc` with no bundling. It resolves inside the
+  monorepo and would not in the published package. Pre-existing; don't add to it.
+
+The suite drives tools in-process. That does not prove registration or the
+transport, so a new tool also wants a run against the real server —
+`InMemoryTransport.createLinkedPair()` for the unit tests (copy
+`check-collisions.test.ts`), and `StdioClientTransport` against
+`dist/bin/pascal-mcp.js` for the smoke check. Rebuild before the latter: it runs
+`dist`, not source.
+
 ## Layer Boundaries (read once, internalise)
 
 - **`packages/core`** owns domain data and pure logic. It must not import Three.js, `packages/viewer`, `apps/editor`, rendering/UI concepts, tools, modes, phases, or view-specific concepts such as floorplan or paint preview.
@@ -400,6 +456,9 @@ Read the relevant page in `wiki/architecture/` **before** writing code. The page
 - Catalog item GLBs (`slot_` materials, `cutout` mesh, UV world scale) → `item-authoring.md`
 - Dimensions, units, measurement drafts → `measurements.md`
 - Anything a third party will consume → `plugin-authoring.md`
+- Adding an MCP tool → the `packages/mcp` section above. Check first whether the
+  per-kind knowledge it needs is reachable at all: the node registry is empty in
+  that process.
 
 ## When reviewing a PR
 
