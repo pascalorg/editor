@@ -1,5 +1,25 @@
 import { describe, expect, test } from 'bun:test'
-import { createStoredNodeCountTracker, isSuspiciousNodeDrop } from './use-auto-save'
+import {
+  createStoredNodeCountTracker,
+  isEmptyGraphWrite,
+  isSuspiciousNodeDrop,
+} from './use-auto-save'
+
+describe('isEmptyGraphWrite', () => {
+  // The drop guard cannot see this case: it is seeded from the store at mount,
+  // which is empty mid-load, so the 0 → 0 write it is asked about looks like no
+  // drop at all. That is exactly the write that wiped a stored scene, flushed
+  // from the autosave effect's cleanup during React StrictMode's remount.
+  test('refuses a graph with no nodes or no roots', () => {
+    expect(isEmptyGraphWrite(0, 0)).toBe(true)
+    expect(isEmptyGraphWrite(0, 1)).toBe(true)
+    expect(isEmptyGraphWrite(20, 0)).toBe(true)
+  })
+
+  test('allows the smallest real document — the default scaffold', () => {
+    expect(isEmptyGraphWrite(3, 1)).toBe(false)
+  })
+})
 
 describe('isSuspiciousNodeDrop', () => {
   test('blocks populated scenes from being flushed as empty skeletons', () => {

@@ -83,6 +83,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!existing) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
+    // A node-less graph is never a document the user authored — it is the
+    // transient state between `unloadScene()` and a loaded scene. Letting one
+    // land on a populated scene is silent, total data loss, and the client is
+    // the wrong place to be the only guard: a stale tab, an older build, or a
+    // third-party caller all reach this route. Refuse it here too.
+    if (wouldEmptyStoredScene(parsed.data.graph, existing.graph)) {
+      return sceneApiJson(request, { error: 'refused_empty_graph' }, { status: 409 })
+    }
     const meta = await operations.saveScene({
       id,
       name: parsed.data.name ?? existing.name,
@@ -158,6 +166,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   } catch (error) {
     return handleStoreError(request, error, { includeCurrentVersionFor: id })
   }
+}
+
+const nodeCount = (graph: unknown): number =>
+  Object.keys((graph as { nodes?: Record<string, unknown> } | null)?.nodes ?? {}).length
+
+/**
+ * True when the incoming graph would replace a populated scene with an empty
+ * one. Only that direction is refused: creating or keeping an empty scene is
+ * allowed, so a genuinely blank document is still writable.
+ */
+export function wouldEmptyStoredScene(incoming: unknown, stored: unknown): boolean {
+  return nodeCount(incoming) === 0 && nodeCount(stored) > 0
 }
 
 /**

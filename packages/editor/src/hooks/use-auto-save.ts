@@ -12,6 +12,20 @@ export function isSuspiciousNodeDrop(previousNodeCount: number, currentNodeCount
 }
 
 /**
+ * A node-less graph is never a document. `unloadScene()` produces one as a
+ * transient state between scenes, and `clearScene()` immediately replaces it
+ * with a site + building + level scaffold — so nothing the user can reach ever
+ * has zero nodes.
+ *
+ * The drop guard cannot catch this on its own: its baseline is seeded from the
+ * store at mount, which is empty during a load, so a 0 → 0 write reads as no
+ * drop at all. This is the floor underneath it.
+ */
+export function isEmptyGraphWrite(nodeCount: number, rootNodeCount: number) {
+  return nodeCount === 0 || rootNodeCount === 0
+}
+
+/**
  * Tracks the node count of the graph we believe is stored, which is what the
  * accidental-wipe guard measures every write against.
  *
@@ -144,6 +158,10 @@ export function useAutoSave({
       } as SceneGraph
 
       const currentNodeCount = Object.keys(nodes).length
+      if (isEmptyGraphWrite(currentNodeCount, rootNodeIds.length)) {
+        console.warn('[autosave] Blocked: refusing to save an empty scene.')
+        return
+      }
       const previousNodeCount = storedNodeCount.count
       if (!storedNodeCount.allowWrite(currentNodeCount)) {
         console.warn(
@@ -250,6 +268,15 @@ export function useAutoSave({
     // (mobile Safari, bfcache) where `beforeunload` does not.
     function flushOnExit() {
       if (!hasDirtyChangesRef.current) return
+      // The same gate `executeSave` applies, and the reason this function needs
+      // it: the effect cleanup below calls `flushOnExit` too, so it fires on
+      // every re-run of the effect — which in dev means React StrictMode's
+      // mount → cleanup → mount, landing squarely inside the scene load. At
+      // that moment the store sits between `unloadScene()` and the loaded
+      // graph, and flushing it wrote an empty scene over the stored one. The
+      // drop guard did not stop it: its baseline was seeded at mount, when the
+      // store was already empty, so 0 → 0 read as no drop.
+      if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) return
       const {
         nodes,
         rootNodeIds,
@@ -261,6 +288,10 @@ export function useAutoSave({
         installedPlugins,
       } = useScene.getState()
       const currentNodeCount = Object.keys(nodes).length
+      if (isEmptyGraphWrite(currentNodeCount, rootNodeIds.length)) {
+        console.warn('[autosave] Blocked unload flush: refusing to save an empty scene.')
+        return
+      }
       const previousNodeCount = storedNodeCount.count
       if (!storedNodeCount.allowWrite(currentNodeCount)) {
         console.warn(
