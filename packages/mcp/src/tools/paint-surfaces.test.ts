@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { SlabNode, WallNode } from '@pascal-app/core/schema'
+import useScene from '@pascal-app/core/store'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerPaintSurfaces } from './paint-surfaces'
 
@@ -115,9 +116,13 @@ describe('paint_surfaces', () => {
     ).rejects.toThrow()
   })
 
-  // Unverifiable here — the scene palette lives in the editor — so it must pass
-  // through rather than be rejected as unknown.
-  test('accepts a scene palette ref', async () => {
+  test('accepts a finish the user authored in this scene', async () => {
+    useScene.getState().addSceneMaterial({
+      id: 'mat_custom',
+      name: 'House white',
+      material: { color: '#fafafa' } as never,
+    })
+
     const payload = await call({
       nodeIds: [wallId],
       slotId: 'interior',
@@ -126,6 +131,13 @@ describe('paint_surfaces', () => {
 
     expect(payload.painted).toEqual([wallId])
     expect(slotsOf(bridge, wallId)?.interior).toBe('scene:mat_custom')
+  })
+
+  test('rejects a scene ref this scene does not have', async () => {
+    await expect(
+      call({ nodeIds: [wallId], slotId: 'interior', material: 'scene:mat_absent' }),
+    ).rejects.toThrow()
+    expect(slotsOf(bridge, wallId)).toBeUndefined()
   })
 
   test('reports a missing node instead of failing the whole batch', async () => {

@@ -2,7 +2,16 @@
 import './node-shims'
 
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import type { AnyNode } from '@pascal-app/core/schema'
+import type {
+  AnyNode,
+  CommentAuthor,
+  CommentId,
+  CommentReply,
+  CommentReplyId,
+  CommentThread,
+  SceneMaterial,
+  SceneMaterialId,
+} from '@pascal-app/core/schema'
 import { type AnyNodeId, AnyNode as AnyNodeSchema, type AnyNodeType } from '@pascal-app/core/schema'
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
 import useScene from '@pascal-app/core/store'
@@ -155,6 +164,35 @@ export class SceneBridge {
       ...(materials && { materials }),
       ...(installedPlugins && { installedPlugins, hasExplicitPluginInstallState: true }),
     })
+  }
+
+  /** The scene's own material palette — user-authored finishes, `scene:mat_…`. */
+  getSceneMaterials(): Record<SceneMaterialId, SceneMaterial> {
+    return useScene.getState().materials
+  }
+
+  /**
+   * Comment threads on the scene.
+   *
+   * Comments are scene-side state but not nodes, so they are invisible to every
+   * node accessor above — an agent reading the graph could not see that the
+   * user had left it feedback. They are also deliberately not history-tracked,
+   * which is why replying is its own call rather than a patch.
+   */
+  getComments(): Record<CommentId, CommentThread> {
+    return useScene.getState().comments
+  }
+
+  /** Append a reply. `null` when the thread is gone. */
+  addCommentReply(
+    id: CommentId,
+    reply: Omit<CommentReply, 'id' | 'createdAt'>,
+  ): CommentReplyId | null {
+    return useScene.getState().addCommentReply(id, reply)
+  }
+
+  setCommentResolved(id: CommentId, resolved: boolean, by?: CommentAuthor): void {
+    useScene.getState().setCommentResolved(id, resolved, by)
   }
 
   /** Read a single node, or `null` if not present. */

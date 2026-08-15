@@ -1,5 +1,16 @@
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
+import type {
+  AnyNode,
+  AnyNodeId,
+  AnyNodeType,
+  CommentAuthor,
+  CommentId,
+  CommentReply,
+  CommentReplyId,
+  CommentThread,
+  SceneMaterial,
+  SceneMaterialId,
+} from '@pascal-app/core/schema'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
   ProjectCreateOptions,
@@ -40,6 +51,13 @@ export interface SceneOperations {
   loadJSON(json: string | SceneGraph): void
   getNode(id: AnyNodeId): AnyNode | null
   getNodes(): Record<AnyNodeId, AnyNode>
+  getSceneMaterials(): Record<SceneMaterialId, SceneMaterial>
+  getComments(): Record<CommentId, CommentThread>
+  addCommentReply(
+    id: CommentId,
+    reply: Omit<CommentReply, 'id' | 'createdAt'>,
+  ): CommentReplyId | null
+  setCommentResolved(id: CommentId, resolved: boolean, by?: CommentAuthor): void
   getRootNodeIds(): AnyNodeId[]
   getChildren(parentId: AnyNodeId): AnyNode[]
   getAncestry(id: AnyNodeId): AnyNode[]
@@ -162,6 +180,25 @@ class SceneOperationsFacade implements SceneOperations {
 
   getNode(id: AnyNodeId): AnyNode | null {
     return this.requireBridge().getNode(id)
+  }
+
+  getSceneMaterials(): Record<SceneMaterialId, SceneMaterial> {
+    return this.requireBridge().getSceneMaterials()
+  }
+
+  getComments(): Record<CommentId, CommentThread> {
+    return this.requireBridge().getComments()
+  }
+
+  addCommentReply(
+    id: CommentId,
+    reply: Omit<CommentReply, 'id' | 'createdAt'>,
+  ): CommentReplyId | null {
+    return this.requireBridge().addCommentReply(id, reply)
+  }
+
+  setCommentResolved(id: CommentId, resolved: boolean, by?: CommentAuthor): void {
+    this.requireBridge().setCommentResolved(id, resolved, by)
   }
 
   getNodes(): Record<AnyNodeId, AnyNode> {

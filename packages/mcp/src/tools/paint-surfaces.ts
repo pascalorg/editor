@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { getCatalogMaterialById, parseMaterialRef, surfaceSlotsFor } from '@pascal-app/core'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import type { AnyNode, AnyNodeId, SceneMaterialId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
@@ -26,7 +26,7 @@ function hasDeclaredSlots(node: AnyNode): boolean {
   return surfaceSlotsFor(node).length > 0
 }
 
-function assertMaterialExists(material: string): void {
+function assertMaterialExists(material: string, bridge: SceneOperations): void {
   if (HEX_COLOR.test(material)) return
 
   const parsed = parseMaterialRef(material)
@@ -36,12 +36,16 @@ function assertMaterialExists(material: string): void {
       `Not a material: ${material}. Expected a catalog ref from list_materials ("library:<id>"), a scene material ref ("scene:mat_<id>"), or a "#rrggbb" colour.`,
     )
   }
-  // A `scene:` ref points at the scene's own palette, which this server has no
-  // reader for — accept it rather than reject something that may well be valid.
   if (parsed.kind === 'library' && !getCatalogMaterialById(parsed.id)) {
     throwMcpError(
       ErrorCode.InvalidParams,
       `Unknown catalog material: ${material}. Call list_materials to get real refs.`,
+    )
+  }
+  if (parsed.kind === 'scene' && !bridge.getSceneMaterials()[parsed.id as SceneMaterialId]) {
+    throwMcpError(
+      ErrorCode.InvalidParams,
+      `This scene has no material ${material}. list_materials reports the scene's own palette under sceneMaterials.`,
     )
   }
 }
@@ -74,7 +78,7 @@ export function registerPaintSurfaces(server: McpServer, bridge: SceneOperations
       outputSchema: paintSurfacesOutput,
     },
     async ({ nodeIds, slotId, material }) => {
-      assertMaterialExists(material)
+      assertMaterialExists(material, bridge)
 
       const patches: BridgePatch[] = []
       const painted: string[] = []

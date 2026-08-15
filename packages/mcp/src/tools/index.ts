@@ -3,6 +3,7 @@ import type { SceneOperations } from '../operations'
 import { registerAddDimension } from './add-dimension'
 import { registerApplyPatch } from './apply-patch'
 import { registerCheckCollisions } from './check-collisions'
+import { registerCommentTools } from './comments'
 import { registerConstructionTools } from './construction-tools'
 import { registerCreateLevel } from './create-level'
 import { registerCreateWall } from './create-wall'
@@ -63,9 +64,10 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerExportGlb(server, operations)
   registerReadCadDrawing(server)
   registerDescribeNodeType(server)
-  registerListMaterials(server)
+  registerListMaterials(server, operations)
   registerPaintSurfaces(server, operations)
   registerAddDimension(server, operations)
+  registerCommentTools(server, operations)
   registerValidateScene(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)

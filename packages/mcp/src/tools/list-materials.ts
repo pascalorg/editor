@@ -4,8 +4,10 @@ import {
   MATERIAL_CATEGORIES,
   MATERIAL_SURFACES,
   toLibraryMaterialRef,
+  toSceneMaterialRef,
 } from '@pascal-app/core'
 import { z } from 'zod'
+import type { SceneOperations } from '../operations'
 
 /**
  * Publish the finish catalog so an agent can dress what it builds.
@@ -48,15 +50,20 @@ export const listMaterialsOutput = {
   ),
   categories: z.array(z.object({ category: z.string(), count: z.number() })),
   total: z.number().describe('Matches before the limit was applied.'),
+  sceneMaterials: z
+    .array(z.object({ ref: z.string(), name: z.string() }))
+    .describe(
+      'Finishes authored inside this scene rather than taken from the catalog. Unaffected by the filters — there are few of them and they are the ones the user made on purpose.',
+    ),
 }
 
-export function registerListMaterials(server: McpServer): void {
+export function registerListMaterials(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'list_materials',
     {
       title: 'List materials',
       description:
-        "List the finishes available to paint onto a node's surfaces — wood, stone, tile, brick, concrete, metal, fabric, flat colours. Returns a `ref` for each, which is what `paint_surfaces` takes. Filter by category, by the surface being painted, or by a text query; call with no arguments for the category index. Read from the editor's own catalog, so every ref returned is real.",
+        "List the finishes available to paint onto a node's surfaces — wood, stone, tile, brick, concrete, metal, fabric, flat colours — plus any the user authored inside this scene. Returns a `ref` for each, which is what `paint_surfaces` takes. Filter by category, by the surface being painted, or by a text query; call with no arguments for the category index. Read from the editor's own catalog, so every ref returned is real.",
       inputSchema: listMaterialsInput,
       outputSchema: listMaterialsOutput,
     },
@@ -87,6 +94,10 @@ export function registerListMaterials(server: McpServer): void {
           .map(([c, count]) => ({ category: c, count }))
           .sort((a, b) => a.category.localeCompare(b.category)),
         total: matches.length,
+        sceneMaterials: Object.values(bridge.getSceneMaterials()).map((material) => ({
+          ref: toSceneMaterialRef(material.id),
+          name: material.name,
+        })),
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

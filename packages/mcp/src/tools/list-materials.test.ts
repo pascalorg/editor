@@ -3,20 +3,27 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { getCatalogMaterialById, parseMaterialRef } from '@pascal-app/core'
+import useScene from '@pascal-app/core/store'
+import { SceneBridge } from '../bridge/scene-bridge'
 import { registerListMaterials } from './list-materials'
 
 type Payload = {
   materials: Array<{ ref: string; label: string; category: string; surfaces?: string[] }>
   categories: Array<{ category: string; count: number }>
   total: number
+  sceneMaterials: Array<{ ref: string; name: string }>
 }
 
 describe('list_materials', () => {
   let client: Client
+  let bridge: SceneBridge
 
   beforeEach(async () => {
+    bridge = new SceneBridge()
+    bridge.setScene({}, [])
+    bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerListMaterials(server)
+    registerListMaterials(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -77,5 +84,19 @@ describe('list_materials', () => {
 
   test('rejects a category that is not in the catalog', async () => {
     await expect(call({ category: 'not_a_category' })).rejects.toThrow()
+  })
+
+  // The scene's own palette is the half no catalog filter can reach, and the
+  // one the user made deliberately.
+  test('reports the scene palette alongside the catalog', async () => {
+    useScene.getState().addSceneMaterial({
+      id: 'mat_brand',
+      name: 'Brand red',
+      material: { color: '#cc0000' } as never,
+    })
+
+    const payload = await call({ category: 'wood', limit: 1 })
+
+    expect(payload.sceneMaterials).toEqual([{ ref: 'scene:mat_brand', name: 'Brand red' }])
   })
 })
