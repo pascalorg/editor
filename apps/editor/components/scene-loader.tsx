@@ -18,11 +18,16 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
+import {
+  type PersistedSceneGraph,
+  sceneGraphSignature,
+  sceneModelSignature,
+} from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from './editor-top-bar'
 import { ShareLinkButton } from './share-link-button'
+import { useSceneCollaboration } from './use-scene-collaboration'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -118,25 +123,38 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
-  const lastRemoteGraphJsonRef = useRef<string | null>(null)
-  const suppressRemoteSaveUntilRef = useRef(0)
+  const authoritativeGraphJsonRef = useRef(sceneGraphSignature(initialScene))
+  const authoritativeModelJsonRef = useRef(sceneModelSignature(initialScene))
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [liveVersion, setLiveVersion] = useState(meta.version)
 
   const lightPreview = isLightPreviewQuery(searchParams)
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
+  const handleAuthoritativeGraph = useCallback((event: LiveSceneEvent) => {
+    const graphJson = sceneGraphSignature(event.graph)
+    authoritativeGraphJsonRef.current = graphJson
+    authoritativeModelJsonRef.current = sceneModelSignature(event.graph)
+    setLiveVersion(event.version)
+    setConflict(false)
+    setSaveError(null)
+  }, [])
+  const { receiveCollaborationEvent, waitForCollaboration } = useSceneCollaboration({
+    initialGraph: initialScene,
+    sceneId: meta.id,
+    versionRef,
+    onAuthoritativeGraph: handleAuthoritativeGraph,
+    onError: setSaveError,
+  })
+
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
+      await waitForCollaboration()
       const graphJson = sceneGraphSignature(graph)
-      const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
-      if (lastRemoteGraphJsonRef.current === graphJson) {
-        lastRemoteGraphJsonRef.current = null
-        suppressRemoteSaveUntilRef.current = 0
-        return
-      }
-      if (isRecentRemoteApply) return
+      if (graphJson === authoritativeGraphJsonRef.current) return
+      if (sceneModelSignature(graph) !== authoritativeModelJsonRef.current) return
 
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
@@ -165,12 +183,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
         const next = (await response.json()) as SceneMeta
         versionRef.current = next.version
+        setLiveVersion(next.version)
+        authoritativeGraphJsonRef.current = graphJson
+        authoritativeModelJsonRef.current = sceneModelSignature(graph)
         setSaveError(null)
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
       }
     },
-    [meta.id, meta.name],
+    [meta.id, meta.name, waitForCollaboration],
   )
 
   useEffect(() => {
@@ -188,7 +209,13 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       if (payload.sceneId !== meta.id) return
       if (payload.version <= versionRef.current) return
 
+      if (payload.kind.startsWith('collaboration:')) {
+        receiveCollaborationEvent(payload as LiveSceneEvent & { graph: SceneGraph })
+        return
+      }
+
       versionRef.current = payload.version
+      setLiveVersion(payload.version)
       // Echo bookkeeping only advances for a change we actually applied. A
       // held proposal must leave it alone, or accepting it later reads as a
       // local edit and gets saved back over the agent's own version.
@@ -199,8 +226,9 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         graph: payload.graph,
       })
       if (applied) {
-        lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
-        suppressRemoteSaveUntilRef.current = Date.now() + 2500
+        const graphJson = sceneGraphSignature(payload.graph)
+        authoritativeGraphJsonRef.current = graphJson
+        authoritativeModelJsonRef.current = sceneModelSignature(payload.graph)
       }
       setConflict(false)
       setSaveError(null)
@@ -217,7 +245,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       useAgentActivity.getState().setConnected(false)
       source.close()
     }
-  }, [meta.id])
+  }, [meta.id, receiveCollaborationEvent])
 
   const handleThumb = useCallback(
     async (_blob: Blob) => {
@@ -292,7 +320,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
                 </Link>
               </>
             }
-            status={saveError ? t('Not saved') : `${t('Version')} ${meta.version}`}
+            status={saveError ? t('Not saved') : `${t('Version')} ${liveVersion}`}
             title={meta.name}
           />
         }

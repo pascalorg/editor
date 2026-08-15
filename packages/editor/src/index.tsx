@@ -27,6 +27,7 @@ export { default as Editor } from './components/editor'
 // preset-system spec.
 export { BakeExporter } from './components/editor/bake-exporter'
 export { BakeThumbnail } from './components/editor/bake-thumbnail'
+export { CollaborationPresenceOverlay } from './components/editor/collaboration-presence-overlay'
 export { FirstPersonControls } from './components/editor/first-person-controls'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
 // Embed surface — the editor's real in-canvas affordances, so a host can mount
@@ -576,7 +577,7 @@ export {
   updateSavedViewFromCurrentState,
 } from './lib/saved-views'
 export type { SceneGraph } from './lib/scene'
-export { applySceneGraphToEditor } from './lib/scene'
+export { applySceneGraphToEditor, syncEditorSelectionFromCurrentScene } from './lib/scene'
 export { triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export {
@@ -643,6 +644,11 @@ export {
   stopArrayDuplicateTracking,
 } from './store/use-array-duplicate'
 export { default as useAudio } from './store/use-audio'
+export {
+  type CollaborationCursor,
+  type CollaborationParticipant,
+  default as useCollaborationPresence,
+} from './store/use-collaboration-presence'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export {
   DRAWING_TYPE_OPTIONS,

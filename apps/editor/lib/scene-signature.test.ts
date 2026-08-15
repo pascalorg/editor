@@ -1,5 +1,9 @@
 import { expect, test } from 'bun:test'
-import { type PersistedSceneGraph, sceneGraphSignature } from './scene-signature'
+import {
+  type PersistedSceneGraph,
+  sceneGraphSignature,
+  sceneModelSignature,
+} from './scene-signature'
 
 const NODE_ID = 'level_a1b2c3d4e5f6g7h8'
 const MATERIAL_ID = 'mat_a1b2c3d4e5f6g7h8'
@@ -94,4 +98,20 @@ test('changing any signed field changes the signature', () => {
   expect(sceneGraphSignature(graph({ installedPlugins: ['@pascal-app/plugin-trees'] }))).not.toBe(
     base,
   )
+})
+
+test('the collaboration model signature excludes comments and includes model bags', () => {
+  const base = sceneModelSignature(graph())
+  expect(
+    sceneModelSignature(
+      graph({
+        comments: {
+          comment_1: { id: 'comment_1', body: 'feedback' },
+        },
+      }),
+    ),
+  ).toBe(base)
+  expect(
+    sceneModelSignature(graph({ collections: { col_1: { id: 'col_1', nodeIds: [NODE_ID] } } })),
+  ).not.toBe(base)
 })

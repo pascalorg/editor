@@ -31,3 +31,15 @@ export function sceneGraphSignature(graph: PersistedSceneGraph): string {
     installedPlugins: graph.installedPlugins ?? [],
   })
 }
+
+export function sceneModelSignature(graph: PersistedSceneGraph): string {
+  return JSON.stringify({
+    nodes: graph.nodes,
+    rootNodeIds: graph.rootNodeIds,
+    collections: graph.collections ?? {},
+    savedViews: graph.savedViews ?? {},
+    definitions: graph.definitions ?? {},
+    materials: graph.materials ?? {},
+    installedPlugins: graph.installedPlugins ?? [],
+  })
+}

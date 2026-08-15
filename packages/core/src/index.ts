@@ -1,3 +1,17 @@
+export {
+  ActorCollaborationHistory,
+  applyCollaborationBatch,
+  type CollaborationApplyResult,
+  type CollaborationBatch,
+  type CollaborationChange,
+  type CollaborationConflict,
+  type CollaborationSnapshotRecords,
+  type CollaborationStamp,
+  collaborationSnapshot,
+  createCollaborationBatch,
+  SceneCollaborationDocument,
+  subscribeCollaborationCommits,
+} from './collaboration/scene-collaboration'
 export type {
   BoxVentEvent,
   BuildingEvent,

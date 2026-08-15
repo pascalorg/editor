@@ -70,6 +70,7 @@ import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { AgentReviewBar } from './agent-review-bar'
+import { CollaborationPresenceOverlay } from './collaboration-presence-overlay'
 import { CommentLayer3D } from './comment-layer-3d'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DefinitionEditHud } from './definition-edit-hud'
@@ -1107,6 +1108,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
       {/* `relative` so the floorplan compass (portaled here to stay visible in
           2d / 3d / split alike) can anchor to this container's bottom-left. */}
       <div className="relative flex h-full" ref={setViewerAreaNode}>
+        <CollaborationPresenceOverlay />
         <QuickMeasurementHud />
         <DefinitionEditHud />
         <TypedDimensionHud />

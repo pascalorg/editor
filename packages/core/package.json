@@ -16,6 +16,11 @@
       "import": "./dist/utils/clone-scene-graph.js",
       "default": "./dist/utils/clone-scene-graph.js"
     },
+    "./collaboration": {
+      "types": "./dist/collaboration/scene-collaboration.d.ts",
+      "import": "./dist/collaboration/scene-collaboration.js",
+      "default": "./dist/collaboration/scene-collaboration.js"
+    },
     "./scene-migrations": {
       "types": "./dist/utils/scene-migrations.d.ts",
       "import": "./dist/utils/scene-migrations.js",
