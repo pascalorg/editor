@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/ifc-converter",
   "version": "1.0.0-beta.4",
-  "description": "IFC → Pascal scene-graph conversion. Pure logic — no DOM, no React.",
+  "description": "IFC ↔ Pascal scene-graph conversion. Pure logic — no DOM, no React.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

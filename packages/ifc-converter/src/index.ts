@@ -8,6 +8,7 @@ import {
   DoorNode,
   LevelNode,
   RoofNode,
+  type SceneGraph,
   SiteNode,
   SlabNode,
   StairNode,
@@ -22,6 +23,7 @@ export type {
   IfcConversionSimplificationOptions,
   IfcConversionSimplificationStats,
 } from './cleanup'
+export * from './export'
 
 export type PascalNode = AnyNode
 
@@ -29,6 +31,7 @@ export interface PascalSceneGraph {
   nodes: Record<AnyNodeId, AnyNode>
   rootNodeIds: AnyNodeId[]
   collections?: Record<string, unknown>
+  materials?: SceneGraph['materials']
 }
 
 // Pascal's BaseNode.metadata is typed as `JSONType` (z.json()) — a loose
