@@ -156,6 +156,13 @@ Three things that bite:
   reverts to defaults on reopen. This exact bug class shipped twice already
   (materials and collections, `CHANGELOG.md` #597). `clone-scene-graph.ts` and
   `use-scene.ts`'s load path are the two places to check.
+- **There is a sixth boundary the five do not cover: the store's own read
+  schema.** `GraphSchema` in `packages/mcp/src/storage/sqlite-scene-store.ts`
+  is a `z.object()`, which *strips every key it does not name*, silently and on
+  load. A field can be correct through all five editor-side boundaries and
+  still vanish the moment the scene round-trips through the API — the save
+  looks like it worked. `savedViews` shipped in Q2 with exactly this bug and
+  nobody noticed until comments hit it. Add the key there too.
 - **`comments` is persisted but deliberately *not* history-tracked**, and it is
   the only scene-side bag exempt from the `readOnly` lock. A comment is feedback
   about the model, not an edit to it: undo must not swallow one, and a

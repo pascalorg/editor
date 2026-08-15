@@ -21,6 +21,7 @@ import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signa
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from './editor-top-bar'
+import { ShareLinkButton } from './share-link-button'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -268,6 +269,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
                 >
                   {t('Light preview')}
                 </button>
+                <ShareLinkButton sceneId={meta.id} />
                 <Link className={TOP_BAR_ACTION} href="/scenes">
                   {t('Saved scenes')}
                 </Link>

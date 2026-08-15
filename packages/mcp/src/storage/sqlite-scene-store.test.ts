@@ -115,11 +115,29 @@ describe('SqliteSceneStore', () => {
 
   // `GraphSchema` strips any key it doesn't name, so a field missing from it
   // is dropped on load without an error — the save looks like it worked.
-  test('round-trips collections, definitions, materials and installed plugins', async () => {
+  test('round-trips every scene-side bag the editor persists', async () => {
     const graph = makeGraph({
       collections: {
         collection_1: { id: 'collection_1', name: 'Refs', nodeIds: ['site_abc'] },
       } as SceneGraph['collections'],
+      savedViews: {
+        'saved-view_1': {
+          id: 'saved-view_1',
+          name: 'Entry',
+          order: 0,
+          camera: { position: [1, 1, 1], target: [0, 0, 0], projection: 'perspective' },
+        },
+      } as unknown as SceneGraph['savedViews'],
+      comments: {
+        comment_1: {
+          id: 'comment_1',
+          anchor: { position: [1, 0, 2] },
+          author: { name: 'Ada' },
+          body: 'too thin',
+          createdAt: '2026-08-01T09:00:00.000Z',
+          replies: [],
+        },
+      } as unknown as SceneGraph['comments'],
       definitions: {
         definition_1: {
           id: 'definition_1',

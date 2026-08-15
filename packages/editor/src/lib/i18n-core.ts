@@ -1942,6 +1942,17 @@ const tr: Record<string, string> = {
   'Delete comment': 'Yorumu sil',
   'Close comment': 'Yorumu kapat',
   'Hide resolved': 'Çözülenleri gizle',
+  // Share links
+  Share: 'Paylaş',
+  'Creating link…': 'Bağlantı oluşturuluyor…',
+  'Link copied': 'Bağlantı kopyalandı',
+  'View-only link': 'Salt-görüntüleme bağlantısı',
+  'Link failed': 'Bağlantı oluşturulamadı',
+  'Create a view-only link — visitors can look, measure and comment, not edit':
+    'Salt-görüntüleme bağlantısı oluştur — ziyaretçiler gezebilir, ölçebilir ve yorum bırakabilir, düzenleyemez',
+  'View only': 'Salt görüntüleme',
+  'Comment not saved': 'Yorum kaydedilmedi',
+  'Comment not saved — try again': 'Yorum kaydedilmedi — tekrar deneyin',
   'Hide resolved comments': 'Çözülen yorumları gizle',
   'Show resolved comments': 'Çözülen yorumları göster',
   Apply: 'Uygula',

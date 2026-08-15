@@ -24,6 +24,7 @@ cp .env.example .env
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `PORT` | No | Dev server port (default: 3002) |
+| `PASCAL_SHARE_LINK_SECRET` | For sharing | Signs view-only share links (`/share/<token>`). Without it the **Share** button returns 503 and existing links stop verifying — everything else works. Changing it invalidates every link already handed out, which is also the only way to revoke one. |
 
 Local development and the official hosted editor work without any environment variables.
 
