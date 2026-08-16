@@ -1,10 +1,22 @@
 import type { ZodObject } from 'zod'
-import type { AnyNodeDefinition, BakePolicy, NodeRegistry, Plugin } from './types'
+import type {
+  AnyNodeDefinition,
+  BakePolicy,
+  InspectorExtension,
+  NodeRegistry,
+  Plugin,
+} from './types'
 
 const HOST_API_VERSION = 1 as const
 const BUILTIN_PLUGIN_ID = 'pascal:core'
 
 const pluginIdsByKind = new Map<string, string>()
+
+// Inspector-card sections contributed by plugins, fanned out per node kind
+// (`Plugin.inspectorExtensions`). Filled by `loadPlugin`, cleared by the
+// test reset alongside `pluginIdsByKind`. Consumers re-derive on the
+// registry-version bump — plugins load asynchronously, after first mount.
+const inspectorExtensionsByKind = new Map<string, InspectorExtension[]>()
 
 // ---------------------------------------------------------------------------
 // Registry change notification. Plugin kinds register ASYNCHRONOUSLY (app
@@ -116,6 +128,7 @@ class NodeRegistryImpl implements NodeRegistry {
   _reset(): void {
     this.defs.clear()
     pluginIdsByKind.clear()
+    inspectorExtensionsByKind.clear()
     notifyRegistryChanged()
   }
 }
@@ -132,6 +145,17 @@ export function registerNode(def: AnyNodeDefinition): void {
 /** The plugin that registered a node kind, when it came through {@link loadPlugin}. */
 export function getNodePluginId(kind: string): string | undefined {
   return pluginIdsByKind.get(kind)
+}
+
+/**
+ * Inspector-card sections registered for a node kind
+ * ({@link InspectorExtension}), in plugin load order. Callers must still
+ * apply the project's install gate (`installedPlugins` — same rule as
+ * {@link isNodeKindEnabled}) before rendering. Re-derive on the
+ * registry-version bump: plugins register asynchronously after mount.
+ */
+export function getInspectorExtensions(kind: string): InspectorExtension[] {
+  return inspectorExtensionsByKind.get(kind) ?? []
 }
 
 /**
@@ -306,6 +330,26 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
     registerNode(def)
     pluginIdsByKind.set(def.kind, plugin.id)
   }
+  let extensionsChanged = false
+  for (const extension of plugin.inspectorExtensions ?? []) {
+    for (const kind of extension.kinds) {
+      const list = inspectorExtensionsByKind.get(kind)
+      if (!list) {
+        inspectorExtensionsByKind.set(kind, [extension])
+        extensionsChanged = true
+        continue
+      }
+      // Same-id re-registration replaces in place (dev HMR re-runs
+      // `loadPlugin`); a fresh id appends in load order.
+      const existing = list.findIndex((e) => e.id === extension.id)
+      if (existing >= 0) list[existing] = extension
+      else list.push(extension)
+      extensionsChanged = true
+    }
+  }
+  // Nodes already notified per `registerNode`; bump once more so a plugin
+  // that only contributes inspector extensions still re-renders consumers.
+  if (extensionsChanged) notifyRegistryChanged()
 }
 
 /**
