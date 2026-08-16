@@ -68,30 +68,30 @@ describe('angle arc presentation', () => {
 
 describe('linear measurements', () => {
   test('formats metric measurements in meters', () => {
-    expect(formatLinearMeasurement(3, 'metric')).toBe('3m')
-    expect(formatLinearMeasurement(3.456, 'metric')).toBe('3.46m')
+    expect(formatLinearMeasurement(3, 'metric')).toBe('3 m')
+    expect(formatLinearMeasurement(3.456, 'metric')).toBe('3,46 m')
   })
 
   test('formats metric measurements in whole millimeters', () => {
-    expect(formatLinearMeasurement(3.456, 'metric', 'millimeters')).toBe('3456mm')
-    expect(formatLinearMeasurement(-0.1524, 'metric', 'millimeters')).toBe('-152mm')
-    expect(formatLinearMeasurement(0.2, 'metric', 'millimeters')).toBe('200mm')
-    expect(formatLinearMeasurement(18.4, 'metric', 'millimeters')).toBe('18400mm')
-    expect(formatLinearMeasurement(0.0005, 'metric', 'millimeters')).toBe('1mm')
-    expect(formatLinearMeasurement(-0.0005, 'metric', 'millimeters')).toBe('-1mm')
+    expect(formatLinearMeasurement(3.456, 'metric', 'millimeters')).toBe('3.456 mm')
+    expect(formatLinearMeasurement(-0.1524, 'metric', 'millimeters')).toBe('-152 mm')
+    expect(formatLinearMeasurement(0.2, 'metric', 'millimeters')).toBe('200 mm')
+    expect(formatLinearMeasurement(18.4, 'metric', 'millimeters')).toBe('18.400 mm')
+    expect(formatLinearMeasurement(0.0005, 'metric', 'millimeters')).toBe('1 mm')
+    expect(formatLinearMeasurement(-0.0005, 'metric', 'millimeters')).toBe('-1 mm')
   })
 
   test('formats metric measurements in whole centimeters', () => {
-    expect(formatLinearMeasurement(3.456, 'metric', 'centimeters')).toBe('346cm')
-    expect(formatLinearMeasurement(-0.1524, 'metric', 'centimeters')).toBe('-15cm')
-    expect(formatLinearMeasurement(0.2, 'metric', 'centimeters')).toBe('20cm')
-    expect(formatLinearMeasurement(18.4, 'metric', 'centimeters')).toBe('1840cm')
-    expect(formatLinearMeasurement(0.005, 'metric', 'centimeters')).toBe('1cm')
-    expect(formatLinearMeasurement(-0.005, 'metric', 'centimeters')).toBe('-1cm')
+    expect(formatLinearMeasurement(3.456, 'metric', 'centimeters')).toBe('346 cm')
+    expect(formatLinearMeasurement(-0.1524, 'metric', 'centimeters')).toBe('-15 cm')
+    expect(formatLinearMeasurement(0.2, 'metric', 'centimeters')).toBe('20 cm')
+    expect(formatLinearMeasurement(18.4, 'metric', 'centimeters')).toBe('1.840 cm')
+    expect(formatLinearMeasurement(0.005, 'metric', 'centimeters')).toBe('1 cm')
+    expect(formatLinearMeasurement(-0.005, 'metric', 'centimeters')).toBe('-1 cm')
   })
 
   test('drops the sign when a centimetre value rounds to zero', () => {
-    expect(formatLinearMeasurement(-0.001, 'metric', 'centimeters')).toBe('0cm')
+    expect(formatLinearMeasurement(-0.001, 'metric', 'centimeters')).toBe('0 cm')
   })
 
   test('formats imperial measurements as feet and inches', () => {
@@ -111,7 +111,7 @@ describe('linear measurements', () => {
 
   test('formats zero measurements', () => {
     expect(formatLinearMeasurement(0, 'imperial')).toBe(`0'0"`)
-    expect(formatLinearMeasurement(0, 'metric')).toBe('0m')
+    expect(formatLinearMeasurement(0, 'metric')).toBe('0 m')
   })
 
   test('formats sub-foot imperial measurements', () => {
@@ -120,7 +120,7 @@ describe('linear measurements', () => {
 
   test('formats negative measurements with a sign', () => {
     expect(formatLinearMeasurement(-0.1524, 'imperial')).toBe(`-0'6"`)
-    expect(formatLinearMeasurement(-0.1524, 'metric')).toBe('-0.15m')
+    expect(formatLinearMeasurement(-0.1524, 'metric')).toBe('-0,15 m')
   })
 
   test('converts between meters and the active linear unit', () => {
@@ -168,9 +168,9 @@ describe('area measurements', () => {
   })
 
   test('formats an area label with value and unit', () => {
-    expect(formatAreaLabel(12.34, 'metric')).toBe('12.3m²')
-    expect(formatAreaLabel(1, 'imperial')).toBe('10.8ft²')
-    expect(formatAreaLabel(12.34, 'metric', 2)).toBe('12.34m²')
+    expect(formatAreaLabel(12.34, 'metric')).toBe('12,3 m²')
+    expect(formatAreaLabel(1, 'imperial')).toBe('10,8 ft²')
+    expect(formatAreaLabel(12.34, 'metric', 2)).toBe('12,34 m²')
   })
 
   test('returns a placeholder for non-finite areas', () => {
@@ -192,9 +192,9 @@ describe('volume measurements', () => {
   })
 
   test('formats a volume label with value and unit', () => {
-    expect(formatVolumeLabel(12.34, 'metric')).toBe('12.3m³')
-    expect(formatVolumeLabel(1, 'imperial')).toBe('35.3ft³')
-    expect(formatVolumeLabel(12.34, 'metric', 2)).toBe('12.34m³')
+    expect(formatVolumeLabel(12.34, 'metric')).toBe('12,3 m³')
+    expect(formatVolumeLabel(1, 'imperial')).toBe('35,3 ft³')
+    expect(formatVolumeLabel(12.34, 'metric', 2)).toBe('12,34 m³')
   })
 
   test('returns a placeholder for non-finite volumes', () => {

@@ -53,7 +53,7 @@ describe('contextual floor-plan dimensions', () => {
       kind: 'dimension',
       start: [0, 0],
       end: [4, 0],
-      text: '4m',
+      text: '4 m',
     })
   })
 
@@ -118,7 +118,7 @@ describe('contextual floor-plan dimensions', () => {
         start: [0, 0.1],
         end: [0, 3.9],
         offsetNormal: [-1, 0],
-        text: '3.8m',
+        text: '3,8 m',
       }),
     )
   })
@@ -149,7 +149,7 @@ describe('contextual floor-plan dimensions', () => {
       start: [0, 0],
       end: [0, 4],
       offsetNormal: [1, 0],
-      text: '4m',
+      text: '4 m',
     })
   })
 
@@ -163,7 +163,7 @@ describe('contextual floor-plan dimensions', () => {
     const geometry = buildWallContextualDimensions(wall, context())
 
     expect(geometry).toMatchObject({ kind: 'dimension-label' })
-    expect(geometry && 'text' in geometry ? Number.parseFloat(geometry.text) : 0).toBeGreaterThan(4)
+    expect(geometry && 'text' in geometry ? Number.parseFloat(geometry.text.replace(',', '.')) : 0).toBeGreaterThan(4)
   })
 
   test('shows only an opening width along its host wall', () => {
@@ -184,7 +184,7 @@ describe('contextual floor-plan dimensions', () => {
       kind: 'dimension',
       start: [1.55, 0],
       end: [2.45, 0],
-      text: '0.9m',
+      text: '0,9 m',
     })
   })
 
@@ -223,7 +223,7 @@ describe('contextual floor-plan dimensions', () => {
       offsetNormal: [0, -1],
       start: [1.5, 0],
       end: [2.5, 0],
-      text: '1m',
+      text: '1 m',
     })
   })
 
@@ -261,7 +261,7 @@ describe('contextual floor-plan dimensions', () => {
 
     expect(
       geometry?.kind === 'dimension-string' ? geometry.segments.map((segment) => segment.text) : [],
-    ).toEqual(['2.4m', '1m', '2.4m'])
+    ).toEqual(['2,4 m', '1 m', '2,4 m'])
   })
 
   test('shows room area at the polygon centroid', () => {
@@ -281,7 +281,7 @@ describe('contextual floor-plan dimensions', () => {
       kind: 'dimension-label',
       cx: 2,
       cy: 1.5,
-      text: '12.0m²',
+      text: '12,0 m²',
     })
   })
 
@@ -306,6 +306,6 @@ describe('contextual floor-plan dimensions', () => {
       geometry?.kind === 'group'
         ? geometry.children.map((child) => ('text' in child ? child.text : null))
         : [],
-    ).toEqual(['2.4m', '0.6m'])
+    ).toEqual(['2,4 m', '0,6 m'])
   })
 })

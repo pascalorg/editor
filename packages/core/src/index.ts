@@ -174,6 +174,7 @@ export {
   type SiteBuildableReading,
   setbackRuleForEdge,
 } from './lib/site-setbacks'
+export { readSiteZoning, type SiteZoningReading } from './lib/site-zoning'
 export {
   getRenderableSlabPolygon,
   type SlabEdgeWallBandSnap,

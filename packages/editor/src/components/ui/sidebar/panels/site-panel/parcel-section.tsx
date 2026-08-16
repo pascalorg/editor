@@ -29,9 +29,11 @@ const ROLE_OPTIONS: Array<{ label: string; value: SetbackRule['role'] }> = [
 function ParcelFacts({
   parcel,
   computedArea,
+  unit,
 }: {
   parcel: NonNullable<SiteNode['parcel']>
   computedArea: string
+  unit: import('../../../../../lib/measurements').LinearUnit
 }) {
   const rows: Array<[string, string]> = [
     ['Location', [parcel.il, parcel.ilce, parcel.mahalle].filter(Boolean).join(' / ')],
@@ -40,7 +42,7 @@ function ParcelFacts({
   if (parcel.nitelik) rows.push(['Quality', parcel.nitelik])
   if (parcel.pafta) rows.push(['Sheet', parcel.pafta])
   if (parcel.registeredArea !== undefined) {
-    rows.push(['Registered area', `${parcel.registeredArea} m²`])
+    rows.push(['Registered area', formatAreaLabel(parcel.registeredArea, unit, 2)])
   }
   rows.push(['Measured area', computedArea])
 
@@ -116,7 +118,7 @@ export function ParcelSetbackSection() {
     <>
       {site.parcel && (
         <PanelSection title="Parcel">
-          <ParcelFacts computedArea={measuredArea} parcel={site.parcel} />
+          <ParcelFacts computedArea={measuredArea} parcel={site.parcel} unit={unit} />
           <div
             className={cn(
               'rounded-md border px-2 py-1.5 text-[10px] leading-relaxed',
