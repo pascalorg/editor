@@ -312,6 +312,8 @@ export const SelectionManager = () => {
   const registryVersion = useRegistryVersion()
 
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     const onEnter = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return

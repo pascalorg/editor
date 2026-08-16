@@ -800,6 +800,8 @@ export const SelectionManager = () => {
   }, [mode, setHoverHighlightMode])
 
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'material-paint') return
     if (movingNode || isCurveReshape) return
 
@@ -1231,6 +1233,8 @@ export const SelectionManager = () => {
   }, [])
 
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'select') return
     if (movingNode || isCurveReshape) return
 
@@ -1536,6 +1540,8 @@ export const SelectionManager = () => {
   }, [isCurveReshape, mode, movingNode])
 
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'select') return
     if (movingNode || isCurveReshape) return
 
@@ -1792,6 +1798,8 @@ export const SelectionManager = () => {
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'select') return
     if (movingNode || isCurveReshape) return
 
@@ -1947,6 +1955,8 @@ export const SelectionManager = () => {
 
   // Delete mode: click-to-delete (sledgehammer tool)
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'delete') return
 
     const onClick = (event: NodeEvent) => {
