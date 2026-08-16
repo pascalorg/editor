@@ -25,15 +25,25 @@ export type Region = {
 
 export async function fetchParcel(
   q: ParcelQuery,
-  opts?: { fetch?: typeof fetch; signal?: AbortSignal }
+  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string }
 ): Promise<ParcelResult | null> {
   const doFetch = opts?.fetch ?? globalThis.fetch
+  const direct = opts?.direct ?? false
+  const proxyBase = opts?.proxyBaseUrl ?? '/api/cadastre'
 
   let url = ''
-  if (q.kind === 'administrative') {
-    url = `https://cbsapi.tkgm.gov.tr/megsiswebapi.${API_VERSION}/api/parsel/${q.mahalleId}/${q.ada}/${q.parsel}`
+  if (direct) {
+    if (q.kind === 'administrative') {
+      url = `https://cbsapi.tkgm.gov.tr/megsiswebapi.${API_VERSION}/api/parsel/${q.mahalleId}/${q.ada}/${q.parsel}`
+    } else {
+      url = `https://cbsapi.tkgm.gov.tr/megsiswebapi.${API_VERSION}/api/parsel/${q.latitude}/${q.longitude}`
+    }
   } else {
-    url = `https://cbsapi.tkgm.gov.tr/megsiswebapi.${API_VERSION}/api/parsel/${q.latitude}/${q.longitude}`
+    if (q.kind === 'administrative') {
+      url = `${proxyBase}/parcel?mahalleId=${q.mahalleId}&ada=${q.ada}&parsel=${q.parsel}`
+    } else {
+      url = `${proxyBase}/parcel?lat=${q.latitude}&lon=${q.longitude}`
+    }
   }
 
   const res = await doFetch(url, { signal: opts?.signal })
@@ -45,6 +55,13 @@ export async function fetchParcel(
 
   const data = await res.json() as any
 
+  if (!direct) {
+    // Proxy returns { found: true/false, parcel: ... }
+    if (!data.found) return null
+    return data.parcel as ParcelResult
+  }
+
+  // Direct TKGM parsing
   // 404 with JSON body {"Message":"Parsel Bulunamadı..."}
   if (data?.Message?.includes('Bulunamadı') || data?.Message?.includes('bulunamadı')) {
     return null
@@ -80,14 +97,26 @@ export async function fetchParcel(
   }
 }
 
-export async function fetchIller(opts?: { fetch?: typeof fetch; signal?: AbortSignal }): Promise<Region[]> {
+export async function fetchIller(
+  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string }
+): Promise<Region[]> {
   const doFetch = opts?.fetch ?? globalThis.fetch
-  const url = `https://parselsorgu.tkgm.gov.tr/app/modules/administrativeQuery/data/ilListe.json`
+  const direct = opts?.direct ?? false
+  const proxyBase = opts?.proxyBaseUrl ?? '/api/cadastre'
+  
+  const url = direct
+    ? `https://parselsorgu.tkgm.gov.tr/app/modules/administrativeQuery/data/ilListe.json`
+    : `${proxyBase}/regions/il`
   
   const res = await doFetch(url, { signal: opts?.signal })
   if (!res.ok) throw new Error(`TKGM API error: HTTP ${res.status}`)
   
   const data = await res.json() as any
+  
+  if (!direct) {
+    return data as Region[]
+  }
+
   if (!data?.features) throw new Error('Invalid TKGM response format')
 
   return data.features.map((f: any) => ({
@@ -98,15 +127,25 @@ export async function fetchIller(opts?: { fetch?: typeof fetch; signal?: AbortSi
 
 export async function fetchIlceler(
   ilId: number,
-  opts?: { fetch?: typeof fetch; signal?: AbortSignal }
+  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string }
 ): Promise<Region[]> {
   const doFetch = opts?.fetch ?? globalThis.fetch
-  const url = `https://cbsapi.tkgm.gov.tr/megsiswebapi.${ADMIN_API_VERSION}/api/idariYapi/ilceListe/${ilId}`
+  const direct = opts?.direct ?? false
+  const proxyBase = opts?.proxyBaseUrl ?? '/api/cadastre'
+
+  const url = direct
+    ? `https://cbsapi.tkgm.gov.tr/megsiswebapi.${ADMIN_API_VERSION}/api/idariYapi/ilceListe/${ilId}`
+    : `${proxyBase}/regions/ilce?ilId=${ilId}`
   
   const res = await doFetch(url, { signal: opts?.signal })
   if (!res.ok) throw new Error(`TKGM API error: HTTP ${res.status}`)
   
   const data = await res.json() as any
+
+  if (!direct) {
+    return data as Region[]
+  }
+
   if (!data?.features) throw new Error('Invalid TKGM response format')
 
   return data.features.map((f: any) => ({
@@ -117,15 +156,25 @@ export async function fetchIlceler(
 
 export async function fetchMahalleler(
   ilceId: number,
-  opts?: { fetch?: typeof fetch; signal?: AbortSignal }
+  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string }
 ): Promise<Region[]> {
   const doFetch = opts?.fetch ?? globalThis.fetch
-  const url = `https://cbsapi.tkgm.gov.tr/megsiswebapi.${ADMIN_API_VERSION}/api/idariYapi/mahalleListe/${ilceId}`
+  const direct = opts?.direct ?? false
+  const proxyBase = opts?.proxyBaseUrl ?? '/api/cadastre'
+
+  const url = direct
+    ? `https://cbsapi.tkgm.gov.tr/megsiswebapi.${ADMIN_API_VERSION}/api/idariYapi/mahalleListe/${ilceId}`
+    : `${proxyBase}/regions/mahalle?ilceId=${ilceId}`
   
   const res = await doFetch(url, { signal: opts?.signal })
   if (!res.ok) throw new Error(`TKGM API error: HTTP ${res.status}`)
   
   const data = await res.json() as any
+
+  if (!direct) {
+    return data as Region[]
+  }
+
   if (!data?.features) throw new Error('Invalid TKGM response format')
 
   return data.features.map((f: any) => ({
