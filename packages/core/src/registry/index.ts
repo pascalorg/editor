@@ -23,6 +23,7 @@ export {
   extendPluginDiscovery,
   getHostRefFields,
   getNodePluginId,
+  getRegistryVersion,
   getSelectableKinds,
   hasRegistry3DMoveTool,
   isDrawnViaTool,
@@ -36,6 +37,7 @@ export {
   kindsWithFloorplanScope,
   loadPlugin,
   nodeRegistry,
+  onRegistryChange,
   type PluginDiscovery,
   registerNode,
   resolveFacingIndicator,
@@ -156,3 +158,4 @@ export type {
   ToolHintChip,
   Vec2,
 } from './types'
+export { useRegistryVersion } from './use-registry-version'
