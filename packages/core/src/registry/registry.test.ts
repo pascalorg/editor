@@ -245,4 +245,42 @@ describe('loadPlugin', () => {
       ).rejects.toThrow(/duplicate node kind/)
     })
   })
+
+  // GATE (late-plugin subscriptions): plugins register via async dynamic
+  // imports AFTER consumers mount. The selection managers rebuild their
+  // `getSelectableKinds()` emitter subscriptions off this change signal —
+  // without it, a plugin kind selects but never hovers in prod (the outline
+  // subscription list froze pre-registration).
+  test('registerNode bumps the registry version and notifies subscribers', async () => {
+    const { getRegistryVersion, onRegistryChange } = await import('./registry')
+    const before = getRegistryVersion()
+    let notified = 0
+    const unsubscribe = onRegistryChange(() => {
+      notified += 1
+    })
+
+    registerNode(makeDefinition('late:kind', { capabilities: { selectable: {} } }))
+    expect(getRegistryVersion()).toBe(before + 1)
+    expect(notified).toBe(1)
+
+    // A consumer re-deriving on the notification now sees the new kind.
+    const { getSelectableKinds } = await import('./registry')
+    expect(getSelectableKinds()).toContain('late:kind')
+
+    unsubscribe()
+    registerNode(makeDefinition('late:kind-2'))
+    expect(getRegistryVersion()).toBe(before + 2)
+    expect(notified).toBe(1) // unsubscribed — no further calls
+  })
+
+  test('loadPlugin notifies once per registered kind', async () => {
+    const { getRegistryVersion } = await import('./registry')
+    const before = getRegistryVersion()
+    await loadPlugin({
+      id: 'pack',
+      apiVersion: 1,
+      nodes: [makeDefinition('pack:a'), makeDefinition('pack:b')],
+    })
+    expect(getRegistryVersion()).toBe(before + 2)
+  })
 })
