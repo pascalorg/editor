@@ -480,6 +480,16 @@ export function SettingsPanel({
             <Download className="size-4" />
             Export OBJ
           </Button>
+          {Object.values(nodes).some((n: any) => n.kind === 'site' && n.parcel) && (() => {
+            const isEdited = Object.values(nodes).some((n: any) => n.kind === 'site' && n.parcel?.edited)
+            return (
+              <div className={`mt-2 text-[10px] ${isEdited ? 'text-sky-700 dark:text-sky-300' : 'text-amber-600 dark:text-amber-400'}`}>
+                {isEdited
+                  ? 'Edited by hand — no longer the registry outline.'
+                  : 'Land registry reference data — not a surveyed site plan.'}
+              </div>
+            )
+          })()}
         </div>
 
         <div className="space-y-2">

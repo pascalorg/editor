@@ -8906,6 +8906,9 @@ export function FloorplanPanel({
             points: worldPolygon,
           },
           ...(setbacks ? { setbacks } : {}),
+          ...(site.parcel && !site.parcel.edited
+            ? { parcel: { ...site.parcel, edited: true } }
+            : {}),
         })
         sfxEmitter.emit('sfx:structure-build')
       }
@@ -10774,6 +10777,7 @@ export function FloorplanPanel({
           points: site.polygon.points.filter((_, index) => index !== vertexIndex),
         },
         ...(setbacks ? { setbacks } : {}),
+        ...(site.parcel && !site.parcel.edited ? { parcel: { ...site.parcel, edited: true } } : {}),
       })
     },
     [clearSiteBoundaryInteraction, site, updateNode],

@@ -163,6 +163,9 @@ const PropertyLineSection = memo(function PropertyLineSection() {
     updateNode(siteNode.id, {
       polygon: { type: 'polygon' as const, points: newPoints },
       ...(setbacks ? { setbacks } : {}),
+      ...(siteNode.parcel && !siteNode.parcel.edited
+        ? { parcel: { ...siteNode.parcel, edited: true } }
+        : {}),
     })
   }
 
@@ -177,6 +180,9 @@ const PropertyLineSection = memo(function PropertyLineSection() {
     updateNode(siteNode.id, {
       polygon: { type: 'polygon' as const, points: newPoints },
       ...(setbacks ? { setbacks } : {}),
+      ...(siteNode.parcel && !siteNode.parcel.edited
+        ? { parcel: { ...siteNode.parcel, edited: true } }
+        : {}),
     })
   }
 

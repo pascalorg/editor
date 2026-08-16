@@ -352,6 +352,7 @@ export const SiteBoundaryEditor: React.FC = () => {
           points: newPolygon,
         },
         ...(setbacks ? { setbacks } : {}),
+        ...(site.parcel && !site.parcel.edited ? { parcel: { ...site.parcel, edited: true } } : {}),
       })
     },
     [site, updateNode],

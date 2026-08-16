@@ -294,6 +294,9 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
                 {result.registeredAreaRaw !== undefined ? formatAreaLabel(Number(result.registeredAreaRaw), unit, 2) : '-'}
               </span>
             </div>
+            <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+              {t('Land registry reference data — not a surveyed site plan.')}
+            </div>
             <ActionGroup>
               <ActionButton onClick={handleApply} label={t('Apply to Site')} />
             </ActionGroup>
