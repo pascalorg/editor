@@ -98,6 +98,16 @@ measurement rather than a squint at a screenshot:
 getter — drei recreates the impl when the default camera changes, so never cache
 it), and `globalThis.__pascalNodeRegistry` is the loaded kind registry.
 
+`packages/editor` closes part of that gap with `renderToStaticMarkup` tests
+(`floorplan-dimension-renderer.test.tsx` and friends) — worth copying for a new
+2D layer, because they do catch "is it mounted" and "does index N draw segment
+N". They cannot catch anything store-driven: zustand 5 passes
+`api.getInitialState()` as `useSyncExternalStore`'s server snapshot, so a
+component that reads a store renders with the store's *initial* values no matter
+what you set first. The way to test such a component is to split it — a
+presentational half that takes the value as a prop, and a thin wrapper that
+subscribes. `floorplan-buildable-layer.tsx` is the worked example.
+
 Three things about actually getting the app up:
 
 - **`dotenv` is not on `PATH`.** Both dev scripts shell out to it, so they only
@@ -332,11 +342,42 @@ consequence; three structural ones sit underneath it.
   reference list for what else to exclude: off-`SCENE_LAYER` overlays, and
   hitboxes whose invisibility lives on `material.visible`.
 
+## Parcel setbacks: one derivation, three drawings
+
+Setbacks and the buildable ground they leave are the first feature that spans
+every layer at once, so they are the shortest worked example of how one is
+meant to hang together.
+
+`readSiteBuildable` (`core/src/lib/site-setbacks.ts`) derives the whole reading
+— per-edge distances, buildable rings, areas — from the site node and nothing
+else. It sits in `core` rather than `editor` because the MCP server needs the
+same answer and the node registry is empty in that process. The offset itself
+(`setback-offset.ts`) is hand-written because zoning asks for a different
+distance per edge and uniform offsetters take a single delta; two things in it
+are counter-intuitive enough to be worth knowing before touching it. The mitre
+limit applies **only at reflex vertices** — at a convex one the mitre is the
+intersection of two half-planes and therefore the buildable region's own corner
+however deep it lands, so clamping it hands back land the setbacks forbid. And
+the self-intersection cleanup handles *collinear overlap*, not just transversal
+crossings, because a narrow neck (a flag lot's access strip) closes by having
+two parallel offset edges slide through each other.
+
+Three surfaces read that one derivation and none reads another: the sidebar's
+`site-panel/parcel-section.tsx`, the floorplan's
+`editor-2d/floorplan-buildable-layer.tsx`, and the 3D `site/renderer.tsx`. That
+is what keeps split view consistent without either pane reading the other.
+`useSetbackEdgeFocus` carries the hovered edge between them because they share
+nothing else — the panel, the floorplan and the R3F tree live in three trees.
+
+The derived rings are deliberately not persisted: the polygon moves under a
+vertex drag, and a stored ring would go stale behind it. The inputs are on the
+node; the answer is recomputed.
+
 ## Editor interaction: what is actually wired
 
-`interaction-scope.md` describes the target model. One dev-mode hazard and three
-gaps between that model and today's code have each cost a wrong assumption;
-check them before building on any of the four.
+`interaction-scope.md` describes the target model. The gaps below between that
+model and today's code have each cost a wrong assumption; check them before
+building on any of them.
 
 - **React StrictMode fires every tool's unmount cleanup right after it mounts.**
   `reactStrictMode` is unset in `apps/editor/next.config.ts`, so Next's default
@@ -376,6 +417,28 @@ check them before building on any of the four.
   *selected* node's floating action menu. A readout added to it is invisible for
   the whole gesture. Editor-wide HUDs mount next to `QuickMeasurementHud` in
   `components/editor/index.tsx`.
+- **The site node is never in `useViewer.selection`.** `selectSiteFloorplanContext()`
+  sets `selectedIds: []` on the way into the site phase, and
+  `ParametricInspector` keys off `selection.selectedIds[0]` — so
+  `siteParametrics.trailingSection` (and `customPanel`, and the whole
+  auto-derived inspector) has no route to the screen for `site`, however
+  correctly it is declared. Site chrome belongs in the sidebar's
+  `site-panel/index.tsx`, next to `PropertyLineSection`, which is the surface the
+  site phase does open. Sites are the exception here; every other kind reaches
+  the inspector normally.
+- **Four separate places write the site polygon**, so anything keyed by vertex
+  or edge index has to be updated in all four or it silently drifts on the paths
+  you missed: the 3D `site-boundary-editor.tsx`, the floorplan's midpoint insert
+  and its double-click vertex delete, and the sidebar's own "Add point" /
+  delete-point buttons — which bypass `PolygonEditor` entirely and call
+  `updateNode` directly. `PolygonEditor` publishes a `PolygonStructuralEdit`
+  alongside the ring so a host can tell an insert from a move; the shared
+  re-keying lives in `lib/site-boundary.ts` for the same reason
+  `siteBoundaryHandlesEnabled` does.
+- **A three.js line cannot be thickened.** `linewidth` is ignored by both the
+  WebGL and WebGPU renderers, so any highlight drawn as a `Line` is one pixel
+  wide and disappears under whatever else occupies that edge. Highlight with a
+  surface instead — the setback band in `site/renderer.tsx` is the pattern.
 
 `CollectionsPopover` is exported from the package but mounted nowhere in this
 app — check a UI surface is actually rendered before extending it.
@@ -456,6 +519,9 @@ Read the relevant page in `wiki/architecture/` **before** writing code. The page
 - Catalog item GLBs (`slot_` materials, `cutout` mesh, UV world scale) → `item-authoring.md`
 - Dimensions, units, measurement drafts → `measurements.md`
 - Anything a third party will consume → `plugin-authoring.md`
+- Anything touching the site polygon, setbacks or zoning → the parcel-setbacks
+  section above. Four places write that polygon, and the site is the one kind
+  whose panel cannot go through the registry inspector.
 - Adding an MCP tool → the `packages/mcp` section above. Check first whether the
   per-kind knowledge it needs is reachable at all: the node registry is empty in
   that process.
