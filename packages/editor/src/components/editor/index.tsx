@@ -225,6 +225,9 @@ export interface EditorProps {
 
   // Command palette fallback when no commands match
   commandPaletteEmptyAction?: CommandPaletteEmptyAction
+
+  // Provider for cadastre/parcel fetching
+  parcelProvider?: import('../../lib/parcel-provider').ParcelProvider
 }
 
 function EditorSceneCrashFallback() {
@@ -1185,7 +1188,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
   )
 })
 
-export default function Editor({
+import { ParcelProviderContext } from '../../lib/parcel-provider-context'
+
+function EditorInner({
   layoutVersion = 'v1',
   appMenuButton,
   sidebarTop,
@@ -1642,3 +1647,12 @@ export default function Editor({
     </div>
   )
 }
+
+export default function Editor(props: EditorProps) {
+  return (
+    <ParcelProviderContext.Provider value={props.parcelProvider ?? null}>
+      <EditorInner {...props} />
+    </ParcelProviderContext.Provider>
+  )
+}
+

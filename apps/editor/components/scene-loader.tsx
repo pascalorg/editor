@@ -24,6 +24,7 @@ import {
   sceneModelSignature,
 } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
+import { cadastreProvider } from '@/lib/cadastre-provider'
 import { BuildTab } from './build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from './editor-top-bar'
 import { ShareLinkButton } from './share-link-button'
@@ -298,6 +299,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       <Editor
         disablePostFx={lightPreview}
         layoutVersion="v2"
+        parcelProvider={cadastreProvider}
         navbarSlot={
           <EditorTopBar
             actions={

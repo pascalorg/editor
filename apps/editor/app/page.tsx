@@ -12,6 +12,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from '@/components/editor-top-bar'
+import { cadastreProvider } from '@/lib/cadastre-provider'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -118,6 +119,7 @@ export default function Home() {
     <div className="relative h-screen w-screen">
       <Editor
         layoutVersion="v2"
+        parcelProvider={cadastreProvider}
         navbarSlot={
           <EditorTopBar
             actions={
