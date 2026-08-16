@@ -103,10 +103,27 @@ export type PolygonEditorPlanPointSnapContext = {
   nativeEvent?: GridEvent['nativeEvent']
 }
 
+/**
+ * What the user did to the ring's *structure*, when they did anything.
+ *
+ * A polygon alone cannot say this: two rings of different lengths do not reveal
+ * where the vertex went in or came out, and a host that has per-edge data keyed
+ * by index has to know. The site's setbacks are the first such host — without
+ * the index, every rule past the edit slides onto the wrong edge and the front
+ * yard silently becomes a side one.
+ */
+export type PolygonStructuralEdit =
+  | { kind: 'insert'; edgeIndex: number }
+  | { kind: 'remove'; vertexIndex: number; pointCount: number }
+
 export interface PolygonEditorProps {
   polygon: Array<[number, number]>
   color?: string
-  onPolygonChange: (polygon: Array<[number, number]>) => void
+  /**
+   * `edit` is present only when the change added or removed a vertex; a plain
+   * move leaves it undefined. Hosts that ignore it keep today's behaviour.
+   */
+  onPolygonChange: (polygon: Array<[number, number]>, edit?: PolygonStructuralEdit) => void
   /**
    * Fires on every drag tick with the in-flight polygon, then once with
    * `null` when the drag commits or is otherwise cleared. Hosts wire
@@ -749,10 +766,16 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     [polygon, updatePreviewPolygon],
   )
 
+  // An insert is committed by the drag that follows it, several callbacks
+  // later, so the index has to be carried across rather than passed along.
+  const pendingStructuralEditRef = useRef<PolygonStructuralEdit | null>(null)
+
   // Commit polygon changes
   const commitPolygonChange = useCallback(() => {
+    const edit = pendingStructuralEditRef.current
+    pendingStructuralEditRef.current = null
     if (previewPolygonRef.current) {
-      onPolygonChange(previewPolygonRef.current)
+      onPolygonChange(previewPolygonRef.current, edit ?? undefined)
     }
     onDragCommitRef.current?.()
     updatePreviewPolygon(null)
@@ -770,6 +793,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         ...basePolygon.slice(afterIndex + 1),
       ]
 
+      pendingStructuralEditRef.current = { kind: 'insert', edgeIndex: afterIndex }
       updatePreviewPolygon(newPolygon)
       return {
         polygon: newPolygon,
@@ -786,7 +810,12 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       if (basePolygon.length <= minVertices) return // Need at least minVertices points
 
       const newPolygon = basePolygon.filter((_, i) => i !== index)
-      onPolygonChange(newPolygon)
+      pendingStructuralEditRef.current = null
+      onPolygonChange(newPolygon, {
+        kind: 'remove',
+        pointCount: basePolygon.length,
+        vertexIndex: index,
+      })
       updatePreviewPolygon(null)
     },
     [polygon, previewPolygon, onPolygonChange, minVertices, updatePreviewPolygon],

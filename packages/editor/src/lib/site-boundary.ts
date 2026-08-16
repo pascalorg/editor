@@ -1,3 +1,9 @@
+import {
+  remapSetbacksForVertexInsert,
+  remapSetbacksForVertexRemove,
+  type SiteNode,
+} from '@pascal-app/core'
+import type { PolygonStructuralEdit } from '../components/tools/shared/polygon-editor'
 import type { Mode, Phase } from '../store/use-editor'
 
 export const SITE_BOUNDARY_DRAG_LABEL = 'site-boundary'
@@ -25,4 +31,25 @@ export const SITE_BOUNDARY_DRAG_LABEL = 'site-boundary'
 export function siteBoundaryHandlesEnabled(args: { mode: Mode; phase: Phase }): boolean {
   if (args.mode === 'terrain-sculpt') return false
   return args.phase === 'site' || args.mode === 'select'
+}
+
+/**
+ * The setback record re-keyed for a ring that just gained or lost a vertex.
+ *
+ * Returns `null` when nothing needs to move, so a caller can leave `setbacks`
+ * out of its patch entirely — the polygon and the rules then travel in one
+ * `updateNode`, which is what keeps the edit a single undo step.
+ *
+ * Shared by the 3D boundary editor and the floorplan for the same reason
+ * `siteBoundaryHandlesEnabled` is: the two must agree, and until something is
+ * shared they drift.
+ */
+export function setbacksAfterPolygonEdit(
+  setbacks: SiteNode['setbacks'] | undefined,
+  edit: PolygonStructuralEdit | undefined,
+): SiteNode['setbacks'] | null {
+  if (!edit || !setbacks || Object.keys(setbacks).length === 0) return null
+  return edit.kind === 'insert'
+    ? remapSetbacksForVertexInsert(setbacks, edit.edgeIndex)
+    : remapSetbacksForVertexRemove(setbacks, edit.vertexIndex, edit.pointCount)
 }

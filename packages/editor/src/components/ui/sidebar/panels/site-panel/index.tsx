@@ -62,6 +62,7 @@ import { CommentsSection } from '../../../panels/comments/comments-section'
 import { SavedViewsSection } from '../../../panels/saved-views/saved-views-section'
 import { ImportCadDialog } from '../../../dialogs/import-cad-dialog'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
+import { setbacksAfterPolygonEdit } from '../../../../../lib/site-boundary'
 import { InlineRenameInput } from './inline-rename-input'
 import { ParcelSetbackSection } from './parcel-section'
 import { focusTreeNode, TreeNode } from './tree-node'
@@ -152,16 +153,28 @@ const PropertyLineSection = memo(function PropertyLineSection() {
       (lastPoint[1] + firstPoint[1]) / 2,
     ]
     const newPoints = [...points, newPoint]
+    // The new point splits the closing edge, so every rule keyed past it moves.
+    const setbacks = setbacksAfterPolygonEdit(siteNode.setbacks, {
+      edgeIndex: points.length - 1,
+      kind: 'insert',
+    })
     updateNode(siteNode.id, {
       polygon: { type: 'polygon' as const, points: newPoints },
+      ...(setbacks ? { setbacks } : {}),
     })
   }
 
   const handleDeletePoint = (index: number) => {
     if (points.length <= 3) return
     const newPoints = points.filter((_, i) => i !== index)
+    const setbacks = setbacksAfterPolygonEdit(siteNode.setbacks, {
+      kind: 'remove',
+      pointCount: points.length,
+      vertexIndex: index,
+    })
     updateNode(siteNode.id, {
       polygon: { type: 'polygon' as const, points: newPoints },
+      ...(setbacks ? { setbacks } : {}),
     })
   }
 

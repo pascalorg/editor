@@ -15,7 +15,7 @@ import {
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { SITE_BOUNDARY_DRAG_LABEL } from '../../../lib/site-boundary'
+import { SITE_BOUNDARY_DRAG_LABEL, setbacksAfterPolygonEdit } from '../../../lib/site-boundary'
 import useEditor, { selectSiteFloorplanContext } from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
@@ -28,6 +28,7 @@ import {
   PolygonEditor,
   type PolygonHandleHandlers,
   type PolygonMidpointHandleRenderProps,
+  type PolygonStructuralEdit,
   type PolygonVertexHandleRenderProps,
 } from '../shared/polygon-editor'
 import { SITE_FLAG_MODEL_URL } from './site-flag-model'
@@ -338,15 +339,20 @@ export const SiteBoundaryEditor: React.FC = () => {
       : site?.polygon?.points
 
   const handlePolygonChange = useCallback(
-    (newPolygon: Array<[number, number]>) => {
-      if (site) {
-        updateNode(site.id, {
-          polygon: {
-            type: 'polygon',
-            points: newPolygon,
-          },
-        })
-      }
+    (newPolygon: Array<[number, number]>, edit?: PolygonStructuralEdit) => {
+      if (!site) return
+      // The setbacks are keyed by edge index, so a vertex that appears or
+      // disappears renumbers them under the polygon. Both go in one patch:
+      // separate calls would be two undo steps, and an undo landing between
+      // them would leave the rules describing edges that no longer exist.
+      const setbacks = setbacksAfterPolygonEdit(site.setbacks, edit)
+      updateNode(site.id, {
+        polygon: {
+          type: 'polygon',
+          points: newPolygon,
+        },
+        ...(setbacks ? { setbacks } : {}),
+      })
     },
     [site, updateNode],
   )

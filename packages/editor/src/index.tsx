@@ -157,6 +157,7 @@ export {
   PolygonEditor,
   type PolygonEditorPlanPointSnapContext,
   type PolygonEditorProps,
+  type PolygonStructuralEdit,
 } from './components/tools/shared/polygon-editor'
 export {
   formatAngleRadians,

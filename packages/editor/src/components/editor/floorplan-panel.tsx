@@ -98,7 +98,11 @@ import { LocalizedContent } from '../../lib/i18n'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
+import {
+  SITE_BOUNDARY_DRAG_LABEL,
+  setbacksAfterPolygonEdit,
+  siteBoundaryHandlesEnabled,
+} from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
@@ -173,6 +177,7 @@ import {
   updateScreenRectangleSelectionElement,
 } from '../tools/select/screen-rectangle-selection'
 import { collectSelectableCandidateIds } from '../tools/select/select-candidates'
+import type { PolygonStructuralEdit } from '../tools/shared/polygon-editor'
 import {
   formatAngleRadians,
   getAngleArcToSegmentReference,
@@ -585,6 +590,12 @@ type WallCurveDraft = {
 type SiteBoundaryDraft = {
   siteId: SiteNode['id']
   polygon: WallPlanPoint[]
+  /**
+   * Set when the draft began by inserting a vertex, so the commit can re-key
+   * the setbacks with it. The insert and the drag that places it are separate
+   * gestures, and only the commit writes to the store.
+   */
+  edit?: PolygonStructuralEdit
 }
 
 type SiteVertexDragState = {
@@ -8880,11 +8891,13 @@ export function FloorplanPanel({
           window.removeEventListener('click', suppressClick, true)
         })
 
+        const setbacks = setbacksAfterPolygonEdit(site.setbacks, draft.edit)
         updateNode(draft.siteId, {
           polygon: {
             type: 'polygon',
             points: worldPolygon,
           },
+          ...(setbacks ? { setbacks } : {}),
         })
         sfxEmitter.emit('sfx:structure-build')
       }
@@ -10741,11 +10754,17 @@ export function FloorplanPanel({
 
       clearSiteBoundaryInteraction()
 
+      const setbacks = setbacksAfterPolygonEdit(site.setbacks, {
+        kind: 'remove',
+        pointCount: site.polygon.points.length,
+        vertexIndex,
+      })
       updateNode(siteId, {
         polygon: {
           type: 'polygon',
           points: site.polygon.points.filter((_, index) => index !== vertexIndex),
         },
+        ...(setbacks ? { setbacks } : {}),
       })
     },
     [clearSiteBoundaryInteraction, site, updateNode],
@@ -10787,9 +10806,10 @@ export function FloorplanPanel({
       }
       selectSiteFloorplanContext()
 
-      const nextDraft = {
-        siteId,
+      const nextDraft: SiteBoundaryDraft = {
+        edit: { edgeIndex, kind: 'insert' },
         polygon: nextPolygon,
+        siteId,
       }
       siteBoundaryDraftRef.current = nextDraft
       setSiteBoundaryDraft(nextDraft)
