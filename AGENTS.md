@@ -12,6 +12,7 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the stand
 | `packages/nodes` | Node kinds: one folder per kind (schema re-export, definition, geometry, floorplan, renderer, tool) |
 | `packages/mcp` | MCP server and scene storage adapters |
 | `packages/cad-import` | DXF → CAD underlay geometry. Pure logic, no DOM, no React |
+| `packages/cadastre` | TKGM (Turkish land registry) CBS client. Pure logic, zero runtime dependencies |
 | `packages/ifc-converter` | IFC → scene-graph conversion (`web-ifc`). Pure logic, no DOM, no React |
 | `packages/ui` | `@repo/ui` — internal shared primitives, private, not published |
 | `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools, and owns the scene API (`app/api/scenes/*`, backed by `@pascal-app/mcp/storage` via `lib/scene-store-server.ts`) |
@@ -300,6 +301,13 @@ Consequences worth knowing before you touch copy:
 - `panel-wrapper.tsx`, `popover.tsx` and `tooltip.tsx` already translate their
   children, so wrapping content inside them in `<LocalizedContent>` again is
   redundant.
+- **Numbers do not follow that locale.** `lib/measurements.ts` formats through
+  `Intl.NumberFormat` seeded from `document.documentElement.lang`, and
+  `apps/editor/app/layout.tsx` hardcodes `lang="tr"` — so every dimension,
+  area and volume readout is Turkish-formatted (`3,8 m`, `1.000 mm`) whatever
+  `useUiPreferences.locale` says. Switching the UI to English translates the
+  words and leaves the decimal comma. Two locale sources, one of them not
+  user-controllable; reconcile them before relying on either.
 - **The default locale is `tr`, not `en`** (`lib/ui-preferences.tsx`), persisted
   to `localStorage` and mirrored to `pascal-locale` / `pascal-theme` cookies by
   `UiPreferencesSync`. Server Components read that cookie directly and wrap in
@@ -342,7 +350,7 @@ consequence; three structural ones sit underneath it.
   reference list for what else to exclude: off-`SCENE_LAYER` overlays, and
   hitboxes whose invisibility lives on `material.visible`.
 
-## Parcel setbacks: one derivation, three drawings
+## Parcel, setbacks and zoning: the one vertical that spans every layer
 
 Setbacks and the buildable ground they leave are the first feature that spans
 every layer at once, so they are the shortest worked example of how one is
@@ -371,7 +379,22 @@ nothing else — the panel, the floorplan and the R3F tree live in three trees.
 
 The derived rings are deliberately not persisted: the polygon moves under a
 vertex drag, and a stored ring would go stale behind it. The inputs are on the
-node; the answer is recomputed.
+node; the answer is recomputed. `readSiteZoning` (`core/src/lib/site-zoning.ts`)
+is the same shape for the TAKS/KAKS reading, and
+`snapPointToPolygonEdges` (`core/src/services/snap.ts`) is what lets the wall
+tool snap to the buildable line.
+
+Fetching a real parcel is the part that must **not** leak into the published
+package. `packages/editor` owns only the abstract seam — `lib/parcel-provider.ts`
+(the `ParcelProvider` / `ParcelQuery` / `ParcelResult` types) and a React context
+to inject one. The TKGM implementation lives in `apps/editor/lib/cadastre-provider.ts`
+and talks to `app/api/cadastre/*`, which proxies `packages/cadastre` server-side
+so the browser never calls the registry directly and the responses can be cached
+and stripped of the geometry the dropdowns do not need. An embedder in another
+country plugs its own provider into the same context; without one, the parcel
+importer simply does not mount. `packages/mcp/src/tools/parcel-tools.ts` is the
+agent-facing half, reaching the site through `SceneOperations` like every other
+tool.
 
 ## Editor interaction: what is actually wired
 
@@ -519,9 +542,11 @@ Read the relevant page in `wiki/architecture/` **before** writing code. The page
 - Catalog item GLBs (`slot_` materials, `cutout` mesh, UV world scale) → `item-authoring.md`
 - Dimensions, units, measurement drafts → `measurements.md`
 - Anything a third party will consume → `plugin-authoring.md`
-- Anything touching the site polygon, setbacks or zoning → the parcel-setbacks
-  section above. Four places write that polygon, and the site is the one kind
-  whose panel cannot go through the registry inspector.
+- Anything touching the site polygon, setbacks, zoning or parcel import → the
+  parcel section above. Four places write that polygon, the site is the one kind
+  whose panel cannot go through the registry inspector, and the registry client
+  must stay behind the `ParcelProvider` seam so the npm package carries no
+  Turkey-specific endpoint.
 - Adding an MCP tool → the `packages/mcp` section above. Check first whether the
   per-kind knowledge it needs is reachable at all: the node registry is empty in
   that process.
