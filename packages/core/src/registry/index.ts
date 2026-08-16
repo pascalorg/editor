@@ -41,7 +41,6 @@ export {
   resolveFacingIndicator,
   setPluginDiscovery,
 } from './registry'
-export { useRegistryVersion } from './use-registry-version'
 export {
   type CascadeContext,
   type ChildQuery,
@@ -156,3 +155,4 @@ export type {
   ToolHintChip,
   Vec2,
 } from './types'
+export { useRegistryVersion } from './use-registry-version'
