@@ -12,6 +12,9 @@ import {
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
   spatialGridManager,
+  pointInPolygon,
+  readSiteBuildable,
+  snapServices,
   terrainSupportLift,
   useScene,
   type WallNode,
@@ -32,6 +35,7 @@ import {
   offsetWallLineForAlignment,
   projectPointOntoWall,
   WALL_CONNECT_SNAP_RADIUS,
+  WALL_ENDPOINT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapResult,
   type WallPlanPoint,
@@ -441,6 +445,25 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
 
   if (bypassSnap) return { point, snap: null, targetWallIds: [] }
 
+  let buildableRings: readonly (readonly WallPlanPoint[])[] = []
+  let shouldSnapToBuildable = false
+  const currentLevelId = useViewer.getState().selection.levelId
+  const { nodes } = useScene.getState()
+  const currentLevel = currentLevelId ? nodes[currentLevelId] : undefined
+  if (currentLevel?.type === 'level' && currentLevel.level >= 0 && currentLevel.level <= 2) {
+    shouldSnapToBuildable = true
+    const site = Object.values(nodes).find((n): n is any => n?.type === 'site')
+    if (site) {
+      buildableRings = readSiteBuildable(site.polygon.points, site).rings
+    }
+  }
+
+  const enforceViolation = (result: WallDraftSnapResult): WallDraftSnapResult => {
+    if (!shouldSnapToBuildable || buildableRings.length === 0) return result
+    const isValid = buildableRings.some((ring) => pointInPolygon(result.point[0], result.point[1], ring as Array<[number, number]>))
+    return { ...result, violation: !isValid }
+  }
+
   // A typed dimension is authoritative: the user asked for exactly this length,
   // so it outranks every magnetic target — being pulled onto a corner 4.19 m out
   // is precisely what typing 4.2 exists to prevent. The cursor still chooses the
@@ -459,7 +482,15 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
       : point
     const constrained = resolveDraftConstraint(start, directionTarget, point)
     if (constrained) {
-      return { point: [constrained[0], constrained[1]], snap: null, targetWallIds: [] }
+      return enforceViolation({ point: [constrained[0], constrained[1]], snap: null, targetWallIds: [] })
+    }
+  }
+
+  if (magnetic && shouldSnapToBuildable && buildableRings.length > 0) {
+    const { snapServices } = require('@pascal-app/core')
+    const buildableSnap = snapServices.polygon.snapToEdges(point, buildableRings, snapRadii?.endpoint ?? WALL_ENDPOINT_SNAP_RADIUS)
+    if (buildableSnap) {
+      return enforceViolation({ point: buildableSnap, snap: null, targetWallIds: [] })
     }
   }
 
@@ -468,7 +499,7 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   // then the nearer of midpoint / crossing — see `findWallSpecialPointSnap`.
   if (magnetic) {
     const special = findWallSpecialPointSnap(point, walls, ignoreWallIds, snapRadii)
-    if (special) return special
+    if (special) return enforceViolation(special)
 
     // Then the CAD underlay, before the grid gets a say — a grid quantise
     // between the cursor and the drawn line is exactly what tracing must not
@@ -481,18 +512,18 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
         radius: snapRadii?.wall,
       })
       if (!wallBody || distanceSquared(point, cad.point) < distanceSquared(point, wallBody)) {
-        return {
+        return enforceViolation({
           point: cad.point,
           snap: cad.kind === 'segment' ? 'wall' : cad.kind,
           targetWallIds: [],
           source: 'cad',
-        }
+        })
       }
-      return {
+      return enforceViolation({
         point: wallBody,
         snap: 'wall',
         targetWallIds: wallIdsAtSnapPoint(wallBody, walls, ignoreWallIds),
-      }
+      })
     }
   }
 
@@ -500,12 +531,23 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   // The angle path snaps the distance ALONG the 15° ray — a scalar, the
   // same in world and local frames — so the `gridSnap` world-grid override
   // only applies when the angle lock is off.
-  const basePoint: WallPlanPoint =
+  let basePoint: WallPlanPoint =
     start && angleSnap
       ? [...snapPointAlongAngleRay(start, point, DEFAULT_ANGLE_STEP, step)]
       : gridSnap
         ? gridSnap(point)
         : snapPointToGrid(point, step)
+
+  if (shouldSnapToBuildable && buildableRings.length > 0 && magnetic) {
+    const edgeSnap = snapServices.polygon.snapToEdges(
+      point,
+      buildableRings,
+      0.2
+    )
+    if (edgeSnap && (!start || !angleSnap)) {
+      basePoint = [edgeSnap[0], edgeSnap[1]]
+    }
+  }
 
   if (magnetic) {
     const wallSnap = findWallSnapTarget(basePoint, walls, {
@@ -513,11 +555,11 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
       radius: snapRadii?.wall,
     })
     if (wallSnap) {
-      return {
+      return enforceViolation({
         point: wallSnap,
         snap: 'wall',
         targetWallIds: wallIdsAtSnapPoint(wallSnap, walls, ignoreWallIds),
-      }
+      })
     }
 
     // Last magnetic candidate: the continuation of an existing wall's line. It
@@ -535,9 +577,9 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
       radius: snapRadii?.wall,
     })
     if (extension) {
-      return { point: extension.point, snap: 'wall', targetWallIds: [extension.wallId] }
+      return enforceViolation({ point: extension.point, snap: 'wall', targetWallIds: [extension.wallId] })
     }
-    return { point: basePoint, snap: null, targetWallIds: [] }
+    return enforceViolation({ point: basePoint, snap: null, targetWallIds: [] })
   }
 
   // Non-magnetic modes (grid / off / angles): connectivity still sticks so a
@@ -552,7 +594,7 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     wall: WALL_CONNECT_SNAP_RADIUS,
   }
   const connectSpecial = findWallSpecialPointSnap(basePoint, walls, ignoreWallIds, connectRadii)
-  if (connectSpecial) return connectSpecial
+  if (connectSpecial) return enforceViolation(connectSpecial)
 
   // The underlay sticks in these modes too, on the same terms as wall
   // connectivity: the mode governs placement right up to the line, then the
@@ -565,12 +607,12 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     segment: WALL_CONNECT_SNAP_RADIUS,
   })
   if (connectCad) {
-    return {
+    return enforceViolation({
       point: connectCad.point,
       snap: connectCad.kind === 'segment' ? 'wall' : connectCad.kind,
       targetWallIds: [],
       source: 'cad',
-    }
+    })
   }
 
   const connectWall = findWallSnapTarget(basePoint, walls, {
@@ -578,14 +620,14 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     radius: WALL_CONNECT_SNAP_RADIUS,
   })
   if (connectWall) {
-    return {
+    return enforceViolation({
       point: connectWall,
       snap: 'wall',
       targetWallIds: wallIdsAtSnapPoint(connectWall, walls, ignoreWallIds),
-    }
+    })
   }
 
-  return { point: basePoint, snap: null, targetWallIds: [] }
+  return enforceViolation({ point: basePoint, snap: null, targetWallIds: [] })
 }
 
 export function snapWallDraftPoint(args: SnapWallDraftArgs): WallPlanPoint {

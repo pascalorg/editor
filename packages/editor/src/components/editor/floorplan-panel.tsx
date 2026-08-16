@@ -4799,6 +4799,10 @@ function FloorplanLinearDraftLayer({
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
+  const draftViolation = useFloorplanDraftPreview((s) => s.draftViolation)
+
+  const activeDraftFill = draftViolation ? (isDark ? 'rgba(248, 113, 113, 0.2)' : 'rgba(239, 68, 68, 0.2)') : draftFill
+  const activeDraftStroke = draftViolation ? (isDark ? '#f87171' : '#ef4444') : draftStroke
 
   const draftPolygon = useMemo(() => {
     if (
@@ -5011,11 +5015,11 @@ function FloorplanLinearDraftLayer({
       )}
 
       <FloorplanDraftLayer
-        anchorFill={draftStroke}
+        anchorFill={activeDraftStroke}
         draftAnchorPoints={EMPTY_DRAFT_ANCHOR_POINTS}
-        draftFill={draftFill}
+        draftFill={activeDraftFill}
         draftPolygonPoints={draftPolygonPoints}
-        draftStroke={draftStroke}
+        draftStroke={activeDraftStroke}
         linearDraftSegment={fenceDraftSegment}
         polygonDraftClosingSegment={null}
         polygonDraftPolygonPoints={null}
@@ -9666,6 +9670,7 @@ export function FloorplanPanel({
       // drives the 2D draft polygon — both views update in parallel.
       emitFloorplanGridEvent('move', snappedPoint, event)
       setCursorPoint(snappedPoint)
+      useFloorplanDraftPreview.getState().setDraftViolation(wallSnap.violation ?? false)
 
       if (!draftStart) {
         return

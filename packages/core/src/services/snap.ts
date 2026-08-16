@@ -161,6 +161,60 @@ export function snapAngleToList(
   return best ?? angle
 }
 
+function distanceToSegment(p: Vec2, v: Vec2, w: Vec2): { distance: number; point: Vec2 } {
+  const l2 = (w[0] - v[0]) ** 2 + (w[1] - v[1]) ** 2
+  if (l2 === 0) return { distance: Math.hypot(p[0] - v[0], p[1] - v[1]), point: v }
+  let t = ((p[0] - v[0]) * (w[0] - v[0]) + (p[1] - v[1]) * (w[1] - v[1])) / l2
+  t = Math.max(0, Math.min(1, t))
+  const proj: Vec2 = [v[0] + t * (w[0] - v[0]), v[1] + t * (w[1] - v[1])]
+  return { distance: Math.hypot(p[0] - proj[0], p[1] - proj[1]), point: proj }
+}
+
+/**
+ * Snaps a point to the nearest edge or vertex of a set of polygon rings.
+ * Evaluates vertices first (so corners take priority), then segments.
+ */
+export function snapPointToPolygonEdges(
+  point: Vec2,
+  rings: readonly (readonly Vec2[])[],
+  tolerance: number,
+): Vec2 | null {
+  if (tolerance <= 0 || rings.length === 0) return null
+
+  let bestVertex: Vec2 | null = null
+  let bestVertexDist = Number.POSITIVE_INFINITY
+
+  let bestEdge: Vec2 | null = null
+  let bestEdgeDist = Number.POSITIVE_INFINITY
+
+  for (const ring of rings) {
+    if (ring.length < 2) continue
+
+    for (let i = 0; i < ring.length; i++) {
+      const v1 = ring[i]!
+      // Check vertex
+      const distV = Math.hypot(point[0] - v1[0], point[1] - v1[1])
+      if (distV <= tolerance && distV < bestVertexDist) {
+        bestVertexDist = distV
+        bestVertex = v1
+      }
+
+      // Check edge
+      const v2 = ring[(i + 1) % ring.length]!
+      const { distance, point: proj } = distanceToSegment(point, v1, v2)
+      if (distance <= tolerance && distance < bestEdgeDist) {
+        bestEdgeDist = distance
+        bestEdge = proj
+      }
+    }
+  }
+
+  // Priority: vertex over edge.
+  if (bestVertex) return bestVertex
+  if (bestEdge) return bestEdge
+  return null
+}
+
 // ─── Top-level SnapServices facade ────────────────────────────────────
 
 /**
@@ -180,6 +234,9 @@ export type SnapServices = {
     snapTo: (from: Vec2, cursor: Vec2, angleStep?: number, gridStep?: number) => Vec2
     snapToList: (angle: number, list: readonly number[], toleranceRad?: number) => number
   }
+  polygon: {
+    snapToEdges: (point: Vec2, rings: readonly (readonly Vec2[])[], tolerance: number) => Vec2 | null
+  }
 }
 
 export const snapServices: SnapServices = {
@@ -191,5 +248,8 @@ export const snapServices: SnapServices = {
   angle: {
     snapTo: snapPointToAngle,
     snapToList: snapAngleToList,
+  },
+  polygon: {
+    snapToEdges: snapPointToPolygonEdges,
   },
 }

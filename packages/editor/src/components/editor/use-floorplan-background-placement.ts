@@ -10,7 +10,7 @@ import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/
 import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
-import { getSegmentGridStep, type WallPlanPoint } from '../tools/wall/wall-drafting'
+import { getSegmentGridStep, snapWallDraftPointDetailed, type WallPlanPoint } from '../tools/wall/wall-drafting'
 
 type UseFloorplanBackgroundPlacementArgs = {
   activePolygonDraftPoints: WallPlanPoint[]
@@ -308,17 +308,22 @@ export function useFloorplanBackgroundPlacement({
         // onto existing wall corners / edges + alignment, `off` is free.
         const wallStep = getSegmentGridStep()
         const wallAngleSnap = draftStart !== null && isAngleSnapActive()
-        const wallSnapped = snapWallDraftPoint({
+        const snapResult = snapWallDraftPointDetailed({
           point: planPoint,
           walls,
           start: draftStart ?? undefined,
           angleSnap: wallAngleSnap,
-          gridSnap: (p) => worldGridSnap(p, wallStep),
+          magnetic: isMagneticSnapActive(),
+          cadLevelId: levelId ?? null,
         })
-        const wallGridBase = worldGridSnap(planPoint, wallStep)
-        const wallLocked = wallSnapped[0] !== wallGridBase[0] || wallSnapped[1] !== wallGridBase[1]
+        if (snapResult.violation) return true
+        
+        const wallSnapped = snapResult.point
+        // Locked onto existing geometry (corner / midpoint / crossing / edge) →
+        // that snap wins, so skip Figma alignment and stand the beacon there.
+        const lockedToWall = snapResult.snap !== null
         let snappedPoint = wallSnapped
-        if (wallLocked) {
+        if (lockedToWall) {
           useAlignmentGuides.getState().clear()
         } else {
           // Alignment lines are shown in every mode; the pull applies only when

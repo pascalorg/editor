@@ -38,6 +38,8 @@ export type WallDraftSnapResult = {
    * traced line for a wall to join or split.
    */
   source?: 'wall' | 'cad'
+  /** True when the point lies outside the site's buildable area. */
+  violation?: boolean
 }
 
 export const WALL_JOIN_SNAP_RADIUS = 0.35

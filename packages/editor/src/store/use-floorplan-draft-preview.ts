@@ -42,6 +42,8 @@ type FloorplanDraftPreviewState = {
   roofDraftStart: WallPlanPoint | null
   polygonDraftType: FloorplanPolygonDraftType | null
   polygonDraftPoints: WallPlanPoint[]
+  /** True when the current draft violates the buildable area. */
+  draftViolation: boolean
   /** Set the snapped cursor point. No-ops (skips the store update, so
    *  subscribers don't re-render) when unchanged — `grid:move` fires far more
    *  often than the snapped cell actually changes. */
@@ -55,6 +57,7 @@ type FloorplanDraftPreviewState = {
   setFenceDraftStart(point: WallPlanPoint | null): void
   setRoofDraftStart(point: WallPlanPoint | null): void
   setPolygonDraft(type: FloorplanPolygonDraftType | null, points: readonly WallPlanPoint[]): void
+  setDraftViolation(violation: boolean): void
   reset(): void
 }
 
@@ -96,6 +99,7 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
   roofDraftStart: null,
   polygonDraftType: null,
   polygonDraftPoints: [],
+  draftViolation: false,
   setCursorPoint: (point) =>
     set((state) => {
       const prev = state.cursorPoint
@@ -122,6 +126,8 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
         ? state
         : { polygonDraftType: type, polygonDraftPoints: points.map(([x, z]) => [x, z]) },
     ),
+  setDraftViolation: (violation) =>
+    set((state) => (state.draftViolation === violation ? state : { draftViolation: violation })),
   reset: () =>
     set((state) =>
       state.cursorPoint === null &&
@@ -133,7 +139,8 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
       state.fenceDraftStart === null &&
       state.roofDraftStart === null &&
       state.polygonDraftType === null &&
-      state.polygonDraftPoints.length === 0
+      state.polygonDraftPoints.length === 0 &&
+      state.draftViolation === false
         ? state
         : {
             cursorPoint: null,
@@ -146,6 +153,7 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
             roofDraftStart: null,
             polygonDraftType: null,
             polygonDraftPoints: [],
+            draftViolation: false,
           },
     ),
 }))
