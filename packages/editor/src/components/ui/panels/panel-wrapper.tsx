@@ -27,6 +27,11 @@ import {
   useState,
 } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
+import {
+  resolveActiveExtension,
+  toggleCard,
+  toggleExtension,
+} from '../../../lib/inspector-card-mode'
 import { cn } from '../../../lib/utils'
 import { PanelSection } from '../controls/panel-section'
 import { ErrorBoundary } from '../primitives/error-boundary'
@@ -132,10 +137,13 @@ export function PanelWrapper({
     )
   }, [selectedType, installedPlugins, registryVersion])
 
-  // The extension whose folded-header icon was clicked — its section mounts
-  // expanded when the card opens. Cleared whenever the card folds so a plain
-  // chevron expand shows extension sections collapsed again.
-  const [focusedExtensionId, setFocusedExtensionId] = useState<string | null>(null)
+  // Which extension's content fills the card body (extension mode). The two
+  // expanded modes are EITHER/OR: extension mode replaces the regular
+  // controls; null shows the regular controls with no extension sections.
+  // See `lib/inspector-card-mode.ts` for the transition table.
+  const [activeExtensionId, setActiveExtensionId] = useState<string | null>(null)
+  // Stale ids (kind changed, plugin gated off) fall back to regular mode.
+  const activeExtension = resolveActiveExtension(activeExtensionId, extensions)
 
   // The whole panel is collapsed to just its header by default; the chevron
   // expands it to reveal the inspector body. Keep the desktop value shared
@@ -154,10 +162,24 @@ export function PanelWrapper({
     [],
   )
 
-  // Folding the card forgets the focused extension — the focus jump is a
+  const applyMode = useCallback(
+    (next: { collapsed: boolean; activeExtensionId: string | null }) => {
+      setCollapsed(next.collapsed)
+      setActiveExtensionId(next.activeExtensionId)
+    },
+    [setCollapsed],
+  )
+
+  // Chevron / header press — collapsed → regular, regular → collapsed,
+  // extension mode → regular (exit the extension first, stay expanded).
+  const handleCardToggle = useCallback(() => {
+    applyMode(toggleCard({ collapsed, activeExtensionId }))
+  }, [applyMode, collapsed, activeExtensionId])
+
+  // Folding the card forgets the active extension — extension mode is a
   // one-shot affordance of the header icon, not sticky panel state.
   useEffect(() => {
-    if (collapsed) setFocusedExtensionId(null)
+    if (collapsed) setActiveExtensionId(null)
   }, [collapsed])
 
   // Drag-to-reposition from the header. `offset` is a translation applied on
@@ -224,15 +246,19 @@ export function PanelWrapper({
     setOffset({ x: drag.baseX + (left - drag.rectLeft), y: drag.baseY + (top - drag.rectTop) })
   }, [])
 
-  const handleHeaderPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    if (!drag) return
-    dragRef.current = null
-    setIsDragging(false)
-    e.currentTarget.releasePointerCapture(e.pointerId)
-    // A press that never turned into a drag is a click → toggle collapse.
-    if (!drag.moved) setCollapsed((c) => !c)
-  }, [])
+  const handleHeaderPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current
+      if (!drag) return
+      dragRef.current = null
+      setIsDragging(false)
+      e.currentTarget.releasePointerCapture(e.pointerId)
+      // A press that never turned into a drag is a click → same mode toggle
+      // as the chevron.
+      if (!drag.moved) handleCardToggle()
+    },
+    [handleCardToggle],
+  )
 
   // Expanding can grow the panel past an edge if it was dragged there while
   // collapsed — nudge it back inside the viewer bounds.
@@ -329,30 +355,39 @@ export function PanelWrapper({
                 <RotateCcw className="h-4 w-4" />
               </button>
             )}
-            {/* Extension jump buttons — folded card only: one icon per
-                registered inspector extension, left of the chevron. Click
-                expands the card straight to that section. */}
-            {collapsed &&
-              extensions.map((extension) => (
+            {/* Extension mode buttons — one icon per registered inspector
+                extension, left of the chevron. Click swaps the card body to
+                ONLY that extension's content (either/or with the regular
+                controls); the active icon (highlighted) or the chevron
+                returns to the regular controls. */}
+            {extensions.map((extension) => {
+              const isActive = !collapsed && activeExtensionId === extension.id
+              return (
                 <button
-                  aria-label={`Open ${extension.title}`}
-                  className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                  aria-label={isActive ? `Close ${extension.title}` : `Open ${extension.title}`}
+                  aria-pressed={isActive}
+                  className={cn(
+                    'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                    isActive
+                      ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
+                      : 'bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                  )}
                   key={extension.id}
-                  onClick={() => {
-                    setFocusedExtensionId(extension.id)
-                    setCollapsed(false)
-                  }}
+                  onClick={() =>
+                    applyMode(toggleExtension({ collapsed, activeExtensionId }, extension.id))
+                  }
                   title={extension.title}
                   type="button"
                 >
                   {renderExtensionIcon(extension.icon)}
                 </button>
-              ))}
+              )
+            })}
             <button
               aria-expanded={!collapsed}
               aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
               className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
-              onClick={() => setCollapsed((c) => !c)}
+              onClick={handleCardToggle}
               type="button"
             >
               <ChevronDown
@@ -372,20 +407,36 @@ export function PanelWrapper({
         </div>
       )}
 
-      {/* Content — hidden while the panel is collapsed (desktop). */}
+      {/* Content — hidden while the panel is collapsed (desktop). The two
+          expanded modes are EITHER/OR: extension mode renders ONLY that
+          extension's content; regular mode renders ONLY the kind's own
+          controls (`children`). A stale extension id falls back to regular
+          via `resolveActiveExtension`. */}
       {!(collapsed && !isMobile) && (
         <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {children}
-          {/* Plugin-contributed sections, after the kind's own controls. */}
-          {selectedId &&
-            extensions.map((extension) => (
-              <InspectorExtensionSection
-                defaultExpanded={extension.id === focusedExtensionId}
-                extension={extension}
-                key={extension.id}
-                nodeId={selectedId}
-              />
-            ))}
+          {!isMobile && selectedId && activeExtension ? (
+            <InspectorExtensionSection
+              extension={activeExtension}
+              key={activeExtension.id}
+              nodeId={selectedId}
+            />
+          ) : (
+            <>
+              {children}
+              {/* Mobile sheet has no header icons to swap modes — keep the
+                  plugin sections appended after the kind's controls there. */}
+              {isMobile &&
+                selectedId &&
+                extensions.map((extension) => (
+                  <InspectorExtensionSection
+                    defaultExpanded={false}
+                    extension={extension}
+                    key={extension.id}
+                    nodeId={selectedId}
+                  />
+                ))}
+            </>
+          )}
         </div>
       )}
 
@@ -446,14 +497,16 @@ function resolveExtensionComponent(
  * One plugin-contributed inspector section. Subscribes to the full node —
  * the section body reflects any edit — and hands it to the extension's
  * lazy component inside its own error boundary so a crashing plugin
- * section can't take down the inspector card.
+ * section can't take down the inspector card. On desktop this is the
+ * card's SOLE body while its extension is active (either/or with the
+ * regular controls); the mobile sheet appends it after them instead.
  */
 function InspectorExtensionSection({
-  defaultExpanded,
+  defaultExpanded = true,
   extension,
   nodeId,
 }: {
-  defaultExpanded: boolean
+  defaultExpanded?: boolean
   extension: InspectorExtension
   nodeId: AnyNodeId
 }) {

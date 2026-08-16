@@ -881,10 +881,13 @@ export type FloorplanMoveTarget<N> = (args: {
 /**
  * A plugin-contributed section for the floating node inspector card.
  * When a node whose `type` is in `kinds` is selected, the inspector header
- * shows the extension's `icon` as a button while the card is folded
- * (click → expand straight to the section), and the expanded card renders
- * `component` inside a collapsible section titled `title`, after the
- * kind's own controls.
+ * shows the extension's `icon` as a button. Clicking it swaps the card
+ * body to ONLY this extension's `component` (inside a section titled
+ * `title`) — extension mode and the kind's own controls are EITHER/OR,
+ * never appended together. Clicking the (highlighted) icon again, or the
+ * chevron, returns to the regular controls. The mobile sheet has no
+ * header icons, so it appends the section after the kind's controls
+ * instead.
  *
  * `component` is lazy-loaded on first expand and receives the selected
  * node as a `node` prop (`ComponentType<{ node: AnyNode }>` — typed as
