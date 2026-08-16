@@ -63,6 +63,7 @@ import { SavedViewsSection } from '../../../panels/saved-views/saved-views-secti
 import { ImportCadDialog } from '../../../dialogs/import-cad-dialog'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
+import { ParcelSetbackSection } from './parcel-section'
 import { focusTreeNode, TreeNode } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 
@@ -1712,6 +1713,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
               >
                 <PropertyLineSection />
+                <ParcelSetbackSection />
               </motion.div>
             )}
           </AnimatePresence>

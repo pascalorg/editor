@@ -28,25 +28,35 @@ function ringPath(ring: readonly Point2D[]): string {
  * so an `isActive` gate would hide the boundary during exactly the gesture it
  * exists to guide.
  */
-export const FloorplanBuildableLayer = memo(function FloorplanBuildableLayer({
+/**
+ * The drawing itself, with the focused edge handed in.
+ *
+ * Split from the store subscription below so the markup can be rendered and
+ * asserted on without a browser — which edge index highlights which segment is
+ * exactly the sort of off-by-one that only shows up on screen otherwise.
+ */
+export const BuildableAreaGeometry = memo(function BuildableAreaGeometry({
   buildableRings,
   dimmed,
+  focusedEdge,
+  onSelectEdge,
+  onHoverEdge,
   sitePolygon,
   unitsPerPixel,
 }: {
   buildableRings: readonly Point2D[][] | null
   dimmed: boolean
+  focusedEdge: number | null
+  onSelectEdge: (edgeIndex: number | null) => void
+  onHoverEdge: (edgeIndex: number | null) => void
   sitePolygon: readonly Point2D[] | null
   unitsPerPixel: number
 }) {
-  const hoveredEdge = useSetbackEdgeFocus((state) => state.hoveredEdge)
-  const selectedEdge = useSetbackEdgeFocus((state) => state.selectedEdge)
-  const setHoveredEdge = useSetbackEdgeFocus((state) => state.setHoveredEdge)
-  const setSelectedEdge = useSetbackEdgeFocus((state) => state.setSelectedEdge)
+  const setHoveredEdge = onHoverEdge
+  const setSelectedEdge = onSelectEdge
 
   if (!(sitePolygon && buildableRings && sitePolygon.length >= 3)) return null
 
-  const focusedEdge = hoveredEdge ?? selectedEdge
   const hatchSpacing = Math.max(unitsPerPixel * 7, 0.08)
   // Even-odd: the parcel with the buildable rings punched out of it is exactly
   // the ground the setbacks put off limits, and one path expresses it whether
@@ -106,7 +116,7 @@ export const FloorplanBuildableLayer = memo(function FloorplanBuildableLayer({
         return (
           <g key={`setback-edge-${edgeIndex}-${point.x}:${point.y}`}>
             <line
-              onPointerDown={() => setSelectedEdge(isFocused ? null : edgeIndex)}
+              onPointerDown={() => setSelectedEdge(focusedEdge === edgeIndex ? null : edgeIndex)}
               onPointerEnter={() => setHoveredEdge(edgeIndex)}
               onPointerLeave={() => setHoveredEdge(null)}
               pointerEvents="stroke"
@@ -136,3 +146,31 @@ export const FloorplanBuildableLayer = memo(function FloorplanBuildableLayer({
     </g>
   )
 })
+
+/**
+ * Subscribes to the focus store the panel and the 3D renderer also write.
+ *
+ * The subscription lives out here, in a leaf, rather than in `FloorplanPanel`:
+ * the panel is a ~10k-line component whose render costs over a hundred
+ * milliseconds, so a hover that re-rendered it would be felt.
+ */
+export function FloorplanBuildableLayer(props: {
+  buildableRings: readonly Point2D[][] | null
+  dimmed: boolean
+  sitePolygon: readonly Point2D[] | null
+  unitsPerPixel: number
+}) {
+  const hoveredEdge = useSetbackEdgeFocus((state) => state.hoveredEdge)
+  const selectedEdge = useSetbackEdgeFocus((state) => state.selectedEdge)
+  const setHoveredEdge = useSetbackEdgeFocus((state) => state.setHoveredEdge)
+  const setSelectedEdge = useSetbackEdgeFocus((state) => state.setSelectedEdge)
+
+  return (
+    <BuildableAreaGeometry
+      {...props}
+      focusedEdge={hoveredEdge ?? selectedEdge}
+      onHoverEdge={setHoveredEdge}
+      onSelectEdge={setSelectedEdge}
+    />
+  )
+}

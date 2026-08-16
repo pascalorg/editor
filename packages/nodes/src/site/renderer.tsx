@@ -2,6 +2,8 @@
 
 import {
   type AnyNodeId,
+  type PolygonPoint2D as Point2D,
+  polygonSignedArea,
   readSiteBuildable,
   type SiteNode,
   type TerrainField,
@@ -438,28 +440,59 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     [setbackOverlay],
   )
 
+  // The focused edge's own setback band, as a surface rather than a line.
+  //
+  // A line would be the obvious choice and is the wrong one: `linewidth` is
+  // ignored by every WebGL/WebGPU line, so the highlight would be one pixel
+  // drawn exactly along a parcel edge that already carries a selection colour —
+  // invisible in practice. Painting the band the setback actually occupies is
+  // both visible and the more useful answer: it shows how much ground that one
+  // number is taking.
+  //
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the grid signature, not the field — see above.
-  const focusedEdgeLine = useMemo(() => {
+  const focusedEdgeBand = useMemo(() => {
     if (focusedEdge === null || !polygonPoints || polygonPoints.length < 3) return null
-    const start = polygonPoints[focusedEdge % polygonPoints.length]
-    const end = polygonPoints[(focusedEdge + 1) % polygonPoints.length]
-    if (!(start && end)) return null
+    const count = polygonPoints.length
+    const start = polygonPoints[focusedEdge % count]
+    const end = polygonPoints[(focusedEdge + 1) % count]
+    const distance = buildable.distances[focusedEdge % count] ?? 0
+    if (!(start && end) || distance <= 0) return null
+
+    const length = Math.hypot(end[0] - start[0], end[1] - start[1])
+    if (length < 1e-6) return null
+    // Which side is inward depends on the ring's winding, which the site
+    // polygon does not guarantee — the offset normalises it internally, so the
+    // sign has to be recovered here rather than assumed.
+    const winding = polygonSignedArea(polygonPoints as Point2D[]) >= 0 ? 1 : -1
+    const nx = (-(end[1] - start[1]) / length) * winding
+    const nz = ((end[0] - start[0]) / length) * winding
+
     const field = useLiveTerrain.getState().fieldOf(node.id) ?? persistedField
-    return drapedOverlayLine({
-      points: [start, end],
+    return buildSetbackStripGeometry({
+      parcel: [
+        start,
+        end,
+        [end[0] + nx * distance, end[1] + nz * distance],
+        [start[0] + nx * distance, start[1] + nz * distance],
+      ],
+      buildableRings: [],
       field,
-      lift: Y_OFFSET * 3,
-      closed: false,
-      renderOrder: 11,
-      opacity: 1,
+      lift: Y_OFFSET * 1.5,
     })
-  }, [focusedEdge, polygonPoints, terrainKey, node.id])
-  useEffect(
-    () => () => {
-      if (focusedEdgeLine) disposeOverlayLine(focusedEdgeLine)
-    },
-    [focusedEdgeLine],
-  )
+  }, [focusedEdge, polygonPoints, buildable, terrainKey, node.id])
+  useEffect(() => () => focusedEdgeBand?.dispose(), [focusedEdgeBand])
+
+  const focusedBandMaterial = useMemo(() => {
+    const material = new MeshBasicNodeMaterial({ color: SETBACK_OVERLAY_COLOR })
+    material.depthWrite = false
+    material.opacity = 0.42
+    material.polygonOffset = true
+    material.polygonOffsetFactor = -2
+    material.polygonOffsetUnits = -2
+    material.transparent = true
+    return material
+  }, [])
+  useEffect(() => () => focusedBandMaterial.dispose(), [focusedBandMaterial])
 
   // Unlit: the strip is a reading, not a surface, and a lit tint would change
   // meaning with the sun angle.
@@ -541,8 +574,17 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         <primitive key={line.uuid} object={line} />
       ))}
 
-      {/* The parcel edge the setback panel is pointing at, in either view. */}
-      {focusedEdgeLine && <primitive object={focusedEdgeLine} />}
+      {/* The setback band of the edge the panel is pointing at. */}
+      {focusedEdgeBand && (
+        <mesh
+          frustumCulled={false}
+          geometry={focusedEdgeBand}
+          material={focusedBandMaterial}
+          raycast={noopRaycast}
+          renderOrder={11}
+          userData={{ pascalExport: 'strip' }}
+        />
+      )}
 
       {/* Simple boundary line */}
       {/* @ts-ignore */}

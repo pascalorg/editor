@@ -10,19 +10,15 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import {
-  ActionButton,
-  ActionGroup,
-  cn,
-  formatAreaLabel,
-  formatLinearMeasurement,
-  MetricControl,
-  PanelSection,
-  SegmentedControl,
-  useSetbackEdgeFocus,
-} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
+import { formatAreaLabel, formatLinearMeasurement } from '../../../../../lib/measurements'
+import { cn } from '../../../../../lib/utils'
+import useSetbackEdgeFocus from '../../../../../store/use-setback-edge-focus'
+import { ActionButton, ActionGroup } from '../../../controls/action-button'
+import { MetricControl } from '../../../controls/metric-control'
+import { PanelSection } from '../../../controls/panel-section'
+import { SegmentedControl } from '../../../controls/segmented-control'
 
 const ROLE_OPTIONS: Array<{ label: string; value: SetbackRule['role'] }> = [
   { label: 'Road', value: 'road' },
@@ -60,7 +56,7 @@ function ParcelFacts({
   )
 }
 
-export default function SiteParcelPanel() {
+export function ParcelSetbackSection() {
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const nodes = useScene((state) => state.nodes)
