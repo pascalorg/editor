@@ -11,6 +11,59 @@ const PropertyLineData = z.object({
   points: z.array(z.tuple([z.number(), z.number()])),
 })
 
+/**
+ * Where the parcel boundary came from. Absent on a lot line somebody drew.
+ *
+ * Kept alongside the polygon rather than folded into it because provenance
+ * outlives the geometry: the user may nudge a vertex, and the drawing has to
+ * keep saying which registry record it started from and that it has since been
+ * touched.
+ */
+export const ParcelRecord = z.object({
+  source: z.enum(['tkgm', 'manual']),
+  il: z.string(),
+  ilce: z.string(),
+  mahalle: z.string(),
+  mahalleId: z.number().int(),
+  ada: z.string(),
+  parsel: z.string(),
+  /**
+   * The registry's own recorded area, m². It can disagree with the area of the
+   * polygon — which of the two to believe is the user's call, not ours.
+   */
+  registeredArea: z.number().positive().optional(),
+  nitelik: z.string().optional(),
+  pafta: z.string().optional(),
+  fetchedAt: z.string(),
+  /** Set once the user edits the imported polygon by hand. */
+  edited: z.boolean().default(false),
+})
+
+export type ParcelRecord = z.infer<typeof ParcelRecord>
+
+/** A per-edge setback. Edge `i` runs `polygon.points[i] → points[i + 1]`. */
+export const SetbackRule = z.object({
+  role: z.enum(['road', 'side', 'rear']).default('side'),
+  distance: z.number().finite().min(0).default(3),
+})
+
+export type SetbackRule = z.infer<typeof SetbackRule>
+
+/** Zoning allowances, entered by hand — no registry publishes them. */
+export const ZoningLimits = z.object({
+  /** Taban alanı kat sayısı: footprint as a fraction of the parcel. */
+  taks: z.number().finite().min(0).max(1).optional(),
+  /** Emsal: total floor area as a multiple of the parcel. */
+  kaks: z.number().finite().min(0).optional(),
+  /** Hmax, metres. */
+  maxHeight: z.number().finite().positive().optional(),
+  maxFloors: z.number().int().positive().optional(),
+  /** Ayrık / bitişik / blok nizam. */
+  order: z.enum(['detached', 'adjacent', 'block']).optional(),
+})
+
+export type ZoningLimits = z.infer<typeof ZoningLimits>
+
 export const SiteNode = BaseNode.extend({
   id: objectId('site'),
   type: nodeType('site'),
@@ -46,6 +99,17 @@ export const SiteNode = BaseNode.extend({
    */
   latitude: z.number().finite().min(-90).max(90).optional(),
   longitude: z.number().finite().min(-180).max(180).optional(),
+  /** Which registry parcel this boundary is. Absent on a hand-drawn site. */
+  parcel: ParcelRecord.optional(),
+  /**
+   * Edge index → setback, sparse: an edge nobody has touched uses
+   * `defaultSetback`. Sparse rather than an array because most edges of most
+   * parcels share one number, and because an array would have to be resized in
+   * lockstep with every vertex the user adds.
+   */
+  setbacks: z.record(z.string(), SetbackRule).default({}),
+  defaultSetback: z.number().finite().min(0).default(0),
+  zoning: ZoningLimits.optional(),
   children: z.array(z.string()).default([]),
 }).describe(
   dedent`
@@ -54,6 +118,10 @@ export const SiteNode = BaseNode.extend({
   - terrain: optional sculpted heightfield; absent means flat ground
   - northOffset: true bearing of plan-up in degrees; 0 means drawn north-up
   - latitude/longitude: site location in degrees, for solar position; absent means unplaced
+  - parcel: cadastral record the boundary was imported from; absent if drawn by hand
+  - setbacks: edge index -> {role, distance}; edges not listed use defaultSetback
+  - defaultSetback: fallback setback distance in metres for unlisted edges
+  - zoning: TAKS/KAKS/Hmax allowances, entered by hand
   - children: array of child node ids (buildings, items)
   `,
 )

@@ -1,5 +1,26 @@
 export type Point2D = [number, number]
 
+/**
+ * Shoelace area, signed. Positive is the winding the site polygon's own default
+ * uses, so it is what everything here treats as "correct" — note that with the
+ * floorplan drawing `+Z` downward, positive reads as clockwise on screen.
+ */
+export function polygonSignedArea(polygon: readonly Point2D[]): number {
+  if (polygon.length < 3) return 0
+  let sum = 0
+  for (let i = 0; i < polygon.length; i++) {
+    const current = polygon[i]!
+    const next = polygon[(i + 1) % polygon.length]!
+    sum += current[0] * next[1] - next[0] * current[1]
+  }
+  return sum / 2
+}
+
+/** Unsigned polygon area, in whatever unit the points are in. */
+export function polygonArea(polygon: readonly Point2D[]): number {
+  return Math.abs(polygonSignedArea(polygon))
+}
+
 export function pointOnSegment(point: Point2D, start: Point2D, end: Point2D, tolerance = 1e-6) {
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]

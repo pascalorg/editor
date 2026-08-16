@@ -102,6 +102,17 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  type GeoAnchor,
+  type LonLat,
+  localMetersToLonLat,
+  lonLatToLocalMeters,
+  PARCEL_AREA_TOLERANCE,
+  parcelAreaDeviation,
+  resolveGeoAnchor,
+  ringCentroid,
+  ringToLocalMeters,
+} from './lib/geo-projection'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
 export {
   areMeasurementPointsCoplanar,
@@ -126,7 +137,9 @@ export {
   type Point2D as PolygonPoint2D,
   pointInPolygon as pointInPolygon2D,
   pointOnSegment,
+  polygonArea,
   polygonContainsPolygon,
+  polygonSignedArea,
   polygonsIntersect,
   polygonsOverlap,
   segmentsIntersect,
@@ -146,6 +159,14 @@ export {
   quantityTakeoffToCsv,
 } from './lib/quantity-takeoff'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
+export {
+  type BuildableAreaOptions,
+  buildableArea,
+  remapSetbacksForVertexInsert,
+  remapSetbacksForVertexRemove,
+  resolveSetbackDistances,
+  sumRingAreas,
+} from './lib/setback-offset'
 export {
   getRenderableSlabPolygon,
   type SlabEdgeWallBandSnap,

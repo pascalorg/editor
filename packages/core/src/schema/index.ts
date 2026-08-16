@@ -235,7 +235,7 @@ export {
 export { ScanNode } from './nodes/scan'
 export { SectionPlaneNode } from './nodes/section-plane'
 export { ShelfNode } from './nodes/shelf'
-export { SiteNode } from './nodes/site'
+export { ParcelRecord, SetbackRule, SiteNode, ZoningLimits } from './nodes/site'
 export {
   SKYLIGHT_TYPE_ORDER,
   SKYLIGHT_TYPE_PRESETS,
