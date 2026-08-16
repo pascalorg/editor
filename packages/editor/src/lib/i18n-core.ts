@@ -1535,6 +1535,30 @@ const tr: Record<string, string> = {
   'Waterfall ends': 'Şelale uçlar',
   Width: 'Genişlik',
   'Zone quantities': 'Bölge metrajları',
+  // Parcel and setbacks (site panel)
+  Parcel: 'Parsel',
+  Location: 'Konum',
+  'Block / parcel': 'Ada / parsel',
+  Quality: 'Nitelik',
+  Sheet: 'Pafta',
+  'Registered area': 'Kayıtlı alan',
+  'Measured area': 'Ölçülen alan',
+  'Land registry reference data — not a surveyed site plan.':
+    'TKGM referans verisi — aplikasyon krokisi değildir.',
+  'Edited by hand — no longer the registry outline.':
+    'Elle düzenlendi — artık tapu kaydındaki sınır değil.',
+  Setbacks: 'Çekme mesafeleri',
+  Edge: 'Kenar',
+  Road: 'Yol',
+  Neighbour: 'Komşu',
+  Rear: 'Arka',
+  'Apply to all edges': 'Tüm kenarlara uygula',
+  'Parcel area': 'Parsel alanı',
+  'Buildable area': 'Yapılaşma alanı',
+  'No buildable ground is left after these setbacks.':
+    'Bu çekme mesafelerinden sonra yapılaşma alanı kalmıyor.',
+  "The presets are common values. The binding distances are the ones on your municipality's zoning certificate.":
+    'Ön ayarlar yaygın değerlerdir; bağlayıcı mesafeler belediyenizin imar durumu belgesindedir.',
   'No results for “': 'Sonuç bulunamadı: “',
   '" plugin crashed': '" eklentisi çöktü',
   '" Trap': '" Sifon',

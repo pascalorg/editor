@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  readSiteBuildable,
   type SiteNode,
   type TerrainField,
   terrainFieldOf,
@@ -10,6 +11,7 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
+import { useSetbackEdgeFocus } from '@pascal-app/editor'
 import {
   backdropGradient,
   deepSkyColor,
@@ -21,9 +23,19 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
-import { BufferAttribute, BufferGeometry, type Group, Path, Shape, ShapeGeometry } from 'three'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  type Group,
+  Line,
+  LineBasicMaterial,
+  Path,
+  Shape,
+  ShapeGeometry,
+} from 'three'
 import { cameraPosition, color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
-import { MeshLambertNodeMaterial } from 'three/webgpu'
+import { MeshBasicNodeMaterial, MeshLambertNodeMaterial } from 'three/webgpu'
+import { buildSetbackStripGeometry } from './buildable-overlay'
 import { getRecessedSlabGroundHoles } from './recessed-slab-ground-holes'
 import {
   buildDrapedPolyline,
@@ -82,6 +94,52 @@ function markPositionsDirty(geometry: BufferGeometry): void {
   const attribute = geometry.getAttribute('position') as BufferAttribute
   attribute.needsUpdate = true
   geometry.computeBoundingSphere()
+}
+
+const SETBACK_OVERLAY_COLOR = '#22d3ee'
+
+/**
+ * A draped overlay line as a real `Line` object rather than an `<line>` element.
+ *
+ * R3F's `line` intrinsic collides with SVG's, so every JSX use needs a
+ * `@ts-expect-error` that only suppresses when the whole element fits on one line.
+ * Building the object here keeps the props typed, and puts creation and
+ * disposal of the geometry and its material in one place.
+ */
+function drapedOverlayLine({
+  points,
+  field,
+  lift,
+  closed,
+  renderOrder,
+  opacity = 0.95,
+}: {
+  points: ReadonlyArray<readonly [number, number]>
+  field: TerrainField | null
+  lift: number
+  closed: boolean
+  renderOrder: number
+  opacity?: number
+}): Line {
+  const draped = buildDrapedPolyline({ points, field, lift, closed })
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(draped.positions, 3))
+  const line = new Line(
+    geometry,
+    new LineBasicMaterial({ color: SETBACK_OVERLAY_COLOR, opacity, transparent: opacity < 1 }),
+  )
+  line.frustumCulled = false
+  line.renderOrder = renderOrder
+  line.userData.pascalExport = 'strip'
+  line.raycast = noopRaycast
+  return line
+}
+
+function disposeOverlayLine(line: Line): void {
+  line.geometry.dispose()
+  const material = line.material
+  if (Array.isArray(material)) for (const entry of material) entry.dispose()
+  else material.dispose()
 }
 
 type S = ReturnType<typeof useScene.getState>
@@ -346,6 +404,77 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   }, [groundShape])
   useEffect(() => () => groundGeometry?.dispose(), [groundGeometry])
 
+  // Setback overlay. Derived from the node with no state of its own, so it
+  // follows a vertex drag (the live polygon feeds `polygonPoints`) and a setback
+  // edit alike, and it never disagrees with the floorplan's own copy.
+  const { defaultSetback, setbacks } = node
+  const buildable = useMemo(
+    () => readSiteBuildable(polygonPoints, { defaultSetback, setbacks }),
+    [polygonPoints, setbacks, defaultSetback],
+  )
+  const focusedEdge = useSetbackEdgeFocus((state) => state.hoveredEdge ?? state.selectedEdge)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the grid signature, not the field — a sculpt dab must not rebuild these.
+  const setbackOverlay = useMemo(() => {
+    if (!polygonPoints || !buildable.hasSetback) return null
+    const field = useLiveTerrain.getState().fieldOf(node.id) ?? persistedField
+    const strip = buildSetbackStripGeometry({
+      parcel: polygonPoints,
+      buildableRings: buildable.rings,
+      field,
+      lift: Y_OFFSET,
+    })
+    // The buildable line sits a hair above the strip so the two never z-fight.
+    const lines = buildable.rings.map((ring) =>
+      drapedOverlayLine({ points: ring, field, lift: Y_OFFSET * 2, closed: true, renderOrder: 10 }),
+    )
+    return { lines, strip }
+  }, [polygonPoints, buildable, terrainKey, node.id])
+  useEffect(
+    () => () => {
+      setbackOverlay?.strip?.dispose()
+      for (const line of setbackOverlay?.lines ?? []) disposeOverlayLine(line)
+    },
+    [setbackOverlay],
+  )
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the grid signature, not the field — see above.
+  const focusedEdgeLine = useMemo(() => {
+    if (focusedEdge === null || !polygonPoints || polygonPoints.length < 3) return null
+    const start = polygonPoints[focusedEdge % polygonPoints.length]
+    const end = polygonPoints[(focusedEdge + 1) % polygonPoints.length]
+    if (!(start && end)) return null
+    const field = useLiveTerrain.getState().fieldOf(node.id) ?? persistedField
+    return drapedOverlayLine({
+      points: [start, end],
+      field,
+      lift: Y_OFFSET * 3,
+      closed: false,
+      renderOrder: 11,
+      opacity: 1,
+    })
+  }, [focusedEdge, polygonPoints, terrainKey, node.id])
+  useEffect(
+    () => () => {
+      if (focusedEdgeLine) disposeOverlayLine(focusedEdgeLine)
+    },
+    [focusedEdgeLine],
+  )
+
+  // Unlit: the strip is a reading, not a surface, and a lit tint would change
+  // meaning with the sun angle.
+  const setbackStripMaterial = useMemo(() => {
+    const material = new MeshBasicNodeMaterial({ color: '#f59e0b' })
+    material.depthWrite = false
+    material.opacity = 0.16
+    material.polygonOffset = true
+    material.polygonOffsetFactor = -1
+    material.polygonOffsetUnits = -1
+    material.transparent = true
+    return material
+  }, [])
+  useEffect(() => () => setbackStripMaterial.dispose(), [setbackStripMaterial])
+
   const handlers = useNodeEvents(node, 'site')
 
   // Terrain replaces the flat ground fill rather than sitting on top of it: two
@@ -392,6 +521,28 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           userData={{ pascalExport: 'strip' }}
         />
       )}
+
+      {/* Setback strip: the ground the setbacks put off limits. Presentation
+          only — `strip` keeps it out of GLB export and out of scene framing,
+          which would otherwise measure the overlay as model content. */}
+      {setbackOverlay?.strip && (
+        <mesh
+          frustumCulled={false}
+          geometry={setbackOverlay.strip}
+          material={setbackStripMaterial}
+          raycast={noopRaycast}
+          renderOrder={8}
+          userData={{ pascalExport: 'strip' }}
+        />
+      )}
+
+      {/* Buildable boundary — the line the architect actually draws to. */}
+      {setbackOverlay?.lines.map((line) => (
+        <primitive key={line.uuid} object={line} />
+      ))}
+
+      {/* The parcel edge the setback panel is pointing at, in either view. */}
+      {focusedEdgeLine && <primitive object={focusedEdgeLine} />}
 
       {/* Simple boundary line */}
       {/* @ts-ignore */}

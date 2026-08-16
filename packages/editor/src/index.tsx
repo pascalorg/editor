@@ -739,6 +739,7 @@ export {
   useQuickMeasurementHud,
 } from './store/use-quick-measurement-hud'
 export { default as useSegmentDraftChain } from './store/use-segment-draft-chain'
+export { default as useSetbackEdgeFocus } from './store/use-setback-edge-focus'
 export {
   type StairPreviewPoint,
   useStairBuildPreview,

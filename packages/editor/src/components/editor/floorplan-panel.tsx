@@ -33,6 +33,7 @@ import {
   type Point2D,
   type RoofNode,
   type RoofSegmentNode,
+  readSiteBuildable,
   resolveSlabPlacementElevation,
   type SiteNode,
   type SlabNode,
@@ -123,6 +124,7 @@ import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
+import { FloorplanBuildableLayer } from '../editor-2d/floorplan-buildable-layer'
 import { FloorplanCommentLayer } from '../editor-2d/floorplan-comment-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -5488,6 +5490,19 @@ export function FloorplanPanel({
       points: formatPolygonPoints(polygon),
     }
   }, [siteBoundaryDraft, sitePolygonEntry])
+  // Offset in floorplan-local metres rather than world: the transform between
+  // them is a rotation and a translation, so every distance a setback is
+  // measured in survives it. Derived from the *displayed* polygon, so the
+  // boundary follows a vertex drag instead of lagging a frame behind it.
+  const siteBuildableRings = useMemo(() => {
+    if (!displaySitePolygon) return null
+    const reading = readSiteBuildable(
+      displaySitePolygon.polygon.map((point) => [point.x, point.y] as [number, number]),
+      displaySitePolygon.site,
+    )
+    if (!reading.hasSetback) return null
+    return reading.rings.map((ring) => ring.map(([x, y]) => ({ x, y })))
+  }, [displaySitePolygon])
   const siteBoundaryWorldPolygon = useCallback(
     (polygon: WallPlanPoint[]) =>
       polygon.map((point) => {
@@ -11630,6 +11645,13 @@ export function FloorplanPanel({
                 isHighlighted={isSiteBoundaryHighlighted}
                 palette={palette}
                 sitePolygon={visibleSitePolygon}
+              />
+
+              <FloorplanBuildableLayer
+                buildableRings={siteBuildableRings}
+                dimmed={selectedIds.length > 1 || previewSelectedIds.length > 1}
+                sitePolygon={visibleSitePolygon?.polygon ?? null}
+                unitsPerPixel={floorplanUnitsPerPixel}
               />
 
               <FloorplanPolygonHandleLayer

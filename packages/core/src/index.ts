@@ -168,6 +168,13 @@ export {
   sumRingAreas,
 } from './lib/setback-offset'
 export {
+  polygonEdgeLengths,
+  readSiteBuildable,
+  SETBACK_ROLE_PRESETS,
+  type SiteBuildableReading,
+  setbackRuleForEdge,
+} from './lib/site-setbacks'
+export {
   getRenderableSlabPolygon,
   type SlabEdgeWallBandSnap,
   type SlabPolygonContext,
