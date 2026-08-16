@@ -47,13 +47,13 @@ export const LevelSystem = () => {
       const explodedExtra = levelMode === 'exploded' ? index * EXPLODED_GAP : 0
       const targetY = baseY + explodedExtra
 
-      // Frame-rate-independent smoothing. The naive `lerp(y, target, delta*12)`
-      // multiplies the error by |1 - 12*delta| per frame — DIVERGENT once a
-      // frame exceeds ~166 ms (slow machines, headless GL, heavy scenes):
-      // levels oscillated kilometers off-screen and the fit-camera followed
-      // (blank viewport). exp() keeps the factor in (0,1) for ANY delta.
-      obj.position.y = lerp(obj.position.y, targetY, 1 - Math.exp(-12 * delta))
-      if (Math.abs(obj.position.y - targetY) < 1e-4) obj.position.y = targetY
+      // Clamped smoothing. The naive `lerp(y, target, delta*12)` multiplies
+      // the error by |1 - 12*delta| per frame — DIVERGENT once a frame
+      // exceeds ~166 ms (slow machines, headless GL, heavy scenes): levels
+      // oscillated kilometers off-screen and the level-fit camera followed
+      // (blank viewport). Clamping keeps every step a contraction: identical
+      // feel at 60 fps, exact snap instead of overshoot on slow frames.
+      obj.position.y = lerp(obj.position.y, targetY, Math.min(1, delta * 12))
 
       // Solo: hidden levels ABOVE the soloed one stay in the shadow map
       // (shadow-caster-only) so the sun still shadows the soloed floor through
