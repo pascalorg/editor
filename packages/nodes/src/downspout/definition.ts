@@ -207,7 +207,7 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   presentation: {
     label: 'Downspout',
     description: 'Vertical drop pipe from a gutter outlet to the ground.',
-    icon: { kind: 'url', src: '/icons/roof.webp' },
+    icon: { kind: 'url', src: '/icons/downspout.webp' },
     paletteSection: 'structure',
     paletteOrder: 123,
   },
