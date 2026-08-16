@@ -65,6 +65,7 @@ import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { setbacksAfterPolygonEdit } from '../../../../../lib/site-boundary'
 import { InlineRenameInput } from './inline-rename-input'
 import { ParcelSetbackSection } from './parcel-section'
+import { ZoningSection } from './zoning-section'
 import { focusTreeNode, TreeNode } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 
@@ -1727,6 +1728,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
               >
                 <PropertyLineSection />
                 <ParcelSetbackSection />
+                <ZoningSection />
               </motion.div>
             )}
           </AnimatePresence>

@@ -71,7 +71,7 @@ describe('buildMeasurementFloorplan', () => {
     const metric = buildMeasurementFloorplan(node, context('metric'))
     const imperial = buildMeasurementFloorplan(node, context('imperial'))
 
-    expect(metric && labels(metric)).toEqual(['3.05m'])
+    expect(metric && labels(metric)).toEqual(['3,05 m'])
     expect(imperial && labels(imperial)).toEqual([`10'0"`])
     expect(
       metric && flattenGeometry(metric).find((entry) => entry.kind === 'dimension-label'),
@@ -92,7 +92,7 @@ describe('buildMeasurementFloorplan', () => {
     })
 
     const metric = buildMeasurementFloorplan(node, context('metric', false, 'millimeters'))
-    expect(metric && labels(metric)).toEqual(['3048mm'])
+    expect(metric && labels(metric)).toEqual(['3.048 mm'])
   })
 
   test('uses indigo analysis colors in plan view', () => {
@@ -152,8 +152,8 @@ describe('buildMeasurementFloorplan', () => {
     const volumeGeometry = buildMeasurementFloorplan(volume, context('metric'))
 
     expect(areaGeometry?.kind).toBe('group')
-    expect(areaGeometry && labels(areaGeometry)).toEqual(['A 6.0m²'])
-    expect(volumeGeometry && labels(volumeGeometry)).toEqual(['V 12.0m³'])
+    expect(areaGeometry && labels(areaGeometry)).toEqual(['A 6,0 m²'])
+    expect(volumeGeometry && labels(volumeGeometry)).toEqual(['V 12,0 m³'])
     expect(
       areaGeometry &&
         flattenGeometry(areaGeometry).find((entry) => entry.kind === 'dimension-label'),
@@ -201,7 +201,7 @@ describe('buildMeasurementFloorplan', () => {
     if (anglePolylines[1]?.kind === 'polyline') {
       expect(anglePolylines[1].points.length).toBeGreaterThan(4)
     }
-    expect(perimeterGeometry && labels(perimeterGeometry)).toEqual(['P 12m'])
+    expect(perimeterGeometry && labels(perimeterGeometry)).toEqual(['P 12 m'])
   })
 
   test('marks a missing semantic feature as unlinked instead of freezing silently', () => {
@@ -222,7 +222,7 @@ describe('buildMeasurementFloorplan', () => {
     })
 
     const geometry = buildMeasurementFloorplan(node, context('metric'))
-    expect(geometry && labels(geometry)).toEqual(['Unlinked · 2m'])
+    expect(geometry && labels(geometry)).toEqual(['Unlinked · 2 m'])
     expect(
       geometry && flattenGeometry(geometry).find((entry) => entry.kind === 'line'),
     ).toMatchObject({ stroke: '#dc2626' })

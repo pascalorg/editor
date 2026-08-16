@@ -70,7 +70,7 @@ describe('continuous construction-dimension drafting', () => {
     )
 
     expect(geometry).toHaveLength(3)
-    expect(geometry.map((segment) => segment.text)).toEqual(['2m', '3m', '4m'])
+    expect(geometry.map((segment) => segment.text)).toEqual(['2 m', '3 m', '4 m'])
     expect(geometry[1]).toMatchObject({
       start: [2, 0],
       end: [5, 0],
@@ -97,10 +97,10 @@ describe('continuous construction-dimension drafting', () => {
     ]
     expect(
       buildConstructionDimensionPreviewGeometries(points, [0, 0, 1], 'metric', 'radius')[0],
-    ).toMatchObject({ text: 'R 1m' })
+    ).toMatchObject({ text: 'R 1 m' })
     expect(
       buildConstructionDimensionPreviewGeometries(points, [0, 0, 1], 'metric', 'diameter')[0],
-    ).toMatchObject({ text: 'Ø 2m' })
+    ).toMatchObject({ text: 'Ø 2 m' })
     expect(
       buildConstructionDimensionPreviewGeometries(points, [0, 0, 1], 'metric', 'angular'),
     ).toEqual([])
@@ -124,7 +124,7 @@ describe('continuous construction-dimension drafting', () => {
       children: expect.arrayContaining([
         expect.objectContaining({ kind: 'path' }),
         expect.objectContaining({ kind: 'line', x2: 3, y2: 3 }),
-        expect.objectContaining({ kind: 'dimension-label', text: 'ARC 3.14m' }),
+        expect.objectContaining({ kind: 'dimension-label', text: 'ARC 3,14 m' }),
       ]),
     })
   })

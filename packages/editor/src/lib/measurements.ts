@@ -153,7 +153,15 @@ export function formatAreaLabel(
 ): string {
   if (!Number.isFinite(squareMeters)) return '--'
 
-  return `${squareMetersToAreaUnit(squareMeters, unit).toFixed(fractionDigits)}${getAreaUnitLabel(unit)}`
+  const value = squareMetersToAreaUnit(squareMeters, unit)
+  const formatter = new Intl.NumberFormat(
+    typeof document !== 'undefined' ? document.documentElement.lang || 'tr-TR' : 'tr-TR',
+    {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    },
+  )
+  return `${formatter.format(value)} ${getAreaUnitLabel(unit)}`
 }
 
 export function cubicMetersToVolumeUnit(cubicMeters: number, unit: LinearUnit): number {
@@ -171,13 +179,22 @@ export function formatVolumeLabel(
 ): string {
   if (!Number.isFinite(cubicMeters)) return '--'
 
-  return `${cubicMetersToVolumeUnit(cubicMeters, unit).toFixed(fractionDigits)}${getVolumeUnitLabel(unit)}`
+  const value = cubicMetersToVolumeUnit(cubicMeters, unit)
+  const formatter = new Intl.NumberFormat(
+    typeof document !== 'undefined' ? document.documentElement.lang || 'tr-TR' : 'tr-TR',
+    {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    },
+  )
+  return `${formatter.format(value)} ${getVolumeUnitLabel(unit)}`
 }
 
 export function formatLinearMeasurement(
   meters: number,
   unit: LinearUnit,
   metricNotation: MetricNotation = 'meters',
+  fractionDigits = 2,
 ): string {
   if (!Number.isFinite(meters)) return '--'
 
@@ -197,20 +214,31 @@ export function formatLinearMeasurement(
     return `${sign}${wholeFeet}'${inches}"`
   }
 
+  let value = absoluteMeters
+  let symbol = 'm'
+
   if (metricNotation === 'millimeters') {
-    const roundedMillimeters = Math.round(absoluteMeters * 1000)
-    const sign = meters < 0 && roundedMillimeters !== 0 ? '-' : ''
-    return `${sign}${roundedMillimeters}mm`
+    value = Math.round(absoluteMeters * 1000)
+    symbol = 'mm'
+    fractionDigits = 0
+  } else if (metricNotation === 'centimeters') {
+    value = Math.round(absoluteMeters * 100)
+    symbol = 'cm'
+    fractionDigits = 0
+  } else {
+    value = Number.parseFloat(absoluteMeters.toFixed(2))
+    // We keep fractionDigits as passed in (default 2) for meters
   }
 
-  if (metricNotation === 'centimeters') {
-    const roundedCentimeters = Math.round(absoluteMeters * 100)
-    const sign = meters < 0 && roundedCentimeters !== 0 ? '-' : ''
-    return `${sign}${roundedCentimeters}cm`
-  }
+  const formatter = new Intl.NumberFormat(
+    typeof document !== 'undefined' ? document.documentElement.lang || 'tr-TR' : 'tr-TR',
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: fractionDigits,
+    },
+  )
 
-  const roundedMeters = Number.parseFloat(absoluteMeters.toFixed(2))
-  const sign = meters < 0 && roundedMeters !== 0 ? '-' : ''
-
-  return `${sign}${roundedMeters}m`
+  const formatted = formatter.format(value)
+  const sign = meters < 0 && value !== 0 ? '-' : ''
+  return `${sign}${formatted} ${symbol}`
 }
