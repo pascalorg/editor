@@ -21,6 +21,7 @@ export {
   extendPluginDiscovery,
   getHostRefFields,
   getNodePluginId,
+  getRegistryVersion,
   getSelectableKinds,
   hasRegistry3DMoveTool,
   isDrawnViaTool,
@@ -34,11 +35,13 @@ export {
   kindsWithFloorplanScope,
   loadPlugin,
   nodeRegistry,
+  onRegistryChange,
   type PluginDiscovery,
   registerNode,
   resolveFacingIndicator,
   setPluginDiscovery,
 } from './registry'
+export { useRegistryVersion } from './use-registry-version'
 export {
   type CascadeContext,
   type ChildQuery,

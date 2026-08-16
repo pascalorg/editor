@@ -23,6 +23,7 @@ import {
   type StairSurfaceMaterialRole,
   sceneRegistry,
   useLiveNodeOverrides,
+  useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
 
@@ -782,6 +783,12 @@ export const SelectionManager = () => {
 
   const movingNode = useMovingNode()
   const isCurveReshape = useIsCurveReshape()
+  // Plugin kinds register AFTER mount (async dynamic-import discovery), so
+  // every effect below that snapshots `getSelectableKinds()` into an emitter
+  // subscription list depends on this version — a late plugin load re-runs
+  // them and picks up the new kinds (hover / click / double-click / paint /
+  // pointerdown). Without it, plugin nodes select-but-never-hover in prod.
+  const registryVersion = useRegistryVersion()
 
   useEffect(() => {
     const nextHoverMode: HoverHighlightMode = mode === 'delete' ? 'delete' : 'default'
@@ -1188,7 +1195,7 @@ export const SelectionManager = () => {
       setHoverHighlightMode('default')
       useEditor.getState().setPaintHover(null)
     }
-  }, [isCurveReshape, mode, movingNode, setHoverHighlightMode])
+  }, [isCurveReshape, mode, movingNode, setHoverHighlightMode, registryVersion])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1363,7 +1370,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:pointerdown` as any, onPointerDown as any)
       }
     }
-  }, [isCurveReshape, mode, movingNode, camera, raycaster, glDomElement])
+  }, [isCurveReshape, mode, movingNode, camera, raycaster, glDomElement, registryVersion])
 
   // Move cursor over the selected movable node: the visual cue that clicking it
   // picks it up (replaces the removed move-cross gizmo). Reacts only when the
@@ -1781,7 +1788,7 @@ export const SelectionManager = () => {
       })
       emitter.off('grid:click', onGridClick)
     }
-  }, [isCurveReshape, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode, registryVersion])
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {
@@ -1936,7 +1943,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:double-click` as any, onDoubleClick as any)
       })
     }
-  }, [isCurveReshape, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode, registryVersion])
 
   // Delete mode: click-to-delete (sledgehammer tool)
   useEffect(() => {
@@ -2012,7 +2019,7 @@ export const SelectionManager = () => {
       }
       useViewer.setState({ hoveredId: null })
     }
-  }, [mode])
+  }, [mode, registryVersion])
 
   return (
     <>
