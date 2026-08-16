@@ -105,6 +105,15 @@
         "typescript": "6.0.3",
       },
     },
+    "packages/cadastre": {
+      "name": "@pascal-app/cadastre",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@pascal/typescript-config": "*",
+        "@types/bun": "^1.3.0",
+        "typescript": "6.0.3",
+      },
+    },
     "packages/core": {
       "name": "@pascal-app/core",
       "version": "1.0.0-beta.4",
@@ -703,6 +712,8 @@
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.69.0", "", { "os": "win32", "cpu": "x64" }, "sha512-w8SOXv3mT9Fi6jY8OXdXCfnvX/3KNLXGNr4HEz2TA7S4Mv/PYAOmpB8y/ge40mxvBMgGNaSaaDwZpAsQn7HtWA=="],
 
     "@pascal-app/cad-import": ["@pascal-app/cad-import@workspace:packages/cad-import"],
+
+    "@pascal-app/cadastre": ["@pascal-app/cadastre@workspace:packages/cadastre"],
 
     "@pascal-app/core": ["@pascal-app/core@workspace:packages/core"],
 
