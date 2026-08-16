@@ -720,7 +720,7 @@ export const WallTool: React.FC = () => {
           previewHeightRef.current,
           previewThicknessRef.current,
         )
-        const isDark = getSceneTheme() === 'dark'
+        const isDark = getSceneTheme(useViewer.getState().sceneTheme).appearance === 'dark'
         const color = snapResult.violation ? (isDark ? '#f87171' : '#ef4444') : '#818cf8'
         ;(wallPreviewRef.current.material as any).color.set(color)
         setDraftMeasurement(

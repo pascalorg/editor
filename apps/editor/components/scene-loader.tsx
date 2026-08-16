@@ -18,13 +18,13 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { cadastreProvider } from '@/lib/cadastre-provider'
 import {
   type PersistedSceneGraph,
   sceneGraphSignature,
   sceneModelSignature,
 } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
-import { cadastreProvider } from '@/lib/cadastre-provider'
 import { BuildTab } from './build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from './editor-top-bar'
 import { ShareLinkButton } from './share-link-button'

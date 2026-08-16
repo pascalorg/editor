@@ -4801,7 +4801,11 @@ function FloorplanLinearDraftLayer({
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
   const draftViolation = useFloorplanDraftPreview((s) => s.draftViolation)
 
-  const activeDraftFill = draftViolation ? (isDark ? 'rgba(248, 113, 113, 0.2)' : 'rgba(239, 68, 68, 0.2)') : draftFill
+  const activeDraftFill = draftViolation
+    ? isDark
+      ? 'rgba(248, 113, 113, 0.2)'
+      : 'rgba(239, 68, 68, 0.2)'
+    : draftFill
   const activeDraftStroke = draftViolation ? (isDark ? '#f87171' : '#ef4444') : draftStroke
 
   const draftPolygon = useMemo(() => {

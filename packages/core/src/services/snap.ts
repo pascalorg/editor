@@ -235,7 +235,11 @@ export type SnapServices = {
     snapToList: (angle: number, list: readonly number[], toleranceRad?: number) => number
   }
   polygon: {
-    snapToEdges: (point: Vec2, rings: readonly (readonly Vec2[])[], tolerance: number) => Vec2 | null
+    snapToEdges: (
+      point: Vec2,
+      rings: readonly (readonly Vec2[])[],
+      tolerance: number,
+    ) => Vec2 | null
   }
 }
 

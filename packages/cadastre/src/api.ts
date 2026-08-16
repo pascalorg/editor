@@ -25,7 +25,7 @@ export type Region = {
 
 export async function fetchParcel(
   q: ParcelQuery,
-  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string }
+  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string },
 ): Promise<ParcelResult | null> {
   const doFetch = opts?.fetch ?? globalThis.fetch
   const direct = opts?.direct ?? false
@@ -53,7 +53,7 @@ export async function fetchParcel(
     throw new Error(`TKGM API error: HTTP ${res.status}`)
   }
 
-  const data = await res.json() as any
+  const data = (await res.json()) as any
 
   if (!direct) {
     // Proxy returns { found: true/false, parcel: ... }
@@ -97,22 +97,25 @@ export async function fetchParcel(
   }
 }
 
-export async function fetchIller(
-  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string }
-): Promise<Region[]> {
+export async function fetchIller(opts?: {
+  fetch?: typeof fetch
+  signal?: AbortSignal
+  direct?: boolean
+  proxyBaseUrl?: string
+}): Promise<Region[]> {
   const doFetch = opts?.fetch ?? globalThis.fetch
   const direct = opts?.direct ?? false
   const proxyBase = opts?.proxyBaseUrl ?? '/api/cadastre'
-  
+
   const url = direct
     ? `https://parselsorgu.tkgm.gov.tr/app/modules/administrativeQuery/data/ilListe.json`
     : `${proxyBase}/regions/il`
-  
+
   const res = await doFetch(url, { signal: opts?.signal })
   if (!res.ok) throw new Error(`TKGM API error: HTTP ${res.status}`)
-  
-  const data = await res.json() as any
-  
+
+  const data = (await res.json()) as any
+
   if (!direct) {
     return data as Region[]
   }
@@ -127,7 +130,7 @@ export async function fetchIller(
 
 export async function fetchIlceler(
   ilId: number,
-  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string }
+  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string },
 ): Promise<Region[]> {
   const doFetch = opts?.fetch ?? globalThis.fetch
   const direct = opts?.direct ?? false
@@ -136,11 +139,11 @@ export async function fetchIlceler(
   const url = direct
     ? `https://cbsapi.tkgm.gov.tr/megsiswebapi.${ADMIN_API_VERSION}/api/idariYapi/ilceListe/${ilId}`
     : `${proxyBase}/regions/ilce?ilId=${ilId}`
-  
+
   const res = await doFetch(url, { signal: opts?.signal })
   if (!res.ok) throw new Error(`TKGM API error: HTTP ${res.status}`)
-  
-  const data = await res.json() as any
+
+  const data = (await res.json()) as any
 
   if (!direct) {
     return data as Region[]
@@ -156,7 +159,7 @@ export async function fetchIlceler(
 
 export async function fetchMahalleler(
   ilceId: number,
-  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string }
+  opts?: { fetch?: typeof fetch; signal?: AbortSignal; direct?: boolean; proxyBaseUrl?: string },
 ): Promise<Region[]> {
   const doFetch = opts?.fetch ?? globalThis.fetch
   const direct = opts?.direct ?? false
@@ -165,11 +168,11 @@ export async function fetchMahalleler(
   const url = direct
     ? `https://cbsapi.tkgm.gov.tr/megsiswebapi.${ADMIN_API_VERSION}/api/idariYapi/mahalleListe/${ilceId}`
     : `${proxyBase}/regions/mahalle?ilceId=${ilceId}`
-  
+
   const res = await doFetch(url, { signal: opts?.signal })
   if (!res.ok) throw new Error(`TKGM API error: HTTP ${res.status}`)
-  
-  const data = await res.json() as any
+
+  const data = (await res.json()) as any
 
   if (!direct) {
     return data as Region[]

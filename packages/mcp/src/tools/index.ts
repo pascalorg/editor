@@ -21,6 +21,7 @@ import { registerGetScene } from './get-scene'
 import { registerListMaterials } from './list-materials'
 import { registerMeasure } from './measure'
 import { registerPaintSurfaces } from './paint-surfaces'
+import { registerParcelTools } from './parcel-tools'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerPlaceItem } from './place-item'
 import { registerReadCadDrawing } from './read-cad-drawing'
@@ -78,4 +79,5 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
     registerVariantTools(server, operations)
     registerPhotoToSceneTool(server, operations)
   }
+  registerParcelTools(server, operations)
 }

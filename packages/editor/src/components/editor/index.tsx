@@ -1655,4 +1655,3 @@ export default function Editor(props: EditorProps) {
     </ParcelProviderContext.Provider>
   )
 }
-

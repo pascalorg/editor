@@ -10,7 +10,11 @@ import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/
 import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
-import { getSegmentGridStep, snapWallDraftPointDetailed, type WallPlanPoint } from '../tools/wall/wall-drafting'
+import {
+  getSegmentGridStep,
+  snapWallDraftPointDetailed,
+  type WallPlanPoint,
+} from '../tools/wall/wall-drafting'
 
 type UseFloorplanBackgroundPlacementArgs = {
   activePolygonDraftPoints: WallPlanPoint[]
@@ -317,7 +321,7 @@ export function useFloorplanBackgroundPlacement({
           cadLevelId: levelId ?? null,
         })
         if (snapResult.violation) return true
-        
+
         const wallSnapped = snapResult.point
         // Locked onto existing geometry (corner / midpoint / crossing / edge) →
         // that snap wins, so skip Figma alignment and stand the beacon there.
@@ -402,7 +406,6 @@ export function useFloorplanBackgroundPlacement({
       setFenceDraftStart,
       setRoofDraftEnd,
       setRoofDraftStart,
-      snapWallDraftPoint,
       snapPolygonDraftPoint,
       toPoint2D,
       walls,

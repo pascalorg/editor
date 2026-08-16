@@ -55,6 +55,10 @@ export interface SceneOperations {
   loadJSON(json: string | SceneGraph): void
   getNode(id: AnyNodeId): AnyNode | null
   getNodes(): Record<AnyNodeId, AnyNode>
+  getSiteNode(): AnyNode | null
+  getSitePolygon(): any | null
+  getSiteSetbacks(): Record<string, any> | null
+  getSiteZoning(): any | null
   getSceneMaterials(): Record<SceneMaterialId, SceneMaterial>
   getComments(): Record<CommentId, CommentThread>
   addCommentReply(
@@ -218,6 +222,26 @@ class SceneOperationsFacade implements SceneOperations {
 
   getNodes(): Record<AnyNodeId, AnyNode> {
     return this.requireBridge().getNodes()
+  }
+
+  getSiteNode(): AnyNode | null {
+    const nodes = this.getNodes()
+    return Object.values(nodes).find((n) => n.type === 'site') || null
+  }
+
+  getSitePolygon(): any | null {
+    const site = this.getSiteNode() as any
+    return site?.polygon || null
+  }
+
+  getSiteSetbacks(): Record<string, any> | null {
+    const site = this.getSiteNode() as any
+    return site?.setbacks || null
+  }
+
+  getSiteZoning(): any | null {
+    const site = this.getSiteNode() as any
+    return site?.zoning || null
   }
 
   getRootNodeIds(): AnyNodeId[] {

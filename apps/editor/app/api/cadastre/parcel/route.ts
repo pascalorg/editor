@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { fetchParcel, type ParcelQuery } from '@pascal-app/cadastre'
+import type { NextRequest } from 'next/server'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
 
 export function OPTIONS(request: NextRequest) {
@@ -22,7 +22,13 @@ export async function GET(request: NextRequest) {
     const ada = searchParams.get('ada')
     const parsel = searchParams.get('parsel')
 
-    if (!Number.isFinite(mahalleId) || !ada || !parsel || ada.trim() === '' || parsel.trim() === '') {
+    if (
+      !Number.isFinite(mahalleId) ||
+      !ada ||
+      !parsel ||
+      ada.trim() === '' ||
+      parsel.trim() === ''
+    ) {
       return sceneApiJson(request, { error: 'Invalid administrative parameters' }, { status: 400 })
     }
     query = { kind: 'administrative', mahalleId, ada, parsel }
@@ -50,6 +56,10 @@ export async function GET(request: NextRequest) {
     return sceneApiJson(request, { found: true, parcel })
   } catch (error) {
     console.error('Cadastre proxy error:', error)
-    return sceneApiJson(request, { error: 'TKGM servislerine şu anda ulaşılamıyor. Lütfen daha sonra tekrar deneyin.' }, { status: 502 })
+    return sceneApiJson(
+      request,
+      { error: 'TKGM servislerine şu anda ulaşılamıyor. Lütfen daha sonra tekrar deneyin.' },
+      { status: 502 },
+    )
   }
 }

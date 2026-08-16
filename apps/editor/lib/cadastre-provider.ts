@@ -20,14 +20,15 @@ export const cadastreProvider: ParcelProvider = {
     }
 
     const data = await response.json()
-    if (!data || !data.properties) return null
+    if (!data?.properties) return null
 
     // Transform raw TKGM format to Editor ParcelResult
     // Geometry should be in LonLat
-    const ring = data.geometry?.coordinates?.[0]?.[0]?.map((coord: [number, number]) => ({
-      longitude: coord[0],
-      latitude: coord[1]
-    })) || []
+    const ring =
+      data.geometry?.coordinates?.[0]?.[0]?.map((coord: [number, number]) => ({
+        longitude: coord[0],
+        latitude: coord[1],
+      })) || []
 
     return {
       ring,
@@ -38,7 +39,7 @@ export const cadastreProvider: ParcelProvider = {
         mevkii: data.properties.mevkii,
         nitelik: data.properties.nitelik,
         pafta: data.properties.pafta,
-      }
+      },
     }
   },
   regions: {
@@ -56,7 +57,6 @@ export const cadastreProvider: ParcelProvider = {
       const res = await fetch(`/api/cadastre/regions/mahalle?ilceId=${ilceId}`, { signal })
       if (!res.ok) throw new Error('Failed to fetch mahalleler')
       return res.json()
-    }
-  }
+    },
+  },
 }
-

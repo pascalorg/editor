@@ -1,7 +1,7 @@
-import type { BuildingNode, LevelNode, SiteNode, SlabNode } from '../schema'
+import type { BuildingNode, LevelNode, SlabNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { polygonArea } from './polygon-relations'
 import { getLevelElevations } from '../services/storey'
+import { polygonArea } from './polygon-relations'
 
 export type SiteZoningReading = {
   footprintArea: number
@@ -23,9 +23,7 @@ export function readSiteZoning(nodes: Record<AnyNodeId, AnyNode>): SiteZoningRea
     const levelIds = building.children.filter((id) => nodes[id]?.type === 'level')
     if (levelIds.length === 0) continue
 
-    const levels = levelIds
-      .map((id) => nodes[id] as LevelNode)
-      .sort((a, b) => a.level - b.level)
+    const levels = levelIds.map((id) => nodes[id] as LevelNode).sort((a, b) => a.level - b.level)
 
     // Floors count is the number of levels
     maxFloors = Math.max(maxFloors, levels.length)
@@ -69,7 +67,8 @@ export function readSiteZoning(nodes: Record<AnyNodeId, AnyNode>): SiteZoningRea
 
   // Also include levels not assigned to any building
   const floatingLevels = Object.values(nodes).filter(
-    (n): n is LevelNode => n?.type === 'level' && !n.parentId && !buildings.some(b => b.children.includes(n.id))
+    (n): n is LevelNode =>
+      n?.type === 'level' && !n.parentId && !buildings.some((b) => b.children.includes(n.id)),
   )
   if (floatingLevels.length > 0) {
     maxFloors = Math.max(maxFloors, floatingLevels.length)
@@ -85,7 +84,7 @@ export function readSiteZoning(nodes: Record<AnyNodeId, AnyNode>): SiteZoningRea
     if (floatingMaxY > floatingMinY) {
       maxHeight = Math.max(maxHeight, floatingMaxY - floatingMinY)
     }
-    
+
     // Sort to find lowest
     floatingLevels.sort((a, b) => a.level - b.level)
     if (floatingLevels[0]) {
@@ -97,7 +96,7 @@ export function readSiteZoning(nodes: Record<AnyNodeId, AnyNode>): SiteZoningRea
         }
       }
     }
-    
+
     for (const level of floatingLevels) {
       for (const node of Object.values(nodes)) {
         if (node?.type === 'slab' && node.parentId === level.id) {

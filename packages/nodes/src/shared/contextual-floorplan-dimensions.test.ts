@@ -163,7 +163,9 @@ describe('contextual floor-plan dimensions', () => {
     const geometry = buildWallContextualDimensions(wall, context())
 
     expect(geometry).toMatchObject({ kind: 'dimension-label' })
-    expect(geometry && 'text' in geometry ? Number.parseFloat(geometry.text.replace(',', '.')) : 0).toBeGreaterThan(4)
+    expect(
+      geometry && 'text' in geometry ? Number.parseFloat(geometry.text.replace(',', '.')) : 0,
+    ).toBeGreaterThan(4)
   })
 
   test('shows only an opening width along its host wall', () => {

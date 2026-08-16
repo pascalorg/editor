@@ -330,12 +330,6 @@ export {
   type PlacementSurface,
   publishPlacementSurface,
 } from './lib/active-placement-surface'
-export type {
-  ParcelProvider,
-  ParcelQuery,
-  ParcelResult,
-  RegionSource
-} from './lib/parcel-provider'
 // Live MCP scene changes route through here rather than through
 // `applySceneGraphToEditor`: the agent path needs review + single-undo, which
 // that function's `clearSceneHistory()` actively defeats.
@@ -548,6 +542,12 @@ export {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './lib/measurements'
+export type {
+  ParcelProvider,
+  ParcelQuery,
+  ParcelResult,
+  RegionSource,
+} from './lib/parcel-provider'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,

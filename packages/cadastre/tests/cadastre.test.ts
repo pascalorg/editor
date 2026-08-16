@@ -1,11 +1,11 @@
-import { expect, test, describe, mock } from 'bun:test'
-import { fetchParcel, fetchIller } from '../src/api'
+import { describe, expect, mock, test } from 'bun:test'
+import { fetchParcel } from '../src/api'
 
 function mockResponse(body: any, ok: boolean = true, status: number = 200) {
   return Promise.resolve({
     ok,
     status,
-    json: () => Promise.resolve(body)
+    json: () => Promise.resolve(body),
   } as Response)
 }
 
@@ -13,7 +13,16 @@ describe('fetchParcel', () => {
   test('Parses a successful polygon response (Ankara Çankaya 2705/15)', async () => {
     const fixture = {
       type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [[[32.85587, 39.90166], [32.85590, 39.90170], [32.85587, 39.90166]]] },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [32.85587, 39.90166],
+            [32.8559, 39.9017],
+            [32.85587, 39.90166],
+          ],
+        ],
+      },
       properties: {
         ilAd: 'Ankara',
         ilId: 28,
@@ -25,17 +34,17 @@ describe('fetchParcel', () => {
         parselNo: '15',
         alan: '1.295,00',
         nitelik: 'Apartman-Beton',
-        pafta: 'I29b08d4c'
-      }
+        pafta: 'I29b08d4c',
+      },
     }
-    
+
     const fetchMock = mock((url, opts) => mockResponse(fixture))
-    
+
     const result = await fetchParcel(
       { kind: 'administrative', mahalleId: 1162, ada: '2705', parsel: '15' },
-      { fetch: fetchMock as any, direct: true, direct: true }
+      { fetch: fetchMock as any, direct: true },
     )
-    
+
     expect(result).not.toBeNull()
     expect(result?.il).toBe('Ankara')
     expect(result?.ada).toBe('2705')
@@ -49,41 +58,71 @@ describe('fetchParcel', () => {
   test('Keeps raw area across different locale formats', async () => {
     const fixture = {
       type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 1], [0, 0]]] },
-      properties: { alan: '1,295.00' }
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [0, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
+      properties: { alan: '1,295.00' },
     }
     const fetchMock = mock((url, opts) => mockResponse(fixture))
-    const result = await fetchParcel({ kind: 'point', latitude: 0, longitude: 0 }, { fetch: fetchMock as any, direct: true, direct: true })
+    const result = await fetchParcel(
+      { kind: 'point', latitude: 0, longitude: 0 },
+      { fetch: fetchMock as any, direct: true },
+    )
     expect(result?.registeredAreaRaw).toBe('1,295.00')
   })
 
   test('Returns null on 404', async () => {
     const fetchMock = mock((url, opts) => mockResponse({}, false, 404))
-    const result = await fetchParcel({ kind: 'point', latitude: 0, longitude: 0 }, { fetch: fetchMock as any, direct: true, direct: true })
+    const result = await fetchParcel(
+      { kind: 'point', latitude: 0, longitude: 0 },
+      { fetch: fetchMock as any, direct: true },
+    )
     expect(result).toBeNull()
   })
 
   test('Returns null when 200 but message contains "Bulunamadı"', async () => {
-    const fixture = { Message: "Parsel Bulunamadı: Enlem = 0" }
+    const fixture = { Message: 'Parsel Bulunamadı: Enlem = 0' }
     const fetchMock = mock((url, opts) => mockResponse(fixture))
-    const result = await fetchParcel({ kind: 'point', latitude: 0, longitude: 0 }, { fetch: fetchMock as any, direct: true, direct: true })
+    const result = await fetchParcel(
+      { kind: 'point', latitude: 0, longitude: 0 },
+      { fetch: fetchMock as any, direct: true },
+    )
     expect(result).toBeNull()
   })
 
   test('Throws on network error (e.g. 500)', async () => {
     const fetchMock = mock((url, opts) => mockResponse({}, false, 500))
-    expect(fetchParcel({ kind: 'point', latitude: 0, longitude: 0 }, { fetch: fetchMock as any, direct: true, direct: true }))
-      .rejects.toThrow('TKGM API error: HTTP 500')
+    expect(
+      fetchParcel(
+        { kind: 'point', latitude: 0, longitude: 0 },
+        { fetch: fetchMock as any, direct: true },
+      ),
+    ).rejects.toThrow('TKGM API error: HTTP 500')
   })
 
   test('Throws on invalid JSON', async () => {
-    const fetchMock = mock((url, opts) => Promise.resolve({
-      ok: true,
-      status: 200,
-      json: () => { throw new SyntaxError('Unexpected token') }
-    } as any))
-    expect(fetchParcel({ kind: 'point', latitude: 0, longitude: 0 }, { fetch: fetchMock as any, direct: true, direct: true }))
-      .rejects.toThrow('Unexpected token')
+    const fetchMock = mock((url, opts) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => {
+          throw new SyntaxError('Unexpected token')
+        },
+      } as any),
+    )
+    expect(
+      fetchParcel(
+        { kind: 'point', latitude: 0, longitude: 0 },
+        { fetch: fetchMock as any, direct: true },
+      ),
+    ).rejects.toThrow('Unexpected token')
   })
 
   test('Supports AbortSignal', async () => {
@@ -95,8 +134,12 @@ describe('fetchParcel', () => {
       }
       return mockResponse({})
     })
-    
-    expect(fetchParcel({ kind: 'point', latitude: 0, longitude: 0 }, { fetch: fetchMock as any, direct: true, signal: controller.signal, direct: true }))
-      .rejects.toThrow('AbortError')
+
+    expect(
+      fetchParcel(
+        { kind: 'point', latitude: 0, longitude: 0 },
+        { fetch: fetchMock as any, signal: controller.signal, direct: true },
+      ),
+    ).rejects.toThrow('AbortError')
   })
 })

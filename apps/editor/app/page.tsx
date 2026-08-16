@@ -12,11 +12,11 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from '@/components/editor-top-bar'
-import { cadastreProvider } from '@/lib/cadastre-provider'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
 } from '@/components/viewer-toolbar'
+import { cadastreProvider } from '@/lib/cadastre-provider'
 
 // The open-source editor only ships the built-in catalog (no uploaded items),
 // so the Library/Community/Mine source chips and tag filters add nothing —

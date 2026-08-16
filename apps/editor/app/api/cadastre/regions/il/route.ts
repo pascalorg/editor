@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { fetchIller } from '@pascal-app/cadastre'
+import type { NextRequest } from 'next/server'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
 
 export function OPTIONS(request: NextRequest) {
@@ -19,6 +19,10 @@ export async function GET(request: NextRequest) {
     return sceneApiJson(request, regions)
   } catch (error) {
     console.error('Cadastre proxy error:', error)
-    return sceneApiJson(request, { error: 'TKGM servislerine şu anda ulaşılamıyor. Lütfen daha sonra tekrar deneyin.' }, { status: 502 })
+    return sceneApiJson(
+      request,
+      { error: 'TKGM servislerine şu anda ulaşılamıyor. Lütfen daha sonra tekrar deneyin.' },
+      { status: 502 },
+    )
   }
 }

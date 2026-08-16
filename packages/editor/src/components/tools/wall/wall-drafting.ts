@@ -8,13 +8,13 @@ import {
   GROUND_SUPPORT_ID,
   getScaledDimensions,
   type ItemNode,
+  pointInPolygon,
+  readSiteBuildable,
   resolveWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
-  spatialGridManager,
-  pointInPolygon,
-  readSiteBuildable,
   snapServices,
+  spatialGridManager,
   terrainSupportLift,
   useScene,
   type WallNode,
@@ -460,7 +460,9 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
 
   const enforceViolation = (result: WallDraftSnapResult): WallDraftSnapResult => {
     if (!shouldSnapToBuildable || buildableRings.length === 0) return result
-    const isValid = buildableRings.some((ring) => pointInPolygon(result.point[0], result.point[1], ring as Array<[number, number]>))
+    const isValid = buildableRings.some((ring) =>
+      pointInPolygon(result.point[0], result.point[1], ring as Array<[number, number]>),
+    )
     return { ...result, violation: !isValid }
   }
 
@@ -482,13 +484,21 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
       : point
     const constrained = resolveDraftConstraint(start, directionTarget, point)
     if (constrained) {
-      return enforceViolation({ point: [constrained[0], constrained[1]], snap: null, targetWallIds: [] })
+      return enforceViolation({
+        point: [constrained[0], constrained[1]],
+        snap: null,
+        targetWallIds: [],
+      })
     }
   }
 
   if (magnetic && shouldSnapToBuildable && buildableRings.length > 0) {
     const { snapServices } = require('@pascal-app/core')
-    const buildableSnap = snapServices.polygon.snapToEdges(point, buildableRings, snapRadii?.endpoint ?? WALL_ENDPOINT_SNAP_RADIUS)
+    const buildableSnap = snapServices.polygon.snapToEdges(
+      point,
+      buildableRings,
+      snapRadii?.endpoint ?? WALL_ENDPOINT_SNAP_RADIUS,
+    )
     if (buildableSnap) {
       return enforceViolation({ point: buildableSnap, snap: null, targetWallIds: [] })
     }
@@ -539,11 +549,7 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
         : snapPointToGrid(point, step)
 
   if (shouldSnapToBuildable && buildableRings.length > 0 && magnetic) {
-    const edgeSnap = snapServices.polygon.snapToEdges(
-      point,
-      buildableRings,
-      0.2
-    )
+    const edgeSnap = snapServices.polygon.snapToEdges(point, buildableRings, 0.2)
     if (edgeSnap && (!start || !angleSnap)) {
       basePoint = [edgeSnap[0], edgeSnap[1]]
     }
@@ -577,7 +583,11 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
       radius: snapRadii?.wall,
     })
     if (extension) {
-      return enforceViolation({ point: extension.point, snap: 'wall', targetWallIds: [extension.wallId] })
+      return enforceViolation({
+        point: extension.point,
+        snap: 'wall',
+        targetWallIds: [extension.wallId],
+      })
     }
     return enforceViolation({ point: basePoint, snap: null, targetWallIds: [] })
   }
