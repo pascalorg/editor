@@ -1,17 +1,35 @@
 'use client'
 
+import { Icon } from '@iconify/react'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  getInspectorExtensions,
+  type IconRef,
+  type InspectorExtension,
+  useRegistryVersion,
+  useScene,
+} from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { ChevronDown, ChevronLeft, GripHorizontal, RotateCcw, X } from 'lucide-react'
 import Image from 'next/image'
 import {
+  type ComponentType,
   createContext,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { cn } from '../../../lib/utils'
+import { PanelSection } from '../controls/panel-section'
+import { ErrorBoundary } from '../primitives/error-boundary'
 
 const DRAG_MARGIN = 8
 // Pointer travel (px) below which a header press is treated as a click
@@ -92,6 +110,33 @@ export function PanelWrapper({
 
   const panelRef = useRef<HTMLDivElement>(null)
 
+  // ── Plugin inspector extensions ────────────────────────────────────
+  // The wrapper self-resolves the selected node instead of taking a prop:
+  // kind-owned `customPanel`s (wall, slab, …) render their own
+  // <PanelWrapper>, so this is the one spot every inspector card flows
+  // through. Extensions only apply to a single-node selection.
+  const registryVersion = useRegistryVersion()
+  const selectedId = useViewer((s) =>
+    s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : undefined,
+  ) as AnyNodeId | undefined
+  // Subscribe to the selected node's *type* only — a string primitive that
+  // doesn't change as fields are edited (same trick as ParametricInspector).
+  const selectedType = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
+  const installedPlugins = useScene((s) => s.installedPlugins)
+  const extensions = useMemo(() => {
+    // re-derive when plugin extensions register after mount (async plugin load)
+    void registryVersion
+    if (!selectedType) return []
+    return getInspectorExtensions(selectedType).filter(
+      (extension) => !extension.pluginId || installedPlugins.includes(extension.pluginId),
+    )
+  }, [selectedType, installedPlugins, registryVersion])
+
+  // The extension whose folded-header icon was clicked — its section mounts
+  // expanded when the card opens. Cleared whenever the card folds so a plain
+  // chevron expand shows extension sections collapsed again.
+  const [focusedExtensionId, setFocusedExtensionId] = useState<string | null>(null)
+
   // The whole panel is collapsed to just its header by default; the chevron
   // expands it to reveal the inspector body. Keep the desktop value shared
   // across inspector swaps (roof ↔ segment, etc.) so navigating between
@@ -108,6 +153,12 @@ export function PanelWrapper({
     },
     [],
   )
+
+  // Folding the card forgets the focused extension — the focus jump is a
+  // one-shot affordance of the header icon, not sticky panel state.
+  useEffect(() => {
+    if (collapsed) setFocusedExtensionId(null)
+  }, [collapsed])
 
   // Drag-to-reposition from the header. `offset` is a translation applied on
   // top of the default `top-20 right-4` anchor; null until first dragged.
@@ -278,6 +329,25 @@ export function PanelWrapper({
                 <RotateCcw className="h-4 w-4" />
               </button>
             )}
+            {/* Extension jump buttons — folded card only: one icon per
+                registered inspector extension, left of the chevron. Click
+                expands the card straight to that section. */}
+            {collapsed &&
+              extensions.map((extension) => (
+                <button
+                  aria-label={`Open ${extension.title}`}
+                  className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
+                  key={extension.id}
+                  onClick={() => {
+                    setFocusedExtensionId(extension.id)
+                    setCollapsed(false)
+                  }}
+                  title={extension.title}
+                  type="button"
+                >
+                  {renderExtensionIcon(extension.icon)}
+                </button>
+              ))}
             <button
               aria-expanded={!collapsed}
               aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
@@ -304,12 +374,105 @@ export function PanelWrapper({
 
       {/* Content — hidden while the panel is collapsed (desktop). */}
       {!(collapsed && !isMobile) && (
-        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {children}
+          {/* Plugin-contributed sections, after the kind's own controls. */}
+          {selectedId &&
+            extensions.map((extension) => (
+              <InspectorExtensionSection
+                defaultExpanded={extension.id === focusedExtensionId}
+                extension={extension}
+                key={extension.id}
+                nodeId={selectedId}
+              />
+            ))}
+        </div>
       )}
 
       {resolvedFooter && !(collapsed && !isMobile) && (
         <div className="shrink-0 border-border/50 border-t p-3">{resolvedFooter}</div>
       )}
     </div>
+  )
+}
+
+// ─── Plugin inspector extensions ──────────────────────────────────────
+
+/** 16px icon for an extension's header button — mirrors the parametric
+ *  inspector's `renderIcon` (plain <img> so no next/image server deps). */
+function renderExtensionIcon(ref: IconRef): React.ReactNode {
+  if (ref.kind === 'url') {
+    return <img alt="" className="h-4 w-4 shrink-0 object-contain" src={ref.src} />
+  }
+  if (ref.kind === 'iconify') {
+    return <Icon height={16} icon={ref.name} width={16} />
+  }
+  if (ref.kind === 'svg') {
+    return (
+      <svg height={16} viewBox={ref.viewBox} width={16}>
+        <path d={ref.path} fill="currentColor" />
+      </svg>
+    )
+  }
+  const LazyIcon = lazy(ref.module)
+  return (
+    <Suspense fallback={null}>
+      <LazyIcon />
+    </Suspense>
+  )
+}
+
+// `React.lazy` once per loader so the resolved component keeps a stable
+// identity across renders — same WeakMap pattern as `resolveCustomPanel`
+// in parametric-inspector.tsx.
+const extensionComponentCache = new WeakMap<
+  InspectorExtension['component'],
+  ComponentType<{ node: AnyNode }>
+>()
+
+function resolveExtensionComponent(
+  extension: InspectorExtension,
+): ComponentType<{ node: AnyNode }> {
+  const cached = extensionComponentCache.get(extension.component)
+  if (cached) return cached
+  // `LazyComponent` is prop-agnostic; the inspector-extension contract is
+  // that the default export accepts `{ node }` (see the type's docs).
+  const Comp = lazy(extension.component) as unknown as ComponentType<{ node: AnyNode }>
+  extensionComponentCache.set(extension.component, Comp)
+  return Comp
+}
+
+/**
+ * One plugin-contributed inspector section. Subscribes to the full node —
+ * the section body reflects any edit — and hands it to the extension's
+ * lazy component inside its own error boundary so a crashing plugin
+ * section can't take down the inspector card.
+ */
+function InspectorExtensionSection({
+  defaultExpanded,
+  extension,
+  nodeId,
+}: {
+  defaultExpanded: boolean
+  extension: InspectorExtension
+  nodeId: AnyNodeId
+}) {
+  const node = useScene((s) => s.nodes[nodeId])
+  if (!node) return null
+  const Extension = resolveExtensionComponent(extension)
+  return (
+    <PanelSection defaultExpanded={defaultExpanded} title={extension.title}>
+      <ErrorBoundary
+        fallback={
+          <p className="p-1 text-muted-foreground text-xs">
+            “{extension.title}” hit an error and was unloaded for this session.
+          </p>
+        }
+      >
+        <Suspense fallback={null}>
+          <Extension node={node} />
+        </Suspense>
+      </ErrorBoundary>
+    </PanelSection>
   )
 }
