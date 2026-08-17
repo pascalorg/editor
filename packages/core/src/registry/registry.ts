@@ -220,6 +220,50 @@ export function isPresettableKind(kind: string): boolean {
 }
 
 /**
+ * Broad, user-facing grouping used by the editor's category visibility /
+ * lock controls. Deliberately coarser than {@link NodeCategory} +
+ * `paletteSection`: those describe the tool palette; these four describe the
+ * "layers" a user toggles as a whole (structure, furnish, zone, site).
+ */
+export type VisibilityCategory = 'structure' | 'furnish' | 'zone' | 'site'
+
+// Scene-hierarchy containers. They own the recursive render of every descendant
+// (site → building → level → content), so they are NEVER assigned a visibility
+// category — hiding or per-category-locking one would take its whole subtree
+// with it, which is not what a "hide site content" toggle means. `sceneLocked`
+// still governs them (it locks everything regardless of category).
+const CONTAINER_KINDS = new Set(['site', 'building', 'level'])
+
+/**
+ * The {@link VisibilityCategory} a definition belongs to, or `null` for the
+ * structural containers that must never be gated as a category. Pure: reads
+ * only the definition. `paletteSection` wins where present, falling back to the
+ * coarse {@link NodeCategory} (which is what the palette itself defaults to).
+ */
+export function categoryOfDef(def: AnyNodeDefinition): VisibilityCategory | null {
+  if (CONTAINER_KINDS.has(def.kind)) return null
+  const paletteSection = def.presentation?.paletteSection
+  // Furnish covers the host furniture kinds (item / cabinet / shelf) and every
+  // warehouse plugin kind (rack / pallet / conveyor / …), all `category:'furnish'`.
+  if (def.category === 'furnish' || paletteSection === 'furnish') return 'furnish'
+  if (def.kind === 'zone') return 'zone'
+  const section = paletteSection ?? def.category
+  if (section === 'structure') return 'structure'
+  if (section === 'site') return 'site'
+  return 'structure'
+}
+
+/**
+ * The {@link VisibilityCategory} for a registered kind. Unregistered kinds fall
+ * back to `'structure'`; containers (site/building/level) return `null`.
+ */
+export function categoryOf(kind: string): VisibilityCategory | null {
+  const def = nodeRegistry.get(kind)
+  if (!def) return 'structure'
+  return categoryOfDef(def)
+}
+
+/**
  * Resolve a kind's facing-triangle config, or `null` when it has none.
  * `{ reversed }` says whether the triangle points along the node's local -Z
  * (its front) instead of +Z. One reader (the editor-side `<FacingPoseIndicator>`

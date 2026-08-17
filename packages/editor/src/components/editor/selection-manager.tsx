@@ -41,6 +41,7 @@ import {
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
 } from '../../lib/direct-manipulation'
+import { isNodeEditLocked } from '../../lib/edit-lock'
 import { createEditorApi } from '../../lib/editor-api'
 import {
   type ActivePaintMaterial,
@@ -1261,6 +1262,8 @@ export const SelectionManager = () => {
         selectedIds: useViewer.getState().selection.selectedIds,
       })
       if (!canDirectMoveNode(node)) return
+      // A locked node can be selected and inspected but never moved.
+      if (isNodeEditLocked(node)) return
       // Sole selection only: per-node direct manipulation stands down for a
       // multi-selection (the group sessions own plain drags there, and Cmd is
       // the selection-toggle key — a wobbly Cmd+click must not yank one

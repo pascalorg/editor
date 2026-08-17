@@ -43,6 +43,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
+import { isNodeEditLocked } from '../../lib/edit-lock'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
@@ -199,6 +200,8 @@ function DimensionLabel({
 
 export function NodeArrowHandles() {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
+  const sceneLocked = useViewer((state) => state.sceneLocked)
+  const lockedCategories = useViewer((state) => state.lockedCategories)
   const activeRotateNodeId = useDirectManipulationFeedback((state) => state.activeRotateNodeId)
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
@@ -228,6 +231,11 @@ export function NodeArrowHandles() {
     [rawNode, liveOverride],
   )
   const def = node ? nodeRegistry.get(node.type) : null
+  // A locked node keeps its selection outline but exposes no resize/rotate rig.
+  // `lockActive` reads the subscribed lock fields so a lock toggle re-renders;
+  // isNodeEditLocked stays the authoritative predicate.
+  const lockActive = sceneLocked || lockedCategories.size > 0
+  const editLocked = !!node && lockActive && isNodeEditLocked(node)
   const descriptorSceneApi = useMemo(() => createSceneApi(useScene), [])
   const descriptors = useMemo(() => {
     if (!(node && def?.handles)) return null
@@ -260,6 +268,7 @@ export function NodeArrowHandles() {
     !isCurveReshape
 
   if (!shouldRender || !node || !descriptors) return null
+  if (editLocked) return null
   // Key by the selected node id so switching selection REMOUNTS the rig.
   // The portal target + ride-mesh refs are seeded from the scene registry
   // in `useState` initializers; without a remount they'd persist from the

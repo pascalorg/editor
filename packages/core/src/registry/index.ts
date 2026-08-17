@@ -17,6 +17,8 @@ export type {
 } from './handles'
 export {
   bakePolicyOf,
+  categoryOf,
+  categoryOfDef,
   discoverPlugins,
   extendPluginDiscovery,
   getHostRefFields,
@@ -38,6 +40,7 @@ export {
   registerNode,
   resolveFacingIndicator,
   setPluginDiscovery,
+  type VisibilityCategory,
 } from './registry'
 export {
   type CascadeContext,

@@ -296,6 +296,7 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 export { markToolCancelConsumed } from './hooks/use-keyboard'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { type Selection, useSelection } from './hooks/use-selection'
+export { useTemporalCounts } from './hooks/use-temporal-counts'
 export {
   clearPlacementSurface,
   getPlacementSurface,
@@ -318,6 +319,11 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export {
+  filterEditableIds,
+  isNodeEditLocked,
+  isNodeIdEditLocked,
+} from './lib/edit-lock'
 export {
   clearStructuralElevationGuide,
   collectElevationSnapTargets,

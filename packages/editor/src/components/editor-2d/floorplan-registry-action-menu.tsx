@@ -20,6 +20,7 @@ import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useReducedMotion } from '../../hooks/use-reduced-motion'
 import { resolveMoveActionNode } from '../../lib/direct-manipulation'
+import { isNodeIdEditLocked } from '../../lib/edit-lock'
 import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
 import {
   createFreshPlacementSubtree,
@@ -131,6 +132,13 @@ export function FloorplanRegistryActionMenu() {
   const selectedId = useViewer((s) =>
     s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : undefined,
   ) as AnyNodeId | undefined
+  // Lock state gates the edit actions (move / delete / curve / add-hole) while
+  // leaving the node selectable. `lockActive` reads the subscribed lock fields
+  // so a lock toggle re-renders; isNodeIdEditLocked stays the predicate.
+  const sceneLocked = useViewer((s) => s.sceneLocked)
+  const lockedCategories = useViewer((s) => s.lockedCategories)
+  const lockActive = sceneLocked || lockedCategories.size > 0
+  const editLocked = lockActive && !!selectedId && isNodeIdEditLocked(selectedId)
   const movingNode = useMovingNode()
   const isCurveReshape = useIsCurveReshape()
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -379,11 +387,11 @@ export function FloorplanRegistryActionMenu() {
       }}
     >
       <NodeActionMenu
-        onAddHole={canAddHole ? handleAddHole : undefined}
-        onCurve={canCurve ? handleCurve : undefined}
-        onDelete={canDelete ? handleDelete : undefined}
+        onAddHole={canAddHole && !editLocked ? handleAddHole : undefined}
+        onCurve={canCurve && !editLocked ? handleCurve : undefined}
+        onDelete={canDelete && !editLocked ? handleDelete : undefined}
         onDuplicate={canDuplicate ? handleDuplicate : undefined}
-        onMove={canMove ? handleMove : undefined}
+        onMove={canMove && !editLocked ? handleMove : undefined}
         onPointerDown={(event) => event.stopPropagation()}
         onPointerUp={(event) => event.stopPropagation()}
       />

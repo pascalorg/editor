@@ -10,10 +10,13 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  runRedo,
+  runUndo,
   useEditor,
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
   useSidebarStore,
+  useTemporalCounts,
   type ViewMode,
 } from '@pascal-app/editor'
 import {
@@ -25,6 +28,7 @@ import {
 } from '@pascal-app/viewer'
 import {
   Box,
+  Boxes,
   Check,
   ChevronsLeft,
   ChevronsRight,
@@ -34,16 +38,24 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  Layers,
   Layers3,
+  Lock,
+  LockOpen,
   Magnet,
+  MapPin,
   PenLine,
+  Redo2,
   Ruler,
   ScanLine,
+  Shapes,
   SlidersHorizontal,
   Sparkles,
+  SquareStack,
   SquareUserRound,
   SwatchBook,
   Tag,
+  Undo2,
 } from 'lucide-react'
 import Image from 'next/image'
 import { type ReactNode, useCallback } from 'react'
@@ -166,6 +178,15 @@ const FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS = [
   { id: 'finished-faces', name: 'Finished faces', detail: 'Full wall thickness' },
   { id: 'centerline', name: 'Wall centerline', detail: 'Single wall axis' },
   { id: 'stud-faces', name: 'Face of stud', detail: 'Structural core face' },
+] as const
+
+// The four broad "layers" the visibility / lock controls operate on. Kept in
+// sync with `categoryOf` in @pascal-app/core.
+const CATEGORY_OPTIONS = [
+  { id: 'structure', name: 'Structure', icon: SquareStack },
+  { id: 'furnish', name: 'Furnish', icon: Boxes },
+  { id: 'zone', name: 'Zone', icon: Shapes },
+  { id: 'site', name: 'Site', icon: MapPin },
 ] as const
 
 function ViewModeControl() {
@@ -686,6 +707,126 @@ function PreviewButton() {
   )
 }
 
+// [↶ Undo] [🔒 Scene-Lock] [↷ Redo] — the scene lock sits between the two
+// history buttons. Undo/redo drive the shared history engine; the lock flips
+// the viewer's `sceneLocked` presentation flag that the editor's edit paths gate on.
+function HistoryLockControls() {
+  const { canUndo, canRedo } = useTemporalCounts()
+  const sceneLocked = useViewer((state) => state.sceneLocked)
+  const setSceneLocked = useViewer((state) => state.setSceneLocked)
+
+  return (
+    <div className={TOOLBAR_CONTAINER}>
+      <ToolbarTooltip label="Undo">
+        <button
+          aria-label="Undo"
+          className={cn(TOOLBAR_BTN, 'disabled:pointer-events-none disabled:opacity-40')}
+          disabled={!canUndo}
+          onClick={() => runUndo()}
+          type="button"
+        >
+          <Undo2 className="h-4 w-4" />
+        </button>
+      </ToolbarTooltip>
+      <ToolbarTooltip label={sceneLocked ? 'Unlock scene' : 'Lock scene'}>
+        <button
+          aria-label={sceneLocked ? 'Unlock scene' : 'Lock scene'}
+          aria-pressed={sceneLocked}
+          className={cn(TOOLBAR_BTN, sceneLocked && 'bg-amber-500/15 text-amber-400')}
+          onClick={() => setSceneLocked(!sceneLocked)}
+          type="button"
+        >
+          {sceneLocked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
+        </button>
+      </ToolbarTooltip>
+      <ToolbarTooltip label="Redo">
+        <button
+          aria-label="Redo"
+          className={cn(TOOLBAR_BTN, 'disabled:pointer-events-none disabled:opacity-40')}
+          disabled={!canRedo}
+          onClick={() => runRedo()}
+          type="button"
+        >
+          <Redo2 className="h-4 w-4" />
+        </button>
+      </ToolbarTooltip>
+    </div>
+  )
+}
+
+// Per-category visibility + lock. Non-destructive: both are viewer presentation
+// state (`hiddenCategories` / `lockedCategories`), never node data. The eye
+// hides a whole category from the render; the lock blocks edits on it. Scene
+// lock (the toolbar button) forces every row to read locked.
+function CategoriesMenu() {
+  const hiddenCategories = useViewer((state) => state.hiddenCategories)
+  const setCategoryHidden = useViewer((state) => state.setCategoryHidden)
+  const lockedCategories = useViewer((state) => state.lockedCategories)
+  const setCategoryLocked = useViewer((state) => state.setCategoryLocked)
+  const sceneLocked = useViewer((state) => state.sceneLocked)
+
+  return (
+    <DropdownMenu>
+      <ToolbarTooltip label="Categories">
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label="Categories"
+            className={cn(TOOLBAR_BTN, 'w-auto gap-1.5 px-2.5 text-foreground/90')}
+            type="button"
+          >
+            <Layers className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-medium text-xs">Layers</span>
+          </button>
+        </DropdownMenuTrigger>
+      </ToolbarTooltip>
+      <DropdownMenuContent
+        align="end"
+        className="w-60 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
+        side="bottom"
+        sideOffset={8}
+      >
+        {CATEGORY_OPTIONS.map((option) => {
+          const OptionIcon = option.icon
+          const hidden = hiddenCategories.has(option.id)
+          const locked = sceneLocked || lockedCategories.has(option.id)
+          return (
+            <div
+              className="flex items-center gap-2 px-2 py-1.5 text-foreground text-sm"
+              key={option.id}
+            >
+              <OptionIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1">{option.name}</span>
+              <button
+                aria-label={`${hidden ? 'Show' : 'Hide'} ${option.name}`}
+                aria-pressed={!hidden}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground"
+                onClick={() => setCategoryHidden(option.id, !hidden)}
+                type="button"
+              >
+                {hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+              <button
+                aria-label={`${locked ? 'Unlock' : 'Lock'} ${option.name}`}
+                aria-pressed={locked}
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-white/8',
+                  locked ? 'text-amber-400' : 'text-muted-foreground hover:text-foreground',
+                  sceneLocked && 'pointer-events-none opacity-50',
+                )}
+                disabled={sceneLocked}
+                onClick={() => setCategoryLocked(option.id, !lockedCategories.has(option.id))}
+                type="button"
+              >
+                {locked ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
+              </button>
+            </div>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 export function CommunityViewerToolbarLeft() {
   return (
     <>
@@ -697,14 +838,18 @@ export function CommunityViewerToolbarLeft() {
 
 export function CommunityViewerToolbarRight() {
   return (
-    <div className={TOOLBAR_CONTAINER}>
-      <LevelModeToggle />
-      <WallModeToggle />
-      <div className="my-1.5 w-px bg-border/50" />
-      <DisplayMenu />
-      <div className="my-1.5 w-px bg-border/50" />
-      <WalkthroughButton />
-      <PreviewButton />
-    </div>
+    <>
+      <HistoryLockControls />
+      <div className={TOOLBAR_CONTAINER}>
+        <LevelModeToggle />
+        <WallModeToggle />
+        <div className="my-1.5 w-px bg-border/50" />
+        <CategoriesMenu />
+        <DisplayMenu />
+        <div className="my-1.5 w-px bg-border/50" />
+        <WalkthroughButton />
+        <PreviewButton />
+      </div>
+    </>
   )
 }

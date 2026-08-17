@@ -26,6 +26,7 @@ import {
 import { steppedRotation } from '../components/tools/item/placement-math'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
+import { isNodeIdEditLocked } from '../lib/edit-lock'
 import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
@@ -675,7 +676,7 @@ export const useKeyboard = ({
 
         // Delete selected zone when no explicit element selection is active.
         const selectedZoneId = useViewer.getState().selection.zoneId
-        if (selectedZoneId) {
+        if (selectedZoneId && !isNodeIdEditLocked(selectedZoneId as AnyNodeId)) {
           sfxEmitter.emit('sfx:structure-delete')
           useScene.getState().deleteNode(selectedZoneId as AnyNodeId)
           useViewer.getState().setSelection({ zoneId: null })

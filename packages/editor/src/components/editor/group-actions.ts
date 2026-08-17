@@ -17,6 +17,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
+import { filterEditableIds } from '../../lib/edit-lock'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
 import {
   copySelectedNodesToEditorClipboard,
@@ -556,12 +557,17 @@ export function cutSelectionToEditorClipboard(): boolean {
   const payload = getEditorClipboardSnapshot()
   if (!payload || payload.rootIds.length === 0) return false
 
-  if (payload.rootIds.length === 1) {
-    emitDeleteSFX(useScene.getState().nodes[payload.rootIds[0]!]?.type)
+  // Copy is fine on a locked node (it produces an unlocked copy elsewhere), but
+  // the delete half of Cut must skip locked roots — same rule as deleteSelection.
+  const rootIds = filterEditableIds(payload.rootIds)
+  if (rootIds.length === 0) return true
+
+  if (rootIds.length === 1) {
+    emitDeleteSFX(useScene.getState().nodes[rootIds[0]!]?.type)
   } else {
     sfxEmitter.emit('sfx:structure-delete')
   }
-  useScene.getState().deleteNodes(payload.rootIds)
+  useScene.getState().deleteNodes(rootIds)
   useViewer.getState().setSelection({ selectedIds: [] })
   return true
 }
@@ -571,7 +577,10 @@ export function cutSelectionToEditorClipboard(): boolean {
  * including the accidental-bulk-delete confirm.
  */
 export function deleteSelection(): boolean {
-  const selectedIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
+  const selected = useViewer.getState().selection.selectedIds as AnyNodeId[]
+  // Locked nodes (scene lock or a locked category) can be selected but not
+  // deleted — drop them from the delete set. Nothing left ⇒ nothing to delete.
+  const selectedIds = filterEditableIds(selected)
   if (selectedIds.length === 0) return false
 
   const commitDelete = () => {

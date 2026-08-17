@@ -135,6 +135,7 @@ export const ToolManager: React.FC = () => {
     }
   }, [reshapingNode, tangentReshape])
   const editingHole = useEditingHole()
+  const sceneLocked = useViewer((state) => state.sceneLocked)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
@@ -222,8 +223,10 @@ export const ToolManager: React.FC = () => {
     !showSlabBoundaryEditor &&
     !showCeilingBoundaryEditor
 
-  // Show build tools when in build mode
-  const showBuildTool = mode === 'build' && tool !== null
+  // Show build tools when in build mode. A fully locked scene blocks all new
+  // placement (per-category locks don't — you can still add other categories),
+  // so gate the build/placement tools off here rather than in each tool.
+  const showBuildTool = mode === 'build' && tool !== null && !sceneLocked
 
   // A move initiated from the 2D floor-plan (orange move-dot) is owned end-to-
   // end by `FloorplanRegistryMoveOverlay`, which marks the origin `'2d'` at

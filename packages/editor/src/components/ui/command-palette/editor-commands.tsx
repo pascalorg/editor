@@ -37,6 +37,7 @@ import {
   Video,
 } from 'lucide-react'
 import { useEffect } from 'react'
+import { filterEditableIds } from '../../../lib/edit-lock'
 import { runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
 import { useCommandRegistry } from '../../../store/use-command-registry'
@@ -151,7 +152,8 @@ export function EditorCommands() {
         execute: () =>
           run(() => {
             const { selectedIds } = useViewer.getState().selection
-            useScene.getState().deleteNodes(selectedIds as any[])
+            const deletable = filterEditableIds(selectedIds as AnyNodeId[])
+            if (deletable.length > 0) useScene.getState().deleteNodes(deletable)
           }),
       },
       {

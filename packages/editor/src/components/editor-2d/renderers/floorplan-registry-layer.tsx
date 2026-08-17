@@ -48,6 +48,7 @@ import {
   resolveDirectRotationPatch,
   snapDirectRotationDelta,
 } from '../../../lib/direct-manipulation'
+import { isNodeIdEditLocked } from '../../../lib/edit-lock'
 import { createEditorApi } from '../../../lib/editor-api'
 import {
   type FloorplanAnnotationVisibility,
@@ -1908,6 +1909,8 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       event: ReactPointerEvent<SVGGElement>,
       rotationPivot?: FloorplanPoint,
     ) => {
+      // Resize / rotate affordances are edits — blocked on a locked node.
+      if (isNodeIdEditLocked(nodeId)) return
       onHandlePointerDown(
         nodeId,
         makeHandleId(nodeId, payload),
@@ -1932,6 +1935,8 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       if (event.button !== 0) return
       const currentNode = useScene.getState().nodes[nodeId]
       if (!currentNode) return
+      // A locked node can be selected/inspected but not moved from the plan.
+      if (isNodeIdEditLocked(nodeId)) return
       event.preventDefault()
       event.stopPropagation()
       suppressBoxSelectForPointer(event)

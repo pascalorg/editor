@@ -118,6 +118,28 @@ type ViewerState = {
   showZones: boolean
   setShowZones: (show: boolean) => void
 
+  /**
+   * Broad node categories (structure / furnish / zone / site) hidden from the
+   * scene. Non-destructive presentation state — the node data is untouched, the
+   * central node-render dispatch simply skips a node whose category is in here.
+   * Transient (never persisted): a session view, not a saved preference.
+   */
+  hiddenCategories: Set<string>
+  setCategoryHidden: (category: string, hidden: boolean) => void
+
+  /**
+   * Categories whose nodes are edit-locked: they can still be selected and
+   * inspected, but the editor blocks move / delete / transform on them.
+   * `sceneLocked` locks the whole scene regardless of category. Both are
+   * transient presentation state that the editor layer reads to gate edits —
+   * kept here (not in `useEditor`) so the viewer's selection manager can read
+   * them without crossing the layer boundary. Never persisted.
+   */
+  lockedCategories: Set<string>
+  setCategoryLocked: (category: string, locked: boolean) => void
+  sceneLocked: boolean
+  setSceneLocked: (locked: boolean) => void
+
   transparentBackground: boolean
   setTransparentBackground: (transparent: boolean) => void
 
@@ -472,6 +494,28 @@ const useViewer = create<ViewerState>()(
 
       showZones: true,
       setShowZones: (show) => set({ showZones: show }),
+
+      hiddenCategories: new Set<string>(),
+      setCategoryHidden: (category, hidden) =>
+        set((state) => {
+          if (hidden === state.hiddenCategories.has(category)) return state
+          const next = new Set(state.hiddenCategories)
+          if (hidden) next.add(category)
+          else next.delete(category)
+          return { hiddenCategories: next }
+        }),
+
+      lockedCategories: new Set<string>(),
+      setCategoryLocked: (category, locked) =>
+        set((state) => {
+          if (locked === state.lockedCategories.has(category)) return state
+          const next = new Set(state.lockedCategories)
+          if (locked) next.add(category)
+          else next.delete(category)
+          return { lockedCategories: next }
+        }),
+      sceneLocked: false,
+      setSceneLocked: (locked) => set({ sceneLocked: locked }),
 
       transparentBackground: false,
       setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),
