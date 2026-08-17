@@ -8,6 +8,14 @@ import {
   sceneApiJson,
   sceneApiPreflight,
 } from '@/lib/scene-api-security'
+import {
+  evaluateSceneQuota,
+  measureSceneUsage,
+  quotaViolationMessage,
+  resolveSceneQuotas,
+  sceneBytes,
+  tierForActor,
+} from '@/lib/scene-quota'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -99,16 +107,24 @@ export async function POST(request: NextRequest) {
 
   const operations = await getSceneOperations()
 
-  // Anonymous user quota check
-  if (actor.type === 'user' && actor.isAnonymous) {
-    const userScenes = await operations.listScenes({ ownerId: actor.userId, limit: 10 })
-    if (userScenes.length >= 2) {
+  // Per-tier quota: scene count, per-scene size and total storage. Guests are
+  // anonymous accounts, free is a verified account; both now carry a limit.
+  if (actor.type === 'user') {
+    const limits = resolveSceneQuotas()[tierForActor(actor)]
+    const userScenes = await operations.listScenes({
+      ownerId: actor.userId,
+      limit: limits.maxScenes + 1,
+    })
+    const violation = evaluateSceneQuota(
+      limits,
+      measureSceneUsage(userScenes),
+      sceneBytes(parsed.data.graph),
+      true,
+    )
+    if (violation) {
       return sceneApiJson(
         request,
-        {
-          error: 'quota_exceeded',
-          details: 'Guest users are limited to 2 scenes. Please sign up to create more.',
-        },
+        { error: 'quota_exceeded', details: quotaViolationMessage(violation) },
         { status: 403 },
       )
     }

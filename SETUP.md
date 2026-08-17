@@ -34,6 +34,11 @@ cp .env.example .env
 | `EMAIL_FROM` | For auth | RFC 5322 sender for that mail, e.g. `Menart 3D <hesap@menart3d.com>`. Defaults to Resend's shared `onboarding@resend.dev`, which only delivers to the account owner. |
 | `NEXT_PUBLIC_APP_URL` | For auth | The base URL of the app (default: `http://localhost:3002`). |
 
+Scene quotas are tiered (guest vs verified account) and env-configurable; each
+of the six `PASCAL_QUOTA_{GUEST,FREE}_{MAX_SCENES,MAX_TOTAL_BYTES,MAX_SCENE_BYTES}`
+variables overrides one default (`apps/editor/lib/scene-quota.ts` lists the
+defaults — 2 scenes / 20 MB for guests, 25 scenes / 500 MB for verified users).
+
 Local development and the official hosted editor work without any environment variables.
 
 ## Authentication (Google OAuth)
