@@ -10,12 +10,19 @@ interface SceneWithGraph extends SceneMeta {
   graph: SceneGraph
 }
 
+import { headers } from 'next/headers'
+import { authorizeScene, resolveActor } from '@/lib/scene-api-security'
+
 /**
  * The store directly — see the note in `app/scenes/page.tsx`. It matters more
  * here: the graph is 300 KB–10 MB, and the round trip carried all of it over
  * HTTP for no reason before rendering it into the RSC payload.
  */
 async function fetchScene(id: string): Promise<SceneWithGraph | null> {
+  const actor = await resolveActor(await headers())
+  const access = await authorizeScene(actor, id, 'read')
+  if (!access) return null
+
   const operations = await getSceneOperations()
   return (await operations.loadStoredScene(id)) as SceneWithGraph | null
 }

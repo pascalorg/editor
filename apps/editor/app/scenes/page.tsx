@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
 import { ServerLocalizedContent } from '@/components/server-localized-content'
+import { resolveActor } from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -17,8 +18,11 @@ export const dynamic = 'force-dynamic'
  */
 async function fetchScenes(): Promise<SceneMeta[]> {
   try {
+    const actor = await resolveActor(await headers())
+    if (actor.type !== 'user') return []
+
     const operations = await getSceneOperations()
-    return (await operations.listScenes({ limit: 50 })) as SceneMeta[]
+    return (await operations.listScenes({ limit: 50, ownerId: actor.userId })) as SceneMeta[]
   } catch {
     // An unreachable store leaves the page empty rather than a crash screen,
     // matching what the failed fetch used to do.

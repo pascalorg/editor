@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import {
+  authorizeScene,
   guardSceneApiRequest,
+  resolveActor,
   sceneApiJson,
   sceneApiPreflight,
   withSceneApiHeaders,
@@ -34,6 +36,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   if (guard) return guard
 
   const { id } = await params
+  const actor = await resolveActor(request)
+  const access = await authorizeScene(actor, id, 'read')
+  if (!access) return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
+
   const operations = await getSceneOperations()
   try {
     const scene = await operations.loadStoredScene(id)
@@ -53,6 +59,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   if (guard) return guard
 
   const { id } = await params
+  const actor = await resolveActor(request)
+  const access = await authorizeScene(actor, id, 'write')
+  if (!access) return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
 
   let body: unknown
   try {
@@ -114,6 +123,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (guard) return guard
 
   const { id } = await params
+  const actor = await resolveActor(request)
+  const access = await authorizeScene(actor, id, 'delete')
+  if (!access) return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
+
   const ifMatch = parseIfMatch(request.headers.get('If-Match'))
 
   const operations = await getSceneOperations()
@@ -133,6 +146,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (guard) return guard
 
   const { id } = await params
+  const actor = await resolveActor(request)
+  const access = await authorizeScene(actor, id, 'write')
+  if (!access) return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
 
   let body: unknown
   try {

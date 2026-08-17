@@ -9,13 +9,15 @@
     "start": "next start",
     "lint": "biome lint",
     "check-types": "next typegen && tsc --noEmit",
-    "test": "bun test lib"
+    "test": "POSTGRES_URL=postgres://dummy bun test lib"
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
     "@number-flow/react": "^0.6.0",
     "@pascal-app/cadastre": "*",
     "@pascal-app/core": "*",
+    "@pascal-app/auth": "*",
+    "@pascal-app/db": "*",
     "@pascal-app/editor": "*",
     "@pascal-app/mcp": "*",
     "@pascal-app/nodes": "*",
@@ -39,6 +41,7 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
+    "@t3-oss/env-nextjs": "^0.13.11",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.19.12",
     "@types/react": "19.2.2",

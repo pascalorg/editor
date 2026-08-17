@@ -65,7 +65,7 @@ test('connectHttp close() stops the server', async () => {
 
 test('connectHttp requires auth when binding a non-loopback host', async () => {
   await expect(connectHttp(server, 0, { host: '0.0.0.0' })).rejects.toThrow(
-    /requires PASCAL_MCP_HTTP_TOKEN/,
+    /requires PASCAL_API_TOKEN/,
   )
 })
 

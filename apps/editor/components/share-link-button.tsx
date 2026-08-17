@@ -2,6 +2,7 @@
 
 import { useTranslation } from '@pascal-app/editor'
 import { useCallback, useState } from 'react'
+import { authClient } from '@/lib/auth-client'
 import { cn } from '@/lib/utils'
 import { TOP_BAR_ACTION } from './editor-top-bar'
 
@@ -19,8 +20,11 @@ export function ShareLinkButton({ sceneId }: { sceneId: string }) {
   const [state, setState] = useState<ShareState>('idle')
   const [url, setUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const { data: session } = authClient.useSession()
+  const isAnonymous = session?.user?.isAnonymous ?? false
 
   const share = useCallback(async () => {
+    if (isAnonymous) return
     setState('minting')
     setCopied(false)
     try {
@@ -49,15 +53,19 @@ export function ShareLinkButton({ sceneId }: { sceneId: string }) {
     } catch {
       setState('error')
     }
-  }, [sceneId])
+  }, [sceneId, isAnonymous])
 
   return (
     <>
       <button
         className={cn(TOP_BAR_ACTION, state === 'ready' && 'bg-accent text-foreground')}
-        disabled={state === 'minting'}
+        disabled={state === 'minting' || isAnonymous}
         onClick={share}
-        title={t('Create a view-only link — visitors can look, measure and comment, not edit')}
+        title={
+          isAnonymous
+            ? t('Sign in to share scenes')
+            : t('Create a view-only link — visitors can look, measure and comment, not edit')
+        }
         type="button"
       >
         {state === 'minting'

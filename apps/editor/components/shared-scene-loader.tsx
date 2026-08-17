@@ -12,6 +12,7 @@ import {
 import { Layers, Sigma, Sun } from 'lucide-react'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { TopBarAuth } from './auth/top-bar-auth'
 import { EditorTopBar } from './editor-top-bar'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -133,7 +134,9 @@ export function SharedSceneLoader({
       )}
       <Editor
         layoutVersion="v2"
-        navbarSlot={<EditorTopBar status={t('View only')} title={meta.name} />}
+        navbarSlot={
+          <EditorTopBar status={t('View only')} title={meta.name} actions={<TopBarAuth />} />
+        }
         onLoad={handleLoad}
         onSave={handleSave}
         projectId="shared"

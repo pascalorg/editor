@@ -269,6 +269,15 @@ export { SavedViewsSection } from './components/ui/panels/saved-views/saved-view
 export { SunStudySection } from './components/ui/panels/sun-study/sun-study-section'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
 export {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from './components/ui/primitives/dialog'
+export {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,

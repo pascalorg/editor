@@ -27,6 +27,11 @@ export const env = createEnv({
      * front in transaction mode.
      */
     POSTGRES_POOL_SIZE: z.coerce.number().int().positive().max(100).optional(),
+    
+    BETTER_AUTH_SECRET: z.string().optional(),
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    RESEND_API_KEY: z.string().optional(),
   },
 
   /**
@@ -34,14 +39,22 @@ export const env = createEnv({
    */
   client: {
     NEXT_PUBLIC_ASSETS_CDN_URL: z.string().optional(),
+    NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   },
 
   /**
    * Runtime values - pulls from process.env
    */
   runtimeEnv: {
+    POSTGRES_URL: process.env.POSTGRES_URL,
+    POSTGRES_POOL_SIZE: process.env.POSTGRES_POOL_SIZE,
+    BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
     NEXT_PUBLIC_ASSETS_CDN_URL:
       process.env.NEXT_PUBLIC_ASSETS_CDN_URL ?? process.env.NEXT_PUBLIC_EDITOR_ASSETS_CDN_URL,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
 
   /**

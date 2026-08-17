@@ -25,6 +25,7 @@ import {
   sceneModelSignature,
 } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
+import { TopBarAuth } from './auth/top-bar-auth'
 import { BuildTab } from './build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from './editor-top-bar'
 import { ShareLinkButton } from './share-link-button'
@@ -323,6 +324,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
                 <Link className={TOP_BAR_ACTION} href="/scenes">
                   {t('Saved scenes')}
                 </Link>
+                <TopBarAuth />
               </>
             }
             status={saveError ? t('Not saved') : `${t('Version')} ${liveVersion}`}

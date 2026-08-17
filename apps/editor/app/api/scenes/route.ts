@@ -1,7 +1,13 @@
 import type { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
-import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
+import {
+  authorizeProject,
+  guardSceneApiRequest,
+  resolveActor,
+  sceneApiJson,
+  sceneApiPreflight,
+} from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +33,8 @@ export async function GET(request: NextRequest) {
   const guard = guardSceneApiRequest(request)
   if (guard) return guard
 
+  const actor = await resolveActor(request)
+
   const url = new URL(request.url)
   const parsed = listQuerySchema.safeParse({
     projectId: url.searchParams.get('projectId') ?? undefined,
@@ -41,8 +49,23 @@ export async function GET(request: NextRequest) {
   }
 
   const operations = await getSceneOperations()
+
+  if (parsed.data.projectId) {
+    const access = await authorizeProject(actor, parsed.data.projectId, 'read')
+    if (!access) return sceneApiJson(request, { scenes: [] })
+
+    const scenes = await operations.listScenes({
+      projectId: parsed.data.projectId,
+      limit: parsed.data.limit,
+    })
+    return sceneApiJson(request, { scenes })
+  }
+
+  // If no projectId is given, we just list scenes owned by the user (or nothing if anon)
+  if (actor.type !== 'user') return sceneApiJson(request, { scenes: [] })
+
   const scenes = await operations.listScenes({
-    projectId: parsed.data.projectId,
+    ownerId: actor.userId,
     limit: parsed.data.limit,
   })
   return sceneApiJson(request, { scenes })
@@ -51,6 +74,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const guard = guardSceneApiRequest(request)
   if (guard) return guard
+
+  const actor = await resolveActor(request)
 
   let body: unknown
   try {
@@ -73,11 +98,28 @@ export async function POST(request: NextRequest) {
   }
 
   const operations = await getSceneOperations()
+
+  // Anonymous user quota check
+  if (actor.type === 'user' && actor.isAnonymous) {
+    const userScenes = await operations.listScenes({ ownerId: actor.userId, limit: 10 })
+    if (userScenes.length >= 2) {
+      return sceneApiJson(
+        request,
+        {
+          error: 'quota_exceeded',
+          details: 'Guest users are limited to 2 scenes. Please sign up to create more.',
+        },
+        { status: 403 },
+      )
+    }
+  }
+
   try {
     const meta = await operations.saveScene({
       id: parsed.data.id,
       name: parsed.data.name,
       projectId: parsed.data.projectId ?? null,
+      ownerId: actor.type === 'user' ? actor.userId : null,
       graph: parsed.data.graph as never,
       thumbnailUrl: parsed.data.thumbnailUrl ?? null,
     })

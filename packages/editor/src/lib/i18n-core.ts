@@ -2405,6 +2405,43 @@ const tr: Record<string, string> = {
     'Bakış açısını koruyarak, seçili nesneler görünümü dolduracak kadar geri çekilir. Hiçbir şey seçili değilse modelin tamamını çerçeveler.',
   'Frames everything visible. Works in the 2D plan and the 3D view alike.':
     'Görünen her şeyi çerçeveler. Hem 2B planda hem de 3B görünümde çalışır.',
+  'Sign In': 'Giriş Yap',
+  'Sign in to Pascal': "Pascal'a Giriş Yap",
+  'Check your email': 'E-postanızı kontrol edin',
+  "We've sent a magic link to": 'Sihirli bir bağlantı gönderdik:',
+  'Click the link in the email to sign in to your account.':
+    'Hesabınıza giriş yapmak için e-postadaki bağlantıya tıklayın.',
+  'Last signed in with': 'Son giriş yapılan yöntem:',
+  'Continue with Google': 'Google ile devam et',
+  Password: 'Parola',
+  'Sign in': 'Giriş Yap',
+  'Sign up': 'Kayıt Ol',
+  'Send magic link': 'Sihirli bağlantı gönder',
+  'Use magic link instead': 'Bunun yerine sihirli bağlantı kullan',
+  'Use password instead': 'Bunun yerine parola kullan',
+  "Don't have an account?": 'Hesabınız yok mu?',
+  'Already have an account?': 'Zaten bir hesabınız var mı?',
+  'By signing in, you agree to our': 'Giriş yaparak şunları kabul etmiş olursunuz:',
+  'Account Settings': 'Hesap Ayarları',
+  'Sign out': 'Çıkış Yap',
+  'Not signed in': 'Giriş yapılmadı',
+  'Please sign in to access your account settings.':
+    'Hesap ayarlarınıza erişmek için lütfen giriş yapın.',
+  'Email address cannot be changed.': 'E-posta adresi değiştirilemez.',
+  'Save Profile': 'Profili Kaydet',
+  Security: 'Güvenlik',
+  'Current Password': 'Mevcut Parola',
+  'New Password': 'Yeni Parola',
+  'Update Password': 'Parolayı Güncelle',
+  Sessions: 'Oturumlar',
+  'Sign out of all other active sessions across your devices.':
+    'Diğer tüm cihazlarınızdaki aktif oturumları kapatın.',
+  'Sign out all other devices': 'Diğer tüm cihazlardan çıkış yap',
+  'Are you sure you want to sign out from all devices?':
+    'Tüm cihazlardan çıkış yapmak istediğinizden emin misiniz?',
+  'Profile updated successfully': 'Profil başarıyla güncellendi',
+  'Password updated successfully': 'Parola başarıyla güncellendi',
+  'All other sessions revoked': 'Diğer tüm oturumlar kapatıldı',
 }
 
 function translateDynamicText(text: string): string | null {

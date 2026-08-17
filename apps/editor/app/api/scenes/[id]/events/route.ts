@@ -1,5 +1,7 @@
 import {
+  authorizeScene,
   guardSceneApiRequest,
+  resolveActor,
   sceneApiJson,
   sceneApiPreflight,
   withSceneApiHeaders,
@@ -24,6 +26,10 @@ export async function GET(request: Request, { params }: RouteParams) {
   if (guard) return guard
 
   const { id } = await params
+  const actor = await resolveActor(request)
+  const access = await authorizeScene(actor, id, 'read')
+  if (!access) return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
+
   const operations = await getSceneOperations()
 
   if (!operations.canListSceneEvents) {

@@ -1,10 +1,13 @@
-import { timingSafeEqual } from 'node:crypto'
+import { getDatabase } from '@pascal-app/db'
+import { projectMembers, projects, scenes } from '@pascal-app/db/schema'
+import { and, eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import { auth } from './auth'
 
 const DEFAULT_RATE_LIMIT_PER_MINUTE = 120
 const WINDOW_MS = 60_000
 const ALLOWED_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-const ALLOWED_HEADERS = 'authorization, content-type, if-match, last-event-id, x-pascal-scene-token'
+const ALLOWED_HEADERS = 'authorization, content-type, if-match, last-event-id'
 
 type RateBucket = {
   resetAt: number
@@ -12,6 +15,174 @@ type RateBucket = {
 }
 
 const rateBuckets = new Map<string, RateBucket>()
+
+import { apiTokens } from '@pascal-app/db/schema'
+
+export type Actor =
+  | { type: 'user'; userId: string; isAnonymous: boolean; scopes?: string[] }
+  | { type: 'anon' }
+
+async function hashToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token)
+  const hash = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+export async function resolveActor(requestOrHeaders: Request | Headers): Promise<Actor> {
+  const headers = requestOrHeaders instanceof Headers ? requestOrHeaders : requestOrHeaders.headers
+
+  // 1. Check for PAT
+  const authHeader = headers.get('authorization')
+  if (authHeader?.startsWith('Bearer pascal_pat_')) {
+    const token = authHeader.substring(7) // remove 'Bearer '
+    try {
+      const db = getDatabase()
+      const hash = await hashToken(token)
+      const rows = await db.select().from(apiTokens).where(eq(apiTokens.tokenHash, hash)).limit(1)
+      const row = rows[0]
+
+      if (row) {
+        const now = new Date()
+        if (row.revokedAt && row.revokedAt <= now) return { type: 'anon' }
+        if (row.expiresAt && row.expiresAt <= now) return { type: 'anon' }
+
+        // Throttle lastUsedAt updates to 1 minute
+        if (!row.lastUsedAt || now.getTime() - row.lastUsedAt.getTime() > 60000) {
+          // Fire and forget update
+          db.update(apiTokens)
+            .set({ lastUsedAt: now })
+            .where(eq(apiTokens.id, row.id))
+            .execute()
+            .catch(() => {})
+        }
+
+        return { type: 'user', userId: row.userId, isAnonymous: false, scopes: row.scopes || [] }
+      }
+    } catch {
+      // DB error or hash error, fallback to anon or session
+    }
+  }
+
+  // 2. Fallback to session
+  const session = await auth.api.getSession({ headers })
+  if (session?.user?.id) {
+    return { type: 'user', userId: session.user.id, isAnonymous: session.user.isAnonymous ?? false }
+  }
+  return { type: 'anon' }
+}
+
+export async function authorizeScene(
+  actor: Actor,
+  sceneId: string,
+  action: 'read' | 'write' | 'delete',
+): Promise<boolean> {
+  // If PAT, check scopes
+  if (actor.type === 'user' && actor.scopes && !actor.scopes.includes(`scenes:${action}`)) {
+    return false
+  }
+
+  let db
+  try {
+    db = getDatabase()
+  } catch (e) {
+    // If running in an environment without Postgres, assume no access
+    return false
+  }
+
+  const sceneRows = await db.select().from(scenes).where(eq(scenes.id, sceneId)).limit(1)
+  const scene = sceneRows[0]
+  if (!scene) return false
+
+  // Project scene
+  if (scene.projectId) {
+    const projectRows = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, scene.projectId))
+      .limit(1)
+    const project = projectRows[0]
+    if (!project) return false
+
+    if (
+      action === 'read' &&
+      (project.visibility === 'public' || project.visibility === 'unlisted')
+    ) {
+      return true
+    }
+
+    if (actor.type === 'user') {
+      if (project.ownerId === actor.userId) return true
+      const memberRows = await db
+        .select()
+        .from(projectMembers)
+        .where(
+          and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, actor.userId)),
+        )
+        .limit(1)
+      const member = memberRows[0]
+      if (member) {
+        if (member.role === 'owner' || member.role === 'editor') return true
+        if (member.role === 'viewer' && action === 'read') return true
+      }
+    }
+    return false
+  }
+
+  // Personal scene
+  if (scene.ownerId) {
+    if (actor.type === 'user' && scene.ownerId === actor.userId) {
+      return true
+    }
+    return false
+  }
+
+  // Ownerless scene (anonymous fallback)
+  return true
+}
+
+export async function authorizeProject(
+  actor: Actor,
+  projectId: string,
+  action: 'read' | 'write',
+): Promise<boolean> {
+  // If PAT, check scopes (for projects, we check the scene equivalent scope since PATs only declare scene scopes)
+  if (actor.type === 'user' && actor.scopes && !actor.scopes.includes(`scenes:${action}`)) {
+    return false
+  }
+
+  let db
+  try {
+    db = getDatabase()
+  } catch (e) {
+    return false
+  }
+
+  const projectRows = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1)
+  const project = projectRows[0]
+  if (!project) return false
+
+  if (action === 'read' && (project.visibility === 'public' || project.visibility === 'unlisted')) {
+    return true
+  }
+
+  if (actor.type === 'user') {
+    if (project.ownerId === actor.userId) return true
+    const memberRows = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, project.id), eq(projectMembers.userId, actor.userId)))
+      .limit(1)
+    const member = memberRows[0]
+    if (member) {
+      if (member.role === 'owner' || member.role === 'editor') return true
+      if (member.role === 'viewer' && action === 'read') return true
+    }
+  }
+
+  return false
+}
 
 export function sceneApiPreflight(request: Request): NextResponse {
   const guard = guardSceneApiRequest(request, { skipRateLimit: true, skipAuth: true })
@@ -25,11 +196,6 @@ export function guardSceneApiRequest(
 ): NextResponse | null {
   const originError = validateOrigin(request)
   if (originError) return originError
-
-  if (!opts.skipAuth) {
-    const authError = validateAuth(request)
-    if (authError) return authError
-  }
 
   if (!opts.skipRateLimit) {
     const rateError = validateRateLimit(request)
@@ -62,18 +228,6 @@ function validateOrigin(request: Request): NextResponse | null {
   return sceneApiJson(request, { error: 'origin_not_allowed' }, { status: 403 })
 }
 
-function validateAuth(request: Request): NextResponse | null {
-  const token = process.env.PASCAL_SCENE_API_TOKEN
-  if (!token) {
-    if (isLoopbackRequest(request)) return null
-    return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
-  }
-
-  const supplied = bearerToken(request) ?? request.headers.get('x-pascal-scene-token')
-  if (supplied && safeEqual(supplied, token)) return null
-  return sceneApiJson(request, { error: 'unauthorized' }, { status: 401 })
-}
-
 function validateRateLimit(request: Request): NextResponse | null {
   const limit = rateLimitPerMinute()
   if (limit <= 0) return null
@@ -93,20 +247,6 @@ function validateRateLimit(request: Request): NextResponse | null {
   const response = sceneApiJson(request, { error: 'rate_limited' }, { status: 429 })
   response.headers.set('Retry-After', String(retryAfter))
   return response
-}
-
-function bearerToken(request: Request): string | null {
-  const header = request.headers.get('authorization')
-  if (!header) return null
-  const match = header.match(/^Bearer\s+(.+)$/i)
-  return match?.[1] ?? null
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const aBuffer = Buffer.from(a)
-  const bBuffer = Buffer.from(b)
-  if (aBuffer.length !== bBuffer.length) return false
-  return timingSafeEqual(aBuffer, bBuffer)
 }
 
 function rateLimitPerMinute(): number {
@@ -149,11 +289,6 @@ function isSameOrigin(request: Request, origin: string): boolean {
   return normalizeOrigin(parsedOrigin) === normalizeOrigin(requestUrl)
 }
 
-function isLoopbackRequest(request: Request): boolean {
-  const host = request.headers.get('host') ?? new URL(request.url).host
-  return isLoopbackHostname(stripPort(host))
-}
-
 function isLoopbackHostname(hostname: string): boolean {
   const h = hostname.toLowerCase()
   return h === 'localhost' || h.endsWith('.localhost') || h === '127.0.0.1' || h === '::1'
@@ -169,12 +304,4 @@ function parseUrl(value: string): URL | null {
 
 function normalizeOrigin(url: URL): string {
   return `${url.protocol}//${url.host}`.toLowerCase()
-}
-
-function stripPort(host: string): string {
-  if (host.startsWith('[')) {
-    const end = host.indexOf(']')
-    return end === -1 ? host : host.slice(1, end)
-  }
-  return host.split(':')[0] ?? host
 }

@@ -3,6 +3,7 @@
 import { type SceneGraph, useTranslation } from '@pascal-app/editor'
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
+import { authClient } from '@/lib/auth-client'
 
 const EMPTY_GRAPH: SceneGraph = {
   nodes: {},
@@ -25,17 +26,32 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const { data: session } = authClient.useSession()
   const handleCreate = useCallback(async () => {
     setIsCreating(true)
     setError(null)
     try {
+      if (!session) {
+        const { error: signInError } = await authClient.signIn.anonymous()
+        if (signInError) {
+          setError('Failed to initialize anonymous session')
+          setIsCreating(false)
+          return
+        }
+      }
+
       const response = await fetch('/api/scenes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Untitled scene', graph: EMPTY_GRAPH }),
       })
       if (!response.ok) {
-        setError(`Failed to create scene (${response.status})`)
+        let msg = `Failed to create scene (${response.status})`
+        try {
+          const errData = await response.json()
+          if (errData.details && typeof errData.details === 'string') msg = errData.details
+        } catch {}
+        setError(msg)
         return
       }
       const meta = (await response.json()) as { id: string }
@@ -45,7 +61,7 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
     } finally {
       setIsCreating(false)
     }
-  }, [router])
+  }, [router, session])
 
   return (
     <div className="flex items-center gap-3">
@@ -106,6 +122,8 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
     }
   }, [getGraph, name, sceneId, version])
 
+  const { data: session } = authClient.useSession()
+
   const handleSaveAs = useCallback(async () => {
     const graph = getGraph()
     if (!graph) {
@@ -117,13 +135,27 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
     setIsSaving(true)
     setStatus(null)
     try {
+      if (!session) {
+        const { error: signInError } = await authClient.signIn.anonymous()
+        if (signInError) {
+          setStatus('Failed to initialize anonymous session')
+          setIsSaving(false)
+          return
+        }
+      }
+
       const response = await fetch('/api/scenes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, graph }),
       })
       if (!response.ok) {
-        setStatus(`Save-as failed (${response.status})`)
+        let msg = `Save-as failed (${response.status})`
+        try {
+          const errData = await response.json()
+          if (errData.details && typeof errData.details === 'string') msg = errData.details
+        } catch {}
+        setStatus(msg)
         return
       }
       const meta = (await response.json()) as { id: string }
@@ -133,7 +165,7 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
     } finally {
       setIsSaving(false)
     }
-  }, [getGraph, name, router])
+  }, [getGraph, name, router, session])
 
   return (
     <div className="flex items-center gap-2">

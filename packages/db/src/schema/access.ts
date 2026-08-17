@@ -25,6 +25,7 @@ export const apiTokens = pgTable(
     tokenHash: t.text('token_hash').notNull(),
     /** First characters of the secret, so the UI can tell two tokens apart. */
     tokenPrefix: t.text('token_prefix').notNull(),
+    scopes: t.jsonb('scopes').$type<string[]>().notNull().default([]),
     lastUsedAt: t.timestamp('last_used_at', { withTimezone: true }),
     expiresAt: t.timestamp('expires_at', { withTimezone: true }),
     revokedAt: t.timestamp('revoked_at', { withTimezone: true }),

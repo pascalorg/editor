@@ -10,6 +10,7 @@ import {
 import { Hammer, Layers, MessageSquare, Package, Settings, Sigma, Sun } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { TopBarAuth } from '@/components/auth/top-bar-auth'
 import { BuildTab } from '@/components/build-tab'
 import { EditorTopBar, TOP_BAR_ACTION } from '@/components/editor-top-bar'
 import {
@@ -147,9 +148,12 @@ export default function Home() {
         navbarSlot={
           <EditorTopBar
             actions={
-              <Link className={TOP_BAR_ACTION} href="/scenes">
-                {t('Saved scenes')}
-              </Link>
+              <>
+                <Link className={TOP_BAR_ACTION} href="/scenes">
+                  {t('Saved scenes')}
+                </Link>
+                <TopBarAuth />
+              </>
             }
             status={t('Blank canvas · not saved')}
             title={t('New workspace')}

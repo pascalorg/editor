@@ -1,0 +1,24 @@
+{
+  "name": "@pascal-app/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Authentication layer (better-auth).",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@pascal-app/db": "workspace:*",
+    "better-auth": "^1.5.0"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "typescript": "6.0.3"
+  }
+}

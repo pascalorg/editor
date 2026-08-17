@@ -25,7 +25,7 @@ export type HttpTransportOptions = {
    * interface requires an auth token.
    */
   host?: string
-  /** Bearer token for HTTP MCP calls. Defaults to PASCAL_MCP_HTTP_TOKEN. */
+  /** Bearer token for HTTP MCP calls. Defaults to PASCAL_API_TOKEN. */
   authToken?: string
   /** Exact CORS origins allowed to call this transport. Loopback origins are allowed. */
   allowedOrigins?: string[]
@@ -51,11 +51,9 @@ export async function connectHttp(
   options: HttpTransportOptions = {},
 ): Promise<HttpTransportHandle> {
   const host = options.host ?? DEFAULT_HOST
-  const authToken = options.authToken ?? process.env.PASCAL_MCP_HTTP_TOKEN
+  const authToken = options.authToken ?? process.env.PASCAL_API_TOKEN
   if (!(isLoopbackHost(host) || authToken)) {
-    throw new Error(
-      'HTTP transport on a non-loopback host requires PASCAL_MCP_HTTP_TOKEN or authToken',
-    )
+    throw new Error('HTTP transport on a non-loopback host requires PASCAL_API_TOKEN or authToken')
   }
   const guard = createHttpGuard({
     authToken,

@@ -27,8 +27,21 @@ cp .env.example .env
 | `PASCAL_SHARE_LINK_SECRET` | For sharing | Signs view-only share links (`/share/<token>`). Without it the **Share** button returns 503 and existing links stop verifying — everything else works. Changing it invalidates every link already handed out, which is also the only way to revoke one. |
 | `POSTGRES_URL` | For the Postgres store | Connection string for `packages/db`. Unset, the editor keeps using the local SQLite store. |
 | `POSTGRES_POOL_SIZE` | No | Per-replica connection pool size (default 10). `replicas × this` must stay under Postgres' `max_connections`. |
+| `BETTER_AUTH_SECRET` | For auth | A random string used to sign session cookies. |
+| `GOOGLE_CLIENT_ID` | For auth | Google OAuth Client ID. |
+| `GOOGLE_CLIENT_SECRET` | For auth | Google OAuth Client Secret. |
+| `RESEND_API_KEY` | For auth | API key for sending magic links via Resend. |
+| `NEXT_PUBLIC_APP_URL` | For auth | The base URL of the app (default: `http://localhost:3002`). |
 
 Local development and the official hosted editor work without any environment variables.
+
+## Authentication (Google OAuth)
+
+To enable Google sign-in locally, you must create an OAuth 2.0 Client ID in the Google Cloud Console and set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+Ensure the following **Authorized redirect URIs** are configured in your Google Cloud Console:
+- Local: `http://localhost:3002/api/auth/callback/google`
+- Production: `https://your-production-domain.com/api/auth/callback/google`
 
 ## Postgres (optional, for cloud work)
 

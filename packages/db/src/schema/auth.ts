@@ -21,6 +21,7 @@ export const users = pgTable(
     banned: t.boolean('banned').notNull().default(false),
     banReason: t.text('ban_reason'),
     banExpires: t.timestamp('ban_expires', { withTimezone: true }),
+    isAnonymous: t.boolean('is_anonymous').notNull().default(false),
     ...timestamps,
   }),
   // Case-insensitive: `Ali@x.com` and `ali@x.com` are one account, and letting
