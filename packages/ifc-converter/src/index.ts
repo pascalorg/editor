@@ -356,14 +356,13 @@ function getAxisPolyline(ifcApi: WebIFC.IfcAPI, modelID: number, element: any): 
   return null
 }
 
-type ExtrusionData = {
+export interface ExtrusionData {
   depth: number | null
+  extrusionDirection: [number, number, number] | null
   xDim: number | null
   yDim: number | null
   profilePoints: number[][] | null
-  // Detected swept-area profile shape (model units, pre-unitFactor).
-  // 'round' carries `radius`; 'rectangular' carries xDim/yDim.
-  profileShape: 'round' | 'rectangular' | null
+  profileShape: 'rectangular' | 'round' | null
   radius: number | null
 }
 
@@ -386,6 +385,13 @@ function extractFromExtrusionItem(
 
   if (current.Depth?.value) {
     result.depth = current.Depth.value
+    if (current.ExtrudedDirection?.value) {
+      const dir = ifcApi.GetLine(modelID, current.ExtrudedDirection.value)
+      if (dir.DirectionRatios) {
+        const ratios = dir.DirectionRatios.map((r: any) => typeof r === 'number' ? r : (r?.value ?? 0))
+        result.extrusionDirection = [ratios[0] ?? 0, ratios[1] ?? 0, ratios[2] ?? 0]
+      }
+    }
   }
 
   if (current.SweptArea?.value) {
@@ -448,6 +454,7 @@ function extractFromExtrusionItem(
 function getBodyExtrusionData(ifcApi: WebIFC.IfcAPI, modelID: number, element: any): ExtrusionData {
   const result: ExtrusionData = {
     depth: null,
+    extrusionDirection: null,
     xDim: null,
     yDim: null,
     profilePoints: null,
@@ -1466,23 +1473,30 @@ export async function convertIfcToPascal(
         ? resolveWorldTransform(ifcApi, modelID, slab.ObjectPlacement.value)
         : identity()
 
-      // Get elevation from placement Z
-      const s = worldToScene(transformPoint3(worldMat, [0, 0, 0]))
-      elevation = s[2]
-
       // Get body extrusion data
       const body = getBodyExtrusionData(ifcApi, modelID, slab)
 
-      // Extrusion depth is slab thickness
-      if (body.depth) {
-        thickness = body.depth * unitFactor
-      }
-
       // Extrusion Position provides an additional local offset for the profile
       const extrusionMat = getExtrusionPosition(ifcApi, modelID, slab)
+      const combinedMat = extrusionMat ? multiply(worldMat, extrusionMat) : worldMat
+
+      // Calculate true top elevation and thickness from extrusion vector
+      if (body.depth) {
+        const dir = body.extrusionDirection || [0, 0, 1]
+        const d = body.depth
+        const p1 = transformPoint3(combinedMat, [0, 0, 0])
+        const p2 = transformPoint3(combinedMat, [dir[0] * d, dir[1] * d, dir[2] * d])
+        const s1 = worldToScene(p1)
+        const s2 = worldToScene(p2)
+        elevation = Math.max(s1[2], s2[2])
+        // Fall back to default if Z delta is zero
+        thickness = Math.abs(s1[2] - s2[2]) || undefined
+      } else {
+        const s = worldToScene(transformPoint3(worldMat, [0, 0, 0]))
+        elevation = s[2]
+      }
 
       if (body.profilePoints && body.profilePoints.length >= 3) {
-        const combinedMat = extrusionMat ? multiply(worldMat, extrusionMat) : worldMat
         polygon = body.profilePoints.map((pt) => {
           const sc = worldToScene(transformPoint3(combinedMat, [pt[0], pt[1], 0]))
           return [sc[0], sc[1]] as [number, number]
@@ -1528,13 +1542,11 @@ export async function convertIfcToPascal(
       polygon,
       holes: [],
       elevation,
-      // TODO(ifc-fix): Pascal SlabNode has no `thickness` field — moved
-      // to metadata so the IFC value isn't lost.
+      thickness,
       metadata: buildMetadata({
         ifcType: 'IFCSLAB',
         expressID: slabExpressID,
         globalId: slab.GlobalId?.value,
-        thickness,
       }),
     })
 
