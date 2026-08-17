@@ -68,6 +68,58 @@ function App() {
 }
 ```
 
+## 2D and Split-View Embeds
+
+`@pascal-app/viewer` owns the 3D canvas. The npm-facing multi-view shell lives in
+`@pascal-app/editor`, where it can compose that canvas with the read-only SVG floor plan without
+coupling editor-only floor-plan state into the viewer runtime.
+
+Use `modes` to expose any combination of `3d`, `2d`, and `split`. A single enabled mode hides the
+switcher automatically. `mode` and `onModeChange` can be supplied for controlled embeds; otherwise
+`defaultMode` is used.
+
+```tsx
+import { ViewerStage, useViewerCameraNavigationSync } from '@pascal-app/editor'
+import { Viewer } from '@pascal-app/viewer'
+import { CameraControls, type CameraControlsImpl } from '@react-three/drei'
+import { useRef } from 'react'
+
+function SyncedCameraControls() {
+  const controls = useRef<CameraControlsImpl>(null)
+  const publishCameraPose = useViewerCameraNavigationSync(controls)
+
+  return <CameraControls makeDefault onUpdate={publishCameraPose} ref={controls} />
+}
+
+function EmbeddedViewer() {
+  return (
+    <div style={{ width: 960, height: 640 }}>
+      <ViewerStage defaultMode="3d" modes={['3d', '2d']}>
+        <Viewer>
+          <SyncedCameraControls />
+        </Viewer>
+      </ViewerStage>
+    </div>
+  )
+}
+```
+
+Common configurations:
+
+```tsx
+<ViewerStage modes={['3d']}>{viewer}</ViewerStage>
+<ViewerStage modes={['2d']} />
+<ViewerStage modes={['3d', '2d']}>{viewer}</ViewerStage>
+<ViewerStage modes={['3d', 'split']}>{viewer}</ViewerStage>
+<ViewerStage modes={['3d', '2d', 'split']}>{viewer}</ViewerStage>
+```
+
+For a 2D-only embed, no 3D canvas is mounted. When 3D or split is enabled, the 3D canvas stays
+mounted while 2D is active, avoiding renderer reinitialization. Camera poses,
+floor-plan pan/zoom/rotation, and the compass synchronize through transient subscriptions; live
+navigation does not require a React render per frame. Set `showCompass={false}` or
+`showSwitcher={false}` when the host supplies its own controls.
+
 ## Viewer State
 
 ```typescript

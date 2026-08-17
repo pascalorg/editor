@@ -59,6 +59,8 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { ViewerStage } from '../viewer/viewer-stage'
+import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
 import { EditorLayoutV2 } from './editor-layout-v2'
@@ -86,6 +88,8 @@ import { WallMoveSideHandles } from './wall-move-side-handles'
 import { WallOpeningHighlights } from './wall-opening-highlights'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
+const PREVIEW_STAGE_SWITCHER_POSITION =
+  'top-28 right-4 left-auto translate-x-0 md:top-4 md:right-auto md:left-1/2 md:-translate-x-1/2'
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
 const DELETE_CURSOR_BADGE_OFFSET_X = 14
 const DELETE_CURSOR_BADGE_OFFSET_Y = 14
@@ -1119,6 +1123,60 @@ const ViewerCanvas = memo(function ViewerCanvas({
   )
 })
 
+function PreviewStage({
+  isFirstPersonMode,
+  mode,
+  onModeChange,
+  showLoader,
+  viewerContent,
+}: {
+  isFirstPersonMode: boolean
+  mode: ViewerStageMode
+  onModeChange: (mode: ViewerStageMode) => void
+  showLoader: boolean
+  viewerContent: ReactNode
+}) {
+  const hasFloorplan = useScene((state) =>
+    Object.values(state.nodes).some((node) => node.type === 'level'),
+  )
+
+  const handleModeChange = useCallback(
+    (nextMode: ViewerStageMode) => {
+      if (nextMode !== '3d') useEditor.getState().setFirstPersonMode(false)
+      onModeChange(nextMode)
+    },
+    [onModeChange],
+  )
+
+  const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
+  const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
+
+  return (
+    <div className="dark relative h-full w-full overflow-hidden bg-neutral-100 text-foreground">
+      {isFirstPersonMode ? (
+        <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+      ) : (
+        <ViewerOverlay
+          hideBottomBar={stageMode !== '3d'}
+          onBack={() => useEditor.getState().setPreviewMode(false)}
+        />
+      )}
+
+      <ViewerStage
+        className="absolute inset-0"
+        mode={stageMode}
+        modes={stageModes}
+        onModeChange={handleModeChange}
+        showCompass={hasFloorplan && !isFirstPersonMode}
+        showSwitcher={hasFloorplan && !isFirstPersonMode}
+        switcherClassName={`${PREVIEW_STAGE_SWITCHER_POSITION} ${showLoader ? 'z-[70]' : ''}`}
+      >
+        {viewerContent}
+      </ViewerStage>
+    </div>
+  )
+}
+
 export default function Editor({
   layoutVersion = 'v1',
   appMenuButton,
@@ -1166,6 +1224,7 @@ export default function Editor({
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
   const [sceneReadyKey, setSceneReadyKey] = useState(0)
   const [isViewerSceneReady, setIsViewerSceneReady] = useState(false)
+  const [previewStageMode, setPreviewStageMode] = useState<ViewerStageMode>('3d')
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
 
@@ -1262,6 +1321,10 @@ export default function Editor({
   }, [isVersionPreviewMode])
 
   useEffect(() => {
+    if (!isPreviewMode) setPreviewStageMode('3d')
+  }, [isPreviewMode])
+
+  useEffect(() => {
     document.body.classList.add('dark')
     return () => {
       document.body.classList.remove('dark')
@@ -1286,10 +1349,19 @@ export default function Editor({
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
 
   const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
+  const visibleLoader =
+    showLoader &&
+    !(
+      isPreviewMode &&
+      previewStageMode === '2d' &&
+      !isLoading &&
+      !isSceneLoading &&
+      hasLoadedInitialScene
+    )
 
   useEffect(() => {
-    onLoaderChange?.(showLoader)
-  }, [showLoader, onLoaderChange])
+    onLoaderChange?.(visibleLoader)
+  }, [visibleLoader, onLoaderChange])
 
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
@@ -1415,23 +1487,20 @@ export default function Editor({
     return (
       <>
         <FloorplanModeCoordinator />
-        {showLoader && (
+        {visibleLoader && (
           <div className="fixed inset-0 z-60">
             <SceneLoader className="bg-background" />
           </div>
         )}
 
         {!isLoading && isPreviewMode ? (
-          <div className="dark flex h-full w-full flex-col bg-neutral-100 text-foreground">
-            {isFirstPersonMode ? (
-              <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-            ) : (
-              <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-            )}
-            <div className="h-full w-full" data-pascal-viewer-3d>
-              {previewViewerContent}
-            </div>
-          </div>
+          <PreviewStage
+            isFirstPersonMode={isFirstPersonMode}
+            mode={previewStageMode}
+            onModeChange={setPreviewStageMode}
+            showLoader={visibleLoader}
+            viewerContent={previewViewerContent}
+          />
         ) : (
           <>
             <EditorLayoutV2
@@ -1491,23 +1560,20 @@ export default function Editor({
   return (
     <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
       <FloorplanModeCoordinator />
-      {showLoader && (
+      {visibleLoader && (
         <div className="fixed inset-0 z-60">
           <SceneLoader className="bg-background" />
         </div>
       )}
 
       {!isLoading && isPreviewMode ? (
-        <>
-          {isFirstPersonMode ? (
-            <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-          ) : (
-            <ViewerOverlay onBack={() => useEditor.getState().setPreviewMode(false)} />
-          )}
-          <div className="h-full w-full" data-pascal-viewer-3d>
-            {previewViewerContent}
-          </div>
-        </>
+        <PreviewStage
+          isFirstPersonMode={isFirstPersonMode}
+          mode={previewStageMode}
+          onModeChange={setPreviewStageMode}
+          showLoader={visibleLoader}
+          viewerContent={previewViewerContent}
+        />
       ) : (
         <>
           {/* Sidebar */}
