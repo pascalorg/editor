@@ -2,6 +2,7 @@ import {
   applyCollaborationBatch,
   type CollaborationBatch,
   collaborationSnapshot,
+  hashModelSnapshot,
 } from '@pascal-app/core/collaboration'
 import { after } from 'next/server'
 import { z } from 'zod'
@@ -52,6 +53,14 @@ const collaborationBatchSchema = z.object({
   clock: z.number().int().nonnegative(),
   operationId: z.string().min(1).max(128),
   /**
+   * The model signature the client expects the merged result to have, a
+   * canonical SHA-256 hex digest (`hashModelSnapshot`). When it matches the
+   * graph this batch produced, the client already has the result and the full
+   * graph is elided from the response. Absent, the graph is always returned —
+   * the safe default for a caller that does not say what it expects.
+   */
+  expectedSignature: z.string().max(64).optional(),
+  /**
    * Live editing lands here, one batch per gesture — this is *the* write path
    * for the model in this app, not the autosave PUT, which only ever carries
    * comments once the collaboration channel is up. So it defaults to `draft`:
@@ -74,6 +83,29 @@ const collaborationBatchSchema = z.object({
     .min(1)
     .max(20_000),
 })
+
+/**
+ * The graph to hand back to the publisher, or `null` when the publisher
+ * already has it. Exported so the elision rule is testable without a store.
+ */
+export function collaborationGraphToReturn(
+  graph: {
+    nodes: Record<string, unknown>
+    rootNodeIds: string[]
+    collections?: unknown
+    savedViews?: unknown
+    definitions?: unknown
+    materials?: unknown
+    installedPlugins?: unknown
+  },
+  expectedSignature: string | undefined,
+): typeof graph | null {
+  if (expectedSignature === undefined) return graph
+  const resultSignature = hashModelSnapshot(
+    collaborationSnapshot(graph.nodes as never, graph.rootNodeIds as never, graph as never),
+  )
+  return resultSignature === expectedSignature ? null : graph
+}
 
 export function OPTIONS(request: Request) {
   return sceneApiPreflight(request)
@@ -153,14 +185,18 @@ export async function POST(request: Request, { params }: RouteParams) {
         })
       }
 
-      // The broadcast event carries no graph, but this response does: the
-      // publisher needs the merged result to reconcile against, it is one
-      // reader rather than every subscriber, and the server already has it in
-      // hand — making them refetch what it just computed would be a round trip
-      // for nothing.
+      // The broadcast event carries no graph, but this response carries the
+      // merged result for the publisher to reconcile against — unless the
+      // publisher already has it, which the matching signature proves. In the
+      // common conflict-free case that is the whole graph elided: the client's
+      // optimistic state is already what the server stored.
       return sceneApiJson(
         request,
-        { event, graph: validated.data, conflicts: applied.conflicts },
+        {
+          event,
+          graph: collaborationGraphToReturn(validated.data, parsed.data.expectedSignature),
+          conflicts: applied.conflicts,
+        },
         { status: 201 },
       )
     } catch (error) {

@@ -654,3 +654,5 @@ export function collaborationSnapshot(
     installedPlugins: records.installedPlugins ?? [],
   }
 }
+
+export { canonicalJson, hashModelSnapshot, sha256Hex } from './model-signature'

@@ -9,6 +9,7 @@ export {
   type CollaborationStamp,
   collaborationSnapshot,
   createCollaborationBatch,
+  hashModelSnapshot,
   SceneCollaborationDocument,
   subscribeCollaborationCommits,
 } from './collaboration/scene-collaboration'

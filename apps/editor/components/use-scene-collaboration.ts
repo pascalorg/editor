@@ -10,6 +10,8 @@ import {
   collaborationSnapshot,
   createCollaborationBatch,
   getSceneHistoryPauseDepth,
+  hashModelSnapshot,
+  type SceneSnapshot,
   subscribeCollaborationCommits,
   useScene,
 } from '@pascal-app/core'
@@ -34,8 +36,12 @@ type CollaborationSceneEvent = {
 type CollaborationResponse = {
   /** Notification shape: no graph, the same as what the SSE feed carries. */
   event: Omit<CollaborationSceneEvent, 'graph'> | null
-  /** The merged result, returned only to the publisher that asked for it. */
-  graph: SceneGraph
+  /**
+   * The merged result, returned only to the publisher that asked for it —
+   * `null` when the publisher's expected signature already matched, so the
+   * client keeps its own optimistic state.
+   */
+  graph: SceneGraph | null
   conflicts: CollaborationConflict[]
 }
 
@@ -65,6 +71,26 @@ function snapshotFromGraph(graph: SceneGraph) {
     graph.rootNodeIds as AnyNodeId[],
     graph as never,
   )
+}
+
+/**
+ * Rebuild a `SceneGraph` from the snapshot the server just acknowledged. Used
+ * only when the server elides the graph (`graph: null`): the snapshot is
+ * already what was stored, so it becomes the authoritative graph for the echo
+ * refs without a second round trip. Comments ride a separate write path and
+ * are taken from the live store.
+ */
+function graphFromSnapshot(snapshot: SceneSnapshot): SceneGraph {
+  return {
+    nodes: snapshot.nodes,
+    rootNodeIds: snapshot.rootNodeIds,
+    collections: snapshot.collections,
+    savedViews: snapshot.savedViews,
+    definitions: snapshot.definitions,
+    materials: snapshot.materials,
+    installedPlugins: snapshot.installedPlugins,
+    comments: useScene.getState().comments,
+  } as unknown as SceneGraph
 }
 
 function currentModelSignature(): string {
@@ -171,8 +197,9 @@ export function useSceneCollaboration({
      */
     let lastCheckpointAt = Date.now()
 
-    const publish = (batch: CollaborationBatch) => {
+    const publish = (batch: CollaborationBatch, expected: SceneSnapshot) => {
       if (batch.changes.length === 0) return
+      const expectedSignature = hashModelSnapshot(expected)
       const now = Date.now()
       const saveMode =
         now - lastCheckpointAt >= COLLABORATION_CHECKPOINT_MS ? 'checkpoint' : 'draft'
@@ -186,7 +213,7 @@ export function useSceneCollaboration({
               response = await fetch(`/api/scenes/${sceneId}/collaboration`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...batch, saveMode }),
+                body: JSON.stringify({ ...batch, saveMode, expectedSignature }),
               })
               if (response.ok || response.status < 500) break
             } catch {
@@ -197,11 +224,22 @@ export function useSceneCollaboration({
           const payload = (await response.json()) as CollaborationResponse
           showConflicts(payload.conflicts)
           if (payload.event) {
-            const authoritative = { ...payload.event, graph: payload.graph }
-            clock = Math.max(clock, authoritative.version)
-            versionRef.current = Math.max(versionRef.current, authoritative.version)
-            if (!latestAuthoritative || authoritative.version > latestAuthoritative.version) {
-              latestAuthoritative = authoritative
+            clock = Math.max(clock, payload.event.version)
+            versionRef.current = Math.max(versionRef.current, payload.event.version)
+            if (payload.graph) {
+              const authoritative = { ...payload.event, graph: payload.graph }
+              if (!latestAuthoritative || authoritative.version > latestAuthoritative.version) {
+                latestAuthoritative = authoritative
+              }
+            } else {
+              // The server matched our expected state, so there is nothing to
+              // apply — but the echo refs still have to advance, or a later
+              // comment-only autosave reads this batch's model change as an
+              // unsaved diff and skips the save.
+              onAuthoritativeGraphRef.current({
+                ...payload.event,
+                graph: graphFromSnapshot(expected),
+              })
             }
           }
           onErrorRef.current(null)
@@ -229,7 +267,7 @@ export function useSceneCollaboration({
       if (!result) return
       applySceneSnapshot(result.snapshot, { origin: 'host' })
       syncEditorSelectionFromCurrentScene()
-      publish(result.batch)
+      publish(result.batch, result.snapshot)
     }
     const stopHistory = installHistoryCommandDelegate({
       undo: () => applyHistoryResult(history.undo(currentSnapshot(), nextStamp())),
@@ -247,7 +285,7 @@ export function useSceneCollaboration({
       })
       if (batch.changes.length === 0) return
       history.record(commit)
-      publish(batch)
+      publish(batch, commit.current)
     })
     waitRef.current = () => publishQueue.then(() => {})
 
