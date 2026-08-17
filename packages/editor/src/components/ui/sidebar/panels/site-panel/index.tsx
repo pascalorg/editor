@@ -54,9 +54,6 @@ import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { CollectionsSection } from '../../../panels/collections/collections-section'
-import { AgentActivitySection } from '../../../panels/agent/agent-activity-section'
-import { AgentPromptBox } from '../../../panels/agent/agent-prompt-box'
-import { CommentsSection } from '../../../panels/comments/comments-section'
 import { SavedViewsSection } from '../../../panels/saved-views/saved-views-section'
 import { ImportCadDialog } from '../../../dialogs/import-cad-dialog'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
@@ -1655,13 +1652,60 @@ export interface SitePanelProps {
 export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanelProps = {}) {
   const t = useTranslation()
   const rootNodeIds = useScene((state) => state.rootNodeIds)
-  const updateNode = useScene((state) => state.updateNode)
-  const selectedBuildingId = useViewer((state) => state.selection.buildingId)
-  const setSelection = useViewer((state) => state.setSelection)
   const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
 
   const [siteCameraOpen, setSiteCameraOpen] = useState(false)
+
+  const siteNode = useScene((s) =>
+    rootNodeIds[0] ? ((s.nodes[rootNodeIds[0]] as SiteNode | undefined) ?? null) : null,
+  )
+
+  useEffect(() => {
+    if (phase !== 'site') {
+      setPhase('site')
+    }
+  }, [phase, setPhase])
+
+  return (
+    <div className="flex h-full flex-col overflow-y-auto">
+      {siteNode && (
+        <div className="flex shrink-0 items-center justify-between border-border/50 border-b px-3 py-3 bg-accent/50 text-foreground">
+          <div className="flex items-center gap-2">
+            <img
+              alt="Site"
+              className="h-5 w-5 object-contain"
+              src="/icons/site-flag.webp"
+            />
+            <span className="font-medium text-sm">{siteNode.name || t('Site')}</span>
+          </div>
+          <CameraPopover
+            buttonClassName="transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+            hasCamera={!!siteNode.camera}
+            nodeId={siteNode.id as AnyNodeId}
+            onOpenChange={setSiteCameraOpen}
+            open={siteCameraOpen}
+          />
+        </div>
+      )}
+
+      <PropertyLineSection />
+      {siteNode && <ParcelImporter siteNode={siteNode} />}
+      <ParcelSetbackSection />
+      <ZoningSection />
+
+      <SavedViewsSection />
+      <CollectionsSection />
+    </div>
+  )
+}
+
+export function BuildingPanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanelProps = {}) {
+  const rootNodeIds = useScene((state) => state.rootNodeIds)
+  const selectedBuildingId = useViewer((state) => state.selection.buildingId)
+  const phase = useEditor((state) => state.phase)
+  const setPhase = useEditor((state) => state.setPhase)
+
   const [buildingCameraOpen, setBuildingCameraOpen] = useState<string | null>(null)
 
   const siteNode = useScene((s) =>
@@ -1676,114 +1720,43 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
     }),
   )
 
+  useEffect(() => {
+    if (phase === 'site') {
+      setPhase('structure')
+    }
+  }, [phase, setPhase])
+
   return (
     <LayoutGroup>
       <div className="flex h-full flex-col">
-        {/* Site Header */}
-        {siteNode && (
-          <motion.div
-            className={cn(
-              'flex shrink-0 cursor-pointer items-center justify-between border-border/50 border-b px-3 py-3 transition-colors',
-              phase === 'site'
-                ? 'bg-accent/50 text-foreground'
-                : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
-            )}
-            layout="position"
-            onClick={() => setPhase('site')}
-          >
-            <div className="flex items-center gap-2">
-              <img
-                alt="Site"
-                className={cn(
-                  'h-5 w-5 object-contain transition-all',
-                  phase !== 'site' && 'opacity-60 grayscale',
-                )}
-                src="/icons/site-flag.webp"
-              />
-              <span className="font-medium text-sm">{siteNode.name || t('Site')}</span>
-            </div>
-            <CameraPopover
-              buttonClassName={cn(
-                'transition-colors',
-                phase === 'site' ? 'hover:bg-black/5 dark:hover:bg-white/10' : 'hover:bg-accent',
-              )}
-              hasCamera={!!siteNode.camera}
-              nodeId={siteNode.id as AnyNodeId}
-              onOpenChange={setSiteCameraOpen}
-              open={siteCameraOpen}
-            />
-          </motion.div>
+        {buildings.length === 0 ? (
+          <LocalizedContent>
+            <motion.div className="px-3 py-4 text-muted-foreground text-sm" layout="position">
+              No buildings yet
+            </motion.div>
+          </LocalizedContent>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col">
+            {buildings.map((building) => {
+              const isBuildingActive =
+                (phase === 'structure' || phase === 'furnish') &&
+                selectedBuildingId === building.id
+
+              return (
+                <BuildingItem
+                  building={building}
+                  buildingCameraOpen={buildingCameraOpen}
+                  isBuildingActive={isBuildingActive}
+                  key={building.id}
+                  onDeleteAsset={onDeleteAsset}
+                  onUploadAsset={onUploadAsset}
+                  projectId={projectId}
+                  setBuildingCameraOpen={setBuildingCameraOpen}
+                />
+              )
+            })}
+          </div>
         )}
-
-        <motion.div
-          className={cn('flex min-h-0 flex-1 flex-col', phase === 'site' && 'overflow-y-auto')}
-          layout
-        >
-          {/* When phase is site, show property line immediately under site header */}
-          <AnimatePresence initial={false}>
-            {phase === 'site' && (
-              <motion.div
-                animate={{ height: 'auto', opacity: 1 }}
-                className="shrink-0 overflow-hidden"
-                exit={{ height: 0, opacity: 0 }}
-                initial={{ height: 0, opacity: 0 }}
-                layout="position"
-                transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
-              >
-                <PropertyLineSection />
-                {siteNode && <ParcelImporter siteNode={siteNode} />}
-                <ParcelSetbackSection />
-                <ZoningSection />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Saved views — above collections because activating a view rewrites
-              collection visibility, so this is the control that owns it. */}
-          <SavedViewsSection />
-
-          {/* Comments — under the views because a thread's "go there" is the
-              same gesture a saved view performs. */}
-          <CommentsSection />
-
-          {/* Agent activity — what the connected MCP client has been doing. */}
-          <AgentPromptBox />
-          <AgentActivitySection />
-
-          {/* Collections — above the buildings tree because a hidden collection
-              has no members left in that tree to reach it from. */}
-          <CollectionsSection />
-
-          {/* Buildings List */}
-          {buildings.length === 0 ? (
-            <LocalizedContent>
-              <motion.div className="px-3 py-4 text-muted-foreground text-sm" layout="position">
-                No buildings yet
-              </motion.div>
-            </LocalizedContent>
-          ) : (
-            <div className="flex min-h-0 flex-1 flex-col">
-              {buildings.map((building) => {
-                const isBuildingActive =
-                  (phase === 'structure' || phase === 'furnish') &&
-                  selectedBuildingId === building.id
-
-                return (
-                  <BuildingItem
-                    building={building}
-                    buildingCameraOpen={buildingCameraOpen}
-                    isBuildingActive={isBuildingActive}
-                    key={building.id}
-                    onDeleteAsset={onDeleteAsset}
-                    onUploadAsset={onUploadAsset}
-                    projectId={projectId}
-                    setBuildingCameraOpen={setBuildingCameraOpen}
-                  />
-                )
-              })}
-            </div>
-          )}
-        </motion.div>
       </div>
     </LayoutGroup>
   )

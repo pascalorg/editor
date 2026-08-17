@@ -64,9 +64,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/toolti
 import { SceneLoader } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
+import { ActivityPanel } from '../ui/sidebar/panels/activity-panel'
 import { ComponentsPanel } from '../ui/sidebar/panels/components-panel'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
-import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
+import { BuildingPanel, SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { AgentReviewBar } from './agent-review-bar'
@@ -1462,6 +1463,12 @@ function EditorInner({
       // Built-in panels
       if (tabId === 'site') {
         return <SitePanel {...sitePanelProps} />
+      }
+      if (tabId === 'building') {
+        return <BuildingPanel {...sitePanelProps} />
+      }
+      if (tabId === 'activity') {
+        return <ActivityPanel />
       }
       if (tabId === 'settings') {
         return <SettingsPanel {...settingsPanelProps} />

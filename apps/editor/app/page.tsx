@@ -7,7 +7,7 @@ import {
   SunStudyPanel,
   useTranslation,
 } from '@pascal-app/editor'
-import { Hammer, Layers, Package, Settings, Sigma, Sun } from 'lucide-react'
+import { Hammer, Layers, MessageSquare, Package, Settings, Sigma, Sun } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
@@ -29,7 +29,7 @@ function sidebarTabs(t: (text: string) => string) {
   return [
     {
       id: 'site',
-      label: t('Scene'),
+      label: t('Site'),
       component: () => null,
       mobileDefaultSnap: 0.5,
       mobileIcon: <Layers className="h-5 w-5" />,
@@ -38,10 +38,34 @@ function sidebarTabs(t: (text: string) => string) {
           alt=""
           className="h-8 w-8 object-contain"
           height={32}
-          src="/icons/scene.webp"
+          src="/icons/site-flag.webp"
           width={32}
         />
       ),
+    },
+    {
+      id: 'building',
+      label: t('Building'),
+      component: () => null,
+      mobileDefaultSnap: 0.5,
+      mobileIcon: <Layers className="h-5 w-5" />,
+      icon: (
+        <Image
+          alt=""
+          className="h-8 w-8 object-contain"
+          height={32}
+          src="/icons/building.webp"
+          width={32}
+        />
+      ),
+    },
+    {
+      id: 'activity',
+      label: t('Activity'),
+      component: () => null,
+      mobileDefaultSnap: 0.5,
+      mobileIcon: <MessageSquare className="h-5 w-5" />,
+      icon: <MessageSquare className="h-5 w-5" />,
     },
     {
       id: 'build',
