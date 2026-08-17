@@ -17,6 +17,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { FrontSide, type Group, type Material, type Mesh, type Object3D } from 'three'
+import { disposeObject3DResources } from '../../lib/dispose-object3d'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -338,22 +339,7 @@ function disposeChildren(group: Group) {
       ?.__fromGeometry
     if (!fromGeometry) continue
     group.remove(child)
-    const mesh = child as Partial<Mesh> & { geometry?: { dispose?: () => void } }
-    if (mesh.geometry?.dispose) mesh.geometry.dispose()
-    if ('material' in mesh) {
-      const m = (mesh as { material: unknown }).material
-      if (Array.isArray(m)) {
-        for (const mat of m) {
-          if (isCachedMaterial(mat)) continue
-          if (mat && typeof (mat as { dispose?: () => void }).dispose === 'function') {
-            ;(mat as { dispose: () => void }).dispose()
-          }
-        }
-      } else if (isCachedMaterial(m)) {
-      } else if (m && typeof (m as { dispose?: () => void }).dispose === 'function') {
-        ;(m as { dispose: () => void }).dispose()
-      }
-    }
+    disposeObject3DResources(child)
   }
 }
 
@@ -400,13 +386,6 @@ function isSurfaceRole(value: string): value is SurfaceRole {
 function getMaterialSide(material: Material | Material[]): Material['side'] {
   const source = Array.isArray(material) ? material[0] : material
   return source?.side ?? FrontSide
-}
-
-function isCachedMaterial(value: unknown): boolean {
-  return Boolean(
-    (value as { userData?: { __pascalCachedMaterial?: boolean } } | null)?.userData
-      ?.__pascalCachedMaterial,
-  )
 }
 
 export default GeometrySystem

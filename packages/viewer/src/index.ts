@@ -73,6 +73,7 @@ export {
   prepareBrushForCSG,
   SUBTRACTION,
 } from './lib/csg-utils'
+export { disposeObject3DResources } from './lib/dispose-object3d'
 export type { EdgeMode } from './lib/edge-style'
 export {
   computeHeroFraming,

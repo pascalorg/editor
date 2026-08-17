@@ -375,6 +375,8 @@ interface ViewerProps {
    * `?disable=postFx` diagnostic URL flag, but host-controlled.
    */
   disablePostFx?: boolean
+  /** Keep the mounted renderer/context warm without advancing scene frames. */
+  renderPaused?: boolean
 }
 
 /** Imperative handle exposed via `ref` on `<Viewer>`. */
@@ -404,6 +406,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     sceneReadyMaxWaitMs,
     maxFps = 50,
     disablePostFx = false,
+    renderPaused = false,
   },
   ref,
 ) {
@@ -569,7 +572,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         enabled: shadowsEnabled,
       }}
     >
-      <FrameLimiter fps={maxFps} />
+      <FrameLimiter fps={maxFps} paused={renderPaused} />
       <ViewerCamera />
       <GPUDeviceWatcher />
       <ToneMappingExposure />
