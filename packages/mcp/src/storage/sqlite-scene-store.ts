@@ -1,9 +1,11 @@
 import { mkdirSync } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { readEnv } from '../lib/env'
 import {
   assertValidName,
+  countGraphNodes,
   DEFAULT_LIST_LIMIT,
   editorUrlForScene,
   hashGraphJson,
@@ -26,7 +28,10 @@ import {
   type SceneMeta,
   type SceneMutateOptions,
   SceneNotFoundError,
+  type SceneRevisionMeta,
   type SceneSaveOptions,
+  type SceneShare,
+  type SceneShareRole,
   type SceneStore,
   SceneTooLargeError,
   SceneVersionConflictError,
@@ -443,6 +448,11 @@ export class SqliteSceneStore implements SceneStore {
     if (opts.ownerId !== undefined) {
       clauses.push('owner_id = ?')
       bindings.push(opts.ownerId)
+    } else if (opts.viewerId !== undefined) {
+      // Owned by the viewer OR shared with them. `ownerId` wins when both are
+      // set (an explicit owner query), so this branch is `else if`.
+      clauses.push('(owner_id = ? OR id IN (SELECT scene_id FROM scene_shares WHERE user_id = ?))')
+      bindings.push(opts.viewerId, opts.viewerId)
     }
 
     const requestedLimit = opts.limit ?? DEFAULT_LIST_LIMIT
@@ -568,6 +578,82 @@ export class SqliteSceneStore implements SceneStore {
     return rows.map((row) => rowToSceneEvent(row as SceneEventRow))
   }
 
+  async listSceneShares(sceneId: string): Promise<SceneShare[]> {
+    const db = await this.database()
+    const rows = db
+      .query('SELECT user_id, role FROM scene_shares WHERE scene_id = ? ORDER BY granted_at ASC')
+      .all(sanitizeSlug(sceneId)) as Array<{ user_id: string; role: string }>
+    return rows.map((r) => ({ userId: r.user_id, role: r.role as SceneShareRole }))
+  }
+
+  async setSceneShares(
+    sceneId: string,
+    shares: SceneShare[],
+    grantedBy: string | null = null,
+  ): Promise<void> {
+    const safeId = sanitizeSlug(sceneId)
+    const now = new Date().toISOString()
+    await this.withWriteTransaction((db) => {
+      db.query('DELETE FROM scene_shares WHERE scene_id = ?').run(safeId)
+      const insert = db.query(
+        `INSERT INTO scene_shares (scene_id, user_id, role, granted_by, granted_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      for (const share of shares) {
+        insert.run(safeId, share.userId, share.role, grantedBy, now)
+      }
+    })
+  }
+
+  async getSceneShareRole(sceneId: string, userId: string): Promise<SceneShareRole | null> {
+    const db = await this.database()
+    const row = db
+      .query('SELECT role FROM scene_shares WHERE scene_id = ? AND user_id = ?')
+      .get(sanitizeSlug(sceneId), userId) as { role: string } | null | undefined
+    return row ? (row.role as SceneShareRole) : null
+  }
+
+  async listSceneRevisions(sceneId: string): Promise<SceneRevisionMeta[]> {
+    const db = await this.database()
+    const rows = db
+      .query(
+        `SELECT version, author_kind, created_at, graph_json
+           FROM scene_revisions
+          WHERE scene_id = ?
+          ORDER BY version DESC`,
+      )
+      .all(sanitizeSlug(sceneId)) as Array<{
+      version: number
+      author_kind: string
+      created_at: string
+      graph_json: string
+    }>
+    return rows.map((r) => ({
+      version: Number(r.version),
+      createdAt: r.created_at,
+      authorKind: r.author_kind,
+      nodeCount: countGraphNodes(r.graph_json),
+      sizeBytes: Buffer.byteLength(r.graph_json, 'utf8'),
+    }))
+  }
+
+  async loadSceneRevision(sceneId: string, version: number): Promise<SceneGraph | null> {
+    const db = await this.database()
+    const row = db
+      .query('SELECT graph_json FROM scene_revisions WHERE scene_id = ? AND version = ?')
+      .get(sanitizeSlug(sceneId), version) as { graph_json: string } | null | undefined
+    if (!row) return null
+    return parseGraph(row.graph_json, `${sceneId}@${version}`)
+  }
+
+  async updateThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void> {
+    const db = await this.database()
+    db.query('UPDATE scenes SET thumbnail_url = ? WHERE id = ?').run(
+      thumbnailUrl,
+      sanitizeSlug(sceneId),
+    )
+  }
+
   close(): void {
     this.db?.close()
     this.db = null
@@ -645,6 +731,19 @@ export class SqliteSceneStore implements SceneStore {
 
       CREATE INDEX IF NOT EXISTS scene_events_scene_event_idx
         ON scene_events(scene_id, event_id);
+
+      CREATE TABLE IF NOT EXISTS scene_shares (
+        scene_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('viewer', 'editor')),
+        granted_by TEXT,
+        granted_at TEXT NOT NULL,
+        PRIMARY KEY (scene_id, user_id),
+        FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS scene_shares_user_idx
+        ON scene_shares(user_id);
     `)
   }
 

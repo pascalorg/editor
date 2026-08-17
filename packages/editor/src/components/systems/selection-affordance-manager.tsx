@@ -3,6 +3,7 @@
 import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, Suspense, useMemo } from 'react'
+import { useIsNodeIdEditLocked } from '../../lib/edit-lock'
 import { getRegistryAffordanceTool } from '../tools/shared/affordance-dispatch'
 
 /**
@@ -19,17 +20,18 @@ import { getRegistryAffordanceTool } from '../tools/shared/affordance-dispatch'
  */
 export function SelectionAffordanceManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const selectedKind = useScene((s) => {
-    if (selectedIds.length !== 1) return null
-    return s.nodes[selectedIds[0] as AnyNodeId]?.type ?? null
-  })
+  const selectedId = selectedIds.length === 1 ? (selectedIds[0] as AnyNodeId) : null
+  const selectedKind = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
+  // A locked node's drag-to-edit affordances (duct/pipe path points, etc.) do
+  // not mount; it stays selectable and inspectable.
+  const editLocked = useIsNodeIdEditLocked(selectedId)
 
   const Component = useMemo<ComponentType | null>(() => {
     if (!selectedKind) return null
     return getRegistryAffordanceTool(selectedKind, 'selection')
   }, [selectedKind])
 
-  if (!Component) return null
+  if (!Component || editLocked) return null
   return (
     <Suspense fallback={null}>
       <Component />

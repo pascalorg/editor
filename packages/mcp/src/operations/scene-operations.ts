@@ -10,7 +10,10 @@ import type {
   SceneListOptions,
   SceneMeta,
   SceneMutateOptions,
+  SceneRevisionMeta,
   SceneSaveOptions,
+  SceneShare,
+  SceneShareRole,
   SceneStore,
   SceneWithGraph,
 } from '../storage/types'
@@ -73,6 +76,17 @@ export interface SceneOperations {
   renameStoredScene(id: string, newName: string, options?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null>
   listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]>
+
+  readonly canShareScenes: boolean
+  listSceneShares(sceneId: string): Promise<SceneShare[]>
+  setSceneShares(sceneId: string, shares: SceneShare[], grantedBy?: string | null): Promise<void>
+  getSceneShareRole(sceneId: string, userId: string): Promise<SceneShareRole | null>
+
+  readonly canReadSceneRevisions: boolean
+  readonly canUpdateThumbnail: boolean
+  listSceneRevisions(sceneId: string): Promise<SceneRevisionMeta[]>
+  loadSceneRevision(sceneId: string, version: number): Promise<SceneGraph | null>
+  updateSceneThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void>
 }
 
 export function createSceneOperations(options: CreateSceneOperationsOptions): SceneOperations {
@@ -106,6 +120,25 @@ class SceneOperationsFacade implements SceneOperations {
 
   get canListSceneEvents(): boolean {
     return typeof this.#store?.listSceneEvents === 'function'
+  }
+
+  get canShareScenes(): boolean {
+    return (
+      typeof this.#store?.listSceneShares === 'function' &&
+      typeof this.#store?.setSceneShares === 'function' &&
+      typeof this.#store?.getSceneShareRole === 'function'
+    )
+  }
+
+  get canReadSceneRevisions(): boolean {
+    return (
+      typeof this.#store?.listSceneRevisions === 'function' &&
+      typeof this.#store?.loadSceneRevision === 'function'
+    )
+  }
+
+  get canUpdateThumbnail(): boolean {
+    return typeof this.#store?.updateThumbnail === 'function'
   }
 
   get canCreateProject(): boolean {
@@ -309,6 +342,46 @@ class SceneOperationsFacade implements SceneOperations {
       throw new Error('scene_events_unavailable')
     }
     return store.listSceneEvents(id, options)
+  }
+
+  async listSceneShares(sceneId: string): Promise<SceneShare[]> {
+    const store = this.requireStore()
+    if (!store.listSceneShares) throw new Error('scene_shares_unavailable')
+    return store.listSceneShares(sceneId)
+  }
+
+  async setSceneShares(
+    sceneId: string,
+    shares: SceneShare[],
+    grantedBy?: string | null,
+  ): Promise<void> {
+    const store = this.requireStore()
+    if (!store.setSceneShares) throw new Error('scene_shares_unavailable')
+    return store.setSceneShares(sceneId, shares, grantedBy)
+  }
+
+  async getSceneShareRole(sceneId: string, userId: string): Promise<SceneShareRole | null> {
+    const store = this.requireStore()
+    if (!store.getSceneShareRole) throw new Error('scene_shares_unavailable')
+    return store.getSceneShareRole(sceneId, userId)
+  }
+
+  async listSceneRevisions(sceneId: string): Promise<SceneRevisionMeta[]> {
+    const store = this.requireStore()
+    if (!store.listSceneRevisions) throw new Error('scene_revisions_unavailable')
+    return store.listSceneRevisions(sceneId)
+  }
+
+  async loadSceneRevision(sceneId: string, version: number): Promise<SceneGraph | null> {
+    const store = this.requireStore()
+    if (!store.loadSceneRevision) throw new Error('scene_revisions_unavailable')
+    return store.loadSceneRevision(sceneId, version)
+  }
+
+  async updateSceneThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void> {
+    const store = this.requireStore()
+    if (!store.updateThumbnail) throw new Error('thumbnail_unavailable')
+    return store.updateThumbnail(sceneId, thumbnailUrl)
   }
 
   private requireBridge(): SceneBridge {

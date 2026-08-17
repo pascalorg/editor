@@ -1,9 +1,23 @@
 'use client'
 
 import { useApp } from '@panel/components/app-providers'
-import { Toast } from '@panel/components/ui/feedback'
+import { Button, SegBar, SegButton } from '@panel/components/ui/controls'
+import { Dialog, Toast } from '@panel/components/ui/feedback'
+import { call } from '@panel/lib/client-api'
 import { formatDate } from '@panel/lib/i18n'
 import { useCallback, useEffect, useState } from 'react'
+
+type ShareRole = 'viewer' | 'editor'
+interface SceneShareRow {
+  userId: string
+  role: ShareRole
+  email: string | null
+}
+interface SceneSharesPayload {
+  shares: SceneShareRow[]
+  users: { id: string; email: string }[]
+  ownerId: string | null
+}
 
 /**
  * The 3D scenes on the server: every scene, its owner, reassignment and the
@@ -37,6 +51,7 @@ export function ScenesTab() {
   const { t, lang } = useApp()
 
   const [data, setData] = useState<AdminScenesPayload | null>(null)
+  const [sharing, setSharing] = useState<AdminSceneRow | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null)
@@ -178,6 +193,14 @@ export function ScenesTab() {
                     <button
                       className={ACTION}
                       disabled={busy}
+                      onClick={() => setSharing(scene)}
+                      type="button"
+                    >
+                      {lang === 'tr' ? 'Paylaş' : 'Share'}
+                    </button>
+                    <button
+                      className={ACTION}
+                      disabled={busy}
                       onClick={() => {
                         const name = window.prompt(t.scRenamePrompt, scene.name)?.trim()
                         if (name && name !== scene.name) {
@@ -234,7 +257,181 @@ export function ScenesTab() {
         </table>
       </div>
 
+      {sharing ? (
+        <SceneShareManager
+          lang={lang}
+          scene={sharing}
+          onClose={() => setSharing(null)}
+          onSaved={() => {
+            setSharing(null)
+            notify(t.scSaved, 'success')
+          }}
+          onError={(message) => notify(message, 'error')}
+        />
+      ) : null}
+
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </section>
+  )
+}
+
+function pick(lang: string, tr: string, en: string): string {
+  return lang === 'tr' ? tr : en
+}
+
+/**
+ * Manage which accounts a scene is shared with, per-user viewer/editor. Admins
+ * reach any scene here, which is what makes this the home for sharing projects
+ * an admin does not own. Strings are inline bilingual rather than i18n keys:
+ * this file is editor-owned and its keys do not exist in the console's own
+ * dictionary, so a `t.*` reference would break the panel repo on sync.
+ */
+function SceneShareManager({
+  lang,
+  scene,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  lang: string
+  scene: AdminSceneRow
+  onClose: () => void
+  onSaved: () => void
+  onError: (message: string) => void
+}) {
+  const [payload, setPayload] = useState<SceneSharesPayload | null>(null)
+  const [shares, setShares] = useState<SceneShareRow[]>([])
+  const [addId, setAddId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      const res = await call<SceneSharesPayload>(`/api/scenes/${scene.id}/shares`)
+      if (!alive) return
+      if (res.ok) {
+        setPayload(res.data)
+        setShares(res.data.shares)
+      } else {
+        setLoadError(pick(lang, 'Paylaşımlar yüklenemedi.', 'Could not load shares.'))
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [scene.id, lang])
+
+  const candidates = (payload?.users ?? []).filter((u) => !shares.some((s) => s.userId === u.id))
+
+  const setRole = (userId: string, role: ShareRole) =>
+    setShares((prev) => prev.map((s) => (s.userId === userId ? { ...s, role } : s)))
+  const remove = (userId: string) => setShares((prev) => prev.filter((s) => s.userId !== userId))
+  const add = () => {
+    if (!addId) return
+    const user = payload?.users.find((u) => u.id === addId)
+    setShares((prev) => [...prev, { userId: addId, role: 'viewer', email: user?.email ?? null }])
+    setAddId('')
+  }
+
+  const save = async () => {
+    setBusy(true)
+    const res = await call(`/api/scenes/${scene.id}/shares`, {
+      method: 'PUT',
+      body: { shares: shares.map((s) => ({ userId: s.userId, role: s.role })) },
+    })
+    setBusy(false)
+    if (res.ok) onSaved()
+    else onError(pick(lang, 'Kaydedilemedi.', 'Could not save.'))
+  }
+
+  return (
+    <Dialog labelledBy="dt-scene-share-title" width={420} onClose={onClose}>
+      <div className="flex flex-col gap-1">
+        <h2 id="dt-scene-share-title" className="m-0 font-semibold text-[15px] tracking-[-0.01em]">
+          {pick(lang, 'Projeyi paylaş', 'Share project')}
+        </h2>
+        <span className="truncate font-mono text-[10.5px] text-muted-fg">{scene.name}</span>
+        <p className="m-0 mt-1 text-[11.5px] text-muted-fg leading-[1.5] text-pretty">
+          {pick(
+            lang,
+            'Editör birlikte gerçek zamanlı düzenleyebilir; izleyici yalnızca görüntüler.',
+            'An editor can edit together in real time; a viewer can only view.',
+          )}
+        </p>
+      </div>
+
+      {loadError ? (
+        <p className="text-[11.5px] text-destructive">{loadError}</p>
+      ) : payload === null ? (
+        <p className="text-[11.5px] text-muted-fg">…</p>
+      ) : (
+        <div className="flex flex-col gap-[8px]">
+          {shares.length === 0 ? (
+            <p className="text-[11.5px] text-muted-fg">
+              {pick(lang, 'Henüz kimseyle paylaşılmadı.', 'Not shared with anyone yet.')}
+            </p>
+          ) : (
+            shares.map((s) => (
+              <div key={s.userId} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-[12px] text-fg">
+                  {s.email ?? s.userId}
+                </span>
+                <SegBar>
+                  <SegButton
+                    active={s.role === 'viewer'}
+                    onClick={() => setRole(s.userId, 'viewer')}
+                  >
+                    {pick(lang, 'İzleyici', 'Viewer')}
+                  </SegButton>
+                  <SegButton
+                    active={s.role === 'editor'}
+                    onClick={() => setRole(s.userId, 'editor')}
+                  >
+                    {pick(lang, 'Editör', 'Editor')}
+                  </SegButton>
+                </SegBar>
+                <button
+                  type="button"
+                  onClick={() => remove(s.userId)}
+                  className="shrink-0 rounded-[6px] border border-border px-[8px] py-[4px] text-[11.5px] text-muted-fg hover:bg-hover hover:text-fg"
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+
+          {candidates.length > 0 ? (
+            <div className="flex items-center gap-2 pt-1">
+              <select
+                value={addId}
+                onChange={(e) => setAddId(e.target.value)}
+                className="min-w-0 flex-1 rounded-[6px] border border-border bg-field px-2 py-1 text-[11.5px] text-fg"
+              >
+                <option value="">{pick(lang, 'Kullanıcı ekle…', 'Add a user…')}</option>
+                {candidates.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.email}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={add} disabled={!addId} className={ACTION}>
+                {pick(lang, 'Ekle', 'Add')}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-[9px]">
+        <Button onClick={() => void save()} disabled={busy || payload === null}>
+          {pick(lang, 'Kaydet', 'Save')}
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
+          {pick(lang, 'Kapat', 'Close')}
+        </Button>
+      </div>
+    </Dialog>
   )
 }

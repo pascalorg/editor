@@ -2,6 +2,7 @@ import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { readEnv } from '../lib/env'
 import {
   assertValidName,
+  countGraphNodes,
   DEFAULT_LIST_LIMIT,
   editorUrlForScene,
   hashGraphJson,
@@ -23,7 +24,10 @@ import {
   type SceneMeta,
   type SceneMutateOptions,
   SceneNotFoundError,
+  type SceneRevisionMeta,
   type SceneSaveOptions,
+  type SceneShare,
+  type SceneShareRole,
   type SceneStore,
   SceneTooLargeError,
   SceneVersionConflictError,
@@ -450,6 +454,11 @@ export class MysqlSceneStore implements SceneStore {
     if (opts.ownerId !== undefined) {
       clauses.push('owner_id = ?')
       bindings.push(opts.ownerId)
+    } else if (opts.viewerId !== undefined) {
+      // Owned by the viewer OR shared with them. `ownerId` wins when both are
+      // set (an explicit owner query), so this branch is `else if`.
+      clauses.push('(owner_id = ? OR id IN (SELECT scene_id FROM scene_shares WHERE user_id = ?))')
+      bindings.push(opts.viewerId, opts.viewerId)
     }
 
     const requestedLimit = opts.limit ?? DEFAULT_LIST_LIMIT
@@ -575,6 +584,91 @@ export class MysqlSceneStore implements SceneStore {
     )
 
     return rows(result).map((row) => rowToSceneEvent(row as unknown as SceneEventRow))
+  }
+
+  async listSceneShares(sceneId: string): Promise<SceneShare[]> {
+    const pool = await this.database()
+    const [result] = await pool.execute(
+      'SELECT user_id, role FROM scene_shares WHERE scene_id = ? ORDER BY granted_at ASC',
+      [sanitizeSlug(sceneId)],
+    )
+    return rows(result).map((row) => {
+      const r = row as unknown as { user_id: string; role: string }
+      return { userId: r.user_id, role: r.role as SceneShareRole }
+    })
+  }
+
+  async setSceneShares(
+    sceneId: string,
+    shares: SceneShare[],
+    grantedBy: string | null = null,
+  ): Promise<void> {
+    const safeId = sanitizeSlug(sceneId)
+    await this.withWriteTransaction(async (conn) => {
+      await conn.execute('DELETE FROM scene_shares WHERE scene_id = ?', [safeId])
+      for (const share of shares) {
+        await conn.execute(
+          `INSERT INTO scene_shares (scene_id, user_id, role, granted_by)
+           VALUES (?, ?, ?, ?)`,
+          [safeId, share.userId, share.role, grantedBy],
+        )
+      }
+    })
+  }
+
+  async getSceneShareRole(sceneId: string, userId: string): Promise<SceneShareRole | null> {
+    const pool = await this.database()
+    const [result] = await pool.execute(
+      'SELECT role FROM scene_shares WHERE scene_id = ? AND user_id = ?',
+      [sanitizeSlug(sceneId), userId],
+    )
+    const row = firstRow<{ role: string }>(result)
+    return row ? (row.role as SceneShareRole) : null
+  }
+
+  async listSceneRevisions(sceneId: string): Promise<SceneRevisionMeta[]> {
+    const pool = await this.database()
+    const [result] = await pool.execute(
+      `SELECT version, author_kind, created_at, graph_json
+         FROM scene_revisions
+        WHERE scene_id = ?
+        ORDER BY version DESC`,
+      [sanitizeSlug(sceneId)],
+    )
+    return rows(result).map((row) => {
+      const r = row as unknown as {
+        version: number
+        author_kind: string
+        created_at: string
+        graph_json: string
+      }
+      return {
+        version: Number(r.version),
+        createdAt: r.created_at,
+        authorKind: r.author_kind,
+        nodeCount: countGraphNodes(r.graph_json),
+        sizeBytes: Buffer.byteLength(r.graph_json, 'utf8'),
+      }
+    })
+  }
+
+  async loadSceneRevision(sceneId: string, version: number): Promise<SceneGraph | null> {
+    const pool = await this.database()
+    const [result] = await pool.execute(
+      'SELECT graph_json FROM scene_revisions WHERE scene_id = ? AND version = ?',
+      [sanitizeSlug(sceneId), version],
+    )
+    const row = firstRow<{ graph_json: string }>(result)
+    if (!row) return null
+    return parseGraph(row.graph_json, `${sceneId}@${version}`)
+  }
+
+  async updateThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void> {
+    const pool = await this.database()
+    await pool.execute('UPDATE scenes SET thumbnail_url = ? WHERE id = ?', [
+      thumbnailUrl,
+      sanitizeSlug(sceneId),
+    ])
   }
 
   async close(): Promise<void> {
@@ -725,6 +819,24 @@ export class MysqlSceneStore implements SceneStore {
         graph_json LONGTEXT NOT NULL,
         INDEX scene_events_scene_event_idx (scene_id, event_id),
         CONSTRAINT scene_events_scene_fk FOREIGN KEY (scene_id)
+          REFERENCES scenes(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `)
+
+    // Same collation as `scenes` so the `id IN (SELECT scene_id ...)` subquery
+    // in list() joins without a per-row CONVERT(). user_id is the console's
+    // ULID (users.public_id); comparisons against `users` still CONVERT where
+    // needed, exactly as owner_id does.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS scene_shares (
+        scene_id VARCHAR(64) NOT NULL,
+        user_id VARCHAR(64) NOT NULL,
+        role ENUM('viewer', 'editor') NOT NULL DEFAULT 'viewer',
+        granted_by VARCHAR(64) NULL,
+        granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (scene_id, user_id),
+        INDEX scene_shares_user_idx (user_id),
+        CONSTRAINT scene_shares_scene_fk FOREIGN KEY (scene_id)
           REFERENCES scenes(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)

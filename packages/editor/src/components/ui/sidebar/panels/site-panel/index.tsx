@@ -39,6 +39,7 @@ import {
 } from './../../../../../lib/level-duplication'
 import { getDefaultLevelName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
+import { elementBelongsToPanelTab } from './../../../../../lib/panel-tab'
 import {
   formatAreaLabel,
   getAreaUnitLabel,
@@ -1335,12 +1336,20 @@ const ContentSection = memo(function ContentSection() {
       )
     }),
   )
+  // Structure and Furnish are complementary categoryOf views of the same
+  // level children — filter each tab to its own category so plugin objects
+  // (warehouse:* → furnish) no longer show under both tabs.
+  const elementTab: 'structure' | 'furnish' = phase === 'furnish' ? 'furnish' : 'structure'
   const elementChildren = useScene(
     useShallow((s) => {
       if (!selectedLevelId) return []
       const lvl = s.nodes[selectedLevelId] as LevelNode | undefined
       if (!lvl) return []
-      return lvl.children.filter((childId) => s.nodes[childId]?.type !== 'zone')
+      return lvl.children.filter((childId) => {
+        const child = s.nodes[childId]
+        if (!child || child.type === 'zone') return false
+        return elementBelongsToPanelTab(child.type, elementTab)
+      })
     }),
   )
 

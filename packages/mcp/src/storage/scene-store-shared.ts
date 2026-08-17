@@ -107,6 +107,20 @@ export function hashGraphJson(graphJson: string): string {
   return createHash('sha256').update(graphJson).digest('hex')
 }
 
+/**
+ * Node count of a serialized graph, tolerant of malformed JSON (returns 0).
+ * Used to describe a stored revision without loading the whole graph into the
+ * scene — a "backups" list only needs the number, not the nodes.
+ */
+export function countGraphNodes(graphJson: string): number {
+  try {
+    const parsed = JSON.parse(graphJson) as { nodes?: Record<string, unknown> }
+    return parsed?.nodes ? Object.keys(parsed.nodes).length : 0
+  } catch {
+    return 0
+  }
+}
+
 export function assertValidName(name: string): void {
   if (typeof name !== 'string') {
     throw new SceneInvalidError('Scene name must be a string')

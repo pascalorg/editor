@@ -466,3 +466,116 @@ describe('SqliteSceneStore', () => {
     await expect(store.load('bad')).rejects.toThrow(SceneInvalidError)
   })
 })
+
+describe('SqliteSceneStore scene sharing', () => {
+  let rootDir: string
+  let store: SqliteSceneStore
+
+  beforeEach(async () => {
+    rootDir = await mkTmpRoot()
+    store = createStore(rootDir)
+  })
+
+  afterEach(async () => {
+    store.close()
+    await rmrf(rootDir)
+  })
+
+  test('setSceneShares replaces the whole set; roles round-trip', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'owner1', graph: makeGraph() })
+
+    await store.setSceneShares('proj', [
+      { userId: 'ann', role: 'viewer' },
+      { userId: 'bob', role: 'editor' },
+    ])
+    expect(await store.listSceneShares('proj')).toEqual([
+      { userId: 'ann', role: 'viewer' },
+      { userId: 'bob', role: 'editor' },
+    ])
+
+    // A second call fully replaces — ann is dropped, bob is downgraded.
+    await store.setSceneShares('proj', [{ userId: 'bob', role: 'viewer' }])
+    expect(await store.listSceneShares('proj')).toEqual([{ userId: 'bob', role: 'viewer' }])
+    expect(await store.getSceneShareRole('proj', 'ann')).toBeNull()
+    expect(await store.getSceneShareRole('proj', 'bob')).toBe('viewer')
+  })
+
+  test('viewerId lists owned AND shared scenes, never unrelated ones', async () => {
+    await store.save({ id: 'mine', name: 'Mine', ownerId: 'me', graph: makeGraph() })
+    await store.save({ id: 'shared', name: 'Shared', ownerId: 'other', graph: makeGraph() })
+    await store.save({ id: 'private', name: 'Private', ownerId: 'other', graph: makeGraph() })
+    await store.setSceneShares('shared', [{ userId: 'me', role: 'editor' }])
+
+    const ids = (await store.list({ viewerId: 'me' })).map((s) => s.id).sort()
+    expect(ids).toEqual(['mine', 'shared'])
+    // `private` is owned by other and not shared with me — it must not leak.
+    expect(ids).not.toContain('private')
+  })
+
+  test('ownerId filter still returns owned-only (admin/console path)', async () => {
+    await store.save({ id: 'mine', name: 'Mine', ownerId: 'me', graph: makeGraph() })
+    await store.save({ id: 'shared', name: 'Shared', ownerId: 'other', graph: makeGraph() })
+    await store.setSceneShares('shared', [{ userId: 'me', role: 'editor' }])
+
+    const ids = (await store.list({ ownerId: 'me' })).map((s) => s.id)
+    expect(ids).toEqual(['mine'])
+  })
+
+  test('deleting a scene cascades its shares away', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'owner1', graph: makeGraph() })
+    await store.setSceneShares('proj', [{ userId: 'ann', role: 'viewer' }])
+    await store.delete('proj')
+    expect(await store.listSceneShares('proj')).toEqual([])
+  })
+})
+
+describe('SqliteSceneStore revisions and thumbnail', () => {
+  let rootDir: string
+  let store: SqliteSceneStore
+
+  beforeEach(async () => {
+    rootDir = await mkTmpRoot()
+    store = createStore(rootDir)
+  })
+
+  afterEach(async () => {
+    store.close()
+    await rmrf(rootDir)
+  })
+
+  test('checkpoint saves accumulate restorable revisions', async () => {
+    const v1 = await store.save({
+      id: 'proj',
+      name: 'Proj',
+      graph: makeGraph(),
+      saveMode: 'checkpoint',
+    })
+    await store.save({
+      id: 'proj',
+      name: 'Proj',
+      graph: makeGraph(),
+      saveMode: 'checkpoint',
+      expectedVersion: v1.version,
+    })
+
+    const revs = await store.listSceneRevisions('proj')
+    expect(revs.length).toBeGreaterThanOrEqual(2)
+    // Newest first, and each carries a usable node count.
+    expect(revs[0]!.version).toBeGreaterThan(revs[1]!.version)
+    expect(revs[0]!.nodeCount).toBe(2)
+
+    const graph = await store.loadSceneRevision('proj', revs[revs.length - 1]!.version)
+    expect(graph).not.toBeNull()
+    expect(Object.keys(graph!.nodes).length).toBe(2)
+    expect(await store.loadSceneRevision('proj', 9999)).toBeNull()
+  })
+
+  test('updateThumbnail sets the preview without bumping the version', async () => {
+    const saved = await store.save({ id: 'proj', name: 'Proj', graph: makeGraph() })
+    await store.updateThumbnail('proj', 'data:image/jpeg;base64,AAAA')
+
+    const loaded = await store.load('proj')
+    expect(loaded!.thumbnailUrl).toBe('data:image/jpeg;base64,AAAA')
+    expect(loaded!.version).toBe(saved.version)
+  })
+})

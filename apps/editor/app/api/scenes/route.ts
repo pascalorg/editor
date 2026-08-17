@@ -42,19 +42,20 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // With auth on, a signed-in user sees only their own scenes and a signed-out
-  // caller sees none. Without auth (SQLite dev), the list stays unfiltered.
-  let ownerId: string | undefined
+  // With auth on, a signed-in user sees the scenes they own AND the scenes
+  // shared with them; a signed-out caller sees none. Without auth (SQLite
+  // dev), the list stays unfiltered.
+  let viewerId: string | undefined
   if (authAvailable()) {
     const user = await getSessionUser()
     if (!user) return sceneApiJson(request, { scenes: [] })
-    ownerId = user.id
+    viewerId = user.id
   }
 
   const operations = await getSceneOperations()
   const scenes = await operations.listScenes({
     projectId: parsed.data.projectId,
-    ownerId,
+    viewerId,
     limit: parsed.data.limit,
   })
   return sceneApiJson(request, { scenes })

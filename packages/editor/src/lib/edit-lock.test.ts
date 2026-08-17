@@ -101,3 +101,21 @@ describe('edit-lock cut / move / rotate participant filter', () => {
     expect(filterEditableIds([ROUTE, WALL, RACK])).toEqual([ROUTE, RACK])
   })
 })
+
+// A wall is category 'structure'. The user report was walls stayed editable —
+// these pin that a locked wall is reported edit-locked under both lock kinds,
+// which is what every wall edit affordance now checks before mounting.
+describe('edit-lock reports a locked wall', () => {
+  test('Structure category lock locks the wall (not the rack)', () => {
+    useViewer.getState().setCategoryLocked('structure', true)
+
+    expect(isNodeIdEditLocked(WALL)).toBe(true)
+    expect(isNodeIdEditLocked(RACK)).toBe(false)
+  })
+
+  test('scene lock locks the wall', () => {
+    useViewer.getState().setSceneLocked(true)
+
+    expect(isNodeIdEditLocked(WALL)).toBe(true)
+  })
+})

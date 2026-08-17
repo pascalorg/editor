@@ -67,9 +67,34 @@ export interface SceneSaveOptions {
 
 export type SceneSaveMode = 'draft' | 'checkpoint'
 
+/** The access a shared user has on a scene. `editor` implies `viewer`. */
+export type SceneShareRole = 'viewer' | 'editor'
+
+export interface SceneShare {
+  userId: string
+  role: SceneShareRole
+}
+
+/** One retained past version of a scene — a "backup" the user can restore. */
+export interface SceneRevisionMeta {
+  version: number
+  /** ISO 8601 timestamp of when this version was recorded. */
+  createdAt: string
+  /** 'mcp' | 'user' | 'agent' — who wrote it. */
+  authorKind: string
+  nodeCount: number
+  sizeBytes: number
+}
+
 export interface SceneListOptions {
   projectId?: string
   ownerId?: string
+  /**
+   * Scenes this user may see: owned by them OR shared with them. Distinct from
+   * `ownerId` (owned only), which the admin console still uses. When both are
+   * set, `ownerId` wins — the caller asked for a specific owner's scenes.
+   */
+  viewerId?: string
   limit?: number
 }
 
@@ -129,6 +154,18 @@ export interface SceneStore {
   rename(id: SceneId, newName: string, opts?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent?(opts: SceneEventAppendOptions): Promise<SceneEvent>
   listSceneEvents?(sceneId: SceneId, opts?: SceneEventListOptions): Promise<SceneEvent[]>
+  /** Every user a scene is shared with, and at what access. */
+  listSceneShares?(sceneId: SceneId): Promise<SceneShare[]>
+  /** Replaces the whole share set for a scene. `grantedBy` is the acting user. */
+  setSceneShares?(sceneId: SceneId, shares: SceneShare[], grantedBy?: string | null): Promise<void>
+  /** The share access one user holds on a scene, or null if none. */
+  getSceneShareRole?(sceneId: SceneId, userId: string): Promise<SceneShareRole | null>
+  /** Retained past versions of a scene, newest first (a "backups" list). */
+  listSceneRevisions?(sceneId: SceneId): Promise<SceneRevisionMeta[]>
+  /** The graph of one retained version, for restoring it. */
+  loadSceneRevision?(sceneId: SceneId, version: number): Promise<SceneGraph | null>
+  /** Sets only a scene's thumbnail; no version bump, no revision, no event. */
+  updateThumbnail?(sceneId: SceneId, thumbnailUrl: string | null): Promise<void>
 }
 
 export class SceneNotFoundError extends Error {

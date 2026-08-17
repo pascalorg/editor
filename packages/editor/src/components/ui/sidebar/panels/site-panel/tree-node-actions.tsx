@@ -1,12 +1,13 @@
-import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { type AnyNodeId, categoryOf, emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Camera, Eye, EyeOff, Trash2 } from 'lucide-react'
+import { Camera, Eye, EyeOff, Lock, Trash2 } from 'lucide-react'
 import { memo, useState } from 'react'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from './../../../../../components/ui/primitives/popover'
+import { useIsNodeIdEditLocked } from './../../../../../lib/edit-lock'
 
 interface TreeNodeActionsProps {
   nodeId: AnyNodeId
@@ -18,6 +19,15 @@ export const TreeNodeActions = memo(function TreeNodeActions({ nodeId }: TreeNod
   const updateNodes = useScene((state) => state.updateNodes)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const hasCamera = useScene((s) => !!(s.nodes[nodeId] as any)?.camera)
+
+  // Reflect the Layers panel: a node whose category is hidden / locked shows
+  // that state here too — category state combines with (and, for lock, overrides)
+  // the node's own flag, matching `isNodeEditLocked`.
+  const kind = useScene((s) => s.nodes[nodeId]?.type ?? null)
+  const category = kind ? categoryOf(kind) : null
+  const categoryHidden = useViewer((s) => category !== null && s.hiddenCategories.has(category))
+  const locked = useIsNodeIdEditLocked(nodeId)
+  const effectiveHidden = categoryHidden || !isVisible
 
   const toggleVisibility = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -54,12 +64,20 @@ export const TreeNodeActions = memo(function TreeNodeActions({ nodeId }: TreeNod
 
   return (
     <div className="flex items-center gap-0.5">
+      {locked && (
+        <span
+          className="flex h-6 w-6 items-center justify-center text-amber-400/80"
+          title="Locked by the Layers panel"
+        >
+          <Lock className="h-3 w-3" />
+        </span>
+      )}
       <button
         className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
         onClick={toggleVisibility}
-        title={isVisible ? 'Hide' : 'Show'}
+        title={categoryHidden ? 'Hidden by the Layers panel' : isVisible ? 'Hide' : 'Show'}
       >
-        {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3 opacity-50" />}
+        {effectiveHidden ? <EyeOff className="h-3 w-3 opacity-50" /> : <Eye className="h-3 w-3" />}
       </button>
 
       <Popover onOpenChange={setOpen} open={open}>

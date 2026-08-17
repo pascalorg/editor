@@ -27,3 +27,17 @@ export function isNodeIdEditLocked(id: AnyNodeId): boolean {
 export function filterEditableIds(ids: readonly AnyNodeId[]): AnyNodeId[] {
   return ids.filter((id) => !isNodeIdEditLocked(id))
 }
+
+/**
+ * Reactive counterpart of {@link isNodeIdEditLocked} for editing-affordance
+ * components: subscribes to the lock state so the component re-renders (and
+ * unmounts its handles) the instant a lock flips while a node is selected.
+ * `null` / `undefined` id reads as not-locked. The authoritative predicate is
+ * still {@link isNodeIdEditLocked}; the subscribed fields only drive re-render.
+ */
+export function useIsNodeIdEditLocked(id: AnyNodeId | null | undefined): boolean {
+  const sceneLocked = useViewer((s) => s.sceneLocked)
+  const lockedCategories = useViewer((s) => s.lockedCategories)
+  const lockActive = sceneLocked || lockedCategories.size > 0
+  return lockActive && !!id && isNodeIdEditLocked(id)
+}

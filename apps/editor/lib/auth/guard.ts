@@ -1,9 +1,26 @@
+import type { SceneShareRole } from '@pascal-app/mcp/storage/types'
+import { getSceneOperations } from '@/lib/scene-store-server'
 import { authAvailable } from './db'
 import { canEdit, getSessionUser, type SessionUser } from './session'
 
 export type MutationAuth =
   | { ok: true; user: SessionUser | null }
   | { ok: false; status: 401 | 403; error: string }
+
+/**
+ * The share access `userId` holds on a scene, or null. Swallows store errors
+ * and a store that predates sharing (returns null), so authorization degrades
+ * to owner-only rather than failing closed on an unrelated store hiccup.
+ */
+async function sceneShareRoleFor(sceneId: string, userId: string): Promise<SceneShareRole | null> {
+  try {
+    const operations = await getSceneOperations()
+    if (!operations.canShareScenes) return null
+    return await operations.getSceneShareRole(sceneId, userId)
+  } catch {
+    return null
+  }
+}
 
 /**
  * Authorizes a write against an existing scene.
@@ -32,6 +49,7 @@ export type MutationAuth =
  * them — so any signed-in account may read one, whoever owns it.
  */
 export async function authorizeSceneRead(
+  sceneId: string,
   ownerId: string | null,
   opts: { published?: boolean } = {},
 ): Promise<MutationAuth> {
@@ -40,17 +58,24 @@ export async function authorizeSceneRead(
   if (!user) return { ok: false, status: 401, error: 'auth_required' }
   if (user.role === 'admin') return { ok: true, user }
   if (opts.published) return { ok: true, user }
-  if (ownerId && ownerId !== user.id) return { ok: false, status: 403, error: 'forbidden' }
-  return { ok: true, user }
+  if (!ownerId || ownerId === user.id) return { ok: true, user }
+  // Not the owner — but the scene may be shared with them (viewer or editor).
+  if ((await sceneShareRoleFor(sceneId, user.id)) !== null) return { ok: true, user }
+  return { ok: false, status: 403, error: 'forbidden' }
 }
 
-export async function authorizeSceneMutation(ownerId: string | null): Promise<MutationAuth> {
+export async function authorizeSceneMutation(
+  sceneId: string,
+  ownerId: string | null,
+): Promise<MutationAuth> {
   if (!authAvailable()) return { ok: true, user: null }
   const user = await getSessionUser()
   if (!user) return { ok: false, status: 401, error: 'auth_required' }
+  // A view-only account never writes, whatever ownership or sharing says.
   if (!canEdit(user)) return { ok: false, status: 403, error: 'forbidden' }
-  if (ownerId && ownerId !== user.id && user.role !== 'admin') {
-    return { ok: false, status: 403, error: 'forbidden' }
-  }
-  return { ok: true, user }
+  if (user.role === 'admin' || !ownerId || ownerId === user.id) return { ok: true, user }
+  // Not the owner — an explicit `editor` share grants write; a `viewer` share
+  // does not.
+  if ((await sceneShareRoleFor(sceneId, user.id)) === 'editor') return { ok: true, user }
+  return { ok: false, status: 403, error: 'forbidden' }
 }

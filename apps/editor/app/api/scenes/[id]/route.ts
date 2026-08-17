@@ -44,7 +44,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
     // The origin guard above proves where the request came from, not who sent
     // it. Without this a scene id was enough to read the drawing.
-    const auth = await authorizeSceneRead(scene.ownerId ?? null, {
+    const auth = await authorizeSceneRead(id, scene.ownerId ?? null, {
       published: (await publishedSceneIds()).has(id),
     })
     if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
@@ -91,7 +91,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!existing) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
-    const auth = await authorizeSceneMutation(existing.ownerId)
+    const auth = await authorizeSceneMutation(id, existing.ownerId)
     if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     const meta = await operations.saveScene({
       id,
@@ -124,7 +124,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!existing) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
-    const auth = await authorizeSceneMutation(existing.ownerId)
+    const auth = await authorizeSceneMutation(id, existing.ownerId)
     if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     const removed = await operations.deleteStoredScene(id, { expectedVersion: ifMatch })
     if (!removed) {
@@ -171,7 +171,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (!existing) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
-    const auth = await authorizeSceneMutation(existing.ownerId)
+    const auth = await authorizeSceneMutation(id, existing.ownerId)
     if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     const meta = await operations.renameStoredScene(id, parsed.data.name, { expectedVersion })
     return sceneApiJson(request, meta, {

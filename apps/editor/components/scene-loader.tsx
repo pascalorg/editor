@@ -25,6 +25,38 @@ export interface SceneMeta {
   nodeCount: number
 }
 
+// Card previews are stored inline in the scenes row, so they must stay small:
+// a ~256px JPEG at moderate quality is a few KB and reads clearly at card size.
+const THUMBNAIL_MAX_DIM = 256
+const THUMBNAIL_QUALITY = 0.55
+const THUMBNAIL_MAX_CHARS = 60_000
+
+/**
+ * Shrinks a captured snapshot to a small JPEG data URL. Runs in the browser
+ * (canvas), returns null if a 2D context is unavailable.
+ */
+async function downscaleToDataUrl(
+  blob: Blob,
+  maxDim: number,
+  quality: number,
+): Promise<string | null> {
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height))
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(bitmap, 0, 0, width, height)
+    return canvas.toDataURL('image/jpeg', quality)
+  } finally {
+    bitmap.close?.()
+  }
+}
+
 interface SceneLoaderProps {
   initialScene: SceneGraph
   meta: SceneMeta
@@ -157,17 +189,25 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
   }, [meta.id])
 
   const handleThumb = useCallback(
-    async (_blob: Blob) => {
-      // TODO(phase7): upload thumbnail via POST /api/scenes/[id]/thumbnail.
-      // Stub endpoint is not yet implemented in v0.1 — skip upload for now.
-      await fetch(`/api/scenes/${meta.id}/thumbnail`, {
-        method: 'POST',
-        // Intentionally no body — endpoint is a stub.
-      }).catch(() => {
-        // Swallow errors silently; thumbnail upload is best-effort.
-      })
+    async (blob: Blob) => {
+      // A read-only viewer never owns the scene; the server would 403 the write.
+      if (readOnly) return
+      try {
+        const dataUrl = await downscaleToDataUrl(blob, THUMBNAIL_MAX_DIM, THUMBNAIL_QUALITY)
+        // The thumbnail lives inline in the scenes row (a TEXT column); an
+        // oversized data URL would be rejected server-side, so drop it here
+        // rather than send a doomed request.
+        if (!dataUrl || dataUrl.length > THUMBNAIL_MAX_CHARS) return
+        await fetch(`/api/scenes/${meta.id}/thumbnail`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl }),
+        })
+      } catch {
+        // Best-effort: a missing card preview is not worth surfacing an error.
+      }
     },
-    [meta.id],
+    [meta.id, readOnly],
   )
 
   return (

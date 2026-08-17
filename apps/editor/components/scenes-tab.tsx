@@ -1,10 +1,16 @@
 'use client'
 
+import { Eye, History, Pencil, Share2, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from '@/components/auth/session-provider'
 import type { SceneMeta } from '@/components/scene-loader'
 import { cn } from '@/lib/utils'
+import { SceneBackupsDialog } from './scene-backups-dialog'
+import { SceneDeleteDialog } from './scene-delete-dialog'
+import { ScenePreviewDialog } from './scene-preview-dialog'
+import { SceneRenameDialog } from './scene-rename-dialog'
+import { SceneShareDialog } from './scene-share-dialog'
 
 /**
  * The scenes library, as a sidebar panel.
@@ -19,7 +25,7 @@ interface ScenesResponse {
   scenes: SceneMeta[]
 }
 
-function formatWhen(iso: string): string {
+export function formatWhen(iso: string): string {
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return ''
   const minutes = Math.round((Date.now() - then) / 60_000)
@@ -40,6 +46,10 @@ export function ScenesTab() {
   const [scenes, setScenes] = useState<SceneMeta[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [dialog, setDialog] = useState<{
+    kind: 'rename' | 'delete' | 'share' | 'backups' | 'preview'
+    scene: SceneMeta
+  } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Which scene is open right now, so the list can say so. Read from the URL
@@ -51,6 +61,11 @@ export function ScenesTab() {
       : (/^\/scene\/([^/]+)/.exec(window.location.pathname)?.[1] ?? null)
 
   const canEdit = user !== null && user.role !== 'viewer'
+
+  // Owner-or-admin gate for the managing actions (rename, delete, share,
+  // backups). Preview only reads the stored thumbnail, so it's open to all.
+  const canManage = (scene: SceneMeta): boolean =>
+    user != null && (scene.ownerId === user.id || user.role === 'admin')
 
   const load = useCallback(async () => {
     setError(null)
@@ -211,39 +226,96 @@ export function ScenesTab() {
               : 'No scenes have been shared with your account yet.'}
           </p>
         ) : (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-2">
             {scenes.map((scene) => {
               const active = scene.id === currentId
+              const manage = canManage(scene)
               return (
                 <li key={scene.id}>
-                  <button
+                  <div
                     className={cn(
-                      'flex w-full items-center gap-2.5 rounded-xl p-1.5 text-left transition-colors',
-                      active
-                        ? 'bg-primary/10 ring-1 ring-primary/50'
-                        : 'bg-muted/40 hover:bg-muted',
+                      'overflow-hidden rounded-xl transition-colors',
+                      active ? 'bg-primary/10 ring-1 ring-primary/50' : 'bg-muted/40',
                     )}
-                    onClick={() => router.push(`/scene/${scene.id}`)}
-                    type="button"
                   >
-                    <span className="flex h-10 w-[58px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-background/60">
-                      {scene.thumbnailUrl ? (
-                        <img
-                          alt=""
-                          className="h-full w-full object-cover"
-                          src={scene.thumbnailUrl}
-                        />
-                      ) : (
-                        <span className="text-[9px] text-muted-foreground">—</span>
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-sm">{scene.name}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {scene.nodeCount} nodes · {formatWhen(scene.updatedAt)}
+                    <button
+                      className="block w-full text-left"
+                      onClick={() => router.push(`/scene/${scene.id}`)}
+                      type="button"
+                    >
+                      <span className="flex aspect-[16/9] w-full items-center justify-center overflow-hidden bg-background/60">
+                        {scene.thumbnailUrl ? (
+                          <img
+                            alt=""
+                            className="h-full w-full object-cover"
+                            src={scene.thumbnailUrl}
+                          />
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">Önizleme yok</span>
+                        )}
                       </span>
-                    </span>
-                  </button>
+                      <span className="block px-2.5 pt-2">
+                        <span className="block truncate font-medium text-sm">{scene.name}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {scene.nodeCount} nodes · {formatWhen(scene.updatedAt)}
+                        </span>
+                      </span>
+                    </button>
+
+                    <div className="flex items-center gap-1 px-2 py-2">
+                      {manage && (
+                        <button
+                          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          onClick={() => setDialog({ kind: 'backups', scene })}
+                          title="Yedekler"
+                          type="button"
+                        >
+                          <History className="size-3.5" />
+                          Yedekler
+                        </button>
+                      )}
+                      <button
+                        className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        onClick={() => setDialog({ kind: 'preview', scene })}
+                        title="Önizle"
+                        type="button"
+                      >
+                        <Eye className="size-3.5" />
+                        Önizle
+                      </button>
+                      {manage && (
+                        <div className="ml-auto flex items-center gap-0.5">
+                          <button
+                            aria-label="Yeniden adlandır"
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            onClick={() => setDialog({ kind: 'rename', scene })}
+                            title="Yeniden adlandır"
+                            type="button"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                          <button
+                            aria-label="Paylaş"
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            onClick={() => setDialog({ kind: 'share', scene })}
+                            title="Paylaş"
+                            type="button"
+                          >
+                            <Share2 className="size-3.5" />
+                          </button>
+                          <button
+                            aria-label="Sil"
+                            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+                            onClick={() => setDialog({ kind: 'delete', scene })}
+                            title="Sil"
+                            type="button"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </li>
               )
             })}
@@ -274,6 +346,48 @@ export function ScenesTab() {
         >
           Manage in console
         </a>
+      )}
+
+      {dialog?.kind === 'rename' && (
+        <SceneRenameDialog
+          onClose={() => setDialog(null)}
+          onRenamed={() => void load()}
+          scene={dialog.scene}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <SceneDeleteDialog
+          onClose={() => setDialog(null)}
+          onDeleted={() => {
+            const deletedId = dialog.scene.id
+            void load()
+            if (deletedId === currentId) router.push('/')
+          }}
+          scene={dialog.scene}
+        />
+      )}
+      {dialog?.kind === 'share' && (
+        <SceneShareDialog
+          onClose={() => setDialog(null)}
+          onSaved={() => void load()}
+          scene={dialog.scene}
+        />
+      )}
+      {dialog?.kind === 'backups' && (
+        <SceneBackupsDialog
+          onClose={() => setDialog(null)}
+          onRestored={() => {
+            const restoredId = dialog.scene.id
+            void load()
+            // If the restored scene is the one open now, reload so the editor
+            // picks up the restored graph rather than the stale in-memory one.
+            if (restoredId === currentId) window.location.reload()
+          }}
+          scene={dialog.scene}
+        />
+      )}
+      {dialog?.kind === 'preview' && (
+        <ScenePreviewDialog onClose={() => setDialog(null)} scene={dialog.scene} />
       )}
     </div>
   )

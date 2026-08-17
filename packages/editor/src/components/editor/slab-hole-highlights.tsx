@@ -25,6 +25,7 @@ import {
 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { useIsNodeIdEditLocked } from '../../lib/edit-lock'
 import { holeEditScope } from '../../lib/interaction/scope'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, { useEditingHole } from '../../store/use-interaction-scope'
@@ -245,13 +246,14 @@ export function SlabHoleHighlights() {
   // multi-selection shows highlight only (the group transforms as one piece).
   if (selectedIds.length !== 1) return null
 
-  return (
-    <>
-      {selectedIds.map((id) => (
-        <SelectedSlabHoleHighlights key={id} slabId={id} />
-      ))}
-    </>
-  )
+  return <SlabHoleHighlightsForSelection slabId={selectedIds[0] as AnyNodeId} />
+}
+
+function SlabHoleHighlightsForSelection({ slabId }: { slabId: AnyNodeId }) {
+  // A locked slab / ceiling keeps its outline but no editable hole handles.
+  const editLocked = useIsNodeIdEditLocked(slabId)
+  if (editLocked) return null
+  return <SelectedSlabHoleHighlights slabId={slabId} />
 }
 
 function SelectedSlabHoleHighlights({ slabId }: { slabId: string }) {

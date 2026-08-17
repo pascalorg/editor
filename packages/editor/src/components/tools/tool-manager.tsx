@@ -12,6 +12,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
+import { categoryOfActiveTool } from '../../lib/tool-category'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import {
   useControlPointReshape,
@@ -136,6 +137,7 @@ export const ToolManager: React.FC = () => {
   }, [reshapingNode, tangentReshape])
   const editingHole = useEditingHole()
   const sceneLocked = useViewer((state) => state.sceneLocked)
+  const lockedCategories = useViewer((state) => state.lockedCategories)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
@@ -223,10 +225,14 @@ export const ToolManager: React.FC = () => {
     !showSlabBoundaryEditor &&
     !showCeilingBoundaryEditor
 
-  // Show build tools when in build mode. A fully locked scene blocks all new
-  // placement (per-category locks don't — you can still add other categories),
-  // so gate the build/placement tools off here rather than in each tool.
-  const showBuildTool = mode === 'build' && tool !== null && !sceneLocked
+  // Show build tools when in build mode. `sceneLocked` blocks ALL placement; a
+  // per-category lock blocks only placement of the category the active tool
+  // would create (you can still add other categories). Gate here rather than in
+  // each tool.
+  const activeToolCategory = categoryOfActiveTool(phase, tool)
+  const placementLocked =
+    sceneLocked || (activeToolCategory !== null && lockedCategories.has(activeToolCategory))
+  const showBuildTool = mode === 'build' && tool !== null && !placementLocked
 
   // A move initiated from the 2D floor-plan (orange move-dot) is owned end-to-
   // end by `FloorplanRegistryMoveOverlay`, which marks the origin `'2d'` at

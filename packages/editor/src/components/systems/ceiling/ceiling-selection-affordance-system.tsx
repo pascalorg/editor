@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNodeId,
   type CeilingNode,
   emitter,
   resolveCeilingHeight,
@@ -19,6 +20,7 @@ import {
   clearCeilingSnapFeedback,
   resolveCeilingPlanPointSnap,
 } from '../../../lib/ceiling-plan-snap'
+import { isNodeIdEditLocked } from '../../../lib/edit-lock'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor, { isGridSnapActive } from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
@@ -105,6 +107,9 @@ export const CeilingSelectionAffordanceSystem = () => {
   // scope, so it can't unmount itself.
   const scopeIdle = useInteractionScope((state) => state.scope.kind === 'idle')
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  const sceneLocked = useViewer((state) => state.sceneLocked)
+  const lockedCategories = useViewer((state) => state.lockedCategories)
+  const lockActive = sceneLocked || lockedCategories.size > 0
 
   const ceilings = useScene(
     useShallow((state) =>
@@ -128,9 +133,14 @@ export const CeilingSelectionAffordanceSystem = () => {
 
   if (!shouldRender) return null
 
+  // Locked ceilings keep their selection but expose no corner-drag brackets.
+  const editableCeilings = lockActive
+    ? ceilings.filter((ceiling) => !isNodeIdEditLocked(ceiling.id as AnyNodeId))
+    : ceilings
+
   return (
     <>
-      {ceilings.map((ceiling) => (
+      {editableCeilings.map((ceiling) => (
         <CeilingSelectionAffordance ceiling={ceiling} key={ceiling.id} levelId={currentLevelId} />
       ))}
     </>
