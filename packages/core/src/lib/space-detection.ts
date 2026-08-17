@@ -19,7 +19,9 @@ import {
   getStoredLevelHeight,
 } from '../services/storey'
 import {
+  areSceneSnapshotsEqual,
   getSceneHistoryPauseDepth,
+  notifySceneCommit,
   pauseSceneHistory,
   resumeSceneHistory,
 } from '../store/history-control'
@@ -1674,12 +1676,39 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
 
     isProcessing = true
     pauseSceneHistory(sceneStore)
+    const beforeState = sceneStore.getState()
+    const beforeSnapshot = {
+      nodes: beforeState.nodes,
+      rootNodeIds: beforeState.rootNodeIds,
+      collections: beforeState.collections,
+      savedViews: beforeState.savedViews,
+      definitions: beforeState.definitions,
+      materials: beforeState.materials,
+      installedPlugins: beforeState.installedPlugins,
+    }
+
     try {
       runSpaceDetection([...levelsToUpdate], sceneStore, editorStore, nodes)
     } finally {
       resumeSceneHistory(sceneStore)
+      
+      const currentState = sceneStore.getState()
+      const currentSnapshot = {
+        nodes: currentState.nodes,
+        rootNodeIds: currentState.rootNodeIds,
+        collections: currentState.collections,
+        savedViews: currentState.savedViews,
+        definitions: currentState.definitions,
+        materials: currentState.materials,
+        installedPlugins: currentState.installedPlugins,
+      }
+      
+      // Emit a local commit so collaborators receive the generated slabs/ceilings
+      // without creating a separate undo step.
+      notifySceneCommit({ origin: 'local', before: beforeSnapshot, current: currentSnapshot })
+
       previousSnapshots.clear()
-      const postRunSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
+      const postRunSnapshots = levelStructureSnapshots(currentState.nodes)
       for (const [levelId, snapshot] of postRunSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)
       }
