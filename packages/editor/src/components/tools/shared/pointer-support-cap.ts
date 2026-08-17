@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   canHostOnTop,
   GROUND_SUPPORT_ID,
@@ -158,7 +159,7 @@ export function resolvePointerSupportSurface(
       [...sceneRegistry.nodes.entries()].map(([nodeId, object]) => [object, nodeId as AnyNodeId]),
     )
     const belongsToActiveLevel = (nodeId: AnyNodeId) => {
-      let current = nodes[nodeId]
+      let current: AnyNode | undefined = nodes[nodeId]
       const visited = new Set<AnyNodeId>()
       while (current && !visited.has(current.id)) {
         if (current.id === levelId) return true
