@@ -3,6 +3,8 @@ import {
   createStoredNodeCountTracker,
   isEmptyGraphWrite,
   isSuspiciousNodeDrop,
+  saveDelayFor,
+  shouldFlushBeforeHiding,
 } from './use-auto-save'
 
 describe('isEmptyGraphWrite', () => {
@@ -79,5 +81,55 @@ describe('createStoredNodeCountTracker', () => {
     tracker.trackLoadedGraph(3)
 
     expect(tracker.allowWrite(3)).toBe(true)
+  })
+})
+
+/**
+ * The pacing policy, which the hook itself cannot be tested through: it lives
+ * inside a closure wired to `window` listeners and a live store. These are the
+ * three decisions it makes, and each of them is one where getting it wrong
+ * loses an edit rather than merely wasting a write.
+ */
+describe('saveDelayFor', () => {
+  const idle = { pointerDown: false, hidden: false }
+
+  test('an ordinary change waits out the idle interval', () => {
+    expect(saveDelayFor('change', idle, 5000)).toBe(5000)
+  })
+
+  test('the end of a gesture is written at once', () => {
+    expect(saveDelayFor('gesture-end', idle, 5000)).toBe(0)
+    expect(saveDelayFor('became-visible', idle, 5000)).toBe(0)
+  })
+
+  // Every write mid-drag is superseded a frame later. Suppressing them is only
+  // safe because `gesture-end` re-arms — that pairing is the whole contract.
+  test('nothing is written while a pointer is down', () => {
+    expect(saveDelayFor('change', { ...idle, pointerDown: true }, 5000)).toBeNull()
+  })
+
+  test('nothing is scheduled in a background tab', () => {
+    expect(saveDelayFor('change', { ...idle, hidden: true }, 5000)).toBeNull()
+  })
+
+  // A gesture that ends after the tab was hidden must not sneak a timer past
+  // the gate; becoming visible again is what re-arms it.
+  test('the gates outrank the event that would otherwise write immediately', () => {
+    expect(saveDelayFor('gesture-end', { pointerDown: true, hidden: false }, 5000)).toBeNull()
+    expect(saveDelayFor('gesture-end', { pointerDown: false, hidden: true }, 5000)).toBeNull()
+  })
+})
+
+describe('shouldFlushBeforeHiding', () => {
+  // Going quiet in the background is only safe if the change is written on the
+  // way out — `pagehide` does not arrive on every platform that backgrounds a
+  // tab, so this is the write that stands between a pending edit and losing it.
+  test('a pending change is written before the tab goes quiet', () => {
+    expect(shouldFlushBeforeHiding(true, false)).toBe(true)
+  })
+
+  test('nothing to write, or a write already in flight, is left alone', () => {
+    expect(shouldFlushBeforeHiding(false, false)).toBe(false)
+    expect(shouldFlushBeforeHiding(true, true)).toBe(false)
   })
 })

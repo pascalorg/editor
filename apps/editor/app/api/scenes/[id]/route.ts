@@ -1,6 +1,7 @@
 import { after, type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
+import { readJsonBody } from '@/lib/request-body'
 import {
   authorizeScene,
   guardSceneApiRequest,
@@ -71,11 +72,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   let body: unknown
   try {
-    body = await request.json()
-  } catch {
+    body = await readJsonBody(request)
+  } catch (error) {
     return sceneApiJson(
       request,
-      { error: 'invalid_request', details: 'body must be valid JSON' },
+      { error: 'invalid_request', details: (error as Error).message },
       { status: 400 },
     )
   }
@@ -170,11 +171,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   let body: unknown
   try {
-    body = await request.json()
-  } catch {
+    body = await readJsonBody(request)
+  } catch (error) {
     return sceneApiJson(
       request,
-      { error: 'invalid_request', details: 'body must be valid JSON' },
+      { error: 'invalid_request', details: (error as Error).message },
       { status: 400 },
     )
   }

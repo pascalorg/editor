@@ -70,6 +70,46 @@ export function createStoredNodeCountTracker(initialNodeCount: number) {
   }
 }
 
+/** What just happened, as far as pacing is concerned. */
+export type SavePacingEvent = 'change' | 'gesture-end' | 'became-visible'
+
+export interface SavePacingState {
+  /** A gesture is in progress. */
+  pointerDown: boolean
+  /** The tab is in the background. */
+  hidden: boolean
+}
+
+/**
+ * How long a write waits, or `null` for "not now".
+ *
+ * The two `null` cases are the point of the whole thing. Mid-gesture, every
+ * write is superseded by the next one a frame later, so a drag used to spend
+ * its whole length writing results nobody would ever read. Backgrounded, a tab
+ * that keeps its timer alive is still writing to the database for a user who
+ * left. Both are re-armed by the event that ends them — `gesture-end` and
+ * `became-visible` — which is why neither can strand a change.
+ */
+export function saveDelayFor(
+  event: SavePacingEvent,
+  state: SavePacingState,
+  idleMs: number,
+): number | null {
+  if (state.pointerDown || state.hidden) return null
+  return event === 'change' ? idleMs : GESTURE_END_DEBOUNCE_MS
+}
+
+/**
+ * Whether a tab on its way to the background should write before going quiet.
+ *
+ * It should: the alternative is a pending change sitting in a tab that may
+ * never be looked at again, and `pagehide` is not guaranteed to arrive on
+ * every platform that backgrounds one.
+ */
+export function shouldFlushBeforeHiding(isDirty: boolean, isSaving: boolean): boolean {
+  return isDirty && !isSaving
+}
+
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
 interface UseAutoSaveOptions {
@@ -210,7 +250,7 @@ export function useAutoSave({
         if (pendingSaveRef.current) {
           pendingSaveRef.current = false
           setSaveStatus('pending')
-          scheduleSave(IDLE_DEBOUNCE_MS)
+          scheduleSave('change')
         }
       }
     }
@@ -226,17 +266,22 @@ export function useAutoSave({
      */
     let pointerIsDown = false
 
-    function scheduleSave(delayMs: number) {
+    function scheduleSave(event: SavePacingEvent) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       saveTimeoutRef.current = undefined
-      // Mid-gesture and backgrounded are both "not now": the gesture's end and
-      // the visibility change each schedule their own write.
-      if (pointerIsDown) return
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      const delay = saveDelayFor(
+        event,
+        {
+          pointerDown: pointerIsDown,
+          hidden: typeof document !== 'undefined' && document.visibilityState === 'hidden',
+        },
+        IDLE_DEBOUNCE_MS,
+      )
+      if (delay === null) return
       saveTimeoutRef.current = setTimeout(() => {
         saveTimeoutRef.current = undefined
         executeSave()
-      }, delayMs)
+      }, delay)
     }
 
     function handlePointerDown() {
@@ -250,19 +295,17 @@ export function useAutoSave({
     function handlePointerUp() {
       if (!pointerIsDown) return
       pointerIsDown = false
-      if (hasDirtyChangesRef.current) scheduleSave(GESTURE_END_DEBOUNCE_MS)
+      if (hasDirtyChangesRef.current) scheduleSave('gesture-end')
     }
 
     function handleVisibilityChange() {
       if (document.visibilityState === 'hidden') {
-        // One write on the way out, then silence. A background tab that keeps
-        // an autosave timer alive is a tab still writing to the database for a
-        // user who left; a tab that writes nothing at all on the way out is a
-        // lost edit if it is never brought back.
-        if (hasDirtyChangesRef.current && !isSavingRef.current) void executeSave()
+        if (shouldFlushBeforeHiding(hasDirtyChangesRef.current, isSavingRef.current)) {
+          void executeSave()
+        }
         return
       }
-      if (hasDirtyChangesRef.current) scheduleSave(GESTURE_END_DEBOUNCE_MS)
+      if (hasDirtyChangesRef.current) scheduleSave('became-visible')
     }
 
     window.addEventListener('pointerdown', handlePointerDown, { capture: true })
@@ -321,7 +364,7 @@ export function useAutoSave({
         return
       }
 
-      scheduleSave(IDLE_DEBOUNCE_MS)
+      scheduleSave('change')
     })
 
     // Flush any unsaved change while the page is going away. The network

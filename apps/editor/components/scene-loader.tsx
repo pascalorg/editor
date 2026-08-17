@@ -1,6 +1,5 @@
 'use client'
 
-import { deltaIsWorthSending, diffSceneGraphs, type SceneDelta } from '@pascal-app/core/scene-delta'
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
@@ -20,6 +19,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cadastreProvider } from '@/lib/cadastre-provider'
+import { type SaveGraph, saveSceneGraph } from '@/lib/save-scene-graph'
 import {
   type PersistedSceneGraph,
   sceneGraphSignature,
@@ -177,33 +177,6 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     onError: setSaveError,
   })
 
-  /**
-   * Sends one delta. `stale` means the stored version moved out from under the
-   * base this delta was measured against — an agent wrote, or a checkpoint from
-   * another tab landed — and the caller resynchronises with a full PUT rather
-   * than guessing at a merge.
-   */
-  const sendDelta = useCallback(
-    async (delta: SceneDelta): Promise<'sent' | 'stale' | 'failed'> => {
-      try {
-        const response = await fetch(`/api/scenes/${meta.id}/patch`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ baseVersion: versionRef.current, ops: delta.ops }),
-        })
-        if (response.status === 409) return 'stale'
-        if (!response.ok) return 'failed'
-        const next = (await response.json()) as { version: number }
-        versionRef.current = next.version
-        setLiveVersion(next.version)
-        return 'sent'
-      } catch {
-        return 'failed'
-      }
-    },
-    [meta.id],
-  )
-
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
       await waitForCollaboration()
@@ -219,69 +192,34 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       const isCheckpoint =
         options?.keepalive === true || now - lastCheckpointAtRef.current >= CHECKPOINT_INTERVAL_MS
 
-      // A checkpoint has to carry the whole graph — it is the row someone
-      // restores from, and reconstructing it out of a delta chain is exactly
-      // the recovery risk checkpoints exist to avoid. Everything else is a
-      // draft, and a draft only needs to say what moved.
-      if (!isCheckpoint) {
-        const previous = lastSentGraphRef.current
-        const delta = previous ? diffSceneGraphs(previous, graph) : null
-        if (delta && deltaIsWorthSending(delta, graph)) {
-          const sent = await sendDelta(delta)
-          if (sent === 'sent') {
-            authoritativeGraphJsonRef.current = graphJson
-            authoritativeModelJsonRef.current = sceneModelSignature(graph)
-            lastSentGraphRef.current = graph
-            setSaveError(null)
-            return
-          }
-          // `stale` and `failed` both fall through to the full PUT below, which
-          // resynchronises the base the next delta is measured against.
-        }
+      const result = await saveSceneGraph({
+        sceneId: meta.id,
+        name: meta.name,
+        graph: graph as SaveGraph,
+        previousGraph: lastSentGraphRef.current as SaveGraph | null,
+        version: versionRef.current,
+        isCheckpoint,
+        keepalive: options?.keepalive,
+      })
+
+      if (result.outcome === 'conflict') {
+        setConflict(true)
+        return
+      }
+      if (result.outcome === 'error') {
+        setSaveError(result.message)
+        return
       }
 
-      try {
-        const response = await fetch(`/api/scenes/${meta.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'If-Match': String(versionRef.current),
-          },
-          body: JSON.stringify({
-            name: meta.name,
-            graph,
-            saveMode: isCheckpoint ? 'checkpoint' : 'draft',
-          }),
-          // `keepalive` lets the request outlive a page unload (the autosave
-          // flush on refresh/close). Browsers cap keepalive bodies at 64KB, so
-          // only the unload flush opts in — normal debounced saves omit it and
-          // can carry arbitrarily large scenes.
-          keepalive: options?.keepalive,
-        })
-
-        if (response.status === 409) {
-          setConflict(true)
-          return
-        }
-
-        if (!response.ok) {
-          setSaveError(`Save failed (${response.status})`)
-          return
-        }
-
-        const next = (await response.json()) as SceneMeta
-        if (isCheckpoint) lastCheckpointAtRef.current = now
-        versionRef.current = next.version
-        setLiveVersion(next.version)
-        authoritativeGraphJsonRef.current = graphJson
-        authoritativeModelJsonRef.current = sceneModelSignature(graph)
-        lastSentGraphRef.current = graph
-        setSaveError(null)
-      } catch (error) {
-        setSaveError(error instanceof Error ? error.message : 'Save failed')
-      }
+      if (isCheckpoint) lastCheckpointAtRef.current = now
+      versionRef.current = result.version
+      setLiveVersion(result.version)
+      authoritativeGraphJsonRef.current = graphJson
+      authoritativeModelJsonRef.current = sceneModelSignature(graph)
+      lastSentGraphRef.current = graph
+      setSaveError(null)
     },
-    [meta.id, meta.name, sendDelta, waitForCollaboration],
+    [meta.id, meta.name, waitForCollaboration],
   )
 
   useEffect(() => {

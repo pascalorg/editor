@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { z } from 'zod'
 import { wouldEmptyStoredScene } from '@/app/api/scenes/[id]/route'
 import { apiGraphSchema } from '@/lib/graph-schema'
+import { readJsonBody } from '@/lib/request-body'
 import {
   authorizeScene,
   guardSceneApiRequest,
@@ -66,9 +67,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   let body: unknown
   try {
-    body = await request.json()
-  } catch {
-    return sceneApiJson(request, { error: 'invalid_request' }, { status: 400 })
+    body = await readJsonBody(request)
+  } catch (error) {
+    return sceneApiJson(
+      request,
+      { error: 'invalid_request', details: (error as Error).message },
+      { status: 400 },
+    )
   }
 
   const parsed = patchSchema.safeParse(body)

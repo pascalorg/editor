@@ -6,6 +6,7 @@ import {
 import { after } from 'next/server'
 import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
+import { readJsonBody } from '@/lib/request-body'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
@@ -84,9 +85,13 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   let body: unknown
   try {
-    body = await request.json()
-  } catch {
-    return sceneApiJson(request, { error: 'invalid_request' }, { status: 400 })
+    body = await readJsonBody(request)
+  } catch (error) {
+    return sceneApiJson(
+      request,
+      { error: 'invalid_request', details: (error as Error).message },
+      { status: 400 },
+    )
   }
   const parsed = collaborationBatchSchema.safeParse(body)
   if (!parsed.success) {
