@@ -38,10 +38,11 @@ function segment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode {
   } as RoofSegmentNode
 }
 
-function handles(): HandleDescriptor<RoofSegmentNode>[] {
+function handles(node: RoofSegmentNode = segment()): HandleDescriptor<RoofSegmentNode>[] {
   const descriptors = roofSegmentDefinition.handles
-  if (!Array.isArray(descriptors)) throw new Error('Expected static roof-segment handles')
-  return descriptors as HandleDescriptor<RoofSegmentNode>[]
+  return (
+    typeof descriptors === 'function' ? descriptors(node, undefined as never) : descriptors
+  ) as HandleDescriptor<RoofSegmentNode>[]
 }
 
 function linear(axis: 'x' | 'z', anchor: 'min' | 'max'): LinearResizeHandle<RoofSegmentNode> {
@@ -50,6 +51,15 @@ function linear(axis: 'x' | 'z', anchor: 'min' | 'max'): LinearResizeHandle<Roof
       h.kind === 'linear-resize' && h.axis === axis && h.anchor === anchor,
   )
   if (!handle) throw new Error(`Missing ${axis}/${anchor} handle`)
+  return handle
+}
+
+function pitchHandle(): LinearResizeHandle<RoofSegmentNode> {
+  const handle = handles().find(
+    (h): h is LinearResizeHandle<RoofSegmentNode> =>
+      h.kind === 'linear-resize' && h.axis === 'y' && typeof h.min === 'function',
+  )
+  if (!handle) throw new Error('Missing pitch handle')
   return handle
 }
 
@@ -85,5 +95,31 @@ describe('roof-segment resize handles', () => {
 
     expect(frontPatch).toMatchObject({ depth: 8, position: [10, 0, 21] })
     expect(backPatch).toMatchObject({ depth: 8, position: [10, 0, 19] })
+  })
+
+  test('hides the pitch handle for managed lean-to roof segments', () => {
+    const handle = pitchHandle()
+    const managed = segment({
+      metadata: {
+        managedByLeanTo: 'lean_to_test',
+        leanToRole: 'roof-segment',
+      },
+    })
+
+    expect(handle.visible?.(segment(), undefined as never)).not.toBe(false)
+    expect(handle.visible?.(managed, undefined as never)).toBe(false)
+  })
+
+  test('hides all direct handles for managed lean-to roof segments', () => {
+    expect(
+      handles(
+        segment({
+          metadata: {
+            managedByLeanTo: 'lean_to_test',
+            leanToRole: 'roof-segment',
+          },
+        }),
+      ),
+    ).toEqual([])
   })
 })

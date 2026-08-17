@@ -54,6 +54,11 @@ function shouldShowTrimPlanes(metadata: unknown): boolean {
   return metadataRecord(metadata).showTrimPlanes === true
 }
 
+function isManagedLeanToRoofSegment(metadata: unknown): boolean {
+  const record = metadataRecord(metadata)
+  return record.managedByLeanTo !== undefined && record.leanToRole === 'roof-segment'
+}
+
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)) {
     return metadata as Record<string, unknown>
@@ -96,6 +101,7 @@ export default function RoofSegmentPanel() {
 
   const handleRoofTypeChange = useCallback(
     (roofType: RoofType) => {
+      if (isManagedLeanToRoofSegment(node?.metadata)) return
       // Switching to Dutch resets the shape parameters to their defaults so the
       // gablet is well-formed regardless of the leftover values from the
       // previous roof type.
@@ -112,7 +118,7 @@ export default function RoofSegmentPanel() {
           : { roofType },
       )
     },
-    [handleUpdate],
+    [handleUpdate, node?.metadata],
   )
 
   const handleClose = useCallback(() => {
@@ -229,6 +235,7 @@ export default function RoofSegmentPanel() {
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
+  const managedLeanToRoofSegment = isManagedLeanToRoofSegment(node.metadata)
 
   return (
     <PanelWrapper
@@ -243,11 +250,13 @@ export default function RoofSegmentPanel() {
           onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS}
           value={node.roofType}
+          disabled={managedLeanToRoofSegment}
         />
         <SegmentedControl
           onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS_2}
           value={node.roofType}
+          disabled={managedLeanToRoofSegment}
         />
       </PanelSection>
 

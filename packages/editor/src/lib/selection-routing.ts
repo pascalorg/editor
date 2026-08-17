@@ -31,6 +31,26 @@ function shouldBypassSelectionProxy(node: AnyNode, target: AnyNode): boolean {
   return nodeRegistry.get(node.type)?.selectionProxy?.bypassDirectPick?.(node, target) ?? false
 }
 
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>)
+    : {}
+}
+
+function resolveManagedLeanToRoofOwner(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+): AnyNode | null {
+  if (node.type !== 'roof' && node.type !== 'roof-segment') return null
+  const metadata = metadataRecord(node.metadata)
+  const role = metadata.leanToRole
+  if (role !== 'roof' && role !== 'roof-segment') return null
+  const ownerId = metadata.managedByLeanTo
+  if (typeof ownerId !== 'string') return null
+  const owner = nodes[ownerId]
+  return owner?.type === 'lean-to-extension' ? owner : null
+}
+
 export function resolveCanvasSelectionNode({
   node,
   nodes,
@@ -40,8 +60,14 @@ export function resolveCanvasSelectionNode({
   nodes: Readonly<Record<string, AnyNode | undefined>>
   selectedIds: readonly string[]
 }): AnyNode {
+  const managedLeanToOwner = resolveManagedLeanToRoofOwner(node, nodes)
+  if (managedLeanToOwner) return managedLeanToOwner
+
   const proxiedTarget = nodes[resolveSelectionProxyId(node, nodes)] ?? node
   let target = shouldBypassSelectionProxy(node, proxiedTarget) ? node : proxiedTarget
+  const managedLeanToTargetOwner = resolveManagedLeanToRoofOwner(target, nodes)
+  if (managedLeanToTargetOwner) return managedLeanToTargetOwner
+
   const parentFrame = nodeRegistry.get(target.type)?.capabilities?.movable?.parentFrame
   if (parentFrame) {
     const parent = parentFrame.resolveParent(target, nodes as Readonly<Record<string, AnyNode>>)
