@@ -6,6 +6,42 @@ type FrameLimiterProps = {
   fps?: number
 }
 
+export type FrameClock = {
+  sample: (wallTimeMs: number, intervalMs: number) => number | null
+  step: (seconds: number) => number
+}
+
+/**
+ * Keeps R3F's manual clock monotonic while each limiter effect owns a fresh
+ * wall-time baseline. The first rAF sample establishes that baseline instead
+ * of treating the browser's process uptime as elapsed frame time.
+ */
+export function createFrameClock(initialTime = 0): FrameClock {
+  let frameTime = initialTime
+  let previousWallTime: number | null = null
+
+  return {
+    sample(wallTimeMs, intervalMs) {
+      if (previousWallTime === null) {
+        previousWallTime = wallTimeMs
+        return null
+      }
+
+      const elapsedMs = wallTimeMs - previousWallTime
+      if (elapsedMs < intervalMs) return null
+
+      const remainderMs = elapsedMs % intervalMs
+      frameTime += (elapsedMs - remainderMs) / 1000
+      previousWallTime = wallTimeMs - remainderMs
+      return frameTime
+    },
+    step(seconds) {
+      frameTime += seconds
+      return frameTime
+    },
+  }
+}
+
 // `?disable=draw` (see post-processing.tsx): the page renders no real frames,
 // and Chromium's no-damage scheduler then throttles requestAnimationFrame to
 // 1Hz on Linux (measured in the headless bake worker — every useFrame system
@@ -31,13 +67,12 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
 
   useLayoutEffect(() => {
     if (renderPaused) return
-    let elapsed = 0
-    let then = 0
-    let i = nextFrameTimeRef.current
+    const clock = createFrameClock(nextFrameTimeRef.current)
     let raf: number | null = null
     let timer: ReturnType<typeof setInterval> | null = null
     let sizeSynced = false
-    const interval = 1000 / fps
+    const effectiveFps = Number.isFinite(fps) && fps > 0 ? fps : 50
+    const interval = 1000 / effectiveFps
     function syncSize() {
       if (sizeSynced) return
       renderer.setPixelRatio(dpr)
@@ -47,19 +82,16 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     function tick(t: DOMHighResTimeStamp) {
       raf = requestAnimationFrame(tick)
       syncSize()
-      elapsed = t - then
-      if (elapsed > interval) {
-        advance(i)
-        i += elapsed / 1000 - (elapsed % interval) / 1000
-        nextFrameTimeRef.current = i
-        then = t - (elapsed % interval)
-      }
+      const frameTime = clock.sample(t, interval)
+      if (frameTime === null) return
+      nextFrameTimeRef.current = frameTime
+      advance(frameTime)
     }
     function kick() {
       syncSize()
-      i += 1 / 1000
-      nextFrameTimeRef.current = i
-      advance(i)
+      const frameTime = clock.step(1 / 1000)
+      nextFrameTimeRef.current = frameTime
+      advance(frameTime)
     }
     function onVisibilityChange() {
       if (document.visibilityState === 'visible') kick()
@@ -68,9 +100,9 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     set({ frameloop: 'never' })
     if (DRAW_DISABLED) {
       timer = setInterval(() => {
-        i += interval / 1000
-        nextFrameTimeRef.current = i
-        advance(i)
+        const frameTime = clock.step(interval / 1000)
+        nextFrameTimeRef.current = frameTime
+        advance(frameTime)
       }, interval)
     } else {
       // Kick off custom render loop
