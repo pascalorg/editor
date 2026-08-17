@@ -268,7 +268,11 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   const corner = endpoint === 'start' ? wall.start : wall.end
   const x = corner[0]
   const z = corner[1]
-  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+  const wallHeight = getWallEffectiveHeightForNodes(
+    wall,
+    useScene.getState().nodes,
+    endpoint === 'start' ? 0 : 1,
+  )
 
   const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(wallHeight), [wallHeight])
   const hitGeometry = useMemo(() => createEndpointHitAreaGeometry(CORNER_HEX_RADIUS), [])
@@ -606,7 +610,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const wallAngle = Math.atan2(-dirZ, dirX)
   // `wall` is the override-merged effective wall (see
   // WallMoveSideHandlesForWall), so this height is already live during a drag.
-  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes, 0.5)
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
   const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
@@ -949,7 +953,7 @@ function getWallMoveHandles(wall: WallNode, nodes: Record<string, AnyNode>): Wal
   const midpoint: [number, number] = frame
     ? [frame.point.x, frame.point.y]
     : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
-  const wallHeight = getWallEffectiveHeightForNodes(wall, nodes)
+  const wallHeight = getWallEffectiveHeightForNodes(wall, nodes, 0.5)
   const handleHeight = Math.max(wallHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT)
   const offset = Math.max(getWallThickness(wall) / 2 + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
 
