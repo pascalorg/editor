@@ -135,14 +135,19 @@ function disposeLevelBatches(levelId: string) {
   batchesByLevel.delete(levelId)
 }
 
-type Candidate = { nodeId: string; mesh: Mesh; materials: Material[] }
+export type WallBatchCandidate = { nodeId: string; mesh: Mesh; materials: Material[] }
 
 /**
  * A wall joins a batch only if its whole material set is opaque. Translucent
  * and cut-away walls depend on per-object blend ordering, which merging would
  * change — they keep the per-wall path.
  */
-function toCandidate(nodeId: string, node: WallNode): Candidate | null {
+function toCandidate(
+  nodeId: string,
+  node: WallNode,
+  excludedNodeIds: ReadonlySet<string> = EMPTY_IDS,
+): WallBatchCandidate | null {
+  if (excludedNodeIds.has(nodeId)) return null
   if (node.visible === false) return null
 
   const mesh = sceneRegistry.nodes.get(nodeId) as Mesh | undefined
@@ -184,15 +189,15 @@ export function canBatchWalls(wallMode: WallMode, isolationActive: boolean): boo
  * are only ever a handful, and a handful of extra draw calls is what the tint
  * costs.
  */
-function collectTintedWalls(wallIds: ReadonlySet<string>): string[] {
+function collectTintedWalls(wallIds: ReadonlySet<string>): Set<string> {
   const viewer = useViewer.getState()
-  const tinted: string[] = []
+  const tinted = new Set<string>()
 
-  for (const id of viewer.selection.selectedIds) if (wallIds.has(id)) tinted.push(id)
-  for (const id of viewer.previewSelectedIds) if (wallIds.has(id)) tinted.push(id)
+  for (const id of viewer.selection.selectedIds) if (wallIds.has(id)) tinted.add(id)
+  for (const id of viewer.previewSelectedIds) if (wallIds.has(id)) tinted.add(id)
 
   const hovered = viewer.hoverHighlightMode === 'delete' ? viewer.hoveredId : null
-  if (hovered && wallIds.has(hovered)) tinted.push(hovered)
+  if (hovered && wallIds.has(hovered)) tinted.add(hovered)
 
   return tinted
 }
@@ -201,17 +206,20 @@ function materialSetKey(materials: readonly Material[]): string {
   return materials.map((material) => material.uuid).join('|')
 }
 
-function collectCandidates(levelId: string): Map<string, Candidate[]> {
+export function collectWallBatchCandidates(
+  levelId: string,
+  excludedNodeIds: ReadonlySet<string> = EMPTY_IDS,
+): Map<string, WallBatchCandidate[]> {
   const nodes = useScene.getState().nodes
   const level = nodes[levelId as AnyNodeId]
-  const grouped = new Map<string, Candidate[]>()
+  const grouped = new Map<string, WallBatchCandidate[]>()
   if (level?.type !== 'level') return grouped
 
   for (const childId of level.children) {
     const child = nodes[childId]
     if (child?.type !== 'wall') continue
 
-    const candidate = toCandidate(childId, child as WallNode)
+    const candidate = toCandidate(childId, child as WallNode, excludedNodeIds)
     if (!candidate) continue
 
     const key = materialSetKey(candidate.materials)
@@ -231,13 +239,17 @@ function collectCandidates(levelId: string): Map<string, Candidate[]> {
  * pays off once enough walls have drifted out, so a single edit leaves the
  * floor's merged mesh exactly where it was.
  */
-function unbatchedWallCount(levelId: string): number {
+function unbatchedWallCount(
+  levelId: string,
+  excludedNodeIds: ReadonlySet<string> = EMPTY_IDS,
+): number {
   const nodes = useScene.getState().nodes
   const level = nodes[levelId as AnyNodeId]
   if (level?.type !== 'level') return 0
 
   let count = 0
   for (const childId of level.children) {
+    if (excludedNodeIds.has(childId)) continue
     if (batchByNode.has(childId)) continue
     const child = nodes[childId]
     if (child?.type !== 'wall') continue
@@ -250,7 +262,7 @@ function unbatchedWallCount(levelId: string): number {
 const localMatrix = new Matrix4()
 const rootInverse = new Matrix4()
 
-function mergeLevel(levelId: string) {
+function mergeLevel(levelId: string, excludedNodeIds: ReadonlySet<string> = EMPTY_IDS) {
   disposeLevelBatches(levelId)
 
   const root = sceneRegistry.nodes.get(levelId) as Object3D | undefined
@@ -261,7 +273,7 @@ function mergeLevel(levelId: string) {
 
   const records: BatchRecord[] = []
 
-  for (const candidates of collectCandidates(levelId).values()) {
+  for (const candidates of collectWallBatchCandidates(levelId, excludedNodeIds).values()) {
     if (candidates.length < MIN_BATCH_WALLS) continue
 
     const sources = candidates.map((candidate) => {
@@ -370,7 +382,8 @@ function runBatchFrame(
   // so it goes back to drawing its own geometry for as long as it is lit. It
   // stays out afterwards: one wall short of a batch is not worth re-sewing a
   // floor over, and the level's own re-merge threshold decides when it is.
-  for (const nodeId of collectTintedWalls(wallIds)) {
+  const tintedWalls = collectTintedWalls(wallIds)
+  for (const nodeId of tintedWalls) {
     if (!batchByNode.has(nodeId)) continue
     const record = batchByNode.get(nodeId)
     if (record) staleLevels.add(record.levelId)
@@ -445,7 +458,9 @@ function runBatchFrame(
   }
 
   for (const levelId of staleLevels) {
-    if (unbatchedWallCount(levelId) >= MIN_BATCH_WALLS) mergeLevel(levelId)
+    if (unbatchedWallCount(levelId, tintedWalls) >= MIN_BATCH_WALLS) {
+      mergeLevel(levelId, tintedWalls)
+    }
   }
   staleLevels.clear()
 }
