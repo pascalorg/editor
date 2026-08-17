@@ -14,6 +14,7 @@
   "dependencies": {
     "@iconify/react": "^6.0.2",
     "@number-flow/react": "^0.6.0",
+    "@pascal-app/cadastre": "*",
     "@pascal-app/core": "*",
     "@pascal-app/editor": "*",
     "@pascal-app/mcp": "*",

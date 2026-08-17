@@ -11,24 +11,15 @@ import { PanelSection } from '../../../controls/panel-section'
 import { ActionButton, ActionGroup } from '../../../controls/action-button'
 import { formatAreaLabel } from '../../../../../lib/measurements'
 
-// Minimal bounding box logic to center the polygon.
-function calculatePolygonArea(polygon: Array<[number, number]>): number {
-  if (polygon.length < 3) return 0
-  let area = 0
-  const n = polygon.length
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    const [currentX, currentY] = polygon[i]!
-    const [nextX, nextY] = polygon[j]!
-    area += currentX * nextY
-    area -= nextX * currentY
-  }
-  return Math.abs(area) / 2
-}
-
 export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
   const provider = useContext(ParcelProviderContext)
   const t = useTranslation()
+
+  // A provider throws the English source string, so the dictionary can still
+  // reach it. Anything else came from below the provider and has no key.
+  const describeError = (error: unknown) =>
+    error instanceof Error && error.message ? t(error.message) : t('Error fetching parcel')
+
   const updateNode = useScene((state) => state.updateNode)
   const unit = useViewer((state) => state.unit)
 
@@ -95,8 +86,8 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
       } else {
         setResult(res)
       }
-    } catch (e: any) {
-      setError(e.message || t('Error fetching parcel'))
+    } catch (e) {
+      setError(describeError(e))
     } finally {
       setLoading(false)
     }
@@ -119,8 +110,8 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
       } else {
         setResult(res)
       }
-    } catch (e: any) {
-      setError(e.message || t('Error fetching parcel'))
+    } catch (e) {
+      setError(describeError(e))
     } finally {
       setLoading(false)
     }
@@ -158,8 +149,6 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
     const cz = (minZ + maxZ) / 2
     const centeredPoints: Array<[number, number]> = localPoints.map(([x, z]) => [x - cx, z - cz])
 
-    const parts = result.label.split(' / ')
-    
     updateNode(siteNode.id, {
       latitude: origin.latitude,
       longitude: origin.longitude,
@@ -167,13 +156,13 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
       parcel: {
         source: 'tkgm',
         edited: false,
-        registeredArea: result.registeredAreaRaw ? Number(result.registeredAreaRaw) : undefined,
-        ada: parts[3]?.split(' ')[0] || '',
-        parsel: parts[3]?.split(' ')[2] || '',
-        il: parts[0] || '',
-        ilce: parts[1] || '',
-        mahalle: parts[2] || '',
-        mahalleId: Number(mahalleId) || 0,
+        registeredArea: result.registeredArea,
+        ada: result.ada,
+        parsel: result.parsel,
+        il: result.il,
+        ilce: result.ilce,
+        mahalle: result.mahalle,
+        mahalleId: result.mahalleId,
         nitelik: result.attributes?.nitelik,
         pafta: result.attributes?.pafta,
         fetchedAt: new Date().toISOString(),
@@ -186,43 +175,43 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
   const renderForm = () => (
     <div className="flex flex-col gap-2 px-3 pb-2 text-xs">
       <div className="flex flex-col gap-1">
-        <label className="text-muted-foreground">{t('İl')}</label>
+        <label className="text-muted-foreground">{t('City')}</label>
         <select 
           className="rounded border border-border/50 bg-foreground/5 p-1 text-foreground"
           value={ilId}
           onChange={(e) => { setIlId(Number(e.target.value) || ''); setIlceId(''); setMahalleId('') }}
         >
-          <option value="">{t('Seçiniz...')}</option>
+          <option value="">{t('Select...')}</option>
           {iller.map(il => <option key={il.id} value={il.id}>{il.name}</option>)}
         </select>
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-muted-foreground">{t('İlçe')}</label>
+        <label className="text-muted-foreground">{t('District')}</label>
         <select 
           className="rounded border border-border/50 bg-foreground/5 p-1 text-foreground disabled:opacity-50"
           value={ilceId}
           disabled={!ilId}
           onChange={(e) => { setIlceId(Number(e.target.value) || ''); setMahalleId('') }}
         >
-          <option value="">{t('Seçiniz...')}</option>
+          <option value="">{t('Select...')}</option>
           {ilceler.map(ilce => <option key={ilce.id} value={ilce.id}>{ilce.name}</option>)}
         </select>
       </div>
       <div className="flex flex-col gap-1">
-        <label className="text-muted-foreground">{t('Mahalle')}</label>
+        <label className="text-muted-foreground">{t('Neighborhood')}</label>
         <select 
           className="rounded border border-border/50 bg-foreground/5 p-1 text-foreground disabled:opacity-50"
           value={mahalleId}
           disabled={!ilceId}
           onChange={(e) => setMahalleId(Number(e.target.value) || '')}
         >
-          <option value="">{t('Seçiniz...')}</option>
+          <option value="">{t('Select...')}</option>
           {mahalleler.map(mah => <option key={mah.id} value={mah.id}>{mah.name}</option>)}
         </select>
       </div>
       <div className="flex gap-2">
         <div className="flex flex-col gap-1 flex-1">
-          <label className="text-muted-foreground">{t('Ada')}</label>
+          <label className="text-muted-foreground">{t('Block')}</label>
           <input 
             className="w-full rounded border border-border/50 bg-foreground/5 p-1 text-foreground"
             value={ada}
@@ -230,7 +219,7 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
           />
         </div>
         <div className="flex flex-col gap-1 flex-1">
-          <label className="text-muted-foreground">{t('Parsel')}</label>
+          <label className="text-muted-foreground">{t('Parcel')}</label>
           <input 
             className="w-full rounded border border-border/50 bg-foreground/5 p-1 text-foreground"
             value={parsel}
@@ -262,7 +251,7 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
             className={cn('flex-1 rounded py-1 text-xs transition-colors', mode === 'form' ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground hover:bg-accent/50')}
             onClick={() => setMode('form')}
           >
-            {t('Ada / Parsel')}
+            {t('Block / parcel')}
           </button>
         </div>
 
@@ -287,11 +276,27 @@ export function ParcelImporter({ siteNode }: { siteNode: SiteNode }) {
 
         {result && (
           <div className="mx-3 mb-2 flex flex-col gap-2 rounded-md border border-border/50 bg-accent/30 p-2 text-xs">
-            <div className="font-medium text-foreground">{result.label}</div>
+            {/* Laid out as label/value rows rather than one composed sentence:
+                the dictionary is keyed by exact source strings, so a
+                "… ada … parsel" line assembled at runtime could never match. */}
             <div className="flex justify-between text-muted-foreground">
-              <span>{t('Registered Area')}</span>
+              <span>{t('Location')}</span>
               <span className="font-medium text-foreground">
-                {result.registeredAreaRaw !== undefined ? formatAreaLabel(Number(result.registeredAreaRaw), unit, 2) : '-'}
+                {[result.il, result.ilce, result.mahalle].filter(Boolean).join(' / ')}
+              </span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>{t('Block / parcel')}</span>
+              <span className="font-medium text-foreground">
+                {result.ada} / {result.parsel}
+              </span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>{t('Registered area')}</span>
+              <span className="font-medium text-foreground">
+                {result.registeredArea !== undefined
+                  ? formatAreaLabel(result.registeredArea, unit, 2)
+                  : '-'}
               </span>
             </div>
             <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">

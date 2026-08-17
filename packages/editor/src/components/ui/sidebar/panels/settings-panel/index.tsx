@@ -28,6 +28,7 @@ import {
 import { exportFloorplanPdf } from '../../../../../lib/floorplan/floorplan-export'
 import { LocalizedContent } from '../../../../../lib/i18n'
 import { useUiPreferences } from '../../../../../lib/ui-preferences'
+import { cn } from '../../../../../lib/utils'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -210,6 +211,11 @@ export function SettingsPanel({
   const theme = useUiPreferences((state) => state.theme)
   const setLocale = useUiPreferences((state) => state.setLocale)
   const setTheme = useUiPreferences((state) => state.setTheme)
+
+  // The export buttons hand the drawing to somebody who was not here when the
+  // parcel came in, so the provenance note has to travel next to them.
+  const siteNode = rootNodeIds[0] ? nodes[rootNodeIds[0]] : undefined
+  const importedParcel = siteNode?.type === 'site' ? siteNode.parcel : undefined
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
@@ -480,16 +486,20 @@ export function SettingsPanel({
             <Download className="size-4" />
             Export OBJ
           </Button>
-          {Object.values(nodes).some((n: any) => n.kind === 'site' && n.parcel) && (() => {
-            const isEdited = Object.values(nodes).some((n: any) => n.kind === 'site' && n.parcel?.edited)
-            return (
-              <div className={`mt-2 text-[10px] ${isEdited ? 'text-sky-700 dark:text-sky-300' : 'text-amber-600 dark:text-amber-400'}`}>
-                {isEdited
-                  ? 'Edited by hand — no longer the registry outline.'
-                  : 'Land registry reference data — not a surveyed site plan.'}
-              </div>
-            )
-          })()}
+          {importedParcel && (
+            <div
+              className={cn(
+                'mt-2 text-[10px]',
+                importedParcel.edited
+                  ? 'text-sky-700 dark:text-sky-300'
+                  : 'text-amber-600 dark:text-amber-400',
+              )}
+            >
+              {importedParcel.edited
+                ? 'Edited by hand — no longer the registry outline.'
+                : 'Land registry reference data — not a surveyed site plan.'}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">

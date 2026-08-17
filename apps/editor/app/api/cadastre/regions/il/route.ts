@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     console.error('Cadastre proxy error:', error)
     return sceneApiJson(
       request,
-      { error: 'TKGM servislerine şu anda ulaşılamıyor. Lütfen daha sonra tekrar deneyin.' },
+      { error: 'The land registry service is unavailable right now. Please try again later.' },
       { status: 502 },
     )
   }

@@ -1569,6 +1569,24 @@ const tr: Record<string, string> = {
     'Bu çekme mesafelerinden sonra yapılaşma alanı kalmıyor.',
   "The presets are common values. The binding distances are the ones on your municipality's zoning certificate.":
     'Ön ayarlar yaygın değerlerdir; bağlayıcı mesafeler belediyenizin imar durumu belgesindedir.',
+  // Parcel importer (TKGM)
+  'Import Parcel': 'Parsel içe aktar',
+  'From Map': 'Haritadan',
+  City: 'İl',
+  District: 'İlçe',
+  Neighborhood: 'Mahalle',
+  Block: 'Ada',
+  'Select...': 'Seçiniz...',
+  'Searching...': 'Aranıyor...',
+  'Find Parcel': 'Parseli bul',
+  'Apply to Site': 'Arsaya uygula',
+  'Parcel not found.': 'Parsel bulunamadı.',
+  'No parcel found at this location.': 'Bu konumda parsel bulunamadı.',
+  'Error fetching parcel': 'Parsel getirilirken hata oluştu',
+  'The land registry service is unavailable right now. Please try again later.':
+    'TKGM servislerine şu anda ulaşılamıyor. Lütfen daha sonra tekrar deneyin.',
+  'Could not reach the land registry. Check your connection and try again.':
+    'TKGM servisine ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.',
   'No results for “': 'Sonuç bulunamadı: “',
   '" plugin crashed': '" eklentisi çöktü',
   '" Trap': '" Sifon',
@@ -2517,6 +2535,16 @@ export function translate(text: string, locale: I18nLocale): string {
   const trailing = match[3] ?? ''
   const translated = tr[content] ?? translateDynamicText(content)
   return translated ? `${leading}${translated}${trailing}` : text
+}
+
+/**
+ * Whether the dictionary covers this exact source string. `translate` cannot
+ * answer that on its own: an acronym Turkish keeps unchanged ("KAKS (Emsal)")
+ * is indistinguishable from a string nobody ever added.
+ */
+export function hasTranslation(text: string): boolean {
+  const content = text.trim()
+  return content in tr || translateDynamicText(content) !== null
 }
 
 export function translateReactNode(node: ReactNode, locale: I18nLocale): ReactNode {
