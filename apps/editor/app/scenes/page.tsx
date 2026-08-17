@@ -1,38 +1,29 @@
 import { type I18nLocale, translate } from '@pascal-app/editor/i18n'
-import { cookies, headers } from 'next/headers'
+import { cookies } from 'next/headers'
 import Link from 'next/link'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
 import { ServerLocalizedContent } from '@/components/server-localized-content'
+import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 
-async function resolveBaseUrl(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL
-  }
-  const h = await headers()
-  const host = h.get('x-forwarded-host') ?? h.get('host')
-  const proto = h.get('x-forwarded-proto') ?? 'http'
-  if (!host) {
-    return 'http://localhost:3000'
-  }
-  return `${proto}://${host}`
-}
-
+/**
+ * The store directly, not this app's own HTTP API. A Server Component calling
+ * its own route sends the request back out through the proxy — and in a
+ * multi-replica deployment it can land on a different replica than the one
+ * rendering the page. It also drops the caller's cookies, so the round trip
+ * starts 401-ing the moment sessions exist.
+ */
 async function fetchScenes(): Promise<SceneMeta[]> {
-  const base = await resolveBaseUrl()
-  const response = await fetch(`${base}/api/scenes?limit=50`, {
-    cache: 'no-store',
-  })
-  if (!response.ok) {
+  try {
+    const operations = await getSceneOperations()
+    return (await operations.listScenes({ limit: 50 })) as SceneMeta[]
+  } catch {
+    // An unreachable store leaves the page empty rather than a crash screen,
+    // matching what the failed fetch used to do.
     return []
   }
-  const payload = (await response.json()) as { scenes?: SceneMeta[] } | SceneMeta[]
-  if (Array.isArray(payload)) {
-    return payload
-  }
-  return payload.scenes ?? []
 }
 
 function formatDate(iso: string, locale: I18nLocale): string {
