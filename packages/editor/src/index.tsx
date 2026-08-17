@@ -275,6 +275,16 @@ export {
   SnapTargetIcon,
 } from './components/ui/snap-target-badge'
 export {
+  FloorplanCompassButton,
+  type FloorplanCompassButtonProps,
+} from './components/viewer/floorplan-compass-button'
+export {
+  FloorplanPreview,
+  type FloorplanPreviewProps,
+  type FloorplanPreviewScene,
+} from './components/viewer/floorplan-preview'
+export { useViewerCameraNavigationSync } from './components/viewer/use-viewer-camera-navigation-sync'
+export {
   ViewerControlsBar,
   type ViewerControlsBarProps,
 } from './components/viewer/viewer-controls-bar'
@@ -282,6 +292,19 @@ export {
   ViewerSceneHeader,
   type ViewerSceneHeaderProps,
 } from './components/viewer/viewer-scene-header'
+export { ViewerStage, type ViewerStageProps } from './components/viewer/viewer-stage'
+export {
+  normalizeViewerStageModes,
+  resolveMobileViewerStageMode,
+  resolveViewerStageMode,
+  VIEWER_STAGE_MODES,
+  viewerStageIncludes3D,
+} from './components/viewer/viewer-stage-modes'
+export {
+  type ViewerStageMode,
+  ViewerStageSwitcher,
+  type ViewerStageSwitcherProps,
+} from './components/viewer/viewer-stage-switcher'
 export {
   WalkthroughHud,
   type WalkthroughHudProps,
