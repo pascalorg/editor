@@ -19,18 +19,22 @@ function materialWithOpacity(material: Material | Material[] | undefined): Mater
   return Array.isArray(material) ? (material[0] ?? null) : material
 }
 
-function animateCabinetFlames(objects: Object3D[], elapsedTime: number, updateTubes: boolean) {
+export function animateCabinetFlames(
+  objects: Object3D[],
+  elapsedTime: number,
+  updateTubes: boolean,
+) {
   for (const obj of objects) {
     const jet = obj.userData.cabinetFlameJet as
       | { seed: CooktopFlameSeed; burnerR: number }
       | undefined
     if (jet) {
-      if (!updateTubes) return
+      if (!updateTubes) continue
       const mesh = obj as Mesh
       const position = mesh.geometry.getAttribute('position') as BufferAttribute
       updateCooktopFlameTube(position.array as Float32Array, elapsedTime, jet.seed, jet.burnerR)
       position.needsUpdate = true
-      return
+      continue
     }
 
     const pulse = obj.userData.cabinetFlamePulse as
@@ -43,9 +47,9 @@ function animateCabinetFlames(objects: Object3D[], elapsedTime: number, updateTu
     const materialPulse = obj.userData.cabinetFlameMaterialPulse as
       | { phase: number; amplitude: number; base: number }
       | undefined
-    if (!materialPulse) return
+    if (!materialPulse) continue
     const material = materialWithOpacity((obj as { material?: Material | Material[] }).material)
-    if (!material || !('opacity' in material)) return
+    if (!material || !('opacity' in material)) continue
     material.opacity =
       materialPulse.base +
       materialPulse.amplitude * Math.sin(elapsedTime * 2.3 + materialPulse.phase)
