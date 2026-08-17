@@ -258,9 +258,9 @@ whole visual system:
   `@source "../../../packages/editor/src"` (and `nodes`, plus plugin sources).
   A new source directory that isn't `@source`d produces no CSS and silently
   renders unstyled.
-- Font keys are indirection, not identity: `font-barlow` is spelled across ~15
+- Font keys are indirection, not identity: `font-sans` is spelled across ~15
   files in `packages/editor`, so the typeface is swapped by repointing the
-  `--font-barlow` theme key at a different face — not by renaming utilities.
+  `--font-sans` theme key at a different face — not by renaming utilities. We currently use `DM Sans` as the primary font.
 
 Two consequences worth internalising:
 
@@ -349,6 +349,7 @@ consequence; three structural ones sit underneath it.
   the scene (`lib/zoom-framing.ts` is the other caller). The export prune is the
   reference list for what else to exclude: off-`SCENE_LAYER` overlays, and
   hitboxes whose invisibility lives on `material.visible`.
+- **Draft previews and double-offsetting.** The 2D floorplan offset geometry (like walls) originates from the exact pointer click points. When a 3D tool sets `useFloorplanDraftPreview` coordinates, it must pass the *un-offset* pointer coordinates, not the already-offset ghost coordinates. Otherwise, the floorplan will offset the already-offset coordinates again, causing a double-offset drift. Also, 3D ghost models should react to configuration changes (like `wallAlignment`) instantly via React `useEffect`s rather than waiting for a pointer move.
 
 ## Parcel, setbacks and zoning: the one vertical that spans every layer
 
