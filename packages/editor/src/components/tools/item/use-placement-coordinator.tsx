@@ -3,7 +3,6 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
-  type BlockEvent,
   type CeilingEvent,
   collectAlignmentAnchors,
   emitter,
@@ -11,6 +10,8 @@ import {
   getScaledDimensions,
   type ItemEvent,
   movingFootprintAnchors,
+  type NodeEvent,
+  nodeRegistry,
   type RoofEvent,
   resolveFrozenFloorPlacementPatch,
   resolveLevelId,
@@ -70,13 +71,13 @@ import {
   resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
-import { commitBlockClick, resolveBlockPreviewCommit } from './block-commit'
 import {
   applyBlockPreviewPose,
   resolveBlockFaceSwitch,
   shouldDetachBlockFaceOnLeave,
 } from './block-preview'
 import { shouldCreateFloorDraft } from './draft-creation'
+import { commitFaceHostClick, resolveFaceHostPreviewCommit } from './face-host-commit'
 import {
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
@@ -86,9 +87,9 @@ import {
   steppedRotation,
 } from './placement-math'
 import {
-  blockFaceStrategy,
   ceilingStrategy,
   checkCanPlace,
+  faceHostStrategy,
   floorStrategy,
   itemSurfaceStrategy,
   roofWallStrategy,
@@ -500,7 +501,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // layer's frame.
     let alignmentCandidates: AlignmentAnchor[] | null = null
     let floorDragAnchor: [number, number] | null = null
-    let pendingBlockFaceId: string | null = null
+    let pendingFaceHostId: string | null = null
 
     // Reset placement state
     placementState.current = configRef.current.initialState ?? {
@@ -588,11 +589,25 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const finalId = draftNode.commit(nodeUpdate, options)
       if (draftId) {
         useLiveTransforms.getState().clear(draftId)
-        useLiveNodeOverrides
-          .getState()
-          .clearFields(draftId, ['position', 'rotation', 'blockFaceId'])
+        useLiveNodeOverrides.getState().clearFields(draftId, faceHostClearFields(draftNode.current))
       }
       return { committedId: finalId ?? draftId, wasAdopted }
+    }
+
+    const faceHostClearFields = (draft: ItemNode | null | undefined): Array<keyof ItemNode> => {
+      if (!draft?.parentId) return ['position', 'rotation']
+      const host = useScene.getState().nodes[draft.parentId as AnyNodeId]
+      return host
+        ? [...(nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields ?? [])]
+        : ['position', 'rotation']
+    }
+
+    const currentFaceHostId = (draft: ItemNode | null | undefined): string | null => {
+      if (!draft?.parentId) return null
+      const host = useScene.getState().nodes[draft.parentId as AnyNodeId]
+      return host
+        ? (nodeRegistry.get(host.type)?.capabilities.faceHost?.currentFaceId(draft) ?? null)
+        : null
     }
 
     const revalidate = (): boolean => {
@@ -1514,12 +1529,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
-    // ---- Block Face Handlers ----
+    // ---- Face Host Handlers ----
 
-    const enterBlockFace = (event: BlockEvent): boolean => {
-      const result = blockFaceStrategy.enter(getContext(), event)
+    const enterFaceHost = (event: NodeEvent): boolean => {
+      const result = faceHostStrategy.enter(getContext(), event)
       if (!result) return false
-      pendingBlockFaceId = null
+      pendingFaceHostId = null
       event.stopPropagation()
       applyTransition(result)
       if (!draftNode.current) {
@@ -1532,20 +1547,20 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return true
     }
 
-    const onBlockEnter = (event: BlockEvent) => {
+    const onFaceHostEnter = (event: NodeEvent) => {
       has3DPointerDrivenMoveRef.current = true
-      enterBlockFace(event)
+      enterFaceHost(event)
     }
 
-    const onBlockMove = (event: BlockEvent) => {
+    const onFaceHostMove = (event: NodeEvent) => {
       has3DPointerDrivenMoveRef.current = true
       if (!cursorGroupRef.current) return
       const ctx = getContext()
       if (ctx.state.surface !== 'block-face' || !draftNode.current) {
-        if (enterBlockFace(event)) releaseCommit = () => onBlockClick(event)
+        if (enterFaceHost(event)) releaseCommit = () => onFaceHostClick(event)
         return
       }
-      const result = blockFaceStrategy.move(ctx, event)
+      const result = faceHostStrategy.move(ctx, event)
       if (!result) {
         event.stopPropagation()
         return
@@ -1553,11 +1568,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       event.stopPropagation()
       const draft = draftNode.current
-      const nextFaceId = result.nodeUpdate?.blockFaceId
-      const faceSwitch = resolveBlockFaceSwitch(draft?.blockFaceId, nextFaceId, pendingBlockFaceId)
-      pendingBlockFaceId = faceSwitch.pendingFaceId
+      const nextFaceId = result.hostFaceId
+      const faceSwitch = resolveBlockFaceSwitch(
+        currentFaceHostId(draft),
+        nextFaceId,
+        pendingFaceHostId,
+      )
+      pendingFaceHostId = faceSwitch.pendingFaceId
       if (!faceSwitch.accept) return
-      releaseCommit = () => onBlockClick(event)
+      releaseCommit = () => onFaceHostClick(event)
 
       const posChanged =
         gridPosition.current.x !== result.gridPosition[0] ||
@@ -1579,42 +1598,40 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useLiveNodeOverrides.getState().set(draft.id, {
           position: result.gridPosition,
           rotation,
-          blockFaceId: nextFaceId,
+          ...result.nodeUpdate,
         })
       }
       revalidate()
     }
 
-    const onBlockClick = (event: BlockEvent) => {
-      const outcome = commitBlockClick({
+    const onFaceHostClick = (event: NodeEvent) => {
+      const outcome = commitFaceHostClick({
         commitDraft,
-        enterBlockFace,
+        enterFaceHost,
         event,
         getContext,
       })
       if (!outcome) return
       const { committedId, wasAdopted } = outcome
       finishCommittedPlacement(committedId, wasAdopted, () => {
-        const enterResult = blockFaceStrategy.enter(getContext(), event)
+        const enterResult = faceHostStrategy.enter(getContext(), event)
         if (enterResult) applyTransition(enterResult)
         else revalidate()
       })
     }
 
-    const onBlockLeave = (event: BlockEvent) => {
-      pendingBlockFaceId = null
+    const onFaceHostLeave = (event: NodeEvent) => {
+      pendingFaceHostId = null
       if (!shouldDetachBlockFaceOnLeave(asset.attachTo)) {
         event.stopPropagation()
         return
       }
-      const result = blockFaceStrategy.leave(getContext())
+      const result = faceHostStrategy.leave(getContext())
       if (!result) return
       event.stopPropagation()
       const draft = draftNode.current
       if (draft) {
-        useLiveNodeOverrides
-          .getState()
-          .clearFields(draft.id, ['position', 'rotation', 'blockFaceId'])
+        useLiveNodeOverrides.getState().clearFields(draft.id, faceHostClearFields(draft))
       }
       if (draftNode.isAdopted) {
         applyTransition(result)
@@ -1831,7 +1848,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (event.node.id === draftNode.current?.id) {
         const ctx = getContext()
         if (ctx.state.surface === 'block-face') {
-          const result = resolveBlockPreviewCommit(ctx)
+          const result = resolveFaceHostPreviewCommit(ctx)
           if (result) {
             event.stopPropagation()
             const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
@@ -2426,10 +2443,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('roof:move', onRoofWallMove)
     emitter.on('roof:click', onRoofWallClick)
     emitter.on('roof:leave', onRoofWallLeave)
-    emitter.on('block:enter', onBlockEnter)
-    emitter.on('block:move', onBlockMove)
-    emitter.on('block:click', onBlockClick)
-    emitter.on('block:leave', onBlockLeave)
+    emitter.on('node:enter', onFaceHostEnter)
+    emitter.on('node:move', onFaceHostMove)
+    emitter.on('node:click', onFaceHostClick)
+    emitter.on('node:leave', onFaceHostLeave)
     emitter.on('ceiling:enter', onCeilingEnter)
     emitter.on('ceiling:move', onCeilingMove)
     emitter.on('ceiling:click', onCeilingClick)
@@ -2480,10 +2497,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('roof:move', onRoofWallMove)
       emitter.off('roof:click', onRoofWallClick)
       emitter.off('roof:leave', onRoofWallLeave)
-      emitter.off('block:enter', onBlockEnter)
-      emitter.off('block:move', onBlockMove)
-      emitter.off('block:click', onBlockClick)
-      emitter.off('block:leave', onBlockLeave)
+      emitter.off('node:enter', onFaceHostEnter)
+      emitter.off('node:move', onFaceHostMove)
+      emitter.off('node:click', onFaceHostClick)
+      emitter.off('node:leave', onFaceHostLeave)
       emitter.off('ceiling:enter', onCeilingEnter)
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
@@ -2545,7 +2562,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (
       draftParent?.type === 'item' ||
       draftParent?.type === 'shelf' ||
-      (draftParent?.type === 'block' && draft.blockFaceId)
+      (draftParent &&
+        nodeRegistry.get(draftParent.type)?.capabilities.faceHost?.currentFaceId(draft))
     )
       return
     draft.parentId = viewerLevelId

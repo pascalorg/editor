@@ -5,6 +5,7 @@ import {
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { blockContextualHelp } from './contextual-help'
+import { blockFaceHost } from './face-host'
 import { buildBlockFloorplan } from './floorplan'
 import { buildBlockGeometry } from './geometry'
 import { blockPaint } from './paint'
@@ -102,6 +103,12 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
     },
     paint: blockPaint,
     slots: (rawNode) => blockSlots(rawNode as BlockNodeType),
+    faceHost: blockFaceHost,
+  },
+
+  relations: {
+    hosts: ['item'],
+    cascadeDelete: 'descendants',
   },
 
   geometry: buildBlockGeometry,

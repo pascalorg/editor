@@ -1,13 +1,12 @@
 import type {
   AnyNode,
   AnyNodeId,
-  BlockEvent,
-  BlockNode,
   CeilingEvent,
   CeilingNode,
   GridEvent,
   ItemEvent,
   ItemNode,
+  NodeEvent,
   RoofEvent,
   RoofNode,
   RoofSegmentNode,
@@ -20,7 +19,6 @@ import type {
 import {
   canHostOnTop,
   clampRectToRoofWallFace,
-  getBlockFaceFrame,
   getRoofSegmentWallFace,
   getScaledDimensions,
   isLowProfileItemSurface,
@@ -29,10 +27,9 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { Euler, Matrix3, Matrix4, Quaternion, Vector3 } from 'three'
+import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
-import { clampBlockFaceCenterPosition, clampBlockFacePosition } from './block-preview'
 import {
   calculateItemRotation,
   getGridAlignedDimensions,
@@ -53,11 +50,6 @@ import type {
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 const UPWARD_SURFACE_NORMAL_MIN_Y = 0.75
-const BLOCK_HORIZONTAL_NORMAL_MIN_Y = 0.95
-const BLOCK_VERTICAL_NORMAL_MAX_Y = 0.05
-const BLOCK_FLOOR_ROTATION_X = Math.PI / 2
-const BLOCK_CEILING_ROTATION_X = -Math.PI / 2
-const BLOCK_FACE_STICKY_PLANE_EPSILON = 0.08
 
 function getWorldNormalY(event: ItemEvent): number | null {
   if (!event.normal) return null
@@ -637,152 +629,44 @@ export const roofWallStrategy = {
 }
 
 // ============================================================================
-// BLOCK FACE STRATEGY
+// FACE HOST STRATEGY
 // ============================================================================
 
-type BlockFaceRange = { faceId: string; start: number; count: number }
-type BlockFaceTarget = {
-  faceId: string
-  position: [number, number, number]
-  rotation: [number, number, number]
-  cursorPosition: [number, number, number]
-  cursorRotation: [number, number, number]
-}
-
-function blockFaceAcceptsAttachment(
-  normalY: number,
-  attachTo: PlacementContext['asset']['attachTo'],
-): boolean {
-  if (!attachTo) return normalY >= BLOCK_HORIZONTAL_NORMAL_MIN_Y
-  if (attachTo === 'ceiling') return normalY <= -BLOCK_HORIZONTAL_NORMAL_MIN_Y
-  if (attachTo === 'wall' || attachTo === 'wall-side') {
-    return Math.abs(normalY) <= BLOCK_VERTICAL_NORMAL_MAX_Y
-  }
-  return false
-}
-
-function blockHitFaceId(event: BlockEvent): string | null {
-  if (event.faceIndex == null) return null
-  const geometry = (event.object as { geometry?: { userData?: Record<string, unknown> } }).geometry
-  const ranges = geometry?.userData?.blockFaces
-  if (!Array.isArray(ranges)) return null
-  const triangleStart = event.faceIndex * 3
-  const range = (ranges as BlockFaceRange[]).find(
-    (candidate) =>
-      triangleStart >= candidate.start && triangleStart < candidate.start + candidate.count,
-  )
-  return range?.faceId ?? null
-}
-
-function resolveBlockFaceTargetForFace(
-  ctx: PlacementContext,
-  event: BlockEvent,
-  faceId: string,
-  options: { requirePointerOnPlane?: boolean } = {},
-): BlockFaceTarget | null {
-  const attachTo = ctx.asset.attachTo
-  const frame = getBlockFaceFrame(event.node.topology, faceId)
-  if (!frame) return null
-  if (!blockFaceAcceptsAttachment(frame.normal[1], attachTo)) return null
-
-  const hit = new Vector3(...event.localPosition).sub(new Vector3(...frame.origin))
-  const xAxis = new Vector3(...frame.xAxis)
-  const yAxis = new Vector3(...frame.yAxis)
-  const normal = new Vector3(...frame.normal)
-  if (
-    options.requirePointerOnPlane &&
-    Math.abs(hit.dot(normal)) > BLOCK_FACE_STICKY_PLANE_EPSILON
-  ) {
-    return null
-  }
-  const face = event.node.topology.faces.find((candidate) => candidate.id === faceId)
-  if (!face) return null
-  const vertices = new Map(
-    event.node.topology.vertices.map((vertex) => [vertex.id, vertex.position]),
-  )
-  let minU = Number.POSITIVE_INFINITY
-  let maxU = Number.NEGATIVE_INFINITY
-  let minV = Number.POSITIVE_INFINITY
-  let maxV = Number.NEGATIVE_INFINITY
-  for (const vertexId of face.vertexIds) {
-    const point = vertices.get(vertexId)
-    if (!point) return null
-    const dx = point[0] - frame.origin[0]
-    const dy = point[1] - frame.origin[1]
-    const dz = point[2] - frame.origin[2]
-    const pointU = dx * xAxis.x + dy * xAxis.y + dz * xAxis.z
-    const pointV = dx * yAxis.x + dy * yAxis.y + dz * yAxis.z
-    minU = Math.min(minU, pointU)
-    maxU = Math.max(maxU, pointU)
-    minV = Math.min(minV, pointV)
-    maxV = Math.max(maxV, pointV)
-  }
-  const rawDims = ctx.draftItem
+function resolveFaceHostTarget(ctx: PlacementContext, event: NodeEvent) {
+  const faceHost = nodeRegistry.get(event.node.type)?.capabilities.faceHost
+  if (!faceHost) return null
+  const rawDimensions = ctx.draftItem
     ? getScaledDimensions(ctx.draftItem)
     : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
-  const [width, height, depth] = getGridAlignedDimensions(rawDims, attachTo)
-  const snappedPosition: [number, number, number] = [
-    snapToHalf(hit.dot(xAxis)),
-    snapToHalf(hit.dot(yAxis)),
-    0,
-  ]
-  const faceBounds = { minU, maxU, minV, maxV }
-  const facePosition =
-    !attachTo || attachTo === 'ceiling'
-      ? clampBlockFaceCenterPosition(snappedPosition, faceBounds, [width, depth])
-      : clampBlockFacePosition(snappedPosition, faceBounds, [width, height])
-  if (!facePosition) return null
-  const [u, v] = facePosition
-  const normalOffset = attachTo === 'ceiling' && !ctx.asset.recessed ? rawDims[1] : 0
-  const position: [number, number, number] = [u, v, normalOffset]
-  const localPoint = new Vector3(...frame.origin)
-    .addScaledVector(xAxis, u)
-    .addScaledVector(yAxis, v)
-    .addScaledVector(normal, normalOffset)
-  event.object.updateWorldMatrix(true, false)
-  const worldPoint = event.object.localToWorld(localPoint)
-
-  const localFrame = new Matrix4().makeBasis(xAxis, yAxis, normal)
-  const worldFrame = new Matrix4().copy(event.object.matrixWorld).multiply(localFrame)
-  const worldQuaternion = new Quaternion()
-  worldFrame.decompose(new Vector3(), worldQuaternion, new Vector3())
-  const rotation: [number, number, number] = !attachTo
-    ? [BLOCK_FLOOR_ROTATION_X, 0, 0]
-    : attachTo === 'ceiling'
-      ? [BLOCK_CEILING_ROTATION_X, 0, 0]
-      : [0, 0, 0]
-  worldQuaternion.multiply(new Quaternion().setFromEuler(new Euler(...rotation)))
-  const cursorRotation = new Euler().setFromQuaternion(worldQuaternion, 'XYZ')
-
-  return {
-    faceId,
-    position,
-    rotation,
-    cursorPosition: worldPoint.toArray() as [number, number, number],
-    cursorRotation: [cursorRotation.x, cursorRotation.y, cursorRotation.z] as [
-      number,
-      number,
-      number,
-    ],
-  }
+  return faceHost.resolvePlacement({
+    host: event.node,
+    asset: ctx.asset,
+    draftItem: ctx.draftItem,
+    localPosition: event.localPosition,
+    faceIndex: event.faceIndex,
+    object: event.object,
+    currentFaceId: faceHost.currentFaceId(ctx.draftItem),
+    rawDimensions,
+    dimensions: getGridAlignedDimensions(rawDimensions, ctx.asset.attachTo),
+    snapScalar: snapToHalf,
+  })
 }
 
-function resolveBlockFaceTarget(ctx: PlacementContext, event: BlockEvent) {
-  const currentFaceId = ctx.draftItem?.blockFaceId
-  if (currentFaceId) {
-    const currentTarget = resolveBlockFaceTargetForFace(ctx, event, currentFaceId, {
-      requirePointerOnPlane: true,
-    })
-    if (currentTarget) return currentTarget
+function clearFaceHostItemFields(ctx: PlacementContext): Partial<ItemNode> {
+  const host = ctx.state.blockId ? useScene.getState().nodes[ctx.state.blockId] : undefined
+  const clearFields = host
+    ? nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields
+    : undefined
+  const patch: Partial<ItemNode> = {}
+  for (const field of clearFields ?? []) {
+    ;(patch as Record<string, unknown>)[field] = undefined
   }
-
-  const faceId = blockHitFaceId(event)
-  return faceId ? resolveBlockFaceTargetForFace(ctx, event, faceId) : null
+  return patch
 }
 
-export const blockFaceStrategy = {
-  enter(ctx: PlacementContext, event: BlockEvent): TransitionResult | null {
-    const target = resolveBlockFaceTarget(ctx, event)
+export const faceHostStrategy = {
+  enter(ctx: PlacementContext, event: NodeEvent): TransitionResult | null {
+    const target = resolveFaceHostTarget(ctx, event)
     if (!target) return null
     return {
       stateUpdate: {
@@ -792,56 +676,40 @@ export const blockFaceStrategy = {
         roofSegmentId: null,
       },
       nodeUpdate: {
-        position: target.position,
-        parentId: event.node.id,
-        blockFaceId: target.faceId,
-        roofSegmentId: undefined,
-        roofFace: undefined,
-        wallId: undefined,
-        side: 'front',
-        rotation: target.rotation,
+        ...target.nodeUpdate,
       },
       gridPosition: target.position,
       cursorPosition: target.cursorPosition,
       cursorRotationY: target.cursorRotation[1],
       cursorRotation: target.cursorRotation,
       stopPropagation: true,
+      hostFaceId: target.faceId,
     }
   },
 
-  move(ctx: PlacementContext, event: BlockEvent): PlacementResult | null {
+  move(ctx: PlacementContext, event: NodeEvent): PlacementResult | null {
     if (ctx.state.surface !== 'block-face' || !ctx.draftItem) return null
-    const target = resolveBlockFaceTarget(ctx, event)
+    const target = resolveFaceHostTarget(ctx, event)
     if (!target || event.node.id !== ctx.state.blockId) return null
     return {
       gridPosition: target.position,
       cursorPosition: target.cursorPosition,
       cursorRotationY: target.cursorRotation[1],
       cursorRotation: target.cursorRotation,
-      nodeUpdate: {
-        position: target.position,
-        blockFaceId: target.faceId,
-        rotation: target.rotation,
-      },
+      nodeUpdate: target.nodeUpdate,
       stopPropagation: true,
       dirtyNodeId: null,
+      hostFaceId: target.faceId,
     }
   },
 
-  click(ctx: PlacementContext, event: BlockEvent): CommitResult | null {
+  click(ctx: PlacementContext, event: NodeEvent): CommitResult | null {
     if (ctx.state.surface !== 'block-face' || !ctx.draftItem) return null
-    const target = resolveBlockFaceTarget(ctx, event)
+    const target = resolveFaceHostTarget(ctx, event)
     if (!target || event.node.id !== ctx.state.blockId) return null
     return {
       nodeUpdate: {
-        position: target.position,
-        parentId: event.node.id,
-        blockFaceId: target.faceId,
-        roofSegmentId: undefined,
-        roofFace: undefined,
-        wallId: undefined,
-        side: 'front',
-        rotation: target.rotation,
+        ...target.nodeUpdate,
         metadata: stripTransient(ctx.draftItem.metadata),
       },
       stopPropagation: true,
@@ -855,9 +723,9 @@ export const blockFaceStrategy = {
     return {
       stateUpdate: { surface: 'floor', blockId: null },
       nodeUpdate: {
+        ...clearFaceHostItemFields(ctx),
         position: floorPosition,
         parentId: ctx.levelId,
-        blockFaceId: undefined,
         rotation: [0, ctx.currentCursorRotationY, 0],
       },
       cursorRotationY: ctx.currentCursorRotationY,
@@ -1310,12 +1178,14 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
 
   if (ctx.state.surface === 'block-face') {
     const hostId = ctx.state.blockId
-    const host = hostId
-      ? (useScene.getState().nodes[hostId as AnyNodeId] as BlockNode | undefined)
-      : undefined
-    const faceId = ctx.draftItem.blockFaceId
-    const frame = host?.type === 'block' && faceId ? getBlockFaceFrame(host.topology, faceId) : null
-    return !!(frame && blockFaceAcceptsAttachment(frame.normal[1], attachTo))
+    const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : undefined
+    const faceHost = host ? nodeRegistry.get(host.type)?.capabilities.faceHost : undefined
+    if (!(host && faceHost)) return false
+    return faceHost.isStoredPlacementValid({
+      host,
+      item: ctx.draftItem,
+      asset: ctx.draftItem.asset,
+    })
   }
 
   if (attachTo === 'ceiling') {

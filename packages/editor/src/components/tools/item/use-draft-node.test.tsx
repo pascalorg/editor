@@ -1,19 +1,20 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNodeId,
-  type BlockEvent,
   BlockNode,
   BuildingNode,
   getBlockFaceFrame,
   ItemNode,
   LevelNode,
+  type NodeEvent,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { renderToString } from 'react-dom/server'
 import { BufferGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three'
-import { commitBlockClick } from './block-commit'
+import { commitFaceHostClick } from './face-host-commit'
 import type { PlacementContext } from './placement-types'
+import { registerTestBlockFaceHost } from './test-face-host'
 import { type DraftNodeHandle, useDraftNode } from './use-draft-node'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -35,6 +36,7 @@ function DraftHarness() {
 }
 
 beforeEach(() => {
+  registerTestBlockFaceHost()
   const block = BlockNode.parse({
     id: BLOCK_ID,
     parentId: LEVEL_ID,
@@ -287,7 +289,7 @@ describe('useDraftNode block face commit', () => {
     geometry.userData.blockFaces = [{ faceId: 'f-top', start: 0, count: 6 }]
     const object = new Mesh(geometry, new MeshBasicMaterial())
     object.updateMatrixWorld(true)
-    const event: BlockEvent = {
+    const event: NodeEvent = {
       node: host,
       object,
       faceIndex: 0,
@@ -295,7 +297,7 @@ describe('useDraftNode block face commit', () => {
       localPosition: [0, 2.4, 0],
       normal: [0, 1, 0],
       stopPropagation: () => draft.destroy(),
-      nativeEvent: {} as BlockEvent['nativeEvent'],
+      nativeEvent: {} as NodeEvent['nativeEvent'],
     }
     const getContext = (): PlacementContext => ({
       asset: transient.asset,
@@ -314,10 +316,10 @@ describe('useDraftNode block face commit', () => {
       currentCursorRotationY: 0,
     })
 
-    const outcome = commitBlockClick({
+    const outcome = commitFaceHostClick({
       getContext,
       event,
-      enterBlockFace: () => false,
+      enterFaceHost: () => false,
       commitDraft: (nodeUpdate) => ({
         committedId: draft.commit(nodeUpdate),
         wasAdopted: draft.isAdopted,

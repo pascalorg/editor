@@ -1,18 +1,31 @@
-import { describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import {
-  type BlockEvent,
   BlockNode,
   ItemNode,
   type LevelNode,
+  type NodeEvent,
+  useScene,
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
 import { BufferGeometry, Mesh, MeshBasicMaterial, type Object3D, Vector3 } from 'three'
-import { blockFaceStrategy, wallStrategy } from './placement-strategies'
+import { faceHostStrategy, wallStrategy } from './placement-strategies'
 import type { PlacementContext, SpatialValidators } from './placement-types'
+import { registerTestBlockFaceHost } from './test-face-host'
 
 const BLOCK_ID = 'block_ceiling-host'
 const LEVEL_ID = 'level_ceiling-host' as LevelNode['id']
+
+beforeEach(() => {
+  registerTestBlockFaceHost()
+  useScene.setState((state) => ({
+    ...state,
+    nodes: {
+      ...state.nodes,
+      [BLOCK_ID]: BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID }),
+    },
+  }))
+})
 
 function ceilingContext(): PlacementContext {
   return {
@@ -70,7 +83,7 @@ function wallItemContext(): PlacementContext {
   }
 }
 
-function frontFaceEvent(slopeTopEdge = false): BlockEvent {
+function frontFaceEvent(slopeTopEdge = false): NodeEvent {
   const box = BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID })
   const node = slopeTopEdge
     ? {
@@ -105,11 +118,11 @@ function frontFaceEvent(slopeTopEdge = false): BlockEvent {
     localPosition: [0, 1.2, slopeTopEdge ? -0.5 : -1],
     normal: [0, 0, -1],
     stopPropagation: () => {},
-    nativeEvent: {} as BlockEvent['nativeEvent'],
+    nativeEvent: {} as NodeEvent['nativeEvent'],
   }
 }
 
-function adjacentRightFaceEventOnFrontSurface(): BlockEvent {
+function adjacentRightFaceEventOnFrontSurface(): NodeEvent {
   const node = BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID })
   const geometry = new BufferGeometry()
   geometry.userData.blockFaces = [
@@ -127,11 +140,11 @@ function adjacentRightFaceEventOnFrontSurface(): BlockEvent {
     localPosition: [0.5, 1.2, -1],
     normal: [1, 0, 0],
     stopPropagation: () => {},
-    nativeEvent: {} as BlockEvent['nativeEvent'],
+    nativeEvent: {} as NodeEvent['nativeEvent'],
   }
 }
 
-function bottomFaceEvent(): BlockEvent {
+function bottomFaceEvent(): NodeEvent {
   const node = BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID })
   const geometry = new BufferGeometry()
   geometry.userData.blockFaces = [{ faceId: 'f-bottom', start: 0, count: 6 }]
@@ -146,11 +159,11 @@ function bottomFaceEvent(): BlockEvent {
     localPosition: [0, 0, 0],
     normal: [0, -1, 0],
     stopPropagation: () => {},
-    nativeEvent: {} as BlockEvent['nativeEvent'],
+    nativeEvent: {} as NodeEvent['nativeEvent'],
   }
 }
 
-function topFaceEvent(): BlockEvent {
+function topFaceEvent(): NodeEvent {
   const node = BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID })
   const geometry = new BufferGeometry()
   geometry.userData.blockFaces = [{ faceId: 'f-top', start: 0, count: 6 }]
@@ -165,22 +178,22 @@ function topFaceEvent(): BlockEvent {
     localPosition: [0, 2.4, 0],
     normal: [0, 1, 0],
     stopPropagation: () => {},
-    nativeEvent: {} as BlockEvent['nativeEvent'],
+    nativeEvent: {} as NodeEvent['nativeEvent'],
   }
 }
 
-describe('blockFaceStrategy', () => {
+describe('faceHostStrategy', () => {
   test('hosts a wall-mounted item on a vertical block face', () => {
-    expect(blockFaceStrategy.enter(wallItemContext(), frontFaceEvent())).not.toBeNull()
+    expect(faceHostStrategy.enter(wallItemContext(), frontFaceEvent())).not.toBeNull()
   })
 
   test('does not host a wall-mounted item after the block face is edited into a slope', () => {
-    expect(blockFaceStrategy.enter(wallItemContext(), frontFaceEvent(true))).toBeNull()
+    expect(faceHostStrategy.enter(wallItemContext(), frontFaceEvent(true))).toBeNull()
   })
 
   test('keeps a wall-mounted item on the active face during adjacent triangle hits', () => {
     const context = wallItemContext()
-    const enter = blockFaceStrategy.enter(context, frontFaceEvent())
+    const enter = faceHostStrategy.enter(context, frontFaceEvent())
     expect(enter).not.toBeNull()
 
     context.state.surface = 'block-face'
@@ -193,7 +206,7 @@ describe('blockFaceStrategy', () => {
     })
     context.gridPosition.set(...enter!.gridPosition)
 
-    const move = blockFaceStrategy.move(context, adjacentRightFaceEventOnFrontSurface())
+    const move = faceHostStrategy.move(context, adjacentRightFaceEventOnFrontSurface())
 
     expect(move?.nodeUpdate).toMatchObject({
       blockFaceId: 'f-front',
@@ -202,7 +215,7 @@ describe('blockFaceStrategy', () => {
   })
 
   test('hosts a ceiling item on a downward-facing block face', () => {
-    const result = blockFaceStrategy.enter(ceilingContext(), bottomFaceEvent())
+    const result = faceHostStrategy.enter(ceilingContext(), bottomFaceEvent())
 
     expect(result).not.toBeNull()
     expect(result?.stateUpdate).toMatchObject({
@@ -221,7 +234,7 @@ describe('blockFaceStrategy', () => {
   test('hosts a floor item on an upward-facing block face', () => {
     const context = floorItemContext()
     const event = topFaceEvent()
-    const result = blockFaceStrategy.enter(context, event)
+    const result = faceHostStrategy.enter(context, event)
 
     expect(result).not.toBeNull()
     expect(result?.stateUpdate).toMatchObject({
@@ -245,7 +258,7 @@ describe('blockFaceStrategy', () => {
     Object.assign(context.state, result?.stateUpdate)
     context.gridPosition.set(...result!.gridPosition)
 
-    expect(blockFaceStrategy.click(context, event)?.nodeUpdate).toMatchObject({
+    expect(faceHostStrategy.click(context, event)?.nodeUpdate).toMatchObject({
       parentId: BLOCK_ID,
       blockFaceId: 'f-top',
       position: [0, 0, 0],
@@ -268,7 +281,7 @@ describe('blockFaceStrategy', () => {
       blockFaceId: 'f-top',
     })
 
-    expect(blockFaceStrategy.leave(context)).toMatchObject({
+    expect(faceHostStrategy.leave(context)).toMatchObject({
       nodeUpdate: {
         parentId: LEVEL_ID,
         blockFaceId: undefined,

@@ -1,7 +1,7 @@
 import type {
   AnyNode,
+  AnyNodeId,
   AssetInput,
-  BlockNode,
   CeilingNode,
   ItemNode,
   LevelNode,
@@ -35,8 +35,8 @@ export interface PlacementState {
    * (base walls + coplanar gable ends).
    */
   roofSegmentId: string | null
-  /** Active planar block face used as a wall-like attachment host. */
-  blockId?: BlockNode['id'] | null
+  /** Active planar node face used as a wall-like attachment host. */
+  blockId?: AnyNodeId | null
   ceilingId: string | null
   surfaceItemId: string | null
   /**
@@ -85,6 +85,7 @@ export interface PlacementResult {
   nodeUpdate: Partial<ItemNode> | null
   stopPropagation: boolean
   dirtyNodeId: AnyNode['id'] | null
+  hostFaceId?: string | null
 }
 
 /**
@@ -98,6 +99,7 @@ export interface TransitionResult {
   cursorRotationY: number
   cursorRotation?: [number, number, number]
   stopPropagation: boolean
+  hostFaceId?: string | null
 }
 
 /**
