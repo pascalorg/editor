@@ -599,7 +599,7 @@ export function GlbScene({
       const targetY = baseY + (exploded ? index * EXPLODED_GAP : 0)
       // Snap (not lerp) in walkthrough so the first-person collider, built from
       // these world positions, matches the stacked building immediately.
-      node.position.y = walkthroughMode ? targetY : lerp(node.position.y, targetY, delta * 12)
+      node.position.y = walkthroughMode ? targetY : lerp(node.position.y, targetY, Math.min(delta * 12, 1))
       // Solo: hidden levels above the soloed one keep casting shadows
       // (shadow-caster-only); below-levels can't block the sun, so plain-hide.
       const hidden =

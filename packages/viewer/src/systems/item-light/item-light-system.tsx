@@ -227,7 +227,7 @@ export function ItemLightSystem() {
       // Fade-out phase: lerp intensity → 0, then complete the transition
       if (slot.isFadingOut) {
         light.visible = true
-        light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
+        light.intensity = MathUtils.lerp(light.intensity, 0, Math.min(dt * 12, 1))
         if (light.intensity < 0.01) {
           light.intensity = 0
           light.visible = false
@@ -284,7 +284,7 @@ export function ItemLightSystem() {
       if (targetIntensity > 0) {
         light.visible = true
       }
-      light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
+      light.intensity = MathUtils.lerp(light.intensity, targetIntensity, Math.min(dt * 12, 1))
       if (targetIntensity <= 0 && light.intensity < 0.01) {
         light.intensity = 0
         light.visible = false

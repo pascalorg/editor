@@ -69,7 +69,7 @@ export const ZoneSystem = () => {
     }
 
     // Lerp speed: complete transition in ~400ms
-    const lerpSpeed = 10 * delta
+    const lerpSpeed = Math.min(10 * delta, 1)
 
     sceneRegistry.byType.zone!.forEach((zoneId) => {
       const zone = sceneRegistry.nodes.get(zoneId)

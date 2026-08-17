@@ -388,7 +388,7 @@ function GlbItemLights({
       if (!(light && slot)) continue
 
       if (slot.isFadingOut) {
-        light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
+        light.intensity = MathUtils.lerp(light.intensity, 0, Math.min(dt * 12, 1))
         if (light.intensity < 0.01) {
           light.intensity = 0
           slot.isFadingOut = false
@@ -406,7 +406,7 @@ function GlbItemLights({
       }
 
       if (!slot.key) {
-        light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
+        light.intensity = MathUtils.lerp(light.intensity, 0, Math.min(dt * 12, 1))
         continue
       }
       const reg = regByKey.get(slot.key)
@@ -435,7 +435,7 @@ function GlbItemLights({
       const targetIntensity = isOn
         ? MathUtils.lerp(reg.effect.intensityRange[0], reg.effect.intensityRange[1], t)
         : reg.effect.intensityRange[0]
-      light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
+      light.intensity = MathUtils.lerp(light.intensity, targetIntensity, Math.min(dt * 12, 1))
     }
   })
 
