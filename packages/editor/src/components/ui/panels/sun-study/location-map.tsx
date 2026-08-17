@@ -54,6 +54,11 @@ export function LocationMap({
   )
   const [zoom, setZoom] = useState(DEFAULT_ZOOM)
   const [width, setWidth] = useState(0)
+  // Measured, not assumed. `MAP_HEIGHT` is what the box asks for, but a flex
+  // parent can shrink it — and then the tiles are laid out for one height while
+  // a click is measured against another, so the pick lands hundreds of metres
+  // from where the user aimed.
+  const [height, setHeight] = useState(MAP_HEIGHT)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -73,10 +78,13 @@ export function LocationMap({
     const element = containerRef.current
     if (!element) return
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(entry.contentRect.width)
+      if (!entry) return
+      setWidth(entry.contentRect.width)
+      if (entry.contentRect.height > 0) setHeight(entry.contentRect.height)
     })
     observer.observe(element)
     setWidth(element.clientWidth)
+    if (element.clientHeight > 0) setHeight(element.clientHeight)
     return () => observer.disconnect()
   }, [])
 
@@ -109,7 +117,7 @@ export function LocationMap({
       center,
       zoom,
       bounds.width,
-      MAP_HEIGHT,
+      bounds.height,
       event.clientX - bounds.left,
       event.clientY - bounds.top,
     )
@@ -158,7 +166,7 @@ export function LocationMap({
     }
   }, [query, onPick])
 
-  const tiles = width > 0 ? visibleTiles(center, zoom, width, MAP_HEIGHT) : []
+  const tiles = width > 0 ? visibleTiles(center, zoom, width, height) : []
 
   return (
     <LocalizedContent>
@@ -195,7 +203,7 @@ export function LocationMap({
       </div>
 
       <div
-        className="relative touch-none overflow-hidden rounded border border-border/50 bg-foreground/5"
+        className="relative shrink-0 touch-none overflow-hidden rounded border border-border/50 bg-foreground/5"
         onPointerCancel={() => {
           dragRef.current = null
         }}
