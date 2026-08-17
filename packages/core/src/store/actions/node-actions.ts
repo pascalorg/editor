@@ -1052,6 +1052,10 @@ const updateNodesActionImpl = (
 
   // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
   for (const u of updates) {
+    // Visibility is applied by React before the deferred dirty callback. Mark
+    // it now so render systems can release collective geometry in that same
+    // frame, including when the host uses render-on-demand.
+    if (u.data.visible !== undefined) get().markDirty(u.id)
     pendingUpdates.add(u.id)
   }
   for (const pId of parentsToUpdate) {

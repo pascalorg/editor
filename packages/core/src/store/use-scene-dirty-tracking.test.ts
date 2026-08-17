@@ -74,4 +74,26 @@ describe('dirty tracking', () => {
     expect(useScene.getState().nodes[TRACKED]).toBeUndefined()
     expect(useScene.getState().dirtyNodes.has(TRACKED)).toBe(false)
   })
+
+  test('visibility updates mark dirty before the batched RAF callback', () => {
+    let scheduled: ((time: number) => void) | null = null
+    const previousRaf = globalThis.requestAnimationFrame
+    const previousCancelRaf = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = ((callback: (time: number) => void) => {
+      scheduled = callback
+      return 1
+    }) as typeof requestAnimationFrame
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
+
+    try {
+      useScene.getState().updateNode(TRACKED, { visible: false })
+
+      expect(scheduled).not.toBeNull()
+      expect(useScene.getState().dirtyNodes.has(TRACKED)).toBe(true)
+      ;(scheduled as ((time: number) => void) | null)?.(0)
+    } finally {
+      globalThis.requestAnimationFrame = previousRaf
+      globalThis.cancelAnimationFrame = previousCancelRaf
+    }
+  })
 })
