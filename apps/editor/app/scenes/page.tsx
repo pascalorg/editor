@@ -1,11 +1,17 @@
 import { type I18nLocale, translate } from '@pascal-app/editor/i18n'
-import { cookies } from 'next/headers'
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import Link from 'next/link'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
 import { ServerLocalizedContent } from '@/components/server-localized-content'
 import { resolveActor } from '@/lib/scene-api-security'
+import {
+  measureSceneUsage,
+  resolveSceneQuotas,
+  type SceneQuotaLimits,
+  type SceneUsage,
+  tierForActor,
+} from '@/lib/scene-quota'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -17,18 +23,31 @@ export const dynamic = 'force-dynamic'
  * rendering the page. It also drops the caller's cookies, so the round trip
  * starts 401-ing the moment sessions exist.
  */
-async function fetchScenes(): Promise<SceneMeta[]> {
+async function fetchUsage(): Promise<{
+  scenes: SceneMeta[]
+  usage: SceneUsage | null
+  limits: SceneQuotaLimits | null
+}> {
   try {
     const actor = await resolveActor(await headers())
-    if (actor.type !== 'user') return []
+    if (actor.type !== 'user') return { scenes: [], usage: null, limits: null }
 
     const operations = await getSceneOperations()
-    return (await operations.listScenes({ limit: 50, ownerId: actor.userId })) as SceneMeta[]
+    const scenes = (await operations.listScenes({
+      limit: 50,
+      ownerId: actor.userId,
+    })) as SceneMeta[]
+    const limits = resolveSceneQuotas()[tierForActor(actor)]
+    return { scenes, usage: measureSceneUsage(scenes), limits }
   } catch {
     // An unreachable store leaves the page empty rather than a crash screen,
     // matching what the failed fetch used to do.
-    return []
+    return { scenes: [], usage: null, limits: null }
   }
+}
+
+function formatMb(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(0)
 }
 
 function formatDate(iso: string, locale: I18nLocale): string {
@@ -40,7 +59,7 @@ function formatDate(iso: string, locale: I18nLocale): string {
 }
 
 export default async function ScenesPage() {
-  const scenes = await fetchScenes()
+  const { scenes, usage, limits } = await fetchUsage()
   const locale = (await cookies()).get('pascal-locale')?.value === 'en' ? 'en' : 'tr'
   const t = (text: string) => translate(text, locale)
 
@@ -70,6 +89,12 @@ export default async function ScenesPage() {
               ? t('No scenes yet. Create one to get started.')
               : translate(`${scenes.length} scene${scenes.length === 1 ? '' : 's'}.`, locale)}
           </p>
+          {usage && limits && (
+            <p className="mb-8 -mt-4 text-muted-foreground text-xs">
+              {usage.sceneCount} / {limits.maxScenes} {t('scenes')} · {formatMb(usage.totalBytes)} /{' '}
+              {formatMb(limits.maxTotalBytes)} MB
+            </p>
+          )}
 
           {scenes.length === 0 ? (
             <div className="rounded-xl border border-border/60 border-dashed bg-background p-12 text-center">
