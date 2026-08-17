@@ -62,6 +62,22 @@ applies the committed migrations.
 Migrations are a deploy step, never app boot: several replicas starting
 together would all race to migrate.
 
+To move scenes from an existing SQLite file into Postgres (the one-shot
+migration tool, `packages/mcp/src/bin/pascal-migrate.ts`):
+
+```bash
+bunx pascal-migrate \
+  --from ~/.pascal/data/pascal.db \
+  --to "$POSTGRES_URL" \
+  --owner <userId> \
+  --dry-run          # print the plan first; drop this flag to actually write
+```
+
+`--owner` stamps an owner on scenes that have none (early dev data predates
+accounts); scenes that already have an owner keep it. The run is idempotent —
+scenes the target already has are skipped — so a half-finished run can be
+restarted, and `--overwrite` re-saves them instead.
+
 ## Docker
 
 ```bash

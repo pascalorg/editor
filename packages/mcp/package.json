@@ -38,7 +38,8 @@
     }
   },
   "bin": {
-    "pascal-mcp": "./dist/bin/pascal-mcp.js"
+    "pascal-mcp": "./dist/bin/pascal-mcp.js",
+    "pascal-migrate": "./dist/bin/pascal-migrate.js"
   },
   "files": [
     "dist",
