@@ -560,6 +560,16 @@ export class SqliteSceneStore implements SceneStore {
       // is what lets one contract test cover both.
       const head = this.getRow(db, id)?.version ?? 0
 
+      // Two survivor sets, unioned: the newest N, and the last row of each of
+      // the last `keepDays` days. `date()` is what makes the second one one row
+      // per day rather than every row inside the window.
+      const dailyClause = cutoff
+        ? `AND version NOT IN (
+                SELECT MAX(version) FROM scene_revisions
+                 WHERE scene_id = ? AND created_at >= ?
+                 GROUP BY date(created_at)
+              )`
+        : ''
       const revisions = db
         .query(
           `DELETE FROM scene_revisions
@@ -571,9 +581,13 @@ export class SqliteSceneStore implements SceneStore {
                  ORDER BY version DESC
                  LIMIT ?
               )
-              AND (? IS NULL OR created_at < ?)`,
+              ${dailyClause}`,
         )
-        .run(id, head, id, keepCheckpoints, cutoff, cutoff)
+        .run(
+          ...(cutoff
+            ? [id, head, id, keepCheckpoints, id, cutoff]
+            : [id, head, id, keepCheckpoints]),
+        )
 
       const events = db
         .query(

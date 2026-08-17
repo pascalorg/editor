@@ -389,6 +389,25 @@ export function runSceneStoreContract(harness: SceneStoreContractHarness): void 
       expect((await store.load('kept'))?.graph.rootNodeIds).toEqual(graph.rootNodeIds)
     })
 
+    test('the retention window keeps one row a day, not every row', async () => {
+      const graph = makeContractGraph()
+      await store.save({ id: 'daily', name: 'daily', graph })
+      const version = await saveRepeatedly('daily', 'checkpoint', 12)
+
+      // Every row here landed within seconds of the others, so they all sit
+      // inside the window. Keeping one per day plus the newest two leaves the
+      // rest collectable — the bug this pins let a week of five-minute
+      // checkpoints accumulate untouched because they were all "recent".
+      const pruned = await store.pruneSceneHistory?.('daily', {
+        keepCheckpoints: 2,
+        keepDays: 7,
+        keepEvents: 0,
+      })
+
+      expect(pruned?.revisionsDeleted).toBeGreaterThan(5)
+      expect((await store.load('daily'))?.version).toBe(version)
+    })
+
     test('pruning keeps the newest events and drops the rest', async () => {
       const meta = await store.save({ id: 'feed', name: 'Feed', graph: makeContractGraph() })
       for (let i = 0; i < 6; i += 1) {

@@ -4,7 +4,18 @@ import { useScene } from '@pascal-app/core'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
-const AUTOSAVE_DEBOUNCE_MS = 1000
+/**
+ * How long a change waits before it is written, once nothing is happening.
+ *
+ * It used to be a flat second, which meant a drag wrote once a second for its
+ * whole length and every one of those writes was thrown away by the next. The
+ * pacing is now driven by what the user is doing rather than by a clock:
+ * nothing is written while a pointer is down, the gesture's end writes at once,
+ * and an idle session settles at this interval.
+ */
+const IDLE_DEBOUNCE_MS = 5000
+/** A finished gesture is the result the user is waiting on; do not sit on it. */
+const GESTURE_END_DEBOUNCE_MS = 0
 const STRUCTURAL_NODE_COUNT = 4
 
 export function isSuspiciousNodeDrop(previousNodeCount: number, currentNodeCount: number) {
@@ -112,7 +123,15 @@ export function useAutoSave({
 
   // Stable subscription to scene changes
   useEffect(() => {
-    let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
+    // Reference, not `JSON.stringify`. This runs on *every* store update, and
+    // serialising the whole node map there put a full pass over the scene on
+    // the main thread between frames — the bigger the model, the worse the
+    // drag. Zustand hands out a new `nodes` object exactly when something wrote
+    // to it, so the pointer answers the same question for free. It is slightly
+    // more eager: a write that stores an identical value now counts as a
+    // change. The debounce is what absorbs that, and a save with nothing in it
+    // is caught by the delta being empty.
+    let lastNodesRef = useScene.getState().nodes
     const storedNodeCount = createStoredNodeCountTracker(
       Object.keys(useScene.getState().nodes).length,
     )
@@ -191,19 +210,69 @@ export function useAutoSave({
         if (pendingSaveRef.current) {
           pendingSaveRef.current = false
           setSaveStatus('pending')
-          saveTimeoutRef.current = setTimeout(() => {
-            saveTimeoutRef.current = undefined
-            executeSave()
-          }, AUTOSAVE_DEBOUNCE_MS)
+          scheduleSave(IDLE_DEBOUNCE_MS)
         }
       }
     }
 
     executeSaveRef.current = executeSave
 
+    /**
+     * A pointer being down is the one signal every gesture shares. Drafting
+     * tools do not open an `InteractionScope` and each drag publishes to its
+     * own live store, so there is no editor-level "a gesture is running" flag
+     * to read — but there is no gesture without a pointer, and this needs no
+     * tool to remember to announce itself.
+     */
+    let pointerIsDown = false
+
+    function scheduleSave(delayMs: number) {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = undefined
+      // Mid-gesture and backgrounded are both "not now": the gesture's end and
+      // the visibility change each schedule their own write.
+      if (pointerIsDown) return
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      saveTimeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = undefined
+        executeSave()
+      }, delayMs)
+    }
+
+    function handlePointerDown() {
+      pointerIsDown = true
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = undefined
+      }
+    }
+
+    function handlePointerUp() {
+      if (!pointerIsDown) return
+      pointerIsDown = false
+      if (hasDirtyChangesRef.current) scheduleSave(GESTURE_END_DEBOUNCE_MS)
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        // One write on the way out, then silence. A background tab that keeps
+        // an autosave timer alive is a tab still writing to the database for a
+        // user who left; a tab that writes nothing at all on the way out is a
+        // lost edit if it is never brought back.
+        if (hasDirtyChangesRef.current && !isSavingRef.current) void executeSave()
+        return
+      }
+      if (hasDirtyChangesRef.current) scheduleSave(GESTURE_END_DEBOUNCE_MS)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown, { capture: true })
+    window.addEventListener('pointerup', handlePointerUp, { capture: true })
+    window.addEventListener('pointercancel', handlePointerUp, { capture: true })
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     const unsubscribe = useScene.subscribe((state) => {
       if (isLoadingSceneRef.current) {
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastNodesRef = state.nodes
         storedNodeCount.trackLoadedGraph(Object.keys(state.nodes).length)
         lastCollectionsRef = state.collections
         lastSavedViewsRef = state.savedViews
@@ -216,7 +285,7 @@ export function useAutoSave({
 
       if (isVersionPreviewModeRef.current) {
         setSaveStatus('paused')
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastNodesRef = state.nodes
         lastCollectionsRef = state.collections
         lastSavedViewsRef = state.savedViews
         lastCommentsRef = state.comments
@@ -226,9 +295,8 @@ export function useAutoSave({
         return
       }
 
-      const currentNodesSnapshot = JSON.stringify(state.nodes)
       const changed =
-        currentNodesSnapshot !== lastNodesSnapshot ||
+        state.nodes !== lastNodesRef ||
         state.collections !== lastCollectionsRef ||
         state.savedViews !== lastSavedViewsRef ||
         state.comments !== lastCommentsRef ||
@@ -237,7 +305,7 @@ export function useAutoSave({
         state.installedPlugins !== lastInstalledPluginsRef
       if (!changed) return
 
-      lastNodesSnapshot = currentNodesSnapshot
+      lastNodesRef = state.nodes
       lastCollectionsRef = state.collections
       lastSavedViewsRef = state.savedViews
       lastCommentsRef = state.comments
@@ -253,12 +321,7 @@ export function useAutoSave({
         return
       }
 
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
-
-      saveTimeoutRef.current = setTimeout(() => {
-        saveTimeoutRef.current = undefined
-        executeSave()
-      }, AUTOSAVE_DEBOUNCE_MS)
+      scheduleSave(IDLE_DEBOUNCE_MS)
     })
 
     // Flush any unsaved change while the page is going away. The network
@@ -326,6 +389,10 @@ export function useAutoSave({
       executeSaveRef.current = null
       window.removeEventListener('beforeunload', flushOnExit)
       window.removeEventListener('pagehide', flushOnExit)
+      window.removeEventListener('pointerdown', handlePointerDown, { capture: true })
+      window.removeEventListener('pointerup', handlePointerUp, { capture: true })
+      window.removeEventListener('pointercancel', handlePointerUp, { capture: true })
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       flushOnExit()
       unsubscribe()
@@ -354,7 +421,7 @@ export function useAutoSave({
         saveTimeoutRef.current = setTimeout(() => {
           saveTimeoutRef.current = undefined
           executeSaveRef.current?.()
-        }, AUTOSAVE_DEBOUNCE_MS)
+        }, IDLE_DEBOUNCE_MS)
       }
       return
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { deltaIsWorthSending, diffSceneGraphs, type SceneDelta } from '@pascal-app/core/scene-delta'
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
@@ -138,6 +139,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
   const lastCheckpointAtRef = useRef(Date.now())
+  /**
+   * The base every delta is measured against: the exact graph object the server
+   * last acknowledged from this tab. Null until the first full save, and reset
+   * to null whenever something else becomes authoritative — a delta diffed
+   * against a graph the server does not have would resurrect nodes someone else
+   * deleted. The diff compares nodes by reference, which only means anything
+   * for two graphs that came out of the same store.
+   */
+  const lastSentGraphRef = useRef<SceneGraph | null>(null)
   const authoritativeGraphJsonRef = useRef(sceneGraphSignature(initialScene))
   const authoritativeModelJsonRef = useRef(sceneModelSignature(initialScene))
   const [conflict, setConflict] = useState(false)
@@ -152,6 +162,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     const graphJson = sceneGraphSignature(event.graph)
     authoritativeGraphJsonRef.current = graphJson
     authoritativeModelJsonRef.current = sceneModelSignature(event.graph)
+    lastSentGraphRef.current = null
     setLiveVersion(event.version)
     setConflict(false)
     setSaveError(null)
@@ -165,6 +176,33 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     onAuthoritativeGraph: handleAuthoritativeGraph,
     onError: setSaveError,
   })
+
+  /**
+   * Sends one delta. `stale` means the stored version moved out from under the
+   * base this delta was measured against — an agent wrote, or a checkpoint from
+   * another tab landed — and the caller resynchronises with a full PUT rather
+   * than guessing at a merge.
+   */
+  const sendDelta = useCallback(
+    async (delta: SceneDelta): Promise<'sent' | 'stale' | 'failed'> => {
+      try {
+        const response = await fetch(`/api/scenes/${meta.id}/patch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ baseVersion: versionRef.current, ops: delta.ops }),
+        })
+        if (response.status === 409) return 'stale'
+        if (!response.ok) return 'failed'
+        const next = (await response.json()) as { version: number }
+        versionRef.current = next.version
+        setLiveVersion(next.version)
+        return 'sent'
+      } catch {
+        return 'failed'
+      }
+    },
+    [meta.id],
+  )
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
@@ -180,6 +218,27 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       const now = Date.now()
       const isCheckpoint =
         options?.keepalive === true || now - lastCheckpointAtRef.current >= CHECKPOINT_INTERVAL_MS
+
+      // A checkpoint has to carry the whole graph — it is the row someone
+      // restores from, and reconstructing it out of a delta chain is exactly
+      // the recovery risk checkpoints exist to avoid. Everything else is a
+      // draft, and a draft only needs to say what moved.
+      if (!isCheckpoint) {
+        const previous = lastSentGraphRef.current
+        const delta = previous ? diffSceneGraphs(previous, graph) : null
+        if (delta && deltaIsWorthSending(delta, graph)) {
+          const sent = await sendDelta(delta)
+          if (sent === 'sent') {
+            authoritativeGraphJsonRef.current = graphJson
+            authoritativeModelJsonRef.current = sceneModelSignature(graph)
+            lastSentGraphRef.current = graph
+            setSaveError(null)
+            return
+          }
+          // `stale` and `failed` both fall through to the full PUT below, which
+          // resynchronises the base the next delta is measured against.
+        }
+      }
 
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
@@ -216,12 +275,13 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         setLiveVersion(next.version)
         authoritativeGraphJsonRef.current = graphJson
         authoritativeModelJsonRef.current = sceneModelSignature(graph)
+        lastSentGraphRef.current = graph
         setSaveError(null)
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
       }
     },
-    [meta.id, meta.name, waitForCollaboration],
+    [meta.id, meta.name, sendDelta, waitForCollaboration],
   )
 
   useEffect(() => {
@@ -244,6 +304,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       }
 
       versionRef.current = event.version
+      lastSentGraphRef.current = null
       setLiveVersion(event.version)
       // Echo bookkeeping only advances for a change we actually applied. A
       // held proposal must leave it alone, or accepting it later reads as a

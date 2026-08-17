@@ -430,7 +430,15 @@ export class PostgresSceneStore implements SceneStore {
              ORDER BY version DESC
              LIMIT ${keepCheckpoints}
           )`,
-          cutoff ? sql`${sceneVersionsTable.createdAt} < ${cutoff}` : sql`true`,
+          // The daily survivors: one row per day inside the window, not every
+          // row from those days.
+          cutoff
+            ? sql`${sceneVersionsTable.version} NOT IN (
+                SELECT max(version) FROM scene_versions
+                 WHERE scene_id = ${id} AND created_at >= ${cutoff}
+                 GROUP BY date_trunc('day', created_at)
+              )`
+            : sql`true`,
         ),
       )
       .returning({ version: sceneVersionsTable.version })

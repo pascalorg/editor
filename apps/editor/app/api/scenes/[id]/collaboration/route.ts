@@ -3,6 +3,7 @@ import {
   type CollaborationBatch,
   collaborationSnapshot,
 } from '@pascal-app/core/collaboration'
+import { after } from 'next/server'
 import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
@@ -49,6 +50,15 @@ const collaborationBatchSchema = z.object({
   actorId: z.string().min(1).max(128),
   clock: z.number().int().nonnegative(),
   operationId: z.string().min(1).max(128),
+  /**
+   * Live editing lands here, one batch per gesture — this is *the* write path
+   * for the model in this app, not the autosave PUT, which only ever carries
+   * comments once the collaboration channel is up. So it defaults to `draft`:
+   * filing a full-graph history row per gesture is what made a minute of
+   * editing cost tens of megabytes. The client promotes a batch to a
+   * checkpoint on the same five-minute rule the PUT path uses.
+   */
+  saveMode: z.enum(['draft', 'checkpoint']).default('draft'),
   changes: z
     .array(
       z.discriminatedUnion('type', [
@@ -121,12 +131,23 @@ export async function POST(request: Request, { params }: RouteParams) {
         graph: validated.data as never,
         expectedVersion: scene.version,
         operation: eventKind,
+        saveMode: parsed.data.saveMode,
       })
       const event = await operations.appendSceneEvent({
         sceneId: id,
         version: meta.version,
         kind: eventKind,
       })
+      if (parsed.data.saveMode === 'checkpoint' && operations.canPruneSceneHistory) {
+        after(async () => {
+          try {
+            await operations.pruneSceneHistory(id)
+          } catch (error) {
+            console.error(`[scenes] pruning history for ${id} failed:`, error)
+          }
+        })
+      }
+
       // The broadcast event carries no graph, but this response does: the
       // publisher needs the merged result to reconcile against, it is one
       // reader rather than every subscriber, and the server already has it in

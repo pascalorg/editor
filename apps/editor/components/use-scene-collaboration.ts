@@ -47,6 +47,8 @@ type UseSceneCollaborationOptions = {
   onError: (message: string | null) => void
 }
 
+/** How often a live batch is filed as a version someone can return to. */
+const COLLABORATION_CHECKPOINT_MS = 5 * 60 * 1000
 const CURSOR_PUBLISH_MS = 80
 const PRESENCE_HEARTBEAT_MS = 5_000
 const ACTOR_STORAGE_KEY = 'pascal-collaboration-actor:v1'
@@ -161,8 +163,20 @@ export function useSceneCollaboration({
       onAuthoritativeGraphRef.current(event)
     }
 
+    /**
+     * Batches are drafts, which the store rewrites in place. History still has
+     * to advance, so one batch every five minutes is promoted to a checkpoint —
+     * the same rule the autosave PUT follows, applied to the channel that
+     * actually carries the model.
+     */
+    let lastCheckpointAt = Date.now()
+
     const publish = (batch: CollaborationBatch) => {
       if (batch.changes.length === 0) return
+      const now = Date.now()
+      const saveMode =
+        now - lastCheckpointAt >= COLLABORATION_CHECKPOINT_MS ? 'checkpoint' : 'draft'
+      if (saveMode === 'checkpoint') lastCheckpointAt = now
       pending += 1
       publishQueue = publishQueue
         .then(async () => {
@@ -172,7 +186,7 @@ export function useSceneCollaboration({
               response = await fetch(`/api/scenes/${sceneId}/collaboration`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(batch),
+                body: JSON.stringify({ ...batch, saveMode }),
               })
               if (response.ok || response.status < 500) break
             } catch {

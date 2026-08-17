@@ -3,10 +3,12 @@ import type { SceneHistoryPrunePolicy } from './types'
 /**
  * Defaults for what a scene keeps of its own past.
  *
- * The numbers are a retention policy, not a tuning knob: 20 checkpoints is what
- * "show me an earlier version" needs, and 7 days covers the case where someone
- * broke something on Friday and noticed on Monday. Both apply — a checkpoint
- * younger than the window survives even past the count.
+ * Two rules, unioned. The newest `keepCheckpoints` cover "undo my afternoon".
+ * The `keepDays` window covers "it broke sometime last week" — and it keeps
+ * *one row per day*, not every row from those days. That distinction is the
+ * whole point: checkpoints land every five minutes while someone is editing, so
+ * a rule that kept everything inside the window would keep a thousand rows a
+ * week and only start collecting on day eight.
  */
 export const DEFAULT_HISTORY_POLICY = {
   keepCheckpoints: 20,
