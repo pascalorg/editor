@@ -1,10 +1,11 @@
 'use client'
 
 import { type AnyNodeId, useLiveNodeOverrides, useScene, type WallNode } from '@pascal-app/core'
-import { WallBatchSystem, WallCutout, WallSystem } from '@pascal-app/viewer'
+import { WallCutout, WallSystem } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { buildWallTreatmentLevelData, useWallTreatmentLevelData } from './treatment-level-data'
 import { wallTreatmentProudOffsets } from './treatments'
+import { WallBatchSystem } from './wall-batch-system'
 
 function effectiveWall(wall: WallNode): WallNode {
   const override = useLiveNodeOverrides.getState().get(wall.id)

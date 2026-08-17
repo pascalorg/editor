@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { WallMode } from '../../store/use-viewer'
+import type { WallMode } from '@pascal-app/viewer'
 import { canBatchWalls } from './wall-batch-system'
 
 /**

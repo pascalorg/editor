@@ -1,20 +1,24 @@
 'use client'
 
 import { type AnyNodeId, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
+import {
+  drainRebuiltWalls,
+  getPendingWallRebuildCount,
+  isIsolationActive,
+  SCENE_LAYER,
+  useViewer,
+  type WallMode,
+} from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Material, Matrix4, Mesh, type Object3D } from 'three'
-import { isIsolationActive } from '../../lib/isolation'
-import { SCENE_LAYER } from '../../lib/layers'
 import {
   applyWallBatchGroups,
   buildWallBatch,
   hideBatchedWall,
   revealBatchedWall,
   type WallBatch,
-} from '../../lib/wall-batch'
-import useViewer, { type WallMode } from '../../store/use-viewer'
-import { drainRebuiltWalls, getPendingWallRebuildCount } from './wall-system'
+} from './wall-batch'
 
 // A level's walls are merged only once they stop changing. Below this many
 // walls a merge is not worth the buffer, and the leftovers (a selected wall,

@@ -143,6 +143,7 @@ export {
   SCENE_THEMES,
   type SceneTheme,
 } from './lib/scene-themes'
+export { type HiddenReason, hideFromScene, showInScene } from './lib/scene-visibility'
 export {
   createSnapshotPipeline,
   SNAPSHOT_MAX_EDGE,
@@ -244,14 +245,17 @@ export {
   getOpeningCutoutBottomPadding,
   hasFlatOpeningCutoutBottom,
 } from './systems/wall/opening-cutout-geometry'
-export { WallBatchSystem } from './systems/wall/wall-batch-system'
 export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
-export { WallSystem } from './systems/wall/wall-system'
+export {
+  drainRebuiltWalls,
+  getPendingWallRebuildCount,
+  WallSystem,
+} from './systems/wall/wall-system'
 export {
   poseWindowMovingParts,
   WindowAnimationSystem,

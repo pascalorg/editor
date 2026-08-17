@@ -1,5 +1,5 @@
+import { hideFromScene, showInScene } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import { hideFromScene, showInScene } from './scene-visibility'
 
 /** A contiguous vertex range one wall contributes to one material run. */
 export type WallBatchSlice = { nodeId: string; start: number; count: number }

@@ -38,11 +38,9 @@ export const GRID_LAYER = 3
 export const SHADOW_ONLY_LAYER = 4
 
 /**
- * Layer for wall geometry that a level batch already draws (see
- * `lib/wall-batch.ts`). No camera or pass enables it, so a sewn wall costs no
- * draw call, yet the mesh keeps its place in the graph: its children (door and
- * window cutters, treatments) still render, and the invisible `collision-mesh`
- * that carries pointer events is untouched.
+ * Layer for source geometry that a collective batch already draws. No camera
+ * or pass enables it, so a batched object costs no draw call while its children
+ * and interaction proxies remain in the graph.
  *
  * Raycasters that query real surfaces must opt in via
  * {@link setSurfaceRaycastLayers}, otherwise a sewn wall would stop answering
