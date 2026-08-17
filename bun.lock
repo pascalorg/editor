@@ -34,7 +34,7 @@
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
-        "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#dc1daf3a0cf912e23c119c5741e3552ed5bc4d65",
+        "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#f308cf36042371fb03e8aef154ab4a1578d3f3a6",
         "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
@@ -725,7 +725,7 @@
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
 
-    "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@github:pascalorg/plugin-bones#dc1daf3", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-bones-dc1daf3"],
+    "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@github:pascalorg/plugin-bones#f308cf3", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-bones-f308cf3"],
 
     "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#1c04ec9", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-1c04ec9"],
 
