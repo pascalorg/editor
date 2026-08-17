@@ -415,7 +415,7 @@ const WindowTool: React.FC = () => {
         width,
         height,
       })
-      const { clampedX, clampedY } = clampToWall(
+      const { clampedX, clampedY, fits } = clampToWall(
         wall,
         localX,
         localY,
@@ -423,15 +423,9 @@ const WindowTool: React.FC = () => {
         height,
         useScene.getState().nodes,
       )
-      const valid = !hasWallChildOverlap(
-        wall.id,
-        useScene.getState().nodes,
-        clampedX,
-        clampedY,
-        width,
-        height,
-        ignoreId,
-      )
+
+      const valid = fits && !hasWallChildOverlap(wall.id, useScene.getState().nodes, clampedX, clampedY, width, height, ignoreId)
+: add endHeightOffset for sloped walls)
       return { clampedX, clampedY, valid }
     }
 

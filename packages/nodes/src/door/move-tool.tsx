@@ -338,14 +338,19 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         // component lives in `snapToHalf` (itself mode-aware).
         applySnap: isMagneticSnapActive(),
       })
-      const { clampedX, clampedY } = clampToWall(
+      const sceneReader = {
+        get: (id: AnyNodeId) => useScene.getState().nodes[id],
+        nodes: () => useScene.getState().nodes,
+      }
+      const { clampedX, clampedY, fits } = clampToWall(
         event.node,
         localX,
         movingDoorNode.width,
         movingDoorNode.height,
+        sceneReader,
       )
 
-      const valid = !hasWallChildOverlap(
+      const valid = fits && !hasWallChildOverlap(
         event.node.id,
         useScene.getState().nodes,
         clampedX,

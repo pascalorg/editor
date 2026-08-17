@@ -452,9 +452,10 @@ function getWallBandSplitPlanes(wall: WallNode, effectiveWallHeight: number): nu
   const planes = [bands.lowerTop]
   if (bands.count >= 3) planes.push(bands.middleTop)
   if (bands.count >= 4) planes.push(bands.upperTop)
+  const maxWallHeight = effectiveWallHeight + Math.max(0, wall.endHeightOffset ?? 0)
   return planes.filter(
     (plane) =>
-      plane > WALL_BAND_SPLIT_EPSILON && plane < effectiveWallHeight - WALL_BAND_SPLIT_EPSILON,
+      plane > WALL_BAND_SPLIT_EPSILON && plane < maxWallHeight - WALL_BAND_SPLIT_EPSILON,
   )
 }
 
@@ -961,6 +962,40 @@ function mergeWallTerrainFill(
   return merged
 }
 
+/**
+ * Tilts a wall's top edge along its length so the `end` side sits taller (or
+ * shorter) than the `start` side — e.g. a knee wall following a single-pitch
+ * roof slope — instead of requiring a non-rectangular footprint. Only
+ * vertices sitting exactly at the flat extruded top (`topY`) move.
+ *
+ * Evaluates the linear plane equation `slope * localX` continuously across
+ * all top vertices (including mitered corner vertices extending beyond [0, L])
+ * so the extruded top face remains a single coplanar surface without corner
+ * creases or triangulation folds.
+ */
+function applyWallEndHeightSlope(
+  geometry: THREE.BufferGeometry,
+  wallNode: WallNode,
+  wallLength: number,
+  topY: number,
+  bodyHeight: number,
+): void {
+  const rawOffset = wallNode.endHeightOffset
+  if (!rawOffset || wallLength < 1e-9) {
+    return
+  }
+  const minEndHeight = 0.01
+  const endHeightOffset = Math.max(rawOffset, -(bodyHeight - minEndHeight))
+  const slope = endHeightOffset / wallLength
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute
+
+  for (let i = 0; i < position.count; i++) {
+    if (Math.abs(position.getY(i) - topY) > 1e-4) continue
+    position.setY(i, topY + slope * position.getX(i))
+  }
+  position.needsUpdate = true
+}
+
 export function generateExtrudedWall(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
@@ -1044,9 +1079,9 @@ export function generateExtrudedWall(
     bevelEnabled: false,
   })
 
-  // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
   if (Math.abs(localBottom) > 1e-9) geometry.translate(0, localBottom, 0)
+  applyWallEndHeightSlope(geometry, wallNode, L, localBottom + height, effectiveWallHeight)
   geometry.computeVertexNormals()
   assignWallMaterialGroups(geometry, wallNode, boundaryEdges, effectiveWallHeight)
   ensureRenderableGeometryAttributes(geometry)

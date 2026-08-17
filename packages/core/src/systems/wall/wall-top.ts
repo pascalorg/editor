@@ -24,13 +24,26 @@ export const MIN_WALL_HEIGHT = 0.5
  * Returns the top in level-local Y (same frame as `electedBase`).
  */
 export function resolveWallTop(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
+  t?: number,
 ): number {
-  if (wall.height == null) return storeyHeight
-  if (wall.supportSlabId === 'ground') return electedBase + wall.height
-  return electedBase > 0 ? electedBase + wall.height : wall.height
+  let top: number
+  if (wall.height == null) {
+    top = storeyHeight
+  } else if (wall.supportSlabId === 'ground') {
+    top = electedBase + wall.height
+  } else {
+    top = electedBase > 0 ? electedBase + wall.height : wall.height
+  }
+  if (wall.endHeightOffset && t !== undefined) {
+    const bodyHeight = Math.max(0.01, top - electedBase)
+    const minEndHeight = 0.01
+    const clampedOffset = Math.max(wall.endHeightOffset, -(bodyHeight - minEndHeight))
+    top += clampedOffset * t
+  }
+  return top
 }
 
 /**
@@ -48,9 +61,10 @@ export function resolveWallTop(
  * policy.
  */
 export function resolveWallEffectiveHeight(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
+  t?: number,
 ): number {
-  return resolveWallTop(wall, storeyHeight, electedBase) - electedBase
+  return resolveWallTop(wall, storeyHeight, electedBase, t) - electedBase
 }

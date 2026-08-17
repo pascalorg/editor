@@ -409,18 +409,43 @@ function trimOpeningRanges(
   childrenNodes: OpeningLike[],
   yBottom: number,
   height: number,
+  kind?: TrimKind,
 ) {
-  const yTop = yBottom + height
+  const dx = node.end[0] - node.start[0]
+  const dz = node.end[1] - node.start[1]
+  const wallLength = Math.hypot(dx, dz)
+  const wallHeight = yBottom + height
+  const minEndHeight = 0.01
+  const endHeightOffset = node.endHeightOffset
+    ? Math.max(node.endHeightOffset, -(wallHeight - minEndHeight))
+    : 0
+  const slope =
+    kind === 'crown' && endHeightOffset && wallLength > EPS
+      ? endHeightOffset / wallLength
+      : 0
+
   return childrenNodes
     .filter((child) => child.type === 'door' || child.type === 'window')
     .flatMap((child) => {
       const width = child.width ?? 0
       const childHeight = child.height ?? 0
       const position = child.position ?? [0, 0, 0]
+      const childX = position[0]
       const childBottom = position[1] - childHeight / 2
       const childTop = childBottom + childHeight
-      if (childTop <= yBottom + EPS || childBottom >= yTop - EPS) return []
-      return [[position[0] - width / 2, position[0] + width / 2] as [number, number]]
+
+      const xMin = childX - width / 2
+      const xMax = childX + width / 2
+      const slopeOffsetMin = slope * (slope >= 0 ? xMin : xMax)
+      const slopeOffsetMax = slope * (slope >= 0 ? xMax : xMin)
+
+      const localYBottom = yBottom + slopeOffsetMin
+      const localYTop = yBottom + height + slopeOffsetMax
+
+      if (childTop <= localYBottom + EPS || childBottom >= localYTop - EPS) {
+        return []
+      }
+      return [[xMin, xMax] as [number, number]]
     })
 }
 
@@ -496,6 +521,35 @@ function mergeGeometries(geometries: THREE.BufferGeometry[]) {
   return null
 }
 
+/**
+ * Tilts crown molding trims along the wall slope. Evaluates the linear slope
+ * equation `slope * localX` continuously across all vertices (including
+ * mitered corner extensions) to maintain coplanar trim surfaces without creases.
+ */
+function applyTrimSlope(geometry: THREE.BufferGeometry, node: WallNode, wallHeight: number) {
+  const rawOffset = node.endHeightOffset
+  if (!rawOffset) return
+  const dx = node.end[0] - node.start[0]
+  const dz = node.end[1] - node.start[1]
+  const wallLength = Math.hypot(dx, dz)
+  if (wallLength < 1e-6) return
+
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!position) return
+
+  const minEndHeight = 0.01
+  const endHeightOffset = Math.max(rawOffset, -(wallHeight - minEndHeight))
+  const slope = endHeightOffset / wallLength
+
+  for (let index = 0; index < position.count; index += 1) {
+    const x = position.getX(index)
+    const y = position.getY(index)
+    position.setY(index, y + slope * x)
+  }
+  position.needsUpdate = true
+  geometry.computeVertexNormals()
+}
+
 export function buildTrimGeometry(
   node: WallNode,
   side: WallSide,
@@ -506,14 +560,22 @@ export function buildTrimGeometry(
 ) {
   const wallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
   const height = trim.height
+  const minEndHeight = 0.01
+  const rawOffset = node.endHeightOffset ?? 0
+  const endHeightOffset = Math.max(rawOffset, -(wallHeight - minEndHeight))
+  const minWallHeight = Math.min(wallHeight, wallHeight + endHeightOffset)
+
+  const chairRailOffsetY = trim.offsetY ?? WALL_CHAIR_RAIL_DEFAULT.offsetY ?? 0.9
+  const requiredWallHeight = kind === 'chairRail' ? chairRailOffsetY + height : height
+  if (minWallHeight < requiredWallHeight - EPS) {
+    return null
+  }
+
   const yBottom =
     kind === 'crown'
-      ? Math.max(0, wallHeight - height)
+      ? wallHeight - height
       : kind === 'chairRail'
-        ? Math.max(
-            0,
-            Math.min(wallHeight - height, trim.offsetY ?? WALL_CHAIR_RAIL_DEFAULT.offsetY ?? 0.9),
-          )
+        ? Math.max(0, Math.min(minWallHeight - height, chairRailOffsetY))
         : 0
 
   const thickness = getWallThickness(node)
@@ -521,8 +583,10 @@ export function buildTrimGeometry(
   if (inner.length < 2) return null
 
   const wallLength = Math.hypot(node.end[0] - node.start[0], node.end[1] - node.start[1])
-  const openingRanges = trimOpeningRanges(node, childrenNodes, yBottom, height)
+  if (wallLength < EPS) return null
+
   const fullRanges: Array<[number, number]> = [[0, wallLength]]
+  const openingRanges = trimOpeningRanges(node, childrenNodes, yBottom, height, kind)
   const runs = subtractOpeningRanges(fullRanges, openingRanges)
   if (runs.length === 0) return null
 
@@ -555,6 +619,9 @@ export function buildTrimGeometry(
   if (slices.length === 0) return null
   const merged = mergeGeometries(slices)
   for (const slice of slices) slice.dispose()
+  if (merged && kind === 'crown' && node.endHeightOffset) {
+    applyTrimSlope(merged, node, wallHeight)
+  }
   return merged
 }
 

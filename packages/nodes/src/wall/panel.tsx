@@ -228,17 +228,19 @@ export default function WallPanel() {
   const followsTerrain = node.fillToTerrain === true
   const isPlaneBound = node.height == null
   const height = node.height ?? resolvedHeightMeters ?? 2.5
+  const endHeightOffset = node.endHeightOffset ?? 0
   const thickness = node.thickness ?? 0.1
   const curveOffset = getClampedWallCurveOffset(node)
   const maxCurveOffset = getMaxWallCurveOffset(node)
   const unitLabel = getLinearUnitLabel(unit)
   const displayLength = metersToLinearUnit(length, unit)
   const displayHeight = metersToLinearUnit(height, unit)
+  const displayEndHeightOffset = metersToLinearUnit(endHeightOffset, unit)
   const displayThickness = metersToLinearUnit(thickness, unit)
   const displayCurveOffset = metersToLinearUnit(curveOffset, unit)
   const displayMaxCurveOffset = metersToLinearUnit(maxCurveOffset, unit)
   const curveOffsetLimit = Math.max(0.01, maxCurveOffset)
-  const wallHeightMeters = height
+  const wallHeightMeters = resolvedHeightMeters ?? height
 
   const skirting = { ...WALL_SKIRTING_DEFAULT, ...(node.skirting ?? {}) }
   const crown = { ...WALL_CROWN_DEFAULT, ...(node.crown ?? {}) }
@@ -297,6 +299,24 @@ export default function WallPanel() {
             value={Math.round(displayHeight * 100) / 100}
           />
         )}
+        <SliderControl
+          label="End height offset"
+          max={metersToLinearUnit(3, unit)}
+          min={metersToLinearUnit(-(wallHeightMeters - 0.01), unit)}
+          onChange={(v) => {
+            const minMeters = -(wallHeightMeters - 0.01)
+            handleUpdate({
+              endHeightOffset: linearControlValueToMeters(v, unit, {
+                maxMeters: 3,
+                minMeters,
+              }),
+            })
+          }}
+          precision={2}
+          step={0.1}
+          unit={unitLabel}
+          value={Math.round(displayEndHeightOffset * 100) / 100}
+        />
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
           Bottom
         </div>
@@ -422,6 +442,7 @@ function WallFaceBandSection({
   wallHeightMeters: number
 }) {
   const bandConfig = getWallFaceBandConfig(node, wallHeightMeters)
+  const maxWallHeight = wallHeightMeters + Math.max(0, node.endHeightOffset ?? 0)
   const bandCount = bandConfig.count
   const lowerHeight = bandConfig.lowerHeight
   const middleHeight = bandConfig.middleHeight
@@ -451,12 +472,12 @@ function WallFaceBandSection({
       {bandCount >= 2 && (
         <SliderControl
           label="Lower"
-          max={metersToLinearUnit(wallHeightMeters, unit)}
+          max={metersToLinearUnit(maxWallHeight, unit)}
           min={metersToLinearUnit(0, unit)}
           onChange={(value) =>
             updateBands({
               lowerHeight: linearControlValueToMeters(value, unit, {
-                maxMeters: wallHeightMeters,
+                maxMeters: maxWallHeight,
                 minMeters: 0,
               }),
             })
@@ -470,12 +491,12 @@ function WallFaceBandSection({
       {bandCount >= 3 && (
         <SliderControl
           label="Middle"
-          max={metersToLinearUnit(Math.max(0, wallHeightMeters - lowerHeight), unit)}
+          max={metersToLinearUnit(Math.max(0, maxWallHeight - lowerHeight), unit)}
           min={metersToLinearUnit(0, unit)}
           onChange={(value) =>
             updateBands({
               middleHeight: linearControlValueToMeters(value, unit, {
-                maxMeters: Math.max(0, wallHeightMeters - lowerHeight),
+                maxMeters: Math.max(0, maxWallHeight - lowerHeight),
                 minMeters: 0,
               }),
             })
@@ -489,12 +510,12 @@ function WallFaceBandSection({
       {bandCount >= 4 && (
         <SliderControl
           label="Upper"
-          max={metersToLinearUnit(Math.max(0, wallHeightMeters - lowerHeight - middleHeight), unit)}
+          max={metersToLinearUnit(Math.max(0, maxWallHeight - lowerHeight - middleHeight), unit)}
           min={metersToLinearUnit(0, unit)}
           onChange={(value) =>
             updateBands({
               upperHeight: linearControlValueToMeters(value, unit, {
-                maxMeters: Math.max(0, wallHeightMeters - lowerHeight - middleHeight),
+                maxMeters: Math.max(0, maxWallHeight - lowerHeight - middleHeight),
                 minMeters: 0,
               }),
             })
