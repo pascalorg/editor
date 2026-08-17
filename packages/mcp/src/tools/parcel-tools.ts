@@ -1,5 +1,5 @@
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
-import { fetchParcel } from '@pascal-app/cadastre'
+import { fetchParcel, parseRegisteredArea } from '@pascal-app/cadastre'
 import { readSiteBuildable } from '@pascal-app/core'
 import type { AnyNode, SiteNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -23,8 +23,29 @@ export const searchParcelSchema = z.object({
   ]),
 })
 
+/**
+ * Spelled out rather than `z.any()`: every field here lands in the site node's
+ * `ParcelRecord`, where they are required. An unvalidated blob writes
+ * `undefined` into them and the scene only fails later, on save.
+ */
+const parcelDataSchema = z.object({
+  ring: z
+    .array(z.object({ latitude: z.number(), longitude: z.number() }))
+    .min(3)
+    .describe('Parcel outline in WGS84 degrees'),
+  il: z.string(),
+  ilce: z.string(),
+  mahalle: z.string(),
+  mahalleId: z.number().int(),
+  ada: z.string(),
+  parsel: z.string(),
+  registeredAreaRaw: z.string().optional(),
+  nitelik: z.string().optional(),
+  pafta: z.string().optional(),
+})
+
 export const applyParcelSchema = z.object({
-  parcelData: z.any().describe('The full parcel result returned by search_parcel'),
+  parcelData: parcelDataSchema.describe('The full parcel result returned by search_parcel'),
   northOffset: z
     .number()
     .optional()
@@ -66,9 +87,15 @@ const tkgmFetchAdapter = async (url: any, init?: any): Promise<Response> => {
   }
 }
 
-export async function executeSearchParcel(params: z.infer<typeof searchParcelSchema>) {
+export async function executeSearchParcel(
+  params: z.infer<typeof searchParcelSchema>,
+  // The registry is the one thing in this file the suite cannot reach, so the
+  // transport is a parameter — the tests drive the not-found and the
+  // network-down branches through it rather than over the wire.
+  fetchImpl: typeof fetch = tkgmFetchAdapter,
+) {
   try {
-    const result = await fetchParcel(params.query, { fetch: tkgmFetchAdapter, direct: true })
+    const result = await fetchParcel(params.query, { fetch: fetchImpl, direct: true })
     if (!result) {
       return {
         content: [
@@ -101,12 +128,6 @@ export async function executeApplyParcelToSite(
   }
 
   const result = params.parcelData
-  if (!result?.ring || !Array.isArray(result.ring)) {
-    throw new McpError(
-      ErrorCode.InvalidParams,
-      'Geçersiz parcelData. search_parcel sonucunu aynen iletmelisiniz.',
-    )
-  }
 
   let minLon = Infinity,
     maxLon = -Infinity,
@@ -125,7 +146,7 @@ export async function executeApplyParcelToSite(
   const latScale = 111320
   const lonScale = 111320 * Math.cos((centerLat * Math.PI) / 180)
 
-  const localPoints = result.ring.map((pt: any) => {
+  const localPoints = result.ring.map((pt) => {
     const dx = (pt.longitude - centerLon) * lonScale
     const dz = -(pt.latitude - centerLat) * latScale
     return [dx, dz] as [number, number]
@@ -139,7 +160,9 @@ export async function executeApplyParcelToSite(
     mahalleId: result.mahalleId,
     ada: result.ada,
     parsel: result.parsel,
-    registeredArea: result.registeredAreaRaw ? parseFloat(result.registeredAreaRaw) : undefined,
+    // TKGM reports the same parcel's area as "1,295.00" or "1.295,00"; both are
+    // NaN to `Number` and 1.295 to `parseFloat`.
+    registeredArea: parseRegisteredArea(result.registeredAreaRaw),
     nitelik: result.nitelik,
     pafta: result.pafta,
     fetchedAt: new Date().toISOString(),
@@ -156,8 +179,6 @@ export async function executeApplyParcelToSite(
     longitude: centerLon,
     northOffset: params.northOffset ?? (site as any).northOffset ?? 0,
   })
-
-  operations.undo(0) // push history entry via applyPatch or something? updateNode already pushes
 
   await publishLiveSceneSnapshot(operations, 'apply_parcel_to_site')
 

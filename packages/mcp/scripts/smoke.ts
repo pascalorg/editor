@@ -62,6 +62,63 @@ async function main(): Promise<void> {
     })
     console.log('[smoke] validate_scene:', validate.isError ? 'ERROR' : 'OK')
 
+    // Parcel vertical. The in-process suite drives these handlers directly,
+    // which proves the logic and nothing about registration or the transport —
+    // a tool whose schema the SDK rejects still passes there.
+    const names = new Set(tools.tools.map((tool) => tool.name))
+    for (const name of [
+      'search_parcel',
+      'apply_parcel_to_site',
+      'set_setbacks',
+      'get_buildable_area',
+    ]) {
+      if (!names.has(name)) throw new Error(`${name} is not registered`)
+    }
+    console.log('[smoke] parcel tools registered: OK')
+
+    // `search_parcel` is left out on purpose: it reaches TKGM, and a smoke run
+    // must not fail because a third party is down or the machine is offline.
+    const setbacks = await client.callTool({
+      name: 'set_setbacks',
+      arguments: { defaultSetback: 5, edges: [{ index: '0', role: 'road', distance: 5 }] },
+    })
+    if (setbacks.isError) throw new Error(`set_setbacks failed: ${JSON.stringify(setbacks)}`)
+    console.log('[smoke] set_setbacks: OK')
+
+    const buildable = await client.callTool({ name: 'get_buildable_area', arguments: {} })
+    if (buildable.isError)
+      throw new Error(`get_buildable_area failed: ${JSON.stringify(buildable)}`)
+    const reading = JSON.parse((buildable.content as Array<{ text: string }>)[0]!.text)
+    if (!(reading.buildableArea > 0)) {
+      throw new Error(`get_buildable_area returned no ground: ${JSON.stringify(reading)}`)
+    }
+    console.log(`[smoke] get_buildable_area: OK (${reading.buildableArea.toFixed(1)} m²)`)
+
+    const applied = await client.callTool({
+      name: 'apply_parcel_to_site',
+      arguments: {
+        parcelData: {
+          ring: [
+            { latitude: 39.9, longitude: 32.85 },
+            { latitude: 39.9, longitude: 32.850467 },
+            { latitude: 39.900269, longitude: 32.850467 },
+            { latitude: 39.900269, longitude: 32.85 },
+          ],
+          il: 'Ankara',
+          ilce: 'Çankaya',
+          mahalle: 'Kızılay',
+          mahalleId: 12345,
+          ada: '2705',
+          parsel: '15',
+          registeredAreaRaw: '1.295,00',
+        },
+      },
+    })
+    if (applied.isError) {
+      throw new Error(`apply_parcel_to_site failed: ${JSON.stringify(applied)}`)
+    }
+    console.log('[smoke] apply_parcel_to_site: OK')
+
     const undone = await client.callTool({ name: 'undo', arguments: {} })
     console.log('[smoke] undo:', undone.isError ? 'ERROR' : 'OK')
 
