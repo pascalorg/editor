@@ -67,7 +67,7 @@ import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
  * slabs, ceilings, doors, windows, stairs, columns, roofs…); `'full'` keeps
  * every node that has a floorplan builder and is visible.
  */
-export type FloorplanExportScope = 'full' | 'structure'
+export type FloorplanExportScope = 'full' | 'structure' | 'routing'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 /** Minimum and proportional margin around the structural drawing bounds. */
@@ -135,7 +135,10 @@ export type FloorplanPageLayout = {
   planBox: { x: number; y: number; width: number; height: number }
 }
 
-export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
+export async function exportFloorplanPdf(
+  scope: FloorplanExportScope,
+  options?: { drawingType?: ConstructionDrawingType }
+): Promise<void> {
   const nodes = useScene.getState().nodes
   const viewer = useViewer.getState()
   const unit = viewer.unit
@@ -151,7 +154,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
     expertAnnotationState.wallDimensionReference,
   )
   const navigationAzimuth = useEditor.getState().navigationSyncPose?.azimuth
-  const drawingType = useDrawingView.getState().drawingType
+  const drawingType = options?.drawingType ?? useDrawingView.getState().drawingType
   const annotationLayoutOverrides = useDrawingView.getState().annotationLayoutOverrides
   const drawingLabel =
     DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType)?.label ?? 'Floor plan'
@@ -184,7 +187,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         drawingType,
         wallDimensionReference,
       )
-      const schedules = collectFloorplanSchedules(nodes, level.id, unit)
+      const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
       if (geometries.length === 0 && schedules.length === 0) continue
       const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
 
@@ -270,12 +273,19 @@ export function collectFloorplanSchedules(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
   unit: 'metric' | 'imperial',
+  scope: FloorplanExportScope,
 ): FloorplanSchedule[] {
   const siblingsByType = new Map<string, AnyNode[]>()
   const visit = (id: AnyNodeId) => {
     const node = nodes[id]
     if (!node) return
-    if (node.visible !== false) {
+    const def = nodeRegistry.get(node.type)
+    if (
+      node.visible !== false &&
+      (scope === 'full' ||
+        def?.category === 'structure' ||
+        (scope === 'routing' && def?.category === 'utility'))
+    ) {
       const siblings = siblingsByType.get(node.type)
       if (siblings) siblings.push(node)
       else siblingsByType.set(node.type, [node])
@@ -500,15 +510,14 @@ export function resolveFloorplanExportPlacement(
 export function resolveFloorplanExportViewport(
   modelBounds: FloorplanExportBounds,
 ): FloorplanExportBounds {
-  const padding = Math.max(
-    MIN_PLAN_PADDING_M,
-    Math.max(modelBounds.width, modelBounds.height) * PLAN_PADDING_RATIO,
-  )
+  const paddingX = Math.max(MIN_PLAN_PADDING_M, modelBounds.width * PLAN_PADDING_RATIO)
+  const paddingY = Math.max(MIN_PLAN_PADDING_M, modelBounds.height * PLAN_PADDING_RATIO)
+  
   return {
-    x: modelBounds.x - padding,
-    y: modelBounds.y - padding,
-    width: modelBounds.width + padding * 2,
-    height: modelBounds.height + padding * 2,
+    x: modelBounds.x - paddingX,
+    y: modelBounds.y - paddingY,
+    width: modelBounds.width + paddingX * 2,
+    height: modelBounds.height + paddingY * 2,
   }
 }
 
@@ -721,7 +730,7 @@ function applyFloorplanViewport(
   mounted.svg.insertBefore(background, mounted.svg.firstChild)
 }
 
-function collectFloorplanGeometry(
+export function collectFloorplanGeometry(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
   scope: FloorplanExportScope,
@@ -747,7 +756,9 @@ function collectFloorplanGeometry(
     if (
       def?.floorplan &&
       isFloorplanNodeVisible(node) &&
-      (scope === 'full' || def.category === 'structure')
+      (scope === 'full' ||
+        def.category === 'structure' ||
+        (scope === 'routing' && def.category === 'utility'))
     ) {
       const drawingNode = resolveNodeForDrawingType(node, nodes, drawingType)
       if (drawingNode) entries.push({ id, node: drawingNode })
@@ -764,7 +775,9 @@ function collectFloorplanGeometry(
       const definition = nodeRegistry.get(linked.node.type)
       if (
         isFloorplanNodeVisible(linked.node) &&
-        (scope === 'full' || definition?.category === 'structure')
+        (scope === 'full' ||
+          definition?.category === 'structure' ||
+          (scope === 'routing' && definition?.category === 'utility'))
       ) {
         const drawingNode = resolveNodeForDrawingType(linked.node, nodes, drawingType)
         if (drawingNode) {
@@ -937,7 +950,10 @@ function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
   let levelNodes: AnyNode[]
   if (buildingId) {
     const childIds = (nodes[buildingId] as { children?: AnyNodeId[] }).children ?? []
-    levelNodes = childIds.map((id) => nodes[id]).filter((n): n is AnyNode => n?.type === 'level')
+    levelNodes = childIds
+      .map((id) => nodes[id])
+      .filter((n): n is AnyNode => n?.type === 'level')
+      .filter((n) => (n.metadata as { role?: unknown } | undefined)?.role !== 'roof')
   } else {
     const node = nodes[activeLevelId]
     levelNodes = node ? [node] : []
