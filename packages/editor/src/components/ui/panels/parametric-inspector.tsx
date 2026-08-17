@@ -292,6 +292,7 @@ interface FieldRendererProps {
 
 function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
   const key = String(field.key)
+  const label = field.label ?? prettifyKey(key)
   // Subscribe only to this field's value. Zustand compares with ===, so when
   // another field on the same node changes (which produces a new node object
   // reference), this primitive value stays equal and the field doesn't
@@ -318,7 +319,7 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
       const precision = precisionForStep(step)
       return (
         <SliderControl
-          label={prettifyKey(key)}
+          label={label}
           max={field.max}
           min={field.min}
           onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
@@ -335,7 +336,7 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
       return (
         <ToggleControl
           checked={checked}
-          label={prettifyKey(key)}
+          label={label}
           onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
         />
       )
@@ -345,16 +346,19 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
       const str = typeof value === 'string' ? value : (field.options[0] ?? '')
       if (field.display === 'segmented') {
         return (
-          <SegmentedControl
-            onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-            options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
-            value={str}
-          />
+          <div className="space-y-1.5 px-3 py-2">
+            {field.label && <div className="text-foreground/80 text-xs">{label}</div>}
+            <SegmentedControl
+              onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
+              options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
+              value={str}
+            />
+          </div>
         )
       }
       return (
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
+          <span className="text-foreground/80 text-xs">{label}</span>
           <select
             className="rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
             onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
@@ -374,7 +378,7 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
       const str = typeof value === 'string' ? value : '#888888'
       return (
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
+          <span className="text-foreground/80 text-xs">{label}</span>
           <div className="flex items-center gap-2">
             <input
               className="h-6 w-8 cursor-pointer rounded border border-border/50 bg-transparent"

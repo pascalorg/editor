@@ -58,6 +58,11 @@ describe('lean-to assembly', () => {
     expect(assembly.segment.position[1]).toBeLessThan(layout.lowEdgeHeight)
     expect(assembly.segment.depth).toBeCloseTo(layout.roofRun + 0.02, 6)
     expect(assembly.segment.overhang).toBe(0)
+    expect(assembly.segment.metadata).toMatchObject({
+      leanToSideInfillSpan: 4,
+      leanToSideInfillMinX: -2.04,
+      leanToSideInfillMaxX: 2.04,
+    })
     expect(assembly.segment.position[2]).toBeCloseTo(
       (leanTo.projection + leanTo.lowOverhang - leanTo.highOverhang) / 2 - 0.012,
       6,

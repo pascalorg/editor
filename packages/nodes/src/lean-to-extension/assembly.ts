@@ -24,6 +24,9 @@ import { resolveLeanToLayout } from './layout'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
+const ROOF_INSET_SPAN_KEY = 'leanToSideInfillSpan'
+const ROOF_INSET_MIN_X_KEY = 'leanToSideInfillMinX'
+const ROOF_INSET_MAX_X_KEY = 'leanToSideInfillMaxX'
 const POST_INDEX_KEY = 'leanToPostIndex'
 const POST_SIDE_KEY = 'leanToPostSide'
 const POST_GUTTER_CLEARANCE = 0.02
@@ -96,7 +99,6 @@ export function managedLeanToPostSide(column: ColumnNodeType): LeanToPostSide {
 export type LeanToPostLayoutPatch = Pick<
   ColumnNodeType,
   | 'position'
-  | 'rotation'
   | 'height'
   | 'width'
   | 'depth'
@@ -128,7 +130,6 @@ export function leanToPostLayoutPatch(
       baseY,
       side === 'high' ? 0 : layout.beamZ - gutterSetback,
     ],
-    rotation: 0,
     height: Math.max(
       0.2,
       (side === 'high'
@@ -269,6 +270,7 @@ export type LeanToRoofSegmentLayoutPatch = Pick<
   | 'shingleThickness'
   | 'overhang'
   | 'trim'
+  | 'metadata'
 >
 
 export function leanToRoofSegmentLayoutPatch(
@@ -279,6 +281,10 @@ export function leanToRoofSegmentLayoutPatch(
   const overhang = 0
   const width = layout.roofWidth
   const depth = layout.roofRun + WALL_CONNECTION_OVERLAP
+  const sideMemberFaceInset = Math.min(
+    Math.max(0, leanTo.rafterWidth / 2),
+    Math.max(0, layout.span / 2 - 0.01),
+  )
   const surfaceProbe = {
     roofType: 'shed',
     width,
@@ -311,6 +317,11 @@ export function leanToRoofSegmentLayoutPatch(
     deckThickness: leanTo.roofThickness,
     shingleThickness,
     overhang,
+    metadata: managedMetadata(leanTo, 'roof-segment', {
+      [ROOF_INSET_SPAN_KEY]: layout.span,
+      [ROOF_INSET_MIN_X_KEY]: -layout.span / 2 - sideMemberFaceInset - layout.roofCenterX,
+      [ROOF_INSET_MAX_X_KEY]: layout.span / 2 + sideMemberFaceInset - layout.roofCenterX,
+    }),
     trim: {
       left: 0,
       right: 0,
@@ -420,7 +431,6 @@ export function createManagedLeanToRoofAssembly(
     ...leanToRoofSegmentLayoutPatch(leanTo),
     name: 'Lean-to Shed Roof',
     parentId: roof.id,
-    metadata: managedMetadata(leanTo, 'roof-segment'),
   })
   const gutter = GutterNode.parse({
     ...leanToGutterLayoutPatch(segment, leanTo),

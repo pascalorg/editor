@@ -81,4 +81,29 @@ describe('lean-to scene commit boundary', () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     stopCommits()
   })
+
+  test('preserves managed post rotation while parent edits still update its height', () => {
+    const leanTo = Object.values(useScene.getState().nodes).find(
+      (node): node is LeanToExtensionNode => node.type === 'lean-to-extension',
+    )!
+    const post = leanTo.children
+      .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
+      .find((node): node is Extract<AnyNode, { type: 'column' }> => node?.type === 'column')!
+
+    useScene.getState().updateNode(post.id as AnyNodeId, {
+      rotation: Math.PI,
+      supportStyle: 'k-brace',
+    })
+    const rotatedPost = useScene.getState().nodes[post.id as AnyNodeId] as typeof post
+    expect(rotatedPost.rotation).toBe(Math.PI)
+    expect(rotatedPost.supportStyle).toBe('k-brace')
+    const heightBeforeParentEdit = rotatedPost.height
+
+    useScene.getState().updateNode(leanTo.id as AnyNodeId, { projection: 4 })
+
+    const postAfterParentEdit = useScene.getState().nodes[post.id as AnyNodeId] as typeof post
+    expect(postAfterParentEdit.rotation).toBe(Math.PI)
+    expect(postAfterParentEdit.supportStyle).toBe('k-brace')
+    expect(postAfterParentEdit.height).not.toBe(heightBeforeParentEdit)
+  })
 })

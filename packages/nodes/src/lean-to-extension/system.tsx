@@ -97,7 +97,6 @@ function postNeedsLayoutUpdate(
   const expected = leanToPostLayoutPatch(leanTo, index, baseY, gutterSetback, side)
   return (
     !sameTuple(post.position, expected.position) ||
-    post.rotation !== expected.rotation ||
     post.height !== expected.height ||
     post.width !== expected.width ||
     post.depth !== expected.depth ||
@@ -124,7 +123,8 @@ function segmentNeedsLayoutUpdate(segment: RoofSegmentNode, leanTo: LeanToExtens
     segment.deckThickness !== expected.deckThickness ||
     segment.shingleThickness !== expected.shingleThickness ||
     segment.overhang !== expected.overhang ||
-    JSON.stringify(segment.trim) !== JSON.stringify(expected.trim)
+    JSON.stringify(segment.trim) !== JSON.stringify(expected.trim) ||
+    JSON.stringify(segment.metadata) !== JSON.stringify(expected.metadata)
   )
 }
 

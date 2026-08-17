@@ -2222,6 +2222,7 @@ export type ParamGroup<N> = {
 export type ParamField<N> =
   | {
       key: keyof N
+      label?: string
       kind: 'number'
       unit?: string
       min?: number
@@ -2230,9 +2231,10 @@ export type ParamField<N> =
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }
-  | { key: keyof N; kind: 'boolean'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'boolean'; visibleIf?: (n: N) => boolean }
   | {
       key: keyof N
+      label?: string
       kind: 'enum'
       options: readonly string[]
       /** Defaults to 'select' (dropdown). 'segmented' renders the inline
@@ -2240,10 +2242,10 @@ export type ParamField<N> =
       display?: 'select' | 'segmented'
       visibleIf?: (n: N) => boolean
     }
-  | { key: keyof N; kind: 'vec3'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; kind: 'color'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; kind: 'material'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'vec3'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'color'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'material'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
   /** Escape hatch for fields that don't map to a single node key —
    *  derived values (`length` from `start`/`end`), sliders with
    *  dynamic min/max (curve sagitta bounded by chord length),
@@ -2251,6 +2253,7 @@ export type ParamField<N> =
    *  update logic. `key` here is just a stable React key/label. */
   | {
       key: string
+      label?: string
       kind: 'custom'
       component: ComponentType<{ node: N; onUpdate: (patch: Partial<N>) => void }>
       visibleIf?: (n: N) => boolean

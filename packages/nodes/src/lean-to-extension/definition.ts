@@ -1,4 +1,5 @@
 import type {
+  AnyNode,
   AnyNodeId,
   HandleDescriptor,
   NodeDefinition,
@@ -6,10 +7,23 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import {
+  isManagedLeanToNode,
+  isManagedLeanToPost,
+  leanToDownspoutLayoutPatch,
+  leanToGutterLayoutPatch,
+  leanToPostLayoutPatch,
+  leanToRoofSegmentLayoutPatch,
+  managedLeanToPostIndex,
+  managedLeanToPostSide,
+  resolveLeanToPostBaseY,
+  resolveLeanToPostGutterSetback,
+} from './assembly'
 import { buildLeanToExtensionFloorplan } from './floorplan'
 import { leanToResizeAffordance } from './floorplan-affordances'
 import { leanToFloorplanMoveTarget } from './floorplan-move'
 import { buildLeanToExtensionGeometry, leanToExtensionGeometryKey } from './geometry'
+import { resolveLeanToLayout } from './layout'
 import { leanToPaint } from './paint'
 import { deriveLeanToResizePatch, leanToExtensionParametrics } from './parametrics'
 import { applyLeanToRoofAttachment, resolveLeanToRoofAttachment } from './roof-attachment'
@@ -17,8 +31,8 @@ import { LeanToExtensionNode } from './schema'
 import { leanToSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.25
+const SPAN_HANDLE_OFFSET = 0.3
 const ROOF_EDGE_SNAP_TOLERANCE = 0.3
-const PROJECTION_HANDLE_HEIGHT = 0.2
 
 function resolveHostWall(node: LeanToExtensionNode, sceneApi: SceneApi): WallNode | null {
   if (!node.parentId) return null
@@ -90,6 +104,120 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
   }
 }
 
+function leanToManagedPreviewOverrides(
+  node: LeanToExtensionNode,
+  patch: Partial<LeanToExtensionNode>,
+  sceneApi: SceneApi,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const next = { ...node, ...patch } as LeanToExtensionNode
+  const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+  const entries: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+
+  const wall = next.parentId ? nodes[next.parentId as AnyNodeId] : undefined
+  for (const childId of next.children) {
+    const child = nodes[childId as AnyNodeId]
+    if (!child) continue
+
+    if (child.type === 'column' && isManagedLeanToPost(child, next.id)) {
+      const index = managedLeanToPostIndex(child)
+      if (index === null) continue
+      const side = managedLeanToPostSide(child)
+      const baseY =
+        wall?.type === 'wall' ? resolveLeanToPostBaseY(next, wall, nodes, index, side) : 0
+      const gutterSetback = side === 'low' ? resolveLeanToPostGutterSetback(next, child) : 0
+      entries.push([
+        child.id as AnyNodeId,
+        leanToPostLayoutPatch(next, index, baseY, gutterSetback, side) as Partial<AnyNode>,
+      ])
+      continue
+    }
+
+    if (child.type !== 'roof' || !isManagedLeanToNode(child, next.id, 'roof')) continue
+    const segment = child.children
+      .map((id) => nodes[id as AnyNodeId])
+      .find(
+        (candidate) =>
+          candidate?.type === 'roof-segment' &&
+          isManagedLeanToNode(candidate, next.id, 'roof-segment'),
+      )
+    if (segment?.type !== 'roof-segment') continue
+
+    const segmentPatch = leanToRoofSegmentLayoutPatch(next)
+    entries.push([segment.id as AnyNodeId, segmentPatch as Partial<AnyNode>])
+
+    const nextSegment = { ...segment, ...segmentPatch }
+    const gutter = segment.children
+      .map((id) => nodes[id as AnyNodeId])
+      .find(
+        (candidate) =>
+          candidate?.type === 'gutter' && isManagedLeanToNode(candidate, next.id, 'gutter'),
+      )
+    if (gutter?.type !== 'gutter') continue
+    const gutterPatch = leanToGutterLayoutPatch(nextSegment, next, gutter)
+    entries.push([gutter.id as AnyNodeId, gutterPatch as Partial<AnyNode>])
+
+    const nextGutter = { ...gutter, ...gutterPatch }
+    const downspout = segment.children
+      .map((id) => nodes[id as AnyNodeId])
+      .find(
+        (candidate) =>
+          candidate?.type === 'downspout' && isManagedLeanToNode(candidate, next.id, 'downspout'),
+      )
+    if (downspout?.type === 'downspout') {
+      entries.push([
+        downspout.id as AnyNodeId,
+        leanToDownspoutLayoutPatch(nextSegment, nextGutter, next, downspout) as Partial<AnyNode>,
+      ])
+    }
+  }
+
+  return entries
+}
+
+function spanPatch(
+  node: LeanToExtensionNode,
+  span: number,
+  side: 'left' | 'right',
+): Partial<LeanToExtensionNode> {
+  const sign = side === 'right' ? 1 : -1
+  return {
+    span,
+    autoSpan: false,
+    position: [
+      node.position[0] + (sign * (span - node.span)) / 2,
+      node.position[1],
+      node.position[2],
+    ],
+  }
+}
+
+function spanHandle(side: 'left' | 'right'): HandleDescriptor<LeanToExtensionNode> {
+  const sign = side === 'right' ? 1 : -1
+  return {
+    kind: 'linear-resize',
+    axis: 'x',
+    anchor: side === 'right' ? 'min' : 'max',
+    min: 0.5,
+    max: 100,
+    currentValue: (node) => node.span,
+    apply: (node, span) => spanPatch(node, span, side),
+    previewOverrides: (node, span, sceneApi) =>
+      leanToManagedPreviewOverrides(node, spanPatch(node, span, side), sceneApi),
+    placement: {
+      position: (node) => {
+        const layout = resolveLeanToLayout(node)
+        return [
+          sign * (node.span / 2 + SPAN_HANDLE_OFFSET),
+          layout.lowEdgeHeight + HEIGHT_HANDLE_OFFSET,
+          node.projection,
+        ]
+      },
+      rotationY: () => (side === 'right' ? 0 : Math.PI),
+    },
+    measureLabel: 'Span',
+  }
+}
+
 const leanToExtensionHandles: HandleDescriptor<LeanToExtensionNode>[] = [highEdgeHeightHandle()]
 leanToExtensionHandles.push({
   kind: 'linear-resize',
@@ -102,20 +230,15 @@ leanToExtensionHandles.push({
     projection,
     ...deriveLeanToResizePatch(node, { projection }),
   }),
-  placement: { position: (node) => [0, PROJECTION_HANDLE_HEIGHT, node.projection] },
+  placement: {
+    position: (node) => {
+      const layout = resolveLeanToLayout(node)
+      return [0, layout.lowEdgeHeight + HEIGHT_HANDLE_OFFSET, node.projection]
+    },
+  },
   measureLabel: 'Projection',
 })
-leanToExtensionHandles.push({
-  kind: 'linear-resize',
-  axis: 'x',
-  anchor: 'center',
-  min: 0.5,
-  max: 100,
-  currentValue: (node) => node.span,
-  apply: (_node, span) => ({ span, autoSpan: false }),
-  placement: { position: (node) => [node.span / 2, PROJECTION_HANDLE_HEIGHT, node.projection] },
-  measureLabel: 'Span',
-})
+leanToExtensionHandles.push(spanHandle('right'), spanHandle('left'))
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',

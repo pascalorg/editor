@@ -191,6 +191,17 @@ const STYLES_WITH_TOP_SPREAD = new Set<ColumnNodeType['supportStyle']>([
   'v-frame',
 ])
 
+function isLeanToManagedColumn(node: ColumnNodeType): boolean {
+  const metadata = node.metadata
+  return (
+    metadata !== null &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    metadata.managedByLeanTo !== undefined &&
+    metadata.leanToRole === 'post'
+  )
+}
+
 // Resolve the column's visible XZ footprint half-extents per supportStyle
 // + crossSection. Vertical supports use the shaft geometry (radius for
 // round / octagonal / sixteen-sided, width/depth for square / rectangular);
@@ -280,7 +291,9 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
   //    - round / octagonal / sixteen-sided → single radius arrow
   //    - square                            → uniform width+depth
   //    - rectangular                       → width + depth (independent)
-  const handles: HandleDescriptor<ColumnNodeType>[] = [columnHeightHandle()]
+  const handles: HandleDescriptor<ColumnNodeType>[] = []
+  const managedByLeanTo = isLeanToManagedColumn(node)
+  if (!managedByLeanTo) handles.push(columnHeightHandle())
   if (node.supportStyle !== 'vertical') {
     handles.push(columnBraceHandle('x'), columnBraceHandle('z'))
     if (STYLES_WITH_BOTTOM_SPREAD.has(node.supportStyle)) {
@@ -289,6 +302,9 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
     if (STYLES_WITH_TOP_SPREAD.has(node.supportStyle)) {
       handles.push(columnBraceTopSpreadHandle())
     }
+  } else if (managedByLeanTo) {
+    // Lean-to sync owns the post's structural height and footprint. Keep
+    // rotation user-owned so asymmetric styles such as K-braces can be flipped.
   } else if (ROUND_CROSS_SECTIONS.has(node.crossSection)) {
     handles.push(columnRadiusHandle())
   } else if (node.crossSection === 'square') {
@@ -296,7 +312,8 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
   } else {
     handles.push(columnAxisHandle('x'), columnAxisHandle('z'))
   }
-  handles.push(columnRotateHandle(), columnMoveHandle())
+  handles.push(columnRotateHandle())
+  if (!managedByLeanTo) handles.push(columnMoveHandle())
   return handles
 }
 

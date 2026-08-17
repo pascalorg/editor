@@ -29,20 +29,28 @@ export const leanToResizeAffordance: FloorplanAffordance<LeanToExtensionNode> = 
     const axis = dimension === 'projection' ? outward : along
     const initialAxis = initialPlanPoint[0] * axis[0] + initialPlanPoint[1] * axis[1]
     const initialValue = dimension === 'projection' ? node.projection : node.span
+    const initialPosition = node.position
     let lastPatch: Partial<LeanToExtensionNode> = {}
 
     return {
       affectedIds: [node.id as AnyNodeId],
       apply({ planPoint }) {
         const currentAxis = planPoint[0] * axis[0] + planPoint[1] * axis[1]
-        const multiplier = dimension === 'projection' ? 1 : 2
-        const raw = initialValue + (currentAxis - initialAxis) * side * multiplier
+        const raw = initialValue + (currentAxis - initialAxis) * side
         const step = getSegmentGridStep()
         const value = Math.max(0.5, step > 0 ? snapScalar(raw, step) : raw)
         lastPatch =
           dimension === 'projection'
             ? { projection: value, ...deriveLeanToResizePatch(node, { projection: value }) }
-            : { span: value, autoSpan: false }
+            : {
+                span: value,
+                autoSpan: false,
+                position: [
+                  initialPosition[0] + (side * (value - initialValue)) / 2,
+                  initialPosition[1],
+                  initialPosition[2],
+                ],
+              }
         useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
         sceneApi.markDirty(node.id as AnyNodeId)
       },

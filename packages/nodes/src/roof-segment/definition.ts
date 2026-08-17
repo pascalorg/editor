@@ -18,6 +18,7 @@ import { RoofSegmentNode } from './schema'
 
 const SIDE_HANDLE_OFFSET = 0.3
 const HEIGHT_HANDLE_OFFSET = 0.3
+const ROOF_HANDLE_CLEARANCE = 0.15
 const ROTATE_CORNER_OFFSET = 0.4
 const ROTATE_RING_OFFSET = 0.08
 const MIN_ROOF_DIM = 1
@@ -34,6 +35,16 @@ const MAX_PITCH = 85
 // math in core.
 function getPeakHeight(n: RoofSegmentNodeType): number {
   return n.wallHeight + getActiveRoofHeight(n)
+}
+
+function getSideResizeHandleY(n: RoofSegmentNodeType, localZ: number): number {
+  if (n.roofType !== 'shed') return Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2
+
+  const halfDepth = Math.max(n.depth, MIN_ROOF_DIM) / 2
+  const roofHeight = getActiveRoofHeight(n)
+  const t = halfDepth > 0 ? (localZ + halfDepth) / (2 * halfDepth) : 0.5
+  const roofY = n.wallHeight + roofHeight * (1 - Math.max(0, Math.min(1, t)))
+  return Math.max(roofY, MIN_WALL_DISPLAY) + ROOF_HANDLE_CLEARANCE
 }
 
 // Width arrow on the +X (right) or -X (left) side. Asymmetric resize:
@@ -73,11 +84,7 @@ function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSe
       }
     },
     placement: {
-      position: (n) => [
-        sign * (n.width / 2 + SIDE_HANDLE_OFFSET),
-        Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2,
-        0,
-      ],
+      position: (n) => [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), getSideResizeHandleY(n, 0), 0],
       // Flip the left chevron so it points outward toward -X. The
       // generic LinearArrow only auto-orients for axis 'z' (rotates the
       // chevron 90° to face +Z); +X / -X facing is up to the descriptor.
@@ -141,7 +148,7 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
     placement: {
       position: (n) => [
         0,
-        Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2,
+        getSideResizeHandleY(n, sign * (n.depth / 2)),
         sign * (n.depth / 2 + SIDE_HANDLE_OFFSET),
       ],
       // For axis 'z', `LinearArrow` adds -π/2 around Y so the chevron
