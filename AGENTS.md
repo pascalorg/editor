@@ -10,12 +10,14 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the stand
 | `packages/viewer` | Standalone 3D canvas: renderers, viewer systems, presentation state |
 | `packages/editor` | Editor UI components reused by the standalone app and embedders |
 | `packages/nodes` | Node kinds: one folder per kind (schema re-export, definition, geometry, floorplan, renderer, tool) |
-| `packages/mcp` | MCP server and scene storage adapters |
+| `packages/mcp` | MCP server and scene storage adapters (SQLite + Postgres) |
+| `packages/db` | `@pascal-app/db` — Postgres data layer (Drizzle). Private, server-safe: no React, no Three.js, no `next/*` |
+| `packages/auth` | `@pascal-app/auth` — better-auth wiring (Google OAuth, magic link, transactional mail). Private, depends on `db` |
 | `packages/cad-import` | DXF → CAD underlay geometry. Pure logic, no DOM, no React |
 | `packages/cadastre` | TKGM (Turkish land registry) CBS client. Pure logic, zero runtime dependencies |
 | `packages/ifc-converter` | IFC → scene-graph conversion (`web-ifc`). Pure logic, no DOM, no React |
 | `packages/ui` | `@repo/ui` — internal shared primitives, private, not published |
-| `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools, and owns the scene API (`app/api/scenes/*`, backed by `@pascal-app/mcp/storage` via `lib/scene-store-server.ts`) |
+| `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools, and owns the scene API (`app/api/scenes/*`, backed by `@pascal-app/mcp/storage` via `lib/scene-store-server.ts`), the auth routes (`app/api/auth/*`) and the access checks in `lib/scene-api-security.ts` |
 | `apps/ifc-converter` | Next app wrapping `packages/ifc-converter` (:3003) |
 | `tooling/` | Release scripts and the shared tsconfig base |
 
@@ -23,6 +25,10 @@ Dependencies run **core → viewer → editor → nodes → apps**. `packages/no
 depends on `@pascal-app/editor`, so the editor package can never import
 `nodes` — shared logic a node kind needs has to live in `editor` (or `core`)
 and be imported from there.
+
+`db` and `auth` sit outside that chain: server-only leaves that `apps/editor`
+and `packages/mcp` import and that nothing in `core`, `viewer`, `editor` or
+`nodes` may touch. See "Persistence backends, auth and tenancy" below.
 
 ## Where to look
 
@@ -46,9 +52,26 @@ bun check          # biome lint + format (add :fix to write)
 bun restart        # kill :3002, clear caches, dev
 ```
 
+Nothing above needs a database — the default store is the SQLite file. Postgres
+work needs three more:
+
+```sh
+docker compose up -d postgres            # local Postgres, host port 5433
+cd packages/db && bun run db:migrate     # apply the committed migrations
+cd packages/db && bun run db:generate    # schema diff → a new migration file
+```
+
+5433 rather than 5432 on purpose: a system Postgres usually holds 5432, and
+connecting to the wrong server fails as "password authentication failed", which
+sends you looking at credentials instead of at the host.
+
 CI (`.github/workflows/ci.yml`) gates on exactly `bun run check`,
 `bun run check-types`, `bun run test`, `bun run build`, with bun pinned to the
-`packageManager` version. Reproduce a CI failure with those four, in that order.
+`packageManager` version and a Postgres 17 service on `:5433` exported as
+`POSTGRES_URL`. Reproduce a CI failure with those four, in that order. A second,
+path-filtered workflow (`mcp-ci.yml`) builds `core` + `mcp` and runs the MCP
+suite and the scene-API tests whenever `packages/mcp`, `packages/core` or
+`apps/editor/app/api/scenes` changes — green `ci.yml` is not the whole gate.
 
 Narrow the loop while working:
 
@@ -60,18 +83,27 @@ bunx turbo run test --force                              # ignore the turbo cach
 cd packages/editor && bunx tsgo --noEmit                 # type-check one package
 ```
 
-Five things that will mislead you if you don't know them:
+Six things that will mislead you if you don't know them:
 
 - **`bun test` is not `bun run test`.** Bare `bun test` hits Bun's built-in
   runner, which walks the whole repo from source (~365 files) and ignores turbo
   entirely. `bun run test` is the turbo pipeline CI uses. The built-in is the
   faster inner loop precisely because it skips the build; use `bun run test`
   before you claim the suite is green.
-- **Only four workspaces declare `check-types`:** `packages/editor`,
-  `packages/ui`, `apps/editor`, `apps/ifc-converter`. `core`, `viewer`,
-  `nodes`, `mcp`, `cad-import` and `ifc-converter` are *not* covered — their
-  type errors surface only through `build`. A clean `bun check-types` says
-  almost nothing; run `bunx turbo run build` before believing types are clean.
+- **Six workspaces declare `check-types`:** `packages/editor`, `packages/ui`,
+  `packages/auth`, `packages/db`, `apps/editor`, `apps/ifc-converter`. `core`,
+  `viewer`, `nodes`, `mcp`, `cad-import` and `ifc-converter` are *not* covered —
+  their type errors surface only through `build`, so a clean `bun check-types`
+  says little on its own. The reverse holds for the app: `next.config.ts` sets
+  `typescript.ignoreBuildErrors: true`, so `apps/editor`'s build type-checks
+  *nothing* and only its own `check-types` (`next typegen && tsc --noEmit`)
+  catches it. Neither command alone is the gate; run both.
+- **`packages/db`'s migration test skips itself without `POSTGRES_URL`** and
+  reports green having run nothing — so a schema change looks tested locally and
+  fails in CI, which supplies a real database. Generated SQL reviews fine and
+  still breaks when it runs. Before touching `migrations/`: `docker compose up -d
+  postgres`, then from `packages/db`
+  `POSTGRES_URL=postgresql://pascal:pascal@127.0.0.1:5433/pascal bun test tests`.
 - **`core`, `viewer`, `nodes` and `mcp` exclude `**/*.test.ts` from their
   tsconfigs**, so their tests are never type-checked. Neither are
   `cad-import`'s — it keeps tests in its tsconfig but has no `check-types`
@@ -109,8 +141,14 @@ what you set first. The way to test such a component is to split it — a
 presentational half that takes the value as a prop, and a thin wrapper that
 subscribes. `floorplan-buildable-layer.tsx` is the worked example.
 
-Three things about actually getting the app up:
+Four things about actually getting the app up:
 
+- **`apps/editor` reads its environment from the repo root, not from the app.**
+  Its scripts are `dotenv -e ../../.env.local -e ../../.env.defaults -- next
+  dev`, so an `apps/editor/.env*` is never loaded and a variable put there does
+  nothing. Root `bun dev` layers `./.env` + `./.env.defaults` on top for turbo.
+  `SETUP.md` is the table of what each variable does; `apps/editor/env.mjs`
+  validates them at boot so a typo fails there rather than on first use.
 - **`dotenv` is not on `PATH`.** Both dev scripts shell out to it, so they only
   resolve through `bun dev` / `bun run dev` (which put `node_modules/.bin` on
   the path). Invoking `dotenv -e … -- next dev` yourself exits 127.
@@ -149,7 +187,7 @@ and adding one for a new gesture is normal. What the table pins down is where
 Subscribe in components (`useScene((s) => s.nodes)`); use `getState()` outside
 React (systems, callbacks, tool handlers).
 
-Three things that bite:
+Seven things that bite:
 
 - **Undo is Zundo `temporal`, not a command stack.** Every tracked `set` pushes
   a history entry, so a multi-step mutation must be wrapped:
@@ -167,13 +205,18 @@ Three things that bite:
   reverts to defaults on reopen. This exact bug class shipped twice already
   (materials and collections, `CHANGELOG.md` #597). `clone-scene-graph.ts` and
   `use-scene.ts`'s load path are the two places to check.
-- **There is a sixth boundary the five do not cover: the store's own read
-  schema.** `GraphSchema` in `packages/mcp/src/storage/sqlite-scene-store.ts`
-  is a `z.object()`, which *strips every key it does not name*, silently and on
-  load. A field can be correct through all five editor-side boundaries and
-  still vanish the moment the scene round-trips through the API — the save
-  looks like it worked. `savedViews` shipped in Q2 with exactly this bug and
-  nobody noticed until comments hit it. Add the key there too.
+- **There are two more boundaries the five do not cover, and both are schemas
+  that silently drop what they do not name.** `GraphSchema` in
+  `packages/mcp/src/storage/scene-graph-codec.ts` (shared by *both* stores, so
+  the backend makes no difference) is a `z.object()`, which strips every unnamed
+  key on load; `apiGraphSchema` in `apps/editor/lib/graph-schema.ts` is the
+  second, re-parsing every node through `AnyNode` at the untrusted API edge to
+  keep the `AssetUrl` allowlist enforced (a plugin kind the process cannot
+  resolve is held to the `BaseNode` envelope instead). A field can be correct
+  through all five editor-side boundaries and still vanish the moment the scene
+  round-trips through the API — the save looks like it worked. `savedViews`
+  shipped in Q2 with exactly this bug and nobody noticed until comments hit it.
+  Add the key in both.
 - **`comments` is persisted but deliberately *not* history-tracked**, and it is
   the only scene-side bag exempt from the `readOnly` lock. A comment is feedback
   about the model, not an edit to it: undo must not swallow one, and a
@@ -488,8 +531,12 @@ app — check a UI surface is actually rendered before extending it.
 The MCP server (`packages/mcp/src/tools/`, ~55 tools registered in
 `tools/index.ts`) runs as its own stdio process started by the user's Claude
 client. It is **not** imported by the running editor. The two share exactly one
-thing: the SQLite database, resolved from `PASCAL_DB_PATH`, then
-`PASCAL_DATA_DIR/pascal.db`, defaulting to `$HOME/.pascal/data/pascal.db`.
+thing: the database — *whichever* `createSceneStore(env)` picks in each process.
+`POSTGRES_URL` selects Postgres; otherwise SQLite, resolved from
+`PASCAL_DB_PATH`, then `PASCAL_DATA_DIR/pascal.db`, defaulting to
+`$HOME/.pascal/data/pascal.db`. Two processes that resolve differently share
+nothing, and the symptom is not an error — the MCP server writes a scene the
+editor simply never sees.
 
 That shared database is the whole coupling, and it runs in both directions.
 Server → editor: a mutating tool calls `publishLiveSceneSnapshot(bridge, kind)`,
@@ -521,6 +568,11 @@ Four things that will cost you an hour each:
 - **`@pascal-app/core` is a devDependency here but imported at runtime by ~81
   files**, and the build is plain `tsc` with no bundling. It resolves inside the
   monorepo and would not in the published package. Pre-existing; don't add to it.
+  `@pascal-app/db` is the same shape and worse — it is a *private* workspace
+  package, so the published `@pascal-app/mcp` can never resolve
+  `postgres-scene-store.ts`'s import of it. The lazy `await import` in
+  `createSceneStore` is what keeps that from being a crash rather than an
+  unreachable branch; keep it lazy.
 
 The suite drives tools in-process. That does not prove registration or the
 transport, so a new tool also wants a run against the real server —
@@ -529,13 +581,73 @@ transport, so a new tool also wants a run against the real server —
 `dist/bin/pascal-mcp.js` for the smoke check. Rebuild before the latter: it runs
 `dist`, not source.
 
+## Persistence backends, auth and tenancy
+
+Two scene stores sit behind one `SceneStore` contract, chosen per process by
+`createSceneStore(env)` (`packages/mcp/src/storage/index.ts`). SQLite is not a
+transitional fallback to be deleted later: `pascal-mcp` has to work on a laptop
+with no server, and `*-scene-store.contract.test.ts` runs the same contract
+against both.
+
+`packages/db` (Drizzle) owns the schema — `auth_*` identity, `projects` /
+`project_members`, `scenes` + `scene_versions` (the graph body lives on the
+version row, not on the metadata row every listing reads), `scene_events`,
+`agent_requests`, `api_tokens`, `share_links`. Three rules ride on it:
+
+- **It is server-safe by test, not by convention.** `tests/server-safe.test.ts`
+  fails on any `react`, `three`, `next/`, `zustand` or `@react-three` import
+  anywhere in `src` — the same rule `scene-migrations.ts` and `i18n-core.ts`
+  live under, and for the same reason: it runs in API routes, Server Components,
+  the migration step and the MCP process at once, so one client import lands in
+  all four.
+- **Migrations are a deploy step, never app boot.** N replicas starting together
+  all race to migrate, and the loser either crashes or serves traffic against a
+  half-migrated schema. The SQL is generated *and committed*, so what runs in
+  production is what was reviewed.
+- **Field names deliberately track `sqlite-scene-store.ts`** (`version`,
+  `size_bytes`, `node_count`, `graph_hash`) so one contract covers both
+  backends. `graph_hash` is stored rather than recomputed on read because
+  `jsonb` normalises key order and a hash taken after the round trip would not
+  match the one the client saw.
+
+Auth is better-auth in `packages/auth`, instantiated in `apps/editor/lib/auth.ts`
+behind a lazy `getAuth()`. The laziness is load-bearing: `getDatabase()` throws
+without `POSTGRES_URL`, and building the instance at module scope made
+`bun run build` fail on `/api/auth/[...all]` for every checkout without Postgres.
+
+`lib/scene-api-security.ts` is the gate the scene routes pass through.
+`resolveActor` checks a `Bearer pascal_pat_…` token against `api_tokens`
+(SHA-256, revocation and expiry) before falling back to the session cookie;
+`authorizeScene` / `authorizeProject` resolve owner, member role and project
+visibility; `guardSceneApiRequest` does method, CORS and a 120-per-minute
+bucket. Two things about it decide whether a change is even reachable:
+
+- **It fails closed on a database it cannot open.** `authorizeScene` returns
+  `false` when `getDatabase()` throws, so on the documented default setup —
+  SQLite, no `POSTGRES_URL` — every verb on `/api/scenes/:id` answers
+  `404 not_found`. The `/scene/[id]` page still loads, because Server Components
+  read the store directly instead of fetching their own API
+  (`server-components-avoid-self-fetch.test.ts` pins that). "The API 404s but the
+  editor works" is this, not a missing scene.
+- **The collaboration route is not behind it.** `POST /api/scenes/:id/collaboration`
+  — the model's actual write path — calls `guardSceneApiRequest` only, with no
+  `authorizeScene`. The gated routes and the route carrying every edit therefore
+  disagree about who may write. Know which side a change lands on before
+  reasoning about access, and don't infer one route's posture from another's.
+
+Share links are a third mechanism again: `lib/share-token.ts` signs
+`/share/<token>` with `PASCAL_SHARE_LINK_SECRET`. Unset, the Share button
+returns 503 and existing links stop verifying; rotating it is the only way to
+revoke one.
+
 ## Layer Boundaries (read once, internalise)
 
 - **`packages/core`** owns domain data and pure logic. It must not import Three.js, `packages/viewer`, `apps/editor`, rendering/UI concepts, tools, modes, phases, or view-specific concepts such as floorplan or paint preview.
 - **`packages/viewer`** owns the standalone 3D canvas, renderers, viewer systems, and genuine presentation state. It must not know about `useEditor`, editor tools, phases, modes, paint mode, floorplan state, or editor-only presentation vocabulary.
 - **`packages/editor`** owns the editing experience: tools, `useEditor`, panels, floorplan helpers, paint mode, keyboard shortcuts, command palette, action menus, cursor badges, and editor-only overlays. Editor features are injected into `<Viewer>` via props and children. It lives in the package, not the app, so embedders get it too.
 - **`packages/nodes`** owns per-kind verticals only. It sits *below* the apps and *above* `editor`, so it may import `editor` but nothing may import it except apps and the plugin loader. Logic two kinds share belongs in `editor` or `core`, never in a sibling kind folder.
-- **`apps/editor`** is a thin Next.js composition host — routing, scene loading/saving, app chrome (`build-tab`, `save-button`, `viewer-toolbar`). Editing behaviour that belongs to the product goes in `packages/editor`; only app-specific shell goes here.
+- **`packages/db` / `packages/auth`** own persistence and identity, and are server-only leaves: no React, no Three.js, no `next/*`, no `'use client'`, and nothing in `core`, `viewer`, `editor` or `nodes` may import them. They are private, so nothing they export can appear in a published package's public API.
+- **`apps/editor`** is a thin Next.js composition host — routing, scene loading/saving, app chrome (`build-tab`, `save-button`, `viewer-toolbar`), plus the scene API, auth routes and access checks. Editing behaviour that belongs to the product goes in `packages/editor`; only app-specific shell goes here.
 
 Details, examples, and rationale live in `wiki/architecture/layers.md`, `wiki/architecture/viewer-isolation.md`, `wiki/architecture/systems.md`, `wiki/architecture/renderers.md`, `wiki/architecture/tools.md`.
 
@@ -567,6 +679,13 @@ Read the relevant page in `wiki/architecture/` **before** writing code. The page
 - Adding an MCP tool → the `packages/mcp` section above. Check first whether the
   per-kind knowledge it needs is reachable at all: the node registry is empty in
   that process.
+- Adding or changing a scene API route, or anything about who may read or write
+  a scene → the persistence/auth section above. Both stores have to keep
+  answering the same contract, the gate is `lib/scene-api-security.ts`, and it
+  fails closed without Postgres.
+- Changing the database schema → `packages/db/README.md`, then generate the
+  migration and run `packages/db`'s tests against a real Postgres. Migrations are
+  committed and applied at deploy, never at boot.
 
 ## When reviewing a PR
 
