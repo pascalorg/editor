@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
+import { useTranslation } from '../../../../../lib/i18n'
 import { formatAreaLabel, formatLinearMeasurement } from '../../../../../lib/measurements'
 import { cn } from '../../../../../lib/utils'
 import useSetbackEdgeFocus from '../../../../../store/use-setback-edge-focus'
@@ -26,7 +27,11 @@ const ROLE_OPTIONS: Array<{ label: string; value: SetbackRule['role'] }> = [
   { label: 'Rear', value: 'rear' },
 ]
 
-function ParcelFacts({
+// `PanelSection` translates its children, but only the JSX it is handed — the
+// strings below do not exist until React renders this component, so the walk
+// never sees them. Anything factored out into its own component has to
+// translate its own copy.
+export function ParcelFacts({
   parcel,
   computedArea,
   unit,
@@ -35,6 +40,7 @@ function ParcelFacts({
   computedArea: string
   unit: import('../../../../../lib/measurements').LinearUnit
 }) {
+  const t = useTranslation()
   const rows: Array<[string, string]> = [
     ['Location', [parcel.il, parcel.ilce, parcel.mahalle].filter(Boolean).join(' / ')],
     ['Block / parcel', `${parcel.ada} / ${parcel.parsel}`],
@@ -50,7 +56,7 @@ function ParcelFacts({
     <div className="flex flex-col gap-1">
       {rows.map(([label, value]) => (
         <div className="flex items-baseline gap-2 text-xs" key={label}>
-          <span className="text-muted-foreground">{label}</span>
+          <span className="text-muted-foreground">{t(label)}</span>
           <span className="ml-auto text-right font-medium text-foreground">{value}</span>
         </div>
       ))}

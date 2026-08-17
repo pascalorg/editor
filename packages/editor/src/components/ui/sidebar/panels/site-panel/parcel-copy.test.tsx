@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { hasTranslation } from '../../../../../lib/i18n-core'
+import { ParcelFacts } from './parcel-section'
 
 /**
  * The parcel and zoning surfaces are the copy-heaviest thing in the app, and a
@@ -64,5 +67,40 @@ describe('parcel surface copy', () => {
       'Current design exceeds zoning limits.',
     ]
     expect(copy.filter((text) => !hasTranslation(text))).toEqual([])
+  })
+
+  // A dictionary entry is not the same thing as a translated screen. These
+  // labels each had one and still rendered in English, because `PanelSection`
+  // walks the JSX it is handed and `ParcelFacts` is a component — its strings
+  // do not exist until React renders it, so the walk never reaches them.
+  // Rendering is the only way to catch that class of miss.
+  test('the parcel facts render in Turkish, not just resolve in the dictionary', () => {
+    const html = renderToStaticMarkup(
+      createElement(ParcelFacts, {
+        computedArea: '883,60 m²',
+        unit: 'metric' as const,
+        parcel: {
+          source: 'tkgm' as const,
+          il: 'Ankara',
+          ilce: 'Çankaya',
+          mahalle: 'Kavaklı Dere',
+          mahalleId: 1161,
+          ada: '2515',
+          parsel: '102',
+          registeredArea: 870,
+          nitelik: 'Kargir Apartman',
+          pafta: 'A12',
+          fetchedAt: '2026-08-17T00:00:00.000Z',
+          edited: false,
+        },
+      }),
+    )
+
+    for (const turkish of ['Konum', 'Ada / parsel', 'Nitelik', 'Pafta', 'Kayıtlı alan', 'Ölçülen alan']) {
+      expect(html).toContain(turkish)
+    }
+    for (const english of ['Location', 'Block / parcel', 'Quality', 'Sheet', 'Registered area', 'Measured area']) {
+      expect(html).not.toContain(english)
+    }
   })
 })

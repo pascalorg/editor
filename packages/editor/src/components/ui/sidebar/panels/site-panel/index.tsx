@@ -42,11 +42,9 @@ import { getDefaultLevelName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import {
   formatAreaLabel,
-  getAreaUnitLabel,
-  getLinearUnitLabel,
+  formatLinearMeasurement,
   linearUnitToMeters,
   metersToLinearUnit,
-  squareMetersToAreaUnit,
 } from './../../../../../lib/measurements'
 import { useCadImport } from './../../../../../hooks/use-cad-import'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
@@ -117,6 +115,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
   const mode = useEditor((state) => state.mode)
   const setMode = useEditor((state) => state.setMode)
   const viewerUnit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
 
   if (!siteNode) return null
 
@@ -127,11 +126,8 @@ const PropertyLineSection = memo(function PropertyLineSection() {
 
   // Property-line coordinates and readouts follow the metric/imperial toggle.
   const isImperial = viewerUnit === 'imperial'
-  const linearLabel = getLinearUnitLabel(viewerUnit)
   const toDisplayLinear = (meters: number) => metersToLinearUnit(meters, viewerUnit)
   const toStoredLinear = (display: number) => linearUnitToMeters(display, viewerUnit)
-  const displayArea = squareMetersToAreaUnit(area, viewerUnit)
-  const displayPerimeter = toDisplayLinear(perimeter)
 
   const handleToggleEdit = () => {
     setMode(isEditing ? 'select' : 'edit')
@@ -216,16 +212,17 @@ const PropertyLineSection = memo(function PropertyLineSection() {
 
       {/* Measurements */}
       <div className="relative flex gap-3 pr-3 pb-2 pl-10">
+        {/* Through the shared formatters, not `toFixed`: these sit directly
+            above the parcel section's own area readout, and a raw `883.6`
+            beside a formatted `883,60 m²` reads as two different numbers. */}
         <div className="text-muted-foreground text-xs">
           Area:{' '}
-          <span className="text-foreground">
-            {displayArea.toFixed(1)} {getAreaUnitLabel(viewerUnit)}
-          </span>
+          <span className="text-foreground">{formatAreaLabel(area, viewerUnit, 1)}</span>
         </div>
         <div className="text-muted-foreground text-xs">
           Perimeter:{' '}
           <span className="text-foreground">
-            {displayPerimeter.toFixed(1)} {linearLabel}
+            {formatLinearMeasurement(perimeter, viewerUnit, metricNotation)}
           </span>
         </div>
       </div>
