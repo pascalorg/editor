@@ -54,6 +54,7 @@ import {
 } from 'react'
 import {
   BufferGeometry,
+  type Camera,
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
@@ -112,7 +113,7 @@ type PlaneAxes = 'xy' | 'xz' | 'yz'
 type TransformOperation = 'translate' | 'rotate' | 'scale'
 type ActiveTransform = {
   operation: TransformOperation
-  constraint: Axis
+  constraint: Axis | 'uniform'
 }
 type TransformTool = 'transform' | 'loop-cut' | 'bevel'
 type TopologyOperator = 'extrude' | 'inset' | 'merge' | 'dissolve' | 'delete'
@@ -208,6 +209,22 @@ function closestAxisParameterToRay(
   if (Math.abs(denominator) < 1e-6) return -d
   const axisParameter = (b * e - d) / denominator
   return e + b * axisParameter < 0 ? -d : axisParameter
+}
+
+function localPointToClient(
+  point: Point,
+  target: Object3D,
+  camera: Camera,
+  canvas: HTMLCanvasElement,
+): Vector2 | null {
+  target.updateWorldMatrix(true, false)
+  const projected = target.localToWorld(new Vector3(...point)).project(camera)
+  if (![projected.x, projected.y, projected.z].every(Number.isFinite)) return null
+  const rect = canvas.getBoundingClientRect()
+  return new Vector2(
+    rect.left + ((projected.x + 1) / 2) * rect.width,
+    rect.top + ((1 - projected.y) / 2) * rect.height,
+  )
 }
 
 function VertexHandle({
@@ -1278,6 +1295,7 @@ function BlockEditor({
   const [toolbarPanel, setToolbarPanel] = useState<ToolbarPanel>(null)
   const [error, setError] = useState<string | null>(null)
   const cancelDragRef = useRef<(() => void) | null>(null)
+  const lastPointerClientRef = useRef<Vector2 | null>(null)
   const displayTopology = previewTopology ?? node.topology
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selection = useMemo<BlockSelection>(() => ({ mode, ids: selectedIds }), [mode, selectedIds])
@@ -1406,6 +1424,15 @@ function BlockEditor({
     window.addEventListener('pointerdown', closePanel, true)
     return () => window.removeEventListener('pointerdown', closePanel, true)
   }, [editing, toolbarPanel])
+
+  useEffect(() => {
+    if (!editing) return
+    const trackPointer = (event: PointerEvent) => {
+      lastPointerClientRef.current = new Vector2(event.clientX, event.clientY)
+    }
+    window.addEventListener('pointermove', trackPointer, true)
+    return () => window.removeEventListener('pointermove', trackPointer, true)
+  }, [editing])
 
   useEffect(() => {
     if (!editing) return
@@ -1902,6 +1929,153 @@ function BlockEditor({
     ],
   )
 
+  const beginUniformScaleModal = useCallback(() => {
+    if (!ownsEditSession() || selectedIds.length === 0 || cancelDragRef.current) return false
+    const origin = selectionCentroid(displayTopology, selection)
+    if (!origin) return false
+    const pivotClient = localPointToClient(origin, target, camera, gl.domElement)
+    if (!pivotClient) return false
+
+    const fallbackDistance = Math.max(80, gizmoLength * 96)
+    const startPointer =
+      lastPointerClientRef.current?.clone() ??
+      pivotClient.clone().add(new Vector2(fallbackDistance, 0))
+    const initialDistance = Math.max(24, pivotClient.distanceTo(startPointer))
+    const baseTopology = displayTopology
+    const baseSelection = selection
+    const previousInputDragging = useViewer.getState().inputDragging
+    const previousCursor = document.body.style.cursor
+    let latestFactor = 1
+    let lastSnapFactor: number | null = null
+    let latestTopology: BlockTopology | null = null
+    let finished = false
+
+    const updatePreview = (clientX: number, clientY: number, altKey: boolean) => {
+      const pointer = new Vector2(clientX, clientY)
+      const distance = pointer.distanceTo(pivotClient) - initialDistance
+      const snapStep = !altKey && isGridSnapActive() ? 0.1 : 0
+      const factor = blockScaleFactorFromDrag(distance, initialDistance, snapStep)
+      if (snapStep > 0 && Math.abs(factor - 1) > 1e-6 && factor !== lastSnapFactor) {
+        lastSnapFactor = factor
+        playBlockSfx('resize-step')
+      } else if (snapStep === 0) {
+        lastSnapFactor = null
+      }
+      const result = applyBlockCommand(baseTopology, {
+        type: 'scale-components',
+        selection: baseSelection,
+        pivot: origin,
+        factors: blockScaleFactors('uniform', factor),
+      })
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      latestFactor = factor
+      latestTopology = result.topology
+      setPreviewTopology(result.topology)
+      useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
+      useScene.getState().markDirty(node.id)
+      setError(null)
+    }
+
+    const finish = (commit: boolean) => {
+      if (finished) return
+      finished = true
+      window.removeEventListener('pointermove', onMove, true)
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('contextmenu', onContextMenu, true)
+      window.removeEventListener('blur', onCancel)
+      cancelDragRef.current = null
+      useLiveNodeOverrides.getState().clear(node.id)
+      useScene.getState().markDirty(node.id)
+      useViewer.getState().setInputDragging(previousInputDragging)
+      document.body.style.cursor = previousCursor
+      setPreviewTopology(null)
+      setActiveTransform(null)
+      if (commit && latestTopology && Math.abs(latestFactor - 1) > 1e-6) {
+        useScene.getState().updateNode(node.id, { topology: latestTopology })
+        playBlockSfx('finish')
+      } else if (!commit) {
+        playBlockSfx('cancel')
+      }
+      if (ownsEditSession()) {
+        useInteractionScope.getState().begin(meshEditScope(node.id))
+      }
+      swallowNextClick()
+    }
+
+    const onMove = (pointerEvent: PointerEvent) => {
+      lastPointerClientRef.current = new Vector2(pointerEvent.clientX, pointerEvent.clientY)
+      updatePreview(pointerEvent.clientX, pointerEvent.clientY, pointerEvent.altKey)
+    }
+    const onPointerDown = (pointerEvent: PointerEvent) => {
+      pointerEvent.preventDefault()
+      pointerEvent.stopImmediatePropagation()
+      if (pointerEvent.button === 2) {
+        window.addEventListener(
+          'contextmenu',
+          (event) => {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+          },
+          { capture: true, once: true },
+        )
+      }
+      finish(pointerEvent.button !== 2)
+    }
+    const onKeyDown = (keyboardEvent: KeyboardEvent) => {
+      const element = keyboardEvent.target as HTMLElement | null
+      if (
+        element?.tagName === 'INPUT' ||
+        element?.tagName === 'TEXTAREA' ||
+        element?.isContentEditable
+      )
+        return
+      if (keyboardEvent.key === 'Enter') {
+        keyboardEvent.preventDefault()
+        keyboardEvent.stopImmediatePropagation()
+        finish(true)
+      } else if (keyboardEvent.key === 'Escape') {
+        keyboardEvent.preventDefault()
+        keyboardEvent.stopImmediatePropagation()
+        finish(false)
+      }
+    }
+    const onContextMenu = (event: Event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    const onCancel = () => finish(false)
+
+    useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'scale'))
+    playBlockSfx('drag-start')
+    useViewer.getState().setInputDragging(true)
+    setTransformTool('transform')
+    setToolbarPanel(null)
+    setActiveTransform({ operation: 'scale', constraint: 'uniform' })
+    setError(null)
+    document.body.style.cursor = 'nwse-resize'
+    cancelDragRef.current = onCancel
+    window.addEventListener('pointermove', onMove, true)
+    window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('contextmenu', onContextMenu, true)
+    window.addEventListener('blur', onCancel, { once: true })
+    return true
+  }, [
+    camera,
+    displayTopology,
+    gizmoLength,
+    gl.domElement,
+    node.id,
+    ownsEditSession,
+    selectedIds.length,
+    selection,
+    target,
+  ])
+
   const beginBevelDrag = useCallback(
     (edgeId: string, event: ThreeEvent<PointerEvent>) => {
       if (event.nativeEvent.button !== 0 || !ownsEditSession() || cancelDragRef.current) return
@@ -2298,6 +2472,7 @@ function BlockEditor({
     updateSelection(clearBlockSelection({ mode, ids: selectedIds, activeId }))
 
   const keyboardActionsRef = useRef({
+    beginUniformScaleModal,
     canBevel: mode === 'edge',
     clearSelection,
     deleteSelection,
@@ -2310,6 +2485,7 @@ function BlockEditor({
     selectAll,
   })
   keyboardActionsRef.current = {
+    beginUniformScaleModal,
     canBevel: mode === 'edge',
     clearSelection,
     deleteSelection,
@@ -2368,8 +2544,10 @@ function BlockEditor({
         }
       } else if (key === 's') {
         if (actions.hasSelection) {
-          playBlockSfx('tool-select')
-          setTransformTool('transform')
+          if (!actions.beginUniformScaleModal()) {
+            playBlockSfx('tool-select')
+            setTransformTool('transform')
+          }
         }
       } else if (key === 'm') {
         actions.mergeSelection()
