@@ -65,6 +65,14 @@ export const sceneVersions = pgTable(
     graphHash: t.text('graph_hash').notNull(),
     sizeBytes: t.integer('size_bytes').notNull().default(0),
     nodeCount: t.integer('node_count').notNull().default(0),
+    /**
+     * A draft row is the mutable head: the next autosave rewrites it in place
+     * rather than appending. Without the flag there is nowhere to put the body
+     * of a draft save — the `scenes` row carries no graph — so every second of
+     * editing would leave a permanent full-graph row behind. A checkpoint row is
+     * immutable, which is what makes it something a user can go back to.
+     */
+    isDraft: t.boolean('is_draft').notNull().default(false),
     authorKind: authorKinds('author_kind').notNull().default('user'),
     /** Opaque for the same reason as `scenes.owner_id`. */
     authorId: t.text('author_id'),

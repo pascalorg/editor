@@ -1,21 +1,3 @@
-/**
- * `SceneStore` over Postgres, through `packages/db`.
- *
- * The SQLite store stays: `pascal-mcp` has to work offline on a laptop, and the
- * suite runs against it. Which backend you get is decided only by
- * `POSTGRES_URL` — see `createSceneStore`.
- *
- * Two things differ from the SQLite implementation in ways worth knowing:
- *
- * - **Optimistic locking is compare-and-set, not a transaction fence.** SQLite
- *   takes `BEGIN IMMEDIATE` and compares versions inside it. Here the version
- *   check rides in the `UPDATE … WHERE head_version = $expected`, and zero
- *   affected rows *is* the conflict. That is what makes two replicas safe: no
- *   read-then-write window exists for the second one to slip into.
- * - **The graph body goes to `scene_versions`, not the `scenes` row.** The
- *   metadata row every listing reads therefore stays small.
- */
-import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import {
   agentRequests as agentRequestsTable,
   createDatabaseClient,
@@ -25,6 +7,7 @@ import {
   sceneVersions as sceneVersionsTable,
 } from '@pascal-app/db'
 import { and, asc, desc, eq, gt, sql } from 'drizzle-orm'
+import { resolveHistoryPolicy, retentionCutoff } from './history-policy'
 import {
   assertValidName,
   DEFAULT_LIST_LIMIT,
@@ -44,6 +27,8 @@ import {
   type SceneEvent,
   type SceneEventAppendOptions,
   type SceneEventListOptions,
+  type SceneHistoryPrunePolicy,
+  type SceneHistoryPruneResult,
   SceneInvalidError,
   type SceneListOptions,
   type SceneMeta,
@@ -223,16 +208,38 @@ export class PostgresSceneStore implements SceneStore {
         }
       }
 
-      await tx.insert(sceneVersionsTable).values({
-        sceneId: id,
-        version,
+      const isDraft = (opts.saveMode ?? 'checkpoint') === 'draft'
+      const body = {
         graph: opts.graph as unknown as Record<string, unknown>,
         graphHash,
         sizeBytes,
         nodeCount,
-        authorKind: 'agent',
+        authorKind: 'agent' as const,
         authorId: null,
-      })
+      }
+
+      // A draft rewrites the head row when that row is itself a draft, so a
+      // session of autosaves leaves one row behind instead of one per second.
+      // It may never rewrite a checkpoint: that row is the thing a user goes
+      // back to, and the version it is filed under has to keep pointing at the
+      // graph that was current when it was taken.
+      const rewritten = isDraft
+        ? await tx
+            .update(sceneVersionsTable)
+            .set({ version, ...body, isDraft: true })
+            .where(
+              and(
+                eq(sceneVersionsTable.sceneId, id),
+                eq(sceneVersionsTable.version, existing?.headVersion ?? -1),
+                eq(sceneVersionsTable.isDraft, true),
+              ),
+            )
+            .returning({ version: sceneVersionsTable.version })
+        : []
+
+      if (rewritten.length === 0) {
+        await tx.insert(sceneVersionsTable).values({ sceneId: id, version, ...body, isDraft })
+      }
 
       return rowToMeta(row)
     })
@@ -371,15 +378,9 @@ export class PostgresSceneStore implements SceneStore {
       version: row.version,
       kind: row.kind,
       createdAt: ISO(row.createdAt),
-      graph: opts.graph,
     }
   }
 
-  /**
-   * Events carry a version, not a graph — that is the whole point of the
-   * Postgres feed (#38). Subscribers get the head graph attached so the
-   * contract still holds; a delta protocol replaces this wholesale.
-   */
   async listSceneEvents(sceneId: string, opts: SceneEventListOptions = {}): Promise<SceneEvent[]> {
     const id = sanitizeSlug(sceneId)
     const conditions = [eq(sceneEventsTable.sceneId, id)]
@@ -393,10 +394,6 @@ export class PostgresSceneStore implements SceneStore {
       .where(and(...conditions))
       .orderBy(asc(sceneEventsTable.eventId))
       .limit(opts.limit ?? DEFAULT_LIST_LIMIT)
-    if (rows.length === 0) return []
-
-    const scene = await this.load(id)
-    const graph = (scene?.graph ?? { nodes: {}, rootNodeIds: [] }) as SceneGraph
 
     return rows.map((row) => ({
       eventId: row.eventId,
@@ -404,8 +401,56 @@ export class PostgresSceneStore implements SceneStore {
       version: row.version,
       kind: row.kind,
       createdAt: ISO(row.createdAt),
-      graph,
     }))
+  }
+
+  /**
+   * Same retention rule as the SQLite store, expressed as two deletes. The head
+   * version is excluded explicitly rather than relying on the count — `load`
+   * reads the body from `scene_versions`, so pruning it would erase the scene.
+   */
+  async pruneSceneHistory(
+    sceneId: string,
+    policy?: SceneHistoryPrunePolicy,
+  ): Promise<SceneHistoryPruneResult> {
+    const id = sanitizeSlug(sceneId)
+    const { keepCheckpoints, keepDays, keepEvents } = resolveHistoryPolicy(policy)
+    const cutoff = retentionCutoff(keepDays)
+    const head = (await this.row(id))?.headVersion ?? 0
+
+    const revisions = await this.db
+      .delete(sceneVersionsTable)
+      .where(
+        and(
+          eq(sceneVersionsTable.sceneId, id),
+          sql`${sceneVersionsTable.version} <> ${head}`,
+          sql`${sceneVersionsTable.version} NOT IN (
+            SELECT version FROM scene_versions
+             WHERE scene_id = ${id}
+             ORDER BY version DESC
+             LIMIT ${keepCheckpoints}
+          )`,
+          cutoff ? sql`${sceneVersionsTable.createdAt} < ${cutoff}` : sql`true`,
+        ),
+      )
+      .returning({ version: sceneVersionsTable.version })
+
+    const events = await this.db
+      .delete(sceneEventsTable)
+      .where(
+        and(
+          eq(sceneEventsTable.sceneId, id),
+          sql`${sceneEventsTable.eventId} NOT IN (
+            SELECT event_id FROM scene_events
+             WHERE scene_id = ${id}
+             ORDER BY event_id DESC
+             LIMIT ${keepEvents}
+          )`,
+        ),
+      )
+      .returning({ eventId: sceneEventsTable.eventId })
+
+    return { revisionsDeleted: revisions.length, eventsDeleted: events.length }
   }
 
   async createAgentRequest(opts: AgentRequestCreateOptions): Promise<AgentRequest> {

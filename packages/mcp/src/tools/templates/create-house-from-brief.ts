@@ -175,10 +175,7 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
           operation: 'create_house_from_brief',
         })
         bridge.setActiveScene(meta)
-        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'create_house_from_brief', {
-          nodes,
-          rootNodeIds,
-        })
+        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'create_house_from_brief')
         const scene = sceneMetaPayload(meta, { nodes, rootNodeIds })
         const payload = {
           projectId: scene.projectId ?? scene.id,

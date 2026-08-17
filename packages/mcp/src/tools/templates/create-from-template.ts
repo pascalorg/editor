@@ -145,10 +145,7 @@ export function registerCreateFromTemplate(server: McpServer, bridge: SceneOpera
           operation: 'create_from_template',
         })
         bridge.setActiveScene(meta)
-        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'create_from_template', {
-          nodes,
-          rootNodeIds,
-        })
+        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'create_from_template')
         const scene = {
           ...sceneMetaPayload(meta, { nodes, rootNodeIds }),
           ...currentLevelContext(bridge),

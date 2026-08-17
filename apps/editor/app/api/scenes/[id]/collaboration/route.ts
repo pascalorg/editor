@@ -126,9 +126,17 @@ export async function POST(request: Request, { params }: RouteParams) {
         sceneId: id,
         version: meta.version,
         kind: eventKind,
-        graph: validated.data as never,
       })
-      return sceneApiJson(request, { event, conflicts: applied.conflicts }, { status: 201 })
+      // The broadcast event carries no graph, but this response does: the
+      // publisher needs the merged result to reconcile against, it is one
+      // reader rather than every subscriber, and the server already has it in
+      // hand — making them refetch what it just computed would be a round trip
+      // for nothing.
+      return sceneApiJson(
+        request,
+        { event, graph: validated.data, conflicts: applied.conflicts },
+        { status: 201 },
+      )
     } catch (error) {
       if ((error as { code?: string })?.code === 'version_conflict' && attempt < 3) continue
       const code = (error as { code?: string })?.code

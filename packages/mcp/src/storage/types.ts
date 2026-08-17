@@ -37,13 +37,20 @@ export interface SceneWithGraph extends SceneMeta {
   graph: SceneGraph
 }
 
+/**
+ * A notification that a version landed — deliberately **not** the graph.
+ *
+ * Broadcasting the whole scene to every subscriber is what made one save cost
+ * (subscribers × graph size) of egress and a full read per poll. A client that
+ * sees a version it does not have fetches that version once, through the same
+ * `load` path everything else uses.
+ */
 export interface SceneEvent {
   eventId: number
   sceneId: SceneId
   version: number
   kind: string
   createdAt: string
-  graph: SceneGraph
 }
 
 export interface SceneSaveOptions {
@@ -55,7 +62,13 @@ export interface SceneSaveOptions {
   thumbnailUrl?: string | null
   /** When set, save fails with `SceneVersionConflictError` on mismatch. */
   expectedVersion?: number
-  /** `draft` updates the browser-visible working model; `checkpoint` records version history. */
+  /**
+   * `draft` updates the browser-visible working model without adding a row to
+   * the history; `checkpoint` records a version that survives pruning by count.
+   * Defaults to `checkpoint`, so a caller that says nothing keeps its history —
+   * the autosave path is the one that has to opt out, because it is the one
+   * writing every second.
+   */
   saveMode?: SceneSaveMode
   /** Whether a checkpoint should become the published/browser-visible head. */
   publish?: boolean
@@ -81,12 +94,30 @@ export interface SceneEventAppendOptions {
   sceneId: SceneId
   version: number
   kind: string
-  graph: SceneGraph
 }
 
 export interface SceneEventListOptions {
   afterEventId?: number
   limit?: number
+}
+
+/**
+ * What a scene keeps of its own past. Autosave writes a version a second, so
+ * without a ceiling the history table is the fastest-growing thing in the
+ * database and none of it is what a user means by "an earlier version".
+ */
+export interface SceneHistoryPrunePolicy {
+  /** Newest checkpoints to keep regardless of age. */
+  keepCheckpoints?: number
+  /** Keep anything younger than this many days, even beyond the count. */
+  keepDays?: number
+  /** Newest notification rows to keep. Older subscribers resync by version. */
+  keepEvents?: number
+}
+
+export interface SceneHistoryPruneResult {
+  revisionsDeleted: number
+  eventsDeleted: number
 }
 
 /**
@@ -162,6 +193,10 @@ export interface SceneStore {
   rename(id: SceneId, newName: string, opts?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent?(opts: SceneEventAppendOptions): Promise<SceneEvent>
   listSceneEvents?(sceneId: SceneId, opts?: SceneEventListOptions): Promise<SceneEvent[]>
+  pruneSceneHistory?(
+    sceneId: SceneId,
+    policy?: SceneHistoryPrunePolicy,
+  ): Promise<SceneHistoryPruneResult>
   createAgentRequest?(opts: AgentRequestCreateOptions): Promise<AgentRequest>
   /** Atomically take the oldest pending request, so two agents cannot claim one. */
   claimNextAgentRequest?(sceneId?: SceneId): Promise<AgentRequest | null>

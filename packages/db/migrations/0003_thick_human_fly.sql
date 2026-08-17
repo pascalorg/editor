@@ -1,0 +1,1 @@
+ALTER TABLE "scene_versions" ADD COLUMN "is_draft" boolean DEFAULT false NOT NULL;

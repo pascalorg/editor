@@ -21,6 +21,8 @@ import type {
   SceneEvent,
   SceneEventAppendOptions,
   SceneEventListOptions,
+  SceneHistoryPrunePolicy,
+  SceneHistoryPruneResult,
   SceneListOptions,
   SceneMeta,
   SceneMutateOptions,
@@ -41,6 +43,7 @@ export interface SceneOperations {
   readonly canAppendSceneEvents: boolean
   readonly canServeAgentRequests: boolean
   readonly canListSceneEvents: boolean
+  readonly canPruneSceneHistory: boolean
   readonly canCreateProject: boolean
   readonly canGetProjectStatus: boolean
   readonly storeBackend: SceneStore['backend'] | null
@@ -99,6 +102,10 @@ export interface SceneOperations {
   renameStoredScene(id: string, newName: string, options?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null>
   listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]>
+  pruneSceneHistory(
+    id: string,
+    policy?: SceneHistoryPrunePolicy,
+  ): Promise<SceneHistoryPruneResult | null>
   createAgentRequest(options: AgentRequestCreateOptions): Promise<AgentRequest | null>
   claimNextAgentRequest(sceneId?: string): Promise<AgentRequest | null>
   answerAgentRequest(requestId: number, answer: string): Promise<AgentRequest | null>
@@ -143,6 +150,10 @@ class SceneOperationsFacade implements SceneOperations {
 
   get canListSceneEvents(): boolean {
     return typeof this.#store?.listSceneEvents === 'function'
+  }
+
+  get canPruneSceneHistory(): boolean {
+    return typeof this.#store?.pruneSceneHistory === 'function'
   }
 
   get canCreateProject(): boolean {
@@ -413,6 +424,15 @@ class SceneOperationsFacade implements SceneOperations {
       throw new Error('scene_events_unavailable')
     }
     return store.listSceneEvents(id, options)
+  }
+
+  async pruneSceneHistory(
+    id: string,
+    policy?: SceneHistoryPrunePolicy,
+  ): Promise<SceneHistoryPruneResult | null> {
+    const store = this.requireStore()
+    if (!store.pruneSceneHistory) return null
+    return store.pruneSceneHistory(id, policy)
   }
 
   private requireBridge(): SceneBridge {

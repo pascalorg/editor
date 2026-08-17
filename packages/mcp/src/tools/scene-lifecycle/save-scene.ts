@@ -167,7 +167,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
           ...(publish !== undefined ? { publish } : {}),
           operation: 'save_scene',
         })
-        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'save_scene', sceneGraph)
+        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'save_scene')
         if (includeCurrentScene) {
           bridge.setActiveScene(meta)
         }

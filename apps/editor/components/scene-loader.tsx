@@ -102,12 +102,23 @@ interface SceneLoaderProps {
   meta: SceneMeta
 }
 
-interface LiveSceneEvent {
+/** How often an autosave is promoted to a version a user can return to. */
+const CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000
+
+/**
+ * What the SSE feed carries: a version landed, nothing more. The graph used to
+ * ride along, which made one save cost every subscriber a full copy of the
+ * scene. The client fetches the version it is missing instead.
+ */
+interface LiveSceneNotification {
   eventId: number
   sceneId: string
   version: number
   kind: string
   createdAt: string
+}
+
+interface LiveSceneEvent extends LiveSceneNotification {
   graph: PersistedSceneGraph
 }
 
@@ -126,6 +137,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
+  const lastCheckpointAtRef = useRef(Date.now())
   const authoritativeGraphJsonRef = useRef(sceneGraphSignature(initialScene))
   const authoritativeModelJsonRef = useRef(sceneModelSignature(initialScene))
   const [conflict, setConflict] = useState(false)
@@ -161,6 +173,14 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
       if (graphJson === authoritativeGraphJsonRef.current) return
       if (sceneModelSignature(graph) !== authoritativeModelJsonRef.current) return
 
+      // Autosave writes drafts, which the store overwrites in place instead of
+      // filing away. History still has to advance, so a save is promoted to a
+      // checkpoint on a timer and when the page is going away — the two moments
+      // a user would recognise as "where I was".
+      const now = Date.now()
+      const isCheckpoint =
+        options?.keepalive === true || now - lastCheckpointAtRef.current >= CHECKPOINT_INTERVAL_MS
+
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
           method: 'PUT',
@@ -168,7 +188,11 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
             'Content-Type': 'application/json',
             'If-Match': String(versionRef.current),
           },
-          body: JSON.stringify({ name: meta.name, graph }),
+          body: JSON.stringify({
+            name: meta.name,
+            graph,
+            saveMode: isCheckpoint ? 'checkpoint' : 'draft',
+          }),
           // `keepalive` lets the request outlive a page unload (the autosave
           // flush on refresh/close). Browsers cap keepalive bodies at 64KB, so
           // only the unload flush opts in — normal debounced saves omit it and
@@ -187,6 +211,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         }
 
         const next = (await response.json()) as SceneMeta
+        if (isCheckpoint) lastCheckpointAtRef.current = now
         versionRef.current = next.version
         setLiveVersion(next.version)
         authoritativeGraphJsonRef.current = graphJson
@@ -204,39 +229,70 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     const activity = useAgentActivity.getState()
     activity.setConnected(true)
 
-    source.addEventListener('scene', (event) => {
-      let payload: LiveSceneEvent
+    // A burst of events — an agent writing several nodes, or a collaborator
+    // mid-drag — announces several versions in a row. Only the newest is worth
+    // fetching, so queue the notification rather than the request and let the
+    // in-flight fetch finish first.
+    let inFlight = false
+    let queued: LiveSceneNotification | null = null
+    let cancelled = false
+
+    const applyLiveScene = (event: LiveSceneEvent) => {
+      if (event.kind.startsWith('collaboration:')) {
+        receiveCollaborationEvent(event as LiveSceneEvent & { graph: SceneGraph })
+        return
+      }
+
+      versionRef.current = event.version
+      setLiveVersion(event.version)
+      // Echo bookkeeping only advances for a change we actually applied. A
+      // held proposal must leave it alone, or accepting it later reads as a
+      // local edit and gets saved back over the agent's own version.
+      const applied = receiveAgentSceneChange({
+        eventId: event.eventId,
+        kind: event.kind,
+        version: event.version,
+        graph: event.graph,
+      })
+      if (applied) {
+        authoritativeGraphJsonRef.current = sceneGraphSignature(event.graph)
+        authoritativeModelJsonRef.current = sceneModelSignature(event.graph)
+      }
+      setConflict(false)
+      setSaveError(null)
+    }
+
+    const drain = async () => {
+      if (inFlight || !queued || cancelled) return
+      const notification = queued
+      queued = null
+      inFlight = true
       try {
-        payload = JSON.parse((event as MessageEvent<string>).data) as LiveSceneEvent
+        const response = await fetch(`/api/scenes/${meta.id}`)
+        if (!response.ok) return
+        const scene = (await response.json()) as { version: number; graph: PersistedSceneGraph }
+        if (cancelled || scene.version <= versionRef.current) return
+        applyLiveScene({ ...notification, version: scene.version, graph: scene.graph })
+      } catch {
+        // A failed fetch is not fatal: the next event re-queues, and a client
+        // that misses one is only ever behind by a version it can refetch.
+      } finally {
+        inFlight = false
+        void drain()
+      }
+    }
+
+    source.addEventListener('scene', (event) => {
+      let payload: LiveSceneNotification
+      try {
+        payload = JSON.parse((event as MessageEvent<string>).data) as LiveSceneNotification
       } catch {
         return
       }
       if (payload.sceneId !== meta.id) return
       if (payload.version <= versionRef.current) return
-
-      if (payload.kind.startsWith('collaboration:')) {
-        receiveCollaborationEvent(payload as LiveSceneEvent & { graph: SceneGraph })
-        return
-      }
-
-      versionRef.current = payload.version
-      setLiveVersion(payload.version)
-      // Echo bookkeeping only advances for a change we actually applied. A
-      // held proposal must leave it alone, or accepting it later reads as a
-      // local edit and gets saved back over the agent's own version.
-      const applied = receiveAgentSceneChange({
-        eventId: payload.eventId,
-        kind: payload.kind,
-        version: payload.version,
-        graph: payload.graph,
-      })
-      if (applied) {
-        const graphJson = sceneGraphSignature(payload.graph)
-        authoritativeGraphJsonRef.current = graphJson
-        authoritativeModelJsonRef.current = sceneModelSignature(payload.graph)
-      }
-      setConflict(false)
-      setSaveError(null)
+      if (!queued || payload.version > queued.version) queued = payload
+      void drain()
     })
 
     source.addEventListener('error', () => {
@@ -247,6 +303,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     })
 
     return () => {
+      cancelled = true
       useAgentActivity.getState().setConnected(false)
       source.close()
     }

@@ -32,7 +32,10 @@ type CollaborationSceneEvent = {
 }
 
 type CollaborationResponse = {
-  event: CollaborationSceneEvent | null
+  /** Notification shape: no graph, the same as what the SSE feed carries. */
+  event: Omit<CollaborationSceneEvent, 'graph'> | null
+  /** The merged result, returned only to the publisher that asked for it. */
+  graph: SceneGraph
   conflicts: CollaborationConflict[]
 }
 
@@ -180,10 +183,11 @@ export function useSceneCollaboration({
           const payload = (await response.json()) as CollaborationResponse
           showConflicts(payload.conflicts)
           if (payload.event) {
-            clock = Math.max(clock, payload.event.version)
-            versionRef.current = Math.max(versionRef.current, payload.event.version)
-            if (!latestAuthoritative || payload.event.version > latestAuthoritative.version) {
-              latestAuthoritative = payload.event
+            const authoritative = { ...payload.event, graph: payload.graph }
+            clock = Math.max(clock, authoritative.version)
+            versionRef.current = Math.max(versionRef.current, authoritative.version)
+            if (!latestAuthoritative || authoritative.version > latestAuthoritative.version) {
+              latestAuthoritative = authoritative
             }
           }
           onErrorRef.current(null)

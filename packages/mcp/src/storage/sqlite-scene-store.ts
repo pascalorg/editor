@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { resolveHistoryPolicy, retentionCutoff } from './history-policy'
 import {
   assertValidName,
   DEFAULT_LIST_LIMIT,
@@ -22,6 +23,8 @@ import {
   type SceneEvent,
   type SceneEventAppendOptions,
   type SceneEventListOptions,
+  type SceneHistoryPrunePolicy,
+  type SceneHistoryPruneResult,
   SceneInvalidError,
   type SceneListOptions,
   type SceneMeta,
@@ -63,7 +66,6 @@ interface SceneEventRow {
   version: number
   kind: string
   created_at: string
-  graph_json: string
 }
 
 interface AgentRequestRow {
@@ -210,7 +212,6 @@ function rowToSceneEvent(row: SceneEventRow): SceneEvent {
     version: Number(row.version),
     kind: row.kind,
     createdAt: row.created_at,
-    graph: parseGraph(row.graph_json, `${row.scene_id}@${row.version}`),
   }
 }
 
@@ -226,12 +227,14 @@ export class SqliteSceneStore implements SceneStore {
   readonly databasePath: string
 
   private readonly maxSceneBytes: number
+  private readonly env: NodeJS.ProcessEnv
   private readonly projectPlaceholders = new Map<string, ProjectPlaceholder>()
   private db: SqliteDatabase | null = null
   private dbPromise: Promise<SqliteDatabase> | null = null
 
   constructor(opts: SqliteSceneStoreOptions = {}) {
     const env = opts.env ?? process.env
+    this.env = env
     this.databasePath = path.resolve(opts.databasePath ?? resolveDefaultDatabasePath(env))
     this.maxSceneBytes = resolveMaxSceneBytes(env, opts.maxSceneBytes)
   }
@@ -362,11 +365,17 @@ export class SqliteSceneStore implements SceneStore {
         )
       }
 
-      db.query(
-        `INSERT INTO scene_revisions (
-           scene_id, version, graph_json, author_kind, author_id, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(id, version, graphJson, 'mcp', ownerId, now)
+      // `scenes.graph_json` already holds the current body, so a draft has
+      // nowhere it still needs to be written. Autosave lands here once a second;
+      // giving each of those its own full-graph history row is the single
+      // largest source of table growth in the database.
+      if ((opts.saveMode ?? 'checkpoint') === 'checkpoint') {
+        db.query(
+          `INSERT INTO scene_revisions (
+             scene_id, version, graph_json, author_kind, author_id, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?)`,
+        ).run(id, version, graphJson, 'mcp', ownerId, now)
+      }
 
       this.projectPlaceholders.delete(id)
 
@@ -493,15 +502,14 @@ export class SqliteSceneStore implements SceneStore {
         throw new SceneNotFoundError(`Scene "${safeId}" not found`)
       }
 
-      const graphJson = serializeGraph(opts.graph)
       const now = new Date().toISOString()
       const result = db
         .query(
           `INSERT INTO scene_events (
-             scene_id, version, kind, created_at, graph_json
-           ) VALUES (?, ?, ?, ?, ?)`,
+             scene_id, version, kind, created_at
+           ) VALUES (?, ?, ?, ?)`,
         )
-        .run(safeId, opts.version, opts.kind, now, graphJson)
+        .run(safeId, opts.version, opts.kind, now)
 
       return {
         eventId: Number(result.lastInsertRowid),
@@ -509,7 +517,6 @@ export class SqliteSceneStore implements SceneStore {
         version: opts.version,
         kind: opts.kind,
         createdAt: now,
-        graph: opts.graph,
       }
     })
   }
@@ -521,7 +528,7 @@ export class SqliteSceneStore implements SceneStore {
     const db = await this.database()
     const rows = db
       .query(
-        `SELECT event_id, scene_id, version, kind, created_at, graph_json
+        `SELECT event_id, scene_id, version, kind, created_at
            FROM scene_events
           WHERE scene_id = ?
             AND event_id > ?
@@ -531,6 +538,58 @@ export class SqliteSceneStore implements SceneStore {
       .all(sanitizeSlug(sceneId), afterEventId, limit)
 
     return rows.map((row) => rowToSceneEvent(row as SceneEventRow))
+  }
+
+  /**
+   * Trims history for one scene. Revisions survive if they are among the newest
+   * `keepCheckpoints` *or* younger than `keepDays` — the union, so a burst of
+   * checkpoints in one afternoon does not evict the week's older ones.
+   */
+  async pruneSceneHistory(
+    sceneId: string,
+    policy?: SceneHistoryPrunePolicy,
+  ): Promise<SceneHistoryPruneResult> {
+    const { keepCheckpoints, keepDays, keepEvents } = resolveHistoryPolicy(policy, this.env)
+    const cutoff = retentionCutoff(keepDays)
+
+    return this.withWriteTransaction((db) => {
+      const id = sanitizeSlug(sceneId)
+
+      // The head version is excluded for the Postgres store's sake, where it is
+      // the only place the current body lives. Keeping the rule identical here
+      // is what lets one contract test cover both.
+      const head = this.getRow(db, id)?.version ?? 0
+
+      const revisions = db
+        .query(
+          `DELETE FROM scene_revisions
+            WHERE scene_id = ?
+              AND version <> ?
+              AND version NOT IN (
+                SELECT version FROM scene_revisions
+                 WHERE scene_id = ?
+                 ORDER BY version DESC
+                 LIMIT ?
+              )
+              AND (? IS NULL OR created_at < ?)`,
+        )
+        .run(id, head, id, keepCheckpoints, cutoff, cutoff)
+
+      const events = db
+        .query(
+          `DELETE FROM scene_events
+            WHERE scene_id = ?
+              AND event_id NOT IN (
+                SELECT event_id FROM scene_events
+                 WHERE scene_id = ?
+                 ORDER BY event_id DESC
+                 LIMIT ?
+              )`,
+        )
+        .run(id, id, keepEvents)
+
+      return { revisionsDeleted: revisions.changes, eventsDeleted: events.changes }
+    })
   }
 
   async createAgentRequest(opts: AgentRequestCreateOptions): Promise<AgentRequest> {
@@ -693,7 +752,6 @@ export class SqliteSceneStore implements SceneStore {
         version INTEGER NOT NULL CHECK (version >= 1),
         kind TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        graph_json TEXT NOT NULL,
         FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
       );
 
@@ -718,6 +776,16 @@ export class SqliteSceneStore implements SceneStore {
       CREATE INDEX IF NOT EXISTS agent_requests_scene_idx
         ON agent_requests(scene_id, request_id);
     `)
+
+    // A database written before events became notification-only still has the
+    // graph column, and it is `NOT NULL` — every insert would fail against it.
+    // `CREATE TABLE IF NOT EXISTS` cannot fix an existing table, so drop it.
+    const eventColumns = db.query('PRAGMA table_info(scene_events)').all() as Array<{
+      name: string
+    }>
+    if (eventColumns.some((column) => column.name === 'graph_json')) {
+      db.exec('ALTER TABLE scene_events DROP COLUMN graph_json')
+    }
   }
 
   private async withWriteTransaction<T>(fn: (db: SqliteDatabase) => T | Promise<T>): Promise<T> {

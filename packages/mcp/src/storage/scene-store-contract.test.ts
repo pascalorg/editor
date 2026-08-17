@@ -285,33 +285,11 @@ export function runSceneStoreContract(harness: SceneStoreContractHarness): void 
         sceneId: meta.id,
         version: meta.version,
         kind: 'save_scene',
-        graph,
-      })
-      const updatedGraph = makeContractGraph({
-        nodes: {
-          ...graph.nodes,
-          wall_new: {
-            object: 'node',
-            id: 'wall_new',
-            type: 'wall',
-            parentId: 'building_def',
-            visible: true,
-            metadata: {},
-            children: [],
-            start: [0, 0],
-            end: [1, 0],
-            thickness: 0.1,
-            height: 2.5,
-            frontSide: 'unknown',
-            backSide: 'unknown',
-          },
-        } as unknown as SceneGraph['nodes'],
       })
       const second = await store.appendSceneEvent?.({
         sceneId: meta.id,
         version: meta.version,
         kind: 'create_wall',
-        graph: updatedGraph,
       })
 
       expect(second?.eventId).toBeGreaterThan(first?.eventId ?? 0)
@@ -324,6 +302,23 @@ export function runSceneStoreContract(harness: SceneStoreContractHarness): void 
       expect(afterFirst?.[0]?.eventId).toBe(second?.eventId as number)
     })
 
+    test('an event carries a version, never the graph', async () => {
+      const meta = await store.save({ id: 'notify', name: 'Notify', graph: makeContractGraph() })
+      const appended = await store.appendSceneEvent?.({
+        sceneId: meta.id,
+        version: meta.version,
+        kind: 'save_scene',
+      })
+
+      // The property is gone from the type; this is the runtime half, because
+      // a store that still selected the column would satisfy the compiler and
+      // put a scene-sized payload on every subscriber's connection anyway.
+      expect(appended).not.toHaveProperty('graph')
+      const listed = await store.listSceneEvents?.('notify')
+      expect(listed?.[0]).not.toHaveProperty('graph')
+      expect(listed?.[0]?.version).toBe(meta.version)
+    })
+
     test('deleting a scene takes its events with it', async () => {
       const graph = makeContractGraph()
       const meta = await store.save({ id: 'cascade', name: 'Cascade', graph })
@@ -331,12 +326,85 @@ export function runSceneStoreContract(harness: SceneStoreContractHarness): void 
         sceneId: meta.id,
         version: meta.version,
         kind: 'save_scene',
-        graph,
       })
       expect(await store.listSceneEvents?.('cascade')).toHaveLength(1)
 
       await store.delete('cascade', { expectedVersion: meta.version })
       expect(await store.listSceneEvents?.('cascade')).toHaveLength(0)
+    })
+
+    /**
+     * The point of the draft/checkpoint split, stated as something observable
+     * through the interface: run a prune to get to a known floor, write more,
+     * prune again on the same policy. Drafts leave nothing new to collect;
+     * checkpoints leave one each. Row counts are a backend's own business —
+     * SQLite keeps the body in the scene row and Postgres keeps it in the
+     * version row — but "does editing accumulate history" has to be the same.
+     */
+    const saveRepeatedly = async (id: string, mode: 'draft' | 'checkpoint', times: number) => {
+      let version = (await store.load(id))?.version ?? 0
+      for (let i = 0; i < times; i += 1) {
+        version = (
+          await store.save({
+            id,
+            name: id,
+            graph: makeContractGraph(),
+            expectedVersion: version,
+            saveMode: mode,
+          })
+        ).version
+      }
+      return version
+    }
+
+    const KEEP_ONE = { keepCheckpoints: 1, keepDays: 0, keepEvents: 0 } as const
+
+    test('drafts do not accumulate history', async () => {
+      const graph = makeContractGraph()
+      await store.save({ id: 'drafty', name: 'drafty', graph })
+      await saveRepeatedly('drafty', 'draft', 5)
+      await store.pruneSceneHistory?.('drafty', KEEP_ONE)
+
+      const version = await saveRepeatedly('drafty', 'draft', 5)
+      const pruned = await store.pruneSceneHistory?.('drafty', KEEP_ONE)
+
+      expect(pruned?.revisionsDeleted).toBe(0)
+      // Every one of those drafts is still what the scene loads as.
+      expect((await store.load('drafty'))?.version).toBe(version)
+      expect((await store.load('drafty'))?.graph.rootNodeIds).toEqual(graph.rootNodeIds)
+    })
+
+    test('checkpoints accumulate history, and pruning collects it', async () => {
+      const graph = makeContractGraph()
+      await store.save({ id: 'kept', name: 'kept', graph })
+      await saveRepeatedly('kept', 'checkpoint', 5)
+      await store.pruneSceneHistory?.('kept', KEEP_ONE)
+
+      const version = await saveRepeatedly('kept', 'checkpoint', 5)
+      const pruned = await store.pruneSceneHistory?.('kept', KEEP_ONE)
+
+      expect(pruned?.revisionsDeleted).toBeGreaterThan(0)
+      // Pruning never takes the version the scene currently points at.
+      expect((await store.load('kept'))?.version).toBe(version)
+      expect((await store.load('kept'))?.graph.rootNodeIds).toEqual(graph.rootNodeIds)
+    })
+
+    test('pruning keeps the newest events and drops the rest', async () => {
+      const meta = await store.save({ id: 'feed', name: 'Feed', graph: makeContractGraph() })
+      for (let i = 0; i < 6; i += 1) {
+        await store.appendSceneEvent?.({
+          sceneId: meta.id,
+          version: meta.version,
+          kind: `edit_${i}`,
+        })
+      }
+
+      const pruned = await store.pruneSceneHistory?.('feed', { keepEvents: 2 })
+      expect(pruned?.eventsDeleted).toBe(4)
+      expect((await store.listSceneEvents?.('feed'))?.map((event) => event.kind)).toEqual([
+        'edit_4',
+        'edit_5',
+      ])
     })
 
     test('validates the name', async () => {

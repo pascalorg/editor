@@ -1,13 +1,13 @@
-import { NextResponse } from 'next/server'
-import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getDatabase } from '@pascal-app/db'
 import { scenes } from '@pascal-app/db/schema'
 import { eq } from 'drizzle-orm'
-import sharp from 'sharp'
 import { nanoid } from 'nanoid'
-import { resolveActor, authorizeScene, sceneApiJson } from '@/lib/scene-api-security'
-import { s3Client, S3_BUCKET } from '@/lib/s3-client'
+import type { NextResponse } from 'next/server'
+import sharp from 'sharp'
 import { env } from '@/env.mjs'
+import { S3_BUCKET, s3Client } from '@/lib/s3-client'
+import { authorizeScene, resolveActor, sceneApiJson } from '@/lib/scene-api-security'
 
 const MAX_SIZE = 512 * 1024 // 512 KB
 
@@ -19,7 +19,7 @@ export async function POST(
 
   const actor = await resolveActor(request)
   const isAuthorized = await authorizeScene(actor, sceneId, 'write')
-  
+
   if (!isAuthorized) {
     return sceneApiJson(request, { error: 'not_found_or_unauthorized' }, { status: 404 })
   }
@@ -52,7 +52,11 @@ export async function POST(
 
     if (s3Client) {
       // Get old scene to find old thumbnail
-      const existingScenes = await db.select({ thumbnailUrl: scenes.thumbnailUrl }).from(scenes).where(eq(scenes.id, sceneId)).limit(1)
+      const existingScenes = await db
+        .select({ thumbnailUrl: scenes.thumbnailUrl })
+        .from(scenes)
+        .where(eq(scenes.id, sceneId))
+        .limit(1)
       const oldThumbnailUrl = existingScenes[0]?.thumbnailUrl
 
       // Upload to S3
@@ -64,14 +68,16 @@ export async function POST(
           Body: imageBuffer,
           ContentType: 'image/webp',
           CacheControl: 'public, max-age=31536000, immutable',
-        })
+        }),
       )
 
       if (env.NEXT_PUBLIC_ASSETS_CDN_URL) {
         thumbnailUrl = `${env.NEXT_PUBLIC_ASSETS_CDN_URL}/${key}`
       } else if (env.S3_ENDPOINT) {
         // Fallback for direct S3 URL
-        const endpoint = env.S3_ENDPOINT.endsWith('/') ? env.S3_ENDPOINT.slice(0, -1) : env.S3_ENDPOINT
+        const endpoint = env.S3_ENDPOINT.endsWith('/')
+          ? env.S3_ENDPOINT.slice(0, -1)
+          : env.S3_ENDPOINT
         thumbnailUrl = `${endpoint}/${S3_BUCKET}/${key}`
       }
 
@@ -80,10 +86,15 @@ export async function POST(
         try {
           // Fire and forget GC
           let oldKey: string | null = null
-          if (env.NEXT_PUBLIC_ASSETS_CDN_URL && oldThumbnailUrl.startsWith(env.NEXT_PUBLIC_ASSETS_CDN_URL)) {
+          if (
+            env.NEXT_PUBLIC_ASSETS_CDN_URL &&
+            oldThumbnailUrl.startsWith(env.NEXT_PUBLIC_ASSETS_CDN_URL)
+          ) {
             oldKey = oldThumbnailUrl.replace(`${env.NEXT_PUBLIC_ASSETS_CDN_URL}/`, '')
           } else if (env.S3_ENDPOINT) {
-            const endpoint = env.S3_ENDPOINT.endsWith('/') ? env.S3_ENDPOINT.slice(0, -1) : env.S3_ENDPOINT
+            const endpoint = env.S3_ENDPOINT.endsWith('/')
+              ? env.S3_ENDPOINT.slice(0, -1)
+              : env.S3_ENDPOINT
             const prefix = `${endpoint}/${S3_BUCKET}/`
             if (oldThumbnailUrl.startsWith(prefix)) {
               oldKey = oldThumbnailUrl.replace(prefix, '')
@@ -91,7 +102,9 @@ export async function POST(
           }
 
           if (oldKey && oldKey.startsWith('thumbnails/')) {
-            s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: oldKey })).catch(() => {})
+            s3Client
+              .send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: oldKey }))
+              .catch(() => {})
           }
         } catch (e) {
           // Ignore GC errors
@@ -101,10 +114,7 @@ export async function POST(
 
     // Best-effort: we always return 200, but if we don't have S3 configured, we don't update DB.
     if (thumbnailUrl) {
-      await db.update(scenes)
-        .set({ thumbnailUrl })
-        .where(eq(scenes.id, sceneId))
-        .execute()
+      await db.update(scenes).set({ thumbnailUrl }).where(eq(scenes.id, sceneId)).execute()
     }
 
     return sceneApiJson(request, { success: true, thumbnailUrl }, { status: 200 })

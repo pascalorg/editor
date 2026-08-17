@@ -1,4 +1,4 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import { after, type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import {
@@ -20,6 +20,12 @@ const putSceneSchema = z.object({
   graph: apiGraphSchema,
   thumbnailUrl: z.string().url().nullable().optional(),
   expectedVersion: z.number().int().nonnegative().optional(),
+  /**
+   * This is the autosave endpoint, so it defaults to `draft` — the opposite of
+   * the store, where a caller that says nothing keeps its history. A client
+   * writing once a second has to opt *in* to a history row, not out of one.
+   */
+  saveMode: z.enum(['draft', 'checkpoint']).default('draft'),
 })
 
 const patchSceneSchema = z.object({
@@ -109,7 +115,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       thumbnailUrl:
         parsed.data.thumbnailUrl === undefined ? existing.thumbnailUrl : parsed.data.thumbnailUrl,
       expectedVersion: expectedVersion ?? existing.version,
+      saveMode: parsed.data.saveMode,
     })
+    // Only a checkpoint can have grown the history, and `after` runs this once
+    // the response is on its way — the client is never waiting on a delete.
+    if (parsed.data.saveMode === 'checkpoint' && operations.canPruneSceneHistory) {
+      after(async () => {
+        try {
+          await operations.pruneSceneHistory(id)
+        } catch (error) {
+          console.error(`[scenes] pruning history for ${id} failed:`, error)
+        }
+      })
+    }
     return sceneApiJson(request, meta, {
       headers: { ETag: `"${meta.version}"` },
     })

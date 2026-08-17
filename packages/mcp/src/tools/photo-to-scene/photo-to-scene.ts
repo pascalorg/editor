@@ -384,7 +384,7 @@ export function registerPhotoToScene(server: McpServer, bridge: SceneOperations)
           graph,
         })
         bridge.setActiveScene(meta)
-        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'photo_to_scene', graph)
+        await appendLiveSceneEvent(bridge, meta.id, meta.version, 'photo_to_scene')
         const payload: {
           sceneId: string
           url: string

@@ -1,4 +1,3 @@
-import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { syncAutoStairOpenings } from '@pascal-app/core/stair-openings'
 import type { SceneOperations } from '../operations'
 import { SceneVersionConflictError } from '../storage/types'
@@ -51,7 +50,6 @@ export async function publishLiveSceneSnapshot(
       sceneId: meta.id,
       version: meta.version,
       kind,
-      graph,
     })
   } catch (error) {
     if (error instanceof SceneVersionConflictError) {
@@ -70,8 +68,7 @@ export async function appendLiveSceneEvent(
   sceneId: string,
   version: number,
   kind: string,
-  graph: SceneGraph,
 ): Promise<void> {
   if (!operations.canAppendSceneEvents) return
-  await operations.appendSceneEvent({ sceneId, version, kind, graph })
+  await operations.appendSceneEvent({ sceneId, version, kind })
 }
