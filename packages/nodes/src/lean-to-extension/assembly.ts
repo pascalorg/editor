@@ -24,6 +24,7 @@ import { resolveLeanToLayout } from './layout'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
+const SELECTION_PROXY_KEY = 'nodeSelectionProxyId'
 const ROOF_INSET_SPAN_KEY = 'leanToSideInfillSpan'
 const ROOF_INSET_MIN_X_KEY = 'leanToSideInfillMinX'
 const ROOF_INSET_MAX_X_KEY = 'leanToSideInfillMaxX'
@@ -64,6 +65,7 @@ function managedMetadata(
   return {
     [MANAGED_BY_KEY]: leanTo.id,
     [MANAGED_ROLE_KEY]: role,
+    ...(role === 'roof' || role === 'roof-segment' ? { [SELECTION_PROXY_KEY]: leanTo.id } : {}),
     ...extra,
   }
 }

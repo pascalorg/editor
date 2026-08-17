@@ -50,6 +50,9 @@ describe('lean-to assembly', () => {
     expect(assembly.roof.parentId).toBe(leanTo.id)
     expect(assembly.roof.children).toEqual([assembly.segment.id])
     expect(isManagedLeanToNode(assembly.roof, leanTo.id, 'roof')).toBe(true)
+    expect(assembly.roof.metadata).toMatchObject({
+      nodeSelectionProxyId: leanTo.id,
+    })
 
     expect(assembly.segment.type).toBe('roof-segment')
     expect(assembly.segment.parentId).toBe(assembly.roof.id)
@@ -62,6 +65,7 @@ describe('lean-to assembly', () => {
       leanToSideInfillSpan: 4,
       leanToSideInfillMinX: -2.04,
       leanToSideInfillMaxX: 2.04,
+      nodeSelectionProxyId: leanTo.id,
     })
     expect(assembly.segment.position[2]).toBeCloseTo(
       (leanTo.projection + leanTo.lowOverhang - leanTo.highOverhang) / 2 - 0.012,
