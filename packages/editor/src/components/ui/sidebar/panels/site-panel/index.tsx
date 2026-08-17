@@ -48,6 +48,7 @@ import {
 } from './../../../../../lib/measurements'
 import { useCadImport } from './../../../../../hooks/use-cad-import'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
+import { createLocalScan } from './../../../../../lib/local-scan'
 import { LocalizedContent, useTranslation } from './../../../../../lib/i18n'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
@@ -526,6 +527,22 @@ const LevelReferences = memo(function LevelReferences({
         window.setTimeout(() => useUploadStore.getState().clearUpload(levelId), 600)
       } catch {
         useUploadStore.getState().setError(levelId, 'Could not add that guide image.')
+      }
+      return
+    }
+
+    if (isScan && !onUploadAsset) {
+      useUploadStore.getState().startUpload(levelId, 'scan', file.name)
+      useUploadStore.getState().setStatus(levelId, 'uploading')
+
+      try {
+        const scan = await createLocalScan({ createNode, file, levelId })
+        setSelectedReferenceId(scan.id)
+        setSelection({ selectedIds: [], zoneId: null })
+        useUploadStore.getState().setResult(levelId, scan.url)
+        window.setTimeout(() => useUploadStore.getState().clearUpload(levelId), 600)
+      } catch {
+        useUploadStore.getState().setError(levelId, 'Could not add local scan.')
       }
       return
     }
