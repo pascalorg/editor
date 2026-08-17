@@ -1,10 +1,10 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import type { BlockNode } from './block'
 import type { CeilingNode } from './ceiling'
 import type { ColumnNode } from './column'
 import type { ConstructionDimensionNode } from './construction-dimension'
-import type { CustomMeshNode } from './custom-mesh'
 import type { DuctFittingNode } from './duct-fitting'
 import type { DuctSegmentNode } from './duct-segment'
 import type { DuctTerminalNode } from './duct-terminal'
@@ -33,7 +33,7 @@ type CoreLevelChildId =
   | FenceNode['id']
   | ColumnNode['id']
   | ConstructionDimensionNode['id']
-  | CustomMeshNode['id']
+  | BlockNode['id']
   | StructuralGridNode['id']
   | ItemNode['id']
   | ZoneNode['id']

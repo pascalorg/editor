@@ -1,17 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  type CustomMeshEvent,
-  CustomMeshNode,
+  type BlockEvent,
+  BlockNode,
   ItemNode,
   type LevelNode,
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
 import { BufferGeometry, Mesh, MeshBasicMaterial, type Object3D, Vector3 } from 'three'
-import { customMeshFaceStrategy, wallStrategy } from './placement-strategies'
+import { blockFaceStrategy, wallStrategy } from './placement-strategies'
 import type { PlacementContext, SpatialValidators } from './placement-types'
 
-const CUSTOM_MESH_ID = 'custom-mesh_ceiling-host'
+const BLOCK_ID = 'block_ceiling-host'
 const LEVEL_ID = 'level_ceiling-host' as LevelNode['id']
 
 function ceilingContext(): PlacementContext {
@@ -32,7 +32,7 @@ function ceilingContext(): PlacementContext {
       surface: 'floor',
       wallId: null,
       roofSegmentId: null,
-      customMeshId: null,
+      blockId: null,
       ceilingId: null,
       surfaceItemId: null,
       shelfId: null,
@@ -70,8 +70,8 @@ function wallItemContext(): PlacementContext {
   }
 }
 
-function frontFaceEvent(slopeTopEdge = false): CustomMeshEvent {
-  const box = CustomMeshNode.parse({ id: CUSTOM_MESH_ID, parentId: LEVEL_ID })
+function frontFaceEvent(slopeTopEdge = false): BlockEvent {
+  const box = BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID })
   const node = slopeTopEdge
     ? {
         ...box,
@@ -93,7 +93,7 @@ function frontFaceEvent(slopeTopEdge = false): CustomMeshEvent {
       }
     : box
   const geometry = new BufferGeometry()
-  geometry.userData.customMeshFaces = [{ faceId: 'f-front', start: 0, count: 6 }]
+  geometry.userData.blockFaces = [{ faceId: 'f-front', start: 0, count: 6 }]
   const object = new Mesh(geometry, new MeshBasicMaterial())
   object.updateMatrixWorld(true)
 
@@ -105,14 +105,36 @@ function frontFaceEvent(slopeTopEdge = false): CustomMeshEvent {
     localPosition: [0, 1.2, slopeTopEdge ? -0.5 : -1],
     normal: [0, 0, -1],
     stopPropagation: () => {},
-    nativeEvent: {} as CustomMeshEvent['nativeEvent'],
+    nativeEvent: {} as BlockEvent['nativeEvent'],
   }
 }
 
-function bottomFaceEvent(): CustomMeshEvent {
-  const node = CustomMeshNode.parse({ id: CUSTOM_MESH_ID, parentId: LEVEL_ID })
+function adjacentRightFaceEventOnFrontSurface(): BlockEvent {
+  const node = BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID })
   const geometry = new BufferGeometry()
-  geometry.userData.customMeshFaces = [{ faceId: 'f-bottom', start: 0, count: 6 }]
+  geometry.userData.blockFaces = [
+    { faceId: 'f-front', start: 0, count: 6 },
+    { faceId: 'f-right', start: 6, count: 6 },
+  ]
+  const object = new Mesh(geometry, new MeshBasicMaterial())
+  object.updateMatrixWorld(true)
+
+  return {
+    node,
+    object,
+    faceIndex: 2,
+    position: [0.5, 1.2, -1],
+    localPosition: [0.5, 1.2, -1],
+    normal: [1, 0, 0],
+    stopPropagation: () => {},
+    nativeEvent: {} as BlockEvent['nativeEvent'],
+  }
+}
+
+function bottomFaceEvent(): BlockEvent {
+  const node = BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID })
+  const geometry = new BufferGeometry()
+  geometry.userData.blockFaces = [{ faceId: 'f-bottom', start: 0, count: 6 }]
   const object = new Mesh(geometry, new MeshBasicMaterial())
   object.updateMatrixWorld(true)
 
@@ -124,14 +146,14 @@ function bottomFaceEvent(): CustomMeshEvent {
     localPosition: [0, 0, 0],
     normal: [0, -1, 0],
     stopPropagation: () => {},
-    nativeEvent: {} as CustomMeshEvent['nativeEvent'],
+    nativeEvent: {} as BlockEvent['nativeEvent'],
   }
 }
 
-function topFaceEvent(): CustomMeshEvent {
-  const node = CustomMeshNode.parse({ id: CUSTOM_MESH_ID, parentId: LEVEL_ID })
+function topFaceEvent(): BlockEvent {
+  const node = BlockNode.parse({ id: BLOCK_ID, parentId: LEVEL_ID })
   const geometry = new BufferGeometry()
-  geometry.userData.customMeshFaces = [{ faceId: 'f-top', start: 0, count: 6 }]
+  geometry.userData.blockFaces = [{ faceId: 'f-top', start: 0, count: 6 }]
   const object = new Mesh(geometry, new MeshBasicMaterial())
   object.updateMatrixWorld(true)
 
@@ -143,49 +165,72 @@ function topFaceEvent(): CustomMeshEvent {
     localPosition: [0, 2.4, 0],
     normal: [0, 1, 0],
     stopPropagation: () => {},
-    nativeEvent: {} as CustomMeshEvent['nativeEvent'],
+    nativeEvent: {} as BlockEvent['nativeEvent'],
   }
 }
 
-describe('customMeshFaceStrategy', () => {
-  test('hosts a wall-mounted item on a vertical custom-mesh face', () => {
-    expect(customMeshFaceStrategy.enter(wallItemContext(), frontFaceEvent())).not.toBeNull()
+describe('blockFaceStrategy', () => {
+  test('hosts a wall-mounted item on a vertical block face', () => {
+    expect(blockFaceStrategy.enter(wallItemContext(), frontFaceEvent())).not.toBeNull()
   })
 
-  test('does not host a wall-mounted item after the custom-mesh face is edited into a slope', () => {
-    expect(customMeshFaceStrategy.enter(wallItemContext(), frontFaceEvent(true))).toBeNull()
+  test('does not host a wall-mounted item after the block face is edited into a slope', () => {
+    expect(blockFaceStrategy.enter(wallItemContext(), frontFaceEvent(true))).toBeNull()
   })
 
-  test('hosts a ceiling item on a downward-facing custom-mesh face', () => {
-    const result = customMeshFaceStrategy.enter(ceilingContext(), bottomFaceEvent())
+  test('keeps a wall-mounted item on the active face during adjacent triangle hits', () => {
+    const context = wallItemContext()
+    const enter = blockFaceStrategy.enter(context, frontFaceEvent())
+    expect(enter).not.toBeNull()
+
+    context.state.surface = 'block-face'
+    context.state.blockId = BLOCK_ID
+    context.draftItem = ItemNode.parse({
+      id: 'item_wall-light',
+      parentId: BLOCK_ID,
+      asset: context.asset,
+      ...enter?.nodeUpdate,
+    })
+    context.gridPosition.set(...enter!.gridPosition)
+
+    const move = blockFaceStrategy.move(context, adjacentRightFaceEventOnFrontSurface())
+
+    expect(move?.nodeUpdate).toMatchObject({
+      blockFaceId: 'f-front',
+    } satisfies Partial<ItemNode>)
+    expect(move?.cursorPosition[2]).toBe(-1)
+  })
+
+  test('hosts a ceiling item on a downward-facing block face', () => {
+    const result = blockFaceStrategy.enter(ceilingContext(), bottomFaceEvent())
 
     expect(result).not.toBeNull()
     expect(result?.stateUpdate).toMatchObject({
-      surface: 'custom-mesh-face',
-      customMeshId: CUSTOM_MESH_ID,
+      surface: 'block-face',
+      blockId: BLOCK_ID,
     })
     expect(result?.nodeUpdate).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
-      customMeshFaceId: 'f-bottom',
+      parentId: BLOCK_ID,
+      blockFaceId: 'f-bottom',
       position: [0, 0, 0.25],
       rotation: [-Math.PI / 2, 0, 0],
     } satisfies Partial<ItemNode>)
     expect(result?.cursorPosition).toEqual([0, -0.25, 0])
   })
 
-  test('hosts a floor item on an upward-facing custom-mesh face', () => {
+  test('hosts a floor item on an upward-facing block face', () => {
     const context = floorItemContext()
     const event = topFaceEvent()
-    const result = customMeshFaceStrategy.enter(context, event)
+    const result = blockFaceStrategy.enter(context, event)
 
     expect(result).not.toBeNull()
     expect(result?.stateUpdate).toMatchObject({
-      surface: 'custom-mesh-face',
-      customMeshId: CUSTOM_MESH_ID,
+      surface: 'block-face',
+      blockId: BLOCK_ID,
     })
     expect(result?.nodeUpdate).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
-      customMeshFaceId: 'f-top',
+      parentId: BLOCK_ID,
+      blockFaceId: 'f-top',
       position: [0, 0, 0],
       rotation: [Math.PI / 2, 0, 0],
     } satisfies Partial<ItemNode>)
@@ -193,40 +238,40 @@ describe('customMeshFaceStrategy', () => {
 
     context.draftItem = ItemNode.parse({
       id: 'item_potted-plant',
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       asset: context.asset,
       ...result?.nodeUpdate,
     })
     Object.assign(context.state, result?.stateUpdate)
     context.gridPosition.set(...result!.gridPosition)
 
-    expect(customMeshFaceStrategy.click(context, event)?.nodeUpdate).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
-      customMeshFaceId: 'f-top',
+    expect(blockFaceStrategy.click(context, event)?.nodeUpdate).toMatchObject({
+      parentId: BLOCK_ID,
+      blockFaceId: 'f-top',
       position: [0, 0, 0],
       rotation: [Math.PI / 2, 0, 0],
     } satisfies Partial<ItemNode>)
   })
 
-  test('restores floor-local position and rotation when an item leaves a custom-mesh face', () => {
+  test('restores floor-local position and rotation when an item leaves a block face', () => {
     const context = floorItemContext()
-    context.state.surface = 'custom-mesh-face'
-    context.state.customMeshId = CUSTOM_MESH_ID
+    context.state.surface = 'block-face'
+    context.state.blockId = BLOCK_ID
     context.currentCursorRotationY = Math.PI / 4
     context.gridPosition.set(1, -0.5, 2)
     context.draftItem = ItemNode.parse({
       id: 'item_moving-potted-plant',
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       asset: context.asset,
       position: [0, 0, 0],
       rotation: [Math.PI / 2, Math.PI / 4, 0],
-      customMeshFaceId: 'f-top',
+      blockFaceId: 'f-top',
     })
 
-    expect(customMeshFaceStrategy.leave(context)).toMatchObject({
+    expect(blockFaceStrategy.leave(context)).toMatchObject({
       nodeUpdate: {
         parentId: LEVEL_ID,
-        customMeshFaceId: undefined,
+        blockFaceId: undefined,
         position: [1, 0, 2],
         rotation: [0, Math.PI / 4, 0],
       } satisfies Partial<ItemNode>,

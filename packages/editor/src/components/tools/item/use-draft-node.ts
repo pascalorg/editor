@@ -21,7 +21,7 @@ interface OriginalState {
   // mid-move, so reverts must restore it alongside parentId.
   roofSegmentId: ItemNode['roofSegmentId']
   roofFace: ItemNode['roofFace']
-  customMeshFaceId: ItemNode['customMeshFaceId']
+  blockFaceId: ItemNode['blockFaceId']
   metadata: ItemNode['metadata']
 }
 
@@ -118,7 +118,7 @@ export function useDraftNode(): DraftNodeHandle {
       parentId: node.parentId,
       roofSegmentId: node.roofSegmentId,
       roofFace: node.roofFace,
-      customMeshFaceId: node.customMeshFaceId,
+      blockFaceId: node.blockFaceId,
       metadata: node.metadata,
     }
 
@@ -166,7 +166,7 @@ export function useDraftNode(): DraftNodeHandle {
           parentId: original.parentId,
           roofSegmentId: original.roofSegmentId,
           roofFace: original.roofFace,
-          customMeshFaceId: original.customMeshFaceId,
+          blockFaceId: original.blockFaceId,
           metadata: original.metadata,
         })
 
@@ -192,7 +192,7 @@ export function useDraftNode(): DraftNodeHandle {
           // the segment transform.
           roofSegmentId: updateProps.roofSegmentId,
           roofFace: updateProps.roofFace,
-          customMeshFaceId: updateProps.customMeshFaceId,
+          blockFaceId: updateProps.blockFaceId,
           // Only when the strategy decided about wallId (roof commits clear
           // it) — floor/ceiling commits never managed the field.
           ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
@@ -240,7 +240,7 @@ export function useDraftNode(): DraftNodeHandle {
         // forwarded explicitly.
         roofSegmentId: updateProps.roofSegmentId,
         roofFace: updateProps.roofFace,
-        customMeshFaceId: updateProps.customMeshFaceId,
+        blockFaceId: updateProps.blockFaceId,
         ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
         metadata: updateProps.metadata ?? stripTransient(draft.metadata),
         parentId,
@@ -312,7 +312,7 @@ export function useDraftNode(): DraftNodeHandle {
         parentId: original.parentId,
         roofSegmentId: original.roofSegmentId,
         roofFace: original.roofFace,
-        customMeshFaceId: original.customMeshFaceId,
+        blockFaceId: original.blockFaceId,
         metadata: original.metadata,
       })
 

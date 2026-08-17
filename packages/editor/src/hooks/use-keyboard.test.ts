@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
-  CustomMeshNode,
+  BlockNode,
   clearSceneHistory,
   useScene,
 } from '@pascal-app/core'
@@ -20,10 +20,10 @@ type RafFn = (callback: (time: number) => void) => number
 ;(globalThis as unknown as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame ??=
   () => {}
 
-const NODE_ID = 'custom-mesh_history' as AnyNodeId
+const NODE_ID = 'block_history' as AnyNodeId
 
 beforeEach(() => {
-  const node = CustomMeshNode.parse({ id: NODE_ID, position: [0, 0, 0] })
+  const node = BlockNode.parse({ id: NODE_ID, position: [0, 0, 0] })
   useScene.setState({
     nodes: { [NODE_ID]: node },
     rootNodeIds: [NODE_ID],
@@ -41,12 +41,12 @@ afterEach(() => {
   clearSceneHistory()
 })
 
-describe('history shortcuts during custom mesh editing', () => {
+describe('history shortcuts during block editing', () => {
   test('undoes and redoes mesh changes without leaving component selection mode', () => {
     useInteractionScope.getState().begin(meshEditScope(NODE_ID))
 
     expect(runHistoryShortcut('undo')).toBe(true)
-    expect((useScene.getState().nodes[NODE_ID] as CustomMeshNode).position).toEqual([0, 0, 0])
+    expect((useScene.getState().nodes[NODE_ID] as BlockNode).position).toEqual([0, 0, 0])
     expect(useInteractionScope.getState().scope).toEqual({
       kind: 'mesh-editing',
       nodeId: NODE_ID,
@@ -54,7 +54,7 @@ describe('history shortcuts during custom mesh editing', () => {
     })
 
     expect(runHistoryShortcut('redo')).toBe(true)
-    expect((useScene.getState().nodes[NODE_ID] as CustomMeshNode).position).toEqual([1, 2, 3])
+    expect((useScene.getState().nodes[NODE_ID] as BlockNode).position).toEqual([1, 2, 3])
     expect(useInteractionScope.getState().scope).toEqual({
       kind: 'mesh-editing',
       nodeId: NODE_ID,

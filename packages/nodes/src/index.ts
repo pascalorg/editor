@@ -1,4 +1,5 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { blockDefinition } from './block/definition'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
 import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
@@ -7,7 +8,6 @@ import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
 import { constructionDimensionDefinition } from './construction-dimension'
 import { cupolaDefinition } from './cupola'
-import { customMeshDefinition } from './custom-mesh/definition'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
 import { downspoutDefinition } from './downspout'
@@ -68,7 +68,7 @@ export const builtinPlugin: Plugin = {
   nodes: [
     // Stage E-complete (full registry path)
     shelfDefinition as unknown as AnyNodeDefinition,
-    customMeshDefinition as unknown as AnyNodeDefinition,
+    blockDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
@@ -122,6 +122,15 @@ export const builtinPlugin: Plugin = {
   ],
 }
 
+export {
+  applyBlockCommand,
+  type BlockCommand,
+  type BlockCommandResult,
+  type BlockSelection,
+  blockFaceCentroid,
+  blockFaceNormal,
+} from './block/commands'
+export { blockDefinition } from './block/definition'
 export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export {
@@ -138,15 +147,6 @@ export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
 export { constructionDimensionDefinition } from './construction-dimension'
 export { cupolaDefinition } from './cupola'
-export {
-  applyCustomMeshCommand,
-  type CustomMeshCommand,
-  type CustomMeshCommandResult,
-  type CustomMeshSelection,
-  customMeshFaceCentroid,
-  customMeshFaceNormal,
-} from './custom-mesh/commands'
-export { customMeshDefinition } from './custom-mesh/definition'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
 export { downspoutDefinition } from './downspout'

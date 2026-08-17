@@ -121,14 +121,14 @@ describe('use-interaction-scope state machine', () => {
 
   test('mesh edit mode owns its node and disables scene selection for the full session', () => {
     const s = useInteractionScope.getState()
-    s.begin(meshEditScope('custom-mesh_1'))
-    expect(scopeNodeId(useInteractionScope.getState().scope)).toBe('custom-mesh_1')
+    s.begin(meshEditScope('block_1'))
+    expect(scopeNodeId(useInteractionScope.getState().scope)).toBe('block_1')
     expect(selectionEnabled(useInteractionScope.getState().scope)).toBe(false)
 
-    s.begin(meshEditScope('custom-mesh_1', 'operating', 'translate'))
+    s.begin(meshEditScope('block_1', 'operating', 'translate'))
     expect(useInteractionScope.getState().scope).toEqual({
       kind: 'mesh-editing',
-      nodeId: 'custom-mesh_1',
+      nodeId: 'block_1',
       phase: 'operating',
       operator: 'translate',
     })

@@ -52,7 +52,7 @@ describe('createFenceOnCurrentLevel', () => {
     seedLevel()
   })
 
-  test('freezes a custom-mesh top above its underlying slab', () => {
+  test('freezes a block top above its underlying slab', () => {
     const slab = {
       id: 'slab_low',
       type: 'slab',
@@ -87,7 +87,7 @@ describe('createFenceOnCurrentLevel', () => {
     expect(fence?.supportOffset).toBeCloseTo(1.75)
   })
 
-  test('pins ground beneath a custom-mesh top when no slab exists', () => {
+  test('pins ground beneath a block top when no slab exists', () => {
     const fence = createFenceOnCurrentLevel([-1, 0], [1, 0], {
       supportCap: 2,
       preferredSupportSlabId: null,

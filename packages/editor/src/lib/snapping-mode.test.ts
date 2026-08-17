@@ -83,7 +83,7 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     ceiling: 'structural',
     roof: 'structural',
     zone: 'structural',
-    'custom-mesh': 'structural',
+    block: 'structural',
   }
   const profileOf = (t: string) => declared[t]
   const profileOfNode = (id: string) =>
@@ -91,8 +91,8 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
       ? declared.item
       : id === 'wall_1'
         ? declared.wall
-        : id === 'custom-mesh_1'
-          ? declared['custom-mesh']
+        : id === 'block_1'
+          ? declared['block']
           : undefined
   const ctx = (
     scope: {
@@ -124,17 +124,11 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
   })
 
   it('gives mesh rotation the angle context and other edit operations polygon snapping', () => {
-    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1' })).toBe('polygon')
-    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1', operator: 'translate' })).toBe(
-      'polygon',
-    )
-    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1', operator: 'scale' })).toBe(
-      'polygon',
-    )
-    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1', operator: 'loop-cut' })).toBe(
-      'polygon',
-    )
-    expect(ctx({ kind: 'mesh-editing', nodeId: 'custom-mesh_1', operator: 'rotate' })).toBe('wall')
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'block_1' })).toBe('polygon')
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'block_1', operator: 'translate' })).toBe('polygon')
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'block_1', operator: 'scale' })).toBe('polygon')
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'block_1', operator: 'loop-cut' })).toBe('polygon')
+    expect(ctx({ kind: 'mesh-editing', nodeId: 'block_1', operator: 'rotate' })).toBe('wall')
   })
 
   it('endpoint reshape is angle-bearing (wall); curve + polygon vertex edits are not', () => {

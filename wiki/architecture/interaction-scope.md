@@ -42,7 +42,7 @@ mounting for the same gesture. Placing and moving use `view: '2d' | '3d'`.
 ### Helpers
 
 - `isIdle(scope)` / `isActive(scope)` — `idle` vs anything else (`ActiveInteractionScope`).
-- `scopeNodeId(scope)` — the node a scope acts on, or `null`. `drafting`/`box-select`/`painting`/`idle` target no single existing node. A `mesh-editing` scope targets the custom mesh whose topology owns the session.
+- `scopeNodeId(scope)` — the node a scope acts on, or `null`. `drafting`/`box-select`/`painting`/`idle` target no single existing node. A `mesh-editing` scope targets the block whose topology owns the session.
 - `isToolDrivenReshape(scope)` / `isFloorplanDrivenReshape(scope)` — narrow
   reshape ownership so only the matching interaction body mounts.
 - `selectionEnabled(scope)` — true only while `idle`. During any active interaction the pointer belongs to that interaction's body, not to selecting a different object; the picking choke point must not route a hover/click to selection while this is false.
@@ -62,7 +62,7 @@ single owner. Exactly one scope at a time; the only writable shape is
 | `end()`                                | Return to idle atomically. Both commit and cancel call it; the write-vs-revert distinction lives in the interaction body, not here.                                                                               |
 | `endIf(match)`                         | Return to idle only if the active scope satisfies `match`.                                                                                                                                                        |
 
-The `mesh-editing` scope is the global ownership summary, not a container for kind-specific component state. Custom mesh keeps its vertex/edge/face mode, selected IDs, active component, and active material slot in a kind-owned transient store under `packages/nodes/src/custom-mesh/`. The canvas affordance and custom inspector share that store while the scope owns the session. Entering another mesh transfers ownership; scope loss, explicit exit, and unmount clear only the matching node's session. Persisted topology and material slots remain in `useScene`.
+The `mesh-editing` scope is the global ownership summary, not a container for kind-specific component state. block keeps its vertex/edge/face mode, selected IDs, active component, and active material slot in a kind-owned transient store under `packages/nodes/src/block/`. The canvas affordance and custom inspector share that store while the scope owns the session. Entering another mesh transfers ownership; scope loss, explicit exit, and unmount clear only the matching node's session. Persisted topology and material slots remain in `useScene`.
 
 **Atomic-end invariant.** `end()` sets the scope back to `IDLE_SCOPE` in one
 write — no interaction payload can leak past the end of its interaction (no stale

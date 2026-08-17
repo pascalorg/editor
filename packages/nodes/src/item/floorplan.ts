@@ -4,7 +4,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
-  getCustomMeshFaceFrame,
+  getBlockFaceFrame,
   getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
@@ -142,8 +142,8 @@ function resolveItemTransform(
         rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
       }
     }
-  } else if (parentNode?.type === 'custom-mesh' && item.customMeshFaceId) {
-    const frame = getCustomMeshFaceFrame(parentNode.topology, item.customMeshFaceId)
+  } else if (parentNode?.type === 'block' && item.blockFaceId) {
+    const frame = getBlockFaceFrame(parentNode.topology, item.blockFaceId)
     if (frame) {
       const localX =
         frame.origin[0] +

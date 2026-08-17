@@ -41,7 +41,7 @@ export type InteractionScope =
   | { kind: 'moving'; node: AnyNode; nodeId: string; nodeType: string; view: InteractionView }
   // Dragging a resize/translate/rotate handle of a selected node.
   | { kind: 'handle-drag'; nodeId: string; handle: string }
-  // Editing the internal topology of one custom mesh. This scope remains
+  // Editing the internal topology of one block. This scope remains
   // active for the whole edit-mode session so scene selection and whole-node
   // movement cannot claim the same pointer stream.
   | {

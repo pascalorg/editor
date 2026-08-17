@@ -5,7 +5,7 @@ import {
   collectAlignmentAnchors,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
-  getCustomMeshFaceFrame,
+  getBlockFaceFrame,
   getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
@@ -131,8 +131,8 @@ function resolveItemPlanTransform(
         rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
       }
     }
-  } else if (parent?.type === 'custom-mesh' && item.customMeshFaceId) {
-    const frame = getCustomMeshFaceFrame(parent.topology, item.customMeshFaceId)
+  } else if (parent?.type === 'block' && item.blockFaceId) {
+    const frame = getBlockFaceFrame(parent.topology, item.blockFaceId)
     if (frame) {
       const localX =
         frame.origin[0] +
@@ -264,7 +264,7 @@ function buildWallItemSession(
         parentId: hit.wall.id,
         roofSegmentId: undefined,
         roofFace: undefined,
-        customMeshFaceId: undefined,
+        blockFaceId: undefined,
       }
       useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
       useScene.getState().markDirty(node.id as AnyNodeId)

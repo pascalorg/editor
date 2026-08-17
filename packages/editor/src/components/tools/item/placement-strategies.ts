@@ -1,10 +1,10 @@
 import type {
   AnyNode,
   AnyNodeId,
+  BlockEvent,
+  BlockNode,
   CeilingEvent,
   CeilingNode,
-  CustomMeshEvent,
-  CustomMeshNode,
   GridEvent,
   ItemEvent,
   ItemNode,
@@ -20,7 +20,7 @@ import type {
 import {
   canHostOnTop,
   clampRectToRoofWallFace,
-  getCustomMeshFaceFrame,
+  getBlockFaceFrame,
   getRoofSegmentWallFace,
   getScaledDimensions,
   isLowProfileItemSurface,
@@ -32,10 +32,7 @@ import {
 import { Euler, Matrix3, Matrix4, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
-import {
-  clampCustomMeshFaceCenterPosition,
-  clampCustomMeshFacePosition,
-} from './custom-mesh-preview'
+import { clampBlockFaceCenterPosition, clampBlockFacePosition } from './block-preview'
 import {
   calculateItemRotation,
   getGridAlignedDimensions,
@@ -56,10 +53,11 @@ import type {
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 const UPWARD_SURFACE_NORMAL_MIN_Y = 0.75
-const CUSTOM_MESH_HORIZONTAL_NORMAL_MIN_Y = 0.95
-const CUSTOM_MESH_VERTICAL_NORMAL_MAX_Y = 0.05
-const CUSTOM_MESH_FLOOR_ROTATION_X = Math.PI / 2
-const CUSTOM_MESH_CEILING_ROTATION_X = -Math.PI / 2
+const BLOCK_HORIZONTAL_NORMAL_MIN_Y = 0.95
+const BLOCK_VERTICAL_NORMAL_MAX_Y = 0.05
+const BLOCK_FLOOR_ROTATION_X = Math.PI / 2
+const BLOCK_CEILING_ROTATION_X = -Math.PI / 2
+const BLOCK_FACE_STICKY_PLANE_EPSILON = 0.08
 
 function getWorldNormalY(event: ItemEvent): number | null {
   if (!event.normal) return null
@@ -290,7 +288,7 @@ export const wallStrategy = {
         // The draft may arrive from a roof-segment wall face.
         roofSegmentId: undefined,
         roofFace: undefined,
-        customMeshFaceId: undefined,
+        blockFaceId: undefined,
         side,
         rotation: [0, itemRotation, 0],
       },
@@ -383,7 +381,7 @@ export const wallStrategy = {
         parentId: event.node.id,
         roofSegmentId: undefined,
         roofFace: undefined,
-        customMeshFaceId: undefined,
+        blockFaceId: undefined,
         side: ctx.draftItem.side,
         rotation: ctx.draftItem.rotation,
         metadata: stripTransient(ctx.draftItem.metadata),
@@ -547,7 +545,7 @@ export const roofWallStrategy = {
         parentId: target.segment.id,
         roofSegmentId: target.segment.id,
         roofFace: target.faceId,
-        customMeshFaceId: undefined,
+        blockFaceId: undefined,
         wallId: undefined,
         side: 'front',
         rotation: [0, 0, 0],
@@ -605,7 +603,7 @@ export const roofWallStrategy = {
         parentId: ctx.state.roofSegmentId,
         roofSegmentId: ctx.state.roofSegmentId,
         roofFace: ctx.draftItem.roofFace,
-        customMeshFaceId: undefined,
+        blockFaceId: undefined,
         wallId: undefined,
         side: 'front',
         rotation: [0, 0, 0],
@@ -639,48 +637,64 @@ export const roofWallStrategy = {
 }
 
 // ============================================================================
-// CUSTOM MESH FACE STRATEGY
+// BLOCK FACE STRATEGY
 // ============================================================================
 
-type CustomMeshFaceRange = { faceId: string; start: number; count: number }
+type BlockFaceRange = { faceId: string; start: number; count: number }
+type BlockFaceTarget = {
+  faceId: string
+  position: [number, number, number]
+  rotation: [number, number, number]
+  cursorPosition: [number, number, number]
+  cursorRotation: [number, number, number]
+}
 
-function customMeshFaceAcceptsAttachment(
+function blockFaceAcceptsAttachment(
   normalY: number,
   attachTo: PlacementContext['asset']['attachTo'],
 ): boolean {
-  if (!attachTo) return normalY >= CUSTOM_MESH_HORIZONTAL_NORMAL_MIN_Y
-  if (attachTo === 'ceiling') return normalY <= -CUSTOM_MESH_HORIZONTAL_NORMAL_MIN_Y
+  if (!attachTo) return normalY >= BLOCK_HORIZONTAL_NORMAL_MIN_Y
+  if (attachTo === 'ceiling') return normalY <= -BLOCK_HORIZONTAL_NORMAL_MIN_Y
   if (attachTo === 'wall' || attachTo === 'wall-side') {
-    return Math.abs(normalY) <= CUSTOM_MESH_VERTICAL_NORMAL_MAX_Y
+    return Math.abs(normalY) <= BLOCK_VERTICAL_NORMAL_MAX_Y
   }
   return false
 }
 
-function customMeshHitFaceId(event: CustomMeshEvent): string | null {
+function blockHitFaceId(event: BlockEvent): string | null {
   if (event.faceIndex == null) return null
   const geometry = (event.object as { geometry?: { userData?: Record<string, unknown> } }).geometry
-  const ranges = geometry?.userData?.customMeshFaces
+  const ranges = geometry?.userData?.blockFaces
   if (!Array.isArray(ranges)) return null
   const triangleStart = event.faceIndex * 3
-  const range = (ranges as CustomMeshFaceRange[]).find(
+  const range = (ranges as BlockFaceRange[]).find(
     (candidate) =>
       triangleStart >= candidate.start && triangleStart < candidate.start + candidate.count,
   )
   return range?.faceId ?? null
 }
 
-function resolveCustomMeshFaceTarget(ctx: PlacementContext, event: CustomMeshEvent) {
+function resolveBlockFaceTargetForFace(
+  ctx: PlacementContext,
+  event: BlockEvent,
+  faceId: string,
+  options: { requirePointerOnPlane?: boolean } = {},
+): BlockFaceTarget | null {
   const attachTo = ctx.asset.attachTo
-  const faceId = customMeshHitFaceId(event)
-  if (!faceId) return null
-  const frame = getCustomMeshFaceFrame(event.node.topology, faceId)
+  const frame = getBlockFaceFrame(event.node.topology, faceId)
   if (!frame) return null
-  if (!customMeshFaceAcceptsAttachment(frame.normal[1], attachTo)) return null
+  if (!blockFaceAcceptsAttachment(frame.normal[1], attachTo)) return null
 
   const hit = new Vector3(...event.localPosition).sub(new Vector3(...frame.origin))
   const xAxis = new Vector3(...frame.xAxis)
   const yAxis = new Vector3(...frame.yAxis)
   const normal = new Vector3(...frame.normal)
+  if (
+    options.requirePointerOnPlane &&
+    Math.abs(hit.dot(normal)) > BLOCK_FACE_STICKY_PLANE_EPSILON
+  ) {
+    return null
+  }
   const face = event.node.topology.faces.find((candidate) => candidate.id === faceId)
   if (!face) return null
   const vertices = new Map(
@@ -715,8 +729,8 @@ function resolveCustomMeshFaceTarget(ctx: PlacementContext, event: CustomMeshEve
   const faceBounds = { minU, maxU, minV, maxV }
   const facePosition =
     !attachTo || attachTo === 'ceiling'
-      ? clampCustomMeshFaceCenterPosition(snappedPosition, faceBounds, [width, depth])
-      : clampCustomMeshFacePosition(snappedPosition, faceBounds, [width, height])
+      ? clampBlockFaceCenterPosition(snappedPosition, faceBounds, [width, depth])
+      : clampBlockFacePosition(snappedPosition, faceBounds, [width, height])
   if (!facePosition) return null
   const [u, v] = facePosition
   const normalOffset = attachTo === 'ceiling' && !ctx.asset.recessed ? rawDims[1] : 0
@@ -725,6 +739,7 @@ function resolveCustomMeshFaceTarget(ctx: PlacementContext, event: CustomMeshEve
     .addScaledVector(xAxis, u)
     .addScaledVector(yAxis, v)
     .addScaledVector(normal, normalOffset)
+  event.object.updateWorldMatrix(true, false)
   const worldPoint = event.object.localToWorld(localPoint)
 
   const localFrame = new Matrix4().makeBasis(xAxis, yAxis, normal)
@@ -732,9 +747,9 @@ function resolveCustomMeshFaceTarget(ctx: PlacementContext, event: CustomMeshEve
   const worldQuaternion = new Quaternion()
   worldFrame.decompose(new Vector3(), worldQuaternion, new Vector3())
   const rotation: [number, number, number] = !attachTo
-    ? [CUSTOM_MESH_FLOOR_ROTATION_X, 0, 0]
+    ? [BLOCK_FLOOR_ROTATION_X, 0, 0]
     : attachTo === 'ceiling'
-      ? [CUSTOM_MESH_CEILING_ROTATION_X, 0, 0]
+      ? [BLOCK_CEILING_ROTATION_X, 0, 0]
       : [0, 0, 0]
   worldQuaternion.multiply(new Quaternion().setFromEuler(new Euler(...rotation)))
   const cursorRotation = new Euler().setFromQuaternion(worldQuaternion, 'XYZ')
@@ -752,21 +767,34 @@ function resolveCustomMeshFaceTarget(ctx: PlacementContext, event: CustomMeshEve
   }
 }
 
-export const customMeshFaceStrategy = {
-  enter(ctx: PlacementContext, event: CustomMeshEvent): TransitionResult | null {
-    const target = resolveCustomMeshFaceTarget(ctx, event)
+function resolveBlockFaceTarget(ctx: PlacementContext, event: BlockEvent) {
+  const currentFaceId = ctx.draftItem?.blockFaceId
+  if (currentFaceId) {
+    const currentTarget = resolveBlockFaceTargetForFace(ctx, event, currentFaceId, {
+      requirePointerOnPlane: true,
+    })
+    if (currentTarget) return currentTarget
+  }
+
+  const faceId = blockHitFaceId(event)
+  return faceId ? resolveBlockFaceTargetForFace(ctx, event, faceId) : null
+}
+
+export const blockFaceStrategy = {
+  enter(ctx: PlacementContext, event: BlockEvent): TransitionResult | null {
+    const target = resolveBlockFaceTarget(ctx, event)
     if (!target) return null
     return {
       stateUpdate: {
-        surface: 'custom-mesh-face',
-        customMeshId: event.node.id,
+        surface: 'block-face',
+        blockId: event.node.id,
         wallId: null,
         roofSegmentId: null,
       },
       nodeUpdate: {
         position: target.position,
         parentId: event.node.id,
-        customMeshFaceId: target.faceId,
+        blockFaceId: target.faceId,
         roofSegmentId: undefined,
         roofFace: undefined,
         wallId: undefined,
@@ -781,10 +809,10 @@ export const customMeshFaceStrategy = {
     }
   },
 
-  move(ctx: PlacementContext, event: CustomMeshEvent): PlacementResult | null {
-    if (ctx.state.surface !== 'custom-mesh-face' || !ctx.draftItem) return null
-    const target = resolveCustomMeshFaceTarget(ctx, event)
-    if (!target || event.node.id !== ctx.state.customMeshId) return null
+  move(ctx: PlacementContext, event: BlockEvent): PlacementResult | null {
+    if (ctx.state.surface !== 'block-face' || !ctx.draftItem) return null
+    const target = resolveBlockFaceTarget(ctx, event)
+    if (!target || event.node.id !== ctx.state.blockId) return null
     return {
       gridPosition: target.position,
       cursorPosition: target.cursorPosition,
@@ -792,7 +820,7 @@ export const customMeshFaceStrategy = {
       cursorRotation: target.cursorRotation,
       nodeUpdate: {
         position: target.position,
-        customMeshFaceId: target.faceId,
+        blockFaceId: target.faceId,
         rotation: target.rotation,
       },
       stopPropagation: true,
@@ -800,15 +828,15 @@ export const customMeshFaceStrategy = {
     }
   },
 
-  click(ctx: PlacementContext, event: CustomMeshEvent): CommitResult | null {
-    if (ctx.state.surface !== 'custom-mesh-face' || !ctx.draftItem) return null
-    const target = resolveCustomMeshFaceTarget(ctx, event)
-    if (!target || event.node.id !== ctx.state.customMeshId) return null
+  click(ctx: PlacementContext, event: BlockEvent): CommitResult | null {
+    if (ctx.state.surface !== 'block-face' || !ctx.draftItem) return null
+    const target = resolveBlockFaceTarget(ctx, event)
+    if (!target || event.node.id !== ctx.state.blockId) return null
     return {
       nodeUpdate: {
         position: target.position,
         parentId: event.node.id,
-        customMeshFaceId: target.faceId,
+        blockFaceId: target.faceId,
         roofSegmentId: undefined,
         roofFace: undefined,
         wallId: undefined,
@@ -822,14 +850,14 @@ export const customMeshFaceStrategy = {
   },
 
   leave(ctx: PlacementContext): TransitionResult | null {
-    if (ctx.state.surface !== 'custom-mesh-face') return null
+    if (ctx.state.surface !== 'block-face') return null
     const floorPosition: [number, number, number] = [ctx.gridPosition.x, 0, ctx.gridPosition.z]
     return {
-      stateUpdate: { surface: 'floor', customMeshId: null },
+      stateUpdate: { surface: 'floor', blockId: null },
       nodeUpdate: {
         position: floorPosition,
         parentId: ctx.levelId,
-        customMeshFaceId: undefined,
+        blockFaceId: undefined,
         rotation: [0, ctx.currentCursorRotationY, 0],
       },
       cursorRotationY: ctx.currentCursorRotationY,
@@ -1280,15 +1308,14 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
 
   const alignedDims = getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), attachTo)
 
-  if (ctx.state.surface === 'custom-mesh-face') {
-    const hostId = ctx.state.customMeshId
+  if (ctx.state.surface === 'block-face') {
+    const hostId = ctx.state.blockId
     const host = hostId
-      ? (useScene.getState().nodes[hostId as AnyNodeId] as CustomMeshNode | undefined)
+      ? (useScene.getState().nodes[hostId as AnyNodeId] as BlockNode | undefined)
       : undefined
-    const faceId = ctx.draftItem.customMeshFaceId
-    const frame =
-      host?.type === 'custom-mesh' && faceId ? getCustomMeshFaceFrame(host.topology, faceId) : null
-    return !!(frame && customMeshFaceAcceptsAttachment(frame.normal[1], attachTo))
+    const faceId = ctx.draftItem.blockFaceId
+    const frame = host?.type === 'block' && faceId ? getBlockFaceFrame(host.topology, faceId) : null
+    return !!(frame && blockFaceAcceptsAttachment(frame.normal[1], attachTo))
   }
 
   if (attachTo === 'ceiling') {

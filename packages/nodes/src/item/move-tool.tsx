@@ -42,12 +42,12 @@ export function getInitialState(
     : undefined,
 ): PlacementState {
   const attachTo = node.asset.attachTo
-  if (node.customMeshFaceId && parent?.type === 'custom-mesh') {
+  if (node.blockFaceId && parent?.type === 'block') {
     return {
-      surface: 'custom-mesh-face',
+      surface: 'block-face',
       wallId: null,
       roofSegmentId: null,
-      customMeshId: parent.id,
+      blockId: parent.id,
       ceilingId: null,
       surfaceItemId: null,
       shelfId: null,

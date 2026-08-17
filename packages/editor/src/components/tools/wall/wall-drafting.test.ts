@@ -3,8 +3,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   applyHeightPatch,
+  BlockNode,
   CeilingNode,
-  CustomMeshNode,
   createTerrainField,
   DoorNode as DoorSchema,
   encodeTerrainField,
@@ -317,11 +317,11 @@ describe('createWallOnCurrentLevel', () => {
     nodeRegistry._reset()
     spatialGridManager.clear()
     registerNode({
-      kind: 'custom-mesh',
+      kind: 'block',
       schemaVersion: 2,
-      schema: CustomMeshNode,
+      schema: BlockNode,
       category: 'structure',
-      defaults: () => CustomMeshNode.parse({ name: 'Custom Mesh' }),
+      defaults: () => BlockNode.parse({ name: 'Block' }),
       capabilities: {
         floorPlaced: {
           footprint: () => ({ dimensions: [4, 2.4, 4], rotation: [0, 0, 0] }),
@@ -329,7 +329,7 @@ describe('createWallOnCurrentLevel', () => {
       },
     } as never)
 
-    const slope = CustomMeshNode.parse({
+    const slope = BlockNode.parse({
       name: 'Existing slope',
       parentId: LEVEL_ID,
       position: [0, 0, 0],
@@ -344,7 +344,7 @@ describe('createWallOnCurrentLevel', () => {
       supportCap: 2.4,
     })
 
-    const pinnedSlope = useScene.getState().nodes[slope.id] as CustomMeshNode
+    const pinnedSlope = useScene.getState().nodes[slope.id] as BlockNode
     expect(pinnedSlope.supportSlabId).toBe(GROUND_SUPPORT_ID)
 
     const generatedSlab = SlabNode.parse({

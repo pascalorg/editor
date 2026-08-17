@@ -1,8 +1,8 @@
-# Blender-Style Custom Mesh Edit Mode Research
+# Blender-Style Block Edit Mode Research
 
 ## Purpose and conclusion
 
-This brief describes the Edit Mode interaction shown by the linked X post, how Blender's mesh Edit Mode actually behaves, what the current Pascal custom-mesh slice already implements, and the staged work required for a credible Blender-like experience. External behavior claims use only current first-party Blender manuals, developer documentation, and API documentation. Repository claims come from the current worktree, audited on 2026-08-10.
+This brief describes the Edit Mode interaction shown by the linked X post, how Blender's mesh Edit Mode actually behaves, what the current Pascal block slice already implements, and the staged work required for a credible Blender-like experience. External behavior claims use only current first-party Blender manuals, developer documentation, and API documentation. Repository claims come from the current worktree, audited on 2026-08-10.
 
 The central recommendation is unchanged but now concrete:
 
@@ -15,7 +15,7 @@ The central recommendation is unchanged but now concrete:
 
 The [37-second X video](https://x.com/00namazu86_7/status/2079180451521200550) primarily demonstrates architectural massing: a rectangular footprint becomes a shallow solid, a top face is raised with a measured handle, and contextual surface actions lead into higher-level building and material workflows. The closest first product target is therefore **face Push/Pull on an editable architectural solid**, built on a topology model capable of growing toward Blender-style component editing.
 
-That does not mean the custom mesh should absorb Pascal's semantic model. Walls, slabs, roofs, openings, balconies, and hosted items should remain semantic nodes or explicit semantic commands. Materials and day/night presentation remain orthogonal to topology. Stable hosting on a custom-mesh face would require a later face-host contract that survives topology remapping.
+That does not mean the block should absorb Pascal's semantic model. Walls, slabs, roofs, openings, balconies, and hosted items should remain semantic nodes or explicit semantic commands. Materials and day/night presentation remain orthogonal to topology. Stable hosting on a block face would require a later face-host contract that survives topology remapping.
 
 ## Current Pascal implementation
 
@@ -23,12 +23,12 @@ The worktree already contains a coherent first vertical slice.
 
 | Area                 | Current implementation                                                                                                                                                                                                                                                                                                                                                                                                          | Current boundary                                                                                                                                                                                                              |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Persistent schema    | [`CustomMeshNode`](../packages/core/src/schema/nodes/custom-mesh.ts) stores level-local position/rotation plus stable-ID vertices, undirected edges, ordered face vertex loops, per-face `materialSlot`, and optional slots. A box is the default topology.                                                                                                                                                                     | No face-corner/loop attributes, holes, explicit adjacency, or topology version/revision.                                                                                                                                      |
-| Validation           | `inspectCustomMeshTopology` rejects duplicate component IDs, self-edges, missing vertex references, duplicate undirected edges, faces with fewer than three distinct vertices, and missing face-boundary edges.                                                                                                                                                                                                                 | It does not yet define a manifold policy or reject zero-length edges, repeated vertices in a longer face loop, duplicate faces, non-planar/zero-area/self-intersecting faces, inconsistent winding, or failed triangulation.  |
-| Pure commands        | [`commands.ts`](../packages/nodes/src/custom-mesh/commands.ts) exposes component translate/rotate/scale/delete plus single-face extrude/inset, returns a new topology plus selection, preserves input immutability, allocates stable IDs, and validates the result.                                                                                                                                                             | Selection supports one mode at a time, has no identity remap, and extrude/inset handle exactly one face with immediate numeric parameters rather than modal region operations.                                                |
-| Derived geometry     | [`geometry.ts`](../packages/nodes/src/custom-mesh/geometry.ts) projects each face to 2D, triangulates it, generates flat normals/UVs/material groups, and stores triangle ranges keyed by face ID.                                                                                                                                                                                                                              | Triangulation assumes a usable planar simple loop; rebuilding replaces the whole `BufferGeometry`; the face-range metadata is not yet the main component picker.                                                              |
-| Registry integration | [`definition.ts`](../packages/nodes/src/custom-mesh/definition.ts) registers geometry, floor-plan output, placement preview/tool, selection affordance, item-style snapping, move/delete/duplicate, floor placement, collision, and materials. The node is registered in the built-in plugin and appears through registry-driven build UI.                                                                                      | Object rotation is stored but no rotatable capability is declared. The floor plan uses the XZ convex hull, so concavity and overhang distinctions are lost.                                                                   |
-| Edit UI              | [`selection.tsx`](../packages/nodes/src/custom-mesh/selection.tsx) mounts only for a sole selected custom mesh. It has a dedicated `mesh-editing` interaction scope, active-white/selected-orange components, topology-aware `1`/`2`/`3` conversion, All/Invert/Clear, X-Ray, tool-gated compact move handles, numeric rotate/scale, Extrude, Inset, Merge at Center, Dissolve Edge, component Delete, shortcuts, and Done/Tab. | Detailed session state is still component-local; there is no mixed-mode or box selection, face-center picking, plane/free transform handles, orientation/pivot controls, proportional editing, or full modal operator engine. |
+| Persistent schema    | [`BlockNode`](../packages/core/src/schema/nodes/block.ts) stores level-local position/rotation plus stable-ID vertices, undirected edges, ordered face vertex loops, per-face `materialSlot`, and optional slots. A box is the default topology.                                                                                                                                                                     | No face-corner/loop attributes, holes, explicit adjacency, or topology version/revision.                                                                                                                                      |
+| Validation           | `inspectBlockTopology` rejects duplicate component IDs, self-edges, missing vertex references, duplicate undirected edges, faces with fewer than three distinct vertices, and missing face-boundary edges.                                                                                                                                                                                                                 | It does not yet define a manifold policy or reject zero-length edges, repeated vertices in a longer face loop, duplicate faces, non-planar/zero-area/self-intersecting faces, inconsistent winding, or failed triangulation.  |
+| Pure commands        | [`commands.ts`](../packages/nodes/src/block/commands.ts) exposes component translate/rotate/scale/delete plus single-face extrude/inset, returns a new topology plus selection, preserves input immutability, allocates stable IDs, and validates the result.                                                                                                                                                             | Selection supports one mode at a time, has no identity remap, and extrude/inset handle exactly one face with immediate numeric parameters rather than modal region operations.                                                |
+| Derived geometry     | [`geometry.ts`](../packages/nodes/src/block/geometry.ts) projects each face to 2D, triangulates it, generates flat normals/UVs/material groups, and stores triangle ranges keyed by face ID.                                                                                                                                                                                                                              | Triangulation assumes a usable planar simple loop; rebuilding replaces the whole `BufferGeometry`; the face-range metadata is not yet the main component picker.                                                              |
+| Registry integration | [`definition.ts`](../packages/nodes/src/block/definition.ts) registers geometry, floor-plan output, placement preview/tool, selection affordance, item-style snapping, move/delete/duplicate, floor placement, collision, and materials. The node is registered in the built-in plugin and appears through registry-driven build UI.                                                                                      | Object rotation is stored but no rotatable capability is declared. The floor plan uses the XZ convex hull, so concavity and overhang distinctions are lost.                                                                   |
+| Edit UI              | [`selection.tsx`](../packages/nodes/src/block/selection.tsx) mounts only for a sole selected block. It has a dedicated `mesh-editing` interaction scope, active-white/selected-orange components, topology-aware `1`/`2`/`3` conversion, All/Invert/Clear, X-Ray, tool-gated compact move handles, numeric rotate/scale, Extrude, Inset, Merge at Center, Dissolve Edge, component Delete, shortcuts, and Done/Tab. | Detailed session state is still component-local; there is no mixed-mode or box selection, face-center picking, plane/free transform handles, orientation/pivot controls, proportional editing, or full modal operator engine. |
 | Preview/history      | The complete Edit Mode session owns the `mesh-editing` scope, suppressing object selection and whole-node movement. Axis drag snapshots topology, previews through `useLiveNodeOverrides`, clears on cancel/unmount, and performs one `updateNode` on release. Numeric operators perform one validated scene update.                                                                                                            | Numeric operators do not yet provide pointer preview/cancel, typed modal input, or a durable last-operator record for parameter replay.                                                                                       |
 | Tests                | Core schema tests cover the default box and a missing boundary edge. Command tests cover extrusion, ID allocation, translation, rotation, scale, inset, deletion, and topology validity. Selection tests cover active identity, toggling, conversion, All, and Invert; scope tests cover persistent mesh-edit ownership.                                                                                                        | No tests yet cover pointer picking/occlusion, component visuals, preview cancellation/history, save/reload, floor-plan updates, degeneracies, performance, or end-to-end user workflows.                                      |
 
@@ -43,7 +43,7 @@ This implementation already follows two important repository precedents:
 
 Blender uses `Tab` to toggle Edit Mode for supported objects. Entering a mode changes viewport appearance, header, toolbar, menus, and the shortcut map; Object Mode transforms the object while Edit Mode changes its components. Blender also supports multiple objects in Edit Mode, but cannot connect geometry across different objects. [Blender object modes](https://docs.blender.org/manual/en/latest/editors/3dview/modes.html)
 
-For Pascal v1, the transferable behavior is explicit mode ownership, not multi-object editing. Tab and an Edit Mesh action should enter a sole selected custom mesh; Tab should exit when no modal command is active. Escape should first cancel the current command. The canvas, contextual HUD, shortcut routing, and component overlays must all derive from the same session.
+For Pascal v1, the transferable behavior is explicit mode ownership, not multi-object editing. Tab and an Edit Mesh action should enter a sole selected block; Tab should exit when no modal command is active. Escape should first cancel the current command. The canvas, contextual HUD, shortcut routing, and component overlays must all derive from the same session.
 
 ### Component modes, visuals, and active element
 
@@ -198,7 +198,7 @@ Every command result should include more than `topology` and one selection:
 
 ```ts
 type MeshCommandResult = {
-  topology: CustomMeshTopology;
+  topology: BlockTopology;
   selection: MeshComponentSelection;
   active: MeshComponentRef | null;
   remap: {
@@ -219,7 +219,7 @@ Move the current local React state into a dedicated editor-owned session control
 
 ```ts
 type MeshEditSession = {
-  nodeId: CustomMeshNodeId;
+  nodeId: BlockNodeId;
   enabledModes: ReadonlySet<"vertex" | "edge" | "face">;
   selected: {
     vertices: ReadonlySet<string>;
@@ -236,24 +236,24 @@ type MeshEditSession = {
 };
 ```
 
-The existing global editor `Mode` already contains `'edit'` for property-boundary editing, so it cannot silently become mesh Edit Mode. The current `drafting/custom-mesh-edit` scope also misnames a persistent editing session.
+The existing global editor `Mode` already contains `'edit'` for property-boundary editing, so it cannot silently become mesh Edit Mode. The current `drafting/block-edit` scope also misnames a persistent editing session.
 
 Recommended seam:
 
 - `useMeshEditSession` owns the detailed session and immutable operation snapshot.
 - Add an explicit `mesh-editing` summary to `InteractionScope` with `nodeId`, `phase` (`selecting` or `operating`), operator, and stage. This keeps selection gating, hot-set, overlays, HUD, and Escape routing on the interaction spine without putting large topology snapshots into it.
 - One controller owns enter, switch mode, select, begin operation, preview, confirm, cancel, and exit so the stores cannot drift.
-- Viewer selection retains the custom-mesh node; component selection remains editor-only. `packages/viewer` stays unaware of Edit Mode. [Viewer isolation](architecture/viewer-isolation.md), [selection managers](architecture/selection-managers.md), [interaction scope](architecture/interaction-scope.md)
+- Viewer selection retains the block node; component selection remains editor-only. `packages/viewer` stays unaware of Edit Mode. [Viewer isolation](architecture/viewer-isolation.md), [selection managers](architecture/selection-managers.md), [interaction scope](architecture/interaction-scope.md)
 
 ### Pure command and modal interfaces
 
-Extend the existing pure `applyCustomMeshCommand` model instead of embedding algorithms in `selection.tsx`:
+Extend the existing pure `applyBlockCommand` model instead of embedding algorithms in `selection.tsx`:
 
 ```ts
 type MeshCommand<P> = {
   kind: string;
   execute(input: {
-    topology: CustomMeshTopology;
+    topology: BlockTopology;
     selection: MeshComponentSelection;
     active: MeshComponentRef | null;
     parameters: P;
@@ -262,7 +262,7 @@ type MeshCommand<P> = {
 
 type MeshModalOperation<P> = {
   command: MeshCommand<P>;
-  baseTopology: CustomMeshTopology;
+  baseTopology: BlockTopology;
   baseSelection: MeshComponentSelection;
   baseActive: MeshComponentRef | null;
   parameters: P;
@@ -290,10 +290,10 @@ For Adjust Last Operation, retain `{ baseTopology, baseSelection, commandKind, p
 
 | Concern                                                                      | Home                                                                                                                           |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Serialized schema, validation shared by every consumer, migrations           | `packages/core/src/schema/nodes/custom-mesh.ts`                                                                                |
-| Kind-specific pure adjacency and command kernel                              | `packages/nodes/src/custom-mesh/`, kept independent of React/stores/Three                                                      |
-| Derived Three.js geometry and triangle-to-face metadata                      | `packages/nodes/src/custom-mesh/geometry.ts` through `def.geometry`                                                            |
-| Kind-owned selection/edit contribution                                       | `packages/nodes/src/custom-mesh/selection.tsx`, progressively reduced to composition over shared editor controllers/components |
+| Serialized schema, validation shared by every consumer, migrations           | `packages/core/src/schema/nodes/block.ts`                                                                                |
+| Kind-specific pure adjacency and command kernel                              | `packages/nodes/src/block/`, kept independent of React/stores/Three                                                      |
+| Derived Three.js geometry and triangle-to-face metadata                      | `packages/nodes/src/block/geometry.ts` through `def.geometry`                                                            |
+| Kind-owned selection/edit contribution                                       | `packages/nodes/src/block/selection.tsx`, progressively reduced to composition over shared editor controllers/components |
 | Reusable mesh-edit session, modal input, compact gizmo, numeric HUD, picking | `packages/editor`, injected into Viewer as editor-only children/contributions                                                  |
 | Read-only rendering/scene registration                                       | Existing generic viewer path; no edit-mode state in `packages/viewer`                                                          |
 
@@ -389,7 +389,7 @@ This follows the registry composition model and viewer isolation. [Node definiti
 
 ### End-to-end acceptance tests
 
-- Place a custom mesh, Tab into Edit Mode, select a face, `G Z 1.5`, confirm, undo, redo, and exit.
+- Place a block, Tab into Edit Mode, select a face, `G Z 1.5`, confirm, undo, redo, and exit.
 - Push/Pull a face to an exact height, cancel a second extrusion with no duplicate topology, then repeat and commit.
 - Select through with X-Ray, switch component modes with topology-aware preservation, and merge at active/last.
 - Inset, bevel, loop cut, dissolve, subdivide, and knife representative meshes as their phases land.

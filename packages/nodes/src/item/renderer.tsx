@@ -44,7 +44,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
-import { CustomMeshFaceHostFrame } from '../shared/custom-mesh-face-host'
+import { BlockFaceHostFrame } from '../shared/block-face-host'
 import { RoofFaceHostFrame } from '../shared/roof-face-host'
 import { cancelItemModelLoad, getUnavailableItemAsset, ItemGLTFLoader } from './model-loader'
 
@@ -468,11 +468,11 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
     </group>
   )
 
-  if (node.customMeshFaceId && node.parentId) {
+  if (node.blockFaceId && node.parentId) {
     return (
-      <CustomMeshFaceHostFrame customMeshId={node.parentId} faceId={node.customMeshFaceId}>
+      <BlockFaceHostFrame blockId={node.parentId} faceId={node.blockFaceId}>
         {content}
-      </CustomMeshFaceHostFrame>
+      </BlockFaceHostFrame>
     )
   }
   if (!node.roofSegmentId) return content

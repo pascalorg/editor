@@ -33,6 +33,21 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
+export {
+  BlockEdge,
+  BlockFace,
+  type BlockFaceFrame,
+  BlockNode,
+  BlockTopology,
+  type BlockTopologyIssue,
+  BlockVertex,
+  blockUndirectedEdgeKey,
+  createBoxBlockTopology,
+  getBlockFaceCentroid,
+  getBlockFaceFrame,
+  getBlockFaceNormal,
+  inspectBlockTopology,
+} from './nodes/block'
 export { BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
 export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
@@ -74,21 +89,6 @@ export {
   setConstructionDimensionDrawingSuppressedSegments,
 } from './nodes/construction-dimension'
 export { CupolaNode } from './nodes/cupola'
-export {
-  CustomMeshEdge,
-  CustomMeshFace,
-  type CustomMeshFaceFrame,
-  CustomMeshNode,
-  CustomMeshTopology,
-  type CustomMeshTopologyIssue,
-  CustomMeshVertex,
-  createBoxCustomMeshTopology,
-  customMeshUndirectedEdgeKey,
-  getCustomMeshFaceCentroid,
-  getCustomMeshFaceFrame,
-  getCustomMeshFaceNormal,
-  inspectCustomMeshTopology,
-} from './nodes/custom-mesh'
 export {
   DoorNode,
   DoorSegment,

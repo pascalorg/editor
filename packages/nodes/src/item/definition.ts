@@ -230,7 +230,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     // host app strips these via `getHostRefFields(def)` so the
     // descendant re-attaches against the new host geometry at
     // placement time.
-    hostRefFields: ['wallId', 'wallT', 'roofSegmentId', 'roofFace', 'customMeshFaceId'],
+    hostRefFields: ['wallId', 'wallT', 'roofSegmentId', 'roofFace', 'blockFaceId'],
     // Floor items get lifted by slabs underneath via the generic
     // `<FloorElevationSystem>`. Wall- / ceiling-attached items live in
     // their parent's local frame and skip the lift via `applies`.

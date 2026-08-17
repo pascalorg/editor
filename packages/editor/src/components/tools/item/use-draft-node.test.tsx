@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNodeId,
+  type BlockEvent,
+  BlockNode,
   BuildingNode,
-  type CustomMeshEvent,
-  CustomMeshNode,
-  getCustomMeshFaceFrame,
+  getBlockFaceFrame,
   ItemNode,
   LevelNode,
   useScene,
@@ -12,7 +12,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { renderToString } from 'react-dom/server'
 import { BufferGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three'
-import { commitCustomMeshClick } from './custom-mesh-commit'
+import { commitBlockClick } from './block-commit'
 import type { PlacementContext } from './placement-types'
 import { type DraftNodeHandle, useDraftNode } from './use-draft-node'
 
@@ -25,7 +25,7 @@ type RafFn = (callback: (time: number) => void) => number
 
 const BUILDING_ID = 'building_draft_custom_mesh'
 const LEVEL_ID = 'level_draft_custom_mesh'
-const CUSTOM_MESH_ID = 'custom-mesh_draft_host'
+const BLOCK_ID = 'block_draft_host'
 
 let draftNode: DraftNodeHandle | null = null
 
@@ -35,14 +35,14 @@ function DraftHarness() {
 }
 
 beforeEach(() => {
-  const customMesh = CustomMeshNode.parse({
-    id: CUSTOM_MESH_ID,
+  const block = BlockNode.parse({
+    id: BLOCK_ID,
     parentId: LEVEL_ID,
   })
   const level = LevelNode.parse({
     id: LEVEL_ID,
     parentId: BUILDING_ID,
-    children: [CUSTOM_MESH_ID],
+    children: [BLOCK_ID],
     level: 0,
   })
   const building = BuildingNode.parse({
@@ -53,7 +53,7 @@ beforeEach(() => {
     nodes: {
       [BUILDING_ID]: building,
       [LEVEL_ID]: level,
-      [CUSTOM_MESH_ID]: customMesh,
+      [BLOCK_ID]: block,
     },
     rootNodeIds: [BUILDING_ID],
     collections: {},
@@ -73,7 +73,7 @@ beforeEach(() => {
   renderToString(<DraftHarness />)
 })
 
-describe('useDraftNode custom-mesh face commit', () => {
+describe('useDraftNode block face commit', () => {
   test('persists the face host used by the placement preview', () => {
     const draft = draftNode!
     draft.create(new Vector3(0, 0, 0), {
@@ -87,21 +87,21 @@ describe('useDraftNode custom-mesh face commit', () => {
     })
 
     const committedId = draft.commit({
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       position: [0.5, -0.5, 0],
       rotation: [0, 0, 0],
-      customMeshFaceId: 'face-front',
+      blockFaceId: 'face-front',
     })
 
     const committed = useScene.getState().nodes[committedId as AnyNodeId]
     expect(committed).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       position: [0.5, -0.5, 0],
-      customMeshFaceId: 'face-front',
+      blockFaceId: 'face-front',
     })
   })
 
-  test('keeps a custom-face placement visible until undo removes the committed item', () => {
+  test('keeps a block-face placement visible until undo removes the committed item', () => {
     useScene.temporal.getState().pause()
     const draft = draftNode!
     const transient = draft.create(new Vector3(0, 0, 0), {
@@ -114,19 +114,19 @@ describe('useDraftNode custom-mesh face commit', () => {
     })!
 
     const committedId = draft.commit({
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       position: [0.5, 0, 0],
       rotation: [Math.PI / 2, 0, 0],
-      customMeshFaceId: 'face-top',
+      blockFaceId: 'face-top',
     })!
 
     const afterCommit = useScene.getState().nodes
     expect(afterCommit[transient.id as AnyNodeId]).toBeUndefined()
     expect(afterCommit[committedId as AnyNodeId]).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
-      customMeshFaceId: 'face-top',
+      parentId: BLOCK_ID,
+      blockFaceId: 'face-top',
     })
-    expect((afterCommit[CUSTOM_MESH_ID as AnyNodeId] as CustomMeshNode).children).toContain(
+    expect((afterCommit[BLOCK_ID as AnyNodeId] as BlockNode).children).toContain(
       committedId as ItemNode['id'],
     )
 
@@ -135,15 +135,15 @@ describe('useDraftNode custom-mesh face commit', () => {
     const afterUndo = useScene.getState().nodes
     expect(afterUndo[committedId as AnyNodeId]).toBeUndefined()
     expect(afterUndo[transient.id as AnyNodeId]).toBeUndefined()
-    expect((afterUndo[CUSTOM_MESH_ID as AnyNodeId] as CustomMeshNode).children).not.toContain(
+    expect((afterUndo[BLOCK_ID as AnyNodeId] as BlockNode).children).not.toContain(
       committedId as ItemNode['id'],
     )
   })
 
-  test('moves a custom-face item to the floor as one undoable reparent', () => {
+  test('moves a block-face item to the floor as one undoable reparent', () => {
     const hosted = ItemNode.parse({
       id: 'item_hosted-potted-plant',
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       asset: {
         id: 'potted-plant',
         category: 'decor',
@@ -154,9 +154,9 @@ describe('useDraftNode custom-mesh face commit', () => {
       },
       position: [0.5, 0, 0],
       rotation: [Math.PI / 2, 0, 0],
-      customMeshFaceId: 'face-top',
+      blockFaceId: 'face-top',
     })
-    useScene.getState().createNode(hosted, CUSTOM_MESH_ID as AnyNodeId)
+    useScene.getState().createNode(hosted, BLOCK_ID as AnyNodeId)
     useScene.temporal.getState().clear()
     useScene.temporal.getState().pause()
 
@@ -166,7 +166,7 @@ describe('useDraftNode custom-mesh face commit', () => {
       parentId: LEVEL_ID,
       position: [2, 0, 3],
       rotation: [0, Math.PI / 4, 0],
-      customMeshFaceId: undefined,
+      blockFaceId: undefined,
     })
 
     expect(useScene.getState().nodes[hosted.id as AnyNodeId]).toMatchObject({
@@ -175,11 +175,11 @@ describe('useDraftNode custom-mesh face commit', () => {
       rotation: [0, Math.PI / 4, 0],
     })
     expect(
-      (useScene.getState().nodes[hosted.id as AnyNodeId] as ItemNode).customMeshFaceId,
+      (useScene.getState().nodes[hosted.id as AnyNodeId] as ItemNode).blockFaceId,
     ).toBeUndefined()
-    expect(
-      (useScene.getState().nodes[CUSTOM_MESH_ID as AnyNodeId] as CustomMeshNode).children,
-    ).not.toContain(hosted.id)
+    expect((useScene.getState().nodes[BLOCK_ID as AnyNodeId] as BlockNode).children).not.toContain(
+      hosted.id,
+    )
     expect((useScene.getState().nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).toContain(
       hosted.id,
     )
@@ -187,20 +187,20 @@ describe('useDraftNode custom-mesh face commit', () => {
     useScene.temporal.getState().undo()
 
     expect(useScene.getState().nodes[hosted.id as AnyNodeId]).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       position: [0.5, 0, 0],
       rotation: [Math.PI / 2, 0, 0],
-      customMeshFaceId: 'face-top',
+      blockFaceId: 'face-top',
     })
-    expect(
-      (useScene.getState().nodes[CUSTOM_MESH_ID as AnyNodeId] as CustomMeshNode).children,
-    ).toContain(hosted.id)
+    expect((useScene.getState().nodes[BLOCK_ID as AnyNodeId] as BlockNode).children).toContain(
+      hosted.id,
+    )
     expect((useScene.getState().nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).not.toContain(
       hosted.id,
     )
   })
 
-  test('keeps a hosted item visible through a custom-mesh topology edit and its undo', () => {
+  test('keeps a hosted item visible through a block topology edit and its undo', () => {
     useScene.temporal.getState().pause()
     const draft = draftNode!
     draft.create(new Vector3(0, 0, 0), {
@@ -212,13 +212,13 @@ describe('useDraftNode custom-mesh face commit', () => {
       dimensions: [0.5, 0.39, 0.5],
     })
     const committedId = draft.commit({
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       position: [0, 0, 0],
       rotation: [Math.PI / 2, 0, 0],
-      customMeshFaceId: 'f-top',
+      blockFaceId: 'f-top',
     })!
 
-    const beforeEdit = useScene.getState().nodes[CUSTOM_MESH_ID as AnyNodeId] as CustomMeshNode
+    const beforeEdit = useScene.getState().nodes[BLOCK_ID as AnyNodeId] as BlockNode
     const topVertexIds = new Set(
       beforeEdit.topology.faces.find((face) => face.id === 'f-top')?.vertexIds ?? [],
     )
@@ -239,31 +239,31 @@ describe('useDraftNode custom-mesh face commit', () => {
     }
 
     useScene.temporal.getState().resume()
-    useScene.getState().updateNode(CUSTOM_MESH_ID as AnyNodeId, { topology: editedTopology })
+    useScene.getState().updateNode(BLOCK_ID as AnyNodeId, { topology: editedTopology })
     useScene.temporal.getState().pause()
 
     const afterEdit = useScene.getState().nodes
-    const editedHost = afterEdit[CUSTOM_MESH_ID as AnyNodeId] as CustomMeshNode
+    const editedHost = afterEdit[BLOCK_ID as AnyNodeId] as BlockNode
     expect(editedHost.children).toContain(committedId as ItemNode['id'])
     expect(afterEdit[committedId as AnyNodeId]).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
-      customMeshFaceId: 'f-top',
+      parentId: BLOCK_ID,
+      blockFaceId: 'f-top',
     })
-    expect(getCustomMeshFaceFrame(editedHost.topology, 'f-top')?.origin[1]).toBe(2.9)
+    expect(getBlockFaceFrame(editedHost.topology, 'f-top')?.origin[1]).toBe(2.9)
 
     useScene.temporal.getState().undo()
 
     const afterUndo = useScene.getState().nodes
-    const restoredHost = afterUndo[CUSTOM_MESH_ID as AnyNodeId] as CustomMeshNode
+    const restoredHost = afterUndo[BLOCK_ID as AnyNodeId] as BlockNode
     expect(restoredHost.children).toContain(committedId as ItemNode['id'])
     expect(afterUndo[committedId as AnyNodeId]).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
-      customMeshFaceId: 'f-top',
+      parentId: BLOCK_ID,
+      blockFaceId: 'f-top',
     })
-    expect(getCustomMeshFaceFrame(restoredHost.topology, 'f-top')?.origin[1]).toBe(2.4)
+    expect(getBlockFaceFrame(restoredHost.topology, 'f-top')?.origin[1]).toBe(2.4)
   })
 
-  test('commits before a stop-propagation leave can destroy the custom-face draft', () => {
+  test('commits before a stop-propagation leave can destroy the block-face draft', () => {
     useScene.temporal.getState().pause()
     const draft = draftNode!
     const transient = draft.create(new Vector3(), {
@@ -275,19 +275,19 @@ describe('useDraftNode custom-mesh face commit', () => {
       dimensions: [0.5, 0.39, 0.5],
     })!
     Object.assign(transient, {
-      parentId: CUSTOM_MESH_ID,
+      parentId: BLOCK_ID,
       position: [0, 0, 0],
       rotation: [Math.PI / 2, 0, 0],
-      customMeshFaceId: 'f-top',
+      blockFaceId: 'f-top',
     })
     useScene.getState().updateNode(transient.id, transient)
 
-    const host = useScene.getState().nodes[CUSTOM_MESH_ID as AnyNodeId] as CustomMeshNode
+    const host = useScene.getState().nodes[BLOCK_ID as AnyNodeId] as BlockNode
     const geometry = new BufferGeometry()
-    geometry.userData.customMeshFaces = [{ faceId: 'f-top', start: 0, count: 6 }]
+    geometry.userData.blockFaces = [{ faceId: 'f-top', start: 0, count: 6 }]
     const object = new Mesh(geometry, new MeshBasicMaterial())
     object.updateMatrixWorld(true)
-    const event: CustomMeshEvent = {
+    const event: BlockEvent = {
       node: host,
       object,
       faceIndex: 0,
@@ -295,7 +295,7 @@ describe('useDraftNode custom-mesh face commit', () => {
       localPosition: [0, 2.4, 0],
       normal: [0, 1, 0],
       stopPropagation: () => draft.destroy(),
-      nativeEvent: {} as CustomMeshEvent['nativeEvent'],
+      nativeEvent: {} as BlockEvent['nativeEvent'],
     }
     const getContext = (): PlacementContext => ({
       asset: transient.asset,
@@ -303,8 +303,8 @@ describe('useDraftNode custom-mesh face commit', () => {
       draftItem: draft.current,
       gridPosition: new Vector3(),
       state: {
-        surface: 'custom-mesh-face',
-        customMeshId: CUSTOM_MESH_ID,
+        surface: 'block-face',
+        blockId: BLOCK_ID,
         wallId: null,
         roofSegmentId: null,
         ceilingId: null,
@@ -314,10 +314,10 @@ describe('useDraftNode custom-mesh face commit', () => {
       currentCursorRotationY: 0,
     })
 
-    const outcome = commitCustomMeshClick({
+    const outcome = commitBlockClick({
       getContext,
       event,
-      enterCustomMeshFace: () => false,
+      enterBlockFace: () => false,
       commitDraft: (nodeUpdate) => ({
         committedId: draft.commit(nodeUpdate),
         wasAdopted: draft.isAdopted,
@@ -326,8 +326,8 @@ describe('useDraftNode custom-mesh face commit', () => {
 
     expect(outcome?.committedId).not.toBeNull()
     expect(useScene.getState().nodes[outcome!.committedId as AnyNodeId]).toMatchObject({
-      parentId: CUSTOM_MESH_ID,
-      customMeshFaceId: 'f-top',
+      parentId: BLOCK_ID,
+      blockFaceId: 'f-top',
       metadata: {},
     })
   })

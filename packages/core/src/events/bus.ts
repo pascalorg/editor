@@ -2,6 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  BlockNode,
   BoxVentNode,
   BuildingNode,
   CabinetModuleNode,
@@ -11,7 +12,6 @@ import type {
   ColumnNode,
   ConstructionDimensionNode,
   CupolaNode,
-  CustomMeshNode,
   DoorNode,
   DormerNode,
   DownspoutNode,
@@ -105,7 +105,7 @@ export type SpawnEvent = NodeEvent<SpawnNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type ColumnEvent = NodeEvent<ColumnNode>
 export type ConstructionDimensionEvent = NodeEvent<ConstructionDimensionNode>
-export type CustomMeshEvent = NodeEvent<CustomMeshNode>
+export type BlockEvent = NodeEvent<BlockNode>
 export type RoofEvent = NodeEvent<RoofNode>
 export type RoofSegmentEvent = NodeEvent<RoofSegmentNode>
 export type StairEvent = NodeEvent<StairNode>
@@ -312,7 +312,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'column', ColumnEvent> &
   NodeEvents<'construction-dimension', ConstructionDimensionEvent> &
-  NodeEvents<'custom-mesh', CustomMeshEvent> &
+  NodeEvents<'block', BlockEvent> &
   NodeEvents<'roof', RoofEvent> &
   NodeEvents<'roof-segment', RoofSegmentEvent> &
   NodeEvents<'stair', StairEvent> &

@@ -2,7 +2,7 @@
 
 ## Purpose and conclusion
 
-This brief records Blender's Loop Cut and Slide behavior for the Pascal custom-mesh implementation. Behavior claims use only first-party Blender documentation and the official Blender source mirror. The source links are pinned to commit `1663a95e78e36c5a792c63fc10bcd4e1d09b7585`; the research was completed on 2026-08-10.
+This brief records Blender's Loop Cut and Slide behavior for the Pascal block implementation. Behavior claims use only first-party Blender documentation and the official Blender source mirror. The source links are pinned to commit `1663a95e78e36c5a792c63fc10bcd4e1d09b7585`; the research was completed on 2026-08-10.
 
 The important architectural fact is that Blender does not implement this as one opaque action. `MESH_OT_loopcut_slide` is a macro that runs topology insertion (`MESH_OT_loopcut`) and then the existing edge-slide transform (`TRANSFORM_OT_edge_slide`). [Blender mesh operator registration](https://github.com/blender/blender/blob/1663a95e78e36c5a792c63fc10bcd4e1d09b7585/source/blender/editors/mesh/mesh_ops.cc#L217-L228), [Blender operator API](https://docs.blender.org/api/current/bpy.ops.mesh.html#bpy.ops.mesh.loopcut_slide)
 
@@ -78,7 +78,7 @@ Pascal should deliberately provide an additional unambiguous full-operation canc
 
 ## Safe Pascal MVP
 
-The current `CustomMeshTopology` stores stable-ID vertices, undirected edges, and ordered face vertex loops, but validation does not establish manifoldness, face planarity, or geometric self-intersection. The MVP should therefore be narrower than Blender's complete BMesh behavior.
+The current `BlockTopology` stores stable-ID vertices, undirected edges, and ordered face vertex loops, but validation does not establish manifoldness, face planarity, or geometric self-intersection. The MVP should therefore be narrower than Blender's complete BMesh behavior.
 
 ### Supported topology
 
@@ -141,7 +141,7 @@ Implement these only after single-cut traversal, winding, preview cancellation, 
 2. Even distance, control-edge choice, and Flip.
 3. Unclamped slide; it can create self-intersection that the current validator cannot detect.
 4. Smoothness and falloff.
-5. UV correction and mirror editing, once custom-mesh topology stores the required attributes and symmetry contract.
+5. UV correction and mirror editing, once block topology stores the required attributes and symmetry contract.
 6. Blender's single-edge fallback on non-quad topology.
 
 ## Acceptance matrix

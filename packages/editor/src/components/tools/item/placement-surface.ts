@@ -8,7 +8,7 @@ export function resolveItemPlacementSurfaceNormal(
   target: Vector3,
   attachTo?: 'wall' | 'wall-side' | 'ceiling',
 ): Vector3 {
-  if (surface === 'custom-mesh-face') {
+  if (surface === 'block-face') {
     if (attachTo === 'ceiling') target.set(0, -1, 0)
     else if (attachTo === 'wall' || attachTo === 'wall-side') target.set(0, 0, 1)
     else target.set(0, 1, 0)

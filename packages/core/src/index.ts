@@ -1,4 +1,5 @@
 export type {
+  BlockEvent,
   BoxVentEvent,
   BuildingEvent,
   CabinetEvent,
@@ -10,7 +11,6 @@ export type {
   ChimneyEvent,
   ColumnEvent,
   ConstructionDimensionEvent,
-  CustomMeshEvent,
   DoorEvent,
   DormerEvent,
   ElevatorEvent,

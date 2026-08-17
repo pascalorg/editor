@@ -2,7 +2,7 @@
 
 ## Purpose and conclusion
 
-This brief records Blender's per-face material workflow and translates its useful interaction contracts into a Pascal custom-mesh plan. Blender behavior claims use only the official Blender manual, Python API, and source mirror. Source links are pinned to commit `ce63cce6b7d645d6565f0f973142209b5069a7b2`; the research was completed on 2026-08-12.
+This brief records Blender's per-face material workflow and translates its useful interaction contracts into a Pascal block plan. Blender behavior claims use only the official Blender manual, Python API, and source mirror. Source links are pinned to commit `ce63cce6b7d645d6565f0f973142209b5069a7b2`; the research was completed on 2026-08-12.
 
 The central design is deliberately two-level:
 
@@ -10,7 +10,7 @@ The central design is deliberately two-level:
 2. An object's ordered **material slots** reference materials.
 3. Each face stores one slot choice; it does not contain or duplicate the material.
 
-Pascal already has the corresponding persistent pieces in a safer stable-ID form: `CustomMeshFace.materialSlot` identifies an object-local slot, `CustomMeshNode.slots` maps slot IDs to reusable `MaterialRef` values, and the scene owns reusable materials. The missing product surface is an editor-owned active slot plus explicit face assignment controls.
+Pascal already has the corresponding persistent pieces in a safer stable-ID form: `BlockFace.materialSlot` identifies an object-local slot, `BlockNode.slots` maps slot IDs to reusable `MaterialRef` values, and the scene owns reusable materials. The missing product surface is an editor-owned active slot plus explicit face assignment controls.
 
 ## Blender's data model
 
@@ -26,7 +26,7 @@ Slot identity and Material identity are different:
 
 The Material data-block picker is the reuse surface. It lists materials in the current blend file, supports name search, and lets the user place an existing Material in the selected slot instead of duplicating it. [Blender reusing existing materials](https://docs.blender.org/manual/en/5.0/render/materials/assignment.html#reusing-existing-materials)
 
-Blender additionally supports linking slot materials to either a specific object or its shared mesh data. That distinction matters for Blender instances, but Pascal should not copy it unless custom meshes later gain shared editable topology instances: Pascal's existing scene `MaterialRef` plus per-node `slots` mapping already provides the relevant reuse boundary. [Blender material slot link behavior](https://docs.blender.org/manual/en/5.0/render/materials/assignment.html#data-block)
+Blender additionally supports linking slot materials to either a specific object or its shared mesh data. That distinction matters for Blender instances, but Pascal should not copy it unless blockes later gain shared editable topology instances: Pascal's existing scene `MaterialRef` plus per-node `slots` mapping already provides the relevant reuse boundary. [Blender material slot link behavior](https://docs.blender.org/manual/en/5.0/render/materials/assignment.html#data-block)
 
 ## Edit Mode workflow
 
@@ -92,21 +92,21 @@ This section is a product inference based on Blender's behavior and Pascal's cur
 Keep Pascal's stable string slot IDs rather than copying Blender's fragile ordered indices:
 
 ```ts
-type CustomMeshFace = {
+type BlockFace = {
   id: string;
   vertexIds: string[];
   materialSlot: string;
 };
 
-type CustomMeshNode = {
-  topology: { faces: CustomMeshFace[] /* ... */ };
+type BlockNode = {
+  topology: { faces: BlockFace[] /* ... */ };
   slots?: Record<string, MaterialRef>;
 };
 ```
 
-The initial custom mesh keeps every face on `materialSlot: "body"`. Its unbound `body` slot resolves to the shared wall-role default color. Adding another material creates a new stable slot ID and maps it to a reusable `MaterialRef`; assigning faces changes only their `materialSlot` string.
+The initial block keeps every face on `materialSlot: "body"`. Its unbound `body` slot resolves to the shared wall-role default color. Adding another material creates a new stable slot ID and maps it to a reusable `MaterialRef`; assigning faces changes only their `materialSlot` string.
 
-The current schema already has this shape in [`custom-mesh.ts`](../packages/core/src/schema/nodes/custom-mesh.ts). No face should store copied shader/color/texture properties.
+The current schema already has this shape in [`block.ts`](../packages/core/src/schema/nodes/block.ts). No face should store copied shader/color/texture properties.
 
 ### Transient editor state
 
@@ -122,8 +122,8 @@ The Edit Mode session should own an `activeMaterialSlotId`. It should not be per
 
 A Blender-derived Pascal panel can be compact:
 
-1. **Face Material** section visible in custom-mesh Edit Mode, primarily in Face selection mode.
-2. Active slot/material preview showing only slots already used by the custom mesh, followed by a compact data-block dropdown for material references already used in the scene plus custom scene materials. The full catalog remains in the global Paint tool instead of being duplicated in this inspector.
+1. **Face Material** section visible in block Edit Mode, primarily in Face selection mode.
+2. Active slot/material preview showing only slots already used by the block, followed by a compact data-block dropdown for material references already used in the scene plus custom scene materials. The full catalog remains in the global Paint tool instead of being duplicated in this inspector.
 3. **Assign to selected** as the explicit mutating action for reusing an existing mesh slot, with the selection count in its label or nearby.
 4. **Select faces** and **Deselect faces** for the active slot; these are valuable once models have many faces.
 5. Painting a face with the global Paint tool adds or reuses an object slot by `MaterialRef` identity.
@@ -147,13 +147,13 @@ Every topology command must preserve or deterministically derive face assignment
 - Merge/dissolve across mixed materials needs a deterministic active/source-face policy.
 - Deleting the last face using a slot does not need to delete the reusable Material; optional slot cleanup is separate.
 
-This is more important than matching Blender's exact removal remap because custom-mesh commands already operate on stable face identities.
+This is more important than matching Blender's exact removal remap because block commands already operate on stable face identities.
 
 ## MVP acceptance matrix
 
 | Case                                                         | Expected result                                                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| New custom mesh                                              | All faces resolve through the single `body` slot and show one material.                                 |
+| New block                                              | All faces resolve through the single `body` slot and show one material.                                 |
 | Click a face                                                 | The face becomes active/selected and the panel follows its assigned material.                           |
 | Paint a face with a reusable material                         | One object slot is reused or created; only the painted face points to it.                                |
 | Select several faces, choose an existing mesh slot, Assign   | Every selected face points to that slot; unselected faces are unchanged.                                 |
@@ -169,7 +169,7 @@ This is more important than matching Blender's exact removal remap because custo
 
 ## Implemented decisions
 
-1. Pascal exposes the object slot list plus a compact reusable-material dropdown in the custom-mesh inspector. It contains deduplicated material references used by scene node slots and custom scene materials; the full catalog stays in the global Paint tool, which also adds or reuses slots when it paints individual faces.
+1. Pascal exposes the object slot list plus a compact reusable-material dropdown in the block inspector. It contains deduplicated material references used by scene node slots and custom scene materials; the full catalog stays in the global Paint tool, which also adds or reuses slots when it paints individual faces.
 2. Choosing a reusable material from the compact dropdown assigns it immediately to the selected faces. Choosing an existing object slot remains non-mutating until **Assign**.
 3. Mixed selections show **Mixed materials**, while the active face continues to drive the active slot.
 4. **Select** and **Deselect** ship with the MVP and modify only transient face selection.

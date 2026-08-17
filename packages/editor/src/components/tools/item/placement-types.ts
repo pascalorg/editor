@@ -1,8 +1,8 @@
 import type {
   AnyNode,
   AssetInput,
+  BlockNode,
   CeilingNode,
-  CustomMeshNode,
   ItemNode,
   LevelNode,
   WallNode,
@@ -17,7 +17,7 @@ export type SurfaceType =
   | 'floor'
   | 'wall'
   | 'roof-wall'
-  | 'custom-mesh-face'
+  | 'block-face'
   | 'ceiling'
   | 'item-surface'
   | 'shelf-surface'
@@ -35,8 +35,8 @@ export interface PlacementState {
    * (base walls + coplanar gable ends).
    */
   roofSegmentId: string | null
-  /** Active planar custom-mesh face used as a wall-like attachment host. */
-  customMeshId?: CustomMeshNode['id'] | null
+  /** Active planar block face used as a wall-like attachment host. */
+  blockId?: BlockNode['id'] | null
   ceilingId: string | null
   surfaceItemId: string | null
   /**

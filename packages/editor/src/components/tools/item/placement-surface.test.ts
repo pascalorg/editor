@@ -3,7 +3,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three'
 import { resolveItemPlacementSurfaceNormal } from './placement-surface'
 
 describe('resolveItemPlacementSurfaceNormal', () => {
-  test('uses the full face normal for a sloped custom-mesh host', () => {
+  test('uses the full face normal for a sloped block host', () => {
     const normal = new Vector3(0, 0.6, 0.8).normalize()
     const xAxis = new Vector3(1, 0, 0)
     const yAxis = new Vector3().crossVectors(normal, xAxis).normalize()
@@ -12,7 +12,7 @@ describe('resolveItemPlacementSurfaceNormal', () => {
     )
 
     const resolved = resolveItemPlacementSurfaceNormal(
-      'custom-mesh-face',
+      'block-face',
       faceQuaternion,
       null,
       new Vector3(),
@@ -22,7 +22,7 @@ describe('resolveItemPlacementSurfaceNormal', () => {
     expect(resolved.toArray()).toEqual(normal.toArray())
   })
 
-  test('uses the upward host normal for a floor item on a custom-mesh top face', () => {
+  test('uses the upward host normal for a floor item on a block top face', () => {
     const faceQuaternion = new Quaternion().setFromRotationMatrix(
       new Matrix4().makeBasis(new Vector3(1, 0, 0), new Vector3(0, 0, -1), new Vector3(0, 1, 0)),
     )
@@ -31,7 +31,7 @@ describe('resolveItemPlacementSurfaceNormal', () => {
     )
 
     const resolved = resolveItemPlacementSurfaceNormal(
-      'custom-mesh-face',
+      'block-face',
       itemQuaternion,
       null,
       new Vector3(),
@@ -40,7 +40,7 @@ describe('resolveItemPlacementSurfaceNormal', () => {
     expect(resolved.toArray().map((value) => Math.round(value))).toEqual([0, 1, 0])
   })
 
-  test('uses the downward host normal for a custom-mesh ceiling attachment', () => {
+  test('uses the downward host normal for a block ceiling attachment', () => {
     const faceQuaternion = new Quaternion().setFromRotationMatrix(
       new Matrix4().makeBasis(new Vector3(1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, -1, 0)),
     )
@@ -49,7 +49,7 @@ describe('resolveItemPlacementSurfaceNormal', () => {
     )
 
     const resolved = resolveItemPlacementSurfaceNormal(
-      'custom-mesh-face',
+      'block-face',
       itemQuaternion,
       null,
       new Vector3(),

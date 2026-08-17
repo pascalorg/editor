@@ -3,8 +3,8 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  type BlockEvent,
   type CeilingEvent,
-  type CustomMeshEvent,
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
@@ -70,8 +70,12 @@ import {
   resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
-import { commitCustomMeshClick, resolveCustomMeshPreviewCommit } from './custom-mesh-commit'
-import { applyCustomMeshPreviewPose, resolveCustomMeshFaceSwitch } from './custom-mesh-preview'
+import { commitBlockClick, resolveBlockPreviewCommit } from './block-commit'
+import {
+  applyBlockPreviewPose,
+  resolveBlockFaceSwitch,
+  shouldDetachBlockFaceOnLeave,
+} from './block-preview'
 import { shouldCreateFloorDraft } from './draft-creation'
 import {
   getDetachedAttachmentPreviewLift,
@@ -82,9 +86,9 @@ import {
   steppedRotation,
 } from './placement-math'
 import {
+  blockFaceStrategy,
   ceilingStrategy,
   checkCanPlace,
-  customMeshFaceStrategy,
   floorStrategy,
   itemSurfaceStrategy,
   roofWallStrategy,
@@ -496,7 +500,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // layer's frame.
     let alignmentCandidates: AlignmentAnchor[] | null = null
     let floorDragAnchor: [number, number] | null = null
-    let pendingCustomMeshFaceId: string | null = null
+    let pendingBlockFaceId: string | null = null
 
     // Reset placement state
     placementState.current = configRef.current.initialState ?? {
@@ -586,7 +590,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useLiveTransforms.getState().clear(draftId)
         useLiveNodeOverrides
           .getState()
-          .clearFields(draftId, ['position', 'rotation', 'customMeshFaceId'])
+          .clearFields(draftId, ['position', 'rotation', 'blockFaceId'])
       }
       return { committedId: finalId ?? draftId, wasAdopted }
     }
@@ -1510,12 +1514,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
-    // ---- Custom Mesh Face Handlers ----
+    // ---- Block Face Handlers ----
 
-    const enterCustomMeshFace = (event: CustomMeshEvent): boolean => {
-      const result = customMeshFaceStrategy.enter(getContext(), event)
+    const enterBlockFace = (event: BlockEvent): boolean => {
+      const result = blockFaceStrategy.enter(getContext(), event)
       if (!result) return false
-      pendingCustomMeshFaceId = null
+      pendingBlockFaceId = null
       event.stopPropagation()
       applyTransition(result)
       if (!draftNode.current) {
@@ -1528,36 +1532,32 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return true
     }
 
-    const onCustomMeshEnter = (event: CustomMeshEvent) => {
+    const onBlockEnter = (event: BlockEvent) => {
       has3DPointerDrivenMoveRef.current = true
-      enterCustomMeshFace(event)
+      enterBlockFace(event)
     }
 
-    const onCustomMeshMove = (event: CustomMeshEvent) => {
+    const onBlockMove = (event: BlockEvent) => {
       has3DPointerDrivenMoveRef.current = true
       if (!cursorGroupRef.current) return
       const ctx = getContext()
-      if (ctx.state.surface !== 'custom-mesh-face' || !draftNode.current) {
-        if (enterCustomMeshFace(event)) releaseCommit = () => onCustomMeshClick(event)
+      if (ctx.state.surface !== 'block-face' || !draftNode.current) {
+        if (enterBlockFace(event)) releaseCommit = () => onBlockClick(event)
         return
       }
-      const result = customMeshFaceStrategy.move(ctx, event)
+      const result = blockFaceStrategy.move(ctx, event)
       if (!result) {
-        if (enterCustomMeshFace(event)) releaseCommit = () => onCustomMeshClick(event)
+        event.stopPropagation()
         return
       }
 
       event.stopPropagation()
       const draft = draftNode.current
-      const nextFaceId = result.nodeUpdate?.customMeshFaceId
-      const faceSwitch = resolveCustomMeshFaceSwitch(
-        draft?.customMeshFaceId,
-        nextFaceId,
-        pendingCustomMeshFaceId,
-      )
-      pendingCustomMeshFaceId = faceSwitch.pendingFaceId
+      const nextFaceId = result.nodeUpdate?.blockFaceId
+      const faceSwitch = resolveBlockFaceSwitch(draft?.blockFaceId, nextFaceId, pendingBlockFaceId)
+      pendingBlockFaceId = faceSwitch.pendingFaceId
       if (!faceSwitch.accept) return
-      releaseCommit = () => onCustomMeshClick(event)
+      releaseCommit = () => onBlockClick(event)
 
       const posChanged =
         gridPosition.current.x !== result.gridPosition[0] ||
@@ -1575,42 +1575,46 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         Object.assign(draft, result.nodeUpdate)
         const mesh = sceneRegistry.nodes.get(draft.id)
         const rotation = result.nodeUpdate.rotation ?? draft.rotation
-        if (mesh) applyCustomMeshPreviewPose(mesh, result.gridPosition, rotation)
+        if (mesh) applyBlockPreviewPose(mesh, result.gridPosition, rotation)
         useLiveNodeOverrides.getState().set(draft.id, {
           position: result.gridPosition,
           rotation,
-          customMeshFaceId: nextFaceId,
+          blockFaceId: nextFaceId,
         })
       }
       revalidate()
     }
 
-    const onCustomMeshClick = (event: CustomMeshEvent) => {
-      const outcome = commitCustomMeshClick({
+    const onBlockClick = (event: BlockEvent) => {
+      const outcome = commitBlockClick({
         commitDraft,
-        enterCustomMeshFace,
+        enterBlockFace,
         event,
         getContext,
       })
       if (!outcome) return
       const { committedId, wasAdopted } = outcome
       finishCommittedPlacement(committedId, wasAdopted, () => {
-        const enterResult = customMeshFaceStrategy.enter(getContext(), event)
+        const enterResult = blockFaceStrategy.enter(getContext(), event)
         if (enterResult) applyTransition(enterResult)
         else revalidate()
       })
     }
 
-    const onCustomMeshLeave = (event: CustomMeshEvent) => {
-      pendingCustomMeshFaceId = null
-      const result = customMeshFaceStrategy.leave(getContext())
+    const onBlockLeave = (event: BlockEvent) => {
+      pendingBlockFaceId = null
+      if (!shouldDetachBlockFaceOnLeave(asset.attachTo)) {
+        event.stopPropagation()
+        return
+      }
+      const result = blockFaceStrategy.leave(getContext())
       if (!result) return
       event.stopPropagation()
       const draft = draftNode.current
       if (draft) {
         useLiveNodeOverrides
           .getState()
-          .clearFields(draft.id, ['position', 'rotation', 'customMeshFaceId'])
+          .clearFields(draft.id, ['position', 'rotation', 'blockFaceId'])
       }
       if (draftNode.isAdopted) {
         applyTransition(result)
@@ -1826,8 +1830,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // have to aim around the cursor preview to drop the item.
       if (event.node.id === draftNode.current?.id) {
         const ctx = getContext()
-        if (ctx.state.surface === 'custom-mesh-face') {
-          const result = resolveCustomMeshPreviewCommit(ctx)
+        if (ctx.state.surface === 'block-face') {
+          const result = resolveBlockPreviewCommit(ctx)
           if (result) {
             event.stopPropagation()
             const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
@@ -2210,7 +2214,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // manual rotation would skew them off the wall plane.
       if (
         placementState.current.surface === 'roof-wall' ||
-        placementState.current.surface === 'custom-mesh-face'
+        placementState.current.surface === 'block-face'
       )
         return
 
@@ -2422,10 +2426,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('roof:move', onRoofWallMove)
     emitter.on('roof:click', onRoofWallClick)
     emitter.on('roof:leave', onRoofWallLeave)
-    emitter.on('custom-mesh:enter', onCustomMeshEnter)
-    emitter.on('custom-mesh:move', onCustomMeshMove)
-    emitter.on('custom-mesh:click', onCustomMeshClick)
-    emitter.on('custom-mesh:leave', onCustomMeshLeave)
+    emitter.on('block:enter', onBlockEnter)
+    emitter.on('block:move', onBlockMove)
+    emitter.on('block:click', onBlockClick)
+    emitter.on('block:leave', onBlockLeave)
     emitter.on('ceiling:enter', onCeilingEnter)
     emitter.on('ceiling:move', onCeilingMove)
     emitter.on('ceiling:click', onCeilingClick)
@@ -2476,10 +2480,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('roof:move', onRoofWallMove)
       emitter.off('roof:click', onRoofWallClick)
       emitter.off('roof:leave', onRoofWallLeave)
-      emitter.off('custom-mesh:enter', onCustomMeshEnter)
-      emitter.off('custom-mesh:move', onCustomMeshMove)
-      emitter.off('custom-mesh:click', onCustomMeshClick)
-      emitter.off('custom-mesh:leave', onCustomMeshLeave)
+      emitter.off('block:enter', onBlockEnter)
+      emitter.off('block:move', onBlockMove)
+      emitter.off('block:click', onBlockClick)
+      emitter.off('block:leave', onBlockLeave)
       emitter.off('ceiling:enter', onCeilingEnter)
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
@@ -2541,7 +2545,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (
       draftParent?.type === 'item' ||
       draftParent?.type === 'shelf' ||
-      (draftParent?.type === 'custom-mesh' && draft.customMeshFaceId)
+      (draftParent?.type === 'block' && draft.blockFaceId)
     )
       return
     draft.parentId = viewerLevelId
@@ -2576,7 +2580,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // the item's forward on the floor, and the triangle rides at the ghost's Y.
     let facingYaw = ghost.rotation.y
     let facingY = ghost.position.y
-    if (surf === 'wall' || surf === 'roof-wall' || surf === 'custom-mesh-face') {
+    if (surf === 'wall' || surf === 'roof-wall' || surf === 'block-face') {
       // Wall/roof-segment faces: the cursor group's yaw is the symmetric
       // wireframe yaw (π off the real facing for a wall, and a different frame
       // for a roof face), so derive the item's TRUE outward facing from the
@@ -2585,7 +2589,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // wall and roof-segment hosts alike, rather than the old quaternion read
       // that pointed the wrong way.
       const mesh =
-        surf === 'custom-mesh-face' || !draftNode.current
+        surf === 'block-face' || !draftNode.current
           ? null
           : sceneRegistry.nodes.get(draftNode.current.id)
       ghost.getWorldQuaternion(ghostSurfaceQuatRef.current)
@@ -2676,9 +2680,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         mesh.position.y = visualPosition[1]
         cursorGroupRef.current.position.y = visualPosition[1]
       }
-    } else if (placementState.current.surface === 'custom-mesh-face') {
+    } else if (placementState.current.surface === 'block-face') {
       const rotation = draftNode.current.rotation
-      applyCustomMeshPreviewPose(
+      applyBlockPreviewPose(
         mesh,
         [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
         rotation,

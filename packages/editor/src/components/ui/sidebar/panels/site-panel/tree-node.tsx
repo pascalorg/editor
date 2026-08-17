@@ -136,7 +136,7 @@ const treeNodeByType: Record<
   cabinet: RegistryTreeNode,
   'cabinet-module': RegistryTreeNode,
   'box-vent': RegistryTreeNode,
-  'custom-mesh': RegistryTreeNode,
+  'block': RegistryTreeNode,
   ceiling: CeilingTreeNode,
   chimney: ChimneyTreeNode,
   dormer: DormerTreeNode,

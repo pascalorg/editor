@@ -15,11 +15,11 @@ The event bus (`emitter`) is a global `mitt` instance typed with `EditorEvents`.
 node:<suffix>
 ```
 
-Example keys: `wall:click`, `custom-mesh:enter`, `node:click`, `grid:pointerdown`
+Example keys: `wall:click`, `block:enter`, `node:click`, `grid:pointerdown`
 
 ### Node Types
 Every registered `AnyNode` discriminator is available as a typed node-event
-prefix, including `custom-mesh`. `node:*` is the cross-kind channel for
+prefix, including `block`. `node:*` is the cross-kind channel for
 consumers that intentionally handle every node kind without maintaining a
 parallel list.
 
@@ -68,7 +68,7 @@ return <mesh ref={ref} {...events} />
 ```
 
 `useNodeEvents` converts R3F `ThreeEvent` into a `NodeEvent` and emits both the
-kind-specific event (`wall:click`, `custom-mesh:enter`, etc.) and its generic
+kind-specific event (`wall:click`, `block:enter`, etc.) and its generic
 `node:*` counterpart. It suppresses events while the camera is dragging.
 
 ## Listening
