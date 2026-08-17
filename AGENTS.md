@@ -193,6 +193,22 @@ Three things that bite:
   hydration — `store/use-sticky-defaults.ts` is the worked example. Verify by
   seeding `localStorage` by hand, reloading, and reading the value back; a
   manual `persist.rehydrate()` will restore it correctly and prove nothing.
+- **The autosave PUT is not the model's write path.** `scene-loader.tsx`'s
+  `handleSave` returns early when `sceneModelSignature` has moved, and that
+  signature covers everything except `comments` — so once the collaboration
+  channel is up, `PUT /api/scenes/:id` carries comments and nothing else. Model
+  edits go through `POST /api/scenes/:id/collaboration` as field-level batches,
+  one per gesture. Anything measured, throttled or optimised on the autosave
+  path therefore does nothing for ordinary editing; the collaboration route is
+  where the traffic is. `POST /api/scenes/:id/patch` is the third writer (node
+  deltas from the autosave hook), and all three land in the same `saveScene`.
+- **A save is a `draft` unless someone says otherwise.** Drafts overwrite the
+  head in place; only a `checkpoint` files a row a user can return to, and both
+  live-edit paths promote one every five minutes. The `SceneStore` default is
+  the opposite (`checkpoint`), so an MCP tool that says nothing keeps its
+  history. Adding a fourth write path means choosing a side deliberately —
+  defaulting to checkpoint there puts a full graph copy in the database per
+  call.
 
 Loaded scenes run through migrations. `packages/core/src/utils/scene-migrations.ts`
 is a **server-safe barrel** — everything it exports must stay pure data logic
