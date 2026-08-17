@@ -83,7 +83,7 @@ export function ViewerStage({
   synchronizeNavigation = true,
   threeDClassName,
 }: ViewerStageProps) {
-  const enabledModes = useMemo(() => normalizeViewerStageModes(modes), [modes])
+  const enabledModes = normalizeViewerStageModes(modes)
   const [internalMode, setInternalMode] = useState(() =>
     resolveViewerStageMode(defaultMode, enabledModes),
   )

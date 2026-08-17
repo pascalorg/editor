@@ -13,6 +13,12 @@ describe('viewer stage modes', () => {
     expect(normalizeViewerStageModes([])).toEqual(['3d'])
   })
 
+  test('reuses normalized combinations across inline prop arrays', () => {
+    expect(normalizeViewerStageModes(['split', '3d'])).toBe(
+      normalizeViewerStageModes(['3d', 'split']),
+    )
+  })
+
   test('falls back to the first enabled mode', () => {
     expect(resolveViewerStageMode('split', ['3d', '2d'])).toBe('3d')
     expect(resolveViewerStageMode(undefined, ['2d', 'split'])).toBe('2d')
