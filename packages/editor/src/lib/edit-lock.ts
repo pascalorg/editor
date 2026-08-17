@@ -3,11 +3,14 @@ import { useViewer } from '@pascal-app/viewer'
 
 /**
  * Whether a node is currently edit-locked — `sceneLocked` (everything) or its
- * category being in `lockedCategories`. Locked nodes stay selectable and
- * inspectable; the editor blocks move / delete / transform on them. The lock
- * state lives in the viewer's presentation store (`useViewer`), so both the
- * viewer's selection manager and the editor's edit paths can read it without
- * either package importing the other's edit vocabulary.
+ * category being in `lockedCategories`. A locked node is view-only: the
+ * selection manager will not select it (click, double-click dive, or marquee)
+ * and the editor blocks move / delete / transform on it. This holds for both
+ * lock scopes — a whole-scene lock and a single locked category behave the same
+ * way for the nodes they cover. The lock state lives in the viewer's
+ * presentation store (`useViewer`), so both the viewer's selection manager and
+ * the editor's edit paths can read it without either package importing the
+ * other's edit vocabulary.
  */
 export function isNodeEditLocked(node: AnyNode): boolean {
   const { sceneLocked, lockedCategories } = useViewer.getState()

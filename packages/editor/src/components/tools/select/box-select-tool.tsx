@@ -1,4 +1,4 @@
-import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
+import { type AnyNodeId, sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
@@ -12,6 +12,7 @@ import {
   Vector2,
   Vector3,
 } from 'three'
+import { filterEditableIds } from '../../../lib/edit-lock'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
@@ -249,9 +250,13 @@ function commitBoxSelection(ids: string[], event: PointerEvent) {
   const { phase, structureLayer } = useEditor.getState()
   const viewer = useViewer.getState()
 
+  // Locked nodes (a whole-scene lock, or a locked category) are not selectable,
+  // so a marquee drags over them without picking them up.
+  const selectable = filterEditableIds(ids as AnyNodeId[]) as string[]
+
   if (phase === 'structure' && structureLayer === 'zones') {
-    if (ids.length > 0) {
-      viewer.setSelection({ zoneId: ids[0] as ZoneNode['id'] })
+    if (selectable.length > 0) {
+      viewer.setSelection({ zoneId: selectable[0] as ZoneNode['id'] })
     } else if (!shouldAppend) {
       viewer.setSelection({ zoneId: null })
     }
@@ -260,12 +265,12 @@ function commitBoxSelection(ids: string[], event: PointerEvent) {
 
   if (shouldAppend) {
     viewer.setSelection({
-      selectedIds: Array.from(new Set([...viewer.selection.selectedIds, ...ids])),
+      selectedIds: Array.from(new Set([...viewer.selection.selectedIds, ...selectable])),
     })
     return
   }
 
-  viewer.setSelection({ selectedIds: ids })
+  viewer.setSelection({ selectedIds: selectable })
 }
 
 export const BoxSelectTool: React.FC = () => {
