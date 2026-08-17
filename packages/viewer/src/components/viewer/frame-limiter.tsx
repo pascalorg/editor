@@ -1,5 +1,5 @@
 import { useThree } from '@react-three/fiber'
-import { useLayoutEffect } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import useViewer from '../../store/use-viewer'
 
 type FrameLimiterProps = {
@@ -22,6 +22,7 @@ const DRAW_DISABLED =
 
 const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
   const { advance, set, frameloop: initFrameloop } = useThree()
+  const nextFrameTimeRef = useRef(0)
   const renderer = useThree((state) => state.gl)
   const size = useThree((state) => state.size)
   const dpr = useThree((state) => state.viewport.dpr)
@@ -32,7 +33,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     if (renderPaused) return
     let elapsed = 0
     let then = 0
-    let i = 0
+    let i = nextFrameTimeRef.current
     let raf: number | null = null
     let timer: ReturnType<typeof setInterval> | null = null
     let sizeSynced = false
@@ -50,12 +51,14 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
       if (elapsed > interval) {
         advance(i)
         i += elapsed / 1000 - (elapsed % interval) / 1000
+        nextFrameTimeRef.current = i
         then = t - (elapsed % interval)
       }
     }
     function kick() {
       syncSize()
       i += 1 / 1000
+      nextFrameTimeRef.current = i
       advance(i)
     }
     function onVisibilityChange() {
@@ -66,6 +69,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     if (DRAW_DISABLED) {
       timer = setInterval(() => {
         i += interval / 1000
+        nextFrameTimeRef.current = i
         advance(i)
       }, interval)
     } else {
