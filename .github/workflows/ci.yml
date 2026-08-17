@@ -15,6 +15,29 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+
+    # `packages/db`'s migration test needs a real, empty Postgres — generated
+    # SQL reviews fine and still fails when it runs. Without POSTGRES_URL that
+    # test skips itself, so a contributor with no database keeps a green suite;
+    # here it must actually run.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pascal
+          POSTGRES_PASSWORD: pascal
+          POSTGRES_DB: pascal
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U pascal -d pascal"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      POSTGRES_URL: postgresql://pascal:pascal@127.0.0.1:5433/pascal
+
     steps:
       - uses: actions/checkout@v4
 

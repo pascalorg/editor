@@ -25,8 +25,28 @@ cp .env.example .env
 |----------|----------|-------------|
 | `PORT` | No | Dev server port (default: 3002) |
 | `PASCAL_SHARE_LINK_SECRET` | For sharing | Signs view-only share links (`/share/<token>`). Without it the **Share** button returns 503 and existing links stop verifying — everything else works. Changing it invalidates every link already handed out, which is also the only way to revoke one. |
+| `POSTGRES_URL` | For the Postgres store | Connection string for `packages/db`. Unset, the editor keeps using the local SQLite store. |
+| `POSTGRES_POOL_SIZE` | No | Per-replica connection pool size (default 10). `replicas × this` must stay under Postgres' `max_connections`. |
 
 Local development and the official hosted editor work without any environment variables.
+
+## Postgres (optional, for cloud work)
+
+The default store is SQLite at `~/.pascal/data/pascal.db` — nothing to set up.
+To work on the Postgres data layer (`packages/db`):
+
+```bash
+docker compose up -d postgres
+cd packages/db && bun run db:migrate
+```
+
+That brings Postgres up on **port 5433** (5432 is usually taken by a system
+install, and connecting to the wrong one fails as "password authentication
+failed", which sends you looking at credentials instead of at the host) and
+applies the committed migrations.
+
+Migrations are a deploy step, never app boot: several replicas starting
+together would all race to migrate.
 
 ## Docker
 
@@ -37,11 +57,6 @@ docker compose up -d
 The editor will be running at **http://localhost:3000**. Saved scenes live in
 the `pascal-data` volume, so they survive `docker compose down`.
 
-Keep the container port at 3000: the `/scenes` page fetches its own API through
-a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
-value at build time, so remapping the port to something else makes the page
-return 500.
-
 ## Monorepo Structure
 
 ```
@@ -50,6 +65,7 @@ return 500.
 ├── packages/
 │   ├── core/            # @pascal-app/core — Scene schema, state, systems
 │   ├── viewer/          # @pascal-app/viewer — 3D rendering
+│   ├── db/              # @pascal-app/db — Postgres data layer (Drizzle)
 │   └── ui/              # Shared UI components
 └── tooling/             # Build & release tooling
 ```

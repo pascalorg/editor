@@ -13,7 +13,21 @@ export const env = createEnv({
   /**
    * Server-side environment variables (not exposed to client)
    */
-  server: {},
+  server: {
+    /**
+     * Postgres connection string. Optional while the SQLite store is still the
+     * default; `packages/db` throws on its own if something asks for a database
+     * without it. Validated here so a typo fails at boot rather than on the
+     * first query.
+     */
+    POSTGRES_URL: z.string().url().optional(),
+    /**
+     * Per-replica connection pool size. `replicas × this` has to stay under
+     * Postgres' `max_connections`, which is why production puts PgBouncer in
+     * front in transaction mode.
+     */
+    POSTGRES_POOL_SIZE: z.coerce.number().int().positive().max(100).optional(),
+  },
 
   /**
    * Client-side environment variables (exposed to browser via NEXT_PUBLIC_)

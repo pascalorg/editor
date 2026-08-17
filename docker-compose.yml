@@ -1,10 +1,30 @@
 services:
+  # Local Postgres for development. Production runs its own managed instance
+  # behind PgBouncer — see `packages/db/README.md`.
+  #
+  # Port 5433 on the host on purpose: 5432 is usually already taken by a
+  # system Postgres, and the failure that causes ("password authentication
+  # failed") points at credentials rather than at the wrong server.
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: pascal
+      POSTGRES_PASSWORD: pascal
+      POSTGRES_DB: pascal
+    volumes:
+      - pascal-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pascal -d pascal"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   editor:
     build: .
     ports:
-      # Keep the container port at 3000. `/scenes` fetches its own API through a
-      # base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines
-      # that at build time — so a remapped host port 500s the page.
       - "3000:3000"
     environment:
       NODE_ENV: production
@@ -17,3 +37,4 @@ services:
 
 volumes:
   pascal-data:
+  pascal-postgres:

@@ -27,7 +27,11 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      // `packages/db`'s migration test skips itself without this, silently —
+      // turbo filters the environment, so an unlisted variable simply is not
+      // there and the test reports green having run nothing.
+      "env": ["POSTGRES_URL"]
     },
     "dev": {
       "dependsOn": ["^build"],

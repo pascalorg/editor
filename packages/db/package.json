@@ -1,0 +1,35 @@
+{
+  "name": "@pascal-app/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Postgres data layer (Drizzle). Server-safe: no React, no Three.js, no DOM.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./schema": {
+      "types": "./src/schema/index.ts",
+      "default": "./src/schema/index.ts"
+    }
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "bun run src/migrate.ts",
+    "db:studio": "drizzle-kit studio --config drizzle.config.ts",
+    "check-types": "tsgo --noEmit",
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1",
+    "nanoid": "^5.1.7",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/bun": "^1.3.0",
+    "drizzle-kit": "^0.31.9",
+    "typescript": "6.0.3"
+  }
+}

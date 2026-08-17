@@ -1,0 +1,9 @@
+{
+  "extends": "@pascal/typescript-config/base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["bun"]
+  },
+  "include": ["src", "tests", "drizzle.config.ts"],
+  "exclude": ["node_modules"]
+}
