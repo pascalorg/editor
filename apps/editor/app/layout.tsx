@@ -1,6 +1,6 @@
 import { Agentation } from 'agentation'
 import { GeistPixelSquare } from 'geist/font/pixel'
-import { Archivo } from 'next/font/google'
+import { DM_Sans } from 'next/font/google'
 import localFont from 'next/font/local'
 import { ClientBootstrap } from './client-bootstrap'
 import './globals.css'
@@ -15,10 +15,10 @@ const geistMono = localFont({
 })
 
 // The Modernist system's face. `latin-ext` carries the Turkish ı, ğ and ş.
-const archivo = Archivo({
+const dmSans = DM_Sans({
   subsets: ['latin', 'latin-ext'],
   weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-archivo',
+  variable: '--font-dm-sans',
   display: 'swap',
 })
 
@@ -32,7 +32,7 @@ export default function RootLayout({
 
   return (
     <html
-      className={`dark ${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${archivo.variable}`}
+      className={`dark ${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} ${dmSans.variable}`}
       lang="tr"
       suppressHydrationWarning
     >
