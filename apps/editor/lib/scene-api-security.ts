@@ -2,7 +2,7 @@ import { getDatabase } from '@pascal-app/db'
 import { projectMembers, projects, scenes } from '@pascal-app/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
-import { auth } from './auth'
+import { getAuth } from './auth'
 
 const DEFAULT_RATE_LIMIT_PER_MINUTE = 120
 const WINDOW_MS = 60_000
@@ -66,9 +66,13 @@ export async function resolveActor(requestOrHeaders: Request | Headers): Promise
   }
 
   // 2. Fallback to session
-  const session = await auth.api.getSession({ headers })
+  const session = await getAuth().api.getSession({ headers })
   if (session?.user?.id) {
-    return { type: 'user', userId: session.user.id, isAnonymous: (session.user as any).isAnonymous ?? false }
+    return {
+      type: 'user',
+      userId: session.user.id,
+      isAnonymous: (session.user as any).isAnonymous ?? false,
+    }
   }
   return { type: 'anon' }
 }

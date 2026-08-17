@@ -30,7 +30,8 @@ cp .env.example .env
 | `BETTER_AUTH_SECRET` | For auth | A random string used to sign session cookies. |
 | `GOOGLE_CLIENT_ID` | For auth | Google OAuth Client ID. |
 | `GOOGLE_CLIENT_SECRET` | For auth | Google OAuth Client Secret. |
-| `RESEND_API_KEY` | For auth | API key for sending magic links via Resend. |
+| `RESEND_API_KEY` | For auth | API key for the transactional email Resend sends (magic link, email verification, password reset, welcome). Unset in dev, the messages are printed to the terminal instead — the magic link is clickable from there. Unset in production, the flows that need mail report a configuration error rather than claiming to have sent something. |
+| `EMAIL_FROM` | For auth | RFC 5322 sender for that mail, e.g. `Menart 3D <hesap@menart3d.com>`. Defaults to Resend's shared `onboarding@resend.dev`, which only delivers to the account owner. |
 | `NEXT_PUBLIC_APP_URL` | For auth | The base URL of the app (default: `http://localhost:3002`). |
 
 Local development and the official hosted editor work without any environment variables.

@@ -3,7 +3,7 @@ import { apiTokens } from '@pascal-app/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import { customAlphabet } from 'nanoid'
 import { NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getAuth } from '@/lib/auth'
 
 const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 const generateTokenValue = customAlphabet(ALPHABET, 32)
@@ -17,7 +17,7 @@ async function hashToken(token: string): Promise<string> {
 }
 
 export async function GET(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers })
+  const session = await getAuth().api.getSession({ headers: request.headers })
   if (!session?.user?.id) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const db = getDatabase()
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers })
+  const session = await getAuth().api.getSession({ headers: request.headers })
   if (!session?.user?.id) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const body = await request.json()
@@ -64,14 +64,14 @@ export async function POST(request: Request) {
       scopes,
     })
     .returning({ id: apiTokens.id })
-    
+
   if (!row) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
 
   return NextResponse.json({ id: row.id, token })
 }
 
 export async function DELETE(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers })
+  const session = await getAuth().api.getSession({ headers: request.headers })
   if (!session?.user?.id) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const url = new URL(request.url)

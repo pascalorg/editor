@@ -11,7 +11,8 @@
     }
   },
   "scripts": {
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsgo --noEmit",
+    "test": "bun test tests"
   },
   "dependencies": {
     "@pascal-app/db": "workspace:*",

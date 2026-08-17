@@ -32,6 +32,8 @@ export const env = createEnv({
     GOOGLE_CLIENT_ID: z.string().optional(),
     GOOGLE_CLIENT_SECRET: z.string().optional(),
     RESEND_API_KEY: z.string().optional(),
+    /** RFC 5322 sender for transactional mail, e.g. `Menart 3D <hesap@menart3d.com>`. */
+    EMAIL_FROM: z.string().optional(),
     S3_ENDPOINT: z.string().url().optional(),
     S3_REGION: z.string().optional(),
     S3_BUCKET: z.string().optional(),
@@ -57,6 +59,7 @@ export const env = createEnv({
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
+    EMAIL_FROM: process.env.EMAIL_FROM,
     NEXT_PUBLIC_ASSETS_CDN_URL:
       process.env.NEXT_PUBLIC_ASSETS_CDN_URL ?? process.env.NEXT_PUBLIC_EDITOR_ASSETS_CDN_URL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

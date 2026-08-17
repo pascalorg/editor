@@ -54,7 +54,7 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+  const [success, setSuccess] = useState<'magic-link' | 'password-reset' | null>(null)
 
   // Better-auth might not export getLastUsedLoginMethod immediately in this version context,
   // we'll safely ignore it or use a simpler approach.
@@ -114,9 +114,32 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
         if (result.error) {
           setError(result.error.message || 'Failed to send magic link')
         } else {
-          setSuccess(true)
-          setEmail('')
+          setSuccess('magic-link')
         }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Enter your email address first')
+      return
+    }
+    setError(null)
+    setIsLoading(true)
+    try {
+      const result = await authClient.requestPasswordReset({
+        email,
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (result.error) {
+        setError(result.error.message || 'Failed to send the reset link')
+      } else {
+        setSuccess('password-reset')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
@@ -132,7 +155,7 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
         setEmail('')
         setPassword('')
         setError(null)
-        setSuccess(false)
+        setSuccess(null)
       }, 200)
     }
   }
@@ -163,10 +186,15 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
               <div className="space-y-2">
                 <h3 className="font-semibold text-lg">{t('Check your email')}</h3>
                 <p className="text-muted-foreground text-sm">
-                  {t("We've sent a magic link to")} <strong>{email}</strong>
+                  {success === 'password-reset'
+                    ? t("We've sent a password reset link to")
+                    : t("We've sent a magic link to")}{' '}
+                  <strong>{email}</strong>
                 </p>
                 <p className="text-muted-foreground text-sm">
-                  {t('Click the link in the email to sign in to your account.')}
+                  {success === 'password-reset'
+                    ? t('Open the link in the email to choose a new password.')
+                    : t('Click the link in the email to sign in to your account.')}
                 </p>
               </div>
             </div>
@@ -235,6 +263,16 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
                     <label className="font-medium text-sm text-foreground" htmlFor="password">
                       {t('Password')}
                     </label>
+                    {isLoginView && (
+                      <button
+                        className="text-muted-foreground text-xs hover:text-foreground hover:underline disabled:opacity-50"
+                        disabled={anyLoading}
+                        onClick={handleForgotPassword}
+                        type="button"
+                      >
+                        {t('Forgot your password?')}
+                      </button>
+                    )}
                   </div>
                   <input
                     autoComplete={isLoginView ? 'current-password' : 'new-password'}
