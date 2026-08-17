@@ -1,5 +1,6 @@
 import { type I18nLocale, translate } from '@pascal-app/editor/i18n'
 import { cookies } from 'next/headers'
+import { headers } from 'next/headers'
 import Link from 'next/link'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'

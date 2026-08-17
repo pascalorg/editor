@@ -68,7 +68,7 @@ export async function resolveActor(requestOrHeaders: Request | Headers): Promise
   // 2. Fallback to session
   const session = await auth.api.getSession({ headers })
   if (session?.user?.id) {
-    return { type: 'user', userId: session.user.id, isAnonymous: session.user.isAnonymous ?? false }
+    return { type: 'user', userId: session.user.id, isAnonymous: (session.user as any).isAnonymous ?? false }
   }
   return { type: 'anon' }
 }

@@ -254,11 +254,11 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
   const handleThumb = useCallback(
     async (_blob: Blob) => {
-      // TODO(phase7): upload thumbnail via POST /api/scenes/[id]/thumbnail.
-      // Stub endpoint is not yet implemented in v0.1 — skip upload for now.
+      // Thumbnail upload via POST /api/scenes/[id]/thumbnail.
       await fetch(`/api/scenes/${meta.id}/thumbnail`, {
         method: 'POST',
-        // Intentionally no body — endpoint is a stub.
+        body: _blob,
+        headers: { 'Content-Type': _blob.type },
       }).catch(() => {
         // Swallow errors silently; thumbnail upload is best-effort.
       })

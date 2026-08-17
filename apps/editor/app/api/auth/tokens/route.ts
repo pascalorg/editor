@@ -64,6 +64,8 @@ export async function POST(request: Request) {
       scopes,
     })
     .returning({ id: apiTokens.id })
+    
+  if (!row) return NextResponse.json({ error: 'internal_error' }, { status: 500 })
 
   return NextResponse.json({ id: row.id, token })
 }
