@@ -47,7 +47,7 @@ export const LevelSystem = () => {
       const explodedExtra = levelMode === 'exploded' ? index * EXPLODED_GAP : 0
       const targetY = baseY + explodedExtra
 
-      obj.position.y = lerp(obj.position.y, targetY, delta * 12) // Smoothly animate to new Y position
+      obj.position.y = lerp(obj.position.y, targetY, Math.min(delta * 12, 1)) // Smoothly animate to new Y position
 
       // Solo: hidden levels ABOVE the soloed one stay in the shadow map
       // (shadow-caster-only) so the sun still shadows the soloed floor through
