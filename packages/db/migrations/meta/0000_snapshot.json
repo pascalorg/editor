@@ -1,5 +1,5 @@
 {
-  "id": "74d70b6a-5e36-4809-aed9-b2b3d7597db8",
+  "id": "2eaf002e-84b8-4a23-a808-30efd9961992",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1085,15 +1085,6 @@
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "scene_versions_author_id_auth_users_id_fk": {
-          "name": "scene_versions_author_id_auth_users_id_fk",
-          "tableFrom": "scene_versions",
-          "tableTo": "auth_users",
-          "columnsFrom": ["author_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -1234,26 +1225,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "scenes_project_id_projects_id_fk": {
-          "name": "scenes_project_id_projects_id_fk",
-          "tableFrom": "scenes",
-          "tableTo": "projects",
-          "columnsFrom": ["project_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "scenes_owner_id_auth_users_id_fk": {
-          "name": "scenes_owner_id_auth_users_id_fk",
-          "tableFrom": "scenes",
-          "tableTo": "auth_users",
-          "columnsFrom": ["owner_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

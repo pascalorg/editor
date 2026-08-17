@@ -19,8 +19,6 @@
  */
 import { index, jsonb, pgEnum, pgTable, primaryKey } from 'drizzle-orm/pg-core'
 import { createdAt, id, timestamps } from '../helpers'
-import { users } from './auth'
-import { projects } from './projects'
 
 export const AUTHOR_KINDS = ['user', 'agent', 'system'] as const
 export const authorKinds = pgEnum('scene_author_kinds', AUTHOR_KINDS)
@@ -30,8 +28,16 @@ export const scenes = pgTable(
   (t) => ({
     id: id('scene'),
     name: t.text('name').notNull(),
-    projectId: t.text('project_id').references(() => projects.id, { onDelete: 'cascade' }),
-    ownerId: t.text('owner_id').references(() => users.id, { onDelete: 'set null' }),
+    /**
+     * Deliberately **not** a foreign key yet. The `SceneStore` contract takes
+     * `projectId` and `ownerId` as opaque strings and SQLite stores them as
+     * such; a constraint here would make the two backends behave differently
+     * for the same call, which is the one thing this interface exists to
+     * prevent. #34 introduces real projects and users, and the constraints
+     * arrive with them in their own migration.
+     */
+    projectId: t.text('project_id'),
+    ownerId: t.text('owner_id'),
     thumbnailUrl: t.text('thumbnail_url'),
     /** Version of the row in `scene_versions` this scene currently points at. */
     headVersion: t.integer('head_version').notNull().default(1),
@@ -60,7 +66,8 @@ export const sceneVersions = pgTable(
     sizeBytes: t.integer('size_bytes').notNull().default(0),
     nodeCount: t.integer('node_count').notNull().default(0),
     authorKind: authorKinds('author_kind').notNull().default('user'),
-    authorId: t.text('author_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Opaque for the same reason as `scenes.owner_id`. */
+    authorId: t.text('author_id'),
     createdAt,
   }),
   (t) => [primaryKey({ columns: [t.sceneId, t.version] })],
