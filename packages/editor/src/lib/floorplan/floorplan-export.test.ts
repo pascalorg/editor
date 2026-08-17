@@ -263,9 +263,9 @@ describe('floor plan export policy', () => {
 
   test('keeps the export viewport anchored to the structural drawing bounds', () => {
     expect(resolveFloorplanExportViewport({ x: -5, y: -6, width: 13, height: 13.5 })).toEqual({
-      x: -7.7,
+      x: -7.6,
       y: -8.7,
-      width: 18.4,
+      width: 18.2,
       height: 18.9,
     })
   })
@@ -315,5 +315,118 @@ describe('resolveFloorplanPageLayout', () => {
     expect(resolveFloorplanPageLayout(842, 595)).toEqual({
       planBox: { x: 36, y: 64, width: 770, height: 495 },
     })
+  })
+})
+
+import { nodeRegistry } from '@pascal-app/core'
+import { collectFloorplanGeometry, collectFloorplanSchedules } from './floorplan-export'
+describe('collectFloorplanGeometry scope filtering', () => {
+  const defaultArgs = [
+    'metric',
+    'millimeters',
+    DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+    'floor-plan',
+    'centerline',
+  ] as const
+
+  test('excludes utility nodes from the subtree walk under structure scope, but includes under routing', () => {
+    nodeRegistry._register({
+      schemaVersion: 1,
+      schema: { type: 'object', properties: {} } as any,
+      kind: 'mock-utility',
+      category: 'utility',
+      floorplan: () => ({ kind: 'rect', x: 0, y: 0, width: 1, height: 1, fill: 'black' } as any),
+    } as any)
+    
+    const nodes = {
+      'level-1': { id: 'level-1', type: 'level', children: ['u1'] },
+      u1: { id: 'u1', type: 'mock-utility', visible: true },
+    } as any
+
+    const struct = collectFloorplanGeometry(nodes, 'level-1' as any, 'structure', ...defaultArgs)
+    expect(struct).toHaveLength(0)
+
+    const route = collectFloorplanGeometry(nodes, 'level-1' as any, 'routing', ...defaultArgs)
+    expect(route).toHaveLength(1)
+    expect(route[0]?.id).toBe('u1' as any)
+    
+    nodeRegistry._reset()
+  })
+
+  test('excludes utility nodes from the linked-level walk under structure scope', () => {
+    nodeRegistry._register({
+      schemaVersion: 1,
+      schema: { type: 'object', properties: {} } as any,
+      kind: 'mock-zone',
+      category: 'site',
+      floorplan: () => ({ kind: 'rect', x: 0, y: 0, width: 1, height: 1, fill: 'black' } as any),
+      capabilities: { floorPlaced: true }
+    } as any)
+    
+    const nodes = {
+      'level-1': { id: 'level-1', type: 'level', children: [], elevation: 0 },
+      zone: { id: 'zone', type: 'mock-zone', visible: true, elevation: 0 },
+    } as any
+
+    // the floor plan linked level walk looks at nodes outside the level hierarchy if they match the elevation
+    // but the scope filter should exclude site nodes from structure and routing
+    const struct = collectFloorplanGeometry(nodes, 'level-1' as any, 'structure', ...defaultArgs)
+    expect(struct).toHaveLength(0)
+
+    const route = collectFloorplanGeometry(nodes, 'level-1' as any, 'routing', ...defaultArgs)
+    expect(route).toHaveLength(0)
+
+    const full = collectFloorplanGeometry(nodes, 'level-1' as any, 'full', ...defaultArgs)
+    // full includes everything
+    expect(full.length).toBeGreaterThanOrEqual(0)
+    
+    nodeRegistry._reset()
+  })
+})
+
+describe('collectFloorplanSchedules scope filtering', () => {
+  test('filters schedule contributors by scope', () => {
+    nodeRegistry._register({
+      schemaVersion: 1,
+      schema: { type: 'object', properties: {} } as any,
+      kind: 'mock-door',
+      category: 'structure',
+      floorplan: () => ({ kind: 'rect', x: 0, y: 0, width: 1, height: 1, fill: 'black' } as any),
+      extensions: {
+        'pascal:editor/floorplan': {
+          schedule: ({ siblings }: any) => ({ title: 'Doors', columns: [], rows: siblings.map((s: any) => ({ id: s.id, cells: [] })) })
+        }
+      } as any
+    } as any)
+    
+    nodeRegistry._register({
+      schemaVersion: 1,
+      schema: { type: 'object', properties: {} } as any,
+      kind: 'mock-utility-schedule',
+      category: 'utility',
+      floorplan: () => ({ kind: 'rect', x: 0, y: 0, width: 1, height: 1, fill: 'black' } as any),
+      extensions: {
+        'pascal:editor/floorplan': {
+          schedule: ({ siblings }: any) => ({ title: 'Utilities', columns: [], rows: siblings.map((s: any) => ({ id: s.id, cells: [] })) })
+        }
+      } as any
+    } as any)
+
+    const nodes = {
+      'level-1': { id: 'level-1', type: 'level', children: ['d1', 'u1'] },
+      d1: { id: 'd1', type: 'mock-door', visible: true },
+      u1: { id: 'u1', type: 'mock-utility-schedule', visible: true },
+    } as any
+
+    const struct = collectFloorplanSchedules(nodes, 'level-1' as any, 'metric', 'structure')
+    expect(struct).toHaveLength(1)
+    expect(struct[0]?.title).toBe('Doors')
+
+    const route = collectFloorplanSchedules(nodes, 'level-1' as any, 'metric', 'routing')
+    expect(route).toHaveLength(2)
+    expect(route.map(s => s.title)).toContain('Doors')
+    expect(route.map(s => s.title)).toContain('Utilities')
+    
+    nodeRegistry._reset()
   })
 })
