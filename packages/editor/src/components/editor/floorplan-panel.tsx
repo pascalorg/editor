@@ -2418,7 +2418,12 @@ function getWallHoverSidePaths(polygon: Point2D[], wall: WallNode): [string, str
   return [rightSidePath, leftSidePath]
 }
 
-function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoint): WallNode {
+function buildDraftWall(
+  levelId: string,
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  thickness?: number,
+): WallNode {
   return {
     object: 'node',
     id: 'wall_draft' as WallNode['id'],
@@ -2430,6 +2435,7 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
     children: [],
     start,
     end,
+    thickness,
     frontSide: 'unknown',
     backSide: 'unknown',
   }
@@ -4796,6 +4802,7 @@ function FloorplanLinearDraftLayer({
 }) {
   const metricNotation = useViewer((state) => state.metricNotation)
   const wallAlignment = useEditor((s) => s.wallAlignment)
+  const draftWallThickness = useEditor((s) => s.toolDefaults.wall?.thickness as number | undefined)
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
@@ -4826,13 +4833,15 @@ function FloorplanLinearDraftLayer({
     const [ghostStart, ghostEnd] = offsetWallLineForAlignment(
       wallDraftStart,
       wallDraftEnd,
-      getWallThickness(buildDraftWall(levelId, wallDraftStart, wallDraftEnd)),
+      getWallThickness(buildDraftWall(levelId, wallDraftStart, wallDraftEnd, draftWallThickness)),
       wallAlignment,
     )
-    const draftWall = getSharedFloorplanWall(buildDraftWall(levelId, ghostStart, ghostEnd))
+    const draftWall = getSharedFloorplanWall(
+      buildDraftWall(levelId, ghostStart, ghostEnd, draftWallThickness),
+    )
     // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
-  }, [levelId, wallDraftStart, wallDraftEnd, wallAlignment])
+  }, [levelId, wallDraftStart, wallDraftEnd, wallAlignment, draftWallThickness])
 
   const draftPolygonPoints = useMemo(() => {
     if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {

@@ -55,7 +55,7 @@ import {
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
-import { DoubleSide, type Group, type Mesh, Vector3 } from 'three'
+import { BoxGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
 import {
   DraftAngleArc,
   type DraftAngleLabel,
@@ -477,8 +477,10 @@ export const WallTool: React.FC = () => {
   previewHeightRef.current = previewHeight
   const previewThicknessRef = useRef(previewThickness)
   previewThicknessRef.current = previewThickness
+  const wallAlignment = useEditor((s) => s.wallAlignment)
   const cursorRef = useRef<Group>(null)
   const wallPreviewRef = useRef<Mesh>(null!)
+  const edgeMaterialRef = useRef<any>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const chainFirstVertex = useRef<Vector3 | null>(null)
@@ -496,6 +498,28 @@ export const WallTool: React.FC = () => {
   // Clear preset-seeded defaults on deactivation so a later manual wall draw
   // isn't built with a stale preset's parameters. Unmount-only.
   useEffect(() => () => clearToolDefaultsOnDeactivate('wall'), [])
+
+  useEffect(() => {
+    if (buildingState.current === 1 && wallPreviewRef.current) {
+      const snappedLocal: WallPlanPoint = [endingPoint.current.x, endingPoint.current.z]
+      const [ghostStart, ghostEnd] = offsetWallLineForAlignment(
+        [startingPoint.current.x, startingPoint.current.z],
+        snappedLocal,
+        previewThickness,
+        wallAlignment,
+      )
+
+      ghostStartVec.set(ghostStart[0], startingPoint.current.y, ghostStart[1])
+      ghostEndVec.set(ghostEnd[0], endingPoint.current.y, ghostEnd[1])
+      updateWallPreview(
+        wallPreviewRef.current,
+        ghostStartVec,
+        ghostEndVec,
+        previewHeightRef.current,
+        previewThickness,
+      )
+    }
+  }, [wallAlignment, previewThickness])
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
@@ -697,8 +721,8 @@ export const WallTool: React.FC = () => {
           useEditor.getState().wallAlignment,
         )
         const draftPreview = useFloorplanDraftPreview.getState()
-        draftPreview.setWallDraftStart(ghostStart)
-        draftPreview.setWallDraftEnd(ghostEnd)
+        draftPreview.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
+        draftPreview.setWallDraftEnd(snappedLocal)
         cursorRef.current.position.copy(endingPoint.current)
         setAxisGuide({
           origin: [startingPoint.current.x, startingPoint.current.z],
@@ -722,7 +746,17 @@ export const WallTool: React.FC = () => {
         )
         const isDark = getSceneTheme(useViewer.getState().sceneTheme).appearance === 'dark'
         const color = snapResult.violation ? (isDark ? '#f87171' : '#ef4444') : '#818cf8'
+        const edgeColor = snapResult.violation
+          ? isDark
+            ? '#f87171'
+            : '#ef4444'
+          : isDark
+            ? '#a5b4fc'
+            : '#4f46e5'
         ;(wallPreviewRef.current.material as any).color.set(color)
+        if (edgeMaterialRef.current) {
+          edgeMaterialRef.current.color.set(edgeColor)
+        }
         setDraftMeasurement(
           getDraftMeasurementState(
             [startingPoint.current.x, startingPoint.current.z],
@@ -935,6 +969,17 @@ export const WallTool: React.FC = () => {
           side={DoubleSide}
           transparent
         />
+        <lineSegments layers={EDITOR_LAYER} renderOrder={2}>
+          <edgesGeometry attach="geometry" args={[new BoxGeometry(1, 1, 1)]} />
+          <lineBasicMaterial
+            attach="material"
+            ref={edgeMaterialRef}
+            color={isDark ? '#a5b4fc' : '#4f46e5'}
+            depthTest={false}
+            transparent={true}
+            opacity={0.8}
+          />
+        </lineSegments>
       </mesh>
       {draftMeasurement && (
         <>
