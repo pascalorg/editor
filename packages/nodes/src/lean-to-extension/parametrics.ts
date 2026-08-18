@@ -224,6 +224,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'enum',
           options: ['hidden', 'rafters', 'purlins', 'covering-specific'],
         },
+        { key: 'autoMiterCorners', label: 'Auto miter corners', kind: 'boolean' },
       ],
     },
     {

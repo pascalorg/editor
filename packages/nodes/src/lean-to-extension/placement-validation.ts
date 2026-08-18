@@ -17,6 +17,10 @@ function overlaps(aCenter: number, aWidth: number, bCenter: number, bWidth: numb
   return Math.abs(aCenter - bCenter) < (aWidth + bWidth) / 2 + CLEARANCE
 }
 
+function leanToSpansOverlap(a: LeanToExtensionNode, b: LeanToExtensionNode) {
+  return Math.abs(a.position[0] - b.position[0]) < (a.span + b.span) / 2 - 1e-6
+}
+
 function planBounds(leanTo: LeanToExtensionNode, wall: WallNode) {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
@@ -305,16 +309,10 @@ export function leanToPlacementConflicts(
   for (const childId of wall.children ?? []) {
     const child = nodes[childId as AnyNodeId]
     if (!child || child.id === leanTo.id) continue
-    if (child.type === 'door' || child.type === 'window') {
-      if (overlaps(leanTo.position[0], leanTo.span, child.position[0], child.width)) {
-        conflicts.push(`${child.type} ${child.id}`)
-      }
-      continue
-    }
     if (
       child.type === 'lean-to-extension' &&
       Math.cos(child.rotation[1]) * Math.cos(leanTo.rotation[1]) > 0 &&
-      overlaps(leanTo.position[0], leanTo.span, child.position[0], child.span)
+      leanToSpansOverlap(leanTo, child)
     ) {
       conflicts.push(`lean-to extension ${child.id}`)
     }
@@ -370,6 +368,7 @@ export function leanToPlacementConflicts(
     const roofBuilding = ancestorBuilding(roof, nodes)
     if (roofBuilding?.id !== hostBuilding?.id) continue
     const roofLevelY = roof.parentId ? (elevations.get(roof.parentId)?.baseY ?? 0) : 0
+    const isSameHostLevel = roof.parentId === wall.parentId
     for (const childId of roof.children) {
       const segment = nodes[childId as AnyNodeId]
       if (segment?.type !== 'roof-segment') continue
@@ -379,6 +378,7 @@ export function leanToPlacementConflicts(
         }
         continue
       }
+      if (!isSameHostLevel) continue
       if (!boundsOverlap(candidateWorldBounds, roofSegmentWorldBounds(roof, segment, roofBuilding)))
         continue
       const roofMinY = buildingY + roofLevelY + roof.position[1] + segment.position[1]

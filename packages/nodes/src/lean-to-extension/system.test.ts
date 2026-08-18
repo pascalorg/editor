@@ -11,7 +11,7 @@ import {
   useScene,
   WallNode,
 } from '@pascal-app/core'
-import { createLeanToAssembly } from './assembly'
+import { createLeanToAssembly, leanToCornerPostIndex, managedLeanToPostIndex } from './assembly'
 import { initializeLeanToExtensionSync } from './system'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -105,5 +105,164 @@ describe('lean-to scene commit boundary', () => {
     expect(postAfterParentEdit.rotation).toBe(Math.PI)
     expect(postAfterParentEdit.supportStyle).toBe('k-brace')
     expect(postAfterParentEdit.height).not.toBe(heightBeforeParentEdit)
+  })
+
+  test('preserves the resolved free wall span across commit synchronization', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_shared_wall', level: 0 })
+    const wall = WallNode.parse({
+      id: 'wall_shared_span',
+      parentId: level.id,
+      start: [0, 0],
+      end: [6, 0],
+    })
+    const existing = LeanToExtensionNode.parse({
+      id: 'leanto_existing_span',
+      parentId: wall.id,
+      autoSpan: false,
+      position: [1, 0, 0.05],
+      span: 2,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const candidate = LeanToExtensionNode.parse({
+      id: 'leanto_remaining_span',
+      parentId: wall.id,
+      autoSpan: true,
+      position: [4, 0, 0.05],
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const existingAssembly = createLeanToAssembly(existing)
+    const candidateAssembly = createLeanToAssembly(candidate)
+    const nodes = Object.fromEntries(
+      [
+        level,
+        { ...wall, children: [existing.id, candidate.id] },
+        existingAssembly.extension,
+        ...existingAssembly.children,
+        candidateAssembly.extension,
+        ...candidateAssembly.children,
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    useScene.getState().updateNode(candidate.id as AnyNodeId, { projection: 3 })
+
+    const committed = useScene.getState().nodes[candidate.id as AnyNodeId]
+    expect(committed?.type).toBe('lean-to-extension')
+    if (committed?.type !== 'lean-to-extension') return
+    expect(committed.position[0]).toBeCloseTo(4, 6)
+    expect(committed.span).toBeCloseTo(4, 6)
+  })
+
+  test('synchronizes a complete corner joint after two extensions become neighbors', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_corner_sync', level: 0 })
+    const wallA = WallNode.parse({
+      id: 'wall_corner_sync_a',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_corner_sync_b',
+      parentId: level.id,
+      start: [4, 0],
+      end: [4, -4],
+    })
+    const leanToA = LeanToExtensionNode.parse({
+      id: 'leanto_corner_sync_a',
+      parentId: wallA.id,
+      position: [2, 0, 0.05],
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const leanToB = LeanToExtensionNode.parse({
+      id: 'leanto_corner_sync_b',
+      parentId: wallB.id,
+      position: [2, 0, 0.05],
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const assemblyA = createLeanToAssembly(leanToA)
+    const assemblyB = createLeanToAssembly(leanToB)
+    const nodes = Object.fromEntries(
+      [
+        { ...level, children: [wallA.id, wallB.id] },
+        { ...wallA, children: [leanToA.id] },
+        { ...wallB, children: [leanToB.id] },
+        assemblyA.extension,
+        ...assemblyA.children,
+        assemblyB.extension,
+        ...assemblyB.children,
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    const syncedNodes = useScene.getState().nodes
+    const syncedA = syncedNodes[leanToA.id as AnyNodeId]
+    const syncedB = syncedNodes[leanToB.id as AnyNodeId]
+    expect(syncedA?.type).toBe('lean-to-extension')
+    expect(syncedB?.type).toBe('lean-to-extension')
+    if (syncedA?.type !== 'lean-to-extension' || syncedB?.type !== 'lean-to-extension') return
+    expect(syncedA.rightEndCondition).toBe('joined')
+    expect(syncedB.leftEndCondition).toBe('joined')
+    expect(syncedA.metadata).toMatchObject({
+      leanToCornerJoints: { right: { gutterMitre: Math.PI / 4 } },
+    })
+    expect(syncedB.metadata).toMatchObject({
+      leanToCornerJoints: { left: { gutterMitre: Math.PI / 4 } },
+    })
+
+    const roofA = syncedA.children
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .find((node) => node?.type === 'roof')
+    const segmentA =
+      roofA?.type === 'roof'
+        ? roofA.children
+            .map((id) => syncedNodes[id as AnyNodeId])
+            .find((node) => node?.type === 'roof-segment')
+        : undefined
+    const gutterA =
+      segmentA?.type === 'roof-segment'
+        ? segmentA.children
+            .map((id) => syncedNodes[id as AnyNodeId])
+            .find((node) => node?.type === 'gutter')
+        : undefined
+    expect(segmentA?.metadata).toMatchObject({ leanToCornerSides: ['right'] })
+    expect(gutterA?.metadata).toMatchObject({
+      leanToGutterMitres: { left: 0, right: Math.PI / 4 },
+    })
+
+    const cornerPosts = [...syncedA.children, ...syncedB.children]
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .filter((node) => {
+        if (node?.type !== 'column') return false
+        const index = managedLeanToPostIndex(node)
+        return index === leanToCornerPostIndex('left') || index === leanToCornerPostIndex('right')
+      })
+    expect(cornerPosts).toHaveLength(1)
   })
 })

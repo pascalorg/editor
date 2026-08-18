@@ -24,6 +24,7 @@ import { leanToWallLocalPose, resolveLeanToWallPlacement } from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import LeanToExtensionPreview from './preview'
 import {
+  applyLeanToAvailableWallSpan,
   applyLeanToRoofAttachment,
   applyLeanToWallAutoSpan,
   clearLeanToRoofAttachment,
@@ -68,9 +69,15 @@ const LeanToExtensionTool = ({ activeLevelId, sceneApi, selectNode }: ToolContri
       }
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const attachment = resolveLeanToRoofAttachment(wallPlacement, event.node, nodes)
-      const attachedNode = attachment
+      const autoSpannedNode = attachment
         ? applyLeanToRoofAttachment(wallPlacement, attachment)
         : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), event.node)
+      const attachedNode = applyLeanToAvailableWallSpan(
+        autoSpannedNode,
+        event.node,
+        nodes,
+        wallPlacement.position[0],
+      )
       const node = resolveLeanToEndAbutments(attachedNode, event.node, nodes)
       if (leanToPlacementConflicts(node, event.node, nodes).length > 0) {
         setPreview(null)
@@ -98,7 +105,7 @@ const LeanToExtensionTool = ({ activeLevelId, sceneApi, selectNode }: ToolContri
       if (!node) return
       event.stopPropagation()
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
-      const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes))
+      const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes), nodes)
       sceneApi.createMany?.([
         { node: assembly.extension, parentId: event.node.id },
         ...assembly.children.map((child) => ({

@@ -1,6 +1,9 @@
 import {
   type AnyNodeId,
   type FloorplanAffordance,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  isCurvedWall,
   type LeanToExtensionNode,
   snapScalar,
   useLiveNodeOverrides,
@@ -20,12 +23,24 @@ export const leanToResizeAffordance: FloorplanAffordance<LeanToExtensionNode> = 
       return { affectedIds: [], apply() {}, canCommit: () => false }
     }
     const { dimension, side = 1 } = payload as ResizePayload
-    const dx = wall.end[0] - wall.start[0]
-    const dz = wall.end[1] - wall.start[1]
-    const length = Math.max(1e-6, Math.hypot(dx, dz))
-    const along: readonly [number, number] = [dx / length, dz / length]
     const outwardSign = Math.cos(node.rotation[1]) >= 0 ? 1 : -1
-    const outward: readonly [number, number] = [-along[1] * outwardSign, along[0] * outwardSign]
+    let along: readonly [number, number]
+    let outward: readonly [number, number]
+    // On a curved host the drag axes are the wall arc's tangent / normal at
+    // the lean-to's along-wall position, not the straight chord direction.
+    if (isCurvedWall(wall)) {
+      const arcLength = Math.max(1e-6, getWallCurveLength(wall))
+      const t = Math.max(0, Math.min(1, node.position[0] / arcLength))
+      const frame = getWallCurveFrameAt(wall, t)
+      along = [frame.tangent.x, frame.tangent.y]
+      outward = [frame.normal.x * outwardSign, frame.normal.y * outwardSign]
+    } else {
+      const dx = wall.end[0] - wall.start[0]
+      const dz = wall.end[1] - wall.start[1]
+      const length = Math.max(1e-6, Math.hypot(dx, dz))
+      along = [dx / length, dz / length]
+      outward = [-along[1] * outwardSign, along[0] * outwardSign]
+    }
     const axis = dimension === 'projection' ? outward : along
     const initialAxis = initialPlanPoint[0] * axis[0] + initialPlanPoint[1] * axis[1]
     const initialValue = dimension === 'projection' ? node.projection : node.span

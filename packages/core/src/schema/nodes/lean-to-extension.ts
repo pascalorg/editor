@@ -18,6 +18,7 @@ export const LeanToPostLayoutMode = z.enum(['count', 'target-spacing'])
 export const LeanToFootingStyle = z.enum(['none', 'base-plate', 'concrete-pad'])
 export const LeanToCoveringType = z.enum(['generic', 'shingle', 'metal-panel'])
 const DEFAULT_LOW_EDGE_HEIGHT = 2.7 - 3 * Math.tan((5 * Math.PI) / 180)
+const DEFAULT_LEAN_TO_POST_SPACING = 3
 export type LeanToConnectionMode = z.infer<typeof LeanToConnectionMode>
 export type LeanToRoofEdge = z.infer<typeof LeanToRoofEdge>
 
@@ -31,12 +32,25 @@ export const LeanToExtensionNode = BaseNode.extend({
   span: z.number().min(0.5).max(100).default(4),
   autoSpan: z.boolean().default(true),
   projection: z.number().min(0.5).max(10).default(2.5),
+  spanArcCenterZ: z
+    .number()
+    .optional()
+    .describe(
+      'Local-Z of the host wall arc center in the lean-to local frame (the crown sits on the local Z axis, so center X = 0). Derived from the host wall arc; absent for straight walls.',
+    ),
+  spanArcRadius: z
+    .number()
+    .optional()
+    .describe(
+      "The host wall's true arc radius, in metres. Derived from the host wall arc; absent for straight walls.",
+    ),
   highEdgeHeight: z.number().min(0.8).max(10).default(2.8),
   lowEdgeHeight: z.number().min(0.2).max(10).default(DEFAULT_LOW_EDGE_HEIGHT),
   pitch: z.number().min(1).max(45).default(10),
   resizeLock: LeanToResizeLock.default('preserve-high-edge'),
   leftEndCondition: LeanToEndCondition.default('open'),
   rightEndCondition: LeanToEndCondition.default('open'),
+  autoMiterCorners: z.boolean().default(true),
   sideFlashing: z.boolean().default(true),
   flashingProjection: z.number().min(0.01).max(0.5).default(0.025),
   flashingHeight: z.number().min(0.03).max(0.5).default(0.14),
@@ -84,9 +98,9 @@ export const LeanToExtensionNode = BaseNode.extend({
   postWidth: z.number().min(0.05).max(0.6).default(0.16),
   postDepth: z.number().min(0.05).max(0.6).default(0.16),
   postCount: z.number().int().min(2).max(20).default(3),
-  postLayoutMode: LeanToPostLayoutMode.default('count'),
-  postSpacing: z.number().min(0.3).max(10).default(2),
-  postInset: z.number().min(0).max(3).default(0.2),
+  postLayoutMode: LeanToPostLayoutMode.default('target-spacing'),
+  postSpacing: z.number().min(0.3).max(10).default(DEFAULT_LEAN_TO_POST_SPACING),
+  postInset: z.number().min(0).max(3).default(0),
   postBracing: z.enum(['none', 'knee']).default('none'),
   footingStyle: LeanToFootingStyle.default('none'),
 }).describe(

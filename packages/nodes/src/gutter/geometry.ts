@@ -234,10 +234,35 @@ export function buildGutterGeometry(
     }
     const cutGeometry = csgGeometry(workingBrush)
     merged.dispose()
-    return cutGeometry
+    return bendGutterGeometryAlongArc(cutGeometry, node)
   }
 
-  return merged
+  return bendGutterGeometryAlongArc(merged, node)
+}
+
+// Bend the finished straight gutter (length along mesh-+X, outward along mesh-+Z)
+// onto its stored concentric arc. Each vertex keeps its vertical Y; its (x, z) rotate
+// about the arc center by the angle its along-length coordinate subtends, so the trough
+// hugs the same circle as the deck's eave. Absent `arc` is a straight no-op.
+function bendGutterGeometryAlongArc(
+  geometry: THREE.BufferGeometry,
+  node: GutterNode,
+): THREE.BufferGeometry {
+  const arc = node.arc
+  if (!arc || !Number.isFinite(arc.radius)) return geometry
+  const signedRef = (Math.sign(arc.centerZ) || 1) * arc.radius
+  const position = geometry.attributes.position!
+  for (let index = 0; index < position.count; index++) {
+    const x = position.getX(index)
+    const z = position.getZ(index)
+    const phi = (x - arc.centerX) / signedRef
+    const radial = z - arc.centerZ
+    position.setX(index, arc.centerX - radial * Math.sin(phi))
+    position.setZ(index, arc.centerZ + radial * Math.cos(phi))
+  }
+  position.needsUpdate = true
+  geometry.computeVertexNormals()
+  return geometry
 }
 
 // Remove the extrude's cross-section CAP triangles at a mitred end so two

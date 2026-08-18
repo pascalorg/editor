@@ -1,6 +1,7 @@
 'use client'
 
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import { getWallCurveFrameAt, getWallCurveLength, isCurvedWall } from '@pascal-app/core'
 import {
   type FloorplanToolContext,
   markToolCancelConsumed,
@@ -10,10 +11,13 @@ import {
 } from '@pascal-app/editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import { bendLocalPoint, isCurvedLeanTo } from './arc'
 import { createLeanToAssembly } from './assembly'
-import { resolveLeanToWallPlacement } from './layout'
+import { leanToFacetCount } from './geometry'
+import { resolveLeanToSpanArc, resolveLeanToWallPlacement } from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import {
+  applyLeanToAvailableWallSpan,
   applyLeanToRoofAttachment,
   applyLeanToWallAutoSpan,
   clearLeanToRoofAttachment,
@@ -71,9 +75,15 @@ const FloorplanLeanToExtensionTool = ({
       if (!wallPlacement) return null
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const attachment = resolveLeanToRoofAttachment(wallPlacement, hit.wall, nodes)
-      const attachedNode = attachment
+      const autoSpannedNode = attachment
         ? applyLeanToRoofAttachment(wallPlacement, attachment)
         : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), hit.wall)
+      const attachedNode = applyLeanToAvailableWallSpan(
+        autoSpannedNode,
+        hit.wall,
+        nodes,
+        wallPlacement.position[0],
+      )
       const node = resolveLeanToEndAbutments(attachedNode, hit.wall, nodes)
       return leanToPlacementConflicts(node, hit.wall, nodes).length === 0 ? node : null
     }
@@ -92,7 +102,7 @@ const FloorplanLeanToExtensionTool = ({
       const node = resolveEvent(event) ?? targetRef.current
       if (!node) return
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
-      const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes))
+      const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes), nodes)
       sceneApi.createMany?.([
         { node: assembly.extension, parentId: node.parentId as AnyNodeId },
         ...assembly.children.map((child) => ({
@@ -134,28 +144,66 @@ const FloorplanLeanToExtensionTool = ({
   const wall = target?.parentId ? sceneApi.get(target.parentId as AnyNodeId) : null
   if (!(target && wall?.type === 'wall')) return <g ref={groupRef} />
 
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
-  const length = Math.hypot(dx, dz)
-  const dirX = dx / length
-  const dirZ = dz / length
-  const perpX = -dirZ
-  const perpZ = dirX
   const sign = Math.cos(target.rotation[1]) >= 0 ? 1 : -1
-  const originX = wall.start[0] + dirX * target.position[0] + perpX * target.position[2]
-  const originZ = wall.start[1] + dirZ * target.position[0] + perpZ * target.position[2]
+  // Recompute the local arc from the final placed span/position so the preview
+  // footprint bends the same way reconciliation will store it.
+  const spanArc = resolveLeanToSpanArc(wall, target)
+  const previewNode = {
+    ...target,
+    spanArcCenterZ: spanArc?.centerZ,
+    spanArcRadius: spanArc?.radius,
+  }
+  const curved = isCurvedLeanTo(previewNode) && isCurvedWall(wall)
+
+  let originX: number
+  let originZ: number
+  let alongX: number
+  let alongZ: number
+  let perpX: number
+  let perpZ: number
+  if (curved) {
+    const arcLength = getWallCurveLength(wall)
+    const t = Math.max(0, Math.min(1, arcLength > 1e-6 ? target.position[0] / arcLength : 0))
+    const frame = getWallCurveFrameAt(wall, t)
+    alongX = frame.tangent.x
+    alongZ = frame.tangent.y
+    perpX = frame.normal.x
+    perpZ = frame.normal.y
+    originX = frame.point.x + perpX * target.position[2]
+    originZ = frame.point.y + perpZ * target.position[2]
+  } else {
+    const dx = wall.end[0] - wall.start[0]
+    const dz = wall.end[1] - wall.start[1]
+    const length = Math.hypot(dx, dz)
+    alongX = dx / length
+    alongZ = dz / length
+    perpX = -alongZ
+    perpZ = alongX
+    originX = wall.start[0] + alongX * target.position[0] + perpX * target.position[2]
+    originZ = wall.start[1] + alongZ * target.position[0] + perpZ * target.position[2]
+  }
   const outX = perpX * sign
   const outZ = perpZ * sign
+  const toWorld = (localX: number, localZ: number): [number, number] => {
+    if (curved) {
+      const bent = bendLocalPoint(previewNode, localX, localZ)
+      return [originX + alongX * bent.x + outX * bent.y, originZ + alongZ * bent.x + outZ * bent.y]
+    }
+    return [originX + alongX * localX + outX * localZ, originZ + alongZ * localX + outZ * localZ]
+  }
   const left = target.span / 2 + target.leftOverhang
   const right = target.span / 2 + target.rightOverhang
   const high = target.highOverhang
   const low = target.projection + target.lowOverhang
-  const points = [
-    [originX - dirX * left - outX * high, originZ - dirZ * left - outZ * high],
-    [originX + dirX * right - outX * high, originZ + dirZ * right - outZ * high],
-    [originX + dirX * right + outX * low, originZ + dirZ * right + outZ * low],
-    [originX - dirX * left + outX * low, originZ - dirZ * left + outZ * low],
-  ]
+  const facets = curved ? leanToFacetCount(previewNode) : 1
+  const highEdge: [number, number][] = []
+  const lowEdge: [number, number][] = []
+  for (let i = 0; i <= facets; i++) {
+    const localX = -left + ((right + left) * i) / facets
+    highEdge.push(toWorld(localX, -high))
+    lowEdge.push(toWorld(localX, low))
+  }
+  const points = [...highEdge, ...lowEdge.reverse()]
 
   return (
     <g ref={groupRef}>

@@ -142,7 +142,7 @@ function leanToManagedPreviewOverrides(
       )
     if (segment?.type !== 'roof-segment') continue
 
-    const segmentPatch = leanToRoofSegmentLayoutPatch(next)
+    const segmentPatch = leanToRoofSegmentLayoutPatch(next, nodes)
     entries.push([segment.id as AnyNodeId, segmentPatch as Partial<AnyNode>])
 
     const nextSegment = { ...segment, ...segmentPatch }
@@ -153,7 +153,7 @@ function leanToManagedPreviewOverrides(
           candidate?.type === 'gutter' && isManagedLeanToNode(candidate, next.id, 'gutter'),
       )
     if (gutter?.type !== 'gutter') continue
-    const gutterPatch = leanToGutterLayoutPatch(nextSegment, next, gutter)
+    const gutterPatch = leanToGutterLayoutPatch(nextSegment, next, gutter, nodes)
     entries.push([gutter.id as AnyNodeId, gutterPatch as Partial<AnyNode>])
 
     const nextGutter = { ...gutter, ...gutterPatch }
@@ -179,7 +179,8 @@ function spanPatch(
   span: number,
   side: 'left' | 'right',
 ): Partial<LeanToExtensionNode> {
-  const sign = side === 'right' ? 1 : -1
+  const localSign = side === 'right' ? 1 : -1
+  const sign = Math.cos(node.rotation[1]) >= 0 ? localSign : -localSign
   return {
     span,
     autoSpan: false,
@@ -242,7 +243,7 @@ leanToExtensionHandles.push(spanHandle('right'), spanHandle('left'))
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 6,
+  schemaVersion: 7,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',

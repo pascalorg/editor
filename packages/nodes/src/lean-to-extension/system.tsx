@@ -14,11 +14,14 @@ import type {
 } from '@pascal-app/core'
 import { useEffect } from 'react'
 import {
+  createManagedLeanToCornerPost,
   createManagedLeanToPost,
   createManagedLeanToRoofAssembly,
   isManagedLeanToNode,
   isManagedLeanToPost,
   type LeanToPostSide,
+  leanToCornerPostIndex,
+  leanToCornerPostLayoutPatch,
   leanToDownspoutLayoutPatch,
   leanToGutterLayoutPatch,
   leanToPostLayoutPatch,
@@ -27,11 +30,22 @@ import {
   managedLeanToPostIndex,
   managedLeanToPostSide,
   resolveLeanToPostBaseY,
+  resolveLeanToPostBaseYAtLocalPosition,
   resolveLeanToPostGutterSetback,
 } from './assembly'
-import { LEAN_TO_EXTENSION_GEOMETRY_REVISION, resolveLeanToLayout } from './layout'
+import {
+  LEAN_TO_CORNER_JOINTS_KEY,
+  leanToCornerJointMetadata,
+  resolveLeanToCornerJoints,
+} from './corner-joint'
+import {
+  LEAN_TO_EXTENSION_GEOMETRY_REVISION,
+  resolveLeanToLayout,
+  resolveLeanToSpanArc,
+} from './layout'
 import { resolveLeanToEndAbutments } from './placement-validation'
 import {
+  applyLeanToAvailableWallSpan,
   applyLeanToRoofAttachment,
   applyLeanToWallAutoSpan,
   clearLeanToRoofAttachment,
@@ -46,6 +60,7 @@ const BROAD_LEAN_TO_DEPENDENCY_TYPES = new Set<AnyNode['type']>([
   'level',
   'slab',
   'wall',
+  'lean-to-extension',
   'roof',
   'roof-segment',
 ])
@@ -95,6 +110,13 @@ function postNeedsLayoutUpdate(
   side: LeanToPostSide,
 ) {
   const expected = leanToPostLayoutPatch(leanTo, index, baseY, gutterSetback, side)
+  return postPatchNeedsLayoutUpdate(post, expected)
+}
+
+function postPatchNeedsLayoutUpdate(
+  post: ColumnNode,
+  expected: ReturnType<typeof leanToPostLayoutPatch>,
+) {
   return (
     !sameTuple(post.position, expected.position) ||
     post.height !== expected.height ||
@@ -109,8 +131,12 @@ function postNeedsLayoutUpdate(
   )
 }
 
-function segmentNeedsLayoutUpdate(segment: RoofSegmentNode, leanTo: LeanToExtensionNode) {
-  const expected = leanToRoofSegmentLayoutPatch(leanTo)
+function segmentNeedsLayoutUpdate(
+  segment: RoofSegmentNode,
+  leanTo: LeanToExtensionNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+) {
+  const expected = leanToRoofSegmentLayoutPatch(leanTo, nodes)
   return (
     !sameTuple(segment.position, expected.position) ||
     segment.rotation !== expected.rotation ||
@@ -123,6 +149,7 @@ function segmentNeedsLayoutUpdate(segment: RoofSegmentNode, leanTo: LeanToExtens
     segment.deckThickness !== expected.deckThickness ||
     segment.shingleThickness !== expected.shingleThickness ||
     segment.overhang !== expected.overhang ||
+    JSON.stringify(segment.arc) !== JSON.stringify(expected.arc) ||
     JSON.stringify(segment.trim) !== JSON.stringify(expected.trim) ||
     JSON.stringify(segment.metadata) !== JSON.stringify(expected.metadata)
   )
@@ -132,17 +159,20 @@ function gutterNeedsLayoutUpdate(
   gutter: GutterNode,
   segment: RoofSegmentNode,
   leanTo: LeanToExtensionNode,
+  nodes: Record<string, AnyNode>,
 ) {
-  const expected = leanToGutterLayoutPatch(segment, leanTo, gutter)
+  const expected = leanToGutterLayoutPatch(segment, leanTo, gutter, nodes)
   return (
     !sameTuple(gutter.position, expected.position) ||
     gutter.rotation !== expected.rotation ||
     gutter.length !== expected.length ||
+    JSON.stringify(gutter.arc) !== JSON.stringify(expected.arc) ||
     gutter.roofSegmentId !== expected.roofSegmentId ||
     gutter.visible !== expected.visible ||
     gutter.profile !== expected.profile ||
     gutter.size !== expected.size ||
-    JSON.stringify(gutter.outlets) !== JSON.stringify(expected.outlets)
+    JSON.stringify(gutter.outlets) !== JSON.stringify(expected.outlets) ||
+    JSON.stringify(gutter.metadata) !== JSON.stringify(expected.metadata)
   )
 }
 
@@ -169,6 +199,8 @@ function extensionSignature(
 ): string {
   return JSON.stringify([
     leanTo.span,
+    leanTo.spanArcCenterZ,
+    leanTo.spanArcRadius,
     leanTo.autoSpan,
     leanTo.position,
     leanTo.projection,
@@ -181,6 +213,7 @@ function extensionSignature(
     leanTo.lowOverhang,
     leanTo.leftOverhang,
     leanTo.rightOverhang,
+    leanTo.autoMiterCorners,
     leanTo.coveringType,
     leanTo.beamHeight,
     leanTo.rafterHeight,
@@ -213,6 +246,27 @@ function extensionSignature(
     leanTo.downspoutEnabled,
     leanTo.downspoutPosition,
     hostRoof && leanTo.matchHostRoofMaterial !== false ? leanToRoofMaterialPatch(hostRoof) : null,
+    Object.values(nodes)
+      .filter((node) => node.type === 'lean-to-extension')
+      .map((node) => ({
+        id: node.id,
+        parentId: node.parentId,
+        position: node.position,
+        rotation: node.rotation,
+        span: node.span,
+        projection: node.projection,
+        highEdgeHeight: node.highEdgeHeight,
+        pitch: node.pitch,
+        roofThickness: node.roofThickness,
+        shingleThickness: node.shingleThickness,
+        beamHeight: node.beamHeight,
+        rafterHeight: node.rafterHeight,
+        leftOverhang: node.leftOverhang,
+        rightOverhang: node.rightOverhang,
+        lowOverhang: node.lowOverhang,
+        autoMiterCorners: node.autoMiterCorners,
+        gutterEnabled: node.gutterEnabled,
+      })),
     leanTo.children,
     leanTo.children.map((childId) => {
       const child = nodes[childId as AnyNodeId]
@@ -235,9 +289,12 @@ function attachmentNeedsUpdate(current: LeanToExtensionNode, next: LeanToExtensi
     current.rightEndCondition !== next.rightEndCondition ||
     current.downspoutPosition !== next.downspoutPosition ||
     current.span !== next.span ||
+    current.spanArcCenterZ !== next.spanArcCenterZ ||
+    current.spanArcRadius !== next.spanArcRadius ||
     !sameTuple(current.position, next.position) ||
     current.roofThickness !== next.roofThickness ||
-    current.shingleThickness !== next.shingleThickness
+    current.shingleThickness !== next.shingleThickness ||
+    JSON.stringify(current.metadata) !== JSON.stringify(next.metadata)
   )
 }
 
@@ -275,7 +332,37 @@ function resolveEffectiveLeanTo(
       : attachment
         ? applyLeanToRoofAttachment(leanTo, attachment)
         : clearLeanToRoofAttachment(wallSpanningLeanTo)
-  return resolveLeanToEndAbutments(resolved, wall, nodes)
+  const withoutStaleJointEnds = leanTo.autoMiterCorners
+    ? {
+        ...resolved,
+        leftEndCondition:
+          resolved.leftEndCondition === 'joined' ? 'open' : resolved.leftEndCondition,
+        rightEndCondition:
+          resolved.rightEndCondition === 'joined' ? 'open' : resolved.rightEndCondition,
+      }
+    : resolved
+  const available = applyLeanToAvailableWallSpan(
+    withoutStaleJointEnds,
+    wall,
+    nodes,
+    leanTo.position[0],
+  )
+  const withAbutments = resolveLeanToEndAbutments(available, wall, nodes)
+  const joints = resolveLeanToCornerJoints(withAbutments, wall, nodes)
+  const spanArc = resolveLeanToSpanArc(wall, withAbutments)
+  return {
+    ...withAbutments,
+    spanArcCenterZ: spanArc?.centerZ,
+    spanArcRadius: spanArc?.radius,
+    leftEndCondition: joints.left ? 'joined' : withAbutments.leftEndCondition,
+    rightEndCondition: joints.right ? 'joined' : withAbutments.rightEndCondition,
+    metadata: {
+      ...(withAbutments.metadata && typeof withAbutments.metadata === 'object'
+        ? withAbutments.metadata
+        : {}),
+      [LEAN_TO_CORNER_JOINTS_KEY]: leanToCornerJointMetadata(joints),
+    },
+  }
 }
 
 export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
@@ -346,15 +433,18 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
             rightEndCondition: effectiveLeanTo.rightEndCondition,
             downspoutPosition: effectiveLeanTo.downspoutPosition,
             span: effectiveLeanTo.span,
+            spanArcCenterZ: effectiveLeanTo.spanArcCenterZ,
+            spanArcRadius: effectiveLeanTo.spanArcRadius,
             position: effectiveLeanTo.position,
             roofThickness: effectiveLeanTo.roofThickness,
             shingleThickness: effectiveLeanTo.shingleThickness,
+            metadata: effectiveLeanTo.metadata,
           } as Partial<AnyNode>,
         })
       }
 
       if (!roof) {
-        const assembly = createManagedLeanToRoofAssembly(effectiveLeanTo, hostRoof)
+        const assembly = createManagedLeanToRoofAssembly(effectiveLeanTo, hostRoof, nodes)
         create.push(
           { node: assembly.roof, parentId: leanTo.id },
           { node: assembly.segment, parentId: assembly.roof.id },
@@ -380,12 +470,12 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
               isManagedLeanToNode(child, leanTo.id, 'roof-segment'),
           )
         if (segment) {
-          const segmentPatch = leanToRoofSegmentLayoutPatch(effectiveLeanTo)
+          const segmentPatch = leanToRoofSegmentLayoutPatch(effectiveLeanTo, nodes)
           const expectedSegment = {
             ...segment,
             ...segmentPatch,
           } as RoofSegmentNode
-          if (segmentNeedsLayoutUpdate(segment, effectiveLeanTo)) {
+          if (segmentNeedsLayoutUpdate(segment, effectiveLeanTo, nodes)) {
             update.push({
               id: segment.id as AnyNodeId,
               data: segmentPatch as Partial<AnyNode>,
@@ -398,9 +488,14 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
                 child?.type === 'gutter' && isManagedLeanToNode(child, leanTo.id, 'gutter'),
             )
           if (gutter) {
-            const gutterPatch = leanToGutterLayoutPatch(expectedSegment, effectiveLeanTo, gutter)
+            const gutterPatch = leanToGutterLayoutPatch(
+              expectedSegment,
+              effectiveLeanTo,
+              gutter,
+              nodes,
+            )
             const expectedGutter = { ...gutter, ...gutterPatch } as GutterNode
-            if (gutterNeedsLayoutUpdate(gutter, expectedSegment, effectiveLeanTo)) {
+            if (gutterNeedsLayoutUpdate(gutter, expectedSegment, effectiveLeanTo, nodes)) {
               update.push({
                 id: gutter.id as AnyNodeId,
                 data: gutterPatch as Partial<AnyNode>,
@@ -461,17 +556,54 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
           } else if (
             postNeedsLayoutUpdate(current, effectiveLeanTo, index, postBaseY, gutterSetback, side)
           ) {
+            // Post rotation is user-owned once placed (the arc yaw is applied
+            // only at create time), so the managed sync must not clobber it.
+            const { rotation: _rotation, ...postData } = leanToPostLayoutPatch(
+              effectiveLeanTo,
+              index,
+              postBaseY,
+              gutterSetback,
+              side,
+            )
             update.push({
               id: current.id as AnyNodeId,
-              data: leanToPostLayoutPatch(
-                effectiveLeanTo,
-                index,
-                postBaseY,
-                gutterSetback,
-                side,
-              ) as Partial<AnyNode>,
+              data: postData as Partial<AnyNode>,
             })
           }
+        }
+      }
+      const cornerJoints =
+        parent?.type === 'wall' ? resolveLeanToCornerJoints(effectiveLeanTo, parent, nodes) : {}
+      for (const joint of Object.values(cornerJoints)) {
+        if (!joint?.sharedPostOwner) continue
+        const index = leanToCornerPostIndex(joint.side)
+        const key = `low:${index}`
+        desiredPostKeys.add(key)
+        const postBaseY =
+          parent?.type === 'wall'
+            ? resolveLeanToPostBaseYAtLocalPosition(
+                effectiveLeanTo,
+                parent,
+                nodes,
+                joint.sharedPostPosition,
+              )
+            : 0
+        const current = managedPosts.get(key)
+        const gutterSetback = resolveLeanToPostGutterSetback(effectiveLeanTo, current)
+        const patch = leanToCornerPostLayoutPatch(effectiveLeanTo, joint, postBaseY, gutterSetback)
+        if (!current) {
+          create.push({
+            node: {
+              ...createManagedLeanToCornerPost(effectiveLeanTo, joint),
+              ...patch,
+            } as ColumnNode,
+            parentId: leanTo.id,
+          })
+        } else if (postPatchNeedsLayoutUpdate(current, patch)) {
+          update.push({
+            id: current.id as AnyNodeId,
+            data: patch as Partial<AnyNode>,
+          })
         }
       }
       for (const [key, post] of managedPosts) {

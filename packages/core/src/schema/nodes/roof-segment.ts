@@ -122,6 +122,16 @@ export const RoofSegmentNode = BaseNode.extend({
   deckThickness: z.number().default(0.1),
   overhang: z.number().default(0.3),
   shingleThickness: z.number().default(0.05),
+  arc: z
+    .object({
+      centerX: z.number(),
+      centerZ: z.number(),
+      radius: z.number(),
+    })
+    .optional()
+    .describe(
+      'Concentric-arc descriptor for a shed deck that follows a curved wall, in segment-local coordinates (center + true radius). Absent for a flat straight deck; set by managed lean-to roofs.',
+    ),
   // Shape-specific ratios. Only the pair matching `roofType` is read; the
   // rest are inert. Defined on every segment so the panel can flip
   // roofType without losing the previous shape's tuning.
@@ -662,6 +672,13 @@ export function getRoofSegmentSurfaceY(
 
   const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
   return peakY - t * activeRh
+}
+
+// A shed segment whose deck follows a concentric wall arc (managed lean-to roofs).
+export function isBandedShedSegment(
+  node: Pick<RoofSegmentNode, 'roofType' | 'arc'>,
+): node is Pick<RoofSegmentNode, 'roofType' | 'arc'> & { arc: NonNullable<RoofSegmentNode['arc']> } {
+  return node.roofType === 'shed' && node.arc != null && Number.isFinite(node.arc.radius)
 }
 
 /**

@@ -112,10 +112,60 @@ describe('roof system shed geometry', () => {
     expect(sideInfillNormals).toHaveLength(2)
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeCloseTo(infillHalfWidth, 5)
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeGreaterThan(span / 2)
-    expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeLessThan(
-      span / 2 + leftOverhang,
-    )
+    expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeLessThan(span / 2 + leftOverhang)
     expect(Math.max(...roofSideX)).toBeGreaterThan(span / 2 + leftOverhang * 0.5)
+
+    geometry.dispose()
+  })
+
+  test('bends a curved lean-to shed deck into a thin concentric band (no balloon)', () => {
+    const depth = 2
+    // Arc chosen so the back (wall) edge lands at radius 5 and the front edge
+    // at radius 5 - depth = 3: a thin band, never a disc.
+    const centerX = 0
+    const centerZ = 5 - depth / 2
+    const radius = 5
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_lean_to_curved',
+      type: 'roof-segment',
+      roofType: 'shed',
+      width: 8,
+      depth,
+      wallHeight: 0,
+      wallThickness: 0.01,
+      pitch: 10,
+      overhang: 0,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      arc: { centerX, centerZ, radius },
+      metadata: {
+        managedByLeanTo: 'leanto_curved',
+        leanToRole: 'roof-segment',
+      },
+    })
+
+    const geometry = generateRoofSegmentGeometry(segment)
+    const position = geometry.getAttribute('position')
+    expect(position.count).toBeGreaterThan(0)
+    // O(N) vertices, not O(N^2): a faceted band, not a triangulated disc.
+    expect(position.count).toBeLessThan(1000)
+
+    const distances: number[] = []
+    for (let i = 0; i < position.count; i++) {
+      const dx = position.getX(i) - centerX
+      const dz = position.getZ(i) - centerZ
+      distances.push(Math.hypot(dx, dz))
+    }
+    const minR = Math.min(...distances)
+    const maxR = Math.max(...distances)
+
+    // Every vertex stays within the annulus [R - depth, R]; nothing fans out
+    // toward the center (the old sagitta balloon bug drove vertices to ~0).
+    expect(minR).toBeGreaterThan(radius - depth - 0.02)
+    expect(maxR).toBeLessThan(radius + 0.02)
+    // The band spans one depth in radius, with its outer edge at the wall.
+    expect(maxR).toBeCloseTo(radius, 1)
+    expect(minR).toBeCloseTo(radius - depth, 1)
 
     geometry.dispose()
   })

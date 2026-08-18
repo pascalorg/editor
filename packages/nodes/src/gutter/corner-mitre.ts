@@ -45,6 +45,18 @@ export type GutterMitres = {
 
 export const NO_MITRES: GutterMitres = { left: 0, right: 0 }
 
+function prescribedLeanToMitres(gutter: GutterNode): GutterMitres {
+  const metadata = gutter.metadata
+  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return NO_MITRES
+  const value = (metadata as Record<string, unknown>).leanToGutterMitres
+  if (!(value && typeof value === 'object' && !Array.isArray(value))) return NO_MITRES
+  const mitres = value as Record<string, unknown>
+  return {
+    left: typeof mitres.left === 'number' && Number.isFinite(mitres.left) ? mitres.left : 0,
+    right: typeof mitres.right === 'number' && Number.isFinite(mitres.right) ? mitres.right : 0,
+  }
+}
+
 // Match the length-snap's 10 cm catch radius (`length-snap.ts`): any two
 // endpoints close enough for the corner snap to bind are close enough to
 // read as "they meant to meet". The corner snap pulls them to the exact
@@ -225,11 +237,12 @@ export function computeGutterMitres(
   subjectSegment: Pick<RoofSegmentNode, 'position' | 'rotation'>,
   siblings: readonly GutterWithSegment[],
 ): GutterMitres {
-  if (siblings.length === 0) return NO_MITRES
+  const prescribed = prescribedLeanToMitres(subject)
+  if (siblings.length === 0) return prescribed
 
   const subj = gutterEndpointsInFrame(subject, subjectSegment)
-  let leftMitre = 0
-  let rightMitre = 0
+  let leftMitre = prescribed.left
+  let rightMitre = prescribed.right
 
   for (const sib of siblings) {
     if (sib.gutter.id === subject.id) continue

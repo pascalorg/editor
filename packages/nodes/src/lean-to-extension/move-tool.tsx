@@ -12,7 +12,7 @@ import {
 } from '@pascal-app/core'
 import { isGridSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useEffect } from 'react'
-import { resolveLeanToMoveCenterX } from './layout'
+import { resolveLeanToEdgeSnapTargets, resolveLeanToMoveCenterX } from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 
 type MoveLeanToExtensionProps = {
@@ -32,12 +32,18 @@ const MoveLeanToExtensionTool = ({ node, sceneApi }: MoveLeanToExtensionProps) =
       const rawLocalX = event.localPosition[0]
       const gridStep =
         !event.nativeEvent.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const position: LeanToExtensionNode['position'] = [
-        resolveLeanToMoveCenterX(node, wall, rawLocalX, gridStep),
+        resolveLeanToMoveCenterX(
+          node,
+          wall,
+          rawLocalX,
+          gridStep,
+          event.nativeEvent.altKey ? [] : resolveLeanToEdgeSnapTargets(node, wall, nodes),
+        ),
         node.position[1],
         node.position[2],
       ]
-      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const candidate = resolveLeanToEndAbutments(
         { ...node, position, autoSpan: false },
         wall,

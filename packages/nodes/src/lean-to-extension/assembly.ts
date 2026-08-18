@@ -20,6 +20,14 @@ import {
 } from '@pascal-app/core'
 import { resolveEaveSnap } from '../gutter/eave-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
+import {
+  LEAN_TO_CORNER_JOINTS_KEY,
+  type LeanToCornerJoint,
+  type LeanToCornerSide,
+  leanToCornerJointMetadata,
+  resolveLeanToCornerJoints,
+} from './corner-joint'
+import { bendLocalPoint, bendRotationYAtLocalX, isCurvedLeanTo } from './arc'
 import { resolveLeanToLayout } from './layout'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
@@ -28,6 +36,10 @@ const SELECTION_PROXY_KEY = 'nodeSelectionProxyId'
 const ROOF_INSET_SPAN_KEY = 'leanToSideInfillSpan'
 const ROOF_INSET_MIN_X_KEY = 'leanToSideInfillMinX'
 const ROOF_INSET_MAX_X_KEY = 'leanToSideInfillMaxX'
+const ROOF_PIECES_KEY = 'leanToRoofPieces'
+const ROOF_JOINT_SIDES_KEY = 'leanToCornerSides'
+const GUTTER_MITRES_KEY = 'leanToGutterMitres'
+const GUTTER_EAVE_Y_KEY = 'leanToGutterEaveY'
 const POST_INDEX_KEY = 'leanToPostIndex'
 const POST_SIDE_KEY = 'leanToPostSide'
 const POST_GUTTER_CLEARANCE = 0.02
@@ -35,6 +47,12 @@ const POST_GROUND_EMBED = 0.02
 const POST_BEAM_EMBED = 0.02
 const WALL_CONNECTION_TRIM = 0.002
 const WALL_CONNECTION_OVERLAP = 0.02
+export const LEFT_CORNER_POST_INDEX = -1001
+export const RIGHT_CORNER_POST_INDEX = -1002
+
+export function leanToCornerPostIndex(side: LeanToCornerSide): number {
+  return side === 'left' ? LEFT_CORNER_POST_INDEX : RIGHT_CORNER_POST_INDEX
+}
 
 type LeanToManagedRole = 'roof' | 'roof-segment' | 'gutter' | 'downspout' | 'post'
 export type LeanToPostSide = 'high' | 'low'
@@ -101,6 +119,7 @@ export function managedLeanToPostSide(column: ColumnNodeType): LeanToPostSide {
 export type LeanToPostLayoutPatch = Pick<
   ColumnNodeType,
   | 'position'
+  | 'rotation'
   | 'height'
   | 'width'
   | 'depth'
@@ -126,12 +145,12 @@ export function leanToPostLayoutPatch(
       : leanTo.footingStyle === 'base-plate'
         ? ('simple-square' as const)
         : ('none' as const)
+  const postX = layout.postXs[index] ?? 0
+  const postZ = side === 'high' ? 0 : layout.beamZ - gutterSetback
+  const bent = bendLocalPoint(leanTo, postX, postZ)
   return {
-    position: [
-      layout.postXs[index] ?? 0,
-      baseY,
-      side === 'high' ? 0 : layout.beamZ - gutterSetback,
-    ],
+    position: [bent.x, baseY, bent.y],
+    rotation: bendRotationYAtLocalX(leanTo, postX),
     height: Math.max(
       0.2,
       (side === 'high'
@@ -161,6 +180,18 @@ export function leanToPostLayoutPatch(
         ? {}
         : { base: leanTo.slots?.footings ?? 'library:concrete-plaster' }),
     },
+  }
+}
+
+export function leanToCornerPostLayoutPatch(
+  leanTo: LeanToExtensionNode,
+  joint: LeanToCornerJoint,
+  baseY = 0,
+  gutterSetback = 0,
+): LeanToPostLayoutPatch {
+  return {
+    ...leanToPostLayoutPatch(leanTo, 0, baseY, gutterSetback, 'low'),
+    position: [joint.sharedPostPosition[0], baseY, joint.sharedPostPosition[2] - gutterSetback],
   }
 }
 
@@ -198,15 +229,27 @@ export function resolveLeanToPostBaseY(
   index: number,
   side: LeanToPostSide = 'low',
 ): number {
+  const layout = resolveLeanToLayout(leanTo)
+  const postX = layout.postXs[index] ?? 0
+  const postZ = side === 'high' ? 0 : layout.beamZ
+  const bent = bendLocalPoint(leanTo, postX, postZ)
+  return resolveLeanToPostBaseYAtLocalPosition(leanTo, wall, nodes, [bent.x, 0, bent.y])
+}
+
+export function resolveLeanToPostBaseYAtLocalPosition(
+  leanTo: LeanToExtensionNode,
+  wall: WallNode,
+  nodes: Record<string, AnyNode>,
+  localPosition: readonly [number, number, number],
+): number {
   const levelId = wall.parentId
   if (!levelId || nodes[levelId]?.type !== 'level') return 0
 
-  const layout = resolveLeanToLayout(leanTo)
-  const postX = layout.postXs[index] ?? 0
+  const postX = localPosition[0]
   const leanRotation = leanTo.rotation[1]
   const leanCos = Math.cos(leanRotation)
   const leanSin = Math.sin(leanRotation)
-  const postZ = side === 'high' ? 0 : layout.beamZ
+  const postZ = localPosition[2]
   const wallLocalX = leanTo.position[0] + postX * leanCos + postZ * leanSin
   const wallLocalZ = leanTo.position[2] - postX * leanSin + postZ * leanCos
   const wallAngle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
@@ -258,6 +301,31 @@ export function createManagedLeanToPost(
   })
 }
 
+export function createManagedLeanToCornerPost(
+  leanTo: LeanToExtensionNode,
+  joint: LeanToCornerJoint,
+): ColumnNodeType {
+  const { label: _label, ...preset } = COLUMN_PRESETS.squarePillar
+  return ColumnNode.parse({
+    ...preset,
+    ...leanToCornerPostLayoutPatch(leanTo, joint),
+    name: `Lean-to ${joint.side === 'left' ? 'Left' : 'Right'} Corner Post`,
+    parentId: leanTo.id,
+    style: 'plain',
+    edgeSoftness: 0.008,
+    capitalHeight: 0,
+    capitalStyle: 'none',
+    capitalWidthScale: 1,
+    capitalDepthScale: 1,
+    shaftStartScale: 1,
+    shaftEndScale: 1,
+    metadata: managedMetadata(leanTo, 'post', {
+      [POST_INDEX_KEY]: leanToCornerPostIndex(joint.side),
+      [POST_SIDE_KEY]: 'low',
+    }),
+  })
+}
+
 export type LeanToRoofSegmentLayoutPatch = Pick<
   RoofSegmentNodeType,
   | 'position'
@@ -271,18 +339,58 @@ export type LeanToRoofSegmentLayoutPatch = Pick<
   | 'deckThickness'
   | 'shingleThickness'
   | 'overhang'
+  | 'arc'
   | 'trim'
   | 'metadata'
 >
 
 export function leanToRoofSegmentLayoutPatch(
   leanTo: LeanToExtensionNode,
+  nodes?: Record<string, AnyNode>,
 ): LeanToRoofSegmentLayoutPatch {
   const layout = resolveLeanToLayout(leanTo)
+  const wall =
+    leanTo.parentId && nodes?.[leanTo.parentId]?.type === 'wall'
+      ? (nodes[leanTo.parentId] as WallNode)
+      : undefined
   const shingleThickness = leanTo.shingleThickness ?? 0.025
   const overhang = 0
-  const width = layout.roofWidth
   const depth = layout.roofRun + WALL_CONNECTION_OVERLAP
+  const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
+  const leftCornerExtension = cornerJoints.left?.roofExtension ?? 0
+  const rightCornerExtension = cornerJoints.right?.roofExtension ?? 0
+  const width = layout.roofWidth + leftCornerExtension + rightCornerExtension
+  const roofCenterX = layout.roofCenterX + (rightCornerExtension - leftCornerExtension) / 2
+  const roofCenterZ =
+    depth / 2 - Math.max(0, leanTo.highOverhang) - WALL_CONNECTION_TRIM - WALL_CONNECTION_OVERLAP
+  // Concentric-band descriptor in segment-local coords. The whole lean-to bends
+  // about the wall's true arc center at lean-to-local (0, spanArcCenterZ); the
+  // segment is offset by (roofCenterX, roofCenterZ), so the center lands here.
+  // `radius` is the signed bend reference |spanArcCenterZ| (its sign follows
+  // centerZ), which reproduces the members' bend transform exactly.
+  const arc = isCurvedLeanTo(leanTo)
+    ? {
+        centerX: -roofCenterX,
+        centerZ: (leanTo.spanArcCenterZ ?? 0) - roofCenterZ,
+        radius: Math.abs(leanTo.spanArcCenterZ ?? 0),
+      }
+    : undefined
+  const roofBack = roofCenterZ - depth / 2 + (leanTo.highOverhang > 0 ? 0 : WALL_CONNECTION_TRIM)
+  const roofFront = roofCenterZ + depth / 2
+  const roofPieces: [number, number][][] = [
+    [
+      [layout.roofCenterX - layout.roofWidth / 2, roofBack],
+      [layout.roofCenterX + layout.roofWidth / 2, roofBack],
+      [layout.roofCenterX + layout.roofWidth / 2, roofFront],
+      [layout.roofCenterX - layout.roofWidth / 2, roofFront],
+    ],
+    ...Object.values(cornerJoints).flatMap((joint) =>
+      joint && joint.roofPiece.length >= 3 ? [joint.roofPiece] : [],
+    ),
+  ].map((polygon) =>
+    polygon.map(([x = 0, z = 0]) => [x - roofCenterX, z - roofCenterZ] as [number, number]),
+  )
+  const jointSides = Object.values(cornerJoints).flatMap((joint) => (joint ? [joint.side] : []))
   const sideMemberFaceInset = Math.min(
     Math.max(0, leanTo.rafterWidth / 2),
     Math.max(0, layout.span / 2 - 0.01),
@@ -304,11 +412,7 @@ export function leanToRoofSegmentLayoutPatch(
     surfaceProbe,
   )
   return {
-    position: [
-      layout.roofCenterX,
-      layout.highEdgeHeight - topAtWall,
-      depth / 2 - Math.max(0, leanTo.highOverhang) - WALL_CONNECTION_TRIM - WALL_CONNECTION_OVERLAP,
-    ],
+    position: [roofCenterX, layout.highEdgeHeight - topAtWall, roofCenterZ],
     rotation: 0,
     roofType: 'shed',
     width,
@@ -319,10 +423,14 @@ export function leanToRoofSegmentLayoutPatch(
     deckThickness: leanTo.roofThickness,
     shingleThickness,
     overhang,
+    arc,
     metadata: managedMetadata(leanTo, 'roof-segment', {
       [ROOF_INSET_SPAN_KEY]: layout.span,
-      [ROOF_INSET_MIN_X_KEY]: -layout.span / 2 - sideMemberFaceInset - layout.roofCenterX,
-      [ROOF_INSET_MAX_X_KEY]: layout.span / 2 + sideMemberFaceInset - layout.roofCenterX,
+      [ROOF_INSET_MIN_X_KEY]: -layout.span / 2 - sideMemberFaceInset - roofCenterX,
+      [ROOF_INSET_MAX_X_KEY]: layout.span / 2 + sideMemberFaceInset - roofCenterX,
+      ...(jointSides.length > 0
+        ? { [ROOF_PIECES_KEY]: roofPieces, [ROOF_JOINT_SIDES_KEY]: jointSides }
+        : {}),
     }),
     trim: {
       left: 0,
@@ -349,15 +457,84 @@ export function leanToGutterLayoutPatch(
   segment: RoofSegmentNodeType,
   leanTo: LeanToExtensionNode,
   gutter?: GutterNodeType,
+  nodes?: Record<string, AnyNode>,
 ): Pick<
   GutterNodeType,
-  'position' | 'rotation' | 'length' | 'roofSegmentId' | 'visible' | 'profile' | 'size' | 'outlets'
+  | 'position'
+  | 'rotation'
+  | 'length'
+  | 'arc'
+  | 'roofSegmentId'
+  | 'visible'
+  | 'profile'
+  | 'size'
+  | 'outlets'
+  | 'metadata'
 > {
   const snap = resolveEaveSnap(segment, 0, segment.depth / 2)
-  const length = segment.width + 2 * segment.overhang
   const existingOutlet = gutter?.outlets[0]
   const outletId = existingOutlet?.id ?? generateId('outlet')
-  const offset = leanTo.downspoutPosition * Math.max(0, length / 2 - 0.16)
+  const wall =
+    leanTo.parentId && nodes?.[leanTo.parentId]?.type === 'wall'
+      ? (nodes[leanTo.parentId] as WallNode)
+      : undefined
+  const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
+  const ownWorldEaveY =
+    (wall && nodes ? getWallBaseElevationForNodes(wall, nodes) : 0) +
+    leanTo.position[1] +
+    segment.position[1] +
+    snap.eaveY
+  let sharedWorldEaveY = ownWorldEaveY
+  if (leanTo.gutterEnabled && nodes) {
+    for (const joint of Object.values(cornerJoints)) {
+      const neighbor = joint ? nodes[joint.neighborId] : undefined
+      if (neighbor?.type !== 'lean-to-extension' || !neighbor.gutterEnabled) continue
+      const neighborWall = neighbor.parentId ? nodes[neighbor.parentId] : undefined
+      if (neighborWall?.type !== 'wall') continue
+      const neighborSegment = leanToRoofSegmentLayoutPatch(neighbor, nodes)
+      const neighborSnap = resolveEaveSnap(
+        neighborSegment as RoofSegmentNodeType,
+        0,
+        neighborSegment.depth / 2,
+      )
+      sharedWorldEaveY = Math.max(
+        sharedWorldEaveY,
+        getWallBaseElevationForNodes(neighborWall, nodes) +
+          neighbor.position[1] +
+          neighborSegment.position[1] +
+          neighborSnap.eaveY,
+      )
+    }
+  }
+  const sharedLocalEaveY = sharedWorldEaveY - ownWorldEaveY + snap.eaveY
+  const gutterMitreForJoint = (joint: LeanToCornerJoint | undefined): number => {
+    if (!(leanTo.gutterEnabled && joint && nodes)) return 0
+    const neighbor = nodes[joint.neighborId]
+    return neighbor?.type === 'lean-to-extension' && neighbor.gutterEnabled ? joint.gutterMitre : 0
+  }
+  const length = Math.max(0.05, segment.width + 2 * segment.overhang)
+  const jointAwareDownspoutPosition =
+    cornerJoints.left && leanTo.downspoutPosition < -0.75
+      ? cornerJoints.right
+        ? 0
+        : 1
+      : cornerJoints.right && leanTo.downspoutPosition > 0.75
+        ? cornerJoints.left
+          ? 0
+          : -1
+        : leanTo.downspoutPosition
+  const offset = jointAwareDownspoutPosition * Math.max(0, length / 2 - 0.16)
+  // The eave follows the same concentric arc as the deck. The eave snap is a pure
+  // translation of segment-local (rotation 0 for shed's +Z eave), so the segment
+  // arc center maps to gutter-mesh-local by subtracting the snap seat; radius (the
+  // signed bend reference) is unchanged.
+  const gutterArc = segment.arc
+    ? {
+        centerX: segment.arc.centerX - snap.eaveX,
+        centerZ: segment.arc.centerZ - snap.eaveZ,
+        radius: segment.arc.radius,
+      }
+    : undefined
   const outlet =
     existingOutlet && existingOutlet.generatedBy !== 'default-downspout'
       ? existingOutlet
@@ -371,11 +548,22 @@ export function leanToGutterLayoutPatch(
     position: [snap.eaveX, snap.eaveY, snap.eaveZ],
     rotation: snap.rotation,
     length,
+    arc: gutterArc,
     roofSegmentId: segment.id,
     visible: leanTo.gutterEnabled,
     profile: leanTo.gutterProfile,
     size: leanTo.gutterSize,
     outlets: leanTo.gutterEnabled && leanTo.downspoutEnabled ? [outlet] : [],
+    metadata: {
+      ...metadataRecord(gutter?.metadata),
+      ...managedMetadata(leanTo, 'gutter', {
+        [GUTTER_MITRES_KEY]: {
+          left: gutterMitreForJoint(cornerJoints.left),
+          right: gutterMitreForJoint(cornerJoints.right),
+        },
+        [GUTTER_EAVE_Y_KEY]: sharedLocalEaveY,
+      }),
+    },
   }
 }
 
@@ -418,6 +606,7 @@ export type LeanToRoofAssembly = {
 export function createManagedLeanToRoofAssembly(
   leanTo: LeanToExtensionNode,
   hostRoof?: RoofNodeType,
+  nodes?: Record<string, AnyNode>,
 ): LeanToRoofAssembly {
   const roof = RoofNode.parse({
     ...(hostRoof && leanTo.matchHostRoofMaterial !== false
@@ -430,15 +619,14 @@ export function createManagedLeanToRoofAssembly(
     metadata: managedMetadata(leanTo, 'roof'),
   })
   const segment = RoofSegmentNode.parse({
-    ...leanToRoofSegmentLayoutPatch(leanTo),
+    ...leanToRoofSegmentLayoutPatch(leanTo, nodes),
     name: 'Lean-to Shed Roof',
     parentId: roof.id,
   })
   const gutter = GutterNode.parse({
-    ...leanToGutterLayoutPatch(segment, leanTo),
+    ...leanToGutterLayoutPatch(segment, leanTo, undefined, nodes),
     name: 'Lean-to Gutter',
     parentId: segment.id,
-    metadata: managedMetadata(leanTo, 'gutter'),
   })
   const downspout = DownspoutNode.parse({
     ...leanToDownspoutLayoutPatch(segment, gutter, leanTo),
@@ -461,6 +649,7 @@ export function createManagedLeanToRoofAssembly(
 export function createLeanToAssembly(
   leanTo: LeanToExtensionNode,
   hostRoof?: RoofNodeType,
+  nodes?: Record<string, AnyNode>,
 ): {
   extension: LeanToExtensionNode
   roof: RoofNodeType
@@ -470,11 +659,19 @@ export function createLeanToAssembly(
   posts: ColumnNodeType[]
   children: AnyNode[]
 } {
-  const roofAssembly = createManagedLeanToRoofAssembly(leanTo, hostRoof)
+  const roofAssembly = createManagedLeanToRoofAssembly(leanTo, hostRoof, nodes)
+  const wall =
+    leanTo.parentId && nodes?.[leanTo.parentId]?.type === 'wall'
+      ? (nodes[leanTo.parentId] as WallNode)
+      : undefined
+  const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
   const postCount = resolveLeanToLayout(leanTo).postXs.length
   const posts = Array.from({ length: postCount }, (_, index) =>
     createManagedLeanToPost(leanTo, index, 'low'),
   )
+  for (const joint of Object.values(cornerJoints)) {
+    if (joint?.sharedPostOwner) posts.push(createManagedLeanToCornerPost(leanTo, joint))
+  }
   if (leanTo.highSideMode === 'independent-high-beam') {
     posts.push(
       ...Array.from({ length: postCount }, (_, index) =>
@@ -492,6 +689,10 @@ export function createLeanToAssembly(
   return {
     extension: {
       ...leanTo,
+      metadata: {
+        ...metadataRecord(leanTo.metadata),
+        [LEAN_TO_CORNER_JOINTS_KEY]: leanToCornerJointMetadata(cornerJoints),
+      },
       children: [roofAssembly.roof.id, ...posts.map((post) => post.id)],
     },
     ...roofAssembly,

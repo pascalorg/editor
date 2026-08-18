@@ -16,9 +16,12 @@ import {
   createLeanToAssembly,
   isManagedLeanToNode,
   isManagedLeanToPost,
+  leanToCornerPostIndex,
   leanToDownspoutLayoutPatch,
   leanToGutterLayoutPatch,
   leanToPostLayoutPatch,
+  leanToRoofSegmentLayoutPatch,
+  managedLeanToPostIndex,
   managedLeanToPostSide,
   resolveLeanToPostBaseY,
   resolveLeanToPostGutterSetback,
@@ -30,6 +33,7 @@ beforeEach(() => spatialGridManager.clear())
 describe('lean-to assembly', () => {
   test('composes a standard shed roof, gutter, downspout, and pillar children', () => {
     const leanTo = LeanToExtensionNode.parse({
+      postLayoutMode: 'count',
       postCount: 4,
       postWidth: 0.18,
       postDepth: 0.14,
@@ -110,9 +114,40 @@ describe('lean-to assembly', () => {
     }
   })
 
+  test('bends the managed roof-segment, gutter, and posts to follow a curved host', () => {
+    const leanTo = LeanToExtensionNode.parse({
+      span: 6,
+      projection: 2.5,
+      highEdgeHeight: 2.8,
+      postLayoutMode: 'count',
+      postCount: 3,
+      spanArcCenterZ: 5,
+      spanArcRadius: 5,
+    })
+
+    const segmentPatch = leanToRoofSegmentLayoutPatch(leanTo)
+    expect(Number.isFinite(segmentPatch.arc?.radius ?? Number.NaN)).toBe(true)
+    expect(segmentPatch.arc?.radius).toBeCloseTo(5, 6)
+
+    const assembly = createLeanToAssembly(leanTo)
+    expect(Number.isFinite(assembly.segment.arc?.radius ?? Number.NaN)).toBe(true)
+
+    const gutterPatch = leanToGutterLayoutPatch(assembly.segment, leanTo, assembly.gutter)
+    expect(Number.isFinite(gutterPatch.arc?.radius ?? Number.NaN)).toBe(true)
+    expect(gutterPatch.arc?.radius).toBeCloseTo(assembly.segment.arc?.radius ?? 0, 6)
+
+    // Center post sits on the crown (no yaw); an end post bends off the
+    // chord and yaws toward the local arc tangent.
+    const centerPost = leanToPostLayoutPatch(leanTo, 1)
+    const endPost = leanToPostLayoutPatch(leanTo, 0)
+    expect(centerPost.rotation).toBeCloseTo(0, 6)
+    expect(Math.abs(endPost.rotation)).toBeGreaterThan(1e-3)
+  })
+
   test('composes terrain-aware high-side columns for an independent beam', () => {
     const leanTo = LeanToExtensionNode.parse({
       highSideMode: 'independent-high-beam',
+      postLayoutMode: 'count',
       postCount: 3,
     })
     const assembly = createLeanToAssembly(leanTo)
@@ -220,6 +255,227 @@ describe('lean-to assembly', () => {
 
     expect(assembly.segment.trim.back).toBeCloseTo(0.002, 6)
     expect(assembly.segment.position[2] + bounds.minZ).toBeCloseTo(-0.02, 6)
+  })
+
+  test('automatically fills perpendicular lean-to roof corners', () => {
+    const wallA = WallNode.parse({
+      id: 'wall_a',
+      parentId: 'level_test',
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_b',
+      parentId: 'level_test',
+      start: [4, 0],
+      end: [4, -4],
+    })
+    const leanToA = LeanToExtensionNode.parse({
+      id: 'leanto_a',
+      parentId: wallA.id,
+      position: [2, 0, 0.05],
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const leanToB = LeanToExtensionNode.parse({
+      id: 'leanto_b',
+      parentId: wallB.id,
+      position: [2, 0, 0.05],
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const nodes = {
+      [wallA.id]: wallA,
+      [wallB.id]: wallB,
+      [leanToA.id]: leanToA,
+      [leanToB.id]: leanToB,
+    } as Record<string, AnyNode>
+
+    const assembly = createLeanToAssembly(leanToA, undefined, nodes)
+    const neighborAssembly = createLeanToAssembly(leanToB, undefined, nodes)
+    const layout = resolveLeanToLayout(leanToA)
+    const neighborLayout = resolveLeanToLayout(leanToB)
+
+    const pointInLevel = (
+      point: readonly [number, number],
+      extension: typeof leanToA,
+      host: typeof wallA,
+    ): readonly [number, number] => {
+      const leanCos = Math.cos(extension.rotation[1])
+      const leanSin = Math.sin(extension.rotation[1])
+      const wallAngle = Math.atan2(host.end[1] - host.start[1], host.end[0] - host.start[0])
+      const wallCos = Math.cos(wallAngle)
+      const wallSin = Math.sin(wallAngle)
+      const wallX = extension.position[0] + point[0] * leanCos + point[1] * leanSin
+      const wallZ = extension.position[2] - point[0] * leanSin + point[1] * leanCos
+      return [
+        host.start[0] + wallX * wallCos - wallZ * wallSin,
+        host.start[1] + wallX * wallSin + wallZ * wallCos,
+      ]
+    }
+    const gutterEnd = (
+      gutter: typeof assembly.gutter,
+      segment: typeof assembly.segment,
+      extension: typeof leanToA,
+      host: typeof wallA,
+      side: 'left' | 'right',
+    ) => {
+      const sign = side === 'left' ? -1 : 1
+      const localX = gutter.position[0] + ((Math.cos(gutter.rotation) * gutter.length) / 2) * sign
+      const localZ = gutter.position[2] - ((Math.sin(gutter.rotation) * gutter.length) / 2) * sign
+      return pointInLevel(
+        [segment.position[0] + localX, segment.position[2] + localZ],
+        extension,
+        host,
+      )
+    }
+
+    expect(assembly.segment.width).toBeGreaterThan(layout.roofWidth)
+    expect(assembly.segment.position[0]).toBeGreaterThan(layout.roofCenterX)
+    expect(assembly.segment.trim.frontRightX).toBe(0)
+    expect(assembly.segment.trim.frontRightZ).toBe(0)
+    expect(assembly.segment.trim.backLeftX).toBe(0)
+    expect(assembly.segment.trim.backLeftZ).toBe(0)
+    expect(assembly.segment.trim.backRightX).toBe(0)
+    expect(assembly.segment.trim.backRightZ).toBe(0)
+    expect(assembly.segment.metadata).toMatchObject({
+      leanToCornerSides: ['right'],
+    })
+    expect((assembly.segment.metadata as Record<string, unknown>).leanToRoofPieces).toHaveLength(2)
+    expect(
+      assembly.posts.some(
+        (post) => managedLeanToPostIndex(post) === leanToCornerPostIndex('right'),
+      ),
+    ).toBe(true)
+    expect(assembly.gutter.length).toBeCloseTo(assembly.segment.width, 6)
+    expect(assembly.gutter.position[0]).toBeCloseTo(0, 6)
+    expect(assembly.gutter.metadata).toMatchObject({
+      leanToGutterMitres: { left: 0, right: Math.PI / 4 },
+    })
+    expect(neighborAssembly.gutter.metadata).toMatchObject({
+      leanToGutterMitres: { left: Math.PI / 4, right: 0 },
+    })
+
+    const gutterA = gutterEnd(assembly.gutter, assembly.segment, leanToA, wallA, 'right')
+    const gutterB = gutterEnd(
+      neighborAssembly.gutter,
+      neighborAssembly.segment,
+      leanToB,
+      wallB,
+      'left',
+    )
+    expect(gutterA[0]).toBeCloseTo(gutterB[0], 6)
+    expect(gutterA[1]).toBeCloseTo(gutterB[1], 6)
+
+    const cornerPost = assembly.posts.find(
+      (post) => managedLeanToPostIndex(post) === leanToCornerPostIndex('right'),
+    )!
+    const postFromA = pointInLevel([cornerPost.position[0], cornerPost.position[2]], leanToA, wallA)
+    const postFromB = pointInLevel(
+      [-neighborLayout.span / 2 - leanToA.position[2] - layout.beamZ, neighborLayout.beamZ],
+      leanToB,
+      wallB,
+    )
+    expect(postFromA[0]).toBeCloseTo(postFromB[0], 6)
+    expect(postFromA[1]).toBeCloseTo(postFromB[1], 6)
+  })
+
+  test('keeps perpendicular lean-to roof corners square when auto miter is disabled', () => {
+    const wallA = WallNode.parse({
+      id: 'wall_a_disabled',
+      parentId: 'level_test',
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_b_disabled',
+      parentId: 'level_test',
+      start: [4, 0],
+      end: [4, 4],
+    })
+    const leanToA = LeanToExtensionNode.parse({
+      id: 'leanto_a_disabled',
+      parentId: wallA.id,
+      position: [2, 0, 0.05],
+      span: 4,
+      autoMiterCorners: false,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const leanToB = LeanToExtensionNode.parse({
+      id: 'leanto_b_disabled',
+      parentId: wallB.id,
+      position: [2, 0, 0.05],
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const nodes = {
+      [wallA.id]: wallA,
+      [wallB.id]: wallB,
+      [leanToA.id]: leanToA,
+      [leanToB.id]: leanToB,
+    } as Record<string, AnyNode>
+
+    const assembly = createLeanToAssembly(leanToA, undefined, nodes)
+
+    expect(assembly.segment.width).toBeCloseTo(resolveLeanToLayout(leanToA).roofWidth, 6)
+    expect(assembly.segment.trim.backRightX).toBe(0)
+    expect(assembly.segment.trim.backRightZ).toBe(0)
+    expect(
+      assembly.posts.some(
+        (post) => managedLeanToPostIndex(post) === leanToCornerPostIndex('right'),
+      ),
+    ).toBe(false)
+  })
+
+  test('does not connect perpendicular lean-to roof corners across levels', () => {
+    const wallA = WallNode.parse({
+      id: 'wall_a_level',
+      parentId: 'level_ground',
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_b_level',
+      parentId: 'level_upper',
+      start: [4, 0],
+      end: [4, 4],
+    })
+    const leanToA = LeanToExtensionNode.parse({
+      id: 'leanto_a_level',
+      parentId: wallA.id,
+      position: [2, 0, 0.05],
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const leanToB = LeanToExtensionNode.parse({
+      id: 'leanto_b_level',
+      parentId: wallB.id,
+      position: [2, 0, 0.05],
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const nodes = {
+      [wallA.id]: wallA,
+      [wallB.id]: wallB,
+      [leanToA.id]: leanToA,
+      [leanToB.id]: leanToB,
+    } as Record<string, AnyNode>
+
+    const assembly = createLeanToAssembly(leanToA, undefined, nodes)
+
+    expect(assembly.segment.width).toBeCloseTo(resolveLeanToLayout(leanToA).roofWidth, 6)
+    expect(assembly.segment.trim.backRightX).toBe(0)
+    expect(
+      assembly.posts.some(
+        (post) => managedLeanToPostIndex(post) === leanToCornerPostIndex('right'),
+      ),
+    ).toBe(false)
   })
 
   test('keeps the triangular side edge recessed beneath the sloping eave', () => {

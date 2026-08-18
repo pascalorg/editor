@@ -200,6 +200,7 @@ export {
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
+  isBandedShedSegment,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,

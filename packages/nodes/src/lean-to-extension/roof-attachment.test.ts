@@ -14,6 +14,7 @@ import {
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { leanToRoofSegmentLayoutPatch } from './assembly'
 import {
+  applyLeanToAvailableWallSpan,
   applyLeanToRoofAttachment,
   applyLeanToWallAutoSpan,
   resolveLeanToRoofAttachment,
@@ -137,6 +138,38 @@ describe('lean-to roof-edge attachment', () => {
 
     expect(spanning.position[0]).toBeCloseTo(2, 5)
     expect(spanning.span + spanning.leftOverhang + spanning.rightOverhang).toBeCloseTo(4, 5)
+  })
+
+  test('auto-spans only the free part of a wall that already hosts an extension', () => {
+    const { leanTo, nodes, wall } = sceneWithRoof()
+    const existing = LeanToExtensionNode.parse({
+      id: 'leanto_existing',
+      position: [1, 0, leanTo.position[2]],
+      span: 2,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const draft = LeanToExtensionNode.parse({
+      ...leanTo,
+      id: 'leanto_draft',
+      position: [3, 0, leanTo.position[2]],
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const fullWallDraft = applyLeanToWallAutoSpan(draft, wall)
+    const wallWithExisting = WallNode.parse({ ...wall, children: [existing.id] })
+    const availableNodes = Object.fromEntries(
+      Object.entries(nodes).filter(([id]) => id !== leanTo.id),
+    ) as Record<AnyNodeId, AnyNode>
+    const available = applyLeanToAvailableWallSpan(
+      fullWallDraft,
+      wallWithExisting,
+      { ...availableNodes, [existing.id]: existing },
+      3,
+    )
+
+    expect(available.position[0]).toBeCloseTo(3, 6)
+    expect(available.span).toBeCloseTo(2, 6)
   })
 
   test('connects a ground-floor wall to a roof stored on the level above', () => {

@@ -67,8 +67,19 @@ export const GutterNode = BaseNode.extend({
   // to tilt for a custom run.
   rotation: z.number().default(0),
 
-  // Length along the eave (gutter-local +X).
+  // Length along the eave (gutter-local +X). For a curved eave this is the
+  // arc length of the run.
   length: z.number().default(2.0),
+  // Concentric-arc descriptor for a run that follows a curved eave, in
+  // gutter-mesh-local coordinates (center + true radius). Absent for a straight
+  // gutter; set by a managed lean-to following a curved wall.
+  arc: z
+    .object({
+      centerX: z.number(),
+      centerZ: z.number(),
+      radius: z.number(),
+    })
+    .optional(),
   // Profile size — the vertical drop of the U-channel below the eave
   // line. 5″ (0.127 m) is the most common residential gutter size; 6″
   // (0.152 m) is the common commercial / heavy-duty size. Default

@@ -5,6 +5,7 @@ import { Box3, type BoxGeometry, type Mesh, type MeshStandardMaterial } from 'th
 import { buildGutterGeometry } from '../gutter/geometry'
 import { createLeanToAssembly } from './assembly'
 import { buildLeanToExtensionGeometry } from './geometry'
+import { resolveLeanToLayout } from './layout'
 import { leanToSlots } from './slots'
 
 describe('lean-to extension geometry', () => {
@@ -159,5 +160,73 @@ describe('lean-to extension geometry', () => {
     const firstPostMinX = firstPost.position.x - postWidth / 2
 
     expect(beamMinX).toBeCloseTo(firstPostMinX, 6)
+  })
+
+  test('replaces the joined boundary rafter and extends the beam to the shared corner post', () => {
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      rightEndCondition: 'joined',
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: 2.5,
+            gutterMitre: Math.PI / 4,
+            seam: [
+              [2, 0],
+              [4.5, 2.5],
+            ],
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const layout = resolveLeanToLayout(node)
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    const beam = group.getObjectByName('lean-to-front-beam') as Mesh<BoxGeometry>
+    const beamWidth = (beam.geometry.parameters as { width: number }).width
+    const beamPositions = beam.geometry.getAttribute('position')
+    const rightEndXs = Array.from({ length: beamPositions.count }, (_, index) =>
+      beamPositions.getX(index),
+    ).filter((x) => x > beamWidth / 2 - node.beamWidth * 1.1)
+    const ordinaryRafters = group.children.filter((child) =>
+      child.name.startsWith('lean-to-rafter-'),
+    )
+
+    expect(beamWidth).toBeCloseTo(layout.beamSpan + 2.5, 6)
+    expect(beam.position.x).toBeCloseTo(1.25, 6)
+    expect(Math.max(...rightEndXs) - Math.min(...rightEndXs)).toBeCloseTo(node.beamWidth, 6)
+    expect(ordinaryRafters).toHaveLength(layout.rafterXs.length - 1)
+    expect(group.getObjectByName('lean-to-right-corner-rafter')).toBeDefined()
+    expect(group.getObjectByName('lean-to-right-side-flashing')).toBeUndefined()
+  })
+
+  test('cuts an extended corner beam at the resolved arbitrary mitre angle', () => {
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      rightEndCondition: 'joined',
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: 2.5,
+            gutterMitre: Math.PI / 3,
+            seam: null,
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const beam = buildLeanToExtensionGeometry(node, {} as never).getObjectByName(
+      'lean-to-front-beam',
+    ) as Mesh<BoxGeometry>
+    const positions = beam.geometry.getAttribute('position')
+    const halfLength = (beam.geometry.parameters as { width: number }).width / 2
+    const endXs = Array.from({ length: positions.count }, (_, index) =>
+      positions.getX(index),
+    ).filter((x) => x > halfLength - node.beamWidth * 2)
+
+    expect(Math.max(...endXs) - Math.min(...endXs)).toBeCloseTo(
+      node.beamWidth * Math.tan(Math.PI / 3),
+      6,
+    )
   })
 })

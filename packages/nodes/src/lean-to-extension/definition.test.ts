@@ -91,6 +91,21 @@ describe('lean-to extension span handles', () => {
     })
   })
 
+  test('resizes span from the visual side when placed on the opposite wall face', () => {
+    const leanTo = node({ rotation: [0, Math.PI, 0], position: [6, 0, -0.05] })
+
+    expect(spanHandle('min').apply(leanTo, 6, undefined as never)).toMatchObject({
+      span: 6,
+      autoSpan: false,
+      position: [5, 0, -0.05],
+    })
+    expect(spanHandle('max').apply(leanTo, 6, undefined as never)).toMatchObject({
+      span: 6,
+      autoSpan: false,
+      position: [7, 0, -0.05],
+    })
+  })
+
   test('previews managed roof-segment span while dragging', () => {
     const leanTo = node({ children: ['roof_test' as never] })
     const nodes = {

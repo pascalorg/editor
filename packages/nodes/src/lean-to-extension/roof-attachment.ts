@@ -3,6 +3,9 @@ import {
   type AnyNodeId,
   getLevelElevations,
   getWallBaseElevationForNodes,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  isCurvedWall,
   type LeanToExtensionNode,
   type LeanToRoofEdge,
   type RoofNode,
@@ -134,13 +137,35 @@ function nearestPointOnSegment(point: PlanPoint, start: PlanPoint, end: PlanPoin
 }
 
 function wallFrame(wall: WallNode, leanTo: LeanToExtensionNode) {
+  const side = Math.cos(leanTo.rotation[1]) >= 0 ? 1 : -1
+
+  // Curved host: linearise the arc at the lean-to's along-wall position.
+  // position[0] is arc-length from the wall start, so the local tangent /
+  // normal at that param give the along / outward axes the matcher needs.
+  if (isCurvedWall(wall)) {
+    const arcLength = getWallCurveLength(wall)
+    if (arcLength <= 1e-6) return null
+    const t = Math.max(0, Math.min(1, leanTo.position[0] / arcLength))
+    const frame = getWallCurveFrameAt(wall, t)
+    const along = { x: frame.tangent.x, z: frame.tangent.y }
+    const perpendicular = { x: frame.normal.x, z: frame.normal.y }
+    return {
+      along,
+      outward: { x: perpendicular.x * side, z: perpendicular.z * side },
+      center: {
+        x: frame.point.x + perpendicular.x * leanTo.position[2],
+        z: frame.point.y + perpendicular.z * leanTo.position[2],
+      },
+      wallStart: { x: wall.start[0], z: wall.start[1] },
+    }
+  }
+
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
   const length = Math.hypot(dx, dz)
   if (length <= 1e-6) return null
   const along = { x: dx / length, z: dz / length }
   const perpendicular = { x: -along.z, z: along.x }
-  const side = Math.cos(leanTo.rotation[1]) >= 0 ? 1 : -1
   const center = {
     x: wall.start[0] + along.x * leanTo.position[0] + perpendicular.x * leanTo.position[2],
     z: wall.start[1] + along.z * leanTo.position[0] + perpendicular.z * leanTo.position[2],
@@ -321,11 +346,68 @@ export function applyLeanToWallAutoSpan(
   wall: WallNode,
 ): LeanToExtensionNode {
   if (!leanTo.autoSpan) return leanTo
-  const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  const wallLength = isCurvedWall(wall)
+    ? getWallCurveLength(wall)
+    : Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
   if (wallLength <= 1e-6) return leanTo
   return {
     ...leanTo,
     ...autoSpanPatch(leanTo, wallLength, wallLength / 2),
+  }
+}
+
+export function applyLeanToAvailableWallSpan(
+  leanTo: LeanToExtensionNode,
+  wall: WallNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+  targetWallX: number,
+): LeanToExtensionNode {
+  if (!leanTo.autoSpan) return leanTo
+
+  const domainStart = leanTo.position[0] - leanTo.span / 2 - leanTo.leftOverhang
+  const domainEnd = leanTo.position[0] + leanTo.span / 2 + leanTo.rightOverhang
+  const sameSide = Math.sign(Math.cos(leanTo.rotation[1])) || 1
+  const wallChildIds = new Set(wall.children ?? [])
+  const occupied = Object.values(nodes)
+    .filter(
+      (candidate): candidate is LeanToExtensionNode =>
+        candidate.type === 'lean-to-extension' &&
+        candidate.id !== leanTo.id &&
+        (candidate.parentId === wall.id || wallChildIds.has(candidate.id)) &&
+        (Math.sign(Math.cos(candidate.rotation[1])) || 1) === sameSide,
+    )
+    .map((candidate) => ({
+      start: candidate.position[0] - candidate.span / 2 - candidate.leftOverhang,
+      end: candidate.position[0] + candidate.span / 2 + candidate.rightOverhang,
+    }))
+    .filter((interval) => interval.end > domainStart && interval.start < domainEnd)
+    .sort((a, b) => a.start - b.start)
+
+  if (occupied.length === 0) return leanTo
+
+  const free: Array<{ start: number; end: number }> = []
+  let cursor = domainStart
+  for (const interval of occupied) {
+    const start = Math.max(domainStart, interval.start)
+    const end = Math.min(domainEnd, interval.end)
+    if (start > cursor) free.push({ start: cursor, end: start })
+    cursor = Math.max(cursor, end)
+  }
+  if (cursor < domainEnd) free.push({ start: cursor, end: domainEnd })
+
+  const targetInterval = free.find(
+    (interval) => targetWallX >= interval.start - 1e-6 && targetWallX <= interval.end + 1e-6,
+  )
+  if (!targetInterval) return leanTo
+
+  const visibleSpan = targetInterval.end - targetInterval.start
+  if (visibleSpan < MIN_EXTENSION_SPAN + leanTo.leftOverhang + leanTo.rightOverhang) {
+    return leanTo
+  }
+
+  return {
+    ...leanTo,
+    ...autoSpanPatch(leanTo, visibleSpan, (targetInterval.start + targetInterval.end) / 2),
   }
 }
 

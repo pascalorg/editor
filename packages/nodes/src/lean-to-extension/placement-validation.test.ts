@@ -12,12 +12,36 @@ import {
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 
 describe('lean-to placement validation', () => {
-  test('rejects a span crossing a host-wall opening', () => {
+  test('allows a span crossing a host-wall opening', () => {
     const window = WindowNode.parse({ position: [2, 1, 0], width: 1.2 })
     const wall = WallNode.parse({ start: [0, 0], end: [6, 0], children: [window.id] })
     const leanTo = LeanToExtensionNode.parse({ parentId: wall.id, position: [2, 0, 0.05] })
     const nodes = { [wall.id]: wall, [window.id]: window } as Record<string, AnyNode>
-    expect(leanToPlacementConflicts(leanTo, wall, nodes)).toHaveLength(1)
+    expect(leanToPlacementConflicts(leanTo, wall, nodes)).toHaveLength(0)
+  })
+
+  test('allows adjacent extensions on the same unsplit wall', () => {
+    const wall = WallNode.parse({
+      id: 'wall_shared',
+      start: [0, 0],
+      end: [10, 0],
+      children: ['leanto_left'],
+    })
+    const existing = LeanToExtensionNode.parse({
+      id: 'leanto_left',
+      parentId: wall.id,
+      position: [1.5, 0, 0.05],
+      span: 3,
+    })
+    const candidate = LeanToExtensionNode.parse({
+      id: 'leanto_right',
+      parentId: wall.id,
+      position: [6.5, 0, 0.05],
+      span: 7,
+    })
+    const nodes = { [wall.id]: wall, [existing.id]: existing } as Record<string, AnyNode>
+
+    expect(leanToPlacementConflicts(candidate, wall, nodes)).toHaveLength(0)
   })
 
   test('rejects an overlapping extension hosted by an adjacent wall', () => {
@@ -179,6 +203,56 @@ describe('lean-to placement validation', () => {
     ) as Record<string, AnyNode>
 
     expect(leanToPlacementConflicts(leanTo, wall, nodes)).toContain(`roof/eave ${segment.id}`)
+  })
+
+  test('allows an unrelated upper-level roof over a lower-level canopy footprint', () => {
+    const building = BuildingNode.parse({
+      id: 'building_multilevel',
+      children: ['level_ground', 'level_upper'],
+    })
+    const ground = LevelNode.parse({
+      id: 'level_ground',
+      parentId: building.id,
+      level: 0,
+      height: 2.5,
+      children: ['wall_ground'],
+    })
+    const upper = LevelNode.parse({
+      id: 'level_upper',
+      parentId: building.id,
+      level: 1,
+      height: 2.5,
+      children: ['roof_upper'],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_ground',
+      parentId: ground.id,
+      start: [0, 0],
+      end: [6, 0],
+      height: 2.8,
+    })
+    const roof = RoofNode.parse({
+      id: 'roof_upper',
+      parentId: upper.id,
+      position: [3, 2.2, 1.5],
+    })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_upper',
+      parentId: roof.id,
+      roofType: 'flat',
+      width: 4,
+      depth: 1,
+      wallHeight: 0.3,
+    })
+    const leanTo = LeanToExtensionNode.parse({ parentId: wall.id, position: [3, 0, 0.05] })
+    const nodes = Object.fromEntries(
+      [building, ground, upper, wall, { ...roof, children: [segment.id] }, segment].map((node) => [
+        node.id,
+        node,
+      ]),
+    ) as Record<string, AnyNode>
+
+    expect(leanToPlacementConflicts(leanTo, wall, nodes)).not.toContain(`roof/eave ${segment.id}`)
   })
 
   test('rejects a host eave that intrudes beyond its recorded connection edge', () => {
