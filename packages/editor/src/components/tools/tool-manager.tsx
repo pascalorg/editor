@@ -7,7 +7,6 @@ import {
   type FenceNode,
   nodeRegistry,
   type SlabNode,
-  type ToolContributionProps,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -15,7 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
-import {
+import useInteractionScope, {
   useControlPointReshape,
   useEditingHole,
   useEndpointReshape,
@@ -32,6 +31,7 @@ import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
+import { RegistryToolProvider } from './registry-tool-context'
 import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
@@ -43,8 +43,7 @@ import { ZoneTool } from './zone/zone-tool'
 
 // Cache lazy tool components keyed by their loader so React.lazy isn't
 // re-invoked across renders.
-type RegistryToolProps = ToolContributionProps
-const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType<RegistryToolProps>>()
+const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType>()
 const registryToolPreloadCache = new WeakMap<AnyNodeDefinition, Promise<void>>()
 
 export function preloadRegistryToolModules(tool: string | null): Promise<void> {
@@ -69,7 +68,7 @@ export function preloadRegistryToolModules(tool: string | null): Promise<void> {
   return preload
 }
 
-function getRegistryTool(tool: Tool | null): ComponentType<RegistryToolProps> | null {
+function getRegistryTool(tool: Tool | null): ComponentType | null {
   if (!tool) return null
   const def = nodeRegistry.get(tool)
   if (!def?.tool) return null
@@ -80,7 +79,7 @@ function getRegistryTool(tool: Tool | null): ComponentType<RegistryToolProps> | 
     // inspector, and move contribution are warm. This keeps the click itself
     // synchronous even under Next.js dev-time on-demand compilation.
     await preloadRegistryToolModules(tool)
-    return def.tool!() as Promise<{ default: ComponentType<RegistryToolProps> }>
+    return def.tool!() as Promise<{ default: ComponentType }>
   })
   lazyToolCache.set(def.tool, Comp)
   return Comp
@@ -102,11 +101,13 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
 }
 
 export const ToolManager: React.FC = () => {
-  const sceneApi = useMemo(() => createSceneApi(useScene), [])
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const movingNode = useMovingNode()
+  const registryToolOwnsPlacement = useInteractionScope(
+    (state) => state.scope.kind === 'placing' && state.scope.driver === 'registry-tool',
+  )
   const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
   const endpointReshape = useEndpointReshape()
   const controlPointReshape = useControlPointReshape()
@@ -145,6 +146,15 @@ export const ToolManager: React.FC = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
+  const registrySceneApi = useMemo(() => createSceneApi(useScene), [])
+  const registryToolContext = useMemo(
+    () => ({
+      activeLevelId: activeLevelId ?? null,
+      sceneApi: registrySceneApi,
+      selectNode: (nodeId: AnyNodeId) => setSelection({ selectedIds: [nodeId] }),
+    }),
+    [activeLevelId, registrySceneApi, setSelection],
+  )
 
   // Building transform for the local group — all building-relative tools live inside this group
   // so their cursor positions and committed data are naturally in building-local space.
@@ -237,7 +247,7 @@ export const ToolManager: React.FC = () => {
   // (the scene writes the overlay makes still mirror into the 3D view). A
   // 3D-initiated move leaves the origin null until its own commit, so this only
   // suppresses the 3D tool for genuinely 2D-owned moves.
-  const showMover = movingNode != null && movingNodeOrigin !== '2d'
+  const showMover = movingNode != null && movingNodeOrigin !== '2d' && !registryToolOwnsPlacement
 
   // Registry-first: if the active tool's kind has a NodeDefinition with a
   // tool contribution, the registry-driven tool takes over.
@@ -379,13 +389,11 @@ export const ToolManager: React.FC = () => {
         )}
         {/* Registry-first: when the active tool's kind has a registered
             NodeDefinition with a tool contribution, mount it here. */}
-        {!movingNode && useRegistryTool && RegistryToolComponent && (
+        {(!movingNode || registryToolOwnsPlacement) && useRegistryTool && RegistryToolComponent && (
           <Suspense fallback={null}>
-            <RegistryToolComponent
-              activeLevelId={activeLevelId as AnyNodeId | null}
-              sceneApi={sceneApi}
-              selectNode={handlePlacedNodeSelected}
-            />
+            <RegistryToolProvider value={registryToolContext}>
+              <RegistryToolComponent />
+            </RegistryToolProvider>
           </Suspense>
         )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (

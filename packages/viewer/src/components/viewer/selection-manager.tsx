@@ -13,6 +13,7 @@ import {
   pointInPolygon,
   resolveSelectionProxyId,
   sceneRegistry,
+  useRegistryVersion,
   useScene,
   type WallNode,
   type ZoneNode,
@@ -306,8 +307,13 @@ const getStrategy = (): SelectionStrategy | null => {
 export const SelectionManager = () => {
   const selection = useViewer((s) => s.selection)
   const clickHandledRef = useRef(false)
+  // Plugin kinds register AFTER mount (async dynamic-import discovery) —
+  // re-derive the `getSelectableKinds()` subscription list when they land.
+  const registryVersion = useRegistryVersion()
 
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     const onEnter = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
@@ -396,7 +402,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:click` as any, onClick as any)
       }
     }
-  }, [])
+  }, [registryVersion])
 
   return (
     <>

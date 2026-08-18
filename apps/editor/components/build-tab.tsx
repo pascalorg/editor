@@ -13,7 +13,7 @@ import {
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import Image from 'next/image'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
   Tooltip,
   TooltipContent,
@@ -77,6 +77,8 @@ const BASE_BUILD_TYPES: BuildType[] = [
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
   { id: 'terrain', label: 'Terrain', iconSrc: '/icons/mesh.webp', mode: 'terrain-sculpt' },
 ]
+
+const subscribeToClientMount = () => () => {}
 
 function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
   const baseKinds = new Set(BASE_BUILD_TYPES.flatMap((type) => (type.kind ? [type.kind] : [])))
@@ -209,15 +211,15 @@ export function BuildTab() {
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
-  const [registryReady, setRegistryReady] = useState(false)
+  const registryReady = useSyncExternalStore(
+    subscribeToClientMount,
+    () => true,
+    () => false,
+  )
   const buildTypes = useMemo(
     () => (registryReady ? collectBuildTypes(floorplanMode) : BASE_BUILD_TYPES),
     [floorplanMode, registryReady],
   )
-
-  useEffect(() => {
-    setRegistryReady(true)
-  }, [])
 
   // The fitting / follow tools are armed from a segment's panel, not a grid
   // tile — keep the segment tile lit so the panel (and the way back) stays

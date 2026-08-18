@@ -355,6 +355,19 @@ interface ViewerProps {
    */
   sceneReadyMaxWaitMs?: number
   /**
+   * Frame cap for the render loop, in frames per second. Defaults to 50, the
+   * value the viewer has always used.
+   *
+   * The viewer runs `frameloop="never"` and advances frames itself through
+   * `<FrameLimiter>`, so this cap is the only thing setting the cadence and a
+   * host cannot raise it from the outside. Hosts that animate the scene on
+   * their own clock — a timeline scrubbing node transforms, a walkthrough
+   * camera — are pinned to it and cannot reach display refresh, which reads as
+   * judder against a 60Hz+ monitor. Raise it for those; lower it to spare the
+   * GPU on a passive or background canvas.
+   */
+  maxFps?: number
+  /**
    * Skip the TSL post-processing pipeline (SSGI/denoise/ink/outline) and render
    * the scene directly. For headless/capture surfaces (the bake page) where
    * frame quality is irrelevant: on a software-rasterised worker the pipeline
@@ -362,6 +375,8 @@ interface ViewerProps {
    * `?disable=postFx` diagnostic URL flag, but host-controlled.
    */
   disablePostFx?: boolean
+  /** Keep the mounted renderer/context warm without advancing scene frames. */
+  renderPaused?: boolean
 }
 
 /** Imperative handle exposed via `ref` on `<Viewer>`. */
@@ -389,7 +404,9 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     sceneReadyKey,
     onSceneReadyChange,
     sceneReadyMaxWaitMs,
+    maxFps = 50,
     disablePostFx = false,
+    renderPaused = false,
   },
   ref,
 ) {
@@ -555,7 +572,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         enabled: shadowsEnabled,
       }}
     >
-      <FrameLimiter fps={50} />
+      <FrameLimiter fps={maxFps} paused={renderPaused} />
       <ViewerCamera />
       <GPUDeviceWatcher />
       <ToneMappingExposure />

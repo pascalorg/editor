@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
+import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
@@ -881,10 +882,46 @@ export type FloorplanMoveTarget<N> = (args: {
 
 // ─── Plugin manifest ─────────────────────────────────────────────────
 
+/**
+ * A plugin-contributed section for the floating node inspector card.
+ * When a node whose `type` is in `kinds` is selected, the inspector header
+ * shows the extension's `icon` as a button. Clicking it swaps the card
+ * body to ONLY this extension's `component` (inside a section titled
+ * `title`) — extension mode and the kind's own controls are EITHER/OR,
+ * never appended together. Clicking the (highlighted) icon again, or the
+ * chevron, returns to the regular controls. The mobile sheet has no
+ * header icons, so it appends the section after the kind's controls
+ * instead.
+ *
+ * `component` is lazy-loaded on first expand and receives the selected
+ * node as a `node` prop (`ComponentType<{ node: AnyNode }>` — typed as
+ * {@link LazyComponent} so plugin bundles don't need the host's node
+ * types to declare one).
+ *
+ * Extensions surface only when the contributing plugin is installed in
+ * the project (same `installedPlugins` gate as panels and node kinds).
+ */
+export type InspectorExtension = {
+  /** Globally unique id, e.g. `pascal:bones:wall-engineering`. */
+  id: string
+  /** The contributing plugin's id — used for the install gate. */
+  pluginId: string
+  /** Node kinds whose inspector card grows this section. */
+  kinds: string[]
+  /** Header-button icon (16px box). */
+  icon: IconRef
+  /** Section title, e.g. `Engineering`. */
+  title: string
+  /** Lazy section body; receives `{ node }` (the selected node). */
+  component: LazyComponent
+}
+
 export type Plugin = {
   id: string
   apiVersion: 1
   nodes?: AnyNodeDefinition[]
+  /** Sections contributed to the floating node inspector card. */
+  inspectorExtensions?: InspectorExtension[]
 }
 
 // ─── NodeDefinition ──────────────────────────────────────────────────
@@ -1249,7 +1286,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   ports?: (node: z.infer<S>) => NodePort[]
   system?: SystemContribution
-  tool?: ToolLazyComponent
+  tool?: LazyComponent
   /**
    * Stage-D drag-affordance components — one per kind-owned editor mode
    * triggered by `useEditor` state. Component receives `{ node }` as its
@@ -1429,12 +1466,6 @@ export type IconRef =
    * boundary per icon. */
   | { kind: 'component'; module: () => Promise<{ default: ComponentType }> }
 
-export type ToolContributionProps = {
-  sceneApi: SceneApi
-  activeLevelId: AnyNodeId | null
-  selectNode: (nodeId: AnyNodeId) => void
-}
-export type ToolLazyComponent = () => Promise<{ default: ComponentType<ToolContributionProps> }>
 export type LazyComponent = () => Promise<{ default: ComponentType }>
 
 export type RendererSource<N> =
@@ -1498,6 +1529,7 @@ export type Capabilities = {
   cuttable?: CuttableConfig
   snappable?: SnappableConfig
   surfaces?: SurfacesConfig
+  faceHost?: FaceHostCapability<any>
   duplicable?: boolean | DuplicableConfig
   deletable?: boolean
   groupable?: boolean
@@ -2033,7 +2065,9 @@ export type SnappableConfig = {
 export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 
 export type SurfacesConfig = {
-  top?: { height: number | ((n: AnyNode) => number) }
+  top?: {
+    height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
+  }
   sides?: { faces: 'all' | ReadonlyArray<readonly [number, number, number]> }
   custom?: SurfaceQuery
 }
@@ -2042,6 +2076,48 @@ export type SurfaceQuery = (n: AnyNode) => SurfacePoint[]
 export type SurfacePoint = {
   position: readonly [number, number, number]
   normal: readonly [number, number, number]
+}
+
+export type FaceHostPlacementArgs<N extends AnyNode = AnyNode> = {
+  host: N
+  asset: AssetInput
+  draftItem: ItemNode | null
+  localPosition: readonly [number, number, number]
+  faceIndex?: number
+  object: Object3D
+  currentFaceId?: string | null
+  rawDimensions: readonly [number, number, number]
+  dimensions: readonly [number, number, number]
+  snapScalar: (value: number) => number
+}
+
+export type FaceHostStoredPlacementArgs<N extends AnyNode = AnyNode> = {
+  host: N
+  item: ItemNode
+  position: readonly [number, number, number]
+}
+
+export type FaceHostStoredValidityArgs<N extends AnyNode = AnyNode> = {
+  host: N
+  item: ItemNode
+  asset: AssetInput
+}
+
+export type FaceHostPlacementResult = {
+  faceId: string
+  nodeUpdate: Partial<ItemNode>
+  position: [number, number, number]
+  rotation: [number, number, number]
+  cursorPosition: [number, number, number]
+  cursorRotation: [number, number, number]
+}
+
+export type FaceHostCapability<N extends AnyNode = AnyNode> = {
+  currentFaceId: (item: ItemNode | null) => string | null
+  clearItemFields: readonly (keyof ItemNode)[]
+  resolvePlacement: (args: FaceHostPlacementArgs<N>) => FaceHostPlacementResult | null
+  storedPlacementPatch: (args: FaceHostStoredPlacementArgs<N>) => Partial<ItemNode> | null
+  isStoredPlacementValid: (args: FaceHostStoredValidityArgs<N>) => boolean
 }
 
 export type SelectableConfig = {

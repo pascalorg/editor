@@ -242,6 +242,9 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   parametrics: elevatorParametrics,
   handles: elevatorHandles,
 
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
+
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

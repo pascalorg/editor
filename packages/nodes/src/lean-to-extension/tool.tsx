@@ -6,7 +6,6 @@ import {
   emitter,
   getLevelElevations,
   getWallBaseElevationForNodes,
-  type ToolContributionProps,
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
@@ -16,6 +15,7 @@ import {
   triggerSFX,
   useEditor,
   useInteractionScope,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
 import { useEffect, useState } from 'react'
 import { createLeanToAssembly } from './assembly'
@@ -39,7 +39,8 @@ type PreviewPose = {
   rotationY: number
 }
 
-const LeanToExtensionTool = ({ activeLevelId, sceneApi, selectNode }: ToolContributionProps) => {
+const LeanToExtensionTool = () => {
+  const { activeLevelId, sceneApi, selectNode } = useRegistryToolContext()
   const viewMode = useEditor((state) => state.viewMode)
   const [preview, setPreview] = useState<PreviewPose | null>(null)
 

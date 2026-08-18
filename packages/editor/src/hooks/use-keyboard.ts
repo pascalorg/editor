@@ -141,6 +141,8 @@ const cancelInteractionForHistoryShortcut = () => {
     guideEmitter.emit('guide:cancel-reference-scale')
     return true
   }
+  const activeScope = useInteractionScope.getState().scope
+  if (activeScope.kind === 'mesh-editing' && activeScope.phase === 'selecting') return false
   _toolCancelConsumed = false
   emitter.emit('tool:cancel')
   if (_toolCancelConsumed) return true
@@ -160,6 +162,13 @@ const cancelInteractionForHistoryShortcut = () => {
     return true
   }
   return false
+}
+
+export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
+  if (cancelInteractionForHistoryShortcut()) return false
+  if (direction === 'redo') runRedo()
+  else runUndo()
+  return true
 }
 
 export const useKeyboard = ({
@@ -419,13 +428,11 @@ export const useKeyboard = ({
       } else if (e.key.toLowerCase() === 'z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        if (cancelInteractionForHistoryShortcut()) return
-        runRedo()
+        runHistoryShortcut('redo')
       } else if (e.key.toLowerCase() === 'z' && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        if (cancelInteractionForHistoryShortcut()) return
-        runUndo()
+        runHistoryShortcut('undo')
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         const { buildingId, levelId } = useViewer.getState().selection

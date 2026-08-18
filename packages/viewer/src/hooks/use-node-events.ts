@@ -34,6 +34,7 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
     // keys; the `as never` cast lets us emit a kind-specific payload
     // through that generic surface without enumerating every kind.
     emitter.emit(eventKey, payload as never)
+    emitter.emit(`node:${suffix}`, payload)
   }
 
   // Camera drags (orbit / pan / dolly) suppress ALL node pointer events.

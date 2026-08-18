@@ -225,7 +225,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
-      <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
+      <div className="pointer-events-none absolute top-4 right-4 z-40 flex flex-col items-end gap-1 md:top-14 md:flex-row md:items-center md:gap-2">
         <button
           aria-pressed={lightPreview}
           className={cn(

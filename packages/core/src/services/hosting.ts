@@ -105,11 +105,14 @@ export function getSurface(host: AnyNode): SurfacesConfig | null {
  * Resolves the stackable top height of a host (e.g. table surface, slab top,
  * stair landing). Returns `null` when the host has no `surfaces.top`.
  */
-export function getTopSurfaceHeight(host: AnyNode): number | null {
+export function getTopSurfaceHeight(
+  host: AnyNode,
+  nodes: Record<string, AnyNode> = { [host.id]: host },
+): number | null {
   const surfaces = getSurface(host)
   if (!surfaces?.top) return null
   const { height } = surfaces.top
-  return typeof height === 'function' ? height(host) : height
+  return typeof height === 'function' ? height(host, { nodes }) : height
 }
 
 /**
@@ -152,7 +155,11 @@ export function pickHost(args: {
  * Convenience: clamps a Y coordinate to the top of a host surface, when one
  * is declared. Returns the original Y if the host has no top surface.
  */
-export function clampYToHostTop(host: AnyNode, originalY: number): number {
-  const top = getTopSurfaceHeight(host)
+export function clampYToHostTop(
+  host: AnyNode,
+  originalY: number,
+  nodes?: Record<string, AnyNode>,
+): number {
+  const top = getTopSurfaceHeight(host, nodes)
   return top == null ? originalY : top
 }

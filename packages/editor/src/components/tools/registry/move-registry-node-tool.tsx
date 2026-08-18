@@ -10,7 +10,6 @@ import {
   bboxCornerAnchors,
   collectAlignmentAnchors,
   createSceneApi,
-  type EventSuffix,
   emitter,
   footprintAABBFrom,
   type GridEvent,
@@ -23,6 +22,7 @@ import {
   resolveAlignment,
   resolveConnectivityUpdates,
   resolveFacingIndicator,
+  resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
   sceneRegistry,
   spatialGridManager,
@@ -56,7 +56,10 @@ import { DragBoundingBox } from '../shared/drag-bounding-box'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import { useFreshPlacementVisibility } from '../shared/fresh-placement-visibility'
 import { PlacementBox } from '../shared/placement-box'
-import { resolvePointerSupportSurface } from '../shared/pointer-support-cap'
+import {
+  type PointerSupportSurface,
+  resolvePointerSupportSurface,
+} from '../shared/pointer-support-cap'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
  *  / 0.1 / 0.05), read live so changing the step mid-drag takes effect. */
@@ -203,12 +206,10 @@ const ALIGNMENT_THRESHOLD_M = 0.08
  * Cancel imperatively snaps the mesh back to its original position and
  * resumes history without ever having touched the store mid-drag.
  *
- * **Commit triggers**: the tool listens for `grid:click` *and* the
- * common node click events (shelf / item / slab / ceiling / wall /
- * fence / column / roof / stair). A click on the grid plane fires
- * `grid:click`; a click on the moved node itself (or any other 3D
- * geometry the ray happens to land on) fires the corresponding node
- * click event. Without the node-click listeners, clicking on the
+ * **Commit triggers**: the tool listens for `grid:click` and the generic
+ * `node:click` event. A click on the grid plane fires `grid:click`; a click
+ * on the moved node itself (or any other 3D geometry the ray happens to land
+ * on) fires `node:click`. Without the node-click listener, clicking on the
  * cursor's own mesh during a move would silently drop the commit —
  * the user perceives "click did nothing" because the click hit the
  * vertical face of e.g. a shelf instead of the grid plane below it.
@@ -218,20 +219,6 @@ const ALIGNMENT_THRESHOLD_M = 0.08
  * indicating.
  */
 type ClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
-
-const CLICK_TRIGGER_KINDS = [
-  'shelf',
-  'item',
-  'slab',
-  'ceiling',
-  'wall',
-  'fence',
-  'column',
-  'roof',
-  'roof-segment',
-  'stair',
-  'stair-segment',
-] as const
 
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // Live camera ref — the pointer-surface cap reconstructs the cursor world
@@ -243,6 +230,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // refreshed per grid move. Caps the floor-support election so a deck
   // hanging above the aimed-at floor never lifts the dragged node.
   const supportCapRef = useRef<number | null>(null)
+  const supportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   // Kinds whose `position` lives in a host parent's local frame declare
   // `movable.parentFrame` (cabinet module ↔ its run). The tool converts the
   // plan-frame cursor through the capability's hooks and previews via
@@ -420,6 +408,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     // No pointer surface known yet — uncapped election (the node keeps its
     // persisted host / committed elevation until the first grid move).
     supportCapRef.current = null
+    supportSurfaceRef.current = null
     // Re-sync the box transform to the (possibly new) node. `node` changes
     // without this component remounting whenever a positioned preset re-arms a
     // fresh clone after a drop, or the user picks a different catalog tile —
@@ -620,6 +609,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // single fixed point per pointer ray.
       const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
       supportCapRef.current = pointed?.elevation ?? null
+      supportSurfaceRef.current = pointed
       const rawX = pointed?.localPoint?.[0] ?? event.localPosition[0]
       const rawZ = pointed?.localPoint?.[2] ?? event.localPosition[2]
       revealFreshPlacement()
@@ -732,6 +722,24 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
           if (guides.length > 0) useAlignmentGuides.getState().set(guides)
         }
       }
+      if (!parentFrame && pointed?.sourceNodeId) {
+        const rotation = toCommitRotation(rotationRef.current)
+        const effectiveNode = {
+          ...(node as Record<string, unknown>),
+          position,
+          rotation,
+        } as AnyNode
+        position = resolveFrozenFloorPlacementPatch(
+          effectiveNode,
+          { ...useScene.getState().nodes, [node.id]: effectiveNode },
+          {
+            position,
+            rotation,
+            elevation: pointed.elevation,
+            preferredSlabId: pointed.supportSlabId,
+          },
+        ).position
+      }
       const visualPosition = getVisualPosition(position)
       hasMovedRef.current = true
       setCursorPosition(visualPosition)
@@ -790,8 +798,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
      *  AND scene updated) — never the original.
      */
     const commitAtCursor = (event: ClickTriggerEvent) => {
-      // One physical click can reach here twice: node clicks (`slab:click`,
-      // `item:click`, …) are synthesized on *pointerup* (`use-node-events`),
+      // One physical click can reach here twice: `node:click` is synthesized
+      // on *pointerup* (`use-node-events`),
       // while `grid:click` rides the browser's native *click* event from a
       // canvas DOM listener (`use-grid-events`) that deliberately ignores
       // stopPropagation — and this effect stays subscribed until React
@@ -830,7 +838,11 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
               ...useScene.getState().nodes,
               [node.id]: effectiveNode,
             },
-            { maxElevation: supportCapRef.current },
+            {
+              maxElevation: supportCapRef.current,
+              preferredSlabId: supportSurfaceRef.current?.supportSlabId,
+              pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
+            },
           ),
           ...(isNew
             ? {
@@ -902,7 +914,11 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
                 ...useScene.getState().nodes,
                 [reparsed.id]: reparsed,
               },
-              { maxElevation: supportCapRef.current },
+              {
+                maxElevation: supportCapRef.current,
+                preferredSlabId: supportSurfaceRef.current?.supportSlabId,
+                pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
+              },
             ),
           }) as AnyNode
           useScene.temporal.getState().resume()
@@ -1007,15 +1023,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
     window.addEventListener('pointerup', onPlacementDragPointerUp)
 
-    // Listen on every common kind's click event too. mitt's typing keeps
-    // `${kind}:click` as a fixed union so the cast is safe at runtime —
-    // we're just routing them through the shared commit path.
-    type SuffixedKey<K extends string> = `${K}:${EventSuffix}`
-    type ClickKey = SuffixedKey<(typeof CLICK_TRIGGER_KINDS)[number]>
-    for (const kind of CLICK_TRIGGER_KINDS) {
-      const key = `${kind}:click` as ClickKey
-      emitter.on(key, commitAtCursor as never)
-    }
+    emitter.on('node:click', commitAtCursor)
 
     const onCancel = () => {
       useLiveTransforms.getState().clear(node.id)
@@ -1040,10 +1048,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', commitAtCursor)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
-      for (const kind of CLICK_TRIGGER_KINDS) {
-        const key = `${kind}:click` as ClickKey
-        emitter.off(key, commitAtCursor as never)
-      }
+      emitter.off('node:click', commitAtCursor)
       emitter.off('tool:cancel', onCancel)
       // Restore the moved meshes' raycast so they're hoverable / selectable
       // again after the drag ends.

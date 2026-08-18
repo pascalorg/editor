@@ -1,4 +1,5 @@
 import z from 'zod'
+import { BlockNode } from './nodes/block'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
 import { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
@@ -54,6 +55,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   LeanToExtensionNode,
   ColumnNode,
   ConstructionDimensionNode,
+  BlockNode,
   StructuralGridNode,
   WallNode,
   FenceNode,

@@ -30,6 +30,8 @@ export type HotSetCandidate = {
   // The candidate exposes a usable top surface (registry
   // `capabilities.surfaces.top`) — a table, a shelf, a slab.
   exposesTop: boolean
+  // The candidate declares wall-like side faces through registry surfaces.
+  exposesSides?: boolean
   // The candidate's own attach class. A ceiling fan is `ceiling`: it hangs from
   // the ceiling and must never act as a host top (Track E).
   attachClass: AttachClass
@@ -38,7 +40,7 @@ export type HotSetCandidate = {
 // For a node whose attach class is `placed`, is `candidate` a valid
 // host/surface to pick during placement or move?
 export function isPickableForAttach(placed: AttachClass, candidate: HotSetCandidate): boolean {
-  if (placed === 'wall') return candidate.type === 'wall'
+  if (placed === 'wall') return candidate.type === 'wall' || candidate.exposesSides === true
   if (placed === 'ceiling') return candidate.type === 'ceiling'
   // Surface-resting: the floor, or any host that exposes a top surface — but
   // never a ceiling-mounted host (a floor lamp must not land on a ceiling fan).

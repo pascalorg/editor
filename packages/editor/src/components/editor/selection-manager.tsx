@@ -23,6 +23,7 @@ import {
   type StairSurfaceMaterialRole,
   sceneRegistry,
   useLiveNodeOverrides,
+  useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
 
@@ -42,6 +43,7 @@ import {
   resolveDirectRotationPatch,
 } from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
+import { selectionEnabled } from '../../lib/interaction/scope'
 import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
@@ -782,6 +784,12 @@ export const SelectionManager = () => {
 
   const movingNode = useMovingNode()
   const isCurveReshape = useIsCurveReshape()
+  // Plugin kinds register AFTER mount (async dynamic-import discovery), so
+  // every effect below that snapshots `getSelectableKinds()` into an emitter
+  // subscription list depends on this version — a late plugin load re-runs
+  // them and picks up the new kinds (hover / click / double-click / paint /
+  // pointerdown). Without it, plugin nodes select-but-never-hover in prod.
+  const registryVersion = useRegistryVersion()
 
   useEffect(() => {
     const nextHoverMode: HoverHighlightMode = mode === 'delete' ? 'delete' : 'default'
@@ -793,6 +801,8 @@ export const SelectionManager = () => {
   }, [mode, setHoverHighlightMode])
 
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'material-paint') return
     if (movingNode || isCurveReshape) return
 
@@ -1188,7 +1198,7 @@ export const SelectionManager = () => {
       setHoverHighlightMode('default')
       useEditor.getState().setPaintHover(null)
     }
-  }, [isCurveReshape, mode, movingNode, setHoverHighlightMode])
+  }, [isCurveReshape, mode, movingNode, setHoverHighlightMode, registryVersion])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1224,10 +1234,13 @@ export const SelectionManager = () => {
   }, [])
 
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'select') return
     if (movingNode || isCurveReshape) return
 
     const onPointerDown = (event: NodeEvent) => {
+      if (!selectionEnabled(useInteractionScope.getState().scope)) return
       const pointer = pointerEventFromNodeEvent(event)
       if (pointer.button !== 0) return
 
@@ -1363,7 +1376,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:pointerdown` as any, onPointerDown as any)
       }
     }
-  }, [isCurveReshape, mode, movingNode, camera, raycaster, glDomElement])
+  }, [isCurveReshape, mode, movingNode, camera, raycaster, glDomElement, registryVersion])
 
   // Move cursor over the selected movable node: the visual cue that clicking it
   // picks it up (replaces the removed move-cross gizmo). Reacts only when the
@@ -1381,7 +1394,7 @@ export const SelectionManager = () => {
       if (key === prevKey) return
       prevKey = key
       let wantsMove = false
-      if (hoveredId && !getMovingNode()) {
+      if (hoveredId && !getMovingNode() && selectionEnabled(useInteractionScope.getState().scope)) {
         if (sole === hoveredId) {
           const node = useScene.getState().nodes[sole as AnyNodeId]
           wantsMove = !!node && canDirectMoveNode(node)
@@ -1529,6 +1542,8 @@ export const SelectionManager = () => {
   }, [isCurveReshape, mode, movingNode])
 
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'select') return
     if (movingNode || isCurveReshape) return
 
@@ -1544,6 +1559,7 @@ export const SelectionManager = () => {
       // body click so only the reshape tool handles the release. (Scoped to
       // `endpoint`: hole-edit relies on node clicks to exit, just below.)
       const activeScope = useInteractionScope.getState().scope
+      if (activeScope.kind === 'mesh-editing') return
       if (activeScope.kind === 'reshaping' && activeScope.reshape === 'endpoint') return
 
       if (dispatchSceneAction(event.node, getEventObject(event))) {
@@ -1760,6 +1776,7 @@ export const SelectionManager = () => {
     const onGridClick = (event: GridEvent) => {
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
+      if (useInteractionScope.getState().scope.kind === 'mesh-editing') return
       const nativeEvent = event.nativeEvent
       if (nativeEvent?.metaKey || nativeEvent?.ctrlKey || nativeEvent?.shiftKey) return
       const { phase, structureLayer } = useEditor.getState()
@@ -1781,14 +1798,17 @@ export const SelectionManager = () => {
       })
       emitter.off('grid:click', onGridClick)
     }
-  }, [isCurveReshape, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode, registryVersion])
 
   // Global double-click handler for auto-switching phases and cross-phase hover
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'select') return
     if (movingNode || isCurveReshape) return
 
     const onEnter = (event: NodeEvent) => {
+      if (useInteractionScope.getState().scope.kind === 'mesh-editing') return
       // A host-driven drag (handle resize/rotate, box-select) sets
       // `inputDragging`. useNodeEvents still emits hover events during it so
       // surface move tools keep tracking — but the select-hover outline must
@@ -1837,6 +1857,7 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
+      if (useInteractionScope.getState().scope.kind === 'mesh-editing') return
       let node = resolveCanvasSelectionNode({
         node: resolveSelectModeNodeTarget(event),
         nodes: useScene.getState().nodes,
@@ -1936,10 +1957,12 @@ export const SelectionManager = () => {
         emitter.off(`${type}:double-click` as any, onDoubleClick as any)
       })
     }
-  }, [isCurveReshape, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode, registryVersion])
 
   // Delete mode: click-to-delete (sledgehammer tool)
   useEffect(() => {
+    // re-subscribe when plugin kinds register after mount (async plugin load)
+    void registryVersion
     if (mode !== 'delete') return
 
     const onClick = (event: NodeEvent) => {
@@ -2012,7 +2035,7 @@ export const SelectionManager = () => {
       }
       useViewer.setState({ hoveredId: null })
     }
-  }, [mode])
+  }, [mode, registryVersion])
 
   return (
     <>

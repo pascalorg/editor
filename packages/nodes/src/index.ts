@@ -1,4 +1,5 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import { blockDefinition } from './block/definition'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
 import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
@@ -68,6 +69,7 @@ export const builtinPlugin: Plugin = {
   nodes: [
     // Stage E-complete (full registry path)
     shelfDefinition as unknown as AnyNodeDefinition,
+    blockDefinition as unknown as AnyNodeDefinition,
     spawnDefinition as unknown as AnyNodeDefinition,
     wallDefinition as unknown as AnyNodeDefinition,
     leanToExtensionDefinition as unknown as AnyNodeDefinition,
@@ -122,6 +124,15 @@ export const builtinPlugin: Plugin = {
   ],
 }
 
+export {
+  applyBlockCommand,
+  type BlockCommand,
+  type BlockCommandResult,
+  type BlockSelection,
+  blockFaceCentroid,
+  blockFaceNormal,
+} from './block/commands'
+export { blockDefinition } from './block/definition'
 export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export {

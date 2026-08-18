@@ -1,17 +1,13 @@
 import {
-  type AnyNode,
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
-  DEFAULT_LEVEL_HEIGHT,
-  GROUND_SUPPORT_ID,
   planWallInsertion,
   planWallSplitAtPoint,
-  resolveWallSupportSlabPatch,
+  resolveWallConstruction,
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
-  spatialGridManager,
-  terrainSupportLift,
   useScene,
+  type WallConstructionOptions,
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -209,41 +205,6 @@ export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): b
   return distanceSquared(start, end) >= WALL_MIN_LENGTH * WALL_MIN_LENGTH
 }
 
-export type WallConstructionOptions = {
-  /** Pointer-decided maximum support elevation in level-local metres. */
-  supportCap?: number | null
-  /** Support source selected by the first click or inherited from a snapped wall. */
-  preferredSupportSlabId?: string | null
-  /** Frozen level-local Y shown by the draft ghost. */
-  constructionElevation?: number | null
-  /** Height shown by the draft ghost. */
-  constructionHeight?: number | null
-}
-
-export function resolveTerrainWallConstructionOptions(
-  nodes: Record<string, AnyNode>,
-  levelId: string,
-  point: WallPlanPoint,
-  defaults?: Record<string, unknown>,
-): WallConstructionOptions | undefined {
-  const constructionElevation = terrainSupportLift(nodes, levelId, point[0], point[1])
-  if (constructionElevation == null) return undefined
-
-  const level = nodes[levelId]
-  const constructionHeight =
-    typeof defaults?.height === 'number'
-      ? defaults.height
-      : level?.type === 'level'
-        ? (level.height ?? DEFAULT_LEVEL_HEIGHT)
-        : DEFAULT_LEVEL_HEIGHT
-
-  return {
-    constructionElevation,
-    constructionHeight,
-    supportCap: constructionElevation,
-  }
-}
-
 export function createWallOnCurrentLevel(
   start: WallPlanPoint,
   end: WallPlanPoint,
@@ -269,82 +230,30 @@ export function createWallOnCurrentLevel(
     if (!result.ok) return null
     const { plan } = result
 
-    applyNodeChanges(plan.changes)
-    const committedNodes = useScene.getState().nodes
-    const supportUpdates = plan.insertedWalls.flatMap((wall) => {
-      const createdWall = committedNodes[wall.id]
-      if (createdWall?.type !== 'wall') return []
-      const terrainBase = terrainSupportLift(
-        committedNodes,
-        currentLevelId,
-        createdWall.start[0],
-        createdWall.start[1],
-      )
-      // A ground-preferred draft is the terrain exception only while sculpted
-      // terrain actually supports this storey. On flat ground the ground plane
-      // is just the backdrop the chain started from: drop the draft options so
-      // the wall commits plane-bound — no stamped height, no persisted ground
-      // host, no election cap at the draft plane.
-      const wallOptions =
-        options?.preferredSupportSlabId === GROUND_SUPPORT_ID && terrainBase == null
-          ? undefined
-          : options
-      const preferredSupportSlabId =
-        wallOptions?.preferredSupportSlabId ??
-        (wallOptions?.constructionElevation != null && terrainBase != null
-          ? GROUND_SUPPORT_ID
-          : null)
-      const supportPatch = resolveWallSupportSlabPatch(createdWall, committedNodes, {
-        maxElevation: wallOptions?.supportCap ?? null,
-        preferredSlabId: preferredSupportSlabId,
-      })
-      const supportSlabId = supportPatch.supportSlabId
-      const sourceSupport = spatialGridManager.getSlabSupportForWall(
-        currentLevelId,
-        createdWall.start,
-        createdWall.end,
-        createdWall.curveOffset,
-        createdWall.thickness,
-        supportSlabId,
-        wallOptions?.supportCap ?? null,
-      )
-      // Freezing the draft plane into the node (explicit height + offset from
-      // the elected support) is the terrain exception only: a ground-drafted
-      // chain keeps one construction plane and a fixed body height while
-      // sculpting moves the ground. Every other wall stays plane-bound —
-      // height absent, top at the storey plane, base re-elected from slab
-      // support — so a wall merely started on a slab or deck must never have
-      // the ghost height stamped onto it.
-      const groundDraft = preferredSupportSlabId === GROUND_SUPPORT_ID
-      const supportOffset =
-        groundDraft && wallOptions?.constructionElevation != null
-          ? wallOptions.constructionElevation - sourceSupport.elevation
-          : undefined
-      const preserveDraftHeight =
-        groundDraft &&
-        createdWall.height == null &&
-        wallOptions?.constructionHeight != null &&
-        wallOptions.constructionElevation != null
-      return [
-        {
-          id: createdWall.id,
-          data: {
-            ...supportPatch,
-            height: preserveDraftHeight
-              ? (wallOptions?.constructionHeight ?? createdWall.height)
-              : createdWall.height,
-            supportOffset:
-              supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
-          },
-        },
-      ]
+    const construction = resolveWallConstruction(nodes, currentLevelId, plan.insertedWalls, options)
+    const finalizedWalls = construction.walls
+    const finalizedWallsById = new Map(finalizedWalls.map((wall) => [wall.id, wall]))
+    const sourceUpdate = construction.sourceSupportUpdate
+    const sourceAlreadyUpdated = sourceUpdate
+      ? plan.changes.update.some((operation) => operation.id === sourceUpdate.id)
+      : false
+    applyNodeChanges({
+      ...plan.changes,
+      update: plan.changes.update
+        .map((operation) =>
+          sourceUpdate?.id === operation.id
+            ? { ...operation, data: { ...operation.data, ...sourceUpdate.data } }
+            : operation,
+        )
+        .concat(sourceUpdate && !sourceAlreadyUpdated ? [sourceUpdate] : []),
+      create: plan.changes.create.map((operation) => ({
+        ...operation,
+        node: finalizedWallsById.get(operation.node.id as WallNode['id']) ?? operation.node,
+      })),
     })
-    if (supportUpdates.length > 0) {
-      useScene.getState().updateNodes(supportUpdates)
-    }
     sfxEmitter.emit('sfx:structure-build')
 
-    const terminalWall = plan.insertedWalls.at(-1)!
+    const terminalWall = finalizedWalls.at(-1)!
     const committedWall = useScene.getState().nodes[plan.terminalWallId]
     return committedWall?.type === 'wall' ? committedWall : terminalWall
   })

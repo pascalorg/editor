@@ -2,6 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  BlockNode,
   BoxVentNode,
   BuildingNode,
   CabinetModuleNode,
@@ -106,6 +107,7 @@ export type SpawnEvent = NodeEvent<SpawnNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type ColumnEvent = NodeEvent<ColumnNode>
 export type ConstructionDimensionEvent = NodeEvent<ConstructionDimensionNode>
+export type BlockEvent = NodeEvent<BlockNode>
 export type RoofEvent = NodeEvent<RoofNode>
 export type RoofSegmentEvent = NodeEvent<RoofSegmentNode>
 export type StairEvent = NodeEvent<StairNode>
@@ -158,6 +160,10 @@ type NodeEvents<T extends string, E> = {
 
 type GridEvents = {
   [K in `grid:${EventSuffix}`]: GridEvent
+}
+
+type GenericNodeEvents = {
+  [K in `node:${EventSuffix}`]: NodeEvent<AnyNode>
 }
 
 export interface CameraControlEvent {
@@ -291,6 +297,7 @@ type SelectionEvents = {
 }
 
 type EditorEvents = GridEvents &
+  GenericNodeEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'cabinet', CabinetEvent> &
@@ -308,6 +315,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'column', ColumnEvent> &
   NodeEvents<'construction-dimension', ConstructionDimensionEvent> &
+  NodeEvents<'block', BlockEvent> &
   NodeEvents<'roof', RoofEvent> &
   NodeEvents<'roof-segment', RoofSegmentEvent> &
   NodeEvents<'stair', StairEvent> &

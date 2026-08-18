@@ -1,3 +1,5 @@
+import type { Layers } from 'three'
+
 /** Default Three.js layer for main scene geometry. */
 export const SCENE_LAYER = 0
 
@@ -34,3 +36,23 @@ export const GRID_LAYER = 3
  * cascade) via `applyShadowOnly` / `clearShadowOnly` in `lib/shadow-only.ts`.
  */
 export const SHADOW_ONLY_LAYER = 4
+
+/**
+ * Layer for source geometry that a collective batch already draws. No camera
+ * or pass enables it, so a batched object costs no draw call while its children
+ * and interaction proxies remain in the graph.
+ *
+ * Raycasters that query real surfaces must opt in via
+ * {@link setSurfaceRaycastLayers}, otherwise a sewn wall would stop answering
+ * measurement rays.
+ */
+export const BATCHED_LAYER = 5
+
+/**
+ * Aims a raycaster at every real scene surface, whether a wall still draws
+ * itself or a level batch draws it for us.
+ */
+export function setSurfaceRaycastLayers(layers: Layers): void {
+  layers.set(SCENE_LAYER)
+  layers.enable(BATCHED_LAYER)
+}

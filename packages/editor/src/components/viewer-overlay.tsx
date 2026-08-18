@@ -39,6 +39,7 @@ interface ViewerOverlayProps {
   owner?: ProjectOwner | null
   canShowScans?: boolean
   canShowGuides?: boolean
+  hideBottomBar?: boolean
   onBack?: () => void
 }
 
@@ -47,17 +48,20 @@ export const ViewerOverlay = ({
   owner,
   canShowScans = true,
   canShowGuides = true,
+  hideBottomBar = false,
   onBack,
 }: ViewerOverlayProps) => (
   <>
     <ViewerSceneHeader onBack={onBack} owner={owner} projectName={projectName} />
-    <ViewerControlsBar
-      canShowGuides={canShowGuides}
-      canShowScans={canShowScans}
-      onWalkthroughToggle={() => {
-        flushSync(() => useEditor.getState().setFirstPersonMode(true))
-        requestWalkthroughPointerLock()
-      }}
-    />
+    {!hideBottomBar ? (
+      <ViewerControlsBar
+        canShowGuides={canShowGuides}
+        canShowScans={canShowScans}
+        onWalkthroughToggle={() => {
+          flushSync(() => useEditor.getState().setFirstPersonMode(true))
+          requestWalkthroughPointerLock()
+        }}
+      />
+    ) : null}
   </>
 )

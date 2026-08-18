@@ -22,6 +22,7 @@ interface SliderControlProps {
   className?: string
   unit?: string
   restoreOnCommit?: boolean
+  mixed?: boolean
 }
 
 function stepPrecision(s: number): number {
@@ -64,6 +65,7 @@ export function SliderControl({
   className,
   unit = '',
   restoreOnCommit = true,
+  mixed = false,
 }: SliderControlProps) {
   // Display/storage conversion so the value honors the metric/imperial toggle.
   // `value`, `onChange`, `onCommit`, `min`/`max`/`clamp` are always in the
@@ -76,6 +78,10 @@ export function SliderControl({
   const [isDragging, setIsDragging] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [inputValue, setInputValue] = useState(toDisplay(value).toFixed(precision))
+  // Live readout while dragging. Multi-edit previews write live overrides
+  // instead of the scene, so `value` would otherwise stay frozen even though
+  // the meshes are moving.
+  const [dragDisplay, setDragDisplay] = useState<number | null>(null)
 
   const dragRef = useRef<{
     // Original value at drag start — preserved across modifier re-anchors so
@@ -89,8 +95,9 @@ export function SliderControl({
     stepMultiplier: number
   } | null>(null)
   const labelRef = useRef<HTMLDivElement>(null)
-  const valueRef = useRef(value)
-  valueRef.current = value
+  const shown = dragDisplay ?? value
+  const valueRef = useRef(shown)
+  valueRef.current = shown
 
   const clamp = useCallback((val: number) => Math.min(Math.max(val, min), max), [min, max])
   // Apply a signed display-unit delta to a stored value, rounding in the
@@ -185,6 +192,7 @@ export function SliderControl({
       const newValue = applyDisplayDelta(anchorValue, (dx / 4) * s, s)
       if (newValue !== valueRef.current) {
         valueRef.current = newValue
+        setDragDisplay(newValue)
         onChange(newValue)
       }
     },
@@ -209,6 +217,7 @@ export function SliderControl({
         useScene.temporal.getState().resume()
         onCommit?.(finalVal)
       }
+      setDragDisplay(null)
     },
     [onChange, onCommit, restoreOnCommit],
   )
@@ -272,7 +281,7 @@ export function SliderControl({
     [submitValue, value, precision, step, applyDisplayDelta, onChange, toDisplay],
   )
 
-  const displayValue = toDisplay(value)
+  const displayValue = toDisplay(shown)
 
   return (
     <div
@@ -340,6 +349,13 @@ export function SliderControl({
               </span>
             )}
           </>
+        ) : mixed && !isDragging ? (
+          <div
+            className="flex cursor-text items-center text-muted-foreground transition-colors hover:text-foreground"
+            onClick={handleValueClick}
+          >
+            <span className="font-mono tracking-tight">Mixed</span>
+          </div>
         ) : (
           <div
             className="flex cursor-text items-center text-foreground/60 transition-colors hover:text-foreground"

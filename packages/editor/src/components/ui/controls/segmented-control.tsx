@@ -8,6 +8,7 @@ interface SegmentedControlProps<T extends string> {
   options: { label: React.ReactNode; value: T }[]
   className?: string
   disabled?: boolean
+  mixed?: boolean
 }
 
 export function SegmentedControl<T extends string>({
@@ -16,6 +17,7 @@ export function SegmentedControl<T extends string>({
   options,
   className,
   disabled = false,
+  mixed = false,
 }: SegmentedControlProps<T>) {
   return (
     <div
@@ -26,7 +28,7 @@ export function SegmentedControl<T extends string>({
       )}
     >
       {options.map((option) => {
-        const isSelected = value === option.value
+        const isSelected = !mixed && value === option.value
         return (
           <button
             className={cn(

@@ -8,7 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import {
@@ -19,6 +19,7 @@ import {
   resolveRotateHandleHelpHints,
   resolveSelectModeHelpHints,
 } from '../../../lib/contextual-help'
+import { getContextualHelpNodeExtension } from '../../../lib/contextual-help-extension'
 import { continuationContextOf } from '../../../lib/continuation'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
 import type { ReshapeKind } from '../../../lib/interaction/scope'
@@ -88,6 +89,9 @@ type ActiveModifierKeys = {
   shift: boolean
 }
 
+const EMPTY_CONTEXTUAL_HINTS: ContextualShortcutHint[] = []
+const NO_CONTEXTUAL_HELP_SUBSCRIPTION = () => () => {}
+
 function useActiveModifierKeys(): ActiveModifierKeys {
   const [modifiers, setModifiers] = useState<ActiveModifierKeys>({
     command: false,
@@ -142,6 +146,21 @@ export function HelperManager() {
         .map((id) => s.nodes[id as AnyNodeId])
         .filter((node): node is AnyNode => node !== undefined),
     ),
+  )
+  const contextualHelpNode =
+    scope.kind === 'mesh-editing'
+      ? selectedNodes.find((node) => node.id === scope.nodeId) ?? null
+      : null
+  const contextualHelpExtension = contextualHelpNode
+    ? getContextualHelpNodeExtension(nodeRegistry.get(contextualHelpNode.type))
+    : undefined
+  const contextualEditHints = useSyncExternalStore(
+    contextualHelpExtension?.subscribe ?? NO_CONTEXTUAL_HELP_SUBSCRIPTION,
+    () =>
+      contextualHelpNode
+        ? (contextualHelpExtension?.getHints(contextualHelpNode.id) ?? EMPTY_CONTEXTUAL_HINTS)
+        : EMPTY_CONTEXTUAL_HINTS,
+    () => EMPTY_CONTEXTUAL_HINTS,
   )
   // The snapping context for whatever's active (wall / item / polygon) — drives
   // which snapping chips the HUD shows, derived once and shared by every branch.
@@ -247,13 +266,13 @@ export function HelperManager() {
     const movingContinuationContext = isFreshPlacementMetadata(movingNode.metadata)
       ? continuationContextOf(movingNode.type)
       : null
-    // Force-place only makes sense for kinds that collision-validate their drop;
-    // structural kinds (wall/slab/…) never reject, so don't advertise Alt.
+    const collisionValidatesDrop =
+      nodeRegistry.get(movingNode.type)?.capabilities.floorPlaced?.collides === true
     return (
       <ItemHelper
         continuationContext={movingContinuationContext}
         showEsc
-        showForce={nodeRegistry.get(movingNode.type)?.snapProfile !== 'structural'}
+        showForce={collisionValidatesDrop}
         snapContext={snapContext}
       />
     )
@@ -273,6 +292,10 @@ export function HelperManager() {
   // than exiting the mode.
   if (mode === 'terrain-sculpt') {
     return <ContextualHelperPanel hints={terrainSculptHints(terrainVerb, terrainSampling)} />
+  }
+
+  if (scope.kind === 'mesh-editing') {
+    return <ContextualHelperPanel hints={contextualEditHints} snapContext={snapContext} />
   }
 
   // Idle select only — an active scope (handle-drag, box-select, …) must not show

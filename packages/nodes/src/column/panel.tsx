@@ -585,7 +585,7 @@ export default function ColumnPanel() {
         {!managedByLeanTo && (
           <SliderControl
             label="Height"
-            max={6}
+            max={20}
             min={0.8}
             onChange={(value) => handleUpdate({ height: value })}
             precision={2}

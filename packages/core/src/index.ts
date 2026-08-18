@@ -1,4 +1,5 @@
 export type {
+  BlockEvent,
   BoxVentEvent,
   BuildingEvent,
   CabinetEvent,
@@ -71,13 +72,21 @@ export {
   resolveLevelId,
 } from './hooks/spatial-grid/spatial-grid-sync'
 export {
+  type FenceConstructionOptions,
   type FenceSupportInput,
+  type FrozenFloorPlacementOptions,
+  resolveFenceConstructionSupport,
   resolveFenceSupportSlabPatch,
+  resolveFrozenFloorPlacementPatch,
   resolveMovedWallSupportSlabPatch,
   resolveSupportSlabPatch,
+  resolveTerrainWallConstructionOptions,
+  resolveWallConstruction,
   resolveWallSupportSlabPatch,
   type SupportSlabPatch,
   type SupportSlabPatchOptions,
+  type WallConstructionOptions,
+  type WallConstructionResolution,
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'

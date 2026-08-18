@@ -1,4 +1,10 @@
-import type { AnyNodeId, NodeDefinition } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  getWallBaseElevationForNodes,
+  getWallEffectiveHeightForNodes,
+  type NodeDefinition,
+  type WallNode as WallNodeType,
+} from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
@@ -79,6 +85,14 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     selectable: { hitVolume: 'bbox' },
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
+      top: {
+        height: (node, { nodes }) => {
+          const wall = node as WallNodeType
+          return (
+            getWallBaseElevationForNodes(wall, nodes) + getWallEffectiveHeightForNodes(wall, nodes)
+          )
+        },
+      },
       sides: { faces: 'all' },
     },
     duplicable: true,
