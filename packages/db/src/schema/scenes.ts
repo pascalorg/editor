@@ -45,6 +45,7 @@ export const scenes = pgTable(
     nodeCount: t.integer('node_count').notNull().default(0),
     graphHash: t.text('graph_hash'),
     published: t.boolean('published').notNull().default(false),
+    deletedAt: t.timestamp('deleted_at', { withTimezone: true }),
     ...timestamps,
   }),
   (t) => [

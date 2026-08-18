@@ -29,6 +29,13 @@
       "when": 1787000527609,
       "tag": "0003_thick_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787040898394,
+      "tag": "0004_solid_speed_demon",
+      "breakpoints": true
     }
   ]
 }

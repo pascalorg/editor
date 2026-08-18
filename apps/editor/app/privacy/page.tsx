@@ -144,17 +144,17 @@ export default async function PrivacyPage() {
             </section>
 
             <section className="mb-8 space-y-4">
-              <h2 className="font-semibold text-xl">7. Your Rights</h2>
-              <p className="text-foreground/90 leading-relaxed">You have the right to:</p>
+              <h2 className="font-semibold text-xl">7. Your Rights (GDPR & KVKK Compliance)</h2>
+              <p className="text-foreground/90 leading-relaxed">Under the General Data Protection Regulation (GDPR) and the Turkish Personal Data Protection Law (KVKK), you have the right to:</p>
               <ul className="list-disc space-y-2 pl-6 text-foreground/90">
                 <li>Access the personal data we hold about you</li>
                 <li>Request correction of inaccurate data</li>
-                <li>Request deletion of your data</li>
-                <li>Export your project data</li>
-                <li>Opt out of marketing communications</li>
+                <li>Request deletion of your data (Right to be Forgotten)</li>
+                <li>Export your data and projects in a machine-readable format (JSON) (Data Portability)</li>
+                <li>Withdraw your consent or opt out of marketing communications</li>
               </ul>
               <p className="mt-4 text-foreground/90 leading-relaxed">
-                To exercise any of these rights, please contact us at{' '}
+                To exercise any of these rights, you can use the account settings page or contact us at{' '}
                 <a
                   className="text-foreground underline hover:text-foreground/80"
                   href="mailto:support@pascal.app"
@@ -166,12 +166,16 @@ export default async function PrivacyPage() {
             </section>
 
             <section className="mb-8 space-y-4">
-              <h2 className="font-semibold text-xl">8. Data Retention</h2>
+              <h2 className="font-semibold text-xl">8. Data Retention & Deletion Policy</h2>
               <p className="text-foreground/90 leading-relaxed">
-                We retain your data for as long as your account is active. If you delete your
-                account, we will delete your personal data and project data within 30 days, except
-                where we are required by law to retain certain information.
+                We retain your data for as long as your account is active. When you request account deletion:
               </p>
+              <ul className="list-disc space-y-2 pl-6 text-foreground/90">
+                <li>Your account and associated scenes are immediately soft-deleted and become inaccessible.</li>
+                <li>We hold this data for a 30-day grace period to prevent accidental loss.</li>
+                <li>After 30 days, all your personal data, scenes, and associated files are permanently deleted from our servers.</li>
+                <li>System logs and analytics data are automatically purged after 90 days in accordance with our retention policy.</li>
+              </ul>
             </section>
 
             <section className="mb-8 space-y-4">

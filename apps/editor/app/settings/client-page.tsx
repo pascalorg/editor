@@ -233,6 +233,94 @@ export function SettingsClientPage() {
       </div>
 
       <TokenManager />
+
+      <div className="space-y-6 rounded-xl border border-destructive/20 bg-destructive/5 p-6">
+        <h2 className="font-semibold text-lg text-destructive">{t('Danger Zone')}</h2>
+        
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-border/40 bg-background p-4">
+            <div>
+              <h3 className="font-medium text-sm">{t('Export Data')}</h3>
+              <p className="text-muted-foreground text-xs mt-1">
+                {t('Download a copy of your profile and all your scenes in JSON format.')}
+              </p>
+            </div>
+            <button
+              className="rounded-md border border-input bg-background px-4 py-2 font-medium text-foreground text-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50 whitespace-nowrap"
+              disabled={isLoading}
+              onClick={async () => {
+                setIsLoading(true)
+                try {
+                  const response = await fetch('/api/account/export')
+                  if (!response.ok) throw new Error('Export failed')
+                  
+                  const blob = await response.blob()
+                  const url = window.URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `menart-3d-export-${session.user.id}.json`
+                  document.body.appendChild(a)
+                  a.click()
+                  a.remove()
+                  window.URL.revokeObjectURL(url)
+                  setMessage({ type: 'success', text: 'Data exported successfully' })
+                } catch (err) {
+                  setMessage({ type: 'error', text: 'Failed to export data' })
+                } finally {
+                  setIsLoading(false)
+                }
+              }}
+              type="button"
+            >
+              {t('Export Data')}
+            </button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg border border-destructive/40 bg-background p-4">
+            <div>
+              <h3 className="font-medium text-sm text-destructive">{t('Delete Account')}</h3>
+              <p className="text-muted-foreground text-xs mt-1">
+                {t('Permanently delete your account, scenes, and all associated data. This action cannot be undone after 30 days.')}
+              </p>
+            </div>
+            <button
+              className="rounded-md bg-destructive px-4 py-2 font-medium text-destructive-foreground text-sm transition-colors hover:bg-destructive/90 disabled:opacity-50 whitespace-nowrap"
+              disabled={isLoading}
+              onClick={async () => {
+                const confirm1 = confirm(t('Are you sure you want to delete your account? This action cannot be undone after 30 days.'))
+                if (!confirm1) return
+                
+                const confirm2 = prompt(t('Type "delete my account" to confirm.'))
+                if (confirm2 !== 'delete my account') {
+                  alert(t('Account deletion cancelled.'))
+                  return
+                }
+
+                setIsLoading(true)
+                try {
+                  const response = await fetch('/api/account/delete', { method: 'POST' })
+                  if (!response.ok) throw new Error('Deletion failed')
+                  
+                  await authClient.signOut({
+                    fetchOptions: {
+                      onSuccess: () => {
+                        router.push('/')
+                        router.refresh()
+                      },
+                    },
+                  })
+                } catch (err) {
+                  setMessage({ type: 'error', text: 'Failed to delete account' })
+                  setIsLoading(false)
+                }
+              }}
+              type="button"
+            >
+              {t('Delete Account')}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

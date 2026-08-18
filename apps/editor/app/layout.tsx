@@ -3,6 +3,7 @@ import { GeistPixelSquare } from 'geist/font/pixel'
 import { DM_Sans } from 'next/font/google'
 import localFont from 'next/font/local'
 import { ClientBootstrap } from './client-bootstrap'
+import { CookieConsent } from '@/components/cookie-consent'
 import './globals.css'
 
 const geistSans = localFont({
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className="font-sans">
         <ClientBootstrap enableDevDiagnostics={enableDevDiagnostics}>{children}</ClientBootstrap>
         {enableDevDiagnostics && <Agentation />}
+        <CookieConsent />
       </body>
     </html>
   )

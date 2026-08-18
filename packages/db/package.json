@@ -18,6 +18,7 @@
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "bun run src/migrate.ts",
     "db:studio": "drizzle-kit studio --config drizzle.config.ts",
+    "db:cleanup": "bun run src/retention-cleanup.ts",
     "check-types": "tsgo --noEmit",
     "test": "bun test tests"
   },

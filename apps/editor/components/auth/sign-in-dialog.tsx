@@ -56,11 +56,17 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<'magic-link' | 'password-reset' | null>(null)
 
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+
   // Better-auth might not export getLastUsedLoginMethod immediately in this version context,
   // we'll safely ignore it or use a simpler approach.
   const lastMethodLabel = null
 
   const handleGoogleSignIn = async () => {
+    if (!acceptedTerms) {
+      setError('Please agree to the Terms and Privacy Policy to continue')
+      return
+    }
     setError(null)
     setIsGoogleLoading(true)
     try {
@@ -76,6 +82,10 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!acceptedTerms) {
+      setError('Please agree to the Terms and Privacy Policy to continue')
+      return
+    }
     setError(null)
     setIsLoading(true)
 
@@ -156,6 +166,7 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
         setPassword('')
         setError(null)
         setSuccess(null)
+        setAcceptedTerms(false)
       }, 200)
     }
   }
@@ -213,10 +224,38 @@ export function SignInDialog({ open, onOpenChange }: SignInDialogProps) {
               </p>
             )}
 
+            {/* Terms Checkbox */}
+            <div className="flex items-start gap-2 rounded-md border border-input p-3 bg-accent/30">
+              <input
+                type="checkbox"
+                id="terms-checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => {
+                  setAcceptedTerms(e.target.checked)
+                  if (e.target.checked && error === 'Please agree to the Terms and Privacy Policy to continue') {
+                    setError(null)
+                  }
+                }}
+                className="mt-0.5 h-4 w-4 rounded border-input bg-background"
+              />
+              <label htmlFor="terms-checkbox" className="text-xs text-muted-foreground leading-tight cursor-pointer">
+                {t('I have read and agree to the')}{' '}
+                <Link href="/terms" className="underline hover:text-foreground" target="_blank">
+                  {t('Terms of Service')}
+                </Link>{' '}
+                {t('and')}{' '}
+                <Link href="/privacy" className="underline hover:text-foreground" target="_blank">
+                  {t('Privacy Policy')}
+                </Link>
+                {'. '}
+                <span className="text-destructive">*</span>
+              </label>
+            </div>
+
             {/* Google Sign-In */}
             <button
               className="flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-              disabled={anyLoading}
+              disabled={anyLoading || !acceptedTerms}
               onClick={handleGoogleSignIn}
               type="button"
             >
