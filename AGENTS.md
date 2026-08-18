@@ -65,6 +65,16 @@ cd packages/db && bun run db:generate    # schema diff → a new migration file
 connecting to the wrong server fails as "password authentication failed", which
 sends you looking at credentials instead of at the host.
 
+Migrating scenes out of an existing SQLite file into Postgres is a one-shot
+`pascal-migrate` (`packages/mcp/src/bin/pascal-migrate.ts`):
+
+```sh
+bunx pascal-migrate --from ~/.pascal/data/pascal.db --to "$POSTGRES_URL" [--owner <id>] [--overwrite] [--dry-run]
+```
+
+Idempotent (existing scenes are skipped), backend-agnostic over the `SceneStore`
+contract — see `SETUP.md`.
+
 CI (`.github/workflows/ci.yml`) gates on exactly `bun run check`,
 `bun run check-types`, `bun run test`, `bun run build`, with bun pinned to the
 `packageManager` version and a Postgres 17 service on `:5433` exported as
@@ -541,7 +551,12 @@ editor simply never sees.
 That shared database is the whole coupling, and it runs in both directions.
 Server → editor: a mutating tool calls `publishLiveSceneSnapshot(bridge, kind)`,
 which saves the scene *and* appends a `scene_events` row, which the editor
-receives over SSE at `/api/scenes/[id]/events`. Editor → server: the agent
+receives over SSE at `/api/scenes/[id]/events`. That SSE feed is **pub/sub, not
+polling**: the Postgres store `NOTIFY`s a `scene_<id>` channel on
+`appendSceneEvent` and the route `LISTEN`s it (one shared connection per
+replica, so idle subscribers issue zero queries), with a single catch-up read
+to close the registration gap. SQLite falls back to the polling loop. Editor →
+server: the agent
 prompt box writes an `agent_requests` row that the server's
 `await_editor_request` tool claims — MCP is client-driven, so a server can never
 start a conversation, and a queue an already-running agent polls is the way
@@ -619,8 +634,11 @@ without `POSTGRES_URL`, and building the instance at module scope made
 `resolveActor` checks a `Bearer pascal_pat_…` token against `api_tokens`
 (SHA-256, revocation and expiry) before falling back to the session cookie;
 `authorizeScene` / `authorizeProject` resolve owner, member role and project
-visibility; `guardSceneApiRequest` does method, CORS and a 120-per-minute
-bucket. Two things about it decide whether a change is even reachable:
+visibility; `guardSceneApiRequest` does method, CORS and a Redis-backed
+sliding-window rate limit — user-keyed with IP as the anonymous fallback, and
+fail-open (no `REDIS_URL`, or Redis down, disables it rather than rejecting
+traffic; `lib/redis.ts` + `lib/rate-limit.ts`). Two things about it decide
+whether a change is even reachable:
 
 - **It fails closed on a database it cannot open.** `authorizeScene` returns
   `false` when `getDatabase()` throws, so on the documented default setup —
@@ -634,6 +652,12 @@ bucket. Two things about it decide whether a change is even reachable:
   `authorizeScene`. The gated routes and the route carrying every edit therefore
   disagree about who may write. Know which side a change lands on before
   reasoning about access, and don't infer one route's posture from another's.
+
+Scene creation is quota-gated on top of that: `lib/scene-quota.ts` defines
+per-tier limits (guest vs verified account — scene count, total storage, scene
+size; `PASCAL_QUOTA_{GUEST,FREE}_*` override the defaults) and `POST /api/scenes`
+enforces them with a `quota_exceeded` response, while `GET /api/scenes/usage`
+reports the caller's tier, limits and current usage.
 
 Share links are a third mechanism again: `lib/share-token.ts` signs
 `/share/<token>` with `PASCAL_SHARE_LINK_SECRET`. Unset, the Share button
