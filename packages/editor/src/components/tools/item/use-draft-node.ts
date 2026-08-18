@@ -21,6 +21,7 @@ interface OriginalState {
   // mid-move, so reverts must restore it alongside parentId.
   roofSegmentId: ItemNode['roofSegmentId']
   roofFace: ItemNode['roofFace']
+  blockFaceId: ItemNode['blockFaceId']
   metadata: ItemNode['metadata']
 }
 
@@ -46,7 +47,11 @@ export interface DraftNodeHandle {
    *  commit lands on the surface the cursor pointed at. */
   commit: (
     finalUpdate: Partial<ItemNode>,
-    options?: { supportElevationCap?: number | null },
+    options?: {
+      supportElevationCap?: number | null
+      preferredSupportSlabId?: string | null
+      pinSupport?: boolean
+    },
   ) => string | null
   /** Destroy the current draft. Create mode: delete node. Move mode: restore original state. */
   destroy: () => void
@@ -113,6 +118,7 @@ export function useDraftNode(): DraftNodeHandle {
       parentId: node.parentId,
       roofSegmentId: node.roofSegmentId,
       roofFace: node.roofFace,
+      blockFaceId: node.blockFaceId,
       metadata: node.metadata,
     }
 
@@ -134,7 +140,11 @@ export function useDraftNode(): DraftNodeHandle {
   const commit = useCallback(
     (
       finalUpdate: Partial<ItemNode>,
-      options?: { supportElevationCap?: number | null },
+      options?: {
+        supportElevationCap?: number | null
+        preferredSupportSlabId?: string | null
+        pinSupport?: boolean
+      },
     ): string | null => {
       const draft = draftRef.current
       if (!draft) return null
@@ -156,6 +166,7 @@ export function useDraftNode(): DraftNodeHandle {
           parentId: original.parentId,
           roofSegmentId: original.roofSegmentId,
           roofFace: original.roofFace,
+          blockFaceId: original.blockFaceId,
           metadata: original.metadata,
         })
 
@@ -181,11 +192,14 @@ export function useDraftNode(): DraftNodeHandle {
           // the segment transform.
           roofSegmentId: updateProps.roofSegmentId,
           roofFace: updateProps.roofFace,
+          blockFaceId: updateProps.blockFaceId,
           // Only when the strategy decided about wallId (roof commits clear
           // it) — floor/ceiling commits never managed the field.
           ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
           ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
             maxElevation: options?.supportElevationCap,
+            preferredSlabId: options?.preferredSupportSlabId,
+            pinSupport: options?.pinSupport,
           }),
         })
 
@@ -226,6 +240,7 @@ export function useDraftNode(): DraftNodeHandle {
         // forwarded explicitly.
         roofSegmentId: updateProps.roofSegmentId,
         roofFace: updateProps.roofFace,
+        blockFaceId: updateProps.blockFaceId,
         ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
         metadata: updateProps.metadata ?? stripTransient(draft.metadata),
         parentId,
@@ -236,7 +251,11 @@ export function useDraftNode(): DraftNodeHandle {
         ...resolveSupportSlabPatch(
           finalNode,
           { ...nodes, [finalNode.id]: finalNode },
-          { maxElevation: options?.supportElevationCap },
+          {
+            maxElevation: options?.supportElevationCap,
+            preferredSlabId: options?.preferredSupportSlabId,
+            pinSupport: options?.pinSupport,
+          },
         ),
       })
       useScene.getState().createNode(committedNode, parentId)
@@ -293,6 +312,7 @@ export function useDraftNode(): DraftNodeHandle {
         parentId: original.parentId,
         roofSegmentId: original.roofSegmentId,
         roofFace: original.roofFace,
+        blockFaceId: original.blockFaceId,
         metadata: original.metadata,
       })
 

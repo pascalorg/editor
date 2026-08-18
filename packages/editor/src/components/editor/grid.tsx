@@ -9,7 +9,7 @@ import { color, float, fract, fwidth, mix, positionLocal, uniform } from 'three/
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useCeilingEvents } from '../../hooks/use-ceiling-events'
 import { useGridEvents } from '../../hooks/use-grid-events'
-import { getPlacementSurface } from '../../lib/active-placement-surface'
+import { getPlacementSurface, usesOrientedPlacementPlane } from '../../lib/active-placement-surface'
 import useEditor, { isGridSnapActive } from '../../store/use-editor'
 import { getMovingNode } from '../../store/use-interaction-scope'
 
@@ -229,9 +229,9 @@ export const Grid = ({
     }
 
     const gridMesh = gridRef.current
-    const onWall = surfacePoint != null && Math.abs(surfaceNormal.y) < 0.5
-    if (onWall && surfacePoint) {
-      // Wall-anchored lattice: orient the plane into the wall and pin the mesh to
+    const onOrientedPlane = surfacePoint != null && usesOrientedPlacementPlane(surfaceNormal)
+    if (onOrientedPlane && surfacePoint) {
+      // Surface-anchored lattice: orient the plane into the host and pin the mesh to
       // the plane's FOOT (the point on the wall plane closest to the world origin)
       // — never the moving ghost. Sliding the opening along the wall then only
       // moves the reveal patch (the cursor uniform); the snap lattice stays put.
@@ -275,8 +275,8 @@ export const Grid = ({
     // Floor grid depth-tests against the scene (ground occludes a sub-floor
     // lattice); the wall grid ignores depth so it stays visible through the wall
     // when the opening is being handled from the opposite side.
-    if (material.depthTest === onWall) {
-      material.depthTest = !onWall
+    if (material.depthTest === onOrientedPlane) {
+      material.depthTest = !onOrientedPlane
       material.needsUpdate = true
     }
 

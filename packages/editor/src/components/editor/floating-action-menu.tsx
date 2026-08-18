@@ -43,6 +43,7 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useReducedMotion } from '../../hooks/use-reduced-motion'
 import { resolveMoveActionNode } from '../../lib/direct-manipulation'
+import { getFloatingMenuScale } from '../../lib/floating-menu-scale'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
@@ -98,17 +99,6 @@ const ALLOWED_TYPES = [
 ]
 const DELETE_ONLY_TYPES: string[] = []
 const HOLE_TYPES = ['slab', 'ceiling']
-
-// Menu scales with camera zoom so it feels anchored to the object, but is
-// clamped on both ends so it stays readable when zoomed way out and doesn't
-// dominate the screen when zoomed in close. Reference values are picked so
-// scale = 1 lands near the editor's default framing.
-const MIN_MENU_SCALE = 0.5
-// Cap at 1 so zooming in doesn't grow the menu past its default pixel size —
-// only zoom-out shrinks it (down to MIN_MENU_SCALE).
-const MAX_MENU_SCALE = 1
-const REF_ORTHO_ZOOM = 20
-const REF_CAMERA_DISTANCE = 12
 
 // World-space Y distance from a node's bbox top to the floating menu anchor.
 // Per-type because in-world chrome above the node (height-resize arrows,
@@ -392,12 +382,7 @@ export function FloatingActionMenu() {
     // so it stays readable at extreme zoom-out and doesn't fill the screen
     // when zoomed in close.
     if (menuScaleRef.current) {
-      const raw =
-        state.camera instanceof THREE.OrthographicCamera
-          ? state.camera.zoom / REF_ORTHO_ZOOM
-          : REF_CAMERA_DISTANCE /
-            Math.max(state.camera.position.distanceTo(groupRef.current.position), 0.001)
-      const scale = Math.min(MAX_MENU_SCALE, Math.max(MIN_MENU_SCALE, raw))
+      const scale = getFloatingMenuScale(state.camera, groupRef.current.position)
       menuScaleRef.current.style.transform = `scale(${scale})`
     }
 

@@ -1,6 +1,5 @@
 import {
   type AnyNode,
-  type EventSuffix,
   emitter,
   type GridEvent,
   movingFootprintAnchors,
@@ -13,21 +12,11 @@ import { Vector3 } from 'three'
 
 export const FLOOR_PLACEMENT_ALIGNMENT_THRESHOLD_M = 0.08
 
-export const FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS = [
-  'shelf',
-  'item',
-  'slab',
-  'ceiling',
-  'wall',
-  'fence',
-  'column',
-  'roof',
-  'roof-segment',
-  'stair',
-  'stair-segment',
-] as const
-
 export type FloorPlacementClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
+
+export function isForcePlacementEvent(event: FloorPlacementClickTriggerEvent): boolean {
+  return event.nativeEvent?.altKey === true
+}
 
 type FloorPlacementAlignmentArgs = {
   node: AnyNode
@@ -132,19 +121,11 @@ export function subscribeFloorPlacementClicks(
   onClick: (event: FloorPlacementClickTriggerEvent) => void,
 ) {
   emitter.on('grid:click', onClick)
-  type SuffixedKey<K extends string> = `${K}:${EventSuffix}`
-  type ClickKey = SuffixedKey<(typeof FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS)[number]>
-  for (const kind of FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS) {
-    const key = `${kind}:click` as ClickKey
-    emitter.on(key, onClick as never)
-  }
+  emitter.on('node:click', onClick)
 
   return () => {
     emitter.off('grid:click', onClick)
-    for (const kind of FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS) {
-      const key = `${kind}:click` as ClickKey
-      emitter.off(key, onClick as never)
-    }
+    emitter.off('node:click', onClick)
   }
 }
 
@@ -152,18 +133,10 @@ export function subscribeFloorPlacementDoubleClicks(
   onDoubleClick: (event: FloorPlacementClickTriggerEvent) => void,
 ) {
   emitter.on('grid:double-click', onDoubleClick)
-  type SuffixedKey<K extends string> = `${K}:${EventSuffix}`
-  type DoubleClickKey = SuffixedKey<(typeof FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS)[number]>
-  for (const kind of FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS) {
-    const key = `${kind}:double-click` as DoubleClickKey
-    emitter.on(key, onDoubleClick as never)
-  }
+  emitter.on('node:double-click', onDoubleClick)
 
   return () => {
     emitter.off('grid:double-click', onDoubleClick)
-    for (const kind of FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS) {
-      const key = `${kind}:double-click` as DoubleClickKey
-      emitter.off(key, onDoubleClick as never)
-    }
+    emitter.off('node:double-click', onDoubleClick)
   }
 }

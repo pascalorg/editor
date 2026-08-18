@@ -6,6 +6,7 @@ import type {
   GridEvent,
   ItemEvent,
   ItemNode,
+  NodeEvent,
   RoofEvent,
   RoofNode,
   RoofSegmentNode,
@@ -268,13 +269,18 @@ export const wallStrategy = {
     const pose = resolveWallPlacementPose(event, x, adjustedY, attachTo, side, itemRotation)
 
     return {
-      stateUpdate: { surface: 'wall', wallId: event.node.id, roofSegmentId: null },
+      stateUpdate: {
+        surface: 'wall',
+        wallId: event.node.id,
+        roofSegmentId: null,
+      },
       nodeUpdate: {
         position: pose.position,
         parentId: event.node.id,
         // The draft may arrive from a roof-segment wall face.
         roofSegmentId: undefined,
         roofFace: undefined,
+        blockFaceId: undefined,
         side,
         rotation: [0, itemRotation, 0],
       },
@@ -367,6 +373,7 @@ export const wallStrategy = {
         parentId: event.node.id,
         roofSegmentId: undefined,
         roofFace: undefined,
+        blockFaceId: undefined,
         side: ctx.draftItem.side,
         rotation: ctx.draftItem.rotation,
         metadata: stripTransient(ctx.draftItem.metadata),
@@ -520,12 +527,17 @@ export const roofWallStrategy = {
     if (!target) return null
 
     return {
-      stateUpdate: { surface: 'roof-wall', roofSegmentId: target.segment.id, wallId: null },
+      stateUpdate: {
+        surface: 'roof-wall',
+        roofSegmentId: target.segment.id,
+        wallId: null,
+      },
       nodeUpdate: {
         position: target.position,
         parentId: target.segment.id,
         roofSegmentId: target.segment.id,
         roofFace: target.faceId,
+        blockFaceId: undefined,
         wallId: undefined,
         side: 'front',
         rotation: [0, 0, 0],
@@ -583,6 +595,7 @@ export const roofWallStrategy = {
         parentId: ctx.state.roofSegmentId,
         roofSegmentId: ctx.state.roofSegmentId,
         roofFace: ctx.draftItem.roofFace,
+        blockFaceId: undefined,
         wallId: undefined,
         side: 'front',
         rotation: [0, 0, 0],
@@ -610,6 +623,114 @@ export const roofWallStrategy = {
       cursorRotationY: 0,
       gridPosition: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
       cursorPosition: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+      stopPropagation: true,
+    }
+  },
+}
+
+// ============================================================================
+// FACE HOST STRATEGY
+// ============================================================================
+
+function resolveFaceHostTarget(ctx: PlacementContext, event: NodeEvent) {
+  const faceHost = nodeRegistry.get(event.node.type)?.capabilities.faceHost
+  if (!faceHost) return null
+  const rawDimensions = ctx.draftItem
+    ? getScaledDimensions(ctx.draftItem)
+    : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+  return faceHost.resolvePlacement({
+    host: event.node,
+    asset: ctx.asset,
+    draftItem: ctx.draftItem,
+    localPosition: event.localPosition,
+    faceIndex: event.faceIndex,
+    object: event.object,
+    currentFaceId: faceHost.currentFaceId(ctx.draftItem),
+    rawDimensions,
+    dimensions: getGridAlignedDimensions(rawDimensions, ctx.asset.attachTo),
+    snapScalar: snapToHalf,
+  })
+}
+
+function clearFaceHostItemFields(ctx: PlacementContext): Partial<ItemNode> {
+  const host = ctx.state.blockId ? useScene.getState().nodes[ctx.state.blockId] : undefined
+  const clearFields = host
+    ? nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields
+    : undefined
+  const patch: Partial<ItemNode> = {}
+  for (const field of clearFields ?? []) {
+    ;(patch as Record<string, unknown>)[field] = undefined
+  }
+  return patch
+}
+
+export const faceHostStrategy = {
+  enter(ctx: PlacementContext, event: NodeEvent): TransitionResult | null {
+    const target = resolveFaceHostTarget(ctx, event)
+    if (!target) return null
+    return {
+      stateUpdate: {
+        surface: 'block-face',
+        blockId: event.node.id,
+        wallId: null,
+        roofSegmentId: null,
+      },
+      nodeUpdate: {
+        ...target.nodeUpdate,
+      },
+      gridPosition: target.position,
+      cursorPosition: target.cursorPosition,
+      cursorRotationY: target.cursorRotation[1],
+      cursorRotation: target.cursorRotation,
+      stopPropagation: true,
+      hostFaceId: target.faceId,
+    }
+  },
+
+  move(ctx: PlacementContext, event: NodeEvent): PlacementResult | null {
+    if (ctx.state.surface !== 'block-face' || !ctx.draftItem) return null
+    const target = resolveFaceHostTarget(ctx, event)
+    if (!target || event.node.id !== ctx.state.blockId) return null
+    return {
+      gridPosition: target.position,
+      cursorPosition: target.cursorPosition,
+      cursorRotationY: target.cursorRotation[1],
+      cursorRotation: target.cursorRotation,
+      nodeUpdate: target.nodeUpdate,
+      stopPropagation: true,
+      dirtyNodeId: null,
+      hostFaceId: target.faceId,
+    }
+  },
+
+  click(ctx: PlacementContext, event: NodeEvent): CommitResult | null {
+    if (ctx.state.surface !== 'block-face' || !ctx.draftItem) return null
+    const target = resolveFaceHostTarget(ctx, event)
+    if (!target || event.node.id !== ctx.state.blockId) return null
+    return {
+      nodeUpdate: {
+        ...target.nodeUpdate,
+        metadata: stripTransient(ctx.draftItem.metadata),
+      },
+      stopPropagation: true,
+      dirtyNodeId: null,
+    }
+  },
+
+  leave(ctx: PlacementContext): TransitionResult | null {
+    if (ctx.state.surface !== 'block-face') return null
+    const floorPosition: [number, number, number] = [ctx.gridPosition.x, 0, ctx.gridPosition.z]
+    return {
+      stateUpdate: { surface: 'floor', blockId: null },
+      nodeUpdate: {
+        ...clearFaceHostItemFields(ctx),
+        position: floorPosition,
+        parentId: ctx.levelId,
+        rotation: [0, ctx.currentCursorRotationY, 0],
+      },
+      cursorRotationY: ctx.currentCursorRotationY,
+      gridPosition: floorPosition,
+      cursorPosition: floorPosition,
       stopPropagation: true,
     }
   },
@@ -1054,6 +1175,18 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
   const attachTo = ctx.draftItem.asset.attachTo
 
   const alignedDims = getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), attachTo)
+
+  if (ctx.state.surface === 'block-face') {
+    const hostId = ctx.state.blockId
+    const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : undefined
+    const faceHost = host ? nodeRegistry.get(host.type)?.capabilities.faceHost : undefined
+    if (!(host && faceHost)) return false
+    return faceHost.isStoredPlacementValid({
+      host,
+      item: ctx.draftItem,
+      asset: ctx.draftItem.asset,
+    })
+  }
 
   if (attachTo === 'ceiling') {
     if (ctx.state.surface !== 'ceiling' || !ctx.state.ceilingId) return false

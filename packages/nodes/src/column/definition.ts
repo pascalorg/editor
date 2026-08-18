@@ -346,6 +346,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    surfaces: { top: { height: (node) => (node as ColumnNodeType).height } },
     duplicable: true,
     deletable: true,
     // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
