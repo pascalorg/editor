@@ -579,3 +579,70 @@ describe('SqliteSceneStore revisions and thumbnail', () => {
     expect(loaded!.version).toBe(saved.version)
   })
 })
+
+describe('SqliteSceneStore presence + edit lease', () => {
+  let rootDir: string
+  let store: SqliteSceneStore
+
+  beforeEach(async () => {
+    rootDir = await mkTmpRoot()
+    store = createStore(rootDir)
+  })
+
+  afterEach(async () => {
+    store.close()
+    await rmrf(rootDir)
+  })
+
+  test('first claimant holds the lease; a concurrent claimant is a viewer', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+
+    const a = await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    expect(a.isEditor).toBe(true)
+    expect(a.editorUserId).toBe('ann')
+
+    // Bob opens while Ann is fresh — forced viewer, told who holds it.
+    const b = await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: true })
+    expect(b.isEditor).toBe(false)
+    expect(b.editorUserId).toBe('ann')
+    expect(b.editorEmail).toBe('ann@x')
+
+    // Ann heartbeats — still the editor.
+    const a2 = await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    expect(a2.isEditor).toBe(true)
+
+    // A non-editing viewer (claimEditor:false) never becomes editor.
+    const c = await store.touchPresence('proj', 'cy', 'cy@x', { claimEditor: false })
+    expect(c.isEditor).toBe(false)
+    expect(c.editorUserId).toBe('ann')
+  })
+
+  test('listScenePresence returns everyone fresh, editor first', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: true })
+
+    const present = await store.listScenePresence('proj')
+    expect(present.map((p) => p.userId).sort()).toEqual(['ann', 'bob'])
+    expect(present[0]!.isEditor).toBe(true)
+    expect(present[0]!.userId).toBe('ann')
+    expect(present.find((p) => p.userId === 'bob')!.isEditor).toBe(false)
+  })
+
+  test('releasing the editor frees the lease for the next claimant', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    const bBefore = await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: true })
+    expect(bBefore.isEditor).toBe(false)
+
+    await store.releaseScenePresence('proj', 'ann')
+
+    // Now Bob's next heartbeat (still wanting to edit) takes the lease.
+    const bAfter = await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: true })
+    expect(bAfter.isEditor).toBe(true)
+    expect(bAfter.editorUserId).toBe('bob')
+
+    const present = await store.listScenePresence('proj')
+    expect(present.map((p) => p.userId)).toEqual(['bob'])
+  })
+})

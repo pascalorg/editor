@@ -7,6 +7,7 @@ import {
   editorUrlForScene,
   hashGraphJson,
   parseGraph,
+  presenceCutoffIso,
   resolveMaxSceneBytes,
   SCENE_EVENT_HISTORY,
   SCENE_REVISION_HISTORY,
@@ -14,6 +15,7 @@ import {
 } from './scene-store-shared'
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
 import {
+  type PresenceClaim,
   type ProjectCreateOptions,
   type ProjectStatus,
   type SceneEvent,
@@ -24,6 +26,7 @@ import {
   type SceneMeta,
   type SceneMutateOptions,
   SceneNotFoundError,
+  type ScenePresence,
   type SceneRevisionMeta,
   type SceneSaveOptions,
   type SceneShare,
@@ -671,6 +674,90 @@ export class MysqlSceneStore implements SceneStore {
     ])
   }
 
+  async touchPresence(
+    sceneId: string,
+    userId: string,
+    email: string | null,
+    opts: { claimEditor: boolean },
+  ): Promise<PresenceClaim> {
+    const safeId = sanitizeSlug(sceneId)
+    const now = new Date().toISOString()
+    const cutoff = presenceCutoffIso(Date.now())
+    return this.withWriteTransaction(async (conn) => {
+      // Prune stale rows first — frees the lease when a tab closed without a
+      // clean release. FOR UPDATE serializes concurrent claims on this scene.
+      await conn.execute('DELETE FROM scene_presence WHERE scene_id = ? AND last_seen < ?', [
+        safeId,
+        cutoff,
+      ])
+      const [editorResult] = await conn.execute(
+        'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND is_editor = 1 LIMIT 1 FOR UPDATE',
+        [safeId],
+      )
+      const editorRow = firstRow<{ user_id: string; email: string | null }>(editorResult)
+
+      let isEditor: boolean
+      let editorUserId: string | null
+      let editorEmail: string | null
+      if (editorRow) {
+        isEditor = editorRow.user_id === userId
+        editorUserId = editorRow.user_id
+        editorEmail = editorRow.user_id === userId ? email : editorRow.email
+      } else if (opts.claimEditor) {
+        isEditor = true
+        editorUserId = userId
+        editorEmail = email
+      } else {
+        isEditor = false
+        editorUserId = null
+        editorEmail = null
+      }
+
+      await conn.execute(
+        `INSERT INTO scene_presence (scene_id, user_id, email, last_seen, is_editor)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE email = VALUES(email), last_seen = VALUES(last_seen), is_editor = VALUES(is_editor)`,
+        [safeId, userId, email, now, isEditor ? 1 : 0],
+      )
+
+      return { isEditor, editorUserId, editorEmail }
+    })
+  }
+
+  async listScenePresence(sceneId: string): Promise<ScenePresence[]> {
+    const pool = await this.database()
+    const cutoff = presenceCutoffIso(Date.now())
+    const [result] = await pool.execute(
+      `SELECT user_id, email, is_editor, last_seen
+         FROM scene_presence
+        WHERE scene_id = ? AND last_seen >= ?
+        ORDER BY is_editor DESC, last_seen ASC`,
+      [sanitizeSlug(sceneId), cutoff],
+    )
+    return rows(result).map((row) => {
+      const r = row as unknown as {
+        user_id: string
+        email: string | null
+        is_editor: number
+        last_seen: string
+      }
+      return {
+        userId: r.user_id,
+        email: r.email,
+        isEditor: Number(r.is_editor) === 1,
+        lastSeen: r.last_seen,
+      }
+    })
+  }
+
+  async releaseScenePresence(sceneId: string, userId: string): Promise<void> {
+    const pool = await this.database()
+    await pool.execute('DELETE FROM scene_presence WHERE scene_id = ? AND user_id = ?', [
+      sanitizeSlug(sceneId),
+      userId,
+    ])
+  }
+
   async close(): Promise<void> {
     await this.pool?.end()
     this.pool = null
@@ -837,6 +924,23 @@ export class MysqlSceneStore implements SceneStore {
         PRIMARY KEY (scene_id, user_id),
         INDEX scene_shares_user_idx (user_id),
         CONSTRAINT scene_shares_scene_fk FOREIGN KEY (scene_id)
+          REFERENCES scenes(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `)
+
+    // Short-lived per-user presence: last_seen drives a TTL, is_editor marks the
+    // single account holding the edit lease. last_seen is a sortable ISO string
+    // (VARCHAR) to match how the stores compare timestamps elsewhere.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS scene_presence (
+        scene_id VARCHAR(64) NOT NULL,
+        user_id VARCHAR(64) NOT NULL,
+        email VARCHAR(320) NULL,
+        last_seen VARCHAR(32) NOT NULL,
+        is_editor TINYINT(1) NOT NULL DEFAULT 0,
+        PRIMARY KEY (scene_id, user_id),
+        INDEX scene_presence_scene_seen_idx (scene_id, last_seen),
+        CONSTRAINT scene_presence_scene_fk FOREIGN KEY (scene_id)
           REFERENCES scenes(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)

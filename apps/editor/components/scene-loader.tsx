@@ -10,6 +10,8 @@ import { AccountSettingsSection } from '@/components/account-settings-section'
 import { useSession } from '@/components/auth/session-provider'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
+import { PresenceBar } from './presence-bar'
+import { useScenePresence } from './use-scene-presence'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -97,9 +99,27 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
   const [saveError, setSaveError] = useState<string | null>(null)
   const { openAuth } = useSession()
 
+  const presence = useScenePresence(meta.id, true)
+  // Before presence loads, fall back to the server `readOnly` prop so an
+  // editable canvas never flashes for someone who is not the lease holder.
+  const forcedReadOnly = presence.loaded ? !presence.canEdit || !presence.isEditor : readOnly
+  const forcedReadOnlyRef = useRef(forcedReadOnly)
   useEffect(() => {
-    if (readOnly) useEditor.getState().setPreviewMode(true)
-  }, [readOnly])
+    forcedReadOnlyRef.current = forcedReadOnly
+  }, [forcedReadOnly])
+
+  useEffect(() => {
+    if (forcedReadOnly) {
+      useEditor.getState().setPreviewMode(true)
+      // A forced viewer must stay in preview even if the viewer overlay's
+      // "back" button tries to exit it — re-assert on any store change.
+      const unsub = useEditor.subscribe((s) => {
+        if (!s.isPreviewMode) useEditor.getState().setPreviewMode(true)
+      })
+      return unsub
+    }
+    useEditor.getState().setPreviewMode(false)
+  }, [forcedReadOnly])
 
   const lightPreview = isLightPreviewQuery(searchParams)
 
@@ -107,7 +127,7 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
-      if (readOnly) return
+      if (forcedReadOnlyRef.current) return
       const graphJson = sceneGraphSignature(graph)
       const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
       if (lastRemoteGraphJsonRef.current === graphJson) {
@@ -155,7 +175,7 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
         setSaveError(error instanceof Error ? error.message : 'Save failed')
       }
     },
-    [meta.id, meta.name, openAuth, readOnly],
+    [meta.id, meta.name, openAuth],
   )
 
   useEffect(() => {
@@ -190,8 +210,8 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
 
   const handleThumb = useCallback(
     async (blob: Blob) => {
-      // A read-only viewer never owns the scene; the server would 403 the write.
-      if (readOnly) return
+      // A non-lease holder never owns the scene write; the server would refuse it.
+      if (forcedReadOnlyRef.current) return
       try {
         const dataUrl = await downscaleToDataUrl(blob, THUMBNAIL_MAX_DIM, THUMBNAIL_QUALITY)
         // The thumbnail lives inline in the scenes row (a TEXT column); an
@@ -207,11 +227,21 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
         // Best-effort: a missing card preview is not worth surfacing an error.
       }
     },
-    [meta.id, readOnly],
+    [meta.id],
   )
 
   return (
     <div className="relative h-screen w-screen">
+      {presence.loaded &&
+        (presence.present.length > 1 || (presence.canEdit && !presence.isEditor)) && (
+          <PresenceBar
+            canEdit={presence.canEdit}
+            editor={presence.editor}
+            isEditor={presence.isEditor}
+            onTakeOver={presence.takeOver}
+            present={presence.present}
+          />
+        )}
       {conflict && (
         <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
           <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>

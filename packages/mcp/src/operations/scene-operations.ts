@@ -2,6 +2,7 @@ import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
+  PresenceClaim,
   ProjectCreateOptions,
   ProjectStatus,
   SceneEvent,
@@ -10,6 +11,7 @@ import type {
   SceneListOptions,
   SceneMeta,
   SceneMutateOptions,
+  ScenePresence,
   SceneRevisionMeta,
   SceneSaveOptions,
   SceneShare,
@@ -87,6 +89,16 @@ export interface SceneOperations {
   listSceneRevisions(sceneId: string): Promise<SceneRevisionMeta[]>
   loadSceneRevision(sceneId: string, version: number): Promise<SceneGraph | null>
   updateSceneThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void>
+
+  readonly canTrackPresence: boolean
+  touchScenePresence(
+    sceneId: string,
+    userId: string,
+    email: string | null,
+    opts: { claimEditor: boolean },
+  ): Promise<PresenceClaim>
+  listScenePresence(sceneId: string): Promise<ScenePresence[]>
+  releaseScenePresence(sceneId: string, userId: string): Promise<void>
 }
 
 export function createSceneOperations(options: CreateSceneOperationsOptions): SceneOperations {
@@ -139,6 +151,14 @@ class SceneOperationsFacade implements SceneOperations {
 
   get canUpdateThumbnail(): boolean {
     return typeof this.#store?.updateThumbnail === 'function'
+  }
+
+  get canTrackPresence(): boolean {
+    return (
+      typeof this.#store?.touchPresence === 'function' &&
+      typeof this.#store?.listScenePresence === 'function' &&
+      typeof this.#store?.releaseScenePresence === 'function'
+    )
   }
 
   get canCreateProject(): boolean {
@@ -382,6 +402,29 @@ class SceneOperationsFacade implements SceneOperations {
     const store = this.requireStore()
     if (!store.updateThumbnail) throw new Error('thumbnail_unavailable')
     return store.updateThumbnail(sceneId, thumbnailUrl)
+  }
+
+  async touchScenePresence(
+    sceneId: string,
+    userId: string,
+    email: string | null,
+    opts: { claimEditor: boolean },
+  ): Promise<PresenceClaim> {
+    const store = this.requireStore()
+    if (!store.touchPresence) throw new Error('presence_unavailable')
+    return store.touchPresence(sceneId, userId, email, opts)
+  }
+
+  async listScenePresence(sceneId: string): Promise<ScenePresence[]> {
+    const store = this.requireStore()
+    if (!store.listScenePresence) throw new Error('presence_unavailable')
+    return store.listScenePresence(sceneId)
+  }
+
+  async releaseScenePresence(sceneId: string, userId: string): Promise<void> {
+    const store = this.requireStore()
+    if (!store.releaseScenePresence) throw new Error('presence_unavailable')
+    return store.releaseScenePresence(sceneId, userId)
   }
 
   private requireBridge(): SceneBridge {

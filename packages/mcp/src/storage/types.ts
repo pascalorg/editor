@@ -75,6 +75,24 @@ export interface SceneShare {
   role: SceneShareRole
 }
 
+/** One person currently present in a scene (fresh within the presence TTL). */
+export interface ScenePresence {
+  userId: string
+  email: string | null
+  /** True for the single account currently holding the edit lease. */
+  isEditor: boolean
+  /** ISO 8601 timestamp of the last heartbeat. */
+  lastSeen: string
+}
+
+/** Result of a presence heartbeat: whether the caller holds the edit lease. */
+export interface PresenceClaim {
+  isEditor: boolean
+  /** Who currently holds the edit lease (may be the caller, or null if none). */
+  editorUserId: string | null
+  editorEmail: string | null
+}
+
 /** One retained past version of a scene — a "backup" the user can restore. */
 export interface SceneRevisionMeta {
   version: number
@@ -166,6 +184,22 @@ export interface SceneStore {
   loadSceneRevision?(sceneId: SceneId, version: number): Promise<SceneGraph | null>
   /** Sets only a scene's thumbnail; no version bump, no revision, no event. */
   updateThumbnail?(sceneId: SceneId, thumbnailUrl: string | null): Promise<void>
+  /**
+   * Records a heartbeat for `userId` in `sceneId` and returns who holds the
+   * single edit lease. Atomic: if `claimEditor` is true and no other fresh
+   * account holds the lease, the caller takes it; otherwise the caller is a
+   * viewer. A caller already holding the lease keeps it.
+   */
+  touchPresence?(
+    sceneId: SceneId,
+    userId: string,
+    email: string | null,
+    opts: { claimEditor: boolean },
+  ): Promise<PresenceClaim>
+  /** Everyone currently present (fresh within the TTL), the editor first. */
+  listScenePresence?(sceneId: SceneId): Promise<ScenePresence[]>
+  /** Removes a user's presence row (best-effort on leave). */
+  releaseScenePresence?(sceneId: SceneId, userId: string): Promise<void>
 }
 
 export class SceneNotFoundError extends Error {

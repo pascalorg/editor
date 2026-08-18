@@ -10,6 +10,7 @@ import {
   editorUrlForScene,
   hashGraphJson,
   parseGraph,
+  presenceCutoffIso,
   resolveMaxSceneBytes,
   SCENE_EVENT_HISTORY,
   SCENE_REVISION_HISTORY,
@@ -18,6 +19,7 @@ import {
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite-driver'
 import {
+  type PresenceClaim,
   type ProjectCreateOptions,
   type ProjectStatus,
   type SceneEvent,
@@ -28,6 +30,7 @@ import {
   type SceneMeta,
   type SceneMutateOptions,
   SceneNotFoundError,
+  type ScenePresence,
   type SceneRevisionMeta,
   type SceneSaveOptions,
   type SceneShare,
@@ -654,6 +657,88 @@ export class SqliteSceneStore implements SceneStore {
     )
   }
 
+  async touchPresence(
+    sceneId: string,
+    userId: string,
+    email: string | null,
+    opts: { claimEditor: boolean },
+  ): Promise<PresenceClaim> {
+    const safeId = sanitizeSlug(sceneId)
+    const now = new Date().toISOString()
+    const cutoff = presenceCutoffIso(Date.now())
+    return this.withWriteTransaction((db) => {
+      // Prune stale rows first — this is what frees the lease when a tab closed
+      // without a clean release. After this, any is_editor row is a live holder.
+      db.query('DELETE FROM scene_presence WHERE scene_id = ? AND last_seen < ?').run(
+        safeId,
+        cutoff,
+      )
+      const editorRow = db
+        .query(
+          'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND is_editor = 1 LIMIT 1',
+        )
+        .get(safeId) as { user_id: string; email: string | null } | null | undefined
+
+      let isEditor: boolean
+      let editorUserId: string | null
+      let editorEmail: string | null
+      if (editorRow) {
+        isEditor = editorRow.user_id === userId
+        editorUserId = editorRow.user_id
+        editorEmail = editorRow.user_id === userId ? email : editorRow.email
+      } else if (opts.claimEditor) {
+        isEditor = true
+        editorUserId = userId
+        editorEmail = email
+      } else {
+        isEditor = false
+        editorUserId = null
+        editorEmail = null
+      }
+
+      db.query(
+        `INSERT INTO scene_presence (scene_id, user_id, email, last_seen, is_editor)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(scene_id, user_id)
+           DO UPDATE SET email = excluded.email, last_seen = excluded.last_seen, is_editor = excluded.is_editor`,
+      ).run(safeId, userId, email, now, isEditor ? 1 : 0)
+
+      return { isEditor, editorUserId, editorEmail }
+    })
+  }
+
+  async listScenePresence(sceneId: string): Promise<ScenePresence[]> {
+    const db = await this.database()
+    const cutoff = presenceCutoffIso(Date.now())
+    const rows = db
+      .query(
+        `SELECT user_id, email, is_editor, last_seen
+           FROM scene_presence
+          WHERE scene_id = ? AND last_seen >= ?
+          ORDER BY is_editor DESC, last_seen ASC`,
+      )
+      .all(sanitizeSlug(sceneId), cutoff) as Array<{
+      user_id: string
+      email: string | null
+      is_editor: number
+      last_seen: string
+    }>
+    return rows.map((r) => ({
+      userId: r.user_id,
+      email: r.email,
+      isEditor: r.is_editor === 1,
+      lastSeen: r.last_seen,
+    }))
+  }
+
+  async releaseScenePresence(sceneId: string, userId: string): Promise<void> {
+    const db = await this.database()
+    db.query('DELETE FROM scene_presence WHERE scene_id = ? AND user_id = ?').run(
+      sanitizeSlug(sceneId),
+      userId,
+    )
+  }
+
   close(): void {
     this.db?.close()
     this.db = null
@@ -744,6 +829,19 @@ export class SqliteSceneStore implements SceneStore {
 
       CREATE INDEX IF NOT EXISTS scene_shares_user_idx
         ON scene_shares(user_id);
+
+      CREATE TABLE IF NOT EXISTS scene_presence (
+        scene_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        email TEXT,
+        last_seen TEXT NOT NULL,
+        is_editor INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (scene_id, user_id),
+        FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS scene_presence_scene_seen_idx
+        ON scene_presence(scene_id, last_seen);
     `)
   }
 

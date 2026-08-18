@@ -103,6 +103,20 @@ export function editorUrlForScene(id: string): string {
   return `/editor/${id}`
 }
 
+/**
+ * How long a presence heartbeat stays "fresh". A row older than this is treated
+ * as gone (the tab closed without a clean release, which browsers don't reliably
+ * signal), which is what frees the edit lease for the next person. Must be
+ * comfortably larger than the client's heartbeat interval (~10s) so a live tab
+ * is never mistaken for stale.
+ */
+export const SCENE_PRESENCE_TTL_SECONDS = 30
+
+/** ISO timestamp cutoff before which presence rows are considered stale. */
+export function presenceCutoffIso(nowMs: number): string {
+  return new Date(nowMs - SCENE_PRESENCE_TTL_SECONDS * 1000).toISOString()
+}
+
 export function hashGraphJson(graphJson: string): string {
   return createHash('sha256').update(graphJson).digest('hex')
 }

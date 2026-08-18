@@ -93,6 +93,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
     const auth = await authorizeSceneMutation(id, existing.ownerId)
     if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
+
+    // Single-active-editor lease: if another account currently holds the live
+    // edit lease on this scene, refuse this save so two editors can't clobber
+    // each other. A free lease (no fresh holder) is allowed. The live editor
+    // UI keeps a non-holder in preview, so this is a server-side safety net.
+    if (auth.user && operations.canTrackPresence) {
+      const editor = (await operations.listScenePresence(id)).find((p) => p.isEditor)
+      if (editor && editor.userId !== auth.user.id) {
+        return sceneApiJson(request, { error: 'scene_locked_by_editor' }, { status: 423 })
+      }
+    }
+
     const meta = await operations.saveScene({
       id,
       name: parsed.data.name ?? existing.name,
