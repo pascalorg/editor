@@ -54,9 +54,10 @@ export async function GET(request: Request, { params }: RouteParams) {
   let closed = false
   let pollTimer: ReturnType<typeof setTimeout> | undefined
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined
+  let unsubscribe: (() => Promise<void>) | undefined
 
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    async start(controller) {
       const enqueue = (chunk: string) => {
         if (!closed) controller.enqueue(encoder.encode(chunk))
       }
@@ -66,6 +67,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         closed = true
         if (pollTimer) clearTimeout(pollTimer)
         if (heartbeatTimer) clearInterval(heartbeatTimer)
+        if (unsubscribe) void unsubscribe()
         try {
           controller.close()
         } catch {
@@ -76,35 +78,80 @@ export async function GET(request: Request, { params }: RouteParams) {
       request.signal.addEventListener('abort', close, { once: true })
       enqueue('retry: 1000\n\n')
 
-      const poll = async () => {
-        if (closed) return
+      const forward = (event: {
+        eventId: number
+        sceneId: string
+        version: number
+        kind: string
+        createdAt: string
+      }) => {
+        if (event.eventId <= cursor) return
+        cursor = event.eventId
+        enqueue(`id: ${event.eventId}\n`)
+        enqueue('event: scene\n')
+        enqueue(`data: ${JSON.stringify(event)}\n\n`)
+      }
+
+      // Prefer the backend's pub/sub channel; polling is the SQLite fallback.
+      let subscribed = false
+      if (operations.canSubscribeSceneEvents) {
+        try {
+          const subscription = await operations.subscribeSceneEvents(id, forward)
+          if (subscription) {
+            subscribed = true
+            unsubscribe = () => subscription.unsubscribe()
+          }
+        } catch (error) {
+          console.error(`[scenes] subscribing to ${id} failed, falling back to polling:`, error)
+        }
+      }
+
+      if (subscribed) {
+        // Close the gap between the LISTEN registration and any event committed
+        // before it took effect, then rely on the subscription alone. After this
+        // read, an idle connection issues no further queries.
         try {
           const events = await operations.listSceneEvents(id, {
             afterEventId: cursor,
             limit: MAX_EVENTS_PER_POLL,
           })
-          for (const event of events) {
-            cursor = event.eventId
-            enqueue(`id: ${event.eventId}\n`)
-            enqueue('event: scene\n')
-            enqueue(`data: ${JSON.stringify(event)}\n\n`)
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          enqueue('event: error\n')
-          enqueue(`data: ${JSON.stringify({ message })}\n\n`)
-        } finally {
-          if (!closed) pollTimer = setTimeout(poll, POLL_MS)
+          for (const event of events) forward(event)
+        } catch {
+          // A failed catch-up is not fatal: the subscription is already live.
         }
+      } else {
+        const poll = async () => {
+          if (closed) return
+          try {
+            const events = await operations.listSceneEvents(id, {
+              afterEventId: cursor,
+              limit: MAX_EVENTS_PER_POLL,
+            })
+            for (const event of events) {
+              cursor = event.eventId
+              enqueue(`id: ${event.eventId}\n`)
+              enqueue('event: scene\n')
+              enqueue(`data: ${JSON.stringify(event)}\n\n`)
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            enqueue('event: error\n')
+            enqueue(`data: ${JSON.stringify({ message })}\n\n`)
+          } finally {
+            if (!closed) pollTimer = setTimeout(poll, POLL_MS)
+          }
+        }
+
+        void poll()
       }
 
       heartbeatTimer = setInterval(() => enqueue(': keepalive\n\n'), HEARTBEAT_MS)
-      void poll()
     },
     cancel() {
       closed = true
       if (pollTimer) clearTimeout(pollTimer)
       if (heartbeatTimer) clearInterval(heartbeatTimer)
+      if (unsubscribe) void unsubscribe()
     },
   })
 

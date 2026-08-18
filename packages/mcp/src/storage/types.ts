@@ -53,6 +53,17 @@ export interface SceneEvent {
   createdAt: string
 }
 
+/**
+ * A live subscription to scene events, delivered by the backend's pub/sub
+ * channel (Postgres LISTEN/NOTIFY) rather than polling. Only the Postgres
+ * store offers this; SQLite keeps the polling path in the route.
+ */
+export type SceneEventSubscriber = (event: SceneEvent) => void
+
+export interface SceneEventSubscription {
+  unsubscribe(): Promise<void>
+}
+
 export interface SceneSaveOptions {
   id?: SceneId
   name: string
@@ -193,6 +204,16 @@ export interface SceneStore {
   rename(id: SceneId, newName: string, opts?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent?(opts: SceneEventAppendOptions): Promise<SceneEvent>
   listSceneEvents?(sceneId: SceneId, opts?: SceneEventListOptions): Promise<SceneEvent[]>
+  /**
+   * Subscribe to scene events as they land, instead of polling `listSceneEvents`.
+   * Backends without a pub/sub channel (SQLite) omit this; the route falls back
+   * to polling. The subscription delivers only events appended after it is
+   * registered — the caller still owns an initial catch-up read.
+   */
+  subscribeSceneEvents?(
+    sceneId: SceneId,
+    subscriber: SceneEventSubscriber,
+  ): Promise<SceneEventSubscription>
   pruneSceneHistory?(
     sceneId: SceneId,
     policy?: SceneHistoryPrunePolicy,

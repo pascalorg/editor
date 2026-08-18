@@ -27,6 +27,8 @@ import {
   type SceneEvent,
   type SceneEventAppendOptions,
   type SceneEventListOptions,
+  type SceneEventSubscriber,
+  type SceneEventSubscription,
   type SceneHistoryPrunePolicy,
   type SceneHistoryPruneResult,
   SceneInvalidError,
@@ -47,6 +49,15 @@ export interface PostgresSceneStoreOptions {
   maxSceneBytes?: number
   /** Injected in tests so the suite can share one pool. */
   database?: Database
+  /** Injected alongside `database` in tests so pub/sub (LISTEN/NOTIFY) works. */
+  client?: SqlClient
+}
+
+type SqlClient = ReturnType<typeof createDatabaseClient>['client']
+
+/** Postgres NOTIFY channel for one scene's events. */
+function sceneEventChannel(sceneId: string): string {
+  return `scene_${sceneId}`
 }
 
 type SceneRow = typeof scenesTable.$inferSelect
@@ -78,18 +89,21 @@ export class PostgresSceneStore implements SceneStore {
   readonly backend = 'postgres' as const
 
   private readonly db: Database
+  private readonly client: SqlClient | null
   private readonly close: (() => Promise<void>) | null
   private readonly maxSceneBytes: number
 
   constructor(options: PostgresSceneStoreOptions = {}) {
     if (options.database) {
       this.db = options.database
+      this.client = options.client ?? null
       this.close = null
     } else {
       const { client, db } = createDatabaseClient({
         connectionString: options.connectionString ?? options.env?.POSTGRES_URL,
       })
       this.db = db
+      this.client = client
       this.close = () => client.end()
     }
     this.maxSceneBytes = resolveMaxSceneBytes(options.env, options.maxSceneBytes)
@@ -372,13 +386,51 @@ export class PostgresSceneStore implements SceneStore {
     const row = inserted[0]
     if (!row) throw new SceneNotFoundError(`Scene "${sceneId}" not found`)
 
-    return {
+    const event: SceneEvent = {
       eventId: row.eventId,
       sceneId: row.sceneId,
       version: row.version,
       kind: row.kind,
       createdAt: ISO(row.createdAt),
     }
+
+    // Publish over the pub/sub channel so subscribers wake immediately instead
+    // of polling. The row is committed by the insert above. Fire-and-forget: a
+    // missed NOTIFY is recovered when the subscriber reconnects and its catch-up
+    // read replays the gap, so a notify failure must not fail the append.
+    if (this.client) {
+      const payload = JSON.stringify({
+        eventId: event.eventId,
+        version: event.version,
+        kind: event.kind,
+        createdAt: event.createdAt,
+      })
+      this.client.notify(sceneEventChannel(sceneId), payload).catch((error) => {
+        console.error(`[scene-events] NOTIFY ${sceneId} failed:`, error)
+      })
+    }
+
+    return event
+  }
+
+  async subscribeSceneEvents(
+    sceneId: string,
+    subscriber: SceneEventSubscriber,
+  ): Promise<SceneEventSubscription> {
+    if (!this.client) {
+      throw new SceneInvalidError('scene event subscriptions require a database client')
+    }
+    const id = sanitizeSlug(sceneId)
+    const handle = await this.client.listen(sceneEventChannel(id), (payload) => {
+      let data: Omit<SceneEvent, 'sceneId'>
+      try {
+        data = JSON.parse(payload) as Omit<SceneEvent, 'sceneId'>
+      } catch {
+        return
+      }
+      subscriber({ ...data, sceneId: id })
+    })
+    return { unsubscribe: () => handle.unlisten() }
   }
 
   async listSceneEvents(sceneId: string, opts: SceneEventListOptions = {}): Promise<SceneEvent[]> {

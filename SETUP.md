@@ -92,6 +92,20 @@ docker compose up -d
 The editor will be running at **http://localhost:3000**. Saved scenes live in
 the `pascal-data` volume, so they survive `docker compose down`.
 
+### Live sync behind a reverse proxy
+
+The SSE endpoints (`/api/scenes/[id]/events` and `/api/scenes/[id]/presence`)
+are long-lived streams and must not be buffered or idle-timed-out by whatever
+sits in front of them (Coolify/Traefik, nginx, Cloudflare). The route already
+sends `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`, but
+the proxy needs to cooperate:
+
+- Traefik/Coolify: SSE passes through unbuffered by default, but set an idle
+  timeout long enough to span the 15s keepalive (the route sends `: keepalive`
+  every 15s, so any idle timeout ≥ 30s is safe).
+- nginx: `proxy_buffering off; proxy_read_timeout 60s;` for the two SSE paths.
+- Cloudflare: `no-transform` (already sent) stops response compression/rewrites.
+
 ## Monorepo Structure
 
 ```

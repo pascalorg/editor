@@ -21,6 +21,8 @@ import type {
   SceneEvent,
   SceneEventAppendOptions,
   SceneEventListOptions,
+  SceneEventSubscriber,
+  SceneEventSubscription,
   SceneHistoryPrunePolicy,
   SceneHistoryPruneResult,
   SceneListOptions,
@@ -43,6 +45,7 @@ export interface SceneOperations {
   readonly canAppendSceneEvents: boolean
   readonly canServeAgentRequests: boolean
   readonly canListSceneEvents: boolean
+  readonly canSubscribeSceneEvents: boolean
   readonly canPruneSceneHistory: boolean
   readonly canCreateProject: boolean
   readonly canGetProjectStatus: boolean
@@ -102,6 +105,10 @@ export interface SceneOperations {
   renameStoredScene(id: string, newName: string, options?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null>
   listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]>
+  subscribeSceneEvents(
+    id: string,
+    subscriber: SceneEventSubscriber,
+  ): Promise<SceneEventSubscription | null>
   pruneSceneHistory(
     id: string,
     policy?: SceneHistoryPrunePolicy,
@@ -150,6 +157,10 @@ class SceneOperationsFacade implements SceneOperations {
 
   get canListSceneEvents(): boolean {
     return typeof this.#store?.listSceneEvents === 'function'
+  }
+
+  get canSubscribeSceneEvents(): boolean {
+    return typeof this.#store?.subscribeSceneEvents === 'function'
   }
 
   get canPruneSceneHistory(): boolean {
@@ -424,6 +435,15 @@ class SceneOperationsFacade implements SceneOperations {
       throw new Error('scene_events_unavailable')
     }
     return store.listSceneEvents(id, options)
+  }
+
+  async subscribeSceneEvents(
+    id: string,
+    subscriber: SceneEventSubscriber,
+  ): Promise<SceneEventSubscription | null> {
+    const store = this.requireStore()
+    if (!store.subscribeSceneEvents) return null
+    return store.subscribeSceneEvents(id, subscriber)
   }
 
   async pruneSceneHistory(
