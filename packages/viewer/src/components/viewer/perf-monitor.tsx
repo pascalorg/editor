@@ -45,7 +45,7 @@ export const PerfMonitor = () => {
     }
   }, [gl])
 
-  useFrame(({ gl, scene, clock }) => {
+  useFrame(({ gl, scene, clock }, delta) => {
     frameCount.current++
     const now = clock.elapsedTime
     const dt = now - elapsed.current
@@ -123,7 +123,7 @@ export const PerfMonitor = () => {
       elapsed.current = now
     }
 
-    lastMs.current = Math.round(clock.getDelta() * 1000 * 10) / 10
+    lastMs.current = Math.round(delta * 1000 * 10) / 10
   })
 
   return (

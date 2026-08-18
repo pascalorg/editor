@@ -7,8 +7,9 @@ import type {
   PipeSegmentNode,
 } from '@pascal-app/core'
 import { EDITOR_LAYER } from '@pascal-app/editor'
-import { useMemo } from 'react'
-import { Mesh, MeshBasicMaterial } from 'three'
+import { disposeObject3DResources } from '@pascal-app/viewer'
+import { useEffect, useMemo } from 'react'
+import { type Material, Mesh, MeshBasicMaterial } from 'three'
 import { buildDuctFittingGeometry } from '../duct-fitting/geometry'
 import { buildDuctSegmentGeometry } from '../duct-segment/geometry'
 import { buildPipeFittingGeometry } from '../pipe-fitting/geometry'
@@ -34,8 +35,15 @@ function ghostColor(tint: GhostTint): number | string {
 /** Repaint every mesh in `group` as a translucent, depth-test-free preview. */
 function ghostify(group: { traverse: (cb: (child: object) => void) => void }, tint: GhostTint) {
   const color = ghostColor(tint)
+  const replacedMaterials = new Set<Material>()
   group.traverse((child) => {
     if (child instanceof Mesh) {
+      const previous = child.material
+      if (Array.isArray(previous)) {
+        for (const material of previous) replacedMaterials.add(material)
+      } else {
+        replacedMaterials.add(previous)
+      }
       child.layers.set(EDITOR_LAYER)
       child.material = new MeshBasicMaterial({
         color,
@@ -46,6 +54,9 @@ function ghostify(group: { traverse: (cb: (child: object) => void) => void }, ti
       child.renderOrder = 999
     }
   })
+  for (const material of replacedMaterials) {
+    if (!material.userData.__pascalCachedMaterial) material.dispose()
+  }
 }
 
 /**
@@ -62,6 +73,7 @@ export function FittingGhost({ fitting, tint }: { fitting: DuctFittingNode; tint
     ghostify(group, tint)
     return group
   }, [fitting, tint])
+  useEffect(() => () => disposeObject3DResources(ghost), [ghost])
   return <primitive object={ghost} />
 }
 
@@ -76,6 +88,7 @@ export function DuctSegmentGhost({ duct, tint }: { duct: DuctSegmentNode; tint?:
     ghostify(group, tint)
     return group
   }, [duct, tint])
+  useEffect(() => () => disposeObject3DResources(ghost), [ghost])
   return <primitive object={ghost} />
 }
 
@@ -93,6 +106,7 @@ export function PipeFittingGhost({
     ghostify(group, tint)
     return group
   }, [fitting, tint])
+  useEffect(() => () => disposeObject3DResources(ghost), [ghost])
   return <primitive object={ghost} />
 }
 
@@ -102,5 +116,6 @@ export function PipeSegmentGhost({ pipe, tint }: { pipe: PipeSegmentNode; tint?:
     ghostify(group, tint)
     return group
   }, [pipe, tint])
+  useEffect(() => () => disposeObject3DResources(ghost), [ghost])
   return <primitive object={ghost} />
 }

@@ -4,6 +4,7 @@ import useViewer from '../../store/use-viewer'
 
 type FrameLimiterProps = {
   fps?: number
+  paused?: boolean
 }
 
 export type FrameClock = {
@@ -56,7 +57,7 @@ const DRAW_DISABLED =
       .map((s) => s.trim()),
   ).has('draw')
 
-const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
+const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false }) => {
   const { advance, set, frameloop: initFrameloop } = useThree()
   const nextFrameTimeRef = useRef(0)
   const renderer = useThree((state) => state.gl)
@@ -66,7 +67,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
   const renderPaused = useViewer((s) => s.renderPaused)
 
   useLayoutEffect(() => {
-    if (renderPaused) return
+    if (renderPaused || paused) return
     const clock = createFrameClock(nextFrameTimeRef.current)
     let raf: number | null = null
     let timer: ReturnType<typeof setInterval> | null = null
@@ -126,7 +127,18 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
       window.removeEventListener('pageshow', kick)
       set({ frameloop: initFrameloop })
     }
-  }, [advance, dpr, fps, initFrameloop, renderPaused, renderer, set, size.height, size.width])
+  }, [
+    advance,
+    dpr,
+    fps,
+    initFrameloop,
+    paused,
+    renderPaused,
+    renderer,
+    set,
+    size.height,
+    size.width,
+  ])
 
   return null
 }
