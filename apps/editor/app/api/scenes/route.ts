@@ -38,7 +38,7 @@ export function OPTIONS(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   const actor = await resolveActor(request)
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   const actor = await resolveActor(request)

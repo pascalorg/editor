@@ -3,18 +3,12 @@ import { projectMembers, projects, scenes } from '@pascal-app/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { getAuth } from './auth'
+import { checkRateLimit } from './rate-limit'
 
 const DEFAULT_RATE_LIMIT_PER_MINUTE = 120
-const WINDOW_MS = 60_000
+const RATE_LIMIT_WINDOW_MS = 60_000
 const ALLOWED_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
 const ALLOWED_HEADERS = 'authorization, content-type, if-match, last-event-id'
-
-type RateBucket = {
-  resetAt: number
-  count: number
-}
-
-const rateBuckets = new Map<string, RateBucket>()
 
 import { apiTokens } from '@pascal-app/db/schema'
 
@@ -188,21 +182,21 @@ export async function authorizeProject(
   return false
 }
 
-export function sceneApiPreflight(request: Request): NextResponse {
-  const guard = guardSceneApiRequest(request, { skipRateLimit: true, skipAuth: true })
+export async function sceneApiPreflight(request: Request): Promise<NextResponse> {
+  const guard = await guardSceneApiRequest(request, { skipRateLimit: true, skipAuth: true })
   if (guard) return guard
   return withSceneApiHeaders(request, new NextResponse(null, { status: 204 }))
 }
 
-export function guardSceneApiRequest(
+export async function guardSceneApiRequest(
   request: Request,
   opts: { skipRateLimit?: boolean; skipAuth?: boolean } = {},
-): NextResponse | null {
+): Promise<NextResponse | null> {
   const originError = validateOrigin(request)
   if (originError) return originError
 
   if (!opts.skipRateLimit) {
-    const rateError = validateRateLimit(request)
+    const rateError = await validateRateLimit(request)
     if (rateError) return rateError
   }
 
@@ -232,24 +226,23 @@ function validateOrigin(request: Request): NextResponse | null {
   return sceneApiJson(request, { error: 'origin_not_allowed' }, { status: 403 })
 }
 
-function validateRateLimit(request: Request): NextResponse | null {
+async function validateRateLimit(request: Request): Promise<NextResponse | null> {
   const limit = rateLimitPerMinute()
   if (limit <= 0) return null
 
-  const now = Date.now()
-  const key = clientIp(request)
-  const bucket = rateBuckets.get(key)
-  if (!bucket || bucket.resetAt <= now) {
-    rateBuckets.set(key, { count: 1, resetAt: now + WINDOW_MS })
-    return null
-  }
+  // User-based keying, IP only as the anonymous fallback — a NAT's fifty
+  // users must not throttle each other off one shared IP.
+  const actor = await resolveActor(request)
+  const key = actor.type === 'user' ? `user:${actor.userId}` : `ip:${clientIp(request)}`
 
-  bucket.count++
-  if (bucket.count <= limit) return null
+  const result = await checkRateLimit(key, limit, RATE_LIMIT_WINDOW_MS)
+  if (!result || result.allowed) return null
 
-  const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))
   const response = sceneApiJson(request, { error: 'rate_limited' }, { status: 429 })
-  response.headers.set('Retry-After', String(retryAfter))
+  response.headers.set('Retry-After', String(result.retryAfter))
+  response.headers.set('X-RateLimit-Limit', String(result.limit))
+  response.headers.set('X-RateLimit-Remaining', String(result.remaining))
+  response.headers.set('X-RateLimit-Reset', String(Math.ceil(result.resetAt / 1000)))
   return response
 }
 

@@ -112,7 +112,7 @@ export function OPTIONS(request: Request) {
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   let body: unknown

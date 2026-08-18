@@ -21,7 +21,7 @@ export function OPTIONS(request: NextRequest) {
  * Unauthenticated callers get the guest limits and zero usage.
  */
 export async function GET(request: NextRequest) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   const actor = await resolveActor(request)

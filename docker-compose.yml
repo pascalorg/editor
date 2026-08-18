@@ -22,6 +22,14 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Distributed rate limiting (and, later, presence and the background queue).
+  # `REDIS_URL=redis://localhost:6379` in the editor. Local-only by default.
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
   editor:
     build: .
     ports:

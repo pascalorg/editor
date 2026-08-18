@@ -31,7 +31,7 @@ export function OPTIONS(request: Request) {
 }
 
 export async function GET(request: Request, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request, { skipRateLimit: true })
+  const guard = await guardSceneApiRequest(request, { skipRateLimit: true })
   if (guard) return guard
   const { id } = await params
   const scene = await (await getSceneOperations()).loadStoredScene(id)
@@ -85,7 +85,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request, { skipRateLimit: true })
+  const guard = await guardSceneApiRequest(request, { skipRateLimit: true })
   if (guard) return guard
   let body: unknown
   try {
@@ -108,7 +108,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(request: Request, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request, { skipRateLimit: true })
+  const guard = await guardSceneApiRequest(request, { skipRateLimit: true })
   if (guard) return guard
   const actorId = new URL(request.url).searchParams.get('actorId')
   if (!actorId) return sceneApiJson(request, { error: 'invalid_request' }, { status: 400 })

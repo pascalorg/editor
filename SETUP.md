@@ -27,6 +27,7 @@ cp .env.example .env
 | `PASCAL_SHARE_LINK_SECRET` | For sharing | Signs view-only share links (`/share/<token>`). Without it the **Share** button returns 503 and existing links stop verifying — everything else works. Changing it invalidates every link already handed out, which is also the only way to revoke one. |
 | `POSTGRES_URL` | For the Postgres store | Connection string for `packages/db`. Unset, the editor keeps using the local SQLite store. |
 | `POSTGRES_POOL_SIZE` | No | Per-replica connection pool size (default 10). `replicas × this` must stay under Postgres' `max_connections`. |
+| `REDIS_URL` | For the rate limit | Redis connection (e.g. `redis://localhost:6379`). Unset, rate limiting is disabled — requests are never rejected because Redis is down (fail-open). |
 | `BETTER_AUTH_SECRET` | For auth | A random string used to sign session cookies. |
 | `GOOGLE_CLIENT_ID` | For auth | Google OAuth Client ID. |
 | `GOOGLE_CLIENT_SECRET` | For auth | Google OAuth Client Secret. |

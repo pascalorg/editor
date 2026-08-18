@@ -39,7 +39,7 @@ export function OPTIONS(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   const { id } = await params
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   const { id } = await params
@@ -138,7 +138,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   const { id } = await params
@@ -161,7 +161,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   const { id } = await params

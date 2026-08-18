@@ -25,7 +25,7 @@ export function OPTIONS(request: NextRequest) {
  * is unauthenticated.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const guard = guardSceneApiRequest(request)
+  const guard = await guardSceneApiRequest(request)
   if (guard) return guard
 
   const { id } = await params

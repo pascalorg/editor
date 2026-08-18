@@ -7,7 +7,7 @@ export function OPTIONS(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const guard = guardSceneApiRequest(request, { skipAuth: true })
+  const guard = await guardSceneApiRequest(request, { skipAuth: true })
   if (guard) return guard
 
   try {

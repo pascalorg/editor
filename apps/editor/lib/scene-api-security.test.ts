@@ -22,14 +22,14 @@ function restoreEnv(key: keyof NodeJS.ProcessEnv): void {
   else process.env[key] = OLD_ENV[key]
 }
 
-test('allows loopback scene API requests', () => {
+test('allows loopback scene API requests', async () => {
   const request = new Request('http://127.0.0.1:3000/api/scenes', {
     headers: { host: '127.0.0.1:3000' },
   })
-  expect(guardSceneApiRequest(request)).toBeNull()
+  expect(await guardSceneApiRequest(request)).toBeNull()
 })
 
-test('applies configured CORS origins for preflight', () => {
+test('applies configured CORS origins for preflight', async () => {
   process.env.PASCAL_SCENE_API_ORIGINS = 'https://app.example'
   const request = new Request('https://editor.example/api/scenes', {
     method: 'OPTIONS',
@@ -39,7 +39,7 @@ test('applies configured CORS origins for preflight', () => {
     },
   })
 
-  const response = sceneApiPreflight(request)
+  const response = await sceneApiPreflight(request)
 
   expect(response.status).toBe(204)
   expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example')
