@@ -12,24 +12,29 @@ import {
   cabinetRunFootprint,
   cabinetRunNeighborSignature,
 } from './definition'
+import { collectCabinetFlameObjects } from './flame-index'
 
 function materialWithOpacity(material: Material | Material[] | undefined): Material | null {
   if (!material) return null
   return Array.isArray(material) ? (material[0] ?? null) : material
 }
 
-function animateCabinetFlames(root: Object3D, elapsedTime: number, updateTubes: boolean) {
-  root.traverse((obj) => {
+export function animateCabinetFlames(
+  objects: Object3D[],
+  elapsedTime: number,
+  updateTubes: boolean,
+) {
+  for (const obj of objects) {
     const jet = obj.userData.cabinetFlameJet as
       | { seed: CooktopFlameSeed; burnerR: number }
       | undefined
     if (jet) {
-      if (!updateTubes) return
+      if (!updateTubes) continue
       const mesh = obj as Mesh
       const position = mesh.geometry.getAttribute('position') as BufferAttribute
       updateCooktopFlameTube(position.array as Float32Array, elapsedTime, jet.seed, jet.burnerR)
       position.needsUpdate = true
-      return
+      continue
     }
 
     const pulse = obj.userData.cabinetFlamePulse as
@@ -42,13 +47,13 @@ function animateCabinetFlames(root: Object3D, elapsedTime: number, updateTubes: 
     const materialPulse = obj.userData.cabinetFlameMaterialPulse as
       | { phase: number; amplitude: number; base: number }
       | undefined
-    if (!materialPulse) return
+    if (!materialPulse) continue
     const material = materialWithOpacity((obj as { material?: Material | Material[] }).material)
-    if (!material || !('opacity' in material)) return
+    if (!material || !('opacity' in material)) continue
     material.opacity =
       materialPulse.base +
       materialPulse.amplitude * Math.sin(elapsedTime * 2.3 + materialPulse.phase)
-  })
+  }
 }
 
 /**
@@ -61,6 +66,9 @@ function animateCabinetFlames(root: Object3D, elapsedTime: number, updateTubes: 
 const CabinetAnimationSystem = ({ sceneApi }: { sceneApi: SceneApi }) => {
   const appliedRef = useRef(new Map<string, number>())
   const lastTubeUpdateRef = useRef(0)
+  const flameObjectsRef = useRef(
+    new Map<string, { root: Object3D; children: Object3D[]; objects: Object3D[] }>(),
+  )
   // Last-seen neighbor-affecting signature per run. A run whose countertop
   // overhang trims against sibling runs never sees a neighbor's move in its
   // own geometryKey, so when a run's signature changes here we bump the
@@ -118,8 +126,26 @@ const CabinetAnimationSystem = ({ sceneApi }: { sceneApi: SceneApi }) => {
           poseCabinetMovingParts(obj, value)
           applied.set(id, value)
         }
-        animateCabinetFlames(obj, clock.elapsedTime, updateTubes)
+        let flameEntry = flameObjectsRef.current.get(id)
+        const childrenChanged =
+          !flameEntry ||
+          flameEntry.children.length !== obj.children.length ||
+          flameEntry.children.some((child, index) => child !== obj.children[index])
+        if (flameEntry?.root !== obj || childrenChanged) {
+          flameEntry = {
+            root: obj,
+            children: [...obj.children],
+            objects: collectCabinetFlameObjects(obj),
+          }
+          flameObjectsRef.current.set(id, flameEntry)
+        }
+        if (flameEntry.objects.length > 0) {
+          animateCabinetFlames(flameEntry.objects, clock.elapsedTime, updateTubes)
+        }
       }
+    }
+    for (const id of flameObjectsRef.current.keys()) {
+      if (!sceneRegistry.nodes.has(id)) flameObjectsRef.current.delete(id)
     }
   }, 2)
 

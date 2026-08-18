@@ -1104,6 +1104,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             hoverStyles={EDITOR_HOVER_STYLES}
             onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
+            renderPaused={!show3d && !showLoader}
             sceneReadyKey={sceneReadyKey}
             selectionManager={isFirstPersonMode ? 'default' : 'custom'}
           >
