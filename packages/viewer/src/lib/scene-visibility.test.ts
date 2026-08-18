@@ -2,7 +2,13 @@
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import * as THREE from 'three'
-import { BATCHED_LAYER, OVERLAY_LAYER, SCENE_LAYER, SHADOW_ONLY_LAYER } from './layers'
+import {
+  BATCHED_LAYER,
+  OVERLAY_LAYER,
+  SCENE_LAYER,
+  SHADOW_ONLY_LAYER,
+  setSurfaceRaycastLayers,
+} from './layers'
 import { hideFromScene, showInScene } from './scene-visibility'
 
 function sceneObject(): THREE.Object3D {
@@ -114,5 +120,28 @@ describe('scene visibility', () => {
     showInScene(obj, 'isolated')
     expect(obj.layers.mask).toBe(original)
     expect(obj.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  })
+
+  // A batched wall keeps its pointer handlers, so whatever raycaster drives
+  // hover / paint / click has to reach it or the wall goes dead the moment its
+  // level is sewn. `PointerRaycastLayers` enables the bit on R3F's shared
+  // raycaster; `setSurfaceRaycastLayers` does it for private ones.
+  test('a batched object answers only a raycaster that opted into the layer', () => {
+    const obj = sceneObject()
+    hideFromScene(obj, 'batched')
+
+    const defaultLayers = new THREE.Layers()
+    expect(obj.layers.test(defaultLayers)).toBe(false)
+
+    const surfaceLayers = new THREE.Layers()
+    setSurfaceRaycastLayers(surfaceLayers)
+    expect(obj.layers.test(surfaceLayers)).toBe(true)
+
+    const sharedLayers = new THREE.Layers()
+    sharedLayers.enable(BATCHED_LAYER)
+    expect(obj.layers.test(sharedLayers)).toBe(true)
+
+    showInScene(obj, 'batched')
+    expect(obj.layers.test(defaultLayers)).toBe(true)
   })
 })
