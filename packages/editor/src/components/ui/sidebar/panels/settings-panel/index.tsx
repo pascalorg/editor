@@ -531,6 +531,14 @@ export function SettingsPanel({
             <MapIcon className="size-4" />
             Routing (structure + utilities)
           </Button>
+          <Button
+            className="w-full justify-start gap-2"
+            onClick={() => exportFloorplanPdf('views')}
+            variant="outline"
+          >
+            <MapIcon className="size-4" />
+            <LocalizedContent>Saved views</LocalizedContent>
+          </Button>
         </div>
       </div>
 

@@ -165,6 +165,11 @@ export class FloorplanPdfDocument {
     else this.raw.stroke()
     return this
   }
+
+  image(src: ArrayBuffer | any, x: number, y: number, options?: any): this {
+    this.raw.image(src, x, y, options)
+    return this
+  }
 }
 
 export async function createFloorplanPdfDocument(defaultPageSize: readonly [number, number]) {

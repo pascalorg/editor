@@ -67,7 +67,7 @@ import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
  * slabs, ceilings, doors, windows, stairs, columns, roofs…); `'full'` keeps
  * every node that has a floorplan builder and is visible.
  */
-export type FloorplanExportScope = 'full' | 'structure' | 'routing'
+export type FloorplanExportScope = 'full' | 'structure' | 'routing' | 'views'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 /** Minimum and proportional margin around the structural drawing bounds. */
@@ -158,9 +158,15 @@ export async function exportFloorplanPdf(
   const annotationLayoutOverrides = useDrawingView.getState().annotationLayoutOverrides
   const drawingLabel =
     DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType)?.label ?? 'Floor plan'
+  
+  const savedViews = Object.values(useScene.getState().savedViews).sort((a, b) => a.order - b.order)
   const levels = resolveExportLevels(nodes)
-  if (levels.length === 0) {
+  if (scope !== 'views' && levels.length === 0) {
     console.warn('[floorplan-export] no level to export')
+    return
+  }
+  if (scope === 'views' && savedViews.length === 0) {
+    console.warn('[floorplan-export] no saved views to export')
     return
   }
 
@@ -176,84 +182,177 @@ export async function exportFloorplanPdf(
 
   let pageCount = 0
   try {
-    for (const level of levels) {
-      const geometries = collectFloorplanGeometry(
-        nodes,
-        level.id,
-        scope,
-        unit,
-        metricNotation,
-        annotationVisibility,
-        drawingType,
-        wallDimensionReference,
-      )
-      const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
-      if (geometries.length === 0 && schedules.length === 0) continue
-      const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
+    if (scope === 'views') {
+      const w = window as any
+      for (const view of savedViews) {
+        // apply view state
+        const { applySavedView, readSavedViewPresentation } = await import('../saved-views')
+        applySavedView(view.id)
+        
+        const presentation = readSavedViewPresentation(view)
+        const is3d = presentation.viewMode === '3d'
+        
+        // Let the scene graph and systems settle
+        await nextFrames(10)
 
-      if (geometries.length > 0) {
-        // Preserve the live floor-plan orientation rather than forcing north-up.
-        const buildingId = resolveBuildingForLevel(level.id, nodes as Record<AnyNodeId, AnyNode>)
-        const building = buildingId ? nodes[buildingId] : undefined
-        const buildingRotationY = building?.type === 'building' ? (building.rotation[1] ?? 0) : 0
-        const rotationDeg = resolveFloorplanExportRotationDeg(buildingRotationY, navigationAzimuth)
-
-        const mounted = await mountFloorplanSvg(
-          host,
-          geometries,
-          rotationDeg,
-          annotationLayoutOverrides,
-        )
-        if (mounted) {
+        if (is3d && w.__pascalCaptureThumbnail) {
           try {
+            const { blob, resolution } = await w.__pascalCaptureThumbnail({
+              captureMode: 'standard',
+              transparent: false,
+            })
+            const buffer = await blob.arrayBuffer()
+            
             doc.addPage([A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT], 'landscape')
             pageCount++
+            drawFloorplanPageHeader(doc, view.name, drawingLabel)
+            
+            const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
+            const targetRatio = layout.planBox.width / layout.planBox.height
+            const imgRatio = resolution.w / resolution.h
+            let imgW = layout.planBox.width
+            let imgH = layout.planBox.height
+            if (imgRatio > targetRatio) {
+              imgH = imgW / imgRatio
+            } else {
+              imgW = imgH * imgRatio
+            }
+            const imgX = layout.planBox.x + (layout.planBox.width - imgW) / 2
+            const imgY = layout.planBox.y + (layout.planBox.height - imgH) / 2
+            
+            doc.image(buffer, imgX, imgY, { width: imgW, height: imgH })
+          } catch (e) {
+            console.error('[floorplan-export] failed to capture 3d view for PDF', e)
+          }
+        } else {
+          // 2D or split mode (or missing 3d pipeline), fall back to standard 2D vector export
+          const currentLevels = resolveExportLevels(useScene.getState().nodes)
+          const levelId = currentLevels[0]?.id
+          if (!levelId) continue
+          
+          const geometries = collectFloorplanGeometry(
+            nodes, levelId, 'full', unit, metricNotation, annotationVisibility, drawingType, wallDimensionReference,
+          )
+          const schedules = collectFloorplanSchedules(nodes, levelId, unit, 'full')
+          
+          if (geometries.length > 0) {
+            const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
+            const buildingId = resolveBuildingForLevel(levelId, nodes as Record<AnyNodeId, AnyNode>)
+            const building = buildingId ? nodes[buildingId] : undefined
+            const buildingRotationY = building?.type === 'building' ? (building.rotation[1] ?? 0) : 0
+            const rotationDeg = resolveFloorplanExportRotationDeg(buildingRotationY, navigationAzimuth)
 
-            const screenUnitsPerPixel = resolveFloorplanScreenUnitsPerPixel(
-              mounted.width,
-              mounted.height,
-              layout.planBox.width,
-              layout.planBox.height,
-            )
-            await mounted.setScreenUnitsPerPixel(screenUnitsPerPixel)
-            const fitted = resolveFloorplanExportPlacement(
-              mounted.width,
-              mounted.height,
-              layout.planBox.x,
-              layout.planBox.y,
-              layout.planBox.width,
-              layout.planBox.height,
-            )
-            drawFloorplanPageHeader(doc, level.label, drawingLabel)
-            const model = combineGeometryList(geometries.map((geometry) => geometry.model))
-            if (model) {
-              await renderFloorplanGeometryToPdfKit(doc, model, {
-                annotationLayer: false,
-                placement: fitted,
-                rotationDeg,
-                viewport: mounted.viewport,
-              })
+            const mounted = await mountFloorplanSvg(host, geometries, rotationDeg, annotationLayoutOverrides)
+            if (mounted) {
+              try {
+                doc.addPage([A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT], 'landscape')
+                pageCount++
+                const screenUnitsPerPixel = resolveFloorplanScreenUnitsPerPixel(
+                  mounted.width, mounted.height, layout.planBox.width, layout.planBox.height,
+                )
+                await mounted.setScreenUnitsPerPixel(screenUnitsPerPixel)
+                const fitted = resolveFloorplanExportPlacement(
+                  mounted.width, mounted.height, layout.planBox.x, layout.planBox.y, layout.planBox.width, layout.planBox.height,
+                )
+                drawFloorplanPageHeader(doc, view.name, drawingLabel)
+                const model = combineGeometryList(geometries.map((geometry) => geometry.model))
+                if (model) {
+                  await renderFloorplanGeometryToPdfKit(doc, model, { annotationLayer: false, placement: fitted, rotationDeg, viewport: mounted.viewport })
+                }
+                const annotations = combineGeometryList(geometries.map((geometry) => geometry.annotations))
+                if (annotations) {
+                  await renderFloorplanGeometryToPdfKit(doc, annotations, { annotationLabelShifts: mounted.annotationLabelShifts, annotationLayer: true, placement: fitted, rotationDeg, viewport: mounted.viewport })
+                }
+              } finally {
+                mounted.cleanup()
+              }
             }
-            const annotations = combineGeometryList(
-              geometries.map((geometry) => geometry.annotations),
-            )
-            if (annotations) {
-              await renderFloorplanGeometryToPdfKit(doc, annotations, {
-                annotationLabelShifts: mounted.annotationLabelShifts,
-                annotationLayer: true,
-                placement: fitted,
-                rotationDeg,
-                viewport: mounted.viewport,
-              })
-            }
-          } finally {
-            mounted.cleanup()
+          }
+          if (schedules.length > 0) {
+            pageCount = drawFloorplanSchedulePages(doc, view.name, schedules, pageCount)
           }
         }
       }
+    } else {
+      for (const level of levels) {
+        const geometries = collectFloorplanGeometry(
+          nodes,
+          level.id,
+          scope,
+          unit,
+          metricNotation,
+          annotationVisibility,
+          drawingType,
+          wallDimensionReference,
+        )
+        const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
+        if (geometries.length === 0 && schedules.length === 0) continue
+        const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
 
-      if (schedules.length > 0) {
-        pageCount = drawFloorplanSchedulePages(doc, level.label, schedules, pageCount)
+        if (geometries.length > 0) {
+          // Preserve the live floor-plan orientation rather than forcing north-up.
+          const buildingId = resolveBuildingForLevel(level.id, nodes as Record<AnyNodeId, AnyNode>)
+          const building = buildingId ? nodes[buildingId] : undefined
+          const buildingRotationY = building?.type === 'building' ? (building.rotation[1] ?? 0) : 0
+          const rotationDeg = resolveFloorplanExportRotationDeg(buildingRotationY, navigationAzimuth)
+
+          const mounted = await mountFloorplanSvg(
+            host,
+            geometries,
+            rotationDeg,
+            annotationLayoutOverrides,
+          )
+          if (mounted) {
+            try {
+              doc.addPage([A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT], 'landscape')
+              pageCount++
+
+              const screenUnitsPerPixel = resolveFloorplanScreenUnitsPerPixel(
+                mounted.width,
+                mounted.height,
+                layout.planBox.width,
+                layout.planBox.height,
+              )
+              await mounted.setScreenUnitsPerPixel(screenUnitsPerPixel)
+              const fitted = resolveFloorplanExportPlacement(
+                mounted.width,
+                mounted.height,
+                layout.planBox.x,
+                layout.planBox.y,
+                layout.planBox.width,
+                layout.planBox.height,
+              )
+              drawFloorplanPageHeader(doc, level.label, drawingLabel)
+              const model = combineGeometryList(geometries.map((geometry) => geometry.model))
+              if (model) {
+                await renderFloorplanGeometryToPdfKit(doc, model, {
+                  annotationLayer: false,
+                  placement: fitted,
+                  rotationDeg,
+                  viewport: mounted.viewport,
+                })
+              }
+              const annotations = combineGeometryList(
+                geometries.map((geometry) => geometry.annotations),
+              )
+              if (annotations) {
+                await renderFloorplanGeometryToPdfKit(doc, annotations, {
+                  annotationLabelShifts: mounted.annotationLabelShifts,
+                  annotationLayer: true,
+                  placement: fitted,
+                  rotationDeg,
+                  viewport: mounted.viewport,
+                })
+              }
+            } finally {
+              mounted.cleanup()
+            }
+          }
+        }
+
+        if (schedules.length > 0) {
+          pageCount = drawFloorplanSchedulePages(doc, level.label, schedules, pageCount)
+        }
       }
     }
 

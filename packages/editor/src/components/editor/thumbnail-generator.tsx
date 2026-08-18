@@ -336,7 +336,38 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     }
 
     emitter.on('camera-controls:generate-thumbnail', handleGenerateThumbnail)
-    return () => emitter.off('camera-controls:generate-thumbnail', handleGenerateThumbnail)
+
+    const w = window as typeof window & {
+      __pascalCaptureThumbnail?: (options?: {
+        captureMode?: 'standard' | 'viewport' | 'area'
+        transparent?: boolean
+      }) => Promise<{ blob: Blob; resolution: { w: number; h: number } }>
+    }
+
+    w.__pascalCaptureThumbnail = async (options) => {
+      return new Promise((resolve, reject) => {
+        const originalOnCapture = onThumbnailCaptureRef.current
+        onThumbnailCaptureRef.current = (blob, data) => {
+          onThumbnailCaptureRef.current = originalOnCapture
+          resolve({ blob, resolution: data.resolution! })
+        }
+        generate(
+          false,
+          options?.captureMode ?? 'viewport',
+          undefined,
+          undefined,
+          options?.transparent,
+        ).catch((err) => {
+          onThumbnailCaptureRef.current = originalOnCapture
+          reject(err)
+        })
+      })
+    }
+
+    return () => {
+      emitter.off('camera-controls:generate-thumbnail', handleGenerateThumbnail)
+      w.__pascalCaptureThumbnail = undefined
+    }
   }, [generate, onThumbnailCapture])
 
   // Go-to-camera: animate camera to a saved snapshot position/target
