@@ -4,6 +4,7 @@ export type PersistedSceneGraph = SceneGraph & {
   collections?: Record<string, unknown>
   savedViews?: Record<string, unknown>
   comments?: Record<string, unknown>
+  unitPrices?: Record<string, unknown>
 }
 
 /**
@@ -28,6 +29,7 @@ export function sceneGraphSignature(graph: PersistedSceneGraph): string {
     comments: graph.comments ?? {},
     definitions: graph.definitions ?? {},
     materials: graph.materials ?? {},
+    unitPrices: graph.unitPrices ?? {},
     installedPlugins: graph.installedPlugins ?? [],
   })
 }
@@ -40,6 +42,7 @@ export function sceneModelSignature(graph: PersistedSceneGraph): string {
     savedViews: graph.savedViews ?? {},
     definitions: graph.definitions ?? {},
     materials: graph.materials ?? {},
+    unitPrices: graph.unitPrices ?? {},
     installedPlugins: graph.installedPlugins ?? [],
   })
 }

@@ -3,6 +3,7 @@ import type { Definition, DefinitionId } from '../schema/definitions'
 import type { SavedView, SavedViewId } from '../schema/saved-views'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { UnitPriceMap } from '../schema/unit-prices'
 import type { SceneCommit, SceneSnapshot } from '../store/history-control'
 import { subscribeSceneCommits } from '../store/history-control'
 
@@ -12,7 +13,12 @@ export type CollaborationStamp = {
   operationId: string
 }
 
-type CollaborationRecordName = 'collections' | 'definitions' | 'materials' | 'savedViews'
+type CollaborationRecordName =
+  | 'collections'
+  | 'definitions'
+  | 'materials'
+  | 'savedViews'
+  | 'unitPrices'
 
 export type CollaborationChange =
   | { type: 'node-create'; node: AnyNode; position: number }
@@ -209,6 +215,7 @@ export function createCollaborationBatch(
     ...recordChanges('savedViews', before.savedViews, current.savedViews),
     ...recordChanges('definitions', before.definitions, current.definitions),
     ...recordChanges('materials', before.materials, current.materials),
+    ...recordChanges('unitPrices', before.unitPrices, current.unitPrices),
   )
   if (!semanticEqual(before.installedPlugins, current.installedPlugins)) {
     changes.push({ type: 'installed-plugins-set', value: [...current.installedPlugins] })
@@ -529,7 +536,13 @@ function selectiveHistoryTarget(
     }
   }
 
-  for (const recordName of ['collections', 'savedViews', 'definitions', 'materials'] as const) {
+  for (const recordName of [
+    'collections',
+    'savedViews',
+    'definitions',
+    'materials',
+    'unitPrices',
+  ] as const) {
     const currentRecord = target[recordName] as Record<string, unknown>
     const expectedRecord = expected[recordName] as Record<string, unknown>
     const replacementRecord = replacement[recordName] as Record<string, unknown>
@@ -636,6 +649,7 @@ export type CollaborationSnapshotRecords = {
   savedViews?: Record<SavedViewId, SavedView>
   definitions?: Record<DefinitionId, Definition>
   materials?: Record<SceneMaterialId, SceneMaterial>
+  unitPrices?: UnitPriceMap
   installedPlugins?: string[]
 }
 
@@ -651,6 +665,7 @@ export function collaborationSnapshot(
     savedViews: records.savedViews ?? {},
     definitions: records.definitions ?? {},
     materials: records.materials ?? {},
+    unitPrices: records.unitPrices ?? {},
     installedPlugins: records.installedPlugins ?? [],
   }
 }

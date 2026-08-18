@@ -10,6 +10,7 @@ import type { CommentId, CommentThread } from '../schema/comments'
 import type { Definition, DefinitionId } from '../schema/definitions'
 import type { SavedView, SavedViewId } from '../schema/saved-views'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
+import type { UnitPriceMap } from '../schema/unit-prices'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -19,6 +20,7 @@ export type SceneGraph = {
   comments?: Record<CommentId, CommentThread>
   definitions?: Record<DefinitionId, Definition>
   materials?: Record<SceneMaterialId, SceneMaterial>
+  unitPrices?: UnitPriceMap
   installedPlugins?: string[]
 }
 
@@ -48,6 +50,7 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     comments,
     definitions,
     materials,
+    unitPrices,
     installedPlugins,
   } = sceneGraph
 
@@ -271,6 +274,9 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     // ids. Minting fresh material ids here would orphan every one of those
     // refs and the clone would render with default materials.
     ...(materials && { materials: structuredClone(materials) }),
+    // Prices are keyed by (kind, row key, group) — never by node id — so a
+    // straight clone carries them verbatim, like materials.
+    ...(unitPrices && { unitPrices: structuredClone(unitPrices) }),
     ...(installedPlugins && { installedPlugins: [...installedPlugins] }),
   }
 }
@@ -419,6 +425,7 @@ export function forkSceneGraph(
     comments,
     definitions,
     materials,
+    unitPrices,
     installedPlugins,
   } = sceneGraph
 
@@ -516,6 +523,9 @@ export function forkSceneGraph(
     // happened to be its only user would silently delete a material the fork's
     // owner can still pick from the palette.
     ...(materials && { materials }),
+    // Same reasoning as materials: prices are authored content keyed by line,
+    // not by node, so the fork keeps them whole.
+    ...(unitPrices && { unitPrices }),
     ...(installedPlugins && { installedPlugins }),
   })
 }

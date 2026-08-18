@@ -120,6 +120,7 @@ export const apiGraphSchema = z
     // URLs that `MaterialSchema` routes through `AssetUrl` — this schema is
     // where that allowlist is enforced.
     materials: z.record(z.string(), z.unknown()).optional(),
+    unitPrices: z.unknown().optional(),
     installedPlugins: z.array(z.string().min(1)).optional(),
   })
   .superRefine((value, ctx) => {

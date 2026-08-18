@@ -54,6 +54,42 @@ export function formatQuantity(
   }
 }
 
+const costFormatters = new Map<string, Intl.NumberFormat>()
+
+/**
+ * Format a monetary amount in the app's number locale.
+ *
+ * Seeded from `document.documentElement.lang` for the same reason every other
+ * number readout is: the layout hardcodes `lang="tr"`, so costs render with a
+ * Turkish decimal comma regardless of `useUiPreferences.locale`. Formatters are
+ * cached — a takeoff panel rebuilds per keystroke, and `Intl.NumberFormat`
+ * construction is not free.
+ */
+export function formatCost(amount: number, currency: string): string {
+  const lang = typeof document !== 'undefined' ? document.documentElement.lang : 'tr'
+  const key = `${lang}:${currency}`
+  let formatter = costFormatters.get(key)
+  if (!formatter) {
+    try {
+      formatter = new Intl.NumberFormat(lang, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    } catch {
+      // An unknown currency code throws; fall back to a plain amount + code.
+      formatter = new Intl.NumberFormat(lang, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+      return `${formatter.format(amount)} ${currency}`
+    }
+    costFormatters.set(key, formatter)
+  }
+  return formatter.format(amount)
+}
+
 /**
  * Hand the CSV to the browser as a download.
  *

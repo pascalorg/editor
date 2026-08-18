@@ -32,6 +32,7 @@ export const SCENE_DELTA_RECORDS = [
   'comments',
   'definitions',
   'materials',
+  'unitPrices',
   'installedPlugins',
 ] as const
 

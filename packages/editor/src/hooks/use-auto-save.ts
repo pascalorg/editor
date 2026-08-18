@@ -186,6 +186,7 @@ export function useAutoSave({
     let lastCommentsRef = useScene.getState().comments
     let lastDefinitionsRef = useScene.getState().definitions
     let lastMaterialsRef = useScene.getState().materials
+    let lastUnitPricesRef = useScene.getState().unitPrices
     let lastInstalledPluginsRef = useScene.getState().installedPlugins
 
     async function executeSave() {
@@ -203,6 +204,7 @@ export function useAutoSave({
         comments,
         definitions,
         materials,
+        unitPrices,
         installedPlugins,
       } = useScene.getState()
       const sceneGraph = {
@@ -213,6 +215,7 @@ export function useAutoSave({
         comments,
         definitions,
         materials,
+        unitPrices,
         installedPlugins,
       } as SceneGraph
 
@@ -322,6 +325,7 @@ export function useAutoSave({
         lastCommentsRef = state.comments
         lastDefinitionsRef = state.definitions
         lastMaterialsRef = state.materials
+        lastUnitPricesRef = state.unitPrices
         lastInstalledPluginsRef = state.installedPlugins
         return
       }
@@ -334,6 +338,7 @@ export function useAutoSave({
         lastCommentsRef = state.comments
         lastDefinitionsRef = state.definitions
         lastMaterialsRef = state.materials
+        lastUnitPricesRef = state.unitPrices
         lastInstalledPluginsRef = state.installedPlugins
         return
       }
@@ -345,6 +350,7 @@ export function useAutoSave({
         state.comments !== lastCommentsRef ||
         state.definitions !== lastDefinitionsRef ||
         state.materials !== lastMaterialsRef ||
+        state.unitPrices !== lastUnitPricesRef ||
         state.installedPlugins !== lastInstalledPluginsRef
       if (!changed) return
 
@@ -354,6 +360,7 @@ export function useAutoSave({
       lastCommentsRef = state.comments
       lastDefinitionsRef = state.definitions
       lastMaterialsRef = state.materials
+      lastUnitPricesRef = state.unitPrices
       lastInstalledPluginsRef = state.installedPlugins
       hasDirtyChangesRef.current = true
       onDirtyRef.current?.()
@@ -391,6 +398,7 @@ export function useAutoSave({
         comments,
         definitions,
         materials,
+        unitPrices,
         installedPlugins,
       } = useScene.getState()
       const currentNodeCount = Object.keys(nodes).length
@@ -416,6 +424,7 @@ export function useAutoSave({
         comments,
         definitions,
         materials,
+        unitPrices,
         installedPlugins,
       } as SceneGraph
       if (onSaveRef.current) {

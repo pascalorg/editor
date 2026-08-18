@@ -92,6 +92,7 @@ export class SceneBridge {
         comments: state.comments ?? {},
         definitions: state.definitions ?? {},
         materials: state.materials ?? {},
+        unitPrices: state.unitPrices ?? {},
         ...(state.hasExplicitPluginInstallState || state.installedPlugins.length > 0
           ? { installedPlugins: state.installedPlugins }
           : {}),
@@ -146,6 +147,7 @@ export class SceneBridge {
     const comments = record(obj.comments) as NonNullable<SetSceneExtra>['comments']
     const definitions = record(obj.definitions) as NonNullable<SetSceneExtra>['definitions']
     const materials = record(obj.materials) as NonNullable<SetSceneExtra>['materials']
+    const unitPrices = record(obj.unitPrices) as NonNullable<SetSceneExtra>['unitPrices']
     const installedPlugins = Array.isArray(obj.installedPlugins)
       ? obj.installedPlugins.filter((id): id is string => typeof id === 'string')
       : undefined
@@ -162,6 +164,7 @@ export class SceneBridge {
       ...(comments && { comments }),
       ...(definitions && { definitions }),
       ...(materials && { materials }),
+      ...(unitPrices && { unitPrices }),
       ...(installedPlugins && { installedPlugins, hasExplicitPluginInstallState: true }),
     })
   }

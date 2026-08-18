@@ -157,8 +157,15 @@ export {
   type QuantitySection,
   type QuantityTakeoff,
   type QuantityUnit,
+  QUANTITY_UNIT_SUFFIX,
   quantityTakeoffToCsv,
 } from './lib/quantity-takeoff'
+export {
+  type CurrencyTotal,
+  type PricedQuantityLine,
+  type PricedQuantityTakeoff,
+  priceQuantityTakeoff,
+} from './lib/quantity-cost'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   type BuildableAreaOptions,

@@ -211,6 +211,7 @@ class SceneOperationsFacade implements SceneOperations {
       collections: exported.collections as SceneGraph['collections'],
       definitions: exported.definitions,
       materials: exported.materials,
+      unitPrices: exported.unitPrices,
       installedPlugins: exported.installedPlugins,
     }
   }

@@ -143,6 +143,7 @@ export function hashModelSnapshot(snapshot: SceneSnapshot): string {
       savedViews: snapshot.savedViews,
       definitions: snapshot.definitions,
       materials: snapshot.materials,
+      unitPrices: snapshot.unitPrices,
       installedPlugins: snapshot.installedPlugins,
     }),
   )

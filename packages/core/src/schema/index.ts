@@ -317,6 +317,12 @@ export {
 } from './saved-views'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
+export {
+  normalizeUnitPrices,
+  type UnitPrice,
+  type UnitPriceMap,
+  unitPriceKey,
+} from './unit-prices'
 export type { AnyNodeId, AnyNodeType } from './types'
 // Union types
 export { AnyNode } from './types'

@@ -25,6 +25,7 @@ export type SceneGraph = {
   comments?: Record<string, unknown>
   definitions?: Record<string, unknown>
   materials?: Record<string, unknown>
+  unitPrices?: Record<string, unknown>
   installedPlugins?: string[]
 }
 
@@ -396,6 +397,7 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
       comments,
       definitions,
       materials,
+      unitPrices,
       installedPlugins,
     } = sceneGraph
     useScene.getState().setScene(nodes as any, rootNodeIds as any, {
@@ -404,6 +406,7 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
       comments: comments as any,
       definitions: definitions as any,
       materials: materials as any,
+      unitPrices: unitPrices as any,
       installedPlugins: installedPlugins ?? defaultInstalledPlugins,
       hasExplicitPluginInstallState: installedPlugins !== undefined,
     })

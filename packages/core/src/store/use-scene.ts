@@ -56,6 +56,7 @@ import {
   type SceneMaterialId,
 } from '../schema/scene-material'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
+import { normalizeUnitPrices, type UnitPrice, type UnitPriceMap } from '../schema/unit-prices'
 import { deriveLegacyLevelHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
@@ -1335,6 +1336,7 @@ export type SceneState = {
   comments: Record<CommentId, CommentThread>
   definitions: Record<DefinitionId, Definition>
   materials: Record<SceneMaterialId, SceneMaterial>
+  unitPrices: UnitPriceMap
   installedPlugins: string[]
   hasExplicitPluginInstallState: boolean
 
@@ -1357,6 +1359,7 @@ export type SceneState = {
       comments?: Record<CommentId, CommentThread>
       definitions?: Record<DefinitionId, Definition>
       materials?: Record<SceneMaterialId, SceneMaterial>
+      unitPrices?: UnitPriceMap
       installedPlugins?: string[]
       hasExplicitPluginInstallState?: boolean
     },
@@ -1385,6 +1388,10 @@ export type SceneState = {
   updateSavedView: (id: SavedViewId, data: Partial<Omit<SavedView, 'id'>>) => void
   deleteSavedView: (id: SavedViewId) => void
   moveSavedView: (fromIndex: number, toIndex: number) => void
+
+  // Unit-price actions
+  setUnitPrice: (key: string, price: UnitPrice) => void
+  removeUnitPrice: (key: string) => void
 
   // Comment actions — exempt from `readOnly`, see the field's note
   createComment: (
@@ -1444,6 +1451,7 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
         | 'savedViews'
         | 'definitions'
         | 'materials'
+        | 'unitPrices'
         | 'installedPlugins'
       >
     >
@@ -1459,11 +1467,20 @@ function sceneHistorySnapshotFromState(
     | 'savedViews'
     | 'definitions'
     | 'materials'
+    | 'unitPrices'
     | 'installedPlugins'
   >,
 ): SceneSnapshot {
-  const { nodes, rootNodeIds, collections, savedViews, definitions, materials, installedPlugins } =
-    state
+  const {
+    nodes,
+    rootNodeIds,
+    collections,
+    savedViews,
+    definitions,
+    materials,
+    unitPrices,
+    installedPlugins,
+  } = state
   return {
     nodes,
     rootNodeIds,
@@ -1471,6 +1488,7 @@ function sceneHistorySnapshotFromState(
     savedViews,
     definitions,
     materials,
+    unitPrices,
     installedPlugins,
   }
 }
@@ -1493,6 +1511,7 @@ const useScene: UseSceneStore = create<SceneState>()(
       comments: {} as Record<CommentId, CommentThread>,
       definitions: {} as Record<DefinitionId, Definition>,
       materials: {} as Record<SceneMaterialId, SceneMaterial>,
+      unitPrices: {} as UnitPriceMap,
       installedPlugins: [],
       hasExplicitPluginInstallState: false,
 
@@ -1510,6 +1529,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           comments: {},
           definitions: {},
           materials: {},
+          unitPrices: {},
           installedPlugins: [],
           hasExplicitPluginInstallState: false,
         })
@@ -1574,6 +1594,7 @@ const useScene: UseSceneStore = create<SceneState>()(
           comments: normalizeComments(extra?.comments),
           definitions: normalizedDefinitions,
           materials,
+          unitPrices: normalizeUnitPrices(extra?.unitPrices),
           installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
           hasExplicitPluginInstallState: extra?.hasExplicitPluginInstallState ?? false,
         })
@@ -1709,6 +1730,27 @@ const useScene: UseSceneStore = create<SceneState>()(
             if (view) next[patch.id] = { ...view, order: patch.order }
           }
           return { savedViews: next }
+        })
+      },
+
+      // --- UNIT PRICES ---
+      //
+      // Prices are model content, so they sit under the same `readOnly` guard
+      // and zundo partialize as `savedViews` — unlike comments, undoing a price
+      // change is an edit to the model, not feedback about it.
+
+      setUnitPrice: (key, price) => {
+        if (get().readOnly) return
+        set((state) => ({ unitPrices: { ...state.unitPrices, [key]: price } }))
+      },
+
+      removeUnitPrice: (key) => {
+        if (get().readOnly) return
+        set((state) => {
+          if (!state.unitPrices[key]) return state
+          const next = { ...state.unitPrices }
+          delete next[key]
+          return { unitPrices: next }
         })
       },
 

@@ -3,6 +3,7 @@ import type { Definition, DefinitionId } from '../schema/definitions'
 import type { SavedView, SavedViewId } from '../schema/saved-views'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { UnitPriceMap } from '../schema/unit-prices'
 
 let sceneHistoryPauseDepth = 0
 
@@ -13,6 +14,7 @@ export type SceneSnapshot = {
   savedViews: Record<SavedViewId, SavedView>
   definitions: Record<DefinitionId, Definition>
   materials: Record<SceneMaterialId, SceneMaterial>
+  unitPrices: UnitPriceMap
   installedPlugins: string[]
 }
 
@@ -81,6 +83,7 @@ export function areSceneSnapshotsEqual(left: SceneSnapshot, right: SceneSnapshot
     areSemanticValuesEqual(left.savedViews, right.savedViews) &&
     areSemanticValuesEqual(left.definitions, right.definitions) &&
     areSemanticValuesEqual(left.materials, right.materials) &&
+    areSemanticValuesEqual(left.unitPrices, right.unitPrices) &&
     areSemanticValuesEqual(left.installedPlugins, right.installedPlugins)
   )
 }

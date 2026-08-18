@@ -1676,15 +1676,16 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
 
     isProcessing = true
     pauseSceneHistory(sceneStore)
-    const beforeState = sceneStore.getState()
+    const oldState = sceneStore.getState()
     const beforeSnapshot = {
-      nodes: beforeState.nodes,
-      rootNodeIds: beforeState.rootNodeIds,
-      collections: beforeState.collections,
-      savedViews: beforeState.savedViews,
-      definitions: beforeState.definitions,
-      materials: beforeState.materials,
-      installedPlugins: beforeState.installedPlugins,
+      nodes: oldState.nodes,
+      rootNodeIds: oldState.rootNodeIds,
+      collections: oldState.collections,
+      savedViews: oldState.savedViews,
+      definitions: oldState.definitions,
+      materials: oldState.materials,
+      unitPrices: oldState.unitPrices,
+      installedPlugins: oldState.installedPlugins,
     }
 
     try {
@@ -1700,6 +1701,7 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
         savedViews: currentState.savedViews,
         definitions: currentState.definitions,
         materials: currentState.materials,
+        unitPrices: currentState.unitPrices,
         installedPlugins: currentState.installedPlugins,
       }
       

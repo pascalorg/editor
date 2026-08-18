@@ -1948,6 +1948,9 @@ const tr: Record<string, string> = {
   Quantities: 'Metraj',
   'Export CSV': 'CSV dışa aktar',
   'Export quantities as CSV': 'Metrajı CSV olarak dışa aktar',
+  'Export quantities as XLSX': 'Metrajı XLSX olarak dışa aktar',
+  'Export XLSX': 'XLSX dışa aktar',
+  Total: 'Toplam',
   'Select a level to measure it.': 'Ölçmek için bir kat seçin.',
   'Nothing to measure on this level yet.': 'Bu katta henüz ölçülecek bir şey yok.',
   'Totals cover the active level and exclude hidden nodes. Wall face area is gross, before openings.':
