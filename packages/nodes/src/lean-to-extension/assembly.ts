@@ -33,11 +33,6 @@ import { resolveLeanToLayout } from './layout'
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
 const SELECTION_PROXY_KEY = 'nodeSelectionProxyId'
-const ROOF_INSET_SPAN_KEY = 'leanToSideInfillSpan'
-const ROOF_INSET_MIN_X_KEY = 'leanToSideInfillMinX'
-const ROOF_INSET_MAX_X_KEY = 'leanToSideInfillMaxX'
-const ROOF_PIECES_KEY = 'leanToRoofPieces'
-const ROOF_JOINT_SIDES_KEY = 'leanToCornerSides'
 const GUTTER_MITRES_KEY = 'leanToGutterMitres'
 const GUTTER_EAVE_Y_KEY = 'leanToGutterEaveY'
 const POST_INDEX_KEY = 'leanToPostIndex'
@@ -340,6 +335,11 @@ export type LeanToRoofSegmentLayoutPatch = Pick<
   | 'shingleThickness'
   | 'overhang'
   | 'arc'
+  | 'shedSideInfillSpan'
+  | 'shedSideInfillMinX'
+  | 'shedSideInfillMaxX'
+  | 'shedFootprintPieces'
+  | 'shedOpenEndSides'
   | 'trim'
   | 'metadata'
 >
@@ -424,14 +424,12 @@ export function leanToRoofSegmentLayoutPatch(
     shingleThickness,
     overhang,
     arc,
-    metadata: managedMetadata(leanTo, 'roof-segment', {
-      [ROOF_INSET_SPAN_KEY]: layout.span,
-      [ROOF_INSET_MIN_X_KEY]: -layout.span / 2 - sideMemberFaceInset - roofCenterX,
-      [ROOF_INSET_MAX_X_KEY]: layout.span / 2 + sideMemberFaceInset - roofCenterX,
-      ...(jointSides.length > 0
-        ? { [ROOF_PIECES_KEY]: roofPieces, [ROOF_JOINT_SIDES_KEY]: jointSides }
-        : {}),
-    }),
+    shedSideInfillSpan: layout.span,
+    shedSideInfillMinX: -layout.span / 2 - sideMemberFaceInset - roofCenterX,
+    shedSideInfillMaxX: layout.span / 2 + sideMemberFaceInset - roofCenterX,
+    shedFootprintPieces: jointSides.length > 0 ? roofPieces : undefined,
+    shedOpenEndSides: jointSides.length > 0 ? jointSides : undefined,
+    metadata: managedMetadata(leanTo, 'roof-segment'),
     trim: {
       left: 0,
       right: 0,

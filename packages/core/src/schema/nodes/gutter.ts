@@ -72,7 +72,7 @@ export const GutterNode = BaseNode.extend({
   length: z.number().default(2.0),
   // Concentric-arc descriptor for a run that follows a curved eave, in
   // gutter-mesh-local coordinates (center + true radius). Absent for a straight
-  // gutter; set by a managed lean-to following a curved wall.
+  // gutter.
   arc: z
     .object({
       centerX: z.number(),

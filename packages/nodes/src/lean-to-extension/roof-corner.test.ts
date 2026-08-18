@@ -475,8 +475,8 @@ describe('lean-to corner joint', () => {
     const assemblyB = createLeanToAssembly(leanToB, undefined, nodes)
     expect(assemblyA.segment.trim.backRightX).toBe(0)
     expect(assemblyB.segment.trim.backLeftX).toBe(0)
-    expect((assemblyA.segment.metadata as Record<string, unknown>).leanToRoofPieces).toHaveLength(2)
-    expect((assemblyB.segment.metadata as Record<string, unknown>).leanToRoofPieces).toHaveLength(2)
+    expect(assemblyA.segment.shedFootprintPieces).toHaveLength(2)
+    expect(assemblyB.segment.shedFootprintPieces).toHaveLength(2)
     expect(assemblyA.gutter.metadata).toMatchObject({
       leanToGutterMitres: { left: 0, right: Math.PI / 4 },
     })

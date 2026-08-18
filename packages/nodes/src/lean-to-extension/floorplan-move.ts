@@ -64,7 +64,9 @@ export const leanToFloorplanMoveTarget: FloorplanMoveTarget<LeanToExtensionNode>
             const dx = wall.end[0] - wall.start[0]
             const dz = wall.end[1] - wall.start[1]
             const length = Math.max(1e-6, Math.hypot(dx, dz))
-            return ((planPoint[0] - wall.start[0]) * dx + (planPoint[1] - wall.start[1]) * dz) / length
+            return (
+              ((planPoint[0] - wall.start[0]) * dx + (planPoint[1] - wall.start[1]) * dz) / length
+            )
           })()
       const step = modifiers.altKey ? 0 : getSegmentGridStep()
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>

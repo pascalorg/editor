@@ -81,14 +81,14 @@ describe('roof system shed geometry', () => {
     geometry.dispose()
   })
 
-  test('keeps lean-to shed side infill on the outer side-member face', () => {
+  test('keeps configured shed side infill on the outer side-member face', () => {
     const span = 4
     const leftOverhang = 0.15
     const rightOverhang = 0.15
     const rafterWidth = 0.08
     const infillHalfWidth = span / 2 + rafterWidth / 2
     const segment = RoofSegmentNode.parse({
-      id: 'rseg_lean_to_shed',
+      id: 'rseg_custom_shed',
       type: 'roof-segment',
       roofType: 'shed',
       width: span + leftOverhang + rightOverhang,
@@ -99,13 +99,9 @@ describe('roof system shed geometry', () => {
       overhang: 0,
       deckThickness: 0.1,
       shingleThickness: 0.025,
-      metadata: {
-        managedByLeanTo: 'leanto_test',
-        leanToRole: 'roof-segment',
-        leanToSideInfillSpan: span,
-        leanToSideInfillMinX: -infillHalfWidth,
-        leanToSideInfillMaxX: infillHalfWidth,
-      },
+      shedSideInfillSpan: span,
+      shedSideInfillMinX: -infillHalfWidth,
+      shedSideInfillMaxX: infillHalfWidth,
     })
     const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
 
@@ -118,7 +114,7 @@ describe('roof system shed geometry', () => {
     geometry.dispose()
   })
 
-  test('bends a curved lean-to shed deck into a thin concentric band (no balloon)', () => {
+  test('bends a curved shed deck into a thin concentric band (no balloon)', () => {
     const depth = 2
     // Arc chosen so the back (wall) edge lands at radius 5 and the front edge
     // at radius 5 - depth = 3: a thin band, never a disc.
@@ -126,7 +122,7 @@ describe('roof system shed geometry', () => {
     const centerZ = 5 - depth / 2
     const radius = 5
     const segment = RoofSegmentNode.parse({
-      id: 'rseg_lean_to_curved',
+      id: 'rseg_curved_shed',
       type: 'roof-segment',
       roofType: 'shed',
       width: 8,
@@ -138,10 +134,6 @@ describe('roof system shed geometry', () => {
       deckThickness: 0.1,
       shingleThickness: 0.025,
       arc: { centerX, centerZ, radius },
-      metadata: {
-        managedByLeanTo: 'leanto_curved',
-        leanToRole: 'roof-segment',
-      },
     })
 
     const geometry = generateRoofSegmentGeometry(segment)
@@ -203,14 +195,14 @@ describe('roof system shed geometry', () => {
     geometry.dispose()
   })
 
-  test('keeps an outer-side curved shed as a sloped annular band', () => {
+  test('keeps a reverse-radius curved shed as a sloped annular band', () => {
     const depth = 2
     const centerX = 0
     const centerZ = -6
     const highRadius = 5
     const lowRadius = 7
     const segment = RoofSegmentNode.parse({
-      id: 'rseg_lean_to_curved_outer',
+      id: 'rseg_curved_shed_outer',
       type: 'roof-segment',
       roofType: 'shed',
       width: 8,
@@ -222,10 +214,6 @@ describe('roof system shed geometry', () => {
       deckThickness: 0.1,
       shingleThickness: 0.025,
       arc: { centerX, centerZ, radius: highRadius },
-      metadata: {
-        managedByLeanTo: 'leanto_curved_outer',
-        leanToRole: 'roof-segment',
-      },
     })
 
     const geometry = generateRoofSegmentGeometry(segment)

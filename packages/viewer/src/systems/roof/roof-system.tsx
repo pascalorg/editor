@@ -522,7 +522,7 @@ function updateMergedRoofGeometry(
         child.position,
         child.rotation ?? 0,
       ),
-      () => buildLeanToRoofPieceGeometry(child),
+      () => buildCustomShedGeometry(child),
     )
     if (directGeometry) {
       const withPanels = addShedInsetEndPanels(directGeometry, [child], false)
@@ -930,11 +930,6 @@ const RAKE_FACE_ALIGNMENT_EPSILON = 0.35
 const TRIM_CUT_EPSILON = 0.002
 const ROOF_EDGE_MATERIAL_INDEX = 0
 const ROOF_INSET_WALL_MATERIAL_INDEX = 2
-const LEAN_TO_SIDE_INFILL_SPAN_KEY = 'leanToSideInfillSpan'
-const LEAN_TO_SIDE_INFILL_MIN_X_KEY = 'leanToSideInfillMinX'
-const LEAN_TO_SIDE_INFILL_MAX_X_KEY = 'leanToSideInfillMaxX'
-const LEAN_TO_ROOF_PIECES_KEY = 'leanToRoofPieces'
-const LEAN_TO_CORNER_SIDES_KEY = 'leanToCornerSides'
 const DUTCH_RAKE_SIDE_MATERIAL_INDEX = 1
 const DUTCH_RAKE_TOP_MATERIAL_INDEX = 3
 const DUTCH_RAKE_SLOPE_SEAT_OFFSET = 0.0002
@@ -944,19 +939,11 @@ function pushDoubleSidedFace(targetFaces: THREE.Vector3[][], face: THREE.Vector3
   targetFaces.push(face.map((point) => point.clone()).reverse())
 }
 
-type LeanToCornerSide = 'left' | 'right'
+type ShedEndSide = 'left' | 'right'
 type RoofPlanPolygon = [number, number][]
 
-function segmentMetadata(node: RoofSegmentNode): Record<string, unknown> {
-  return typeof node.metadata === 'object' &&
-    node.metadata !== null &&
-    !Array.isArray(node.metadata)
-    ? (node.metadata as Record<string, unknown>)
-    : {}
-}
-
-function readLeanToRoofPieces(node: RoofSegmentNode): RoofPlanPolygon[] {
-  const value = segmentMetadata(node)[LEAN_TO_ROOF_PIECES_KEY]
+function readShedFootprintPieces(node: RoofSegmentNode): RoofPlanPolygon[] {
+  const value = node.shedFootprintPieces
   if (!Array.isArray(value)) return []
   return value.flatMap((polygon) => {
     if (!Array.isArray(polygon)) return []
@@ -970,12 +957,10 @@ function readLeanToRoofPieces(node: RoofSegmentNode): RoofPlanPolygon[] {
   })
 }
 
-function readLeanToCornerSides(node: RoofSegmentNode): Set<LeanToCornerSide> {
-  const value = segmentMetadata(node)[LEAN_TO_CORNER_SIDES_KEY]
+function readShedOpenEndSides(node: RoofSegmentNode): Set<ShedEndSide> {
+  const value = node.shedOpenEndSides
   if (!Array.isArray(value)) return new Set()
-  return new Set(
-    value.filter((side): side is LeanToCornerSide => side === 'left' || side === 'right'),
-  )
+  return new Set(value.filter((side): side is ShedEndSide => side === 'left' || side === 'right'))
 }
 
 function hasSegmentTrim(node: RoofSegmentNode): boolean {
@@ -1596,11 +1581,11 @@ export function generateRoofSegmentGeometry(
     node.position,
     node.rotation ?? 0,
   )
-  const directLeanToRoof = withSegmentUvMatrix(segmentWorldMatrix, () =>
-    buildLeanToRoofPieceGeometry(node),
+  const directShedGeometry = withSegmentUvMatrix(segmentWorldMatrix, () =>
+    buildCustomShedGeometry(node),
   )
-  if (directLeanToRoof) {
-    const result = addShedInsetEndPanels(directLeanToRoof, [node], false)
+  if (directShedGeometry) {
+    const result = addShedInsetEndPanels(directShedGeometry, [node], false)
     result.computeVertexNormals()
     ensureRenderableGeometryAttributes(result)
     return result
@@ -1748,8 +1733,7 @@ function mergeGeometriesPreservingGroups(
 }
 
 // Signed bend reference for a banded segment: the divisor that turns a flat
-// along-width coordinate into an arc angle. Equals the lean-to's `spanArcCenterZ`,
-// so the deck bends about the exact same center as the posts/beam/rafters.
+// along-width coordinate into an arc angle.
 function bandSignedRef(arc: NonNullable<RoofSegmentNode['arc']>): number {
   return (Math.sign(arc.centerZ) || 1) * arc.radius
 }
@@ -1873,10 +1857,10 @@ function buildConcentricBandDeckGeometry(node: RoofSegmentNode): THREE.BufferGeo
   return merged
 }
 
-function buildLeanToRoofPieceGeometry(node: RoofSegmentNode): THREE.BufferGeometry | null {
+function buildCustomShedGeometry(node: RoofSegmentNode): THREE.BufferGeometry | null {
   if (node.roofType !== 'shed') return null
   if (isBandedShedSegment(node)) return buildConcentricBandDeckGeometry(node)
-  const pieces = readLeanToRoofPieces(node)
+  const pieces = readShedFootprintPieces(node)
   if (pieces.length === 0) return null
 
   const { cosTheta } = getSegmentSlopeFrame(node)
@@ -2517,15 +2501,15 @@ function createShedInsetEndPanelGeometry(node: RoofSegmentNode): THREE.BufferGeo
   if (node.roofType !== 'shed') return null
 
   const trim = normalizeRoofSegmentTrim(node)
-  const cornerSides = readLeanToCornerSides(node)
+  const openEndSides = readShedOpenEndSides(node)
   const hasCornerSide = (side: -1 | 1) =>
     side < 0
-      ? cornerSides.has('left') ||
+      ? openEndSides.has('left') ||
         (trim.frontLeftX > 0 && trim.frontLeftZ > 0) ||
         (trim.backLeftX > 0 && trim.backLeftZ > 0)
       : (trim.frontRightX > 0 && trim.frontRightZ > 0) ||
         (trim.backRightX > 0 && trim.backRightZ > 0) ||
-        cornerSides.has('right')
+        openEndSides.has('right')
   const sideInset = Math.min(Math.max(node.wallThickness, 0.05), node.overhang * 0.5, 0.12)
   const fallbackPanelHalfWidth = Math.max(0.01, node.width / 2 - sideInset)
   const sidePanelX = (side: -1 | 1) => resolveShedSideInfillX(node, side, fallbackPanelHalfWidth)
@@ -2581,16 +2565,10 @@ function resolveShedSideInfillX(
   side: -1 | 1,
   fallbackPanelHalfWidth: number,
 ): number {
-  const metadata =
-    typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>)
-      : {}
-  const sideX = readFiniteNumber(
-    metadata[side < 0 ? LEAN_TO_SIDE_INFILL_MIN_X_KEY : LEAN_TO_SIDE_INFILL_MAX_X_KEY],
-  )
+  const sideX = readFiniteNumber(side < 0 ? node.shedSideInfillMinX : node.shedSideInfillMaxX)
   if (sideX !== null) return THREE.MathUtils.clamp(sideX, -node.width / 2, node.width / 2)
 
-  const span = readFiniteNumber(metadata[LEAN_TO_SIDE_INFILL_SPAN_KEY])
+  const span = readFiniteNumber(node.shedSideInfillSpan)
   if (span !== null && span > 0) {
     return side * Math.min(span / 2, node.width / 2)
   }

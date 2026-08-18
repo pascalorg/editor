@@ -130,8 +130,13 @@ export const RoofSegmentNode = BaseNode.extend({
     })
     .optional()
     .describe(
-      'Concentric-arc descriptor for a shed deck that follows a curved wall, in segment-local coordinates (center + true radius). Absent for a flat straight deck; set by managed lean-to roofs.',
+      'Concentric-arc descriptor for a curved shed deck, in segment-local coordinates (center + true radius). Absent for a straight deck.',
     ),
+  shedSideInfillSpan: z.number().positive().optional(),
+  shedSideInfillMinX: z.number().optional(),
+  shedSideInfillMaxX: z.number().optional(),
+  shedFootprintPieces: z.array(z.array(z.tuple([z.number(), z.number()])).min(3)).optional(),
+  shedOpenEndSides: z.array(z.enum(['left', 'right'])).optional(),
   // Shape-specific ratios. Only the pair matching `roofType` is read; the
   // rest are inert. Defined on every segment so the panel can flip
   // roofType without losing the previous shape's tuning.
@@ -674,10 +679,13 @@ export function getRoofSegmentSurfaceY(
   return peakY - t * activeRh
 }
 
-// A shed segment whose deck follows a concentric wall arc (managed lean-to roofs).
-export function isBandedShedSegment(
-  node: Pick<RoofSegmentNode, 'roofType' | 'arc'>,
-): node is Pick<RoofSegmentNode, 'roofType' | 'arc'> & { arc: NonNullable<RoofSegmentNode['arc']> } {
+// A shed segment whose deck follows a concentric arc.
+export function isBandedShedSegment(node: Pick<RoofSegmentNode, 'roofType' | 'arc'>): node is Pick<
+  RoofSegmentNode,
+  'roofType' | 'arc'
+> & {
+  arc: NonNullable<RoofSegmentNode['arc']>
+} {
   return node.roofType === 'shed' && node.arc != null && Number.isFinite(node.arc.radius)
 }
 

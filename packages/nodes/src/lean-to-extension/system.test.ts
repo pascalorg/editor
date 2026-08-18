@@ -251,7 +251,7 @@ describe('lean-to scene commit boundary', () => {
             .map((id) => syncedNodes[id as AnyNodeId])
             .find((node) => node?.type === 'gutter')
         : undefined
-    expect(segmentA?.metadata).toMatchObject({ leanToCornerSides: ['right'] })
+    expect(segmentA).toMatchObject({ shedOpenEndSides: ['right'] })
     expect(gutterA?.metadata).toMatchObject({
       leanToGutterMitres: { left: 0, right: Math.PI / 4 },
     })

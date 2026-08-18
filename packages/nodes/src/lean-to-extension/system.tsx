@@ -150,6 +150,11 @@ function segmentNeedsLayoutUpdate(
     segment.shingleThickness !== expected.shingleThickness ||
     segment.overhang !== expected.overhang ||
     JSON.stringify(segment.arc) !== JSON.stringify(expected.arc) ||
+    segment.shedSideInfillSpan !== expected.shedSideInfillSpan ||
+    segment.shedSideInfillMinX !== expected.shedSideInfillMinX ||
+    segment.shedSideInfillMaxX !== expected.shedSideInfillMaxX ||
+    JSON.stringify(segment.shedFootprintPieces) !== JSON.stringify(expected.shedFootprintPieces) ||
+    JSON.stringify(segment.shedOpenEndSides) !== JSON.stringify(expected.shedOpenEndSides) ||
     JSON.stringify(segment.trim) !== JSON.stringify(expected.trim) ||
     JSON.stringify(segment.metadata) !== JSON.stringify(expected.metadata)
   )

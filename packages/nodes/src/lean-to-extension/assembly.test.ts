@@ -65,10 +65,12 @@ describe('lean-to assembly', () => {
     expect(assembly.segment.position[1]).toBeLessThan(layout.lowEdgeHeight)
     expect(assembly.segment.depth).toBeCloseTo(layout.roofRun + 0.02, 6)
     expect(assembly.segment.overhang).toBe(0)
+    expect(assembly.segment).toMatchObject({
+      shedSideInfillSpan: 4,
+      shedSideInfillMinX: -2.04,
+      shedSideInfillMaxX: 2.04,
+    })
     expect(assembly.segment.metadata).toMatchObject({
-      leanToSideInfillSpan: 4,
-      leanToSideInfillMinX: -2.04,
-      leanToSideInfillMaxX: 2.04,
       nodeSelectionProxyId: leanTo.id,
     })
     expect(assembly.segment.position[2]).toBeCloseTo(
@@ -352,10 +354,8 @@ describe('lean-to assembly', () => {
     expect(assembly.segment.trim.backLeftZ).toBe(0)
     expect(assembly.segment.trim.backRightX).toBe(0)
     expect(assembly.segment.trim.backRightZ).toBe(0)
-    expect(assembly.segment.metadata).toMatchObject({
-      leanToCornerSides: ['right'],
-    })
-    expect((assembly.segment.metadata as Record<string, unknown>).leanToRoofPieces).toHaveLength(2)
+    expect(assembly.segment.shedOpenEndSides).toEqual(['right'])
+    expect(assembly.segment.shedFootprintPieces).toHaveLength(2)
     expect(
       assembly.posts.some(
         (post) => managedLeanToPostIndex(post) === leanToCornerPostIndex('right'),

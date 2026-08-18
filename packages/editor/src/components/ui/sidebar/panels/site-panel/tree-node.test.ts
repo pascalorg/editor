@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { hasTreeNodeComponent } from './tree-node'
+import { getTreeNodeComponent } from './tree-node'
 
 describe('site tree node routing', () => {
-  test('renders lean-to extensions in the editor tree', () => {
-    expect(hasTreeNodeComponent('lean-to-extension')).toBe(true)
+  test('renders plugin node kinds through the generic tree row', () => {
+    expect(getTreeNodeComponent('lean-to-extension')).toBe(getTreeNodeComponent('plugin-kind'))
   })
 })
