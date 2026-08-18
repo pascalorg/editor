@@ -87,7 +87,14 @@ export {
   isIsolationActive,
 } from './lib/isolation'
 export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
-export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
+export {
+  BATCHED_LAYER,
+  GRID_LAYER,
+  OVERLAY_LAYER,
+  SCENE_LAYER,
+  setSurfaceRaycastLayers,
+  ZONE_LAYER,
+} from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
   BLUEPRINT_PALETTE,
@@ -134,6 +141,7 @@ export {
   SCENE_THEMES,
   type SceneTheme,
 } from './lib/scene-themes'
+export { type HiddenReason, hideFromScene, showInScene } from './lib/scene-visibility'
 export {
   createSnapshotPipeline,
   SNAPSHOT_MAX_EDGE,
@@ -254,7 +262,11 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
-export { WallSystem } from './systems/wall/wall-system'
+export {
+  drainRebuiltWalls,
+  getPendingWallRebuildCount,
+  WallSystem,
+} from './systems/wall/wall-system'
 export {
   poseWindowMovingParts,
   WindowAnimationSystem,

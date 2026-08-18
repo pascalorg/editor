@@ -9,7 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import type { MeasurementAxis, MeasurementAxisGuide, MeasurementPoint } from '@pascal-app/editor'
-import { SCENE_LAYER, ZONE_LAYER } from '@pascal-app/viewer'
+import { setSurfaceRaycastLayers, ZONE_LAYER } from '@pascal-app/viewer'
 import {
   type Camera,
   type InstancedMesh,
@@ -698,7 +698,7 @@ function collectMeasurementAxisSurfaceIntersections(
   const origin = levelObject.localToWorld(new Vector3(...anchor))
   const levelRotation = levelObject.getWorldQuaternion(new Quaternion())
   const inverseLevelRotation = levelRotation.clone().invert()
-  raycaster.layers.set(SCENE_LAYER)
+  setSurfaceRaycastLayers(raycaster.layers)
   raycaster.near = 0
   raycaster.far = maxDistance
   const intersections: MeasurementAxisSurfaceIntersection[] = []
@@ -761,9 +761,9 @@ export function createMeasurementSurfaceQuerySession(
   const verificationRaycaster = new Raycaster()
   const axisRaycaster = new Raycaster()
   const pointer = new Vector2()
-  pointerRaycaster.layers.set(SCENE_LAYER)
-  verificationRaycaster.layers.set(SCENE_LAYER)
-  axisRaycaster.layers.set(SCENE_LAYER)
+  setSurfaceRaycastLayers(pointerRaycaster.layers)
+  setSurfaceRaycastLayers(verificationRaycaster.layers)
+  setSurfaceRaycastLayers(axisRaycaster.layers)
   if (options.includeZoneLayer) pointerRaycaster.layers.enable(ZONE_LAYER)
 
   let context: MeasurementRaycastContext | null = null

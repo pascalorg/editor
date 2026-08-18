@@ -45,7 +45,7 @@ import {
   useInteractionScope,
   useMeasurementDraft,
 } from '@pascal-app/editor'
-import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
+import { setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { type FC, useEffect, useMemo, useRef, useState } from 'react'
@@ -435,7 +435,7 @@ export function collectMeasurementAxisSurfaceIntersections(
   const origin = levelObject.localToWorld(new Vector3(...anchor))
   const levelRotation = levelObject.getWorldQuaternion(new Quaternion())
   const raycaster = new Raycaster()
-  raycaster.layers.set(SCENE_LAYER)
+  setSurfaceRaycastLayers(raycaster.layers)
   raycaster.near = 0
   raycaster.far = maxDistance
   const intersections: MeasurementAxisSurfaceIntersection[] = []
@@ -1775,7 +1775,7 @@ export const MeasurementTool: FC = () => {
   const surfaceQuery = useMemo(() => createMeasurementSurfaceQuerySession(scene), [scene])
 
   useEffect(() => {
-    raycaster.current.layers.set(SCENE_LAYER)
+    setSurfaceRaycastLayers(raycaster.current.layers)
   }, [])
 
   useEffect(() => () => surfaceQuery.dispose(), [surfaceQuery])
