@@ -391,7 +391,10 @@ export const useKeyboard = ({
       } else if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().setMode('delete')
+        // Toggle: X enters delete mode, and pressing X again leaves it — so the
+        // mode never gets stuck "on" with no way back from the same key.
+        const editor = useEditor.getState()
+        editor.setMode(editor.mode === 'delete' ? 'select' : 'delete')
       } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
