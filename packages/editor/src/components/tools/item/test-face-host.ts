@@ -103,7 +103,12 @@ const testFaceHost: FaceHostCapability<BlockNodeType> = {
 }
 
 export function registerTestBlockFaceHost() {
-  if (nodeRegistry.has('block')) return
+  // The registry is a module singleton shared across test files, and other
+  // suites register their own minimal `block` (the wall drafting stub is
+  // floor-placed only). Skipping on name alone would leave that capability-less
+  // definition in place, so replace it unless it already hosts faces.
+  if (nodeRegistry.get('block')?.capabilities?.faceHost) return
+  if (nodeRegistry.has('block')) nodeRegistry._reset()
   registerNode({
     kind: 'block',
     schemaVersion: 1,
