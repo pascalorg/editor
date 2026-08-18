@@ -26,13 +26,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
+import { deleteSelection, duplicateSelectionAndPickUp, startGroupPickUp } from '../../editor/group-actions'
+import { resolveHomogeneousSelection } from './homogeneous-selection'
 import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
+import { MultiParametricInspector } from './multi-parametric-inspector'
 import { MultiSelectionPanel } from './multi-selection-panel'
-import { getNodeDisplay } from './node-display'
+import { getNodeDisplay, getTypeDisplay } from './node-display'
 import { resetDesktopInspectorCollapsed } from './panel-wrapper'
 import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
+import { formatSelectionBreakdown } from './selection-breakdown'
 
 type MovableNode =
   | ItemNode
@@ -169,6 +173,46 @@ function MobilePanelLayer({
   )
 }
 
+function MobileMultiPanelLayer({
+  breakdown,
+  panel,
+  type,
+}: {
+  breakdown: string
+  panel: React.ReactNode
+  type: string | null
+}) {
+  const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const display = type ? getTypeDisplay(type) : { icon: '/icons/select.webp', label: 'Selection' }
+  const title = breakdown || display.label
+
+  useEffect(() => {
+    setIsSheetOpen(false)
+  }, [breakdown])
+
+  return (
+    <>
+      <MobileSelectionBar
+        icon={display.icon}
+        label={title}
+        node={null}
+        onDelete={() => deleteSelection()}
+        onDuplicate={() => duplicateSelectionAndPickUp()}
+        onEdit={() => setIsSheetOpen((v) => !v)}
+        onMove={() => startGroupPickUp()}
+      />
+      <MobilePanelSheet
+        icon={display.icon}
+        onClose={() => setIsSheetOpen(false)}
+        open={isSheetOpen}
+        title={title}
+      >
+        {panel}
+      </MobilePanelSheet>
+    </>
+  )
+}
+
 export function PanelManager({
   inspectorFooter,
   multiSelectionFooter,
@@ -193,6 +237,14 @@ export function PanelManager({
     const id = selectedIds[0]
     return id ? (s.nodes[id as AnyNodeId] ?? null) : null
   })
+  const homogeneousType = useScene((s) =>
+    selectedIds.length > 1 ? resolveHomogeneousSelection(selectedIds, s.nodes) : null,
+  )
+  const multiBreakdown = useScene((s) =>
+    selectedIds.length > 1
+      ? formatSelectionBreakdown(selectedIds.map((id) => s.nodes[id as AnyNodeId]?.type))
+      : '',
+  )
 
   // Node and reference selection are mutually exclusive: selecting a guide
   // clears the node selection (handleGuideSelect), but node selection never
@@ -219,6 +271,21 @@ export function PanelManager({
     if (selectedReferenceId) {
       return <MobilePanelLayer isReference={true} node={null} panel={<ReferencePanel />} />
     }
+    if (selectedIds.length > 1) {
+      return (
+        <MobileMultiPanelLayer
+          breakdown={multiBreakdown}
+          panel={
+            homogeneousType ? (
+              <MultiParametricInspector footer={multiSelectionFooter} />
+            ) : (
+              <MultiSelectionPanel footer={multiSelectionFooter} />
+            )
+          }
+          type={homogeneousType}
+        />
+      )
+    }
     return (
       <MobilePanelLayer
         isReference={false}
@@ -244,9 +311,12 @@ export function PanelManager({
     )
   }
 
-  // Multi-selection: compact docked panel (desktop only — the mobile branch
-  // above keeps today's behavior and renders nothing for multi-selections).
+  // Multi-selection: parametric inspector when every resolved id shares a type,
+  // otherwise the actions-only panel. Mobile uses the same panels in a sheet.
   if (selectedIds.length > 1) {
+    if (homogeneousType) {
+      return <MultiParametricInspector footer={multiSelectionFooter} />
+    }
     return <MultiSelectionPanel footer={multiSelectionFooter} />
   }
 

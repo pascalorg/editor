@@ -20,9 +20,7 @@ import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
-import { SegmentedControl } from '../controls/segmented-control'
-import { SliderControl } from '../controls/slider-control'
-import { ToggleControl } from '../controls/toggle-control'
+import { ParametricFieldControl } from './parametric-field-control'
 import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
 
 /**
@@ -311,136 +309,11 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
   })
   if (!visible) return null
 
-  switch (field.kind) {
-    case 'number': {
-      const num = typeof value === 'number' ? value : 0
-      const step = field.step ?? 0.01
-      const precision = precisionForStep(step)
-      return (
-        <SliderControl
-          label={prettifyKey(key)}
-          max={field.max}
-          min={field.min}
-          onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-          precision={precision}
-          step={step}
-          unit={field.unit ?? ''}
-          value={num}
-        />
-      )
-    }
-
-    case 'boolean': {
-      const checked = value === true
-      return (
-        <ToggleControl
-          checked={checked}
-          label={prettifyKey(key)}
-          onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-        />
-      )
-    }
-
-    case 'enum': {
-      const str = typeof value === 'string' ? value : (field.options[0] ?? '')
-      if (field.display === 'segmented') {
-        return (
-          <SegmentedControl
-            onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-            options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
-            value={str}
-          />
-        )
-      }
-      return (
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
-          <select
-            className="rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
-            onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
-            value={str}
-          >
-            {field.options.map((opt) => (
-              <option key={opt} value={opt}>
-                {prettifyEnumValue(opt)}
-              </option>
-            ))}
-          </select>
-        </div>
-      )
-    }
-
-    case 'color': {
-      const str = typeof value === 'string' ? value : '#888888'
-      return (
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
-          <div className="flex items-center gap-2">
-            <input
-              className="h-6 w-8 cursor-pointer rounded border border-border/50 bg-transparent"
-              onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
-              type="color"
-              value={str}
-            />
-            <input
-              className="w-20 rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
-              onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
-              type="text"
-              value={str}
-            />
-          </div>
-        </div>
-      )
-    }
-
-    case 'vec3': {
-      const v = Array.isArray(value) && value.length >= 3
-        ? (value as [number, number, number])
-        : [0, 0, 0]
-      const axes: Array<{ label: string; index: 0 | 1 | 2 }> = [
-        { label: 'X', index: 0 },
-        { label: 'Y', index: 1 },
-        { label: 'Z', index: 2 },
-      ]
-      return (
-        <>
-          {axes.map(({ label, index }) => {
-            // v is a [number, number, number] tuple; the explicit local
-            // resolves TS's noUncheckedIndexedAccess concern that v[index]
-            // could be undefined.
-            const axisValue = v[index] ?? 0
-            return (
-              <SliderControl
-                key={`${key}-${label}`}
-                label={label}
-                max={axisValue + 5}
-                min={axisValue - 5}
-                onChange={(next) => {
-                  const updated = [...v] as [number, number, number]
-                  updated[index] = next
-                  onUpdate({ [key]: updated } as Partial<AnyNode>)
-                }}
-                precision={2}
-                step={0.05}
-                unit="m"
-                value={Math.round(axisValue * 100) / 100}
-              />
-            )
-          })}
-        </>
-      )
-    }
-
-    case 'custom':
-      // The field owns its rendering and update logic — used for
-      // derived values (length from start/end), dynamic-bounded
-      // sliders (curve sagitta), composed editors.
-      return <CustomFieldRenderer Comp={field.component} nodeId={nodeId} onUpdate={onUpdate} />
-
-    default:
-      // material / ref / unrecognized kinds — not implemented in v1.
-      return null
+  if (field.kind === 'custom') {
+    return <CustomFieldRenderer Comp={field.component} nodeId={nodeId} onUpdate={onUpdate} />
   }
+
+  return <ParametricFieldControl field={field} onChange={onUpdate} value={value} />
 }
 
 function CustomFieldRenderer({
@@ -458,27 +331,4 @@ function CustomFieldRenderer({
   const node = useScene((s) => s.nodes[nodeId])
   if (!node) return null
   return <Comp node={node} onUpdate={onUpdate} />
-}
-
-// ─── helpers ─────────────────────────────────────────────────────────
-
-function precisionForStep(step: number): number {
-  if (step <= 0) return 0
-  return Math.max(0, Math.ceil(-Math.log10(step)))
-}
-
-function prettifyKey(key: string): string {
-  // 'bracketStyle' → 'Bracket style'
-  const spaced = key.replace(/([A-Z])/g, ' $1').toLowerCase()
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
-}
-
-function prettifyEnumValue(value: string): string {
-  // 'minimal' → 'Minimal'; 'roof-segment' → 'Roof segment'
-  return value
-    .split(/[-_\s]/)
-    .map((word, i) =>
-      i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word.toLowerCase(),
-    )
-    .join(' ')
 }
