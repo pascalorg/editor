@@ -96,7 +96,9 @@ const ColumnTool = () => {
     const pointedSurfaceFor = (event: FloorPlacementClickTriggerEvent) =>
       typeof HTMLCanvasElement !== 'undefined' &&
       event.nativeEvent?.target instanceof HTMLCanvasElement
-        ? resolvePointerSupportSurface(cameraRef.current, event.position)
+        ? resolvePointerSupportSurface(cameraRef.current, event.position, {
+            includeNodeTopSurfaces: true,
+          })
         : null
 
     const resolveColumnPlacement = (

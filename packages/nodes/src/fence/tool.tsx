@@ -74,7 +74,7 @@ const surfacePointScratch = new Vector3()
 // them; those keep the uncapped max election and leave the grid plane alone.
 function pointedSurfaceFor(camera: Camera, event: GridEvent) {
   return event.nativeEvent?.target instanceof HTMLCanvasElement
-    ? resolvePointerSupportSurface(camera, event.position)
+    ? resolvePointerSupportSurface(camera, event.position, { includeNodeTopSurfaces: true })
     : null
 }
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
