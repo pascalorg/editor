@@ -57,15 +57,23 @@ export function buildLeanToExtensionFloorplan(
     originX = wall.start[0] + alongX * node.position[0] + perpX * node.position[2]
     originZ = wall.start[1] + alongZ * node.position[0] + perpZ * node.position[2]
   }
+  const localAlongX = alongX * outwardSign
+  const localAlongZ = alongZ * outwardSign
   const outX = perpX * outwardSign
   const outZ = perpZ * outwardSign
 
   const toWorld = (localX: number, localZ: number): FloorplanPoint => {
     if (curved) {
       const bent = bendLocalPoint(node, localX, localZ)
-      return [originX + alongX * bent.x + outX * bent.y, originZ + alongZ * bent.x + outZ * bent.y]
+      return [
+        originX + localAlongX * bent.x + outX * bent.y,
+        originZ + localAlongZ * bent.x + outZ * bent.y,
+      ]
     }
-    return [originX + alongX * localX + outX * localZ, originZ + alongZ * localX + outZ * localZ]
+    return [
+      originX + localAlongX * localX + outX * localZ,
+      originZ + localAlongZ * localX + outZ * localZ,
+    ]
   }
 
   const left = layout.span / 2 + node.leftOverhang

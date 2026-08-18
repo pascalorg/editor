@@ -182,14 +182,22 @@ const FloorplanLeanToExtensionTool = ({
     originX = wall.start[0] + alongX * target.position[0] + perpX * target.position[2]
     originZ = wall.start[1] + alongZ * target.position[0] + perpZ * target.position[2]
   }
+  const localAlongX = alongX * sign
+  const localAlongZ = alongZ * sign
   const outX = perpX * sign
   const outZ = perpZ * sign
   const toWorld = (localX: number, localZ: number): [number, number] => {
     if (curved) {
       const bent = bendLocalPoint(previewNode, localX, localZ)
-      return [originX + alongX * bent.x + outX * bent.y, originZ + alongZ * bent.x + outZ * bent.y]
+      return [
+        originX + localAlongX * bent.x + outX * bent.y,
+        originZ + localAlongZ * bent.x + outZ * bent.y,
+      ]
     }
-    return [originX + alongX * localX + outX * localZ, originZ + alongZ * localX + outZ * localZ]
+    return [
+      originX + localAlongX * localX + outX * localZ,
+      originZ + localAlongZ * localX + outZ * localZ,
+    ]
   }
   const left = target.span / 2 + target.leftOverhang
   const right = target.span / 2 + target.rightOverhang

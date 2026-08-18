@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { LeanToExtensionNode } from '@pascal-app/core'
 import { resolveSurfaceColor } from '@pascal-app/viewer'
-import { Box3, type BoxGeometry, type Mesh, type MeshStandardMaterial } from 'three'
+import { Box3, type BoxGeometry, type Mesh, type MeshStandardMaterial, Vector3 } from 'three'
 import { buildGutterGeometry } from '../gutter/geometry'
 import { createLeanToAssembly } from './assembly'
 import { buildLeanToExtensionGeometry } from './geometry'
@@ -160,6 +160,49 @@ describe('lean-to extension geometry', () => {
     const firstPostMinX = firstPost.position.x - postWidth / 2
 
     expect(beamMinX).toBeCloseTo(firstPostMinX, 6)
+  })
+
+  test('joins curved front-beam facets at the pillar tops on both wall sides', () => {
+    for (const spanArcCenterZ of [-5, 5]) {
+      const node = LeanToExtensionNode.parse({
+        span: 8,
+        projection: 2,
+        postCount: 5,
+        spanArcCenterZ,
+        spanArcRadius: 5,
+      })
+      const group = buildLeanToExtensionGeometry(node)
+      const facets = group.children
+        .filter((child): child is Mesh<BoxGeometry> => child.name.startsWith('lean-to-front-beam-'))
+        .sort(
+          (a, b) =>
+            Number(a.name.slice(a.name.lastIndexOf('-') + 1)) -
+            Number(b.name.slice(b.name.lastIndexOf('-') + 1)),
+        )
+
+      group.updateMatrixWorld(true)
+      let maximumJointGap = 0
+      for (let index = 0; index + 1 < facets.length; index++) {
+        const current = facets[index]!
+        const next = facets[index + 1]!
+        const currentWidth = (current.geometry.parameters as { width: number }).width
+        const nextWidth = (next.geometry.parameters as { width: number }).width
+        const currentEnd = current.localToWorld(new Vector3(currentWidth / 2, 0, 0))
+        const nextStart = next.localToWorld(new Vector3(-nextWidth / 2, 0, 0))
+        maximumJointGap = Math.max(maximumJointGap, currentEnd.distanceTo(nextStart))
+      }
+
+      const firstPost = group.getObjectByName('lean-to-post-0') as Mesh<BoxGeometry>
+      const postHeight = (firstPost.geometry.parameters as { height: number }).height
+      const beamHeight = (facets[0]!.geometry.parameters as { height: number }).height
+      const postTop = firstPost.position.y + postHeight / 2
+      const beamBottom = facets[0]!.position.y - beamHeight / 2
+
+      expect(facets.length).toBeGreaterThan(1)
+      expect(group.getObjectByName('lean-to-front-beam')).toBeUndefined()
+      expect(maximumJointGap).toBeLessThan(0.01)
+      expect(beamBottom).toBeCloseTo(postTop, 6)
+    }
   })
 
   test('replaces the joined boundary rafter and extends the beam to the shared corner post', () => {

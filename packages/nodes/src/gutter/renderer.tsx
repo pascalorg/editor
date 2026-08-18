@@ -24,6 +24,7 @@ import { computeGutterMitres, type GutterWithSegment, NO_MITRES } from './corner
 import { computeSharedEaveY } from './eave-align'
 import { computeEaveY } from './eave-snap'
 import { buildGutterGeometry } from './geometry'
+import { segmentForGutterTrimClip } from './trim-clip'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -207,6 +208,9 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       node.endCapRight,
       node.hangerStyle,
       node.hangerSpacing,
+      node.arc?.centerX,
+      node.arc?.centerZ,
+      node.arc?.radius,
       // Value-compare the outlets array so the CSG drills only rebuild
       // when an outlet's offset / diameter changes or one is added.
       JSON.stringify(node.outlets),
@@ -250,7 +254,11 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       ),
     [node.position[0], node.position[2], node.rotation, liveEaveYForClip],
   )
-  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, effectiveSegment, localToSegment)
+  const clippedGeometry = useSegmentTrimClippedGeometry(
+    geometry,
+    segmentForGutterTrimClip(node, effectiveSegment),
+    localToSegment,
+  )
 
   if (!segment || !effectiveSegment) return null
 

@@ -13,7 +13,7 @@ import { type LeanToArcFrame, leanToArcFrameAtLocalX } from './arc'
 
 export const MIN_LEAN_TO_POST_HEIGHT = 0.2
 export const MIN_LEAN_TO_WALL_LENGTH = 0.6
-export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 6
+export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 7
 const LEAN_TO_EDGE_SNAP_TOLERANCE = 0.25
 
 export type LeanToLayout = {
@@ -138,7 +138,7 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
 // Z, `radius` is the wall's true radius. Returns null for a straight wall.
 export function resolveLeanToSpanArc(
   wall: WallNode,
-  node: Pick<LeanToExtensionNode, 'position'>,
+  node: Pick<LeanToExtensionNode, 'position' | 'rotation'>,
 ): { centerZ: number; radius: number } | null {
   if (!isCurvedWall(wall)) return null
   const arc = getWallArcData(wall)
@@ -149,8 +149,11 @@ export function resolveLeanToSpanArc(
   const frame = getWallCurveFrameAt(wall, t)
   // Signed radial distance from the anchor wall point to the arc center along the
   // outward normal (= ±radius; the tangent component is zero by construction).
-  const d = (arc.center.x - frame.point.x) * frame.normal.x + (arc.center.y - frame.point.y) * frame.normal.y
-  return { centerZ: -node.position[2] + d, radius: arc.radius }
+  const d =
+    (arc.center.x - frame.point.x) * frame.normal.x +
+    (arc.center.y - frame.point.y) * frame.normal.y
+  const sideSign = Math.cos(node.rotation[1]) >= 0 ? 1 : -1
+  return { centerZ: sideSign * (d - node.position[2]), radius: arc.radius }
 }
 
 export function resolveLeanToMoveCenterX(
@@ -319,5 +322,25 @@ export function leanToWallLocalPose(
       frame.point.y + frame.normal.y * localZ,
     ],
     rotationY: -angle + node.rotation[1],
+  }
+}
+
+// The wall mesh is rooted at the chord start and rotated to the chord tangent.
+// Curved hosted nodes still store their X coordinate as centerline arc length,
+// so their committed renderer must resolve the actual curve point and tangent,
+// then express that world pose back in the parent wall mesh's local frame.
+export function resolveLeanToParentPose(
+  wall: WallNode,
+  node: LeanToExtensionNode,
+): { position: [number, number, number]; rotationY: number } {
+  const worldPose = leanToWallLocalPose(wall, node, 0)
+  const wallAngle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+  const cos = Math.cos(wallAngle)
+  const sin = Math.sin(wallAngle)
+  const dx = worldPose.position[0] - wall.start[0]
+  const dz = worldPose.position[2] - wall.start[1]
+  return {
+    position: [dx * cos + dz * sin, node.position[1], -dx * sin + dz * cos],
+    rotationY: worldPose.rotationY + wallAngle,
   }
 }

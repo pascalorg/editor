@@ -22,6 +22,15 @@ describe('lean-to local span arc', () => {
     expect(leanToArcRadius(node)).toBeCloseTo(4.25, 6)
   })
 
+  test('uses the true wall radius for angular travel on an offset wall face', () => {
+    const node = { spanArcCenterZ: 4.9, spanArcRadius: 5 }
+    const point = bendLocalPoint(node, 1, 0)
+
+    expect(point.x).toBeCloseTo(4.9 * Math.sin(1 / 5), 6)
+    expect(point.y).toBeCloseTo(4.9 - 4.9 * Math.cos(1 / 5), 6)
+    expect(bendRotationYAtLocalX(node, 1)).toBeCloseTo(-1 / 5, 6)
+  })
+
   test('pins the crown high edge at the local origin', () => {
     const node = { spanArcCenterZ: 5, spanArcRadius: 5 }
     const mid = bendLocalPoint(node, 0, 0)

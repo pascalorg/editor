@@ -9,7 +9,7 @@ const CURVE_EPSILON = 1e-6
 // X = 0); `spanArcRadius` is the wall's true radius, kept for reference/tests.
 //
 // A flat local point (fx, fz) is bent concentrically about O = (0, cz):
-//   phi = fx / cz                     (arc-length preserved along the wall line fz=0)
+//   phi = fx / signed wall radius     (fx is centerline arc length)
 //   x   = -(fz - cz) * sin(phi)
 //   z   =  cz + (fz - cz) * cos(phi)
 // This is exact for any arc extent and reduces to the identity at the crown, with
@@ -41,7 +41,8 @@ export function isCurvedLeanTo(node: LeanToArcLike): boolean {
 export function bendLocalPoint(node: LeanToArcLike, localX: number, localZ: number): Point2D {
   if (!isCurvedLeanTo(node)) return { x: localX, y: localZ }
   const cz = node.spanArcCenterZ as number
-  const phi = localX / cz
+  const signedRadius = (Math.sign(cz) || 1) * (node.spanArcRadius as number)
+  const phi = localX / signedRadius
   const radial = localZ - cz
   return {
     x: -radial * Math.sin(phi),
@@ -55,7 +56,8 @@ export function bendLocalPoint(node: LeanToArcLike, localX: number, localZ: numb
 export function bendRotationYAtLocalX(node: LeanToArcLike, localX: number): number {
   if (!isCurvedLeanTo(node)) return 0
   const cz = node.spanArcCenterZ as number
-  return -(localX / cz)
+  const signedRadius = (Math.sign(cz) || 1) * (node.spanArcRadius as number)
+  return -(localX / signedRadius)
 }
 
 export function leanToArcFrameAtLocalX(node: LeanToArcLike, localX: number): LeanToArcFrame {
@@ -68,7 +70,8 @@ export function leanToArcFrameAtLocalX(node: LeanToArcLike, localX: number): Lea
     }
   }
   const cz = node.spanArcCenterZ as number
-  const phi = localX / cz
+  const signedRadius = (Math.sign(cz) || 1) * (node.spanArcRadius as number)
+  const phi = localX / signedRadius
   return {
     point: bendLocalPoint(node, localX, 0),
     tangent: { x: Math.cos(phi), y: Math.sin(phi) },

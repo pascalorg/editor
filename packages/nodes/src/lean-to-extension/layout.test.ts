@@ -1,9 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { AnyNode, LeanToExtensionNode, RoofNode, WallNode } from '@pascal-app/core'
+import {
+  AnyNode,
+  getWallArcData,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  LeanToExtensionNode,
+  RoofNode,
+  WallNode,
+} from '@pascal-app/core'
 import {
   resolveLeanToEdgeSnapTargets,
   resolveLeanToLayout,
   resolveLeanToMoveCenterX,
+  resolveLeanToParentPose,
   resolveLeanToWallPlacement,
 } from './layout'
 
@@ -69,6 +78,37 @@ describe('lean-to wall placement', () => {
     expect(node?.spanArcRadius).toBeCloseTo(5, 3)
     expect(Number.isFinite(node?.spanArcCenterZ ?? Number.NaN)).toBe(true)
     expect(Math.abs(node?.spanArcCenterZ ?? 0)).toBeGreaterThan(1e-3)
+  })
+
+  test('expresses the curved-wall center in the selected side frame', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [6, 0], curveOffset: 1, thickness: 0.2 })
+    const along = getWallCurveLength(wall) / 2
+    const front = resolveLeanToWallPlacement(wall, along, 'front')!
+    const back = resolveLeanToWallPlacement(wall, along, 'back')!
+
+    expect(front.spanArcRadius).toBeCloseTo(5, 6)
+    expect(front.spanArcCenterZ).toBeCloseTo(4.9, 6)
+    expect(back.spanArcRadius).toBeCloseTo(5, 6)
+    expect(back.spanArcCenterZ).toBeCloseTo(-5.1, 6)
+  })
+
+  test('places a committed curved lean-to at the wall point and tangent', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [6, 0], curveOffset: 1, thickness: 0.2 })
+    const wallLength = getWallCurveLength(wall)
+    const along = wallLength * 0.25
+    const node = resolveLeanToWallPlacement(wall, along, 'front', { span: 1 })!
+    const frame = getWallCurveFrameAt(wall, node.position[0] / wallLength)
+    const arc = getWallArcData(wall)!
+    const pose = resolveLeanToParentPose(wall, node)
+
+    expect(pose.position[0]).toBeCloseTo(frame.point.x + frame.normal.x * 0.1, 5)
+    expect(pose.position[2]).toBeCloseTo(frame.point.y + frame.normal.y * 0.1, 5)
+    expect(pose.position[0]).not.toBeCloseTo(node.position[0], 2)
+    expect(pose.rotationY).toBeCloseTo(-Math.atan2(frame.tangent.y, frame.tangent.x), 6)
+    expect(Math.hypot(frame.point.x - arc.center.x, frame.point.y - arc.center.y)).toBeCloseTo(
+      arc.radius,
+      6,
+    )
   })
 
   test('moves along the host wall with snapping and roof-edge clamping', () => {

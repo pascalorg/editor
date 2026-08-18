@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { GutterNode } from '@pascal-app/core'
+import * as THREE from 'three'
 import { buildGutterGeometry } from './geometry'
 import { resolveGutterOutletById } from './outlet-lookup'
 
@@ -26,24 +27,53 @@ describe('curved gutter arc', () => {
     })
   }
 
-  test('bends the trough into a thin concentric band on the eave circle', () => {
-    const geometry = buildGutterGeometry(curvedGutter())
-    const position = geometry.getAttribute('position')
-    expect(position.count).toBeGreaterThan(0)
+  test('bends every trough triangle into a thin concentric band on both wall sides', () => {
+    for (const arcCenterZ of [-radius, radius]) {
+      const geometry = buildGutterGeometry(
+        curvedGutter({
+          length: 8,
+          arc: { centerX, centerZ: arcCenterZ, radius },
+          outlets: [{ id: 'outlet_arc', offset: 0.5, diameter: 0.07 }],
+        }),
+      )
+      const source = geometry.index ? geometry.toNonIndexed() : geometry
+      const position = source.getAttribute('position')
+      expect(position.count).toBeGreaterThan(0)
 
-    let minR = Number.POSITIVE_INFINITY
-    let maxR = Number.NEGATIVE_INFINITY
-    for (let i = 0; i < position.count; i++) {
-      const d = Math.hypot(position.getX(i) - centerX, position.getZ(i) - centerZ)
-      minR = Math.min(minR, d)
-      maxR = Math.max(maxR, d)
+      const distanceToEdge = (a: number, b: number) => {
+        const ax = position.getX(a) - centerX
+        const az = position.getZ(a) - arcCenterZ
+        const dx = position.getX(b) - position.getX(a)
+        const dz = position.getZ(b) - position.getZ(a)
+        const lengthSquared = dx * dx + dz * dz
+        const t =
+          lengthSquared > 1e-12 ? Math.max(0, Math.min(1, -(ax * dx + az * dz) / lengthSquared)) : 0
+        return Math.hypot(ax + dx * t, az + dz * t)
+      }
+      let minR = Number.POSITIVE_INFINITY
+      let maxR = Number.NEGATIVE_INFINITY
+      let minimumTriangleEdgeRadius = Number.POSITIVE_INFINITY
+      for (let i = 0; i < position.count; i++) {
+        const d = Math.hypot(position.getX(i) - centerX, position.getZ(i) - arcCenterZ)
+        minR = Math.min(minR, d)
+        maxR = Math.max(maxR, d)
+      }
+      for (let offset = 0; offset + 2 < position.count; offset += 3) {
+        minimumTriangleEdgeRadius = Math.min(
+          minimumTriangleEdgeRadius,
+          distanceToEdge(offset, offset + 1),
+          distanceToEdge(offset + 1, offset + 2),
+          distanceToEdge(offset + 2, offset),
+        )
+      }
+
+      expect(minR).toBeGreaterThan(radius - 0.3)
+      expect(maxR).toBeLessThan(radius + 0.3)
+      expect(minimumTriangleEdgeRadius).toBeGreaterThan(radius - 0.3)
+
+      if (source !== geometry) source.dispose()
+      geometry.dispose()
     }
-    // The profile only spans ~`size` across its cross-section, so the whole run
-    // stays within a thin annulus around the eave radius — never near center 0.
-    expect(minR).toBeGreaterThan(radius - 0.3)
-    expect(maxR).toBeLessThan(radius + 0.3)
-
-    geometry.dispose()
   })
 
   test('places an outlet on the eave circle', () => {
@@ -57,6 +87,37 @@ describe('curved gutter arc', () => {
     // only by the profile's floor midpoint (well under one profile `size`).
     expect(d).toBeGreaterThan(radius - 0.01)
     expect(d).toBeLessThan(radius + gutter.size)
+  })
+
+  test('keeps the curved front fascia continuous across a downspout outlet', () => {
+    const outerRadius = 7.25
+    const outerCenterZ = -9.548
+    const offset = 3.94
+    const gutter = curvedGutter({
+      length: 8.2,
+      arc: { centerX, centerZ: outerCenterZ, radius: outerRadius },
+      outlets: [{ id: 'outlet_fascia', offset, diameter: 0.07 }],
+    })
+    const geometry = buildGutterGeometry(gutter)
+    const signedRadius = -outerRadius
+    const phi = offset / signedRadius
+    const radial = new THREE.Vector3(-Math.sin(phi), 0, Math.cos(phi))
+    const raycaster = new THREE.Raycaster(
+      new THREE.Vector3(centerX, -gutter.size * 0.4, outerCenterZ).addScaledVector(
+        radial,
+        Math.abs(outerCenterZ) + 1,
+      ),
+      radial.clone().negate(),
+      0,
+      2,
+    )
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
+    const intersections = raycaster.intersectObject(new THREE.Mesh(geometry, material))
+
+    expect(intersections.length).toBeGreaterThan(0)
+
+    material.dispose()
+    geometry.dispose()
   })
 
   test('leaves a straight gutter (no arc) unbent', () => {

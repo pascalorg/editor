@@ -144,6 +144,18 @@ describe('lean-to assembly', () => {
     expect(Math.abs(endPost.rotation)).toBeGreaterThan(1e-3)
   })
 
+  test('keeps the roof bend reference on the true wall radius', () => {
+    const leanTo = LeanToExtensionNode.parse({
+      span: 6,
+      projection: 2.5,
+      spanArcCenterZ: 4.9,
+      spanArcRadius: 5,
+    })
+
+    const segment = leanToRoofSegmentLayoutPatch(leanTo)
+    expect(segment.arc?.radius).toBeCloseTo(5, 6)
+  })
+
   test('composes terrain-aware high-side columns for an independent beam', () => {
     const leanTo = LeanToExtensionNode.parse({
       highSideMode: 'independent-high-beam',

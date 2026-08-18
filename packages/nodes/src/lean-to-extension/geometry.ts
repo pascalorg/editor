@@ -263,9 +263,14 @@ export function buildLeanToExtensionGeometry(
     slotId?: LeanToSlotId
   }) => {
     const count = curved ? facets : 1
-    const facetWidth = args.totalWidth / count
+    const localFacetWidth = args.totalWidth / count
+    const facetWidth = curved
+      ? 2 *
+        Math.abs((node.spanArcCenterZ ?? 0) - args.localZ) *
+        Math.tan(localFacetWidth / (2 * (node.spanArcRadius ?? 1)))
+      : localFacetWidth
     for (let index = 0; index < count; index++) {
-      const centerX = args.centerX - args.totalWidth / 2 + (index + 0.5) * facetWidth
+      const centerX = args.centerX - args.totalWidth / 2 + (index + 0.5) * localFacetWidth
       const [x, z] = bend(centerX, args.localZ)
       addBox(group, {
         name: count > 1 ? `${args.name}-${index}` : args.name,

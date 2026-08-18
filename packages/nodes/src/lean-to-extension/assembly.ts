@@ -20,6 +20,7 @@ import {
 } from '@pascal-app/core'
 import { resolveEaveSnap } from '../gutter/eave-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
+import { bendLocalPoint, bendRotationYAtLocalX, isCurvedLeanTo } from './arc'
 import {
   LEAN_TO_CORNER_JOINTS_KEY,
   type LeanToCornerJoint,
@@ -27,7 +28,6 @@ import {
   leanToCornerJointMetadata,
   resolveLeanToCornerJoints,
 } from './corner-joint'
-import { bendLocalPoint, bendRotationYAtLocalX, isCurvedLeanTo } from './arc'
 import { resolveLeanToLayout } from './layout'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
@@ -372,7 +372,7 @@ export function leanToRoofSegmentLayoutPatch(
     ? {
         centerX: -roofCenterX,
         centerZ: (leanTo.spanArcCenterZ ?? 0) - roofCenterZ,
-        radius: Math.abs(leanTo.spanArcCenterZ ?? 0),
+        radius: leanTo.spanArcRadius ?? 0,
       }
     : undefined
   const roofBack = roofCenterZ - depth / 2 + (leanTo.highOverhang > 0 ? 0 : WALL_CONNECTION_TRIM)

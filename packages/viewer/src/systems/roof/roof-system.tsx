@@ -1808,30 +1808,63 @@ function buildConcentricBandDeckGeometry(node: RoofSegmentNode): THREE.BufferGeo
     return new THREE.Vector3(bent.x, getRoofSegmentSurfaceY(node, localX, localZ), bent.z)
   }
 
-  const bottom: THREE.Vector3[] = []
-  // Back edge (high side) left→right, then front edge (low side) right→left.
+  const backBottom: THREE.Vector3[] = []
+  const frontBottom: THREE.Vector3[] = []
   for (let index = 0; index <= facetCount; index++) {
     const localX = -halfWidth + (index / facetCount) * width
-    bottom.push(bend(localX, -halfDepth))
-  }
-  for (let index = facetCount; index >= 0; index--) {
-    const localX = -halfWidth + (index / facetCount) * width
-    bottom.push(bend(localX, halfDepth))
+    backBottom.push(bend(localX, -halfDepth))
+    frontBottom.push(bend(localX, halfDepth))
   }
 
-  const top = [...bottom]
-    .reverse()
-    .map((point) => new THREE.Vector3(point.x, point.y + verticalThickness, point.z))
-  const faces: THREE.Vector3[][] = [bottom, top]
-  for (let index = 0; index < bottom.length; index++) {
-    const next = (index + 1) % bottom.length
-    faces.push([
-      bottom[next]!.clone(),
-      bottom[index]!.clone(),
-      new THREE.Vector3(bottom[index]!.x, bottom[index]!.y + verticalThickness, bottom[index]!.z),
-      new THREE.Vector3(bottom[next]!.x, bottom[next]!.y + verticalThickness, bottom[next]!.z),
-    ])
+  const raise = (point: THREE.Vector3) =>
+    new THREE.Vector3(point.x, point.y + verticalThickness, point.z)
+  const backTop = backBottom.map(raise)
+  const frontTop = frontBottom.map(raise)
+  const faces: THREE.Vector3[][] = []
+
+  for (let index = 0; index < facetCount; index++) {
+    const next = index + 1
+    // Each angular interval is its own convex quad. A single polygon around
+    // the complete annular boundary is concave, so fan triangulation sends
+    // diagonals through the open center and fills the roof as a solid sector.
+    faces.push(
+      [
+        backBottom[index]!.clone(),
+        backBottom[next]!.clone(),
+        frontBottom[next]!.clone(),
+        frontBottom[index]!.clone(),
+      ],
+      [
+        frontTop[index]!.clone(),
+        frontTop[next]!.clone(),
+        backTop[next]!.clone(),
+        backTop[index]!.clone(),
+      ],
+      [
+        backBottom[next]!.clone(),
+        backBottom[index]!.clone(),
+        backTop[index]!.clone(),
+        backTop[next]!.clone(),
+      ],
+      [
+        frontBottom[index]!.clone(),
+        frontBottom[next]!.clone(),
+        frontTop[next]!.clone(),
+        frontTop[index]!.clone(),
+      ],
+    )
   }
+
+  const last = facetCount
+  faces.push(
+    [backBottom[0]!.clone(), frontBottom[0]!.clone(), frontTop[0]!.clone(), backTop[0]!.clone()],
+    [
+      frontBottom[last]!.clone(),
+      backBottom[last]!.clone(),
+      backTop[last]!.clone(),
+      frontTop[last]!.clone(),
+    ],
+  )
   const merged = createGeometryFromFaces(faces, (normal) =>
     normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX,
   )

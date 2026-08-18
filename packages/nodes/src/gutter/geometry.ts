@@ -100,7 +100,7 @@ export function buildGutterGeometry(
     depth: channelLen,
     bevelEnabled: false,
     curveSegments: 16,
-    steps: 1,
+    steps: gutterArcSteps(node, channelLen),
   })
   // Apply the corner-mitre skew while we're still in the source frame.
   // Source axes (pre-rotation): X_cs = outward, Y_cs = vertical,
@@ -158,7 +158,7 @@ export function buildGutterGeometry(
       depth: capLeftLen,
       bevelEnabled: false,
       curveSegments: 16,
-      steps: 1,
+      steps: gutterArcSteps(node, capLeftLen),
     })
     leftCap.rotateY(-Math.PI / 2)
     // Left cap spans [-len/2, -len/2 + capLeftLen]: translate by
@@ -173,7 +173,7 @@ export function buildGutterGeometry(
       depth: capRightLen,
       bevelEnabled: false,
       curveSegments: 16,
-      steps: 1,
+      steps: gutterArcSteps(node, capRightLen),
     })
     rightCap.rotateY(-Math.PI / 2)
     // Right cap spans [+len/2 - capRightLen, +len/2].
@@ -217,7 +217,11 @@ export function buildGutterGeometry(
   // CSG drill — punches each bore through the merged geometry. Runs
   // last so the floor + collars are already in one mesh; each drill
   // cuts both at once, subtracted sequentially.
-  if (placements.length > 0) {
+  // Subtracting a near-end outlet from an already subdivided curved run makes
+  // three-bvh-csg discard the complete cross-section around the drill, leaving
+  // a visible break in the fascia. Keep the curved trough watertight; its collar
+  // and connected downspout still conceal the floor where the bore would sit.
+  if (placements.length > 0 && !node.arc) {
     let workingBrush = new Brush(merged)
     prepareBrushForCSG(workingBrush)
     for (const p of placements) {
@@ -238,6 +242,11 @@ export function buildGutterGeometry(
   }
 
   return bendGutterGeometryAlongArc(merged, node)
+}
+
+function gutterArcSteps(node: GutterNode, length: number): number {
+  if (!node.arc || !Number.isFinite(node.arc.radius)) return 1
+  return Math.max(1, Math.min(32, Math.ceil(length / 0.4)))
 }
 
 // Bend the finished straight gutter (length along mesh-+X, outward along mesh-+Z)

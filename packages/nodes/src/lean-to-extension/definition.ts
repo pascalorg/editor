@@ -270,6 +270,10 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
   },
   parametrics: leanToExtensionParametrics,
   handles: leanToExtensionHandles,
+  renderer: {
+    kind: 'parametric',
+    module: () => import('./renderer'),
+  },
   geometry: buildLeanToExtensionGeometry,
   geometryKey: leanToExtensionGeometryKey,
   system: {
