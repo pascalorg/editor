@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
+import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
@@ -1523,6 +1524,7 @@ export type Capabilities = {
   cuttable?: CuttableConfig
   snappable?: SnappableConfig
   surfaces?: SurfacesConfig
+  faceHost?: FaceHostCapability<any>
   duplicable?: boolean | DuplicableConfig
   deletable?: boolean
   groupable?: boolean
@@ -2058,7 +2060,9 @@ export type SnappableConfig = {
 export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 
 export type SurfacesConfig = {
-  top?: { height: number | ((n: AnyNode) => number) }
+  top?: {
+    height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
+  }
   sides?: { faces: 'all' | ReadonlyArray<readonly [number, number, number]> }
   custom?: SurfaceQuery
 }
@@ -2067,6 +2071,48 @@ export type SurfaceQuery = (n: AnyNode) => SurfacePoint[]
 export type SurfacePoint = {
   position: readonly [number, number, number]
   normal: readonly [number, number, number]
+}
+
+export type FaceHostPlacementArgs<N extends AnyNode = AnyNode> = {
+  host: N
+  asset: AssetInput
+  draftItem: ItemNode | null
+  localPosition: readonly [number, number, number]
+  faceIndex?: number
+  object: Object3D
+  currentFaceId?: string | null
+  rawDimensions: readonly [number, number, number]
+  dimensions: readonly [number, number, number]
+  snapScalar: (value: number) => number
+}
+
+export type FaceHostStoredPlacementArgs<N extends AnyNode = AnyNode> = {
+  host: N
+  item: ItemNode
+  position: readonly [number, number, number]
+}
+
+export type FaceHostStoredValidityArgs<N extends AnyNode = AnyNode> = {
+  host: N
+  item: ItemNode
+  asset: AssetInput
+}
+
+export type FaceHostPlacementResult = {
+  faceId: string
+  nodeUpdate: Partial<ItemNode>
+  position: [number, number, number]
+  rotation: [number, number, number]
+  cursorPosition: [number, number, number]
+  cursorRotation: [number, number, number]
+}
+
+export type FaceHostCapability<N extends AnyNode = AnyNode> = {
+  currentFaceId: (item: ItemNode | null) => string | null
+  clearItemFields: readonly (keyof ItemNode)[]
+  resolvePlacement: (args: FaceHostPlacementArgs<N>) => FaceHostPlacementResult | null
+  storedPlacementPatch: (args: FaceHostStoredPlacementArgs<N>) => Partial<ItemNode> | null
+  isStoredPlacementValid: (args: FaceHostStoredValidityArgs<N>) => boolean
 }
 
 export type SelectableConfig = {

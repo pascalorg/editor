@@ -34,6 +34,7 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  type PointerSupportSurface,
   publishPlacementSurface,
   resolvePointerSupportSurface,
   type SegmentAngleReference,
@@ -477,6 +478,7 @@ const StraightFenceTool: React.FC = () => {
   const previewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
+  const constructionSurface = useRef<PointerSupportSurface | null>(null)
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
@@ -524,6 +526,7 @@ const StraightFenceTool: React.FC = () => {
 
     const stopDrafting = () => {
       buildingState.current = 0
+      constructionSurface.current = null
       previewRef.current.visible = false
       setDraftMeasurement(null)
       setAxisGuide(null)
@@ -542,14 +545,20 @@ const StraightFenceTool: React.FC = () => {
       // (`event.localPosition[1]`) sits at the lift the committed fence
       // will get. Aiming past the deck edge drops it back to the floor.
       const pointed = pointedSurfaceFor(cameraRef.current, event)
-      if (pointed) {
+      const activeSurface = constructionSurface.current ?? pointed
+      if (activeSurface) {
         publishPlacementSurface(
-          surfacePointScratch.set(event.position[0], pointed.worldY, event.position[2]),
+          surfacePointScratch.set(event.position[0], activeSurface.worldY, event.position[2]),
           SURFACE_UP,
         )
       }
+      const activeY = activeSurface?.localPoint?.[1] ?? event.localPosition[1]
       const { walls, fences } = getCurrentLevelElements()
-      const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
+      const pointedLocal = buildingState.current === 0 ? pointed?.localPoint : null
+      const localPoint: FencePlanPoint = [
+        pointedLocal?.[0] ?? event.localPosition[0],
+        pointedLocal?.[2] ?? event.localPosition[2],
+      ]
       // While drafting, the segment locks to 15° rays from its start.
       // Snapping is governed by the snapping mode (`'off'` is the bypass);
       // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
@@ -568,7 +577,7 @@ const StraightFenceTool: React.FC = () => {
           }),
           { applySnap: !angleLocked },
         )
-        endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
+        endingPoint.current.set(snappedLocal[0], activeY, snappedLocal[1])
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setFenceDraftStart([startingPoint.current.x, startingPoint.current.z])
         draftPreview.setFenceDraftEnd(snappedLocal)
@@ -619,7 +628,7 @@ const StraightFenceTool: React.FC = () => {
             magnetic: isMagneticSnapActive(),
           }),
         )
-        cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
+        cursorRef.current.position.set(snappedPoint[0], activeY, snappedPoint[1])
         setDraftMeasurement(null)
         setAxisGuide(null)
       }
@@ -633,6 +642,7 @@ const StraightFenceTool: React.FC = () => {
       }
 
       const { walls, fences } = getCurrentLevelElements()
+      const pointed = pointedSurfaceFor(cameraRef.current, event)
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
 
       if (buildingState.current === 0) {
@@ -644,7 +654,12 @@ const StraightFenceTool: React.FC = () => {
             magnetic: isMagneticSnapActive(),
           }),
         )
-        startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
+        startingPoint.current.set(
+          snappedStart[0],
+          pointed?.localPoint?.[1] ?? event.localPosition[1],
+          snappedStart[1],
+        )
+        constructionSurface.current = pointed
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
         const draftPreview = useFloorplanDraftPreview.getState()
@@ -675,11 +690,15 @@ const StraightFenceTool: React.FC = () => {
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
-        const pointed = pointedSurfaceFor(cameraRef.current, event)
+        const pointedSurface = constructionSurface.current ?? pointed
         const createdFence = createFenceOnCurrentLevel(
           [startingPoint.current.x, startingPoint.current.z],
           snappedEnd,
-          { supportCap: pointed ? pointed.elevation : null },
+          {
+            supportCap: pointedSurface?.elevation ?? null,
+            preferredSupportSlabId: pointedSurface?.supportSlabId ?? null,
+            constructionElevation: pointedSurface?.sourceNodeId ? pointedSurface.elevation : null,
+          },
         )
         if (!createdFence) return
 
@@ -700,7 +719,11 @@ const StraightFenceTool: React.FC = () => {
         // chains its next segment from the same point (its own snap
         // pipeline can resolve a slightly different endpoint).
         useSegmentDraftChain.getState().setChainStart('fence', [nextStart[0], nextStart[1]])
-        startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
+        startingPoint.current.set(
+          nextStart[0],
+          constructionSurface.current?.localPoint?.[1] ?? event.localPosition[1],
+          nextStart[1],
+        )
         endingPoint.current.copy(startingPoint.current)
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setFenceDraftEnd(null)
@@ -806,7 +829,7 @@ const SplineFenceDraft: React.FC = () => {
   cameraRef.current = camera
   // Pointer cap for the commit (Enter / double-click carry no useful grid
   // event of their own) — last resolved on move/click.
-  const supportCapRef = useRef<number | null>(null)
+  const supportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   const draftRef = useRef(draftPoints)
 
   draftRef.current = draftPoints
@@ -831,7 +854,11 @@ const SplineFenceDraft: React.FC = () => {
       const points = draftRef.current
       if (points.length >= 2) {
         const created = createSplineFenceOnCurrentLevel(points, undefined, {
-          supportCap: supportCapRef.current,
+          supportCap: supportSurfaceRef.current?.elevation ?? null,
+          preferredSupportSlabId: supportSurfaceRef.current?.supportSlabId ?? null,
+          constructionElevation: supportSurfaceRef.current?.sourceNodeId
+            ? supportSurfaceRef.current.elevation
+            : null,
         })
         if (created) {
           triggerSFX('sfx:item-place')
@@ -848,27 +875,37 @@ const SplineFenceDraft: React.FC = () => {
 
     const trackPointedSurface = (event: GridEvent) => {
       const pointed = pointedSurfaceFor(cameraRef.current, event)
-      if (!pointed) return
-      supportCapRef.current = pointed.elevation
+      if (!pointed) return null
+      if (draftRef.current.length === 0) supportSurfaceRef.current = pointed
+      const activeSurface = supportSurfaceRef.current ?? pointed
       publishPlacementSurface(
-        surfacePointScratch.set(event.position[0], pointed.worldY, event.position[2]),
+        surfacePointScratch.set(event.position[0], activeSurface.worldY, event.position[2]),
         SURFACE_UP,
       )
-      setLiftY(event.localPosition[1])
+      setLiftY(activeSurface.localPoint?.[1] ?? event.localPosition[1])
+      return pointed
     }
 
     const onMove = (event: GridEvent) => {
-      trackPointedSurface(event)
-      setCursor(snapPoint([event.localPosition[0], event.localPosition[2]]))
+      const pointed = trackPointedSurface(event)
+      setCursor(
+        snapPoint([
+          pointed?.localPoint?.[0] ?? event.localPosition[0],
+          pointed?.localPoint?.[2] ?? event.localPosition[2],
+        ]),
+      )
     }
 
     const onClick = (event: GridEvent) => {
-      trackPointedSurface(event)
+      const pointed = trackPointedSurface(event)
       if (event.nativeEvent.detail >= 2) {
         commit()
         return
       }
-      const point = snapPoint([event.localPosition[0], event.localPosition[2]])
+      const point = snapPoint([
+        pointed?.localPoint?.[0] ?? event.localPosition[0],
+        pointed?.localPoint?.[2] ?? event.localPosition[2],
+      ])
       triggerSFX('sfx:grid-snap')
       setDraftPoints((prev) => [...prev, point])
     }

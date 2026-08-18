@@ -62,6 +62,26 @@ So picking the Mediterranean theme gives a blue roof + warm walls without touchi
 
 Each of these reads `shading`/`textures`/`colorPreset`/`sceneTheme` from `useViewer` (or receives them threaded from `GeometrySystem`) and **must include `sceneTheme` in its material cache key and its rebuild dependency array**, or theme switches won't re-colour. `GeometrySystem` marks every geometry node dirty on any of those changing.
 
+## Custom-mesh face materials
+
+blockes use the reusable `MaterialRef` model through stable, user-named object slots. `BlockNode.slots` maps slot IDs to `scene:` or `library:` references, `slotNames` stores their editable labels, and each `BlockFace.materialSlot` stores one slot ID. `body` is the permanent base slot and the fallback for unbound or unresolved slots.
+
+The geometry builder emits one Three.js group per topology face and a material array ordered by the node's stable slot IDs. It publishes that render-material order as `userData.slotIds` and records each face's vertex range in `geometry.userData.blockFaces`. The paint capability re-raycasts the mesh and maps the hit triangle through those ranges to a stable topology face ID, so preview and commit affect only that face. Face UVs retain the world-scale projection contract below.
+
+The block inspector calls this collection **Slots**. Users add and rename slots independently from their material binding. A compact dropdown changes the active slot's material using deduplicated `MaterialRef`s already used by scene node slots plus reusable scene-material datablocks. Choosing a slot changes only the transient assignment source; **Assign** applies that slot to the selected faces. **Select** and **Deselect** only add or subtract faces using the active slot from transient component selection.
+
+Deleting a non-body slot remaps every assigned face to `body` in the same node update, and `body` becomes the active assignment source. The reusable scene or library material remains available to other nodes.
+
+The global Paint tool resolves the hit face's assigned slot and changes that slot's material binding. A fresh mesh has every face assigned to `body`, so its first paint updates the entire mesh. Once faces are assigned to named slots, painting any one of those faces updates every face using that slot. A one-off material reuses a structurally matching scene material before creating a reusable scene material. Erasing clears the slot binding; `body` returns to the wall-role default and other unbound slots fall back to `body`.
+
+Topology operators preserve assignments deterministically:
+
+- retained and transformed faces keep their slot;
+- extrude caps/sides and inset caps/rings inherit the source face;
+- loop-cut pieces inherit the face they split;
+- bevel bands and mixed-material dissolve use the first adjacent face in stable `topology.faces` order;
+- deleting the last face that uses a slot does not delete its reusable material.
+
 ### External plugin renderers
 
 Plugin renderers follow the same four axes through the public `@pascal-app/viewer`

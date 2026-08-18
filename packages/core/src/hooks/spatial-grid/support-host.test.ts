@@ -12,6 +12,7 @@ import { GROUND_SUPPORT_ID, getFloorPlacedElevation } from './floor-placed-eleva
 import { getWallBaseElevationForNodes, spatialGridManager } from './spatial-grid-manager'
 import { initSpatialGridSync } from './spatial-grid-sync'
 import {
+  resolveFrozenFloorPlacementPatch,
   resolveMovedWallSupportSlabPatch,
   resolveSupportSlabPatch,
   resolveWallSupportSlabPatch,
@@ -269,6 +270,60 @@ describe('persisted support hosts (items)', () => {
     expect(resolveSupportSlabPatch(node, nodesFor(level, node, low as AnyNode))).toEqual({
       supportSlabId: undefined,
     })
+  })
+
+  test('a pinned placement is not lifted by a slab generated above it later', () => {
+    registerFloorPlacedItem()
+
+    const level = makeLevel()
+    const node = makeFloorNode()
+    const supportPatch = resolveSupportSlabPatch(node, nodesFor(level, node), {
+      pinSupport: true,
+    })
+    expect(supportPatch).toEqual({ supportSlabId: GROUND_SUPPORT_ID })
+
+    const pinnedNode = makeFloorNode(supportPatch as Partial<AnyNode>)
+    addSlab(makeSlab('slab_generated', SQUARE, 2.45, { autoFromWalls: true }))
+
+    expect(
+      getFloorPlacedElevation({
+        node: pinnedNode,
+        nodes: nodesFor(level, pinnedNode),
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+      }),
+    ).toBe(0)
+  })
+
+  test('a frozen node-top placement keeps its exact height when a slab appears later', () => {
+    registerFloorPlacedItem()
+    const low = makeSlab('slab_low', SQUARE, 0.25)
+    addSlab(low)
+
+    const level = makeLevel()
+    const node = makeFloorNode()
+    const nodes = nodesFor(level, node, low as AnyNode)
+    const patch = resolveFrozenFloorPlacementPatch(node, nodes, {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      elevation: 2,
+      preferredSlabId: low.id,
+    })
+
+    expect(patch).toEqual({ supportSlabId: low.id, position: [0, 1.75, 0] })
+
+    const placed = makeFloorNode(patch as Partial<AnyNode>)
+    const generated = makeSlab('slab_generated', SQUARE, 1.5, { autoFromWalls: true })
+    addSlab(generated)
+    expect(
+      placed.position[1] +
+        getFloorPlacedElevation({
+          node: placed,
+          nodes: nodesFor(level, placed, low as AnyNode, generated as AnyNode),
+          position: placed.position,
+          rotation: placed.rotation,
+        }),
+    ).toBeCloseTo(2)
   })
 
   test('item support follows the RENDERED slab polygon (wall band adoption)', () => {

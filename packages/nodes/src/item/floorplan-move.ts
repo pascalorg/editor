@@ -5,6 +5,7 @@ import {
   collectAlignmentAnchors,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  getBlockFaceFrame,
   getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
@@ -130,6 +131,26 @@ function resolveItemPlanTransform(
         rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
       }
     }
+  } else if (parent?.type === 'block' && item.blockFaceId) {
+    const frame = getBlockFaceFrame(parent.topology, item.blockFaceId)
+    if (frame) {
+      const localX =
+        frame.origin[0] +
+        frame.xAxis[0] * item.position[0] +
+        frame.yAxis[0] * item.position[1] +
+        frame.normal[0] * item.position[2]
+      const localZ =
+        frame.origin[2] +
+        frame.xAxis[2] * item.position[0] +
+        frame.yAxis[2] * item.position[1] +
+        frame.normal[2] * item.position[2]
+      const [offsetX, offsetZ] = rotateVec(localX, localZ, parent.rotation ?? 0)
+      result = {
+        point: [parent.position[0] + offsetX, parent.position[2] + offsetZ],
+        rotation:
+          (parent.rotation ?? 0) - Math.atan2(frame.xAxis[2], frame.xAxis[0]) + localRotation,
+      }
+    }
   }
 
   cache.set(item.id as AnyNodeId, result)
@@ -243,6 +264,7 @@ function buildWallItemSession(
         parentId: hit.wall.id,
         roofSegmentId: undefined,
         roofFace: undefined,
+        blockFaceId: undefined,
       }
       useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
       useScene.getState().markDirty(node.id as AnyNodeId)

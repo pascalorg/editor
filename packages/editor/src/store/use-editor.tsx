@@ -6,35 +6,17 @@ import {
   type AnyNodeId,
   type BrushSettings,
   type BuildingNode,
-  type CabinetModuleNode,
-  type CabinetNode,
-  type CeilingNode,
   type ChimneyMaterialRole,
-  type ChimneyNode,
-  type ColumnNode,
   DEFAULT_BRUSH_SETTINGS,
-  type DoorNode,
-  type DormerNode,
   type DormerSurfaceMaterialRole,
-  type ElevatorNode,
-  type FenceNode,
-  type ItemNode,
   type LevelNode,
   nodeRegistry,
-  type RoofNode,
-  type RoofSegmentNode,
   type RoofSurfaceMaterialRole,
-  type SlabNode,
   type Space,
-  type SpawnNode,
-  type StairNode,
-  type StairSegmentNode,
   type StairSurfaceMaterialRole,
   type TerrainVerb,
   useScene,
-  type WallNode,
   type WallSurfaceSide,
-  type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
@@ -79,31 +61,6 @@ const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'build'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
 const MIN_FLOORPLAN_PANE_RATIO = 0.15
 const MAX_FLOORPLAN_PANE_RATIO = 0.85
-
-function resolveMovingNodeTarget(
-  node:
-    | ItemNode
-    | WindowNode
-    | DoorNode
-    | ElevatorNode
-    | CeilingNode
-    | ChimneyNode
-    | ColumnNode
-    | DormerNode
-    | SlabNode
-    | WallNode
-    | FenceNode
-    | RoofNode
-    | RoofSegmentNode
-    | SpawnNode
-    | StairNode
-    | StairSegmentNode
-    | BuildingNode
-    | CabinetNode
-    | CabinetModuleNode,
-) {
-  return node
-}
 
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
@@ -310,29 +267,7 @@ type EditorState = {
   setPlacementDragMode: (dragMode: boolean) => void
   roofHostDragArmedId: AnyNodeId | null
   setRoofHostDragArmedId: (nodeId: AnyNodeId | null) => void
-  setMovingNode: (
-    node:
-      | ItemNode
-      | WindowNode
-      | DoorNode
-      | ElevatorNode
-      | CeilingNode
-      | ChimneyNode
-      | ColumnNode
-      | DormerNode
-      | SlabNode
-      | WallNode
-      | FenceNode
-      | RoofNode
-      | RoofSegmentNode
-      | SpawnNode
-      | StairNode
-      | StairSegmentNode
-      | BuildingNode
-      | CabinetNode
-      | CabinetModuleNode
-      | null,
-  ) => void
+  setMovingNode: (node: AnyNode | null) => void
   /**
    * Which view (2D floor plan or 3D viewer) most recently completed
    * the active move — set by the committing or cancelling side just
@@ -1085,7 +1020,7 @@ const useEditor = create<EditorState>()(
           set({ placementDragMode: false })
           return
         }
-        const targetNode = resolveMovingNodeTarget(node)
+        const targetNode = node
         const isNew = Boolean((targetNode as { metadata?: { isNew?: boolean } }).metadata?.isNew)
         if (isNew) {
           scope.begin({
@@ -1095,6 +1030,7 @@ const useEditor = create<EditorState>()(
             nodeType: targetNode.type,
             view: '3d',
             pressDrag: get().placementDragMode,
+            driver: 'move-tool',
           })
         } else {
           scope.begin({

@@ -56,6 +56,7 @@ export {
   formatMeasurement,
   MeasurementPill,
 } from './components/editor/measurement-pill'
+export { NodeActionMenu } from './components/editor/node-action-menu'
 // In-world arrow handle primitives (chevron geometry, invisible hit area,
 // shared material, palette + scale constants). Re-exported so kind-owned
 // 3D selection affordances in `@pascal-app/nodes` (duct side-move / height /
@@ -132,6 +133,7 @@ export {
   type PlacementCoordinatorConfig,
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
+export { useRegistryToolContext } from './components/tools/registry-tool-context'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
@@ -334,6 +336,12 @@ export {
   resolveCeilingPlanPointSnap,
 } from './lib/ceiling-plan-snap'
 export { EDITOR_LAYER } from './lib/constants'
+export type { ContextualShortcutHint } from './lib/contextual-help'
+export {
+  CONTEXTUAL_HELP_NODE_EXTENSION_KEY,
+  type ContextualHelpNodeExtension,
+  getContextualHelpNodeExtension,
+} from './lib/contextual-help-extension'
 // Helper libs used by the kind-owned roof / stair / elevator panels.
 export {
   CONTINUATION_PROFILES,
@@ -342,6 +350,7 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export { createEditorApi } from './lib/editor-api'
 export {
   filterEditableIds,
   isNodeEditLocked,
@@ -364,6 +373,7 @@ export {
   resolveElevatorSupportLevelId,
   resolveElevatorSupportY,
 } from './lib/elevator-support'
+export { getFloatingMenuScale } from './lib/floating-menu-scale'
 // Floor-plan stair helpers — the cumulative-transform walk
 // (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
 // builder (`buildFloorplanStairEntry`) used by the kind-owned stair
@@ -430,6 +440,7 @@ export {
   curveReshapeScope,
   endpointReshapeScope,
   holeEditScope,
+  meshEditScope,
   movingNodeOf,
   scopeNodeId,
 } from './lib/interaction/scope'
