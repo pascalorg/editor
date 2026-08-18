@@ -93,6 +93,8 @@ type ViewerState = {
 
   shadows: boolean
   setShadows: (shadows: boolean) => void
+  graphicsQuality: 'low' | 'medium' | 'high'
+  setGraphicsQuality: (quality: 'low' | 'medium' | 'high') => void
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
@@ -200,6 +202,7 @@ type PersistedViewerState = Partial<
     | 'colorPreset'
     | 'edges'
     | 'shadows'
+    | 'graphicsQuality'
     | 'unit'
     | 'metricNotation'
     | 'unitExplicit'
@@ -325,6 +328,11 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     colorPreset: pickString<ColorPreset>(state.colorPreset, COLOR_PRESETS, 'clay'),
     edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
     shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
+    graphicsQuality: pickString<ViewerState['graphicsQuality']>(
+      state.graphicsQuality,
+      ['low', 'medium', 'high'],
+      'high',
+    ),
     unit: pickString<ViewerState['unit']>(state.unit, UNITS, detectDefaultUnit()),
     metricNotation: pickString<MetricNotation>(state.metricNotation, METRIC_NOTATIONS, 'meters'),
     unitExplicit:
@@ -410,6 +418,8 @@ const useViewer = create<ViewerState>()(
 
       shadows: true,
       setShadows: (shadows) => set({ shadows }),
+      graphicsQuality: 'high',
+      setGraphicsQuality: (graphicsQuality) => set({ graphicsQuality }),
 
       unit: detectDefaultUnit(),
       metricNotation: 'meters',
@@ -568,6 +578,7 @@ const useViewer = create<ViewerState>()(
         colorPreset: state.colorPreset,
         edges: state.edges,
         shadows: state.shadows,
+        graphicsQuality: state.graphicsQuality,
         ...(state.unitExplicit ? { unit: state.unit } : {}),
         metricNotation: state.metricNotation,
         levelMode: state.levelMode,

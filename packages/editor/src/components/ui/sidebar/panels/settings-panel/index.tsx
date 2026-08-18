@@ -207,6 +207,8 @@ export function SettingsPanel({
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
+  const graphicsQuality = useViewer((state) => state.graphicsQuality)
+  const setGraphicsQuality = useViewer((state) => state.setGraphicsQuality)
   const locale = useUiPreferences((state) => state.locale)
   const theme = useUiPreferences((state) => state.theme)
   const setLocale = useUiPreferences((state) => state.setLocale)
@@ -402,6 +404,41 @@ export function SettingsPanel({
               >
                 <Moon className="size-4" />
                 Dark
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div>
+              <div className="font-medium text-sm">Graphics Quality</div>
+              <div className="text-muted-foreground text-xs">
+                Adjust render and shadow quality.
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                aria-pressed={graphicsQuality === 'low'}
+                onClick={() => setGraphicsQuality('low')}
+                size="sm"
+                variant={graphicsQuality === 'low' ? 'default' : 'outline'}
+              >
+                Low
+              </Button>
+              <Button
+                aria-pressed={graphicsQuality === 'medium'}
+                onClick={() => setGraphicsQuality('medium')}
+                size="sm"
+                variant={graphicsQuality === 'medium' ? 'default' : 'outline'}
+              >
+                Medium
+              </Button>
+              <Button
+                aria-pressed={graphicsQuality === 'high'}
+                onClick={() => setGraphicsQuality('high')}
+                size="sm"
+                variant={graphicsQuality === 'high' ? 'default' : 'outline'}
+              >
+                High
               </Button>
             </div>
           </div>
