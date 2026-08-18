@@ -10,8 +10,6 @@ export const ScanRenderer = ({ node }: { node: ScanNode }) => {
   const ref = useRef<Group>(null!)
   useRegistry(node.id, 'scan', ref)
 
-  const resolvedUrl = useAssetUrl(node.url)
-
   return (
     <group
       position={node.position}
@@ -20,12 +18,20 @@ export const ScanRenderer = ({ node }: { node: ScanNode }) => {
       scale={[node.scale, node.scale, node.scale]}
       visible={showScans}
     >
-      {resolvedUrl && (
-        <Suspense>
-          <ScanModel opacity={node.opacity} url={resolvedUrl} />
-        </Suspense>
-      )}
+      {node.url && <ScanAsset opacity={node.opacity} url={node.url} />}
     </group>
+  )
+}
+
+const ScanAsset = ({ url, opacity }: { url: string; opacity: number }) => {
+  const resolvedUrl = useAssetUrl(url)
+
+  if (!resolvedUrl) return null
+
+  return (
+    <Suspense>
+      <ScanModel opacity={opacity} url={resolvedUrl} />
+    </Suspense>
   )
 }
 
