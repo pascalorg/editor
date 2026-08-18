@@ -26,10 +26,12 @@ import {
  * the one place the two meet.
  */
 export function takeoffForSubtree(rootId: AnyNodeId): QuantityTakeoff {
+  const state = useScene.getState()
   return buildQuantityTakeoff(
-    useScene.getState().nodes as Readonly<Record<AnyNodeId, AnyNode>>,
+    state.nodes as Readonly<Record<AnyNodeId, AnyNode>>,
     rootId,
     (kind) => nodeRegistry.get(kind)?.quantities as QuantitiesContribution<AnyNode> | undefined,
+    state.materials,
   )
 }
 

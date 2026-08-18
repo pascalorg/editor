@@ -148,6 +148,7 @@ export {
 export {
   buildQuantityTakeoff,
   collectNodesByKind,
+  getMaterialLabel,
   mergeQuantityRows,
   type QuantitiesContribution,
   type QuantityContext,

@@ -1,15 +1,28 @@
-import type { CeilingNode, QuantitiesContribution, QuantityRow } from '@pascal-app/core'
+import {
+  type CeilingNode,
+  type QuantitiesContribution,
+  type QuantityRow,
+  getMaterialLabel,
+} from '@pascal-app/core'
 import { planPolygonNetArea, planPolygonPerimeter } from '../shared/plan-polygon-area'
 
 /** Ceiling takeoff: hole-subtracted surface and edge perimeter. */
-export const ceilingQuantities: QuantitiesContribution<CeilingNode> = (ceilings) => {
+export const ceilingQuantities: QuantitiesContribution<CeilingNode> = (ceilings, ctx) => {
   const rows: QuantityRow[] = []
 
   for (const ceiling of ceilings) {
     const area = planPolygonNetArea(ceiling.polygon, ceiling.holes)
     if (!Number.isFinite(area) || area <= 0) continue
 
-    rows.push({ key: 'area', label: 'Surface area', unit: 'area', value: area })
+    const surfaceRef = ceiling.slots?.['surface'] ?? ceiling.materialPreset
+
+    rows.push({
+      key: 'area',
+      label: 'Surface area',
+      unit: 'area',
+      value: area,
+      group: getMaterialLabel(surfaceRef, ctx),
+    })
     rows.push({
       key: 'perimeter',
       label: 'Edge perimeter',
