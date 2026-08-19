@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  createSceneApi,
   type FenceNode,
   nodeRegistry,
   type SlabNode,
@@ -13,7 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
-import {
+import useInteractionScope, {
   useControlPointReshape,
   useEditingHole,
   useEndpointReshape,
@@ -30,6 +31,7 @@ import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
+import { RegistryToolProvider } from './registry-tool-context'
 import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
@@ -103,6 +105,9 @@ export const ToolManager: React.FC = () => {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const movingNode = useMovingNode()
+  const registryToolOwnsPlacement = useInteractionScope(
+    (state) => state.scope.kind === 'placing' && state.scope.driver === 'registry-tool',
+  )
   const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
   const endpointReshape = useEndpointReshape()
   const controlPointReshape = useControlPointReshape()
@@ -141,6 +146,15 @@ export const ToolManager: React.FC = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
+  const registrySceneApi = useMemo(() => createSceneApi(useScene), [])
+  const registryToolContext = useMemo(
+    () => ({
+      activeLevelId: activeLevelId ?? null,
+      sceneApi: registrySceneApi,
+      selectNode: (nodeId: AnyNodeId) => setSelection({ selectedIds: [nodeId] }),
+    }),
+    [activeLevelId, registrySceneApi, setSelection],
+  )
 
   // Building transform for the local group — all building-relative tools live inside this group
   // so their cursor positions and committed data are naturally in building-local space.
@@ -233,7 +247,7 @@ export const ToolManager: React.FC = () => {
   // (the scene writes the overlay makes still mirror into the 3D view). A
   // 3D-initiated move leaves the origin null until its own commit, so this only
   // suppresses the 3D tool for genuinely 2D-owned moves.
-  const showMover = movingNode != null && movingNodeOrigin !== '2d'
+  const showMover = movingNode != null && movingNodeOrigin !== '2d' && !registryToolOwnsPlacement
 
   // Registry-first: if the active tool's kind has a NodeDefinition with a
   // tool contribution, the registry-driven tool takes over.
@@ -375,9 +389,11 @@ export const ToolManager: React.FC = () => {
         )}
         {/* Registry-first: when the active tool's kind has a registered
             NodeDefinition with a tool contribution, mount it here. */}
-        {!movingNode && useRegistryTool && RegistryToolComponent && (
+        {(!movingNode || registryToolOwnsPlacement) && useRegistryTool && RegistryToolComponent && (
           <Suspense fallback={null}>
-            <RegistryToolComponent />
+            <RegistryToolProvider value={registryToolContext}>
+              <RegistryToolComponent />
+            </RegistryToolProvider>
           </Suspense>
         )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (

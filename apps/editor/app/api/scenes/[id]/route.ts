@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import {
   guardSceneApiRequest,
@@ -18,6 +19,13 @@ const putSceneSchema = z.object({
   graph: apiGraphSchema,
   thumbnailUrl: z.string().url().nullable().optional(),
   expectedVersion: z.number().int().nonnegative().optional(),
+  /**
+   * Overwriting a populated scene with a 0-node graph is rejected (409
+   * `empty_graph_rejected`) unless this is set: an empty PUT is a hydration
+   * race or a bug far more often than an intentional full deletion, and the
+   * wipe is silent while the deletion is recoverable from scene_revisions.
+   */
+  force: z.boolean().optional(),
 })
 
 const patchSceneSchema = z.object({
@@ -82,6 +90,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const existing = await operations.loadStoredScene(id)
     if (!existing) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
+    }
+    if (
+      !parsed.data.force &&
+      isEmptyGraphOverwrite(countGraphNodes(parsed.data.graph), existing.nodeCount)
+    ) {
+      return sceneApiJson(
+        request,
+        {
+          error: 'empty_graph_rejected',
+          details: `Refusing to overwrite ${existing.nodeCount} nodes with an empty graph. Pass "force": true to overwrite intentionally.`,
+          currentVersion: existing.version,
+          currentNodeCount: existing.nodeCount,
+        },
+        { status: 409 },
+      )
     }
     const meta = await operations.saveScene({
       id,

@@ -6,6 +6,7 @@ import {
   type AnyNodeId,
   bboxAnchors,
   bboxCornerAnchors,
+  createSceneApi,
   emitter,
   type FloorplanMoveTargetSession,
   nodeRegistry,
@@ -104,12 +105,14 @@ export function FloorplanRegistryMoveOverlay() {
     // ── Path 1 — kind-owned `floorplanMoveTarget` ───────────────────
     if (hasMoveTarget && def?.floorplanMoveTarget) {
       const sceneNodes = useScene.getState().nodes
+      const sceneApi = createSceneApi(useScene)
       const session: FloorplanMoveTargetSession = (
         def.floorplanMoveTarget as (a: {
           node: AnyNode
           nodes: Record<AnyNodeId, AnyNode>
+          sceneApi: ReturnType<typeof createSceneApi>
         }) => FloorplanMoveTargetSession
-      )({ node: movingNode, nodes: sceneNodes })
+      )({ node: movingNode, nodes: sceneNodes, sceneApi })
 
       // Capture snapshots of every affected node BEFORE the first apply
       // so the single-undo dance has a clean baseline to revert to.

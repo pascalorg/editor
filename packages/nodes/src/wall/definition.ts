@@ -1,4 +1,10 @@
-import type { AnyNodeId, NodeDefinition } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  getWallBaseElevationForNodes,
+  getWallEffectiveHeightForNodes,
+  type NodeDefinition,
+  type WallNode as WallNodeType,
+} from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
@@ -34,7 +40,7 @@ import { wallSlots } from './slots'
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
-  schemaVersion: 7,
+  schemaVersion: 8,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -46,7 +52,13 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
           !node.children.some((childId) => {
             const child = nodes[childId as AnyNodeId]
             if (!child) return false
-            if (child.type === 'door' || child.type === 'window') return true
+            if (
+              child.type === 'door' ||
+              child.type === 'window' ||
+              child.type === 'lean-to-extension'
+            ) {
+              return true
+            }
             if (child.type !== 'item') return false
             return child.asset?.attachTo === 'wall' || child.asset?.attachTo === 'wall-side'
           }),
@@ -73,6 +85,14 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     selectable: { hitVolume: 'bbox' },
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
+      top: {
+        height: (node, { nodes }) => {
+          const wall = node as WallNodeType
+          return (
+            getWallBaseElevationForNodes(wall, nodes) + getWallEffectiveHeightForNodes(wall, nodes)
+          )
+        },
+      },
       sides: { faces: 'all' },
     },
     duplicable: true,
@@ -90,7 +110,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   relations: {
-    hosts: ['door', 'window', 'item'],
+    hosts: ['door', 'window', 'item', 'lean-to-extension'],
     affectsSpatial: ['slab', 'ceiling', 'zone'],
     linkedBy: 'endpoint-match',
     cascadeDelete: 'descendants',
@@ -154,7 +174,8 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   presentation: {
     label: 'Wall',
-    description: 'A straight or curved wall segment. Hosts doors, windows, and wall-mounted items.',
+    description:
+      'A straight or curved wall segment. Hosts doors, windows, lean-to extensions, and wall-mounted items.',
     icon: { kind: 'url', src: '/icons/wall.webp' },
     paletteSection: 'structure',
     paletteOrder: 10,

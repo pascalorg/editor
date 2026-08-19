@@ -55,8 +55,12 @@ function downspoutLengthHandle(): HandleDescriptor<DownspoutNodeType> {
     anchor: 'max',
     shape: 'tracker',
     min: MIN_LENGTH,
+    gridSnap: true,
     currentValue: (n) => n.length,
-    apply: (_n, newValue) => ({ length: Math.max(MIN_LENGTH, newValue) }),
+    apply: (_n, newValue) => ({
+      length: Math.max(MIN_LENGTH, newValue),
+      lengthMode: 'manual',
+    }),
     placement: {
       position: (n, scene) => {
         const routing = resolveDownspoutRouting(n, scene)
@@ -110,13 +114,14 @@ function downspoutMoveHandle(side: 'left' | 'right'): HandleDescriptor<Downspout
     axis: 'x',
     anchor: 'min',
     cursor: 'ew-resize',
+    gridSnap: true,
     overrideTarget: (n) => (n.gutterId ? (n.gutterId as AnyNodeId) : undefined),
     currentValue: (n) => readOutletOffset(n),
     apply: (n, newOffset, scene) => {
       const gutter = n.gutterId ? scene.get<GutterNode>(n.gutterId as AnyNodeId) : undefined
       if (!gutter) return {}
       const outlets = (gutter.outlets ?? []).map((o) =>
-        o.id === n.outletId ? { ...o, offset: newOffset } : o,
+        o.id === n.outletId ? { ...o, offset: newOffset, generatedBy: undefined } : o,
       )
       // Patch targets the GUTTER (overrideTarget), not the downspout.
       return { outlets } as unknown as Partial<DownspoutNodeType>
@@ -155,10 +160,11 @@ const downspoutHandles: HandleDescriptor<DownspoutNodeType>[] = [
  */
 export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   kind: 'downspout',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: DownspoutNode,
   category: 'structure',
   surfaceRole: 'roof',
+  snapProfile: 'item',
 
   defaults: () => {
     const stub = DownspoutNodeSchema.parse({
@@ -185,6 +191,10 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  system: {
+    module: () => import('./system'),
+    priority: 2,
+  },
 
   preview: () => import('./preview'),
   tool: () => import('./tool'),
@@ -197,7 +207,7 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   presentation: {
     label: 'Downspout',
     description: 'Vertical drop pipe from a gutter outlet to the ground.',
-    icon: { kind: 'url', src: '/icons/roof.webp' },
+    icon: { kind: 'url', src: '/icons/downspout.webp' },
     paletteSection: 'structure',
     paletteOrder: 123,
   },

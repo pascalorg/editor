@@ -4,6 +4,7 @@ import {
   clearPlacementSurface,
   getPlacementSurface,
   publishPlacementSurface,
+  usesOrientedPlacementPlane,
 } from './active-placement-surface'
 
 describe('active placement surface', () => {
@@ -20,5 +21,9 @@ describe('active placement surface', () => {
     publishPlacementSurface(new Vector3(), new Vector3(0, 1, 0))
 
     expect(getPlacementSurface()?.projection).toBe('surface')
+  })
+
+  test('orients the grid to a sloped placement surface', () => {
+    expect(usesOrientedPlacementPlane(new Vector3(0, 0.6, 0.8))).toBe(true)
   })
 })

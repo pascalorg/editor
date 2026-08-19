@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   createDefaultRidgeVentsForSegment,
+  isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
   ROOF_SHAPE_DEFAULTS,
@@ -53,6 +54,11 @@ function shouldShowTrimPlanes(metadata: unknown): boolean {
   return metadataRecord(metadata).showTrimPlanes === true
 }
 
+function isManagedLeanToRoofSegment(metadata: unknown): boolean {
+  const record = metadataRecord(metadata)
+  return record.managedByLeanTo !== undefined && record.leanToRole === 'roof-segment'
+}
+
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)) {
     return metadata as Record<string, unknown>
@@ -77,6 +83,13 @@ export default function RoofSegmentPanel() {
     if (current?.type !== 'roof-segment') return false
     return isAutoRidgeVentEnabled(current, s.nodes)
   })
+  const autoGutterEnabled = useScene((s) => {
+    const current = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined)
+      : undefined
+    if (current?.type !== 'roof-segment') return false
+    return isAutoGutterEnabled(current, s.nodes)
+  })
 
   const handleUpdate = useCallback(
     (updates: Partial<RoofSegmentNode>) => {
@@ -88,6 +101,7 @@ export default function RoofSegmentPanel() {
 
   const handleRoofTypeChange = useCallback(
     (roofType: RoofType) => {
+      if (isManagedLeanToRoofSegment(node?.metadata)) return
       // Switching to Dutch resets the shape parameters to their defaults so the
       // gablet is well-formed regardless of the leftover values from the
       // previous roof type.
@@ -104,7 +118,7 @@ export default function RoofSegmentPanel() {
           : { roofType },
       )
     },
-    [handleUpdate],
+    [handleUpdate, node?.metadata],
   )
 
   const handleClose = useCallback(() => {
@@ -205,9 +219,23 @@ export default function RoofSegmentPanel() {
     [selectedId],
   )
 
+  const handleAutoGutterToggle = useCallback(
+    (checked: boolean) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const current = scene.nodes[selectedId as AnyNodeId] as RoofSegmentNode | undefined
+      if (current?.type !== 'roof-segment') return
+      scene.updateNode(selectedId as AnyNodeId, {
+        metadata: { ...metadataRecord(current.metadata), autoGutter: checked },
+      })
+    },
+    [selectedId],
+  )
+
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
+  const managedLeanToRoofSegment = isManagedLeanToRoofSegment(node.metadata)
 
   return (
     <PanelWrapper
@@ -222,11 +250,13 @@ export default function RoofSegmentPanel() {
           onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS}
           value={node.roofType}
+          disabled={managedLeanToRoofSegment}
         />
         <SegmentedControl
           onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS_2}
           value={node.roofType}
+          disabled={managedLeanToRoofSegment}
         />
       </PanelSection>
 
@@ -247,6 +277,14 @@ export default function RoofSegmentPanel() {
             onChange={handleAutoRidgeVentToggle}
           />
         )}
+      </PanelSection>
+
+      <PanelSection title="Drainage">
+        <ToggleControl
+          checked={autoGutterEnabled}
+          label="Auto gutters"
+          onChange={handleAutoGutterToggle}
+        />
       </PanelSection>
 
       <PanelSection title="Footprint">

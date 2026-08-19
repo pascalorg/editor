@@ -12,7 +12,7 @@ export const ceilingParametrics: ParametricDescriptor<CeilingNode> = {
   groups: [
     {
       label: 'Dimensions',
-      fields: [{ key: 'height', kind: 'number', unit: 'm', min: 1.5, max: 6, step: 0.05 }],
+      fields: [{ key: 'height', kind: 'number', unit: 'm', min: 1.5, max: 20, step: 0.05 }],
     },
   ],
   customPanel: () => import('./panel'),

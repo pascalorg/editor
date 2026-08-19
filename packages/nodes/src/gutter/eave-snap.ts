@@ -1,4 +1,10 @@
-import type { RoofSegmentNode, RoofType } from '@pascal-app/core'
+import {
+  computeGutterEaveY,
+  GUTTER_EAVE_TUCK_INWARD,
+  GUTTER_EAVE_TUCK_UP,
+  type RoofSegmentNode,
+  type RoofType,
+} from '@pascal-app/core'
 
 /**
  * Shared eave-snap math for the gutter's placement + move tools.
@@ -21,8 +27,8 @@ import type { RoofSegmentNode, RoofType } from '@pascal-app/core'
 // drip-edge. These tuck the snap so the gutter reads as "attached to
 // the fascia" rather than "floating at the very tip of the overhang".
 // Tuned by feel — bump them up if the gutter looks too low / outboard.
-export const EAVE_TUCK_INWARD = 0.04
-export const EAVE_TUCK_UP = 0.04
+export const EAVE_TUCK_INWARD = GUTTER_EAVE_TUCK_INWARD
+export const EAVE_TUCK_UP = GUTTER_EAVE_TUCK_UP
 
 export type EaveSide = '+X' | '-X' | '+Z' | '-Z'
 
@@ -53,17 +59,7 @@ export type EaveSnap = {
 export function computeEaveY(
   segment: Pick<RoofSegmentNode, 'wallHeight' | 'overhang' | 'pitch' | 'roofType'>,
 ): number {
-  const wallHeight = segment.wallHeight ?? 0
-  // Flat roofs have no slope drop and no slope-surface-vs-deck-top
-  // offset — the deck top IS the eave line. EAVE_TUCK_UP is a
-  // correction that lifts a SLOPED gutter from the slope-surface up to
-  // the deck-top line; applying it to a flat deck floats the gutter
-  // above the roof and leaves a visible gap between the edge and the
-  // gutter. So mount flat gutters right at the deck top.
-  if ((segment.roofType ?? 'gable') === 'flat') return wallHeight
-  const overhang = segment.overhang ?? 0
-  const pitchRad = ((segment.pitch ?? 0) * Math.PI) / 180
-  return wallHeight - overhang * Math.tan(pitchRad) + EAVE_TUCK_UP
+  return computeGutterEaveY(segment)
 }
 
 /**

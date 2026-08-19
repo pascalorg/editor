@@ -5,7 +5,6 @@ import {
   type AnyNodeId,
   type BoxVentNode,
   type ChimneyNode,
-  createDefaultRidgeVentsForSegment,
   type DormerNode,
   type GutterNode,
   type RidgeVentNode,
@@ -176,15 +175,9 @@ export default function RoofPanel() {
       pitch: 40,
       roofType: 'gable',
       position: [2, 0, 2],
+      metadata: { autoRidgeVent: false },
     })
-    const ridgeVents = createDefaultRidgeVentsForSegment(segment)
-    createNodes([
-      { node: segment, parentId: node.id as AnyNodeId },
-      ...ridgeVents.map((ridgeVent) => ({
-        node: ridgeVent,
-        parentId: segment.id as AnyNodeId,
-      })),
-    ])
+    createNodes([{ node: segment, parentId: node.id as AnyNodeId }])
   }, [node, createNodes])
 
   const handleSelectSegment = useCallback(

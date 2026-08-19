@@ -7,6 +7,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
   useScene,
 } from '@pascal-app/core'
@@ -16,6 +17,8 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   movementSfxStepKey,
+  type PointerSupportSurface,
+  resolvePointerSupportSurface,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -23,6 +26,7 @@ import {
   usePlacementPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
+import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group } from 'three'
 import {
@@ -63,7 +67,11 @@ function createColumnFromPreset(presetId: ColumnPresetId, position: [number, num
  */
 const ColumnTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
+  const camera = useThree((state) => state.camera)
+  const cameraRef = useRef(camera)
+  cameraRef.current = camera
   const cursorRef = useRef<Group>(null)
+  const supportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   const previousSnapRef = useRef<string | null>(null)
   const cursorVisibleRef = useRef(false)
   const [cursorVisible, setCursorVisible] = useState(false)
@@ -85,16 +93,51 @@ const ColumnTool = () => {
     // node, so nothing real is excluded.
     let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
 
+    const pointedSurfaceFor = (event: FloorPlacementClickTriggerEvent) =>
+      typeof HTMLCanvasElement !== 'undefined' &&
+      event.nativeEvent?.target instanceof HTMLCanvasElement
+        ? resolvePointerSupportSurface(cameraRef.current, event.position, {
+            includeNodeTopSurfaces: true,
+          })
+        : null
+
+    const resolveColumnPlacement = (
+      position: [number, number, number],
+      surface: PointerSupportSurface | null,
+    ) => {
+      const column = ColumnNode.parse({
+        ...createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position),
+        parentId: activeLevelId,
+      })
+      const nodes = { ...useScene.getState().nodes, [column.id]: column }
+      const patch = surface?.sourceNodeId
+        ? resolveFrozenFloorPlacementPatch(column, nodes, {
+            position,
+            rotation: column.rotation,
+            elevation: surface.elevation,
+            preferredSlabId: surface.supportSlabId,
+          })
+        : {
+            position,
+            ...resolveSupportSlabPatch(column, nodes, {
+              maxElevation: surface?.elevation,
+            }),
+          }
+      return { column, patch }
+    }
+
     const onGridMove = (event: GridEvent) => {
       if (!cursorVisibleRef.current) {
         cursorVisibleRef.current = true
         setCursorVisible(true)
       }
 
+      const pointed = pointedSurfaceFor(event)
+      supportSurfaceRef.current = pointed
       const { position: alignedPosition, guides } = resolveAlignedFloorPlacement({
         node: previewNode,
-        rawX: event.localPosition[0],
-        rawZ: event.localPosition[2],
+        rawX: pointed?.localPoint?.[0] ?? event.localPosition[0],
+        rawZ: pointed?.localPoint?.[2] ?? event.localPosition[2],
         gridStep: useEditor.getState().gridSnapStep,
         candidates: alignmentCandidates,
         showAlignment: isAlignmentGuideActive(),
@@ -108,17 +151,20 @@ const ColumnTool = () => {
               collectStructuralGridAxes(useScene.getState().nodes, activeLevelId),
             )
           : null
-      const position: [number, number, number] = structuralSnap
+      const planPosition: [number, number, number] = structuralSnap
         ? [structuralSnap.point[0], alignedPosition[1], structuralSnap.point[1]]
         : alignedPosition
+      const { patch } = resolveColumnPlacement(planPosition, pointed)
+      const position = patch.position
       if (structuralSnap) useAlignmentGuides.getState().clear()
       else useAlignmentGuides.getState().set(guides)
 
       const visualPosition = getFloorStackPreviewPosition({
-        node: previewNode,
+        node: { ...previewNode, ...patch },
         position,
         rotation: previewNode.rotation,
         levelId: activeLevelId,
+        maxElevation: pointed?.sourceNodeId ? null : pointed?.elevation,
       })
       cursorRef.current?.position.set(...visualPosition)
       // Forward-facing floor triangle, drawn by the editor-side overlay. Columns
@@ -149,6 +195,8 @@ const ColumnTool = () => {
     }
 
     const commitAtCursor = (event: FloorPlacementClickTriggerEvent) => {
+      const pointed = pointedSurfaceFor(event) ?? supportSurfaceRef.current
+      supportSurfaceRef.current = pointed
       const fallbackPosition =
         lastCursorRef.current ??
         getLevelLocalSnappedPosition(
@@ -164,17 +212,13 @@ const ColumnTool = () => {
               collectStructuralGridAxes(useScene.getState().nodes, activeLevelId),
             )
           : null
-      const position: [number, number, number] = structuralSnap
-        ? [structuralSnap.point[0], fallbackPosition[1], structuralSnap.point[1]]
-        : fallbackPosition
-
-      const column = ColumnNode.parse({
-        ...createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position),
-        parentId: activeLevelId,
-      })
+      const planPosition: [number, number, number] = structuralSnap
+        ? [structuralSnap.point[0], 0, structuralSnap.point[1]]
+        : [fallbackPosition[0], 0, fallbackPosition[2]]
+      const { column, patch } = resolveColumnPlacement(planPosition, pointed)
       const committedColumn = ColumnNode.parse({
         ...column,
-        ...resolveSupportSlabPatch(column, useScene.getState().nodes),
+        ...patch,
       })
       useScene.getState().createNode(committedColumn, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [committedColumn.id] })

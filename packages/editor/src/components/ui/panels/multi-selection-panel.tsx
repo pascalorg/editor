@@ -18,6 +18,53 @@ import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelWrapper } from './panel-wrapper'
 import { formatSelectionBreakdown } from './selection-breakdown'
 
+export function MultiSelectionActions() {
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const sessionGroups = useSessionGroups((s) => s.groups)
+  const sceneNodes = useScene((s) => s.nodes)
+  const liveIds = useMemo(() => new Set(Object.keys(sceneNodes)), [sceneNodes])
+  const showGroup = useMemo(
+    () => canCreateSessionGroup(sessionGroups, selectedIds, liveIds),
+    [sessionGroups, selectedIds, liveIds],
+  )
+  const showUngroup = useMemo(
+    () => selectionIntersectsSessionGroup(sessionGroups, selectedIds, liveIds),
+    [sessionGroups, selectedIds, liveIds],
+  )
+
+  return (
+    <ActionGroup>
+      {showGroup && (
+        <ActionButton
+          icon={<Group className="h-4 w-4" />}
+          label="Group"
+          onClick={() => groupCurrentSelection()}
+          title="Group (Ctrl/Cmd+G)"
+        />
+      )}
+      {showUngroup && (
+        <ActionButton
+          icon={<Ungroup className="h-4 w-4" />}
+          label="Ungroup"
+          onClick={() => ungroupCurrentSelection()}
+          title="Ungroup (Ctrl/Cmd+Shift+G)"
+        />
+      )}
+      <ActionButton
+        icon={<Copy className="h-4 w-4" />}
+        label="Duplicate"
+        onClick={() => duplicateSelectionAndPickUp()}
+      />
+      <ActionButton
+        className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+        icon={<Trash2 className="h-4 w-4 text-red-400" />}
+        label="Delete"
+        onClick={() => deleteSelection()}
+      />
+    </ActionGroup>
+  )
+}
+
 /**
  * Docked multi-selection panel. Includes Group / Ungroup for session selection sets.
  */
@@ -32,14 +79,6 @@ export function MultiSelectionPanel({ footer }: { footer?: React.ReactNode }) {
   const liveIds = useMemo(() => new Set(Object.keys(sceneNodes)), [sceneNodes])
   const matchedGroup = useMemo(
     () => selectionMatchesSessionGroup(sessionGroups, selectedIds, liveIds),
-    [sessionGroups, selectedIds, liveIds],
-  )
-  const showGroup = useMemo(
-    () => canCreateSessionGroup(sessionGroups, selectedIds, liveIds),
-    [sessionGroups, selectedIds, liveIds],
-  )
-  const showUngroup = useMemo(
-    () => selectionIntersectsSessionGroup(sessionGroups, selectedIds, liveIds),
     [sessionGroups, selectedIds, liveIds],
   )
 
@@ -63,35 +102,7 @@ export function MultiSelectionPanel({ footer }: { footer?: React.ReactNode }) {
         </div>
       )}
       <div className="border-border/50 border-t p-3">
-        <ActionGroup>
-          {showGroup && (
-            <ActionButton
-              icon={<Group className="h-4 w-4" />}
-              label="Group"
-              onClick={() => groupCurrentSelection()}
-              title="Group (Ctrl/Cmd+G)"
-            />
-          )}
-          {showUngroup && (
-            <ActionButton
-              icon={<Ungroup className="h-4 w-4" />}
-              label="Ungroup"
-              onClick={() => ungroupCurrentSelection()}
-              title="Ungroup (Ctrl/Cmd+Shift+G)"
-            />
-          )}
-          <ActionButton
-            icon={<Copy className="h-4 w-4" />}
-            label="Duplicate"
-            onClick={() => duplicateSelectionAndPickUp()}
-          />
-          <ActionButton
-            className="border-red-500/40 text-red-200 hover:bg-red-500/15"
-            icon={<Trash2 className="h-4 w-4" />}
-            label="Delete"
-            onClick={() => deleteSelection()}
-          />
-        </ActionGroup>
+        <MultiSelectionActions />
       </div>
     </PanelWrapper>
   )

@@ -67,6 +67,10 @@ import {
   resolveFloorplanAnnotationVisibility,
   resolveFloorplanWallDimensionReference,
 } from '../../../lib/floorplan/floorplan-mode'
+import {
+  buildFloorplanContext,
+  floorplanLayerRank,
+} from '../../../lib/floorplan/floorplan-readonly'
 import { clientToPlan } from '../../../lib/floorplan/plan-coords'
 import {
   type ActiveInteractionScope,
@@ -1044,6 +1048,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         nodes: sceneNodes,
         initialPlanPoint,
         gridSnapStep: useEditor.getState().gridSnapStep,
+        sceneApi: createSceneApi(useScene),
       })
       if (!(session.commit && session.canCommit())) return
       session.commit()
@@ -1087,6 +1092,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         nodes: sceneNodes,
         initialPlanPoint,
         gridSnapStep: useEditor.getState().gridSnapStep,
+        sceneApi: createSceneApi(useScene),
       })
 
       const snapshots: NodeSnapshot[] = []
@@ -3158,73 +3164,7 @@ function isFloorplanHierarchyVisible(
   return true
 }
 
-export function buildContext(
-  node: AnyNode,
-  nodes: Record<string, AnyNode>,
-  viewState: {
-    automaticDimensions?: boolean
-    selected: boolean
-    unit: 'metric' | 'imperial'
-    metricNotation?: 'meters' | 'millimeters'
-    purpose?: 'edit' | 'document'
-    wallDimensionReference?: FloorplanWallDimensionReference
-    highlighted: boolean
-    hovered: boolean
-    moving: boolean
-    palette: FloorplanPalette | undefined
-  },
-  levelData?: unknown,
-): GeometryContext {
-  const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
-
-  const childIds = (node as unknown as { children?: AnyNodeId[] }).children
-  const children: AnyNode[] = Array.isArray(childIds)
-    ? childIds.map((cid) => nodes[cid]).filter((n): n is AnyNode => n !== undefined)
-    : []
-
-  const parentId = node.parentId as AnyNodeId | null
-  const parent: AnyNode | null = parentId ? (nodes[parentId] ?? null) : null
-
-  let siblings: AnyNode[] = []
-  if (parent) {
-    const parentChildIds = (parent as unknown as { children?: AnyNodeId[] }).children
-    if (Array.isArray(parentChildIds)) {
-      for (const sid of parentChildIds) {
-        if (sid === node.id) continue
-        const s = nodes[sid]
-        if (s && s.type === node.type) siblings.push(s)
-      }
-    } else {
-      siblings = Object.values(nodes).filter(
-        (n) => n !== node && n.type === node.type && n.parentId === parentId,
-      )
-    }
-  }
-
-  return {
-    resolve,
-    children,
-    siblings,
-    parent,
-    levelData,
-    extensions: createFloorplanContextExtensions({
-      automaticDimensions: viewState.automaticDimensions,
-      metricNotation: viewState.metricNotation ?? 'meters',
-      purpose: viewState.purpose ?? 'edit',
-      wallDimensionReference: viewState.wallDimensionReference,
-    }),
-    viewState: viewState.palette
-      ? {
-          selected: viewState.selected,
-          unit: viewState.unit,
-          highlighted: viewState.highlighted,
-          hovered: viewState.hovered,
-          moving: viewState.moving,
-          palette: viewState.palette,
-        }
-      : undefined,
-  }
-}
+export const buildContext = buildFloorplanContext
 
 export function collectFloorplanLinkedLevelNodes(
   nodes: Record<string, AnyNode>,
@@ -3526,17 +3466,7 @@ function depsValueEqual(a: unknown, b: unknown): boolean {
  * Sort is stable in modern JS engines, so siblings within the same
  * bucket keep their DFS order (= scene tree order).
  */
-export function floorplanLayerRank(type: string): number {
-  switch (type) {
-    case 'zone':
-      return 0
-    case 'slab':
-    case 'ceiling':
-      return 1
-    default:
-      return 2
-  }
-}
+export { floorplanLayerRank }
 
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true

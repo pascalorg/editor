@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
+    "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#22d9e7ae6807126d3f485ae4c3d538280137a43a",
     "@mint/pascal-plugin": "github:mintdotgg/mint-pascal-plugin#902c546dbaece6b31455c0dc394afe6b9cd136fe",
     "@number-flow/react": "^0.6.0",
     "@pascal-app/core": "*",

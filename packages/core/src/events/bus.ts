@@ -2,6 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
+  BlockNode,
   BoxVentNode,
   BuildingNode,
   CabinetModuleNode,
@@ -24,6 +25,7 @@ import type {
   GutterNode,
   HvacEquipmentNode,
   ItemNode,
+  LeanToExtensionNode,
   LevelNode,
   LinesetNode,
   LiquidLineNode,
@@ -97,6 +99,7 @@ export type BuildingEvent = NodeEvent<BuildingNode>
 export type CabinetEvent = NodeEvent<CabinetNode>
 export type CabinetModuleEvent = NodeEvent<CabinetModuleNode>
 export type LevelEvent = NodeEvent<LevelNode>
+export type LeanToExtensionEvent = NodeEvent<LeanToExtensionNode>
 export type ZoneEvent = NodeEvent<ZoneNode>
 export type ShelfEvent = NodeEvent<ShelfNode>
 export type SlabEvent = NodeEvent<SlabNode>
@@ -104,6 +107,7 @@ export type SpawnEvent = NodeEvent<SpawnNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type ColumnEvent = NodeEvent<ColumnNode>
 export type ConstructionDimensionEvent = NodeEvent<ConstructionDimensionNode>
+export type BlockEvent = NodeEvent<BlockNode>
 export type RoofEvent = NodeEvent<RoofNode>
 export type RoofSegmentEvent = NodeEvent<RoofSegmentNode>
 export type StairEvent = NodeEvent<StairNode>
@@ -156,6 +160,10 @@ type NodeEvents<T extends string, E> = {
 
 type GridEvents = {
   [K in `grid:${EventSuffix}`]: GridEvent
+}
+
+type GenericNodeEvents = {
+  [K in `node:${EventSuffix}`]: NodeEvent<AnyNode>
 }
 
 export interface CameraControlEvent {
@@ -289,6 +297,7 @@ type SelectionEvents = {
 }
 
 type EditorEvents = GridEvents &
+  GenericNodeEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'cabinet', CabinetEvent> &
@@ -298,6 +307,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'building', BuildingEvent> &
   NodeEvents<'elevator', ElevatorEvent> &
   NodeEvents<'level', LevelEvent> &
+  NodeEvents<'lean-to-extension', LeanToExtensionEvent> &
   NodeEvents<'zone', ZoneEvent> &
   NodeEvents<'slab', SlabEvent> &
   NodeEvents<'shelf', ShelfEvent> &
@@ -305,6 +315,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'column', ColumnEvent> &
   NodeEvents<'construction-dimension', ConstructionDimensionEvent> &
+  NodeEvents<'block', BlockEvent> &
   NodeEvents<'roof', RoofEvent> &
   NodeEvents<'roof-segment', RoofSegmentEvent> &
   NodeEvents<'stair', StairEvent> &

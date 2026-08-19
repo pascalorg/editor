@@ -1,11 +1,12 @@
 import {
   DEFAULT_ANGLE_STEP,
+  type FenceConstructionOptions as FenceCommitOptions,
   FenceNode,
   getTwoPointFenceCurveTangents,
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
-  resolveFenceSupportSlabPatch,
+  resolveFenceConstructionSupport,
   snapPointAlongAngleRay,
   useScene,
   type WallNode,
@@ -188,18 +189,6 @@ export function snapFenceDraftPoint(args: {
   return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint
 }
 
-export type FenceCommitOptions = {
-  /**
-   * Pointer-decided support cap (level-local Y) from
-   * `resolvePointerSupportSurface` — the 3D tool passes the elevation of
-   * the surface the commit click actually aimed at, so a fence drawn on a
-   * deck top persists the deck as its lift host while one drawn at the
-   * floor underneath stays grounded. Omitted by 2D floor-plan commits (no
-   * camera ray): those keep the uncapped max election.
-   */
-  supportCap?: number | null
-}
-
 export function createFenceOnCurrentLevel(
   start: FencePlanPoint,
   end: FencePlanPoint,
@@ -217,7 +206,7 @@ export function createFenceOnCurrentLevel(
   // spacing, …) merge in first; `name`/`start`/`end` always win. The
   // schema parse validates and drops anything unexpected.
   const defaults = useEditor.getState().toolDefaults.fence ?? {}
-  const fence = FenceNode.parse({
+  const authoredFence = FenceNode.parse({
     ...defaults,
     name: `Fence ${fenceCount + 1}`,
     start,
@@ -225,11 +214,7 @@ export function createFenceOnCurrentLevel(
   })
   // Fences run no per-frame support election — the persisted host IS the
   // lift (absent = level floor), so elect it at commit, pointer-capped.
-  fence.supportSlabId = resolveFenceSupportSlabPatch(
-    { ...fence, parentId: currentLevelId },
-    nodes,
-    { maxElevation: options?.supportCap ?? null },
-  ).supportSlabId
+  const fence = resolveFenceConstructionSupport(authoredFence, currentLevelId, nodes, options)
 
   createNode(fence, currentLevelId)
   sfxEmitter.emit('sfx:structure-build')
@@ -264,7 +249,7 @@ export function createSplineFenceOnCurrentLevel(
 
   const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
   const defaults = useEditor.getState().toolDefaults.fence ?? {}
-  const fence = FenceNode.parse({
+  const authoredFence = FenceNode.parse({
     ...defaults,
     name: `Fence ${fenceCount + 1}`,
     start,
@@ -272,11 +257,7 @@ export function createSplineFenceOnCurrentLevel(
     path,
     tangents,
   })
-  fence.supportSlabId = resolveFenceSupportSlabPatch(
-    { ...fence, parentId: currentLevelId },
-    nodes,
-    { maxElevation: options?.supportCap ?? null },
-  ).supportSlabId
+  const fence = resolveFenceConstructionSupport(authoredFence, currentLevelId, nodes, options)
 
   createNode(fence, currentLevelId)
   sfxEmitter.emit('sfx:structure-build')

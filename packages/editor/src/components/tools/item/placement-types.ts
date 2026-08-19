@@ -1,5 +1,6 @@
 import type {
   AnyNode,
+  AnyNodeId,
   AssetInput,
   CeilingNode,
   ItemNode,
@@ -16,6 +17,7 @@ export type SurfaceType =
   | 'floor'
   | 'wall'
   | 'roof-wall'
+  | 'block-face'
   | 'ceiling'
   | 'item-surface'
   | 'shelf-surface'
@@ -33,6 +35,8 @@ export interface PlacementState {
    * (base walls + coplanar gable ends).
    */
   roofSegmentId: string | null
+  /** Active planar node face used as a wall-like attachment host. */
+  blockId?: AnyNodeId | null
   ceilingId: string | null
   surfaceItemId: string | null
   /**
@@ -81,6 +85,7 @@ export interface PlacementResult {
   nodeUpdate: Partial<ItemNode> | null
   stopPropagation: boolean
   dirtyNodeId: AnyNode['id'] | null
+  hostFaceId?: string | null
 }
 
 /**
@@ -94,6 +99,7 @@ export interface TransitionResult {
   cursorRotationY: number
   cursorRotation?: [number, number, number]
   stopPropagation: boolean
+  hostFaceId?: string | null
 }
 
 /**

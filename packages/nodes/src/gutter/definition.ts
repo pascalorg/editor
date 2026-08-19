@@ -42,9 +42,9 @@ function getRimZ(n: GutterNodeType): number {
 //
 // Corner snap: when the dragged endpoint nears the geometric corner it
 // would form with another gutter (the crossing of their length axes),
-// `snapLengthToCorner` overrides the raw newLength so the endpoint lands
-// EXACTLY on that corner — the corner-mitre detector then fires reliably
-// without pixel-perfect dragging. Only this gutter's length changes.
+// `snapLengthToCorner` is the handle's magnetic snap, so Lines mode lands the
+// endpoint exactly on that corner, Grid mode uses the chosen step, and Off
+// leaves the cursor raw. Only this gutter's length changes.
 function gutterLengthHandle(side: 'left' | 'right'): HandleDescriptor<GutterNodeType> {
   const sign = side === 'right' ? 1 : -1
   return {
@@ -52,14 +52,15 @@ function gutterLengthHandle(side: 'left' | 'right'): HandleDescriptor<GutterNode
     axis: 'x',
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_LENGTH,
+    gridSnap: true,
     currentValue: (n) => n.length,
-    apply: (initial, newLength, sceneApi) => {
+    magneticSnap: (initial, newLength, sceneApi) => {
       const rotY = initial.rotation ?? 0
       const armX = Math.cos(rotY)
       const armZ = -Math.sin(rotY)
       const anchorX = initial.position[0] - sign * (initial.length / 2) * armX
       const anchorZ = initial.position[2] - sign * (initial.length / 2) * armZ
-      const snap = snapLengthToCorner(
+      return snapLengthToCorner(
         initial,
         newLength,
         sign,
@@ -69,14 +70,18 @@ function gutterLengthHandle(side: 'left' | 'right'): HandleDescriptor<GutterNode
         armZ,
         MIN_LENGTH,
         sceneApi,
-      )
-      // Only the dragged gutter's own length is snapped — `snapLengthToCorner`
-      // never moves the corner-mate, so dragging one gutter can't reset
-      // another the user placed deliberately.
-      const newCenterX = anchorX + sign * (snap.length / 2) * armX
-      const newCenterZ = anchorZ + sign * (snap.length / 2) * armZ
+      ).length
+    },
+    apply: (initial, newLength) => {
+      const rotY = initial.rotation ?? 0
+      const armX = Math.cos(rotY)
+      const armZ = -Math.sin(rotY)
+      const anchorX = initial.position[0] - sign * (initial.length / 2) * armX
+      const anchorZ = initial.position[2] - sign * (initial.length / 2) * armZ
+      const newCenterX = anchorX + sign * (newLength / 2) * armX
+      const newCenterZ = anchorZ + sign * (newLength / 2) * armZ
       return {
-        length: snap.length,
+        length: newLength,
         position: [newCenterX, initial.position[1], newCenterZ],
       }
     },
@@ -101,6 +106,7 @@ function gutterSizeHandle(): HandleDescriptor<GutterNodeType> {
     // downward grows the value 1:1.
     anchor: 'max',
     min: MIN_SIZE,
+    gridSnap: true,
     currentValue: (n) => n.size,
     apply: (_n, newValue) => ({ size: Math.max(MIN_SIZE, newValue) }),
     placement: {
@@ -134,10 +140,11 @@ const gutterHandles: HandleDescriptor<GutterNodeType>[] = [
  */
 export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   kind: 'gutter',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: GutterNode,
   category: 'structure',
   surfaceRole: 'roof',
+  snapProfile: 'item',
 
   defaults: () => {
     const stub = GutterNodeSchema.parse({
@@ -182,7 +189,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   presentation: {
     label: 'Gutter',
     description: 'Rain-water channel running along the eave of a roof segment.',
-    icon: { kind: 'url', src: '/icons/roof.webp' },
+    icon: { kind: 'url', src: '/icons/gutter.webp' },
     paletteSection: 'structure',
     paletteOrder: 122,
   },

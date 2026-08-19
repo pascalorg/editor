@@ -1,6 +1,6 @@
 # Interaction Scope
 
-*The authoritative interaction state machine ("the spine") — one scope describes "what the user is currently doing".*
+_The authoritative interaction state machine ("the spine") — one scope describes "what the user is currently doing"._
 
 Applies to: `packages/editor/src/lib/interaction/**`, `packages/editor/src/store/use-interaction-scope.ts`.
 
@@ -19,16 +19,17 @@ scope is exactly one interaction at a time, and `idle` carries no payload.
 
 `InteractionScope` (`lib/interaction/scope.ts`) is a discriminated union on `kind`:
 
-| `kind` | Payload | What |
-|---|---|---|
-| `idle` | — | Nothing in flight. The only state where selection/hover picking is meaningful. |
-| `placing` | `node`, `nodeId`, `nodeType`, `view`, `pressDrag` | Placing a fresh node (catalog/preset/build tool). `node` carries the not-yet-committed draft; `pressDrag` = gizmo press-drag (commit on release) vs click-to-place. |
-| `moving` | `node`, `nodeId`, `nodeType`, `view` | Moving an existing node. |
-| `handle-drag` | `nodeId`, `handle` | Dragging a resize/translate/rotate handle of a selected node. |
-| `drafting` | `tool` | Click-to-click drafting of a polyline/polygon kind (wall/fence/slab/…). |
-| `reshaping` | `nodeId`, `reshape`, `driver`, `holeIndex?`, `endpoint?`, `index?`, `side?` | Reshaping a selected node's geometry. `driver` identifies the interaction body that owns preview and commit. |
-| `box-select` | — | Marquee selection drag. |
-| `painting` | — | Material paint application. |
+| `kind`         | Payload                                                                     | What                                                                                                                                                                |
+| -------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `idle`         | —                                                                           | Nothing in flight. The only state where selection/hover picking is meaningful.                                                                                      |
+| `placing`      | `node`, `nodeId`, `nodeType`, `view`, `pressDrag`, `driver`                 | Placing a fresh node (catalog/preset/build tool). `node` carries the not-yet-committed draft; `pressDrag` = gizmo press-drag (commit on release) vs click-to-place. `driver` identifies the sole interaction body that owns preview and commit. |
+| `moving`       | `node`, `nodeId`, `nodeType`, `view`                                        | Moving an existing node.                                                                                                                                            |
+| `handle-drag`  | `nodeId`, `handle`                                                          | Dragging a resize/translate/rotate handle of a selected node.                                                                                                       |
+| `mesh-editing` | `nodeId`, `phase`, `operator?`                                              | Editing one node's internal mesh components. Held for the complete edit-mode session; `phase` distinguishes component selection from an in-flight operator.         |
+| `drafting`     | `tool`                                                                      | Click-to-click drafting of a polyline/polygon kind (wall/fence/slab/…).                                                                                             |
+| `reshaping`    | `nodeId`, `reshape`, `driver`, `holeIndex?`, `endpoint?`, `index?`, `side?` | Reshaping a selected node's geometry. `driver` identifies the interaction body that owns preview and commit.                                                        |
+| `box-select`   | —                                                                           | Marquee selection drag.                                                                                                                                             |
+| `painting`     | —                                                                           | Material paint application.                                                                                                                                         |
 
 `reshaping` groups endpoint/curve/hole/boundary/control-point/tangent edits as
 sub-states of one scope — there is one node and one in-flight reshape, so
@@ -41,7 +42,7 @@ mounting for the same gesture. Placing and moving use `view: '2d' | '3d'`.
 ### Helpers
 
 - `isIdle(scope)` / `isActive(scope)` — `idle` vs anything else (`ActiveInteractionScope`).
-- `scopeNodeId(scope)` — the node a scope acts on, or `null`. `drafting`/`box-select`/`painting`/`idle` target no single existing node.
+- `scopeNodeId(scope)` — the node a scope acts on, or `null`. `drafting`/`box-select`/`painting`/`idle` target no single existing node. A `mesh-editing` scope targets the block whose topology owns the session.
 - `isToolDrivenReshape(scope)` / `isFloorplanDrivenReshape(scope)` — narrow
   reshape ownership so only the matching interaction body mounts.
 - `selectionEnabled(scope)` — true only while `idle`. During any active interaction the pointer belongs to that interaction's body, not to selecting a different object; the picking choke point must not route a hover/click to selection while this is false.
@@ -54,12 +55,14 @@ mounting for the same gesture. Placing and moving use `view: '2d' | '3d'`.
 single owner. Exactly one scope at a time; the only writable shape is
 `InteractionScope`, so there is no setter that can leave a half-state.
 
-| Method | Behaviour |
-|---|---|
-| `begin(scope: ActiveInteractionScope)` | Enter an interaction. If one is already active it is replaced (single owner, no producer races). |
-| `update(patch)` | Patch the current scope's payload. **Ignored when idle, and ignored when the patch's `kind` differs from the active kind** — payload updates must not change which interaction is running (use `begin` for that). |
-| `end()` | Return to idle atomically. Both commit and cancel call it; the write-vs-revert distinction lives in the interaction body, not here. |
-| `endIf(match)` | Return to idle only if the active scope satisfies `match`. |
+| Method                                 | Behaviour                                                                                                                                                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `begin(scope: ActiveInteractionScope)` | Enter an interaction. If one is already active it is replaced (single owner, no producer races).                                                                                                                  |
+| `update(patch)`                        | Patch the current scope's payload. **Ignored when idle, and ignored when the patch's `kind` differs from the active kind** — payload updates must not change which interaction is running (use `begin` for that). |
+| `end()`                                | Return to idle atomically. Both commit and cancel call it; the write-vs-revert distinction lives in the interaction body, not here.                                                                               |
+| `endIf(match)`                         | Return to idle only if the active scope satisfies `match`.                                                                                                                                                        |
+
+The `mesh-editing` scope is the global ownership summary, not a container for kind-specific component state. block keeps its vertex/edge/face mode, selected IDs, active component, and active material slot in a kind-owned transient store under `packages/nodes/src/block/`. The canvas affordance and custom inspector share that store while the scope owns the session. Entering another mesh transfers ownership; scope loss, explicit exit, and unmount clear only the matching node's session. Persisted topology and material slots remain in `useScene`.
 
 **Atomic-end invariant.** `end()` sets the scope back to `IDLE_SCOPE` in one
 write — no interaction payload can leak past the end of its interaction (no stale
@@ -80,7 +83,7 @@ the node's `asset.attachTo` plus whether a candidate exposes a top surface.
 
 - `wall` — `attachTo` of `wall` or `wall-side`.
 - `ceiling` — `attachTo` of `ceiling`.
-- `surface` — everything else ("floor item" really means *surface-resting*: rests on the floor **or** any host's top surface).
+- `surface` — everything else ("floor item" really means _surface-resting_: rests on the floor **or** any host's top surface).
 
 `isPickableForAttach(placed, candidate)` decides, for a node of attach class
 `placed`, whether a `HotSetCandidate` is a valid host/surface:
@@ -91,7 +94,7 @@ the node's `asset.attachTo` plus whether a candidate exposes a top surface.
 
 `isCandidateInHotSet(scope, placedAttachClass, candidate)` lifts this to a whole scope:
 
-- `idle` → `true` (selection/phase filtering stays in the selection manager; the hot-set only narrows what an *active* interaction can target).
+- `idle` → `true` (selection/phase filtering stays in the selection manager; the hot-set only narrows what an _active_ interaction can target).
 - `placing` / `moving` → `isPickableForAttach`, or `true` when `placedAttachClass` is `null`.
 - every other active scope → `false`: nothing in the scene is a placement target, so the interaction body's own raycast owns the pointer.
 
@@ -108,14 +111,14 @@ module pure and unit-testable without the scene or registry.
 any non-idle scope, scene objects stay visible but non-pickable, and DOM/HUD
 overlays step back differentiated by how distracting they are.
 
-| Overlay | Idle | Any active scope |
-|---|---|---|
-| Zone labels | shown | hidden (not a primary editing concern) |
-| Context badges (hover name pills) | shown | faded + `pointer-events: none` |
-| Conflicting controls (other objects' handles, floating action menu) | shown | hidden |
-| Scene objects pickable | yes | no (the hot-set owns targeting; context preserved, can't grab the wrong thing) |
-| Active affordances (ghost, snap guides, dimension labels, the active handle) | shown | shown |
-| Contextual control HUD interactive | yes | yes (it *is* the active interaction's own controls — exempt from the pointer-events step-back) |
+| Overlay                                                                      | Idle  | Any active scope                                                                               |
+| ---------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------- |
+| Zone labels                                                                  | shown | hidden (not a primary editing concern)                                                         |
+| Context badges (hover name pills)                                            | shown | faded + `pointer-events: none`                                                                 |
+| Conflicting controls (other objects' handles, floating action menu)          | shown | hidden                                                                                         |
+| Scene objects pickable                                                       | yes   | no (the hot-set owns targeting; context preserved, can't grab the wrong thing)                 |
+| Active affordances (ghost, snap guides, dimension labels, the active handle) | shown | shown                                                                                          |
+| Contextual control HUD interactive                                           | yes   | yes (it _is_ the active interaction's own controls — exempt from the pointer-events step-back) |
 
 The policy is binary (`IDLE_POLICY` vs `ACTIVE_POLICY`) keyed on `isActive`.
 
@@ -124,7 +127,7 @@ The policy is binary (`IDLE_POLICY` vs `ACTIVE_POLICY`) keyed on `isActive`.
 ## Snapping mode & modifiers (the unified model)
 
 Snapping is a persistent, **per-context**, always-visible mode — not a held-Shift bypass.
-The active scope selects the *context*; the context's current mode selects the *behaviour*.
+The active scope selects the _context_; the context's current mode selects the _behaviour_.
 There is no per-kind snapping switch.
 
 - **Contexts** (`lib/snapping-mode.ts`, `SNAP_PROFILES`): `wall` (grid/lines/angles/off, default grid),
@@ -147,6 +150,7 @@ There is no per-kind snapping switch.
 **Known-legacy (migrate on touch).** Two legacy modifier patterns predate this model and survive in
 spots not yet touched; both are tracked in `plans/editor-placement-interaction-overhaul.md`. A PR that
 **touches** one must migrate it to the model above, not extend the legacy path:
+
 1. **`event.shiftKey` as a snap bypass with hardcoded steps** — the MEP move/endpoint tools
    (`packages/nodes/src/{duct-segment,pipe-segment,liquid-line,lineset,duct-fitting}/{move-tool,selection}.tsx`).
    Opening a `moving` scope from a bespoke mover is **not** the migration — `useMovingNode()` reads the scope,
