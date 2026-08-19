@@ -20,6 +20,7 @@ import { FenceNode } from './nodes/fence'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
+import { ImportedMeshNode } from './nodes/imported-mesh'
 import { ItemNode } from './nodes/item'
 import { LeanToExtensionNode } from './nodes/lean-to-extension'
 import { LevelNode } from './nodes/level'
@@ -62,6 +63,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   CabinetNode,
   CabinetModuleNode,
   ItemNode,
+  ImportedMeshNode,
   ZoneNode,
   SlabNode,
   CeilingNode,
