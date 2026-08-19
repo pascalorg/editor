@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "editor",
@@ -36,6 +37,8 @@
         "@pascal-app/ifc-converter": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
+        "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#041041dab1366ecd59bf3c74d0dd47a243cc6845",
+        "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
         "@radix-ui/react-tooltip": "^1.2.8",
@@ -109,7 +112,7 @@
     },
     "packages/cli": {
       "name": "@pascal-app/cli",
-      "version": "0.1.5",
+      "version": "1.0.0-beta.1",
       "bin": {
         "pascal": "dist/bin/pascal.js",
       },
@@ -124,7 +127,7 @@
     },
     "packages/core": {
       "name": "@pascal-app/core",
-      "version": "1.0.0-beta.4",
+      "version": "1.0.0-beta.5",
       "dependencies": {
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
@@ -150,7 +153,7 @@
     },
     "packages/editor": {
       "name": "@pascal-app/editor",
-      "version": "1.0.0-beta.4",
+      "version": "1.0.0-beta.5",
       "dependencies": {
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
@@ -187,8 +190,8 @@
         "zustand": "^5.0.11",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.0-beta.4",
-        "@pascal-app/viewer": "^1.0.0-beta.4",
+        "@pascal-app/core": "^1.0.0-beta.5",
+        "@pascal-app/viewer": "^1.0.0-beta.5",
         "@pascal/typescript-config": "*",
         "@types/blob-stream": "^0.1.33",
         "@types/bun": "^1.3.0",
@@ -200,8 +203,8 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.0-beta.4",
-        "@pascal-app/viewer": "^1.0.0-beta.4",
+        "@pascal-app/core": "^1.0.0-beta.5",
+        "@pascal-app/viewer": "^1.0.0-beta.5",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "next": ">=15",
@@ -229,7 +232,7 @@
     },
     "packages/ifc-converter": {
       "name": "@pascal-app/ifc-converter",
-      "version": "1.0.0-beta.4",
+      "version": "1.0.0-beta.5",
       "dependencies": {
         "@pascal-app/core": "*",
         "nanoid": "^5.1.6",
@@ -243,7 +246,7 @@
     },
     "packages/mcp": {
       "name": "@pascal-app/mcp",
-      "version": "1.0.0-beta.5",
+      "version": "1.0.0-beta.6",
       "bin": {
         "pascal-mcp": "./dist/bin/pascal-mcp.js",
       },
@@ -254,22 +257,22 @@
         "zod": "^4.3.5",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.0-beta.4",
+        "@pascal-app/core": "^1.0.0-beta.5",
         "@pascal/typescript-config": "*",
         "@types/node": "^22.19.20",
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.0-beta.4",
+        "@pascal-app/core": "^1.0.0-beta.5",
       },
     },
     "packages/nodes": {
       "name": "@pascal-app/nodes",
-      "version": "1.0.0-beta.4",
+      "version": "1.0.0-beta.5",
       "devDependencies": {
-        "@pascal-app/core": "^1.0.0-beta.4",
-        "@pascal-app/editor": "^1.0.0-beta.4",
-        "@pascal-app/viewer": "^1.0.0-beta.4",
+        "@pascal-app/core": "^1.0.0-beta.5",
+        "@pascal-app/editor": "^1.0.0-beta.5",
+        "@pascal-app/viewer": "^1.0.0-beta.5",
         "@pascal/typescript-config": "*",
         "@types/bun": "^1.3.0",
         "@types/node": "^22.19.12",
@@ -278,9 +281,9 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.0-beta.4",
-        "@pascal-app/editor": "^1.0.0-beta.4",
-        "@pascal-app/viewer": "^1.0.0-beta.4",
+        "@pascal-app/core": "^1.0.0-beta.5",
+        "@pascal-app/editor": "^1.0.0-beta.5",
+        "@pascal-app/viewer": "^1.0.0-beta.5",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "lucide-react": "^1",
@@ -312,14 +315,14 @@
     },
     "packages/viewer": {
       "name": "@pascal-app/viewer",
-      "version": "1.0.0-beta.4",
+      "version": "1.0.0-beta.5",
       "dependencies": {
         "three-bvh-csg": "^0.0.18",
         "three-mesh-bvh": "^0.9.8",
         "zustand": "^5",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.0-beta.4",
+        "@pascal-app/core": "^1.0.0-beta.5",
         "@pascal/typescript-config": "*",
         "@types/node": "^22",
         "@types/react": "^19.2.2",
@@ -327,7 +330,7 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.0-beta.4",
+        "@pascal-app/core": "^1.0.0-beta.5",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
@@ -537,7 +540,7 @@
 
     "@mediapipe/tasks-vision": ["@mediapipe/tasks-vision@0.10.17", "", {}, "sha512-CZWV/q6TTe8ta61cZXjfnnHsfWIdFhms03M9T7Cnd5y2mdpylJM0rF1qRq+wsQVRMLz1OYPVEBU9ph2Bx8cxrg=="],
 
-    "@mint/pascal-plugin": ["@mint/pascal-plugin@github:mintdotgg/mint-pascal-plugin#902c546", { "peerDependencies": { "@pascal-app/core": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "@pascal-app/editor": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "@pascal-app/viewer": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "react": "^18 || ^19", "three": "^0.185" } }, "mintdotgg-mint-pascal-plugin-902c546"],
+    "@mint/pascal-plugin": ["@mint/pascal-plugin@github:mintdotgg/mint-pascal-plugin#902c546", { "peerDependencies": { "@pascal-app/core": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "@pascal-app/editor": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "@pascal-app/viewer": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "react": "^18 || ^19", "three": "^0.185" } }, "mintdotgg-mint-pascal-plugin-902c546", "sha512-/itUH9r9OIP8ZPrklW8iWe6B2SDOtlL1m8r9hlVM4Rw5josYtDdkDKQ37FbanvxxuUKcQnukHbtxWe3svRaCrQ=="],
 
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.29.0", "", { "dependencies": { "@hono/node-server": "^1.19.9", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "content-type": "^1.0.5", "cors": "^2.8.5", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.0", "express": "^5.2.1", "express-rate-limit": "^8.2.1", "hono": "^4.11.4", "jose": "^6.1.3", "json-schema-typed": "^8.0.2", "pkce-challenge": "^5.0.0", "raw-body": "^3.0.0", "zod": "^3.25 || ^4.0", "zod-to-json-schema": "^3.25.1" }, "peerDependencies": { "@cfworker/json-schema": "^4.1.1" }, "optionalPeers": ["@cfworker/json-schema"] }, "sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ=="],
 
@@ -633,7 +636,7 @@
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.41.1", "", {}, "sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA=="],
 
-    "@ovurrsl/plugin-warehouse": ["@ovurrsl/plugin-warehouse@github:ovurrsl/plugin-warehouse#609cf12", { "peerDependencies": { "@iconify/react": "^6", "@pascal-app/core": ">=1.0.0-beta.1 <2", "@pascal-app/editor": ">=1.0.0-beta.1 <2", "@pascal-app/viewer": ">=1.0.0-beta.1 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "ovurrsl-plugin-warehouse-609cf12"],
+    "@ovurrsl/plugin-warehouse": ["@ovurrsl/plugin-warehouse@github:ovurrsl/plugin-warehouse#609cf12", { "peerDependencies": { "@iconify/react": "^6", "@pascal-app/core": ">=1.0.0-beta.1 <2", "@pascal-app/editor": ">=1.0.0-beta.1 <2", "@pascal-app/viewer": ">=1.0.0-beta.1 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "ovurrsl-plugin-warehouse-609cf12", "sha512-ViY632dhGO44mZU3rCaXiJ+8YLYg2fIgExoZ3okqQYv+mjMTgL6wb7qOsi7uWzsHwUlFG4REm6ijNyQ0cx86Rg=="],
 
     "@oxc-parser/binding-android-arm-eabi": ["@oxc-parser/binding-android-arm-eabi@0.132.0", "", { "os": "android", "cpu": "arm" }, "sha512-KrLaPWa5c9Y7LkW+rKkaUE3y7DBDrQtaf7rlsSDfv6KAHUjgzAIRA761Lrrp6//Yd/Rlie/yEOt9YENCoJnOcw=="],
 
@@ -767,7 +770,11 @@
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
 
-    "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c"],
+    "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@github:pascalorg/plugin-bones#041041d", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-bones-041041d", "sha512-rhH2hed/VQtBsNjiP8Edl9wwhQRPEArioUpNDJ2vWJCA93403ASMzMDS/hytWRKB1QC8Nl4B8zLqHj+Hi5is3Q=="],
+
+    "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#1c04ec9", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-1c04ec9", "sha512-X7Zg7wi0ghZRcTtbH5LF6xye493uSZ2ft3AmAQBtguBCU6VCwCexA7pdKDr5AnVxX/JRj2s6JSd/OX4aIZ9Y6Q=="],
+
+    "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c", "sha512-16VzWot1oadvxCPqsRwMJbaP0a3u5FESFy7F7++pY5wAAFq9JTFwzHvKAsllrY5TZ5TJ7Y5vSqvbmQk8sy8HaA=="],
 
     "@pascal-app/viewer": ["@pascal-app/viewer@workspace:packages/viewer"],
 
