@@ -10,8 +10,6 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
-  getSideFromNormal,
-  isValidWallSideFace,
   triggerSFX,
   useEditor,
   useInteractionScope,
@@ -20,7 +18,11 @@ import {
 import { useEffect, useState } from 'react'
 import { createLeanToAssembly } from './assembly'
 import { leanToExtensionGeometryKey } from './geometry'
-import { leanToWallLocalPose, resolveLeanToWallPlacement } from './layout'
+import {
+  leanToWallLocalPose,
+  resolveLeanToWallPlacement,
+  resolveLeanToWallSurfaceHit,
+} from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import LeanToExtensionPreview from './preview'
 import {
@@ -55,15 +57,12 @@ const LeanToExtensionTool = () => {
     }
 
     const updateTarget = (event: WallEvent) => {
-      if (!isValidWallSideFace(event.normal)) {
+      const hit = resolveLeanToWallSurfaceHit(event.node, event.localPosition, event.normal)
+      if (!hit) {
         setPreview(null)
         return null
       }
-      const wallPlacement = resolveLeanToWallPlacement(
-        event.node,
-        event.localPosition[0],
-        getSideFromNormal(event.normal),
-      )
+      const wallPlacement = resolveLeanToWallPlacement(event.node, hit.localX, hit.side)
       if (!wallPlacement) {
         setPreview(null)
         return null

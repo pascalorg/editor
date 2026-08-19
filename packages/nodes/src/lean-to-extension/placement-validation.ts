@@ -9,7 +9,9 @@ import {
   type RoofSegmentNode,
   type WallNode,
 } from '@pascal-app/core'
+import { resolveLeanToCornerJoints } from './corner-joint'
 import { resolveLeanToLayout } from './layout'
+import { type LeanToPlanFacet, leanToPlanFootprintFacets } from './plan-footprint'
 
 const CLEARANCE = 0.05
 
@@ -22,27 +24,7 @@ function leanToSpansOverlap(a: LeanToExtensionNode, b: LeanToExtensionNode) {
 }
 
 function planBounds(leanTo: LeanToExtensionNode, wall: WallNode) {
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
-  const length = Math.max(1e-6, Math.hypot(dx, dz))
-  const along = [dx / length, dz / length] as const
-  const normal = [-along[1], along[0]] as const
-  const side = Math.cos(leanTo.rotation[1]) >= 0 ? 1 : -1
-  const outward = [normal[0] * side, normal[1] * side] as const
-  const center = [
-    wall.start[0] + along[0] * leanTo.position[0] + normal[0] * leanTo.position[2],
-    wall.start[1] + along[1] * leanTo.position[0] + normal[1] * leanTo.position[2],
-  ] as const
-  const minAlong = -leanTo.span / 2 - leanTo.leftOverhang
-  const maxAlong = leanTo.span / 2 + leanTo.rightOverhang
-  const minOutward = -leanTo.highOverhang
-  const maxOutward = leanTo.projection + leanTo.lowOverhang
-  const points = [minAlong, maxAlong].flatMap((x) =>
-    [minOutward, maxOutward].map((z) => [
-      center[0] + along[0] * x + outward[0] * z,
-      center[1] + along[1] * x + outward[1] * z,
-    ]),
-  )
+  const points = leanToPlanFootprintFacets(leanTo, wall).flat()
   return {
     minX: Math.min(...points.map((point) => point[0]!)),
     maxX: Math.max(...points.map((point) => point[0]!)),
@@ -62,6 +44,54 @@ function boundsOverlap(a: ReturnType<typeof planBounds>, b: ReturnType<typeof pl
 
 type Bounds = ReturnType<typeof planBounds>
 type PlanPoint = readonly [number, number]
+
+function transformFacet(facet: LeanToPlanFacet, building?: BuildingNode): LeanToPlanFacet {
+  return [
+    transformPoint(facet[0], building),
+    transformPoint(facet[1], building),
+    transformPoint(facet[2], building),
+    transformPoint(facet[3], building),
+  ]
+}
+
+function convexFacetsOverlap(a: LeanToPlanFacet, b: LeanToPlanFacet): boolean {
+  for (const polygon of [a, b]) {
+    for (let index = 0; index < polygon.length; index++) {
+      const start = polygon[index]!
+      const end = polygon[(index + 1) % polygon.length]!
+      const axis: PlanPoint = [-(end[1] - start[1]), end[0] - start[0]]
+      const axisLength = Math.hypot(axis[0], axis[1])
+      if (axisLength <= 1e-9) continue
+      const unit: PlanPoint = [axis[0] / axisLength, axis[1] / axisLength]
+      const project = (point: PlanPoint) => point[0] * unit[0] + point[1] * unit[1]
+      const aProjection = a.map(project)
+      const bProjection = b.map(project)
+      const overlap =
+        Math.min(Math.max(...aProjection), Math.max(...bProjection)) -
+        Math.max(Math.min(...aProjection), Math.min(...bProjection))
+      if (overlap <= CLEARANCE) return false
+    }
+  }
+  return true
+}
+
+function leanToFootprintsOverlap(
+  a: LeanToExtensionNode,
+  aWall: WallNode,
+  b: LeanToExtensionNode,
+  bWall: WallNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+): boolean {
+  const aBuilding = ancestorBuilding(aWall, nodes)
+  const bBuilding = ancestorBuilding(bWall, nodes)
+  const aFacets = leanToPlanFootprintFacets(a, aWall).map((facet) =>
+    transformFacet(facet, aBuilding),
+  )
+  const bFacets = leanToPlanFootprintFacets(b, bWall).map((facet) =>
+    transformFacet(facet, bBuilding),
+  )
+  return aFacets.some((aFacet) => bFacets.some((bFacet) => convexFacetsOverlap(aFacet, bFacet)))
+}
 
 function ancestorBuilding(
   node: AnyNode | undefined,
@@ -326,12 +356,19 @@ export function leanToPlacementConflicts(
     if (node.type !== 'lean-to-extension' || node.id === leanTo.id || node.parentId === wall.id)
       continue
     const host = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    const supportedConcaveJoint =
+      host?.type === 'wall' &&
+      Object.values(resolveLeanToCornerJoints(leanTo, wall, nodes)).some(
+        (joint) => joint?.kind === 'concave' && joint.neighborId === node.id,
+      )
     if (
       host?.type === 'wall' &&
+      !supportedConcaveJoint &&
       boundsOverlap(
         candidateWorldBounds,
         transformBounds(planBounds(node, host), ancestorBuilding(host, nodes)),
-      )
+      ) &&
+      leanToFootprintsOverlap(leanTo, wall, node, host, nodes)
     ) {
       conflicts.push(`adjacent extension ${node.id}`)
     }

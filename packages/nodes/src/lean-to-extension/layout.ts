@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   getWallArcData,
+  getWallChordFrame,
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
@@ -15,6 +16,7 @@ export const MIN_LEAN_TO_POST_HEIGHT = 0.2
 export const MIN_LEAN_TO_WALL_LENGTH = 0.6
 export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 7
 const LEAN_TO_EDGE_SNAP_TOLERANCE = 0.25
+const CURVED_INNER_EDGE_CLEARANCE = 0.15
 
 export type LeanToLayout = {
   span: number
@@ -47,6 +49,51 @@ export function leanToLowEdgeHeight(
   node: Pick<LeanToExtensionNode, 'highEdgeHeight' | 'pitch' | 'projection'>,
 ): number {
   return node.highEdgeHeight - node.projection * Math.tan((node.pitch * Math.PI) / 180)
+}
+
+export function resolveLeanToWallSurfaceHit(
+  wall: WallNode,
+  localPosition: readonly [number, number, number],
+  normal: readonly [number, number, number] | undefined,
+): { localX: number; side: 'front' | 'back' } | null {
+  if (!normal) return null
+  if (!isCurvedWall(wall)) {
+    if (Math.abs(normal[2]) <= 0.7) return null
+    return { localX: localPosition[0], side: normal[2] >= 0 ? 'front' : 'back' }
+  }
+  if (Math.abs(normal[1]) > 0.7) return null
+
+  const arc = getWallArcData(wall)
+  if (!arc) return null
+  const chord = getWallChordFrame(wall)
+  const point = {
+    x: chord.start.x + chord.tangent.x * localPosition[0] + chord.normal.x * localPosition[2],
+    y: chord.start.y + chord.tangent.y * localPosition[0] + chord.normal.y * localPosition[2],
+  }
+  const angle = Math.atan2(point.y - arc.center.y, point.x - arc.center.x)
+  let directedAngle = (angle - arc.startAngle) * arc.direction
+  while (directedAngle < 0) directedAngle += Math.PI * 2
+  const t = Math.max(0, Math.min(1, directedAngle / Math.abs(arc.delta)))
+  const frame = getWallCurveFrameAt(wall, t)
+  const signedOffset =
+    (point.x - frame.point.x) * frame.normal.x + (point.y - frame.point.y) * frame.normal.y
+  return {
+    localX: getWallCurveLength(wall) * t,
+    side: signedOffset >= 0 ? 'front' : 'back',
+  }
+}
+
+export function applyLeanToCurveProjectionLimit(node: LeanToExtensionNode): LeanToExtensionNode {
+  const centerZ = node.spanArcCenterZ
+  if (centerZ == null || centerZ <= 0) return node
+  const maximumProjection = centerZ - Math.max(0, node.lowOverhang) - CURVED_INNER_EDGE_CLEARANCE
+  if (maximumProjection < 0.5 || node.projection <= maximumProjection) return node
+  const projection = maximumProjection
+  return {
+    ...node,
+    projection,
+    lowEdgeHeight: leanToLowEdgeHeight({ ...node, projection }),
+  }
 }
 
 export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
@@ -297,12 +344,12 @@ export function resolveLeanToWallPlacement(
     highEdgeHeight: overrides.highEdgeHeight ?? Math.max(1.2, (wall.height ?? 2.4) - 0.1),
   })
   const spanArc = resolveLeanToSpanArc(wall, parsed)
-  return {
+  return applyLeanToCurveProjectionLimit({
     ...parsed,
     spanArcCenterZ: spanArc?.centerZ,
     spanArcRadius: spanArc?.radius,
     lowEdgeHeight: leanToLowEdgeHeight(parsed),
-  }
+  })
 }
 
 export function leanToWallLocalPose(

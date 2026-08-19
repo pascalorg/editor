@@ -215,6 +215,47 @@ export function buildLeanToExtensionGeometry(
   const group = new Group()
   group.name = 'lean-to-extension-geometry'
 
+  const isConcave = (side: 'left' | 'right') => (cornerJoints[side]?.beamExtension ?? 0) < -1e-6
+  const concaveBeamBoundaryX = (side: 'left' | 'right') => {
+    const extension = cornerJoints[side]?.beamExtension ?? 0
+    return side === 'left' ? -layout.span / 2 - extension : layout.span / 2 + extension
+  }
+  const isRetainedLowPostX = (x: number) => {
+    if (isConcave('left') && x <= concaveBeamBoundaryX('left') + 1e-6) return false
+    if (isConcave('right') && x >= concaveBeamBoundaryX('right') - 1e-6) return false
+    return true
+  }
+  const seamIntersectionAtX = (side: 'left' | 'right', x: number) => {
+    const seam = cornerJoints[side]?.seam
+    if (!isConcave(side) || !seam) return null
+    const [start, end] = seam
+    const deltaX = end[0] - start[0]
+    if (Math.abs(deltaX) <= 1e-6) return null
+    const ratio = (x - start[0]) / deltaX
+    if (ratio < -1e-6 || ratio > 1 + 1e-6) return null
+    return {
+      z: start[1] + (end[1] - start[1]) * ratio,
+      dzDx: (end[1] - start[1]) / deltaX,
+    }
+  }
+  const retainedWidthAtZ = (z: number) => {
+    let minX = layout.roofCenterX - layout.roofWidth / 2
+    let maxX = layout.roofCenterX + layout.roofWidth / 2
+    for (const side of ['left', 'right'] as const) {
+      const seam = cornerJoints[side]?.seam
+      if (!isConcave(side) || !seam) continue
+      const [start, end] = seam
+      const deltaZ = end[1] - start[1]
+      if (Math.abs(deltaZ) <= 1e-6) continue
+      const ratio = (z - start[1]) / deltaZ
+      if (ratio < -1e-6 || ratio > 1 + 1e-6) continue
+      const seamX = start[0] + (end[0] - start[0]) * ratio
+      if (side === 'left') minX = Math.max(minX, seamX)
+      else maxX = Math.min(maxX, seamX)
+    }
+    return { minX, maxX }
+  }
+
   const curved = isCurvedLeanTo(node)
   const facets = leanToFacetCount(node)
   const bend = (localX: number, localZ: number): [number, number] => {
@@ -505,6 +546,7 @@ export function buildLeanToExtensionGeometry(
 
   if (node.postBracing === 'knee') {
     for (const [index, x] of layout.postXs.entries()) {
+      if (!isRetainedLowPostX(x)) continue
       addBentBox({
         name: `lean-to-knee-brace-${index}`,
         size: [node.rafterWidth, node.rafterHeight, Math.min(0.8, layout.projection / 2)],
@@ -520,24 +562,6 @@ export function buildLeanToExtensionGeometry(
   }
 
   if (node.framingStrategy === 'rafters') {
-    const regularRafters = layout.rafterXs.filter(
-      (_x, index) =>
-        !(cornerJoints.left && index === 0) &&
-        !(cornerJoints.right && index === layout.rafterXs.length - 1),
-    )
-    for (const [index, x] of regularRafters.entries()) {
-      addBentBox({
-        name: `lean-to-rafter-${index}`,
-        size: [node.rafterWidth, node.rafterHeight, layout.rafterSlopeLength],
-        localX: x,
-        localZ: layout.rafterCenterZ,
-        y: layout.rafterCenterY,
-        rotationX: layout.pitchRadians,
-        role: 'joinery',
-        material: framingMaterial,
-        slotId: 'framing',
-      })
-    }
     const roofBuildUp =
       node.roofThickness / Math.max(0.1, Math.cos(layout.pitchRadians)) +
       (node.shingleThickness ?? 0.025) * Math.cos(layout.pitchRadians)
@@ -546,6 +570,50 @@ export function buildLeanToExtensionGeometry(
       z * Math.tan(layout.pitchRadians) -
       roofBuildUp -
       node.rafterHeight / 2
+    const halfRafterRun = (layout.rafterSlopeLength * Math.cos(layout.pitchRadians)) / 2
+    const rafterBackZ = layout.rafterCenterZ - halfRafterRun
+    const rafterFrontZ = layout.rafterCenterZ + halfRafterRun
+    for (const [index, x] of layout.rafterXs.entries()) {
+      if (cornerJoints.left && index === 0) continue
+      if (cornerJoints.right && index === layout.rafterXs.length - 1) continue
+      let clippedFrontZ = rafterFrontZ
+      for (const side of ['left', 'right'] as const) {
+        const intersection = seamIntersectionAtX(side, x)
+        if (!intersection) continue
+        const endRetreat =
+          (Math.abs(intersection.dzDx) * node.rafterWidth) / 2 +
+          (Math.sin(layout.pitchRadians) * node.rafterHeight) / 2 +
+          0.002
+        clippedFrontZ = Math.min(clippedFrontZ, intersection.z - endRetreat)
+      }
+      if (clippedFrontZ <= rafterBackZ + 1e-6) continue
+      if (clippedFrontZ < rafterFrontZ - 1e-6) {
+        addBoxBetween(group, {
+          name: `lean-to-rafter-${index}`,
+          start: [x, rafterY(rafterBackZ), rafterBackZ],
+          end: [x, rafterY(clippedFrontZ), clippedFrontZ],
+          width: node.rafterWidth,
+          height: node.rafterHeight,
+          role: 'joinery',
+          colorPreset,
+          sceneTheme,
+          material: framingMaterial,
+          slotId: 'framing',
+        })
+      } else {
+        addBentBox({
+          name: `lean-to-rafter-${index}`,
+          size: [node.rafterWidth, node.rafterHeight, layout.rafterSlopeLength],
+          localX: x,
+          localZ: layout.rafterCenterZ,
+          y: layout.rafterCenterY,
+          rotationX: layout.pitchRadians,
+          role: 'joinery',
+          material: framingMaterial,
+          slotId: 'framing',
+        })
+      }
+    }
     for (const [side, joint] of Object.entries(cornerJoints)) {
       if (!(joint?.sharedPostOwner && joint.seam)) continue
       const [start, end] = joint.seam
@@ -573,10 +641,12 @@ export function buildLeanToExtensionGeometry(
       const fraction = index / (count - 1)
       const z = fraction * layout.rafterCenterZ * 2
       const y = layout.rafterCenterY + (layout.rafterCenterZ - z) * Math.tan(layout.pitchRadians)
+      const retained = retainedWidthAtZ(z)
+      if (retained.maxX <= retained.minX + 1e-6) continue
       addBentStrip({
         name: `lean-to-purlin-${index}`,
-        centerX: layout.roofCenterX,
-        totalWidth: layout.roofWidth,
+        centerX: (retained.minX + retained.maxX) / 2,
+        totalWidth: retained.maxX - retained.minX,
         height: node.purlinHeight,
         depth: node.purlinWidth,
         localZ: z,

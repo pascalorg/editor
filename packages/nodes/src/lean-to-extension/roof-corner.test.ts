@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   getRoofSegmentSurfaceY,
+  getWallCurveLength,
   LeanToExtensionNode,
   WallNode,
 } from '@pascal-app/core'
@@ -9,8 +10,11 @@ import { generateRoofSegmentGeometry } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { computeGutterMitres, type GutterMitres } from '../gutter/corner-mitre'
 import { buildGutterGeometry } from '../gutter/geometry'
+import { bendLocalPoint } from './arc'
 import { createLeanToAssembly, leanToCornerPostIndex, managedLeanToPostIndex } from './assembly'
 import { resolveLeanToCornerJoints } from './corner-joint'
+import { leanToWallLocalPose, resolveLeanToWallPlacement } from './layout'
+import { applyLeanToWallAutoSpan } from './roof-attachment'
 
 function cornerFixture(reverseWalls = false, sideOverhang = 0) {
   const wallA = WallNode.parse({
@@ -86,6 +90,39 @@ function angledCornerFixture(interiorAngleDegrees: number) {
   return { wallA, wallB, leanToA, leanToB, nodes }
 }
 
+function innerCornerFixture(interiorAngleDegrees = 90) {
+  const corner: [number, number] = [4, 0]
+  const radians = (interiorAngleDegrees * Math.PI) / 180
+  const wallA = WallNode.parse({
+    id: 'wall_inner_corner_a',
+    parentId: 'level_inner_corner',
+    start: [0, 0],
+    end: corner,
+  })
+  const wallB = WallNode.parse({
+    id: 'wall_inner_corner_b',
+    parentId: 'level_inner_corner',
+    start: corner,
+    end: [corner[0] + 4 * Math.cos(radians), 4 * Math.sin(radians)],
+  })
+  const leanToA = LeanToExtensionNode.parse({
+    id: 'leanto_inner_corner_a',
+    parentId: wallA.id,
+    position: [2, 0, 0.05],
+    span: 4,
+  })
+  const leanToB = LeanToExtensionNode.parse({
+    id: 'leanto_inner_corner_b',
+    parentId: wallB.id,
+    position: [2, 0, 0.05],
+    span: 4,
+  })
+  const nodes = Object.fromEntries(
+    [wallA, wallB, leanToA, leanToB].map((node) => [node.id, node]),
+  ) as Record<string, AnyNode>
+  return { wallA, wallB, leanToA, leanToB, nodes }
+}
+
 const continuousSupportedAngles = [
   ...Array.from({ length: 121 }, (_, index) => 30 + index),
   30.25,
@@ -102,12 +139,10 @@ function segmentWorldMatrix(
   leanTo: ReturnType<typeof LeanToExtensionNode.parse>,
   segment: ReturnType<typeof createLeanToAssembly>['segment'],
 ) {
-  const wallAngle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+  const pose = leanToWallLocalPose(wall, leanTo, 0)
   return new THREE.Matrix4()
-    .makeTranslation(wall.start[0], 0, wall.start[1])
-    .multiply(new THREE.Matrix4().makeRotationY(-wallAngle))
-    .multiply(new THREE.Matrix4().makeTranslation(...leanTo.position))
-    .multiply(new THREE.Matrix4().makeRotationY(leanTo.rotation[1]))
+    .makeTranslation(...pose.position)
+    .multiply(new THREE.Matrix4().makeRotationY(pose.rotationY))
     .multiply(new THREE.Matrix4().makeTranslation(...segment.position))
     .multiply(new THREE.Matrix4().makeRotationY(segment.rotation))
 }
@@ -117,13 +152,12 @@ function cornerPlanPointToWorld(
   leanTo: ReturnType<typeof LeanToExtensionNode.parse>,
   point: readonly [number, number],
 ) {
-  const wallAngle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
-  return new THREE.Vector3(point[0], 0, point[1]).applyMatrix4(
+  const pose = leanToWallLocalPose(wall, leanTo, 0)
+  const bent = bendLocalPoint(leanTo, point[0], point[1])
+  return new THREE.Vector3(bent.x, 0, bent.y).applyMatrix4(
     new THREE.Matrix4()
-      .makeTranslation(wall.start[0], 0, wall.start[1])
-      .multiply(new THREE.Matrix4().makeRotationY(-wallAngle))
-      .multiply(new THREE.Matrix4().makeTranslation(...leanTo.position))
-      .multiply(new THREE.Matrix4().makeRotationY(leanTo.rotation[1])),
+      .makeTranslation(...pose.position)
+      .multiply(new THREE.Matrix4().makeRotationY(pose.rotationY)),
   )
 }
 
@@ -235,7 +269,8 @@ function closestMeshDistance(source: THREE.BufferGeometry, target: THREE.BufferG
       triangle.b.fromBufferAttribute(targetPosition, targetVertex(offset + 1))
       triangle.c.fromBufferAttribute(targetPosition, targetVertex(offset + 2))
       triangle.closestPointToPoint(point, closest)
-      minimum = Math.min(minimum, point.distanceTo(closest))
+      const distance = point.distanceTo(closest)
+      if (Number.isFinite(distance)) minimum = Math.min(minimum, distance)
     }
   }
   return minimum
@@ -259,14 +294,399 @@ function contactingVertices(source: THREE.BufferGeometry, target: THREE.BufferGe
       triangle.b.fromBufferAttribute(targetPosition, targetVertex(offset + 1))
       triangle.c.fromBufferAttribute(targetPosition, targetVertex(offset + 2))
       triangle.closestPointToPoint(point, closest)
-      minimum = Math.min(minimum, point.distanceTo(closest))
+      const distance = point.distanceTo(closest)
+      if (Number.isFinite(distance)) minimum = Math.min(minimum, distance)
     }
     if (minimum < 1e-4) contacts.push(point.toArray())
   }
   return contacts
 }
 
+function boundaryVerticesNear(
+  geometry: THREE.BufferGeometry,
+  center: THREE.Vector3,
+  radius: number,
+): THREE.Vector3[] {
+  const source = geometry.index ? geometry.toNonIndexed() : geometry
+  const position = source.getAttribute('position')
+  const precision = 1e5
+  const pointKey = (index: number) =>
+    [position.getX(index), position.getY(index), position.getZ(index)]
+      .map((value) => Math.round(value * precision))
+      .join(':')
+  const points = new Map<string, THREE.Vector3>()
+  const edges = new Map<string, number>()
+  for (let offset = 0; offset < position.count; offset += 3) {
+    for (const [a, b] of [
+      [offset, offset + 1],
+      [offset + 1, offset + 2],
+      [offset + 2, offset],
+    ] as const) {
+      const aKey = pointKey(a)
+      const bKey = pointKey(b)
+      points.set(aKey, new THREE.Vector3().fromBufferAttribute(position, a))
+      points.set(bKey, new THREE.Vector3().fromBufferAttribute(position, b))
+      const edgeKey = aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`
+      edges.set(edgeKey, (edges.get(edgeKey) ?? 0) + 1)
+    }
+  }
+  const boundaryKeys = new Set<string>()
+  for (const [edge, count] of edges) {
+    if (count !== 1) continue
+    const [a, b] = edge.split('|')
+    boundaryKeys.add(a!)
+    boundaryKeys.add(b!)
+  }
+  if (source !== geometry) source.dispose()
+  return [...boundaryKeys]
+    .map((key) => points.get(key)!)
+    .filter((point) => Math.hypot(point.x - center.x, point.z - center.z) < radius)
+}
+
 describe('lean-to corner joint', () => {
+  test('partitions an inner L into one valley with connected gutters, beam, and post', () => {
+    const { wallA, wallB, leanToA, leanToB, nodes } = innerCornerFixture()
+    const jointA = resolveLeanToCornerJoints(leanToA, wallA, nodes).right
+    const jointB = resolveLeanToCornerJoints(leanToB, wallB, nodes).left
+
+    expect(jointA?.neighborId).toBe(leanToB.id)
+    expect(jointB?.neighborId).toBe(leanToA.id)
+    expect(jointA!.roofExtension).toBeLessThan(0)
+    expect(jointB?.roofExtension).toBeCloseTo(jointA!.roofExtension, 6)
+    expect(jointA!.beamExtension).toBeLessThan(0)
+    expect(jointB?.beamExtension).toBeCloseTo(jointA!.beamExtension, 6)
+    expect(jointA?.gutterMitre).toBeCloseTo(-Math.PI / 4, 8)
+    expect(jointB?.gutterMitre).toBeCloseTo(-Math.PI / 4, 8)
+
+    const seamA = jointA?.seam?.map((point) => cornerPlanPointToWorld(wallA, leanToA, point))
+    const seamB = jointB?.seam?.map((point) => cornerPlanPointToWorld(wallB, leanToB, point))
+    expect(seamA).toHaveLength(2)
+    expect(seamB).toHaveLength(2)
+    expect(pointSetHausdorffDistance(seamA!, seamB!)).toBeLessThan(1e-5)
+
+    const assemblyA = createLeanToAssembly(leanToA, undefined, nodes)
+    const assemblyB = createLeanToAssembly(leanToB, undefined, nodes)
+    expect(assemblyA.segment.shedFootprintPieces).toHaveLength(1)
+    expect(assemblyB.segment.shedFootprintPieces).toHaveLength(1)
+    const roofMeshes = [
+      new THREE.Mesh(
+        generateRoofSegmentGeometry(assemblyA.segment).applyMatrix4(
+          segmentWorldMatrix(wallA, leanToA, assemblyA.segment),
+        ),
+      ),
+      new THREE.Mesh(
+        generateRoofSegmentGeometry(assemblyB.segment).applyMatrix4(
+          segmentWorldMatrix(wallB, leanToB, assemblyB.segment),
+        ),
+      ),
+    ]
+    const raycaster = new THREE.Raycaster()
+    raycaster.ray.direction.set(0, -1, 0)
+    const invalidCoverage: [number, number, number][] = []
+    for (let x = 1.4; x < 3.9; x += 0.15) {
+      for (let z = 0.15; z < 2.7; z += 0.15) {
+        raycaster.ray.origin.set(x, 10, z)
+        const owners = roofMeshes.filter(
+          (mesh) => raycaster.intersectObject(mesh, false).length > 0,
+        ).length
+        if (owners !== 1) invalidCoverage.push([x, z, owners])
+      }
+    }
+    expect(invalidCoverage).toEqual([])
+    const gutterA = gutterWorldGeometry(
+      wallA,
+      leanToA,
+      assemblyA,
+      computeGutterMitres(assemblyA.gutter, assemblyA.segment, [
+        { gutter: assemblyB.gutter, segment: assemblyB.segment },
+      ]),
+    )
+    const gutterB = gutterWorldGeometry(
+      wallB,
+      leanToB,
+      assemblyB,
+      computeGutterMitres(assemblyB.gutter, assemblyB.segment, [
+        { gutter: assemblyA.gutter, segment: assemblyA.segment },
+      ]),
+    )
+    expect(contactingVertices(gutterA, gutterB).length).toBeGreaterThan(10)
+    expect(contactingVertices(gutterB, gutterA).length).toBeGreaterThan(10)
+    expect(
+      [...assemblyA.posts, ...assemblyB.posts].filter((post) => {
+        const index = managedLeanToPostIndex(post)
+        return index === leanToCornerPostIndex('left') || index === leanToCornerPostIndex('right')
+      }),
+    ).toHaveLength(1)
+    expect(assemblyA.posts.some((post) => managedLeanToPostIndex(post) === 2)).toBe(false)
+    expect(assemblyB.posts.some((post) => managedLeanToPostIndex(post) === 0)).toBe(false)
+    const regularPostsA = assemblyA.posts.filter(
+      (post) => (managedLeanToPostIndex(post) ?? -1) >= 0,
+    )
+    const regularPostsB = assemblyB.posts.filter(
+      (post) => (managedLeanToPostIndex(post) ?? -1) >= 0,
+    )
+    expect(
+      regularPostsA.every((post) => post.position[0] < jointA!.sharedPostPosition[0] - 1e-6),
+    ).toBe(true)
+    expect(
+      regularPostsB.every((post) => post.position[0] > jointB!.sharedPostPosition[0] + 1e-6),
+    ).toBe(true)
+    for (const mesh of roofMeshes) mesh.geometry.dispose()
+    gutterA.dispose()
+    gutterB.dispose()
+  })
+
+  test('resolves inward V corners continuously across the supported angle range', () => {
+    for (const angle of continuousSupportedAngles) {
+      const { wallA, wallB, leanToA, leanToB, nodes } = innerCornerFixture(angle)
+      const jointA = resolveLeanToCornerJoints(leanToA, wallA, nodes).right
+      const jointB = resolveLeanToCornerJoints(leanToB, wallB, nodes).left
+      const expectedMitre = -(angle * Math.PI) / 360
+
+      expect(jointA?.kind).toBe('concave')
+      expect(jointB?.kind).toBe('concave')
+      expect(jointA?.gutterMitre).toBeCloseTo(expectedMitre, 8)
+      expect(jointB?.gutterMitre).toBeCloseTo(expectedMitre, 8)
+      expect(jointA!.roofExtension).toBeLessThan(0)
+      expect(jointB!.roofExtension).toBeLessThan(0)
+      expect(jointA!.beamExtension).toBeLessThan(0)
+      expect(jointB!.beamExtension).toBeLessThan(0)
+      const seamA = jointA?.seam?.map((point) => cornerPlanPointToWorld(wallA, leanToA, point))
+      const seamB = jointB?.seam?.map((point) => cornerPlanPointToWorld(wallB, leanToB, point))
+      expect(seamA).toHaveLength(2)
+      expect(seamB).toHaveLength(2)
+      expect(pointSetHausdorffDistance(seamA!, seamB!)).toBeLessThan(1e-5)
+    }
+  })
+
+  test('gives unequal inner roofs one coincident valley seam', () => {
+    const fixture = innerCornerFixture()
+    const leanToB = LeanToExtensionNode.parse({
+      ...fixture.leanToB,
+      highEdgeHeight: 3.1,
+      pitch: 16,
+    })
+    const nodes = { ...fixture.nodes, [leanToB.id]: leanToB }
+    const jointA = resolveLeanToCornerJoints(fixture.leanToA, fixture.wallA, nodes).right
+    const jointB = resolveLeanToCornerJoints(leanToB, fixture.wallB, nodes).left
+    const seamA = jointA?.seam?.map((point) =>
+      cornerPlanPointToWorld(fixture.wallA, fixture.leanToA, point),
+    )
+    const seamB = jointB?.seam?.map((point) =>
+      cornerPlanPointToWorld(fixture.wallB, leanToB, point),
+    )
+
+    expect(seamA).toHaveLength(2)
+    expect(seamB).toHaveLength(2)
+    expect(pointSetHausdorffDistance(seamA!, seamB!)).toBeLessThan(1e-5)
+  })
+
+  test('extends both roofs to one curved-to-straight low corner', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_curved_miter',
+      parentId: 'level_curved_miter',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: -0.5,
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_straight_miter',
+      parentId: 'level_curved_miter',
+      start: [6, 0],
+      end: [6, -6],
+    })
+    const curved = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(curvedWall, getWallCurveLength(curvedWall) / 2, 'front')!,
+        curvedWall,
+      ),
+      id: 'leanto_curved_miter',
+    }
+    const straight = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(straightWall, 3, 'front')!,
+        straightWall,
+      ),
+      id: 'leanto_straight_miter',
+    }
+    const nodes = Object.fromEntries(
+      [curvedWall, straightWall, curved, straight].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const joint = resolveLeanToCornerJoints(straight, straightWall, nodes).left
+    const reciprocal = resolveLeanToCornerJoints(curved, curvedWall, nodes).right
+    const straightSeam = joint?.seam?.map((point) =>
+      cornerPlanPointToWorld(straightWall, straight, point),
+    )
+    const curvedSeam = reciprocal?.seam?.map((point) =>
+      cornerPlanPointToWorld(curvedWall, curved, point),
+    )
+
+    expect(joint?.roofExtension).toBeCloseTo(1.811, 2)
+    expect(joint?.gutterMitre).toBeCloseTo(0.577309, 5)
+    expect(joint?.roofPiece).toHaveLength(3)
+    expect(reciprocal?.roofPiece).toHaveLength(3)
+    expect(straightSeam).toHaveLength(2)
+    expect(curvedSeam).toHaveLength(2)
+    expect(pointSetHausdorffDistance(straightSeam!, curvedSeam!)).toBeLessThan(1e-5)
+
+    const straightAssembly = createLeanToAssembly(straight, undefined, nodes)
+    const straightGeometry = generateRoofSegmentGeometry(straightAssembly.segment).applyMatrix4(
+      segmentWorldMatrix(straightWall, straight, straightAssembly.segment),
+    )
+    straightGeometry.dispose()
+
+    const curvedAssembly = createLeanToAssembly(curved, undefined, nodes)
+    const curvedGeometry = generateRoofSegmentGeometry(curvedAssembly.segment).applyMatrix4(
+      segmentWorldMatrix(curvedWall, curved, curvedAssembly.segment),
+    )
+    expect(
+      new THREE.Box3().setFromBufferAttribute(curvedGeometry.getAttribute('position')).max.x,
+    ).toBeLessThan(8.81)
+    curvedGeometry.dispose()
+  })
+
+  test('auto-connects a shallow slanted shed to a curved shed using the gutter chord angle', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_curved_shallow_corner',
+      parentId: 'level_curved_shallow_corner',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: -0.5,
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_straight_shallow_corner',
+      parentId: 'level_curved_shallow_corner',
+      start: [6, 0],
+      end: [6 + 6 / Math.sqrt(2), -6 / Math.sqrt(2)],
+    })
+    const curved = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(curvedWall, getWallCurveLength(curvedWall) / 2, 'front')!,
+        curvedWall,
+      ),
+      id: 'leanto_curved_shallow_corner',
+    }
+    const straight = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(straightWall, 3, 'front')!,
+        straightWall,
+      ),
+      id: 'leanto_straight_shallow_corner',
+    }
+    const nodes = Object.fromEntries(
+      [curvedWall, straightWall, curved, straight].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const curvedJoint = resolveLeanToCornerJoints(curved, curvedWall, nodes).right
+    const straightJoint = resolveLeanToCornerJoints(straight, straightWall, nodes).left
+    const curvedSeam = curvedJoint?.seam?.map((point) =>
+      cornerPlanPointToWorld(curvedWall, curved, point),
+    )
+    const straightSeam = straightJoint?.seam?.map((point) =>
+      cornerPlanPointToWorld(straightWall, straight, point),
+    )
+
+    expect(curvedJoint?.neighborId).toBe(straight.id)
+    expect(straightJoint?.neighborId).toBe(curved.id)
+    expect(curvedJoint?.gutterMitre).toBeCloseTo(0.213267, 5)
+    expect(straightJoint?.gutterMitre).toBeCloseTo(0.213267, 5)
+    expect(curvedSeam).toHaveLength(2)
+    expect(straightSeam).toHaveLength(2)
+    expect(pointSetHausdorffDistance(curvedSeam!, straightSeam!)).toBeLessThan(1e-5)
+    expect(curvedJoint?.roofPiece).toHaveLength(3)
+    expect(straightJoint?.roofPiece).toHaveLength(3)
+
+    const curvedAssembly = createLeanToAssembly(curved, undefined, nodes)
+    const straightAssembly = createLeanToAssembly(straight, undefined, nodes)
+    const curvedGeometry = generateRoofSegmentGeometry(curvedAssembly.segment).applyMatrix4(
+      segmentWorldMatrix(curvedWall, curved, curvedAssembly.segment),
+    )
+    const straightGeometry = generateRoofSegmentGeometry(straightAssembly.segment).applyMatrix4(
+      segmentWorldMatrix(straightWall, straight, straightAssembly.segment),
+    )
+    const roofMeshes = [new THREE.Mesh(curvedGeometry), new THREE.Mesh(straightGeometry)]
+    const expectedMeshes = [
+      new THREE.Mesh(
+        generateRoofSegmentGeometry({
+          ...curvedAssembly.segment,
+          shedFootprintPieces: [],
+        }).applyMatrix4(segmentWorldMatrix(curvedWall, curved, curvedAssembly.segment)),
+      ),
+      new THREE.Mesh(
+        generateRoofSegmentGeometry({
+          ...straightAssembly.segment,
+          shedFootprintPieces: [],
+        }).applyMatrix4(segmentWorldMatrix(straightWall, straight, straightAssembly.segment)),
+      ),
+    ]
+    const bounds = new THREE.Box3().setFromObject(expectedMeshes[0]!)
+    bounds.union(new THREE.Box3().setFromObject(expectedMeshes[1]!))
+    const raycaster = new THREE.Raycaster()
+    raycaster.ray.direction.set(0, -1, 0)
+    const uncovered: [number, number][] = []
+    const overlaps: [number, number][] = []
+    for (let x = bounds.min.x + 0.027; x < bounds.max.x; x += 0.05) {
+      for (let z = bounds.min.z + 0.033; z < bounds.max.z; z += 0.05) {
+        if (x < 5.8 || z > 2) continue
+        raycaster.ray.origin.set(x, 10, z)
+        const expected = expectedMeshes.some(
+          (mesh) => raycaster.intersectObject(mesh, false).length > 0,
+        )
+        if (!expected) continue
+        const owners = roofMeshes.filter(
+          (mesh) => raycaster.intersectObject(mesh, false).length > 0,
+        ).length
+        if (owners === 0) uncovered.push([x, z])
+        if (owners > 1) overlaps.push([x, z])
+      }
+    }
+    const curvedToStraightDistance = closestMeshDistance(curvedGeometry, straightGeometry)
+    const straightToCurvedDistance = closestMeshDistance(straightGeometry, curvedGeometry)
+    expect(Math.min(curvedToStraightDistance, straightToCurvedDistance)).toBeLessThan(0.02)
+    expect(contactingVertices(curvedGeometry, straightGeometry).length).toBeGreaterThan(2)
+    expect(contactingVertices(straightGeometry, curvedGeometry).length).toBeGreaterThan(2)
+    expect(uncovered).toEqual([])
+    expect(overlaps).toEqual([])
+    const curvedGutter = gutterWorldGeometry(
+      curvedWall,
+      curved,
+      curvedAssembly,
+      computeGutterMitres(curvedAssembly.gutter, curvedAssembly.segment, [
+        { gutter: straightAssembly.gutter, segment: straightAssembly.segment },
+      ]),
+    )
+    const straightGutter = gutterWorldGeometry(
+      straightWall,
+      straight,
+      straightAssembly,
+      computeGutterMitres(straightAssembly.gutter, straightAssembly.segment, [
+        { gutter: curvedAssembly.gutter, segment: curvedAssembly.segment },
+      ]),
+    )
+    const curvedContacts = contactingVertices(curvedGutter, straightGutter)
+    const straightContacts = contactingVertices(straightGutter, curvedGutter)
+    const lowRoofCorner = curvedSeam![1]!
+    const roofToGutterCorner = Math.min(
+      ...[...curvedContacts, ...straightContacts].map((point) =>
+        Math.hypot(point[0]! - lowRoofCorner.x, point[2]! - lowRoofCorner.z),
+      ),
+    )
+    expect(curvedContacts.length).toBeGreaterThan(10)
+    expect(straightContacts.length).toBeGreaterThan(10)
+    expect(roofToGutterCorner).toBeLessThan(0.05)
+    const curvedEndProfile = boundaryVerticesNear(curvedGutter, lowRoofCorner, 0.3)
+    const straightEndProfile = boundaryVerticesNear(straightGutter, lowRoofCorner, 0.3)
+    expect(curvedEndProfile.length).toBeGreaterThan(10)
+    expect(straightEndProfile.length).toBeGreaterThan(10)
+    expect(pointSetHausdorffDistance(curvedEndProfile, straightEndProfile)).toBeLessThan(0.002)
+    curvedGeometry.dispose()
+    straightGeometry.dispose()
+    curvedGutter.dispose()
+    straightGutter.dispose()
+    for (const mesh of expectedMeshes) mesh.geometry.dispose()
+  })
+
   test('resolves a reciprocal 60 degree corner with its true gutter mitre', () => {
     const { wallA, wallB, leanToA, leanToB, nodes } = angledCornerFixture(60)
 

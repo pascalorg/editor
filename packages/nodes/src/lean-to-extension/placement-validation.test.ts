@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   BuildingNode,
+  getWallCurveLength,
   LeanToExtensionNode,
   LevelNode,
   RoofNode,
@@ -9,7 +10,9 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { resolveLeanToWallPlacement } from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
+import { applyLeanToWallAutoSpan } from './roof-attachment'
 
 describe('lean-to placement validation', () => {
   test('allows a span crossing a host-wall opening', () => {
@@ -56,6 +59,74 @@ describe('lean-to placement validation', () => {
       [wall, adjacentWall, adjacent].map((node) => [node.id, node]),
     ) as Record<string, AnyNode>
     expect(leanToPlacementConflicts(leanTo, wall, nodes)).toHaveLength(1)
+  })
+
+  test('allows the second extension that completes an internal L corner', () => {
+    const wallA = WallNode.parse({
+      id: 'wall_inner_placement_a',
+      parentId: 'level_inner_placement',
+      start: [0, 0],
+      end: [4, 0],
+      children: ['leanto_inner_placement_a'],
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_inner_placement_b',
+      parentId: 'level_inner_placement',
+      start: [4, 0],
+      end: [4, 4],
+    })
+    const existing = LeanToExtensionNode.parse({
+      id: 'leanto_inner_placement_a',
+      parentId: wallA.id,
+      position: [2, 0, 0.05],
+      span: 4,
+    })
+    const candidate = LeanToExtensionNode.parse({
+      id: 'leanto_inner_placement_b',
+      parentId: wallB.id,
+      position: [2, 0, 0.05],
+      span: 4,
+    })
+    const nodes = Object.fromEntries(
+      [wallA, wallB, existing].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    expect(leanToPlacementConflicts(candidate, wallB, nodes)).toEqual([])
+  })
+
+  test('allows a curved extension to continue onto a tangent straight wall', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_curved_continuation',
+      parentId: 'level_continuation',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: 1,
+      children: ['leanto_curved_continuation'],
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_straight_continuation',
+      parentId: 'level_continuation',
+      start: [6, 0],
+      end: [10.8, 3.6],
+    })
+    const curvedPlacement = resolveLeanToWallPlacement(
+      curvedWall,
+      getWallCurveLength(curvedWall) / 2,
+      'front',
+    )!
+    const existing = {
+      ...applyLeanToWallAutoSpan(curvedPlacement, curvedWall),
+      id: 'leanto_curved_continuation',
+    }
+    const straightPlacement = resolveLeanToWallPlacement(straightWall, 3, 'front')!
+    const candidate = applyLeanToWallAutoSpan(straightPlacement, straightWall)
+    const nodes = {
+      [curvedWall.id]: curvedWall,
+      [straightWall.id]: straightWall,
+      [existing.id]: existing,
+    } as Record<string, AnyNode>
+
+    expect(leanToPlacementConflicts(candidate, straightWall, nodes)).toEqual([])
   })
 
   test('rejects an adjacent building crossing the canopy footprint', () => {

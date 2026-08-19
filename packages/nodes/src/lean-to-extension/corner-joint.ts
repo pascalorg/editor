@@ -1,11 +1,14 @@
 import type { AnyNode, LeanToExtensionNode, WallNode } from '@pascal-app/core'
-import { resolveLeanToLayout } from './layout'
+import { bendLocalPoint, isCurvedLeanTo, leanToArcFrameAtLocalX } from './arc'
+import { leanToWallLocalPose, resolveLeanToLayout } from './layout'
 
 export type LeanToCornerSide = 'left' | 'right'
 export type LeanToPlanPoint = [number, number]
+export type LeanToCornerKind = 'convex' | 'concave'
 
 export type LeanToCornerJoint = {
   side: LeanToCornerSide
+  kind: LeanToCornerKind
   neighborId: string
   neighborSide: LeanToCornerSide
   roofExtension: number
@@ -44,18 +47,37 @@ function wallFrame(wall: WallNode) {
 function leanToOutwardDirection(
   wall: WallNode,
   leanTo: LeanToExtensionNode,
+  side: LeanToCornerSide,
 ): LeanToPlanPoint | null {
-  const frame = wallFrame(wall)
-  if (!frame) return null
-  const cos = Math.cos(leanTo.rotation[1])
-  const sin = Math.sin(leanTo.rotation[1])
-  return [
-    frame.along[0] * sin + frame.perpendicular[0] * cos,
-    frame.along[1] * sin + frame.perpendicular[1] * cos,
-  ]
+  const layout = resolveLeanToLayout(leanTo)
+  const x = layout.roofCenterX + (side === 'left' ? -layout.roofWidth / 2 : layout.roofWidth / 2)
+  const frame = leanToArcFrameAtLocalX(leanTo, x)
+  const pose = leanToWallLocalPose(wall, leanTo, 0)
+  const cos = Math.cos(pose.rotationY)
+  const sin = Math.sin(pose.rotationY)
+  return [frame.normal.x * cos + frame.normal.y * sin, -frame.normal.x * sin + frame.normal.y * cos]
 }
 
 function awayFromEndDirection(
+  wall: WallNode,
+  leanTo: LeanToExtensionNode,
+  side: LeanToCornerSide,
+): LeanToPlanPoint | null {
+  const layout = resolveLeanToLayout(leanTo)
+  const endpointX =
+    layout.roofCenterX + (side === 'left' ? -layout.roofWidth / 2 : layout.roofWidth / 2)
+  const frame = leanToArcFrameAtLocalX(leanTo, endpointX)
+  const pose = leanToWallLocalPose(wall, leanTo, 0)
+  const cos = Math.cos(pose.rotationY)
+  const sin = Math.sin(pose.rotationY)
+  const inwardSign = side === 'left' ? 1 : -1
+  return [
+    (frame.tangent.x * cos + frame.tangent.y * sin) * inwardSign,
+    (-frame.tangent.x * sin + frame.tangent.y * cos) * inwardSign,
+  ]
+}
+
+function awayFromEndChordDirection(
   wall: WallNode,
   leanTo: LeanToExtensionNode,
   side: LeanToCornerSide,
@@ -69,23 +91,28 @@ function awayFromEndDirection(
   return length > PLAN_TOLERANCE ? [dx / length, dz / length] : null
 }
 
-function directionsFaceConvexCorner(
+function cornerKindFromDirections(
   wall: WallNode,
   leanTo: LeanToExtensionNode,
   side: LeanToCornerSide,
   candidateWall: WallNode,
   candidate: LeanToExtensionNode,
   candidateSide: LeanToCornerSide,
-): boolean {
-  const outward = leanToOutwardDirection(wall, leanTo)
-  const candidateOutward = leanToOutwardDirection(candidateWall, candidate)
+): LeanToCornerKind | null {
+  const outward = leanToOutwardDirection(wall, leanTo, side)
+  const candidateOutward = leanToOutwardDirection(candidateWall, candidate, candidateSide)
   const away = awayFromEndDirection(wall, leanTo, side)
   const candidateAway = awayFromEndDirection(candidateWall, candidate, candidateSide)
-  if (!(outward && candidateOutward && away && candidateAway)) return false
-  return (
-    outward[0] * candidateAway[0] + outward[1] * candidateAway[1] < -PLAN_TOLERANCE &&
-    candidateOutward[0] * away[0] + candidateOutward[1] * away[1] < -PLAN_TOLERANCE
-  )
+  if (!(outward && candidateOutward && away && candidateAway)) return null
+  const candidateAcrossOwn = outward[0] * candidateAway[0] + outward[1] * candidateAway[1]
+  const ownAcrossCandidate = candidateOutward[0] * away[0] + candidateOutward[1] * away[1]
+  if (candidateAcrossOwn < -PLAN_TOLERANCE && ownAcrossCandidate < -PLAN_TOLERANCE) {
+    return 'convex'
+  }
+  if (candidateAcrossOwn > PLAN_TOLERANCE && ownAcrossCandidate > PLAN_TOLERANCE) {
+    return 'concave'
+  }
+  return null
 }
 
 function cornerInteriorAngle(
@@ -100,10 +127,23 @@ function cornerInteriorAngle(
   const candidateAway = awayFromEndDirection(candidateWall, candidate, candidateSide)
   if (!(away && candidateAway)) return null
   const dot = Math.max(-1, Math.min(1, away[0] * candidateAway[0] + away[1] * candidateAway[1]))
+  return Math.acos(dot)
+}
+
+function isSupportedHostCorner(
+  wall: WallNode,
+  leanTo: LeanToExtensionNode,
+  side: LeanToCornerSide,
+  candidateWall: WallNode,
+  candidate: LeanToExtensionNode,
+  candidateSide: LeanToCornerSide,
+): boolean {
+  const away = awayFromEndChordDirection(wall, leanTo, side)
+  const candidateAway = awayFromEndChordDirection(candidateWall, candidate, candidateSide)
+  if (!(away && candidateAway)) return false
+  const dot = Math.max(-1, Math.min(1, away[0] * candidateAway[0] + away[1] * candidateAway[1]))
   const angle = Math.acos(dot)
   return angle >= MIN_CORNER_ANGLE - PLAN_TOLERANCE && angle <= MAX_CORNER_ANGLE + PLAN_TOLERANCE
-    ? angle
-    : null
 }
 
 function leanToPointToWorld(
@@ -112,15 +152,13 @@ function leanToPointToWorld(
   localX: number,
   localZ: number,
 ): LeanToPlanPoint | null {
-  const frame = wallFrame(wall)
-  if (!frame) return null
-  const cos = Math.cos(leanTo.rotation[1])
-  const sin = Math.sin(leanTo.rotation[1])
-  const wallX = leanTo.position[0] + localX * cos + localZ * sin
-  const wallZ = leanTo.position[2] - localX * sin + localZ * cos
+  const pose = leanToWallLocalPose(wall, leanTo, 0)
+  const point = bendLocalPoint(leanTo, localX, localZ)
+  const cos = Math.cos(pose.rotationY)
+  const sin = Math.sin(pose.rotationY)
   return [
-    frame.start[0] + frame.along[0] * wallX + frame.perpendicular[0] * wallZ,
-    frame.start[1] + frame.along[1] * wallX + frame.perpendicular[1] * wallZ,
+    pose.position[0] + point.x * cos + point.y * sin,
+    pose.position[2] - point.x * sin + point.y * cos,
   ]
 }
 
@@ -129,15 +167,20 @@ function worldPointToLeanTo(
   leanTo: LeanToExtensionNode,
   point: readonly [number, number],
 ): LeanToPlanPoint | null {
-  const frame = wallFrame(wall)
-  if (!frame) return null
-  const dx = point[0] - frame.start[0]
-  const dz = point[1] - frame.start[1]
-  const relativeX = dx * frame.along[0] + dz * frame.along[1] - leanTo.position[0]
-  const relativeZ = dx * frame.perpendicular[0] + dz * frame.perpendicular[1] - leanTo.position[2]
-  const cos = Math.cos(leanTo.rotation[1])
-  const sin = Math.sin(leanTo.rotation[1])
-  return [relativeX * cos - relativeZ * sin, relativeX * sin + relativeZ * cos]
+  const pose = leanToWallLocalPose(wall, leanTo, 0)
+  const dx = point[0] - pose.position[0]
+  const dz = point[1] - pose.position[2]
+  const cos = Math.cos(pose.rotationY)
+  const sin = Math.sin(pose.rotationY)
+  const bentX = dx * cos - dz * sin
+  const bentZ = dx * sin + dz * cos
+  if (!isCurvedLeanTo(leanTo)) return [bentX, bentZ]
+  const centerZ = leanTo.spanArcCenterZ as number
+  const radialSign = -(Math.sign(centerZ) || 1)
+  const radial = Math.hypot(bentX, bentZ - centerZ) * radialSign
+  const phi = Math.atan2(-bentX * radialSign, (bentZ - centerZ) * radialSign)
+  const signedRadius = (Math.sign(centerZ) || 1) * (leanTo.spanArcRadius as number)
+  return [phi * signedRadius, centerZ + radial]
 }
 
 function extensionToRunIntersection(
@@ -158,6 +201,72 @@ function extensionToRunIntersection(
   if (!(ownOrigin && ownNext && ownBoundary && candidateOrigin && candidateNext)) return null
 
   const ownDirection: LeanToPlanPoint = [ownNext[0] - ownOrigin[0], ownNext[1] - ownOrigin[1]]
+  const sideSign = side === 'left' ? -1 : 1
+  if (isCurvedLeanTo(leanTo) && !isCurvedLeanTo(candidate)) {
+    const candidateDirection: LeanToPlanPoint = [
+      candidateNext[0] - candidateOrigin[0],
+      candidateNext[1] - candidateOrigin[1],
+    ]
+    const directionLength = Math.hypot(candidateDirection[0], candidateDirection[1])
+    if (directionLength <= PLAN_TOLERANCE) return null
+    const direction: LeanToPlanPoint = [
+      candidateDirection[0] / directionLength,
+      candidateDirection[1] / directionLength,
+    ]
+    const pose = leanToWallLocalPose(wall, leanTo, 0)
+    const centerZ = leanTo.spanArcCenterZ as number
+    const cos = Math.cos(pose.rotationY)
+    const sin = Math.sin(pose.rotationY)
+    const center: LeanToPlanPoint = [
+      pose.position[0] + centerZ * sin,
+      pose.position[2] + centerZ * cos,
+    ]
+    const offset: LeanToPlanPoint = [candidateOrigin[0] - center[0], candidateOrigin[1] - center[1]]
+    const projection = offset[0] * direction[0] + offset[1] * direction[1]
+    const radius = Math.abs(ownZ - centerZ)
+    const discriminant =
+      projection * projection - (offset[0] * offset[0] + offset[1] * offset[1] - radius * radius)
+    if (discriminant < -PLAN_TOLERANCE) return null
+    const root = Math.sqrt(Math.max(0, discriminant))
+    const extensions = [-projection - root, -projection + root].flatMap((distance) => {
+      const intersection: LeanToPlanPoint = [
+        candidateOrigin[0] + direction[0] * distance,
+        candidateOrigin[1] + direction[1] * distance,
+      ]
+      const local = worldPointToLeanTo(wall, leanTo, intersection)
+      if (!local) return []
+      const extension = sideSign * (local[0] - ownSideX)
+      return extension >= -PLAN_TOLERANCE ? [Math.max(0, extension)] : []
+    })
+    return extensions.length > 0 ? Math.min(...extensions) : null
+  }
+  if (isCurvedLeanTo(candidate) && !isCurvedLeanTo(leanTo)) {
+    const directionLength = Math.hypot(ownDirection[0], ownDirection[1])
+    if (directionLength <= PLAN_TOLERANCE) return null
+    const direction: LeanToPlanPoint = [
+      (ownDirection[0] / directionLength) * sideSign,
+      (ownDirection[1] / directionLength) * sideSign,
+    ]
+    const pose = leanToWallLocalPose(candidateWall, candidate, 0)
+    const centerZ = candidate.spanArcCenterZ as number
+    const cos = Math.cos(pose.rotationY)
+    const sin = Math.sin(pose.rotationY)
+    const center: LeanToPlanPoint = [
+      pose.position[0] + centerZ * sin,
+      pose.position[2] + centerZ * cos,
+    ]
+    const offset: LeanToPlanPoint = [ownBoundary[0] - center[0], ownBoundary[1] - center[1]]
+    const projection = offset[0] * direction[0] + offset[1] * direction[1]
+    const radius = Math.abs(candidateZ - centerZ)
+    const discriminant =
+      projection * projection - (offset[0] * offset[0] + offset[1] * offset[1] - radius * radius)
+    if (discriminant < -PLAN_TOLERANCE) return null
+    const root = Math.sqrt(Math.max(0, discriminant))
+    const intersections = [-projection - root, -projection + root].filter(
+      (distance) => distance >= -PLAN_TOLERANCE,
+    )
+    return intersections.length > 0 ? Math.max(0, Math.min(...intersections)) : null
+  }
   const candidateDirection: LeanToPlanPoint = [
     candidateNext[0] - candidateOrigin[0],
     candidateNext[1] - candidateOrigin[1],
@@ -171,12 +280,10 @@ function extensionToRunIntersection(
     ownOrigin[0] + ownDirection[0] * alongOwn,
     ownOrigin[1] + ownDirection[1] * alongOwn,
   ]
-  const sideSign = side === 'left' ? -1 : 1
-  return Math.max(
-    0,
+  return (
     sideSign *
-      ((intersection[0] - ownBoundary[0]) * ownDirection[0] +
-        (intersection[1] - ownBoundary[1]) * ownDirection[1]),
+    ((intersection[0] - ownBoundary[0]) * ownDirection[0] +
+      (intersection[1] - ownBoundary[1]) * ownDirection[1])
   )
 }
 
@@ -185,17 +292,10 @@ function leanToTopHeightAtWorld(
   leanTo: LeanToExtensionNode,
   point: readonly [number, number],
 ): number | null {
-  const frame = wallFrame(wall)
-  if (!frame) return null
-  const dx = point[0] - frame.start[0]
-  const dz = point[1] - frame.start[1]
-  const wallX = dx * frame.along[0] + dz * frame.along[1]
-  const wallZ = dx * frame.perpendicular[0] + dz * frame.perpendicular[1]
-  const relativeX = wallX - leanTo.position[0]
-  const relativeZ = wallZ - leanTo.position[2]
-  const localZ = relativeX * Math.sin(leanTo.rotation[1]) + relativeZ * Math.cos(leanTo.rotation[1])
+  const local = worldPointToLeanTo(wall, leanTo, point)
+  if (!local) return null
   const layout = resolveLeanToLayout(leanTo)
-  return leanTo.position[1] + layout.highEdgeHeight - localZ * Math.tan(layout.pitchRadians)
+  return leanTo.position[1] + layout.highEdgeHeight - local[1] * Math.tan(layout.pitchRadians)
 }
 
 function roofPlanEdges(leanTo: LeanToExtensionNode): { back: number; front: number } {
@@ -207,6 +307,26 @@ function roofPlanEdges(leanTo: LeanToExtensionNode): { back: number; front: numb
     back: centerZ - depth / 2 + (leanTo.highOverhang > 0 ? 0 : WALL_CONNECTION_TRIM),
     front: centerZ + depth / 2,
   }
+}
+
+function gutterAwayFromJointDirection(
+  wall: WallNode,
+  leanTo: LeanToExtensionNode,
+  side: LeanToCornerSide,
+  extension: number,
+): LeanToPlanPoint | null {
+  if (Math.abs(extension) <= PLAN_TOLERANCE) return awayFromEndDirection(wall, leanTo, side)
+  const layout = resolveLeanToLayout(leanTo)
+  const sideSign = side === 'left' ? -1 : 1
+  const baseX = layout.roofCenterX + sideSign * (layout.roofWidth / 2)
+  const front = roofPlanEdges(leanTo).front
+  const base = leanToPointToWorld(wall, leanTo, baseX, front)
+  const end = leanToPointToWorld(wall, leanTo, baseX + sideSign * extension, front)
+  if (!(base && end)) return null
+  const dx = base[0] - end[0]
+  const dz = base[1] - end[1]
+  const length = Math.hypot(dx, dz)
+  return length > PLAN_TOLERANCE ? [dx / length, dz / length] : null
 }
 
 function endWorldPoint(
@@ -277,6 +397,17 @@ function roofExtensionBand(
   ]
 }
 
+function roofBasePolygon(leanTo: LeanToExtensionNode): LeanToPlanPoint[] {
+  const layout = resolveLeanToLayout(leanTo)
+  const edges = roofPlanEdges(leanTo)
+  return [
+    [layout.roofCenterX - layout.roofWidth / 2, edges.back],
+    [layout.roofCenterX + layout.roofWidth / 2, edges.back],
+    [layout.roofCenterX + layout.roofWidth / 2, edges.front],
+    [layout.roofCenterX - layout.roofWidth / 2, edges.front],
+  ]
+}
+
 function polygonSignedArea(polygon: readonly LeanToPlanPoint[]): number {
   let area = 0
   for (let index = 0; index < polygon.length; index++) {
@@ -330,17 +461,22 @@ function sharedRoofSeam(
   candidate: LeanToExtensionNode,
   candidateSide: LeanToCornerSide,
   candidateExtension: number,
+  kind: LeanToCornerKind,
 ): [LeanToPlanPoint, LeanToPlanPoint] | null {
-  const ownBand = roofExtensionBand(leanTo, side, extension).flatMap((point) => {
+  const ownPolygon =
+    kind === 'convex' ? roofExtensionBand(leanTo, side, extension) : roofBasePolygon(leanTo)
+  const ownBand = ownPolygon.flatMap((point) => {
     const world = leanToPointToWorld(wall, leanTo, point[0], point[1])
     return world ? [world] : []
   })
-  const candidateBand = roofExtensionBand(candidate, candidateSide, candidateExtension).flatMap(
-    (point) => {
-      const world = leanToPointToWorld(candidateWall, candidate, point[0], point[1])
-      return world ? [world] : []
-    },
-  )
+  const candidatePolygon =
+    kind === 'convex'
+      ? roofExtensionBand(candidate, candidateSide, candidateExtension)
+      : roofBasePolygon(candidate)
+  const candidateBand = candidatePolygon.flatMap((point) => {
+    const world = leanToPointToWorld(candidateWall, candidate, point[0], point[1])
+    return world ? [world] : []
+  })
   if (ownBand.length < 3 || candidateBand.length < 3) return null
   const overlap = intersectConvexPolygons(ownBand, candidateBand)
   const seamWorld: LeanToPlanPoint[] = []
@@ -380,6 +516,76 @@ function sharedRoofSeam(
   }
   const localized = endpoints.map((point) => worldPointToLeanTo(wall, leanTo, point))
   return localized[0] && localized[1] ? [localized[0], localized[1]] : null
+}
+
+function resolveConcaveRoofPiece(
+  leanTo: LeanToExtensionNode,
+  wall: WallNode,
+  side: LeanToCornerSide,
+  candidate: LeanToExtensionNode,
+  candidateWall: WallNode,
+): { piece: LeanToPlanPoint[]; seam: [LeanToPlanPoint, LeanToPlanPoint] | null } {
+  const layout = resolveLeanToLayout(leanTo)
+  const edges = roofPlanEdges(leanTo)
+  const sideSign = side === 'left' ? -1 : 1
+  const originalSideX = layout.roofCenterX + sideSign * (layout.roofWidth / 2)
+  const heightDelta = (point: readonly [number, number]): number | null => {
+    const worldPoint = leanToPointToWorld(wall, leanTo, point[0], point[1])
+    if (!worldPoint) return null
+    const ownHeight = leanToTopHeightAtWorld(wall, leanTo, worldPoint)
+    const candidateHeight = leanToTopHeightAtWorld(candidateWall, candidate, worldPoint)
+    return ownHeight === null || candidateHeight === null ? null : ownHeight - candidateHeight
+  }
+  const probeDelta = heightDelta([
+    originalSideX - sideSign * Math.min(0.1, layout.roofWidth / 4),
+    edges.back,
+  ])
+  if (probeDelta === null || Math.abs(probeDelta) <= PLAN_TOLERANCE) {
+    return { piece: [], seam: null }
+  }
+  const base = roofBasePolygon(leanTo)
+  const piece = clipToRetainedRoofSide(base, heightDelta, Math.sign(probeDelta))
+  const seamPoints: LeanToPlanPoint[] = []
+  for (let index = 0; index < base.length; index++) {
+    const current = base[index]!
+    const next = base[(index + 1) % base.length]!
+    const currentDelta = heightDelta(current)
+    const nextDelta = heightDelta(next)
+    if (currentDelta === null || nextDelta === null) continue
+    if (Math.abs(currentDelta) <= PLAN_TOLERANCE) seamPoints.push(current)
+    if (currentDelta * nextDelta >= 0) continue
+    const ratio = currentDelta / (currentDelta - nextDelta)
+    seamPoints.push([
+      current[0] + (next[0] - current[0]) * ratio,
+      current[1] + (next[1] - current[1]) * ratio,
+    ])
+  }
+  const uniqueSeam = seamPoints.filter(
+    (point, index) =>
+      seamPoints.findIndex((other) => planDistance(point, other) <= PLAN_TOLERANCE) === index,
+  )
+  return {
+    piece,
+    seam: uniqueSeam.length >= 2 ? [uniqueSeam[0]!, uniqueSeam[1]!] : null,
+  }
+}
+
+export function applyLeanToCornerRoofPieces(
+  base: LeanToPlanPoint[],
+  joints: Partial<Record<LeanToCornerSide, LeanToCornerJoint>>,
+): LeanToPlanPoint[][] {
+  let retained = base
+  const additions: LeanToPlanPoint[][] = []
+  for (const side of ['left', 'right'] as const) {
+    const joint = joints[side]
+    if (!joint || joint.roofPiece.length < 3) continue
+    if (joint.kind === 'concave') {
+      retained = intersectConvexPolygons(retained, joint.roofPiece)
+    } else {
+      additions.push(joint.roofPiece)
+    }
+  }
+  return [...(retained.length >= 3 ? [retained] : []), ...additions]
 }
 
 function resolveRoofPiece(
@@ -435,6 +641,48 @@ function resolveRoofPiece(
   }
 }
 
+function resolveCurvedStraightRoofPiece(
+  leanTo: LeanToExtensionNode,
+  wall: WallNode,
+  side: LeanToCornerSide,
+  extension: number,
+  candidate: LeanToExtensionNode,
+  candidateWall: WallNode,
+  candidateSide: LeanToCornerSide,
+  candidateExtension: number,
+): { piece: LeanToPlanPoint[]; seam: [LeanToPlanPoint, LeanToPlanPoint] | null } | null {
+  const ownCurved = isCurvedLeanTo(leanTo)
+  const candidateCurved = isCurvedLeanTo(candidate)
+  if (ownCurved === candidateCurved) return null
+
+  const layout = resolveLeanToLayout(leanTo)
+  const edges = roofPlanEdges(leanTo)
+  const sideSign = side === 'left' ? -1 : 1
+  const sideX = layout.roofCenterX + sideSign * (layout.roofWidth / 2)
+  const curved = ownCurved ? leanTo : candidate
+  const curvedWall = ownCurved ? wall : candidateWall
+  const curvedSide = ownCurved ? side : candidateSide
+  const curvedExtension = ownCurved ? extension : candidateExtension
+  const curvedLayout = resolveLeanToLayout(curved)
+  const curvedEdges = roofPlanEdges(curved)
+  const curvedSideSign = curvedSide === 'left' ? -1 : 1
+  const curvedSideX = curvedLayout.roofCenterX + curvedSideSign * (curvedLayout.roofWidth / 2)
+  const curvedLowX = curvedSideX + curvedSideSign * curvedExtension
+  const seamWorld = [
+    leanToPointToWorld(curvedWall, curved, curvedSideX, curvedEdges.back),
+    leanToPointToWorld(curvedWall, curved, curvedLowX, curvedEdges.front),
+  ]
+  if (seamWorld.some((point) => !point)) return null
+  const localized = seamWorld.map((point) => worldPointToLeanTo(wall, leanTo, point!))
+  if (localized.some((point) => !point)) return null
+  const seamPoints = localized as [LeanToPlanPoint, LeanToPlanPoint]
+  const seam: [LeanToPlanPoint, LeanToPlanPoint] = [seamPoints[0]!, seamPoints.at(-1)!]
+  return {
+    piece: [...seamPoints, [sideX, edges.front]],
+    seam,
+  }
+}
+
 export function resolveLeanToCornerJoints(
   leanTo: LeanToExtensionNode,
   wall: WallNode | undefined,
@@ -459,7 +707,17 @@ export function resolveLeanToCornerJoints(
       if (!wallFrame(candidateWall)) continue
       const neighborSide = candidateSideAtPoint(candidateWall, candidate, endpoint, tolerance)
       if (!neighborSide) continue
-      if (!directionsFaceConvexCorner(wall, leanTo, side, candidateWall, candidate, neighborSide)) {
+      const kind = cornerKindFromDirections(
+        wall,
+        leanTo,
+        side,
+        candidateWall,
+        candidate,
+        neighborSide,
+      )
+      if (!kind) continue
+      if (kind === 'concave' && (isCurvedLeanTo(leanTo) || isCurvedLeanTo(candidate))) continue
+      if (!isSupportedHostCorner(wall, leanTo, side, candidateWall, candidate, neighborSide)) {
         continue
       }
       const interiorAngle = cornerInteriorAngle(
@@ -489,7 +747,6 @@ export function resolveLeanToCornerJoints(
           candidate,
           candidateEdges.front,
         ) ?? 0
-      const roof = resolveRoofPiece(leanTo, wall, side, roofExtension, candidate, candidateWall)
       const candidateSideSign = neighborSide === 'left' ? -1 : 1
       const candidateRoofSideX =
         candidateLayout.roofCenterX + candidateSideSign * (candidateLayout.roofWidth / 2)
@@ -504,16 +761,37 @@ export function resolveLeanToCornerJoints(
           leanTo,
           ownEdges.front,
         ) ?? 0
-      const seam = sharedRoofSeam(
-        wall,
-        leanTo,
-        side,
-        roofExtension,
-        candidateWall,
-        candidate,
-        neighborSide,
-        candidateRoofExtension,
-      )
+      const curvedStraightRoof =
+        kind === 'convex'
+          ? resolveCurvedStraightRoofPiece(
+              leanTo,
+              wall,
+              side,
+              roofExtension,
+              candidate,
+              candidateWall,
+              neighborSide,
+              candidateRoofExtension,
+            )
+          : null
+      const roof =
+        curvedStraightRoof ??
+        (kind === 'convex'
+          ? resolveRoofPiece(leanTo, wall, side, roofExtension, candidate, candidateWall)
+          : resolveConcaveRoofPiece(leanTo, wall, side, candidate, candidateWall))
+      const seam = curvedStraightRoof
+        ? roof.seam
+        : sharedRoofSeam(
+            wall,
+            leanTo,
+            side,
+            roofExtension,
+            candidateWall,
+            candidate,
+            neighborSide,
+            candidateRoofExtension,
+            kind,
+          )
       const beamExtension =
         extensionToRunIntersection(
           wall,
@@ -525,15 +803,35 @@ export function resolveLeanToCornerJoints(
           candidate,
           candidateLayout.beamZ,
         ) ?? 0
+      const gutterAway = gutterAwayFromJointDirection(wall, leanTo, side, roofExtension)
+      const candidateGutterAway = gutterAwayFromJointDirection(
+        candidateWall,
+        candidate,
+        neighborSide,
+        candidateRoofExtension,
+      )
+      const gutterInteriorAngle =
+        gutterAway && candidateGutterAway
+          ? Math.acos(
+              Math.max(
+                -1,
+                Math.min(
+                  1,
+                  gutterAway[0] * candidateGutterAway[0] + gutterAway[1] * candidateGutterAway[1],
+                ),
+              ),
+            )
+          : interiorAngle
       joints[side] = {
         side,
+        kind,
         neighborId: candidate.id,
         neighborSide,
         roofExtension,
         roofPiece: roof.piece,
         seam: seam ?? roof.seam,
         beamExtension,
-        gutterMitre: (Math.PI - interiorAngle) / 2,
+        gutterMitre: (kind === 'concave' ? -1 : 1) * ((Math.PI - gutterInteriorAngle) / 2),
         sharedPostOwner: String(leanTo.id) < String(candidate.id),
         sharedPostPosition: [
           (side === 'left' ? -layout.span / 2 : layout.span / 2) +

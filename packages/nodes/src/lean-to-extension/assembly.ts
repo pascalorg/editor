@@ -22,6 +22,7 @@ import { resolveEaveSnap } from '../gutter/eave-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { bendLocalPoint, bendRotationYAtLocalX, isCurvedLeanTo } from './arc'
 import {
+  applyLeanToCornerRoofPieces,
   LEAN_TO_CORNER_JOINTS_KEY,
   type LeanToCornerJoint,
   type LeanToCornerSide,
@@ -35,6 +36,7 @@ const MANAGED_ROLE_KEY = 'leanToRole'
 const SELECTION_PROXY_KEY = 'nodeSelectionProxyId'
 const GUTTER_MITRES_KEY = 'leanToGutterMitres'
 const GUTTER_EAVE_Y_KEY = 'leanToGutterEaveY'
+const GUTTER_ARC_STRAIGHT_ENDS_KEY = 'leanToGutterArcStraightEnds'
 const POST_INDEX_KEY = 'leanToPostIndex'
 const POST_SIDE_KEY = 'leanToPostSide'
 const POST_GUTTER_CLEARANCE = 0.02
@@ -321,6 +323,23 @@ export function createManagedLeanToCornerPost(
   })
 }
 
+export function resolveLeanToPostIndexes(
+  leanTo: LeanToExtensionNode,
+  cornerJoints: Partial<Record<LeanToCornerSide, LeanToCornerJoint>>,
+  side: LeanToPostSide,
+): number[] {
+  const layout = resolveLeanToLayout(leanTo)
+  return Array.from({ length: layout.postXs.length }, (_, index) => index).filter((index) => {
+    if (side === 'high') return true
+    const x = layout.postXs[index] ?? 0
+    const left = cornerJoints.left
+    if (left?.kind === 'concave' && x <= left.sharedPostPosition[0] + 1e-6) return false
+    const right = cornerJoints.right
+    if (right?.kind === 'concave' && x >= right.sharedPostPosition[0] - 1e-6) return false
+    return true
+  })
+}
+
 export type LeanToRoofSegmentLayoutPatch = Pick<
   RoofSegmentNodeType,
   | 'position'
@@ -359,7 +378,7 @@ export function leanToRoofSegmentLayoutPatch(
   const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
   const leftCornerExtension = cornerJoints.left?.roofExtension ?? 0
   const rightCornerExtension = cornerJoints.right?.roofExtension ?? 0
-  const width = layout.roofWidth + leftCornerExtension + rightCornerExtension
+  const width = Math.max(0.05, layout.roofWidth + leftCornerExtension + rightCornerExtension)
   const roofCenterX = layout.roofCenterX + (rightCornerExtension - leftCornerExtension) / 2
   const roofCenterZ =
     depth / 2 - Math.max(0, leanTo.highOverhang) - WALL_CONNECTION_TRIM - WALL_CONNECTION_OVERLAP
@@ -377,17 +396,15 @@ export function leanToRoofSegmentLayoutPatch(
     : undefined
   const roofBack = roofCenterZ - depth / 2 + (leanTo.highOverhang > 0 ? 0 : WALL_CONNECTION_TRIM)
   const roofFront = roofCenterZ + depth / 2
-  const roofPieces: [number, number][][] = [
+  const roofPieces: [number, number][][] = applyLeanToCornerRoofPieces(
     [
       [layout.roofCenterX - layout.roofWidth / 2, roofBack],
       [layout.roofCenterX + layout.roofWidth / 2, roofBack],
       [layout.roofCenterX + layout.roofWidth / 2, roofFront],
       [layout.roofCenterX - layout.roofWidth / 2, roofFront],
     ],
-    ...Object.values(cornerJoints).flatMap((joint) =>
-      joint && joint.roofPiece.length >= 3 ? [joint.roofPiece] : [],
-    ),
-  ].map((polygon) =>
+    cornerJoints,
+  ).map((polygon) =>
     polygon.map(([x = 0, z = 0]) => [x - roofCenterX, z - roofCenterZ] as [number, number]),
   )
   const jointSides = Object.values(cornerJoints).flatMap((joint) => (joint ? [joint.side] : []))
@@ -533,6 +550,18 @@ export function leanToGutterLayoutPatch(
         radius: segment.arc.radius,
       }
     : undefined
+  const layout = resolveLeanToLayout(leanTo)
+  const arcStraightEnds = gutterArc
+    ? Object.fromEntries(
+        (['left', 'right'] as const).flatMap((side) => {
+          if (!cornerJoints[side]) return []
+          const sign = side === 'left' ? -1 : 1
+          const startX =
+            layout.roofCenterX + sign * (layout.roofWidth / 2) - segment.position[0] - snap.eaveX
+          return [[side, { startX, endX: sign * (length / 2) }]]
+        }),
+      )
+    : undefined
   const outlet =
     existingOutlet && existingOutlet.generatedBy !== 'default-downspout'
       ? existingOutlet
@@ -560,6 +589,9 @@ export function leanToGutterLayoutPatch(
           right: gutterMitreForJoint(cornerJoints.right),
         },
         [GUTTER_EAVE_Y_KEY]: sharedLocalEaveY,
+        ...(arcStraightEnds && Object.keys(arcStraightEnds).length > 0
+          ? { [GUTTER_ARC_STRAIGHT_ENDS_KEY]: arcStraightEnds }
+          : {}),
       }),
     },
   }
@@ -663,8 +695,7 @@ export function createLeanToAssembly(
       ? (nodes[leanTo.parentId] as WallNode)
       : undefined
   const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
-  const postCount = resolveLeanToLayout(leanTo).postXs.length
-  const posts = Array.from({ length: postCount }, (_, index) =>
+  const posts = resolveLeanToPostIndexes(leanTo, cornerJoints, 'low').map((index) =>
     createManagedLeanToPost(leanTo, index, 'low'),
   )
   for (const joint of Object.values(cornerJoints)) {
@@ -672,7 +703,7 @@ export function createLeanToAssembly(
   }
   if (leanTo.highSideMode === 'independent-high-beam') {
     posts.push(
-      ...Array.from({ length: postCount }, (_, index) =>
+      ...resolveLeanToPostIndexes(leanTo, cornerJoints, 'high').map((index) =>
         createManagedLeanToPost(leanTo, index, 'high'),
       ),
     )

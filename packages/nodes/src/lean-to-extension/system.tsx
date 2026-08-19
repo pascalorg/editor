@@ -32,17 +32,14 @@ import {
   resolveLeanToPostBaseY,
   resolveLeanToPostBaseYAtLocalPosition,
   resolveLeanToPostGutterSetback,
+  resolveLeanToPostIndexes,
 } from './assembly'
 import {
   LEAN_TO_CORNER_JOINTS_KEY,
   leanToCornerJointMetadata,
   resolveLeanToCornerJoints,
 } from './corner-joint'
-import {
-  LEAN_TO_EXTENSION_GEOMETRY_REVISION,
-  resolveLeanToLayout,
-  resolveLeanToSpanArc,
-} from './layout'
+import { LEAN_TO_EXTENSION_GEOMETRY_REVISION, resolveLeanToSpanArc } from './layout'
 import { resolveLeanToEndAbutments } from './placement-validation'
 import {
   applyLeanToAvailableWallSpan,
@@ -535,12 +532,13 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
         }
       }
 
-      const resolvedPostCount = resolveLeanToLayout(effectiveLeanTo).postXs.length
+      const cornerJoints =
+        parent?.type === 'wall' ? resolveLeanToCornerJoints(effectiveLeanTo, parent, nodes) : {}
       const postSides: LeanToPostSide[] =
         effectiveLeanTo.highSideMode === 'independent-high-beam' ? ['low', 'high'] : ['low']
       const desiredPostKeys = new Set<string>()
       for (const side of postSides) {
-        for (let index = 0; index < resolvedPostCount; index++) {
+        for (const index of resolveLeanToPostIndexes(effectiveLeanTo, cornerJoints, side)) {
           const key = `${side}:${index}`
           desiredPostKeys.add(key)
           const postBaseY =
@@ -577,8 +575,6 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
           }
         }
       }
-      const cornerJoints =
-        parent?.type === 'wall' ? resolveLeanToCornerJoints(effectiveLeanTo, parent, nodes) : {}
       for (const joint of Object.values(cornerJoints)) {
         if (!joint?.sharedPostOwner) continue
         const index = leanToCornerPostIndex(joint.side)

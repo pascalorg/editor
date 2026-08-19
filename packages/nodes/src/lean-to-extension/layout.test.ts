@@ -14,6 +14,7 @@ import {
   resolveLeanToMoveCenterX,
   resolveLeanToParentPose,
   resolveLeanToWallPlacement,
+  resolveLeanToWallSurfaceHit,
 } from './layout'
 
 describe('lean-to extension layout', () => {
@@ -90,6 +91,58 @@ describe('lean-to wall placement', () => {
     expect(front.spanArcCenterZ).toBeCloseTo(4.9, 6)
     expect(back.spanArcRadius).toBeCloseTo(5, 6)
     expect(back.spanArcCenterZ).toBeCloseTo(-5.1, 6)
+  })
+
+  test('keeps short inner curved roofs outside the arc center', () => {
+    for (const chord of [2, 3]) {
+      const wall = WallNode.parse({
+        start: [0, 0],
+        end: [chord, 0],
+        curveOffset: 0.5,
+        thickness: 0.2,
+      })
+      const along = getWallCurveLength(wall) / 2
+      const inner = resolveLeanToWallPlacement(wall, along, 'front')!
+      const outer = resolveLeanToWallPlacement(wall, along, 'back')!
+      const innerLayout = resolveLeanToLayout(inner)
+
+      expect(inner.spanArcCenterZ).toBeGreaterThan(0)
+      expect(inner.spanArcCenterZ! - innerLayout.roofRun).toBeCloseTo(0.15, 6)
+      expect(inner.projection).toBeLessThan(2.5)
+      expect(inner.lowEdgeHeight).toBeCloseTo(
+        inner.highEdgeHeight - inner.projection * Math.tan((inner.pitch * Math.PI) / 180),
+        6,
+      )
+      expect(outer.spanArcCenterZ).toBeLessThan(0)
+      expect(outer.projection).toBe(2.5)
+    }
+  })
+
+  test('projects tight curved wall face hits onto arc length and side', () => {
+    const wall = WallNode.parse({
+      start: [0, 0],
+      end: [2, 0],
+      curveOffset: 0.5,
+      thickness: 0.2,
+    })
+    const wallLength = getWallCurveLength(wall)
+
+    for (const [side, offset] of [
+      ['front', 0.1],
+      ['back', -0.1],
+    ] as const) {
+      const t = 0.05
+      const frame = getWallCurveFrameAt(wall, t)
+      const hit = resolveLeanToWallSurfaceHit(
+        wall,
+        [frame.point.x + frame.normal.x * offset, 1.5, frame.point.y + frame.normal.y * offset],
+        [frame.normal.x, 0, frame.normal.y],
+      )
+
+      expect(Math.abs(frame.normal.y)).toBeLessThan(0.7)
+      expect(hit?.localX).toBeCloseTo(wallLength * t, 5)
+      expect(hit?.side).toBe(side)
+    }
   })
 
   test('places a committed curved lean-to at the wall point and tangent', () => {

@@ -498,7 +498,6 @@ describe('persisted lean-to gutter corner', () => {
   for (const [flipFaceA, flipFaceB] of [
     [true, false],
     [false, true],
-    [true, true],
   ] as const) {
     test(`rejects non-convex opposite-face layout ${flipFaceA}/${flipFaceB}`, () => {
       const fixture = cornerFixture({ reverseA: false, reverseB: false, flipFaceA, flipFaceB })
@@ -525,6 +524,39 @@ describe('persisted lean-to gutter corner', () => {
       })
     })
   }
+
+  test('persists and renders the concave joint when both sheds face the inner corner', () => {
+    const fixture = cornerFixture({
+      reverseA: false,
+      reverseB: false,
+      flipFaceA: true,
+      flipFaceB: true,
+    })
+    stop = synchronizeAfterSecondShed(fixture, 'AB')
+    const nodes = useScene.getState().nodes
+    const a = managedGutter(fixture.leanToA, nodes)
+    const b = managedGutter(fixture.leanToB, nodes)
+    const geometryA = renderedGutterGeometry(fixture.wallA, fixture.leanToA, a, b)
+    const geometryB = renderedGutterGeometry(fixture.wallB, fixture.leanToB, b, a)
+    const jointA = Object.values(
+      ((nodes[fixture.leanToA.id as AnyNodeId]?.metadata as Record<string, unknown>)
+        ?.leanToCornerJoints ?? {}) as Record<string, { gutterMitre: number }>,
+    )[0]
+    const jointB = Object.values(
+      ((nodes[fixture.leanToB.id as AnyNodeId]?.metadata as Record<string, unknown>)
+        ?.leanToCornerJoints ?? {}) as Record<string, { gutterMitre: number }>,
+    )[0]
+    const boundaryA = openBoundaryPoints(geometryA)
+    const boundaryB = openBoundaryPoints(geometryB)
+
+    expect(jointA?.gutterMitre).toBeCloseTo(-Math.PI / 4, 8)
+    expect(jointB?.gutterMitre).toBeCloseTo(-Math.PI / 4, 8)
+    expect(boundaryA.length).toBeGreaterThan(3)
+    expect(boundaryB.length).toBeGreaterThan(3)
+    expect(boundaryHausdorffDistance(boundaryA, boundaryB)).toBeLessThan(1e-4)
+    geometryA.dispose()
+    geometryB.dispose()
+  })
 
   test('rejects perpendicular walls that cross away from their shed endpoints', () => {
     const base = cornerFixture({ reverseA: false, reverseB: false })

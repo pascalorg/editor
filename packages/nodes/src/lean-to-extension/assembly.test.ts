@@ -3,6 +3,7 @@ import {
   type AnyNode,
   BuildingNode,
   getRoofSegmentVisibleTopBounds,
+  getWallCurveLength,
   LeanToExtensionNode,
   LevelNode,
   RoofNode,
@@ -26,7 +27,8 @@ import {
   resolveLeanToPostBaseY,
   resolveLeanToPostGutterSetback,
 } from './assembly'
-import { resolveLeanToLayout } from './layout'
+import { resolveLeanToLayout, resolveLeanToWallPlacement } from './layout'
+import { applyLeanToWallAutoSpan } from './roof-attachment'
 
 beforeEach(() => spatialGridManager.clear())
 
@@ -144,6 +146,52 @@ describe('lean-to assembly', () => {
     const endPost = leanToPostLayoutPatch(leanTo, 0)
     expect(centerPost.rotation).toBeCloseTo(0, 6)
     expect(Math.abs(endPost.rotation)).toBeGreaterThan(1e-3)
+  })
+
+  test('builds unmodified 3D roof assemblies across a curved-to-tangent-straight join', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_curved_3d_continuation',
+      parentId: 'level_3d_continuation',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: 1,
+      children: ['leanto_curved_3d_continuation'],
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_straight_3d_continuation',
+      parentId: 'level_3d_continuation',
+      start: [6, 0],
+      end: [10.8, 3.6],
+      children: ['leanto_straight_3d_continuation'],
+    })
+    const curved = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(curvedWall, getWallCurveLength(curvedWall) / 2, 'front')!,
+        curvedWall,
+      ),
+      id: 'leanto_curved_3d_continuation',
+    }
+    const straight = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(straightWall, 3, 'front')!,
+        straightWall,
+      ),
+      id: 'leanto_straight_3d_continuation',
+    }
+    const nodes = {
+      [curvedWall.id]: curvedWall,
+      [straightWall.id]: straightWall,
+      [curved.id]: curved,
+      [straight.id]: straight,
+    } as Record<string, AnyNode>
+
+    const curvedAssembly = createLeanToAssembly(curved, undefined, nodes)
+    const straightAssembly = createLeanToAssembly(straight, undefined, nodes)
+
+    expect(curvedAssembly.segment.arc?.radius).toBeCloseTo(5, 6)
+    expect(straightAssembly.segment.arc).toBeUndefined()
+    expect(straightAssembly.segment.width).toBeCloseTo(resolveLeanToLayout(straight).roofWidth, 6)
+    expect(straightAssembly.segment.shedFootprintPieces).toBeUndefined()
   })
 
   test('keeps the roof bend reference on the true wall radius', () => {

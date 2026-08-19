@@ -265,4 +265,69 @@ describe('lean-to scene commit boundary', () => {
       })
     expect(cornerPosts).toHaveLength(1)
   })
+
+  test('removes regular posts outside a synchronized internal L valley', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_inner_post_sync', level: 0 })
+    const wallA = WallNode.parse({
+      id: 'wall_inner_post_sync_a',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_inner_post_sync_b',
+      parentId: level.id,
+      start: [4, 0],
+      end: [4, 4],
+    })
+    const leanToA = LeanToExtensionNode.parse({
+      id: 'leanto_inner_post_sync_a',
+      parentId: wallA.id,
+      position: [2, 0, 0.05],
+      span: 4,
+    })
+    const leanToB = LeanToExtensionNode.parse({
+      id: 'leanto_inner_post_sync_b',
+      parentId: wallB.id,
+      position: [2, 0, 0.05],
+      span: 4,
+    })
+    const assemblyA = createLeanToAssembly(leanToA)
+    const assemblyB = createLeanToAssembly(leanToB)
+    const nodes = Object.fromEntries(
+      [
+        { ...level, children: [wallA.id, wallB.id] },
+        { ...wallA, children: [leanToA.id] },
+        { ...wallB, children: [leanToB.id] },
+        assemblyA.extension,
+        ...assemblyA.children,
+        assemblyB.extension,
+        ...assemblyB.children,
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    const syncedNodes = useScene.getState().nodes
+    const regularIndexesA = (syncedNodes[leanToA.id as AnyNodeId]?.children ?? [])
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .filter((node) => node?.type === 'column')
+      .map((post) => managedLeanToPostIndex(post))
+    const regularIndexesB = (syncedNodes[leanToB.id as AnyNodeId]?.children ?? [])
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .filter((node) => node?.type === 'column')
+      .map((post) => managedLeanToPostIndex(post))
+
+    expect(regularIndexesA).not.toContain(2)
+    expect(regularIndexesB).not.toContain(0)
+  })
 })

@@ -100,15 +100,40 @@ function gutterEndpoints(g: GutterNode): { plus: Endpoint; minus: Endpoint } {
   const outX = Math.sin(r)
   const outZ = Math.cos(r)
   const half = g.length / 2
+  const curvedEnd = (x: number, plus: boolean): Endpoint | null => {
+    const arc = g.arc
+    if (!arc || !Number.isFinite(arc.radius)) return null
+    const signedRef = (Math.sign(arc.centerZ) || 1) * arc.radius
+    const phi = (x - arc.centerX) / signedRef
+    const radial = -arc.centerZ
+    const bentX = arc.centerX - radial * Math.sin(phi)
+    const bentZ = arc.centerZ + radial * Math.cos(phi)
+    const tangentX = Math.cos(phi)
+    const tangentZ = Math.sin(phi)
+    const radialX = -Math.sin(phi)
+    const radialZ = Math.cos(phi)
+    const rotate = (xValue: number, zValue: number): [number, number] => [
+      xValue * dirX + zValue * outX,
+      xValue * dirZ + zValue * outZ,
+    ]
+    const [worldX, worldZ] = rotate(bentX, bentZ)
+    const [tangentWorldX, tangentWorldZ] = rotate(tangentX, tangentZ)
+    const [outWorldX, outWorldZ] = rotate(radialX, radialZ)
+    return {
+      pos: [px + worldX, py, pz + worldZ],
+      awayDir: plus ? [-tangentWorldX, -tangentWorldZ] : [tangentWorldX, tangentWorldZ],
+      outDir: [outWorldX, outWorldZ],
+    }
+  }
   return {
-    plus: {
+    plus: curvedEnd(half, true) ?? {
       pos: [px + dirX * half, py, pz + dirZ * half],
       // From the +X endpoint, the rest of the gutter extends back
       // toward the −X end — so "away from this end" is −dir.
       awayDir: [-dirX, -dirZ],
       outDir: [outX, outZ],
     },
-    minus: {
+    minus: curvedEnd(-half, false) ?? {
       pos: [px - dirX * half, py, pz - dirZ * half],
       awayDir: [dirX, dirZ],
       outDir: [outX, outZ],
@@ -264,10 +289,10 @@ export function computeGutterMitres(
     if (!otherPlusAtCorner && !otherMinusAtCorner) continue
     const otherEnd = otherPlusAtCorner ? other.plus : other.minus
 
-    if (leftMitre === 0 && planDistSq(subj.minus.pos, corner) <= CORNER_EPSILON_SQ) {
+    if (planDistSq(subj.minus.pos, corner) <= CORNER_EPSILON_SQ) {
       leftMitre = mitreBetween(subj.minus, otherEnd)
     }
-    if (rightMitre === 0 && planDistSq(subj.plus.pos, corner) <= CORNER_EPSILON_SQ) {
+    if (planDistSq(subj.plus.pos, corner) <= CORNER_EPSILON_SQ) {
       rightMitre = mitreBetween(subj.plus, otherEnd)
     }
     if (leftMitre !== 0 && rightMitre !== 0) break

@@ -243,6 +243,81 @@ describe('lean-to extension geometry', () => {
     expect(group.getObjectByName('lean-to-right-side-flashing')).toBeUndefined()
   })
 
+  test('clips ordinary rafters at a concave valley seam', () => {
+    const seam = [
+      [2, 0],
+      [-0.75, 2.75],
+    ] as const
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: -2.5,
+            gutterMitre: -Math.PI / 4,
+            seam,
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    group.updateMatrixWorld(true)
+    const ordinaryRafters = group.children.filter((child): child is Mesh<BoxGeometry> =>
+      child.name.startsWith('lean-to-rafter-'),
+    )
+    const seamMinX = Math.min(seam[0][0], seam[1][0])
+    const seamMaxX = Math.max(seam[0][0], seam[1][0])
+
+    for (const rafter of ordinaryRafters) {
+      if (rafter.position.x < seamMinX || rafter.position.x > seamMaxX) continue
+      const ratio = (rafter.position.x - seam[0][0]) / (seam[1][0] - seam[0][0])
+      const seamZ = seam[0][1] + (seam[1][1] - seam[0][1]) * ratio
+      const bounds = new Box3().setFromObject(rafter)
+      expect(bounds.max.z).toBeLessThanOrEqual(seamZ + 1e-6)
+    }
+  })
+
+  test('clips purlins and removes knee braces beyond a concave beam', () => {
+    const seam = [
+      [2, 0],
+      [-0.75, 2.75],
+    ] as const
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+      framingStrategy: 'purlins',
+      postBracing: 'knee',
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: -2.5,
+            gutterMitre: -Math.PI / 4,
+            seam,
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    const braces = group.children.filter((child) => child.name.startsWith('lean-to-knee-brace-'))
+    const purlins = group.children.filter((child): child is Mesh<BoxGeometry> =>
+      child.name.startsWith('lean-to-purlin-'),
+    )
+
+    expect(braces).toHaveLength(1)
+    for (const purlin of purlins) {
+      const ratio = (purlin.position.z - seam[0][1]) / (seam[1][1] - seam[0][1])
+      if (ratio < 0 || ratio > 1) continue
+      const seamX = seam[0][0] + (seam[1][0] - seam[0][0]) * ratio
+      const width = (purlin.geometry.parameters as { width: number }).width
+      expect(purlin.position.x + width / 2).toBeLessThanOrEqual(seamX + 1e-6)
+    }
+  })
+
   test('cuts an extended corner beam at the resolved arbitrary mitre angle', () => {
     const node = LeanToExtensionNode.parse({
       span: 4,

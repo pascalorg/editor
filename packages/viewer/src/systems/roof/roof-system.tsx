@@ -1857,18 +1857,63 @@ function buildConcentricBandDeckGeometry(node: RoofSegmentNode): THREE.BufferGeo
   return merged
 }
 
+function clipRoofPolygonAtX(
+  polygon: readonly [number, number][],
+  boundaryX: number,
+  keepGreater: boolean,
+): RoofPlanPolygon {
+  const clipped: RoofPlanPolygon = []
+  for (let index = 0; index < polygon.length; index++) {
+    const current = polygon[index]!
+    const next = polygon[(index + 1) % polygon.length]!
+    const currentInside = keepGreater ? current[0] >= boundaryX : current[0] <= boundaryX
+    const nextInside = keepGreater ? next[0] >= boundaryX : next[0] <= boundaryX
+    if (currentInside) clipped.push([current[0], current[1]])
+    if (currentInside === nextInside) continue
+    const ratio = (boundaryX - current[0]) / (next[0] - current[0])
+    clipped.push([boundaryX, current[1] + (next[1] - current[1]) * ratio])
+  }
+  return clipped
+}
+
+function facetBandedRoofPieces(
+  pieces: readonly RoofPlanPolygon[],
+  width: number,
+): RoofPlanPolygon[] {
+  const facetCount = Math.max(4, Math.min(32, Math.ceil(width / 0.4)))
+  const halfWidth = width / 2
+  const facetWidth = width / facetCount
+  const faceted: RoofPlanPolygon[] = []
+  for (const piece of pieces) {
+    for (let index = 0; index < facetCount; index++) {
+      const minX = -halfWidth + index * facetWidth
+      const maxX = index === facetCount - 1 ? halfWidth : minX + facetWidth
+      const clipped = clipRoofPolygonAtX(clipRoofPolygonAtX(piece, minX, true), maxX, false)
+      const area = clipped.reduce((sum, point, pointIndex) => {
+        const next = clipped[(pointIndex + 1) % clipped.length]!
+        return sum + point[0] * next[1] - next[0] * point[1]
+      }, 0)
+      if (clipped.length >= 3 && Math.abs(area) > 1e-8) faceted.push(clipped)
+    }
+  }
+  return faceted
+}
+
 function buildCustomShedGeometry(node: RoofSegmentNode): THREE.BufferGeometry | null {
   if (node.roofType !== 'shed') return null
-  if (isBandedShedSegment(node)) return buildConcentricBandDeckGeometry(node)
   const pieces = readShedFootprintPieces(node)
-  if (pieces.length === 0) return null
+  const banded = isBandedShedSegment(node) && node.arc
+  if (pieces.length === 0) return banded ? buildConcentricBandDeckGeometry(node) : null
+  const renderPieces = banded
+    ? [...facetBandedRoofPieces(pieces.slice(0, 1), node.width), ...pieces.slice(1)]
+    : pieces
 
   const { cosTheta } = getSegmentSlopeFrame(node)
   const verticalThickness =
     node.deckThickness / Math.max(0.1, cosTheta) + node.shingleThickness * cosTheta
   const geometries: THREE.BufferGeometry[] = []
 
-  for (const polygon of pieces) {
+  for (const polygon of renderPieces) {
     const signedArea = polygon.reduce((area, point, index) => {
       const next = polygon[(index + 1) % polygon.length]!
       return area + point[0] * next[1] - next[0] * point[1]
@@ -1902,6 +1947,7 @@ function buildCustomShedGeometry(node: RoofSegmentNode): THREE.BufferGeometry | 
   const merged = mergeGeometriesPreservingGroups(geometries)
   for (const geometry of geometries) geometry.dispose()
   if (!merged) return null
+  if (banded) applyBandBendToGeometry(merged, banded)
   merged.computeVertexNormals()
   ensureRenderableGeometryAttributes(merged)
   return merged
