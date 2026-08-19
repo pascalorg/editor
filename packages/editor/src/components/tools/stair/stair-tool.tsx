@@ -438,7 +438,9 @@ export const StairTool: React.FC = () => {
     }
 
     const resolveStairPosition = (event: MoveTriggerEvent): [number, number, number] | null => {
-      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
+      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position, {
+        includeNodeTopSurfaces: true,
+      })
       supportSurfaceRef.current = pointed
       const fallbackPosition =
         'node' in event ? lastCanonicalPositionRef.current : event.localPosition
