@@ -13,7 +13,8 @@ export const columnParametrics: ParametricDescriptor<ColumnNode> = {
   groups: [
     {
       label: 'Dimensions',
-        { key: 'height', kind: 'number', unit: 'm', min: 0.5, max: 20, step: 0.05 },
+      fields: [
+        { key: 'height', kind: 'number', unit: 'm', min: 0.5, step: 0.05 },
         { key: 'width', kind: 'number', unit: 'm', min: 0.1, max: 2, step: 0.01 },
         { key: 'depth', kind: 'number', unit: 'm', min: 0.1, max: 2, step: 0.01 },
       ],

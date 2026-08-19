@@ -553,7 +553,6 @@ export default function ColumnPanel() {
         */}
         <SliderControl
           label="Height"
-          max={20}
           min={0.8}
           onChange={(value) => handleUpdate({ height: value })}
           precision={2}

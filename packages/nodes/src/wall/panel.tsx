@@ -301,11 +301,10 @@ export default function WallPanel() {
         ) : (
           <SliderControl
             label="Height"
-            max={metersToLinearUnit(20, unit)}
             min={metersToLinearUnit(0.1, unit)}
             onChange={(v) =>
               handleUpdate({
-                height: linearControlValueToMeters(v, unit, { maxMeters: 20, minMeters: 0.1 }),
+                height: linearControlValueToMeters(v, unit, { minMeters: 0.1 }),
               })
             }
             precision={2}

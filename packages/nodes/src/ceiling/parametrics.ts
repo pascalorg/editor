@@ -11,7 +11,8 @@ import type { CeilingNode } from './schema'
 export const ceilingParametrics: ParametricDescriptor<CeilingNode> = {
   groups: [
     {
-      fields: [{ key: 'height', kind: 'number', unit: 'm', min: 1.5, max: 20, step: 0.05 }],
+      label: 'Dimensions',
+      fields: [{ key: 'height', kind: 'number', unit: 'm', min: 1.5, step: 0.05 }],
     },
   ],
   customPanel: () => import('./panel'),

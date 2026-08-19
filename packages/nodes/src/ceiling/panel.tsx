@@ -260,7 +260,7 @@ export function CeilingPanel() {
         ) : (
           <SliderControl
             label="Height"
-            max={Math.min(20, maxHeight)}
+            max={maxHeight}
             min={0}
             onChange={handleHeightChange}
             precision={3}
