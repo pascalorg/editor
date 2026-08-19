@@ -52,7 +52,31 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     }
   }, [collisionPlaceholderGeometry, placeholderGeometry])
 
-  const handlers = useNodeEvents(node, 'wall')
+  const rawHandlers = useNodeEvents(node, 'wall')
+  // Hidden walls are pointer-TRANSPARENT: when the wall-mode pass hides this
+  // wall (`WallCutout` stamps `userData.wallHidden` — X-ray 'down' mode,
+  // cutaway-hidden faces, auto-mode interior partitions), its invisible
+  // full-height collision mesh must not swallow pointer events aimed at
+  // visible objects behind it (wall-mounted plugin nodes, items). Returning
+  // early without stopPropagation lets R3F continue to the next intersection.
+  // Delete mode keeps the events so hidden walls stay hover-targetable for
+  // deletion (the deleteInvisible highlight flow).
+  const handlers = useMemo(() => {
+    const gated = {} as typeof rawHandlers
+    for (const key of Object.keys(rawHandlers) as (keyof typeof rawHandlers)[]) {
+      const fn = rawHandlers[key] as (e: unknown) => void
+      ;(gated as Record<string, (e: unknown) => void>)[key] = (e: unknown) => {
+        if (
+          ref.current?.userData?.wallHidden === true &&
+          useViewer.getState().hoverHighlightMode !== 'delete'
+        ) {
+          return
+        }
+        fn(e)
+      }
+    }
+    return gated
+  }, [rawHandlers])
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
