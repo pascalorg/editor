@@ -16,9 +16,11 @@ export const ScanRenderer = ({ node }: { node: ScanNode }) => {
       ref={ref}
       rotation={node.rotation}
       scale={[node.scale, node.scale, node.scale]}
-      visible={showScans}
+      visible={showScans && node.visible}
     >
-      {node.url && <ScanAsset opacity={node.opacity} url={node.url} />}
+      {(node.layers?.model ?? true) && node.url && (
+        <ScanAsset opacity={node.opacity} url={node.url} />
+      )}
     </group>
   )
 }

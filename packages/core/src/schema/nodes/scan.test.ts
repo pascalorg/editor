@@ -11,6 +11,7 @@ describe('ScanNode', () => {
 
     expect(scan.url).toBe('https://cdn.pascal.app/scans/room.glb')
     expect(scan.captureSession).toBeNull()
+    expect(scan.layers).toEqual({ model: true, deviceMotion: true })
   })
 
   test('accepts a capture session without a renderable mesh', () => {
@@ -30,6 +31,20 @@ describe('ScanNode', () => {
       manifestUrl: '/api/projects/project_1/captures/capture_1/artifacts/manifest.json',
       schemaVersion: 1,
     })
+    expect(scan.layers).toEqual({ model: true, deviceMotion: true })
+  })
+
+  test('persists independent model and device-motion visibility', () => {
+    const scan = ScanNode.parse({
+      id: 'scan_session',
+      type: 'scan',
+      layers: {
+        model: false,
+        deviceMotion: true,
+      },
+    })
+
+    expect(scan.layers).toEqual({ model: false, deviceMotion: true })
   })
 
   test('rejects unsafe manifest URLs', () => {

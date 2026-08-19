@@ -11,7 +11,7 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
   // Heavy LiDAR asset: stripped from the bake, re-added live from scene_graph
   // in the viewer (see plans → Part D; glb-reference-nodes.tsx).
   bake: 'strip',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: ScanNode,
   category: 'site',
 
