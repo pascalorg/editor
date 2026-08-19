@@ -55,14 +55,16 @@ describe('collectTintedWalls', () => {
   // mode and in paint mode alike.
   const wallIds = new Set(['wall_a', 'wall_b'])
 
-  test.each(['default', 'paint-ready', 'paint-disabled', 'delete'])(
-    'a %s hover takes the wall out of its batch',
-    (hoverHighlightMode) => {
-      useViewer.setState({ hoverHighlightMode, hoveredId: 'wall_a' } as never)
+  test.each([
+    'default',
+    'paint-ready',
+    'paint-disabled',
+    'delete',
+  ])('a %s hover takes the wall out of its batch', (hoverHighlightMode) => {
+    useViewer.setState({ hoverHighlightMode, hoveredId: 'wall_a' } as never)
 
-      expect([...collectTintedWalls(wallIds)]).toEqual(['wall_a'])
-    },
-  )
+    expect([...collectTintedWalls(wallIds)]).toEqual(['wall_a'])
+  })
 
   test('a hover over a non-wall node tints nothing', () => {
     useViewer.setState({ hoverHighlightMode: 'default', hoveredId: 'slab_a' } as never)
