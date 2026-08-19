@@ -164,6 +164,19 @@ export const WallCutout = () => {
         if (wallNode?.type !== 'wall') return
 
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
+        // Pointer transparency for hidden walls: the wall's full-height
+        // collision mesh keeps raycasting even when the wall draws with the
+        // invisible material ('down' mode, cutaway-hidden faces, auto-mode
+        // interior partitions), so it silently swallows clicks aimed at
+        // VISIBLE objects standing behind it — e.g. a plugin's wall-mounted
+        // device/service boxes in X-ray mode (night-5 D4: the arm click on a
+        // south-wall receptacle selected an invisible wall two meters in
+        // front of it instead, and the follow-up click committed a WALL
+        // move). The wall renderer's pointer handlers read this stamp and
+        // pass hidden walls through (delete mode excepted — hidden walls
+        // must stay hover-targetable for deletion). Translucent walls are
+        // visible, so they keep their events.
+        ;(wallMesh as Mesh).userData.wallHidden = wallMode !== 'translucent' && hideWall
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
         const levelId = resolveLevelId(wallNode, sceneState.nodes)
