@@ -154,7 +154,7 @@ export function resolvePointerSupportSurface(
     options?.includeNodeTopSurfaces === false
       ? []
       : Array.from(nodeRegistry.entries())
-          .filter(([, definition]) => definition.capabilities.surfaces?.top !== undefined)
+          .filter(([, definition]) => definition.capabilities?.surfaces?.top !== undefined)
           .map(([kind]) => kind)
   if (nodeTopSurfaceKinds.some((kind) => (sceneRegistry.byType[kind]?.size ?? 0) > 0)) {
     nodeTopRaycaster.set(worldRayOrigin, worldRayDirection.clone().normalize())

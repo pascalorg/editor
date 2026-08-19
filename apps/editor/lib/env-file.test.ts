@@ -84,6 +84,6 @@ test('a missing file is not an error', () => {
 
 test('looks in the app directory and the home directory', () => {
   const candidates = candidateEnvFiles({ HOME: '/home/someone' })
-  expect(candidates).toContain('/home/someone/.digitaltwin.env')
-  expect(candidates.some((p) => p.endsWith('/.env'))).toBe(true)
+  expect(candidates).toContain(join('/home/someone', '.digitaltwin.env'))
+  expect(candidates.some((p) => p.endsWith('.env'))).toBe(true)
 })
