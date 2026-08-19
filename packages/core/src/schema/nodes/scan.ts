@@ -1,19 +1,16 @@
+import { CaptureSessionLocatorSchema } from '@pascal-app/capture-protocol'
 import { z } from 'zod'
 import { AssetUrl } from '../asset-url'
 import { BaseNode, nodeType, objectId } from '../base'
 
-export const CaptureSessionReference = z.object({
-  sessionId: z.string().min(1),
-  manifestUrl: AssetUrl,
-  schemaVersion: z.number().int().positive().optional(),
+export const CaptureSessionReference = CaptureSessionLocatorSchema.extend({
+  manifestUrl: AssetUrl.optional(),
 })
 
 export const ScanLayerVisibility = z
-  .object({
-    model: z.boolean().default(true),
-    deviceMotion: z.boolean().default(true),
-  })
-  .default({ model: true, deviceMotion: true })
+  .record(z.string().min(1), z.boolean())
+  .default({ deviceMotion: true, model: true })
+  .transform((layers): Record<string, boolean> => ({ deviceMotion: true, model: true, ...layers }))
 
 export const ScanNode = BaseNode.extend({
   id: objectId('scan'),

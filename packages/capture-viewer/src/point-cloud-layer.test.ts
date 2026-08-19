@@ -1,0 +1,27 @@
+import { describe, expect, test } from 'bun:test'
+import type { CaptureStreamPacket } from '@pascal-app/capture-protocol'
+import { buildPointCloudData } from './layers/point-cloud-layer'
+
+function packet(sequence: number, positions: number[], colors?: number[]): CaptureStreamPacket {
+  return {
+    protocolVersion: 1,
+    sessionId: 'capture_123',
+    streamId: 'points',
+    generation: 0,
+    sequence,
+    timestamp: sequence,
+    payload: { colors, positions },
+  }
+}
+
+describe('buildPointCloudData', () => {
+  test('keeps the newest bounded points and normalizes byte colors', () => {
+    const data = buildPointCloudData(
+      [packet(0, [0, 0, 0], [255, 0, 0]), packet(1, [1, 0, 0, 2, 0, 0], [0, 255, 0, 0, 0, 255])],
+      2,
+    )
+
+    expect([...data.positions]).toEqual([1, 0, 0, 2, 0, 0])
+    expect(data.colors ? [...data.colors] : null).toEqual([0, 1, 0, 0, 0, 1])
+  })
+})

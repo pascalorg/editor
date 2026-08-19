@@ -11,7 +11,7 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
   // Heavy LiDAR asset: stripped from the bake, re-added live from scene_graph
   // in the viewer (see plans → Part D; glb-reference-nodes.tsx).
   bake: 'strip',
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: ScanNode,
   category: 'site',
 
@@ -42,7 +42,7 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
   },
 
   presentation: {
-    label: 'Scan',
+    label: 'Capture',
     description: 'A captured session with optional mesh, motion, media, and sensor data.',
     icon: { kind: 'url', src: '/icons/mesh.webp' },
     paletteSection: 'site',

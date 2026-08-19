@@ -9,6 +9,5 @@
     "types": ["bun"]
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"],
-  "references": [{ "path": "../capture-protocol" }]
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

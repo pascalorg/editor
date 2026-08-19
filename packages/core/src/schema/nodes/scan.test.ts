@@ -47,6 +47,43 @@ describe('ScanNode', () => {
     expect(scan.layers).toEqual({ model: false, deviceMotion: true })
   })
 
+  test('preserves known layer defaults when a legacy scene stores a partial map', () => {
+    const scan = ScanNode.parse({
+      id: 'scan_session',
+      type: 'scan',
+      layers: { model: false },
+    })
+
+    expect(scan.layers).toEqual({ deviceMotion: true, model: false })
+  })
+
+  test('supports host-resolved sessions and future layer keys', () => {
+    const scan = ScanNode.parse({
+      id: 'scan_session',
+      type: 'scan',
+      captureSession: {
+        sessionId: 'session_123',
+        revisionId: 'revision_2',
+      },
+      layers: {
+        model: true,
+        pointCloud: false,
+        wifiRanging: true,
+      },
+    })
+
+    expect(scan.captureSession).toEqual({
+      sessionId: 'session_123',
+      revisionId: 'revision_2',
+    })
+    expect(scan.layers).toEqual({
+      deviceMotion: true,
+      model: true,
+      pointCloud: false,
+      wifiRanging: true,
+    })
+  })
+
   test('rejects unsafe manifest URLs', () => {
     const result = ScanNode.safeParse({
       id: 'scan_session',

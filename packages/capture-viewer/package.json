@@ -1,0 +1,63 @@
+{
+  "name": "@pascal-app/capture-viewer",
+  "version": "1.0.0-beta.4",
+  "description": "Open capture-session runtime and reference renderers for the Pascal viewer",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsgo --build --watch",
+    "test": "bun test src",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "@pascal-app/capture-protocol": "^1.0.0-beta.4",
+    "@pascal-app/core": "^1.0.0-beta.4",
+    "@pascal-app/viewer": "^1.0.0-beta.4",
+    "@react-three/drei": "^10",
+    "@react-three/fiber": "^9",
+    "react": "^18 || ^19",
+    "three": "^0.185"
+  },
+  "devDependencies": {
+    "@pascal-app/capture-protocol": "^1.0.0-beta.4",
+    "@pascal-app/core": "^1.0.0-beta.4",
+    "@pascal-app/viewer": "^1.0.0-beta.4",
+    "@pascal/typescript-config": "*",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@types/bun": "^1.3.0",
+    "@types/react": "^19.2.2",
+    "@types/three": "^0.184.0",
+    "react": "^19.2.4",
+    "three": "^0.185.0",
+    "typescript": "6.0.3"
+  },
+  "keywords": [
+    "3d",
+    "capture",
+    "point-cloud",
+    "react-three-fiber",
+    "viewer"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pascalorg/editor.git",
+    "directory": "packages/capture-viewer"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/pascalorg/editor/tree/main/packages/capture-viewer#readme",
+  "bugs": "https://github.com/pascalorg/editor/issues"
+}
