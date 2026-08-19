@@ -61,8 +61,10 @@ function gutterPointInRoofFrame(
 ): Point2D {
   const gutterRotation = gutter.rotation ?? 0
   const [meshX, meshZ] = gutterMeshPoint(gutter, offset, 0)
-  const localX = gutter.position[0] + Math.cos(gutterRotation) * meshX + Math.sin(gutterRotation) * meshZ
-  const localZ = gutter.position[2] - Math.sin(gutterRotation) * meshX + Math.cos(gutterRotation) * meshZ
+  const localX =
+    gutter.position[0] + Math.cos(gutterRotation) * meshX + Math.sin(gutterRotation) * meshZ
+  const localZ =
+    gutter.position[2] - Math.sin(gutterRotation) * meshX + Math.cos(gutterRotation) * meshZ
   if (!segment) return [localX, localZ]
 
   const segmentRotation = segment.rotation ?? 0

@@ -13,6 +13,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import { useEffect } from 'react'
+import { bendLocalPoint } from './arc'
 import {
   createManagedLeanToCornerPost,
   createManagedLeanToPost,
@@ -34,7 +35,6 @@ import {
   resolveLeanToPostGutterSetback,
   resolveLeanToPostIndexes,
 } from './assembly'
-import { bendLocalPoint } from './arc'
 import {
   LEAN_TO_CORNER_JOINTS_KEY,
   leanToCornerJointMetadata,

@@ -649,7 +649,8 @@ function takeNearestGutterId(
   let bestDistance = Number.POSITIVE_INFINITY
   for (let i = 0; i < candidateIds.length; i++) {
     const node = nodes[candidateIds[i]!]
-    const position = node && 'position' in node ? (node.position as number[] | undefined) : undefined
+    const position =
+      node && 'position' in node ? (node.position as number[] | undefined) : undefined
     const dx = (position?.[0] ?? 0) - desired.position[0]
     const dz = (position?.[2] ?? 0) - desired.position[2]
     const distance = dx * dx + dz * dz
@@ -697,7 +698,9 @@ function refreshDefaultGuttersForSegment(
     const side = getDefaultGutterSide(desired, segment.id)
     if (!side) continue
     const matchingIds = existingBySide.get(side)
-    const existingId = matchingIds ? takeNearestGutterId(matchingIds, desired, nextNodes) : undefined
+    const existingId = matchingIds
+      ? takeNearestGutterId(matchingIds, desired, nextNodes)
+      : undefined
 
     if (existingId) {
       const existing = nextNodes[existingId] as GutterNode
