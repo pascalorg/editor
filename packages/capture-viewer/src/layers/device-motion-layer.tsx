@@ -5,12 +5,12 @@ import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferGeometry,
   type Group,
+  LineBasicMaterial,
   LineSegments,
   Quaternion,
   Line as ThreeLine,
   Vector3,
 } from 'three'
-import { LineBasicNodeMaterial } from 'three/webgpu'
 import { type DeviceTrajectory, sampleDeviceTrajectory } from '../trajectory'
 
 export const DEVICE_MOTION_PLAYBACK_SPEED = 3
@@ -115,7 +115,7 @@ function CaptureLine({
     const geometry = new BufferGeometry().setFromPoints(
       points.map(([x, y, z]) => new Vector3(x, y, z)),
     )
-    const material = new LineBasicNodeMaterial({
+    const material = new LineBasicMaterial({
       color,
       depthWrite: opacity >= 1,
       linewidth: lineWidth,
