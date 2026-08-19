@@ -4,6 +4,7 @@ import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import { BuildingNode } from '../schema/nodes/building'
 import { LevelNode } from '../schema/nodes/level'
+import { WallNode } from '../schema/nodes/wall'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
