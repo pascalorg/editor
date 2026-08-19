@@ -6,6 +6,7 @@ A 3D building editor built with React Three Fiber and WebGPU.
 [![npm @pascal-app/core](https://img.shields.io/npm/v/@pascal-app/core?label=%40pascal-app%2Fcore)](https://www.npmjs.com/package/@pascal-app/core)
 [![npm @pascal-app/viewer](https://img.shields.io/npm/v/@pascal-app/viewer?label=%40pascal-app%2Fviewer)](https://www.npmjs.com/package/@pascal-app/viewer)
 [![npm @pascal-app/cli](https://img.shields.io/npm/v/@pascal-app/cli?label=%40pascal-app%2Fcli)](https://www.npmjs.com/package/@pascal-app/cli)
+[![inspect.software](https://raw.githubusercontent.com/inspect-software/badges/main/v1/p/pascalorg/editor.svg)](https://inspect.software/software/pascalorg/editor)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/XRKsDcpqgS)
 [![X (Twitter)](https://img.shields.io/badge/follow-%40pascal__app-black?logo=x&logoColor=white)](https://x.com/pascal_app)
 
