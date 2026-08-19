@@ -826,6 +826,11 @@ export function FloatingActionMenu() {
               }
               onDelete={editLocked ? undefined : handleDelete}
               onDuplicate={
+                // Locked like every other edit here. Duplicating under a lock
+                // wrote the copy at the source's exact position, where the same
+                // lock then made it unselectable and undeletable — an invisible
+                // node nothing in the UI could reach.
+                !editLocked &&
                 node &&
                 node.type !== 'spawn' &&
                 !DELETE_ONLY_TYPES.includes(node.type) &&

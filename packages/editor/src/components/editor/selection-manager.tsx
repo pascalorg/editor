@@ -1959,6 +1959,10 @@ export const SelectionManager = () => {
 
       event.stopPropagation()
 
+      // A locked node (whole-scene lock or its category) can't be deleted, even
+      // in the sledgehammer delete mode — consume the click but delete nothing.
+      if (isNodeEditLocked(node)) return
+
       // Play appropriate SFX
       emitDeleteSFX(node.type)
 

@@ -390,7 +390,7 @@ export function FloorplanRegistryActionMenu() {
         onAddHole={canAddHole && !editLocked ? handleAddHole : undefined}
         onCurve={canCurve && !editLocked ? handleCurve : undefined}
         onDelete={canDelete && !editLocked ? handleDelete : undefined}
-        onDuplicate={canDuplicate ? handleDuplicate : undefined}
+        onDuplicate={canDuplicate && !editLocked ? handleDuplicate : undefined}
         onMove={canMove && !editLocked ? handleMove : undefined}
         onPointerDown={(event) => event.stopPropagation()}
         onPointerUp={(event) => event.stopPropagation()}
