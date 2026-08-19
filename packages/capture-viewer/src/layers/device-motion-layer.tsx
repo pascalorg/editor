@@ -1,9 +1,16 @@
 'use client'
 
-import { Line } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
-import { type Group, Quaternion, Vector3 } from 'three'
+import { useEffect, useMemo, useRef } from 'react'
+import {
+  BufferGeometry,
+  type Group,
+  LineSegments,
+  Quaternion,
+  Line as ThreeLine,
+  Vector3,
+} from 'three'
+import { LineBasicNodeMaterial } from 'three/webgpu'
 import { type DeviceTrajectory, sampleDeviceTrajectory } from '../trajectory'
 
 export const DEVICE_MOTION_PLAYBACK_SPEED = 3
@@ -50,13 +57,12 @@ export function CaptureDeviceMotionLayer({
   return (
     <group>
       {trajectorySegments.map(({ points, segment }) => (
-        <Line
+        <CaptureLine
           color="#222326"
           key={segment}
           lineWidth={lineWidth}
           opacity={0.78}
           points={points}
-          transparent
         />
       ))}
       <group ref={deviceRef}>
@@ -73,23 +79,63 @@ function CameraFrustum({ lineWidth }: { lineWidth: number }) {
   const bottomLeft: [number, number, number] = [-0.14, -0.1, -0.28]
   const bottomRight: [number, number, number] = [0.14, -0.1, -0.28]
   const corners: [number, number, number][] = [topRight, topLeft, bottomLeft, bottomRight]
-  const edges = [
+  const points = [
     ...corners.map((corner) => [apex, corner] as const),
     [topRight, topLeft] as const,
     [topLeft, bottomLeft] as const,
     [bottomLeft, bottomRight] as const,
     [bottomRight, topRight] as const,
-  ]
+  ].flat()
 
   return (
     <group>
-      {edges.map((points, index) => (
-        <Line color="#f5b900" key={index} lineWidth={lineWidth} points={points} />
-      ))}
+      <CaptureLine color="#f5b900" lineWidth={lineWidth} points={points} segments />
       <mesh>
         <sphereGeometry args={[0.025, 12, 12]} />
         <meshBasicMaterial color="#ffd84d" />
       </mesh>
     </group>
   )
+}
+
+function CaptureLine({
+  color,
+  lineWidth,
+  opacity = 1,
+  points,
+  segments = false,
+}: {
+  color: string
+  lineWidth: number
+  opacity?: number
+  points: readonly [number, number, number][]
+  segments?: boolean
+}) {
+  const line = useMemo(() => {
+    const geometry = new BufferGeometry().setFromPoints(
+      points.map(([x, y, z]) => new Vector3(x, y, z)),
+    )
+    const material = new LineBasicNodeMaterial({
+      color,
+      depthWrite: opacity >= 1,
+      linewidth: lineWidth,
+      opacity,
+      transparent: opacity < 1,
+    })
+    const object = segments
+      ? new LineSegments(geometry, material)
+      : new ThreeLine(geometry, material)
+    object.frustumCulled = false
+    return object
+  }, [color, lineWidth, opacity, points, segments])
+
+  useEffect(
+    () => () => {
+      line.geometry.dispose()
+      line.material.dispose()
+    },
+    [line],
+  )
+
+  return <primitive object={line} />
 }
