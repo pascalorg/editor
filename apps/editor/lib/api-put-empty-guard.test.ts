@@ -49,11 +49,20 @@ beforeAll(async () => {
   const storeServer = await import('./scene-store-server')
   storeServer.__resetSceneStoreForTests()
 
-  // Seed through the raw STORE, not SceneOperations: CI's module graph can
-  // resolve '@pascal-app/mcp/operations' to a build predating saveScene
-  // (turbo cache), while the store's save() is the stable primitive the
-  // operations layer itself delegates to.
-  const store = await storeServer.getSceneStore()
+  // Build REAL store+operations from relative SOURCE imports and inject
+  // them: '@pascal-app/mcp/*' subpaths may be mock.module'd by other test
+  // files in the same process (the stubs stick for later dynamic imports
+  // on linux), which starved this fixture of saveScene/loadStoredScene in
+  // CI three runs straight.
+  const { SqliteSceneStore } = await import(
+    '../../../packages/mcp/src/storage/sqlite-scene-store'
+  )
+  const { createSceneOperations } = await import(
+    '../../../packages/mcp/src/operations/scene-operations'
+  )
+  const store = new SqliteSceneStore({ env: process.env })
+  const operations = createSceneOperations({ store })
+  storeServer.__setSceneStoreForTests(store, operations)
   await store.save({
     id: SCENE_ID,
     name: 'Wipe guard fixture',
@@ -68,7 +77,7 @@ beforeAll(async () => {
 afterAll(async () => {
   const storeServer = await import('./scene-store-server')
   const store = await storeServer.getSceneStore()
-  ;(store as { close?: () => void }).close?.()
+  ;(store as unknown as { close?: () => void }).close?.()
   storeServer.__resetSceneStoreForTests()
   restoreEnv()
   rmSync(tempDir, { recursive: true, force: true })
