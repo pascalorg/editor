@@ -45,8 +45,12 @@ beforeAll(async () => {
   const storeServer = await import('./scene-store-server')
   storeServer.__resetSceneStoreForTests()
 
-  const operations = await storeServer.getSceneOperations()
-  await operations.saveScene({
+  // Seed through the raw STORE, not SceneOperations: CI's module graph can
+  // resolve '@pascal-app/mcp/operations' to a build predating saveScene
+  // (turbo cache), while the store's save() is the stable primitive the
+  // operations layer itself delegates to.
+  const store = await storeServer.getSceneStore()
+  await store.save({
     id: SCENE_ID,
     name: 'Wipe guard fixture',
     projectId: null,
