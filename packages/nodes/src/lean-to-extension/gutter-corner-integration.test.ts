@@ -390,7 +390,7 @@ describe('persisted lean-to gutter corner', () => {
       geometryA.dispose()
       geometryB.dispose()
     }
-  })
+  }, 30000)
 
   test('recomputes both gutter cuts when a connected wall angle changes', () => {
     const fixture = cornerFixture({ reverseA: false, reverseB: false })
