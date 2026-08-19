@@ -1858,7 +1858,8 @@ function BlockEditor({
           .addScaledVector(worldAxis, parameter - initialParameter)
         const localPoint = target.worldToLocal(worldPoint)
         const distance = localPoint.getComponent(axisIndex) - originLocal.getComponent(axisIndex)
-        const snapStep = !pointerEvent.altKey && isGridSnapActive() ? 0.1 : 0
+        const snapStep =
+          !pointerEvent.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const factor = blockScaleFactorFromDrag(distance, gizmoLength, snapStep)
         if (snapStep > 0 && Math.abs(factor - 1) > 1e-6 && factor !== lastSnapFactor) {
           lastSnapFactor = factor
@@ -1953,7 +1954,7 @@ function BlockEditor({
     const updatePreview = (clientX: number, clientY: number, altKey: boolean) => {
       const pointer = new Vector2(clientX, clientY)
       const distance = pointer.distanceTo(pivotClient) - initialDistance
-      const snapStep = !altKey && isGridSnapActive() ? 0.1 : 0
+      const snapStep = !altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const factor = blockScaleFactorFromDrag(distance, initialDistance, snapStep)
       if (snapStep > 0 && Math.abs(factor - 1) > 1e-6 && factor !== lastSnapFactor) {
         lastSnapFactor = factor
