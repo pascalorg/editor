@@ -23,6 +23,10 @@ const POPULATED_GRAPH = {
   },
   rootNodeIds: ['n1'],
 }
+// FILE NAME MATTERS: scene-store-server.test.ts calls mock.module() on
+// '@pascal-app/mcp/operations', and bun module mocks leak process-wide to
+// every LATER test file in the same worker — this file must sort BEFORE it
+// alphabetically to see the real module (CI runs single-worker).
 const EMPTY_GRAPH = { nodes: {}, rootNodeIds: [] }
 
 let PUT: typeof import('../app/api/scenes/[id]/route')['PUT']
