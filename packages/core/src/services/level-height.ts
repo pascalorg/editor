@@ -62,7 +62,9 @@ export function deriveLegacyLevelHeight(
         slabs,
         walls,
       ).elevation
-      const top = resolveWallTop(wall, level.height ?? DEFAULT_LEVEL_HEIGHT, electedElevation)
+      const topStart = resolveWallTop(wall, level.height ?? DEFAULT_LEVEL_HEIGHT, electedElevation, 0)
+      const topEnd = resolveWallTop(wall, level.height ?? DEFAULT_LEVEL_HEIGHT, electedElevation, 1)
+      const top = Math.max(topStart, topEnd)
       if (top > maxTop) maxTop = top
     }
   }

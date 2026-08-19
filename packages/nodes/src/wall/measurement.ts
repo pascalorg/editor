@@ -13,8 +13,19 @@ import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 const point = (x: number, y: number, z: number) => [x, y, z] as [number, number, number]
 
+function getWallChordT(wall: WallNode, worldX: number, worldZ: number): number {
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const lenSq = dx * dx + dz * dz
+  if (lenSq < 1e-8) return 0.5
+  const px = worldX - wall.start[0]
+  const pz = worldZ - wall.start[1]
+  return Math.max(0, Math.min(1, (px * dx + pz * dz) / lenSq))
+}
+
 export function wallMeasurementFeatures(wall: WallNode): MeasurementFeature[] {
-  const height = resolveWallOpeningCeiling(wall, useScene.getState().nodes)
+  const nodes = useScene.getState().nodes
+  const midHeight = resolveWallOpeningCeiling(wall, nodes, 0.5)
   const arc = getWallArcData(wall)
   const centerline = sampleWallCenterline(wall).map(({ x, y }) => point(x, 0, y))
   const midpoint = getWallCurveFrameAt(wall, 0.5).point
@@ -98,7 +109,7 @@ export function wallMeasurementFeatures(wall: WallNode): MeasurementFeature[] {
       geometry: {
         kind: 'segment',
         start: point(midpoint.x, 0, midpoint.y),
-        end: point(midpoint.x, height, midpoint.y),
+        end: point(midpoint.x, midHeight, midpoint.y),
       },
     },
     {
@@ -108,7 +119,11 @@ export function wallMeasurementFeatures(wall: WallNode): MeasurementFeature[] {
       priority: 75,
       geometry: {
         kind: 'path',
-        points: centerline.map(([x, , z]) => point(x, height, z)),
+        points: centerline.map(([x, , z]) => {
+          const chordT = getWallChordT(wall, x, z)
+          const h = resolveWallOpeningCeiling(wall, nodes, chordT)
+          return point(x, h, z)
+        }),
       },
     },
   ]
@@ -182,9 +197,10 @@ export function matchWallMeasurementFeature(
     const faceDistance = Math.hypot(hit[0] - faceX, hit[2] - faceZ)
     const threshold = Math.max(maxDistance, halfThickness + 0.03)
     if (faceDistance <= threshold && (!best || faceDistance < best.distance)) {
+      const chordT = getWallChordT(wall, faceX, faceZ)
       const height = Math.max(
         0,
-        Math.min(resolveWallOpeningCeiling(wall, useScene.getState().nodes), hit[1]),
+        Math.min(resolveWallOpeningCeiling(wall, useScene.getState().nodes, chordT), hit[1]),
       )
       best = {
         featureId: side > 0 ? 'wall:face:left' : 'wall:face:right',
@@ -221,9 +237,10 @@ export function resolveWallMeasurementFeature(
   if (typeof heightValue !== 'number' || feature.geometry.kind !== 'path') {
     return normal ? { ...feature, normal } : feature
   }
+  const chordT = getWallChordT(wall, frame.point.x, frame.point.y)
   const height = Math.max(
     0,
-    Math.min(resolveWallOpeningCeiling(wall, useScene.getState().nodes), heightValue),
+    Math.min(resolveWallOpeningCeiling(wall, useScene.getState().nodes, chordT), heightValue),
   )
   return {
     ...feature,

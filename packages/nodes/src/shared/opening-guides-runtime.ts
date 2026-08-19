@@ -95,7 +95,14 @@ export function publishOpeningGuides3D(args: {
 }): void {
   const { wall, centerS, centerY, width, toWorld } = args
   const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-  const wallHeight = resolveWallOpeningCeiling(wall, args.nodes)
+  const halfW = width / 2
+  const tLeft = wallLength > 1e-4 ? Math.max(0, Math.min(1, (centerS - halfW) / wallLength)) : 0.5
+  const tRight = wallLength > 1e-4 ? Math.max(0, Math.min(1, (centerS + halfW) / wallLength)) : 0.5
+  const tCenter = wallLength > 1e-4 ? Math.max(0, Math.min(1, centerS / wallLength)) : 0.5
+  const hLeft = resolveWallOpeningCeiling(wall, args.nodes, tLeft)
+  const hRight = resolveWallOpeningCeiling(wall, args.nodes, tRight)
+  const hCenter = resolveWallOpeningCeiling(wall, args.nodes, tCenter)
+  const wallHeight = Math.min(hLeft, hRight, hCenter)
   const siblings = collectOpeningSiblings(wall, args.movingId, args.nodes)
   const guides = computeOpeningGuides({
     moving: { id: args.movingId, centerS, width, centerY, height: args.height },
