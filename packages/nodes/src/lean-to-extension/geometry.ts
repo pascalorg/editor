@@ -617,10 +617,12 @@ export function buildLeanToExtensionGeometry(
     for (const [side, joint] of Object.entries(cornerJoints)) {
       if (!(joint?.sharedPostOwner && joint.seam)) continue
       const [start, end] = joint.seam
+      const [startX, startZ] = bend(start[0], start[1])
+      const [endX, endZ] = bend(end[0], end[1])
       addBoxBetween(group, {
         name: `lean-to-${side}-corner-rafter`,
-        start: [start[0], rafterY(start[1]), start[1]],
-        end: [end[0], rafterY(end[1]), end[1]],
+        start: [startX, rafterY(start[1]), startZ],
+        end: [endX, rafterY(end[1]), endZ],
         width: node.rafterWidth,
         height: node.rafterHeight,
         role: 'joinery',

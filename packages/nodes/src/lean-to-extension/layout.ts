@@ -14,7 +14,7 @@ import { type LeanToArcFrame, leanToArcFrameAtLocalX } from './arc'
 
 export const MIN_LEAN_TO_POST_HEIGHT = 0.2
 export const MIN_LEAN_TO_WALL_LENGTH = 0.6
-export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 7
+export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 8
 const LEAN_TO_EDGE_SNAP_TOLERANCE = 0.25
 const CURVED_INNER_EDGE_CLEARANCE = 0.15
 

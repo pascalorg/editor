@@ -34,6 +34,7 @@ import {
   resolveLeanToPostGutterSetback,
   resolveLeanToPostIndexes,
 } from './assembly'
+import { bendLocalPoint } from './arc'
 import {
   LEAN_TO_CORNER_JOINTS_KEY,
   leanToCornerJointMetadata,
@@ -580,14 +581,18 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
         const index = leanToCornerPostIndex(joint.side)
         const key = `low:${index}`
         desiredPostKeys.add(key)
+        const bentCornerPost = bendLocalPoint(
+          effectiveLeanTo,
+          joint.sharedPostPosition[0],
+          joint.sharedPostPosition[2],
+        )
         const postBaseY =
           parent?.type === 'wall'
-            ? resolveLeanToPostBaseYAtLocalPosition(
-                effectiveLeanTo,
-                parent,
-                nodes,
-                joint.sharedPostPosition,
-              )
+            ? resolveLeanToPostBaseYAtLocalPosition(effectiveLeanTo, parent, nodes, [
+                bentCornerPost.x,
+                joint.sharedPostPosition[1],
+                bentCornerPost.y,
+              ])
             : 0
         const current = managedPosts.get(key)
         const gutterSetback = resolveLeanToPostGutterSetback(effectiveLeanTo, current)

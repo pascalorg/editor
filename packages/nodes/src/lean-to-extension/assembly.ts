@@ -186,9 +186,12 @@ export function leanToCornerPostLayoutPatch(
   baseY = 0,
   gutterSetback = 0,
 ): LeanToPostLayoutPatch {
+  const cornerX = joint.sharedPostPosition[0]
+  const bent = bendLocalPoint(leanTo, cornerX, joint.sharedPostPosition[2] - gutterSetback)
   return {
     ...leanToPostLayoutPatch(leanTo, 0, baseY, gutterSetback, 'low'),
-    position: [joint.sharedPostPosition[0], baseY, joint.sharedPostPosition[2] - gutterSetback],
+    position: [bent.x, baseY, bent.y],
+    rotation: bendRotationYAtLocalX(leanTo, cornerX),
   }
 }
 
