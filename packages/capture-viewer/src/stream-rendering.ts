@@ -3,6 +3,7 @@ import {
   type CaptureStreamDescriptor,
   captureLayerKey,
   DeviceMotionTrajectorySchema,
+  PointCloudPayloadSchema,
 } from '@pascal-app/capture-protocol'
 
 const GLB_MEDIA_TYPES = new Set(['model/gltf-binary', 'model/gltf+json'])
@@ -26,7 +27,11 @@ export function isCaptureStreamRenderable(
     )
   }
   if (layerKey === 'pointCloud') {
-    return stream.availability === 'live' || isCapturePointCloudArtifact(stream.artifact)
+    return (
+      stream.availability === 'live' ||
+      isCapturePointCloudArtifact(stream.artifact) ||
+      PointCloudPayloadSchema.safeParse(stream.inline).success
+    )
   }
   return false
 }

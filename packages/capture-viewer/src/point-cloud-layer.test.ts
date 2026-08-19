@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CaptureStreamPacket } from '@pascal-app/capture-protocol'
-import { buildPointCloudData } from './layers/point-cloud-layer'
+import { buildPointCloudData, buildPointCloudPayloadData } from './layers/point-cloud-layer'
 
 function packet(sequence: number, positions: number[], colors?: number[]): CaptureStreamPacket {
   return {
@@ -23,5 +23,18 @@ describe('buildPointCloudData', () => {
 
     expect([...data.positions]).toEqual([1, 0, 0, 2, 0, 0])
     expect(data.colors ? [...data.colors] : null).toEqual([0, 1, 0, 0, 0, 1])
+  })
+
+  test('renders bounded inline capture points', () => {
+    const data = buildPointCloudPayloadData(
+      {
+        coordinateSystem: 'arkit-world',
+        positions: [0, 0, 0, 1, 0, 0, 2, 0, 0],
+      },
+      2,
+    )
+
+    expect([...data.positions]).toEqual([1, 0, 0, 2, 0, 0])
+    expect(data.colors).toBeNull()
   })
 })

@@ -29,11 +29,22 @@ describe('capture manifests', () => {
             ],
           },
         },
+        pointCloud: {
+          kind: 'point-cloud',
+          points: {
+            coordinateSystem: 'arkit-world',
+            positions: [0, 0, 0, 1, 1, 1],
+          },
+        },
       },
     })
 
-    expect(descriptor.streams.map(captureLayerKey)).toEqual(['model', 'deviceMotion'])
+    expect(descriptor.streams.map(captureLayerKey)).toEqual(['model', 'deviceMotion', 'pointCloud'])
     expect(descriptor.streams[0]?.artifact?.uri).toBe('https://cdn.pascal.app/room.usdz')
+    expect(descriptor.streams[2]?.inline).toMatchObject({
+      coordinateSystem: 'arkit-world',
+      positions: [0, 0, 0, 1, 1, 1],
+    })
   })
 
   test('keeps unknown v2 stream kinds without a protocol release', () => {

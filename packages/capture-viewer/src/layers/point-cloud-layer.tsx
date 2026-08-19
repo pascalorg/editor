@@ -14,18 +14,27 @@ export type PointCloudData = {
 
 export function CapturePointCloudLayer({
   artifactUrl,
+  inline,
   maxPoints = 250_000,
   packets = [],
   pointSize = 0.012,
 }: {
   artifactUrl?: string
+  inline?: unknown
   maxPoints?: number
   packets?: readonly CaptureStreamPacket[]
   pointSize?: number
 }) {
   const liveData = useMemo(() => buildPointCloudData(packets, maxPoints), [maxPoints, packets])
+  const inlineData = useMemo(
+    () => buildPointCloudPayloadData(inline, maxPoints),
+    [inline, maxPoints],
+  )
   if (liveData.positions.length > 0) {
     return <PointCloudDataLayer data={liveData} pointSize={pointSize} />
+  }
+  if (inlineData.positions.length > 0) {
+    return <PointCloudDataLayer data={inlineData} pointSize={pointSize} />
   }
   return artifactUrl ? <PlyPointCloud pointSize={pointSize} url={artifactUrl} /> : null
 }
@@ -100,6 +109,20 @@ export function buildPointCloudData(
     if (colors && chunk.colors) colors.set(normalizeColors(chunk.colors), offset)
     offset += chunk.positions.length
   }
+  return { colors, positions }
+}
+
+export function buildPointCloudPayloadData(value: unknown, maxPoints: number): PointCloudData {
+  const parsed = parsePointPayload(value)
+  if (!parsed) return { colors: null, positions: new Float32Array() }
+
+  const availablePoints = Math.floor(parsed.positions.length / 3)
+  const keepPoints = Math.min(availablePoints, maxPoints)
+  const start = (availablePoints - keepPoints) * 3
+  const positions = new Float32Array(parsed.positions.slice(start))
+  const colors = parsed.colors
+    ? new Float32Array(normalizeColors(parsed.colors.slice(start)))
+    : null
   return { colors, positions }
 }
 

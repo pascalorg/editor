@@ -21,6 +21,18 @@ describe('isCaptureStreamRenderable', () => {
         artifact: { id: 'points', mediaType: 'application/ply', uri: '/points.ply' },
       }),
     ).toBe(true)
+    expect(
+      isCaptureStreamRenderable({
+        id: 'inline-points',
+        kind: 'point-cloud',
+        role: 'pointCloud',
+        availability: 'ready',
+        inline: {
+          coordinateSystem: 'arkit-world',
+          positions: [0, 0, 0, 1, 1, 1],
+        },
+      }),
+    ).toBe(true)
   })
 
   test('allows a host renderer to claim an otherwise unknown stream', () => {

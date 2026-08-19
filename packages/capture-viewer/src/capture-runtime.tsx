@@ -226,6 +226,7 @@ export function CaptureStreamLayer({
         artifactUrl={
           isCapturePointCloudArtifact(stream.artifact) ? (artifactUrl ?? undefined) : undefined
         }
+        inline={stream.inline}
         packets={stream.availability === 'live' ? packets : []}
       />
     )

@@ -24,6 +24,33 @@ export const ArkitDeviceMotionTrajectorySchema = DeviceMotionTrajectorySchema.ex
   coordinateSystem: z.literal('arkit-world'),
 })
 
+export const PointCloudPayloadSchema = z
+  .object({
+    coordinateSystem: z.string().min(1),
+    positions: z.array(z.number()).min(3),
+    colors: z.array(z.number()).optional(),
+  })
+  .superRefine((payload, context) => {
+    if (payload.positions.length % 3 !== 0) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Point-cloud positions must contain XYZ triples.',
+        path: ['positions'],
+      })
+    }
+    if (payload.colors && payload.colors.length !== payload.positions.length) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Point-cloud colors must match the positions array length.',
+        path: ['colors'],
+      })
+    }
+  })
+
+export const ArkitPointCloudPayloadSchema = PointCloudPayloadSchema.safeExtend({
+  coordinateSystem: z.literal('arkit-world'),
+})
+
 export const CaptureTimeRangeSchema = z
   .object({
     start: z.number().nonnegative(),
@@ -88,6 +115,12 @@ export const CaptureSessionManifestV1Schema = z.object({
         trajectory: ArkitDeviceMotionTrajectorySchema,
       })
       .optional(),
+    pointCloud: z
+      .object({
+        kind: z.literal('point-cloud'),
+        points: ArkitPointCloudPayloadSchema,
+      })
+      .optional(),
   }),
 })
 
@@ -134,6 +167,7 @@ export type CaptureSessionManifestV1 = z.infer<typeof CaptureSessionManifestV1Sc
 export type CaptureSessionManifestV2 = z.infer<typeof CaptureSessionManifestV2Schema>
 export type CaptureStreamDescriptor = z.infer<typeof CaptureStreamDescriptorSchema>
 export type DeviceMotionTrajectoryPayload = z.infer<typeof DeviceMotionTrajectorySchema>
+export type PointCloudPayload = z.infer<typeof PointCloudPayloadSchema>
 
 export function normalizeCaptureSessionManifest(value: unknown): CaptureSessionDescriptor {
   const manifest = CaptureSessionManifestSchema.parse(value)
@@ -160,6 +194,15 @@ export function normalizeCaptureSessionManifest(value: unknown): CaptureSessionD
       role: 'deviceMotion',
       availability: 'ready',
       inline: manifest.streams.deviceMotion.trajectory,
+    })
+  }
+  if (manifest.streams.pointCloud) {
+    streams.push({
+      id: 'point-cloud',
+      kind: manifest.streams.pointCloud.kind,
+      role: 'pointCloud',
+      availability: 'ready',
+      inline: manifest.streams.pointCloud.points,
     })
   }
 

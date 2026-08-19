@@ -23,6 +23,9 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    movable: { axes: ['x', 'y', 'z'], gridSnap: true },
+    rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
+    scalable: { axes: ['x', 'y', 'z'], min: 0.01, max: 10 },
     duplicable: false,
     deletable: true,
     // Scans carry user-uploaded imagery — cataloging them as
