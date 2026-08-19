@@ -34,6 +34,12 @@ export {
   TextureWrapMode,
 } from './material'
 export {
+  type AutoDownspoutPlacement,
+  type AutomaticDownspoutInput,
+  planAutomaticDownspouts,
+  resolveAutomaticDownspoutLength,
+} from './nodes/automatic-downspout'
+export {
   BlockEdge,
   BlockFace,
   type BlockFaceFrame,
@@ -101,7 +107,12 @@ export {
   type DormerSurfaceMaterialSpec,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
-export { DownspoutNode } from './nodes/downspout'
+export {
+  DownspoutNode,
+  defaultDownspoutMetadata,
+  isDefaultDownspoutNode,
+  usesAutomaticDownspoutLength,
+} from './nodes/downspout'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'
 export { DuctTerminalNode } from './nodes/duct-terminal'
@@ -114,7 +125,22 @@ export {
 export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
-export { GutterNode, GutterOutlet } from './nodes/gutter'
+export {
+  computeGutterEaveY,
+  createDefaultGuttersForSegment,
+  GUTTER_EAVE_TUCK_INWARD,
+  GUTTER_EAVE_TUCK_UP,
+  type GutterEaveSide,
+  type GutterEdgeExclusion,
+  GutterNode,
+  GutterOutlet,
+  type GutterRun,
+  getDefaultGutterSide,
+  getGutterRunsForSegment,
+  hasAutoGutterMetadata,
+  isAutoGutterEnabled,
+  isDefaultGutterNode,
+} from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export type {
   AnimationEffect,
@@ -134,6 +160,13 @@ export {
   isLowProfileItemSurface,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
+export {
+  LeanToConnectionMode,
+  LeanToEndCondition,
+  LeanToExtensionNode,
+  LeanToResizeLock,
+  LeanToRoofEdge,
+} from './nodes/lean-to-extension'
 export { LevelNode } from './nodes/level'
 export { LinesetNode } from './nodes/lineset'
 export { LiquidLineNode } from './nodes/liquid-line'
@@ -182,6 +215,7 @@ export {
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
+  isBandedShedSegment,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,

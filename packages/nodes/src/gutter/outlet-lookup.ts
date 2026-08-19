@@ -62,11 +62,33 @@ function placeOutlet(
   const maxX = len / 2 - capRightLen - outerHalfX
   if (maxX <= minX) return null
   const x = Math.max(minX, Math.min(maxX, outlet.offset ?? 0))
+  const z = profileFloorMidZ(gutter.profile ?? 'k-style', size)
+
+  // Straight run: the along-length X and outward Z are already the
+  // mesh-local center. A managed lean-to gutter following a curved wall
+  // carries a concentric arc, so the trough floor bends along its length —
+  // remap (x, z) onto the same arc the geometry uses so the drop tube mounts
+  // on the actual bent floor rather than the straight chord.
+  const arc = gutter.arc
+  if (arc && Number.isFinite(arc.radius)) {
+    const signedRef = (Math.sign(arc.centerZ) || 1) * arc.radius
+    const phi = (x - arc.centerX) / signedRef
+    const radial = z - arc.centerZ
+    return {
+      x: arc.centerX - radial * Math.sin(phi),
+      y: -size,
+      z: arc.centerZ + radial * Math.cos(phi),
+      bore: inner.halfX,
+      shape,
+      innerHalfX: inner.halfX,
+      innerHalfZ: inner.halfZ,
+    }
+  }
 
   return {
     x,
     y: -size,
-    z: profileFloorMidZ(gutter.profile ?? 'k-style', size),
+    z,
     bore: inner.halfX,
     shape,
     innerHalfX: inner.halfX,

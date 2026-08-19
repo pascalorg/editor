@@ -97,7 +97,6 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
       ? ({ ...segment, ...segmentOverrides } as RoofSegmentNode)
       : segment
     : undefined
-
   // Routing back to the wall — memoised on the gutter/segment values
   // that actually move the jog or the collar bore, so the pipe geometry
   // only rebuilds when one of those changes (not on every override-merge

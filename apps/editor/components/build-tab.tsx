@@ -92,6 +92,7 @@ function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
     const extension = getFloorplanNodeExtension(definition)
     if (
       baseKinds.has(kind) ||
+      definition.presentation?.paletteGroup === 'roof-features' ||
       !extension?.tool ||
       !isFloorplanToolAvailableInMode(extension.availableModes, floorplanMode) ||
       !presentation ||
@@ -173,13 +174,12 @@ type RoofFeature = { kind: string; label: string; iconSrc: string }
 const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.webp'
 
 /**
- * Roof accessories surfaced under the Roof tile (a "Features" group). Unlike
- * the community editor these aren't DB presets — each is a registry kind with
- * `capabilities.roofAccessory`, enumerated from the registry at render time
- * (it is populated by the app bootstrap — a module-scope const would race it)
- * and activated like any structure tool (the kind's tool attaches it to the
- * roof segment under the cursor). Label + icon come from the registry's
- * `presentation`; non-url icons fall back to the roof icon.
+ * Roof accessories and extensions surfaced under the Roof tile. Unlike the
+ * community editor these aren't DB presets — each is a registry kind, either
+ * carrying `capabilities.roofAccessory` or explicitly classified as a roof
+ * extension. They are enumerated at render time because the registry is
+ * populated during app bootstrap. Label + icon come from `presentation`;
+ * non-url icons fall back to the roof icon.
  */
 function activateRoofFeatureTool(kind: string): void {
   const ed = useEditor.getState()
@@ -243,9 +243,15 @@ export function BuildTab() {
   // Read at render time (not module scope): the registry is populated by the
   // app bootstrap, so enumerating earlier would race it and see no kinds.
   const roofFeatures = useMemo<RoofFeature[]>(() => {
+    if (!registryReady) return []
     const features: RoofFeature[] = []
     for (const [kind, def] of nodeRegistry.entries()) {
-      if (def.capabilities.roofAccessory === undefined) continue
+      if (
+        def.capabilities.roofAccessory === undefined &&
+        def.presentation?.paletteGroup !== 'roof-features'
+      ) {
+        continue
+      }
       // Door / window declare `roofAccessory` for the wall-face cut but
       // already have their own Build tiles — listing them here too
       // would duplicate the entry under Roof → Features.
@@ -258,7 +264,7 @@ export function BuildTab() {
       })
     }
     return features
-  }, [])
+  }, [registryReady])
 
   // Tile highlight derives from the single source of truth (the active tool /
   // mode), never a separate local selection — so keyboard shortcuts and panel
@@ -362,7 +368,9 @@ export function BuildTab() {
         (activeTool === 'roof' || isRoofFeatureActive) &&
         roofFeatures.length > 0 ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Features</div>
+          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">
+            Features & extensions
+          </div>
           <TooltipProvider delayDuration={0} disableHoverableContent>
             <div
               className="grid gap-1.5"

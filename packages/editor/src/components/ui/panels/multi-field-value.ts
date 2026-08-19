@@ -122,7 +122,7 @@ export function buildMultiNodePatches(
     if (Object.keys(patch).length === 0) continue
     if (parametrics?.derive) {
       const next = { ...node, ...patch } as AnyNode
-      patch = { ...patch, ...parametrics.derive(next, patch) } as Partial<AnyNode>
+      patch = { ...patch, ...parametrics.derive(next, patch, node) } as Partial<AnyNode>
     }
     updates.push({ id, data: patch })
     if (parametrics?.reconcile) {

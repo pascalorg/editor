@@ -65,7 +65,7 @@ export function ParametricInspector({
       const node = scene.nodes[selectedId]
       if (parametrics?.derive && node) {
         const next = { ...node, ...patch } as AnyNode
-        patch = { ...patch, ...parametrics.derive(next, patch) }
+        patch = { ...patch, ...parametrics.derive(next, patch, node as AnyNode) }
       }
       // Bundle the edited node + any reconcile follow-ups into ONE
       // updateNodes call so a single inspector edit is a single undo step.

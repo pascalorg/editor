@@ -235,3 +235,45 @@ describe('supportSlabId remap', () => {
     expect((clonedExternal as { supportSlabId?: string }).supportSlabId).toBe('slab_external')
   })
 })
+
+describe('lean-to roof attachment remap', () => {
+  test('remaps both host roof references in whole-scene and level clones', () => {
+    const level = makeNode('level_1', 'level', {
+      children: ['roof_1', 'leanto_1'],
+    })
+    const roof = makeNode('roof_1', 'roof', {
+      parentId: 'level_1',
+      children: ['roofseg_1'],
+    })
+    const segment = makeNode('roofseg_1', 'roof-segment', {
+      parentId: 'roof_1',
+    })
+    const leanTo = makeNode('leanto_1', 'lean-to-extension', {
+      parentId: 'level_1',
+      hostRoofId: 'roof_1',
+      hostRoofSegmentId: 'roofseg_1',
+    })
+    const nodes = {
+      ['level_1' as AnyNodeId]: level,
+      ['roof_1' as AnyNodeId]: roof,
+      ['roofseg_1' as AnyNodeId]: segment,
+      ['leanto_1' as AnyNodeId]: leanTo,
+    }
+
+    const whole = cloneSceneGraph({ nodes, rootNodeIds: ['level_1' as AnyNodeId] })
+    const wholeRoof = Object.values(whole.nodes).find((node) => node.type === 'roof')!
+    const wholeSegment = Object.values(whole.nodes).find((node) => node.type === 'roof-segment')!
+    const wholeLeanTo = Object.values(whole.nodes).find(
+      (node) => node.type === 'lean-to-extension',
+    )! as unknown as { hostRoofId: string; hostRoofSegmentId: string }
+    expect(wholeLeanTo.hostRoofId).toBe(wholeRoof.id)
+    expect(wholeLeanTo.hostRoofSegmentId).toBe(wholeSegment.id)
+
+    const levelClone = cloneLevelSubtree(nodes, 'level_1' as AnyNodeId)
+    const levelLeanTo = levelClone.clonedNodes.find(
+      (node) => node.type === 'lean-to-extension',
+    )! as unknown as { hostRoofId: string; hostRoofSegmentId: string }
+    expect(levelLeanTo.hostRoofId).toBe(levelClone.idMap.get('roof_1'))
+    expect(levelLeanTo.hostRoofSegmentId).toBe(levelClone.idMap.get('roofseg_1'))
+  })
+})

@@ -24,12 +24,27 @@ import { computeGutterMitres, type GutterWithSegment, NO_MITRES } from './corner
 import { computeSharedEaveY } from './eave-align'
 import { computeEaveY } from './eave-snap'
 import { buildGutterGeometry } from './geometry'
+import { segmentForGutterTrimClip } from './trim-clip'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
   roughness: 0.7,
   metalness: 0.25,
 })
+
+function leanToJointMitres(node: GutterNode) {
+  const metadata =
+    node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
+      ? (node.metadata as Record<string, unknown>)
+      : {}
+  const value = metadata.leanToGutterMitres
+  if (!(value && typeof value === 'object' && !Array.isArray(value))) return NO_MITRES
+  const mitres = value as Record<string, unknown>
+  return {
+    left: typeof mitres.left === 'number' && Number.isFinite(mitres.left) ? mitres.left : 0,
+    right: typeof mitres.right === 'number' && Number.isFinite(mitres.right) ? mitres.right : 0,
+  }
+}
 
 /**
  * Gutter renderer. Mounts at the eave of the host roof-segment — the
@@ -100,6 +115,10 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
         : undefined
       if (!roof) return [] as (GutterNode | RoofSegmentNode)[]
       const out: (GutterNode | RoofSegmentNode)[] = []
+      const managedByLeanTo =
+        typeof (node.metadata as Record<string, unknown> | undefined)?.managedByLeanTo === 'string'
+          ? ((node.metadata as Record<string, unknown>).managedByLeanTo as string)
+          : null
       for (const sid of roof.children ?? []) {
         const s = state.nodes[sid as AnyNodeId]
         if (s?.type !== 'roof-segment') continue
@@ -107,6 +126,18 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
         for (const gid of (s as RoofSegmentNode).children ?? []) {
           const g = state.nodes[gid as AnyNodeId]
           if (g?.type === 'gutter' && g.id !== storeNode.id) out.push(g as GutterNode)
+        }
+      }
+      if (managedByLeanTo) {
+        for (const candidate of Object.values(state.nodes)) {
+          if (candidate?.type !== 'gutter' || candidate.id === storeNode.id) continue
+          const candidateMetadata = candidate.metadata as Record<string, unknown> | undefined
+          if (typeof candidateMetadata?.managedByLeanTo !== 'string') continue
+          const segment = candidate.roofSegmentId
+            ? (state.nodes[candidate.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
+            : undefined
+          if (!segment || out.some((node) => node.id === segment.id)) continue
+          out.push(segment, candidate as GutterNode)
         }
       }
       return out
@@ -159,10 +190,15 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
     effectiveSegment?.roofType,
     mitreNodes,
   ])
+  const jointMitres = leanToJointMitres(node)
+  const renderedMitres = {
+    left: jointMitres.left || mitres.left,
+    right: jointMitres.right || mitres.right,
+  }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
-    () => buildGutterGeometry(node, mitres),
+    () => buildGutterGeometry(node, renderedMitres),
     [
       node.length,
       node.size,
@@ -172,11 +208,14 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       node.endCapRight,
       node.hangerStyle,
       node.hangerSpacing,
+      node.arc?.centerX,
+      node.arc?.centerZ,
+      node.arc?.radius,
       // Value-compare the outlets array so the CSG drills only rebuild
       // when an outlet's offset / diameter changes or one is added.
       JSON.stringify(node.outlets),
-      mitres.left,
-      mitres.right,
+      renderedMitres.left,
+      renderedMitres.right,
     ],
   )
   useEffect(() => () => geometry.dispose(), [geometry])
@@ -215,7 +254,11 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
       ),
     [node.position[0], node.position[2], node.rotation, liveEaveYForClip],
   )
-  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, effectiveSegment, localToSegment)
+  const clippedGeometry = useSegmentTrimClippedGeometry(
+    geometry,
+    segmentForGutterTrimClip(node, effectiveSegment),
+    localToSegment,
+  )
 
   if (!segment || !effectiveSegment) return null
 
