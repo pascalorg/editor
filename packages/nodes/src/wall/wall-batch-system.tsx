@@ -182,21 +182,29 @@ export function canBatchWalls(wallMode: WallMode, isolationActive: boolean): boo
 }
 
 /**
- * Walls the cutaway pass is currently tinting — a selection or a delete hover.
+ * Walls the viewer is currently lighting up — a selection, or any hover.
  *
- * It paints them by swapping the materials on the wall's own mesh, which the
- * merged mesh does not follow, so a lit wall goes back to drawing itself. There
- * are only ever a handful, and a handful of extra draw calls is what the tint
- * costs.
+ * A selection or delete hover paints the wall by swapping the materials on its
+ * own mesh, which the merged mesh does not follow. Every other hover draws an
+ * outline instead, and that needs the same thing for a different reason: the
+ * outline node renders `outliner.hoveredObjects` through the main camera, which
+ * enables no batched layer, so a sewn wall reaches neither mask pass and
+ * hovering it lights up nothing at all — in select mode, and in paint mode
+ * where the outline is the only signal for which surface the next click lands
+ * on.
+ *
+ * Both wants are the same one: a lit wall goes back to drawing its own
+ * geometry. Only ever a handful are lit at once, and a handful of extra draw
+ * calls is what lighting them costs.
  */
-function collectTintedWalls(wallIds: ReadonlySet<string>): Set<string> {
+export function collectTintedWalls(wallIds: ReadonlySet<string>): Set<string> {
   const viewer = useViewer.getState()
   const tinted = new Set<string>()
 
   for (const id of viewer.selection.selectedIds) if (wallIds.has(id)) tinted.add(id)
   for (const id of viewer.previewSelectedIds) if (wallIds.has(id)) tinted.add(id)
 
-  const hovered = viewer.hoverHighlightMode === 'delete' ? viewer.hoveredId : null
+  const hovered = viewer.hoveredId
   if (hovered && wallIds.has(hovered)) tinted.add(hovered)
 
   return tinted
