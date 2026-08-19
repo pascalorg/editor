@@ -51,7 +51,6 @@ import {
   resolveLeanToRoofAttachment,
 } from './roof-attachment'
 
-const ROOF_EDGE_REATTACH_TOLERANCE = 0.3
 const BROAD_LEAN_TO_DEPENDENCY_TYPES = new Set<AnyNode['type']>([
   'site',
   'building',
@@ -195,12 +194,48 @@ function downspoutNeedsLayoutUpdate(
   )
 }
 
+// The ground beneath each post — its slab support or terrain height — feeds
+// the post base Y but is not otherwise part of the lean-to's own fields, so
+// terrain edits and slab moves would leave the reconcile signature unchanged
+// and the posts stuck at a stale height. Folding the resolved base Ys into the
+// signature makes those external changes trigger a re-reconcile.
+function leanToGroundSignature(
+  leanTo: LeanToExtensionNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+): number[] {
+  const parent = leanTo.parentId ? nodes[leanTo.parentId as AnyNodeId] : undefined
+  if (parent?.type !== 'wall') return []
+  const wall = parent as WallNode
+  const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
+  const sides: LeanToPostSide[] =
+    leanTo.highSideMode === 'independent-high-beam' ? ['low', 'high'] : ['low']
+  const values: number[] = []
+  for (const side of sides) {
+    for (const index of resolveLeanToPostIndexes(leanTo, cornerJoints, side)) {
+      values.push(resolveLeanToPostBaseY(leanTo, wall, nodes, index, side))
+    }
+  }
+  for (const joint of Object.values(cornerJoints)) {
+    if (!joint?.sharedPostOwner) continue
+    const bent = bendLocalPoint(leanTo, joint.sharedPostPosition[0], joint.sharedPostPosition[2])
+    values.push(
+      resolveLeanToPostBaseYAtLocalPosition(leanTo, wall, nodes, [
+        bent.x,
+        joint.sharedPostPosition[1],
+        bent.y,
+      ]),
+    )
+  }
+  return values.map((value) => Math.round(value * 1e5) / 1e5)
+}
+
 function extensionSignature(
   leanTo: LeanToExtensionNode,
   hostRoof: RoofNode | undefined,
   nodes: Record<AnyNodeId, AnyNode>,
 ): string {
   return JSON.stringify([
+    leanToGroundSignature(leanTo, nodes),
     leanTo.span,
     leanTo.spanArcCenterZ,
     leanTo.spanArcRadius,
@@ -326,12 +361,13 @@ function resolveEffectiveLeanTo(
         })
       : null
   const attachment = retained ?? resolveLeanToRoofAttachment(wallSpanningLeanTo, wall, nodes)
+  // Manual mode is an explicit user choice to detach from any roof; never
+  // magnetically reattach it (doing so silently flipped connectionMode back to
+  // 'auto' and overwrote the user's wall-side height). Auto mode still tracks
+  // the nearest matching roof edge.
   const resolved =
     leanTo.connectionMode === 'manual'
-      ? attachment &&
-        Math.abs(attachment.highEdgeHeight - leanTo.highEdgeHeight) <= ROOF_EDGE_REATTACH_TOLERANCE
-        ? applyLeanToRoofAttachment(leanTo, attachment)
-        : wallSpanningLeanTo
+      ? wallSpanningLeanTo
       : attachment
         ? applyLeanToRoofAttachment(leanTo, attachment)
         : clearLeanToRoofAttachment(wallSpanningLeanTo)

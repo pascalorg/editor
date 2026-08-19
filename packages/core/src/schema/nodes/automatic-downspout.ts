@@ -38,14 +38,31 @@ export type AutomaticDownspoutInput = {
   maxRunPerDownspout?: number
 }
 
+// A point on the gutter's own mesh, expressed in gutter-mesh-local
+// coordinates: `alongX` is the signed distance from the gutter center along
+// its length, `outwardZ` the outward offset from the eave line. For a curved
+// run the flat (alongX, outwardZ) is bent onto the concentric arc descriptor
+// (matches the mapping the outlet lookup + gutter geometry use); a straight
+// gutter passes through unchanged.
+function gutterMeshPoint(gutter: GutterNode, alongX: number, outwardZ: number): Point2D {
+  const arc = gutter.arc
+  if (!arc) return [alongX, outwardZ]
+  const signedRef = (Math.sign(arc.centerZ) || 1) * arc.radius
+  if (Math.abs(signedRef) < 1e-9) return [alongX, outwardZ]
+  const phi = (alongX - arc.centerX) / signedRef
+  const radial = outwardZ - arc.centerZ
+  return [arc.centerX - radial * Math.sin(phi), arc.centerZ + radial * Math.cos(phi)]
+}
+
 function gutterPointInRoofFrame(
   gutter: GutterNode,
   segment: RoofSegmentNode | undefined,
   offset: number,
 ): Point2D {
   const gutterRotation = gutter.rotation ?? 0
-  const localX = gutter.position[0] + Math.cos(gutterRotation) * offset
-  const localZ = gutter.position[2] - Math.sin(gutterRotation) * offset
+  const [meshX, meshZ] = gutterMeshPoint(gutter, offset, 0)
+  const localX = gutter.position[0] + Math.cos(gutterRotation) * meshX + Math.sin(gutterRotation) * meshZ
+  const localZ = gutter.position[2] - Math.sin(gutterRotation) * meshX + Math.cos(gutterRotation) * meshZ
   if (!segment) return [localX, localZ]
 
   const segmentRotation = segment.rotation ?? 0
@@ -77,6 +94,17 @@ function gutterFloorMidZ(gutter: GutterNode): number {
   return size * 0.4
 }
 
+// The gutter's mount height in the host segment's local frame. Lean-to gutters
+// can be raised to a shared eave line (stored as `leanToGutterEaveY` metadata by
+// the lean-to assembly); the renderer mounts there rather than at the segment's
+// own eave, so the outlet elevation must read the prescribed value when present.
+function prescribedGutterEaveY(gutter: GutterNode): number | null {
+  const metadata = gutter.metadata
+  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return null
+  const value = (metadata as Record<string, unknown>).leanToGutterEaveY
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
 export function resolveAutomaticDownspoutLength(
   nodes: Record<AnyNodeId, AnyNode>,
   segment: RoofSegmentNode,
@@ -97,14 +125,11 @@ export function resolveAutomaticDownspoutLength(
     buildingCandidate?.type === 'building' ? (buildingCandidate as BuildingNode) : undefined
 
   const gutterRotation = gutter.rotation ?? 0
-  const gutterFloorPoint: Point2D = [
-    gutter.position[0] +
-      Math.cos(gutterRotation) * outletOffset +
-      Math.sin(gutterRotation) * gutterFloorMidZ(gutter),
-    gutter.position[2] -
-      Math.sin(gutterRotation) * outletOffset +
-      Math.cos(gutterRotation) * gutterFloorMidZ(gutter),
-  ]
+  const gutterFloorPoint = rotateAndTranslate(
+    gutterMeshPoint(gutter, outletOffset, gutterFloorMidZ(gutter)),
+    gutter.position,
+    gutterRotation,
+  )
   const roofPoint = rotateAndTranslate(gutterFloorPoint, segment.position, segment.rotation ?? 0)
   const leanToPoint = rotateAndTranslate(roofPoint, roof?.position, roof?.rotation ?? 0)
   const wallLocalPoint = leanTo
@@ -128,7 +153,7 @@ export function resolveAutomaticDownspoutLength(
     (leanTo?.position[1] ?? 0) +
     (roof?.position?.[1] ?? 0) +
     (segment.position?.[1] ?? 0) +
-    computeGutterEaveY(segment) -
+    (prescribedGutterEaveY(gutter) ?? computeGutterEaveY(segment)) -
     Math.max(0.04, gutter.size)
 
   return Math.max(0.1, outletWorldY - groundY)

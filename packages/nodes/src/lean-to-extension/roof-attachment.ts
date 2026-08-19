@@ -197,10 +197,11 @@ function gutterEdgeRange(
   edge: LeanToRoofEdge,
   edgeStart: number,
   edgeEnd: number,
-  halfSpan: number,
+  negReach: number,
+  posReach: number,
 ): readonly [number, number] {
-  const overlapFrom = Math.max(-halfSpan, Math.min(edgeStart, edgeEnd))
-  const overlapTo = Math.min(halfSpan, Math.max(edgeStart, edgeEnd))
+  const overlapFrom = Math.max(-negReach, Math.min(edgeStart, edgeEnd))
+  const overlapTo = Math.min(posReach, Math.max(edgeStart, edgeEnd))
   const delta = edgeEnd - edgeStart
   if (Math.abs(delta) <= 1e-9) return [0, 1]
   const first = (overlapFrom - edgeStart) / delta
@@ -221,8 +222,17 @@ export function resolveLeanToRoofAttachment(
   const wallBase = getWallBaseElevationForNodes(wall, nodes)
   const levelElevations = getLevelElevations(nodes)
   const wallLevel = wall.parentId ? levelElevations.get(wall.parentId) : undefined
-  const halfSpan =
-    leanTo.span / 2 + Math.max(Math.max(0, leanTo.leftOverhang), Math.max(0, leanTo.rightOverhang))
+  // The lean-to's footprint along the wall is asymmetric when the left/right
+  // overhangs differ. The lean-to's local +X maps to +along when it faces the
+  // wall front (cos(rotationY) >= 0) and flips on the back, so the reaches
+  // swap sides accordingly. `halfSpan` (the larger reach) is kept for the
+  // symmetric overlap-acceptance threshold and score.
+  const alongSide = Math.cos(leanTo.rotation[1]) >= 0 ? 1 : -1
+  const leftReach = leanTo.span / 2 + Math.max(0, leanTo.leftOverhang)
+  const rightReach = leanTo.span / 2 + Math.max(0, leanTo.rightOverhang)
+  const posReach = alongSide >= 0 ? rightReach : leftReach
+  const negReach = alongSide >= 0 ? leftReach : rightReach
+  const halfSpan = Math.max(posReach, negReach)
   let best: { attachment: LeanToRoofAttachment; score: number } | null = null
 
   for (const candidate of Object.values(nodes)) {
@@ -264,7 +274,7 @@ export function resolveLeanToRoofAttachment(
         const edgeEnd = projection(end, frame.center, frame.along)
         const edgeMin = Math.min(edgeStart, edgeEnd)
         const edgeMax = Math.max(edgeStart, edgeEnd)
-        const overlap = Math.min(halfSpan, edgeMax) - Math.max(-halfSpan, edgeMin)
+        const overlap = Math.min(posReach, edgeMax) - Math.max(-negReach, edgeMin)
         if (overlap < Math.min(MIN_EDGE_OVERLAP, halfSpan * 0.5)) continue
 
         const nearest = nearestPointOnSegment(frame.center, start, end)
@@ -289,7 +299,7 @@ export function resolveLeanToRoofAttachment(
           roofId: roof.id,
           roofSegmentId: segment.id,
           edge,
-          edgeRange: gutterEdgeRange(edge, edgeStart, edgeEnd, halfSpan),
+          edgeRange: gutterEdgeRange(edge, edgeStart, edgeEnd, negReach, posReach),
           highEdgeHeight,
           planDistance,
           overlap,

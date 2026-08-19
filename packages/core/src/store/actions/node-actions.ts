@@ -635,6 +635,32 @@ type DefaultGutterRefreshResult = {
   deletedIds: AnyNodeId[]
 }
 
+// When an eave carries several default gutter runs on the same side (e.g. a run
+// split by a lean-to exclusion), reuse the existing node whose plan position is
+// closest to the desired run rather than an arbitrary queue order — otherwise
+// the runs swap positions and their downspouts follow the wrong segment.
+function takeNearestGutterId(
+  candidateIds: AnyNodeId[],
+  desired: GutterNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+): AnyNodeId | undefined {
+  if (candidateIds.length === 0) return undefined
+  let bestIndex = 0
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (let i = 0; i < candidateIds.length; i++) {
+    const node = nodes[candidateIds[i]!]
+    const position = node && 'position' in node ? (node.position as number[] | undefined) : undefined
+    const dx = (position?.[0] ?? 0) - desired.position[0]
+    const dz = (position?.[2] ?? 0) - desired.position[2]
+    const distance = dx * dx + dz * dz
+    if (distance < bestDistance) {
+      bestDistance = distance
+      bestIndex = i
+    }
+  }
+  return candidateIds.splice(bestIndex, 1)[0]
+}
+
 function refreshDefaultGuttersForSegment(
   nextNodes: Record<AnyNodeId, AnyNode>,
   segment: RoofSegmentNode,
@@ -671,7 +697,7 @@ function refreshDefaultGuttersForSegment(
     const side = getDefaultGutterSide(desired, segment.id)
     if (!side) continue
     const matchingIds = existingBySide.get(side)
-    const existingId = matchingIds?.shift()
+    const existingId = matchingIds ? takeNearestGutterId(matchingIds, desired, nextNodes) : undefined
 
     if (existingId) {
       const existing = nextNodes[existingId] as GutterNode
