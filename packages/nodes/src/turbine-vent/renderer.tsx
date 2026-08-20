@@ -22,6 +22,7 @@ import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildTurbineVentBase, buildTurbineVentHead } from './geometry'
+import { getEffectiveTurbineVentMaterial } from './paint'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -98,14 +99,37 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 
+  const { material: baseMaterial, materialPreset: baseMaterialPreset } =
+    getEffectiveTurbineVentMaterial(node, 'base')
+  const { material: headMaterial, materialPreset: headMaterialPreset } =
+    getEffectiveTurbineVentMaterial(node, 'head')
   const material = useMemo(() => {
-    if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const resolve = (
+      roleMaterial: TurbineVentNode['material'],
+      roleMaterialPreset: string | undefined,
+    ) => {
+      if (!textures) return roleDefault
+      if (roleMaterial) return createMaterial(roleMaterial, shading)
+      if (roleMaterialPreset) {
+        return createMaterialFromPresetRef(roleMaterialPreset, shading) ?? defaultMaterial
+      }
+      return roleDefault
     }
-    return node.material
-      ? createMaterial(node.material, shading)
-      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+    return {
+      base: resolve(baseMaterial, baseMaterialPreset),
+      head: resolve(headMaterial, headMaterialPreset),
+    }
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    baseMaterial,
+    baseMaterialPreset,
+    headMaterial,
+    headMaterialPreset,
+  ])
 
   // Compose slope tilt + yaw onto a single quaternion so the registered
   // ref's local frame is vent-mesh-local (handles read this frame).
@@ -163,7 +187,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
         <mesh
           castShadow
           geometry={clippedBase ?? baseGeometry}
-          material={material}
+          material={material.base}
           name="turbine-vent-base"
           receiveShadow
           {...handlers}
@@ -172,7 +196,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
           <mesh
             castShadow
             geometry={clippedHead ?? headGeometry}
-            material={material}
+            material={material.head}
             name="turbine-vent-head"
             receiveShadow
             {...handlers}

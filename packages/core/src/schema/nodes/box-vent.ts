@@ -3,6 +3,9 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+export const BoxVentMaterialRole = z.enum(['base', 'top'])
+export type BoxVentMaterialRole = z.infer<typeof BoxVentMaterialRole>
+
 export const BoxVentNode = BaseNode.extend({
   id: objectId('bvent'),
   type: nodeType('box-vent'),
@@ -14,6 +17,10 @@ export const BoxVentNode = BaseNode.extend({
   // made it look like the vent had nothing applied even though the
   // renderer was falling back to white internally.
   materialPreset: z.string().default('preset-white'),
+  baseMaterial: MaterialSchema.optional(),
+  baseMaterialPreset: z.string().optional(),
+  topMaterial: MaterialSchema.optional(),
+  topMaterialPreset: z.string().optional(),
 
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

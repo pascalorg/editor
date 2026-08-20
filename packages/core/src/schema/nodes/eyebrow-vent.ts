@@ -3,6 +3,9 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+export const EyebrowVentMaterialRole = z.enum(['hood', 'front'])
+export type EyebrowVentMaterialRole = z.infer<typeof EyebrowVentMaterialRole>
+
 export const EyebrowVentNode = BaseNode.extend({
   id: objectId('eyebrow-vent'),
   type: nodeType('eyebrow-vent'),
@@ -11,6 +14,10 @@ export const EyebrowVentNode = BaseNode.extend({
   // Default to the white preset so a freshly-placed vent reads as clean
   // painted metal and the paint inspector shows "White" (matches box-vent).
   materialPreset: z.string().default('preset-white'),
+  hoodMaterial: MaterialSchema.optional(),
+  hoodMaterialPreset: z.string().optional(),
+  frontMaterial: MaterialSchema.optional(),
+  frontMaterialPreset: z.string().optional(),
 
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

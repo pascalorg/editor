@@ -21,6 +21,7 @@ import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildEyebrowVentGeometry } from './geometry'
+import { getEffectiveEyebrowVentMaterial } from './paint'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -69,14 +70,34 @@ const EyebrowVentRenderer = ({ node: storeNode }: { node: EyebrowVentNode }) => 
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 
+  const { material: hoodMaterial, materialPreset: hoodMaterialPreset } =
+    getEffectiveEyebrowVentMaterial(node, 'hood')
+  const { material: frontMaterial, materialPreset: frontMaterialPreset } =
+    getEffectiveEyebrowVentMaterial(node, 'front')
   const material = useMemo(() => {
-    if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const resolve = (
+      roleMaterial: EyebrowVentNode['material'],
+      roleMaterialPreset: string | undefined,
+    ) => {
+      if (!textures) return roleDefault
+      if (roleMaterial) return createMaterial(roleMaterial, shading)
+      if (roleMaterialPreset) {
+        return createMaterialFromPresetRef(roleMaterialPreset, shading) ?? defaultMaterial
+      }
+      return roleDefault
     }
-    return node.material
-      ? createMaterial(node.material, shading)
-      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+    return [resolve(hoodMaterial, hoodMaterialPreset), resolve(frontMaterial, frontMaterialPreset)]
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    hoodMaterial,
+    hoodMaterialPreset,
+    frontMaterial,
+    frontMaterialPreset,
+  ])
 
   const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), [])
   const composedQuat = useMemo(() => {

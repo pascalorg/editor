@@ -4,10 +4,9 @@ import type { Material, Mesh, Object3D } from 'three'
 
 /**
  * Paint capability for kinds with a single painted surface (`role: 'surface'`)
- * that register a `<group>` of meshes all sharing one material — the roof
- * vents (box / ridge / turbine / cupola / eyebrow). Replaces the editor's
- * hardcoded `node.type === '<vent>'` paint arms with registry-driven dispatch,
- * the same way chimney / dormer / wall declare their own `paint` capability.
+ * that register a mesh or group whose children all share one material. Used by
+ * ridge vents, gutters, and downspouts. Multi-part roof accessories declare
+ * role-aware paint capabilities beside their geometry instead.
  */
 
 type SurfaceNode = AnyNode & {

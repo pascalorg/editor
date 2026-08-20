@@ -108,21 +108,43 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 
-  // Paint surface: explicit material wins, then preset, then the cached
-  // default. FrontSide everywhere — DoubleSide on the role material's
+  // Paint surfaces: the lower base and upper cover resolve independently.
+  // FrontSide everywhere — DoubleSide on the role material's
   // NodeMaterial poisons the MRT scene pass (see `materials.ts` line 77 /
   // glazing fix 9400f1c5). Earlier this path forced DoubleSide so back
   // faces of the vent body / hood wouldn't drop out when looking up at the
   // eaves; that's now a known visual tradeoff — a closed-solid extrude in
   // `geometry.ts` is the right fix if undersides become noticeable.
+  const hasBaseMaterial = node.baseMaterial !== undefined || node.baseMaterialPreset !== undefined
+  const baseMaterial = hasBaseMaterial ? node.baseMaterial : node.material
+  const baseMaterialPreset = hasBaseMaterial ? node.baseMaterialPreset : node.materialPreset
+  const hasTopMaterial = node.topMaterial !== undefined || node.topMaterialPreset !== undefined
+  const topMaterial = hasTopMaterial ? node.topMaterial : node.material
+  const topMaterialPreset = hasTopMaterial ? node.topMaterialPreset : node.materialPreset
   const material = useMemo(() => {
-    if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    if (!textures) return [roleDefault, roleDefault]
+    const resolve = (
+      roleMaterial: BoxVentNode['material'],
+      roleMaterialPreset: string | undefined,
+    ) => {
+      if (roleMaterial) return createMaterial(roleMaterial, shading)
+      if (roleMaterialPreset) {
+        return createMaterialFromPresetRef(roleMaterialPreset, shading) ?? defaultMaterial
+      }
+      return roleDefault
     }
-    return node.material
-      ? createMaterial(node.material, shading)
-      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+    return [resolve(baseMaterial, baseMaterialPreset), resolve(topMaterial, topMaterialPreset)]
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    baseMaterial,
+    baseMaterialPreset,
+    topMaterial,
+    topMaterialPreset,
+  ])
 
   // Compose slope tilt + yaw onto a single quaternion so the registered
   // ref's local frame is vent-mesh-local. `NodeArrowHandles` reads this
