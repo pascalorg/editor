@@ -1,14 +1,12 @@
 'use client'
 
 import {
-  type AnyNodeId,
   type BlockFace,
   type BlockNode,
   type BlockTopology,
   emitter,
   sceneRegistry,
   useLiveNodeOverrides,
-  useScene,
 } from '@pascal-app/core'
 import {
   cn,
@@ -20,6 +18,7 @@ import {
   markToolCancelConsumed,
   meshEditScope,
   NodeActionMenu,
+  type SelectionAffordanceProps,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -84,7 +83,6 @@ import {
   blockFaceCentroid,
   blockFaceNormal,
   blockLoopCutSegments,
-  blockSelectionVertexIds,
 } from './commands'
 import useBlockEditSession from './edit-session'
 import { triangulateBlockFace } from './geometry'
@@ -99,12 +97,8 @@ import {
 } from './last-operation'
 import { resolveLoopCutPointerAction, resolveLoopCutSlideFactor } from './loop-cut-interaction'
 import { BLOCK_BODY_SLOT_ID, unpaintedBlockMaterialSlotIds } from './material-slots'
-import {
-  type BlockModalFaceOperation,
-  blockFaceOperationCommand,
-  blockFaceOperationValueFromPointer,
-  blockModalFaceOperationStatus,
-} from './modal-face-operation'
+import { type BlockModalFaceOperation, blockModalFaceOperationStatus } from './modal-face-operation'
+import { beginBlockModalSession } from './modal-session'
 import {
   type BlockActiveTransform,
   type BlockAxisVisualState,
@@ -133,6 +127,11 @@ import {
   unwrapRotationDelta,
 } from './rotation-drag'
 import {
+  blockLocalPointToClient as localPointToClient,
+  type BlockPoint as Point,
+  blockSelectionCentroid as selectionCentroid,
+} from './selection-geometry'
+import {
   type BlockSelectionState,
   blockSelectionChanged,
   clearBlockSelection,
@@ -151,9 +150,9 @@ import {
   blockToolbarOffset,
   formatBlockSelectionStatus,
 } from './toolbar-state'
+import { useBlockFaceOperation } from './use-block-face-operation'
 
 type ComponentMode = BlockSelection['mode']
-type Point = [number, number, number]
 type Axis = BlockTransformAxis
 type PlaneAxes = BlockTransformPlane
 type TransformOperation = BlockTransformOperation
@@ -223,19 +222,6 @@ function topologyVertexMap(topology: BlockTopology): Map<string, Point> {
   return new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
 }
 
-function selectionCentroid(topology: BlockTopology, selection: BlockSelection): Point | null {
-  const ids = blockSelectionVertexIds(topology, selection)
-  const positions = topology.vertices
-    .filter((vertex) => ids.has(vertex.id))
-    .map((vertex) => vertex.position)
-  if (positions.length === 0) return null
-  const total = positions.reduce<Point>(
-    (sum, point) => [sum[0] + point[0], sum[1] + point[1], sum[2] + point[2]],
-    [0, 0, 0],
-  )
-  return [total[0] / positions.length, total[1] / positions.length, total[2] / positions.length]
-}
-
 function topologyExtent(topology: BlockTopology): number {
   const axes = [0, 1, 2] as const
   return Math.max(
@@ -260,22 +246,6 @@ function closestAxisParameterToRay(
   if (Math.abs(denominator) < 1e-6) return -d
   const axisParameter = (b * e - d) / denominator
   return e + b * axisParameter < 0 ? -d : axisParameter
-}
-
-function localPointToClient(
-  point: Point,
-  target: Object3D,
-  camera: Camera,
-  canvas: HTMLCanvasElement,
-): Vector2 | null {
-  target.updateWorldMatrix(true, false)
-  const projected = target.localToWorld(new Vector3(...point)).project(camera)
-  if (![projected.x, projected.y, projected.z].every(Number.isFinite)) return null
-  const rect = canvas.getBoundingClientRect()
-  return new Vector2(
-    rect.left + ((projected.x + 1) / 2) * rect.width,
-    rect.top + ((1 - projected.y) / 2) * rect.height,
-  )
 }
 
 function geometrySnapThreshold(
@@ -1448,11 +1418,17 @@ function LastOperationControls({
 }
 
 function BlockEditor({
+  historyApi,
   node,
+  readOnly,
+  sceneApi,
   target,
   mirrorTarget,
 }: {
+  historyApi: SelectionAffordanceProps['historyApi']
   node: BlockNode
+  readOnly: boolean
+  sceneApi: SelectionAffordanceProps['sceneApi']
   target: Object3D
   mirrorTarget: boolean
 }) {
@@ -1497,6 +1473,10 @@ function BlockEditor({
   const [error, setError] = useState<string | null>(null)
   const cancelDragRef = useRef<(() => void) | null>(null)
   const lastPointerClientRef = useRef<Vector2 | null>(null)
+  const operationServices = useMemo(
+    () => ({ historyApi, readOnly, sceneApi }),
+    [historyApi, readOnly, sceneApi],
+  )
   const displayTopology = previewTopology ?? node.topology
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selection = useMemo<BlockSelection>(() => ({ mode, ids: selectedIds }), [mode, selectedIds])
@@ -1554,7 +1534,7 @@ function BlockEditor({
     cancelDragRef.current?.()
     cancelDragRef.current = null
     useLiveNodeOverrides.getState().clear(node.id)
-    useScene.getState().markDirty(node.id)
+    sceneApi.markDirty(node.id)
     endOwnedScope()
     useBlockEditSession.getState().end(node.id)
     setPreviewTopology(null)
@@ -1570,18 +1550,18 @@ function BlockEditor({
     setToolbarPanel(null)
     setError(null)
     playBlockSfx('finish')
-  }, [endOwnedScope, node.id])
+  }, [endOwnedScope, node.id, sceneApi.markDirty])
 
   useEffect(
     () => () => {
       cancelDragRef.current?.()
       useLiveNodeOverrides.getState().clear(node.id)
-      useScene.getState().markDirty(node.id)
+      sceneApi.markDirty(node.id)
       endOwnedScope()
       useBlockEditSession.getState().end(node.id)
       if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
     },
-    [endOwnedScope, node.id],
+    [endOwnedScope, node.id, sceneApi.markDirty],
   )
 
   useEffect(() => {
@@ -1589,7 +1569,7 @@ function BlockEditor({
     cancelDragRef.current?.()
     cancelDragRef.current = null
     useLiveNodeOverrides.getState().clear(node.id)
-    useScene.getState().markDirty(node.id)
+    sceneApi.markDirty(node.id)
     setPreviewTopology(null)
     setToolbarPanel(null)
     setLoopCutSegments(null)
@@ -1601,7 +1581,7 @@ function BlockEditor({
     setActiveFaceOperation(null)
     setFaceOperationValue('')
     useBlockEditSession.getState().end(node.id)
-  }, [editing, node.id])
+  }, [editing, node.id, sceneApi.markDirty])
 
   useEffect(() => {
     if (!editing) return
@@ -1855,7 +1835,7 @@ function BlockEditor({
         setError(result.error)
         return false
       }
-      useScene.getState().updateNode(node.id, { topology: result.topology })
+      sceneApi.update(node.id, { topology: result.topology })
       const session = useBlockEditSession.getState()
       session.setSelection(node.id, {
         ...result.selection,
@@ -1863,13 +1843,20 @@ function BlockEditor({
       })
       session.setLastOperation(
         node.id,
-        recordCommittedBlockOperation(node.id, label, baseTopology, command, result),
+        recordCommittedBlockOperation(
+          operationServices,
+          node.id,
+          label,
+          baseTopology,
+          command,
+          result,
+        ),
       )
       setLastOperationPanelOpen(true)
       setError(null)
       return true
     },
-    [node.id],
+    [node.id, operationServices, sceneApi],
   )
 
   const beginKeyboardTransformModal = useCallback(
@@ -1896,8 +1883,6 @@ function BlockEditor({
         .normalize()
       const baseTopology = displayTopology
       const baseSelection = selection
-      const previousInputDragging = useViewer.getState().inputDragging
-      const previousCursor = document.body.style.cursor
       let activeConstraint: Axis | PlaneAxes | null = null
       let latestTopology: BlockTopology | null = null
       let latestCommand: BlockCommand | null = null
@@ -1917,7 +1902,6 @@ function BlockEditor({
       let previousRawPointer = { x: startPointer.x, y: startPointer.y }
       let lastSnapValue: string | number | null = null
       let typedInput = ''
-      let finished = false
 
       const worldAxisFor = (axis: Axis) =>
         target
@@ -2093,23 +2077,13 @@ function BlockEditor({
         latestCommand = command
         setPreviewTopology(result.topology)
         useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         setError(null)
       }
 
-      const finish = (commit: boolean) => {
-        if (finished) return
-        finished = true
-        window.removeEventListener('pointermove', onMove, true)
-        window.removeEventListener('pointerdown', onPointerDown, true)
-        window.removeEventListener('keydown', onKeyDown, true)
-        window.removeEventListener('contextmenu', onContextMenu, true)
-        window.removeEventListener('blur', onCancel)
-        cancelDragRef.current = null
+      const complete = (commit: boolean) => {
         useLiveNodeOverrides.getState().clear(node.id)
-        useScene.getState().markDirty(node.id)
-        useViewer.getState().setInputDragging(previousInputDragging)
-        document.body.style.cursor = previousCursor
+        sceneApi.markDirty(node.id)
         setPreviewTopology(null)
         setActiveTransform(null)
         setTransformNumericInput('')
@@ -2144,13 +2118,13 @@ function BlockEditor({
           pointerEvent.shiftKey,
         )
       }
-      const onPointerDown = (pointerEvent: PointerEvent) => {
+      const onPointerDown = (pointerEvent: PointerEvent, finish: (commit: boolean) => void) => {
         if (pointerEvent.button !== 0 && pointerEvent.button !== 2) return
         pointerEvent.preventDefault()
         pointerEvent.stopImmediatePropagation()
         finish(pointerEvent.button === 0)
       }
-      const onKeyDown = (keyboardEvent: KeyboardEvent) => {
+      const onKeyDown = (keyboardEvent: KeyboardEvent, finish: (commit: boolean) => void) => {
         const element = keyboardEvent.target as HTMLElement | null
         if (
           element?.tagName === 'INPUT' ||
@@ -2216,28 +2190,22 @@ function BlockEditor({
           }
         }
       }
-      const onContextMenu = (event: Event) => {
-        event.preventDefault()
-        event.stopImmediatePropagation()
-      }
-      const onCancel = () => finish(false)
-
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', operation))
       playBlockSfx('drag-start')
-      useViewer.getState().setInputDragging(true)
       setTransformTool('transform')
       setToolbarPanel(null)
       setActiveTransform({ operation, constraint: 'free' })
       setTransformNumericInput('')
       setModalFeedbackMode('free')
       setError(null)
-      document.body.style.cursor = operation === 'translate' ? 'move' : 'crosshair'
-      cancelDragRef.current = onCancel
-      window.addEventListener('pointermove', onMove, true)
-      window.addEventListener('pointerdown', onPointerDown, true)
-      window.addEventListener('keydown', onKeyDown, true)
-      window.addEventListener('contextmenu', onContextMenu, true)
-      window.addEventListener('blur', onCancel, { once: true })
+      beginBlockModalSession({
+        cancelRef: cancelDragRef,
+        cursor: operation === 'translate' ? 'move' : 'crosshair',
+        onFinish: complete,
+        onKeyDown,
+        onPointerDown,
+        onPointerMove: onMove,
+      })
       return true
     },
     [
@@ -2252,6 +2220,7 @@ function BlockEditor({
       selectedIds.length,
       selection,
       target,
+      sceneApi.markDirty,
     ],
   )
 
@@ -2385,7 +2354,7 @@ function BlockEditor({
         latestTopology = result.topology
         setPreviewTopology(result.topology)
         useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
       }
 
       const finish = (commit: boolean) => {
@@ -2397,7 +2366,7 @@ function BlockEditor({
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         useViewer.getState().setInputDragging(previousInputDragging)
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
@@ -2439,6 +2408,7 @@ function BlockEditor({
       selectedIds.length,
       selection,
       target,
+      sceneApi.markDirty,
     ],
   )
 
@@ -2533,7 +2503,7 @@ function BlockEditor({
         latestTopology = result.topology
         setPreviewTopology(result.topology)
         useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
       }
 
       const finish = (commit: boolean) => {
@@ -2545,7 +2515,7 @@ function BlockEditor({
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         useViewer.getState().setInputDragging(previousInputDragging)
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
@@ -2590,6 +2560,7 @@ function BlockEditor({
       selectedIds.length,
       selection,
       target,
+      sceneApi.markDirty,
     ],
   )
 
@@ -2672,7 +2643,7 @@ function BlockEditor({
         latestTopology = result.topology
         setPreviewTopology(result.topology)
         useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         setError(null)
       }
 
@@ -2685,7 +2656,7 @@ function BlockEditor({
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         useViewer.getState().setInputDragging(previousInputDragging)
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
@@ -2730,6 +2701,7 @@ function BlockEditor({
       selectedIds.length,
       selection,
       target,
+      sceneApi.markDirty,
     ],
   )
 
@@ -2747,8 +2719,6 @@ function BlockEditor({
     const initialDistance = Math.max(24, pivotClient.distanceTo(startPointer))
     const baseTopology = displayTopology
     const baseSelection = selection
-    const previousInputDragging = useViewer.getState().inputDragging
-    const previousCursor = document.body.style.cursor
     let latestFactor = 1
     let lastSnapFactor: number | null = null
     let latestTopology: BlockTopology | null = null
@@ -2760,7 +2730,6 @@ function BlockEditor({
     let lastShiftKey = false
     let effectivePointer = { x: startPointer.x, y: startPointer.y }
     let previousRawPointer = { ...effectivePointer }
-    let finished = false
 
     const updatePreview = (
       clientX: number,
@@ -2804,23 +2773,13 @@ function BlockEditor({
       latestTopology = result.topology
       setPreviewTopology(result.topology)
       useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-      useScene.getState().markDirty(node.id)
+      sceneApi.markDirty(node.id)
       setError(null)
     }
 
-    const finish = (commit: boolean) => {
-      if (finished) return
-      finished = true
-      window.removeEventListener('pointermove', onMove, true)
-      window.removeEventListener('pointerdown', onPointerDown, true)
-      window.removeEventListener('keydown', onKeyDown, true)
-      window.removeEventListener('contextmenu', onContextMenu, true)
-      window.removeEventListener('blur', onCancel)
-      cancelDragRef.current = null
+    const complete = (commit: boolean) => {
       useLiveNodeOverrides.getState().clear(node.id)
-      useScene.getState().markDirty(node.id)
-      useViewer.getState().setInputDragging(previousInputDragging)
-      document.body.style.cursor = previousCursor
+      sceneApi.markDirty(node.id)
       setPreviewTopology(null)
       setActiveTransform(null)
       setTransformNumericInput('')
@@ -2862,22 +2821,12 @@ function BlockEditor({
         pointerEvent.shiftKey,
       )
     }
-    const onPointerDown = (pointerEvent: PointerEvent) => {
+    const onPointerDown = (pointerEvent: PointerEvent, finish: (commit: boolean) => void) => {
       pointerEvent.preventDefault()
       pointerEvent.stopImmediatePropagation()
-      if (pointerEvent.button === 2) {
-        window.addEventListener(
-          'contextmenu',
-          (event) => {
-            event.preventDefault()
-            event.stopImmediatePropagation()
-          },
-          { capture: true, once: true },
-        )
-      }
       finish(pointerEvent.button !== 2)
     }
-    const onKeyDown = (keyboardEvent: KeyboardEvent) => {
+    const onKeyDown = (keyboardEvent: KeyboardEvent, finish: (commit: boolean) => void) => {
       const element = keyboardEvent.target as HTMLElement | null
       if (
         element?.tagName === 'INPUT' ||
@@ -2911,28 +2860,22 @@ function BlockEditor({
         finish(false)
       }
     }
-    const onContextMenu = (event: Event) => {
-      event.preventDefault()
-      event.stopImmediatePropagation()
-    }
-    const onCancel = () => finish(false)
-
     useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'scale'))
     playBlockSfx('drag-start')
-    useViewer.getState().setInputDragging(true)
     setTransformTool('transform')
     setToolbarPanel(null)
     setActiveTransform({ operation: 'scale', constraint: 'uniform' })
     setTransformNumericInput('')
     setModalFeedbackMode('free')
     setError(null)
-    document.body.style.cursor = 'nwse-resize'
-    cancelDragRef.current = onCancel
-    window.addEventListener('pointermove', onMove, true)
-    window.addEventListener('pointerdown', onPointerDown, true)
-    window.addEventListener('keydown', onKeyDown, true)
-    window.addEventListener('contextmenu', onContextMenu, true)
-    window.addEventListener('blur', onCancel, { once: true })
+    beginBlockModalSession({
+      cancelRef: cancelDragRef,
+      cursor: 'nwse-resize',
+      onFinish: complete,
+      onKeyDown,
+      onPointerDown,
+      onPointerMove: onMove,
+    })
     return true
   }, [
     camera,
@@ -2945,6 +2888,7 @@ function BlockEditor({
     selectedIds.length,
     selection,
     target,
+    sceneApi.markDirty,
   ])
 
   const beginBevelDrag = useCallback(
@@ -3001,7 +2945,7 @@ function BlockEditor({
         latestSelection = result.selection
         setPreviewTopology(result.topology)
         useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         setError(null)
         return true
       }
@@ -3047,7 +2991,7 @@ function BlockEditor({
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         useViewer.getState().setInputDragging(previousInputDragging)
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
@@ -3092,6 +3036,7 @@ function BlockEditor({
       node.id,
       ownsEditSession,
       selectedIds,
+      sceneApi.markDirty,
     ],
   )
 
@@ -3204,7 +3149,7 @@ function BlockEditor({
         setLoopCutSegments(segments)
         setLoopCutFactor(effectiveFactor)
         useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         setError(null)
         return true
       }
@@ -3266,7 +3211,7 @@ function BlockEditor({
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
-        useScene.getState().markDirty(node.id)
+        sceneApi.markDirty(node.id)
         useViewer.getState().setInputDragging(previousInputDragging)
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
@@ -3324,227 +3269,34 @@ function BlockEditor({
       node.topology,
       ownsEditSession,
       target,
+      sceneApi.markDirty,
     ],
   )
 
-  const beginFaceOperationModal = useCallback(
-    (operation: BlockModalFaceOperation) => {
-      if (
-        !ownsEditSession() ||
-        mode !== 'face' ||
-        selectedIds.length === 0 ||
-        cancelDragRef.current
-      )
-        return false
-      const faceIds = [...selectedIds]
-      if (faceIds.some((id) => !displayTopology.faces.some((face) => face.id === id))) return false
-      const origin = selectionCentroid(displayTopology, selection)
-      if (!origin) return false
-      const pivotClient = localPointToClient(origin, target, camera, gl.domElement)
-      if (!pivotClient) return false
-
-      const startPointer =
-        lastPointerClientRef.current?.clone() ?? pivotClient.clone().add(new Vector2(80, 0))
-      const baseTopology = displayTopology
-      const previousInputDragging = useViewer.getState().inputDragging
-      const previousCursor = document.body.style.cursor
-      let latestTopology: BlockTopology | null = null
-      let latestSelection: BlockSelection | null = null
-      let latestValue = 0
-      let typedInput = ''
-      let lastClientX = startPointer.x
-      let lastClientY = startPointer.y
-      let lastAltKey = false
-      let lastShiftKey = false
-      let lastSnapValue: number | null = null
-      let effectivePointer = { x: startPointer.x, y: startPointer.y }
-      let previousRawPointer = { ...effectivePointer }
-      let finished = false
-
-      const displayValue = (value: number) => String(Math.round(value * 1000) / 1000)
-
-      const updatePreview = (
-        clientX: number,
-        clientY: number,
-        altKey: boolean,
-        precision: boolean,
-      ) => {
-        lastClientX = clientX
-        lastClientY = clientY
-        lastAltKey = altKey
-        lastShiftKey = precision
-        const typedValue = blockTransformNumericValue(
-          typedInput,
-          operation === 'extrude' ? 'translate' : 'scale',
-        )
-        let value =
-          typedValue ??
-          blockFaceOperationValueFromPointer(
-            operation,
-            clientX - startPointer.x,
-            clientY - startPointer.y,
-            extent,
-          )
-        const snapping =
-          operation === 'extrude' && typedValue === null && isGridSnapActive() && !altKey
-        if (snapping) {
-          const step = blockPrecisionSnapStep(useEditor.getState().gridSnapStep, precision)
-          if (step > 0) value = Math.round(value / step) * step
-        }
-        setFaceOperationValue(typedInput || displayValue(value))
-        setModalFeedbackMode(
-          typedInput ? 'exact' : precision ? 'precision' : snapping ? 'grid' : 'free',
-        )
-        if (Math.abs(value) <= 1e-6) {
-          latestTopology = null
-          latestSelection = null
-          latestValue = 0
-          setPreviewTopology(null)
-          useLiveNodeOverrides.getState().clear(node.id)
-          useScene.getState().markDirty(node.id)
-          return
-        }
-        if (snapping && value !== lastSnapValue) {
-          lastSnapValue = value
-          playBlockSfx('move-step')
-        } else if (!snapping) {
-          lastSnapValue = null
-        }
-        const result = applyBlockCommand(
-          baseTopology,
-          blockFaceOperationCommand(operation, faceIds, value),
-        )
-        if (!result.ok) {
-          setError(result.error)
-          return
-        }
-        latestTopology = result.topology
-        latestSelection = result.selection
-        latestValue = value
-        setPreviewTopology(result.topology)
-        useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
-        useScene.getState().markDirty(node.id)
-        setError(null)
-      }
-
-      const finish = (commit: boolean) => {
-        if (finished) return
-        finished = true
-        window.removeEventListener('pointermove', onMove, true)
-        window.removeEventListener('pointerdown', onPointerDown, true)
-        window.removeEventListener('keydown', onKeyDown, true)
-        window.removeEventListener('contextmenu', onContextMenu, true)
-        window.removeEventListener('blur', onCancel)
-        cancelDragRef.current = null
-        useLiveNodeOverrides.getState().clear(node.id)
-        useScene.getState().markDirty(node.id)
-        useViewer.getState().setInputDragging(previousInputDragging)
-        document.body.style.cursor = previousCursor
-        setPreviewTopology(null)
-        setActiveFaceOperation(null)
-        setFaceOperationValue('')
-        setTransformNumericInput('')
-        setModalFeedbackMode('free')
-        if (commit && latestTopology && latestSelection && Math.abs(latestValue) > 1e-6) {
-          commitAdjustableOperation(
-            baseTopology,
-            blockFaceOperationCommand(operation, faceIds, latestValue),
-            operation === 'extrude' ? 'Extrude' : 'Inset',
-          )
-          playBlockSfx('operation-commit')
-        } else if (!commit) {
-          playBlockSfx('cancel')
-        }
-        if (ownsEditSession()) useInteractionScope.getState().begin(meshEditScope(node.id))
-        swallowNextClick()
-      }
-
-      const onMove = (pointerEvent: PointerEvent) => {
-        lastPointerClientRef.current = new Vector2(pointerEvent.clientX, pointerEvent.clientY)
-        effectivePointer = blockAccumulatePrecisionPointer(
-          effectivePointer,
-          previousRawPointer,
-          pointerEvent,
-          pointerEvent.shiftKey,
-        )
-        previousRawPointer = { x: pointerEvent.clientX, y: pointerEvent.clientY }
-        updatePreview(
-          effectivePointer.x,
-          effectivePointer.y,
-          pointerEvent.altKey,
-          pointerEvent.shiftKey,
-        )
-      }
-      const onPointerDown = (pointerEvent: PointerEvent) => {
-        if (pointerEvent.button !== 0 && pointerEvent.button !== 2) return
-        pointerEvent.preventDefault()
-        pointerEvent.stopImmediatePropagation()
-        finish(pointerEvent.button === 0)
-      }
-      const onKeyDown = (keyboardEvent: KeyboardEvent) => {
-        const element = keyboardEvent.target as HTMLElement | null
-        if (
-          element?.tagName === 'INPUT' ||
-          element?.tagName === 'TEXTAREA' ||
-          element?.isContentEditable
-        )
-          return
-        const nextInput = blockTransformNumericInputFromKey(typedInput, keyboardEvent.key)
-        if (nextInput !== null) {
-          keyboardEvent.preventDefault()
-          keyboardEvent.stopImmediatePropagation()
-          typedInput = nextInput
-          setTransformNumericInput(nextInput)
-          updatePreview(lastClientX, lastClientY, lastAltKey, lastShiftKey)
-        } else if (keyboardEvent.key === 'Enter') {
-          keyboardEvent.preventDefault()
-          keyboardEvent.stopImmediatePropagation()
-          finish(true)
-        } else if (keyboardEvent.key === 'Escape') {
-          keyboardEvent.preventDefault()
-          keyboardEvent.stopImmediatePropagation()
-          finish(false)
-        }
-      }
-      const onContextMenu = (event: Event) => {
-        event.preventDefault()
-        event.stopImmediatePropagation()
-      }
-      const onCancel = () => finish(false)
-
-      useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', operation))
-      playBlockSfx('operation-start')
-      useViewer.getState().setInputDragging(true)
-      setToolbarPanel(null)
-      setActiveFaceOperation(operation)
-      setFaceOperationValue('0')
-      setTransformNumericInput('')
-      setModalFeedbackMode('free')
-      setError(null)
-      document.body.style.cursor = operation === 'extrude' ? 'ns-resize' : 'nwse-resize'
-      cancelDragRef.current = onCancel
-      window.addEventListener('pointermove', onMove, true)
-      window.addEventListener('pointerdown', onPointerDown, true)
-      window.addEventListener('keydown', onKeyDown, true)
-      window.addEventListener('contextmenu', onContextMenu, true)
-      window.addEventListener('blur', onCancel, { once: true })
-      return true
-    },
-    [
-      camera,
-      commitAdjustableOperation,
-      displayTopology,
-      extent,
-      gl.domElement,
-      mode,
-      node.id,
-      ownsEditSession,
-      selectedIds,
-      selection,
-      target,
-    ],
-  )
-
+  const beginFaceOperationModal = useBlockFaceOperation({
+    camera,
+    cancelRef: cancelDragRef,
+    canvas: gl.domElement,
+    closeToolbar: () => setToolbarPanel(null),
+    commit: commitAdjustableOperation,
+    displayTopology,
+    extent,
+    lastPointerClientRef,
+    mode,
+    nodeId: node.id,
+    ownsEditSession,
+    playSfx: playBlockSfx,
+    sceneApi,
+    selectedIds,
+    selection,
+    setActiveFaceOperation,
+    setError,
+    setFaceOperationValue,
+    setModalFeedbackMode,
+    setPreviewTopology,
+    setTransformNumericInput,
+    target,
+  })
   const commitCommand = (command: BlockCommand, operator: TopologyOperator) => {
     if (cancelDragRef.current) return
     useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', operator))
@@ -3554,7 +3306,7 @@ function BlockEditor({
       setError(result.error)
       return
     }
-    useScene.getState().updateNode(node.id, { topology: result.topology })
+    sceneApi.update(node.id, { topology: result.topology })
     const session = useBlockEditSession.getState()
     session.setSelection(node.id, {
       ...result.selection,
@@ -3592,7 +3344,7 @@ function BlockEditor({
 
   const adjustLastOperation = (command: BlockCommand) => {
     if (!lastOperation || cancelDragRef.current) return
-    const replacement = replaceCommittedBlockOperation(lastOperation, command)
+    const replacement = replaceCommittedBlockOperation(operationServices, lastOperation, command)
     if (!replacement.ok) {
       setError(replacement.error)
       setLastOperationPanelOpen(false)
@@ -3610,7 +3362,7 @@ function BlockEditor({
 
   const repeatLastOperation = () => {
     if (!lastOperation || cancelDragRef.current) return
-    const repeated = repeatCommittedBlockOperation(lastOperation, {
+    const repeated = repeatCommittedBlockOperation(operationServices, lastOperation, {
       mode,
       ids: selectedIds,
       activeId,
@@ -3758,7 +3510,7 @@ function BlockEditor({
   const deleteNode = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     useViewer.getState().setSelection({ selectedIds: [] })
-    useScene.getState().deleteNode(node.id)
+    sceneApi.delete(node.id)
     playBlockSfx('delete')
   }
 
@@ -4214,15 +3966,15 @@ function BlockEditor({
   )
 }
 
-const BlockSelectionAffordance = () => {
-  const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const node = useScene((state) => {
-    if (selectedIds.length !== 1) return null
-    const selected = state.nodes[selectedIds[0] as AnyNodeId]
-    return selected?.type === 'block' ? (selected as BlockNode) : null
-  })
+const BlockSelectionAffordance = ({
+  historyApi,
+  node,
+  readOnly,
+  sceneApi,
+}: SelectionAffordanceProps) => {
+  const blockNode = node.type === 'block' ? node : null
   const [target, setTarget] = useState<Object3D | null>(null)
-  const nodeId = node?.id ?? null
+  const nodeId = blockNode?.id ?? null
   const scopeAllowsAffordance = useInteractionScope(
     (state) =>
       state.scope.kind === 'idle' ||
@@ -4236,7 +3988,7 @@ const BlockSelectionAffordance = () => {
     }
     let frameId = 0
     const resolve = () => {
-      const next = sceneRegistry.nodes.get(nodeId as AnyNodeId) ?? null
+      const next = sceneRegistry.nodes.get(nodeId) ?? null
       setTarget((current) => (current === next ? current : next))
       if (!next) frameId = window.requestAnimationFrame(resolve)
     }
@@ -4244,10 +3996,17 @@ const BlockSelectionAffordance = () => {
     return () => window.cancelAnimationFrame(frameId)
   }, [nodeId])
 
-  if (!node || !target || !scopeAllowsAffordance) return null
+  if (!blockNode || !target || !scopeAllowsAffordance) return null
   const mount = target.parent ?? target
   return createPortal(
-    <BlockEditor mirrorTarget={mount !== target} node={node} target={target} />,
+    <BlockEditor
+      historyApi={historyApi}
+      mirrorTarget={mount !== target}
+      node={blockNode}
+      readOnly={readOnly}
+      sceneApi={sceneApi}
+      target={target}
+    />,
     mount,
     undefined,
   )

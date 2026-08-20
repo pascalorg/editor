@@ -1,9 +1,5 @@
-import {
-  type AnyNodeId,
-  type BlockTopology,
-  runAsSingleSceneHistoryStep,
-  useScene,
-} from '@pascal-app/core'
+import type { AnyNodeId, BlockNode, BlockTopology, SceneApi } from '@pascal-app/core'
+import type { SelectionAffordanceHistoryApi } from '@pascal-app/editor'
 import {
   applyBlockCommand,
   type BlockCommand,
@@ -13,6 +9,12 @@ import {
 } from './commands'
 
 type SuccessfulBlockCommandResult = Extract<BlockCommandResult, { ok: true }>
+
+export type BlockOperationServices = {
+  historyApi: SelectionAffordanceHistoryApi
+  readOnly: boolean
+  sceneApi: Pick<SceneApi, 'get' | 'update'>
+}
 
 export type BlockLastOperation = {
   baseTopology: BlockTopology
@@ -83,6 +85,7 @@ function commandForRepeat(
 }
 
 export function recordCommittedBlockOperation(
+  services: BlockOperationServices,
   nodeId: AnyNodeId,
   label: string,
   baseTopology: BlockTopology,
@@ -92,7 +95,7 @@ export function recordCommittedBlockOperation(
   return {
     baseTopology,
     command,
-    historyDepth: useScene.temporal.getState().pastStates.length,
+    historyDepth: services.historyApi.depth(),
     label,
     nodeId,
     resultSelection: result.selection,
@@ -101,38 +104,36 @@ export function recordCommittedBlockOperation(
 }
 
 export function replaceCommittedBlockOperation(
+  services: BlockOperationServices,
   operation: BlockLastOperation,
   command: BlockCommand,
 ): BlockLastOperationReplacement {
-  const scene = useScene.getState()
-  const current = scene.nodes[operation.nodeId]
-  if (scene.readOnly) return { ok: false, error: 'Scene is read-only' }
+  if (services.readOnly) return { ok: false, error: 'Scene is read-only' }
+  const current = services.sceneApi.get<BlockNode>(operation.nodeId)
   if (current?.type !== 'block' || !sameTopology(current.topology, operation.resultTopology)) {
     return { ok: false, error: 'The last operation is no longer the latest scene change' }
   }
-  if (useScene.temporal.getState().pastStates.length !== operation.historyDepth) {
+  if (services.historyApi.depth() !== operation.historyDepth) {
     return { ok: false, error: 'Scene history changed after the last operation' }
   }
 
   const result = applyBlockCommand(operation.baseTopology, command)
   if (!result.ok) return result
 
-  let restored = false
-  runAsSingleSceneHistoryStep(useScene, () => {
-    useScene.temporal.getState().undo()
-    const baseline = useScene.getState().nodes[operation.nodeId]
-    restored = baseline?.type === 'block' && sameTopology(baseline.topology, operation.baseTopology)
-    if (!restored) {
-      useScene.temporal.getState().redo()
-      return
+  const restored = services.historyApi.replaceLatest(operation.historyDepth, () => {
+    const baseline = services.sceneApi.get<BlockNode>(operation.nodeId)
+    if (baseline?.type !== 'block' || !sameTopology(baseline.topology, operation.baseTopology)) {
+      return false
     }
-    useScene.getState().updateNode(operation.nodeId, { topology: result.topology })
+    services.sceneApi.update(operation.nodeId, { topology: result.topology })
+    return true
   })
   if (!restored) return { ok: false, error: 'Could not restore the operation baseline' }
 
   return {
     ok: true,
     operation: recordCommittedBlockOperation(
+      services,
       operation.nodeId,
       operation.label,
       operation.baseTopology,
@@ -143,26 +144,27 @@ export function replaceCommittedBlockOperation(
 }
 
 export function repeatCommittedBlockOperation(
+  services: BlockOperationServices,
   operation: BlockLastOperation,
   selection: RepeatSelection,
 ): BlockLastOperationReplacement {
-  const scene = useScene.getState()
-  const current = scene.nodes[operation.nodeId]
-  if (scene.readOnly) return { ok: false, error: 'Scene is read-only' }
+  if (services.readOnly) return { ok: false, error: 'Scene is read-only' }
+  const current = services.sceneApi.get<BlockNode>(operation.nodeId)
   if (current?.type !== 'block' || !sameTopology(current.topology, operation.resultTopology)) {
     return { ok: false, error: 'The last operation is no longer the latest scene change' }
   }
-  if (useScene.temporal.getState().pastStates.length !== operation.historyDepth) {
+  if (services.historyApi.depth() !== operation.historyDepth) {
     return { ok: false, error: 'Scene history changed after the last operation' }
   }
   const command = commandForRepeat(operation.command, current.topology, selection)
   if (!command) return { ok: false, error: 'The current selection cannot repeat this operation' }
   const result = applyBlockCommand(current.topology, command)
   if (!result.ok) return result
-  useScene.getState().updateNode(operation.nodeId, { topology: result.topology })
+  services.sceneApi.update(operation.nodeId, { topology: result.topology })
   return {
     ok: true,
     operation: recordCommittedBlockOperation(
+      services,
       operation.nodeId,
       operation.label,
       current.topology,

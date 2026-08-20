@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { BlockNode, useScene } from '@pascal-app/core'
+import { BlockNode, createSceneApi, runAsSingleSceneHistoryStep, useScene } from '@pascal-app/core'
 import { applyBlockCommand } from './commands'
 import {
   recordCommittedBlockOperation,
@@ -15,6 +15,23 @@ globalThis.cancelAnimationFrame ??= () => {}
 
 describe('block last operation history transaction', () => {
   const node = BlockNode.parse({ name: 'Adjustable block' })
+  const services = {
+    historyApi: {
+      depth: () => useScene.temporal.getState().pastStates.length,
+      replaceLatest: (expectedDepth: number, replace: () => boolean) => {
+        if (useScene.temporal.getState().pastStates.length !== expectedDepth) return false
+        let replaced = false
+        runAsSingleSceneHistoryStep(useScene, () => {
+          useScene.temporal.getState().undo()
+          replaced = replace()
+          if (!replaced) useScene.temporal.getState().redo()
+        })
+        return replaced
+      },
+    },
+    readOnly: false,
+    sceneApi: createSceneApi(useScene),
+  }
 
   beforeEach(() => {
     useScene.setState({ nodes: { [node.id]: node }, dirtyNodes: new Set(), readOnly: false })
@@ -33,6 +50,7 @@ describe('block last operation history transaction', () => {
     if (!first.ok) return
     useScene.getState().updateNode(node.id, { topology: first.topology })
     const record = recordCommittedBlockOperation(
+      services,
       node.id,
       'Extrude',
       node.topology,
@@ -40,7 +58,7 @@ describe('block last operation history transaction', () => {
       first,
     )
 
-    const adjusted = replaceCommittedBlockOperation(record, {
+    const adjusted = replaceCommittedBlockOperation(services, record, {
       ...firstCommand,
       distance: 0.5,
     })
@@ -66,9 +84,16 @@ describe('block last operation history transaction', () => {
     expect(first.ok).toBe(true)
     if (!first.ok) return
     useScene.getState().updateNode(node.id, { topology: first.topology })
-    const record = recordCommittedBlockOperation(node.id, 'Extrude', node.topology, command, first)
+    const record = recordCommittedBlockOperation(
+      services,
+      node.id,
+      'Extrude',
+      node.topology,
+      command,
+      first,
+    )
 
-    const repeated = repeatCommittedBlockOperation(record, {
+    const repeated = repeatCommittedBlockOperation(services, record, {
       mode: 'face',
       ids: ['f-top'],
       activeId: 'f-top',
