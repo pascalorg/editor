@@ -80,12 +80,15 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     for (const key of Object.keys(rawHandlers) as (keyof typeof rawHandlers)[]) {
       const fn = rawHandlers[key] as (e: unknown) => void
       ;(gated as Record<string, (e: unknown) => void>)[key] = (e: unknown) => {
+        const wallHidden = ref.current?.userData?.wallHidden === true
         if (
           wallPointerEventsSuppressed({
-            wallHidden: ref.current?.userData?.wallHidden === true,
+            wallHidden,
             hoverHighlightMode: useViewer.getState().hoverHighlightMode,
             hiddenWallHoldActive: hiddenWallPointerEventsHeld(),
-            selectionRay: extractWallSelectionRay(e, ref.current),
+            // Reduced lazily: visible walls never suppress, so don't walk
+            // the intersection list for every hover move over them.
+            selectionRay: wallHidden ? extractWallSelectionRay(e, ref.current) : undefined,
           })
         ) {
           return
