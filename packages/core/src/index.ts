@@ -281,6 +281,10 @@ export type {
   FloorPlacedFootprintsResolver,
 } from './registry'
 export * from './registry'
+// Exported here rather than from the registry barrel: that barrel is
+// reachable from server-safe graphs (schema → spatial grid → registry)
+// and must stay free of React imports.
+export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
 export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
@@ -361,7 +365,6 @@ export {
   stepElevatorRuntimeState,
   stepElevatorRuntimes,
 } from './systems/elevator/elevator-runtime'
-export { ElevatorRuntimeSystem } from './systems/elevator/elevator-runtime-system'
 export {
   type ElevatorLevelEntry,
   resolveElevatorBuildingLevels,
