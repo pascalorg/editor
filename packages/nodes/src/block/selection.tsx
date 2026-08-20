@@ -804,7 +804,6 @@ function AxisTransformHandle({
           if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
         }}
         position={[0, length * 0.5, 0]}
-        raycast={disabled ? () => {} : undefined}
         renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
       <mesh
@@ -837,7 +836,6 @@ function AxisTransformHandle({
           if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
         }}
         position={[0, scalePosition, 0]}
-        raycast={disabled ? () => {} : undefined}
         renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
     </group>
@@ -939,7 +937,6 @@ function PlaneMoveHandle({
           setHovered(false)
           if (document.body.style.cursor === 'move') document.body.style.cursor = ''
         }}
-        raycast={disabled ? () => {} : undefined}
         renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
     </group>
@@ -1037,7 +1034,6 @@ function RotationHandle({
           setHovered(false)
           if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
         }}
-        raycast={disabled ? () => {} : undefined}
         renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
     </group>
@@ -1419,6 +1415,53 @@ function LastOperationControls({
     default:
       return null
   }
+}
+
+function LastOperationPanel({
+  operation,
+  onChange,
+  onClose,
+  onRepeat,
+}: {
+  operation: BlockLastOperation
+  onChange: (command: BlockCommand) => void
+  onClose: () => void
+  onRepeat: () => void
+}) {
+  return (
+    <div
+      aria-label={`Adjust ${operation.label}`}
+      className="pointer-events-auto absolute bottom-16 left-4 w-64 max-w-[calc(100%-2rem)] rounded-xl border border-border/50 bg-background/98 p-2 shadow-elevation-4 backdrop-blur-xl"
+      onContextMenu={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onPointerUp={(event) => event.stopPropagation()}
+      role="dialog"
+    >
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <div className="font-medium text-xs">{operation.label}</div>
+          <div className="text-[10px] text-muted-foreground">Adjust Last Operation · F9</div>
+        </div>
+        <button
+          aria-label="Close last operation panel"
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          onClick={onClose}
+          type="button"
+        >
+          <XIcon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <LastOperationControls onChange={onChange} operation={operation} />
+      <button
+        className="mt-2 flex h-7 w-full items-center justify-between rounded-md bg-accent/50 px-2 text-[11px] text-foreground hover:bg-accent"
+        onClick={onRepeat}
+        type="button"
+      >
+        <span>Repeat {operation.label}</span>
+        <kbd className="font-mono text-[9px] text-muted-foreground">Shift+R</kbd>
+      </button>
+    </div>
+  )
 }
 
 function BlockEditor({
@@ -3841,47 +3884,13 @@ function BlockEditor({
               </div>
 
               {lastOperation ? (
-                <div className="relative">
-                  <ToolbarButton
-                    active={lastOperationPanelOpen}
-                    label={`Adjust ${lastOperation.label} (F9)`}
-                    onClick={() => setLastOperationPanelOpen((open) => !open)}
-                  >
-                    <Rotate3D className="h-4 w-4" />
-                  </ToolbarButton>
-                  {lastOperationPanelOpen ? (
-                    <ToolbarPanelFrame label={`Adjust ${lastOperation.label}`} className="w-64">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-medium text-xs">{lastOperation.label}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            Adjust Last Operation · F9
-                          </div>
-                        </div>
-                        <button
-                          aria-label="Close last operation panel"
-                          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                          onClick={() => setLastOperationPanelOpen(false)}
-                          type="button"
-                        >
-                          <XIcon className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      <LastOperationControls
-                        onChange={adjustLastOperation}
-                        operation={lastOperation}
-                      />
-                      <button
-                        className="mt-2 flex h-7 w-full items-center justify-between rounded-md bg-accent/50 px-2 text-[11px] text-foreground hover:bg-accent"
-                        onClick={repeatLastOperation}
-                        type="button"
-                      >
-                        <span>Repeat {lastOperation.label}</span>
-                        <kbd className="font-mono text-[9px] text-muted-foreground">Shift+R</kbd>
-                      </button>
-                    </ToolbarPanelFrame>
-                  ) : null}
-                </div>
+                <ToolbarButton
+                  active={lastOperationPanelOpen}
+                  label={`Adjust ${lastOperation.label} (F9)`}
+                  onClick={() => setLastOperationPanelOpen((open) => !open)}
+                >
+                  <Rotate3D className="h-4 w-4" />
+                </ToolbarButton>
               ) : null}
 
               <ToolbarButton label="Finish edit mode (Tab)" onClick={exitEditMode} sound={false}>
@@ -3967,6 +3976,21 @@ function BlockEditor({
           ) : null}
         </div>
       </Html>
+      {editing && lastOperation && lastOperationPanelOpen ? (
+        <Html
+          calculatePosition={(_object, _camera, size) => [size.width / 2, size.height / 2]}
+          fullscreen
+          style={{ pointerEvents: 'none' }}
+          zIndexRange={[80, 0]}
+        >
+          <LastOperationPanel
+            onChange={adjustLastOperation}
+            onClose={() => setLastOperationPanelOpen(false)}
+            onRepeat={repeatLastOperation}
+            operation={lastOperation}
+          />
+        </Html>
+      ) : null}
     </group>
   )
 }
