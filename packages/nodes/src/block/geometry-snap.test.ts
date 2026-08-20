@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createBoxBlockTopology } from '@pascal-app/core'
+import { type BlockTopology, createBoxBlockTopology } from '@pascal-app/core'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { blockGeometrySnapThreshold, resolveBlockGeometrySnap } from './geometry-snap'
 
@@ -54,6 +54,49 @@ describe('block geometry snapping', () => {
     expect(snap?.targetId).toBe('e7')
     expect(snap?.delta[1]).toBe(0)
     expect(snap?.delta[2]).toBe(0)
+  })
+
+  test('ranks nearby targets by their legal correction under an axis constraint', () => {
+    const topology: BlockTopology = {
+      vertices: [
+        { id: 'source', position: [0, 0, 0] },
+        { id: 'closer-in-3d', position: [0.08, 0.01, 0] },
+        { id: 'closer-on-axis', position: [0.02, 0.09, 0] },
+      ],
+      edges: [],
+      faces: [],
+    }
+    const snap = resolveBlockGeometrySnap(
+      topology,
+      { mode: 'vertex', ids: ['source'], activeId: 'source' },
+      [0, 0, 0],
+      'x',
+      0.1,
+    )
+
+    expect(snap?.targetId).toBe('closer-on-axis')
+    expect(snap?.delta).toEqual([0.02, 0, 0])
+  })
+
+  test('does not report geometry snap when a target requires no legal movement', () => {
+    const topology: BlockTopology = {
+      vertices: [
+        { id: 'source', position: [0, 0, 0] },
+        { id: 'off-axis', position: [0, 0.05, 0] },
+      ],
+      edges: [],
+      faces: [],
+    }
+
+    expect(
+      resolveBlockGeometrySnap(
+        topology,
+        { mode: 'vertex', ids: ['source'], activeId: 'source' },
+        [0, 0, 0],
+        'x',
+        0.1,
+      ),
+    ).toBeNull()
   })
 
   test('snaps an active face center onto another face surface', () => {

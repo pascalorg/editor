@@ -110,6 +110,7 @@ import {
   blockAccumulatePrecisionPointer,
   blockAxisDelta,
   blockAxisVisualState,
+  blockConstrainTranslationDelta,
   blockModalTransformStatus,
   blockNumericDeltaForConstraint,
   blockPlaneVisualState,
@@ -1949,9 +1950,10 @@ function BlockEditor({
             const localPoint = target.worldToLocal(
               worldOrigin.clone().add(currentHit.sub(lockedTranslationInitialHit)),
             )
-            delta = [localPoint.x - origin[0], localPoint.y - origin[1], localPoint.z - origin[2]]
-            const excludedAxis = PLANE_NORMAL[activeConstraint]
-            delta[excludedAxis === 'x' ? 0 : excludedAxis === 'y' ? 1 : 2] = 0
+            delta = blockConstrainTranslationDelta(
+              [localPoint.x - origin[0], localPoint.y - origin[1], localPoint.z - origin[2]],
+              activeConstraint,
+            )
           } else {
             const currentHit = ray.intersectPlane(viewPlane, new Vector3())
             if (!currentHit) return
@@ -2159,7 +2161,7 @@ function BlockEditor({
               worldAxisFor(normalAxis),
               worldOrigin,
             )
-            lockedTranslationInitialHit = makeRay(lastClientX, lastClientY).intersectPlane(
+            lockedTranslationInitialHit = startRay.intersectPlane(
               lockedTranslationPlane,
               new Vector3(),
             )

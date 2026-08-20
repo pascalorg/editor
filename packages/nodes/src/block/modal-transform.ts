@@ -111,6 +111,17 @@ export function blockAxisDelta(
   return [axis === 'x' ? distance : 0, axis === 'y' ? distance : 0, axis === 'z' ? distance : 0]
 }
 
+export function blockConstrainTranslationDelta(
+  delta: [number, number, number],
+  constraint: BlockTransformConstraint,
+): [number, number, number] {
+  if (constraint === 'free' || constraint === 'uniform') return delta
+  return delta.map((value, index) => {
+    const axis = index === 0 ? 'x' : index === 1 ? 'y' : 'z'
+    return constraint.includes(axis) ? value : 0
+  }) as [number, number, number]
+}
+
 export function blockNumericDeltaForConstraint(
   constraint: BlockTransformConstraint,
   pointerDelta: [number, number, number],

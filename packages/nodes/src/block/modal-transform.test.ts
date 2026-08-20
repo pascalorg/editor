@@ -3,6 +3,7 @@ import {
   blockAccumulatePrecisionPointer,
   blockAxisDelta,
   blockAxisVisualState,
+  blockConstrainTranslationDelta,
   blockModalTransformStatus,
   blockNumericDeltaForConstraint,
   blockPlaneVisualState,
@@ -66,6 +67,11 @@ describe('block modal transform', () => {
     expect(blockTransformConstraintFromKey('y', true)).toBe('xz')
     expect(blockTransformConstraintFromKey('Z', true)).toBe('xy')
     expect(blockTransformConstraintFromKey('x', false)).toBe('x')
+  })
+
+  test('keeps accumulated movement when it is projected onto a plane lock', () => {
+    expect(blockConstrainTranslationDelta([0.6, 0.4, 0.2], 'xy')).toEqual([0.6, 0.4, 0])
+    expect(blockConstrainTranslationDelta([0.6, 0.4, 0.2], 'yz')).toEqual([0, 0.4, 0.2])
   })
 
   test('keeps the constrained plane axes and plane handle colorful', () => {

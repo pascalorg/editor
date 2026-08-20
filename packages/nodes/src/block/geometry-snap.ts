@@ -123,9 +123,10 @@ export function resolveBlockGeometrySnap(
   ) => {
     const movedSource = source.map((value, index) => value + proposedDelta[index]!) as Point
     const correction = target.map((value, index) => value - movedSource[index]!) as Point
-    const distance = Math.hypot(...correction)
-    if (distance > threshold || (best && distance >= best.distance)) return
+    if (Math.hypot(...correction) > threshold) return
     const allowedCorrection = constrainedCorrection(correction, constraint)
+    const distance = Math.hypot(...allowedCorrection)
+    if (distance <= 1e-8 || (best && distance >= best.distance)) return
     best = {
       delta: proposedDelta.map((value, index) => value + allowedCorrection[index]!) as Point,
       distance,
