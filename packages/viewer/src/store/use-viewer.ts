@@ -19,6 +19,9 @@ export type SceneExportOptions = {
   printScale?: number
   printScope?: 'whole' | 'levels'
   printContent?: 'structure' | 'everything'
+  printBase?: 'none' | 'plinth'
+  printPlinthMarginMm?: number
+  printPlinthThicknessMm?: number
 }
 export type SceneExportArtifact = {
   blob: Blob

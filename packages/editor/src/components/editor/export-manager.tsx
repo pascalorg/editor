@@ -95,7 +95,17 @@ export function ExportManager() {
         if (format === 'print-stl') {
           const scale = options.printScale ?? 100
           if (options.printScope === 'levels') {
-            const { archive, report } = exportSceneLevelsToPrintStl(exportScene, nodes, { scale })
+            const plinth =
+              options.printBase === 'plinth'
+                ? {
+                    marginMm: options.printPlinthMarginMm ?? 2,
+                    thicknessMm: options.printPlinthThicknessMm ?? 2,
+                  }
+                : undefined
+            const { archive, report } = exportSceneLevelsToPrintStl(exportScene, nodes, {
+              scale,
+              plinth,
+            })
             const blob = new Blob([archive], { type: 'application/zip' })
             return finishArtifact(
               blob,
@@ -103,6 +113,9 @@ export function ExportManager() {
               options.download,
               report,
             )
+          }
+          if (options.printBase === 'plinth') {
+            throw new Error('Plinth generation is available only for per-level print packages.')
           }
           const { buffer, report } = exportSceneToPrintStl(exportScene, { scale })
           const blob = new Blob([buffer], { type: 'model/stl' })

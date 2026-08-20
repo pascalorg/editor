@@ -9,6 +9,7 @@ import { useEffect, useId, useState } from 'react'
 import { Button } from '../../../../../components/ui/primitives/button'
 import {
   isPrintLevelBundleReport,
+  type PrintBaseMode,
   type PrintLevelBundleReport,
 } from '../../../../../lib/level-print-export'
 import type { PrintContentScope } from '../../../../../lib/print-content-scope'
@@ -43,10 +44,29 @@ export async function preparePrintExport(
   scaleInput: string,
   scope: 'whole' | 'levels',
   content: PrintContentScope,
+  base: PrintBaseMode,
+  plinthMarginInput: string,
+  plinthThicknessInput: string,
 ): Promise<PreparedPrintExport> {
   const scale = Number(scaleInput)
   if (!Number.isFinite(scale) || scale <= 0) {
     throw new RangeError('Enter a positive scale denominator, such as 25, 50, or 100.')
+  }
+
+  let plinthMarginMm: number | undefined
+  let plinthThicknessMm: number | undefined
+  if (base === 'plinth') {
+    if (scope !== 'levels') {
+      throw new RangeError('A plinth is available only for per-level print packages.')
+    }
+    plinthMarginMm = Number(plinthMarginInput)
+    plinthThicknessMm = Number(plinthThicknessInput)
+    if (!Number.isFinite(plinthMarginMm) || plinthMarginMm < 0) {
+      throw new RangeError('Enter a non-negative plinth margin in millimeters.')
+    }
+    if (!Number.isFinite(plinthThicknessMm) || plinthThicknessMm <= 0) {
+      throw new RangeError('Enter a positive plinth thickness in millimeters.')
+    }
   }
 
   const artifact = await exportScene('print-stl', {
@@ -55,6 +75,9 @@ export async function preparePrintExport(
     printScale: scale,
     printScope: scope,
     printContent: content,
+    printBase: base,
+    ...(plinthMarginMm === undefined ? {} : { printPlinthMarginMm: plinthMarginMm }),
+    ...(plinthThicknessMm === undefined ? {} : { printPlinthThicknessMm: plinthThicknessMm }),
   })
   if (
     !artifact ||
@@ -72,6 +95,9 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   const [printScale, setPrintScale] = useState('100')
   const [scope, setScope] = useState<'whole' | 'levels'>('levels')
   const [content, setContent] = useState<PrintContentScope>('structure')
+  const [base, setBase] = useState<PrintBaseMode>('none')
+  const [plinthMargin, setPlinthMargin] = useState('2')
+  const [plinthThickness, setPlinthThickness] = useState('2')
   const [isPreparing, setIsPreparing] = useState(false)
   const [prepared, setPrepared] = useState<PreparedPrintExport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -79,7 +105,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   useEffect(() => {
     setPrepared(null)
     setError(null)
-  }, [nodes, onlyVisible, printScale, scope, content])
+  }, [nodes, onlyVisible, printScale, scope, content, base, plinthMargin, plinthThickness])
 
   const handlePrepare = async () => {
     if (!exportScene) {
@@ -91,7 +117,18 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
     setPrepared(null)
     setError(null)
     try {
-      setPrepared(await preparePrintExport(exportScene, onlyVisible, printScale, scope, content))
+      setPrepared(
+        await preparePrintExport(
+          exportScene,
+          onlyVisible,
+          printScale,
+          scope,
+          content,
+          scope === 'levels' ? base : 'none',
+          plinthMargin,
+          plinthThickness,
+        ),
+      )
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Print export failed.')
     } finally {
@@ -141,6 +178,49 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
           Structure uses registered structural nodes; watertight union is still pending.
         </span>
       </label>
+
+      <label className="block space-y-1 text-xs">
+        <span className="font-medium">Base</span>
+        <select
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          disabled={scope !== 'levels'}
+          onChange={(event) => setBase(event.target.value as PrintBaseMode)}
+          value={scope === 'levels' ? base : 'none'}
+        >
+          <option value="none">No base</option>
+          <option value="plinth">Separate rectangular plinth</option>
+        </select>
+        <span className="block text-muted-foreground">
+          Optional per-level base; kept separate from the building shell.
+        </span>
+      </label>
+
+      {scope === 'levels' && base === 'plinth' && (
+        <div className="grid grid-cols-2 gap-2">
+          <label className="block space-y-1 text-xs">
+            <span className="font-medium">Margin (mm)</span>
+            <input
+              className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              min="0"
+              onChange={(event) => setPlinthMargin(event.target.value)}
+              step="0.1"
+              type="number"
+              value={plinthMargin}
+            />
+          </label>
+          <label className="block space-y-1 text-xs">
+            <span className="font-medium">Thickness (mm)</span>
+            <input
+              className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              min="0.1"
+              onChange={(event) => setPlinthThickness(event.target.value)}
+              step="0.1"
+              type="number"
+              value={plinthThickness}
+            />
+          </label>
+        </div>
+      )}
 
       <label className="block space-y-1 text-xs">
         <span className="font-medium">Output</span>
@@ -205,11 +285,11 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
           {isPrintLevelBundleReport(prepared.report) ? (
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Level parts</span>
+                <span className="text-muted-foreground">Print parts</span>
                 <span className="font-medium">{prepared.report.partCount}</span>
               </div>
               {prepared.report.parts.map((part) => (
-                <div className="rounded-md border p-2" key={part.levelId}>
+                <div className="rounded-md border p-2" key={part.filename}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">{part.label}</span>
                     <span className="text-muted-foreground">

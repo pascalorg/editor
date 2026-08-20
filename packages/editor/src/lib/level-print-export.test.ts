@@ -129,6 +129,7 @@ describe('per-level print STL export', () => {
     expect(Object.keys(files)).toEqual(['01_ground.stl', '02_upper.stl'])
     expect(bundle.report.status).toBe('pass')
     expect(bundle.report.partCount).toBe(2)
+    expect(bundle.report.parts.map((part) => part.kind)).toEqual(['level', 'level'])
     expect(ground.triangles).toBe(12)
     expect(ground.size.x).toBeCloseTo(100, 4)
     expect(ground.size.y).toBeCloseTo(80, 4)
@@ -197,11 +198,7 @@ describe('per-level print STL export', () => {
     } as unknown as AnyNode
 
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
-    const structure = filterPreparedSceneForPrintContent(
-      prepared.scene,
-      fixture.nodes,
-      'structure',
-    )
+    const structure = filterPreparedSceneForPrintContent(prepared.scene, fixture.nodes, 'structure')
     const bundle = exportSceneLevelsToPrintStl(structure, fixture.nodes, { scale: 100 })
 
     expect(bundle.report.parts.map((part) => part.report.triangleCount)).toEqual([12, 12])
@@ -216,5 +213,30 @@ describe('per-level print STL export', () => {
     const second = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 50 })
 
     expect(first.archive).toEqual(second.archive)
+  })
+
+  test('prepends an optional physical-size plinth derived from the lowest level bounds', () => {
+    const fixture = twoLevelFixture()
+    const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
+
+    const bundle = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, {
+      scale: 100,
+      plinth: { marginMm: 2, thicknessMm: 3 },
+    })
+    const repeated = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, {
+      scale: 100,
+      plinth: { marginMm: 2, thicknessMm: 3 },
+    })
+    const files = unzipSync(bundle.archive)
+    const plinth = binaryStlBounds(files['00_plinth.stl']!)
+
+    expect(Object.keys(files)).toEqual(['00_plinth.stl', '01_ground.stl', '02_upper.stl'])
+    expect(bundle.report.parts.map((part) => part.kind)).toEqual(['plinth', 'level', 'level'])
+    expect(bundle.report.parts[0]?.levelId).toBe('level_ground')
+    expect(plinth.triangles).toBe(12)
+    expect(plinth.size.x).toBeCloseTo(104, 4)
+    expect(plinth.size.y).toBeCloseTo(84, 4)
+    expect(plinth.size.z).toBeCloseTo(3, 4)
+    expect(bundle.archive).toEqual(repeated.archive)
   })
 })

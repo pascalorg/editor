@@ -1,6 +1,6 @@
 import { type AnyNode, getLevelDisplayName, type LevelNode } from '@pascal-app/core'
 import { type Zippable, zipSync } from 'fflate'
-import type * as THREE from 'three'
+import * as THREE from 'three'
 import {
   exportSceneToPrintStl,
   type PrintExportDiagnostic,
@@ -8,8 +8,17 @@ import {
 } from './print-export'
 
 const ZIP_MTIME = new Date(2000, 0, 1, 0, 0, 0)
+const MILLIMETERS_PER_METER = 1000
+
+export type PrintBaseMode = 'none' | 'plinth'
+
+export type PrintPlinthOptions = {
+  marginMm: number
+  thicknessMm: number
+}
 
 export type PrintLevelPartReport = {
+  kind: 'level' | 'plinth'
   levelId: string
   label: string
   filename: string
@@ -163,7 +172,7 @@ function bundleStatus(
 export function exportSceneLevelsToPrintStl(
   source: THREE.Object3D,
   nodes: Record<string, AnyNode>,
-  options: { scale: number },
+  options: { scale: number; plinth?: PrintPlinthOptions },
 ): PrintLevelStlBundle {
   const exportedIds = exportedIdentityIds(source)
   const ownerByNodeId = new Map<string, string | null>()
@@ -199,15 +208,74 @@ export function exportSceneLevelsToPrintStl(
     })
   }
 
-  const files: Zippable = {}
-  const parts: PrintLevelPartReport[] = []
+  const levelFiles: { filename: string; bytes: Uint8Array<ArrayBuffer> }[] = []
+  const levelParts: PrintLevelPartReport[] = []
   for (const [index, level] of levels.entries()) {
     const label = getLevelDisplayName(level)
     const filename = `${String(index + 1).padStart(2, '0')}_${safeFilenamePart(label)}.stl`
     const levelScene = pruneSceneToLevel(source, level.id, nodes, excludedIds, ownerByNodeId)
     const output = exportSceneToPrintStl(levelScene, options)
-    files[filename] = [new Uint8Array(output.buffer), { level: 0, mtime: ZIP_MTIME }]
-    parts.push({ levelId: level.id, label, filename, report: output.report })
+    levelFiles.push({ filename, bytes: new Uint8Array(output.buffer) })
+    levelParts.push({ kind: 'level', levelId: level.id, label, filename, report: output.report })
+  }
+
+  let plinthFile: { filename: string; bytes: Uint8Array<ArrayBuffer> } | null = null
+  let plinthPart: PrintLevelPartReport | null = null
+  if (options.plinth) {
+    const { marginMm, thicknessMm } = options.plinth
+    if (
+      !Number.isFinite(marginMm) ||
+      marginMm < 0 ||
+      !Number.isFinite(thicknessMm) ||
+      thicknessMm <= 0
+    ) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'invalid_plinth_dimensions',
+        message: 'Plinth margin must be non-negative and thickness must be positive.',
+      })
+    } else {
+      const buildingIds = new Set(levels.map((level) => level.parentId ?? 'unparented-building'))
+      const lowestLevel = levels[0]
+      const lowestPart = levelParts[0]
+      const bounds = lowestPart?.report.bounds
+      if (buildingIds.size > 1) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'multiple_building_plinth',
+          message: 'A plinth currently requires the print scope to contain exactly one building.',
+        })
+      } else if (!lowestLevel || !lowestPart || !bounds) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'plinth_missing_footprint',
+          message: 'The lowest visible level has no structural bounds for plinth generation.',
+        })
+      } else {
+        const widthMeters = ((bounds.width + marginMm * 2) * options.scale) / MILLIMETERS_PER_METER
+        const depthMeters = ((bounds.depth + marginMm * 2) * options.scale) / MILLIMETERS_PER_METER
+        const thicknessMeters = (thicknessMm * options.scale) / MILLIMETERS_PER_METER
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(widthMeters, thicknessMeters, depthMeters),
+        )
+        const output = exportSceneToPrintStl(mesh, options)
+        const filename = '00_plinth.stl'
+        plinthFile = { filename, bytes: new Uint8Array(output.buffer) }
+        plinthPart = {
+          kind: 'plinth',
+          levelId: lowestLevel.id,
+          label: 'Plinth',
+          filename,
+          report: output.report,
+        }
+        diagnostics.push({
+          severity: 'info',
+          code: 'rectangular_plinth_experimental',
+          message:
+            'The plinth is a separate rectangular part derived from the lowest level bounds; footprint shaping and connectors are not implemented yet.',
+        })
+      }
+    }
   }
 
   diagnostics.push({
@@ -216,6 +284,18 @@ export function exportSceneLevelsToPrintStl(
     message:
       'Level parts are separated semantically but are not boolean-unioned printable shells yet.',
   })
+
+  const files: Zippable = {}
+  const parts: PrintLevelPartReport[] = []
+  if (plinthFile && plinthPart) {
+    files[plinthFile.filename] = [plinthFile.bytes, { level: 0, mtime: ZIP_MTIME }]
+    parts.push(plinthPart)
+  }
+  for (const [index, file] of levelFiles.entries()) {
+    files[file.filename] = [file.bytes, { level: 0, mtime: ZIP_MTIME }]
+    const part = levelParts[index]
+    if (part) parts.push(part)
+  }
 
   return {
     archive: zipSync(files, { level: 0 }),

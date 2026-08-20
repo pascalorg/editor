@@ -35,7 +35,15 @@ const levelReport: PrintLevelBundleReport = {
   orientation: 'z-up',
   status: 'pass',
   partCount: 1,
-  parts: [{ levelId: 'level_ground', label: 'Ground', filename: '01_ground.stl', report }],
+  parts: [
+    {
+      kind: 'level',
+      levelId: 'level_ground',
+      label: 'Ground',
+      filename: '01_ground.stl',
+      report,
+    },
+  ],
   excludedNodeIds: [],
   diagnostics: [],
 }
@@ -49,7 +57,16 @@ describe('print export card contract', () => {
       return artifact
     }
 
-    const prepared = await preparePrintExport(exportScene, true, '50', 'whole', 'structure')
+    const prepared = await preparePrintExport(
+      exportScene,
+      true,
+      '50',
+      'whole',
+      'structure',
+      'none',
+      '2',
+      '2',
+    )
 
     expect(calls).toEqual([
       {
@@ -60,6 +77,7 @@ describe('print export card contract', () => {
           printScale: 50,
           printScope: 'whole',
           printContent: 'structure',
+          printBase: 'none',
         },
       },
     ])
@@ -74,7 +92,7 @@ describe('print export card contract', () => {
     }
 
     await expect(
-      preparePrintExport(exportScene, true, '0', 'levels', 'structure'),
+      preparePrintExport(exportScene, true, '0', 'levels', 'structure', 'none', '2', '2'),
     ).rejects.toThrow(
       'Enter a positive scale denominator',
     )
@@ -82,12 +100,53 @@ describe('print export card contract', () => {
   })
 
   test('accepts the per-level archive report contract', async () => {
+    const calls: { format?: string; options?: SceneExportOptions }[] = []
     const artifact = { blob: new Blob(['zip']), filename: 'levels.zip', metadata: levelReport }
-    const exportScene: SceneExport = async () => artifact
+    const exportScene: SceneExport = async (format, options) => {
+      calls.push({ format, options })
+      return artifact
+    }
 
-    const prepared = await preparePrintExport(exportScene, true, '50', 'levels', 'everything')
+    const prepared = await preparePrintExport(
+      exportScene,
+      true,
+      '50',
+      'levels',
+      'everything',
+      'plinth',
+      '3',
+      '2.5',
+    )
 
+    expect(calls).toEqual([
+      {
+        format: 'print-stl',
+        options: {
+          onlyVisible: true,
+          download: false,
+          printScale: 50,
+          printScope: 'levels',
+          printContent: 'everything',
+          printBase: 'plinth',
+          printPlinthMarginMm: 3,
+          printPlinthThicknessMm: 2.5,
+        },
+      },
+    ])
     expect(prepared).toEqual({ artifact, report: levelReport })
+  })
+
+  test('rejects invalid plinth dimensions before invoking the exporter', async () => {
+    let invoked = false
+    const exportScene: SceneExport = async () => {
+      invoked = true
+      return null
+    }
+
+    await expect(
+      preparePrintExport(exportScene, true, '50', 'levels', 'structure', 'plinth', '-1', '2'),
+    ).rejects.toThrow('non-negative plinth margin')
+    expect(invoked).toBe(false)
   })
 
   test('rejects an artifact without the print preflight contract', async () => {
@@ -97,7 +156,7 @@ describe('print export card contract', () => {
     })
 
     await expect(
-      preparePrintExport(exportScene, false, '100', 'whole', 'structure'),
+      preparePrintExport(exportScene, false, '100', 'whole', 'structure', 'none', '2', '2'),
     ).rejects.toThrow('did not return a preflight report')
   })
 })
