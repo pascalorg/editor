@@ -230,9 +230,7 @@ describe('opening move history session', () => {
       expect(restored.position).toEqual([1.5, 1.05, 0])
       expect(restored.parentId).toBe(WALL_A_ID)
       expect(restored.wallId).toBe(WALL_A_ID)
-      expect((restored.metadata ?? {}) as Record<string, unknown>).not.toHaveProperty(
-        'isTransient',
-      )
+      expect((restored.metadata ?? {}) as Record<string, unknown>).not.toHaveProperty('isTransient')
       expect(restored.visible).not.toBe(false)
       expect((node(WALL_A_ID) as { children: string[] }).children).toContain(DOOR_ID)
       expect((node(WALL_B_ID) as { children: string[] }).children).not.toContain(DOOR_ID)
