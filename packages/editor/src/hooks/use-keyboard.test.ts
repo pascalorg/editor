@@ -8,7 +8,11 @@ import {
 } from '@pascal-app/core'
 import { meshEditScope } from '../lib/interaction/scope'
 import useInteractionScope from '../store/use-interaction-scope'
-import { canRunGlobalRotationShortcut, runHistoryShortcut } from './use-keyboard'
+import {
+  canCycleSnappingModeShortcut,
+  canRunGlobalRotationShortcut,
+  runHistoryShortcut,
+} from './use-keyboard'
 
 type RafFn = (callback: (time: number) => void) => number
 ;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= (
@@ -46,6 +50,14 @@ describe('history shortcuts during block editing', () => {
     expect(canRunGlobalRotationShortcut()).toBe(true)
     useInteractionScope.getState().begin(meshEditScope(NODE_ID))
     expect(canRunGlobalRotationShortcut()).toBe(false)
+  })
+
+  test('reserves held Shift for precision while a mesh operation is active', () => {
+    useInteractionScope.getState().begin(meshEditScope(NODE_ID))
+    expect(canCycleSnappingModeShortcut(true)).toBe(true)
+
+    useInteractionScope.getState().begin(meshEditScope(NODE_ID, 'operating', 'translate'))
+    expect(canCycleSnappingModeShortcut(true)).toBe(false)
   })
 
   test('undoes and redoes mesh changes without leaving component selection mode', () => {

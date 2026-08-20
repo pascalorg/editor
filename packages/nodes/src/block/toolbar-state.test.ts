@@ -47,8 +47,23 @@ describe('block toolbar state', () => {
         loopCutCount: 1,
         loopCutFactor: 0.5,
         bevelSegments: 6,
+        bevelWidth: 0,
       }),
     ).toBeNull()
+  })
+
+  test('shows live bevel width and segment count', () => {
+    expect(
+      blockComponentStatus({
+        mode: 'edge',
+        selectedCount: 1,
+        tool: 'bevel',
+        loopCutCount: 1,
+        loopCutFactor: 0.5,
+        bevelSegments: 6,
+        bevelWidth: 0.2,
+      }),
+    ).toBe('Bevel · width 0.2 m · 6 segments · drag changes width · wheel changes segments')
   })
 
   test('builds uniform and axis-specific scale factors', () => {

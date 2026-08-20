@@ -174,6 +174,11 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
 export const canRunGlobalRotationShortcut = () =>
   useInteractionScope.getState().scope.kind !== 'mesh-editing'
 
+export const canCycleSnappingModeShortcut = (hasActiveContext = getActiveSnapContext() != null) => {
+  const scope = useInteractionScope.getState().scope
+  return hasActiveContext && !(scope.kind === 'mesh-editing' && scope.phase === 'operating')
+}
+
 export const useKeyboard = ({
   isVersionPreviewMode = false,
   disabled = false,
@@ -203,7 +208,6 @@ export const useKeyboard = ({
     // every node move (including wall-hosted items + door/window openings, which
     // now declare `snapProfile`), and endpoint/polygon reshaping, so the keys
     // never silently stop working. Force-place lives on Alt where a tool supports it.
-    const isSnappingCycleContext = () => getActiveSnapContext() != null
     // A "clean tap" of Ctrl/Meta (pressed and released with NO other key in
     // between) cycles the grid step — same context as the Shift snapping-mode
     // cycle. `ctrlTapClean` starts true the moment Ctrl/Meta goes down alone
@@ -273,7 +277,7 @@ export const useKeyboard = ({
         return
       }
 
-      if (e.key === 'Shift' && !e.repeat && isSnappingCycleContext()) {
+      if (e.key === 'Shift' && !e.repeat && canCycleSnappingModeShortcut()) {
         // Cycle the global snapping mode (grid → lines → angles → off).
         // `'off'` is the snap bypass now, so Shift no longer holds-to-bypass.
         e.preventDefault()
@@ -703,7 +707,7 @@ export const useKeyboard = ({
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
           return
         }
-        if (!isSnappingCycleContext()) return
+        if (!canCycleSnappingModeShortcut()) return
         // Cycle the grid / measurement step (0.5 → 0.25 → 0.1 → 0.05).
         useEditor.getState().cycleGridSnapStep()
         sfxEmitter.emit('sfx:grid-snap')

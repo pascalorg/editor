@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createBoxBlockTopology } from '@pascal-app/core'
 import useBlockEditSession from './edit-session'
+import type { BlockLastOperation } from './last-operation'
 import { createBlockSelection } from './selection-model'
 
 describe('block edit session', () => {
@@ -8,6 +9,7 @@ describe('block edit session', () => {
     useBlockEditSession.setState({
       nodeId: null,
       selection: createBlockSelection('face'),
+      lastOperation: null,
     })
   })
 
@@ -63,5 +65,28 @@ describe('block edit session', () => {
       nodeId: null,
       selection: { mode: 'face', ids: [], activeId: null },
     })
+  })
+
+  test('keeps the latest adjustable operation only for its owning block', () => {
+    const operation = {
+      nodeId: 'block_1',
+      label: 'Move',
+      baseTopology: createBoxBlockTopology(),
+      resultTopology: createBoxBlockTopology(),
+      resultSelection: { mode: 'vertex', ids: ['v0'] },
+      command: {
+        type: 'translate-components',
+        selection: { mode: 'vertex', ids: ['v0'] },
+        delta: [1, 0, 0],
+      },
+      historyDepth: 1,
+    } as BlockLastOperation
+    useBlockEditSession.getState().begin('block_1', createBlockSelection('vertex', ['v0']))
+    useBlockEditSession.getState().setLastOperation('block_2', operation)
+    expect(useBlockEditSession.getState().lastOperation).toBeNull()
+    useBlockEditSession.getState().setLastOperation('block_1', operation)
+    expect(useBlockEditSession.getState().lastOperation).toBe(operation)
+    useBlockEditSession.getState().end('block_1')
+    expect(useBlockEditSession.getState().lastOperation).toBeNull()
   })
 })

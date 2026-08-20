@@ -51,6 +51,7 @@ export function blockComponentStatus({
   loopCutCount,
   loopCutFactor,
   bevelSegments,
+  bevelWidth,
 }: {
   mode: BlockToolbarMode
   selectedCount: number
@@ -58,12 +59,14 @@ export function blockComponentStatus({
   loopCutCount: number
   loopCutFactor: number
   bevelSegments: number
+  bevelWidth: number
 }): string | null {
   if (tool === 'loop-cut') {
     return `Loop Cut · ${loopCutCount} cut${loopCutCount === 1 ? '' : 's'} · factor ${loopCutFactor.toFixed(2)} · click or drag an edge · release applies · wheel changes count`
   }
   if (tool === 'bevel') {
-    return `Bevel · drag an edge to peel it · wheel changes segments (${bevelSegments}) · release to apply`
+    const width = String(Math.round(bevelWidth * 1000) / 1000)
+    return `Bevel · width ${width} m · ${bevelSegments} segments · drag changes width · wheel changes segments`
   }
   return selectedCount === 0 ? `Click a ${mode} to select it` : null
 }
