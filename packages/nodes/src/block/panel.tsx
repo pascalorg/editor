@@ -1,10 +1,13 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type BlockNode,
   getCatalogMaterialById,
+  type MaterialSchema,
   parseMaterialRef,
+  type SceneMaterialId,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -20,6 +23,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Check, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
+import { resolveSlotPaintMaterialRef } from '../shared/slot-paint'
 import useBlockEditSession from './edit-session'
 import {
   assignBlockMaterial,
@@ -35,6 +39,17 @@ const SLOT_TRAILING_ACTION_CLASS =
   'm-2 ml-0 flex w-8 shrink-0 items-center justify-center rounded-md'
 const SLOT_DISABLED_ACTION_CLASS =
   'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-[#2C2C2E] disabled:active:bg-[#2C2C2E]'
+const NEW_BLOCK_SLOT_MATERIAL = {
+  preset: 'custom',
+  properties: {
+    color: '#7768d8',
+    roughness: 0.75,
+    metalness: 0,
+    opacity: 1,
+    transparent: false,
+    side: 'front',
+  },
+} satisfies MaterialSchema
 
 function materialRefLabel(
   ref: string | undefined,
@@ -145,22 +160,52 @@ export default function BlockPanel() {
   }
 
   const addMaterialSlot = () => {
+    const scene = useScene.getState()
+    const resolution = resolveSlotPaintMaterialRef(
+      scene.materials,
+      NEW_BLOCK_SLOT_MATERIAL,
+      undefined,
+    )
+    if (!resolution?.ref) return
     const result = createAssignedBlockMaterialSlot(
       node.topology,
       node.slots,
       node.slotNames,
       selectedFaceIds,
+      resolution.ref,
     )
     if (!result.changed) return
-    useScene.getState().updateNode(node.id, {
-      topology: result.topology,
-      slots: result.slots,
-      slotNames: result.slotNames,
+    let committed = false
+    useScene.setState((current) => {
+      if (current.readOnly || current.nodes[node.id]?.type !== 'block') return current
+      committed = true
+      return {
+        materials: resolution.newSceneMaterial
+          ? {
+              ...current.materials,
+              [resolution.newSceneMaterial.id as SceneMaterialId]: {
+                ...resolution.newSceneMaterial,
+                name: 'Block Accent',
+              },
+            }
+          : current.materials,
+        nodes: {
+          ...current.nodes,
+          [node.id]: {
+            ...current.nodes[node.id],
+            topology: result.topology,
+            slots: result.slots,
+            slotNames: result.slotNames,
+          } as AnyNode,
+        },
+      }
     })
+    if (!committed) return
+    useScene.getState().markDirty(node.id)
     const faceLabel = selectedFaceIds.length === 1 ? 'face' : 'faces'
     setSlotNotice({
       nodeId: node.id,
-      text: `${result.slotNames[result.slotId] ?? result.slotId} applied to ${selectedFaceIds.length} ${faceLabel}. Use Paint (P) to choose its material.`,
+      text: `${result.slotNames[result.slotId] ?? result.slotId} applied to ${selectedFaceIds.length} ${faceLabel} with an accent material. Use Paint (P) to replace it.`,
     })
     triggerSFX('sfx:menu-click')
   }

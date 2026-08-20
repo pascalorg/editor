@@ -40,14 +40,18 @@ describe('block material slots', () => {
 
   test('creates a slot and assigns it to the selected faces in one operation', () => {
     const topology = createBoxBlockTopology()
-    const result = createAssignedBlockMaterialSlot(topology, undefined, { body: 'Body' }, [
-      'f-top',
-      'f-front',
-    ])
+    const result = createAssignedBlockMaterialSlot(
+      topology,
+      undefined,
+      { body: 'Body' },
+      ['f-top', 'f-front'],
+      'scene:block-accent',
+    )
 
     expect(result.changed).toBe(true)
     expect(result.slotId).toBe('slot-1')
     expect(result.slotNames).toEqual({ body: 'Body', 'slot-1': 'Slot 1' })
+    expect(result.slots).toEqual({ 'slot-1': 'scene:block-accent' })
     expect(result.topology.faces.map((face) => face.materialSlot)).toEqual([
       'body',
       'slot-1',
@@ -61,7 +65,13 @@ describe('block material slots', () => {
   test('does not create an empty slot when no faces are selected', () => {
     const topology = createBoxBlockTopology()
     const slotNames = { body: 'Body' }
-    const result = createAssignedBlockMaterialSlot(topology, undefined, slotNames, [])
+    const result = createAssignedBlockMaterialSlot(
+      topology,
+      undefined,
+      slotNames,
+      [],
+      'scene:block-accent',
+    )
 
     expect(result.changed).toBe(false)
     expect(result.topology).toBe(topology)

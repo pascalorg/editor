@@ -93,6 +93,7 @@ export function createAssignedBlockMaterialSlot(
   slots: BlockMaterialSlots,
   slotNames: BlockMaterialSlotNames,
   selectedFaceIds: readonly string[],
+  materialRef: MaterialRef,
 ): BlockAssignedMaterialSlotCreationResult {
   const selected = new Set(selectedFaceIds)
   if (!topology.faces.some((face) => selected.has(face.id))) {
@@ -106,9 +107,10 @@ export function createAssignedBlockMaterialSlot(
     { kind: 'slot', slotId: created.slotId },
     created.slotNames,
   )
+  const bound = setBlockMaterialSlot(assigned.slots, created.slotId, materialRef)
   return {
     topology: assigned.topology,
-    slots: assigned.slots,
+    slots: bound.slots,
     slotId: created.slotId,
     slotNames: created.slotNames,
     changed: true,
