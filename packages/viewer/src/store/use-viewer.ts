@@ -12,14 +12,21 @@ import { SCENE_THEME_IDS } from '../lib/scene-themes'
 export type RenderContext = 'editor' | 'viewer'
 export type MetricNotation = 'meters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
-export type SceneExportFormat = 'glb' | 'stl' | 'obj'
+export type SceneExportFormat = 'glb' | 'stl' | 'obj' | 'print-stl'
 export type SceneExportOptions = {
   onlyVisible?: boolean
+  download?: boolean
+  printScale?: number
+}
+export type SceneExportArtifact = {
+  blob: Blob
+  filename: string
+  metadata?: unknown
 }
 export type SceneExport = (
   format?: SceneExportFormat,
   options?: SceneExportOptions,
-) => Promise<void>
+) => Promise<SceneExportArtifact | null>
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null

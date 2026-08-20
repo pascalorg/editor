@@ -176,6 +176,7 @@ export {
   default as useViewer,
   type MetricNotation,
   type SceneExport,
+  type SceneExportArtifact,
   type SceneExportFormat,
   type SceneExportOptions,
   type WallMode,

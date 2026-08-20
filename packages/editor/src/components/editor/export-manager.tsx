@@ -1,13 +1,19 @@
 'use client'
 
 import { emitter, useScene } from '@pascal-app/core'
-import { type SceneExportFormat, type SceneExportOptions, useViewer } from '@pascal-app/viewer'
+import {
+  type SceneExport,
+  type SceneExportArtifact,
+  snapLevelsToTruePositions,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
+import { exportSceneToPrintStl } from '../../lib/print-export'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
 // material-less renderables) with an attribute-less geometry — GLTFExporter
@@ -36,15 +42,12 @@ export function ExportManager() {
   const setExportScene = useViewer((state) => state.setExportScene)
 
   useEffect(() => {
-    const exportFn = async (
-      format: SceneExportFormat = 'glb',
-      options: SceneExportOptions = {},
-    ) => {
+    const exportFn: SceneExport = async (format = 'glb', options = {}) => {
       // Find the scene renderer group by name
       const sceneGroup = scene.getObjectByName('scene-renderer')
       if (!sceneGroup) {
         console.error('scene-renderer group not found')
-        return
+        return null
       }
 
       const date = new Date().toISOString().split('T')[0]
@@ -60,8 +63,7 @@ export function ExportManager() {
         if (format === 'glb') {
           const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes, options)
           const blob = new Blob([buffer], { type: 'model/gltf-binary' })
-          downloadBlob(blob, `model_${date}.glb`)
-          return
+          return finishArtifact(blob, `model_${date}.glb`, options.download)
         }
 
         // Hide editor affordances that live on the scene layer (selection handles,
@@ -69,30 +71,44 @@ export function ExportManager() {
         // synchronous capture path thumbnails use. We clone the scene inside the
         // window, so the export snapshots the clean building, then restore.
         emitter.emit('thumbnail:before-capture', undefined)
+        const restoreLevels = snapLevelsToTruePositions()
         let prepared: ReturnType<typeof prepareSceneForExport>
         try {
           prepared = prepareSceneForExport(sceneGroup, useScene.getState().nodes, options)
         } finally {
+          restoreLevels()
           emitter.emit('thumbnail:after-capture', undefined)
         }
         const { scene: exportScene } = prepared
         ensurePositionAttributes(exportScene)
 
+        if (format === 'print-stl') {
+          const scale = options.printScale ?? 100
+          const { buffer, report } = exportSceneToPrintStl(exportScene, { scale })
+          const blob = new Blob([buffer], { type: 'model/stl' })
+          return finishArtifact(
+            blob,
+            `print_model_1-${scale}_${date}.stl`,
+            options.download,
+            report,
+          )
+        }
+
         if (format === 'stl') {
           const exporter = new STLExporter()
           const result = exporter.parse(exportScene, { binary: true })
           const blob = new Blob([result], { type: 'model/stl' })
-          downloadBlob(blob, `model_${date}.stl`)
-          return
+          return finishArtifact(blob, `model_${date}.stl`, options.download)
         }
 
         if (format === 'obj') {
           const exporter = new OBJExporter()
           const result = exporter.parse(exportScene)
           const blob = new Blob([result], { type: 'model/obj' })
-          downloadBlob(blob, `model_${date}.obj`)
-          return
+          return finishArtifact(blob, `model_${date}.obj`, options.download)
         }
+
+        return null
       } finally {
         useViewer.getState().setExporting(false)
       }
@@ -106,6 +122,16 @@ export function ExportManager() {
   }, [scene, setExportScene])
 
   return null
+}
+
+function finishArtifact(
+  blob: Blob,
+  filename: string,
+  download: boolean | undefined,
+  metadata?: unknown,
+): SceneExportArtifact {
+  if (download !== false) downloadBlob(blob, filename)
+  return { blob, filename, metadata }
 }
 
 function downloadBlob(blob: Blob, filename: string) {
