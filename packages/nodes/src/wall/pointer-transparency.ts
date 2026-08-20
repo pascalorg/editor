@@ -6,35 +6,46 @@
  * every pointer event. #683 made them blanket pointer-TRANSPARENT so clicks
  * reached the visible objects behind them (wall-mounted plugin device /
  * service boxes, items). That over-corrected hover + selection: with the
- * Bones X-ray on (walls hidden, framing members — handler-less
- * InstancedMeshes — rendering where the walls are), mousing over a wall
- * highlighted and selected the furniture BEHIND it, because nothing at the
- * wall's depth was a ray candidate at all.
+ * Bones X-ray on (walls hidden, framing rendering where the walls are),
+ * mousing over a wall highlighted and selected the furniture BEHIND it,
+ * because nothing at the wall's depth was allowed to win.
  *
- * The rule is now NEAREST-FIRST with wall-furniture priority: a hidden wall
- * participates in hover/selection raycasts and wins when it is genuinely the
- * closest thing on the ray, but it YIELDS (early-return, no stopPropagation,
- * so R3F falls through to the real target) whenever any other interactive
- * hit outranks it:
+ * The rule is NEAREST-FIRST over hits that OWN SELECTION SEMANTICS. The
+ * live event raycast recurses through the level/building wrapper groups
+ * (they carry pointer handlers), so `event.intersections` also contains
+ * passive geometry — Bones framing InstancedMeshes sit exactly at the
+ * wall's own depth (QA f2 probe6/probe7), and the wall's own render mesh
+ * rides the same list. Rank by distance alone and the hidden wall yields
+ * everywhere its overlay (or its own body) renders — i.e. always. So every
+ * hit is first classified by its nearest REGISTERED node ancestor
+ * (`selection-hit-owner.ts`):
  *
- * - a hit HOSTED by this wall (its own doors / windows / wall-mounted
- *   children — subtree membership, so grazing angles can't inflate the
- *   depth gap past any epsilon);
- * - a hit at ~equal-or-nearer depth (`HIDDEN_WALL_SELECTION_EPSILON`
- *   tie-break: device boxes flush with / proud of / recessed into the face,
- *   items standing in front of the wall);
- * - a WALL-MOUNTED hit anywhere further down the ray — a non-wall hit
- *   within epsilon of some other wall's collision hit (the #683 / night-5
- *   D4 class: a visible receptacle on a wall two meters BEHIND an
- *   interposed hidden wall must still win — the interposed wall falls
- *   through exactly like the #694 MOVE gate does).
+ * - 'self-wall' hits (own render/collision/treatment meshes) are neutral;
+ * - 'other-wall' hits never compete directly (two hidden walls must not
+ *   both yield and drop the event into the room behind — delivery order
+ *   gives the nearest one the event) but ANCHOR the wall-mounted test;
+ * - 'passive' hits (framing members, gizmos, the grid — no selectable-node
+ *   ancestry, or a level/building wrapper as their nearest handler owner)
+ *   never outrank the wall;
+ * - 'selectable' hits (furniture, devices, openings, slabs …) outrank the
+ *   hidden wall when any of these hold:
+ *     1. HOSTED by this wall (its own doors / windows / wall-mounted
+ *        children — subtree membership, so grazing angles can't inflate
+ *        the depth gap past any epsilon);
+ *     2. at ~equal-or-nearer depth (`HIDDEN_WALL_SELECTION_EPSILON`
+ *        tie-break: device boxes flush with / proud of / recessed into the
+ *        face, items standing in front of the wall);
+ *     3. WALL-MOUNTED further down the ray — within epsilon of some other
+ *        wall's hit (the #683 / night-5 D4 class: a visible receptacle on
+ *        a wall two meters BEHIND an interposed hidden wall still wins —
+ *        the interposed wall falls through, like the #694 MOVE gate).
  *
- * Free-standing hits clearly behind the wall (a sofa mid-room, the floor
- * slab, the grid) no longer outrank it: the wall in front highlights, which
- * is what the ray visually strikes when the Bones framing renders there.
- * Trade-off (deliberate, host-side only — no plugin presence flag): in a
- * plain manual 'down' mode with NO overlay rendering at the wall, that same
- * wall strip becomes hover/selectable again even though it draws nothing.
+ * Free-standing selectables clearly behind the wall (a sofa mid-room) no
+ * longer outrank it: the wall in front highlights, which is what the ray
+ * visually strikes when the Bones framing renders there. Trade-off
+ * (deliberate, host-side only — no plugin presence flag): in a plain manual
+ * 'down' mode with NO overlay rendering at the wall, that wall strip is
+ * hover/selectable even though it draws nothing.
  *
  * Two pre-existing exceptions keep ALL events flowing unconditionally:
  *
@@ -52,6 +63,8 @@
  * an R3F rig; the renderer supplies live values per event.
  */
 
+import type { WallRayHitOwnership } from './selection-hit-owner'
+
 /**
  * Depth tie-break for "at the wall face": in-wall boxes sit flush-to-
  * recessed within a wall thickness (0.09–0.3 m); openings sit inside the
@@ -64,13 +77,13 @@ export const HIDDEN_WALL_SELECTION_EPSILON = 0.35
 /** The wall renderer names its invisible pick mesh this (see renderer.tsx). */
 export const WALL_COLLISION_MESH_NAME = 'collision-mesh'
 
-/** One interactive raycast hit, reduced to what the yield rule needs. */
+/** One raycast hit, reduced to what the yield rule needs. */
 export type WallRayHit = {
   /** Distance along the ray, in meters (three.js Intersection.distance). */
   distance: number
-  /** True when the hit object is some wall's invisible collision mesh. */
-  isWallCollision: boolean
-  /** True when the hit object lives inside THIS wall's rendered subtree. */
+  /** Who owns the hit — see `selection-hit-owner.ts`. */
+  ownership: WallRayHitOwnership
+  /** True when a 'selectable' hit lives inside THIS wall's rendered subtree. */
   hostedByThisWall: boolean
 }
 
@@ -78,7 +91,7 @@ export type WallRayHit = {
 export type WallSelectionRay = {
   /** Distance of this wall's own collision-mesh hit. */
   wallHitDistance: number
-  /** Every other interactive hit on the same ray (self excluded). */
+  /** Every other hit on the same ray (the delivered hit itself excluded). */
   otherHits: ReadonlyArray<WallRayHit>
 }
 
@@ -90,25 +103,15 @@ export const hiddenWallOutrankedOnRay = (
   ray: WallSelectionRay,
   epsilon: number = HIDDEN_WALL_SELECTION_EPSILON,
 ): boolean => {
-  // Other walls' hits never compete directly (two hidden walls must not
-  // BOTH yield and drop the event through to the room behind — the nearest
-  // one wins by delivery order). They only anchor the wall-mounted test.
   const wallAnchors: number[] = []
   for (const hit of ray.otherHits) {
-    if (hit.isWallCollision) wallAnchors.push(hit.distance)
+    if (hit.ownership === 'other-wall') wallAnchors.push(hit.distance)
   }
 
   return ray.otherHits.some((hit) => {
-    if (hit.isWallCollision) return false
-    // The wall's own hosted children (doors, windows, wall-mounted items)
-    // always win, at any incidence angle.
+    if (hit.ownership !== 'selectable') return false
     if (hit.hostedByThisWall) return true
-    // Nearer, or at ~the wall face: devices flush/proud/recessed, items in
-    // front of the wall.
     if (hit.distance <= ray.wallHitDistance + epsilon) return true
-    // Wall-mounted gear further down the ray (a receptacle on a wall behind
-    // this one): visible through the framing, deliberately small targets —
-    // an interposed hidden wall must not swallow them (D4).
     return wallAnchors.some((anchor) => Math.abs(hit.distance - anchor) <= epsilon)
   })
 }
@@ -137,13 +140,16 @@ const isInSubtree = (object: WallRayObjectLike, root: object | null): boolean =>
  * Reduce a live R3F pointer event (Intersection & { intersections }) to the
  * `WallSelectionRay` the yield rule consumes. `wallRoot` is the wall's
  * registered outer mesh — its subtree hosts the collision mesh, treatments,
- * and the hosted door / window / item renderers. Returns undefined when the
- * event carries no usable ray data (synthetic replays); the caller then
- * falls back to full transparency, #683's original behavior.
+ * and the hosted door / window / item renderers. `classify` resolves each
+ * hit's owner (`createWallRayHitClassifier(node.id)` in the renderer).
+ * Returns undefined when the event carries no usable ray data (synthetic
+ * replays); the caller then falls back to full transparency, #683's
+ * original behavior.
  */
 export const extractWallSelectionRay = (
   event: unknown,
   wallRoot: object | null,
+  classify: (object: WallRayObjectLike) => WallRayHitOwnership,
 ): WallSelectionRay | undefined => {
   const e = event as {
     distance?: unknown
@@ -158,12 +164,11 @@ export const extractWallSelectionRay = (
   for (const hit of e.intersections as WallRayIntersectionLike[]) {
     if (!hit || typeof hit.distance !== 'number' || !hit.object) continue
     if (hit.object === self) continue
+    const ownership = classify(hit.object)
     otherHits.push({
       distance: hit.distance,
-      isWallCollision: hit.object.name === WALL_COLLISION_MESH_NAME,
-      // Self is excluded above, so subtree membership here means a HOSTED
-      // child (door / window / wall-mounted item), not the pick mesh.
-      hostedByThisWall: isInSubtree(hit.object, wallRoot),
+      ownership,
+      hostedByThisWall: ownership === 'selectable' && isInSubtree(hit.object, wallRoot),
     })
   }
   return { wallHitDistance: e.distance, otherHits }

@@ -4,19 +4,25 @@ import {
   extractWallSelectionRay,
   HIDDEN_WALL_SELECTION_EPSILON,
   hiddenWallOutrankedOnRay,
-  WALL_COLLISION_MESH_NAME,
+  type WallRayHit,
   type WallRayObjectLike,
   wallPointerEventsSuppressed,
 } from './pointer-transparency'
+import type { WallRayHitOwnership } from './selection-hit-owner'
 
 // Semantics pinned here (the wall renderer's gated handlers evaluate this
 // predicate per pointer event):
-// - nearest-first selection: a wall hidden by the wall-mode pass (Bones
-//   X-ray 'down' mode) handles hover / selection events when it is the
-//   closest thing on the ray — mousing over the framing highlights the
-//   WALL, not the sofa two meters behind it.
+// - nearest-first selection over hits that OWN selection semantics: a wall
+//   hidden by the wall-mode pass (Bones X-ray 'down' mode) handles hover /
+//   selection events when no selectable hit outranks it — mousing over the
+//   framing highlights the WALL, not the sofa two meters behind it.
+// - passive hits never outrank: the live event raycast recurses through the
+//   level/building wrapper groups, so Bones framing InstancedMeshes (and
+//   the wall's own render mesh) land in event.intersections at the wall's
+//   own depth (QA f2 probe6/probe7). Ranking by distance alone would make
+//   the wall yield everywhere its overlay renders.
 // - #683 / night-5 D4 stays fixed: the hidden wall yields to its own hosted
-//   openings, to anything at ~equal-or-nearer depth (device boxes at the
+//   openings, to selectables at ~equal-or-nearer depth (device boxes at the
 //   face), and to wall-mounted gear on walls further down the ray (the
 //   receptacle behind an interposed hidden wall).
 // - night-6 door-drag (#689): while a door / window move / place tool holds
@@ -27,6 +33,12 @@ import {
 // - visible walls never suppress.
 
 const EPS = HIDDEN_WALL_SELECTION_EPSILON
+
+const hit = (
+  distance: number,
+  ownership: WallRayHitOwnership,
+  hostedByThisWall = false,
+): WallRayHit => ({ distance, ownership, hostedByThisWall })
 
 describe('wallPointerEventsSuppressed', () => {
   const base = {
@@ -55,8 +67,8 @@ describe('wallPointerEventsSuppressed', () => {
         selectionRay: {
           wallHitDistance: 5,
           otherHits: [
-            { distance: 7, isWallCollision: false, hostedByThisWall: false }, // sofa mid-room
-            { distance: 12, isWallCollision: false, hostedByThisWall: false }, // grid / far slab
+            hit(7, 'selectable'), // sofa mid-room
+            hit(12, 'passive'), // grid / helper far behind
           ],
         },
       }),
@@ -69,7 +81,7 @@ describe('wallPointerEventsSuppressed', () => {
         ...base,
         selectionRay: {
           wallHitDistance: 5,
-          otherHits: [{ distance: 5 + EPS / 2, isWallCollision: false, hostedByThisWall: false }],
+          otherHits: [hit(5 + EPS / 2, 'selectable')],
         },
       }),
     ).toBe(true)
@@ -84,7 +96,7 @@ describe('wallPointerEventsSuppressed', () => {
         // the MOVE tools' own-wall gate handles interposed walls downstream.
         selectionRay: {
           wallHitDistance: 5,
-          otherHits: [{ distance: 5, isWallCollision: false, hostedByThisWall: false }],
+          otherHits: [hit(5, 'selectable')],
         },
       }),
     ).toBe(false)
@@ -120,21 +132,50 @@ describe('wallPointerEventsSuppressed', () => {
 })
 
 describe('hiddenWallOutrankedOnRay', () => {
+  test('passive hits at the wall depth do NOT outrank (QA f2: Bones framing members)', () => {
+    // probe7 session B verbatim shape: framing InstancedMesh hits ride the
+    // level wrapper's handlers into the intersection list at d≈4.246–4.422,
+    // the wall's own render + collision hits sit at 4.246, the bed at 6.081.
+    expect(
+      hiddenWallOutrankedOnRay({
+        wallHitDistance: 4.246,
+        otherHits: [
+          hit(4.246, 'passive'), // framing stud bucket
+          hit(4.246, 'self-wall'), // own render mesh (invisible-variant material)
+          hit(4.265, 'passive'),
+          hit(4.266, 'passive'),
+          hit(4.422, 'passive'),
+          hit(6.081, 'selectable'), // Double Bed
+          hit(6.271, 'selectable'),
+        ],
+      }),
+    ).toBe(false)
+  })
+
+  test("the wall's own render/collision hits are neutral — never self-defeating", () => {
+    expect(
+      hiddenWallOutrankedOnRay({
+        wallHitDistance: 5,
+        otherHits: [hit(5, 'self-wall'), hit(5.01, 'self-wall')],
+      }),
+    ).toBe(false)
+  })
+
   test('hosted children (doors / windows) outrank at ANY depth gap — grazing angles included', () => {
     expect(
       hiddenWallOutrankedOnRay({
         wallHitDistance: 5,
         // A door panel hit far beyond epsilon along a grazing ray.
-        otherHits: [{ distance: 5 + 3 * EPS, isWallCollision: false, hostedByThisWall: true }],
+        otherHits: [hit(5 + 3 * EPS, 'selectable', true)],
       }),
     ).toBe(true)
   })
 
-  test('hits nearer than the wall outrank it (plain distance order)', () => {
+  test('selectables nearer than the wall outrank it (plain distance order)', () => {
     expect(
       hiddenWallOutrankedOnRay({
         wallHitDistance: 5,
-        otherHits: [{ distance: 3, isWallCollision: false, hostedByThisWall: false }],
+        otherHits: [hit(3, 'selectable')],
       }),
     ).toBe(true)
   })
@@ -145,9 +186,9 @@ describe('hiddenWallOutrankedOnRay', () => {
         wallHitDistance: 5,
         otherHits: [
           // The receptacle, sitting at its own wall's face 2m behind this one…
-          { distance: 7, isWallCollision: false, hostedByThisWall: false },
-          // …anchored by that wall's collision hit right behind it.
-          { distance: 7 + EPS / 2, isWallCollision: true, hostedByThisWall: false },
+          hit(7, 'selectable'),
+          // …anchored by that wall's hit right behind it.
+          hit(7 + EPS / 2, 'other-wall'),
         ],
       }),
     ).toBe(true)
@@ -159,9 +200,9 @@ describe('hiddenWallOutrankedOnRay', () => {
         wallHitDistance: 5,
         otherHits: [
           // Sofa mid-room: not near ANY wall hit on the ray.
-          { distance: 7, isWallCollision: false, hostedByThisWall: false },
+          hit(7, 'selectable'),
           // The room's far wall, well beyond the sofa.
-          { distance: 10, isWallCollision: true, hostedByThisWall: false },
+          hit(10, 'other-wall'),
         ],
       }),
     ).toBe(false)
@@ -173,7 +214,7 @@ describe('hiddenWallOutrankedOnRay', () => {
     expect(
       hiddenWallOutrankedOnRay({
         wallHitDistance: 5,
-        otherHits: [{ distance: 5.1, isWallCollision: true, hostedByThisWall: false }],
+        otherHits: [hit(5.1, 'other-wall')],
       }),
     ).toBe(false)
   })
@@ -185,11 +226,19 @@ describe('extractWallSelectionRay', () => {
     parent,
   })
 
-  test('reduces a live event: self excluded, wall collisions flagged, subtree hits marked hosted', () => {
+  // Classifier stand-in: ownership by an explicit map, 'passive' otherwise —
+  // the real classifier (selection-hit-owner.ts) is tested separately.
+  const classifierFor =
+    (owners: Map<WallRayObjectLike, WallRayHitOwnership>) => (object: WallRayObjectLike) =>
+      owners.get(object) ?? 'passive'
+
+  test('reduces a live event: self excluded, ownership applied, subtree hits marked hosted', () => {
     const wallRoot = chain(null)
-    const selfCollision = chain(wallRoot, WALL_COLLISION_MESH_NAME)
+    const selfCollision = chain(wallRoot, 'collision-mesh')
+    const selfRenderMesh = wallRoot // the outer render mesh IS the registered root
     const hostedDoorMesh = chain(chain(wallRoot)) // door mesh nested under the wall root
-    const otherWallCollision = chain(chain(null), WALL_COLLISION_MESH_NAME)
+    const framingMesh = chain(chain(null))
+    const otherWallCollision = chain(chain(null), 'collision-mesh')
     const sofaMesh = chain(chain(null))
 
     const ray = extractWallSelectionRay(
@@ -198,48 +247,66 @@ describe('extractWallSelectionRay', () => {
         object: selfCollision,
         intersections: [
           { distance: 5, object: selfCollision },
+          { distance: 5, object: selfRenderMesh },
+          { distance: 5.01, object: framingMesh },
           { distance: 5.2, object: hostedDoorMesh },
           { distance: 7, object: sofaMesh },
           { distance: 7.1, object: otherWallCollision },
         ],
       },
       wallRoot,
+      classifierFor(
+        new Map<WallRayObjectLike, WallRayHitOwnership>([
+          [selfRenderMesh, 'self-wall'],
+          [hostedDoorMesh, 'selectable'],
+          [framingMesh, 'passive'],
+          [otherWallCollision, 'other-wall'],
+          [sofaMesh, 'selectable'],
+        ]),
+      ),
     )
 
     expect(ray).toEqual({
       wallHitDistance: 5,
       otherHits: [
-        { distance: 5.2, isWallCollision: false, hostedByThisWall: true },
-        { distance: 7, isWallCollision: false, hostedByThisWall: false },
-        { distance: 7.1, isWallCollision: true, hostedByThisWall: false },
+        { distance: 5, ownership: 'self-wall', hostedByThisWall: false },
+        { distance: 5.01, ownership: 'passive', hostedByThisWall: false },
+        { distance: 5.2, ownership: 'selectable', hostedByThisWall: true },
+        { distance: 7, ownership: 'selectable', hostedByThisWall: false },
+        { distance: 7.1, ownership: 'other-wall', hostedByThisWall: false },
       ],
     })
   })
 
   test('events without ray data reduce to undefined (→ #683 transparent fallback)', () => {
-    expect(extractWallSelectionRay(undefined, null)).toBeUndefined()
-    expect(extractWallSelectionRay({}, null)).toBeUndefined()
-    expect(extractWallSelectionRay({ distance: 5, object: chain(null) }, null)).toBeUndefined()
+    const classify = classifierFor(new Map())
+    expect(extractWallSelectionRay(undefined, null, classify)).toBeUndefined()
+    expect(extractWallSelectionRay({}, null, classify)).toBeUndefined()
     expect(
-      extractWallSelectionRay({ object: chain(null), intersections: [] }, null),
+      extractWallSelectionRay({ distance: 5, object: chain(null) }, null, classify),
+    ).toBeUndefined()
+    expect(
+      extractWallSelectionRay({ object: chain(null), intersections: [] }, null, classify),
     ).toBeUndefined()
   })
 
   test('a null wall root marks nothing as hosted (wall not registered yet)', () => {
-    const self = chain(null, WALL_COLLISION_MESH_NAME)
+    const self = chain(null, 'collision-mesh')
+    const selectable = chain(null)
     const ray = extractWallSelectionRay(
       {
         distance: 5,
         object: self,
         intersections: [
           { distance: 5, object: self },
-          { distance: 5.1, object: chain(null) },
+          { distance: 5.1, object: selectable },
         ],
       },
       null,
+      classifierFor(new Map([[selectable, 'selectable' as const]])),
     )
     expect(ray?.otherHits).toEqual([
-      { distance: 5.1, isWallCollision: false, hostedByThisWall: false },
+      { distance: 5.1, ownership: 'selectable', hostedByThisWall: false },
     ])
   })
 })
