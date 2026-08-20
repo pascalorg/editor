@@ -257,6 +257,14 @@ export {
 } from './systems/wall/opening-cutout-geometry'
 export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
+// Canonical wall manufacturing solids stay separate from display CSG so
+// print compilation never has to repair the render mesh.
+export {
+  buildPrintableWallSolids,
+  type PrintWallSolidDiagnostic,
+  type PrintWallSolidOptions,
+  type PrintWallSolidResult,
+} from './systems/wall/wall-print-solids'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
