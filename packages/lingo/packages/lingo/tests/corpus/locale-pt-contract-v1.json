@@ -1,0 +1,1403 @@
+{
+  "version": 1,
+  "fixedNow": [
+    2026,
+    6,
+    3,
+    14,
+    30,
+    0
+  ],
+  "breadth": {
+    "dois kg [basic-word-pin]": {
+      "input": "dois kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "entre 5 e 10 kg [range-pin]": {
+      "input": "entre 5 e 10 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 6,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "pelo menos 2 kg [bound-pin]": {
+      "input": "pelo menos 2 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 2,
+        "max": null
+      },
+      "unit": {
+        "min": "kg",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "aproximadamente 5 kg [approx-word-pin]": {
+      "input": "aproximadamente 5 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 16,
+        "end": 20
+      },
+      "confidence": 0.9
+    },
+    "duzentos kg": {
+      "input": "duzentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 200,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "duzentas kg": {
+      "input": "duzentas kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 200,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "trezentos kg": {
+      "input": "trezentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 300,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "quatrocentos kg": {
+      "input": "quatrocentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 400,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "quatrocentas kg": {
+      "input": "quatrocentas kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 400,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "quinhentos kg": {
+      "input": "quinhentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 500,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "quinhentas kg": {
+      "input": "quinhentas kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 500,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "seiscentos kg": {
+      "input": "seiscentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 600,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "seiscentas kg": {
+      "input": "seiscentas kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 600,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "setecentos kg": {
+      "input": "setecentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 700,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "setecentas kg": {
+      "input": "setecentas kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 700,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "oitocentos kg": {
+      "input": "oitocentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 800,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "oitocentas kg": {
+      "input": "oitocentas kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 800,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "novecentos kg": {
+      "input": "novecentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 900,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "novecentas kg": {
+      "input": "novecentas kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 900,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "cem kg": {
+      "input": "cem kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 100,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "mil kg": {
+      "input": "mil kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "vinte e cinco kg": {
+      "input": "vinte e cinco kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 25,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "trinta e sete kg": {
+      "input": "trinta e sete kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 37,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "noventa e nove kg": {
+      "input": "noventa e nove kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 99,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 17
+      },
+      "confidence": 1
+    },
+    "dois virgula cinco kg": {
+      "input": "dois virgula cinco kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2.5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "dois virgula cinco seis kg": {
+      "input": "dois virgula cinco seis kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2.56,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 26
+      },
+      "confidence": 1
+    },
+    "mais ou menos 5 kg": {
+      "input": "mais ou menos 5 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 14,
+        "end": 18
+      },
+      "confidence": 0.9
+    },
+    "por volta de 5 kg": {
+      "input": "por volta de 5 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 13,
+        "end": 17
+      },
+      "confidence": 0.9
+    },
+    "cerca de 5 kg": {
+      "input": "cerca de 5 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 9,
+        "end": 13
+      },
+      "confidence": 0.9
+    },
+    "la pelas 5 kg": {
+      "input": "la pelas 5 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 9,
+        "end": 13
+      },
+      "confidence": 0.9
+    },
+    "uns 5 kg": {
+      "input": "uns 5 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 4,
+        "end": 8
+      },
+      "confidence": 0.9
+    },
+    "umas 3 kg": {
+      "input": "umas 3 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 3,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 5,
+        "end": 9
+      },
+      "confidence": 0.9
+    },
+    "5 kg e pouco": {
+      "input": "5 kg e pouco",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 0.9
+    },
+    "5 kg e poucos": {
+      "input": "5 kg e poucos",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 0.9
+    },
+    "5 kg e tanto": {
+      "input": "5 kg e tanto",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 0.9
+    },
+    "5 ou 6 kg": {
+      "input": "5 ou 6 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 6
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "de 5 a 10 kg": {
+      "input": "de 5 a 10 kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 3,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "um par de kg": {
+      "input": "um par de kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 2,
+        "max": 3
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 0.9
+    },
+    "dezessete kg": {
+      "input": "dezessete kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 17,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "dezassete kg": {
+      "input": "dezassete kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 17,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "dezanove kg": {
+      "input": "dezanove kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 19,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "dezesseis kg": {
+      "input": "dezesseis kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 16,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "dezasseis kg": {
+      "input": "dezasseis kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 16,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "cento e vinte kg": {
+      "input": "cento e vinte kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 120,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "mil e quinhentos kg": {
+      "input": "mil e quinhentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1500,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "dois mil e quinhentos kg": {
+      "input": "dois mil e quinhentos kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2500,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 24
+      },
+      "confidence": 1
+    },
+    "um milhao de kg": {
+      "input": "um milhao de kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1000000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "um bilhao de kg": {
+      "input": "um bilhao de kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1000000000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "mil milhoes de kg": {
+      "input": "mil milhoes de kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1000000000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 17
+      },
+      "confidence": 1
+    },
+    "20 reais": {
+      "input": "20 reais",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 20,
+      "unit": "BRL",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "entre mil e dois mil kg": {
+      "input": "entre mil e dois mil kg",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 1000,
+        "max": 2000
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 6,
+        "end": 23
+      },
+      "confidence": 1
+    }
+  },
+  "date": {
+    "ha tres dias [relative-past-pin]": {
+      "input": "ha tres dias",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 30,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "amanha [tomorrow-pin]": {
+      "input": "amanha",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "ontem [yesterday-pin]": {
+      "input": "ontem",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 2,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "de madrugada": {
+      "input": "de madrugada",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 4,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "anteontem": {
+      "input": "anteontem",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "depois de amanha": {
+      "input": "depois de amanha",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "duas e meia": {
+      "input": "duas e meia",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 2,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "tres e quinze": {
+      "input": "tres e quinze",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 3,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "quinze para as tres": {
+      "input": "quinze para as tres",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 2,
+        "minute": 45,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "dez para as oito": {
+      "input": "dez para as oito",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 7,
+        "minute": 50,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "inicio de julho": {
+      "input": "inicio de julho",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "comeco de julho": {
+      "input": "comeco de julho",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "no comeco do mes": {
+      "input": "no comeco do mes",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "meio de julho": {
+      "input": "meio de julho",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 15,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "fim de julho": {
+      "input": "fim de julho",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 31,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "final de julho": {
+      "input": "final de julho",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 31,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "segunda-feira": {
+      "input": "segunda-feira",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 0.9
+    },
+    "terca-feira": {
+      "input": "terca-feira",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 7,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 0.9
+    },
+    "sexta-feira": {
+      "input": "sexta-feira",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 0.9
+    },
+    "proxima segunda-feira": {
+      "input": "proxima segunda-feira",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "na proxima segunda-feira": {
+      "input": "na proxima segunda-feira",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 24
+      },
+      "confidence": 1
+    },
+    "segunda-feira que vem": {
+      "input": "segunda-feira que vem",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "3 de marco": {
+      "input": "3 de marco",
+      "opts": {
+        "locale": "pt"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 3,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    }
+  },
+  "dateRange": {}
+}

@@ -1,0 +1,8 @@
+{
+  "name": "image-to-text-scripts",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "tesseract.js": "^5.1.1"
+  }
+}

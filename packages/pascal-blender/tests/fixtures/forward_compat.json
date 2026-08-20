@@ -1,0 +1,145 @@
+{
+  "nodes": {
+    "building_fc0000000001": {
+      "object": "node",
+      "id": "building_fc0000000001",
+      "type": "building",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_fc000000000001"
+      ]
+    },
+    "level_fc000000000001": {
+      "object": "node",
+      "id": "level_fc000000000001",
+      "type": "level",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "level": 0,
+      "children": [
+        "wall_fc0000000000001",
+        "hologram_fc000000001",
+        "zone_fc0000000000001"
+      ]
+    },
+    "wall_fc0000000000001": {
+      "object": "node",
+      "id": "wall_fc0000000000001",
+      "type": "wall",
+      "parentId": "level_fc000000000001",
+      "visible": true,
+      "metadata": {
+        "isTransient": false,
+        "customTag": "café-η"
+      },
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        5,
+        0
+      ],
+      "futureField": {
+        "nested": [
+          1,
+          "two",
+          null,
+          {
+            "deep": true
+          }
+        ],
+        "λ": "unicode ✓ 🏠"
+      }
+    },
+    "hologram_fc000000001": {
+      "object": "node",
+      "id": "hologram_fc000000001",
+      "type": "hologram-x",
+      "parentId": "level_fc000000000001",
+      "visible": true,
+      "metadata": {},
+      "beamColor": "#ff00ff",
+      "frames": [
+        0.1,
+        0.2
+      ],
+      "emitter": {
+        "power": 2e+33,
+        "tiny": 1e-17
+      }
+    },
+    "zone_fc0000000000001": {
+      "object": "node",
+      "id": "zone_fc0000000000001",
+      "type": "zone",
+      "parentId": "level_fc000000000001",
+      "visible": true,
+      "metadata": {},
+      "name": "Salle à manger 🍽",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          0,
+          3
+        ]
+      ],
+      "color": "#22c55e",
+      "camera": {
+        "position": [
+          5,
+          5,
+          5
+        ],
+        "target": [
+          1.5,
+          0,
+          1.5
+        ],
+        "mode": "perspective"
+      }
+    },
+    "item_fc0000000000001": {
+      "object": "node",
+      "id": "item_fc0000000000001",
+      "type": "item",
+      "parentId": "wall_gone00000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        1,
+        0,
+        0
+      ],
+      "asset": {
+        "id": "ghost-chair",
+        "category": "furniture",
+        "name": "Ghost Chair",
+        "thumbnail": "/x.webp",
+        "src": "asset://deadbeef",
+        "dimensions": [
+          0.5,
+          0.9,
+          0.5
+        ]
+      }
+    }
+  },
+  "rootNodeIds": [
+    "building_fc0000000001"
+  ]
+}

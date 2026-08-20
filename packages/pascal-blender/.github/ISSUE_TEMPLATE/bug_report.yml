@@ -1,0 +1,58 @@
+name: Bug report
+description: Something imported wrong, crashed, or lost data
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! **A scene file is mandatory** — almost no import
+        bug can be fixed without the JSON that triggers it.
+  - type: input
+    id: blender-version
+    attributes:
+      label: Blender version
+      placeholder: "4.5.3"
+    validations:
+      required: true
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension version
+      description: Preferences → Get Extensions → Pascal Scene Importer
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, what did you get? Screenshots welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: scene-file
+    attributes:
+      label: Scene JSON (mandatory)
+      description: >
+        Drag the .json you imported into this field (zip it if GitHub rejects
+        the extension). If you can't share the full scene, cut it down to the
+        smallest version that still shows the bug — that alone often reveals it.
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Console output / traceback
+      description: >
+        macOS/Linux: start Blender from a terminal. Windows: Window → Toggle
+        System Console. Paste anything red.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I re-imported with the latest release of the extension
+          required: true
+        - label: I attached (or linked) a scene JSON that reproduces the problem
+          required: true

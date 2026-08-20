@@ -1,0 +1,1097 @@
+{
+  "version": 1,
+  "fixedNow": [
+    2026,
+    6,
+    3,
+    14,
+    30,
+    0
+  ],
+  "breadth": {
+    "5キロ [kg-arabic-pin]": {
+      "input": "5キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "三キロ": {
+      "input": "三キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 3,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "三十五キロ": {
+      "input": "三十五キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 35,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "百五十グラム": {
+      "input": "百五十グラム",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 0.15,
+      "unit": "g",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "千五百メートル": {
+      "input": "千五百メートル",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "length",
+      "base": 1500,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "三万五千円": {
+      "input": "三万五千円",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 35000,
+      "unit": "JPY",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "3万5千キロ": {
+      "input": "3万5千キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 35000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "二億三千万": {
+      "input": "二億三千万",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "number",
+      "kind": null,
+      "base": 230000000,
+      "unit": null,
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "二億三千万円": {
+      "input": "二億三千万円",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 230000000,
+      "unit": "JPY",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "二キロ半": {
+      "input": "二キロ半",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2.5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "一時間半": {
+      "input": "一時間半",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "duration",
+      "base": 5400,
+      "unit": "h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "３５キロ": {
+      "input": "３５キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 35,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "5〜10キロ": {
+      "input": "5〜10キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "5～10キロ": {
+      "input": "5～10キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "三〜五日": {
+      "input": "三〜五日",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": 259200,
+        "max": 432000
+      },
+      "unit": {
+        "min": "d",
+        "max": "d"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "約5キロ": {
+      "input": "約5キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 1,
+        "end": 4
+      },
+      "confidence": 0.9
+    },
+    "5キロ ほど": {
+      "input": "5キロ ほど",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    },
+    "三個": {
+      "input": "三個",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "number",
+      "kind": null,
+      "base": 3,
+      "unit": null,
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 1
+      },
+      "confidence": 1
+    },
+    "1000円": {
+      "input": "1000円",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 1000,
+      "unit": "JPY",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "￥1000": {
+      "input": "￥1000",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 1000,
+      "unit": "JPY",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5キロ未満": {
+      "input": "5キロ未満",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": null,
+        "max": 5
+      },
+      "unit": {
+        "min": null,
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5キロ以上": {
+      "input": "5キロ以上",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": null
+      },
+      "unit": {
+        "min": "kg",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5キロ以下": {
+      "input": "5キロ以下",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": null,
+        "max": 5
+      },
+      "unit": {
+        "min": null,
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5キロ以内": {
+      "input": "5キロ以内",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": null,
+        "max": 5
+      },
+      "unit": {
+        "min": null,
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5キロ超": {
+      "input": "5キロ超",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": null
+      },
+      "unit": {
+        "min": "kg",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "最低5キロ": {
+      "input": "最低5キロ",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": null
+      },
+      "unit": {
+        "min": "kg",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5キロほど": {
+      "input": "5キロほど",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    },
+    "5キロ前後": {
+      "input": "5キロ前後",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    }
+  },
+  "date": {
+    "3日前 [compact-days-ago-pin]": {
+      "input": "3日前",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 30,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "一昨日": {
+      "input": "一昨日",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "おととい": {
+      "input": "おととい",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "明後日": {
+      "input": "明後日",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "あさって": {
+      "input": "あさって",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "しあさって": {
+      "input": "しあさって",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "今朝": {
+      "input": "今朝",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 8,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "今晩": {
+      "input": "今晩",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 19,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "今夜": {
+      "input": "今夜",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 21,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "来週": {
+      "input": "来週",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "week",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "再来週": {
+      "input": "再来週",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 13,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "week",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "再来月": {
+      "input": "再来月",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 9,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "先々週": {
+      "input": "先々週",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 15,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "week",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "先々月": {
+      "input": "先々月",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 5,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "週末": {
+      "input": "週末",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "月末": {
+      "input": "月末",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 31,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "2026年3月5日": {
+      "input": "2026年3月5日",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "3月5日": {
+      "input": "3月5日",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "水曜日": {
+      "input": "水曜日",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 8,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    },
+    "水曜": {
+      "input": "水曜",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 8,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 0.9
+    },
+    "来週の月曜日": {
+      "input": "来週の月曜日",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "午後3時": {
+      "input": "午後3時",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "午前9時半": {
+      "input": "午前9時半",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 9,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "3時15分": {
+      "input": "3時15分",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 3,
+        "minute": 15,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "明日午後3時": {
+      "input": "明日午後3時",
+      "opts": {
+        "locale": "ja"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    }
+  },
+  "dateRange": {}
+}

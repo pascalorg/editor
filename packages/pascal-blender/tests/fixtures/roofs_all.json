@@ -1,0 +1,186 @@
+{
+  "nodes": {
+    "rseg_all0000000000000": {
+      "object": "node",
+      "id": "rseg_all0000000000000",
+      "type": "roof-segment",
+      "parentId": "roof_all000000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        0.0,
+        0,
+        0.0
+      ],
+      "rotation": 0,
+      "roofType": "hip",
+      "width": 8,
+      "depth": 6,
+      "wallHeight": 0.5,
+      "roofHeight": 2.5
+    },
+    "rseg_all1000000000000": {
+      "object": "node",
+      "id": "rseg_all1000000000000",
+      "type": "roof-segment",
+      "parentId": "roof_all000000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        12.0,
+        0,
+        0.0
+      ],
+      "rotation": 0,
+      "roofType": "gable",
+      "width": 8,
+      "depth": 6,
+      "wallHeight": 0.5,
+      "roofHeight": 2.5
+    },
+    "rseg_all2000000000000": {
+      "object": "node",
+      "id": "rseg_all2000000000000",
+      "type": "roof-segment",
+      "parentId": "roof_all000000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        24.0,
+        0,
+        0.0
+      ],
+      "rotation": 0.3,
+      "roofType": "shed",
+      "width": 8,
+      "depth": 6,
+      "wallHeight": 0.5,
+      "roofHeight": 2.5
+    },
+    "rseg_all3000000000000": {
+      "object": "node",
+      "id": "rseg_all3000000000000",
+      "type": "roof-segment",
+      "parentId": "roof_all000000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        36.0,
+        0,
+        0.0
+      ],
+      "rotation": 0,
+      "roofType": "gambrel",
+      "width": 8,
+      "depth": 6,
+      "wallHeight": 0.5,
+      "roofHeight": 2.5
+    },
+    "rseg_all4000000000000": {
+      "object": "node",
+      "id": "rseg_all4000000000000",
+      "type": "roof-segment",
+      "parentId": "roof_all000000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        0.0,
+        0,
+        10.0
+      ],
+      "rotation": 0,
+      "roofType": "dutch",
+      "width": 8,
+      "depth": 6,
+      "wallHeight": 0.5,
+      "roofHeight": 2.5
+    },
+    "rseg_all5000000000000": {
+      "object": "node",
+      "id": "rseg_all5000000000000",
+      "type": "roof-segment",
+      "parentId": "roof_all000000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        12.0,
+        0,
+        10.0
+      ],
+      "rotation": 0,
+      "roofType": "mansard",
+      "width": 8,
+      "depth": 6,
+      "wallHeight": 0.5,
+      "roofHeight": 2.5
+    },
+    "rseg_all6000000000000": {
+      "object": "node",
+      "id": "rseg_all6000000000000",
+      "type": "roof-segment",
+      "parentId": "roof_all000000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        24.0,
+        0,
+        10.0
+      ],
+      "rotation": 0,
+      "roofType": "flat",
+      "width": 8,
+      "depth": 6,
+      "wallHeight": 0,
+      "roofHeight": 2.5
+    },
+    "roof_all000000000001": {
+      "object": "node",
+      "id": "roof_all000000000001",
+      "type": "roof",
+      "parentId": "level_all0000000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": 0,
+      "children": [
+        "rseg_all0000000000000",
+        "rseg_all1000000000000",
+        "rseg_all2000000000000",
+        "rseg_all3000000000000",
+        "rseg_all4000000000000",
+        "rseg_all5000000000000",
+        "rseg_all6000000000000"
+      ]
+    },
+    "level_all0000000000001": {
+      "object": "node",
+      "id": "level_all0000000000001",
+      "type": "level",
+      "parentId": "building_all000000001",
+      "visible": true,
+      "metadata": {},
+      "level": 0,
+      "children": [
+        "roof_all000000000001"
+      ]
+    },
+    "building_all000000001": {
+      "object": "node",
+      "id": "building_all000000001",
+      "type": "building",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_all0000000000001"
+      ]
+    }
+  },
+  "rootNodeIds": [
+    "building_all000000001"
+  ]
+}

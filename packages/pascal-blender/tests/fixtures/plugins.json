@@ -1,0 +1,312 @@
+{
+  "nodes": {
+    "building_plug0000001": {
+      "object": "node",
+      "id": "building_plug0000001",
+      "type": "building",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_plug000000001"
+      ]
+    },
+    "fence_plug0000000001": {
+      "object": "node",
+      "id": "fence_plug0000000001",
+      "type": "fence",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        6,
+        0
+      ],
+      "style": "slat"
+    },
+    "fence_plug0000000002": {
+      "object": "node",
+      "id": "fence_plug0000000002",
+      "type": "fence",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0,
+        2
+      ],
+      "end": [
+        6,
+        2
+      ],
+      "style": "horizontal",
+      "postCap": "flat",
+      "height": 1.2
+    },
+    "shelf_plug0000000001": {
+      "object": "node",
+      "id": "shelf_plug0000000001",
+      "type": "shelf",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        1,
+        1.6,
+        3
+      ],
+      "style": "wall-shelf",
+      "width": 1.2
+    },
+    "spawn_plug0000000001": {
+      "object": "node",
+      "id": "spawn_plug0000000001",
+      "type": "spawn",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        3,
+        0,
+        3
+      ],
+      "rotation": 1.57
+    },
+    "tree_plug00000000001": {
+      "object": "node",
+      "id": "tree_plug00000000001",
+      "type": "trees:tree",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        8,
+        0,
+        1
+      ],
+      "preset": "oak",
+      "height": 7
+    },
+    "tree_plug00000000002": {
+      "object": "node",
+      "id": "tree_plug00000000002",
+      "type": "trees:tree",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        10,
+        0,
+        4
+      ],
+      "preset": "pine",
+      "treeType": "evergreen",
+      "leafless": false,
+      "height": 9
+    },
+    "tree_plug00000000003": {
+      "object": "node",
+      "id": "tree_plug00000000003",
+      "type": "trees:tree",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        12,
+        0,
+        1
+      ],
+      "preset": "ash",
+      "leafless": true,
+      "height": 6
+    },
+    "grass_plug0000000001": {
+      "object": "node",
+      "id": "grass_plug0000000001",
+      "type": "trees:grass",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        7,
+        0,
+        3
+      ],
+      "preset": "meadow",
+      "seed": 7,
+      "height": 0.4,
+      "bladeColor": "#5a8f3c"
+    },
+    "grass_plug0000000002": {
+      "object": "node",
+      "id": "grass_plug0000000002",
+      "type": "trees:grass",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        7.5,
+        0,
+        3.2
+      ],
+      "preset": "meadow",
+      "seed": 7,
+      "height": 0.4,
+      "bladeColor": "#5a8f3c"
+    },
+    "grass_plug0000000003": {
+      "object": "node",
+      "id": "grass_plug0000000003",
+      "type": "trees:grass",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        8,
+        0,
+        3.5
+      ],
+      "preset": "reed",
+      "seed": 13,
+      "height": 1.1,
+      "bladeColor": "#4a7d63"
+    },
+    "hologram_plug0000001": {
+      "object": "node",
+      "id": "hologram_plug0000001",
+      "type": "future:hologram",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "beam": "#ff00ff"
+    },
+    "level_plug000000001": {
+      "object": "node",
+      "id": "level_plug000000001",
+      "type": "level",
+      "parentId": "building_plug0000001",
+      "visible": true,
+      "metadata": {},
+      "level": 0,
+      "children": [
+        "fence_plug0000000001",
+        "fence_plug0000000002",
+        "shelf_plug0000000001",
+        "spawn_plug0000000001",
+        "tree_plug00000000001",
+        "tree_plug00000000002",
+        "tree_plug00000000003",
+        "grass_plug0000000001",
+        "grass_plug0000000002",
+        "grass_plug0000000003",
+        "hologram_plug0000001",
+        "item_surfparent00001",
+        "column_plug00000001"
+      ]
+    },
+    "item_surfparent00001": {
+      "object": "node",
+      "id": "item_surfparent00001",
+      "type": "item",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        5,
+        0,
+        5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "children": [
+        "item_surfchild000001"
+      ],
+      "asset": {
+        "id": "test-table",
+        "category": "furniture",
+        "name": "Table",
+        "thumbnail": "/t.webp",
+        "src": "asset://none",
+        "dimensions": [
+          1.2,
+          0.75,
+          0.6
+        ],
+        "surface": {
+          "height": 0.75
+        }
+      }
+    },
+    "item_surfchild000001": {
+      "object": "node",
+      "id": "item_surfchild000001",
+      "type": "item",
+      "parentId": "item_surfparent00001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        0.1,
+        0.75,
+        0.05
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "asset": {
+        "id": "test-cup",
+        "category": "decor",
+        "name": "Cup",
+        "thumbnail": "/c.webp",
+        "src": "asset://none",
+        "dimensions": [
+          0.1,
+          0.12,
+          0.1
+        ]
+      }
+    },
+    "column_plug00000001": {
+      "object": "node",
+      "id": "column_plug00000001",
+      "type": "column",
+      "parentId": "level_plug000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        9,
+        0,
+        9
+      ],
+      "rotation": 0,
+      "width": 0.12,
+      "depth": 0.12,
+      "height": 2.34,
+      "radius": 0.22
+    }
+  },
+  "rootNodeIds": [
+    "building_plug0000001"
+  ],
+  "installedPlugins": [
+    "pascal:trees"
+  ]
+}

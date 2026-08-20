@@ -13,6 +13,7 @@ import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
+import { articraftHostPanel, articraftPlugin } from '@pascal-app/plugin-articraft'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
 // throws on duplicate kinds. Flags live in the module closure so they
@@ -88,19 +89,23 @@ export async function loadExternalPlugins(): Promise<void> {
 // discovery source instead of replacing it. Its Nature rail panel is host UI,
 // so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
-registerEditorHostPanel(treesHostPanel)
+registerEditorHostPanel({ ...treesHostPanel, defaultInstalled: false })
 extendPluginDiscovery(async () => [bonesPlugin])
 // Opt-in: Bones ships uninstalled — users enable it per scene from the
 // Plugins panel (engineering X-ray is a specialist view, not a default).
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
 extendPluginDiscovery(async () => [mintPlugin])
-registerEditorHostPanel(mintHostPanel)
+registerEditorHostPanel({ ...mintHostPanel, defaultInstalled: false })
 extendPluginDiscovery(async () => [streetscapePlugin])
 // The upstream manifest still names 'Pascal' as creator; credit the author.
 registerEditorHostPanel({
   ...streetscapeHostPanel,
   creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
+  defaultInstalled: false
 })
+
+extendPluginDiscovery(async () => [articraftPlugin])
+registerEditorHostPanel({ ...articraftHostPanel, defaultInstalled: false })
 
 // Warehouse & logistics pack. Composed onto the discovery chain rather than
 // replacing it — `setPluginDiscovery` would drop every plugin registered above.

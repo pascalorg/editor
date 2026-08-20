@@ -1,0 +1,1292 @@
+[
+  {
+    "id": "unit-omission-01",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "cm" },
+    "raw": "180",
+    "expected": 180
+  },
+  {
+    "id": "unit-omission-02",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "in" },
+    "raw": "72",
+    "expected": 72
+  },
+  {
+    "id": "unit-omission-03",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "ft" },
+    "raw": "6",
+    "expected": 6
+  },
+  {
+    "id": "unit-omission-04",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "80",
+    "expected": 80
+  },
+  {
+    "id": "unit-omission-05",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "lb" },
+    "raw": "176",
+    "expected": 176
+  },
+  {
+    "id": "unit-omission-06",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "temperature", "unit": "C" },
+    "raw": "20",
+    "expected": 20
+  },
+  {
+    "id": "unit-omission-07",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "temperature", "unit": "F" },
+    "raw": "68",
+    "expected": 67.99999999999999
+  },
+  {
+    "id": "unit-omission-08",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "90",
+    "expected": 90
+  },
+  {
+    "id": "unit-omission-09",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "min" },
+    "raw": "45",
+    "expected": 45
+  },
+  {
+    "id": "unit-omission-10",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "h" },
+    "raw": "2",
+    "expected": 2
+  },
+  {
+    "id": "unit-omission-11",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "pressure", "unit": "psi" },
+    "raw": "32",
+    "expected": 32
+  },
+  {
+    "id": "unit-omission-12",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "pressure", "unit": "hPa" },
+    "raw": "1013",
+    "expected": 1013
+  },
+  {
+    "id": "unit-omission-13",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "data", "unit": "GB" },
+    "raw": "500",
+    "expected": 500
+  },
+  {
+    "id": "unit-omission-14",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "data", "unit": "Mbit" },
+    "raw": "100",
+    "expected": 100
+  },
+  {
+    "id": "unit-omission-15",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "percent", "unit": "%" },
+    "raw": "30",
+    "expected": 30
+  },
+  {
+    "id": "unit-omission-16",
+    "category": "unit-omission",
+    "provenance": "synthesized",
+    "field": { "kind": "angle", "unit": "rad" },
+    "raw": "1.5",
+    "expected": 1.5
+  },
+  {
+    "id": "unit-in-number-field-01",
+    "category": "unit-in-number-field",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "2kg",
+    "expected": 2
+  },
+  {
+    "id": "unit-in-number-field-02",
+    "category": "unit-in-number-field",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "2 kg",
+    "expected": 2
+  },
+  {
+    "id": "unit-in-number-field-03",
+    "category": "unit-in-number-field",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5lbs",
+    "expected": 2.2679618500000003
+  },
+  {
+    "id": "unit-in-number-field-04",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "3 lb",
+    "expected": 1.3607771100000001
+  },
+  {
+    "id": "unit-in-number-field-05",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "72 in",
+    "expected": 1.8288
+  },
+  {
+    "id": "unit-in-number-field-06",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "180cm",
+    "expected": 1.8
+  },
+  {
+    "id": "unit-in-number-field-07",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "5 ft",
+    "expected": 1.524
+  },
+  {
+    "id": "unit-in-number-field-08",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "temperature", "unit": "C" },
+    "raw": "20C",
+    "expected": 20
+  },
+  {
+    "id": "unit-in-number-field-09",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "temperature", "unit": "C" },
+    "raw": "68F",
+    "expected": 20
+  },
+  {
+    "id": "unit-in-number-field-10",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "250ml",
+    "expected": 0.25
+  },
+  {
+    "id": "unit-in-number-field-11",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "2L",
+    "expected": 2
+  },
+  {
+    "id": "unit-in-number-field-12",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "speed", "unit": "m/s" },
+    "raw": "60mph",
+    "expected": 26.8224
+  },
+  {
+    "id": "unit-in-number-field-13",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "speed", "unit": "m/s" },
+    "raw": "100kmh",
+    "expected": 27.77777777777778
+  },
+  {
+    "id": "unit-in-number-field-14",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "pressure", "unit": "Pa" },
+    "raw": "32psi",
+    "expected": 220632.233381376
+  },
+  {
+    "id": "unit-in-number-field-15",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "energy", "unit": "J" },
+    "raw": "13kWh",
+    "expected": 46800000
+  },
+  {
+    "id": "unit-in-number-field-16",
+    "category": "unit-in-number-field",
+    "provenance": "synthesized",
+    "field": { "kind": "angle", "unit": "rad" },
+    "raw": "90deg",
+    "expected": 1.5707963267948966
+  },
+  {
+    "id": "locale-decimal-comma-01",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1,5",
+    "expected": 1.5
+  },
+  {
+    "id": "locale-decimal-comma-02",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1,5 kg",
+    "expected": 1.5
+  },
+  {
+    "id": "locale-decimal-comma-03",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "0,75 m",
+    "expected": 0.75
+  },
+  {
+    "id": "locale-decimal-comma-04",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "12,5 km",
+    "expected": 12500
+  },
+  {
+    "id": "locale-decimal-comma-05",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "3,25 lb",
+    "expected": 1.4741752025000001
+  },
+  {
+    "id": "locale-decimal-comma-06",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "temperature", "unit": "C" },
+    "raw": "37,5 C",
+    "expected": 37.5
+  },
+  {
+    "id": "locale-decimal-comma-07",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "250,5 ml",
+    "expected": 0.25049999999999994
+  },
+  {
+    "id": "locale-decimal-comma-08",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "1,25 cups",
+    "expected": 0.295735295625
+  },
+  {
+    "id": "locale-decimal-comma-09",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "1,5h",
+    "expected": 5400
+  },
+  {
+    "id": "locale-decimal-comma-10",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "0,5h",
+    "expected": 1800
+  },
+  {
+    "id": "locale-decimal-comma-11",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "2,25 hr",
+    "expected": 8100
+  },
+  {
+    "id": "locale-decimal-comma-12",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "speed", "unit": "m/s" },
+    "raw": "9,8 m/s",
+    "expected": 9.8
+  },
+  {
+    "id": "locale-decimal-comma-13",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "pressure", "unit": "Pa" },
+    "raw": "1,5 bar",
+    "expected": 150000
+  },
+  {
+    "id": "locale-decimal-comma-14",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "angle", "unit": "rad" },
+    "raw": "90,5 deg",
+    "expected": 1.5795229730548683
+  },
+  {
+    "id": "locale-decimal-comma-15",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "energy", "unit": "J" },
+    "raw": "2,5 kWh",
+    "expected": 9000000
+  },
+  {
+    "id": "locale-decimal-comma-16",
+    "category": "locale-decimal-comma",
+    "provenance": "synthesized",
+    "field": { "kind": "percent", "unit": "%" },
+    "raw": "12,5%",
+    "expected": 12.5
+  },
+  {
+    "id": "thousands-separator-01",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1,234",
+    "expected": 1234
+  },
+  {
+    "id": "thousands-separator-02",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "12,345 kg",
+    "expected": 12345
+  },
+  {
+    "id": "thousands-separator-03",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1 234 kg",
+    "expected": 1234
+  },
+  {
+    "id": "thousands-separator-04",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1 234,5 kg",
+    "expected": 1234.5
+  },
+  {
+    "id": "thousands-separator-05",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "12,34,567 m",
+    "expected": 1234567
+  },
+  {
+    "id": "thousands-separator-06",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "70k km",
+    "expected": 70000000
+  },
+  {
+    "id": "thousands-separator-07",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg", "numberFormat": "comma-decimal" },
+    "raw": "1.234",
+    "expected": 1234,
+    "expectWrongIfNaive": 1.234
+  },
+  {
+    "id": "thousands-separator-08",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg", "numberFormat": "comma-decimal" },
+    "raw": "12.345",
+    "expected": 12345,
+    "expectWrongIfNaive": 12.345
+  },
+  {
+    "id": "thousands-separator-09",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg", "numberFormat": "comma-decimal" },
+    "raw": "1.234 kg",
+    "expected": 1234
+  },
+  {
+    "id": "thousands-separator-10",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg", "numberFormat": "comma-decimal" },
+    "raw": "12.345,67 kg",
+    "expected": 12345.67
+  },
+  {
+    "id": "thousands-separator-11",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1,234.5 kg",
+    "expected": 1234.5
+  },
+  {
+    "id": "thousands-separator-12",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "2,500 lb",
+    "expected": 1133.980925
+  },
+  {
+    "id": "thousands-separator-13",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "10 000 ft",
+    "expected": 3048
+  },
+  {
+    "id": "thousands-separator-14",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "pressure", "unit": "Pa" },
+    "raw": "3,500 psi",
+    "expected": 24131650.526088
+  },
+  {
+    "id": "thousands-separator-15",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "data", "unit": "B" },
+    "raw": "1 024 GB",
+    "expected": 1024000000000
+  },
+  {
+    "id": "thousands-separator-16",
+    "category": "thousands-separator",
+    "provenance": "synthesized",
+    "field": { "kind": "energy", "unit": "J" },
+    "raw": "5,000 kWh",
+    "expected": 18000000000
+  },
+  {
+    "id": "date-drift-nl-in-date-field-01",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "03/04/2025",
+    "expected": "2025-04-02T22:00:00.000Z",
+    "expectWrongIfNaive": "2025-03-03T23:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-02",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "04/03/2025",
+    "expected": "2025-03-03T23:00:00.000Z",
+    "expectWrongIfNaive": "2025-04-02T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-03",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "05/06/2025",
+    "expected": "2025-06-04T22:00:00.000Z",
+    "expectWrongIfNaive": "2025-05-05T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-04",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "06/05/2025",
+    "expected": "2025-05-05T22:00:00.000Z",
+    "expectWrongIfNaive": "2025-06-04T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-05",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "07/08/2025",
+    "expected": "2025-08-06T22:00:00.000Z",
+    "expectWrongIfNaive": "2025-07-07T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-06",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "08/07/2025",
+    "expected": "2025-07-07T22:00:00.000Z",
+    "expectWrongIfNaive": "2025-08-06T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-07",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "09/10/2025",
+    "expected": "2025-10-08T22:00:00.000Z",
+    "expectWrongIfNaive": "2025-09-09T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-08",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "10/09/2025",
+    "expected": "2025-09-09T22:00:00.000Z",
+    "expectWrongIfNaive": "2025-10-08T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-09",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "tomorrow",
+    "expected": "2026-07-03T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-10",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "synthesized",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "tmrw",
+    "expected": "2026-07-03T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-11",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "synthesized",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "in 2 days",
+    "expected": "2026-07-05T12:30:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-12",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "documented",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "next Tuesday",
+    "expected": "2026-07-06T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-13",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "synthesized",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "next tues",
+    "expected": "2026-07-06T22:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-14",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "synthesized",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "3pm tomorrow",
+    "expected": "2026-07-04T13:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-15",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "synthesized",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "tomorrow at 3pm",
+    "expected": "2026-07-04T13:00:00.000Z"
+  },
+  {
+    "id": "date-drift-nl-in-date-field-16",
+    "category": "date-drift-nl-in-date-field",
+    "provenance": "synthesized",
+    "field": { "date": true, "dayFirst": true },
+    "raw": "2 hours ago",
+    "expected": "2026-07-03T10:30:00.000Z"
+  },
+  {
+    "id": "scientific-notation-01",
+    "category": "scientific-notation",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "3e5",
+    "expected": 300000
+  },
+  {
+    "id": "scientific-notation-02",
+    "category": "scientific-notation",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "3E5",
+    "expected": 300000
+  },
+  {
+    "id": "scientific-notation-03",
+    "category": "scientific-notation",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "3e5 kg",
+    "expected": 300000
+  },
+  {
+    "id": "scientific-notation-04",
+    "category": "scientific-notation",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1.5e5 kg",
+    "expected": 150000
+  },
+  {
+    "id": "scientific-notation-05",
+    "category": "scientific-notation",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1.5×10⁵ kg",
+    "expected": 150000
+  },
+  {
+    "id": "scientific-notation-06",
+    "category": "scientific-notation",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1.5 x 10^5 kg",
+    "expected": 150000
+  },
+  {
+    "id": "scientific-notation-07",
+    "category": "scientific-notation",
+    "provenance": "documented",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "2×10³ m",
+    "expected": 2000
+  },
+  {
+    "id": "scientific-notation-08",
+    "category": "scientific-notation",
+    "provenance": "documented",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "2 x 10^3 m",
+    "expected": 2000
+  },
+  {
+    "id": "scientific-notation-09",
+    "category": "scientific-notation",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "6.02e2 g",
+    "expected": 0.602
+  },
+  {
+    "id": "scientific-notation-10",
+    "category": "scientific-notation",
+    "provenance": "synthesized",
+    "field": { "kind": "speed", "unit": "m/s" },
+    "raw": "9.81e0 m/s",
+    "expected": 9.81
+  },
+  {
+    "id": "scientific-notation-11",
+    "category": "scientific-notation",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "1e3 ml",
+    "expected": 1
+  },
+  {
+    "id": "scientific-notation-12",
+    "category": "scientific-notation",
+    "provenance": "synthesized",
+    "field": { "kind": "temperature", "unit": "C" },
+    "raw": "2.5e1 C",
+    "expected": 25
+  },
+  {
+    "id": "scientific-notation-13",
+    "category": "scientific-notation",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "7.2e1 in",
+    "expected": 1.8288
+  },
+  {
+    "id": "scientific-notation-14",
+    "category": "scientific-notation",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "4e3 ft",
+    "expected": 1219.2
+  },
+  {
+    "id": "scientific-notation-15",
+    "category": "scientific-notation",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5e2 lb",
+    "expected": 226.796185
+  },
+  {
+    "id": "scientific-notation-16",
+    "category": "scientific-notation",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "1.25e3 km",
+    "expected": 1250000
+  },
+  {
+    "id": "range-in-scalar-01",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5-10",
+    "expected": { "min": 5, "max": 10 }
+  },
+  {
+    "id": "range-in-scalar-02",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5 - 10 kg",
+    "expected": { "min": 5, "max": 10 }
+  },
+  {
+    "id": "range-in-scalar-03",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "between 5 and 10 kg",
+    "expected": { "min": 5, "max": 10 }
+  },
+  {
+    "id": "range-in-scalar-04",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5 to 10 kg",
+    "expected": { "min": 5, "max": 10 }
+  },
+  {
+    "id": "range-in-scalar-05",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "2–4 lb",
+    "expected": { "min": 0.90718474, "max": 1.81436948 }
+  },
+  {
+    "id": "range-in-scalar-06",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "1.5-2.5 m",
+    "expected": { "min": 1.5, "max": 2.5 }
+  },
+  {
+    "id": "range-in-scalar-07",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "10 ± 0.5 kg",
+    "expected": { "min": 9.5, "max": 10.5 }
+  },
+  {
+    "id": "range-in-scalar-08",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "70-75 in",
+    "expected": { "min": 1.778, "max": 1.905 }
+  },
+  {
+    "id": "range-in-scalar-09",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "temperature", "unit": "C" },
+    "raw": "20-30 C",
+    "expected": { "min": 20, "max": 30 }
+  },
+  {
+    "id": "range-in-scalar-10",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1,5-2,5 kg",
+    "expected": { "min": 1.5, "max": 2.5 }
+  },
+  {
+    "id": "range-in-scalar-11",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "3e5-4e5 kg",
+    "expected": { "min": 300000, "max": 400000 }
+  },
+  {
+    "id": "range-in-scalar-12",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "500-750 ml",
+    "expected": { "min": 0.5, "max": 0.75 }
+  },
+  {
+    "id": "range-in-scalar-13",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "1h-2h",
+    "expected": { "min": 3600, "max": 7200 }
+  },
+  {
+    "id": "range-in-scalar-14",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "90-120 min",
+    "expected": { "min": 5400, "max": 7200 }
+  },
+  {
+    "id": "range-in-scalar-15",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "2 ft - 3 ft",
+    "expected": { "min": 0.6096, "max": 0.9144000000000001 }
+  },
+  {
+    "id": "range-in-scalar-16",
+    "category": "range-in-scalar",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "1.25-1.5 L",
+    "expected": { "min": 1.25, "max": 1.5 }
+  },
+  {
+    "id": "qualifier-leakage-01",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "about 5 kg",
+    "expected": 5
+  },
+  {
+    "id": "qualifier-leakage-02",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "approx 5 kg",
+    "expected": 5
+  },
+  {
+    "id": "qualifier-leakage-03",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "approximately 20 lb",
+    "expected": 9.071847400000001
+  },
+  {
+    "id": "qualifier-leakage-04",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "around 3 meters",
+    "expected": 3
+  },
+  {
+    "id": "qualifier-leakage-05",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "roughly 1,5 kg",
+    "expected": 1.5
+  },
+  {
+    "id": "qualifier-leakage-06",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "nearly 5 kg",
+    "expected": 5
+  },
+  {
+    "id": "qualifier-leakage-07",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "almost 5 kg",
+    "expected": 5
+  },
+  {
+    "id": "qualifier-leakage-08",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "circa 5 kg",
+    "expected": 5
+  },
+  {
+    "id": "qualifier-leakage-09",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "~5 kg",
+    "expected": 5
+  },
+  {
+    "id": "qualifier-leakage-10",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "about twenty kg",
+    "expected": 20
+  },
+  {
+    "id": "qualifier-leakage-11",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "some 3 kg",
+    "expected": 3
+  },
+  {
+    "id": "qualifier-leakage-12",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "like 5 kg",
+    "expected": 5
+  },
+  {
+    "id": "qualifier-leakage-13",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "maybe 5 kg",
+    "expected": 5
+  },
+  {
+    "id": "qualifier-leakage-14",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "around the 4 kg",
+    "expected": 4
+  },
+  {
+    "id": "qualifier-leakage-15",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "roughly 72 in",
+    "expected": 1.8288
+  },
+  {
+    "id": "qualifier-leakage-16",
+    "category": "qualifier-leakage",
+    "provenance": "synthesized",
+    "field": { "kind": "temperature", "unit": "C" },
+    "raw": "about 20C",
+    "expected": 20
+  },
+  {
+    "id": "typod-slang-units-01",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5 kilgram",
+    "expected": 5
+  },
+  {
+    "id": "typod-slang-units-02",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5 killogram",
+    "expected": 5
+  },
+  {
+    "id": "typod-slang-units-03",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5 kilogramz",
+    "expected": 5
+  },
+  {
+    "id": "typod-slang-units-04",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "5 kgs",
+    "expected": 5
+  },
+  {
+    "id": "typod-slang-units-05",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "2 lbs",
+    "expected": 0.90718474
+  },
+  {
+    "id": "typod-slang-units-06",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "3 lb",
+    "expected": 1.3607771100000001
+  },
+  {
+    "id": "typod-slang-units-07",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "80 kilos",
+    "expected": 80
+  },
+  {
+    "id": "typod-slang-units-08",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "1 meterz",
+    "expected": 1
+  },
+  {
+    "id": "typod-slang-units-09",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "5 metrs",
+    "expected": 5
+  },
+  {
+    "id": "typod-slang-units-10",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "2 metres",
+    "expected": 2
+  },
+  {
+    "id": "typod-slang-units-11",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "3 foot",
+    "expected": 0.9144000000000001
+  },
+  {
+    "id": "typod-slang-units-12",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "6 feet",
+    "expected": 1.8288000000000002
+  },
+  {
+    "id": "typod-slang-units-13",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "30 mins",
+    "expected": 1800
+  },
+  {
+    "id": "typod-slang-units-14",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "2 hrs",
+    "expected": 7200
+  },
+  {
+    "id": "typod-slang-units-15",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "3 klicks",
+    "expected": 3000
+  },
+  {
+    "id": "typod-slang-units-16",
+    "category": "typod-slang-units",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "176#",
+    "expected": 79.83225712000001
+  },
+  {
+    "id": "compound-mixed-unit-01",
+    "category": "compound-mixed-unit",
+    "provenance": "documented",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "5'11\"",
+    "expected": 1.8034
+  },
+  {
+    "id": "compound-mixed-unit-02",
+    "category": "compound-mixed-unit",
+    "provenance": "documented",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "5 ft 11 in",
+    "expected": 1.8034
+  },
+  {
+    "id": "compound-mixed-unit-03",
+    "category": "compound-mixed-unit",
+    "provenance": "documented",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "5′11″",
+    "expected": 1.8034
+  },
+  {
+    "id": "compound-mixed-unit-04",
+    "category": "compound-mixed-unit",
+    "provenance": "documented",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "5 foot 11",
+    "expected": 1.8034
+  },
+  {
+    "id": "compound-mixed-unit-05",
+    "category": "compound-mixed-unit",
+    "provenance": "documented",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "2 lb 3 oz",
+    "expected": 0.9922333093750001
+  },
+  {
+    "id": "compound-mixed-unit-06",
+    "category": "compound-mixed-unit",
+    "provenance": "documented",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "1 h 30 min",
+    "expected": 5400
+  },
+  {
+    "id": "compound-mixed-unit-07",
+    "category": "compound-mixed-unit",
+    "provenance": "documented",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "1h30",
+    "expected": 5400
+  },
+  {
+    "id": "compound-mixed-unit-08",
+    "category": "compound-mixed-unit",
+    "provenance": "documented",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "1 hr 30 min",
+    "expected": 5400
+  },
+  {
+    "id": "compound-mixed-unit-09",
+    "category": "compound-mixed-unit",
+    "provenance": "synthesized",
+    "field": { "kind": "duration", "unit": "s" },
+    "raw": "2 hours 15 minutes",
+    "expected": 8100
+  },
+  {
+    "id": "compound-mixed-unit-10",
+    "category": "compound-mixed-unit",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "1 yd 2 ft",
+    "expected": 1.524
+  },
+  {
+    "id": "compound-mixed-unit-11",
+    "category": "compound-mixed-unit",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "3 ft 6 in",
+    "expected": 1.0668000000000002
+  },
+  {
+    "id": "compound-mixed-unit-12",
+    "category": "compound-mixed-unit",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "6'2\"",
+    "expected": 1.8796000000000002
+  },
+  {
+    "id": "compound-mixed-unit-13",
+    "category": "compound-mixed-unit",
+    "provenance": "synthesized",
+    "field": { "kind": "mass", "unit": "kg" },
+    "raw": "1 lb 8 oz",
+    "expected": 0.6803885550000001
+  },
+  {
+    "id": "compound-mixed-unit-14",
+    "category": "compound-mixed-unit",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "2 cups 3 tbsp",
+    "expected": 0.51753676734375
+  },
+  {
+    "id": "compound-mixed-unit-15",
+    "category": "compound-mixed-unit",
+    "provenance": "synthesized",
+    "field": { "kind": "volume", "unit": "L" },
+    "raw": "1 gal 2 qt",
+    "expected": 5.678117676
+  },
+  {
+    "id": "compound-mixed-unit-16",
+    "category": "compound-mixed-unit",
+    "provenance": "synthesized",
+    "field": { "kind": "length", "unit": "m" },
+    "raw": "1m 30cm",
+    "expected": 1.3
+  }
+]

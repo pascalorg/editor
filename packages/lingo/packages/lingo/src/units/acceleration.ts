@@ -1,0 +1,61 @@
+import { defineKind } from '../core/types'
+
+export const acceleration = defineKind({
+  kind: 'acceleration',
+  baseUnit: 'm/s2',
+  units: [
+    {
+      id: 'cm/s2',
+      symbol: 'cm/s²',
+      name: 'centimeter per second squared',
+      plural: 'centimeters per second squared',
+      aliases: [
+        'cm/s^2',
+        'cm/s2',
+        'centimetre per second squared',
+        'centimetres per second squared',
+      ],
+      factor: 0.01,
+      system: 'metric',
+      best: 0,
+    },
+    {
+      id: 'm/s2',
+      symbol: 'm/s²',
+      name: 'meter per second squared',
+      plural: 'meters per second squared',
+      aliases: [
+        'm/s^2',
+        'm/s2',
+        'meter per second per second',
+        'meters per second per second',
+        'metre per second squared',
+        'metres per second squared',
+        'metre per second per second',
+        'metres per second per second',
+      ],
+      factor: 1,
+      system: 'metric',
+      best: 1,
+    },
+    {
+      id: 'ft/s2',
+      symbol: 'ft/s²',
+      name: 'foot per second squared',
+      plural: 'feet per second squared',
+      aliases: ['ft/s^2', 'ft/s2', 'feet per second per second'],
+      factor: 0.3048,
+      system: 'imperial',
+      best: 0,
+    },
+    {
+      id: 'g0',
+      symbol: 'g₀',
+      name: 'standard gravity',
+      plural: 'standard gravities',
+      aliases: ['gee', 'gees'],
+      factor: 9.806_65,
+      system: 'shared',
+    },
+  ],
+} as const)

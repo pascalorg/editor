@@ -1,0 +1,92 @@
+name: Release
+
+# Editor-style dispatch release (plan 023):
+#   gh workflow run release.yml -f bump=patch|minor|major
+# Bumps packages/lingo, runs the full gate, publishes to npm with provenance,
+# then tags and creates the GitHub release.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        type: choice
+        options: [patch, minor, major]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter @pascal-app/lingo check
+      - name: Bump version + roll changelog
+        id: bump
+        working-directory: packages/lingo
+        run: |
+          # npm version walks up into the bun workspace root and rejects the
+          # `workspace:*` protocol — bump the version with plain node instead.
+          VERSION=$(BUMP="${{ inputs.bump }}" node -e '
+            const fs = require("node:fs")
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"))
+            const [major, minor, patch] = pkg.version.split(".").map(Number)
+            pkg.version =
+              process.env.BUMP === "major" ? `${major + 1}.0.0`
+              : process.env.BUMP === "minor" ? `${major}.${minor + 1}.0`
+              : `${major}.${minor}.${patch + 1}`
+            fs.writeFileSync("package.json", `${JSON.stringify(pkg, null, 2)}\n`)
+            process.stdout.write(pkg.version)
+          ')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # Promote the [Unreleased] section to a dated version heading, leaving
+          # a fresh empty [Unreleased] on top (conventions.md docs-surface rule).
+          # VERSION reaches the script via env, not shell interpolation into JS.
+          VERSION="$VERSION" node -e '
+            const fs = require("node:fs")
+            const p = "CHANGELOG.md"
+            const date = new Date().toISOString().slice(0, 10)
+            const src = fs.readFileSync(p, "utf8")
+            fs.writeFileSync(p, src.replace(
+              /## \[Unreleased\]/,
+              "## [Unreleased]\n\n## [" + process.env.VERSION + "] - " + date))
+          '
+      - name: Publish (provenance)
+        run: npm publish --provenance --access public
+        working-directory: packages/lingo
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Commit, tag, release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add packages/lingo/package.json packages/lingo/CHANGELOG.md
+          git commit -m "chore(release): v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD --tags
+          # Release body = the curated changelog section, never an auto commit
+          # list. The notes file lives in RUNNER_TEMP so it can't be committed,
+          # and reaches gh via --notes-file: the changelog is full of backticks
+          # and quotes that would execute or break quoting if interpolated.
+          # npm has already published by this point, so a missing or empty
+          # section falls back to --generate-notes rather than failing the run.
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          if node packages/lingo/scripts/changelog-section.mjs "$VERSION" \
+               --changelog packages/lingo/CHANGELOG.md --out "$NOTES"; then
+            gh release create "v$VERSION" --title "v$VERSION" --notes-file "$NOTES"
+          else
+            echo "::warning::no changelog section for $VERSION; using generated notes"
+            gh release create "v$VERSION" --title "v$VERSION" --generate-notes
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}

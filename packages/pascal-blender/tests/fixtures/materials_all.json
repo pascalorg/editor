@@ -1,0 +1,289 @@
+{
+  "nodes": {
+    "wall_mat000000000000": {
+      "object": "node",
+      "id": "wall_mat000000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0.0,
+        0
+      ],
+      "end": [
+        1.5,
+        0
+      ],
+      "material": {
+        "preset": "white"
+      }
+    },
+    "wall_mat100000000000": {
+      "object": "node",
+      "id": "wall_mat100000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        2.0,
+        0
+      ],
+      "end": [
+        3.5,
+        0
+      ],
+      "material": {
+        "preset": "brick"
+      }
+    },
+    "wall_mat200000000000": {
+      "object": "node",
+      "id": "wall_mat200000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        4.0,
+        0
+      ],
+      "end": [
+        5.5,
+        0
+      ],
+      "material": {
+        "preset": "concrete"
+      }
+    },
+    "wall_mat300000000000": {
+      "object": "node",
+      "id": "wall_mat300000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        6.0,
+        0
+      ],
+      "end": [
+        7.5,
+        0
+      ],
+      "material": {
+        "preset": "wood"
+      }
+    },
+    "wall_mat400000000000": {
+      "object": "node",
+      "id": "wall_mat400000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        8.0,
+        0
+      ],
+      "end": [
+        9.5,
+        0
+      ],
+      "material": {
+        "preset": "glass"
+      }
+    },
+    "wall_mat500000000000": {
+      "object": "node",
+      "id": "wall_mat500000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        10.0,
+        0
+      ],
+      "end": [
+        11.5,
+        0
+      ],
+      "material": {
+        "preset": "metal"
+      }
+    },
+    "wall_mat600000000000": {
+      "object": "node",
+      "id": "wall_mat600000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        12.0,
+        0
+      ],
+      "end": [
+        13.5,
+        0
+      ],
+      "material": {
+        "preset": "plaster"
+      }
+    },
+    "wall_mat700000000000": {
+      "object": "node",
+      "id": "wall_mat700000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        14.0,
+        0
+      ],
+      "end": [
+        15.5,
+        0
+      ],
+      "material": {
+        "preset": "tile"
+      }
+    },
+    "wall_mat800000000000": {
+      "object": "node",
+      "id": "wall_mat800000000000",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        16.0,
+        0
+      ],
+      "end": [
+        17.5,
+        0
+      ],
+      "material": {
+        "preset": "marble"
+      }
+    },
+    "wall_matoverride00001": {
+      "object": "node",
+      "id": "wall_matoverride00001",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0,
+        2
+      ],
+      "end": [
+        2,
+        2
+      ],
+      "material": {
+        "preset": "brick",
+        "properties": {
+          "roughness": 0.15,
+          "color": "#ff0000"
+        }
+      }
+    },
+    "wall_matcustom0000001": {
+      "object": "node",
+      "id": "wall_matcustom0000001",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0,
+        4
+      ],
+      "end": [
+        2,
+        4
+      ],
+      "material": {
+        "preset": "custom",
+        "properties": {
+          "color": "#00ff88",
+          "roughness": 0.33,
+          "metalness": 0.5,
+          "opacity": 0.9,
+          "transparent": true,
+          "side": "double"
+        }
+      }
+    },
+    "wall_mattexture000001": {
+      "object": "node",
+      "id": "wall_mattexture000001",
+      "type": "wall",
+      "parentId": "level_mat000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0,
+        6
+      ],
+      "end": [
+        2,
+        6
+      ],
+      "material": {
+        "preset": "wood",
+        "texture": {
+          "url": "https://example.com/wood.jpg",
+          "repeat": [
+            2,
+            2
+          ],
+          "scale": 1.5
+        }
+      }
+    },
+    "level_mat000000000001": {
+      "object": "node",
+      "id": "level_mat000000000001",
+      "type": "level",
+      "parentId": "building_mat00000001",
+      "visible": true,
+      "metadata": {},
+      "level": 0,
+      "children": [
+        "wall_mat000000000000",
+        "wall_mat100000000000",
+        "wall_mat200000000000",
+        "wall_mat300000000000",
+        "wall_mat400000000000",
+        "wall_mat500000000000",
+        "wall_mat600000000000",
+        "wall_mat700000000000",
+        "wall_mat800000000000",
+        "wall_matoverride00001",
+        "wall_matcustom0000001",
+        "wall_mattexture000001"
+      ]
+    },
+    "building_mat00000001": {
+      "object": "node",
+      "id": "building_mat00000001",
+      "type": "building",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_mat000000000001"
+      ]
+    }
+  },
+  "rootNodeIds": [
+    "building_mat00000001"
+  ]
+}

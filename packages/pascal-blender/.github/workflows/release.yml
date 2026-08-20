@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Blender 4.5 LTS
+        run: |
+          curl -L https://download.blender.org/release/Blender4.5/blender-4.5.3-linux-x64.tar.xz -o blender.tar.xz
+          mkdir blender && tar -xf blender.tar.xz -C blender --strip-components=1
+
+      - name: Test
+        run: ./blender/blender --background --factory-startup --python tests/run_headless.py
+
+      - name: Build extension zip
+        run: |
+          mkdir -p dist
+          ./blender/blender --command extension build --source-dir pascal_blender --output-dir dist
+
+      - name: Create GitHub Release with the zip
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+
+      # A release created with GITHUB_TOKEN does not fire `release:` triggers
+      # (recursion prevention), so dispatch the Pages repo publish explicitly.
+      - name: Republish extension repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main

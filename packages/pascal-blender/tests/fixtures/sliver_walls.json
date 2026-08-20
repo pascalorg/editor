@@ -1,0 +1,80 @@
+{
+  "nodes": {
+    "building_sliver00001": {
+      "object": "node",
+      "id": "building_sliver00001",
+      "type": "building",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_sliver0000001"
+      ]
+    },
+    "level_sliver0000001": {
+      "object": "node",
+      "id": "level_sliver0000001",
+      "type": "level",
+      "parentId": "building_sliver00001",
+      "visible": true,
+      "metadata": {},
+      "level": 0,
+      "children": [
+        "wall_sliver00000001",
+        "wall_sliver00000002",
+        "wall_sliver00000003"
+      ]
+    },
+    "wall_sliver00000001": {
+      "object": "node",
+      "id": "wall_sliver00000001",
+      "type": "wall",
+      "parentId": "level_sliver0000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        -1.9448822358361357,
+        1.1474862000631119
+      ],
+      "end": [
+        -1.9000000171688924,
+        1.1474862007346474
+      ]
+    },
+    "wall_sliver00000002": {
+      "object": "node",
+      "id": "wall_sliver00000002",
+      "type": "wall",
+      "parentId": "level_sliver0000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        -2.80789750521557,
+        1.1474861333516475
+      ],
+      "end": [
+        -1.9000000171688924,
+        1.1474862007346474
+      ]
+    },
+    "wall_sliver00000003": {
+      "object": "node",
+      "id": "wall_sliver00000003",
+      "type": "wall",
+      "parentId": "level_sliver0000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        -1.9448822358361357,
+        1.1474862000631119
+      ],
+      "end": [
+        -1.9448822358361357,
+        4.0
+      ]
+    }
+  },
+  "rootNodeIds": [
+    "building_sliver00001"
+  ]
+}

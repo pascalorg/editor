@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.blend1
+/dist/
+/tests/output/
+.DS_Store
+/asset_cache/
+tests/fixtures/real_house.json

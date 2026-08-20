@@ -1,0 +1,14 @@
+# Lefthook — git hooks for the lingo monorepo (house pattern).
+# Runs Biome lint + format on staged files before every commit.
+# Hooks install automatically via the root postinstall; manual: bunx lefthook install
+
+pre-commit:
+  parallel: true
+  commands:
+    biome-check:
+      glob: "*.{ts,tsx,js,jsx,json,css,md,mdx}"
+      # Pin the version so the hook can't float to a registry "latest" when the
+      # local install isn't resolvable (e.g. from a git worktree without
+      # node_modules). Keep in sync with the @biomejs/biome pin in package.json.
+      run: npx @biomejs/biome@2.4.16 check --no-errors-on-unmatched --diagnostic-level=error {staged_files}
+      stage_fixed: true

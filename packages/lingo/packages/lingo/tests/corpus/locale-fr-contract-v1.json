@@ -1,0 +1,1212 @@
+{
+  "version": 1,
+  "fixedNow": [
+    2026,
+    6,
+    3,
+    14,
+    30,
+    0
+  ],
+  "breadth": {
+    "deux kg [basic-word-pin]": {
+      "input": "deux kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "entre 5 et 10 kg [range-pin]": {
+      "input": "entre 5 et 10 kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 6,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "au moins 2 kg [bound-pin]": {
+      "input": "au moins 2 kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 2,
+        "max": null
+      },
+      "unit": {
+        "min": "kg",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "environ 5 kg [approx-word-pin]": {
+      "input": "environ 5 kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 8,
+        "end": 12
+      },
+      "confidence": 0.9
+    },
+    "soixante-dix kg": {
+      "input": "soixante-dix kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 70,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "soixante-quinze kg": {
+      "input": "soixante-quinze kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 75,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "soixante-dix-neuf kg": {
+      "input": "soixante-dix-neuf kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 79,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "quatre-vingts kg": {
+      "input": "quatre-vingts kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 80,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "quatre-vingt-cinq kg": {
+      "input": "quatre-vingt-cinq kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 85,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "quatre-vingt-neuf kg": {
+      "input": "quatre-vingt-neuf kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 89,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "quatre-vingt-dix kg": {
+      "input": "quatre-vingt-dix kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 90,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "quatre-vingt-quinze kg": {
+      "input": "quatre-vingt-quinze kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 95,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 22
+      },
+      "confidence": 1
+    },
+    "quatre-vingt-dix-neuf kg": {
+      "input": "quatre-vingt-dix-neuf kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 99,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 24
+      },
+      "confidence": 1
+    },
+    "septante-cinq kg": {
+      "input": "septante-cinq kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 75,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "nonante-deux kg": {
+      "input": "nonante-deux kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 92,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "huitante kg": {
+      "input": "huitante kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 80,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "cent kg": {
+      "input": "cent kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 100,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "mille kg": {
+      "input": "mille kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "vingt et un kg": {
+      "input": "vingt et un kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 21,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "trente et un kg": {
+      "input": "trente et un kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 31,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "deux virgule cinq kg": {
+      "input": "deux virgule cinq kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2.5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "trois virgule quatorze kg": {
+      "input": "trois virgule quatorze kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 3.14,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 25
+      },
+      "confidence": 1
+    },
+    "deux virgule cinq six kg": {
+      "input": "deux virgule cinq six kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2.56,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 24
+      },
+      "confidence": 1
+    },
+    "a peu pres 5 kg": {
+      "input": "a peu pres 5 kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 11,
+        "end": 15
+      },
+      "confidence": 0.9
+    },
+    "plus ou moins 5 kg": {
+      "input": "plus ou moins 5 kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 14,
+        "end": 18
+      },
+      "confidence": 0.9
+    },
+    "grosso modo 5 kg": {
+      "input": "grosso modo 5 kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 12,
+        "end": 16
+      },
+      "confidence": 0.9
+    },
+    "5 kg environ": {
+      "input": "5 kg environ",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 0.9
+    },
+    "5 kg et quelques": {
+      "input": "5 kg et quelques",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 0.9
+    },
+    "5 kg a peu pres": {
+      "input": "5 kg a peu pres",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 0.9
+    },
+    "5 ou 6 kg": {
+      "input": "5 ou 6 kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 6
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "une dizaine de kg": {
+      "input": "une dizaine de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 8,
+        "max": 12
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 17
+      },
+      "confidence": 0.9
+    },
+    "une vingtaine de kg": {
+      "input": "une vingtaine de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 18,
+        "max": 25
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 0.9
+    },
+    "une trentaine de kg": {
+      "input": "une trentaine de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 25,
+        "max": 35
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 0.9
+    },
+    "une centaine de kg": {
+      "input": "une centaine de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 80,
+        "max": 120
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 0.9
+    },
+    "un millier de kg": {
+      "input": "un millier de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 800,
+        "max": 1200
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 0.9
+    },
+    "quelques kg": {
+      "input": "quelques kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 2,
+        "max": 4
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 0.9
+    },
+    "dix-sept kg": {
+      "input": "dix-sept kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 17,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "dix-huit kg": {
+      "input": "dix-huit kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 18,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "dix-neuf kg": {
+      "input": "dix-neuf kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 19,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "mille cinq cents kg": {
+      "input": "mille cinq cents kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1500,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "deux cent cinquante mille kg": {
+      "input": "deux cent cinquante mille kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 250000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 28
+      },
+      "confidence": 1
+    },
+    "cent vingt kg": {
+      "input": "cent vingt kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 120,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "un million de kg": {
+      "input": "un million de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1000000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "deux milliards de kg": {
+      "input": "deux milliards de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2000000000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "un billion de kg": {
+      "input": "un billion de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1000000000000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "mille millions de kg": {
+      "input": "mille millions de kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1000000000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "20 euros": {
+      "input": "20 euros",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 20,
+      "unit": "EUR",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "entre mille et deux mille kg": {
+      "input": "entre mille et deux mille kg",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 1000,
+        "max": 2000
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 6,
+        "end": 28
+      },
+      "confidence": 1
+    }
+  },
+  "date": {
+    "il y a trois jours [relative-past-pin]": {
+      "input": "il y a trois jours",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 30,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "demain [tomorrow-pin]": {
+      "input": "demain",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "hier [yesterday-pin]": {
+      "input": "hier",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 2,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "apres-demain": {
+      "input": "apres-demain",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "avant-hier": {
+      "input": "avant-hier",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "deux heures et quart": {
+      "input": "deux heures et quart",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 2,
+        "minute": 15,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "trois heures moins le quart": {
+      "input": "trois heures moins le quart",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 2,
+        "minute": 45,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 27
+      },
+      "confidence": 1
+    },
+    "midi et demi": {
+      "input": "midi et demi",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 12,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "debut juillet": {
+      "input": "debut juillet",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "mi-juillet": {
+      "input": "mi-juillet",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 15,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "fin juillet": {
+      "input": "fin juillet",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 31,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "lundi en huit": {
+      "input": "lundi en huit",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 13,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "mardi en quinze": {
+      "input": "mardi en quinze",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 21,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "le 1er mars": {
+      "input": "le 1er mars",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 3,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "le 3 mars": {
+      "input": "le 3 mars",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 3,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "lundi prochain": {
+      "input": "lundi prochain",
+      "opts": {
+        "locale": "fr"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    }
+  },
+  "dateRange": {}
+}

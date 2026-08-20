@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pure-python tests
+        run: |
+          python3 tests/test_openings.py
+          python3 tests/test_wallnet.py
+
+      - name: Cache Blender
+        id: cache-blender
+        uses: actions/cache@v4
+        with:
+          path: blender
+          key: blender-4.5.3-linux-x64
+
+      - name: Download Blender 4.5 LTS
+        if: steps.cache-blender.outputs.cache-hit != 'true'
+        run: |
+          curl -L https://download.blender.org/release/Blender4.5/blender-4.5.3-linux-x64.tar.xz -o blender.tar.xz
+          mkdir blender && tar -xf blender.tar.xz -C blender --strip-components=1
+
+      - name: Validate extension manifest
+        run: ./blender/blender --command extension validate pascal_blender
+
+      - name: Headless import + losslessness suite
+        run: ./blender/blender --background --factory-startup --python tests/run_headless.py
+
+      - name: Build extension zip
+        run: |
+          mkdir -p dist
+          ./blender/blender --command extension build --source-dir pascal_blender --output-dir dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pascal_blender-extension
+          path: dist/*.zip

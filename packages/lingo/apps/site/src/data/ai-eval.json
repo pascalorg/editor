@@ -1,0 +1,263 @@
+{
+  "framing": "Canonicalization-rate demo on a recorded corpus, not an end-to-end LLM benchmark.",
+  "environment": {
+    "node": "v24.15.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "timezone": "Europe/Paris",
+    "fixedNowParts": [
+      2026,
+      6,
+      3,
+      14,
+      30,
+      0
+    ],
+    "fixedNowIso": "2026-07-03T12:30:00.000Z",
+    "corpusSize": 160
+  },
+  "overall": {
+    "category": "overall",
+    "count": 160,
+    "provenance": {
+      "documented": 29,
+      "synthesized": 131
+    },
+    "naive": {
+      "accepted": 28,
+      "rejected": 132,
+      "silentWrong": 10,
+      "acceptanceRate": 0.175,
+      "silentWrongRate": 0.0625
+    },
+    "lingo": {
+      "accepted": 155,
+      "rejected": 5,
+      "silentWrong": 0,
+      "acceptanceRate": 0.96875,
+      "silentWrongRate": 0
+    }
+  },
+  "categories": [
+    {
+      "category": "unit-omission",
+      "count": 16,
+      "provenance": {
+        "documented": 0,
+        "synthesized": 16
+      },
+      "naive": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "unit-in-number-field",
+      "count": 16,
+      "provenance": {
+        "documented": 3,
+        "synthesized": 13
+      },
+      "naive": {
+        "accepted": 0,
+        "rejected": 16,
+        "silentWrong": 0,
+        "acceptanceRate": 0,
+        "silentWrongRate": 0
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "locale-decimal-comma",
+      "count": 16,
+      "provenance": {
+        "documented": 0,
+        "synthesized": 16
+      },
+      "naive": {
+        "accepted": 0,
+        "rejected": 16,
+        "silentWrong": 0,
+        "acceptanceRate": 0,
+        "silentWrongRate": 0
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "thousands-separator",
+      "count": 16,
+      "provenance": {
+        "documented": 0,
+        "synthesized": 16
+      },
+      "naive": {
+        "accepted": 2,
+        "rejected": 14,
+        "silentWrong": 2,
+        "acceptanceRate": 0.125,
+        "silentWrongRate": 0.125
+      },
+      "lingo": {
+        "accepted": 11,
+        "rejected": 5,
+        "silentWrong": 0,
+        "acceptanceRate": 0.6875,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "date-drift-nl-in-date-field",
+      "count": 16,
+      "provenance": {
+        "documented": 10,
+        "synthesized": 6
+      },
+      "naive": {
+        "accepted": 8,
+        "rejected": 8,
+        "silentWrong": 8,
+        "acceptanceRate": 0.5,
+        "silentWrongRate": 0.5
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "scientific-notation",
+      "count": 16,
+      "provenance": {
+        "documented": 8,
+        "synthesized": 8
+      },
+      "naive": {
+        "accepted": 2,
+        "rejected": 14,
+        "silentWrong": 0,
+        "acceptanceRate": 0.125,
+        "silentWrongRate": 0
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "range-in-scalar",
+      "count": 16,
+      "provenance": {
+        "documented": 0,
+        "synthesized": 16
+      },
+      "naive": {
+        "accepted": 0,
+        "rejected": 16,
+        "silentWrong": 0,
+        "acceptanceRate": 0,
+        "silentWrongRate": 0
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "qualifier-leakage",
+      "count": 16,
+      "provenance": {
+        "documented": 0,
+        "synthesized": 16
+      },
+      "naive": {
+        "accepted": 0,
+        "rejected": 16,
+        "silentWrong": 0,
+        "acceptanceRate": 0,
+        "silentWrongRate": 0
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "typod-slang-units",
+      "count": 16,
+      "provenance": {
+        "documented": 0,
+        "synthesized": 16
+      },
+      "naive": {
+        "accepted": 0,
+        "rejected": 16,
+        "silentWrong": 0,
+        "acceptanceRate": 0,
+        "silentWrongRate": 0
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    },
+    {
+      "category": "compound-mixed-unit",
+      "count": 16,
+      "provenance": {
+        "documented": 8,
+        "synthesized": 8
+      },
+      "naive": {
+        "accepted": 0,
+        "rejected": 16,
+        "silentWrong": 0,
+        "acceptanceRate": 0,
+        "silentWrongRate": 0
+      },
+      "lingo": {
+        "accepted": 16,
+        "rejected": 0,
+        "silentWrong": 0,
+        "acceptanceRate": 1,
+        "silentWrongRate": 0
+      }
+    }
+  ]
+}

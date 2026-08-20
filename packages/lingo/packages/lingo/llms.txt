@@ -1,0 +1,350 @@
+# lingo
+
+> Make forms easier, LLM tools safer. Zero-dependency TypeScript library that parses natural-language quantities, units, dates, and ranges ("2 ft", "5'11\"", "72 in to cm", "between 5 and 10 kg", "three days ago", "it's hot") into canonical SI-anchored values; converts, validates, formats, and humanizes.
+
+Agent fetch order (online): `https://lingo.pascal.app/llms.txt` (index) → `https://lingo.pascal.app/docs/<section>.md` (per-topic) or `https://lingo.pascal.app/llms-full.txt` (complete narrative). Offline: this file (`node_modules/@pascal-app/lingo/llms.txt`) is the compressed self-contained reference. Keep user measurements as strings in tool schemas; call lingo to convert, validate, surface spans, and handle ambiguity.
+
+Entries: `@pascal-app/lingo` (core+units+fuzzy), `@pascal-app/lingo/date`, `@pascal-app/lingo/dom`, `@pascal-app/lingo/element` (`<lingo-input>`), `@pascal-app/lingo/react`, `@pascal-app/lingo/react-native`, `@pascal-app/lingo/ai` (LLM tool fields), `@pascal-app/lingo/mcp` (MCP tool helper), `@pascal-app/lingo/describe` (rich value/result descriptions), `@pascal-app/lingo/catalog` (query units/kinds/currencies + ISO country codes), `@pascal-app/lingo/complete` (ranked autocomplete completions), `@pascal-app/lingo/schema` (JSON Schema + OpenAPI + enum reference), `@pascal-app/lingo/locales/{en,en-gb,es,fr,pt,zh,ja}` (tree-shakeable language packs), `@pascal-app/lingo/core`.
+
+## Core (`@pascal-app/lingo`)
+
+```ts
+import { lingo, parseQuantity, parseRange } from "@pascal-app/lingo"
+
+const height = parseQuantity("5'11\"", { kind: "length" })
+if (height.ok) height.quantity.to("m").value // 1.8034
+
+const conversion = lingo("72 in to cm") // converted 182.88 cm
+const range = parseRange("between 5 and 10 kg", { kind: "mass" })
+```
+
+- `lingo(text, opts?) → LingoResult`: versioned union on `.type`: 'quantity' | 'range' | 'conversion' | 'number' | 'failure'. Serialized as FLAT v3 JSON: `{ schemaVersion: 3, ok, type, ...value fields at top..., text, span, issues, confidence }`.
+- `parseQuantity(text, opts?)`, `parseRange(text, opts?)`, `partialState(text, opts?)`, `findQuantities(text, opts?)`.
+- `quantity(value, unitRef, kind?)`, `convert(v, from, to)`, `tryConvert(v, from, to)`, `convertDelta(v, from, to)`.
+- `createLingo({ registry?, kinds?, messages?, fuzzy?, locales? }) → instance` for SSR/multi-tenant isolation and loaded locale packs.
+- `fromJSON(json)` rehydrates `toJSON()` output.
+- Result guards: `isQuantity`, `isRange`, `isConversion`, `isNumber`; helpers: `firstError`, `candidateOf`, `formatIssue`.
+
+Options `{ kind?, unit?, currency?, locale?, system?: 'us'|'imperial'|'metric', numberFormat?: 'auto'|'dot-decimal'|'comma-decimal', strictness?: 'forgiving'|'confirm'|'strict', accept?, tolerance?, escalate?, messages?, profile?, registry? }`.
+
+Quantity: `.value`, `.base`, `.kind`, `.to(unitRef)`, `.valueIn(u)`, `.convertDelta(u)`, `.toMinor()`, `.format()`, `.toBest()`, `.toJSON()`. Literal `.to()` targets are same-kind checked at compile time; dynamic strings still validate at runtime.
+QuantityRange: `.minBase/.maxBase/.min()/.max()/.plusMinus/.fuzzy/.contains(q)/.widthIn(u)/.to(u)/.format()`. Literal `.to()` targets get the same check.
+
+Kinds: length mass temperature duration volume area speed data data_rate flow_rate acceleration pressure energy force torque power frequency angle percent luminous_intensity luminous_flux illuminance luminance voltage current resistance charge substance concentration radiation_absorbed_dose radiation_equivalent_dose radioactivity currency. Bases: m, kg, K, s, m³, m², m/s, byte, bit/s, m³/s, m/s², Pa, J, N, N⋅m, W, Hz, rad, %, cd, lm, lx, cd/m², V, A, Ω, C, mol, mol/m³, Gy, Sv, Bq, and self-canonical ISO currency codes.
+
+## Complete (`@pascal-app/lingo/complete`)
+
+```ts
+import { completions } from "@pascal-app/lingo/complete"
+
+const items = completions("10 kg to 16", { kind: "mass", limit: 8 })
+// [{ text, result, confidence, source }] — source: parse|alternative|unit-ambiguity|unit-prefix|implied-unit|range-implied|cross-kind|date
+```
+
+Distinct from success `alternatives`, failure `candidate`, and issue `suggestions`. Wire into `lingoInput({ complete, onComplete })` or `useLingoInput({ complete })` for autocomplete dropdowns. The React hook exposes `completions`, `highlightedIndex`, `setHighlightedIndex()`, and `selectCompletion()` while keeping popup UI caller-owned. Pass `date: (text) => parseDate(text, { now })` to opt into date completions without bundling `@pascal-app/lingo/date` into `@pascal-app/lingo/complete`.
+
+## Locales (`@pascal-app/lingo/locales/*`)
+
+```ts
+import { createLingo } from "@pascal-app/lingo"
+import { es } from "@pascal-app/lingo/locales/es"
+import { fr } from "@pascal-app/lingo/locales/fr"
+import { ja } from "@pascal-app/lingo/locales/ja"
+import { zh } from "@pascal-app/lingo/locales/zh"
+
+const lingo = createLingo({ locales: [es, fr, ja, zh] })
+lingo.parseQuantity("dos kg") // auto-detected as es; result.locale === "es"
+lingo.parseRange("entre 5 et 10 kg", { locale: "fr" })
+lingo.parseQuantity("5公斤", { locale: "zh" })
+lingo.parseQuantity("mille cinq cents metres", { locale: "fr" }) // 1500 m
+
+// Comparators that FOLLOW the quantity (CJK); these return ranges, not quantities.
+lingo.parseRange("5キロ未満", { locale: "ja" })  // { min: null, max: 5 kg }
+lingo.parseRange("5公斤以上", { locale: "zh" })  // { min: 5 kg, max: null }
+lingo.parseQuantity("100元", { locale: "zh" })   // 100 CNY (pack currency default)
+```
+
+Packs: `en`, `en-gb`, `es`, `fr`, `pt`, `zh`, `ja`. Omit `locale` to detect among loaded packs plus English; pass `locale` for known fields. English is built in and does not require a pack. `parseDate(text, { locale, localePacks, now })` can use loaded packs for relative date vocabulary.
+
+Pack notes:
+- `en`: built-in English quantity/date grammar; wave-1 adds spoken decimals and date idioms such as `two point five kg` and `quarter of five`.
+- `en-gb`: English plus day-first numeric dates and UK weekday offsets (`Monday week`, `Tuesday fortnight`).
+- `es`: Spanish number/range words, Romance composition, spoken decimals, approximants, and date clock/edge idioms. Long scale: `mil millones` = 1e9, `billón` = 1e12. Ordinal days (`el 1º de marzo`).
+- `fr`: French number/range words, exhaustive CLDR-style vigesimal compounds, spoken decimals, approximants, and weekday-offset/clock idioms. Long scale: `milliard` = 1e9, `billion` = 1e12. Ordinal days (`le 1er mars`).
+- `pt`: Portuguese number/range words, compound hundreds/tens (`cento e vinte`, `mil e quinhentos`), spoken decimals, approximants, clock/day-offset idioms, `-feira` weekdays, and locative date fillers (`na proxima segunda-feira`).
+- `zh`: Chinese CJK number walker, scale grouping, post-unit half, duration counters, period edges, day offsets, postpositional bounds (`5公斤以上`, `5公斤以下`, `5公斤以内`), CNY default plus `元`/`块` aliases, suffix dates (`2026年3月5日`, `3月5日`), weekdays (`星期三`, `周三`), and spoken clocks with day periods (`下午3点半`, `三点一刻`, `明天下午3点`).
+- `ja`: Japanese CJK number walker, scale grouping, post-unit half, duration counters, wave-dash ranges, double-step period modifiers, postpositional bounds (`5キロ未満`, `5キロ以上`, `5キロ超`), JPY default plus `円` aliases, suffix dates (`2026年3月5日`), weekdays (`水曜日`), and spoken clocks with day periods (`午後3時半`, `明日午後3時`).
+
+Note: `以上`/`未満`-style comparators produce an open RANGE, so read them with `parseRange`/`rangeField`, not `parseQuantity`. The shared `￥`/`¥` symbol resolves per locale (CNY under `zh`, JPY under `ja`).
+
+Verified locale examples (fixed `now = 2026-07-03 14:30` local time for date examples):
+
+```txt
+en:    "two point five kg" → 2.5 kg; "quarter of five" → 2026-07-04 04:45
+en-gb: "Monday week" → 2026-07-13; "Tuesday fortnight" → 2026-07-21
+es:    "treinta y cinco kilos" → 35 kg; "dos coma cinco kg" → 2.5 kg; "las tres menos cuarto" → 2026-07-04 02:45
+fr:    "quatre-vingt-dix kg" → 90 kg; "deux virgule cinq kg" → 2.5 kg; "deux heures et quart" → 2026-07-04 02:15; "lundi en huit" → 2026-07-13
+pt:    "vinte e cinco kg" → 25 kg; "dois virgula cinco kg" → 2.5 kg; "quinze para as tres" → 2026-07-04 02:45; "depois de amanha" → 2026-07-05
+zh:    "三十五公斤" → 35 kg; "两公斤半" → 2.5 kg; "七八天" → duration range 7..8 d; "月底" → 2026-07-31
+ja:    "三十五キロ" → 35 kg; "一時間半" → 1.5 h; "5〜10キロ" → 5..10 kg; "再来週" → week of 2026-07-13
+```
+
+## Dates (`@pascal-app/lingo/date`)
+
+```ts
+import { parseDate, parseDateRange, humanizeDate, parseDuration } from "@pascal-app/lingo/date"
+
+const now = new Date("2026-07-08T12:00:00Z")
+parseDate("three days ago", { now }) // grain "day"; reference-dependent inputs need explicit now
+parseDateRange("2pm to 4pm", { now }) // { start, end } civil endpoints
+parseDateRange("Aug 3 - Aug 9", { now }) // dated span, day grain, dated: true
+parseDateRange("August", { now }) // whole period: Aug 1 → Aug 31
+parseDuration("1h30").duration.base // 5400 seconds
+humanizeDate(d, { now }) // "3 days ago" — always re-parses within one grain
+```
+
+- `parseDate(text, { now?, dayFirst?, weekStart?, forwardDates?, applyZone?, locale?, strictness?, escalate?, messages? })`.
+- Trailing timezones detected on `.zone`; pass `applyZone: true` to resolve the real UTC instant.
+- `parseDateRange`, `humanizeDateRange`, `humanizeDuration`.
+
+`parseDateRange` reads three shapes, in this order: a **time slot** (`2pm to 4pm`, `between 9am and 5pm`, `9-5`, `from 3pm`), a **date-to-date span** (`July 1 to July 5`, `Aug 3 - Aug 9`, `from tomorrow to friday`, `Mon-Fri`, `2026-08-01 to 2026-08-05`), and a **whole calendar period** expanded to its real first and last day (`next week` → Mon–Sun, `next month` → 1st–last, `2027` → Jan 1–Dec 31, `August`, `this weekend` → Sat–Sun). A coarse endpoint widens on the CLOSING side too: `July to August` ends Aug 31 and `until August` ends Aug 31, while `from August` opens on the 1st. `this weekend` on a Saturday or Sunday means the weekend in progress. Two absolute dates given backwards (`2026-08-09 to 2026-08-03`) are swapped with a `RANGE_REVERSED` warning; overnight clock slots (`9pm to 5am`) pass through untouched. A runtime-only `dated` flag says which grammar matched, so one field can drive a day picker, a range picker, or a slot picker; `humanizeDateRange` renders dated ranges as dates (`2026-08-01 to 2026-08-31`) and slots as clock phrases, both re-parseable.
+
+Not supported: quarters (`Q3`, `next quarter`), elliptical right sides (`Aug 3-9`), and dash-joined ISO dates with no spaces (`2026-08-01-2026-08-05`) — all return `UNSUPPORTED_DATE`. Use a spaced dash or `to` between ISO dates.
+
+## DOM (`@pascal-app/lingo/dom`)
+
+```ts
+import { lingoInput } from "@pascal-app/lingo/dom"
+
+const field = lingoInput(document.querySelector("#height"), {
+  kind: "length",
+  unit: "m",
+  name: "height_m",
+})
+field.set("6ft")
+field.commit() // hidden input submits canonical value
+```
+
+`field.value` · `.quantity` · `.result` · `.state` ('idle'|'incomplete'|'valid'|'invalid') · `.set()` · `.commit()` · `.update()` · `.destroy()`. Never rewrites while typing; canonicalizes on blur/Enter/submit. With `complete`/`onComplete`, the input gets the headless WAI-ARIA combobox attributes (`role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`); pass `listboxId` to set `aria-controls` for your rendered listbox.
+
+## React (`@pascal-app/lingo/react`)
+
+```tsx
+import { completions } from "@pascal-app/lingo/complete"
+import { useLingoInput } from "@pascal-app/lingo/react"
+
+function HeightField() {
+  const field = useLingoInput({
+    kind: "length",
+    unit: "m",
+    name: "height_m",
+    listboxId: "height-options",
+    complete: (text) => completions(text, { kind: "length" }),
+  })
+  return (
+    <>
+      <input ref={field.ref} data-state={field.state} />
+      <ul id="height-options" role="listbox">
+        {field.completions.map((item, index) => (
+          <li
+            key={item.text}
+            role="option"
+            aria-selected={index === field.highlightedIndex}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              field.selectCompletion(index)
+            }}
+          >
+            {item.text}
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+}
+```
+
+- Attach `field.ref` to `<input>` / `<textarea>` (DOM controller underneath).
+- Live state: `state`, `value` (canonical number), `quantity`, `result`.
+- Completions (when `complete` injected): `completions`, `highlightedIndex`, `setHighlightedIndex(i)`, `selectCompletion(i?)`.
+- Imperative: `set(number|string)`, `commit()`. Controlled: `value: number | null` + `onValueChange`.
+- Keyboard: handle Arrow/Enter in **capture phase** (`onKeyDownCapture`) so selection beats the controller's native Enter-to-commit.
+- `'use client'` entry; React is an optional peer. `./complete` stays an explicit import.
+
+## React Native (`@pascal-app/lingo/react-native`)
+
+```tsx
+import { FlatList, Text, TextInput, Pressable, View } from "react-native"
+import { completions } from "@pascal-app/lingo/complete"
+import { useLingoTextInput } from "@pascal-app/lingo/react-native"
+
+function WeightField({ onWeight }: { onWeight: (kg: number | null) => void }) {
+  const field = useLingoTextInput({
+    kind: "mass",
+    unit: "kg",
+    min: 0,
+    max: "500 kg",
+    required: true,
+    complete: (text) => completions(text, { kind: "mass", limit: 6 }),
+    onValueChange: onWeight,
+  })
+
+  return (
+    <View>
+      <TextInput
+        {...field.inputProps}
+        placeholder="165 lb or 75 kg"
+        accessibilityLabel="Package weight"
+      />
+      {field.errorMessage ? <Text>{field.errorMessage}</Text> : null}
+      {!field.errorMessage && field.hint ? <Text>{field.hint}</Text> : null}
+      <FlatList
+        data={[...field.completions]}
+        keyExtractor={(item) => item.text}
+        renderItem={({ item, index }) => (
+          <Pressable onPress={() => field.selectCompletion(index)}>
+            <Text>{item.text}</Text>
+          </Pressable>
+        )}
+      />
+    </View>
+  )
+}
+```
+
+DOM-free headless adapter — same parse/commit semantics as web, no browser APIs:
+
+- `inputProps`: `{ value, onChangeText, onBlur, onSubmitEditing }` — spread onto RN `TextInput`.
+- Display vs canonical: `text` (what the user sees), `value` (number in `unit`), `submitValue` (backend string), `quantity` / `result`.
+- Lifecycle: typing uses `partialState` (`idle`/`incomplete`/`valid`/`invalid`); blur / submit / `commit()` canonicalizes (`display: 'canonical'|'echo'|'preserve'`).
+- Validation: `required`, `min`/`max` (parseable strings or numbers), `errorMessage`, `hint`, `touched`, `dirty`.
+- Completions (injected): `completions`, `highlightedIndex`, `setHighlightedIndex(i)`, `selectCompletion(i?)` — render with `FlatList`; engine is not bundled.
+- Imperative: `set(number|string)`, `commit()`. Controlled: `value` + `onValueChange`.
+- Imports React only (optional peer). Does **not** import `react-native`, DOM, or `./complete`.
+
+## Element (`@pascal-app/lingo/element`)
+
+```ts
+import { defineLingoInput } from "@pascal-app/lingo/element"
+defineLingoInput() // registers <lingo-input>
+// <lingo-input kind="length" unit="m" name="height_m"></lingo-input>
+```
+
+Form-associated custom element via `ElementInternals.setFormValue`/`setValidity`. Framework-agnostic.
+
+## AI (`@pascal-app/lingo/ai`)
+
+```ts
+import { tool, generateText } from "ai"
+import { lingoObject, quantityField, dateField } from "@pascal-app/lingo/ai"
+
+const shipment = lingoObject({
+  weight: quantityField({ kind: "mass", unit: "kg", min: 0, max: 500 }),
+  deliverBy: dateField({ now: new Date() }),
+})
+
+await generateText({
+  model: "gpt-5.5",
+  tools: { create_shipment: tool({ inputSchema: shipment, execute: run }) },
+})
+```
+
+Fields implement Standard Schema (validate + jsonSchema). Input JSON Schema is `type:"string"` + description; output is canonical. Call `field.safeParse()` to see warnings; most adapters only read `{success,value}`/`{success,error}`.
+
+- `quantityField`, `rangeField`, `dateField`, `dateRangeField`, `lingoObject`, `optional(field)`.
+- `toJSONSchema(field, { io?, target? })`, `repairTextWith(spec)`, `repairToolCallWith(specsByTool)`.
+- `canonicalizeValues(value, spec)`, `quantityMatch`, `dateMatch`.
+
+Tool-boundary defaults: `AMBIGUOUS_NUMBER` → error + candidate; `dateField` escalates `TZ_IGNORED` and requires explicit `now` for reference-dependent dates; `lingoObject` is closed (`additionalProperties: false`; `{passthrough:true}` opts out). `dateRangeField` shares those guards and accepts every `parseDateRange` shape — slots, dated spans, and calendar periods — returning `{ start?, end?: ISO }`.
+
+## MCP (`@pascal-app/lingo/mcp`)
+
+```ts
+import { quantityField, dateField } from "@pascal-app/lingo/ai"
+import { lingoTool } from "@pascal-app/lingo/mcp"
+
+const createShipment = lingoTool({
+  name: "create_shipment",
+  input: {
+    weight: quantityField({ kind: "mass", unit: "kg", min: 0, max: 500 }),
+    deliverBy: dateField({ now: new Date() }),
+  },
+  handler: ({ weight, deliverBy }) => `Logged ${weight} kg by ${deliverBy}`,
+})
+// server.registerTool(createShipment.name, { inputSchema: createShipment.inputSchema }, createShipment.callback)
+```
+
+`safeParse` runs before `handler`; failures return `{isError:true, content:[{type:'text', text}]}` with `[CODE]`-prefixed messages.
+
+## Catalog (`@pascal-app/lingo/catalog`)
+
+```ts
+import { listKinds, getUnit, listCurrencies, currencyForCountry } from "@pascal-app/lingo/catalog"
+
+listKinds()
+getUnit("ft", "length") // { id, symbol, name, aliases, toBase, ... }
+currencyForCountry("US") // "USD"
+```
+
+## Describe (`@pascal-app/lingo/describe`)
+
+```ts
+import { lingo } from "@pascal-app/lingo"
+import { describeResult } from "@pascal-app/lingo/describe"
+
+describeResult(lingo("72 in to cm")).data
+// resource-style view with object, grouped value/canonical, rich units, issues, alternatives
+```
+
+Keep `toJSON()` for compact wire storage; `describe*` is the human/agent-readable counterpart.
+
+## Schema (`@pascal-app/lingo/schema`)
+
+`lingoJsonSchema` (Draft 2020-12 of v3 wire types), `toOpenApi()` (OpenAPI 3.1), `BUILTIN_KINDS`/`SEVERITIES`/`ISSUE_CODES`/`UNIT_SYSTEMS`. Site also ships generated Zod/Valibot/TypeBox/ArkType/Effect adapters.
+
+## Forms UX examples
+
+The `/docs#forms-ux` section and `/docs/forms-ux.md` markdown mirror show the same before/after matrix:
+
+- Finance: `1250 usd`, `25 bps`, `2 days` → stores USD, percent, days.
+- Recipes: `1.5 cups`, `2 tbsp`, `45 min` → stores mL and minutes.
+- Engineering: `3/4 in`, `32 psi`, `120 lbf`, `35 Nm` → stores mm, kPa, N, N⋅m.
+- Fitness: `165 lb`, `5 km`, `42 min`, `450 Calories` → stores kg, meters, minutes, kcal.
+- Medical: `1.5 tsp`, `6 hr`, `5'11"`, `120 mmHg` → field-local canonical values.
+
+## Issue codes
+
+`{ code, severity: 'error'|'warning'|'info', message, span: { start, end, text }, suggestions?, data?, candidate? }`. `ok:false`/`type:'failure'` means at least one error.
+
+| Code | Meaning | Typical fix |
+|------|---------|-------------|
+| EMPTY | Input is blank | Provide a value or mark the field optional |
+| NO_VALUE | Parser found no quantity | Add a number and unit |
+| UNKNOWN_UNIT | Unit not in registry | Fix typo or pass `kind`/`unit` context |
+| KIND_MISMATCH | Unit belongs to another kind | Pass the correct `kind` option |
+| UNIT_REQUIRED | Bare number without assumed unit | Pass `unit` or enable `accept.bareNumbers` |
+| CONVERSION_NOT_ALLOWED | Conversion shape rejected | Enable `accept.conversions` or parse as quantity only |
+| AMBIGUOUS_NUMBER | Locale separator ambiguity ("1,234") | Re-emit unambiguous form; use `strictness:'confirm'` to fail |
+| LOCALE_NOT_LOADED | Explicit locale pack was not loaded | Pass the pack to `createLingo({ locales })` or `localePacks` |
+| AMBIGUOUS_UNIT | Bare symbol ("$5") | Pass `currency` context |
+| NOW_REQUIRED | Relative date without `now` | Pass explicit `now` to `parseDate`/`dateField` |
+| TZ_IGNORED | Timezone detected but not applied | Pass `applyZone:true` or remove zone from input |
+| TYPO_CORRECTED | Typo auto-fixed | Use `strictness:'confirm'` to fail with candidate |
+| RANGE_MIN / RANGE_MAX | Value outside bounds | Re-emit within min/max advertised in field description |
+| RANGE_REVERSED | Bounds given high-to-low; parser swapped them | Emit low-to-high, or accept the swap |
+| UNSUPPORTED_DATE | Date/range shape not in the grammar (`Q3`, `Aug 3-9`) | Re-emit a supported shape or an explicit `start to end` pair |
+| RATE_REQUIRED | Cross-currency without rates | Call `convertCurrency` with injected rates |
+
+Full list: EMPTY, NO_VALUE, UNKNOWN_UNIT, KIND_MISMATCH, RANGE_KIND_MISMATCH, CONVERSION_KIND_MISMATCH, RATE_REQUIRED, TRAILING_INPUT, SINGLE_VALUE_EXPECTED, APPROX_NOT_ALLOWED, UNIT_REQUIRED, CONVERSION_NOT_ALLOWED, NUMBER_FORMAT, NONFINITE, LOCALE_NOT_LOADED, RANGE_MIN, RANGE_MAX, RANGE_OPEN_BOUND_NOT_ALLOWED, REQUIRED, UNSUPPORTED_DATE, NOW_REQUIRED, TYPO_CORRECTED, AMBIGUOUS_NUMBER, AMBIGUOUS_UNIT, AMBIGUOUS_DATE, RANGE_REVERSED, COMPOUND_OVERFLOW, CIVIL_AVERAGE, UNIT_ASSUMED, WEEKDAY_ASSUMED_NEXT, SLANG_UNIT, TZ_IGNORED, AMBIGUOUS_TIMEZONE. Override copy via `messages` option map.
+
+## Canonical examples (input → essence)
+
+"2 ft" → quantity length base 0.6096 m · "5'11\"" → 1.8034 m (parts ft+in) · "72 in to cm" → conversion, converted 182.88 cm · "60 miles an hour" → speed in m/s · "5 cubic feet" → volume in m³ · "approx. 5 kg" → approximate mass · "1m80" → 1.8 m · "1h30" → 5400 s · "2 lb 3 oz" → 0.9922 kg · "$5" → currency USD value/base 5 baseUnit USD + AMBIGUOUS_UNIT; pass `{currency:'CAD'}` to read bare "$" as CAD · "50 cents" → 0.5 USD + AMBIGUOUS_UNIT; pass `{currency:'EUR'}` to read as EUR · "five dollars and fifty cents" → 5.5 USD · "50p" → 0.5 GBP · "3 quid 50" → 3.5 GBP · "€5-€10" → currency range baseUnit EUR · "5 EUR to USD" → ok:false RATE_REQUIRED (use convertCurrency with injected rates) · "between 5 and 10 kg" → range 5..10 kg · "under 10 minutes" → range max 600 s exclusive · "no greater than 5 kg" → range max 5 kg inclusive · "10 ± 0.5 mm" → plusMinus center 10 mm/base 0.01 and delta 0.5 mm/base 0.0005 · "a few minutes" → range 120..240 s approximate · "it's hot" (kind temperature) → range 300.15..308.15 K fuzzy 'hot' · "1,5 kg" → 1.5 kg · "1,234" → 1234 + AMBIGUOUS_NUMBER (alt 1.234) · "5 meterz" (kind length) → 5 m + TYPO_CORRECTED; with strictness confirm → ok:false + candidate 5 m · "72" (kind length, unit cm, accept.bareNumbers false) → UNIT_REQUIRED + candidate 72 cm · "72 in to cm" with accept.conversions false → CONVERSION_NOT_ALLOWED + candidate conversion · "5m" (kind duration) → 300 s + SLANG_UNIT · "in 2d" → date two days from now · "3min from tmrw" → tomorrow, same time-of-day +3 min · "17h30" → 17:30 · "quarter past 5" → 05:15 · "3pm EST" → 15:00 civil + zone {abbrev, -300, ambiguous} + TZ_IGNORED/AMBIGUOUS_TIMEZONE; `{applyZone:true}` → the 20:00Z instant · "2pm to 4pm" → date-range 14:00..16:00 · "9-5" → date-range 09:00..17:00 (workday shift) · "Aug 3 - Aug 9" → dated date-range 2026-08-03..2026-08-09 · "August" → dated date-range 2026-08-01..2026-08-31 (whole month) · "next week" → Mon..Sun · "this weekend" → Sat..Sun (the one in progress on Sat/Sun) · "2026-08-09 to 2026-08-03" → swapped 08-03..08-09 + RANGE_REVERSED · "Q3" → ok:false UNSUPPORTED_DATE (quarters need a fiscal-year anchor; not supported) · "500 KB" → 500000 B · "5 Mb" → 625000 B (megabits) · "5 Mbps" → data_rate 5000000 bit/s; use "bit/s" for bits per second because bare "bps" stays basis points · "5 gpm" → flow_rate 0.000315451 m³/s · "250 mL/min" → flow_rate 0.000004167 m³/s · "10 inH₂O" → pressure 2490.8891 Pa · "1 kgf/cm²" → pressure 98.0665 kPa · "1 kg/cm²" → ok:false TRAILING_INPUT (kilogram-mass over area deferred; use kgf/cm²) · "5 psig" (kind pressure) → ok:false UNKNOWN_UNIT (gauge semantics deferred) · "9.8 m/s²" → acceleration 9.8 m/s² · "10 Nm" → torque 10 N⋅m (exact-case; lowercase "nm" remains nanometers) · "500 lux" → illuminance 500 lx · "100 nits" → luminance 100 cd/m² · "20 mSv" → radiation equivalent dose 0.02 Sv · "5 MBq" → radioactivity 5000000 Bq · "5 uM" → concentration 0.005 mol/m³ · "1 mol/L" and "1 mol per L" → concentration 1000 mol/m³; untyped glued "1M" fails, use "1 M" or `kind:'concentration'` · "-40°F" → 233.15 K · "3×10⁵ m" → 300000 m · "½ cup" → 118.29 mL · "15%" → percent 15 · "25 bps" → 0.25% (basis points; bare bps stays percent) · "500 mAh" → charge 1800 C · "4.7 kohm" → resistance 4700 Ω · "250 mmol" → substance 0.25 mol.
+
+## Docs (online)
+
+- [Agent index](https://lingo.pascal.app/llms.txt): Curated link index to every section and documentation tier.
+- [Full docs markdown](https://lingo.pascal.app/llms-full.txt): Complete `/docs` page as clean Markdown.
+- [Per-section markdown](https://lingo.pascal.app/docs/parse.md): Fetch `/docs/<section>.md` for self-contained topic slices.
+- [Human docs](https://lingo.pascal.app/docs): Interactive docs with live parser demos.
+- [README](https://github.com/pascalorg/lingo/tree/main/packages/lingo#readme): Package overview and recipes.

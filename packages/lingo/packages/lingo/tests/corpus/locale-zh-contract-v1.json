@@ -1,0 +1,1196 @@
+{
+  "version": 1,
+  "fixedNow": [
+    2026,
+    6,
+    3,
+    14,
+    30,
+    0
+  ],
+  "breadth": {
+    "5公斤 [kg-arabic-pin]": {
+      "input": "5公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "三公斤": {
+      "input": "三公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 3,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "十五公斤": {
+      "input": "十五公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 15,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "一百五十公斤": {
+      "input": "一百五十公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 150,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "一百五十米": {
+      "input": "一百五十米",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "length",
+      "base": 150,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "一百五": {
+      "input": "一百五",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "number",
+      "kind": null,
+      "base": 150,
+      "unit": null,
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "三万五": {
+      "input": "三万五",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "number",
+      "kind": null,
+      "base": 35000,
+      "unit": null,
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "3万5": {
+      "input": "3万5",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "number",
+      "kind": null,
+      "base": 35000,
+      "unit": null,
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "3万5千公斤": {
+      "input": "3万5千公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 35000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "３５公斤": {
+      "input": "３５公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 35,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "两公斤半": {
+      "input": "两公斤半",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2.5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "三个小时": {
+      "input": "三个小时",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "duration",
+      "base": 10800,
+      "unit": "h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "三个月": {
+      "input": "三个月",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "duration",
+      "base": 7889400,
+      "unit": "mo",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "幺公斤": {
+      "input": "幺公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "差不多5公斤": {
+      "input": "差不多5公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 3,
+        "end": 6
+      },
+      "confidence": 0.9
+    },
+    "三 或 四 公斤": {
+      "input": "三 或 四 公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 3,
+        "max": 4
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "七八天": {
+      "input": "七八天",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": 604800,
+        "max": 691200
+      },
+      "unit": {
+        "min": "d",
+        "max": "d"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "100元": {
+      "input": "100元",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 100,
+      "unit": "CNY",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "一百元": {
+      "input": "一百元",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 100,
+      "unit": "CNY",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "50块": {
+      "input": "50块",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 50,
+      "unit": "CNY",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "￥100": {
+      "input": "￥100",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 100,
+      "unit": "CNY",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "5公斤以上": {
+      "input": "5公斤以上",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": null
+      },
+      "unit": {
+        "min": "kg",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5公斤以下": {
+      "input": "5公斤以下",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": null,
+        "max": 5
+      },
+      "unit": {
+        "min": null,
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5公斤以内": {
+      "input": "5公斤以内",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": null,
+        "max": 5
+      },
+      "unit": {
+        "min": null,
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "大于5公斤": {
+      "input": "大于5公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": null
+      },
+      "unit": {
+        "min": "kg",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "小于5公斤": {
+      "input": "小于5公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": null,
+        "max": 5
+      },
+      "unit": {
+        "min": null,
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "不超过5公斤": {
+      "input": "不超过5公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": null,
+        "max": 5
+      },
+      "unit": {
+        "min": null,
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "至少5公斤": {
+      "input": "至少5公斤",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": null
+      },
+      "unit": {
+        "min": "kg",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "五公斤左右": {
+      "input": "五公斤左右",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    },
+    "5公斤左右": {
+      "input": "5公斤左右",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    },
+    "三至五天": {
+      "input": "三至五天",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": 259200,
+        "max": 432000
+      },
+      "unit": {
+        "min": "d",
+        "max": "d"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "三到五天": {
+      "input": "三到五天",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": 259200,
+        "max": 432000
+      },
+      "unit": {
+        "min": "d",
+        "max": "d"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    }
+  },
+  "date": {
+    "三天前 [compact-days-ago-pin]": {
+      "input": "三天前",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 30,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "前天": {
+      "input": "前天",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "后天": {
+      "input": "后天",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "大前天": {
+      "input": "大前天",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 30,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "大后天": {
+      "input": "大后天",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "三个小时后": {
+      "input": "三个小时后",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 17,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "三天以后": {
+      "input": "三天以后",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "月底": {
+      "input": "月底",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 31,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "月初": {
+      "input": "月初",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "月中": {
+      "input": "月中",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 15,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "年底": {
+      "input": "年底",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 12,
+        "day": 31,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "年初": {
+      "input": "年初",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "周末": {
+      "input": "周末",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "2026年3月5日": {
+      "input": "2026年3月5日",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "3月5日": {
+      "input": "3月5日",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "二〇二六年三月五日": {
+      "input": "二〇二六年三月五日",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "星期三": {
+      "input": "星期三",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 8,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    },
+    "周三": {
+      "input": "周三",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 8,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 0.9
+    },
+    "下周一": {
+      "input": "下周一",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "上周五": {
+      "input": "上周五",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 26,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "下午3点": {
+      "input": "下午3点",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "上午9点半": {
+      "input": "上午9点半",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 9,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "3点一刻": {
+      "input": "3点一刻",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 3,
+        "minute": 15,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "晚上8点30分": {
+      "input": "晚上8点30分",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 20,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "明天下午3点": {
+      "input": "明天下午3点",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "昨天上午9点": {
+      "input": "昨天上午9点",
+      "opts": {
+        "locale": "zh"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 2,
+        "hour": 9,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    }
+  },
+  "dateRange": {}
+}

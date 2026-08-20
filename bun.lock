@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "editor",
@@ -36,6 +37,7 @@
         "@pascal-app/ifc-converter": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
+        "@pascal-app/plugin-articraft": "workspace:*",
         "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#041041dab1366ecd59bf3c74d0dd47a243cc6845",
         "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
@@ -243,6 +245,15 @@
         "typescript": "6.0.3",
       },
     },
+    "packages/lingo": {
+      "name": "lingo-monorepo",
+      "devDependencies": {
+        "@biomejs/biome": "2.4.16",
+        "lefthook": "^2.1.6",
+        "turbo": "^2.5.0",
+        "ultracite": "7.8.2",
+      },
+    },
     "packages/mcp": {
       "name": "@pascal-app/mcp",
       "version": "1.0.0-beta.6",
@@ -288,6 +299,77 @@
         "lucide-react": "^1",
         "react": "^18 || ^19",
         "three": "^0.185",
+        "zustand": "^5",
+      },
+    },
+    "packages/plugin-articraft": {
+      "name": "@pascal-app/plugin-articraft",
+      "version": "0.2.0",
+      "dependencies": {
+        "urdf-loader": "^0.13.1",
+      },
+      "devDependencies": {
+        "@pascal-app/core": "1.0.0-beta.4",
+        "@pascal-app/editor": "1.0.0-beta.4",
+        "@pascal-app/viewer": "1.0.0-beta.4",
+        "@react-three/fiber": "^9.5.0",
+        "@types/blob-stream": "^0.1.33",
+        "@types/bun": "^1.3.5",
+        "@types/howler": "^2.2.12",
+        "@types/node": "^22.19.12",
+        "@types/pdfkit": "^0.17.3",
+        "@types/react": "^19.2.2",
+        "@types/react-dom": "^19.2.2",
+        "@types/three": "^0.185.0",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4",
+        "three": "^0.185.0",
+        "typescript": "6.0.3",
+        "zod": "^4.3.6",
+        "zustand": "^5.0.11",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": ">=1.0.0-beta.4 <1.0.0",
+        "@pascal-app/editor": ">=1.0.0-beta.4 <1.0.0",
+        "@pascal-app/viewer": ">=1.0.0-beta.4 <1.0.0",
+        "@react-three/fiber": "^9",
+        "react": "^18 || ^19",
+        "three": "^0.185",
+        "zod": "^4",
+        "zustand": "^5",
+      },
+    },
+    "packages/plugin-trees": {
+      "name": "@pascal-app/plugin-trees",
+      "version": "0.1.0",
+      "dependencies": {
+        "@dgreenheck/ez-tree": "^1.1.0",
+      },
+      "devDependencies": {
+        "@pascal-app/core": "0.9.1",
+        "@pascal-app/editor": "0.9.1",
+        "@pascal-app/viewer": "0.9.1",
+        "@react-three/fiber": "^9",
+        "@types/bun": "^1.3.5",
+        "@types/howler": "^2.2.12",
+        "@types/node": "^22.19.12",
+        "@types/react": "^19.2.2",
+        "@types/react-dom": "^19.2.2",
+        "@types/three": "^0.184.0",
+        "react": "^19",
+        "three": "^0.185",
+        "typescript": "6.0.3",
+        "zod": "^4",
+        "zustand": "^5",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": ">=0.9.1 <1",
+        "@pascal-app/editor": ">=0.9.1 <1",
+        "@pascal-app/viewer": ">=0.9.1 <1",
+        "@react-three/fiber": "^9",
+        "react": "^18 || ^19",
+        "three": "^0.185",
+        "zod": "^4",
         "zustand": "^5",
       },
     },
@@ -539,7 +621,7 @@
 
     "@mediapipe/tasks-vision": ["@mediapipe/tasks-vision@0.10.17", "", {}, "sha512-CZWV/q6TTe8ta61cZXjfnnHsfWIdFhms03M9T7Cnd5y2mdpylJM0rF1qRq+wsQVRMLz1OYPVEBU9ph2Bx8cxrg=="],
 
-    "@mint/pascal-plugin": ["@mint/pascal-plugin@github:mintdotgg/mint-pascal-plugin#902c546", { "peerDependencies": { "@pascal-app/core": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "@pascal-app/editor": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "@pascal-app/viewer": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "react": "^18 || ^19", "three": "^0.185" } }, "mintdotgg-mint-pascal-plugin-902c546"],
+    "@mint/pascal-plugin": ["@mint/pascal-plugin@github:mintdotgg/mint-pascal-plugin#902c546", { "peerDependencies": { "@pascal-app/core": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "@pascal-app/editor": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "@pascal-app/viewer": ">=0.9.2 <1.0.0 || >=1.0.0-beta.1 <1.0.0", "react": "^18 || ^19", "three": "^0.185" } }, "mintdotgg-mint-pascal-plugin-902c546", "sha512-/itUH9r9OIP8ZPrklW8iWe6B2SDOtlL1m8r9hlVM4Rw5josYtDdkDKQ37FbanvxxuUKcQnukHbtxWe3svRaCrQ=="],
 
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.29.0", "", { "dependencies": { "@hono/node-server": "^1.19.9", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "content-type": "^1.0.5", "cors": "^2.8.5", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.0", "express": "^5.2.1", "express-rate-limit": "^8.2.1", "hono": "^4.11.4", "jose": "^6.1.3", "json-schema-typed": "^8.0.2", "pkce-challenge": "^5.0.0", "raw-body": "^3.0.0", "zod": "^3.25 || ^4.0", "zod-to-json-schema": "^3.25.1" }, "peerDependencies": { "@cfworker/json-schema": "^4.1.1" }, "optionalPeers": ["@cfworker/json-schema"] }, "sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ=="],
 
@@ -635,7 +717,7 @@
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.41.1", "", {}, "sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA=="],
 
-    "@ovurrsl/plugin-warehouse": ["@ovurrsl/plugin-warehouse@github:ovurrsl/plugin-warehouse#d188ad4", { "peerDependencies": { "@iconify/react": "^6", "@pascal-app/core": ">=1.0.0-beta.1 <2", "@pascal-app/editor": ">=1.0.0-beta.1 <2", "@pascal-app/viewer": ">=1.0.0-beta.1 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "ovurrsl-plugin-warehouse-d188ad4"],
+    "@ovurrsl/plugin-warehouse": ["@ovurrsl/plugin-warehouse@github:ovurrsl/plugin-warehouse#d188ad4", { "peerDependencies": { "@iconify/react": "^6", "@pascal-app/core": ">=1.0.0-beta.1 <2", "@pascal-app/editor": ">=1.0.0-beta.1 <2", "@pascal-app/viewer": ">=1.0.0-beta.1 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "ovurrsl-plugin-warehouse-d188ad4", "sha512-0HrDukV+LqDrqFnJB9TkRMhAOcoy5G7aXkwk9cg6N7Ly5JRJ2OR07II264acZ16UDALaEzAzdEbmOILhPQip4A=="],
 
     "@oxc-parser/binding-android-arm-eabi": ["@oxc-parser/binding-android-arm-eabi@0.132.0", "", { "os": "android", "cpu": "arm" }, "sha512-KrLaPWa5c9Y7LkW+rKkaUE3y7DBDrQtaf7rlsSDfv6KAHUjgzAIRA761Lrrp6//Yd/Rlie/yEOt9YENCoJnOcw=="],
 
@@ -769,11 +851,13 @@
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
 
-    "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@github:pascalorg/plugin-bones#041041d", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-bones-041041d"],
+    "@pascal-app/plugin-articraft": ["@pascal-app/plugin-articraft@workspace:packages/plugin-articraft"],
 
-    "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#1c04ec9", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-1c04ec9"],
+    "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@github:pascalorg/plugin-bones#041041d", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-bones-041041d", "sha512-rhH2hed/VQtBsNjiP8Edl9wwhQRPEArioUpNDJ2vWJCA93403ASMzMDS/hytWRKB1QC8Nl4B8zLqHj+Hi5is3Q=="],
 
-    "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c"],
+    "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#1c04ec9", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-1c04ec9", "sha512-X7Zg7wi0ghZRcTtbH5LF6xye493uSZ2ft3AmAQBtguBCU6VCwCexA7pdKDr5AnVxX/JRj2s6JSd/OX4aIZ9Y6Q=="],
+
+    "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@workspace:packages/plugin-trees"],
 
     "@pascal-app/viewer": ["@pascal-app/viewer@workspace:packages/viewer"],
 
@@ -1573,6 +1657,28 @@
 
     "kubernetes-types": ["kubernetes-types@1.30.0", "", {}, "sha512-Dew1okvhM/SQcIa2rcgujNndZwU8VnSapDgdxlYoB84ZlpAD43U6KLAFqYo17ykSFGHNPrg0qry0bP+GJd9v7Q=="],
 
+    "lefthook": ["lefthook@2.1.10", "", { "optionalDependencies": { "lefthook-darwin-arm64": "2.1.10", "lefthook-darwin-x64": "2.1.10", "lefthook-freebsd-arm64": "2.1.10", "lefthook-freebsd-x64": "2.1.10", "lefthook-linux-arm64": "2.1.10", "lefthook-linux-x64": "2.1.10", "lefthook-openbsd-arm64": "2.1.10", "lefthook-openbsd-x64": "2.1.10", "lefthook-windows-arm64": "2.1.10", "lefthook-windows-x64": "2.1.10" }, "bin": { "lefthook": "bin/index.js" } }, "sha512-K7mM4WoqMwqfXYK11EHy+lSH1uW8XHni3Yn/bSqyerPkUPygGdf3xn18JoV5HyA06xuQL3ofGAOjG01QX9oJ4w=="],
+
+    "lefthook-darwin-arm64": ["lefthook-darwin-arm64@2.1.10", "", { "os": "darwin", "cpu": "arm64" }, "sha512-nw+X8wRNDoUUV6WSteyKBbcLySq+fsmZt5WV/s50ZJpysmsDKJOUMln6SllNfP+60dzUahAO7REco/2633BsLg=="],
+
+    "lefthook-darwin-x64": ["lefthook-darwin-x64@2.1.10", "", { "os": "darwin", "cpu": "x64" }, "sha512-KQ/bHmvpkFdHMn4pZnUdTf+GuSC+aBBgBTxZT4GW+6cSf+qbErKZBhK7cH6BmILsvx43+VzEArvHYY7YOfRFOQ=="],
+
+    "lefthook-freebsd-arm64": ["lefthook-freebsd-arm64@2.1.10", "", { "os": "freebsd", "cpu": "arm64" }, "sha512-8su6DwydP7+pv7kG0zCtjphqsw4ouOnfexRUErapy5GTxYBoUOhYz3RSHTSWNRsK6W4jva7FPUh2Lp5/PSn30w=="],
+
+    "lefthook-freebsd-x64": ["lefthook-freebsd-x64@2.1.10", "", { "os": "freebsd", "cpu": "x64" }, "sha512-GeAJEFxko3Lk+AsnS3NleAFrpyMLFUKOlgJvPKuU0xHwVEI/z+ZoCcmuO0BX+4CS0NLbZhC/YQAvBASqDvvVdQ=="],
+
+    "lefthook-linux-arm64": ["lefthook-linux-arm64@2.1.10", "", { "os": "linux", "cpu": "arm64" }, "sha512-1sHTCmpTWjVMs+yKPBLRNT1kuuIr1yjietlk7rCB6wFPVOS6Ph3o2zPFH2AvW1UymHlqwyHXzBr9EtDpQ7j1mQ=="],
+
+    "lefthook-linux-x64": ["lefthook-linux-x64@2.1.10", "", { "os": "linux", "cpu": "x64" }, "sha512-z/VlRB3bh6mBvW3r1rwnJ5vP8z+Krx5gJzkZ4veDXh+6FlRTx8wtd3g3fllOv/yZMxkgmL3fQoFXv05Esa7vBQ=="],
+
+    "lefthook-openbsd-arm64": ["lefthook-openbsd-arm64@2.1.10", "", { "os": "openbsd", "cpu": "arm64" }, "sha512-430zL8sSIKw5P0YXGG6PB+eAhHa06n0PXuaERaAQE4Ss3odfqwnl5Mq9hQmkEnOS1EGiQEKkd0UHv/i4PtMNIQ=="],
+
+    "lefthook-openbsd-x64": ["lefthook-openbsd-x64@2.1.10", "", { "os": "openbsd", "cpu": "x64" }, "sha512-bgkO8PphGZVDhQgCJ524aYYPI5491pVmCiLPGjBIo1AvOSlIyw4N1Y+1C3QfqwEmechzw+Aq16SNc8pqv6UuXg=="],
+
+    "lefthook-windows-arm64": ["lefthook-windows-arm64@2.1.10", "", { "os": "win32", "cpu": "arm64" }, "sha512-5Q6etF0Fla2DDA4ilDySrdNgiR5+W7cJZwnZ69Je3kvWCaWm4wnkuc8FEdjp3kiL2x3ZXipdI00f5vpO8aWmog=="],
+
+    "lefthook-windows-x64": ["lefthook-windows-x64@2.1.10", "", { "os": "win32", "cpu": "x64" }, "sha512-c/XH8YZtylG4XaxzqFfXluvq2LXq2W/p54Bnzn3+Z7E5X2Fk3JlFJAibulMbIt2+w8T7UI/r97ok5GqE4kGaeA=="],
+
     "levn": ["levn@0.4.1", "", { "dependencies": { "prelude-ls": "^1.2.1", "type-check": "~0.4.0" } }, "sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ=="],
 
     "lie": ["lie@3.3.0", "", { "dependencies": { "immediate": "~3.0.5" } }, "sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ=="],
@@ -1602,6 +1708,8 @@
     "lightningcss-win32-x64-msvc": ["lightningcss-win32-x64-msvc@1.32.0", "", { "os": "win32", "cpu": "x64" }, "sha512-Amq9B/SoZYdDi1kFrojnoqPLxYhQ4Wo5XiL8EVJrVsB8ARoC1PWW6VGtT0WKCemjy8aC+louJnjS7U18x3b06Q=="],
 
     "linebreak": ["linebreak@1.1.0", "", { "dependencies": { "base64-js": "0.0.8", "unicode-trie": "^2.0.0" } }, "sha512-MHp03UImeVhB7XZtjd0E4n6+3xr5Dq/9xI/5FptGk5FrbDR3zagPa2DS6U8ks/3HjbKWG9Q1M2ufOzxV2qLYSQ=="],
+
+    "lingo-monorepo": ["lingo-monorepo@workspace:packages/lingo"],
 
     "locate-path": ["locate-path@6.0.0", "", { "dependencies": { "p-locate": "^5.0.0" } }, "sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw=="],
 
@@ -2013,6 +2121,8 @@
 
     "update-browserslist-db": ["update-browserslist-db@1.2.3", "", { "dependencies": { "escalade": "^3.2.0", "picocolors": "^1.1.1" }, "peerDependencies": { "browserslist": ">= 4.21.0" }, "bin": { "update-browserslist-db": "cli.js" } }, "sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w=="],
 
+    "urdf-loader": ["urdf-loader@0.13.1", "", { "peerDependencies": { "three": ">=0.152.0" } }, "sha512-bHHoh0Yxrgrw91dPAmVnzKleA8HiVMeHy6xYqOVRw3LuZ2hDOwUiQVCbrzPZckO5S30F1Yym8zLCINN0HfcM3w=="],
+
     "uri-js": ["uri-js@4.4.1", "", { "dependencies": { "punycode": "^2.1.0" } }, "sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg=="],
 
     "use-callback-ref": ["use-callback-ref@1.3.3", "", { "dependencies": { "tslib": "^2.0.0" }, "peerDependencies": { "@types/react": "*", "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-jQL3lRnocaFtu3V00JToYz/4QkNWswxijDaCVNZRiRTO3HQDLsdu1ZtmIUvV4yPp+rvWm5j0y0TG/S61cuijTg=="],
@@ -2115,6 +2225,18 @@
 
     "@oxc-resolver/binding-wasm32-wasi/@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.4", "", { "dependencies": { "@tybys/wasm-util": "^0.10.1" }, "peerDependencies": { "@emnapi/core": "^1.7.1", "@emnapi/runtime": "^1.7.1" } }, "sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow=="],
 
+    "@pascal-app/plugin-articraft/@pascal-app/core": ["@pascal-app/core@1.0.0-beta.4", "", { "dependencies": { "dedent": "^1.7.1", "idb-keyval": "^6.2.2", "mitt": "^3.0.1", "nanoid": "^5.1.6", "zod": "^4.3.5", "zundo": "^2.3.0", "zustand": "^5" }, "peerDependencies": { "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185" } }, "sha512-g07X0t28crhbYrTQcrWImLnRuB/zDLLGAnAt16T8zyp5UBxMMmeh3kPqSqqZQxkDGx261PUG31Qf06TlKcniuw=="],
+
+    "@pascal-app/plugin-articraft/@pascal-app/editor": ["@pascal-app/editor@1.0.0-beta.4", "", { "dependencies": { "@dnd-kit/core": "^6.3.1", "@dnd-kit/sortable": "^10.0.0", "@dnd-kit/utilities": "^3.2.2", "@iconify/react": "^6.0.2", "@number-flow/react": "^0.6.0", "@pascal-app/lingo": "^0.2.0", "@radix-ui/react-alert-dialog": "^1.1.15", "@radix-ui/react-context-menu": "^2.2.16", "@radix-ui/react-dialog": "^1.1.15", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.15", "@radix-ui/react-select": "^2.2.6", "@radix-ui/react-separator": "^1.1.8", "@radix-ui/react-slider": "^1.3.6", "@radix-ui/react-slot": "^1.2.4", "@radix-ui/react-switch": "^1.2.6", "@radix-ui/react-tabs": "^1.1.13", "@radix-ui/react-tooltip": "^1.2.8", "@visual-json/react": "^0.4.0", "blob-stream": "^0.1.3", "class-variance-authority": "^0.7.1", "clsx": "^2.1.1", "cmdk": "^1.1.1", "howler": "^2.2.4", "lucide-react": "^1.7.0", "mitt": "^3.0.1", "motion": "^12.34.3", "nanoid": "^5.1.6", "pdfkit": "^0.19.1", "tailwind-merge": "^3.5.0", "three-mesh-bvh": "~0.9.8", "zod": "^4.3.6", "zustand": "^5.0.11" }, "peerDependencies": { "@pascal-app/core": "^1.0.0-beta.4", "@pascal-app/viewer": "^1.0.0-beta.4", "@react-three/drei": "^10", "@react-three/fiber": "^9", "next": ">=15", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185" } }, "sha512-2ED/NkN+IfimU7rA3ISv7EeVF/MjYOEaXtoIjSLSIrQyf61jWt7Mdt0pdpxR0dm9VGnRa03MqPCG0DJgw2mF6A=="],
+
+    "@pascal-app/plugin-articraft/@pascal-app/viewer": ["@pascal-app/viewer@1.0.0-beta.4", "", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8", "zustand": "^5" }, "peerDependencies": { "@pascal-app/core": "^1.0.0-beta.4", "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185" } }, "sha512-R6TGwIiOhzXNUIWjnG/Qy9GxGS7XQvWOOxgWFekjl3cdejl02M4Z98v90gVw7IDQGmZn/g5CCVJhRaKKtSHBBQ=="],
+
+    "@pascal-app/plugin-trees/@pascal-app/core": ["@pascal-app/core@0.9.1", "", { "dependencies": { "dedent": "^1.7.1", "idb-keyval": "^6.2.2", "mitt": "^3.0.1", "nanoid": "^5.1.6", "zod": "^4.3.5", "zundo": "^2.3.0", "zustand": "^5" }, "peerDependencies": { "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.184" } }, "sha512-v9Fc9johEUbU6lOTdJrF5wlBTtF0DgeTH1e1f+x6lvSYIECeKMeefLQ+K9296KdIIHguSvKgseQtM1XDdOK4NA=="],
+
+    "@pascal-app/plugin-trees/@pascal-app/editor": ["@pascal-app/editor@0.9.1", "", { "dependencies": { "@dnd-kit/core": "^6.3.1", "@dnd-kit/sortable": "^10.0.0", "@dnd-kit/utilities": "^3.2.2", "@iconify/react": "^6.0.2", "@number-flow/react": "^0.6.0", "@radix-ui/react-alert-dialog": "^1.1.15", "@radix-ui/react-context-menu": "^2.2.16", "@radix-ui/react-dialog": "^1.1.15", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.15", "@radix-ui/react-select": "^2.2.6", "@radix-ui/react-separator": "^1.1.8", "@radix-ui/react-slider": "^1.3.6", "@radix-ui/react-slot": "^1.2.4", "@radix-ui/react-switch": "^1.2.6", "@radix-ui/react-tabs": "^1.1.13", "@radix-ui/react-tooltip": "^1.2.8", "@visual-json/react": "^0.4.0", "class-variance-authority": "^0.7.1", "clsx": "^2.1.1", "cmdk": "^1.1.1", "howler": "^2.2.4", "lucide-react": "^1.7.0", "mitt": "^3.0.1", "motion": "^12.34.3", "nanoid": "^5.1.6", "tailwind-merge": "^3.5.0", "three-mesh-bvh": "~0.9.8", "zod": "^4.3.6", "zustand": "^5.0.11" }, "peerDependencies": { "@pascal-app/core": "^0.9.1", "@pascal-app/viewer": "^0.9.1", "@react-three/drei": "^10", "@react-three/fiber": "^9", "next": ">=15", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.184" } }, "sha512-Lb6PGDtiVpDoUTn5ZGTnoD9oz8qSRN0HVLzZR6sC4KQuTqTPG6sXDBYVLG8BB9tOgeg9i2Hx3scKSoQ/kjdpLw=="],
+
+    "@pascal-app/plugin-trees/@pascal-app/viewer": ["@pascal-app/viewer@0.9.1", "", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8", "zustand": "^5" }, "peerDependencies": { "@pascal-app/core": "^0.9.1", "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.184" } }, "sha512-RqQT4wRpgSJM3OMgD3xppsBVOSK5NEyhLz591G0cLum+e8eaUk7svLed50VIafIarvG3qJjZ9NbKlRI111YTSA=="],
+
     "@react-grab/cli/commander": ["commander@14.0.3", "", {}, "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="],
 
     "@react-grab/cli/ignore": ["ignore@7.0.5", "", {}, "sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg=="],
@@ -2152,6 +2274,8 @@
     "deslop-js/minimatch": ["minimatch@10.2.5", "", { "dependencies": { "brace-expansion": "^5.0.5" } }, "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg=="],
 
     "dotenv-expand/dotenv": ["dotenv@16.6.1", "", {}, "sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow=="],
+
+    "editor/@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c", "sha512-16VzWot1oadvxCPqsRwMJbaP0a3u5FESFy7F7++pY5wAAFq9JTFwzHvKAsllrY5TZ5TJ7Y5vSqvbmQk8sy8HaA=="],
 
     "editor/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 

@@ -1,0 +1,55 @@
+import { defineKind } from '../core/types'
+
+export const voltage = defineKind({
+  kind: 'voltage',
+  baseUnit: 'V',
+  units: [
+    {
+      id: 'μV',
+      symbol: 'μV',
+      name: 'microvolt',
+      aliases: ['microvolts', 'uV'],
+      factor: 1e-6,
+      system: 'shared',
+      best: 0,
+    },
+    {
+      id: 'mV',
+      symbol: 'mV',
+      name: 'millivolt',
+      aliases: ['millivolts'],
+      caseExact: ['mV'],
+      factor: 1e-3,
+      system: 'shared',
+      best: 1,
+    },
+    {
+      id: 'V',
+      symbol: 'V',
+      name: 'volt',
+      aliases: ['volts'],
+      factor: 1,
+      system: 'shared',
+      best: 2,
+    },
+    {
+      id: 'kV',
+      symbol: 'kV',
+      name: 'kilovolt',
+      aliases: ['kilovolts'],
+      factor: 1000,
+      system: 'shared',
+      best: 3,
+    },
+    {
+      id: 'MV',
+      symbol: 'MV',
+      name: 'megavolt',
+      aliases: ['megavolts'],
+      caseExact: ['MV'],
+      factor: 1e6,
+      system: 'shared',
+      best: 4,
+    },
+  ],
+} as const)

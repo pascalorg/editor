@@ -1,0 +1,8447 @@
+{
+  "version": 1,
+  "fixedNow": [
+    2026,
+    6,
+    3,
+    14,
+    30,
+    0
+  ],
+  "breadth": {
+    "5 meters": {
+      "input": "5 meters",
+      "type": "quantity",
+      "kind": "length",
+      "base": 5,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "5 metres": {
+      "input": "5 metres",
+      "type": "quantity",
+      "kind": "length",
+      "base": 5,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "5m": {
+      "input": "5m",
+      "type": "quantity",
+      "kind": "length",
+      "base": 5,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "12 km": {
+      "input": "12 km",
+      "type": "quantity",
+      "kind": "length",
+      "base": 12000,
+      "unit": "km",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "3 klicks": {
+      "input": "3 klicks",
+      "opts": {
+        "kind": "length"
+      },
+      "type": "quantity",
+      "kind": "length",
+      "base": 3000,
+      "unit": "km",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "0.5 mm": {
+      "input": "0.5 mm",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.0005,
+      "unit": "mm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "25 microns": {
+      "input": "25 microns",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.000025,
+      "unit": "μm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "25 um": {
+      "input": "25 um",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.000025,
+      "unit": "μm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "6 yd": {
+      "input": "6 yd",
+      "type": "quantity",
+      "kind": "length",
+      "base": 5.4864,
+      "unit": "yd",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "2 miles": {
+      "input": "2 miles",
+      "type": "quantity",
+      "kind": "length",
+      "base": 3218.688,
+      "unit": "mi",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "1 nautical mile": {
+      "input": "1 nautical mile",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1852,
+      "unit": "nmi",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "3 hands": {
+      "input": "3 hands",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.3048,
+      "unit": "hand",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "15 thou": {
+      "input": "15 thou",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.000381,
+      "unit": "thou",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "1 light year": {
+      "input": "1 light year",
+      "type": "quantity",
+      "kind": "length",
+      "base": 9460730472580800,
+      "unit": "ly",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "2 fathoms": {
+      "input": "2 fathoms",
+      "type": "quantity",
+      "kind": "length",
+      "base": 3.6576,
+      "unit": "fathom",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "6 ft.": {
+      "input": "6 ft.",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1.8288,
+      "unit": "ft",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "6 feet": {
+      "input": "6 feet",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1.8288,
+      "unit": "ft",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "six foot": {
+      "input": "six foot",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1.8288,
+      "unit": "ft",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "6'": {
+      "input": "6'",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1.8288,
+      "unit": "ft",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "11\"": {
+      "input": "11\"",
+      "opts": {
+        "kind": "length"
+      },
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.2794,
+      "unit": "in",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "72 inches": {
+      "input": "72 inches",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1.8288,
+      "unit": "in",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "72in": {
+      "input": "72in",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1.8288,
+      "unit": "in",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "80 kg": {
+      "input": "80 kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 80,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "80 kilos": {
+      "input": "80 kilos",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 80,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "80 kilogrammes": {
+      "input": "80 kilogrammes",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 80,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "176 lbs": {
+      "input": "176 lbs",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 79.83225712,
+      "unit": "lb",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "176 pounds": {
+      "input": "176 pounds",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 79.83225712,
+      "unit": "lb",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "176#": {
+      "input": "176#",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 79.83225712,
+      "unit": "lb",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "12 st": {
+      "input": "12 st",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 76.20351816,
+      "unit": "st",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5 grains": {
+      "input": "5 grains",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 0.00032399455,
+      "unit": "gr",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "2 troy oz": {
+      "input": "2 troy oz",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 0.0622069536,
+      "unit": "ozt",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "3 carats": {
+      "input": "3 carats",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 0.0006,
+      "unit": "ct",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "500 mcg": {
+      "input": "500 mcg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5e-7,
+      "unit": "μg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "2 tonnes": {
+      "input": "2 tonnes",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2000,
+      "unit": "t",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "2 metric tons": {
+      "input": "2 metric tons",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2000,
+      "unit": "t",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "20C": {
+      "input": "20C",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 293.15,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "5 C": {
+      "input": "5 C",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 278.15,
+      "unit": "C",
+      "issues": [
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    },
+    "20 °C": {
+      "input": "20 °C",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 293.15,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5 °C": {
+      "input": "5 °C",
+      "opts": {
+        "kind": "temperature"
+      },
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 278.15,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "20 degrees celsius": {
+      "input": "20 degrees celsius",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 293.15,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "68 degrees fahrenheit": {
+      "input": "68 degrees fahrenheit",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 293.15,
+      "unit": "F",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "68F": {
+      "input": "68F",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 293.15,
+      "unit": "F",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "300 kelvin": {
+      "input": "300 kelvin",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 300,
+      "unit": "K",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "minus five degrees celsius": {
+      "input": "minus five degrees celsius",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 268.15,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 26
+      },
+      "confidence": 1
+    },
+    "-5 °C": {
+      "input": "-5 °C",
+      "opts": {
+        "kind": "temperature"
+      },
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 268.15,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "-12.5°C": {
+      "input": "-12.5°C",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 260.65,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "90 seconds": {
+      "input": "90 seconds",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 90,
+      "unit": "s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "90 secs": {
+      "input": "90 secs",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 90,
+      "unit": "s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "45 mins": {
+      "input": "45 mins",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 2700,
+      "unit": "min",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "2 hrs": {
+      "input": "2 hrs",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 7200,
+      "unit": "h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "3 days": {
+      "input": "3 days",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 259200,
+      "unit": "d",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "2 weeks": {
+      "input": "2 weeks",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 1209600,
+      "unit": "wk",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "a fortnight": {
+      "input": "a fortnight",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 1209600,
+      "unit": "fortnight",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "6 months": {
+      "input": "6 months",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 15778800,
+      "unit": "mo",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "2 years": {
+      "input": "2 years",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 63115200,
+      "unit": "yr",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "1.5h": {
+      "input": "1.5h",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 5400,
+      "unit": "h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "12'": {
+      "input": "12'",
+      "opts": {
+        "kind": "duration"
+      },
+      "type": "quantity",
+      "kind": "duration",
+      "base": 720,
+      "unit": "min",
+      "issues": [
+        "SLANG_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.8
+    },
+    "45''": {
+      "input": "45''",
+      "opts": {
+        "kind": "duration"
+      },
+      "type": "quantity",
+      "kind": "duration",
+      "base": 45,
+      "unit": "s",
+      "issues": [
+        "SLANG_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 0.8
+    },
+    "250 ml": {
+      "input": "250 ml",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.00025,
+      "unit": "ml",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "250mL": {
+      "input": "250mL",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.00025,
+      "unit": "ml",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "2 litres": {
+      "input": "2 litres",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.002,
+      "unit": "l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "2L": {
+      "input": "2L",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.002,
+      "unit": "l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 1
+    },
+    "3 cups": {
+      "input": "3 cups",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.0007097647095,
+      "unit": "cup",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "2 tbsp": {
+      "input": "2 tbsp",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.0000295735295625,
+      "unit": "tbsp",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "1 tsp": {
+      "input": "1 tsp",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.00000492892159375,
+      "unit": "tsp",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "12 fl oz": {
+      "input": "12 fl oz",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.00035488235475,
+      "unit": "floz",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "12 fl. oz.": {
+      "input": "12 fl. oz.",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.00035488235475,
+      "unit": "floz",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "12 oz": {
+      "input": "12 oz",
+      "opts": {
+        "kind": "volume"
+      },
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.00035488235475,
+      "unit": "floz",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "2 pints": {
+      "input": "2 pints",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.000946352946,
+      "unit": "pt",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "1 quart": {
+      "input": "1 quart",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.000946352946,
+      "unit": "qt",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "10 gallons": {
+      "input": "10 gallons",
+      "opts": {
+        "system": "imperial"
+      },
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.0454609,
+      "unit": "gal-imp",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "5 cc": {
+      "input": "5 cc",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.000005,
+      "unit": "cm3",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "2 cbm": {
+      "input": "2 cbm",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 2,
+      "unit": "m3",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "3 cubic meters": {
+      "input": "3 cubic meters",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 3,
+      "unit": "m3",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "50 sq ft": {
+      "input": "50 sq ft",
+      "type": "quantity",
+      "kind": "area",
+      "base": 4.645152,
+      "unit": "ft2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "50 sqft": {
+      "input": "50 sqft",
+      "type": "quantity",
+      "kind": "area",
+      "base": 4.645152,
+      "unit": "ft2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "50 square feet": {
+      "input": "50 square feet",
+      "type": "quantity",
+      "kind": "area",
+      "base": 4.645152,
+      "unit": "ft2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "120 m2": {
+      "input": "120 m2",
+      "type": "quantity",
+      "kind": "area",
+      "base": 120,
+      "unit": "m2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "120 m²": {
+      "input": "120 m²",
+      "type": "quantity",
+      "kind": "area",
+      "base": 120,
+      "unit": "m2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "120 sqm": {
+      "input": "120 sqm",
+      "type": "quantity",
+      "kind": "area",
+      "base": 120,
+      "unit": "m2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "5 acres": {
+      "input": "5 acres",
+      "type": "quantity",
+      "kind": "area",
+      "base": 20234.282112,
+      "unit": "ac",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "2 hectares": {
+      "input": "2 hectares",
+      "type": "quantity",
+      "kind": "area",
+      "base": 20000,
+      "unit": "ha",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "60 mph": {
+      "input": "60 mph",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 26.8224,
+      "unit": "mph",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "100 km/h": {
+      "input": "100 km/h",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 27.7777777777778,
+      "unit": "km/h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "100 kph": {
+      "input": "100 kph",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 27.7777777777778,
+      "unit": "km/h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "100kmh": {
+      "input": "100kmh",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 27.7777777777778,
+      "unit": "km/h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "15 knots": {
+      "input": "15 knots",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 7.71666666666667,
+      "unit": "kn",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "9.8 m/s": {
+      "input": "9.8 m/s",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 9.8,
+      "unit": "m/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "500 GB": {
+      "input": "500 GB",
+      "type": "quantity",
+      "kind": "data",
+      "base": 500000000000,
+      "unit": "GB",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "5gig": {
+      "input": "5gig",
+      "type": "quantity",
+      "kind": "data",
+      "base": 5000000000,
+      "unit": "GB",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "500 gigabytes": {
+      "input": "500 gigabytes",
+      "type": "quantity",
+      "kind": "data",
+      "base": 500000000000,
+      "unit": "GB",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "2 TiB": {
+      "input": "2 TiB",
+      "type": "quantity",
+      "kind": "data",
+      "base": 2199023255552,
+      "unit": "TiB",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "100 Mbit": {
+      "input": "100 Mbit",
+      "type": "quantity",
+      "kind": "data",
+      "base": 12500000,
+      "unit": "Mbit",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "8 bits": {
+      "input": "8 bits",
+      "type": "quantity",
+      "kind": "data",
+      "base": 1,
+      "unit": "bit",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "5 Mbps": {
+      "input": "5 Mbps",
+      "type": "quantity",
+      "kind": "data_rate",
+      "base": 5000000,
+      "unit": "Mbit/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "10 kbit/s": {
+      "input": "10 kbit/s",
+      "type": "quantity",
+      "kind": "data_rate",
+      "base": 10000,
+      "unit": "kbit/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "1 gigabit per second": {
+      "input": "1 gigabit per second",
+      "type": "quantity",
+      "kind": "data_rate",
+      "base": 1000000000,
+      "unit": "Gbit/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "20 MB/s": {
+      "input": "20 MB/s",
+      "type": "quantity",
+      "kind": "data_rate",
+      "base": 160000000,
+      "unit": "MB/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "2 MiB/s": {
+      "input": "2 MiB/s",
+      "type": "quantity",
+      "kind": "data_rate",
+      "base": 16777216,
+      "unit": "MiB/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "2 liters per second": {
+      "input": "2 liters per second",
+      "type": "quantity",
+      "kind": "flow_rate",
+      "base": 0.002,
+      "unit": "l/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "5 gpm": {
+      "input": "5 gpm",
+      "type": "quantity",
+      "kind": "flow_rate",
+      "base": 0.000315450982,
+      "unit": "gal/min",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "250 mL/min": {
+      "input": "250 mL/min",
+      "type": "quantity",
+      "kind": "flow_rate",
+      "base": 0.00000416666666666667,
+      "unit": "ml/min",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "250 mL per minute": {
+      "input": "250 mL per minute",
+      "type": "quantity",
+      "kind": "flow_rate",
+      "base": 0.00000416666666666667,
+      "unit": "ml/min",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 17
+      },
+      "confidence": 1
+    },
+    "12 cfm": {
+      "input": "12 cfm",
+      "type": "quantity",
+      "kind": "flow_rate",
+      "base": 0.0056633693184,
+      "unit": "ft3/min",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "12 cfs": {
+      "input": "12 cfs",
+      "type": "quantity",
+      "kind": "flow_rate",
+      "base": 0.339802159104,
+      "unit": "ft3/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "3 m3/h": {
+      "input": "3 m3/h",
+      "type": "quantity",
+      "kind": "flow_rate",
+      "base": 0.000833333333333333,
+      "unit": "m3/h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "32 psi": {
+      "input": "32 psi",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 220632.233381376,
+      "unit": "psi",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "1013 hPa": {
+      "input": "1013 hPa",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 101300,
+      "unit": "hPa",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "1013 mbar": {
+      "input": "1013 mbar",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 101300,
+      "unit": "mbar",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "2 bar": {
+      "input": "2 bar",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 200000,
+      "unit": "bar",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "120 mmHg": {
+      "input": "120 mmHg",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 15998.6864898,
+      "unit": "mmHg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "760 torr": {
+      "input": "760 torr",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 101325,
+      "unit": "torr",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "10 inH2O": {
+      "input": "10 inH2O",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 2490.8891,
+      "unit": "inH2O",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "10 inH₂O": {
+      "input": "10 inH₂O",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 2490.8891,
+      "unit": "inH2O",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "20 cmH2O": {
+      "input": "20 cmH2O",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 1961.33,
+      "unit": "cmH2O",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "3 mH2O": {
+      "input": "3 mH2O",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 29419.95,
+      "unit": "mH2O",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "1 kgf/cm2": {
+      "input": "1 kgf/cm2",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 98066.5,
+      "unit": "kgf/cm2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "1 technical atmosphere": {
+      "input": "1 technical atmosphere",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 98066.5,
+      "unit": "kgf/cm2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 22
+      },
+      "confidence": 1
+    },
+    "2000 kcal": {
+      "input": "2000 kcal",
+      "type": "quantity",
+      "kind": "energy",
+      "base": 8368000,
+      "unit": "kcal",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "2000 Calories": {
+      "input": "2000 Calories",
+      "type": "quantity",
+      "kind": "energy",
+      "base": 8368000,
+      "unit": "kcal",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "500 calories": {
+      "input": "500 calories",
+      "type": "quantity",
+      "kind": "energy",
+      "base": 2092,
+      "unit": "cal",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "13 kWh": {
+      "input": "13 kWh",
+      "type": "quantity",
+      "kind": "energy",
+      "base": 46800000,
+      "unit": "kWh",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "5 N": {
+      "input": "5 N",
+      "type": "quantity",
+      "kind": "force",
+      "base": 5,
+      "unit": "N",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "10 kW": {
+      "input": "10 kW",
+      "type": "quantity",
+      "kind": "power",
+      "base": 10000,
+      "unit": "kW",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "60 Hz": {
+      "input": "60 Hz",
+      "type": "quantity",
+      "kind": "frequency",
+      "base": 60,
+      "unit": "Hz",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "3000 rpm": {
+      "input": "3000 rpm",
+      "type": "quantity",
+      "kind": "frequency",
+      "base": 50,
+      "unit": "rpm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "90 degrees": {
+      "input": "90 degrees",
+      "type": "quantity",
+      "kind": "angle",
+      "base": 1.5707963267949,
+      "unit": "deg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "1.5 rad": {
+      "input": "1.5 rad",
+      "type": "quantity",
+      "kind": "angle",
+      "base": 1.5,
+      "unit": "rad",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "30%": {
+      "input": "30%",
+      "type": "quantity",
+      "kind": "percent",
+      "base": 30,
+      "unit": "%",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "30 percent": {
+      "input": "30 percent",
+      "type": "quantity",
+      "kind": "percent",
+      "base": 30,
+      "unit": "%",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "12 V": {
+      "input": "12 V",
+      "type": "quantity",
+      "kind": "voltage",
+      "base": 12,
+      "unit": "V",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "3.3 volts": {
+      "input": "3.3 volts",
+      "type": "quantity",
+      "kind": "voltage",
+      "base": 3.3,
+      "unit": "V",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "500 mV": {
+      "input": "500 mV",
+      "type": "quantity",
+      "kind": "voltage",
+      "base": 0.5,
+      "unit": "mV",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "11 kV": {
+      "input": "11 kV",
+      "type": "quantity",
+      "kind": "voltage",
+      "base": 11000,
+      "unit": "kV",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "2 amps": {
+      "input": "2 amps",
+      "type": "quantity",
+      "kind": "current",
+      "base": 2,
+      "unit": "A",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "500 mA": {
+      "input": "500 mA",
+      "type": "quantity",
+      "kind": "current",
+      "base": 0.5,
+      "unit": "mA",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "25 microamps": {
+      "input": "25 microamps",
+      "type": "quantity",
+      "kind": "current",
+      "base": 0.000025,
+      "unit": "μA",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "10 ohms": {
+      "input": "10 ohms",
+      "type": "quantity",
+      "kind": "resistance",
+      "base": 10,
+      "unit": "Ω",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "4.7 kohm": {
+      "input": "4.7 kohm",
+      "type": "quantity",
+      "kind": "resistance",
+      "base": 4700,
+      "unit": "kΩ",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "1 megaohm": {
+      "input": "1 megaohm",
+      "type": "quantity",
+      "kind": "resistance",
+      "base": 1000000,
+      "unit": "MΩ",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "5 coulombs": {
+      "input": "5 coulombs",
+      "type": "quantity",
+      "kind": "charge",
+      "base": 5,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "500 mAh": {
+      "input": "500 mAh",
+      "type": "quantity",
+      "kind": "charge",
+      "base": 1800,
+      "unit": "mAh",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "2 Ah": {
+      "input": "2 Ah",
+      "type": "quantity",
+      "kind": "charge",
+      "base": 7200,
+      "unit": "Ah",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "3 moles": {
+      "input": "3 moles",
+      "type": "quantity",
+      "kind": "substance",
+      "base": 3,
+      "unit": "mol",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "250 mmol": {
+      "input": "250 mmol",
+      "type": "quantity",
+      "kind": "substance",
+      "base": 0.25,
+      "unit": "mmol",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "5 umol": {
+      "input": "5 umol",
+      "type": "quantity",
+      "kind": "substance",
+      "base": 0.000005,
+      "unit": "μmol",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "5 USD": {
+      "input": "5 USD",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5,
+      "unit": "USD",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "USD 5": {
+      "input": "USD 5",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5,
+      "unit": "USD",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "5 dollars": {
+      "input": "5 dollars",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5,
+      "unit": "USD",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "5 bucks": {
+      "input": "5 bucks",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5,
+      "unit": "USD",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "5 quid": {
+      "input": "5 quid",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5,
+      "unit": "GBP",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "5 euros": {
+      "input": "5 euros",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5,
+      "unit": "EUR",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "$5": {
+      "input": "$5",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5,
+      "unit": "USD",
+      "issues": [
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 2
+      },
+      "confidence": 0.9
+    },
+    "$5.50": {
+      "input": "$5.50",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5.5,
+      "unit": "USD",
+      "issues": [
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 0.9
+    },
+    "$1,234.50": {
+      "input": "$1,234.50",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 1234.5,
+      "unit": "USD",
+      "issues": [
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 0.9
+    },
+    "€10": {
+      "input": "€10",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 10,
+      "unit": "EUR",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "£3.50": {
+      "input": "£3.50",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 3.5,
+      "unit": "GBP",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "¥1000": {
+      "input": "¥1000",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 1000,
+      "unit": "JPY",
+      "issues": [
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 0.9
+    },
+    "between $5 and $10": {
+      "input": "between $5 and $10",
+      "type": "range",
+      "kind": "currency",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "USD",
+        "max": "USD"
+      },
+      "issues": [
+        "AMBIGUOUS_UNIT",
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 8,
+        "end": 18
+      },
+      "confidence": 0.8
+    },
+    "$5-$10": {
+      "input": "$5-$10",
+      "type": "range",
+      "kind": "currency",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "USD",
+        "max": "USD"
+      },
+      "issues": [
+        "AMBIGUOUS_UNIT",
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 0.8
+    },
+    "$5 to $10": {
+      "input": "$5 to $10",
+      "type": "range",
+      "kind": "currency",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "USD",
+        "max": "USD"
+      },
+      "issues": [
+        "AMBIGUOUS_UNIT",
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 0.8
+    },
+    "5 to 10 USD": {
+      "input": "5 to 10 USD",
+      "type": "range",
+      "kind": "currency",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "USD",
+        "max": "USD"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "5 EUR to USD": {
+      "input": "5 EUR to USD",
+      "opts": {
+        "kind": "currency"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "RATE_REQUIRED"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "€5-$10": {
+      "input": "€5-$10",
+      "opts": {
+        "kind": "currency"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "AMBIGUOUS_UNIT",
+        "RATE_REQUIRED"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "50 cents": {
+      "input": "50 cents",
+      "opts": {
+        "currency": "EUR"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 0.5,
+      "unit": "EUR",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "five dollars and fifty cents": {
+      "input": "five dollars and fifty cents",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5.5,
+      "unit": "USD",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 28
+      },
+      "confidence": 1
+    },
+    "5 dollars 50 cents": {
+      "input": "5 dollars 50 cents",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5.5,
+      "unit": "USD",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "50¢": {
+      "input": "50¢",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 0.5,
+      "unit": "USD",
+      "issues": [
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 0.9
+    },
+    "50p": {
+      "input": "50p",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 0.5,
+      "unit": "GBP",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "50 pence": {
+      "input": "50 pence",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 0.5,
+      "unit": "GBP",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "3 quid 50": {
+      "input": "3 quid 50",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 3.5,
+      "unit": "GBP",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "3 quid 05": {
+      "input": "3 quid 05",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 3.05,
+      "unit": "GBP",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "3 quid 99": {
+      "input": "3 quid 99",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 3.99,
+      "unit": "GBP",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "5 pounds sterling 25": {
+      "input": "5 pounds sterling 25",
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5.25,
+      "unit": "GBP",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "5 pounds 25": {
+      "input": "5 pounds 25",
+      "opts": {
+        "kind": "currency"
+      },
+      "type": "quantity",
+      "kind": "currency",
+      "base": 5.25,
+      "unit": "GBP",
+      "issues": [
+        "SLANG_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 0.8
+    },
+    "1 234,5 kg": {
+      "input": "1 234,5 kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1234.5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "12,34,567 m": {
+      "input": "12,34,567 m",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1234567,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "70k km": {
+      "input": "70k km",
+      "type": "quantity",
+      "kind": "length",
+      "base": 70000000,
+      "unit": "km",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "1×10⁻³ kg": {
+      "input": "1×10⁻³ kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 0.001,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "2.5×10⁻⁴ m": {
+      "input": "2.5×10⁻⁴ m",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.00025,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "3.493e-4 m": {
+      "input": "3.493e-4 m",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.0003493,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "1.234×10^5 kg": {
+      "input": "1.234×10^5 kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 123400,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "¾ cup": {
+      "input": "¾ cup",
+      "type": "quantity",
+      "kind": "volume",
+      "base": 0.000177441177375,
+      "unit": "cup",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "a dozen inches": {
+      "input": "a dozen inches",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.3048,
+      "unit": "in",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "half a dozen feet": {
+      "input": "half a dozen feet",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1.8288,
+      "unit": "ft",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 17
+      },
+      "confidence": 1
+    },
+    "one hundred and five kg": {
+      "input": "one hundred and five kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 105,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 23
+      },
+      "confidence": 1
+    },
+    "two point five six kg": {
+      "input": "two point five six kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 2.56,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "three point one four kg": {
+      "input": "three point one four kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 3.14,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 23
+      },
+      "confidence": 1
+    },
+    "between one thousand and two thousand meters": {
+      "input": "between one thousand and two thousand meters",
+      "type": "range",
+      "kind": "length",
+      "base": {
+        "min": 1000,
+        "max": 2000
+      },
+      "unit": {
+        "min": "m",
+        "max": "m"
+      },
+      "issues": [],
+      "span": {
+        "start": 8,
+        "end": 44
+      },
+      "confidence": 1
+    },
+    "between two hundred and five hundred meters": {
+      "input": "between two hundred and five hundred meters",
+      "type": "range",
+      "kind": "length",
+      "base": {
+        "min": 200,
+        "max": 500
+      },
+      "unit": {
+        "min": "m",
+        "max": "m"
+      },
+      "issues": [],
+      "span": {
+        "start": 8,
+        "end": 43
+      },
+      "confidence": 1
+    },
+    "between five and a half and ten kg": {
+      "input": "between five and a half and ten kg",
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5.5,
+        "max": 10
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 8,
+        "end": 34
+      },
+      "confidence": 1
+    },
+    "nineteen hundred kg": {
+      "input": "nineteen hundred kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 1900,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "two hundred thousand kg": {
+      "input": "two hundred thousand kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 200000,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 23
+      },
+      "confidence": 1
+    },
+    "": {
+      "input": "",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "EMPTY"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "   ": {
+      "input": "   ",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "EMPTY"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "banana": {
+      "input": "banana",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "NO_VALUE"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 blorks": {
+      "input": "5 blorks",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 kg extra words": {
+      "input": "5 kg extra words",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 kg": {
+      "input": "5 kg",
+      "opts": {
+        "kind": "length"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "KIND_MISMATCH"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 kg to seconds": {
+      "input": "5 kg to seconds",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "CONVERSION_KIND_MISMATCH"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "3 and kg": {
+      "input": "3 and kg",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 C 30 F": {
+      "input": "5 C 30 F",
+      "opts": {
+        "kind": "temperature"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "99999999999999999999999 kg": {
+      "input": "99999999999999999999999 kg",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "NONFINITE"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 killograms": {
+      "input": "5 killograms",
+      "opts": {
+        "kind": "mass"
+      },
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [
+        "TYPO_CORRECTED"
+      ],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 0.85
+    },
+    "2 ft to cm": {
+      "input": "2 ft to cm",
+      "type": "conversion",
+      "kind": "length",
+      "base": {
+        "source": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "ft"
+        },
+        "converted": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "cm"
+        }
+      },
+      "unit": "cm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "2 ft in cm": {
+      "input": "2 ft in cm",
+      "type": "conversion",
+      "kind": "length",
+      "base": {
+        "source": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "ft"
+        },
+        "converted": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "cm"
+        }
+      },
+      "unit": "cm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "2ft as cm": {
+      "input": "2ft as cm",
+      "type": "conversion",
+      "kind": "length",
+      "base": {
+        "source": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "ft"
+        },
+        "converted": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "cm"
+        }
+      },
+      "unit": "cm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "2 ft into cm": {
+      "input": "2 ft into cm",
+      "type": "conversion",
+      "kind": "length",
+      "base": {
+        "source": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "ft"
+        },
+        "converted": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "cm"
+        }
+      },
+      "unit": "cm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "2ft = cm": {
+      "input": "2ft = cm",
+      "type": "conversion",
+      "kind": "length",
+      "base": {
+        "source": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "ft"
+        },
+        "converted": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "cm"
+        }
+      },
+      "unit": "cm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "2 ft → cm": {
+      "input": "2 ft → cm",
+      "type": "conversion",
+      "kind": "length",
+      "base": {
+        "source": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "ft"
+        },
+        "converted": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "cm"
+        }
+      },
+      "unit": "cm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "2ft -> cm": {
+      "input": "2ft -> cm",
+      "type": "conversion",
+      "kind": "length",
+      "base": {
+        "source": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "ft"
+        },
+        "converted": {
+          "kind": "length",
+          "base": 0.6096,
+          "unit": "cm"
+        }
+      },
+      "unit": "cm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "15%": {
+      "input": "15%",
+      "opts": {
+        "kind": "length"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "KIND_MISMATCH"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 kg to 10 g": {
+      "input": "5 kg to 10 g",
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 0.01,
+        "max": 5
+      },
+      "unit": {
+        "min": "g",
+        "max": "kg"
+      },
+      "issues": [
+        "RANGE_REVERSED"
+      ],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "5 ft 13 in": {
+      "input": "5 ft 13 in",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1.524,
+      "unit": "ft",
+      "issues": [
+        "COMPOUND_OVERFLOW"
+      ],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "10 ± 0.5 °C to °F": {
+      "input": "10 ± 0.5 °C to °F",
+      "opts": {
+        "kind": "temperature"
+      },
+      "type": "conversion",
+      "kind": "temperature",
+      "base": {
+        "source": {
+          "kind": "temperature",
+          "base": {
+            "min": 282.65,
+            "max": 283.65,
+            "plusMinus": {
+              "center": 283.15,
+              "delta": 0.5
+            }
+          },
+          "unit": {
+            "min": "C",
+            "max": "C",
+            "plusMinus": "C"
+          }
+        },
+        "converted": {
+          "kind": "temperature",
+          "base": {
+            "min": 282.65,
+            "max": 283.65,
+            "plusMinus": {
+              "center": 283.15,
+              "delta": 0.5
+            }
+          },
+          "unit": {
+            "min": "F",
+            "max": "F",
+            "plusMinus": "F"
+          }
+        }
+      },
+      "unit": "F",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 17
+      },
+      "confidence": 1
+    },
+    "½ flurbs": {
+      "input": "½ flurbs",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "several minutes": {
+      "input": "several minutes",
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": 240,
+        "max": 420
+      },
+      "unit": {
+        "min": "min",
+        "max": "min"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 0.9
+    },
+    "9.8 meters per second": {
+      "input": "9.8 meters per second",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 9.8,
+      "unit": "m/s",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "100 kilometers per hour": {
+      "input": "100 kilometers per hour",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 27.7777777777778,
+      "unit": "km/h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 23
+      },
+      "confidence": 1
+    },
+    "60 miles per hour": {
+      "input": "60 miles per hour",
+      "type": "quantity",
+      "kind": "speed",
+      "base": 26.8224,
+      "unit": "mph",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 17
+      },
+      "confidence": 1
+    },
+    "32 pounds per square inch": {
+      "input": "32 pounds per square inch",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 220632.233381376,
+      "unit": "psi",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 25
+      },
+      "confidence": 1
+    },
+    "120 millimeters of mercury": {
+      "input": "120 millimeters of mercury",
+      "type": "quantity",
+      "kind": "pressure",
+      "base": 15998.6864898,
+      "unit": "mmHg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 26
+      },
+      "confidence": 1
+    },
+    "3 centuries": {
+      "input": "3 centuries",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 9467280000,
+      "unit": "century",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "1 M": {
+      "input": "1 M",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 1000,
+      "unit": "M",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "5 mM": {
+      "input": "5 mM",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 5,
+      "unit": "mM",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "5 uM": {
+      "input": "5 uM",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 0.005,
+      "unit": "μM",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "5 μM": {
+      "input": "5 μM",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 0.005,
+      "unit": "μM",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "5 µM": {
+      "input": "5 µM",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 0.005,
+      "unit": "μM",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "1 mol/L": {
+      "input": "1 mol/L",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 1000,
+      "unit": "mol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "1 mol / L": {
+      "input": "1 mol / L",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 1000,
+      "unit": "mol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "1 mol per L": {
+      "input": "1 mol per L",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 1000,
+      "unit": "mol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "1 mol per liter": {
+      "input": "1 mol per liter",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 1000,
+      "unit": "mol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "250 mmol/L": {
+      "input": "250 mmol/L",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 250,
+      "unit": "mmol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "250 mmol per L": {
+      "input": "250 mmol per L",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 250,
+      "unit": "mmol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "250 mmol per litre": {
+      "input": "250 mmol per litre",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 250,
+      "unit": "mmol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "10 umol per L": {
+      "input": "10 umol per L",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 0.01,
+      "unit": "μmol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "1 μmol per liter": {
+      "input": "1 μmol per liter",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 0.001,
+      "unit": "μmol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "1 µmol/L": {
+      "input": "1 µmol/L",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 0.001,
+      "unit": "μmol/l",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "10 micromolar": {
+      "input": "10 micromolar",
+      "type": "quantity",
+      "kind": "concentration",
+      "base": 0.01,
+      "unit": "μM",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "9.8 m/s²": {
+      "input": "9.8 m/s²",
+      "type": "quantity",
+      "kind": "acceleration",
+      "base": 9.8,
+      "unit": "m/s2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "32 ft/s2": {
+      "input": "32 ft/s2",
+      "type": "quantity",
+      "kind": "acceleration",
+      "base": 9.7536,
+      "unit": "ft/s2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "2 gees": {
+      "input": "2 gees",
+      "type": "quantity",
+      "kind": "acceleration",
+      "base": 19.6133,
+      "unit": "g0",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "10 N*m": {
+      "input": "10 N*m",
+      "type": "quantity",
+      "kind": "torque",
+      "base": 10,
+      "unit": "N*m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "10 Nm": {
+      "input": "10 Nm",
+      "type": "quantity",
+      "kind": "torque",
+      "base": 10,
+      "unit": "N*m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "80 lb-ft": {
+      "input": "80 lb-ft",
+      "type": "quantity",
+      "kind": "torque",
+      "base": 108.465435866512,
+      "unit": "lbf*ft",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "250 cd": {
+      "input": "250 cd",
+      "type": "quantity",
+      "kind": "luminous_intensity",
+      "base": 250,
+      "unit": "cd",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "800 lumens": {
+      "input": "800 lumens",
+      "type": "quantity",
+      "kind": "luminous_flux",
+      "base": 800,
+      "unit": "lm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "1.2 klm": {
+      "input": "1.2 klm",
+      "type": "quantity",
+      "kind": "luminous_flux",
+      "base": 1200,
+      "unit": "klm",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "500 lux": {
+      "input": "500 lux",
+      "type": "quantity",
+      "kind": "illuminance",
+      "base": 500,
+      "unit": "lx",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "50 foot-candles": {
+      "input": "50 foot-candles",
+      "type": "quantity",
+      "kind": "illuminance",
+      "base": 538.195520835486,
+      "unit": "fc",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "100 nits": {
+      "input": "100 nits",
+      "type": "quantity",
+      "kind": "luminance",
+      "base": 100,
+      "unit": "nit",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "300 cd/m2": {
+      "input": "300 cd/m2",
+      "type": "quantity",
+      "kind": "luminance",
+      "base": 300,
+      "unit": "cd/m2",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "14 fL": {
+      "input": "14 fL",
+      "type": "quantity",
+      "kind": "luminance",
+      "base": 47.9676273948955,
+      "unit": "fL",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "2 Gy": {
+      "input": "2 Gy",
+      "type": "quantity",
+      "kind": "radiation_absorbed_dose",
+      "base": 2,
+      "unit": "Gy",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "500 mGy": {
+      "input": "500 mGy",
+      "type": "quantity",
+      "kind": "radiation_absorbed_dose",
+      "base": 0.5,
+      "unit": "mGy",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "20 mSv": {
+      "input": "20 mSv",
+      "type": "quantity",
+      "kind": "radiation_equivalent_dose",
+      "base": 0.02,
+      "unit": "mSv",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "2 rem": {
+      "input": "2 rem",
+      "type": "quantity",
+      "kind": "radiation_equivalent_dose",
+      "base": 0.02,
+      "unit": "rem",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "100 Bq": {
+      "input": "100 Bq",
+      "type": "quantity",
+      "kind": "radioactivity",
+      "base": 100,
+      "unit": "Bq",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "5 MBq": {
+      "input": "5 MBq",
+      "type": "quantity",
+      "kind": "radioactivity",
+      "base": 5000000,
+      "unit": "MBq",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "2 uCi": {
+      "input": "2 uCi",
+      "type": "quantity",
+      "kind": "radioactivity",
+      "base": 74000,
+      "unit": "μCi",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "1.2.3.4 kg": {
+      "input": "1.2.3.4 kg",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "NUMBER_FORMAT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 kb": {
+      "input": "5 kb",
+      "type": "quantity",
+      "kind": "data",
+      "base": 5000,
+      "unit": "kB",
+      "issues": [
+        "AMBIGUOUS_UNIT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 0.9
+    },
+    "5 kg to 10 cm": {
+      "input": "5 kg to 10 cm",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "RANGE_KIND_MISMATCH"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1013 mb": {
+      "input": "1013 mb",
+      "opts": {
+        "kind": "pressure"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNIT_ASSUMED",
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 kg/cm²": {
+      "input": "1 kg/cm²",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 psig": {
+      "input": "5 psig",
+      "opts": {
+        "kind": "pressure"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNIT_ASSUMED",
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 psia": {
+      "input": "5 psia",
+      "opts": {
+        "kind": "pressure"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNIT_ASSUMED",
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "3 quid 100": {
+      "input": "3 quid 100",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "COMPOUND_OVERFLOW",
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 USD 10": {
+      "input": "5 USD 10",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1M": {
+      "input": "1M",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 MC": {
+      "input": "1 MC",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 MAh": {
+      "input": "1 MAh",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 UC": {
+      "input": "1 UC",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 ah": {
+      "input": "1 ah",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "10 V/A": {
+      "input": "10 V/A",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 C/s": {
+      "input": "1 C/s",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "AMBIGUOUS_UNIT",
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "5 Ω*m": {
+      "input": "5 Ω*m",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "TRAILING_INPUT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 rad": {
+      "input": "1 rad",
+      "opts": {
+        "kind": "radiation_absorbed_dose"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "KIND_MISMATCH"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 gy": {
+      "input": "1 gy",
+      "opts": {
+        "kind": "radiation_absorbed_dose"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNIT_ASSUMED",
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 sv": {
+      "input": "1 sv",
+      "opts": {
+        "kind": "radiation_equivalent_dose"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNIT_ASSUMED",
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 bq": {
+      "input": "1 bq",
+      "opts": {
+        "kind": "radioactivity"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNIT_ASSUMED",
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "1 ci": {
+      "input": "1 ci",
+      "opts": {
+        "kind": "radioactivity"
+      },
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNIT_ASSUMED",
+        "UNKNOWN_UNIT"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "minus 5 kg": {
+      "input": "minus 5 kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": -5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "negative 5 kg": {
+      "input": "negative 5 kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": -5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "minus 20 celsius": {
+      "input": "minus 20 celsius",
+      "type": "quantity",
+      "kind": "temperature",
+      "base": 253.15,
+      "unit": "C",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "a quarter of a mile": {
+      "input": "a quarter of a mile",
+      "type": "quantity",
+      "kind": "length",
+      "base": 402.336,
+      "unit": "mi",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "two thirds of a meter": {
+      "input": "two thirds of a meter",
+      "type": "quantity",
+      "kind": "length",
+      "base": 0.666666666666667,
+      "unit": "m",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "a third of an hour": {
+      "input": "a third of an hour",
+      "type": "quantity",
+      "kind": "duration",
+      "base": 1200,
+      "unit": "h",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "three quarters of a mile": {
+      "input": "three quarters of a mile",
+      "type": "quantity",
+      "kind": "length",
+      "base": 1207.008,
+      "unit": "mi",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 24
+      },
+      "confidence": 1
+    },
+    "from 5 to 10 kg": {
+      "input": "from 5 to 10 kg",
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 10
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 5,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "5 or 6 kg": {
+      "input": "5 or 6 kg",
+      "type": "range",
+      "kind": "mass",
+      "base": {
+        "min": 5,
+        "max": 6
+      },
+      "unit": {
+        "min": "kg",
+        "max": "kg"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "just under 2 hours": {
+      "input": "just under 2 hours",
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": null,
+        "max": 7200
+      },
+      "unit": {
+        "min": null,
+        "max": "h"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 0.9
+    },
+    "just over 2 hours": {
+      "input": "just over 2 hours",
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": 7200,
+        "max": null
+      },
+      "unit": {
+        "min": "h",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 17
+      },
+      "confidence": 0.9
+    },
+    "a bit over 2 hours": {
+      "input": "a bit over 2 hours",
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": 7200,
+        "max": null
+      },
+      "unit": {
+        "min": "h",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 0.9
+    },
+    "a little over 2 hours": {
+      "input": "a little over 2 hours",
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": 7200,
+        "max": null
+      },
+      "unit": {
+        "min": "h",
+        "max": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 0.9
+    },
+    "slightly under 2 hours": {
+      "input": "slightly under 2 hours",
+      "type": "range",
+      "kind": "duration",
+      "base": {
+        "min": null,
+        "max": 7200
+      },
+      "unit": {
+        "min": null,
+        "max": "h"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 22
+      },
+      "confidence": 0.9
+    },
+    "5ish kg": {
+      "input": "5ish kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 0.9
+    },
+    "5 ish kg": {
+      "input": "5 ish kg",
+      "type": "quantity",
+      "kind": "mass",
+      "base": 5,
+      "unit": "kg",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 0.9
+    }
+  },
+  "date": {
+    "1": {
+      "input": "1",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "NO_VALUE"
+      ],
+      "span": null,
+      "confidence": null
+    },
+    "2024": {
+      "input": "2024",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2024,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "year",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "now": {
+      "input": "now",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "second",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "right now": {
+      "input": "right now",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "second",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "just now": {
+      "input": "just now",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "second",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "a moment ago": {
+      "input": "a moment ago",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "second",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "today": {
+      "input": "today",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "tonight": {
+      "input": "tonight",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 22,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "tonite": {
+      "input": "tonite",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 22,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "tomorrow": {
+      "input": "tomorrow",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "tmr": {
+      "input": "tmr",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "tmrw": {
+      "input": "tmrw",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "tmrw.": {
+      "input": "tmrw.",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "yesterday": {
+      "input": "yesterday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 2,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "yday": {
+      "input": "yday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 2,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "y'day": {
+      "input": "y'day",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 2,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "day after tomorrow": {
+      "input": "day after tomorrow",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "overmorrow": {
+      "input": "overmorrow",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "day before yesterday": {
+      "input": "day before yesterday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "this morning": {
+      "input": "this morning",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 9,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "this afternoon": {
+      "input": "this afternoon",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "this evening": {
+      "input": "this evening",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 19,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "noon": {
+      "input": "noon",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 12,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "midnight": {
+      "input": "midnight",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [
+        "UNIT_ASSUMED"
+      ],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 0.95
+    },
+    "in 90 minutes": {
+      "input": "in 90 minutes",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 16,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "in 10m": {
+      "input": "in 10m",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 40,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "in 5h": {
+      "input": "in 5h",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 19,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "in 2d": {
+      "input": "in 2d",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "in 2 d": {
+      "input": "in 2 d",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "90 minutes ago": {
+      "input": "90 minutes ago",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 13,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "2w ago": {
+      "input": "2w ago",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 19,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "2 hours from now": {
+      "input": "2 hours from now",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 16,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "3mo from now": {
+      "input": "3mo from now",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 10,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "1y from now": {
+      "input": "1y from now",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "year",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "2 hours and 15 minutes ago": {
+      "input": "2 hours and 15 minutes ago",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 12,
+        "minute": 15,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 26
+      },
+      "confidence": 1
+    },
+    "half an hour ago": {
+      "input": "half an hour ago",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "an hour ago": {
+      "input": "an hour ago",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 13,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "twenty-five minutes ago": {
+      "input": "twenty-five minutes ago",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 5,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 23
+      },
+      "confidence": 1
+    },
+    "in 1h30": {
+      "input": "in 1h30",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 16,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "a week from Friday": {
+      "input": "a week from Friday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 10,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "2 days after tomorrow": {
+      "input": "2 days after tomorrow",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "a month from today": {
+      "input": "a month from today",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 8,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 18
+      },
+      "confidence": 1
+    },
+    "3min from tmrw": {
+      "input": "3min from tmrw",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 14,
+        "minute": 33,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "2h after tmr": {
+      "input": "2h after tmr",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 16,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "a week from yday": {
+      "input": "a week from yday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 9,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "a week from tmrw": {
+      "input": "a week from tmrw",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 11,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "in 1 month [jan-end]": {
+      "input": "in 1 month",
+      "opts": {
+        "now": [
+          2026,
+          0,
+          31,
+          9
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 2,
+        "day": 28,
+        "hour": 9,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "in 1 month [leap-jan-end]": {
+      "input": "in 1 month",
+      "opts": {
+        "now": [
+          2028,
+          0,
+          31,
+          9
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2028,
+        "month": 2,
+        "day": 29,
+        "hour": 9,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "in 1 year [now:2028,1,29,9]": {
+      "input": "in 1 year",
+      "opts": {
+        "now": [
+          2028,
+          1,
+          29,
+          9
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2029,
+        "month": 2,
+        "day": 28,
+        "hour": 9,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "year",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "in 1 month and 1 day [now:2026,0,31,9]": {
+      "input": "in 1 month and 1 day",
+      "opts": {
+        "now": [
+          2026,
+          0,
+          31,
+          9
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 1,
+        "hour": 9,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 20
+      },
+      "confidence": 1
+    },
+    "in 1 month and 1 month [now:2026,0,31,9]": {
+      "input": "in 1 month and 1 month",
+      "opts": {
+        "now": [
+          2026,
+          0,
+          31,
+          9
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 31,
+        "hour": 9,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 22
+      },
+      "confidence": 1
+    },
+    "Friday": {
+      "input": "Friday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 0.9
+    },
+    "Monday": {
+      "input": "Monday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 0.9
+    },
+    "this Monday": {
+      "input": "this Monday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 29,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "this Friday": {
+      "input": "this Friday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "next Monday": {
+      "input": "next Monday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "next Friday": {
+      "input": "next Friday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 10,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "last Monday": {
+      "input": "last Monday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 29,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "last Friday": {
+      "input": "last Friday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 26,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "on Wednesday": {
+      "input": "on Wednesday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 8,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 0.9
+    },
+    "next tues": {
+      "input": "next tues",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 7,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "this thurs": {
+      "input": "this thurs",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 2,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "last sat": {
+      "input": "last sat",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 27,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "on fri": {
+      "input": "on fri",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 0.9
+    },
+    "Sunday [now:2026,6,5,10]": {
+      "input": "Sunday",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          5,
+          10
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 0.9
+    },
+    "next Saturday [now:2026,6,5,10]": {
+      "input": "next Saturday",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          5,
+          10
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 11,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "next Sunday [now:2026,6,5,10]": {
+      "input": "next Sunday",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          5,
+          10
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 12,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "last Sunday [now:2026,6,5,10]": {
+      "input": "last Sunday",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          5,
+          10
+        ]
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 28,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "this week": {
+      "input": "this week",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 29,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "week",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "next week": {
+      "input": "next week",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 6,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "week",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "last week": {
+      "input": "last week",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 22,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "week",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "this month": {
+      "input": "this month",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "next month": {
+      "input": "next month",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 8,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "last month": {
+      "input": "last month",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "this year": {
+      "input": "this year",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "year",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "next year": {
+      "input": "next year",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "year",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "last year": {
+      "input": "last year",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2025,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "year",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "this weekend": {
+      "input": "this weekend",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "next weekend": {
+      "input": "next weekend",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 11,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "last weekend": {
+      "input": "last weekend",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 27,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "beginning of the week": {
+      "input": "beginning of the week",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 6,
+        "day": 29,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "week",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 21
+      },
+      "confidence": 1
+    },
+    "start of next month": {
+      "input": "start of next month",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 8,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "end of week": {
+      "input": "end of week",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "end of month": {
+      "input": "end of month",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 31,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "end of year": {
+      "input": "end of year",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 12,
+        "day": 31,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "middle of month": {
+      "input": "middle of month",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 15,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "mid-June": {
+      "input": "mid-June",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 6,
+        "day": 15,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "2026-07-03": {
+      "input": "2026-07-03",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "2026-07-03T14:30": {
+      "input": "2026-07-03T14:30",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "2026-07-03T14:30:05": {
+      "input": "2026-07-03T14:30:05",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 5
+      },
+      "unit": "second",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "7/3/2026": {
+      "input": "7/3/2026",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "AMBIGUOUS_DATE"
+      ],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 0.8
+    },
+    "7.3.2026": {
+      "input": "7.3.2026",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "AMBIGUOUS_DATE"
+      ],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 0.8
+    },
+    "March 5": {
+      "input": "March 5",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "March 5th": {
+      "input": "March 5th",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "March 5th, 2026": {
+      "input": "March 5th, 2026",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "5 March": {
+      "input": "5 March",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "5th of March": {
+      "input": "5th of March",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "Mar 5 '26": {
+      "input": "Mar 5 '26",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "July": {
+      "input": "July",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2027,
+        "month": 7,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "Jan 2020": {
+      "input": "Jan 2020",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2020,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "month",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "5/3/2026": {
+      "input": "5/3/2026",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 5,
+        "day": 3,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "AMBIGUOUS_DATE"
+      ],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 0.8
+    },
+    "5/3/2026 [day-first]": {
+      "input": "5/3/2026",
+      "opts": {
+        "dayFirst": true
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "AMBIGUOUS_DATE"
+      ],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 0.8
+    },
+    "5/3/2026 [en-gb]": {
+      "input": "5/3/2026",
+      "opts": {
+        "locale": "en-GB"
+      },
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 3,
+        "day": 5,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "day",
+      "issues": [
+        "AMBIGUOUS_DATE"
+      ],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 0.8
+    },
+    "at 3pm": {
+      "input": "at 3pm",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "@ 3pm": {
+      "input": "@ 3pm",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "3 pm": {
+      "input": "3 pm",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "3:05 pm": {
+      "input": "3:05 pm",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 5,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "15:30": {
+      "input": "15:30",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "17h30": {
+      "input": "17h30",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 17,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "17h": {
+      "input": "17h",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 17,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "5 o’clock": {
+      "input": "5 o’clock",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 5,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "5 o’clock pm": {
+      "input": "5 o’clock pm",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 17,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "5.30pm": {
+      "input": "5.30pm",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 17,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "17.30": {
+      "input": "17.30",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 17,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 5
+      },
+      "confidence": 1
+    },
+    "quarter past 5": {
+      "input": "quarter past 5",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 5,
+        "minute": 15,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "half past 3": {
+      "input": "half past 3",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 3,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "quarter to 6": {
+      "input": "quarter to 6",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 5,
+        "minute": 45,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "twenty past 4": {
+      "input": "twenty past 4",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 4,
+        "minute": 20,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "ten to 6": {
+      "input": "ten to 6",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 5,
+        "minute": 50,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "half 5": {
+      "input": "half 5",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 5,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "midi": {
+      "input": "midi",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 12,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "confidence": 1
+    },
+    "minuit": {
+      "input": "minuit",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 0,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "midday": {
+      "input": "midday",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 12,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "0900 hours": {
+      "input": "0900 hours",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 9,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "1730 hrs": {
+      "input": "1730 hrs",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 17,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "at noon": {
+      "input": "at noon",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 12,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 1
+    },
+    "7 in the morning": {
+      "input": "7 in the morning",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 7,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "7 in the evening": {
+      "input": "7 in the evening",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 19,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "tomorrow at 3pm": {
+      "input": "tomorrow at 3pm",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 15
+      },
+      "confidence": 1
+    },
+    "3pm tomorrow": {
+      "input": "3pm tomorrow",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 4,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "2026-07-03 14:30": {
+      "input": "2026-07-03 14:30",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 14,
+        "minute": 30,
+        "second": 0
+      },
+      "unit": "minute",
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "3pm EST": {
+      "input": "3pm EST",
+      "type": "date",
+      "kind": "date",
+      "base": {
+        "year": 2026,
+        "month": 7,
+        "day": 3,
+        "hour": 15,
+        "minute": 0,
+        "second": 0
+      },
+      "unit": "hour",
+      "issues": [
+        "TZ_IGNORED",
+        "AMBIGUOUS_TIMEZONE"
+      ],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 0.9
+    },
+    "invoice 2024": {
+      "input": "invoice 2024",
+      "type": "fail",
+      "kind": null,
+      "base": null,
+      "unit": null,
+      "issues": [
+        "UNSUPPORTED_DATE"
+      ],
+      "span": null,
+      "confidence": null
+    }
+  },
+  "dateRange": {
+    "9-5 [now:2026,6,3,9,0,0]": {
+      "input": "9-5",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 9,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 17,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "hour",
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 3
+      },
+      "confidence": 1
+    },
+    "9 to 5 [now:2026,6,3,9,0,0]": {
+      "input": "9 to 5",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 9,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 17,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "hour",
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "2pm to 4pm [now:2026,6,3,9,0,0]": {
+      "input": "2pm to 4pm",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 14,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 16,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "hour",
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "between 9am and 5pm [now:2026,6,3,9,0,0]": {
+      "input": "between 9am and 5pm",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 9,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 17,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "hour",
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "2 to 4pm [now:2026,6,3,9,0,0]": {
+      "input": "2 to 4pm",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 14,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 16,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "hour",
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "from 13:30 to 15:45 [now:2026,6,3,9,0,0]": {
+      "input": "from 13:30 to 15:45",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 13,
+          "minute": 30,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 15,
+          "minute": 45,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "minute",
+        "end": "minute"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "from 3pm [now:2026,6,3,9,0,0]": {
+      "input": "from 3pm",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 15,
+          "minute": 0,
+          "second": 0
+        },
+        "end": null
+      },
+      "unit": {
+        "start": "hour",
+        "end": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 8
+      },
+      "confidence": 1
+    },
+    "until 5pm [now:2026,6,3,9,0,0]": {
+      "input": "until 5pm",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": null,
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 17,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": null,
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "10pm to 2am [now:2026,6,3,9,0,0]": {
+      "input": "10pm to 2am",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 22,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 4,
+          "hour": 2,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "hour",
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "half past 9 to noon [now:2026,6,3,9,0,0]": {
+      "input": "half past 9 to noon",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 9,
+          "minute": 30,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 12,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "minute",
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 19
+      },
+      "confidence": 1
+    },
+    "9am to 5pm EST [now:2026,6,3,9,0,0]": {
+      "input": "9am to 5pm EST",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 9,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 3,
+          "hour": 17,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "hour",
+        "end": "hour"
+      },
+      "issues": [
+        "TZ_IGNORED",
+        "AMBIGUOUS_TIMEZONE"
+      ],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 0.9
+    },
+    "July 1 to July 5 [now:2026,6,3,9,0,0]": {
+      "input": "July 1 to July 5",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2027,
+          "month": 7,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2027,
+          "month": 7,
+          "day": 5,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 16
+      },
+      "confidence": 1
+    },
+    "Aug 3 - Aug 9 [now:2026,6,3,9,0,0]": {
+      "input": "Aug 3 - Aug 9",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 8,
+          "day": 3,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 8,
+          "day": 9,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 13
+      },
+      "confidence": 1
+    },
+    "from tomorrow to friday [now:2026,6,3,9,0,0]": {
+      "input": "from tomorrow to friday",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 4,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 10,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 23
+      },
+      "confidence": 0.9
+    },
+    "2026-08-01 to 2026-08-05 [now:2026,6,3,9,0,0]": {
+      "input": "2026-08-01 to 2026-08-05",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 8,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 8,
+          "day": 5,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 24
+      },
+      "confidence": 1
+    },
+    "2026-08-01 - 2026-08-05 [now:2026,6,3,9,0,0]": {
+      "input": "2026-08-01 - 2026-08-05",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 8,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 8,
+          "day": 5,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 23
+      },
+      "confidence": 1
+    },
+    "Mon-Fri [now:2026,6,3,9,0,0]": {
+      "input": "Mon-Fri",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 6,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 10,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT",
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 7
+      },
+      "confidence": 0.8
+    },
+    "from monday [now:2026,6,3,9,0,0]": {
+      "input": "from monday",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 6,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": null
+      },
+      "unit": {
+        "start": "day",
+        "end": null
+      },
+      "issues": [
+        "WEEKDAY_ASSUMED_NEXT"
+      ],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 0.9
+    },
+    "until august 9 [now:2026,6,3,9,0,0]": {
+      "input": "until august 9",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": null,
+        "end": {
+          "year": 2026,
+          "month": 8,
+          "day": 9,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": null,
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "next week [now:2026,6,3,9,0,0]": {
+      "input": "next week",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 6,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 12,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "week",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "this month [now:2026,6,3,9,0,0]": {
+      "input": "this month",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 31,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "month",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "next month [now:2026,6,3,9,0,0]": {
+      "input": "next month",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 8,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 8,
+          "day": 31,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "month",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 10
+      },
+      "confidence": 1
+    },
+    "this year [now:2026,6,3,9,0,0]": {
+      "input": "this year",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 1,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 12,
+          "day": 31,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "year",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 9
+      },
+      "confidence": 1
+    },
+    "August [now:2026,6,3,9,0,0]": {
+      "input": "August",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 8,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 8,
+          "day": 31,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "month",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 6
+      },
+      "confidence": 1
+    },
+    "this weekend [now:2026,6,3,9,0,0]": {
+      "input": "this weekend",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 4,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 5,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "next weekend [now:2026,6,3,9,0,0]": {
+      "input": "next weekend",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 11,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 12,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "July 1 3pm to July 2 5pm [now:2026,6,3,9,0,0]": {
+      "input": "July 1 3pm to July 2 5pm",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2027,
+          "month": 7,
+          "day": 1,
+          "hour": 15,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2027,
+          "month": 7,
+          "day": 2,
+          "hour": 17,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "hour",
+        "end": "hour"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 24
+      },
+      "confidence": 1
+    },
+    "July to August [now:2026,6,3,9,0,0]": {
+      "input": "July to August",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2027,
+          "month": 7,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2027,
+          "month": 8,
+          "day": 31,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "month",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "confidence": 1
+    },
+    "until August [now:2026,6,3,9,0,0]": {
+      "input": "until August",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": null,
+        "end": {
+          "year": 2026,
+          "month": 8,
+          "day": 31,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": null,
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "from August [now:2026,6,3,9,0,0]": {
+      "input": "from August",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 8,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": null
+      },
+      "unit": {
+        "start": "month",
+        "end": null
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 11
+      },
+      "confidence": 1
+    },
+    "2026 to 2027 [now:2026,6,3,9,0,0]": {
+      "input": "2026 to 2027",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 1,
+          "day": 1,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2027,
+          "month": 12,
+          "day": 31,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "year",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "this weekend to next weekend [now:2026,6,3,9,0,0]": {
+      "input": "this weekend to next weekend",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 4,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 12,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 28
+      },
+      "confidence": 1
+    },
+    "2026-08-09 to 2026-08-03 [now:2026,6,3,9,0,0]": {
+      "input": "2026-08-09 to 2026-08-03",
+      "opts": {
+        "now": [
+          2026,
+          6,
+          3,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 8,
+          "day": 3,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 8,
+          "day": 9,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [
+        "RANGE_REVERSED"
+      ],
+      "span": {
+        "start": 0,
+        "end": 24
+      },
+      "confidence": 1
+    },
+    "this weekend [now:2026,5,28,9,0,0]": {
+      "input": "this weekend",
+      "opts": {
+        "now": [
+          2026,
+          5,
+          28,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 6,
+          "day": 27,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 6,
+          "day": 28,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "next weekend [now:2026,5,28,9,0,0]": {
+      "input": "next weekend",
+      "opts": {
+        "now": [
+          2026,
+          5,
+          28,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 7,
+          "day": 4,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 7,
+          "day": 5,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    },
+    "last weekend [now:2026,5,28,9,0,0]": {
+      "input": "last weekend",
+      "opts": {
+        "now": [
+          2026,
+          5,
+          28,
+          9,
+          0,
+          0
+        ]
+      },
+      "type": "date-range",
+      "kind": "date-range",
+      "base": {
+        "start": {
+          "year": 2026,
+          "month": 6,
+          "day": 20,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2026,
+          "month": 6,
+          "day": 21,
+          "hour": 0,
+          "minute": 0,
+          "second": 0
+        }
+      },
+      "unit": {
+        "start": "day",
+        "end": "day"
+      },
+      "issues": [],
+      "span": {
+        "start": 0,
+        "end": 12
+      },
+      "confidence": 1
+    }
+  }
+}

@@ -1,0 +1,227 @@
+{
+  "nodes": {
+    "site_fw00000000000001": {
+      "object": "node",
+      "id": "site_fw00000000000001",
+      "type": "site",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "polygon": {
+        "type": "polygon",
+        "points": [
+          [
+            -20,
+            -20
+          ],
+          [
+            20,
+            -20
+          ],
+          [
+            20,
+            20
+          ],
+          [
+            -20,
+            20
+          ]
+        ]
+      },
+      "children": [
+        "building_fw000000001"
+      ]
+    },
+    "building_fw000000001": {
+      "object": "node",
+      "id": "building_fw000000001",
+      "type": "building",
+      "parentId": "site_fw00000000000001",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_fw000000000001"
+      ]
+    },
+    "level_fw000000000001": {
+      "object": "node",
+      "id": "level_fw000000000001",
+      "type": "level",
+      "parentId": "building_fw000000001",
+      "visible": true,
+      "metadata": {},
+      "level": 0,
+      "children": [
+        "slab_fw0000000000001",
+        "ceiling_fw00000000001",
+        "wall_fw0000000000001",
+        "guide_fw000000000001",
+        "zone_fw0000000000001"
+      ]
+    },
+    "slab_fw0000000000001": {
+      "object": "node",
+      "id": "slab_fw0000000000001",
+      "type": "slab",
+      "parentId": "level_fw000000000001",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          0,
+          8
+        ]
+      ],
+      "holes": [
+        [
+          [
+            3,
+            3
+          ],
+          [
+            5,
+            3
+          ],
+          [
+            5,
+            5
+          ],
+          [
+            3,
+            5
+          ]
+        ]
+      ],
+      "elevation": -0.3
+    },
+    "ceiling_fw00000000001": {
+      "object": "node",
+      "id": "ceiling_fw00000000001",
+      "type": "ceiling",
+      "parentId": "level_fw000000000001",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          8,
+          0
+        ],
+        [
+          8,
+          8
+        ],
+        [
+          0,
+          8
+        ]
+      ],
+      "holes": [
+        [
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            1,
+            2
+          ]
+        ]
+      ],
+      "height": 2.7,
+      "material": {
+        "preset": "plaster"
+      }
+    },
+    "wall_fw0000000000001": {
+      "object": "node",
+      "id": "wall_fw0000000000001",
+      "type": "wall",
+      "parentId": "level_fw000000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        8,
+        0
+      ]
+    },
+    "guide_fw000000000001": {
+      "object": "node",
+      "id": "guide_fw000000000001",
+      "type": "guide",
+      "parentId": "level_fw000000000001",
+      "visible": true,
+      "metadata": {},
+      "url": "asset://11111111-2222",
+      "position": [
+        4,
+        0,
+        4
+      ],
+      "rotation": [
+        0,
+        0.7853981633974483,
+        0
+      ],
+      "scale": 1.2,
+      "opacity": 30
+    },
+    "zone_fw0000000000001": {
+      "object": "node",
+      "id": "zone_fw0000000000001",
+      "type": "zone",
+      "parentId": "level_fw000000000001",
+      "visible": true,
+      "metadata": {},
+      "name": "Living",
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          4,
+          0
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          0,
+          4
+        ]
+      ]
+    }
+  },
+  "rootNodeIds": [
+    "site_fw00000000000001"
+  ]
+}

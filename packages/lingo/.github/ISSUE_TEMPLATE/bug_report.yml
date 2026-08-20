@@ -1,0 +1,65 @@
+name: 🐛 Bug report
+description: A parse, conversion, format, or validation result that is wrong
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! A concrete input + the serialized result is
+        usually all we need to reproduce a parser bug.
+
+  - type: textarea
+    id: input
+    attributes:
+      label: Input and options
+      description: The exact call that misbehaves.
+      value: |
+        ```ts
+        import { lingo } from '@pascal-app/lingo'
+        lingo('...', { /* options */ })
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+      description: What you expected the result (or issue codes) to be.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: >
+        The actual result. `JSON.stringify(result)` output is ideal — it
+        carries the schema version, spans, and issue codes.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: "@pascal-app/lingo version"
+      placeholder: 0.2.1
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Node/bun/browser + version
+      placeholder: Node 22, bun 1.3, Chrome 126…
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Locale packs loaded, related issues, anything else useful.
+    validations:
+      required: false

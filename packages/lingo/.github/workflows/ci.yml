@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  # Full gate. bun orchestrates; vitest runs on the Node versions it supports
+  # (vitest 4 / vite requires Node >= 20). Ship-target coverage for Node 18 is
+  # the separate node-support job below (D23).
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: bun install --frozen-lockfile
+      - name: Lint (biome via ultracite)
+        if: matrix.node == 24
+        run: bun run lint
+      - run: bun run --filter @pascal-app/lingo typecheck
+      - run: bun run --filter @pascal-app/lingo test
+      - run: bun run --filter @pascal-app/lingo build
+      - run: bun run --filter @pascal-app/lingo size
+      - name: Corpus compatibility gate
+        run: node scripts/corpus-diff.mjs
+        working-directory: packages/lingo
+      - name: Zero-dependency gate
+        run: node scripts/check-zero-deps.mjs
+        working-directory: packages/lingo
+      - name: Docs sync gate (llms.txt kinds)
+        run: node scripts/check-docs-sync.mjs
+        working-directory: packages/lingo
+      - name: Schema artifacts gate
+        run: node scripts/gen-schemas.mjs --check
+        working-directory: packages/lingo
+      - name: Pack preview
+        if: matrix.node == 24
+        run: npm pack --dry-run
+        working-directory: packages/lingo
+
+  # The published package is plain zero-dep ES2020 — prove the built dist
+  # imports and runs on every supported Node, including 18 (the engines floor
+  # vitest can't be run on). This is the real ship-target check.
+  node-support:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter @pascal-app/lingo build
+      - name: Import + smoke the built dist on Node ${{ matrix.node }}
+        working-directory: packages/lingo
+        run: |
+          node --input-type=module -e "
+            import { lingo, convert } from './dist/index.js'
+            import { parseDate } from './dist/date/index.js'
+            const q = lingo('5\'11\"')
+            if (!q.ok || Math.abs(q.quantity.to('m').value - 1.8034) > 1e-6) process.exit(1)
+            if (convert(72, 'in', 'ft') !== 6) process.exit(1)
+            if (!parseDate('2026-03-05').ok) process.exit(1)
+            console.log('dist smoke ok on Node ' + process.version)
+          "
+          node -e "require('./dist/index.cjs').lingo('2 ft').ok || process.exit(1); console.log('cjs smoke ok')"
+
+  # A broken docs site should not merge green (react-doctor is advisory-only).
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      # turbo builds @pascal-app/lingo first (dependsOn ^build) so the site's
+      # workspace link resolves.
+      - run: bunx turbo run build --filter=lingo-site

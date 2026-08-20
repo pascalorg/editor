@@ -1,0 +1,298 @@
+{
+  "name": "@pascal-app/lingo",
+  "version": "0.4.0",
+  "description": "Make forms easier, LLM tools safer. Parse what humans type and what models emit — natural-language quantities, units, dates and ranges — into canonical, validated values. Two-way, zero dependencies.",
+  "keywords": [
+    "parse",
+    "natural-language",
+    "units",
+    "measurement",
+    "convert",
+    "unit-conversion",
+    "input",
+    "mask",
+    "form",
+    "date",
+    "duration",
+    "i18n",
+    "locale",
+    "humanize",
+    "quantity",
+    "typescript",
+    "zero-dependencies",
+    "llm",
+    "ai",
+    "agents",
+    "structured-output",
+    "standard-schema",
+    "json-schema",
+    "tool-calling",
+    "mcp",
+    "validation"
+  ],
+  "license": "MIT",
+  "author": "Aymeric <aymeric@pascal.app>",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "llms.txt",
+    "CHANGELOG.md"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./core": {
+      "import": {
+        "types": "./dist/core/index.d.ts",
+        "default": "./dist/core/index.js"
+      },
+      "require": {
+        "types": "./dist/core/index.d.cts",
+        "default": "./dist/core/index.cjs"
+      }
+    },
+    "./date": {
+      "import": {
+        "types": "./dist/date/index.d.ts",
+        "default": "./dist/date/index.js"
+      },
+      "require": {
+        "types": "./dist/date/index.d.cts",
+        "default": "./dist/date/index.cjs"
+      }
+    },
+    "./dom": {
+      "import": {
+        "types": "./dist/dom/index.d.ts",
+        "default": "./dist/dom/index.js"
+      },
+      "require": {
+        "types": "./dist/dom/index.d.cts",
+        "default": "./dist/dom/index.cjs"
+      }
+    },
+    "./element": {
+      "import": {
+        "types": "./dist/element/index.d.ts",
+        "default": "./dist/element/index.js"
+      },
+      "require": {
+        "types": "./dist/element/index.d.cts",
+        "default": "./dist/element/index.cjs"
+      }
+    },
+    "./describe": {
+      "import": {
+        "types": "./dist/describe/index.d.ts",
+        "default": "./dist/describe/index.js"
+      },
+      "require": {
+        "types": "./dist/describe/index.d.cts",
+        "default": "./dist/describe/index.cjs"
+      }
+    },
+    "./catalog": {
+      "import": {
+        "types": "./dist/catalog/index.d.ts",
+        "default": "./dist/catalog/index.js"
+      },
+      "require": {
+        "types": "./dist/catalog/index.d.cts",
+        "default": "./dist/catalog/index.cjs"
+      }
+    },
+    "./schema": {
+      "import": {
+        "types": "./dist/schema/index.d.ts",
+        "default": "./dist/schema/index.js"
+      },
+      "require": {
+        "types": "./dist/schema/index.d.cts",
+        "default": "./dist/schema/index.cjs"
+      }
+    },
+    "./ai": {
+      "import": {
+        "types": "./dist/ai/index.d.ts",
+        "default": "./dist/ai/index.js"
+      },
+      "require": {
+        "types": "./dist/ai/index.d.cts",
+        "default": "./dist/ai/index.cjs"
+      }
+    },
+    "./mcp": {
+      "import": {
+        "types": "./dist/mcp/index.d.ts",
+        "default": "./dist/mcp/index.js"
+      },
+      "require": {
+        "types": "./dist/mcp/index.d.cts",
+        "default": "./dist/mcp/index.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      },
+      "require": {
+        "types": "./dist/react/index.d.cts",
+        "default": "./dist/react/index.cjs"
+      }
+    },
+    "./react-native": {
+      "import": {
+        "types": "./dist/react-native/index.d.ts",
+        "default": "./dist/react-native/index.js"
+      },
+      "require": {
+        "types": "./dist/react-native/index.d.cts",
+        "default": "./dist/react-native/index.cjs"
+      }
+    },
+    "./complete": {
+      "import": {
+        "types": "./dist/complete/index.d.ts",
+        "default": "./dist/complete/index.js"
+      },
+      "require": {
+        "types": "./dist/complete/index.d.cts",
+        "default": "./dist/complete/index.cjs"
+      }
+    },
+    "./locales/en": {
+      "import": {
+        "types": "./dist/locales/en.d.ts",
+        "default": "./dist/locales/en.js"
+      },
+      "require": {
+        "types": "./dist/locales/en.d.cts",
+        "default": "./dist/locales/en.cjs"
+      }
+    },
+    "./locales/en-gb": {
+      "import": {
+        "types": "./dist/locales/en-gb.d.ts",
+        "default": "./dist/locales/en-gb.js"
+      },
+      "require": {
+        "types": "./dist/locales/en-gb.d.cts",
+        "default": "./dist/locales/en-gb.cjs"
+      }
+    },
+    "./locales/es": {
+      "import": {
+        "types": "./dist/locales/es.d.ts",
+        "default": "./dist/locales/es.js"
+      },
+      "require": {
+        "types": "./dist/locales/es.d.cts",
+        "default": "./dist/locales/es.cjs"
+      }
+    },
+    "./locales/fr": {
+      "import": {
+        "types": "./dist/locales/fr.d.ts",
+        "default": "./dist/locales/fr.js"
+      },
+      "require": {
+        "types": "./dist/locales/fr.d.cts",
+        "default": "./dist/locales/fr.cjs"
+      }
+    },
+    "./locales/pt": {
+      "import": {
+        "types": "./dist/locales/pt.d.ts",
+        "default": "./dist/locales/pt.js"
+      },
+      "require": {
+        "types": "./dist/locales/pt.d.cts",
+        "default": "./dist/locales/pt.cjs"
+      }
+    },
+    "./locales/zh": {
+      "import": {
+        "types": "./dist/locales/zh.d.ts",
+        "default": "./dist/locales/zh.js"
+      },
+      "require": {
+        "types": "./dist/locales/zh.d.cts",
+        "default": "./dist/locales/zh.cjs"
+      }
+    },
+    "./locales/ja": {
+      "import": {
+        "types": "./dist/locales/ja.d.ts",
+        "default": "./dist/locales/ja.js"
+      },
+      "require": {
+        "types": "./dist/locales/ja.d.cts",
+        "default": "./dist/locales/ja.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "size": "node scripts/size.mjs",
+    "bench": "node scripts/bench.mjs",
+    "ai-eval": "node scripts/ai-eval.mjs",
+    "bench:backend": "node scripts/bench.mjs --backend",
+    "bench:browser": "node scripts/bench.mjs --browser --open",
+    "demo": "node scripts/demo.mjs",
+    "check": "bun run typecheck && bun run test && bun run build && bun run size && node scripts/corpus-diff.mjs && node scripts/check-docs-sync.mjs && bun scripts/check-llms-index.mjs && node scripts/check-zero-deps.mjs && node scripts/gen-schemas.mjs --check",
+    "prepublishOnly": "bun run check"
+  },
+  "devDependencies": {
+    "@standard-schema/spec": "^1.1.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19",
+    "esbuild": "^0.28.1",
+    "jsdom": "^29.1.1",
+    "react-dom": "^19",
+    "tsup": "^8.5.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pascalorg/lingo.git",
+    "directory": "packages/lingo"
+  },
+  "homepage": "https://lingo.pascal.app",
+  "bugs": {
+    "url": "https://github.com/pascalorg/lingo/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
