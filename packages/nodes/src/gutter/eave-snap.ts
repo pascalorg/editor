@@ -2,6 +2,7 @@ import {
   computeGutterEaveY,
   GUTTER_EAVE_TUCK_INWARD,
   GUTTER_EAVE_TUCK_UP,
+  getRoofShapeEaveSides,
   type RoofSegmentNode,
   type RoofType,
 } from '@pascal-app/core'
@@ -70,7 +71,7 @@ export function computeEaveY(
  *    regardless of which side the cursor is on — clicking on the high
  *    side still rolls the gutter down to the low eave.
  *
- *  - `hip` / `flat` / `dutch`: 4-way. The slope the user is standing
+ *  - Four-eave roofs: the slope the user is standing
  *    on is determined by whichever of `|lx|/halfW` or `|lz|/halfD` is
  *    larger — same `max(fx, fz)` discriminator the segment-hit's
  *    `analyticalSurfaceY` uses for hip. Sign of the dominant axis
@@ -78,11 +79,7 @@ export function computeEaveY(
  *    lower run has all four eaves at the eave line — it gets the same
  *    4-way snap as hip.
  *
- *  - `gable` / `gambrel` / `mansard`: 2-way `±Z`. Mansard has real
- *    4-side eaves in plan, but the segment-hit formula approximates it
- *    as 2-slope (depth-only), so we stay consistent here — the user
- *    can re-place the gutter manually on a side eave if mansard
- *    becomes important.
+ *  - `gable` / `gambrel`: 2-way `±Z`.
  */
 function pickEaveSide(
   roofType: RoofType,
@@ -91,9 +88,10 @@ function pickEaveSide(
   halfW: number,
   halfD: number,
 ): EaveSide {
-  if (roofType === 'shed') return '+Z'
+  const sides = getRoofShapeEaveSides(roofType)
+  if (sides.length === 1) return sides[0]!
 
-  if (roofType === 'hip' || roofType === 'flat' || roofType === 'dutch') {
+  if (sides.includes('+X')) {
     const fx = halfW > 0 ? Math.abs(localX) / halfW : 0
     const fz = halfD > 0 ? Math.abs(localZ) / halfD : 0
     if (fx > fz) return localX < 0 ? '-X' : '+X'

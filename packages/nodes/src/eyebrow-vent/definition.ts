@@ -4,8 +4,8 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
-import { surfacePaintCapability } from '../shared/surface-paint'
 import { buildEyebrowVentFloorplan } from './floorplan'
+import { eyebrowVentPaint } from './paint'
 import { eyebrowVentParametrics } from './parametrics'
 import { EyebrowVentNode } from './schema'
 
@@ -112,7 +112,7 @@ const eyebrowVentHandles: HandleDescriptor<EyebrowVentNodeType>[] = [
  */
 export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
   kind: 'eyebrow-vent',
-  schemaVersion: 1,
+  schemaVersion: 3,
   schema: EyebrowVentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -127,11 +127,14 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
   },
 
   capabilities: {
+    slots: () => [
+      { slotId: 'hood', label: 'Hood', default: 'library:preset-softwhite' },
+      { slotId: 'front', label: 'Front', default: 'library:preset-softwhite' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
-    // Single painted surface — registry-driven paint dispatch (see chimney).
-    paint: surfacePaintCapability,
+    paint: eyebrowVentPaint,
     // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the slope —
     // no `buildCut`, just the dirty cascade so the parent roof's merged shell
     // rebuilds when the vent moves / resizes.

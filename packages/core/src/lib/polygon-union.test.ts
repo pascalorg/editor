@@ -1,4 +1,4 @@
-// @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
+// @ts-expect-error — bun:test is provided by the Bun runtime; core does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import { type Point2D, subtractPolygonsFromPolygon, unionPolygons } from './polygon-union'

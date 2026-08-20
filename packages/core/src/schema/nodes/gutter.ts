@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import { normalizeRoofSegmentTrim, type RoofSegmentNode } from './roof-segment'
+import { getRoofShapeEaveSides } from './roof-segment-shape'
 
 const MIN_DEFAULT_GUTTER_LENGTH_M = 0.2
 const DEFAULT_GUTTER_GENERATOR = 'default-gutter'
@@ -50,6 +51,7 @@ export const GutterNode = BaseNode.extend({
   type: nodeType('gutter'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // White preset by default — matches the rest of the roof accessory
   // family (box-vent / ridge-vent) so the paint inspector reads as
   // "White" instead of "no material" on a freshly-placed gutter.
@@ -143,15 +145,7 @@ export function computeGutterEaveY(
 }
 
 function getDefaultGutterSides(segment: RoofSegmentNode): GutterEaveSide[] {
-  switch (segment.roofType) {
-    case 'shed':
-      return ['+Z']
-    case 'gable':
-    case 'gambrel':
-      return ['+Z', '-Z']
-    default:
-      return ['+Z', '-Z', '+X', '-X']
-  }
+  return getRoofShapeEaveSides(segment.roofType)
 }
 
 function getGutterEnvelope(segment: RoofSegmentNode) {

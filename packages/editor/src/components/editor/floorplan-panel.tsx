@@ -4673,6 +4673,7 @@ function FloorplanLinearDraftLayer({
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
+  const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
 
   const draftPolygon = useMemo(() => {
     if (
@@ -4708,6 +4709,21 @@ function FloorplanLinearDraftLayer({
     }
     return draftPolygon ? formatPolygonPoints(draftPolygon) : null
   }, [draftPolygon, isRoofBuildActive, roofDraftEnd, roofDraftStart])
+
+  const roofDraftDirectionLine = useMemo(() => {
+    if (!(isRoofBuildActive && roofDraftStart && roofDraftEnd)) return null
+    const minX = Math.min(roofDraftStart[0], roofDraftEnd[0])
+    const maxX = Math.max(roofDraftStart[0], roofDraftEnd[0])
+    const minY = Math.min(roofDraftStart[1], roofDraftEnd[1])
+    const maxY = Math.max(roofDraftStart[1], roofDraftEnd[1])
+    if (maxX - minX < 1e-6 || maxY - minY < 1e-6) return null
+
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+    return roofDraftQuarterTurn
+      ? { x1: centerX, y1: minY, x2: centerX, y2: maxY }
+      : { x1: minX, y1: centerY, x2: maxX, y2: centerY }
+  }, [isRoofBuildActive, roofDraftEnd, roofDraftQuarterTurn, roofDraftStart])
 
   const fenceDraftSegment = useMemo(() => {
     if (!(isFenceBuildActive && fenceDraftStart && fenceDraftEnd)) {
@@ -4886,6 +4902,19 @@ function FloorplanLinearDraftLayer({
         polygonDraftPolylinePoints={null}
         unitsPerPixel={unitsPerPixel}
       />
+
+      {roofDraftDirectionLine && (
+        <line
+          pointerEvents="none"
+          stroke={draftStroke}
+          strokeLinecap="round"
+          strokeWidth={unitsPerPixel * 1.5}
+          x1={toSvgX(roofDraftDirectionLine.x1)}
+          x2={toSvgX(roofDraftDirectionLine.x2)}
+          y1={toSvgY(roofDraftDirectionLine.y1)}
+          y2={toSvgY(roofDraftDirectionLine.y2)}
+        />
+      )}
 
       {draftWallMeasurement && (
         <FloorplanDraftWallMeasurement

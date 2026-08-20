@@ -381,6 +381,37 @@ function migrateSingleMaterialSlots(
   return { ...node, slots, material: undefined, materialPreset: undefined }
 }
 
+function migrateRoleMaterialSlots(
+  node: Record<string, any>,
+  roles: readonly string[],
+  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
+) {
+  const slots: Record<string, string> = { ...(node.slots ?? {}) }
+  const next = { ...node }
+  let changed = false
+
+  for (const role of roles) {
+    if (slots[role] === undefined) {
+      const ref = legacySpecToMaterialRef(
+        {
+          material: node[`${role}Material`] ?? node.material,
+          materialPreset: node[`${role}MaterialPreset`] ?? node.materialPreset,
+        },
+        mintedMaterials,
+      )
+      if (ref) {
+        slots[role] = ref
+        changed = true
+      }
+    }
+    if (`${role}Material` in next || `${role}MaterialPreset` in next) changed = true
+    delete next[`${role}Material`]
+    delete next[`${role}MaterialPreset`]
+  }
+
+  return changed ? { ...next, slots } : node
+}
+
 // Stair carries per-role legacy fields (`treadMaterial*` / `sideMaterial*` /
 // `railingMaterial*`) plus a catch-all. Map each to its slot via the same
 // fallback chain the renderer uses (`getEffectiveStairSurfaceMaterial`):
@@ -834,6 +865,42 @@ function migrateNodes(nodes: Record<string, any>): {
       patchedNodes[id] = migrateSingleMaterialSlots(
         patchedNodes[id],
         ['shaft', 'base', 'capital', 'frame'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'gutter' || node.type === 'downspout') {
+      patchedNodes[id] = migrateSingleMaterialSlots(patchedNodes[id], ['surface'], mintedMaterials)
+    }
+
+    if (node.type === 'box-vent') {
+      patchedNodes[id] = migrateRoleMaterialSlots(
+        patchedNodes[id],
+        ['base', 'top'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'cupola') {
+      patchedNodes[id] = migrateRoleMaterialSlots(
+        patchedNodes[id],
+        ['base', 'body', 'roof'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'eyebrow-vent') {
+      patchedNodes[id] = migrateRoleMaterialSlots(
+        patchedNodes[id],
+        ['hood', 'front'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'turbine-vent') {
+      patchedNodes[id] = migrateRoleMaterialSlots(
+        patchedNodes[id],
+        ['base', 'head'],
         mintedMaterials,
       )
     }

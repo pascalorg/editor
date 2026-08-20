@@ -19,6 +19,7 @@ describe('turbine vent geometry', () => {
     expect(positions.count).toBeGreaterThan(0)
     expect(normals.count).toBe(positions.count)
     expect(uvs.count).toBe(positions.count)
+    expect(geo.getAttribute('uv2').count).toBe(positions.count)
   })
 
   test('base and head both produce finite, non-empty geometry', () => {
@@ -29,6 +30,16 @@ describe('turbine vent geometry', () => {
     expect(head.getAttribute('position').count).toBeGreaterThan(0)
     expect(allFinite(base)).toBe(true)
     expect(allFinite(head)).toBe(true)
+  })
+
+  test('unwraps the circular base continuously at metre scale', () => {
+    const base = buildTurbineVentBase(
+      TurbineVentNode.parse({ diameter: 2, baseOverhang: 0.1, neckHeight: 0.5, height: 2 }),
+    )
+    const uv = base.getAttribute('uv')
+    const u = Array.from({ length: uv.count }, (_, index) => uv.getX(index))
+
+    expect(Math.max(...u) - Math.min(...u)).toBeGreaterThan(6.5)
   })
 
   test('both styles build finite geometry', () => {

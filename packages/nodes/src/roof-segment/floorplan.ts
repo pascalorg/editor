@@ -108,11 +108,9 @@ export function buildRoofSegmentFloorplan(
 
   // NOTE: the ridge / hip / break / slope linework is NOT drawn here — the
   // parent roof's builder (`buildRoofFloorplan`) draws it for every segment,
-  // clipped against the merged-roof valleys so a segment's ridge stops at
-  // the junction instead of running on into a neighbour it overlaps. This
-  // builder owns only the per-segment interaction chrome below. The shape
-  // math lives in `getRoofSegmentPlanLinework` (exported for the roof
-  // builder to consume).
+  // while this builder owns only the per-segment interaction chrome below.
+  // The shape math lives in `getRoofSegmentPlanLinework` (exported for the
+  // roof builder to consume).
 
   // Selection chrome — orange move-handle dot at the centre, four
   // perpendicular side resize-arrows (width on X, depth on Z), and a
@@ -192,8 +190,8 @@ export type PlanSeg = readonly [PlanPt, PlanPt]
  * - break: horizontal fold where the slope angle changes (gambrel kink,
  *          mansard/dutch waist)
  *
- * Exported so the roof-level builder can reuse it to terminate the valley
- * diagonals it draws at merged-roof junctions against the segments' ridges.
+ * Exported so the roof-level builder can reuse the same architectural
+ * linework for the complete roof plan.
  */
 export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
   ridges: PlanSeg[]

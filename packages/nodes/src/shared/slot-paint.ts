@@ -21,8 +21,8 @@ import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
  * Shared paint capability for procedural kinds on the unified slot model
  * (`node.slots: Record<slotId, MaterialRef>` + the shared scene-material
  * palette) — the same data shape items derive from their GLB and the shelf
- * declares via `capabilities.slots`. Distinct from `surface-paint.ts`, which
- * writes the legacy inline `node.material` copy the plan is retiring.
+ * declares via `capabilities.slots`. `surface-paint.ts` configures this helper
+ * for kinds whose entire rendered subtree is one paintable surface.
  *
  * The commit / resolve / effective-material logic is identical across kinds;
  * only the slot-resolution from a pointer hit and the mesh preview differ, so
