@@ -28,6 +28,8 @@ export type PrintExportOptions = {
   compiled?: boolean
   indexedTopology?: boolean
   format?: PrintArtifactFormat
+  /** Original Y-up world elevation that becomes print Z=0. Omit to use geometry minimum. */
+  sourceBedElevationMeters?: number
 }
 
 export type PrintExportBounds = {
@@ -431,6 +433,12 @@ export function prepareSceneForPrint(
   if (!Number.isFinite(options.scale) || options.scale <= 0) {
     throw new RangeError('Print scale must be a positive finite denominator')
   }
+  if (
+    options.sourceBedElevationMeters !== undefined &&
+    !Number.isFinite(options.sourceBedElevationMeters)
+  ) {
+    throw new RangeError('Print bed elevation must be finite')
+  }
 
   ensureMeshPositions(source)
 
@@ -448,10 +456,14 @@ export function prepareSceneForPrint(
 
   const initialBounds = measureBounds(scene)
   if (initialBounds) {
+    const bedElevation =
+      options.sourceBedElevationMeters === undefined
+        ? initialBounds.min.z
+        : options.sourceBedElevationMeters * physicalScale
     scene.position.set(
       -(initialBounds.min.x + initialBounds.max.x) / 2,
       -(initialBounds.min.y + initialBounds.max.y) / 2,
-      -initialBounds.min.z,
+      -bedElevation,
     )
     scene.updateMatrixWorld(true)
   }

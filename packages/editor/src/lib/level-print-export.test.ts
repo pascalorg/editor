@@ -21,7 +21,12 @@ function registerFixtureKind(category: 'structure' | 'furnish'): string {
   return kind
 }
 
-function binaryStlBounds(buffer: Uint8Array): { triangles: number; size: THREE.Vector3 } {
+function binaryStlBounds(buffer: Uint8Array): {
+  triangles: number
+  min: THREE.Vector3
+  max: THREE.Vector3
+  size: THREE.Vector3
+} {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
   const triangles = view.getUint32(80, true)
   const bounds = new THREE.Box3()
@@ -42,7 +47,12 @@ function binaryStlBounds(buffer: Uint8Array): { triangles: number; size: THREE.V
     offset += 2
   }
 
-  return { triangles, size: bounds.getSize(new THREE.Vector3()) }
+  return {
+    triangles,
+    min: bounds.min.clone(),
+    max: bounds.max.clone(),
+    size: bounds.getSize(new THREE.Vector3()),
+  }
 }
 
 function asArray<T>(value: T | T[]): T[] {
@@ -56,12 +66,15 @@ function twoLevelFixture() {
   const upper = new THREE.Group()
   const groundStructure = new THREE.Group()
   const upperStructure = new THREE.Group()
-  groundStructure.add(new THREE.Mesh(new THREE.BoxGeometry(10, 3, 8)))
-  upperStructure.add(new THREE.Mesh(new THREE.BoxGeometry(8, 2, 6)))
+  const groundSolid = new THREE.Mesh(new THREE.BoxGeometry(10, 3, 8))
+  const upperSolid = new THREE.Mesh(new THREE.BoxGeometry(8, 2, 6))
+  groundSolid.position.y = 1.5
+  upperSolid.position.y = 1
+  groundStructure.add(groundSolid)
+  upperStructure.add(upperSolid)
   ground.add(groundStructure)
   upper.add(upperStructure)
-  ground.position.y = 1.5
-  upper.position.y = 4
+  upper.position.y = 3
   root.add(building)
   building.add(ground, upper)
 
@@ -86,6 +99,7 @@ function twoLevelFixture() {
       type: 'level',
       name: 'Ground',
       level: 0,
+      height: 3,
       parentId: 'building_main',
       children: ['structure_ground'],
       visible: true,
@@ -96,6 +110,7 @@ function twoLevelFixture() {
       type: 'level',
       name: 'Upper',
       level: 1,
+      height: 2,
       parentId: 'building_main',
       children: ['structure_upper'],
       visible: true,
@@ -116,7 +131,7 @@ function twoLevelFixture() {
     } as unknown as AnyNode,
   }
 
-  return { root, building, ground, upper, nodes }
+  return { root, building, ground, upper, groundStructure, upperStructure, nodes }
 }
 
 describe('per-level print STL export', () => {
@@ -137,14 +152,72 @@ describe('per-level print STL export', () => {
     expect(bundle.report.status).toBe('pass')
     expect(bundle.report.partCount).toBe(2)
     expect(bundle.report.parts.map((part) => part.kind)).toEqual(['level', 'level'])
+    expect(bundle.report.parts.map((part) => part.sourceBaseMeters)).toEqual([0, 3])
     expect(ground.triangles).toBe(12)
+    expect(ground.min.z).toBeCloseTo(0, 6)
     expect(ground.size.x).toBeCloseTo(100, 4)
     expect(ground.size.y).toBeCloseTo(80, 4)
     expect(ground.size.z).toBeCloseTo(30, 4)
     expect(upper.triangles).toBe(12)
+    expect(upper.min.z).toBeCloseTo(0, 6)
     expect(upper.size.x).toBeCloseTo(80, 4)
     expect(upper.size.y).toBeCloseTo(60, 4)
     expect(upper.size.z).toBeCloseTo(20, 4)
+  })
+
+  test('blocks geometry that crosses or floats above its stored level base', async () => {
+    const fixture = twoLevelFixture()
+    fixture.groundStructure.position.y = -0.25
+    fixture.upperStructure.position.y = 0.5
+    const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
+
+    const bundle = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, { scale: 100 })
+    const [ground, upper] = bundle.report.parts
+
+    expect(bundle.report.status).toBe('blocked')
+    expect(ground?.sourceBaseMeters).toBe(0)
+    expect(ground?.report.bounds?.min.z).toBeCloseTo(-2.5, 5)
+    expect(ground?.report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'level_geometry_below_base',
+        nodeIds: ['level_ground'],
+      }),
+    )
+    expect(upper?.sourceBaseMeters).toBe(3)
+    expect(upper?.report.bounds?.min.z).toBeCloseTo(5, 5)
+    expect(upper?.report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'level_geometry_detached_from_base',
+        nodeIds: ['level_upper'],
+      }),
+    )
+  })
+
+  test('orders a basement first and honors additive stored base elevation', async () => {
+    const fixture = twoLevelFixture()
+    fixture.nodes.level_ground = {
+      ...fixture.nodes.level_ground!,
+      name: 'Basement',
+      level: -1,
+      baseElevation: -0.4,
+    } as AnyNode
+    fixture.nodes.level_upper = {
+      ...fixture.nodes.level_upper!,
+      name: 'Ground',
+      level: 0,
+    } as AnyNode
+    fixture.ground.position.y = -0.4
+    fixture.upper.position.y = 2.6
+    const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
+
+    const bundle = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, { scale: 100 })
+    const files = unzipSync(bundle.data)
+
+    expect(Object.keys(files)).toEqual(['01_basement.stl', '02_ground.stl'])
+    expect(bundle.report.parts.map((part) => part.levelId)).toEqual(['level_ground', 'level_upper'])
+    expect(bundle.report.parts.map((part) => part.sourceBaseMeters)).toEqual([-0.4, 2.6])
+    expect(binaryStlBounds(files['01_basement.stl']!).min.z).toBeCloseTo(0, 6)
+    expect(binaryStlBounds(files['02_ground.stl']!).min.z).toBeCloseTo(0, 6)
   })
 
   test('omits and blocks an unsplit stair that spans two levels', async () => {

@@ -1,4 +1,9 @@
-import { type AnyNode, getLevelDisplayName, type LevelNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  getLevelDisplayName,
+  getLevelElevations,
+  type LevelNode,
+} from '@pascal-app/core'
 import { type Zippable, zipSync } from 'fflate'
 import * as THREE from 'three'
 import { createPrint3mf, type Print3mfPart } from './print-3mf'
@@ -18,6 +23,7 @@ import type { PrintShellCompileResult } from './print-shell-compiler-baseline'
 
 const ZIP_MTIME = new Date(2000, 0, 1, 0, 0, 0)
 const MILLIMETERS_PER_METER = 1000
+const LEVEL_BASE_TOLERANCE_MM = 0.01
 
 export type PrintBaseMode = 'none' | 'plinth'
 
@@ -32,6 +38,7 @@ export type PrintLevelPartReport = {
   label: string
   objectName: string
   filename: string | null
+  sourceBaseMeters: number | null
   report: PrintExportReport
 }
 
@@ -199,6 +206,46 @@ type PreparedLevelArtifact = {
   bounds: PrintExportBounds | null
 }
 
+function levelBaseDiagnostics(
+  level: LevelNode,
+  label: string,
+  sourceBaseMeters: number | null,
+  report: PrintExportReport,
+): PrintExportDiagnostic[] {
+  if (sourceBaseMeters === null) {
+    return [
+      {
+        severity: 'error',
+        code: 'missing_level_base',
+        message: `${label} has no finite stored level base and cannot be normalized reliably.`,
+        nodeIds: [level.id],
+      },
+    ]
+  }
+
+  const minZ = report.bounds?.min.z
+  if (minZ === undefined || Math.abs(minZ) <= LEVEL_BASE_TOLERANCE_MM) return []
+  if (minZ < 0) {
+    return [
+      {
+        severity: 'error',
+        code: 'level_geometry_below_base',
+        message: `${label} extends ${Math.abs(minZ).toFixed(3)} mm below its stored level base. Correct the level ownership or supporting slab before printing.`,
+        nodeIds: [level.id],
+      },
+    ]
+  }
+
+  return [
+    {
+      severity: 'error',
+      code: 'level_geometry_detached_from_base',
+      message: `${label} begins ${minZ.toFixed(3)} mm above its stored level base, leaving the printable part detached from the bed. Add or assign a floor solid before printing.`,
+      nodeIds: [level.id],
+    },
+  ]
+}
+
 export async function exportSceneLevelsForPrint(
   source: THREE.Object3D,
   nodes: Record<string, AnyNode>,
@@ -206,6 +253,7 @@ export async function exportSceneLevelsForPrint(
 ): Promise<PrintLevelPackage> {
   const format = options.format ?? 'stl'
   const exportedIds = exportedIdentityIds(source)
+  const levelElevations = getLevelElevations(nodes)
   const ownerByNodeId = new Map<string, string | null>()
   for (const id of Object.keys(nodes)) owningLevelId(id, nodes, ownerByNodeId)
 
@@ -247,6 +295,9 @@ export async function exportSceneLevelsForPrint(
     const objectName = `${prefix} ${label}`
     const filename = format === 'stl' ? `${prefix}_${safeFilenamePart(label)}.stl` : null
     const levelScene = pruneSceneToLevel(source, level.id, nodes, excludedIds, ownerByNodeId)
+    const sourceBase = levelElevations.get(level.id)?.baseY
+    const sourceBaseMeters =
+      typeof sourceBase === 'number' && Number.isFinite(sourceBase) ? sourceBase : null
     const compiled = options.compileShells
       ? options.compileShell
         ? await options.compileShell(levelScene, nodes)
@@ -258,19 +309,23 @@ export async function exportSceneLevelsForPrint(
       compiled: compiled?.status === 'compiled',
       indexedTopology: compiled?.backend === 'manifold-3d',
       format,
+      ...(sourceBaseMeters === null ? {} : { sourceBedElevationMeters: sourceBaseMeters }),
     })
-    const report = compiled
+    let report = compiled
       ? mergePrintExportDiagnostics(
           prepared.report,
           compiled.diagnostics,
           new Set(['compiler_pending']),
         )
       : prepared.report
+    const baseDiagnostics = levelBaseDiagnostics(level, label, sourceBaseMeters, report)
+    report = mergePrintExportDiagnostics(report, baseDiagnostics)
     if (compiled) {
       diagnostics.push(
         ...compiled.diagnostics.filter((diagnostic) => diagnostic.severity !== 'info'),
       )
     }
+    diagnostics.push(...baseDiagnostics)
     levelArtifacts.push({
       filename,
       objectName,
@@ -282,7 +337,15 @@ export async function exportSceneLevelsForPrint(
           : null,
       bounds: report.bounds,
     })
-    levelParts.push({ kind: 'level', levelId: level.id, label, objectName, filename, report })
+    levelParts.push({
+      kind: 'level',
+      levelId: level.id,
+      label,
+      objectName,
+      filename,
+      sourceBaseMeters,
+      report,
+    })
   }
 
   let plinthArtifact: PreparedLevelArtifact | null = null
@@ -344,6 +407,7 @@ export async function exportSceneLevelsForPrint(
           label: 'Plinth',
           objectName,
           filename,
+          sourceBaseMeters: null,
           report: prepared.report,
         }
         diagnostics.push({
@@ -361,9 +425,9 @@ export async function exportSceneLevelsForPrint(
     code: 'level_parts_experimental',
     message: options.compileShells
       ? options.compileShell
-        ? 'Level parts use worker-backed Manifold semantic shell compilation; self-intersection checks and minimum wall thickness remain pending.'
-        : 'Level parts use the experimental synchronous semantic shell compiler; worker execution, self-intersection checks, and minimum wall thickness remain pending.'
-      : 'Level parts are separated semantically but are not boolean-unioned printable shells yet.',
+        ? 'Level parts use stored level bases and worker-backed Manifold semantic shell compilation; self-intersection checks and minimum wall thickness remain pending.'
+        : 'Level parts use stored level bases and the experimental synchronous semantic shell compiler; worker execution, self-intersection checks, and minimum wall thickness remain pending.'
+      : 'Level parts use stored level bases and semantic separation but are not boolean-unioned printable shells yet.',
   })
 
   const files: Zippable = {}

@@ -46,6 +46,7 @@ const levelReport: PrintLevelBundleReport = {
       label: 'Ground',
       objectName: '01 Ground',
       filename: '01_ground.stl',
+      sourceBaseMeters: 0,
       report: stlReport,
     },
   ],
