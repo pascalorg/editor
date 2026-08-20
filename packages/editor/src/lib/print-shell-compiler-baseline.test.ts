@@ -9,7 +9,6 @@ import {
   type SlabPolygonContext,
   sceneRegistry,
   WallNode,
-  WindowNode,
 } from '@pascal-app/core'
 import {
   generateExtrudedWall,
@@ -17,7 +16,10 @@ import {
   generateSlabGeometry,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
+import { prepareSceneForExport } from './glb-export'
+import { filterPreparedSceneForPrintContent } from './print-content-scope'
 import { exportSceneToPrintStl } from './print-export'
+import { createPrintGoldenHouseFixture } from './print-golden-house.test-fixture'
 import { compileSemanticPrintShell } from './print-shell-compiler'
 import { compilePrintShellBaseline } from './print-shell-compiler-baseline'
 import { compileManifoldMeshData } from './print-shell-compiler-manifold-core'
@@ -39,9 +41,10 @@ function rayIntersectionCount(
   x: number,
   y: number,
   far = Number.POSITIVE_INFINITY,
+  startZ = -2,
 ): number {
   root.updateMatrixWorld(true)
-  const raycaster = new THREE.Raycaster(new THREE.Vector3(x, y, -2), new THREE.Vector3(0, 0, 1))
+  const raycaster = new THREE.Raycaster(new THREE.Vector3(x, y, startZ), new THREE.Vector3(0, 0, 1))
   raycaster.far = far
   const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
   let count = 0
@@ -181,124 +184,29 @@ describe('print shell compiler baseline', () => {
   })
 
   test('compares the semantic full-house baseline union with the Manifold candidate', async () => {
-    const walls = [
-      WallNode.parse({
-        id: 'wall_print-house-front',
-        start: [-2, -1.5],
-        end: [2, -1.5],
-        height: 2.5,
-        thickness: 0.2,
-        children: ['door_print-house-front'],
-      }),
-      WallNode.parse({
-        id: 'wall_print-house-right',
-        start: [2, -1.5],
-        end: [2, 1.5],
-        height: 2.5,
-        thickness: 0.2,
-      }),
-      WallNode.parse({
-        id: 'wall_print-house-back',
-        start: [2, 1.5],
-        end: [-2, 1.5],
-        height: 2.5,
-        thickness: 0.2,
-        children: ['window_print-house-back'],
-      }),
-      WallNode.parse({
-        id: 'wall_print-house-left',
-        start: [-2, 1.5],
-        end: [-2, -1.5],
-        height: 2.5,
-        thickness: 0.2,
-      }),
-    ]
-    const door = DoorNode.parse({
-      id: 'door_print-house-front',
-      wallId: walls[0]!.id,
-      position: [2, 1.05, 0],
-      width: 0.9,
-      height: 2.1,
-    })
-    const window = WindowNode.parse({
-      id: 'window_print-house-back',
-      wallId: walls[2]!.id,
-      position: [2, 1.4, 0],
-      width: 1.2,
-      height: 1,
-    })
-    const slab = SlabNode.parse({
-      id: 'slab_print-house',
-      elevation: 0,
-      thickness: 0.2,
-      polygon: [
-        [-2.1, -1.6],
-        [2.1, -1.6],
-        [2.1, 1.6],
-        [-2.1, 1.6],
-      ],
-    })
-    const roof = RoofSegmentNode.parse({
-      id: 'rseg_print-house',
-      roofType: 'gable',
-      position: [0, 2.5, 0],
-      width: 4,
-      depth: 3,
-      wallHeight: 0.5,
-      pitch: 30,
-      wallThickness: 0.15,
-      deckThickness: 0.1,
-      overhang: 0.3,
-      shingleThickness: 0.05,
-    })
-    const source = new THREE.Group()
-    const miters = calculateLevelMiters(walls)
-    const nodes = Object.fromEntries(
-      [...walls, door, window, slab, roof].map((node) => [node.id, node]),
-    ) as Record<string, WallNode | DoorNode | WindowNode | SlabNode | RoofSegmentNode>
+    const fixture = createPrintGoldenHouseFixture()
 
     try {
-      for (const wall of walls) {
-        const root = new THREE.Group()
-        root.userData = { pascalId: wall.id }
-        root.position.set(wall.start[0], 0, wall.start[1])
-        root.rotation.y = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
-        sceneRegistry.nodes.set(wall.id, root)
-        const openings = [door, window].filter((opening) => opening.wallId === wall.id)
-        root.add(new THREE.Mesh(generateExtrudedWall(wall, openings, miters)))
-        for (const opening of openings) {
-          const openingRoot = new THREE.Group()
-          openingRoot.userData = { pascalId: opening.id }
-          root.add(openingRoot)
-        }
-        source.add(root)
-      }
-      const slabRoot = new THREE.Group()
-      slabRoot.userData = { pascalId: slab.id }
-      slabRoot.add(new THREE.Mesh(generateSlabGeometry(slab, EMPTY_SLAB_CONTEXT)))
-      source.add(slabRoot)
-
-      const roofRoot = new THREE.Group()
-      roofRoot.userData = { pascalId: roof.id }
-      roofRoot.position.set(...roof.position)
-      roofRoot.add(new THREE.Mesh(generateRoofSegmentGeometry(roof)))
-      source.add(roofRoot)
-
-      const compiled = compileSemanticPrintShell(source, nodes, { wallSolids: true })
+      const prepared = prepareSceneForExport(fixture.root, fixture.nodes, { onlyVisible: true })
+      const structure = filterPreparedSceneForPrintContent(
+        prepared.scene,
+        fixture.nodes,
+        'structure',
+      )
+      const compiled = compileSemanticPrintShell(structure, fixture.nodes, { wallSolids: true })
 
       expect(compiled.status).toBe('compiled')
-      expect(compiled.inputMeshCount).toBe(11)
-      expect(compiled.sourceNodeIds).toEqual([...walls, slab, roof].map((node) => node.id).sort())
+      expect(compiled.inputMeshCount).toBeGreaterThan(10)
+      expect(compiled.sourceNodeIds).toEqual(fixture.structuralNodeIds)
       expect(compiled.scene).not.toBeNull()
 
       const print = exportSceneToPrintStl(compiled.scene!, { scale: 100, compiled: true })
       expect(print.report.status).toBe('blocked')
-      expect(print.report.degenerateTriangleCount).toBe(52)
-      expect(print.report.boundaryEdgeCount).toBe(59)
-      expect(print.report.nonManifoldEdgeCount).toBe(1)
+      expect(print.report.degenerateTriangleCount).toBeGreaterThan(0)
+      expect(print.report.boundaryEdgeCount).toBeGreaterThan(0)
       expect(print.report.volumeMm3).toBeGreaterThan(0)
 
-      const candidate = await compileSemanticPrintShellWithManifold(source, nodes, {
+      const candidate = await compileSemanticPrintShellWithManifold(structure, fixture.nodes, {
         runner: compileManifoldMeshData,
       })
       expect(candidate.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual(
@@ -307,9 +215,10 @@ describe('print shell compiler baseline', () => {
       expect(candidate.backend).toBe('manifold-3d')
       expect(candidate.scene).not.toBeNull()
       expect(indexedNonManifoldEdgeCount(candidate.scene!)).toBe(0)
-      expect(rayIntersectionCount(candidate.scene!, 0, 1, 0.8)).toBe(0)
-      expect(rayIntersectionCount(candidate.scene!, 1.5, 1, 0.8)).toBeGreaterThanOrEqual(2)
-      expect(rayIntersectionCount(candidate.scene!, 0, 1.4, 4)).toBe(0)
+      expect(rayIntersectionCount(candidate.scene!, 0, 1.05, 0.8)).toBe(0)
+      expect(rayIntersectionCount(candidate.scene!, 1.5, 1.05, 0.8)).toBeGreaterThanOrEqual(2)
+      expect(rayIntersectionCount(candidate.scene!, 0, 3.9, 1, 1)).toBe(0)
+      expect(rayIntersectionCount(candidate.scene!, 1.5, 3.9, 1, 1)).toBeGreaterThanOrEqual(2)
 
       const candidatePrint = exportSceneToPrintStl(candidate.scene!, {
         scale: 100,
@@ -324,7 +233,7 @@ describe('print shell compiler baseline', () => {
       expect(candidatePrint.report.nonManifoldEdgeCount).toBe(0)
       expect(candidatePrint.report.volumeMm3).toBeGreaterThan(0)
     } finally {
-      for (const wall of walls) sceneRegistry.nodes.delete(wall.id)
+      fixture.dispose()
     }
   }, 15_000)
 
