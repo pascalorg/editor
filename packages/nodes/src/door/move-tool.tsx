@@ -3,6 +3,7 @@ import {
   DoorNode,
   emitter,
   type GridEvent,
+  holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
@@ -99,6 +100,12 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
   useEffect(() => {
     useScene.temporal.getState().pause()
+    // This tool's whole cursor model is the wall surface (`wall:enter` /
+    // `wall:move` / `wall:click`). Walls hidden by the wall-mode pass (X-ray
+    // 'down' mode) are pointer-transparent for selection; hold their pointer
+    // events for the move's lifetime so the door keeps sliding along its wall
+    // instead of detaching into the floor free-follow.
+    const releaseHiddenWallHold = holdHiddenWallPointerEvents()
 
     const meta =
       typeof movingDoorNode.metadata === 'object' && movingDoorNode.metadata !== null
@@ -1005,6 +1012,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       clearOpeningGuides3D()
       useFacingPose.getState().clear()
       clearPlacementSurface()
+      releaseHiddenWallHold()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)

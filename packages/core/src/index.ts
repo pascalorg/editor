@@ -43,6 +43,10 @@ export type {
   ZoneEvent,
 } from './events/bus'
 export { emitter, eventSuffixes } from './events/bus'
+export {
+  hiddenWallPointerEventsHeld,
+  holdHiddenWallPointerEvents,
+} from './events/hidden-wall-pointer-hold'
 export { type ItemClipEntry, itemClipRegistry } from './hooks/scene-registry/item-clip-registry'
 export {
   sceneRegistry,

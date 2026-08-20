@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   emitter,
   type GridEvent,
+  holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
@@ -775,6 +776,11 @@ const WindowTool: React.FC = () => {
     emitter.on('grid:move', onGridFreeFollow)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    // Placement tracks the cursor through wall events; keep walls hidden by
+    // the wall-mode pass (X-ray 'down' mode) pointer-targetable while the
+    // tool is active so a new window still snaps onto them (see the wall
+    // renderer's pointer transparency).
+    const releaseHiddenWallHold = holdHiddenWallPointerEvents()
 
     return () => {
       destroyDraft()
@@ -782,6 +788,7 @@ const WindowTool: React.FC = () => {
       clearPlacementPreview()
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
+      releaseHiddenWallHold()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallHover)
       emitter.off('wall:move', onWallHover)

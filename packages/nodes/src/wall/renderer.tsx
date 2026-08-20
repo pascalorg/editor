@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  hiddenWallPointerEventsHeld,
   useRegistry,
   useScene,
   type WallNode,
@@ -12,6 +13,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
+import { wallPointerEventsSuppressed } from './pointer-transparency'
 import { useWallTreatmentLevelData } from './treatment-level-data'
 import { createWallExtraSlotMaterials, WallTreatments } from './treatments'
 
@@ -59,16 +61,22 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   // full-height collision mesh must not swallow pointer events aimed at
   // visible objects behind it (wall-mounted plugin nodes, items). Returning
   // early without stopPropagation lets R3F continue to the next intersection.
-  // Delete mode keeps the events so hidden walls stay hover-targetable for
-  // deletion (the deleteInvisible highlight flow).
+  // Two exceptions keep the events (see `wallPointerEventsSuppressed`):
+  // delete mode (hidden walls stay hover-targetable for the deleteInvisible
+  // highlight flow) and a live hidden-wall pointer hold (a door / window
+  // move / place tool is tracking the cursor via wall events — without the
+  // wall the opening detaches into the floor free-follow).
   const handlers = useMemo(() => {
     const gated = {} as typeof rawHandlers
     for (const key of Object.keys(rawHandlers) as (keyof typeof rawHandlers)[]) {
       const fn = rawHandlers[key] as (e: unknown) => void
       ;(gated as Record<string, (e: unknown) => void>)[key] = (e: unknown) => {
         if (
-          ref.current?.userData?.wallHidden === true &&
-          useViewer.getState().hoverHighlightMode !== 'delete'
+          wallPointerEventsSuppressed({
+            wallHidden: ref.current?.userData?.wallHidden === true,
+            hoverHighlightMode: useViewer.getState().hoverHighlightMode,
+            hiddenWallHoldActive: hiddenWallPointerEventsHeld(),
+          })
         ) {
           return
         }

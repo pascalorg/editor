@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   emitter,
   type GridEvent,
+  holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
@@ -117,6 +118,12 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
   useEffect(() => {
     useScene.temporal.getState().pause()
+    // This tool's whole cursor model is the wall surface (`wall:enter` /
+    // `wall:move` / `wall:click`). Walls hidden by the wall-mode pass (X-ray
+    // 'down' mode) are pointer-transparent for selection; hold their pointer
+    // events for the move's lifetime so the window keeps sliding along its
+    // wall instead of detaching into the floor free-follow.
+    const releaseHiddenWallHold = holdHiddenWallPointerEvents()
 
     const meta =
       typeof movingWindowNode.metadata === 'object' && movingWindowNode.metadata !== null
@@ -1040,6 +1047,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       clearOpeningGuides3D()
       useFacingPose.getState().clear()
       clearPlacementSurface()
+      releaseHiddenWallHold()
       useScene.temporal.getState().resume()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
