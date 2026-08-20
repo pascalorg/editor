@@ -28,6 +28,8 @@ import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
+import { buildOpenValleyGeometry } from './open-valley-geometry'
+import { subtractRoofInterior } from './roof-layer-trim'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -482,6 +484,14 @@ function updateMergedRoofGeometry(
   const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
   if (!mergedMesh) return
 
+  const allChildren = (roofNode.children ?? [])
+    .map((id) => {
+      const sceneNode = nodes[id] as RoofSegmentNode | undefined
+      return sceneNode ? getEffectiveNode(sceneNode) : undefined
+    })
+    .filter((node): node is RoofSegmentNode => node !== undefined)
+  updateOpenValleyGeometry(roofNode, group, allChildren)
+
   // Segments that carry their own material / preset (catch-all or any of
   // the role-specific fields) are rendered as their own per-segment mesh
   // in `RoofRenderer` so the painted material is preserved. Exclude them
@@ -508,8 +518,7 @@ function updateMergedRoofGeometry(
 
   let totalShinSlab: Brush | null = null
   let totalDeckSlab: Brush | null = null
-  let totalWall: Brush | null = null
-  let totalInner: Brush | null = null
+  let totalWallShell: Brush | null = null
   const rakeBoardGeometries: THREE.BufferGeometry[] = []
   const directSegmentGeometries: THREE.BufferGeometry[] = []
   const csgChildren: RoofSegmentNode[] = []
@@ -542,6 +551,21 @@ function updateMergedRoofGeometry(
       rakeBoardGeometries.push(brushes.rakeBoards)
     }
 
+    const occludingInterior = buildOccludingRoofInterior(child, nodes, 'roof')
+    if (occludingInterior) {
+      const exposedShingles = subtractRoofInterior(
+        brushes.shinSlab,
+        occludingInterior,
+        csgEvaluator,
+      )
+      brushes.shinSlab.geometry.dispose()
+      brushes.shinSlab = exposedShingles
+
+      const exposedDeck = subtractRoofInterior(brushes.deckSlab, occludingInterior, csgEvaluator)
+      brushes.deckSlab.geometry.dispose()
+      brushes.deckSlab = exposedDeck
+    }
+
     if (totalShinSlab) {
       const next: Brush = csgEvaluator.evaluate(totalShinSlab, brushes.shinSlab, ADDITION) as Brush
       totalShinSlab.geometry.dispose()
@@ -566,26 +590,32 @@ function updateMergedRoofGeometry(
       brushes.wallBrush.geometry.dispose()
       brushes.innerBrush.geometry.dispose()
     } else {
-      if (totalWall) {
-        const next: Brush = csgEvaluator.evaluate(totalWall, brushes.wallBrush, ADDITION) as Brush
-        totalWall.geometry.dispose()
-        brushes.wallBrush.geometry.dispose()
-        prepareBrushForCSG(next)
-        totalWall = next
-      } else {
-        totalWall = brushes.wallBrush
+      let wallShell = csgEvaluator.evaluate(
+        brushes.wallBrush,
+        brushes.innerBrush,
+        SUBTRACTION,
+      ) as Brush
+      brushes.wallBrush.geometry.dispose()
+      brushes.innerBrush.geometry.dispose()
+      prepareBrushForCSG(wallShell)
+
+      if (occludingInterior) {
+        const exposedWall = subtractRoofInterior(wallShell, occludingInterior, csgEvaluator)
+        wallShell.geometry.dispose()
+        wallShell = exposedWall
       }
 
-      if (totalInner) {
-        const next: Brush = csgEvaluator.evaluate(totalInner, brushes.innerBrush, ADDITION) as Brush
-        totalInner.geometry.dispose()
-        brushes.innerBrush.geometry.dispose()
+      if (totalWallShell) {
+        const next = csgEvaluator.evaluate(totalWallShell, wallShell, ADDITION) as Brush
+        totalWallShell.geometry.dispose()
+        wallShell.geometry.dispose()
         prepareBrushForCSG(next)
-        totalInner = next
+        totalWallShell = next
       } else {
-        totalInner = brushes.innerBrush
+        totalWallShell = wallShell
       }
     }
+    occludingInterior?.geometry.dispose()
   }
 
   if (totalShinSlab && totalDeckSlab) {
@@ -593,11 +623,8 @@ function updateMergedRoofGeometry(
       const shinDeck = csgEvaluator.evaluate(totalShinSlab, totalDeckSlab, ADDITION)
       prepareBrushForCSG(shinDeck)
       let combined = shinDeck
-      let finalWallTrimmed: Brush | null = null
-      if (totalWall && totalInner) {
-        finalWallTrimmed = csgEvaluator.evaluate(totalWall, totalInner, SUBTRACTION)
-        prepareBrushForCSG(finalWallTrimmed)
-        combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
+      if (totalWallShell) {
+        combined = csgEvaluator.evaluate(shinDeck, totalWallShell, ADDITION)
       }
       prepareBrushForCSG(combined)
 
@@ -611,12 +638,10 @@ function updateMergedRoofGeometry(
           warnedMergedRoofNaNIds.add(roofNode.id)
         }
         resultGeo.dispose()
-        finalWallTrimmed?.geometry.dispose()
         if (combined !== shinDeck) shinDeck.geometry.dispose()
         totalShinSlab.geometry.dispose()
         totalDeckSlab.geometry.dispose()
-        totalWall?.geometry.dispose()
-        totalInner?.geometry.dispose()
+        totalWallShell?.geometry.dispose()
         for (const geometry of rakeBoardGeometries) geometry.dispose()
         for (const geometry of directSegmentGeometries) geometry.dispose()
         return
@@ -653,7 +678,6 @@ function updateMergedRoofGeometry(
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = finalGeo
 
-      finalWallTrimmed?.geometry.dispose()
       if (combined !== shinDeck) shinDeck.geometry.dispose()
     } catch (e) {
       console.error('Merged roof CSG failed:', e)
@@ -661,8 +685,7 @@ function updateMergedRoofGeometry(
 
     totalShinSlab.geometry.dispose()
     totalDeckSlab.geometry.dispose()
-    totalWall?.geometry.dispose()
-    totalInner?.geometry.dispose()
+    totalWallShell?.geometry.dispose()
     for (const geometry of rakeBoardGeometries) geometry.dispose()
   }
 
@@ -681,6 +704,21 @@ function updateMergedRoofGeometry(
       if (geometry !== finalGeo) geometry.dispose()
     }
   }
+}
+
+function updateOpenValleyGeometry(
+  roofNode: RoofNode,
+  group: THREE.Group,
+  segments: readonly RoofSegmentNode[],
+) {
+  const mesh = group.getObjectByName('open-valleys') as THREE.Mesh | undefined
+  if (!mesh) return
+  const geometry =
+    roofNode.openValleyEnabled !== false
+      ? buildOpenValleyGeometry(segments, roofNode.openValleyWidth ?? 0.35)
+      : new THREE.BufferGeometry()
+  mesh.geometry.dispose()
+  mesh.geometry = geometry
 }
 
 function geometryHasInvalidAttributes(geometry: THREE.BufferGeometry) {
@@ -1615,6 +1653,14 @@ export function generateRoofSegmentGeometry(
     }
     prepareBrushForCSG(combined)
 
+    const siblingInterior = nodes ? buildOccludingRoofInterior(node, nodes, 'segment') : null
+    if (siblingInterior) {
+      const unclipped = combined
+      combined = subtractRoofInterior(unclipped, siblingInterior, csgEvaluator)
+      unclipped.geometry.dispose()
+      siblingInterior.geometry.dispose()
+    }
+
     resultGeo = csgGeometry(combined)
     if (geometryHasInvalidAttributes(resultGeo)) {
       resultGeo.dispose()
@@ -1665,6 +1711,76 @@ export function generateRoofSegmentGeometry(
   resultGeo.computeVertexNormals()
   ensureRenderableGeometryAttributes(resultGeo)
   return resultGeo
+}
+
+function buildOccludingRoofInterior(
+  node: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+  space: 'roof' | 'segment',
+): Brush | null {
+  if (!node.parentId) return null
+  const parent = nodes[node.parentId as AnyNodeId]
+  if (parent?.type !== 'roof') return null
+
+  const currentInverse =
+    space === 'segment'
+      ? new THREE.Matrix4()
+          .compose(
+            new THREE.Vector3(...node.position),
+            new THREE.Quaternion().setFromAxisAngle(_yAxis, node.rotation ?? 0),
+            new THREE.Vector3(1, 1, 1),
+          )
+          .invert()
+      : new THREE.Matrix4()
+  const currentIndex = parent.children?.indexOf(node.id) ?? -1
+  const currentArea = node.width * node.depth
+  let combinedInterior: Brush | null = null
+
+  for (const siblingId of parent.children ?? []) {
+    if (siblingId === node.id) continue
+    const storedSibling = nodes[siblingId as AnyNodeId]
+    if (storedSibling?.type !== 'roof-segment') continue
+    const sibling = getEffectiveNode(storedSibling)
+    if (sibling.roofType === 'shed') continue
+    const siblingArea = sibling.width * sibling.depth
+    const siblingIndex = parent.children?.indexOf(siblingId) ?? -1
+    const siblingOwnsOverlap =
+      siblingArea > currentArea + 1e-6 ||
+      (Math.abs(siblingArea - currentArea) <= 1e-6 && siblingIndex < currentIndex)
+    if (!siblingOwnsOverlap) continue
+    const siblingBrushes = getRoofSegmentBrushes(sibling)
+    if (!siblingBrushes) continue
+
+    const siblingMatrix = new THREE.Matrix4().compose(
+      new THREE.Vector3(...sibling.position),
+      new THREE.Quaternion().setFromAxisAngle(_yAxis, sibling.rotation ?? 0),
+      new THREE.Vector3(1, 1, 1),
+    )
+    const relativeMatrix = new THREE.Matrix4().multiplyMatrices(currentInverse, siblingMatrix)
+    csgGeometry(siblingBrushes.innerBrush).applyMatrix4(relativeMatrix)
+    siblingBrushes.innerBrush.updateMatrixWorld()
+
+    siblingBrushes.shinSlab.geometry.dispose()
+    siblingBrushes.deckSlab.geometry.dispose()
+    siblingBrushes.wallBrush.geometry.dispose()
+    siblingBrushes.rakeBoards?.dispose()
+
+    if (combinedInterior) {
+      const next = csgEvaluator.evaluate(
+        combinedInterior,
+        siblingBrushes.innerBrush,
+        ADDITION,
+      ) as Brush
+      combinedInterior.geometry.dispose()
+      siblingBrushes.innerBrush.geometry.dispose()
+      prepareBrushForCSG(next)
+      combinedInterior = next
+    } else {
+      combinedInterior = siblingBrushes.innerBrush
+    }
+  }
+
+  return combinedInterior
 }
 
 // ============================================================================

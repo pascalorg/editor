@@ -35,6 +35,7 @@ import { isHistoryShortcut } from '../../../lib/history'
 import { getHoveredRoofSegmentOutlineProxyName } from '../../../lib/roof-hover-outline-proxy'
 import useInteractionScope, { useMovingNode } from '../../../store/use-interaction-scope'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
+import { getRoofEditVisibility } from './roof-edit-visibility'
 
 // Empty placeholder geometry used when we reveal segments-wrapper for
 // accessory editing. The roof's CSG-merged shell is the only thing
@@ -1788,16 +1789,14 @@ export const RoofEditSystem = () => {
   useEffect(() => {
     const nodes = useScene.getState().nodes
 
-    // Roofs where a segment itself is selected -> full edit mode (hide
-    // merged, show wrapper).
+    // Roofs where a segment itself is selected enter full edit mode.
     const activeRoofIds = new Set<string>()
     // Roofs where an accessory (dormer/chimney/etc.) is selected -> only
     // reveal the wrapper so handle portals into the segment mesh become
     // visible. Merged stays on.
     const revealRoofIds = new Set<string>()
-    // Roofs whose selected segment is currently being moved in 3D. During this
-    // transient state we reveal the wrapper so the moving segment mesh is
-    // visible and hide the merged roof to avoid the duplicate shell fighting it.
+    // Roofs whose selected segment is currently being moved in 3D. The merged
+    // roof remains the visual source and rebuilds from the live move override.
     const movingRoofIds = new Set<string>()
 
     for (const id of selectedIds) {
@@ -1842,14 +1841,9 @@ export const RoofEditSystem = () => {
       const isMoving = movingRoofIds.has(roofId)
       const isReveal = revealRoofIds.has(roofId)
 
-      // Keep the clean merged shell visible during trim editing too (not just
-      // when deselected). The merged shell rebuilds live from each segment's
-      // trim override (RoofSystem reads getEffectiveNode), so the dragged
-      // cutaway matches the commit. Showing the individual per-segment meshes
-      // instead would expose their abutting end-cap faces (the white planes the
-      // merged union removes) — exactly what the commit doesn't show.
-      if (mergedMesh) mergedMesh.visible = !isMoving
-      if (segmentsWrapper) segmentsWrapper.visible = isReveal || isMoving
+      const visibility = getRoofEditVisibility({ isMoving, isReveal })
+      if (mergedMesh) mergedMesh.visible = visibility.merged
+      if (segmentsWrapper) segmentsWrapper.visible = visibility.segments
 
       const roofNode = nodes[roofId as AnyNodeId] as RoofNode | undefined
       if (roofNode?.children?.length) {
@@ -1857,10 +1851,8 @@ export const RoofEditSystem = () => {
         const wasMoving = prevMovingRoofIds.current.has(roofId)
         const wasReveal = prevRevealRoofIds.current.has(roofId)
         if (isActive !== wasActive || isMoving !== wasMoving) {
-          // Entering / exiting full edit mode: rebuild segment / merged
-          // geometries. Segment-move reveal uses the same rebuild so any
-          // wrapper mesh previously stripped to an empty placeholder is
-          // restored before the drag begins.
+          // Entering or exiting edit and move modes rebuilds the merged shell
+          // from the current segment values.
           const { markDirty } = useScene.getState()
           for (const childId of roofNode.children) {
             markDirty(childId as AnyNodeId)

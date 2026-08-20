@@ -23,6 +23,7 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  ToggleControl,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -341,6 +342,26 @@ export default function RoofPanel() {
             }}
           />
         </div>
+      </PanelSection>
+
+      <PanelSection title="Open valleys">
+        <ToggleControl
+          checked={node.openValleyEnabled !== false}
+          label="Generate automatically"
+          onChange={(openValleyEnabled) => handleUpdate({ openValleyEnabled })}
+        />
+        {node.openValleyEnabled !== false && (
+          <SliderControl
+            label="Pan width"
+            max={1.2}
+            min={0.1}
+            onChange={(openValleyWidth) => handleUpdate({ openValleyWidth })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={node.openValleyWidth ?? 0.35}
+          />
+        )}
       </PanelSection>
 
       <PanelSection title="Elements">
