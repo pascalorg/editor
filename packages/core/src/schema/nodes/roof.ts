@@ -22,10 +22,6 @@ export const RoofNode = BaseNode.extend({
   edgeMaterialPreset: z.string().optional(),
   wallMaterial: MaterialSchema.optional(),
   wallMaterialPreset: z.string().optional(),
-  openValleyEnabled: z.boolean().default(true),
-  openValleyWidth: z.number().min(0.1).max(1.2).default(0.35),
-  valleyMaterial: MaterialSchema.optional(),
-  valleyMaterialPreset: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
@@ -39,7 +35,6 @@ export const RoofNode = BaseNode.extend({
   - position: center position of the roof group
   - rotation: rotation around Y axis
   - children: array of RoofSegmentNode IDs
-  - openValleyEnabled / openValleyWidth: generated metal pans at concave segment junctions
   `,
 )
 

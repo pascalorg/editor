@@ -9,17 +9,9 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import {
-  createDefaultMaterial,
-  createMaterial,
-  createMaterialFromPresetRef,
-  getRoofMaterialArray,
-  NodeRenderer,
-  useNodeEvents,
-  useViewer,
-} from '@pascal-app/viewer'
+import { getRoofMaterialArray, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import * as THREE from 'three'
+import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 import { getRoofDebugMaterials, getRoofMaterials } from './roof-materials'
@@ -100,19 +92,6 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
   const material = debugColors
     ? getRoofDebugMaterials(shading)
     : customMaterial || getRoofMaterials(shading, textures, colorPreset)
-  const valleyMaterial = useMemo(() => {
-    const material = node.valleyMaterial
-      ? createMaterial(node.valleyMaterial, shading)
-      : node.valleyMaterialPreset
-        ? createMaterialFromPresetRef(node.valleyMaterialPreset, shading)
-        : null
-    const result = material ?? createDefaultMaterial('#d5dde5', 0.24, shading, THREE.DoubleSide)
-    result.polygonOffset = true
-    result.polygonOffsetFactor = -2
-    result.polygonOffsetUnits = -2
-    return result
-  }, [node.valleyMaterial, node.valleyMaterialPreset, shading])
-
   useEffect(() => {
     return () => {
       placeholderGeometry.dispose()
@@ -133,14 +112,6 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
         material={material}
         name="merged-roof"
         receiveShadow
-      />
-      <mesh
-        castShadow
-        material={valleyMaterial}
-        name="open-valleys"
-        raycast={() => {}}
-        receiveShadow
-        renderOrder={2}
       />
       <group name="segments-wrapper" visible={false}>
         {unpaintedSegmentIds.map((childId) => (

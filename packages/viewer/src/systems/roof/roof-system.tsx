@@ -28,7 +28,6 @@ import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
-import { buildOpenValleyGeometry } from './open-valley-geometry'
 import { subtractRoofInterior } from './roof-layer-trim'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
@@ -158,6 +157,19 @@ const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
 const MAX_SEGMENTS_PER_FRAME = 3
 
+function queueSiblingRoofUpdates(roofId: AnyNodeId, nodes: Record<string, AnyNode>) {
+  pendingRoofUpdates.add(roofId)
+  const roof = nodes[roofId]
+  if (roof?.type !== 'roof' || !roof.parentId) return
+  const parent = nodes[roof.parentId as AnyNodeId]
+  if (!parent || !('children' in parent) || !Array.isArray(parent.children)) return
+  for (const siblingId of parent.children) {
+    if (nodes[siblingId as AnyNodeId]?.type === 'roof') {
+      pendingRoofUpdates.add(siblingId as AnyNodeId)
+    }
+  }
+}
+
 // ============================================================================
 // ROOF SYSTEM
 // ============================================================================
@@ -261,10 +273,10 @@ export const RoofSystem = () => {
         }
         // Queue the parent roof for a merged geometry update
         if (effectiveSegment.parentId) {
-          pendingRoofUpdates.add(effectiveSegment.parentId as AnyNodeId)
+          queueSiblingRoofUpdates(effectiveSegment.parentId as AnyNodeId, nodes)
         }
       } else if (node.type === 'roof') {
-        pendingRoofUpdates.add(id as AnyNodeId)
+        queueSiblingRoofUpdates(id as AnyNodeId, nodes)
         clearDirty(id as AnyNodeId)
       }
     })
@@ -484,14 +496,6 @@ function updateMergedRoofGeometry(
   const mergedMesh = group.getObjectByName('merged-roof') as THREE.Mesh | undefined
   if (!mergedMesh) return
 
-  const allChildren = (roofNode.children ?? [])
-    .map((id) => {
-      const sceneNode = nodes[id] as RoofSegmentNode | undefined
-      return sceneNode ? getEffectiveNode(sceneNode) : undefined
-    })
-    .filter((node): node is RoofSegmentNode => node !== undefined)
-  updateOpenValleyGeometry(roofNode, group, allChildren)
-
   // Segments that carry their own material / preset (catch-all or any of
   // the role-specific fields) are rendered as their own per-segment mesh
   // in `RoofRenderer` so the painted material is preserved. Exclude them
@@ -534,13 +538,14 @@ function updateMergedRoofGeometry(
       () => buildCustomShedGeometry(child),
     )
     if (directGeometry) {
-      const withPanels = addShedInsetEndPanels(directGeometry, [child], false)
+      let withPanels = addShedInsetEndPanels(directGeometry, [child], false)
       _matrix.compose(
         _position.set(child.position[0], child.position[1], child.position[2]),
         _quaternion.setFromAxisAngle(_yAxis, child.rotation),
         _scale,
       )
       withPanels.applyMatrix4(_matrix)
+      withPanels = clipDirectRoofGeometryAgainstSiblings(withPanels, child, nodes, 'roof')
       directSegmentGeometries.push(withPanels)
       continue
     }
@@ -704,21 +709,6 @@ function updateMergedRoofGeometry(
       if (geometry !== finalGeo) geometry.dispose()
     }
   }
-}
-
-function updateOpenValleyGeometry(
-  roofNode: RoofNode,
-  group: THREE.Group,
-  segments: readonly RoofSegmentNode[],
-) {
-  const mesh = group.getObjectByName('open-valleys') as THREE.Mesh | undefined
-  if (!mesh) return
-  const geometry =
-    roofNode.openValleyEnabled !== false
-      ? buildOpenValleyGeometry(segments, roofNode.openValleyWidth ?? 0.35)
-      : new THREE.BufferGeometry()
-  mesh.geometry.dispose()
-  mesh.geometry = geometry
 }
 
 function geometryHasInvalidAttributes(geometry: THREE.BufferGeometry) {
@@ -1623,7 +1613,10 @@ export function generateRoofSegmentGeometry(
     buildCustomShedGeometry(node),
   )
   if (directShedGeometry) {
-    const result = addShedInsetEndPanels(directShedGeometry, [node], false)
+    let result = addShedInsetEndPanels(directShedGeometry, [node], false)
+    if (nodes) {
+      result = clipDirectRoofGeometryAgainstSiblings(result, node, nodes, 'segment')
+    }
     result.computeVertexNormals()
     ensureRenderableGeometryAttributes(result)
     return result
@@ -1713,6 +1706,46 @@ export function generateRoofSegmentGeometry(
   return resultGeo
 }
 
+function clipDirectRoofGeometryAgainstSiblings(
+  geometry: THREE.BufferGeometry,
+  node: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+  space: 'roof' | 'segment',
+): THREE.BufferGeometry {
+  const siblingInterior = buildOccludingRoofInterior(node, nodes, space)
+  if (!siblingInterior) return geometry
+
+  const brush = new Brush(geometry, dummyMats)
+  prepareBrushForCSG(brush)
+  try {
+    const clipped = subtractRoofInterior(brush, siblingInterior, csgEvaluator)
+    const clippedGeometry = csgGeometry(clipped)
+    const clippedMaterials = csgMaterials(clipped)
+    const materialIndices = new Map<THREE.Material, number>([
+      [dummyMats[0], 0],
+      [dummyMats[1], 1],
+      [dummyMats[2], 2],
+      [dummyMats[3], 3],
+    ])
+    for (const group of clippedGeometry.groups) {
+      group.materialIndex = mapRoofGroupMaterialIndex(
+        group.materialIndex,
+        clippedMaterials,
+        materialIndices,
+      )
+    }
+    geometry.dispose()
+    clippedGeometry.computeVertexNormals()
+    ensureRenderableGeometryAttributes(clippedGeometry)
+    return clippedGeometry
+  } catch (error) {
+    console.error('Direct roof intersection CSG failed:', error)
+    return geometry
+  } finally {
+    siblingInterior.geometry.dispose()
+  }
+}
+
 function buildOccludingRoofInterior(
   node: RoofSegmentNode,
   nodes: Record<string, AnyNode>,
@@ -1722,41 +1755,35 @@ function buildOccludingRoofInterior(
   const parent = nodes[node.parentId as AnyNodeId]
   if (parent?.type !== 'roof') return null
 
-  const currentInverse =
-    space === 'segment'
-      ? new THREE.Matrix4()
-          .compose(
-            new THREE.Vector3(...node.position),
-            new THREE.Quaternion().setFromAxisAngle(_yAxis, node.rotation ?? 0),
-            new THREE.Vector3(1, 1, 1),
-          )
-          .invert()
-      : new THREE.Matrix4()
-  const currentIndex = parent.children?.indexOf(node.id) ?? -1
+  const roofEntries = collectSiblingRoofEntries(parent, nodes)
+  const currentEntry = roofEntries.find(({ segment }) => segment.id === node.id)
+  if (!currentEntry) return null
   const currentArea = node.width * node.depth
+  const targetRoofInverse = composeRoofTransform(parent).invert()
+  const targetSegmentInverse = composeSegmentTransform(node).invert()
   let combinedInterior: Brush | null = null
 
-  for (const siblingId of parent.children ?? []) {
-    if (siblingId === node.id) continue
-    const storedSibling = nodes[siblingId as AnyNodeId]
-    if (storedSibling?.type !== 'roof-segment') continue
-    const sibling = getEffectiveNode(storedSibling)
+  for (let siblingIndex = 0; siblingIndex < roofEntries.length; siblingIndex++) {
+    const entry = roofEntries[siblingIndex]!
+    const sibling = entry.segment
+    if (sibling.id === node.id) continue
     if (sibling.roofType === 'shed') continue
     const siblingArea = sibling.width * sibling.depth
-    const siblingIndex = parent.children?.indexOf(siblingId) ?? -1
     const siblingOwnsOverlap =
       siblingArea > currentArea + 1e-6 ||
-      (Math.abs(siblingArea - currentArea) <= 1e-6 && siblingIndex < currentIndex)
+      (Math.abs(siblingArea - currentArea) <= 1e-6 &&
+        compareRoofEntryIdentity(entry, currentEntry) < 0)
     if (!siblingOwnsOverlap) continue
     const siblingBrushes = getRoofSegmentBrushes(sibling)
     if (!siblingBrushes) continue
 
-    const siblingMatrix = new THREE.Matrix4().compose(
-      new THREE.Vector3(...sibling.position),
-      new THREE.Quaternion().setFromAxisAngle(_yAxis, sibling.rotation ?? 0),
-      new THREE.Vector3(1, 1, 1),
-    )
-    const relativeMatrix = new THREE.Matrix4().multiplyMatrices(currentInverse, siblingMatrix)
+    const siblingInTargetRoof = new THREE.Matrix4()
+      .multiplyMatrices(targetRoofInverse, composeRoofTransform(entry.roof))
+      .multiply(composeSegmentTransform(sibling))
+    const relativeMatrix =
+      space === 'segment'
+        ? new THREE.Matrix4().multiplyMatrices(targetSegmentInverse, siblingInTargetRoof)
+        : siblingInTargetRoof
     csgGeometry(siblingBrushes.innerBrush).applyMatrix4(relativeMatrix)
     siblingBrushes.innerBrush.updateMatrixWorld()
 
@@ -1781,6 +1808,50 @@ function buildOccludingRoofInterior(
   }
 
   return combinedInterior
+}
+
+function compareRoofEntryIdentity(
+  a: { roof: RoofNode; segment: RoofSegmentNode },
+  b: { roof: RoofNode; segment: RoofSegmentNode },
+): number {
+  const roofOrder = String(a.roof.id).localeCompare(String(b.roof.id))
+  return roofOrder !== 0 ? roofOrder : String(a.segment.id).localeCompare(String(b.segment.id))
+}
+
+function collectSiblingRoofEntries(
+  targetRoof: RoofNode,
+  nodes: Record<string, AnyNode>,
+): Array<{ roof: RoofNode; segment: RoofSegmentNode }> {
+  const parent = targetRoof.parentId ? nodes[targetRoof.parentId as AnyNodeId] : undefined
+  const orderedRoofIds =
+    parent && 'children' in parent && Array.isArray(parent.children)
+      ? parent.children.filter((id): id is RoofNode['id'] => nodes[id]?.type === 'roof')
+      : [targetRoof.id]
+  if (!orderedRoofIds.includes(targetRoof.id)) orderedRoofIds.push(targetRoof.id)
+
+  return orderedRoofIds.flatMap((roofId) => {
+    const roof = getEffectiveNode(nodes[roofId] as RoofNode)
+    return (roof.children ?? []).flatMap((segmentId) => {
+      const segment = nodes[segmentId as AnyNodeId]
+      return segment?.type === 'roof-segment' ? [{ roof, segment: getEffectiveNode(segment) }] : []
+    })
+  })
+}
+
+function composeRoofTransform(roof: RoofNode): THREE.Matrix4 {
+  return new THREE.Matrix4().compose(
+    new THREE.Vector3(...roof.position),
+    new THREE.Quaternion().setFromAxisAngle(_yAxis, roof.rotation ?? 0),
+    new THREE.Vector3(1, 1, 1),
+  )
+}
+
+function composeSegmentTransform(segment: RoofSegmentNode): THREE.Matrix4 {
+  return new THREE.Matrix4().compose(
+    new THREE.Vector3(...segment.position),
+    new THREE.Quaternion().setFromAxisAngle(_yAxis, segment.rotation ?? 0),
+    new THREE.Vector3(1, 1, 1),
+  )
 }
 
 // ============================================================================

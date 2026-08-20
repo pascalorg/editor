@@ -249,8 +249,6 @@ export {
   roofFacePointToSegment,
   segmentPointToRoofWallFace,
 } from './nodes/roof-segment-walls'
-export type { OpenRoofValley, RoofValleyPoint } from './nodes/roof-valley'
-export { getOpenRoofValleys } from './nodes/roof-valley'
 export { ScanNode } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
 export { SiteNode } from './nodes/site'

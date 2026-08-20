@@ -5,44 +5,11 @@ import type {
   RoofNode,
   RoofSegmentNode,
 } from '@pascal-app/core'
-import { getOpenRoofValleys } from '@pascal-app/core'
-import { unionPolygons } from '@pascal-app/viewer'
+import { subtractPolygonsFromPolygon, unionPolygons } from '@pascal-app/viewer'
 import { getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
 
 type Pt = [number, number]
 type Seg = [Pt, Pt]
-
-function pointInPolygon(px: number, pz: number, poly: readonly Pt[]): boolean {
-  let inside = false
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const pi = poly[i] as Pt
-    const pj = poly[j] as Pt
-    if (
-      pi[1] > pz !== pj[1] > pz &&
-      px < ((pj[0] - pi[0]) * (pz - pi[1])) / (pj[1] - pi[1]) + pi[0]
-    ) {
-      inside = !inside
-    }
-  }
-  return inside
-}
-
-/** Parametric `t` in (0,1) along `p1→p2` where it crosses segment `a→b`, else null. */
-function segCrossT(p1: Pt, p2: Pt, a: Pt, b: Pt): number | null {
-  const rx = p2[0] - p1[0]
-  const rz = p2[1] - p1[1]
-  const ex = b[0] - a[0]
-  const ez = b[1] - a[1]
-  const denom = rx * ez - rz * ex
-  if (Math.abs(denom) < 1e-12) return null
-  const wx = a[0] - p1[0]
-  const wz = a[1] - p1[1]
-  const t = (wx * ez - wz * ex) / denom
-  const s = (wx * rz - wz * rx) / denom
-  if (t <= 1e-4 || t >= 1 - 1e-9) return null
-  if (s < -1e-6 || s > 1 + 1e-6) return null
-  return t
-}
 
 type SegPlan = {
   footprint: Pt[]
@@ -50,6 +17,12 @@ type SegPlan = {
   hips: Seg[]
   breaks: Seg[]
   slope: { tail: Pt; head: Pt } | null
+}
+
+type PlanEntry = {
+  roof: RoofNode
+  segment: RoofSegmentNode
+  plan: SegPlan
 }
 
 /** A segment's footprint + ridge/hip/break/slope linework, in world plan coords. */
@@ -86,17 +59,72 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
   }
 }
 
+function comparePlanEntryIdentity(a: PlanEntry, b: PlanEntry): number {
+  const roofOrder = String(a.roof.id).localeCompare(String(b.roof.id))
+  return roofOrder !== 0 ? roofOrder : String(a.segment.id).localeCompare(String(b.segment.id))
+}
+
+function pointInPolygon(point: Pt, polygon: Pt[]): boolean {
+  let inside = false
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const [x, y] = polygon[index]!
+    const [px, py] = polygon[previous]!
+    if (y > point[1] === py > point[1]) continue
+    const crossingX = ((px - x) * (point[1] - y)) / (py - y) + x
+    if (point[0] < crossingX) inside = !inside
+  }
+  return inside
+}
+
+function segmentIntersectionParameter(line: Seg, edge: Seg): number | null {
+  const lineX = line[1][0] - line[0][0]
+  const lineY = line[1][1] - line[0][1]
+  const edgeX = edge[1][0] - edge[0][0]
+  const edgeY = edge[1][1] - edge[0][1]
+  const determinant = lineX * edgeY - lineY * edgeX
+  if (Math.abs(determinant) <= 1e-9) return null
+  const offsetX = edge[0][0] - line[0][0]
+  const offsetY = edge[0][1] - line[0][1]
+  const lineT = (offsetX * edgeY - offsetY * edgeX) / determinant
+  const edgeT = (offsetX * lineY - offsetY * lineX) / determinant
+  return lineT > 1e-9 && lineT < 1 - 1e-9 && edgeT >= -1e-9 && edgeT <= 1 + 1e-9 ? lineT : null
+}
+
+function clipLineByCutters(line: Seg, cutters: Pt[][]): Seg[] {
+  const parameters = [0, 1]
+  for (const cutter of cutters) {
+    for (let index = 0; index < cutter.length; index++) {
+      const parameter = segmentIntersectionParameter(line, [
+        cutter[index]!,
+        cutter[(index + 1) % cutter.length]!,
+      ])
+      if (parameter !== null) parameters.push(parameter)
+    }
+  }
+  parameters.sort((a, b) => a - b)
+
+  const dx = line[1][0] - line[0][0]
+  const dy = line[1][1] - line[0][1]
+  const result: Seg[] = []
+  for (let index = 0; index < parameters.length - 1; index++) {
+    const startT = parameters[index]!
+    const endT = parameters[index + 1]!
+    if (endT - startT <= 1e-9) continue
+    const midT = (startT + endT) / 2
+    const midpoint: Pt = [line[0][0] + dx * midT, line[0][1] + dy * midT]
+    if (cutters.some((cutter) => pointInPolygon(midpoint, cutter))) continue
+    result.push([
+      [line[0][0] + dx * startT, line[0][1] + dy * startT],
+      [line[0][0] + dx * endT, line[0][1] + dy * endT],
+    ])
+  }
+  return result
+}
+
 /**
  * Roof-level floor-plan builder. Draws the whole merged-roof plan: the
- * unioned silhouette, the valley diagonals at concave junctions, and every
- * segment's ridge/hip/break linework — clipped so a line stops at the valley
- * where its segment overlaps a neighbour, instead of running on at the
- * segment's full length into the cut-away part.
- *
- * Drawing all the linework here (rather than per-segment) is what lets the
- * clip work: the valleys and the neighbouring footprints are all in hand, so
- * each line can be trimmed to the actual merged geometry. The segment
- * builder keeps only its hit-target / selection chrome.
+ * unioned silhouette and every segment's ridge/hip/break linework. The
+ * segment builder keeps only its hit-target / selection chrome.
  *
  * Composition uses the floor plan's negated-rotation convention
  * (segment-local → roof-local → plan). `unionPolygons` returns one ring per
@@ -108,23 +136,42 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
   const segments = ctx.children.filter((c): c is RoofSegmentNode => c.type === 'roof-segment')
   if (segments.length === 0) return null
 
-  const plans = segments.map((s) => buildSegPlan(node, s))
-  const rings = unionPolygons(plans.map((p) => p.footprint)) as Pt[][]
-  if (rings.length === 0) return null
+  const entries: PlanEntry[] = segments.map((segment) => ({
+    roof: node,
+    segment,
+    plan: buildSegPlan(node, segment),
+  }))
+  for (const sibling of ctx.siblings) {
+    if (sibling.type !== 'roof') continue
+    for (const childId of sibling.children ?? []) {
+      const segment = ctx.resolve<RoofSegmentNode>(childId)
+      if (segment?.type !== 'roof-segment') continue
+      entries.push({ roof: sibling, segment, plan: buildSegPlan(sibling, segment) })
+    }
+  }
 
-  const cosRoof = Math.cos(-node.rotation)
-  const sinRoof = Math.sin(-node.rotation)
-  const toPlan = (point: { x: number; z: number }): Pt => [
-    node.position[0] + point.x * cosRoof - point.z * sinRoof,
-    node.position[2] + point.x * sinRoof + point.z * cosRoof,
-  ]
-  const valleys: Seg[] =
-    node.openValleyEnabled !== false
-      ? getOpenRoofValleys(segments, node.openValleyWidth ?? 0.35).map((valley) => [
-          toPlan(valley.start),
-          toPlan(valley.end),
-        ])
-      : []
+  const currentEntries = entries.filter((entry) => entry.roof.id === node.id)
+  const visiblePlans = currentEntries.map((entry) => {
+    const area = entry.segment.width * entry.segment.depth
+    const cutters = entries
+      .filter((candidate) => {
+        if (candidate.segment.id === entry.segment.id) return false
+        if (candidate.segment.roofType === 'shed') return false
+        const candidateArea = candidate.segment.width * candidate.segment.depth
+        return (
+          candidateArea > area + 1e-6 ||
+          (Math.abs(candidateArea - area) <= 1e-6 && comparePlanEntryIdentity(candidate, entry) < 0)
+        )
+      })
+      .map((candidate) => candidate.plan.footprint)
+    return {
+      plan: entry.plan,
+      cutters,
+      footprints: subtractPolygonsFromPolygon(entry.plan.footprint, cutters) as Pt[][],
+    }
+  })
+  const rings = unionPolygons(visiblePlans.flatMap(({ footprints }) => footprints)) as Pt[][]
+  if (rings.length === 0) return null
 
   const view = ctx.viewState
   const palette = view?.palette
@@ -163,62 +210,42 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
     })
   }
 
-  // Valley diagonals.
-  for (const v of valleys) pushLine(v[0], v[1], hipWidth)
-
-  // Per-segment ridge / hip / break linework, clipped to the merged geometry:
-  // an endpoint that overshoots into another segment is pulled back to the
-  // valley it crosses (the junction), so a ridge stops at the diagonal.
-  const footprints = plans.map((p) => p.footprint)
-  const clipEnd = (pt: Pt, other: Pt, ownIndex: number): Pt => {
-    let inOther = false
-    for (let i = 0; i < footprints.length; i++) {
-      if (i === ownIndex) continue
-      if (pointInPolygon(pt[0], pt[1], footprints[i] as Pt[])) {
-        inOther = true
-        break
+  for (const { plan, cutters } of visiblePlans) {
+    for (const line of plan.breaks) {
+      for (const visible of clipLineByCutters(line, cutters)) {
+        pushLine(visible[0], visible[1], hipWidth)
       }
     }
-    if (!inOther) return pt
-    let bestT = Number.POSITIVE_INFINITY // nearest valley crossing to the overshoot
-    for (const v of valleys) {
-      const t = segCrossT(pt, other, v[0], v[1])
-      if (t !== null && t < bestT) bestT = t
+    for (const line of plan.hips) {
+      for (const visible of clipLineByCutters(line, cutters)) {
+        pushLine(visible[0], visible[1], hipWidth)
+      }
     }
-    if (!Number.isFinite(bestT)) return pt // overshoots but no valley to stop at
-    return [pt[0] + (other[0] - pt[0]) * bestT, pt[1] + (other[1] - pt[1]) * bestT]
-  }
-  const clipPush = (line: Seg, width: number, ownIndex: number) => {
-    const a = clipEnd(line[0], line[1], ownIndex)
-    const b = clipEnd(line[1], a, ownIndex)
-    const dx = a[0] - b[0]
-    const dz = a[1] - b[1]
-    if (dx * dx + dz * dz < 1e-8) return
-    pushLine(a, b, width)
-  }
+    for (const line of plan.ridges) {
+      for (const visible of clipLineByCutters(line, cutters)) {
+        pushLine(visible[0], visible[1], ridgeWidth)
+      }
+    }
 
-  plans.forEach((p, idx) => {
-    for (const s of p.breaks) clipPush(s, hipWidth, idx)
-    for (const s of p.hips) clipPush(s, hipWidth, idx)
-    for (const s of p.ridges) clipPush(s, ridgeWidth, idx)
-
-    // Shed downslope arrow (no overshoot to clip).
-    if (p.slope) {
-      const { tail, head } = p.slope
-      const dx = head[0] - tail[0]
-      const dz = head[1] - tail[1]
+    if (plan.slope) {
+      const { tail, head } = plan.slope
+      const visibleSlope = clipLineByCutters([tail, head], cutters).at(-1)
+      if (!visibleSlope) continue
+      const [visibleTail, visibleHead] = visibleSlope
+      const dx = visibleHead[0] - visibleTail[0]
+      const dz = visibleHead[1] - visibleTail[1]
       const len = Math.hypot(dx, dz) || 1
       const ux = dx / len
       const uz = dz / len
       const headLen = Math.min(0.22, len * 0.4)
       const wing = headLen * 0.6
-      pushLine(tail, head, hipWidth)
+      pushLine(visibleTail, visibleHead, hipWidth)
       children.push({
         kind: 'polyline',
         points: [
-          [head[0] - headLen * ux - wing * uz, head[1] - headLen * uz + wing * ux],
-          [head[0], head[1]],
-          [head[0] - headLen * ux + wing * uz, head[1] - headLen * uz - wing * ux],
+          [visibleHead[0] - headLen * ux - wing * uz, visibleHead[1] - headLen * uz + wing * ux],
+          [visibleHead[0], visibleHead[1]],
+          [visibleHead[0] - headLen * ux + wing * uz, visibleHead[1] - headLen * uz - wing * ux],
         ],
         stroke: ink,
         strokeWidth: hipWidth,
@@ -227,7 +254,7 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
         pointerEvents: 'none',
       })
     }
-  })
+  }
 
   return children.length > 0 ? { kind: 'group', children } : null
 }
