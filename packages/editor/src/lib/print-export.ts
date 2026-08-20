@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 
 const MILLIMETERS_PER_METER = 1000
-const EDGE_QUANTIZATION_MM = 0.0001
+const EDGE_CONNECTIVITY_EPSILON_METERS = 1e-5
 const MAX_EDGE_CHECK_TRIANGLES = 500_000
 const DEGENERATE_CROSS_LENGTH_SQ = 1e-12
 
@@ -53,6 +53,12 @@ type BoundsMeasurement = {
   min: THREE.Vector3
   max: THREE.Vector3
 } | null
+
+type EdgeTopologyMeasurement = {
+  boundaryEdgeCount: number | null
+  nonManifoldEdgeCount: number | null
+  edgeCheckComplete: boolean
+}
 
 function ensureMeshPositions(root: THREE.Object3D) {
   root.traverse((object) => {
@@ -136,9 +142,9 @@ function measureBounds(root: THREE.Object3D): BoundsMeasurement {
 }
 
 function pointKey(point: THREE.Vector3): string {
-  return `${Math.round(point.x / EDGE_QUANTIZATION_MM)},${Math.round(
-    point.y / EDGE_QUANTIZATION_MM,
-  )},${Math.round(point.z / EDGE_QUANTIZATION_MM)}`
+  return `${Math.round(point.x / EDGE_CONNECTIVITY_EPSILON_METERS)},${Math.round(
+    point.y / EDGE_CONNECTIVITY_EPSILON_METERS,
+  )},${Math.round(point.z / EDGE_CONNECTIVITY_EPSILON_METERS)}`
 }
 
 function addEdge(edges: Map<string, number>, a: THREE.Vector3, b: THREE.Vector3) {
@@ -148,7 +154,61 @@ function addEdge(edges: Map<string, number>, a: THREE.Vector3, b: THREE.Vector3)
   edges.set(key, (edges.get(key) ?? 0) + 1)
 }
 
-function analyzePrintScene(root: THREE.Object3D, scale: number): PrintExportReport {
+function analyzeEdgeTopology(root: THREE.Object3D): EdgeTopologyMeasurement {
+  const edges = new Map<string, number>()
+  const halfEdgePositions: number[] = []
+  let edgeCheckComplete = true
+  let triangleCount = 0
+
+  forEachTriangle(root, (a, b, c) => {
+    triangleCount += 1
+    if (!isFiniteVector(a) || !isFiniteVector(b) || !isFiniteVector(c)) return
+    if (edgeCheckComplete && triangleCount > MAX_EDGE_CHECK_TRIANGLES) {
+      edges.clear()
+      halfEdgePositions.length = 0
+      edgeCheckComplete = false
+    }
+    if (!edgeCheckComplete) return
+
+    addEdge(edges, a, b)
+    addEdge(edges, b, c)
+    addEdge(edges, c, a)
+    halfEdgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
+  })
+
+  if (!edgeCheckComplete) {
+    return { boundaryEdgeCount: null, nonManifoldEdgeCount: null, edgeCheckComplete }
+  }
+
+  const connectivityGeometry = new THREE.BufferGeometry()
+  connectivityGeometry.setAttribute(
+    'position',
+    new THREE.BufferAttribute(new Float64Array(halfEdgePositions), 3),
+  )
+  const halfEdges = new HalfEdgeMap() as HalfEdgeMap & {
+    matchDisjointEdges: boolean
+    degenerateEpsilon: number
+    unmatchedEdges: number
+  }
+  halfEdges.matchDisjointEdges = true
+  halfEdges.degenerateEpsilon = EDGE_CONNECTIVITY_EPSILON_METERS
+  halfEdges.updateFrom(connectivityGeometry)
+  const boundaryEdgeCount = halfEdges.unmatchedEdges
+  connectivityGeometry.dispose()
+
+  let nonManifoldEdgeCount = 0
+  for (const count of edges.values()) {
+    if (count > 2) nonManifoldEdgeCount += 1
+  }
+
+  return { boundaryEdgeCount, nonManifoldEdgeCount, edgeCheckComplete }
+}
+
+function analyzePrintScene(
+  root: THREE.Object3D,
+  scale: number,
+  edgeTopology: EdgeTopologyMeasurement,
+): PrintExportReport {
   const min = new THREE.Vector3(
     Number.POSITIVE_INFINITY,
     Number.POSITIVE_INFINITY,
@@ -163,9 +223,6 @@ function analyzePrintScene(root: THREE.Object3D, scale: number): PrintExportRepo
   const ac = new THREE.Vector3()
   const areaCross = new THREE.Vector3()
   const volumeCross = new THREE.Vector3()
-  const edges = new Map<string, number>()
-  const halfEdgePositions: number[] = []
-  let edgeCheckComplete = true
   let triangleCount = 0
   let invalidTriangleCount = 0
   let degenerateTriangleCount = 0
@@ -192,44 +249,9 @@ function analyzePrintScene(root: THREE.Object3D, scale: number): PrintExportRepo
 
     volumeCross.crossVectors(b, c)
     signedVolumeMm3 += a.dot(volumeCross) / 6
-
-    if (edgeCheckComplete && triangleCount > MAX_EDGE_CHECK_TRIANGLES) {
-      edges.clear()
-      halfEdgePositions.length = 0
-      edgeCheckComplete = false
-    }
-    if (edgeCheckComplete) {
-      addEdge(edges, a, b)
-      addEdge(edges, b, c)
-      addEdge(edges, c, a)
-      halfEdgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
-    }
   })
 
-  let boundaryEdgeCount: number | null = null
-  let nonManifoldEdgeCount: number | null = null
-  if (edgeCheckComplete) {
-    const connectivityGeometry = new THREE.BufferGeometry()
-    connectivityGeometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(halfEdgePositions, 3),
-    )
-    const halfEdges = new HalfEdgeMap() as HalfEdgeMap & {
-      matchDisjointEdges: boolean
-      degenerateEpsilon: number
-      unmatchedEdges: number
-    }
-    halfEdges.matchDisjointEdges = true
-    halfEdges.degenerateEpsilon = EDGE_QUANTIZATION_MM
-    halfEdges.updateFrom(connectivityGeometry)
-    boundaryEdgeCount = halfEdges.unmatchedEdges
-    connectivityGeometry.dispose()
-
-    nonManifoldEdgeCount = 0
-    for (const count of edges.values()) {
-      if (count > 2) nonManifoldEdgeCount += 1
-    }
-  }
+  const { boundaryEdgeCount, nonManifoldEdgeCount, edgeCheckComplete } = edgeTopology
 
   const bounds = hasFiniteTriangle
     ? {
@@ -339,11 +361,16 @@ export function prepareSceneForPrint(
 
   ensureMeshPositions(source)
 
+  const physicalScale = MILLIMETERS_PER_METER / options.scale
+  // Connectivity is invariant under print scale and orientation. Checking it
+  // in model-space meters avoids scale-dependent ray tolerances and π/2 drift.
+  const edgeTopology = analyzeEdgeTopology(source)
+
   const scene = new THREE.Group()
   scene.name = 'print-export'
   scene.add(source)
   scene.rotation.x = Math.PI / 2
-  scene.scale.setScalar(MILLIMETERS_PER_METER / options.scale)
+  scene.scale.setScalar(physicalScale)
   scene.updateMatrixWorld(true)
 
   const initialBounds = measureBounds(scene)
@@ -356,7 +383,7 @@ export function prepareSceneForPrint(
     scene.updateMatrixWorld(true)
   }
 
-  return { scene, report: analyzePrintScene(scene, options.scale) }
+  return { scene, report: analyzePrintScene(scene, options.scale, edgeTopology) }
 }
 
 export function exportSceneToPrintStl(

@@ -258,6 +258,7 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // removed in Phase 6 when the legacy mount points are deleted.
 export {
   drainRebuiltWalls,
+  generateExtrudedWall,
   getPendingWallRebuildCount,
   WallSystem,
 } from './systems/wall/wall-system'
