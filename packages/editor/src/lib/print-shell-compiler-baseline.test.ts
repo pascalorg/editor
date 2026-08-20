@@ -3,12 +3,14 @@ import {
   calculateLevelMiters,
   DoorNode,
   RoofSegmentNode,
+  type RoofType,
   SlabNode,
   type SlabPolygonContext,
   sceneRegistry,
   WallNode,
 } from '@pascal-app/core'
 import {
+  buildPrintableRoofSegmentSolids,
   generateExtrudedWall,
   generateRoofSegmentGeometry,
   generateSlabGeometry,
@@ -18,6 +20,7 @@ import { exportSceneToPrintStl } from './print-export'
 import { compilePrintShellBaseline } from './print-shell-compiler-baseline'
 
 const EMPTY_SLAB_CONTEXT: SlabPolygonContext = { walls: [], siblingSlabs: [] }
+const ROOF_TYPES: RoofType[] = ['gable', 'hip', 'shed', 'gambrel', 'mansard', 'flat', 'dutch']
 
 function structuralBox(id: string, x: number): THREE.Group {
   const group = new THREE.Group()
@@ -143,7 +146,7 @@ describe('print shell compiler baseline', () => {
     }
   })
 
-  test('blocks the generated gable roof until a printable solid source exists', () => {
+  test('blocks the generated display gable roof from print export', () => {
     const roof = RoofSegmentNode.parse({
       id: 'rseg_print-shell-fixture',
       roofType: 'gable',
@@ -182,6 +185,65 @@ describe('print shell compiler baseline', () => {
       expect.arrayContaining(['degenerate_triangles', 'open_boundaries', 'non_manifold_edges']),
     )
     expect(firstPrint.report.volumeMm3).toBeGreaterThan(0)
+    expect(new Uint8Array(firstPrint.buffer)).toEqual(new Uint8Array(secondPrint.buffer))
+  })
+
+  test('compiles canonical roof modules into deterministic manifold print shells', () => {
+    for (const roofType of ROOF_TYPES) {
+      const roof = RoofSegmentNode.parse({
+        id: `rseg_print-shell-${roofType}`,
+        roofType,
+        width: 4,
+        depth: 3,
+        wallHeight: 0.5,
+        pitch: 30,
+        wallThickness: 0.15,
+        deckThickness: 0.1,
+        overhang: 0.3,
+        shingleThickness: 0.05,
+      })
+      const built = buildPrintableRoofSegmentSolids(roof)
+
+      expect(built.status).toBe('ready')
+      expect(built.object).not.toBeNull()
+
+      const compiled = compilePrintShellBaseline(built.object!)
+      expect(compiled.status).toBe('compiled')
+      expect(compiled.inputMeshCount).toBe(1)
+      expect(compiled.sourceNodeIds).toEqual([roof.id])
+      expect(compiled.scene).not.toBeNull()
+
+      const print = exportSceneToPrintStl(compiled.scene!, { scale: 100 })
+      expect(print.report.status).toBe('pass')
+      expect(print.report.degenerateTriangleCount).toBe(0)
+      expect(print.report.boundaryEdgeCount).toBe(0)
+      expect(print.report.nonManifoldEdgeCount).toBe(0)
+      expect(print.report.volumeMm3).toBeGreaterThan(0)
+    }
+
+    const roof = RoofSegmentNode.parse({
+      id: 'rseg_print-shell-deterministic',
+      roofType: 'gable',
+      width: 4,
+      depth: 3,
+      wallHeight: 0.5,
+      pitch: 30,
+      wallThickness: 0.15,
+      deckThickness: 0.1,
+      overhang: 0.3,
+      shingleThickness: 0.05,
+    })
+    const first = buildPrintableRoofSegmentSolids(roof)
+    const second = buildPrintableRoofSegmentSolids(roof)
+    const firstCompiled = compilePrintShellBaseline(first.object!)
+    const secondCompiled = compilePrintShellBaseline(second.object!)
+    const firstPrint = exportSceneToPrintStl(firstCompiled.scene!, { scale: 100 })
+    const secondPrint = exportSceneToPrintStl(secondCompiled.scene!, { scale: 100 })
+
+    expect(firstPrint.report.bounds?.width).toBeCloseTo(46.6962, 3)
+    expect(firstPrint.report.bounds?.depth).toBeCloseTo(37.1962, 3)
+    expect(firstPrint.report.bounds?.height).toBeCloseTo(15.3923, 3)
+    expect(firstPrint.report.volumeMm3).toBeCloseTo(4_066.52, 1)
     expect(new Uint8Array(firstPrint.buffer)).toEqual(new Uint8Array(secondPrint.buffer))
   })
 })
