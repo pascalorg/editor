@@ -5,8 +5,9 @@ import type { PrintExportReport } from '../../../../../lib/print-export'
 import { preparePrintExport } from './print-export-card'
 
 const report: PrintExportReport = {
-  kind: 'print-stl-report',
-  version: 1,
+  kind: 'print-export-report',
+  version: 2,
+  format: '3mf',
   scale: 50,
   units: 'millimeter',
   orientation: 'z-up',
@@ -27,9 +28,12 @@ const report: PrintExportReport = {
   diagnostics: [],
 }
 
+const stlReport: PrintExportReport = { ...report, format: 'stl' }
+
 const levelReport: PrintLevelBundleReport = {
-  kind: 'print-level-stl-report',
-  version: 1,
+  kind: 'print-level-export-report',
+  version: 2,
+  format: 'stl',
   scale: 50,
   units: 'millimeter',
   orientation: 'z-up',
@@ -40,8 +44,9 @@ const levelReport: PrintLevelBundleReport = {
       kind: 'level',
       levelId: 'level_ground',
       label: 'Ground',
+      objectName: '01 Ground',
       filename: '01_ground.stl',
-      report,
+      report: stlReport,
     },
   ],
   excludedNodeIds: [],
@@ -51,7 +56,7 @@ const levelReport: PrintLevelBundleReport = {
 describe('print export card contract', () => {
   test('prepares a visible-only scaled artifact without downloading immediately', async () => {
     const calls: { format?: string; options?: SceneExportOptions }[] = []
-    const artifact = { blob: new Blob(['stl']), filename: 'house.stl', metadata: report }
+    const artifact = { blob: new Blob(['3mf']), filename: 'house.3mf', metadata: report }
     const exportScene: SceneExport = async (format, options) => {
       calls.push({ format, options })
       return artifact
@@ -62,6 +67,7 @@ describe('print export card contract', () => {
       true,
       '50',
       'whole',
+      '3mf',
       'structure',
       'none',
       '2',
@@ -70,7 +76,7 @@ describe('print export card contract', () => {
 
     expect(calls).toEqual([
       {
-        format: 'print-stl',
+        format: 'print-3mf',
         options: {
           onlyVisible: true,
           download: false,
@@ -92,7 +98,7 @@ describe('print export card contract', () => {
     }
 
     await expect(
-      preparePrintExport(exportScene, true, '0', 'levels', 'structure', 'none', '2', '2'),
+      preparePrintExport(exportScene, true, '0', 'levels', '3mf', 'structure', 'none', '2', '2'),
     ).rejects.toThrow(
       'Enter a positive scale denominator',
     )
@@ -112,6 +118,7 @@ describe('print export card contract', () => {
       true,
       '50',
       'levels',
+      'stl',
       'everything',
       'plinth',
       '3',
@@ -144,7 +151,17 @@ describe('print export card contract', () => {
     }
 
     await expect(
-      preparePrintExport(exportScene, true, '50', 'levels', 'structure', 'plinth', '-1', '2'),
+      preparePrintExport(
+        exportScene,
+        true,
+        '50',
+        'levels',
+        '3mf',
+        'structure',
+        'plinth',
+        '-1',
+        '2',
+      ),
     ).rejects.toThrow('non-negative plinth margin')
     expect(invoked).toBe(false)
   })
@@ -156,7 +173,17 @@ describe('print export card contract', () => {
     })
 
     await expect(
-      preparePrintExport(exportScene, false, '100', 'whole', 'structure', 'none', '2', '2'),
+      preparePrintExport(
+        exportScene,
+        false,
+        '100',
+        'whole',
+        '3mf',
+        'structure',
+        'none',
+        '2',
+        '2',
+      ),
     ).rejects.toThrow('did not return a preflight report')
   })
 })

@@ -12,7 +12,7 @@ import { SCENE_THEME_IDS } from '../lib/scene-themes'
 export type RenderContext = 'editor' | 'viewer'
 export type MetricNotation = 'meters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
-export type SceneExportFormat = 'glb' | 'stl' | 'obj' | 'print-stl'
+export type SceneExportFormat = 'glb' | 'stl' | 'obj' | 'print-stl' | 'print-3mf'
 export type SceneExportOptions = {
   onlyVisible?: boolean
   download?: boolean

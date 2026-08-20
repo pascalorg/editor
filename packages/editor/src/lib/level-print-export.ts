@@ -1,11 +1,17 @@
 import { type AnyNode, getLevelDisplayName, type LevelNode } from '@pascal-app/core'
 import { type Zippable, zipSync } from 'fflate'
 import * as THREE from 'three'
+import { createPrint3mf, type Print3mfPart } from './print-3mf'
 import {
-  exportSceneToPrintStl,
+  encodePreparedPrintSceneToStl,
+  extractPreparedPrintMesh,
   mergePrintExportDiagnostics,
+  type PrintArtifactFormat,
+  type PrintExportBounds,
   type PrintExportDiagnostic,
   type PrintExportReport,
+  type PrintMeshData,
+  prepareSceneForPrint,
 } from './print-export'
 import { compileSemanticPrintShell } from './print-shell-compiler'
 import type { PrintShellCompileResult } from './print-shell-compiler-baseline'
@@ -24,13 +30,15 @@ export type PrintLevelPartReport = {
   kind: 'level' | 'plinth'
   levelId: string
   label: string
-  filename: string
+  objectName: string
+  filename: string | null
   report: PrintExportReport
 }
 
 export type PrintLevelBundleReport = {
-  kind: 'print-level-stl-report'
-  version: 1
+  kind: 'print-level-export-report'
+  version: 2
+  format: PrintArtifactFormat
   scale: number
   units: 'millimeter'
   orientation: 'z-up'
@@ -41,13 +49,14 @@ export type PrintLevelBundleReport = {
   diagnostics: PrintExportDiagnostic[]
 }
 
-export type PrintLevelStlBundle = {
-  archive: Uint8Array<ArrayBuffer>
+export type PrintLevelPackage = {
+  data: Uint8Array<ArrayBuffer>
   report: PrintLevelBundleReport
 }
 
 export type PrintLevelExportOptions = {
   scale: number
+  format?: PrintArtifactFormat
   plinth?: PrintPlinthOptions
   compileShells?: boolean
   compileShell?: (
@@ -182,11 +191,20 @@ function bundleStatus(
   return 'pass'
 }
 
-export async function exportSceneLevelsToPrintStl(
+type PreparedLevelArtifact = {
+  filename: string | null
+  objectName: string
+  bytes: Uint8Array<ArrayBuffer> | null
+  mesh: PrintMeshData | null
+  bounds: PrintExportBounds | null
+}
+
+export async function exportSceneLevelsForPrint(
   source: THREE.Object3D,
   nodes: Record<string, AnyNode>,
   options: PrintLevelExportOptions,
-): Promise<PrintLevelStlBundle> {
+): Promise<PrintLevelPackage> {
+  const format = options.format ?? 'stl'
   const exportedIds = exportedIdentityIds(source)
   const ownerByNodeId = new Map<string, string | null>()
   for (const id of Object.keys(nodes)) owningLevelId(id, nodes, ownerByNodeId)
@@ -221,11 +239,13 @@ export async function exportSceneLevelsToPrintStl(
     })
   }
 
-  const levelFiles: { filename: string; bytes: Uint8Array<ArrayBuffer> }[] = []
+  const levelArtifacts: PreparedLevelArtifact[] = []
   const levelParts: PrintLevelPartReport[] = []
   for (const [index, level] of levels.entries()) {
     const label = getLevelDisplayName(level)
-    const filename = `${String(index + 1).padStart(2, '0')}_${safeFilenamePart(label)}.stl`
+    const prefix = String(index + 1).padStart(2, '0')
+    const objectName = `${prefix} ${label}`
+    const filename = format === 'stl' ? `${prefix}_${safeFilenamePart(label)}.stl` : null
     const levelScene = pruneSceneToLevel(source, level.id, nodes, excludedIds, ownerByNodeId)
     const compiled = options.compileShells
       ? options.compileShell
@@ -233,28 +253,39 @@ export async function exportSceneLevelsToPrintStl(
         : compileSemanticPrintShell(levelScene, nodes)
       : null
     const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : levelScene
-    const output = exportSceneToPrintStl(printSource, {
+    const prepared = prepareSceneForPrint(printSource, {
       scale: options.scale,
       compiled: compiled?.status === 'compiled',
       indexedTopology: compiled?.backend === 'manifold-3d',
+      format,
     })
     const report = compiled
       ? mergePrintExportDiagnostics(
-          output.report,
+          prepared.report,
           compiled.diagnostics,
           new Set(['compiler_pending']),
         )
-      : output.report
+      : prepared.report
     if (compiled) {
       diagnostics.push(
         ...compiled.diagnostics.filter((diagnostic) => diagnostic.severity !== 'info'),
       )
     }
-    levelFiles.push({ filename, bytes: new Uint8Array(output.buffer) })
-    levelParts.push({ kind: 'level', levelId: level.id, label, filename, report })
+    levelArtifacts.push({
+      filename,
+      objectName,
+      bytes:
+        format === 'stl' ? new Uint8Array(encodePreparedPrintSceneToStl(prepared.scene)) : null,
+      mesh:
+        format === '3mf' && report.bounds && report.invalidTriangleCount === 0
+          ? extractPreparedPrintMesh(prepared.scene)
+          : null,
+      bounds: report.bounds,
+    })
+    levelParts.push({ kind: 'level', levelId: level.id, label, objectName, filename, report })
   }
 
-  let plinthFile: { filename: string; bytes: Uint8Array<ArrayBuffer> } | null = null
+  let plinthArtifact: PreparedLevelArtifact | null = null
   let plinthPart: PrintLevelPartReport | null = null
   if (options.plinth) {
     const { marginMm, thicknessMm } = options.plinth
@@ -293,15 +324,27 @@ export async function exportSceneLevelsToPrintStl(
         const mesh = new THREE.Mesh(
           new THREE.BoxGeometry(widthMeters, thicknessMeters, depthMeters),
         )
-        const output = exportSceneToPrintStl(mesh, options)
-        const filename = '00_plinth.stl'
-        plinthFile = { filename, bytes: new Uint8Array(output.buffer) }
+        const prepared = prepareSceneForPrint(mesh, { ...options, format })
+        const filename = format === 'stl' ? '00_plinth.stl' : null
+        const objectName = '00 Plinth'
+        plinthArtifact = {
+          filename,
+          objectName,
+          bytes:
+            format === 'stl' ? new Uint8Array(encodePreparedPrintSceneToStl(prepared.scene)) : null,
+          mesh:
+            format === '3mf' && prepared.report.bounds && prepared.report.invalidTriangleCount === 0
+              ? extractPreparedPrintMesh(prepared.scene)
+              : null,
+          bounds: prepared.report.bounds,
+        }
         plinthPart = {
           kind: 'plinth',
           levelId: lowestLevel.id,
           label: 'Plinth',
+          objectName,
           filename,
-          report: output.report,
+          report: prepared.report,
         }
         diagnostics.push({
           severity: 'info',
@@ -325,21 +368,44 @@ export async function exportSceneLevelsToPrintStl(
 
   const files: Zippable = {}
   const parts: PrintLevelPartReport[] = []
-  if (plinthFile && plinthPart) {
-    files[plinthFile.filename] = [plinthFile.bytes, { level: 0, mtime: ZIP_MTIME }]
+  const packageParts: Print3mfPart[] = []
+  if (plinthArtifact && plinthPart) {
+    if (plinthArtifact.filename && plinthArtifact.bytes) {
+      files[plinthArtifact.filename] = [plinthArtifact.bytes, { level: 0, mtime: ZIP_MTIME }]
+    }
+    if (plinthArtifact.mesh && plinthArtifact.bounds) {
+      packageParts.push({
+        name: plinthArtifact.objectName,
+        mesh: plinthArtifact.mesh,
+        bounds: plinthArtifact.bounds,
+      })
+    }
     parts.push(plinthPart)
   }
-  for (const [index, file] of levelFiles.entries()) {
-    files[file.filename] = [file.bytes, { level: 0, mtime: ZIP_MTIME }]
+  for (const [index, artifact] of levelArtifacts.entries()) {
+    if (artifact.filename && artifact.bytes) {
+      files[artifact.filename] = [artifact.bytes, { level: 0, mtime: ZIP_MTIME }]
+    }
+    if (artifact.mesh && artifact.bounds) {
+      packageParts.push({
+        name: artifact.objectName,
+        mesh: artifact.mesh,
+        bounds: artifact.bounds,
+      })
+    }
     const part = levelParts[index]
     if (part) parts.push(part)
   }
 
   return {
-    archive: zipSync(files, { level: 0 }),
+    data:
+      format === '3mf'
+        ? createPrint3mf(packageParts, 'Pascal level parts')
+        : zipSync(files, { level: 0 }),
     report: {
-      kind: 'print-level-stl-report',
-      version: 1,
+      kind: 'print-level-export-report',
+      version: 2,
+      format,
       scale: options.scale,
       units: 'millimeter',
       orientation: 'z-up',
@@ -355,5 +421,5 @@ export async function exportSceneLevelsToPrintStl(
 export function isPrintLevelBundleReport(value: unknown): value is PrintLevelBundleReport {
   if (!value || typeof value !== 'object') return false
   const report = value as Partial<PrintLevelBundleReport>
-  return report.kind === 'print-level-stl-report' && report.version === 1
+  return report.kind === 'print-level-export-report' && report.version === 2
 }

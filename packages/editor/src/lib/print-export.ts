@@ -21,10 +21,13 @@ export type PrintExportDiagnostic = {
   nodeIds?: string[]
 }
 
+export type PrintArtifactFormat = 'stl' | '3mf'
+
 export type PrintExportOptions = {
   scale: number
   compiled?: boolean
   indexedTopology?: boolean
+  format?: PrintArtifactFormat
 }
 
 export type PrintExportBounds = {
@@ -36,8 +39,9 @@ export type PrintExportBounds = {
 }
 
 export type PrintExportReport = {
-  kind: 'print-stl-report'
-  version: 1
+  kind: 'print-export-report'
+  version: 2
+  format: PrintArtifactFormat
   scale: number
   units: 'millimeter'
   orientation: 'z-up'
@@ -55,6 +59,11 @@ export type PrintExportReport = {
 export type PrintStlExport = {
   buffer: ArrayBuffer
   report: PrintExportReport
+}
+
+export type PrintMeshData = {
+  positions: Float64Array<ArrayBuffer>
+  indices: Uint32Array<ArrayBuffer>
 }
 
 type BoundsMeasurement = {
@@ -260,6 +269,7 @@ function analyzePrintScene(
   scale: number,
   edgeTopology: EdgeTopologyMeasurement,
   compiled: boolean,
+  format: PrintArtifactFormat,
 ): PrintExportReport {
   const min = new THREE.Vector3(
     Number.POSITIVE_INFINITY,
@@ -396,8 +406,9 @@ function analyzePrintScene(
       : 'pass'
 
   return {
-    kind: 'print-stl-report',
-    version: 1,
+    kind: 'print-export-report',
+    version: 2,
+    format,
     scale,
     units: 'millimeter',
     orientation: 'z-up',
@@ -447,8 +458,84 @@ export function prepareSceneForPrint(
 
   return {
     scene,
-    report: analyzePrintScene(scene, options.scale, edgeTopology, options.compiled ?? false),
+    report: analyzePrintScene(
+      scene,
+      options.scale,
+      edgeTopology,
+      options.compiled ?? false,
+      options.format ?? 'stl',
+    ),
   }
+}
+
+export function extractPreparedPrintMesh(root: THREE.Object3D): PrintMeshData {
+  root.updateMatrixWorld(true)
+
+  const positions: number[] = []
+  const indices: number[] = []
+  const point = new THREE.Vector3()
+
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh) return
+
+    const position = mesh.geometry.getAttribute('position')
+    if (!position) return
+    const index = mesh.geometry.getIndex()
+    const skinnedMesh = mesh as THREE.SkinnedMesh
+    const outputIndexByPosition = new Map<string, number>()
+
+    const outputIndexFor = (vertexIndex: number): number => {
+      point.fromBufferAttribute(position, vertexIndex)
+      if (skinnedMesh.isSkinnedMesh) skinnedMesh.applyBoneTransform(vertexIndex, point)
+      point.applyMatrix4(mesh.matrixWorld)
+      if (!isFiniteVector(point)) {
+        throw new RangeError(
+          'Print geometry contains non-finite coordinates and cannot be encoded.',
+        )
+      }
+
+      const x = Object.is(point.x, -0) ? 0 : point.x
+      const y = Object.is(point.y, -0) ? 0 : point.y
+      const z = Object.is(point.z, -0) ? 0 : point.z
+      const key = `${x},${y},${z}`
+      const existing = outputIndexByPosition.get(key)
+      if (existing !== undefined) return existing
+
+      const next = positions.length / 3
+      positions.push(x, y, z)
+      outputIndexByPosition.set(key, next)
+      return next
+    }
+
+    const appendTriangle = (a: number, b: number, c: number) => {
+      indices.push(outputIndexFor(a), outputIndexFor(b), outputIndexFor(c))
+    }
+
+    if (index) {
+      for (let offset = 0; offset + 2 < index.count; offset += 3) {
+        appendTriangle(index.getX(offset), index.getX(offset + 1), index.getX(offset + 2))
+      }
+      return
+    }
+
+    for (let offset = 0; offset + 2 < position.count; offset += 3) {
+      appendTriangle(offset, offset + 1, offset + 2)
+    }
+  })
+
+  return {
+    positions: new Float64Array(positions),
+    indices: new Uint32Array(indices),
+  }
+}
+
+export function encodePreparedPrintSceneToStl(scene: THREE.Object3D): ArrayBuffer {
+  const exporter = new STLExporter()
+  const output = exporter.parse(scene, { binary: true }) as ArrayBuffer | DataView
+  return output instanceof DataView
+    ? (output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength) as ArrayBuffer)
+    : output
 }
 
 export function exportSceneToPrintStl(
@@ -456,16 +543,7 @@ export function exportSceneToPrintStl(
   options: PrintExportOptions,
 ): PrintStlExport {
   const { scene, report } = prepareSceneForPrint(source, options)
-  const exporter = new STLExporter()
-  const output = exporter.parse(scene, { binary: true }) as ArrayBuffer | DataView
-  const buffer =
-    output instanceof DataView
-      ? (output.buffer.slice(
-          output.byteOffset,
-          output.byteOffset + output.byteLength,
-        ) as ArrayBuffer)
-      : output
-  return { buffer, report }
+  return { buffer: encodePreparedPrintSceneToStl(scene), report }
 }
 
 export function mergePrintExportDiagnostics(
@@ -488,5 +566,5 @@ export function mergePrintExportDiagnostics(
 export function isPrintExportReport(value: unknown): value is PrintExportReport {
   if (!value || typeof value !== 'object') return false
   const report = value as Partial<PrintExportReport>
-  return report.kind === 'print-stl-report' && report.version === 1
+  return report.kind === 'print-export-report' && report.version === 2
 }

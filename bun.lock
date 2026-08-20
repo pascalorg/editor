@@ -191,6 +191,7 @@
         "@types/react": "19.2.2",
         "@types/react-dom": "19.2.2",
         "@types/three": "^0.184.0",
+        "fast-xml-parser": "^5.4.2",
         "typescript": "6.0.3",
       },
       "peerDependencies": {

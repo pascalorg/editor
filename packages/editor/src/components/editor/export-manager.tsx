@@ -13,7 +13,8 @@ import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
-import { exportSceneLevelsToPrintStl } from '../../lib/level-print-export'
+import { exportSceneLevelsForPrint } from '../../lib/level-print-export'
+import { exportSceneToPrint3mf } from '../../lib/print-3mf'
 import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
 import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
 import { compileSemanticPrintShellWithManifold } from '../../lib/print-shell-compiler-manifold-worker'
@@ -85,12 +86,14 @@ export function ExportManager() {
         }
         let { scene: exportScene } = prepared
         const printContent = options.printContent ?? 'structure'
-        if (format === 'print-stl') {
+        const isPrintFormat = format === 'print-stl' || format === 'print-3mf'
+        if (isPrintFormat) {
           exportScene = filterPreparedSceneForPrintContent(exportScene, nodes, printContent)
         }
         ensurePositionAttributes(exportScene)
 
-        if (format === 'print-stl') {
+        if (isPrintFormat) {
+          const printFormat = format === 'print-3mf' ? '3mf' : 'stl'
           const scale = options.printScale ?? 100
           const compileShells = printContent === 'structure'
           if (options.printScope === 'levels') {
@@ -101,16 +104,19 @@ export function ExportManager() {
                     thicknessMm: options.printPlinthThicknessMm ?? 2,
                   }
                 : undefined
-            const { archive, report } = await exportSceneLevelsToPrintStl(exportScene, nodes, {
+            const { data, report } = await exportSceneLevelsForPrint(exportScene, nodes, {
               scale,
+              format: printFormat,
               plinth,
               compileShells,
               compileShell: compileShells ? compileSemanticPrintShellWithManifold : undefined,
             })
-            const blob = new Blob([archive], { type: 'application/zip' })
+            const blob = new Blob([data], {
+              type: printFormat === '3mf' ? 'model/3mf' : 'application/zip',
+            })
             return finishArtifact(
               blob,
-              `print_levels_1-${scale}_${date}.zip`,
+              `print_levels_1-${scale}_${date}.${printFormat === '3mf' ? '3mf' : 'zip'}`,
               options.download,
               report,
             )
@@ -122,11 +128,15 @@ export function ExportManager() {
             ? await compileSemanticPrintShellWithManifold(exportScene, nodes)
             : null
           const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : exportScene
-          const output = exportSceneToPrintStl(printSource, {
+          const printOptions = {
             scale,
             compiled: compiled?.status === 'compiled',
             indexedTopology: compiled?.backend === 'manifold-3d',
-          })
+          }
+          const output =
+            printFormat === '3mf'
+              ? exportSceneToPrint3mf(printSource, printOptions)
+              : exportSceneToPrintStl(printSource, printOptions)
           const report = compiled
             ? mergePrintExportDiagnostics(
                 output.report,
@@ -135,10 +145,12 @@ export function ExportManager() {
               )
             : output.report
           const { buffer } = output
-          const blob = new Blob([buffer], { type: 'model/stl' })
+          const blob = new Blob([buffer], {
+            type: printFormat === '3mf' ? 'model/3mf' : 'model/stl',
+          })
           return finishArtifact(
             blob,
-            `print_model_1-${scale}_${date}.stl`,
+            `print_model_1-${scale}_${date}.${printFormat}`,
             options.download,
             report,
           )

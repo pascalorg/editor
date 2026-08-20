@@ -1,7 +1,7 @@
 import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
 import type { Object3D } from 'three'
 
-export type SceneExportFormat = 'glb' | 'stl' | 'obj' | 'print-stl'
+export type SceneExportFormat = 'glb' | 'stl' | 'obj' | 'print-stl' | 'print-3mf'
 export type SceneExportOptions = {
   onlyVisible?: boolean
   download?: boolean

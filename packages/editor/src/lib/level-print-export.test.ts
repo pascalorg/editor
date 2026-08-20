@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, RoofSegmentNode, registerNode, sceneRegistry } from '@pascal-app/core'
 import { generateRoofSegmentGeometry } from '@pascal-app/viewer'
-import { unzipSync } from 'fflate'
+import { XMLParser } from 'fast-xml-parser'
+import { strFromU8, unzipSync } from 'fflate'
 import * as THREE from 'three'
 import { prepareSceneForExport } from './glb-export'
-import { exportSceneLevelsToPrintStl } from './level-print-export'
+import { exportSceneLevelsForPrint } from './level-print-export'
 import { filterPreparedSceneForPrintContent } from './print-content-scope'
 import { compileSemanticPrintShell } from './print-shell-compiler'
 
@@ -42,6 +43,10 @@ function binaryStlBounds(buffer: Uint8Array): { triangles: number; size: THREE.V
   }
 
   return { triangles, size: bounds.getSize(new THREE.Vector3()) }
+}
+
+function asArray<T>(value: T | T[]): T[] {
+  return Array.isArray(value) ? value : [value]
 }
 
 function twoLevelFixture() {
@@ -123,8 +128,8 @@ describe('per-level print STL export', () => {
     const fixture = twoLevelFixture()
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
 
-    const bundle = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
-    const files = unzipSync(bundle.archive)
+    const bundle = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, { scale: 100 })
+    const files = unzipSync(bundle.data)
     const ground = binaryStlBounds(files['01_ground.stl']!)
     const upper = binaryStlBounds(files['02_upper.stl']!)
 
@@ -160,7 +165,7 @@ describe('per-level print STL export', () => {
     } as unknown as AnyNode
 
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
-    const bundle = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
+    const bundle = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, { scale: 100 })
 
     expect(bundle.report.status).toBe('blocked')
     expect(bundle.report.excludedNodeIds).toEqual(['stair_main'])
@@ -178,8 +183,8 @@ describe('per-level print STL export', () => {
     } as AnyNode
 
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
-    const bundle = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
-    const files = unzipSync(bundle.archive)
+    const bundle = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, { scale: 100 })
+    const files = unzipSync(bundle.data)
 
     expect(Object.keys(files)).toEqual(['01_ground.stl'])
     expect(bundle.report.parts.map((part) => part.levelId)).toEqual(['level_ground'])
@@ -201,7 +206,7 @@ describe('per-level print STL export', () => {
 
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
     const structure = filterPreparedSceneForPrintContent(prepared.scene, fixture.nodes, 'structure')
-    const bundle = await exportSceneLevelsToPrintStl(structure, fixture.nodes, { scale: 100 })
+    const bundle = await exportSceneLevelsForPrint(structure, fixture.nodes, { scale: 100 })
 
     expect(bundle.report.parts.map((part) => part.report.triangleCount)).toEqual([12, 12])
     expect(bundle.report.status).toBe('pass')
@@ -255,8 +260,8 @@ describe('per-level print STL export', () => {
     }
 
     let compileCalls = 0
-    const raw = await exportSceneLevelsToPrintStl(root, nodes, { scale: 100 })
-    const compiled = await exportSceneLevelsToPrintStl(root, nodes, {
+    const raw = await exportSceneLevelsForPrint(root, nodes, { scale: 100 })
+    const compiled = await exportSceneLevelsForPrint(root, nodes, {
       scale: 100,
       compileShells: true,
       compileShell: async (source, compilerNodes) => {
@@ -287,25 +292,25 @@ describe('per-level print STL export', () => {
     const fixture = twoLevelFixture()
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
 
-    const first = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 50 })
-    const second = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 50 })
+    const first = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, { scale: 50 })
+    const second = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, { scale: 50 })
 
-    expect(first.archive).toEqual(second.archive)
+    expect(first.data).toEqual(second.data)
   })
 
   test('prepends an optional physical-size plinth derived from the lowest level bounds', async () => {
     const fixture = twoLevelFixture()
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
 
-    const bundle = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, {
+    const bundle = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, {
       scale: 100,
       plinth: { marginMm: 2, thicknessMm: 3 },
     })
-    const repeated = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, {
+    const repeated = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, {
       scale: 100,
       plinth: { marginMm: 2, thicknessMm: 3 },
     })
-    const files = unzipSync(bundle.archive)
+    const files = unzipSync(bundle.data)
     const plinth = binaryStlBounds(files['00_plinth.stl']!)
 
     expect(Object.keys(files)).toEqual(['00_plinth.stl', '01_ground.stl', '02_upper.stl'])
@@ -315,6 +320,81 @@ describe('per-level print STL export', () => {
     expect(plinth.size.x).toBeCloseTo(104, 4)
     expect(plinth.size.y).toBeCloseTo(84, 4)
     expect(plinth.size.z).toBeCloseTo(3, 4)
-    expect(bundle.archive).toEqual(repeated.archive)
+    expect(bundle.data).toEqual(repeated.data)
+  })
+
+  test('packages named, millimeter-unit 3MF objects in a non-overlapping bed layout', async () => {
+    const fixture = twoLevelFixture()
+    fixture.nodes.level_ground = {
+      ...fixture.nodes.level_ground!,
+      name: 'Ground & Entry',
+    } as AnyNode
+    const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
+    const options = {
+      scale: 100,
+      format: '3mf' as const,
+      plinth: { marginMm: 2, thicknessMm: 3 },
+    }
+
+    const bundle = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, options)
+    const repeated = await exportSceneLevelsForPrint(prepared.scene, fixture.nodes, options)
+    const files = unzipSync(bundle.data)
+    const xml = strFromU8(files['3D/3dmodel.model']!)
+    const model = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(
+      xml,
+    ).model
+    const objects = asArray<Record<string, unknown>>(model.resources.object)
+    const items = asArray<Record<string, string>>(model.build.item)
+
+    expect(Object.keys(files)).toEqual(['[Content_Types].xml', '_rels/.rels', '3D/3dmodel.model'])
+    expect(model.unit).toBe('millimeter')
+    expect(objects.map((object) => object.name)).toEqual([
+      '00 Plinth',
+      '01 Ground & Entry',
+      '02 Upper',
+    ])
+    expect(items.map((item) => item.objectid)).toEqual(['1', '2', '3'])
+    expect(bundle.report.format).toBe('3mf')
+    expect(bundle.report.parts.map((part) => part.filename)).toEqual([null, null, null])
+    expect(bundle.report.parts.map((part) => part.objectName)).toEqual([
+      '00 Plinth',
+      '01 Ground & Entry',
+      '02 Upper',
+    ])
+
+    const expectedSizes = [
+      [104, 84, 3],
+      [100, 80, 30],
+      [80, 60, 20],
+    ]
+    let previousMaxX = Number.NEGATIVE_INFINITY
+    for (const [index, object] of objects.entries()) {
+      const mesh = object.mesh as {
+        vertices: { vertex: Record<string, string> | Record<string, string>[] }
+        triangles: { triangle: Record<string, string> | Record<string, string>[] }
+      }
+      const vertices = asArray(mesh.vertices.vertex)
+      const triangles = asArray(mesh.triangles.triangle)
+      const transformValue = items[index]?.transform
+      expect(transformValue).toBeDefined()
+      const transform = transformValue!.split(' ').map(Number)
+      const translation = new THREE.Vector3(transform[9]!, transform[10]!, transform[11]!)
+      const bounds = new THREE.Box3()
+      for (const vertex of vertices) {
+        bounds.expandByPoint(
+          new THREE.Vector3(Number(vertex.x), Number(vertex.y), Number(vertex.z)).add(translation),
+        )
+      }
+      const size = bounds.getSize(new THREE.Vector3())
+
+      expect(triangles).toHaveLength(12)
+      expect(size.x).toBeCloseTo(expectedSizes[index]![0]!, 5)
+      expect(size.y).toBeCloseTo(expectedSizes[index]![1]!, 5)
+      expect(size.z).toBeCloseTo(expectedSizes[index]![2]!, 5)
+      expect(bounds.min.z).toBeCloseTo(0, 9)
+      if (index > 0) expect(bounds.min.x - previousMaxX).toBeCloseTo(5, 5)
+      previousMaxX = bounds.max.x
+    }
+    expect(bundle.data).toEqual(repeated.data)
   })
 })

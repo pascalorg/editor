@@ -15,6 +15,7 @@ import {
 import type { PrintContentScope } from '../../../../../lib/print-content-scope'
 import {
   isPrintExportReport,
+  type PrintArtifactFormat,
   type PrintExportReport,
 } from '../../../../../lib/print-export'
 
@@ -43,6 +44,7 @@ export async function preparePrintExport(
   onlyVisible: boolean,
   scaleInput: string,
   scope: 'whole' | 'levels',
+  format: PrintArtifactFormat,
   content: PrintContentScope,
   base: PrintBaseMode,
   plinthMarginInput: string,
@@ -69,7 +71,7 @@ export async function preparePrintExport(
     }
   }
 
-  const artifact = await exportScene('print-stl', {
+  const artifact = await exportScene(format === '3mf' ? 'print-3mf' : 'print-stl', {
     onlyVisible,
     download: false,
     printScale: scale,
@@ -94,6 +96,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   const exportScene = useViewer((state) => state.exportScene)
   const [printScale, setPrintScale] = useState('100')
   const [scope, setScope] = useState<'whole' | 'levels'>('levels')
+  const [format, setFormat] = useState<PrintArtifactFormat>('3mf')
   const [content, setContent] = useState<PrintContentScope>('structure')
   const [base, setBase] = useState<PrintBaseMode>('none')
   const [plinthMargin, setPlinthMargin] = useState('2')
@@ -105,7 +108,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   useEffect(() => {
     setPrepared(null)
     setError(null)
-  }, [nodes, onlyVisible, printScale, scope, content, base, plinthMargin, plinthThickness])
+  }, [nodes, onlyVisible, printScale, scope, format, content, base, plinthMargin, plinthThickness])
 
   const handlePrepare = async () => {
     if (!exportScene) {
@@ -123,6 +126,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
           onlyVisible,
           printScale,
           scope,
+          format,
           content,
           scope === 'levels' ? base : 'none',
           plinthMargin,
@@ -143,7 +147,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
         <div>
           <div className="font-medium text-sm">Print files</div>
           <div className="text-muted-foreground text-xs">
-            Experimental millimeter, Z-up export centered on the print bed
+            Experimental millimeter, Z-up export normalized to the print bed
           </div>
         </div>
       </div>
@@ -161,6 +165,21 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
         />
         <span className="block text-muted-foreground">
           Common architectural scales are 1:25, 1:50, and 1:100.
+        </span>
+      </label>
+
+      <label className="block space-y-1 text-xs">
+        <span className="font-medium">Format</span>
+        <select
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onChange={(event) => setFormat(event.target.value as PrintArtifactFormat)}
+          value={format}
+        >
+          <option value="3mf">3MF package (recommended)</option>
+          <option value="stl">Binary STL fallback</option>
+        </select>
+        <span className="block text-muted-foreground">
+          3MF declares millimeter units and preserves each level as a named object.
         </span>
       </label>
 
@@ -229,8 +248,10 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
           onChange={(event) => setScope(event.target.value as 'whole' | 'levels')}
           value={scope}
         >
-          <option value="levels">One STL per visible level (.zip)</option>
-          <option value="whole">Whole scene STL</option>
+          <option value="levels">
+            {format === '3mf' ? 'One named object per visible level' : 'One STL per visible level (.zip)'}
+          </option>
+          <option value="whole">{format === '3mf' ? 'Whole scene 3MF' : 'Whole scene STL'}</option>
         </select>
       </label>
 
@@ -244,8 +265,10 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
         {isPreparing
           ? 'Preparing print files...'
           : scope === 'levels'
-            ? 'Prepare level STLs'
-            : 'Prepare print STL'}
+            ? format === '3mf'
+              ? 'Prepare level 3MF'
+              : 'Prepare level STLs'
+            : `Prepare print ${format.toUpperCase()}`}
       </Button>
 
       {error && (
@@ -289,7 +312,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
                 <span className="font-medium">{prepared.report.partCount}</span>
               </div>
               {prepared.report.parts.map((part) => (
-                <div className="rounded-md border p-2" key={part.filename}>
+                <div className="rounded-md border p-2" key={part.objectName}>
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">{part.label}</span>
                     <span className="text-muted-foreground">
@@ -344,9 +367,11 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
             onClick={() => downloadArtifact(prepared.artifact)}
           >
             <Download className="size-4" />
-            {isPrintLevelBundleReport(prepared.report)
-              ? 'Download level STLs (.zip)'
-              : 'Download print STL'}
+            {prepared.report.format === '3mf'
+              ? 'Download print 3MF'
+              : isPrintLevelBundleReport(prepared.report)
+                ? 'Download level STLs (.zip)'
+                : 'Download print STL'}
           </Button>
         </div>
       )}
