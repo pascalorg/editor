@@ -8,13 +8,17 @@ import { AlertTriangle, CheckCircle2, Download, Printer, XCircle } from 'lucide-
 import { useEffect, useId, useState } from 'react'
 import { Button } from '../../../../../components/ui/primitives/button'
 import {
+  isPrintLevelBundleReport,
+  type PrintLevelBundleReport,
+} from '../../../../../lib/level-print-export'
+import {
   isPrintExportReport,
   type PrintExportReport,
 } from '../../../../../lib/print-export'
 
 export type PreparedPrintExport = {
   artifact: SceneExportArtifact
-  report: PrintExportReport
+  report: PrintExportReport | PrintLevelBundleReport
 }
 
 function formatMillimeters(value: number): string {
@@ -36,6 +40,7 @@ export async function preparePrintExport(
   exportScene: SceneExport,
   onlyVisible: boolean,
   scaleInput: string,
+  scope: 'whole' | 'levels',
 ): Promise<PreparedPrintExport> {
   const scale = Number(scaleInput)
   if (!Number.isFinite(scale) || scale <= 0) {
@@ -46,8 +51,12 @@ export async function preparePrintExport(
     onlyVisible,
     download: false,
     printScale: scale,
+    printScope: scope,
   })
-  if (!artifact || !isPrintExportReport(artifact.metadata)) {
+  if (
+    !artifact ||
+    (!isPrintExportReport(artifact.metadata) && !isPrintLevelBundleReport(artifact.metadata))
+  ) {
     throw new Error('The print exporter did not return a preflight report.')
   }
   return { artifact, report: artifact.metadata }
@@ -58,6 +67,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   const nodes = useScene((state) => state.nodes)
   const exportScene = useViewer((state) => state.exportScene)
   const [printScale, setPrintScale] = useState('100')
+  const [scope, setScope] = useState<'whole' | 'levels'>('levels')
   const [isPreparing, setIsPreparing] = useState(false)
   const [prepared, setPrepared] = useState<PreparedPrintExport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +75,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   useEffect(() => {
     setPrepared(null)
     setError(null)
-  }, [nodes, onlyVisible, printScale])
+  }, [nodes, onlyVisible, printScale, scope])
 
   const handlePrepare = async () => {
     if (!exportScene) {
@@ -77,7 +87,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
     setPrepared(null)
     setError(null)
     try {
-      setPrepared(await preparePrintExport(exportScene, onlyVisible, printScale))
+      setPrepared(await preparePrintExport(exportScene, onlyVisible, printScale, scope))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Print export failed.')
     } finally {
@@ -90,7 +100,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
       <div className="flex items-start gap-2">
         <Printer className="mt-0.5 size-4 shrink-0" />
         <div>
-          <div className="font-medium text-sm">Print STL</div>
+          <div className="font-medium text-sm">Print files</div>
           <div className="text-muted-foreground text-xs">
             Experimental millimeter, Z-up export centered on the print bed
           </div>
@@ -113,6 +123,18 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
         </span>
       </label>
 
+      <label className="block space-y-1 text-xs">
+        <span className="font-medium">Output</span>
+        <select
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onChange={(event) => setScope(event.target.value as 'whole' | 'levels')}
+          value={scope}
+        >
+          <option value="levels">One STL per visible level (.zip)</option>
+          <option value="whole">Whole scene STL</option>
+        </select>
+      </label>
+
       <Button
         className="w-full justify-start gap-2"
         disabled={isPreparing || !exportScene}
@@ -120,7 +142,11 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
         variant="outline"
       >
         <Printer className="size-4" />
-        {isPreparing ? 'Preparing print STL...' : 'Prepare print STL'}
+        {isPreparing
+          ? 'Preparing print files...'
+          : scope === 'levels'
+            ? 'Prepare level STLs'
+            : 'Prepare print STL'}
       </Button>
 
       {error && (
@@ -157,28 +183,55 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
             </span>
           </div>
 
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-            <dt className="text-muted-foreground">Physical size</dt>
-            <dd className="text-right font-medium">
-              {prepared.report.bounds
-                ? `${formatMillimeters(prepared.report.bounds.width)} × ${formatMillimeters(
-                    prepared.report.bounds.depth,
-                  )} × ${formatMillimeters(prepared.report.bounds.height)} mm`
-                : '—'}
-            </dd>
-            <dt className="text-muted-foreground">Triangles</dt>
-            <dd className="text-right font-medium">
-              {prepared.report.triangleCount.toLocaleString()}
-            </dd>
-            <dt className="text-muted-foreground">Boundary edges</dt>
-            <dd className="text-right font-medium">
-              {prepared.report.boundaryEdgeCount?.toLocaleString() ?? 'Not checked'}
-            </dd>
-            <dt className="text-muted-foreground">Non-manifold edges</dt>
-            <dd className="text-right font-medium">
-              {prepared.report.nonManifoldEdgeCount?.toLocaleString() ?? 'Not checked'}
-            </dd>
-          </dl>
+          {isPrintLevelBundleReport(prepared.report) ? (
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Level parts</span>
+                <span className="font-medium">{prepared.report.partCount}</span>
+              </div>
+              {prepared.report.parts.map((part) => (
+                <div className="rounded-md border p-2" key={part.levelId}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{part.label}</span>
+                    <span className="text-muted-foreground">
+                      {part.report.bounds
+                        ? `${formatMillimeters(part.report.bounds.width)} × ${formatMillimeters(
+                            part.report.bounds.depth,
+                          )} × ${formatMillimeters(part.report.bounds.height)} mm`
+                        : 'No geometry'}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {part.report.triangleCount.toLocaleString()} triangles ·{' '}
+                    {part.report.status === 'pass' ? 'basic checks passed' : part.report.status}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              <dt className="text-muted-foreground">Physical size</dt>
+              <dd className="text-right font-medium">
+                {prepared.report.bounds
+                  ? `${formatMillimeters(prepared.report.bounds.width)} × ${formatMillimeters(
+                      prepared.report.bounds.depth,
+                    )} × ${formatMillimeters(prepared.report.bounds.height)} mm`
+                  : '—'}
+              </dd>
+              <dt className="text-muted-foreground">Triangles</dt>
+              <dd className="text-right font-medium">
+                {prepared.report.triangleCount.toLocaleString()}
+              </dd>
+              <dt className="text-muted-foreground">Boundary edges</dt>
+              <dd className="text-right font-medium">
+                {prepared.report.boundaryEdgeCount?.toLocaleString() ?? 'Not checked'}
+              </dd>
+              <dt className="text-muted-foreground">Non-manifold edges</dt>
+              <dd className="text-right font-medium">
+                {prepared.report.nonManifoldEdgeCount?.toLocaleString() ?? 'Not checked'}
+              </dd>
+            </dl>
+          )}
 
           <ul className="space-y-1 text-muted-foreground text-xs">
             {prepared.report.diagnostics.map((diagnostic) => (
@@ -192,7 +245,9 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
             onClick={() => downloadArtifact(prepared.artifact)}
           >
             <Download className="size-4" />
-            Download print STL
+            {isPrintLevelBundleReport(prepared.report)
+              ? 'Download level STLs (.zip)'
+              : 'Download print STL'}
           </Button>
         </div>
       )}

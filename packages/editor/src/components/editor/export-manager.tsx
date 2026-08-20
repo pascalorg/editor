@@ -13,6 +13,7 @@ import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
+import { exportSceneLevelsToPrintStl } from '../../lib/level-print-export'
 import { exportSceneToPrintStl } from '../../lib/print-export'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
@@ -72,9 +73,10 @@ export function ExportManager() {
         // window, so the export snapshots the clean building, then restore.
         emitter.emit('thumbnail:before-capture', undefined)
         const restoreLevels = snapLevelsToTruePositions()
+        const nodes = useScene.getState().nodes
         let prepared: ReturnType<typeof prepareSceneForExport>
         try {
-          prepared = prepareSceneForExport(sceneGroup, useScene.getState().nodes, options)
+          prepared = prepareSceneForExport(sceneGroup, nodes, options)
         } finally {
           restoreLevels()
           emitter.emit('thumbnail:after-capture', undefined)
@@ -84,6 +86,16 @@ export function ExportManager() {
 
         if (format === 'print-stl') {
           const scale = options.printScale ?? 100
+          if (options.printScope === 'levels') {
+            const { archive, report } = exportSceneLevelsToPrintStl(exportScene, nodes, { scale })
+            const blob = new Blob([archive], { type: 'application/zip' })
+            return finishArtifact(
+              blob,
+              `print_levels_1-${scale}_${date}.zip`,
+              options.download,
+              report,
+            )
+          }
           const { buffer, report } = exportSceneToPrintStl(exportScene, { scale })
           const blob = new Blob([buffer], { type: 'model/stl' })
           return finishArtifact(

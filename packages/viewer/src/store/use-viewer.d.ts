@@ -6,6 +6,7 @@ export type SceneExportOptions = {
   onlyVisible?: boolean
   download?: boolean
   printScale?: number
+  printScope?: 'whole' | 'levels'
 }
 export type SceneExportArtifact = {
   blob: Blob
