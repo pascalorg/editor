@@ -11,6 +11,7 @@ import {
   isPrintLevelBundleReport,
   type PrintLevelBundleReport,
 } from '../../../../../lib/level-print-export'
+import type { PrintContentScope } from '../../../../../lib/print-content-scope'
 import {
   isPrintExportReport,
   type PrintExportReport,
@@ -41,6 +42,7 @@ export async function preparePrintExport(
   onlyVisible: boolean,
   scaleInput: string,
   scope: 'whole' | 'levels',
+  content: PrintContentScope,
 ): Promise<PreparedPrintExport> {
   const scale = Number(scaleInput)
   if (!Number.isFinite(scale) || scale <= 0) {
@@ -52,6 +54,7 @@ export async function preparePrintExport(
     download: false,
     printScale: scale,
     printScope: scope,
+    printContent: content,
   })
   if (
     !artifact ||
@@ -68,6 +71,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   const exportScene = useViewer((state) => state.exportScene)
   const [printScale, setPrintScale] = useState('100')
   const [scope, setScope] = useState<'whole' | 'levels'>('levels')
+  const [content, setContent] = useState<PrintContentScope>('structure')
   const [isPreparing, setIsPreparing] = useState(false)
   const [prepared, setPrepared] = useState<PreparedPrintExport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -75,7 +79,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   useEffect(() => {
     setPrepared(null)
     setError(null)
-  }, [nodes, onlyVisible, printScale, scope])
+  }, [nodes, onlyVisible, printScale, scope, content])
 
   const handlePrepare = async () => {
     if (!exportScene) {
@@ -87,7 +91,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
     setPrepared(null)
     setError(null)
     try {
-      setPrepared(await preparePrintExport(exportScene, onlyVisible, printScale, scope))
+      setPrepared(await preparePrintExport(exportScene, onlyVisible, printScale, scope, content))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Print export failed.')
     } finally {
@@ -120,6 +124,21 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
         />
         <span className="block text-muted-foreground">
           Common architectural scales are 1:25, 1:50, and 1:100.
+        </span>
+      </label>
+
+      <label className="block space-y-1 text-xs">
+        <span className="font-medium">Content</span>
+        <select
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onChange={(event) => setContent(event.target.value as PrintContentScope)}
+          value={content}
+        >
+          <option value="structure">Architectural structure (default)</option>
+          <option value="everything">Everything in export scope</option>
+        </select>
+        <span className="block text-muted-foreground">
+          Structure uses registered structural nodes; watertight union is still pending.
         </span>
       </label>
 

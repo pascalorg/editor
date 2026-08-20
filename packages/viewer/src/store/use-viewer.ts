@@ -18,6 +18,7 @@ export type SceneExportOptions = {
   download?: boolean
   printScale?: number
   printScope?: 'whole' | 'levels'
+  printContent?: 'structure' | 'everything'
 }
 export type SceneExportArtifact = {
   blob: Blob

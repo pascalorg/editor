@@ -14,6 +14,7 @@ import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
 import { exportSceneLevelsToPrintStl } from '../../lib/level-print-export'
+import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
 import { exportSceneToPrintStl } from '../../lib/print-export'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
@@ -81,7 +82,14 @@ export function ExportManager() {
           restoreLevels()
           emitter.emit('thumbnail:after-capture', undefined)
         }
-        const { scene: exportScene } = prepared
+        let { scene: exportScene } = prepared
+        if (format === 'print-stl') {
+          exportScene = filterPreparedSceneForPrintContent(
+            exportScene,
+            nodes,
+            options.printContent ?? 'structure',
+          )
+        }
         ensurePositionAttributes(exportScene)
 
         if (format === 'print-stl') {

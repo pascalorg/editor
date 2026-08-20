@@ -1,9 +1,22 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, sceneRegistry } from '@pascal-app/core'
+import { type AnyNode, registerNode, sceneRegistry } from '@pascal-app/core'
 import { unzipSync } from 'fflate'
 import * as THREE from 'three'
 import { prepareSceneForExport } from './glb-export'
 import { exportSceneLevelsToPrintStl } from './level-print-export'
+import { filterPreparedSceneForPrintContent } from './print-content-scope'
+
+function registerFixtureKind(category: 'structure' | 'furnish'): string {
+  const kind = `print-level-${category}-${crypto.randomUUID()}`
+  registerNode({
+    kind,
+    schemaVersion: 1,
+    category,
+    defaults: () => ({}),
+    capabilities: {},
+  } as never)
+  return kind
+}
 
 function binaryStlBounds(buffer: Uint8Array): { triangles: number; size: THREE.Vector3 } {
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
@@ -34,16 +47,23 @@ function twoLevelFixture() {
   const building = new THREE.Group()
   const ground = new THREE.Group()
   const upper = new THREE.Group()
-  ground.add(new THREE.Mesh(new THREE.BoxGeometry(10, 3, 8)))
-  upper.add(new THREE.Mesh(new THREE.BoxGeometry(8, 2, 6)))
+  const groundStructure = new THREE.Group()
+  const upperStructure = new THREE.Group()
+  groundStructure.add(new THREE.Mesh(new THREE.BoxGeometry(10, 3, 8)))
+  upperStructure.add(new THREE.Mesh(new THREE.BoxGeometry(8, 2, 6)))
+  ground.add(groundStructure)
+  upper.add(upperStructure)
   ground.position.y = 1.5
   upper.position.y = 4
   root.add(building)
   building.add(ground, upper)
 
+  const structureKind = registerFixtureKind('structure')
   sceneRegistry.nodes.set('building_main', building)
   sceneRegistry.nodes.set('level_ground', ground)
   sceneRegistry.nodes.set('level_upper', upper)
+  sceneRegistry.nodes.set('structure_ground', groundStructure)
+  sceneRegistry.nodes.set('structure_upper', upperStructure)
 
   const nodes: Record<string, AnyNode> = {
     building_main: {
@@ -60,7 +80,7 @@ function twoLevelFixture() {
       name: 'Ground',
       level: 0,
       parentId: 'building_main',
-      children: [],
+      children: ['structure_ground'],
       visible: true,
     } as unknown as AnyNode,
     level_upper: {
@@ -70,7 +90,21 @@ function twoLevelFixture() {
       name: 'Upper',
       level: 1,
       parentId: 'building_main',
-      children: [],
+      children: ['structure_upper'],
+      visible: true,
+    } as unknown as AnyNode,
+    structure_ground: {
+      object: 'node',
+      id: 'structure_ground',
+      type: structureKind,
+      parentId: 'level_ground',
+      visible: true,
+    } as unknown as AnyNode,
+    structure_upper: {
+      object: 'node',
+      id: 'structure_upper',
+      type: structureKind,
+      parentId: 'level_upper',
       visible: true,
     } as unknown as AnyNode,
   }
@@ -146,6 +180,32 @@ describe('per-level print STL export', () => {
 
     expect(Object.keys(files)).toEqual(['01_ground.stl'])
     expect(bundle.report.parts.map((part) => part.levelId)).toEqual(['level_ground'])
+  })
+
+  test('applies structure scope before partitioning level files', () => {
+    const fixture = twoLevelFixture()
+    const furniture = new THREE.Group()
+    furniture.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)))
+    fixture.ground.add(furniture)
+    sceneRegistry.nodes.set('chair_ground', furniture)
+    fixture.nodes.chair_ground = {
+      object: 'node',
+      id: 'chair_ground',
+      type: registerFixtureKind('furnish'),
+      parentId: 'level_ground',
+      visible: true,
+    } as unknown as AnyNode
+
+    const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
+    const structure = filterPreparedSceneForPrintContent(
+      prepared.scene,
+      fixture.nodes,
+      'structure',
+    )
+    const bundle = exportSceneLevelsToPrintStl(structure, fixture.nodes, { scale: 100 })
+
+    expect(bundle.report.parts.map((part) => part.report.triangleCount)).toEqual([12, 12])
+    expect(bundle.report.status).toBe('pass')
   })
 
   test('produces deterministic archive bytes for the same level parts', () => {

@@ -49,7 +49,7 @@ describe('print export card contract', () => {
       return artifact
     }
 
-    const prepared = await preparePrintExport(exportScene, true, '50', 'whole')
+    const prepared = await preparePrintExport(exportScene, true, '50', 'whole', 'structure')
 
     expect(calls).toEqual([
       {
@@ -59,6 +59,7 @@ describe('print export card contract', () => {
           download: false,
           printScale: 50,
           printScope: 'whole',
+          printContent: 'structure',
         },
       },
     ])
@@ -72,7 +73,9 @@ describe('print export card contract', () => {
       return null
     }
 
-    await expect(preparePrintExport(exportScene, true, '0', 'levels')).rejects.toThrow(
+    await expect(
+      preparePrintExport(exportScene, true, '0', 'levels', 'structure'),
+    ).rejects.toThrow(
       'Enter a positive scale denominator',
     )
     expect(invoked).toBe(false)
@@ -82,7 +85,7 @@ describe('print export card contract', () => {
     const artifact = { blob: new Blob(['zip']), filename: 'levels.zip', metadata: levelReport }
     const exportScene: SceneExport = async () => artifact
 
-    const prepared = await preparePrintExport(exportScene, true, '50', 'levels')
+    const prepared = await preparePrintExport(exportScene, true, '50', 'levels', 'everything')
 
     expect(prepared).toEqual({ artifact, report: levelReport })
   })
@@ -93,8 +96,8 @@ describe('print export card contract', () => {
       filename: 'house.stl',
     })
 
-    await expect(preparePrintExport(exportScene, false, '100', 'whole')).rejects.toThrow(
-      'did not return a preflight report',
-    )
+    await expect(
+      preparePrintExport(exportScene, false, '100', 'whole', 'structure'),
+    ).rejects.toThrow('did not return a preflight report')
   })
 })
