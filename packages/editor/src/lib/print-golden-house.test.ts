@@ -188,7 +188,10 @@ describe('print golden house', () => {
         compileShell: compileGoldenShell,
       }
       const first = await exportSceneLevelsForPrint(structure, fixture.nodes, options)
-      const second = await exportSceneLevelsForPrint(structure, fixture.nodes, options)
+      const second = await exportSceneLevelsForPrint(structure, fixture.nodes, {
+        ...options,
+        minimumFeatureMm: 1.8,
+      })
 
       expect(first.report.status).toBe('pass')
       expect(first.report.parts.map((part) => part.objectName)).toEqual([
@@ -197,6 +200,9 @@ describe('print golden house', () => {
         '02 Upper',
       ])
       expect(first.report.parts.map((part) => part.sourceBaseMeters)).toEqual([null, 0, 2.5])
+      expect(first.report.parts.map((part) => part.report.minimumFeatureThicknessMm)).toEqual([
+        3, 2, 1.5,
+      ])
       for (const part of first.report.parts) {
         expect(part.report.status).toBe('pass')
         expect(part.report.degenerateTriangleCount).toBe(0)
@@ -210,6 +216,18 @@ describe('print golden house', () => {
       )
       expect(first.report.parts[2]?.report.diagnostics).toContainEqual(
         expect.objectContaining({ nodeIds: fixture.upperStructuralNodeIds }),
+      )
+      expect(second.report.status).toBe('blocked')
+      expect(second.report.parts.map((part) => part.report.status)).toEqual([
+        'pass',
+        'pass',
+        'blocked',
+      ])
+      expect(second.report.parts[2]?.report.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: 'feature_below_target',
+          nodeIds: [PRINT_GOLDEN_HOUSE_IDS.roof],
+        }),
       )
 
       const objects = packageObjectSizes(first.data)

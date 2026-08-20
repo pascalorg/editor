@@ -73,6 +73,7 @@ try {
       bounds: part.report.bounds,
       triangles: part.report.triangleCount,
       volumeMm3: part.report.volumeMm3,
+      minimumFeatureThicknessMm: part.report.minimumFeatureThicknessMm,
     })),
   }
   await writeFile(

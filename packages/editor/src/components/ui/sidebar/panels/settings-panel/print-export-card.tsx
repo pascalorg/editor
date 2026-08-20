@@ -49,10 +49,19 @@ export async function preparePrintExport(
   base: PrintBaseMode,
   plinthMarginInput: string,
   plinthThicknessInput: string,
+  minimumFeatureInput: string,
 ): Promise<PreparedPrintExport> {
   const scale = Number(scaleInput)
   if (!Number.isFinite(scale) || scale <= 0) {
     throw new RangeError('Enter a positive scale denominator, such as 25, 50, or 100.')
+  }
+
+  let minimumFeatureMm: number | undefined
+  if (content === 'structure' && minimumFeatureInput.trim() !== '') {
+    minimumFeatureMm = Number(minimumFeatureInput)
+    if (!Number.isFinite(minimumFeatureMm) || minimumFeatureMm <= 0) {
+      throw new RangeError('Enter a positive minimum feature target in millimeters.')
+    }
   }
 
   let plinthMarginMm: number | undefined
@@ -78,6 +87,7 @@ export async function preparePrintExport(
     printScope: scope,
     printContent: content,
     printBase: base,
+    ...(minimumFeatureMm === undefined ? {} : { printMinimumFeatureMm: minimumFeatureMm }),
     ...(plinthMarginMm === undefined ? {} : { printPlinthMarginMm: plinthMarginMm }),
     ...(plinthThicknessMm === undefined ? {} : { printPlinthThicknessMm: plinthThicknessMm }),
   })
@@ -92,6 +102,7 @@ export async function preparePrintExport(
 
 export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   const scaleInputId = useId()
+  const minimumFeatureInputId = useId()
   const nodes = useScene((state) => state.nodes)
   const exportScene = useViewer((state) => state.exportScene)
   const [printScale, setPrintScale] = useState('100')
@@ -101,6 +112,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   const [base, setBase] = useState<PrintBaseMode>('none')
   const [plinthMargin, setPlinthMargin] = useState('2')
   const [plinthThickness, setPlinthThickness] = useState('2')
+  const [minimumFeature, setMinimumFeature] = useState('')
   const [isPreparing, setIsPreparing] = useState(false)
   const [prepared, setPrepared] = useState<PreparedPrintExport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -108,7 +120,18 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   useEffect(() => {
     setPrepared(null)
     setError(null)
-  }, [nodes, onlyVisible, printScale, scope, format, content, base, plinthMargin, plinthThickness])
+  }, [
+    nodes,
+    onlyVisible,
+    printScale,
+    scope,
+    format,
+    content,
+    base,
+    plinthMargin,
+    plinthThickness,
+    minimumFeature,
+  ])
 
   const handlePrepare = async () => {
     if (!exportScene) {
@@ -131,6 +154,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
           scope === 'levels' ? base : 'none',
           plinthMargin,
           plinthThickness,
+          minimumFeature,
         ),
       )
     } catch (reason) {
@@ -165,6 +189,25 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
         />
         <span className="block text-muted-foreground">
           Common architectural scales are 1:25, 1:50, and 1:100.
+        </span>
+      </label>
+
+      <label className="block space-y-1 text-xs" htmlFor={minimumFeatureInputId}>
+        <span className="font-medium">Minimum feature target (mm)</span>
+        <input
+          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          disabled={content !== 'structure'}
+          id={minimumFeatureInputId}
+          min="0.1"
+          onChange={(event) => setMinimumFeature(event.target.value)}
+          placeholder="Optional"
+          step="0.1"
+          type="number"
+          value={minimumFeature}
+        />
+        <span className="block text-muted-foreground">
+          Custom printer/process target. Leave blank to report known semantic thickness without
+          blocking.
         </span>
       </label>
 
@@ -327,6 +370,14 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
                     {part.report.triangleCount.toLocaleString()} triangles ·{' '}
                     {part.report.status === 'pass' ? 'basic checks passed' : part.report.status}
                   </div>
+                  {part.report.minimumFeatureThicknessMm !== undefined && (
+                    <div className="mt-1 text-muted-foreground">
+                      Minimum known feature ·{' '}
+                      {part.report.minimumFeatureThicknessMm === null
+                        ? 'Not measured'
+                        : `${formatMillimeters(part.report.minimumFeatureThicknessMm)} mm`}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -352,12 +403,22 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
               <dd className="text-right font-medium">
                 {prepared.report.nonManifoldEdgeCount?.toLocaleString() ?? 'Not checked'}
               </dd>
+              {prepared.report.minimumFeatureThicknessMm !== undefined && (
+                <>
+                  <dt className="text-muted-foreground">Minimum known feature</dt>
+                  <dd className="text-right font-medium">
+                    {prepared.report.minimumFeatureThicknessMm === null
+                      ? 'Not measured'
+                      : `${formatMillimeters(prepared.report.minimumFeatureThicknessMm)} mm`}
+                  </dd>
+                </>
+              )}
             </dl>
           )}
 
           <ul className="space-y-1 text-muted-foreground text-xs">
-            {prepared.report.diagnostics.map((diagnostic) => (
-              <li key={diagnostic.code}>· {diagnostic.message}</li>
+            {prepared.report.diagnostics.map((diagnostic, index) => (
+              <li key={`${diagnostic.code}-${index}`}>· {diagnostic.message}</li>
             ))}
           </ul>
 

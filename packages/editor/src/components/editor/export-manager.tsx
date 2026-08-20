@@ -17,6 +17,7 @@ import { exportSceneLevelsForPrint } from '../../lib/level-print-export'
 import { exportSceneToPrint3mf } from '../../lib/print-3mf'
 import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
 import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
+import { applySemanticPrintFeatureThickness } from '../../lib/print-feature-thickness'
 import { compileSemanticPrintShellWithManifold } from '../../lib/print-shell-compiler-manifold-worker'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
@@ -96,6 +97,7 @@ export function ExportManager() {
           const printFormat = format === 'print-3mf' ? '3mf' : 'stl'
           const scale = options.printScale ?? 100
           const compileShells = printContent === 'structure'
+          const minimumFeatureMm = compileShells ? options.printMinimumFeatureMm : undefined
           if (options.printScope === 'levels') {
             const plinth =
               options.printBase === 'plinth'
@@ -108,6 +110,7 @@ export function ExportManager() {
               scale,
               format: printFormat,
               plinth,
+              minimumFeatureMm,
               compileShells,
               compileShell: compileShells ? compileSemanticPrintShellWithManifold : undefined,
             })
@@ -137,13 +140,21 @@ export function ExportManager() {
             printFormat === '3mf'
               ? exportSceneToPrint3mf(printSource, printOptions)
               : exportSceneToPrintStl(printSource, printOptions)
-          const report = compiled
+          let report = compiled
             ? mergePrintExportDiagnostics(
                 output.report,
                 compiled.diagnostics,
                 new Set(['compiler_pending']),
               )
             : output.report
+          if (compiled) {
+            report = applySemanticPrintFeatureThickness(
+              report,
+              nodes,
+              compiled.sourceNodeIds,
+              minimumFeatureMm,
+            )
+          }
           const { buffer } = output
           const blob = new Blob([buffer], {
             type: printFormat === '3mf' ? 'model/3mf' : 'model/stl',

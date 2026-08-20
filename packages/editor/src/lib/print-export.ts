@@ -55,6 +55,7 @@ export type PrintExportReport = {
   boundaryEdgeCount: number | null
   nonManifoldEdgeCount: number | null
   volumeMm3: number
+  minimumFeatureThicknessMm?: number | null
   diagnostics: PrintExportDiagnostic[]
 }
 

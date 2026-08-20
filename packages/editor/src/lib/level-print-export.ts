@@ -18,6 +18,11 @@ import {
   type PrintMeshData,
   prepareSceneForPrint,
 } from './print-export'
+import {
+  applyPrintFeatureThickness,
+  applySemanticPrintFeatureThickness,
+  isPrintFeatureThicknessDiagnostic,
+} from './print-feature-thickness'
 import { compileSemanticPrintShell } from './print-shell-compiler'
 import type { PrintShellCompileResult } from './print-shell-compiler-baseline'
 
@@ -65,6 +70,7 @@ export type PrintLevelExportOptions = {
   scale: number
   format?: PrintArtifactFormat
   plinth?: PrintPlinthOptions
+  minimumFeatureMm?: number
   compileShells?: boolean
   compileShell?: (
     source: THREE.Object3D,
@@ -318,6 +324,14 @@ export async function exportSceneLevelsForPrint(
           new Set(['compiler_pending']),
         )
       : prepared.report
+    if (compiled) {
+      report = applySemanticPrintFeatureThickness(
+        report,
+        nodes,
+        compiled.sourceNodeIds,
+        options.minimumFeatureMm,
+      )
+    }
     const baseDiagnostics = levelBaseDiagnostics(level, label, sourceBaseMeters, report)
     report = mergePrintExportDiagnostics(report, baseDiagnostics)
     if (compiled) {
@@ -325,6 +339,7 @@ export async function exportSceneLevelsForPrint(
         ...compiled.diagnostics.filter((diagnostic) => diagnostic.severity !== 'info'),
       )
     }
+    diagnostics.push(...report.diagnostics.filter(isPrintFeatureThicknessDiagnostic))
     diagnostics.push(...baseDiagnostics)
     levelArtifacts.push({
       filename,
@@ -388,6 +403,14 @@ export async function exportSceneLevelsForPrint(
           new THREE.BoxGeometry(widthMeters, thicknessMeters, depthMeters),
         )
         const prepared = prepareSceneForPrint(mesh, { ...options, format })
+        const report = applyPrintFeatureThickness(
+          prepared.report,
+          {
+            features: [{ nodeId: lowestLevel.id, thicknessMm }],
+            unmeasuredNodeIds: [],
+          },
+          options.minimumFeatureMm,
+        )
         const filename = format === 'stl' ? '00_plinth.stl' : null
         const objectName = '00 Plinth'
         plinthArtifact = {
@@ -399,7 +422,7 @@ export async function exportSceneLevelsForPrint(
             format === '3mf' && prepared.report.bounds && prepared.report.invalidTriangleCount === 0
               ? extractPreparedPrintMesh(prepared.scene)
               : null,
-          bounds: prepared.report.bounds,
+          bounds: report.bounds,
         }
         plinthPart = {
           kind: 'plinth',
@@ -408,8 +431,9 @@ export async function exportSceneLevelsForPrint(
           objectName,
           filename,
           sourceBaseMeters: null,
-          report: prepared.report,
+          report,
         }
+        diagnostics.push(...report.diagnostics.filter(isPrintFeatureThicknessDiagnostic))
         diagnostics.push({
           severity: 'info',
           code: 'rectangular_plinth_experimental',
@@ -425,8 +449,8 @@ export async function exportSceneLevelsForPrint(
     code: 'level_parts_experimental',
     message: options.compileShells
       ? options.compileShell
-        ? 'Level parts use stored level bases and worker-backed Manifold semantic shell compilation; self-intersection checks and minimum wall thickness remain pending.'
-        : 'Level parts use stored level bases and the experimental synchronous semantic shell compiler; worker execution, self-intersection checks, and minimum wall thickness remain pending.'
+        ? 'Level parts use stored level bases and worker-backed Manifold semantic shell compilation; known wall, slab, roof, and plinth dimensions are measured, while mesh-observed thin features and self-intersections remain pending.'
+        : 'Level parts use stored level bases and the experimental synchronous semantic shell compiler; known wall, slab, roof, and plinth dimensions are measured, while worker execution, mesh-observed thin features, and self-intersections remain pending.'
       : 'Level parts use stored level bases and semantic separation but are not boolean-unioned printable shells yet.',
   })
 

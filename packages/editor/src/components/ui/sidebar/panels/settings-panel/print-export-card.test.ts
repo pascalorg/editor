@@ -73,6 +73,7 @@ describe('print export card contract', () => {
       'none',
       '2',
       '2',
+      '1.8',
     )
 
     expect(calls).toEqual([
@@ -85,6 +86,7 @@ describe('print export card contract', () => {
           printScope: 'whole',
           printContent: 'structure',
           printBase: 'none',
+          printMinimumFeatureMm: 1.8,
         },
       },
     ])
@@ -99,7 +101,18 @@ describe('print export card contract', () => {
     }
 
     await expect(
-      preparePrintExport(exportScene, true, '0', 'levels', '3mf', 'structure', 'none', '2', '2'),
+      preparePrintExport(
+        exportScene,
+        true,
+        '0',
+        'levels',
+        '3mf',
+        'structure',
+        'none',
+        '2',
+        '2',
+        '',
+      ),
     ).rejects.toThrow(
       'Enter a positive scale denominator',
     )
@@ -124,6 +137,7 @@ describe('print export card contract', () => {
       'plinth',
       '3',
       '2.5',
+      '',
     )
 
     expect(calls).toEqual([
@@ -162,8 +176,33 @@ describe('print export card contract', () => {
         'plinth',
         '-1',
         '2',
+        '',
       ),
     ).rejects.toThrow('non-negative plinth margin')
+    expect(invoked).toBe(false)
+  })
+
+  test('rejects an invalid custom minimum feature target before invoking the exporter', async () => {
+    let invoked = false
+    const exportScene: SceneExport = async () => {
+      invoked = true
+      return null
+    }
+
+    await expect(
+      preparePrintExport(
+        exportScene,
+        true,
+        '50',
+        'levels',
+        '3mf',
+        'structure',
+        'none',
+        '2',
+        '2',
+        '0',
+      ),
+    ).rejects.toThrow('positive minimum feature target')
     expect(invoked).toBe(false)
   })
 
@@ -184,6 +223,7 @@ describe('print export card contract', () => {
         'none',
         '2',
         '2',
+        '',
       ),
     ).rejects.toThrow('did not return a preflight report')
   })

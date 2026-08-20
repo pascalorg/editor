@@ -20,6 +20,7 @@ export type SceneExportOptions = {
   printScope?: 'whole' | 'levels'
   printContent?: 'structure' | 'everything'
   printBase?: 'none' | 'plinth'
+  printMinimumFeatureMm?: number
   printPlinthMarginMm?: number
   printPlinthThicknessMm?: number
 }
