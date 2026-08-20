@@ -242,29 +242,29 @@ function analyzePrintScene(root: THREE.Object3D, scale: number): PrintExportRepo
   }
   if (degenerateTriangleCount > 0) {
     diagnostics.push({
-      severity: 'warning',
+      severity: 'error',
       code: 'degenerate_triangles',
       message: `${degenerateTriangleCount.toLocaleString()} zero-area or near-zero-area triangle${
         degenerateTriangleCount === 1 ? '' : 's'
-      } should be repaired.`,
+      } prevent a print-ready artifact.`,
     })
   }
   if (boundaryEdgeCount && boundaryEdgeCount > 0) {
     diagnostics.push({
-      severity: 'warning',
+      severity: 'error',
       code: 'open_boundaries',
       message: `${boundaryEdgeCount.toLocaleString()} boundary edge${
         boundaryEdgeCount === 1 ? '' : 's'
-      } indicate open surfaces.`,
+      } leave the exported surface open.`,
     })
   }
   if (nonManifoldEdgeCount && nonManifoldEdgeCount > 0) {
     diagnostics.push({
-      severity: 'warning',
+      severity: 'error',
       code: 'non_manifold_edges',
       message: `${nonManifoldEdgeCount.toLocaleString()} edge${
         nonManifoldEdgeCount === 1 ? '' : 's'
-      } are shared by more than two triangles.`,
+      } are shared by more than two triangles and must be repaired.`,
     })
   }
   if (!edgeCheckComplete) {
@@ -276,7 +276,7 @@ function analyzePrintScene(root: THREE.Object3D, scale: number): PrintExportRepo
   }
   if (triangleCount > 0 && Math.abs(signedVolumeMm3) <= 1e-6) {
     diagnostics.push({
-      severity: 'warning',
+      severity: 'error',
       code: 'zero_volume',
       message: 'The exported surfaces enclose no measurable signed volume.',
     })

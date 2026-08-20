@@ -61,16 +61,59 @@ describe('print STL export', () => {
     expect(report.volumeMm3).toBeCloseTo(240_000, 4)
   })
 
-  test('reports open, zero-volume surface geometry before download', () => {
+  test('blocks open, zero-volume surface geometry before download', () => {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 3))
 
     const { report } = prepareSceneForPrint(mesh, { scale: 50 })
 
-    expect(report.status).toBe('warning')
+    expect(report.status).toBe('blocked')
     expect(report.boundaryEdgeCount).toBe(4)
     expect(report.volumeMm3).toBeCloseTo(0)
     expect(report.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
       expect.arrayContaining(['open_boundaries', 'zero_volume', 'compiler_pending']),
+    )
+    expect(
+      report.diagnostics
+        .filter(
+          (diagnostic) =>
+            diagnostic.code === 'open_boundaries' || diagnostic.code === 'zero_volume',
+        )
+        .map((diagnostic) => diagnostic.severity),
+    ).toEqual(['error', 'error'])
+  })
+
+  test('blocks degenerate triangles', () => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 2, 0, 0], 3),
+    )
+
+    const { report } = prepareSceneForPrint(new THREE.Mesh(geometry), { scale: 100 })
+
+    expect(report.status).toBe('blocked')
+    expect(report.degenerateTriangleCount).toBe(1)
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'degenerate_triangles', severity: 'error' }),
+    )
+  })
+
+  test('blocks an edge shared by more than two triangles', () => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        3,
+      ),
+    )
+
+    const { report } = prepareSceneForPrint(new THREE.Mesh(geometry), { scale: 100 })
+
+    expect(report.status).toBe('blocked')
+    expect(report.nonManifoldEdgeCount).toBe(1)
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'non_manifold_edges', severity: 'error' }),
     )
   })
 
