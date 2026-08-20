@@ -27,7 +27,7 @@ describe('block last operation history transaction', () => {
   })
 
   test('replaces the committed result while preserving one undo step', () => {
-    const firstCommand = { type: 'extrude-face', faceId: 'f-top', distance: 0.25 } as const
+    const firstCommand = { type: 'extrude-faces', faceIds: ['f-top'], distance: 0.25 } as const
     const first = applyBlockCommand(node.topology, firstCommand)
     expect(first.ok).toBe(true)
     if (!first.ok) return
@@ -61,7 +61,7 @@ describe('block last operation history transaction', () => {
   })
 
   test('repeats the operation from its latest result as a new undo step', () => {
-    const command = { type: 'extrude-face', faceId: 'f-top', distance: 0.25 } as const
+    const command = { type: 'extrude-faces', faceIds: ['f-top'], distance: 0.25 } as const
     const first = applyBlockCommand(node.topology, command)
     expect(first.ok).toBe(true)
     if (!first.ok) return

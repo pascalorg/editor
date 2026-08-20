@@ -6,8 +6,8 @@ describe('applyBlockCommand', () => {
   test('extrudes a face while retaining valid stable topology', () => {
     const topology = createBoxBlockTopology()
     const result = applyBlockCommand(topology, {
-      type: 'extrude-face',
-      faceId: 'f-top',
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
       distance: 0.25,
     })
 
@@ -28,16 +28,16 @@ describe('applyBlockCommand', () => {
 
   test('can extrude the resulting cap again without colliding IDs', () => {
     const first = applyBlockCommand(createBoxBlockTopology(), {
-      type: 'extrude-face',
-      faceId: 'f-top',
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
       distance: 0.25,
     })
     expect(first.ok).toBe(true)
     if (!first.ok) return
 
     const second = applyBlockCommand(first.topology, {
-      type: 'extrude-face',
-      faceId: 'f-top',
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
       distance: 0.25,
     })
     expect(second.ok).toBe(true)
@@ -61,8 +61,8 @@ describe('applyBlockCommand', () => {
     )
     const originalFaceIds = new Set(topology.faces.map((face) => face.id))
     const result = applyBlockCommand(topology, {
-      type: 'extrude-face',
-      faceId: 'f-top',
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
       distance: 0.25,
     })
 
@@ -75,12 +75,37 @@ describe('applyBlockCommand', () => {
     expect(inheritedFaces.every((face) => face.materialSlot === 'accent')).toBe(true)
   })
 
+  test('extrudes a connected face region without walls along its internal edges', () => {
+    const base = createBoxBlockTopology()
+    const first = applyBlockCommand(base, {
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
+      distance: 0.25,
+    })
+    expect(first.ok).toBe(true)
+    if (!first.ok) return
+    const originalFaceIds = new Set(base.faces.map((face) => face.id))
+    const sideFace = first.topology.faces.find((face) => !originalFaceIds.has(face.id))!
+
+    const result = applyBlockCommand(first.topology, {
+      type: 'extrude-faces',
+      faceIds: ['f-top', sideFace.id],
+      distance: 0.25,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.topology.faces).toHaveLength(16)
+    expect(result.selection).toEqual({ mode: 'face', ids: ['f-top', sideFace.id] })
+    expect(inspectBlockTopology(result.topology)).toEqual([])
+  })
+
   test('reports an invalid face selection without changing topology', () => {
     const topology = createBoxBlockTopology()
     expect(
       applyBlockCommand(topology, {
-        type: 'extrude-face',
-        faceId: 'missing',
+        type: 'extrude-faces',
+        faceIds: ['missing'],
         distance: 0.25,
       }),
     ).toEqual({ ok: false, error: 'Face not found: missing' })
@@ -156,8 +181,8 @@ describe('applyBlockCommand', () => {
 
   test('insets a face into a valid inner face and surrounding ring', () => {
     const result = applyBlockCommand(createBoxBlockTopology(), {
-      type: 'inset-face',
-      faceId: 'f-top',
+      type: 'inset-faces',
+      faceIds: ['f-top'],
       amount: 0.2,
       depth: 0,
     })
@@ -177,8 +202,8 @@ describe('applyBlockCommand', () => {
     )
     const originalFaceIds = new Set(topology.faces.map((face) => face.id))
     const result = applyBlockCommand(topology, {
-      type: 'inset-face',
-      faceId: 'f-top',
+      type: 'inset-faces',
+      faceIds: ['f-top'],
       amount: 0.2,
       depth: 0,
     })
@@ -190,6 +215,23 @@ describe('applyBlockCommand', () => {
     )
     expect(inheritedFaces).toHaveLength(5)
     expect(inheritedFaces.every((face) => face.materialSlot === 'accent')).toBe(true)
+  })
+
+  test('insets multiple selected faces in one command and keeps every new cap selected', () => {
+    const result = applyBlockCommand(createBoxBlockTopology(), {
+      type: 'inset-faces',
+      faceIds: ['f-top', 'f-bottom'],
+      amount: 0.2,
+      depth: 0,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.topology.vertices).toHaveLength(16)
+    expect(result.topology.edges).toHaveLength(28)
+    expect(result.topology.faces).toHaveLength(14)
+    expect(result.selection).toEqual({ mode: 'face', ids: ['f-top', 'f-bottom'] })
+    expect(inspectBlockTopology(result.topology)).toEqual([])
   })
 
   test('deletes selected faces, edges, or vertices without invalid references', () => {
@@ -209,6 +251,33 @@ describe('applyBlockCommand', () => {
     }
   })
 
+  test('deletes multiple components according to the active component mode', () => {
+    for (const selection of [
+      { mode: 'face' as const, ids: ['f-top', 'f-bottom'] },
+      { mode: 'edge' as const, ids: ['e0', 'e6'] },
+      { mode: 'vertex' as const, ids: ['v0', 'v6'] },
+    ]) {
+      const result = applyBlockCommand(createBoxBlockTopology(), {
+        type: 'delete-components',
+        selection,
+      })
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) continue
+      expect(result.selection).toEqual({ mode: selection.mode, ids: [] })
+      expect(inspectBlockTopology(result.topology)).toEqual([])
+      if (selection.mode === 'face') {
+        expect(result.topology.faces.some((face) => selection.ids.includes(face.id))).toBe(false)
+      } else if (selection.mode === 'edge') {
+        expect(result.topology.edges.some((edge) => selection.ids.includes(edge.id))).toBe(false)
+      } else {
+        expect(result.topology.vertices.some((vertex) => selection.ids.includes(vertex.id))).toBe(
+          false,
+        )
+      }
+    }
+  })
+
   test('merges selected vertices at their center and collapses duplicate boundaries', () => {
     const result = applyBlockCommand(createBoxBlockTopology(), {
       type: 'merge-vertices',
@@ -219,17 +288,32 @@ describe('applyBlockCommand', () => {
     if (!result.ok) return
     expect(result.topology.vertices).toHaveLength(7)
     expect(result.topology.edges).toHaveLength(11)
-    expect(result.selection).toEqual({ mode: 'vertex', ids: ['v4'] })
-    expect(result.topology.vertices.find((vertex) => vertex.id === 'v4')?.position).toEqual([
+    expect(result.selection).toEqual({ mode: 'vertex', ids: ['v5'] })
+    expect(result.topology.vertices.find((vertex) => vertex.id === 'v5')?.position).toEqual([
       0, 2.4, -1,
     ])
     expect(inspectBlockTopology(result.topology)).toEqual([])
   })
 
+  test('merges multiple vertices while retaining the last-selected active vertex ID', () => {
+    const result = applyBlockCommand(createBoxBlockTopology(), {
+      type: 'merge-vertices',
+      vertexIds: ['v4', 'v5', 'v6'],
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.selection).toEqual({ mode: 'vertex', ids: ['v6'] })
+    expect(result.topology.vertices.some((vertex) => vertex.id === 'v6')).toBe(true)
+    expect(result.topology.vertices.some((vertex) => vertex.id === 'v4')).toBe(false)
+    expect(result.topology.vertices.some((vertex) => vertex.id === 'v5')).toBe(false)
+    expect(inspectBlockTopology(result.topology)).toEqual([])
+  })
+
   test('dissolves a shared edge into one valid face loop', () => {
     const result = applyBlockCommand(createBoxBlockTopology(), {
-      type: 'dissolve-edge',
-      edgeId: 'e4',
+      type: 'dissolve-edges',
+      edgeIds: ['e4'],
     })
 
     expect(result.ok).toBe(true)
@@ -258,14 +342,42 @@ describe('applyBlockCommand', () => {
           : face,
     )
     const result = applyBlockCommand(topology, {
-      type: 'dissolve-edge',
-      edgeId: 'e4',
+      type: 'dissolve-edges',
+      edgeIds: ['e4'],
     })
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.topology.faces.find((face) => face.id === 'f-top')?.materialSlot).toBe('top')
     expect(result.topology.faces.some((face) => face.id === 'f-front')).toBe(false)
+  })
+
+  test('dissolves multiple selected edges in one valid transaction', () => {
+    const result = applyBlockCommand(createBoxBlockTopology(), {
+      type: 'dissolve-edges',
+      edgeIds: ['e4', 'e6'],
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.topology.edges).toHaveLength(10)
+    expect(result.topology.faces).toHaveLength(4)
+    expect(result.selection).toEqual({ mode: 'face', ids: ['f-top'] })
+    expect(inspectBlockTopology(result.topology)).toEqual([])
+  })
+
+  test('dissolves the internal boundaries of a selected face region', () => {
+    const result = applyBlockCommand(createBoxBlockTopology(), {
+      type: 'dissolve-faces',
+      faceIds: ['f-top', 'f-front', 'f-back'],
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.topology.edges).toHaveLength(10)
+    expect(result.topology.faces).toHaveLength(4)
+    expect(result.selection).toEqual({ mode: 'face', ids: ['f-top'] })
+    expect(inspectBlockTopology(result.topology)).toEqual([])
   })
 
   test('cuts a connected quad ring and selects the inserted loop', () => {
@@ -326,8 +438,8 @@ describe('applyBlockCommand', () => {
 
   test('stops a loop cut cleanly before a non-quad face', () => {
     const dissolved = applyBlockCommand(createBoxBlockTopology(), {
-      type: 'dissolve-edge',
-      edgeId: 'e4',
+      type: 'dissolve-edges',
+      edgeIds: ['e4'],
     })
     expect(dissolved.ok).toBe(true)
     if (!dissolved.ok) return
@@ -381,8 +493,8 @@ describe('applyBlockCommand', () => {
 
   test('bevels a manifold box edge with width, segments, profile, and overlap clamping', () => {
     const result = applyBlockCommand(createBoxBlockTopology(), {
-      type: 'bevel-edge',
-      edgeId: 'e0',
+      type: 'bevel-edges',
+      edgeIds: ['e0'],
       width: 0.2,
       segments: 3,
       profile: 0.5,
@@ -416,8 +528,8 @@ describe('applyBlockCommand', () => {
     )
     const originalFaceIds = new Set(topology.faces.map((face) => face.id))
     const result = applyBlockCommand(topology, {
-      type: 'bevel-edge',
-      edgeId: 'e0',
+      type: 'bevel-edges',
+      edgeIds: ['e0'],
       width: 0.2,
       segments: 3,
       profile: 0.5,
@@ -430,5 +542,41 @@ describe('applyBlockCommand', () => {
     expect(bevelBands).toHaveLength(3)
     expect(bevelBands.every((face) => face.materialSlot === 'bottom')).toBe(true)
     expect(result.topology.faces.find((face) => face.id === 'f-front')?.materialSlot).toBe('front')
+  })
+
+  test('bevels multiple independent selected edges in one command', () => {
+    const result = applyBlockCommand(createBoxBlockTopology(), {
+      type: 'bevel-edges',
+      edgeIds: ['e0', 'e6'],
+      width: 0.2,
+      segments: 3,
+      profile: 0.5,
+      clampOverlap: true,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.topology.faces).toHaveLength(12)
+    expect(result.selection.mode).toBe('edge')
+    expect(result.selection.ids).toHaveLength(8)
+    expect(inspectBlockTopology(result.topology)).toEqual([])
+  })
+
+  test('bevels adjacent selected edges after remapping their changed corner endpoints', () => {
+    const result = applyBlockCommand(createBoxBlockTopology(), {
+      type: 'bevel-edges',
+      edgeIds: ['e0', 'e1'],
+      width: 0.2,
+      segments: 3,
+      profile: 0.5,
+      clampOverlap: true,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.topology.faces).toHaveLength(12)
+    expect(result.selection.mode).toBe('edge')
+    expect(result.selection.ids.length).toBeGreaterThan(0)
+    expect(inspectBlockTopology(result.topology)).toEqual([])
   })
 })

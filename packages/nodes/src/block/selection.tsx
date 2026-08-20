@@ -1408,14 +1408,14 @@ function LastOperationControls({
           )}
         </div>
       )
-    case 'extrude-face':
+    case 'extrude-faces':
       return input('Distance', command.distance, (distance) => ({ ...command, distance }))
-    case 'inset-face':
+    case 'inset-faces':
       return input('Amount', command.amount, (amount) => ({ ...command, amount }), {
         min: 0,
         max: 0.95,
       })
-    case 'bevel-edge':
+    case 'bevel-edges':
       return (
         <div className="space-y-1">
           {input('Width', command.width, (width) => ({ ...command, width }), { min: 0 })}
@@ -2951,6 +2951,7 @@ function BlockEditor({
     (edgeId: string, event: ThreeEvent<PointerEvent>) => {
       if (event.nativeEvent.button !== 0 || !ownsEditSession() || cancelDragRef.current) return
       if (!displayTopology.edges.some((edge) => edge.id === edgeId)) return
+      const edgeIds = mode === 'edge' && selectedIds.includes(edgeId) ? [...selectedIds] : [edgeId]
       const baseTopology = displayTopology
       const startClientX = event.nativeEvent.clientX
       const startClientY = event.nativeEvent.clientY
@@ -2968,7 +2969,7 @@ function BlockEditor({
 
       useBlockEditSession.getState().setSelection(node.id, {
         mode: 'edge',
-        ids: [edgeId],
+        ids: edgeIds,
         activeId: edgeId,
       })
       setToolbarPanel(null)
@@ -2982,8 +2983,8 @@ function BlockEditor({
       const updatePreview = (width: number, segments = activeSegments) => {
         if (width <= 1e-6) return false
         const result = applyBlockCommand(baseTopology, {
-          type: 'bevel-edge',
-          edgeId,
+          type: 'bevel-edges',
+          edgeIds,
           width,
           segments,
           profile: 0.5,
@@ -3054,8 +3055,8 @@ function BlockEditor({
           commitAdjustableOperation(
             baseTopology,
             {
-              type: 'bevel-edge',
-              edgeId,
+              type: 'bevel-edges',
+              edgeIds,
               width: latestWidth,
               segments: activeSegments,
               profile: 0.5,
@@ -3087,8 +3088,10 @@ function BlockEditor({
       displayTopology,
       extent,
       gl.domElement,
+      mode,
       node.id,
       ownsEditSession,
+      selectedIds,
     ],
   )
 
@@ -3329,12 +3332,12 @@ function BlockEditor({
       if (
         !ownsEditSession() ||
         mode !== 'face' ||
-        selectedIds.length !== 1 ||
+        selectedIds.length === 0 ||
         cancelDragRef.current
       )
         return false
-      const faceId = selectedIds[0]!
-      if (!displayTopology.faces.some((face) => face.id === faceId)) return false
+      const faceIds = [...selectedIds]
+      if (faceIds.some((id) => !displayTopology.faces.some((face) => face.id === id))) return false
       const origin = selectionCentroid(displayTopology, selection)
       if (!origin) return false
       const pivotClient = localPointToClient(origin, target, camera, gl.domElement)
@@ -3409,7 +3412,7 @@ function BlockEditor({
         }
         const result = applyBlockCommand(
           baseTopology,
-          blockFaceOperationCommand(operation, faceId, value),
+          blockFaceOperationCommand(operation, faceIds, value),
         )
         if (!result.ok) {
           setError(result.error)
@@ -3445,7 +3448,7 @@ function BlockEditor({
         if (commit && latestTopology && latestSelection && Math.abs(latestValue) > 1e-6) {
           commitAdjustableOperation(
             baseTopology,
-            blockFaceOperationCommand(operation, faceId, latestValue),
+            blockFaceOperationCommand(operation, faceIds, latestValue),
             operation === 'extrude' ? 'Extrude' : 'Inset',
           )
           playBlockSfx('operation-commit')
@@ -3580,8 +3583,11 @@ function BlockEditor({
   }
 
   const dissolveSelection = () => {
-    if (mode !== 'edge' || selectedIds.length !== 1) return
-    commitCommand({ type: 'dissolve-edge', edgeId: selectedIds[0]! }, 'dissolve')
+    if (mode === 'edge' && selectedIds.length > 0) {
+      commitCommand({ type: 'dissolve-edges', edgeIds: selectedIds }, 'dissolve')
+    } else if (mode === 'face' && selectedIds.length > 1) {
+      commitCommand({ type: 'dissolve-faces', faceIds: selectedIds }, 'dissolve')
+    }
   }
 
   const adjustLastOperation = (command: BlockCommand) => {
@@ -3730,7 +3736,7 @@ function BlockEditor({
         actions.mergeSelection()
       } else if (key === 'd') {
         actions.dissolveSelection()
-      } else if (event.key === 'Delete' || event.key === 'Backspace' || key === 'x') {
+      } else if (event.key === 'Delete' || key === 'x') {
         actions.deleteSelection()
       } else {
         handled = false
@@ -4000,7 +4006,7 @@ function BlockEditor({
                       </ToolbarOperationItem>
                       <ToolbarOperationItem
                         disabled={!operationAvailability.extrude}
-                        label="Extrude face"
+                        label="Extrude selected faces"
                         onClick={extrudeSelectedFace}
                         shortcut="E"
                       >
@@ -4008,7 +4014,7 @@ function BlockEditor({
                       </ToolbarOperationItem>
                       <ToolbarOperationItem
                         disabled={!operationAvailability.inset}
-                        label="Inset face"
+                        label="Inset selected faces"
                         onClick={insetSelectedFace}
                         shortcut="I"
                       >
@@ -4052,7 +4058,7 @@ function BlockEditor({
                       </ToolbarOperationItem>
                       <ToolbarOperationItem
                         disabled={!operationAvailability.dissolve}
-                        label="Dissolve edge"
+                        label="Dissolve selection"
                         onClick={dissolveSelection}
                         shortcut="D"
                       >
@@ -4061,7 +4067,7 @@ function BlockEditor({
                       <ToolbarOperationItem
                         active={bevelActive}
                         disabled={!operationAvailability.bevel}
-                        label="Bevel edge"
+                        label="Bevel selected edges"
                         onClick={() => {
                           playBlockSfx('tool-select')
                           setBevelSegments(DEFAULT_BEVEL_SEGMENTS)

@@ -63,11 +63,18 @@ function commandForRepeat(
       const pivot = selectionCentroid(topology, selection)
       return pivot ? { ...command, selection, pivot } : null
     }
-    case 'extrude-face':
-    case 'inset-face':
-      return selection.mode === 'face' && activeId ? { ...command, faceId: activeId } : null
-    case 'bevel-edge':
-      return selection.mode === 'edge' && activeId ? { ...command, edgeId: activeId } : null
+    case 'extrude-faces':
+      return selection.mode === 'face' && selection.ids.length > 0
+        ? { ...command, faceIds: selection.ids }
+        : null
+    case 'inset-faces':
+      return selection.mode === 'face' && selection.ids.length > 0
+        ? { ...command, faceIds: selection.ids }
+        : null
+    case 'bevel-edges':
+      return selection.mode === 'edge' && selection.ids.length > 0
+        ? { ...command, edgeIds: selection.ids }
+        : null
     case 'loop-cut':
       return selection.mode === 'edge' && activeId ? { ...command, edgeId: activeId } : null
     default:

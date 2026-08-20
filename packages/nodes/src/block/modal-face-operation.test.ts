@@ -14,14 +14,14 @@ describe('block modal face operation', () => {
   })
 
   test('creates a pure topology command from the modal value', () => {
-    expect(blockFaceOperationCommand('extrude', 'f-top', -0.4)).toEqual({
-      type: 'extrude-face',
-      faceId: 'f-top',
+    expect(blockFaceOperationCommand('extrude', ['f-top'], -0.4)).toEqual({
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
       distance: -0.4,
     })
-    expect(blockFaceOperationCommand('inset', 'f-top', 0.2)).toEqual({
-      type: 'inset-face',
-      faceId: 'f-top',
+    expect(blockFaceOperationCommand('inset', ['f-top'], 0.2)).toEqual({
+      type: 'inset-faces',
+      faceIds: ['f-top'],
       amount: 0.2,
       depth: 0,
     })

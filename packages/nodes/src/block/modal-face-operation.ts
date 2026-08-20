@@ -16,12 +16,12 @@ export function blockFaceOperationValueFromPointer(
 
 export function blockFaceOperationCommand(
   operation: BlockModalFaceOperation,
-  faceId: string,
+  faceIds: string[],
   value: number,
 ): BlockCommand {
   return operation === 'extrude'
-    ? { type: 'extrude-face', faceId, distance: value }
-    : { type: 'inset-face', faceId, amount: value, depth: 0 }
+    ? { type: 'extrude-faces', faceIds, distance: value }
+    : { type: 'inset-faces', faceIds, amount: value, depth: 0 }
 }
 
 export function blockModalFaceOperationStatus(

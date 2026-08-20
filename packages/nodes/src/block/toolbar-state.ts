@@ -31,10 +31,10 @@ export function blockOperationAvailability(
   selectedCount: number,
 ): BlockOperationAvailability {
   return {
-    extrude: mode === 'face' && selectedCount === 1,
-    inset: mode === 'face' && selectedCount === 1,
+    extrude: mode === 'face' && selectedCount >= 1,
+    inset: mode === 'face' && selectedCount >= 1,
     merge: mode === 'vertex' && selectedCount >= 2,
-    dissolve: mode === 'edge' && selectedCount === 1,
+    dissolve: (mode === 'edge' && selectedCount >= 1) || (mode === 'face' && selectedCount >= 2),
     bevel: mode === 'edge',
   }
 }

@@ -11,7 +11,7 @@ import {
 } from './toolbar-state'
 
 describe('block toolbar state', () => {
-  test('enables face operations only for one selected face', () => {
+  test('enables face operations for one or more selected faces', () => {
     expect(blockOperationAvailability('face', 1)).toEqual({
       extrude: true,
       inset: true,
@@ -19,7 +19,7 @@ describe('block toolbar state', () => {
       dissolve: false,
       bevel: false,
     })
-    expect(blockOperationAvailability('face', 2).extrude).toBe(false)
+    expect(blockOperationAvailability('face', 2)).toMatchObject({ extrude: true, inset: true })
   })
 
   test('enables component-specific vertex and edge operations', () => {
@@ -29,6 +29,8 @@ describe('block toolbar state', () => {
       dissolve: true,
       bevel: true,
     })
+    expect(blockOperationAvailability('edge', 2).dissolve).toBe(true)
+    expect(blockOperationAvailability('face', 2).dissolve).toBe(true)
     expect(blockOperationAvailability('edge', 0).bevel).toBe(true)
   })
 
