@@ -68,6 +68,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/three": "^0.184.0",
+    "manifold-3d": "3.5.1",
     "typescript": "6.0.3"
   }
 }

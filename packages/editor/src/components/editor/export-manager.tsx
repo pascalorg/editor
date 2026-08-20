@@ -15,7 +15,8 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
 import { exportSceneLevelsToPrintStl } from '../../lib/level-print-export'
 import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
-import { exportSceneToPrintStl } from '../../lib/print-export'
+import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
+import { compileSemanticPrintShell } from '../../lib/print-shell-compiler'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
 // material-less renderables) with an attribute-less geometry — GLTFExporter
@@ -83,17 +84,15 @@ export function ExportManager() {
           emitter.emit('thumbnail:after-capture', undefined)
         }
         let { scene: exportScene } = prepared
+        const printContent = options.printContent ?? 'structure'
         if (format === 'print-stl') {
-          exportScene = filterPreparedSceneForPrintContent(
-            exportScene,
-            nodes,
-            options.printContent ?? 'structure',
-          )
+          exportScene = filterPreparedSceneForPrintContent(exportScene, nodes, printContent)
         }
         ensurePositionAttributes(exportScene)
 
         if (format === 'print-stl') {
           const scale = options.printScale ?? 100
+          const compileShells = printContent === 'structure'
           if (options.printScope === 'levels') {
             const plinth =
               options.printBase === 'plinth'
@@ -105,6 +104,7 @@ export function ExportManager() {
             const { archive, report } = exportSceneLevelsToPrintStl(exportScene, nodes, {
               scale,
               plinth,
+              compileShells,
             })
             const blob = new Blob([archive], { type: 'application/zip' })
             return finishArtifact(
@@ -117,7 +117,20 @@ export function ExportManager() {
           if (options.printBase === 'plinth') {
             throw new Error('Plinth generation is available only for per-level print packages.')
           }
-          const { buffer, report } = exportSceneToPrintStl(exportScene, { scale })
+          const compiled = compileShells ? compileSemanticPrintShell(exportScene, nodes) : null
+          const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : exportScene
+          const output = exportSceneToPrintStl(printSource, {
+            scale,
+            compiled: compiled?.status === 'compiled',
+          })
+          const report = compiled
+            ? mergePrintExportDiagnostics(
+                output.report,
+                compiled.diagnostics,
+                new Set(['compiler_pending']),
+              )
+            : output.report
+          const { buffer } = output
           const blob = new Blob([buffer], { type: 'model/stl' })
           return finishArtifact(
             blob,

@@ -4,6 +4,7 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 
 const MILLIMETERS_PER_METER = 1000
 const EDGE_CONNECTIVITY_EPSILON_METERS = 1e-5
+const EDGE_INCIDENCE_EPSILON_METERS = 1e-7
 const MAX_EDGE_CHECK_TRIANGLES = 500_000
 const DEGENERATE_CROSS_LENGTH_SQ = 1e-12
 
@@ -17,6 +18,13 @@ export type PrintExportDiagnostic = {
   severity: 'error' | 'warning' | 'info'
   code: string
   message: string
+  nodeIds?: string[]
+}
+
+export type PrintExportOptions = {
+  scale: number
+  compiled?: boolean
+  indexedTopology?: boolean
 }
 
 export type PrintExportBounds = {
@@ -142,9 +150,9 @@ function measureBounds(root: THREE.Object3D): BoundsMeasurement {
 }
 
 function pointKey(point: THREE.Vector3): string {
-  return `${Math.round(point.x / EDGE_CONNECTIVITY_EPSILON_METERS)},${Math.round(
-    point.y / EDGE_CONNECTIVITY_EPSILON_METERS,
-  )},${Math.round(point.z / EDGE_CONNECTIVITY_EPSILON_METERS)}`
+  return `${Math.round(point.x / EDGE_INCIDENCE_EPSILON_METERS)},${Math.round(
+    point.y / EDGE_INCIDENCE_EPSILON_METERS,
+  )},${Math.round(point.z / EDGE_INCIDENCE_EPSILON_METERS)}`
 }
 
 function addEdge(edges: Map<string, number>, a: THREE.Vector3, b: THREE.Vector3) {
@@ -154,7 +162,47 @@ function addEdge(edges: Map<string, number>, a: THREE.Vector3, b: THREE.Vector3)
   edges.set(key, (edges.get(key) ?? 0) + 1)
 }
 
-function analyzeEdgeTopology(root: THREE.Object3D): EdgeTopologyMeasurement {
+function indexedNonManifoldEdgeCount(root: THREE.Object3D): number | null {
+  let hasGeometry = false
+  let nonManifoldEdgeCount = 0
+  for (const object of root.children) object.updateMatrixWorld(true)
+
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh) return
+    const position = mesh.geometry.getAttribute('position')
+    if (!position || position.count === 0) return
+    const index = mesh.geometry.getIndex()
+    if (!index) {
+      nonManifoldEdgeCount = Number.NaN
+      return
+    }
+    hasGeometry = true
+    const edges = new Map<string, number>()
+    const add = (a: number, b: number) => {
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`
+      edges.set(key, (edges.get(key) ?? 0) + 1)
+    }
+    for (let offset = 0; offset + 2 < index.count; offset += 3) {
+      const a = index.getX(offset)
+      const b = index.getX(offset + 1)
+      const c = index.getX(offset + 2)
+      add(a, b)
+      add(b, c)
+      add(c, a)
+    }
+    for (const uses of edges.values()) {
+      if (uses > 2) nonManifoldEdgeCount += 1
+    }
+  })
+
+  return hasGeometry && Number.isFinite(nonManifoldEdgeCount) ? nonManifoldEdgeCount : null
+}
+
+function analyzeEdgeTopology(
+  root: THREE.Object3D,
+  useIndexedIncidence: boolean,
+): EdgeTopologyMeasurement {
   const edges = new Map<string, number>()
   const halfEdgePositions: number[] = []
   let edgeCheckComplete = true
@@ -196,9 +244,12 @@ function analyzeEdgeTopology(root: THREE.Object3D): EdgeTopologyMeasurement {
   const boundaryEdgeCount = halfEdges.unmatchedEdges
   connectivityGeometry.dispose()
 
-  let nonManifoldEdgeCount = 0
-  for (const count of edges.values()) {
-    if (count > 2) nonManifoldEdgeCount += 1
+  let nonManifoldEdgeCount = useIndexedIncidence ? indexedNonManifoldEdgeCount(root) : null
+  if (nonManifoldEdgeCount === null) {
+    nonManifoldEdgeCount = 0
+    for (const count of edges.values()) {
+      if (count > 2) nonManifoldEdgeCount += 1
+    }
   }
 
   return { boundaryEdgeCount, nonManifoldEdgeCount, edgeCheckComplete }
@@ -208,6 +259,7 @@ function analyzePrintScene(
   root: THREE.Object3D,
   scale: number,
   edgeTopology: EdgeTopologyMeasurement,
+  compiled: boolean,
 ): PrintExportReport {
   const min = new THREE.Vector3(
     Number.POSITIVE_INFINITY,
@@ -321,11 +373,21 @@ function analyzePrintScene(
       message: 'The exported surfaces enclose no measurable signed volume.',
     })
   }
-  diagnostics.push({
-    severity: 'info',
-    code: 'compiler_pending',
-    message: 'Boolean union, shell intersections, and minimum wall thickness are not checked yet.',
-  })
+  diagnostics.push(
+    compiled
+      ? {
+          severity: 'info',
+          code: 'compiler_limits',
+          message:
+            'The shell was boolean-unioned, but self-intersections and minimum wall thickness are not checked yet.',
+        }
+      : {
+          severity: 'info',
+          code: 'compiler_pending',
+          message:
+            'Boolean union, shell intersections, and minimum wall thickness are not checked yet.',
+        },
+  )
 
   const status = diagnostics.some((diagnostic) => diagnostic.severity === 'error')
     ? 'blocked'
@@ -353,7 +415,7 @@ function analyzePrintScene(
 
 export function prepareSceneForPrint(
   source: THREE.Object3D,
-  options: { scale: number },
+  options: PrintExportOptions,
 ): { scene: THREE.Object3D; report: PrintExportReport } {
   if (!Number.isFinite(options.scale) || options.scale <= 0) {
     throw new RangeError('Print scale must be a positive finite denominator')
@@ -364,7 +426,7 @@ export function prepareSceneForPrint(
   const physicalScale = MILLIMETERS_PER_METER / options.scale
   // Connectivity is invariant under print scale and orientation. Checking it
   // in model-space meters avoids scale-dependent ray tolerances and π/2 drift.
-  const edgeTopology = analyzeEdgeTopology(source)
+  const edgeTopology = analyzeEdgeTopology(source, options.indexedTopology ?? false)
 
   const scene = new THREE.Group()
   scene.name = 'print-export'
@@ -383,12 +445,15 @@ export function prepareSceneForPrint(
     scene.updateMatrixWorld(true)
   }
 
-  return { scene, report: analyzePrintScene(scene, options.scale, edgeTopology) }
+  return {
+    scene,
+    report: analyzePrintScene(scene, options.scale, edgeTopology, options.compiled ?? false),
+  }
 }
 
 export function exportSceneToPrintStl(
   source: THREE.Object3D,
-  options: { scale: number },
+  options: PrintExportOptions,
 ): PrintStlExport {
   const { scene, report } = prepareSceneForPrint(source, options)
   const exporter = new STLExporter()
@@ -401,6 +466,23 @@ export function exportSceneToPrintStl(
         ) as ArrayBuffer)
       : output
   return { buffer, report }
+}
+
+export function mergePrintExportDiagnostics(
+  report: PrintExportReport,
+  diagnostics: PrintExportDiagnostic[],
+  omitCodes: ReadonlySet<string> = new Set(),
+): PrintExportReport {
+  const merged = [
+    ...report.diagnostics.filter((diagnostic) => !omitCodes.has(diagnostic.code)),
+    ...diagnostics,
+  ]
+  const status = merged.some((diagnostic) => diagnostic.severity === 'error')
+    ? 'blocked'
+    : merged.some((diagnostic) => diagnostic.severity === 'warning')
+      ? 'warning'
+      : 'pass'
+  return { ...report, status, diagnostics: merged }
 }
 
 export function isPrintExportReport(value: unknown): value is PrintExportReport {

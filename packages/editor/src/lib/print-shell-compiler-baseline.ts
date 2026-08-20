@@ -10,11 +10,19 @@ export type PrintShellCompileDiagnostic = {
 }
 
 export type PrintShellCompileResult = {
-  backend: 'pascal-three-bvh-csg'
+  backend: 'pascal-three-bvh-csg' | 'manifold-3d'
   status: 'compiled' | 'blocked'
   scene: THREE.Object3D | null
   inputMeshCount: number
   sourceNodeIds: string[]
+  diagnostics: PrintShellCompileDiagnostic[]
+}
+
+export type PrintShellInput = {
+  inputMeshCount: number
+  sourceNodeIds: Set<string>
+  geometries: THREE.BufferGeometry[]
+  geometryNodeIds: string[]
   diagnostics: PrintShellCompileDiagnostic[]
 }
 
@@ -60,33 +68,13 @@ function worldGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
   return indexed
 }
 
-function blockedResult(
-  inputMeshCount: number,
-  sourceNodeIds: Set<string>,
-  diagnostics: PrintShellCompileDiagnostic[],
-): PrintShellCompileResult {
-  return {
-    backend: 'pascal-three-bvh-csg',
-    status: 'blocked',
-    scene: null,
-    inputMeshCount,
-    sourceNodeIds: Array.from(sourceNodeIds).sort(),
-    diagnostics,
-  }
-}
-
-/**
- * Synchronous baseline used only by print fixtures while backend correctness
- * is evaluated. It unions world-space static meshes and preserves source node
- * IDs at result level; it does not yet run in a worker or provide face-level
- * provenance.
- */
-export function compilePrintShellBaseline(source: THREE.Object3D): PrintShellCompileResult {
+export function collectPrintShellInput(source: THREE.Object3D): PrintShellInput {
   source.updateMatrixWorld(true)
 
   const diagnostics: PrintShellCompileDiagnostic[] = []
   const sourceNodeIds = new Set<string>()
   const geometries: THREE.BufferGeometry[] = []
+  const geometryNodeIds: string[] = []
   let inputMeshCount = 0
 
   source.traverse((object) => {
@@ -130,6 +118,7 @@ export function compilePrintShellBaseline(source: THREE.Object3D): PrintShellCom
     }
 
     geometries.push(worldGeometry(mesh))
+    geometryNodeIds.push(nodeId)
   })
 
   if (inputMeshCount === 0) {
@@ -140,6 +129,33 @@ export function compilePrintShellBaseline(source: THREE.Object3D): PrintShellCom
       nodeIds: [],
     })
   }
+
+  return { inputMeshCount, sourceNodeIds, geometries, geometryNodeIds, diagnostics }
+}
+
+function blockedResult(
+  inputMeshCount: number,
+  sourceNodeIds: Set<string>,
+  diagnostics: PrintShellCompileDiagnostic[],
+): PrintShellCompileResult {
+  return {
+    backend: 'pascal-three-bvh-csg',
+    status: 'blocked',
+    scene: null,
+    inputMeshCount,
+    sourceNodeIds: Array.from(sourceNodeIds).sort(),
+    diagnostics,
+  }
+}
+
+/**
+ * Synchronous baseline used only by print fixtures while backend correctness
+ * is evaluated. It unions world-space static meshes and preserves source node
+ * IDs at result level; it does not yet run in a worker or provide face-level
+ * provenance.
+ */
+export function compilePrintShellBaseline(source: THREE.Object3D): PrintShellCompileResult {
+  const { diagnostics, geometries, inputMeshCount, sourceNodeIds } = collectPrintShellInput(source)
   if (diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
     for (const geometry of geometries) geometry.dispose()
     return blockedResult(inputMeshCount, sourceNodeIds, diagnostics)

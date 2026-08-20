@@ -3,9 +3,11 @@ import { type Zippable, zipSync } from 'fflate'
 import * as THREE from 'three'
 import {
   exportSceneToPrintStl,
+  mergePrintExportDiagnostics,
   type PrintExportDiagnostic,
   type PrintExportReport,
 } from './print-export'
+import { compileSemanticPrintShell } from './print-shell-compiler'
 
 const ZIP_MTIME = new Date(2000, 0, 1, 0, 0, 0)
 const MILLIMETERS_PER_METER = 1000
@@ -41,6 +43,12 @@ export type PrintLevelBundleReport = {
 export type PrintLevelStlBundle = {
   archive: Uint8Array<ArrayBuffer>
   report: PrintLevelBundleReport
+}
+
+export type PrintLevelExportOptions = {
+  scale: number
+  plinth?: PrintPlinthOptions
+  compileShells?: boolean
 }
 
 function exportedIdentityIds(root: THREE.Object3D): Set<string> {
@@ -172,7 +180,7 @@ function bundleStatus(
 export function exportSceneLevelsToPrintStl(
   source: THREE.Object3D,
   nodes: Record<string, AnyNode>,
-  options: { scale: number; plinth?: PrintPlinthOptions },
+  options: PrintLevelExportOptions,
 ): PrintLevelStlBundle {
   const exportedIds = exportedIdentityIds(source)
   const ownerByNodeId = new Map<string, string | null>()
@@ -214,9 +222,26 @@ export function exportSceneLevelsToPrintStl(
     const label = getLevelDisplayName(level)
     const filename = `${String(index + 1).padStart(2, '0')}_${safeFilenamePart(label)}.stl`
     const levelScene = pruneSceneToLevel(source, level.id, nodes, excludedIds, ownerByNodeId)
-    const output = exportSceneToPrintStl(levelScene, options)
+    const compiled = options.compileShells ? compileSemanticPrintShell(levelScene, nodes) : null
+    const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : levelScene
+    const output = exportSceneToPrintStl(printSource, {
+      scale: options.scale,
+      compiled: compiled?.status === 'compiled',
+    })
+    const report = compiled
+      ? mergePrintExportDiagnostics(
+          output.report,
+          compiled.diagnostics,
+          new Set(['compiler_pending']),
+        )
+      : output.report
+    if (compiled) {
+      diagnostics.push(
+        ...compiled.diagnostics.filter((diagnostic) => diagnostic.severity !== 'info'),
+      )
+    }
     levelFiles.push({ filename, bytes: new Uint8Array(output.buffer) })
-    levelParts.push({ kind: 'level', levelId: level.id, label, filename, report: output.report })
+    levelParts.push({ kind: 'level', levelId: level.id, label, filename, report })
   }
 
   let plinthFile: { filename: string; bytes: Uint8Array<ArrayBuffer> } | null = null
@@ -281,8 +306,9 @@ export function exportSceneLevelsToPrintStl(
   diagnostics.push({
     severity: 'info',
     code: 'level_parts_experimental',
-    message:
-      'Level parts are separated semantically but are not boolean-unioned printable shells yet.',
+    message: options.compileShells
+      ? 'Level parts use the experimental synchronous semantic shell compiler; worker execution, self-intersection checks, and minimum wall thickness remain pending.'
+      : 'Level parts are separated semantically but are not boolean-unioned printable shells yet.',
   })
 
   const files: Zippable = {}

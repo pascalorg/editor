@@ -175,7 +175,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
           <option value="everything">Everything in export scope</option>
         </select>
         <span className="block text-muted-foreground">
-          Structure uses registered structural nodes; watertight union is still pending.
+          Structure compiles registered solids into one experimental shell per output part.
         </span>
       </label>
 

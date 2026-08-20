@@ -2,7 +2,11 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, sceneRegistry } from '@pascal-app/core'
 import * as THREE from 'three'
 import { prepareSceneForExport } from './glb-export'
-import { exportSceneToPrintStl, prepareSceneForPrint } from './print-export'
+import {
+  exportSceneToPrintStl,
+  mergePrintExportDiagnostics,
+  prepareSceneForPrint,
+} from './print-export'
 
 function binaryStlBounds(buffer: ArrayBuffer): { triangles: number; bounds: THREE.Box3 } {
   const view = new DataView(buffer)
@@ -114,6 +118,64 @@ describe('print STL export', () => {
     expect(report.nonManifoldEdgeCount).toBe(1)
     expect(report.diagnostics).toContainEqual(
       expect.objectContaining({ code: 'non_manifold_edges', severity: 'error' }),
+    )
+  })
+
+  test('does not conflate distinct closed edges inside the boundary matching tolerance', () => {
+    const source = new THREE.Group()
+    const first = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    const second = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    second.position.x = 1.000002
+    source.add(first, second)
+
+    const { report } = prepareSceneForPrint(source, { scale: 100 })
+
+    expect(report.status).toBe('pass')
+    expect(report.boundaryEdgeCount).toBe(0)
+    expect(report.nonManifoldEdgeCount).toBe(0)
+  })
+
+  test('uses authoritative indexed incidence for a compiled mesh', () => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1], 3),
+    )
+    geometry.setIndex([0, 1, 2, 1, 0, 3, 0, 1, 4])
+
+    const { report } = prepareSceneForPrint(new THREE.Mesh(geometry), {
+      scale: 100,
+      indexedTopology: true,
+    })
+
+    expect(report.status).toBe('blocked')
+    expect(report.nonManifoldEdgeCount).toBe(1)
+  })
+
+  test('merges located compiler diagnostics into a compiled preflight report', () => {
+    const { report } = prepareSceneForPrint(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)), {
+      scale: 100,
+      compiled: true,
+    })
+    const merged = mergePrintExportDiagnostics(report, [
+      {
+        severity: 'error',
+        code: 'unsupported_roof_print_trim',
+        message: 'The roof trim has no manifold fixture.',
+        nodeIds: ['rseg_print-trimmed'],
+      },
+    ])
+
+    expect(report.diagnostics.map((diagnostic) => diagnostic.code)).toContain('compiler_limits')
+    expect(report.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain(
+      'compiler_pending',
+    )
+    expect(merged.status).toBe('blocked')
+    expect(merged.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'unsupported_roof_print_trim',
+        nodeIds: ['rseg_print-trimmed'],
+      }),
     )
   })
 
