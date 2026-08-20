@@ -13,7 +13,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
-import { wallPointerEventsSuppressed } from './pointer-transparency'
+import {
+  extractWallSelectionRay,
+  WALL_COLLISION_MESH_NAME,
+  wallPointerEventsSuppressed,
+} from './pointer-transparency'
 import { useWallTreatmentLevelData } from './treatment-level-data'
 import { createWallExtraSlotMaterials, WallTreatments } from './treatments'
 
@@ -55,13 +59,18 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   }, [collisionPlaceholderGeometry, placeholderGeometry])
 
   const rawHandlers = useNodeEvents(node, 'wall')
-  // Hidden walls are pointer-TRANSPARENT: when the wall-mode pass hides this
-  // wall (`WallCutout` stamps `userData.wallHidden` — X-ray 'down' mode,
-  // cutaway-hidden faces, auto-mode interior partitions), its invisible
-  // full-height collision mesh must not swallow pointer events aimed at
-  // visible objects behind it (wall-mounted plugin nodes, items). Returning
-  // early without stopPropagation lets R3F continue to the next intersection.
-  // Two exceptions keep the events (see `wallPointerEventsSuppressed`):
+  // Hidden walls participate in hover/selection NEAREST-FIRST: when the
+  // wall-mode pass hides this wall (`WallCutout` stamps `userData.wallHidden`
+  // — X-ray 'down' mode, cutaway-hidden faces, auto-mode interior
+  // partitions), its invisible full-height collision mesh handles the event
+  // only when nothing else on the ray outranks it — its own hosted doors /
+  // windows / wall-mounted children, any hit at ~equal-or-nearer depth
+  // (device boxes at the face), or wall-mounted gear on a wall behind it
+  // (the #683 D4 receptacle class) all win instead. Returning early without
+  // stopPropagation lets R3F continue to that next intersection. Free-
+  // standing objects clearly BEHIND the wall no longer steal the hover: the
+  // wall in front highlights (the Bones framing renders exactly there).
+  // Two exceptions keep ALL events (see `wallPointerEventsSuppressed`):
   // delete mode (hidden walls stay hover-targetable for the deleteInvisible
   // highlight flow) and a live hidden-wall pointer hold (a door / window
   // move / place tool is tracking the cursor via wall events — without the
@@ -76,6 +85,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
             wallHidden: ref.current?.userData?.wallHidden === true,
             hoverHighlightMode: useViewer.getState().hoverHighlightMode,
             hiddenWallHoldActive: hiddenWallPointerEventsHeld(),
+            selectionRay: extractWallSelectionRay(e, ref.current),
           })
         ) {
           return
@@ -136,7 +146,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     >
       <mesh
         geometry={collisionPlaceholderGeometry}
-        name="collision-mesh"
+        name={WALL_COLLISION_MESH_NAME}
         visible={false}
         {...handlers}
       />
