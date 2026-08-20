@@ -69,6 +69,7 @@ export {
   csgEvaluator,
   csgGeometry,
   csgMaterials,
+  HalfEdgeMap,
   INTERSECTION,
   prepareBrushForCSG,
   SUBTRACTION,

@@ -1,3 +1,4 @@
+import { HalfEdgeMap } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 
@@ -163,6 +164,7 @@ function analyzePrintScene(root: THREE.Object3D, scale: number): PrintExportRepo
   const areaCross = new THREE.Vector3()
   const volumeCross = new THREE.Vector3()
   const edges = new Map<string, number>()
+  const halfEdgePositions: number[] = []
   let edgeCheckComplete = true
   let triangleCount = 0
   let invalidTriangleCount = 0
@@ -193,22 +195,38 @@ function analyzePrintScene(root: THREE.Object3D, scale: number): PrintExportRepo
 
     if (edgeCheckComplete && triangleCount > MAX_EDGE_CHECK_TRIANGLES) {
       edges.clear()
+      halfEdgePositions.length = 0
       edgeCheckComplete = false
     }
     if (edgeCheckComplete) {
       addEdge(edges, a, b)
       addEdge(edges, b, c)
       addEdge(edges, c, a)
+      halfEdgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
     }
   })
 
   let boundaryEdgeCount: number | null = null
   let nonManifoldEdgeCount: number | null = null
   if (edgeCheckComplete) {
-    boundaryEdgeCount = 0
+    const connectivityGeometry = new THREE.BufferGeometry()
+    connectivityGeometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(halfEdgePositions, 3),
+    )
+    const halfEdges = new HalfEdgeMap() as HalfEdgeMap & {
+      matchDisjointEdges: boolean
+      degenerateEpsilon: number
+      unmatchedEdges: number
+    }
+    halfEdges.matchDisjointEdges = true
+    halfEdges.degenerateEpsilon = EDGE_QUANTIZATION_MM
+    halfEdges.updateFrom(connectivityGeometry)
+    boundaryEdgeCount = halfEdges.unmatchedEdges
+    connectivityGeometry.dispose()
+
     nonManifoldEdgeCount = 0
     for (const count of edges.values()) {
-      if (count === 1) boundaryEdgeCount += 1
       if (count > 2) nonManifoldEdgeCount += 1
     }
   }
