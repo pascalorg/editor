@@ -22,6 +22,7 @@ import { resolveCaptureFrameMatrix } from './frame'
 import { CaptureDeviceMotionLayer } from './layers/device-motion-layer'
 import { CapturePointCloudLayer } from './layers/point-cloud-layer'
 import { CaptureRoomModel } from './layers/room-model-layer'
+import { CaptureSurfaceMeshLayer } from './layers/surface-mesh-layer'
 import { useCaptureSource } from './source-state'
 import {
   captureModelFormat,
@@ -230,6 +231,8 @@ export function CaptureStreamLayer({
         packets={stream.availability === 'live' ? packets : []}
       />
     )
+  } else if (layerKey === 'surfaceMesh') {
+    content = <CaptureSurfaceMeshLayer inline={stream.inline} />
   }
   if (!(content && frameMatrix)) return content
   return (

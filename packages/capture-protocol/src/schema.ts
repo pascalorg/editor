@@ -51,6 +51,70 @@ export const ArkitPointCloudPayloadSchema = PointCloudPayloadSchema.safeExtend({
   coordinateSystem: z.literal('arkit-world'),
 })
 
+const MAX_SURFACE_MESH_VERTICES = 65_535
+const MAX_SURFACE_MESH_FACES = 6_000
+
+export const SurfaceMeshPayloadSchema = z
+  .object({
+    version: z.literal(1),
+    coordinateSystem: z.string().min(1),
+    representation: z.literal('quantized-indexed-triangle-mesh'),
+    appearance: z.literal('camera-vertex-color'),
+    vertexCount: z.number().int().positive().max(MAX_SURFACE_MESH_VERTICES),
+    faceCount: z.number().int().positive().max(MAX_SURFACE_MESH_FACES),
+    boundsMin: z.array(z.number()).length(3),
+    boundsMax: z.array(z.number()).length(3),
+    positionEncoding: z.literal('uint16x3-base64-little-endian'),
+    colorEncoding: z.literal('uint8x3-base64-srgb'),
+    indexEncoding: z.literal('uint16x3-base64-little-endian'),
+    positions: z.string().min(1).max(524_280),
+    colors: z.string().min(1).max(262_140),
+    indices: z.string().min(1).max(48_000),
+  })
+  .superRefine((payload, context) => {
+    if (payload.vertexCount > payload.faceCount * 3) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Surface meshes cannot contain more than three vertices per face.',
+        path: ['vertexCount'],
+      })
+    }
+    for (let axis = 0; axis < 3; axis += 1) {
+      if ((payload.boundsMax[axis] ?? 0) < (payload.boundsMin[axis] ?? 0)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Surface-mesh maximum bounds must not be below minimum bounds.',
+          path: ['boundsMax', axis],
+        })
+      }
+    }
+
+    const positionBytes = decodeBase64(payload.positions)
+    const colorBytes = decodeBase64(payload.colors)
+    const indexBytes = decodeBase64(payload.indices)
+    validateSurfaceMeshByteLength(positionBytes, payload.vertexCount * 3 * 2, 'positions', context)
+    validateSurfaceMeshByteLength(colorBytes, payload.vertexCount * 3, 'colors', context)
+    validateSurfaceMeshByteLength(indexBytes, payload.faceCount * 3 * 2, 'indices', context)
+
+    if (indexBytes?.byteLength === payload.faceCount * 3 * 2) {
+      const indices = new DataView(indexBytes.buffer, indexBytes.byteOffset, indexBytes.byteLength)
+      for (let offset = 0; offset < indexBytes.byteLength; offset += 2) {
+        if (indices.getUint16(offset, true) >= payload.vertexCount) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Surface-mesh indices must reference an existing vertex.',
+            path: ['indices'],
+          })
+          break
+        }
+      }
+    }
+  })
+
+export const ArkitSurfaceMeshPayloadSchema = SurfaceMeshPayloadSchema.safeExtend({
+  coordinateSystem: z.literal('arkit-world'),
+})
+
 export const CaptureTimeRangeSchema = z
   .object({
     start: z.number().nonnegative(),
@@ -121,6 +185,12 @@ export const CaptureSessionManifestV1Schema = z.object({
         points: ArkitPointCloudPayloadSchema,
       })
       .optional(),
+    surfaceMesh: z
+      .object({
+        kind: z.literal('surface-mesh'),
+        mesh: ArkitSurfaceMeshPayloadSchema,
+      })
+      .optional(),
   }),
 })
 
@@ -168,6 +238,7 @@ export type CaptureSessionManifestV2 = z.infer<typeof CaptureSessionManifestV2Sc
 export type CaptureStreamDescriptor = z.infer<typeof CaptureStreamDescriptorSchema>
 export type DeviceMotionTrajectoryPayload = z.infer<typeof DeviceMotionTrajectorySchema>
 export type PointCloudPayload = z.infer<typeof PointCloudPayloadSchema>
+export type SurfaceMeshPayload = z.infer<typeof SurfaceMeshPayloadSchema>
 
 export function normalizeCaptureSessionManifest(value: unknown): CaptureSessionDescriptor {
   const manifest = CaptureSessionManifestSchema.parse(value)
@@ -205,6 +276,15 @@ export function normalizeCaptureSessionManifest(value: unknown): CaptureSessionD
       inline: manifest.streams.pointCloud.points,
     })
   }
+  if (manifest.streams.surfaceMesh) {
+    streams.push({
+      id: 'surface-mesh',
+      kind: manifest.streams.surfaceMesh.kind,
+      role: 'surfaceMesh',
+      availability: 'ready',
+      inline: manifest.streams.surfaceMesh.mesh,
+    })
+  }
 
   return CaptureSessionDescriptorSchema.parse({
     schemaVersion: manifest.schemaVersion,
@@ -222,6 +302,7 @@ export function captureLayerKey(stream: CaptureStreamDescriptor): string {
   if (stream.kind === 'room-model') return 'model'
   if (stream.kind === 'device-motion') return 'deviceMotion'
   if (stream.kind === 'point-cloud') return 'pointCloud'
+  if (stream.kind === 'surface-mesh') return 'surfaceMesh'
   if (stream.kind === 'gaussian-splat') return 'splat'
   return stream.kind
 }
@@ -231,11 +312,50 @@ export function captureStreamLabel(stream: CaptureStreamDescriptor): string {
   if (key === 'model') return '3D model'
   if (key === 'deviceMotion') return 'Device motion'
   if (key === 'pointCloud') return 'Point cloud'
+  if (key === 'surfaceMesh') return 'Surface mesh'
   if (key === 'splat') return 'Gaussian splat'
   return key
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/[-_]+/g, ' ')
     .replace(/^./, (value) => value.toUpperCase())
+}
+
+function validateSurfaceMeshByteLength(
+  bytes: Uint8Array | null,
+  expectedLength: number,
+  path: 'colors' | 'indices' | 'positions',
+  context: { addIssue(issue: { code: 'custom'; message: string; path: string[] }): void },
+): void {
+  if (bytes?.byteLength === expectedLength) return
+  context.addIssue({
+    code: 'custom',
+    message: `Surface-mesh ${path} must contain exactly ${expectedLength} decoded bytes.`,
+    path: [path],
+  })
+}
+
+function decodeBase64(value: string): Uint8Array | null {
+  if (
+    value.length % 4 !== 0 ||
+    !/^(?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{2}==|[A-Za-z\d+/]{3}=)?$/.test(value)
+  ) {
+    return null
+  }
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  const output = new Uint8Array((value.length / 4) * 3 - padding)
+  let outputIndex = 0
+  for (let index = 0; index < value.length; index += 4) {
+    const a = alphabet.indexOf(value[index] ?? '')
+    const b = alphabet.indexOf(value[index + 1] ?? '')
+    const c = value[index + 2] === '=' ? 0 : alphabet.indexOf(value[index + 2] ?? '')
+    const d = value[index + 3] === '=' ? 0 : alphabet.indexOf(value[index + 3] ?? '')
+    const bits = a * 262_144 + b * 4096 + c * 64 + d
+    if (outputIndex < output.length) output[outputIndex++] = Math.floor(bits / 65_536) % 256
+    if (outputIndex < output.length) output[outputIndex++] = Math.floor(bits / 256) % 256
+    if (outputIndex < output.length) output[outputIndex++] = bits % 256
+  }
+  return output
 }
 
 function validateUniqueSessionIds(

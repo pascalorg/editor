@@ -43,4 +43,31 @@ describe('isCaptureStreamRenderable', () => {
       ),
     ).toBe(true)
   })
+
+  test('renders a valid inline color surface mesh', () => {
+    expect(
+      isCaptureStreamRenderable({
+        id: 'surface-mesh',
+        kind: 'surface-mesh',
+        role: 'surfaceMesh',
+        availability: 'ready',
+        inline: {
+          version: 1,
+          coordinateSystem: 'arkit-world',
+          representation: 'quantized-indexed-triangle-mesh',
+          appearance: 'camera-vertex-color',
+          vertexCount: 3,
+          faceCount: 1,
+          boundsMin: [0, 0, 0],
+          boundsMax: [1, 1, 0],
+          positionEncoding: 'uint16x3-base64-little-endian',
+          colorEncoding: 'uint8x3-base64-srgb',
+          indexEncoding: 'uint16x3-base64-little-endian',
+          positions: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+          colors: '////////////',
+          indices: 'AAABAAIA',
+        },
+      }),
+    ).toBe(true)
+  })
 })

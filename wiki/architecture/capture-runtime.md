@@ -11,7 +11,7 @@ scene graph.
 - `@pascal-app/capture-viewer` mounts inside `Viewer` through its existing children slot. It resolves
   `scan.captureSession`, portals layers into that scan node's registered group, honors per-layer
   visibility, composes declared local-to-parent coordinate frames into session space, and supplies
-  reference model, device-motion, and point-cloud renderers.
+  reference model, device-motion, point-cloud, and compact color-surface renderers.
 - `@pascal-app/core` stores only the scene anchor: session locator, optional current mesh URL,
   placement, opacity, and an extensible visibility map. Raw samples and artifact inventories never
   enter scene JSON.
@@ -36,9 +36,12 @@ artifact and privacy policy before it can use the same runtime safely.
 ## Stream extension
 
 Manifest v2 streams use stable IDs plus open `kind` and `role` strings. Known roles currently map to
-`model`, `deviceMotion`, and `pointCloud`. Unknown streams remain available to hosts, which can add a
-renderer keyed by role or kind without changing the scene schema. A splat adapter should remain a
-separate composited renderer while still consuming the same source and visibility contract.
+`model`, `deviceMotion`, `pointCloud`, and `surfaceMesh`. The reference surface renderer accepts the
+bounded quantized inline preview emitted by Capture; a future UV-textured or server-reconstructed
+mesh can be another artifact-backed stream without changing `ScanNode`. Unknown streams remain
+available to hosts, which can add a renderer keyed by role or kind without changing the scene
+schema. A splat adapter should remain a separate composited renderer while still consuming the same
+source and visibility contract.
 
 ## Compatibility
 

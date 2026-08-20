@@ -1,6 +1,7 @@
 export {
   ArkitDeviceMotionTrajectorySchema,
   ArkitPointCloudPayloadSchema,
+  ArkitSurfaceMeshPayloadSchema,
   type CaptureArtifactReference,
   CaptureArtifactReferenceSchema,
   type CaptureClock,
@@ -28,6 +29,8 @@ export {
   normalizeCaptureSessionManifest,
   type PointCloudPayload,
   PointCloudPayloadSchema,
+  type SurfaceMeshPayload,
+  SurfaceMeshPayloadSchema,
 } from './schema'
 export {
   type CaptureArtifactResolution,

@@ -18,6 +18,11 @@ export {
 } from './layers/point-cloud-layer'
 export { CaptureRoomModel } from './layers/room-model-layer'
 export {
+  buildSurfaceMeshData,
+  CaptureSurfaceMeshLayer,
+  type SurfaceMeshData,
+} from './layers/surface-mesh-layer'
+export {
   appendCapturePacket,
   type CaptureSourceState,
   type UseCaptureSourceOptions,

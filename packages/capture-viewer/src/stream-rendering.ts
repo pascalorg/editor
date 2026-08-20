@@ -4,6 +4,7 @@ import {
   captureLayerKey,
   DeviceMotionTrajectorySchema,
   PointCloudPayloadSchema,
+  SurfaceMeshPayloadSchema,
 } from '@pascal-app/capture-protocol'
 
 const GLB_MEDIA_TYPES = new Set(['model/gltf-binary', 'model/gltf+json'])
@@ -33,6 +34,7 @@ export function isCaptureStreamRenderable(
       PointCloudPayloadSchema.safeParse(stream.inline).success
     )
   }
+  if (layerKey === 'surfaceMesh') return SurfaceMeshPayloadSchema.safeParse(stream.inline).success
   return false
 }
 
