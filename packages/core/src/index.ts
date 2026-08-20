@@ -361,7 +361,6 @@ export {
   stepElevatorRuntimeState,
   stepElevatorRuntimes,
 } from './systems/elevator/elevator-runtime'
-export { ElevatorRuntimeSystem } from './systems/elevator/elevator-runtime-system'
 export {
   type ElevatorLevelEntry,
   resolveElevatorBuildingLevels,

@@ -1,7 +1,18 @@
 'use client'
 
-import { ElevatorOpeningSystem, ElevatorRuntimeSystem } from '@pascal-app/core'
+import { ElevatorOpeningSystem, stepElevatorRuntimes } from '@pascal-app/core'
 import { ElevatorInteractionSystem } from '@pascal-app/viewer'
+import { useFrame } from '@react-three/fiber'
+
+/** Cab travel + door state machine, stepped once per frame. Lives here rather
+ * than in core so the core barrel stays free of runtime R3F imports. */
+function ElevatorRuntimeSystem() {
+  useFrame(({ clock }, delta) => {
+    stepElevatorRuntimes(clock.getElapsedTime() * 1000, delta)
+  }, 2)
+
+  return null
+}
 
 /**
  * Composite system for elevator — bundles three per-frame systems:
