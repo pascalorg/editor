@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  type AnyNode,
   calculateLevelMiters,
   DoorNode,
   RoofSegmentNode,
@@ -11,8 +12,6 @@ import {
   WindowNode,
 } from '@pascal-app/core'
 import {
-  buildPrintableRoofSegmentSolids,
-  buildPrintableWallSolids,
   generateExtrudedWall,
   generateRoofSegmentGeometry,
   generateSlabGeometry,
@@ -21,7 +20,8 @@ import * as THREE from 'three'
 import { exportSceneToPrintStl } from './print-export'
 import { compileSemanticPrintShell } from './print-shell-compiler'
 import { compilePrintShellBaseline } from './print-shell-compiler-baseline'
-import { compilePrintShellWithManifold } from './print-shell-compiler-manifold'
+import { compileManifoldMeshData } from './print-shell-compiler-manifold-core'
+import { compileSemanticPrintShellWithManifold } from './print-shell-compiler-manifold-worker'
 
 const EMPTY_SLAB_CONTEXT: SlabPolygonContext = { walls: [], siblingSlabs: [] }
 const ROOF_TYPES: RoofType[] = ['gable', 'hip', 'shed', 'gambrel', 'mansard', 'flat', 'dutch']
@@ -261,6 +261,8 @@ describe('print shell compiler baseline', () => {
       for (const wall of walls) {
         const root = new THREE.Group()
         root.userData = { pascalId: wall.id }
+        root.position.set(wall.start[0], 0, wall.start[1])
+        root.rotation.y = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
         sceneRegistry.nodes.set(wall.id, root)
         const openings = [door, window].filter((opening) => opening.wallId === wall.id)
         root.add(new THREE.Mesh(generateExtrudedWall(wall, openings, miters)))
@@ -291,28 +293,14 @@ describe('print shell compiler baseline', () => {
 
       const print = exportSceneToPrintStl(compiled.scene!, { scale: 100, compiled: true })
       expect(print.report.status).toBe('blocked')
-      expect(print.report.degenerateTriangleCount).toBe(1_760)
-      expect(print.report.boundaryEdgeCount).toBe(1_286)
-      expect(print.report.nonManifoldEdgeCount).toBe(10)
+      expect(print.report.degenerateTriangleCount).toBe(52)
+      expect(print.report.boundaryEdgeCount).toBe(59)
+      expect(print.report.nonManifoldEdgeCount).toBe(1)
       expect(print.report.volumeMm3).toBeGreaterThan(0)
 
-      const candidateSource = new THREE.Group()
-      for (const wall of walls) {
-        const wallHeight = wall.height
-        if (wallHeight === undefined) throw new Error(`Missing height for ${wall.id}`)
-        const result = buildPrintableWallSolids(wall, { effectiveHeight: wallHeight }, nodes)
-        expect(result.status).toBe('ready')
-        candidateSource.add(result.object!)
-      }
-      const manufacturingSlabRoot = new THREE.Group()
-      manufacturingSlabRoot.userData = { pascalId: slab.id }
-      manufacturingSlabRoot.add(new THREE.Mesh(generateSlabGeometry(slab, EMPTY_SLAB_CONTEXT)))
-      candidateSource.add(manufacturingSlabRoot)
-      const canonicalRoof = buildPrintableRoofSegmentSolids(roof)
-      expect(canonicalRoof.status).toBe('ready')
-      candidateSource.add(canonicalRoof.object!)
-
-      const candidate = await compilePrintShellWithManifold(candidateSource)
+      const candidate = await compileSemanticPrintShellWithManifold(source, nodes, {
+        runner: compileManifoldMeshData,
+      })
       expect(candidate.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual(
         [],
       )
@@ -339,6 +327,78 @@ describe('print shell compiler baseline', () => {
       for (const wall of walls) sceneRegistry.nodes.delete(wall.id)
     }
   }, 15_000)
+
+  test('blocks a Manifold worker failure without exporting display geometry', async () => {
+    const source = structuralBox('wall_worker-failure', 0)
+    const compiled = await compileSemanticPrintShellWithManifold(
+      source,
+      {},
+      {
+        runner: async () => {
+          throw new Error('Worker unavailable')
+        },
+      },
+    )
+
+    expect(compiled.status).toBe('blocked')
+    expect(compiled.scene).toBeNull()
+    expect(compiled.sourceNodeIds).toEqual(['wall_worker-failure'])
+    expect(compiled.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'manifold_worker_failed',
+        message: 'Worker unavailable',
+        severity: 'error',
+      }),
+    )
+  })
+
+  test('compiles a plane-bound wall independently of its flat 2D display geometry', async () => {
+    const levelId = 'level_print-shell-2d'
+    const wall = WallNode.parse({
+      id: 'wall_print-shell-2d',
+      parentId: levelId,
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    })
+    const wallRoot = new THREE.Group()
+    wallRoot.userData = { pascalId: wall.id }
+    const flatDisplay = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.2))
+    flatDisplay.rotation.x = -Math.PI / 2
+    wallRoot.add(flatDisplay)
+    const source = new THREE.Group()
+    source.add(wallRoot)
+    const nodes = {
+      [levelId]: {
+        object: 'node',
+        id: levelId,
+        type: 'level',
+        parentId: null,
+        children: [wall.id],
+        height: 2.5,
+        level: 0,
+        visible: true,
+      } as unknown as AnyNode,
+      [wall.id]: wall,
+    }
+
+    const compiled = await compileSemanticPrintShellWithManifold(source, nodes, {
+      runner: compileManifoldMeshData,
+    })
+    expect(compiled.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([])
+    expect(compiled.status).toBe('compiled')
+    expect(compiled.scene).not.toBeNull()
+
+    const print = exportSceneToPrintStl(compiled.scene!, {
+      scale: 100,
+      compiled: true,
+      indexedTopology: true,
+    })
+    expect(print.report.status).toBe('pass')
+    expect(print.report.bounds?.height).toBeCloseTo(25, 4)
+    expect(print.report.boundaryEdgeCount).toBe(0)
+    expect(print.report.nonManifoldEdgeCount).toBe(0)
+  })
 
   test('blocks unsupported semantic wall forms without falling back to display geometry', () => {
     const wall = WallNode.parse({

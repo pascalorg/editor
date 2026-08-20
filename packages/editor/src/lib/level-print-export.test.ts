@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { prepareSceneForExport } from './glb-export'
 import { exportSceneLevelsToPrintStl } from './level-print-export'
 import { filterPreparedSceneForPrintContent } from './print-content-scope'
+import { compileSemanticPrintShell } from './print-shell-compiler'
 
 function registerFixtureKind(category: 'structure' | 'furnish'): string {
   const kind = `print-level-${category}-${crypto.randomUUID()}`
@@ -118,11 +119,11 @@ describe('per-level print STL export', () => {
     sceneRegistry.nodes.clear()
   })
 
-  test('packages one bed-normalized, scale-correct STL per visible level', () => {
+  test('packages one bed-normalized, scale-correct STL per visible level', async () => {
     const fixture = twoLevelFixture()
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
 
-    const bundle = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
+    const bundle = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
     const files = unzipSync(bundle.archive)
     const ground = binaryStlBounds(files['01_ground.stl']!)
     const upper = binaryStlBounds(files['02_upper.stl']!)
@@ -141,7 +142,7 @@ describe('per-level print STL export', () => {
     expect(upper.size.z).toBeCloseTo(20, 4)
   })
 
-  test('omits and blocks an unsplit stair that spans two levels', () => {
+  test('omits and blocks an unsplit stair that spans two levels', async () => {
     const fixture = twoLevelFixture()
     const stair = new THREE.Group()
     stair.add(new THREE.Mesh(new THREE.BoxGeometry(1, 3, 2)))
@@ -159,7 +160,7 @@ describe('per-level print STL export', () => {
     } as unknown as AnyNode
 
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
-    const bundle = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
+    const bundle = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
 
     expect(bundle.report.status).toBe('blocked')
     expect(bundle.report.excludedNodeIds).toEqual(['stair_main'])
@@ -169,7 +170,7 @@ describe('per-level print STL export', () => {
     expect(bundle.report.parts.map((part) => part.report.triangleCount)).toEqual([12, 12])
   })
 
-  test('does not create a part for a semantically hidden level', () => {
+  test('does not create a part for a semantically hidden level', async () => {
     const fixture = twoLevelFixture()
     fixture.nodes.level_upper = {
       ...fixture.nodes.level_upper!,
@@ -177,14 +178,14 @@ describe('per-level print STL export', () => {
     } as AnyNode
 
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
-    const bundle = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
+    const bundle = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 100 })
     const files = unzipSync(bundle.archive)
 
     expect(Object.keys(files)).toEqual(['01_ground.stl'])
     expect(bundle.report.parts.map((part) => part.levelId)).toEqual(['level_ground'])
   })
 
-  test('applies structure scope before partitioning level files', () => {
+  test('applies structure scope before partitioning level files', async () => {
     const fixture = twoLevelFixture()
     const furniture = new THREE.Group()
     furniture.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)))
@@ -200,13 +201,13 @@ describe('per-level print STL export', () => {
 
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
     const structure = filterPreparedSceneForPrintContent(prepared.scene, fixture.nodes, 'structure')
-    const bundle = exportSceneLevelsToPrintStl(structure, fixture.nodes, { scale: 100 })
+    const bundle = await exportSceneLevelsToPrintStl(structure, fixture.nodes, { scale: 100 })
 
     expect(bundle.report.parts.map((part) => part.report.triangleCount)).toEqual([12, 12])
     expect(bundle.report.status).toBe('pass')
   })
 
-  test('substitutes a canonical roof shell before compiling a level part', () => {
+  test('uses the asynchronous shell compiler before exporting a level part', async () => {
     const root = new THREE.Group()
     const building = new THREE.Group()
     building.userData = { pascalId: 'building_roof-print' }
@@ -253,14 +254,20 @@ describe('per-level print STL export', () => {
       [roof.id]: roof,
     }
 
-    const raw = exportSceneLevelsToPrintStl(root, nodes, { scale: 100 })
-    const compiled = exportSceneLevelsToPrintStl(root, nodes, {
+    let compileCalls = 0
+    const raw = await exportSceneLevelsToPrintStl(root, nodes, { scale: 100 })
+    const compiled = await exportSceneLevelsToPrintStl(root, nodes, {
       scale: 100,
       compileShells: true,
+      compileShell: async (source, compilerNodes) => {
+        compileCalls += 1
+        return compileSemanticPrintShell(source, compilerNodes)
+      },
     })
     const part = compiled.report.parts[0]!
 
     expect(raw.report.parts[0]?.report.status).toBe('blocked')
+    expect(compileCalls).toBe(1)
     expect(compiled.report.status).toBe('pass')
     expect(part.report.status).toBe('pass')
     expect(part.report.bounds?.width).toBeCloseTo(46.6962, 3)
@@ -276,25 +283,25 @@ describe('per-level print STL export', () => {
     )
   })
 
-  test('produces deterministic archive bytes for the same level parts', () => {
+  test('produces deterministic archive bytes for the same level parts', async () => {
     const fixture = twoLevelFixture()
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
 
-    const first = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 50 })
-    const second = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 50 })
+    const first = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 50 })
+    const second = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, { scale: 50 })
 
     expect(first.archive).toEqual(second.archive)
   })
 
-  test('prepends an optional physical-size plinth derived from the lowest level bounds', () => {
+  test('prepends an optional physical-size plinth derived from the lowest level bounds', async () => {
     const fixture = twoLevelFixture()
     const prepared = prepareSceneForExport(fixture.root, fixture.nodes)
 
-    const bundle = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, {
+    const bundle = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, {
       scale: 100,
       plinth: { marginMm: 2, thicknessMm: 3 },
     })
-    const repeated = exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, {
+    const repeated = await exportSceneLevelsToPrintStl(prepared.scene, fixture.nodes, {
       scale: 100,
       plinth: { marginMm: 2, thicknessMm: 3 },
     })

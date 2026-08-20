@@ -16,7 +16,7 @@ import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/g
 import { exportSceneLevelsToPrintStl } from '../../lib/level-print-export'
 import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
 import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
-import { compileSemanticPrintShell } from '../../lib/print-shell-compiler'
+import { compileSemanticPrintShellWithManifold } from '../../lib/print-shell-compiler-manifold-worker'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
 // material-less renderables) with an attribute-less geometry — GLTFExporter
@@ -101,10 +101,11 @@ export function ExportManager() {
                     thicknessMm: options.printPlinthThicknessMm ?? 2,
                   }
                 : undefined
-            const { archive, report } = exportSceneLevelsToPrintStl(exportScene, nodes, {
+            const { archive, report } = await exportSceneLevelsToPrintStl(exportScene, nodes, {
               scale,
               plinth,
               compileShells,
+              compileShell: compileShells ? compileSemanticPrintShellWithManifold : undefined,
             })
             const blob = new Blob([archive], { type: 'application/zip' })
             return finishArtifact(
@@ -117,11 +118,14 @@ export function ExportManager() {
           if (options.printBase === 'plinth') {
             throw new Error('Plinth generation is available only for per-level print packages.')
           }
-          const compiled = compileShells ? compileSemanticPrintShell(exportScene, nodes) : null
+          const compiled = compileShells
+            ? await compileSemanticPrintShellWithManifold(exportScene, nodes)
+            : null
           const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : exportScene
           const output = exportSceneToPrintStl(printSource, {
             scale,
             compiled: compiled?.status === 'compiled',
+            indexedTopology: compiled?.backend === 'manifold-3d',
           })
           const report = compiled
             ? mergePrintExportDiagnostics(

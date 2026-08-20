@@ -8,6 +8,7 @@ import {
   type PrintExportReport,
 } from './print-export'
 import { compileSemanticPrintShell } from './print-shell-compiler'
+import type { PrintShellCompileResult } from './print-shell-compiler-baseline'
 
 const ZIP_MTIME = new Date(2000, 0, 1, 0, 0, 0)
 const MILLIMETERS_PER_METER = 1000
@@ -49,6 +50,10 @@ export type PrintLevelExportOptions = {
   scale: number
   plinth?: PrintPlinthOptions
   compileShells?: boolean
+  compileShell?: (
+    source: THREE.Object3D,
+    nodes: Record<string, AnyNode>,
+  ) => Promise<PrintShellCompileResult>
 }
 
 function exportedIdentityIds(root: THREE.Object3D): Set<string> {
@@ -177,11 +182,11 @@ function bundleStatus(
   return 'pass'
 }
 
-export function exportSceneLevelsToPrintStl(
+export async function exportSceneLevelsToPrintStl(
   source: THREE.Object3D,
   nodes: Record<string, AnyNode>,
   options: PrintLevelExportOptions,
-): PrintLevelStlBundle {
+): Promise<PrintLevelStlBundle> {
   const exportedIds = exportedIdentityIds(source)
   const ownerByNodeId = new Map<string, string | null>()
   for (const id of Object.keys(nodes)) owningLevelId(id, nodes, ownerByNodeId)
@@ -222,11 +227,16 @@ export function exportSceneLevelsToPrintStl(
     const label = getLevelDisplayName(level)
     const filename = `${String(index + 1).padStart(2, '0')}_${safeFilenamePart(label)}.stl`
     const levelScene = pruneSceneToLevel(source, level.id, nodes, excludedIds, ownerByNodeId)
-    const compiled = options.compileShells ? compileSemanticPrintShell(levelScene, nodes) : null
+    const compiled = options.compileShells
+      ? options.compileShell
+        ? await options.compileShell(levelScene, nodes)
+        : compileSemanticPrintShell(levelScene, nodes)
+      : null
     const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : levelScene
     const output = exportSceneToPrintStl(printSource, {
       scale: options.scale,
       compiled: compiled?.status === 'compiled',
+      indexedTopology: compiled?.backend === 'manifold-3d',
     })
     const report = compiled
       ? mergePrintExportDiagnostics(
@@ -307,7 +317,9 @@ export function exportSceneLevelsToPrintStl(
     severity: 'info',
     code: 'level_parts_experimental',
     message: options.compileShells
-      ? 'Level parts use the experimental synchronous semantic shell compiler; worker execution, self-intersection checks, and minimum wall thickness remain pending.'
+      ? options.compileShell
+        ? 'Level parts use worker-backed Manifold semantic shell compilation; self-intersection checks and minimum wall thickness remain pending.'
+        : 'Level parts use the experimental synchronous semantic shell compiler; worker execution, self-intersection checks, and minimum wall thickness remain pending.'
       : 'Level parts are separated semantically but are not boolean-unioned printable shells yet.',
   })
 

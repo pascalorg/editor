@@ -1,4 +1,11 @@
-import type { AnyNode, RoofSegmentNode, WallNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  getWallEffectiveHeightForNodes,
+  type RoofSegmentNode,
+  resolveLevelId,
+  spatialGridManager,
+  type WallNode,
+} from '@pascal-app/core'
 import { buildPrintableRoofSegmentSolids, buildPrintableWallSolids } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import {
@@ -10,6 +17,22 @@ import {
 export type SemanticPrintCompileOptions = {
   wallSolids?: boolean
 }
+
+export type SemanticPrintSourceResult =
+  | {
+      status: 'ready'
+      scene: THREE.Object3D
+      diagnostics: []
+      dispose: () => void
+    }
+  | {
+      status: 'blocked'
+      scene: null
+      inputMeshCount: number
+      sourceNodeIds: string[]
+      diagnostics: PrintShellCompileDiagnostic[]
+      dispose: () => void
+    }
 
 function meshCount(root: THREE.Object3D): number {
   let count = 0
@@ -95,22 +118,26 @@ function ownedLocalYBounds(root: THREE.Object3D): { min: number; max: number } |
 function preparedWallHeight(
   node: WallNode,
   object: THREE.Object3D,
+  nodes: Record<string, AnyNode>,
 ):
   | { height: number; diagnostic: null }
   | { height: null; diagnostic: PrintShellCompileDiagnostic } {
+  const levelId = resolveLevelId(node, nodes)
+  const support = spatialGridManager.getSlabSupportForWall(
+    levelId,
+    node.start,
+    node.end,
+    node.curveOffset ?? 0,
+    node.thickness,
+    node.supportSlabId ?? null,
+    undefined,
+    node.supportOffset,
+  )
+  const hasDisplacedBase =
+    Math.abs(support.baseElevation - support.elevation) > 1e-5 ||
+    support.baseSegments.some((segment) => Math.abs(segment.elevation - support.elevation) > 1e-5)
   const bounds = ownedLocalYBounds(object)
-  if (!bounds || bounds.max <= 1e-7) {
-    return {
-      height: null,
-      diagnostic: {
-        severity: 'error',
-        code: 'invalid_wall_print_dimensions',
-        message: `Wall ${node.id} has no finite prepared height for print compilation.`,
-        nodeIds: [node.id],
-      },
-    }
-  }
-  if (bounds.min < -1e-5 || bounds.min > 1e-5) {
+  if (hasDisplacedBase || (bounds && bounds.max > 1e-7 && Math.abs(bounds.min) > 1e-5)) {
     return {
       height: null,
       diagnostic: {
@@ -121,19 +148,27 @@ function preparedWallHeight(
       },
     }
   }
-  return { height: bounds.max, diagnostic: null }
+
+  const height = getWallEffectiveHeightForNodes(node, nodes)
+  if (!Number.isFinite(height) || height <= 1e-7) {
+    return {
+      height: null,
+      diagnostic: {
+        severity: 'error',
+        code: 'invalid_wall_print_dimensions',
+        message: `Wall ${node.id} has no finite semantic height for print compilation.`,
+        nodeIds: [node.id],
+      },
+    }
+  }
+  return { height, diagnostic: null }
 }
 
-/**
- * Compiles a semantic structural source instead of trusting display aggregates.
- * Roof segments are replaced as complete identity subtrees so their hosted
- * display CSG and accessory meshes cannot leak into the manufacturing shell.
- */
-export function compileSemanticPrintShell(
+export function prepareSemanticPrintShellSource(
   source: THREE.Object3D,
   nodes: Record<string, AnyNode>,
   options: SemanticPrintCompileOptions = {},
-): PrintShellCompileResult {
+): SemanticPrintSourceResult {
   const scene = new THREE.Group()
   scene.name = 'semantic-print-source'
   scene.add(source.clone(true))
@@ -160,7 +195,7 @@ export function compileSemanticPrintShell(
     replacements.push({ target: object, replacement: result.object })
   }
   for (const { node, object } of wallTargets) {
-    const prepared = preparedWallHeight(node, object)
+    const prepared = preparedWallHeight(node, object, nodes)
     if (prepared.diagnostic) {
       diagnostics.push(prepared.diagnostic)
       continue
@@ -181,7 +216,6 @@ export function compileSemanticPrintShell(
   if (diagnostics.length > 0) {
     for (const { replacement } of replacements) disposeGenerated(replacement)
     return {
-      backend: 'pascal-three-bvh-csg',
       status: 'blocked',
       scene: null,
       inputMeshCount: meshCount(scene),
@@ -189,6 +223,7 @@ export function compileSemanticPrintShell(
         new Set(diagnostics.flatMap((diagnostic) => diagnostic.nodeIds)),
       ).sort(),
       diagnostics,
+      dispose: () => {},
     }
   }
 
@@ -196,9 +231,44 @@ export function compileSemanticPrintShell(
     if (target.parent) replaceChild(target.parent, target, replacement)
   }
 
+  let disposed = false
+  return {
+    status: 'ready',
+    scene,
+    diagnostics: [],
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      for (const { replacement } of replacements) disposeGenerated(replacement)
+    },
+  }
+}
+
+/**
+ * Compiles a semantic structural source instead of trusting display aggregates.
+ * Roof segments are replaced as complete identity subtrees so their hosted
+ * display CSG and accessory meshes cannot leak into the manufacturing shell.
+ */
+export function compileSemanticPrintShell(
+  source: THREE.Object3D,
+  nodes: Record<string, AnyNode>,
+  options: SemanticPrintCompileOptions = {},
+): PrintShellCompileResult {
+  const prepared = prepareSemanticPrintShellSource(source, nodes, options)
+  if (prepared.status === 'blocked') {
+    return {
+      backend: 'pascal-three-bvh-csg',
+      status: 'blocked',
+      scene: null,
+      inputMeshCount: prepared.inputMeshCount,
+      sourceNodeIds: prepared.sourceNodeIds,
+      diagnostics: prepared.diagnostics,
+    }
+  }
+
   try {
-    return compilePrintShellBaseline(scene)
+    return compilePrintShellBaseline(prepared.scene)
   } finally {
-    for (const { replacement } of replacements) disposeGenerated(replacement)
+    prepared.dispose()
   }
 }
