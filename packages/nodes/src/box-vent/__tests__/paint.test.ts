@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Group, Mesh, MeshBasicMaterial } from 'three'
-import {
-  boxVentPaint,
-  buildBoxVentMaterialPatch,
-  getEffectiveBoxVentMaterial,
-  resolveBoxVentMaterialRole,
-} from '../paint'
+import { boxVentPaint, resolveBoxVentMaterialRole } from '../paint'
 import { BoxVentNode } from '../schema'
 
 describe('box vent paint', () => {
@@ -15,24 +10,24 @@ describe('box vent paint', () => {
   })
 
   test('updates only the painted role', () => {
-    expect(buildBoxVentMaterialPatch('base', undefined, 'library:metal-steel')).toEqual({
-      baseMaterial: undefined,
-      baseMaterialPreset: 'library:metal-steel',
-    })
-    expect(buildBoxVentMaterialPatch('top', undefined, 'library:roof-shingle')).toEqual({
-      topMaterial: undefined,
-      topMaterialPreset: 'library:roof-shingle',
+    const node = BoxVentNode.parse({ slots: { base: 'library:metal-steel' } })
+    expect(
+      boxVentPaint.buildPatch({
+        node,
+        role: 'top',
+        material: undefined,
+        materialPreset: 'library:roof-shingle',
+      }),
+    ).toEqual({
+      slots: { base: 'library:metal-steel', top: 'library:roof-shingle' },
     })
   })
 
   test('keeps the legacy whole-vent material as an independent fallback', () => {
-    const node = BoxVentNode.parse({
-      materialPreset: 'preset-white',
-      baseMaterialPreset: 'library:metal-steel',
-    })
-
-    expect(getEffectiveBoxVentMaterial(node, 'base').materialPreset).toBe('library:metal-steel')
-    expect(getEffectiveBoxVentMaterial(node, 'top').materialPreset).toBe('preset-white')
+    const node = BoxVentNode.parse({ materialPreset: 'preset-white' })
+    expect(
+      boxVentPaint.getEffectiveMaterial?.({ node, role: 'top', nodes: {} })?.materialPreset,
+    ).toBe('preset-white')
   })
 
   test('previews the top without replacing the base material', () => {

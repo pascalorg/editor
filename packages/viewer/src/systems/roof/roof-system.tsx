@@ -5,6 +5,7 @@ import {
   getDutchRoofShapeMetrics,
   getEffectiveNode,
   getRoofModuleFaces,
+  getRoofPlanBounds,
   getRoofSegmentSurfaceY,
   getRoofShapeInsets,
   getRoofShapeRatios,
@@ -15,8 +16,11 @@ import {
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
   type RoofNode,
+  type RoofPlanBounds,
   type RoofSegmentNode,
   type RoofType,
+  roofOverlapEntryOwns,
+  roofPlanBoundsOverlap,
   sceneRegistry,
   useLiveNodeOverrides,
   useScene,
@@ -27,8 +31,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
-import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
-import { subtractRoofInterior } from './roof-layer-trim'
+import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -153,19 +156,64 @@ function createDegenerateRoofPlaceholder(): THREE.BufferGeometry {
 
 // Pending merged-roof updates carried across frames (for throttling)
 const pendingRoofUpdates = new Set<AnyNodeId>()
+const previousRoofPlanBounds = new Map<AnyNodeId, RoofPlanBounds>()
 const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
 const MAX_SEGMENTS_PER_FRAME = 3
 
 function queueSiblingRoofUpdates(roofId: AnyNodeId, nodes: Record<string, AnyNode>) {
   pendingRoofUpdates.add(roofId)
-  const roof = nodes[roofId]
+  const roof = nodes[roofId]?.type === 'roof' ? getEffectiveNode(nodes[roofId]) : undefined
   if (roof?.type !== 'roof' || !roof.parentId) return
+  const currentBounds = getRoofPlanBounds({
+    position: roof.position,
+    rotation: roof.rotation,
+    segments: (roof.children ?? []).flatMap((id) => {
+      const segment = nodes[id as AnyNodeId]
+      if (segment?.type !== 'roof-segment') return []
+      const effective = getEffectiveNode(segment)
+      return [
+        {
+          position: effective.position,
+          rotation: effective.rotation,
+          width: effective.width,
+          depth: effective.depth,
+        },
+      ]
+    }),
+  })
+  const oldBounds = previousRoofPlanBounds.get(roofId)
+  if (currentBounds) previousRoofPlanBounds.set(roofId, currentBounds)
   const parent = nodes[roof.parentId as AnyNodeId]
   if (!parent || !('children' in parent) || !Array.isArray(parent.children)) return
   for (const siblingId of parent.children) {
-    if (nodes[siblingId as AnyNodeId]?.type === 'roof') {
-      pendingRoofUpdates.add(siblingId as AnyNodeId)
+    const sibling = nodes[siblingId as AnyNodeId]
+    if (sibling?.type !== 'roof' || sibling.id === roofId) continue
+    const effectiveSibling = getEffectiveNode(sibling)
+    const siblingBounds = getRoofPlanBounds({
+      position: effectiveSibling.position,
+      rotation: effectiveSibling.rotation,
+      segments: (effectiveSibling.children ?? []).flatMap((id) => {
+        const segment = nodes[id as AnyNodeId]
+        if (segment?.type !== 'roof-segment') return []
+        const effective = getEffectiveNode(segment)
+        return [
+          {
+            position: effective.position,
+            rotation: effective.rotation,
+            width: effective.width,
+            depth: effective.depth,
+          },
+        ]
+      }),
+    })
+    if (!siblingBounds) continue
+    previousRoofPlanBounds.set(sibling.id, siblingBounds)
+    if (
+      (currentBounds && roofPlanBoundsOverlap(currentBounds, siblingBounds)) ||
+      (oldBounds && roofPlanBoundsOverlap(oldBounds, siblingBounds))
+    ) {
+      pendingRoofUpdates.add(sibling.id)
     }
   }
 }
@@ -188,6 +236,7 @@ export const RoofSystem = () => {
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {
       pendingRoofUpdates.clear()
+      previousRoofPlanBounds.clear()
       warnedMergedRoofNaNIds.clear()
       for (const cached of mergedRoofSegmentGeometryCache.values()) {
         disposeCachedMergedRoofSegmentGeometrySet(cached)
@@ -558,15 +607,11 @@ function updateMergedRoofGeometry(
 
     const occludingInterior = buildOccludingRoofInterior(child, nodes, 'roof')
     if (occludingInterior) {
-      const exposedShingles = subtractRoofInterior(
-        brushes.shinSlab,
-        occludingInterior,
-        csgEvaluator,
-      )
+      const exposedShingles = subtractCsgBrush(brushes.shinSlab, occludingInterior, csgEvaluator)
       brushes.shinSlab.geometry.dispose()
       brushes.shinSlab = exposedShingles
 
-      const exposedDeck = subtractRoofInterior(brushes.deckSlab, occludingInterior, csgEvaluator)
+      const exposedDeck = subtractCsgBrush(brushes.deckSlab, occludingInterior, csgEvaluator)
       brushes.deckSlab.geometry.dispose()
       brushes.deckSlab = exposedDeck
     }
@@ -605,7 +650,7 @@ function updateMergedRoofGeometry(
       prepareBrushForCSG(wallShell)
 
       if (occludingInterior) {
-        const exposedWall = subtractRoofInterior(wallShell, occludingInterior, csgEvaluator)
+        const exposedWall = subtractCsgBrush(wallShell, occludingInterior, csgEvaluator)
         wallShell.geometry.dispose()
         wallShell = exposedWall
       }
@@ -1649,7 +1694,7 @@ export function generateRoofSegmentGeometry(
     const siblingInterior = nodes ? buildOccludingRoofInterior(node, nodes, 'segment') : null
     if (siblingInterior) {
       const unclipped = combined
-      combined = subtractRoofInterior(unclipped, siblingInterior, csgEvaluator)
+      combined = subtractCsgBrush(unclipped, siblingInterior, csgEvaluator)
       unclipped.geometry.dispose()
       siblingInterior.geometry.dispose()
     }
@@ -1718,7 +1763,7 @@ function clipDirectRoofGeometryAgainstSiblings(
   const brush = new Brush(geometry, dummyMats)
   prepareBrushForCSG(brush)
   try {
-    const clipped = subtractRoofInterior(brush, siblingInterior, csgEvaluator)
+    const clipped = subtractCsgBrush(brush, siblingInterior, csgEvaluator)
     const clippedGeometry = csgGeometry(clipped)
     const clippedMaterials = csgMaterials(clipped)
     const materialIndices = new Map<THREE.Material, number>([
@@ -1758,7 +1803,6 @@ function buildOccludingRoofInterior(
   const roofEntries = collectSiblingRoofEntries(parent, nodes)
   const currentEntry = roofEntries.find(({ segment }) => segment.id === node.id)
   if (!currentEntry) return null
-  const currentArea = node.width * node.depth
   const targetRoofInverse = composeRoofTransform(parent).invert()
   const targetSegmentInverse = composeSegmentTransform(node).invert()
   let combinedInterior: Brush | null = null
@@ -1768,11 +1812,20 @@ function buildOccludingRoofInterior(
     const sibling = entry.segment
     if (sibling.id === node.id) continue
     if (sibling.roofType === 'shed') continue
-    const siblingArea = sibling.width * sibling.depth
-    const siblingOwnsOverlap =
-      siblingArea > currentArea + 1e-6 ||
-      (Math.abs(siblingArea - currentArea) <= 1e-6 &&
-        compareRoofEntryIdentity(entry, currentEntry) < 0)
+    const siblingOwnsOverlap = roofOverlapEntryOwns(
+      {
+        roofId: String(entry.roof.id),
+        segmentId: String(sibling.id),
+        width: sibling.width,
+        depth: sibling.depth,
+      },
+      {
+        roofId: String(currentEntry.roof.id),
+        segmentId: String(node.id),
+        width: node.width,
+        depth: node.depth,
+      },
+    )
     if (!siblingOwnsOverlap) continue
     const siblingBrushes = getRoofSegmentBrushes(sibling)
     if (!siblingBrushes) continue
@@ -1808,14 +1861,6 @@ function buildOccludingRoofInterior(
   }
 
   return combinedInterior
-}
-
-function compareRoofEntryIdentity(
-  a: { roof: RoofNode; segment: RoofSegmentNode },
-  b: { roof: RoofNode; segment: RoofSegmentNode },
-): number {
-  const roofOrder = String(a.roof.id).localeCompare(String(b.roof.id))
-  return roofOrder !== 0 ? roofOrder : String(a.segment.id).localeCompare(String(b.segment.id))
 }
 
 function collectSiblingRoofEntries(

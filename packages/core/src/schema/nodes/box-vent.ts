@@ -11,16 +11,13 @@ export const BoxVentNode = BaseNode.extend({
   type: nodeType('box-vent'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Default to the white preset so newly-placed vents read as clean
   // painted metal — and so the paint inspector shows "White" as the
   // current selection instead of an empty "no material" state, which
   // made it look like the vent had nothing applied even though the
   // renderer was falling back to white internally.
   materialPreset: z.string().default('preset-white'),
-  baseMaterial: MaterialSchema.optional(),
-  baseMaterialPreset: z.string().optional(),
-  topMaterial: MaterialSchema.optional(),
-  topMaterialPreset: z.string().optional(),
 
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

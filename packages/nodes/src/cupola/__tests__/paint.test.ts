@@ -1,9 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  buildCupolaMaterialPatch,
-  getEffectiveCupolaMaterial,
-  resolveCupolaMaterialRole,
-} from '../paint'
+import { cupolaPaint, resolveCupolaMaterialRole } from '../paint'
 import { CupolaNode } from '../schema'
 
 describe('cupola paint', () => {
@@ -14,20 +10,26 @@ describe('cupola paint', () => {
   })
 
   test('updates only the selected construction part', () => {
-    expect(buildCupolaMaterialPatch('body', undefined, 'library:louver')).toEqual({
-      bodyMaterial: undefined,
-      bodyMaterialPreset: 'library:louver',
-    })
-    expect(buildCupolaMaterialPatch('roof', undefined, 'library:copper')).toEqual({
-      roofMaterial: undefined,
-      roofMaterialPreset: 'library:copper',
+    const node = CupolaNode.parse({ slots: { body: 'library:louver' } })
+    expect(
+      cupolaPaint.buildPatch({
+        node,
+        role: 'roof',
+        material: undefined,
+        materialPreset: 'library:copper',
+      }),
+    ).toEqual({
+      slots: { body: 'library:louver', roof: 'library:copper' },
     })
   })
 
   test('uses the legacy material only for roles without an override', () => {
-    const node = CupolaNode.parse({ bodyMaterialPreset: 'library:louver' })
-    expect(getEffectiveCupolaMaterial(node, 'body').materialPreset).toBe('library:louver')
-    expect(getEffectiveCupolaMaterial(node, 'base').materialPreset).toBe('preset-white')
-    expect(getEffectiveCupolaMaterial(node, 'roof').materialPreset).toBe('preset-white')
+    const node = CupolaNode.parse({ slots: { body: 'library:louver' } })
+    expect(
+      cupolaPaint.getEffectiveMaterial?.({ node, role: 'body', nodes: {} })?.materialPreset,
+    ).toBe('library:louver')
+    expect(
+      cupolaPaint.getEffectiveMaterial?.({ node, role: 'base', nodes: {} })?.materialPreset,
+    ).toBe('preset-white')
   })
 })

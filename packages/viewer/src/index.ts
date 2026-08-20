@@ -128,7 +128,6 @@ export {
   WHITE_PALETTE,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
-export { subtractPolygonsFromPolygon, unionPolygons } from './lib/polygon-union'
 export {
   detectRendererCapability,
   initializeGpuRenderer,

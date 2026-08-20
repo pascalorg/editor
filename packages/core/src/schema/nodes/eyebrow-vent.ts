@@ -11,13 +11,10 @@ export const EyebrowVentNode = BaseNode.extend({
   type: nodeType('eyebrow-vent'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Default to the white preset so a freshly-placed vent reads as clean
   // painted metal and the paint inspector shows "White" (matches box-vent).
   materialPreset: z.string().default('preset-white'),
-  hoodMaterial: MaterialSchema.optional(),
-  hoodMaterialPreset: z.string().optional(),
-  frontMaterial: MaterialSchema.optional(),
-  frontMaterialPreset: z.string().optional(),
 
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

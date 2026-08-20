@@ -10,6 +10,7 @@ export const DownspoutNode = BaseNode.extend({
   type: nodeType('downspout'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Match the gutter family default — paint inspector reads "White"
   // instead of "no material" on a freshly placed downspout.
   materialPreset: z.string().default('preset-white'),

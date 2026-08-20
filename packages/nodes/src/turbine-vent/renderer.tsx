@@ -13,6 +13,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -22,7 +23,6 @@ import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildTurbineVentBase, buildTurbineVentHead } from './geometry'
-import { getEffectiveTurbineVentMaterial } from './paint'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -51,6 +51,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneMaterials = useScene((s) => s.materials)
 
   // Merge live overrides (panel slider drags) on top of the store node so
   // the mesh updates frame-by-frame without polluting undo history.
@@ -99,36 +100,31 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 
-  const { material: baseMaterial, materialPreset: baseMaterialPreset } =
-    getEffectiveTurbineVentMaterial(node, 'base')
-  const { material: headMaterial, materialPreset: headMaterialPreset } =
-    getEffectiveTurbineVentMaterial(node, 'head')
   const material = useMemo(() => {
     const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
-    const resolve = (
-      roleMaterial: TurbineVentNode['material'],
-      roleMaterialPreset: string | undefined,
-    ) => {
+    const resolve = (role: 'base' | 'head') => {
       if (!textures) return roleDefault
-      if (roleMaterial) return createMaterial(roleMaterial, shading)
-      if (roleMaterialPreset) {
-        return createMaterialFromPresetRef(roleMaterialPreset, shading) ?? defaultMaterial
+      const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
+      if (slotMaterial) return slotMaterial
+      if (node.material) return createMaterial(node.material, shading)
+      if (node.materialPreset) {
+        return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
       }
       return roleDefault
     }
     return {
-      base: resolve(baseMaterial, baseMaterialPreset),
-      head: resolve(headMaterial, headMaterialPreset),
+      base: resolve('base'),
+      head: resolve('head'),
     }
   }, [
     textures,
     colorPreset,
     sceneTheme,
     shading,
-    baseMaterial,
-    baseMaterialPreset,
-    headMaterial,
-    headMaterialPreset,
+    node.slots,
+    node.material,
+    node.materialPreset,
+    sceneMaterials,
   ])
 
   // Compose slope tilt + yaw onto a single quaternion so the registered

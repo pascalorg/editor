@@ -175,7 +175,7 @@ const boxVentHandles: HandleDescriptor<BoxVentNodeType>[] = [
  */
 export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   kind: 'box-vent',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: BoxVentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -187,6 +187,10 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   },
 
   capabilities: {
+    slots: () => [
+      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
+      { slotId: 'top', label: 'Top', default: 'library:preset-softwhite' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

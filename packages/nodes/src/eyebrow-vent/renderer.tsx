@@ -13,6 +13,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -21,7 +22,6 @@ import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildEyebrowVentGeometry } from './geometry'
-import { getEffectiveEyebrowVentMaterial } from './paint'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -43,6 +43,7 @@ const EyebrowVentRenderer = ({ node: storeNode }: { node: EyebrowVentNode }) => 
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneMaterials = useScene((s) => s.materials)
 
   const overrides = useLiveNodeOverrides(
     (s) => s.get(storeNode.id as AnyNodeId) as Partial<EyebrowVentNode> | undefined,
@@ -70,33 +71,28 @@ const EyebrowVentRenderer = ({ node: storeNode }: { node: EyebrowVentNode }) => 
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 
-  const { material: hoodMaterial, materialPreset: hoodMaterialPreset } =
-    getEffectiveEyebrowVentMaterial(node, 'hood')
-  const { material: frontMaterial, materialPreset: frontMaterialPreset } =
-    getEffectiveEyebrowVentMaterial(node, 'front')
   const material = useMemo(() => {
     const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
-    const resolve = (
-      roleMaterial: EyebrowVentNode['material'],
-      roleMaterialPreset: string | undefined,
-    ) => {
+    const resolve = (role: 'hood' | 'front') => {
       if (!textures) return roleDefault
-      if (roleMaterial) return createMaterial(roleMaterial, shading)
-      if (roleMaterialPreset) {
-        return createMaterialFromPresetRef(roleMaterialPreset, shading) ?? defaultMaterial
+      const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
+      if (slotMaterial) return slotMaterial
+      if (node.material) return createMaterial(node.material, shading)
+      if (node.materialPreset) {
+        return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
       }
       return roleDefault
     }
-    return [resolve(hoodMaterial, hoodMaterialPreset), resolve(frontMaterial, frontMaterialPreset)]
+    return [resolve('hood'), resolve('front')]
   }, [
     textures,
     colorPreset,
     sceneTheme,
     shading,
-    hoodMaterial,
-    hoodMaterialPreset,
-    frontMaterial,
-    frontMaterialPreset,
+    node.slots,
+    node.material,
+    node.materialPreset,
+    sceneMaterials,
   ])
 
   const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), [])

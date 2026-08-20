@@ -112,7 +112,7 @@ const eyebrowVentHandles: HandleDescriptor<EyebrowVentNodeType>[] = [
  */
 export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
   kind: 'eyebrow-vent',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: EyebrowVentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -127,6 +127,10 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
   },
 
   capabilities: {
+    slots: () => [
+      { slotId: 'hood', label: 'Hood', default: 'library:preset-softwhite' },
+      { slotId: 'front', label: 'Front', default: 'library:preset-softwhite' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { Group, Mesh, MeshBasicMaterial } from 'three'
-import {
-  buildTurbineVentMaterialPatch,
-  getEffectiveTurbineVentMaterial,
-  resolveTurbineVentMaterialRole,
-  turbineVentPaint,
-} from '../paint'
+import { resolveTurbineVentMaterialRole, turbineVentPaint } from '../paint'
 import { TurbineVentNode } from '../schema'
 
 describe('turbine vent paint', () => {
@@ -15,13 +10,23 @@ describe('turbine vent paint', () => {
   })
 
   test('updates one role and falls back to the legacy whole-vent material', () => {
-    expect(buildTurbineVentMaterialPatch('head', undefined, 'library:copper')).toEqual({
-      headMaterial: undefined,
-      headMaterialPreset: 'library:copper',
+    const node = TurbineVentNode.parse({ slots: { base: 'library:steel' } })
+    expect(
+      turbineVentPaint.buildPatch({
+        node,
+        role: 'head',
+        material: undefined,
+        materialPreset: 'library:copper',
+      }),
+    ).toEqual({
+      slots: { base: 'library:steel', head: 'library:copper' },
     })
-    const node = TurbineVentNode.parse({ baseMaterialPreset: 'library:steel' })
-    expect(getEffectiveTurbineVentMaterial(node, 'base').materialPreset).toBe('library:steel')
-    expect(getEffectiveTurbineVentMaterial(node, 'head').materialPreset).toBe('preset-white')
+    expect(
+      turbineVentPaint.getEffectiveMaterial?.({ node, role: 'base', nodes: {} })?.materialPreset,
+    ).toBe('library:steel')
+    expect(
+      turbineVentPaint.getEffectiveMaterial?.({ node, role: 'head', nodes: {} })?.materialPreset,
+    ).toBe('preset-white')
   })
 
   test('previews only the selected mesh', () => {

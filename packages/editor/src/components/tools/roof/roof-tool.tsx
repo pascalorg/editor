@@ -33,11 +33,23 @@ import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
-import { resolveRoofDraftPlacement } from './roof-draft-orientation'
 
 const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
+
+function resolveRoofDraftPlacement(
+  footprintWidth: number,
+  footprintDepth: number,
+  quarterTurn: boolean,
+  parentRotation = 0,
+) {
+  return {
+    width: quarterTurn ? footprintDepth : footprintWidth,
+    depth: quarterTurn ? footprintWidth : footprintDepth,
+    rotation: -parentRotation + (quarterTurn ? Math.PI / 2 : 0),
+  }
+}
 
 // Walls that are direct children of a level.
 function getLevelWalls(

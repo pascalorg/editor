@@ -51,6 +51,7 @@ export const GutterNode = BaseNode.extend({
   type: nodeType('gutter'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // White preset by default — matches the rest of the roof accessory
   // family (box-vent / ridge-vent) so the paint inspector reads as
   // "White" instead of "no material" on a freshly-placed gutter.

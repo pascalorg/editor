@@ -161,7 +161,7 @@ const downspoutHandles: HandleDescriptor<DownspoutNodeType>[] = [
  */
 export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   kind: 'downspout',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: DownspoutNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -177,6 +177,7 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   },
 
   capabilities: {
+    slots: () => [{ slotId: 'surface', label: 'Surface', default: 'library:preset-softwhite' }],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

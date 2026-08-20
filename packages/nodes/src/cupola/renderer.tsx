@@ -13,6 +13,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -21,7 +22,6 @@ import * as THREE from 'three'
 import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildCupolaGeometry } from './geometry'
-import { getEffectiveCupolaMaterial } from './paint'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
@@ -43,6 +43,7 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneMaterials = useScene((s) => s.materials)
 
   const overrides = useLiveNodeOverrides(
     (s) => s.get(storeNode.id as AnyNodeId) as Partial<CupolaNode> | undefined,
@@ -68,47 +69,28 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 
-  const { material: baseMaterial, materialPreset: baseMaterialPreset } = getEffectiveCupolaMaterial(
-    node,
-    'base',
-  )
-  const { material: bodyMaterial, materialPreset: bodyMaterialPreset } = getEffectiveCupolaMaterial(
-    node,
-    'body',
-  )
-  const { material: roofMaterial, materialPreset: roofMaterialPreset } = getEffectiveCupolaMaterial(
-    node,
-    'roof',
-  )
   const material = useMemo(() => {
     const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
-    const resolve = (
-      roleMaterial: CupolaNode['material'],
-      roleMaterialPreset: string | undefined,
-    ) => {
+    const resolve = (role: 'base' | 'body' | 'roof') => {
       if (!textures) return roleDefault
-      if (roleMaterial) return createMaterial(roleMaterial, shading)
-      if (roleMaterialPreset) {
-        return createMaterialFromPresetRef(roleMaterialPreset, shading) ?? defaultMaterial
+      const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
+      if (slotMaterial) return slotMaterial
+      if (node.material) return createMaterial(node.material, shading)
+      if (node.materialPreset) {
+        return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
       }
       return roleDefault
     }
-    return [
-      resolve(baseMaterial, baseMaterialPreset),
-      resolve(bodyMaterial, bodyMaterialPreset),
-      resolve(roofMaterial, roofMaterialPreset),
-    ]
+    return [resolve('base'), resolve('body'), resolve('roof')]
   }, [
     textures,
     colorPreset,
     sceneTheme,
     shading,
-    baseMaterial,
-    baseMaterialPreset,
-    bodyMaterial,
-    bodyMaterialPreset,
-    roofMaterial,
-    roofMaterialPreset,
+    node.slots,
+    node.material,
+    node.materialPreset,
+    sceneMaterials,
   ])
 
   const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), [])

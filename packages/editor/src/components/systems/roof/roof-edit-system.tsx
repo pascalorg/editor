@@ -35,7 +35,6 @@ import { isHistoryShortcut } from '../../../lib/history'
 import { getHoveredRoofSegmentOutlineProxyName } from '../../../lib/roof-hover-outline-proxy'
 import useInteractionScope, { useMovingNode } from '../../../store/use-interaction-scope'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
-import { getRoofEditVisibility } from './roof-edit-visibility'
 
 // Empty placeholder geometry used when we reveal segments-wrapper for
 // accessory editing. The roof's CSG-merged shell is the only thing
@@ -1841,9 +1840,8 @@ export const RoofEditSystem = () => {
       const isMoving = movingRoofIds.has(roofId)
       const isReveal = revealRoofIds.has(roofId)
 
-      const visibility = getRoofEditVisibility({ isMoving, isReveal })
-      if (mergedMesh) mergedMesh.visible = visibility.merged
-      if (segmentsWrapper) segmentsWrapper.visible = visibility.segments
+      if (mergedMesh) mergedMesh.visible = true
+      if (segmentsWrapper) segmentsWrapper.visible = isReveal
 
       const roofNode = nodes[roofId as AnyNodeId] as RoofNode | undefined
       if (roofNode?.children?.length) {

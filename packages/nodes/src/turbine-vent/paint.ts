@@ -1,53 +1,18 @@
-import type {
-  MaterialSchema,
-  PaintCapability,
-  TurbineVentMaterialRole,
-  TurbineVentNode,
-} from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef } from '@pascal-app/viewer'
-import type { Material, Mesh, Object3D } from 'three'
+import type { AnyNode, MaterialSchema, TurbineVentMaterialRole } from '@pascal-app/core'
+import type { Mesh, Object3D } from 'three'
+import { buildSlotPreviewMaterial, createSlotPaintCapability } from '../shared/slot-paint'
+
+type LegacyTurbineVent = AnyNode & { material?: MaterialSchema; materialPreset?: string }
 
 export function resolveTurbineVentMaterialRole(hitObjectName?: string): TurbineVentMaterialRole {
   return hitObjectName === 'turbine-vent-head' ? 'head' : 'base'
 }
 
-export function buildTurbineVentMaterialPatch(
-  role: TurbineVentMaterialRole,
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Partial<TurbineVentNode> {
-  return role === 'head'
-    ? { headMaterial: material, headMaterialPreset: materialPreset }
-    : { baseMaterial: material, baseMaterialPreset: materialPreset }
-}
-
-export function getEffectiveTurbineVentMaterial(
-  node: TurbineVentNode,
-  role: TurbineVentMaterialRole,
-): { material: MaterialSchema | undefined; materialPreset: string | undefined } {
-  const material = role === 'head' ? node.headMaterial : node.baseMaterial
-  const materialPreset = role === 'head' ? node.headMaterialPreset : node.baseMaterialPreset
-  return material !== undefined || materialPreset !== undefined
-    ? { material, materialPreset }
-    : { material: node.material, materialPreset: node.materialPreset }
-}
-
-function previewMaterial(
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Material | null {
-  if (materialPreset) return createMaterialFromPresetRef(materialPreset)
-  if (material) return createMaterial(material)
-  return null
-}
-
-export const turbineVentPaint: PaintCapability = {
+export const turbineVentPaint = createSlotPaintCapability({
   materialTarget: 'turbine-vent',
   resolveRole: ({ hitObjectName }) => resolveTurbineVentMaterialRole(hitObjectName),
-  buildPatch: ({ role, material, materialPreset }) =>
-    buildTurbineVentMaterialPatch(role as TurbineVentMaterialRole, material, materialPreset),
   applyPreview: ({ role, material, materialPreset, root }) => {
-    const preview = previewMaterial(material, materialPreset)
+    const preview = buildSlotPreviewMaterial(material, materialPreset)
     if (!preview) return null
     const targetName = `turbine-vent-${role}`
     const restores: Array<() => void> = []
@@ -65,6 +30,8 @@ export const turbineVentPaint: PaintCapability = {
       for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]?.()
     }
   },
-  getEffectiveMaterial: ({ node, role }) =>
-    getEffectiveTurbineVentMaterial(node as TurbineVentNode, role as TurbineVentMaterialRole),
-}
+  legacyEffective: (node) => {
+    const legacy = node as LegacyTurbineVent
+    return { material: legacy.material, materialPreset: legacy.materialPreset }
+  },
+})

@@ -11,14 +11,11 @@ export const TurbineVentNode = BaseNode.extend({
   type: nodeType('turbine-vent'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Default to the white preset so a freshly-placed turbine reads as
   // clean painted/galvanised metal and the paint inspector shows "White"
   // as the current selection (matches box-vent's reasoning).
   materialPreset: z.string().default('preset-white'),
-  baseMaterial: MaterialSchema.optional(),
-  baseMaterialPreset: z.string().optional(),
-  headMaterial: MaterialSchema.optional(),
-  headMaterialPreset: z.string().optional(),
 
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

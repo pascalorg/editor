@@ -108,7 +108,7 @@ const cupolaHandles: HandleDescriptor<CupolaNodeType>[] = [
  */
 export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   kind: 'cupola',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: CupolaNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -120,6 +120,11 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   },
 
   capabilities: {
+    slots: () => [
+      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
+      { slotId: 'body', label: 'Body', default: 'library:preset-softwhite' },
+      { slotId: 'roof', label: 'Roof', default: 'library:preset-softwhite' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

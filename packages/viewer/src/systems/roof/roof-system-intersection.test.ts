@@ -2,8 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { LevelNode, RoofNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { Brush, Evaluator } from 'three-bvh-csg'
-import { prepareBrushForCSG } from '../../lib/csg-utils'
-import { subtractRoofInterior } from './roof-layer-trim'
+import { prepareBrushForCSG, subtractCsgBrush } from '../../lib/csg-utils'
 import { generateRoofSegmentGeometry } from './roof-system'
 
 function box(size: [number, number, number], position: [number, number, number]): Brush {
@@ -13,14 +12,14 @@ function box(size: [number, number, number], position: [number, number, number])
   return brush
 }
 
-describe('subtractRoofInterior', () => {
+describe('roof system intersections', () => {
   test('removes a roof layer that continues through a sibling attic', () => {
     const layer = box([4, 0.2, 4], [0, 1, 0])
     const siblingInterior = box([2, 3, 2], [0, 1, 0])
     const evaluator = new Evaluator()
     evaluator.attributes = ['position', 'normal', 'uv']
 
-    const result = subtractRoofInterior(layer, siblingInterior, evaluator)
+    const result = subtractCsgBrush(layer, siblingInterior, evaluator)
     const mesh = new THREE.Mesh(result.geometry)
     const centerHits = new THREE.Raycaster(
       new THREE.Vector3(0, 3, 0),

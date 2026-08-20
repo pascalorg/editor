@@ -81,7 +81,7 @@ const turbineVentHandles: HandleDescriptor<TurbineVentNodeType>[] = [
  */
 export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
   kind: 'turbine-vent',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: TurbineVentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -93,6 +93,10 @@ export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
   },
 
   capabilities: {
+    slots: () => [
+      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
+      { slotId: 'head', label: 'Head', default: 'library:preset-softwhite' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

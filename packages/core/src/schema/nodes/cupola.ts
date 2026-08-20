@@ -11,15 +11,10 @@ export const CupolaNode = BaseNode.extend({
   type: nodeType('cupola'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Default to the white preset so a freshly-placed cupola reads as clean
   // painted metal and the paint inspector shows "White" (matches box-vent).
   materialPreset: z.string().default('preset-white'),
-  baseMaterial: MaterialSchema.optional(),
-  baseMaterialPreset: z.string().optional(),
-  bodyMaterial: MaterialSchema.optional(),
-  bodyMaterialPreset: z.string().optional(),
-  roofMaterial: MaterialSchema.optional(),
-  roofMaterialPreset: z.string().optional(),
 
   roofSegmentId: z.string().optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),

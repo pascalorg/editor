@@ -1,11 +1,13 @@
-import type {
-  FloorplanGeometry,
-  FloorplanPoint,
-  GeometryContext,
-  RoofNode,
-  RoofSegmentNode,
+import {
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+  type RoofNode,
+  type RoofSegmentNode,
+  roofOverlapEntryOwns,
+  subtractPolygonsFromPolygon,
+  unionPolygons,
 } from '@pascal-app/core'
-import { subtractPolygonsFromPolygon, unionPolygons } from '@pascal-app/viewer'
 import { getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
 
 type Pt = [number, number]
@@ -57,11 +59,6 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
         }
       : null,
   }
-}
-
-function comparePlanEntryIdentity(a: PlanEntry, b: PlanEntry): number {
-  const roofOrder = String(a.roof.id).localeCompare(String(b.roof.id))
-  return roofOrder !== 0 ? roofOrder : String(a.segment.id).localeCompare(String(b.segment.id))
 }
 
 function pointInPolygon(point: Pt, polygon: Pt[]): boolean {
@@ -152,15 +149,23 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
 
   const currentEntries = entries.filter((entry) => entry.roof.id === node.id)
   const visiblePlans = currentEntries.map((entry) => {
-    const area = entry.segment.width * entry.segment.depth
     const cutters = entries
       .filter((candidate) => {
         if (candidate.segment.id === entry.segment.id) return false
         if (candidate.segment.roofType === 'shed') return false
-        const candidateArea = candidate.segment.width * candidate.segment.depth
-        return (
-          candidateArea > area + 1e-6 ||
-          (Math.abs(candidateArea - area) <= 1e-6 && comparePlanEntryIdentity(candidate, entry) < 0)
+        return roofOverlapEntryOwns(
+          {
+            roofId: String(candidate.roof.id),
+            segmentId: String(candidate.segment.id),
+            width: candidate.segment.width,
+            depth: candidate.segment.depth,
+          },
+          {
+            roofId: String(entry.roof.id),
+            segmentId: String(entry.segment.id),
+            width: entry.segment.width,
+            depth: entry.segment.depth,
+          },
         )
       })
       .map((candidate) => candidate.plan.footprint)

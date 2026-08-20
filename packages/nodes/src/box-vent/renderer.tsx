@@ -13,6 +13,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -56,6 +57,7 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneMaterials = useScene((s) => s.materials)
 
   // Merge live overrides (panel slider drags) on top of the store node.
   // Sliders write here on every `onChange` and only flush to the scene
@@ -115,35 +117,28 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   // faces of the vent body / hood wouldn't drop out when looking up at the
   // eaves; that's now a known visual tradeoff — a closed-solid extrude in
   // `geometry.ts` is the right fix if undersides become noticeable.
-  const hasBaseMaterial = node.baseMaterial !== undefined || node.baseMaterialPreset !== undefined
-  const baseMaterial = hasBaseMaterial ? node.baseMaterial : node.material
-  const baseMaterialPreset = hasBaseMaterial ? node.baseMaterialPreset : node.materialPreset
-  const hasTopMaterial = node.topMaterial !== undefined || node.topMaterialPreset !== undefined
-  const topMaterial = hasTopMaterial ? node.topMaterial : node.material
-  const topMaterialPreset = hasTopMaterial ? node.topMaterialPreset : node.materialPreset
   const material = useMemo(() => {
     const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
     if (!textures) return [roleDefault, roleDefault]
-    const resolve = (
-      roleMaterial: BoxVentNode['material'],
-      roleMaterialPreset: string | undefined,
-    ) => {
-      if (roleMaterial) return createMaterial(roleMaterial, shading)
-      if (roleMaterialPreset) {
-        return createMaterialFromPresetRef(roleMaterialPreset, shading) ?? defaultMaterial
+    const resolve = (role: 'base' | 'top') => {
+      const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
+      if (slotMaterial) return slotMaterial
+      if (node.material) return createMaterial(node.material, shading)
+      if (node.materialPreset) {
+        return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
       }
       return roleDefault
     }
-    return [resolve(baseMaterial, baseMaterialPreset), resolve(topMaterial, topMaterialPreset)]
+    return [resolve('base'), resolve('top')]
   }, [
     textures,
     colorPreset,
     sceneTheme,
     shading,
-    baseMaterial,
-    baseMaterialPreset,
-    topMaterial,
-    topMaterialPreset,
+    node.slots,
+    node.material,
+    node.materialPreset,
+    sceneMaterials,
   ])
 
   // Compose slope tilt + yaw onto a single quaternion so the registered

@@ -126,6 +126,21 @@ export {
   polygonsOverlap,
   segmentsIntersect,
 } from './lib/polygon-relations'
+export {
+  type Point2D as PolygonBooleanPoint2D,
+  subtractPolygonsFromPolygon,
+  unionPolygons,
+} from './lib/polygon-union'
+export {
+  compareRoofOverlapIdentity,
+  getRoofPlanBounds,
+  type RoofOverlapEntry,
+  type RoofPlan,
+  type RoofPlanBounds,
+  type RoofPlanSegment,
+  roofOverlapEntryOwns,
+  roofPlanBoundsOverlap,
+} from './lib/roof-overlap'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   getRenderableSlabPolygon,
