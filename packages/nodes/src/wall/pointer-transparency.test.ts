@@ -1,8 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  hiddenWallPointerEventsHeld,
-  holdHiddenWallPointerEvents,
-} from '@pascal-app/core'
+import { hiddenWallPointerEventsHeld, holdHiddenWallPointerEvents } from '@pascal-app/core'
 import { wallPointerEventsSuppressed } from './pointer-transparency'
 
 // Semantics pinned here (the wall renderer's gated handlers evaluate this
@@ -41,7 +38,11 @@ describe('wallPointerEventsSuppressed', () => {
     for (const hoverHighlightMode of ['default', 'delete', null, undefined]) {
       for (const hiddenWallHoldActive of [false, true]) {
         expect(
-          wallPointerEventsSuppressed({ wallHidden: false, hoverHighlightMode, hiddenWallHoldActive }),
+          wallPointerEventsSuppressed({
+            wallHidden: false,
+            hoverHighlightMode,
+            hiddenWallHoldActive,
+          }),
         ).toBe(false)
       }
     }
