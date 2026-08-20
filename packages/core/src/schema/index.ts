@@ -225,6 +225,7 @@ export {
 } from './nodes/roof-segment'
 export type {
   DutchRoofShapeMetrics,
+  RoofShapeEaveSide,
   RoofShapeFaceVertex,
   RoofShapeInsets,
   RoofShapeRatios,
@@ -233,6 +234,7 @@ export {
   getDutchEndSlopeFaces,
   getDutchRoofShapeMetrics,
   getRoofModuleFaces,
+  getRoofShapeEaveSides,
   getRoofShapeInsets,
   getRoofShapeRatios,
 } from './nodes/roof-segment-shape'
