@@ -1,6 +1,14 @@
 import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
 import type { Object3D } from 'three'
 
+export type SceneExportFormat = 'glb' | 'stl' | 'obj'
+export type SceneExportOptions = {
+  onlyVisible?: boolean
+}
+export type SceneExport = (
+  format?: SceneExportFormat,
+  options?: SceneExportOptions,
+) => Promise<void>
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
@@ -38,8 +46,8 @@ type ViewerState = {
   outliner: Outliner
   geometryRevision: number
   bumpGeometryRevision: () => void
-  exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
-  setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
+  exportScene: SceneExport | null
+  setExportScene: (fn: SceneExport | null) => void
 }
 declare const useViewer: import('zustand').UseBoundStore<import('zustand').StoreApi<ViewerState>>
 export default useViewer

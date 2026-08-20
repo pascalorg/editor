@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type SceneExportFormat, type SceneExportOptions, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
@@ -36,7 +36,10 @@ export function ExportManager() {
   const setExportScene = useViewer((state) => state.setExportScene)
 
   useEffect(() => {
-    const exportFn = async (format: 'glb' | 'stl' | 'obj' = 'glb') => {
+    const exportFn = async (
+      format: SceneExportFormat = 'glb',
+      options: SceneExportOptions = {},
+    ) => {
       // Find the scene renderer group by name
       const sceneGroup = scene.getObjectByName('scene-renderer')
       if (!sceneGroup) {
@@ -55,7 +58,7 @@ export function ExportManager() {
         await nextFrames()
 
         if (format === 'glb') {
-          const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes)
+          const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes, options)
           const blob = new Blob([buffer], { type: 'model/gltf-binary' })
           downloadBlob(blob, `model_${date}.glb`)
           return
@@ -68,7 +71,7 @@ export function ExportManager() {
         emitter.emit('thumbnail:before-capture', undefined)
         let prepared: ReturnType<typeof prepareSceneForExport>
         try {
-          prepared = prepareSceneForExport(sceneGroup, useScene.getState().nodes)
+          prepared = prepareSceneForExport(sceneGroup, useScene.getState().nodes, options)
         } finally {
           emitter.emit('thumbnail:after-capture', undefined)
         }

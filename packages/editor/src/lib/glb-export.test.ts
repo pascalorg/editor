@@ -173,6 +173,68 @@ describe('prepareSceneForExport', () => {
     expect(meshes).toHaveLength(1)
   })
 
+  test('excludes hidden scene nodes and descendants by default', () => {
+    const root = new THREE.Group()
+    const levelGroup = new THREE.Group()
+    const itemGroup = new THREE.Group()
+    itemGroup.add(meshWithNodeMaterial(nodeMaterial()))
+    levelGroup.add(itemGroup)
+    root.add(levelGroup)
+
+    const levelId = 'level_hidden'
+    const itemId = 'item_visible_child'
+    sceneRegistry.nodes.set(levelId, levelGroup)
+    sceneRegistry.nodes.set(itemId, itemGroup)
+    const nodes: Record<string, AnyNode> = {
+      [levelId]: {
+        object: 'node',
+        id: levelId,
+        type: 'level',
+        parentId: null,
+        visible: false,
+      } as unknown as AnyNode,
+      [itemId]: {
+        object: 'node',
+        id: itemId,
+        type: 'item',
+        parentId: levelId,
+        visible: true,
+      } as unknown as AnyNode,
+    }
+
+    const { scene, animations } = prepareSceneForExport(root, nodes)
+
+    expect(scene.getObjectByName(levelId)).toBeUndefined()
+    expect(scene.getObjectByName(itemId)).toBeUndefined()
+    expect(animations).toHaveLength(0)
+  })
+
+  test('can include hidden scene nodes when visible-only export is disabled', () => {
+    const root = new THREE.Group()
+    const itemGroup = new THREE.Group()
+    itemGroup.add(meshWithNodeMaterial(nodeMaterial()))
+    root.add(itemGroup)
+
+    const itemId = 'item_hidden'
+    sceneRegistry.nodes.set(itemId, itemGroup)
+    const nodes: Record<string, AnyNode> = {
+      [itemId]: {
+        object: 'node',
+        id: itemId,
+        type: 'item',
+        parentId: null,
+        visible: false,
+      } as unknown as AnyNode,
+    }
+
+    const { scene } = prepareSceneForExport(root, nodes, { onlyVisible: false })
+
+    expect(scene.getObjectByName(itemId)?.userData).toMatchObject({
+      pascalId: itemId,
+      kind: 'item',
+    })
+  })
+
   test('neutralises an invisible hitbox root but keeps its visible children', () => {
     // Door/window roots are selection hitboxes: a box geometry with an invisible
     // material (object stays visible). Left intact it would plug the wall opening.

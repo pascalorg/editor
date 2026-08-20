@@ -175,6 +175,9 @@ export {
   applyCountryUnitDefault,
   default as useViewer,
   type MetricNotation,
+  type SceneExport,
+  type SceneExportFormat,
+  type SceneExportOptions,
   type WallMode,
 } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'

@@ -195,6 +195,7 @@ export function SettingsPanel({
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
+  const [exportOnlyVisible, setExportOnlyVisible] = useState(true)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
     () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
@@ -374,9 +375,18 @@ export function SettingsPanel({
 
         <div className="space-y-2">
           <div className="font-medium text-muted-foreground text-xs">3D model</div>
+          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+            <div>
+              <div className="font-medium text-sm">Visible nodes only</div>
+              <div className="text-muted-foreground text-xs">
+                Exclude hidden furniture and other hidden scene nodes
+              </div>
+            </div>
+            <Switch checked={exportOnlyVisible} onCheckedChange={setExportOnlyVisible} />
+          </div>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('glb')}
+            onClick={() => exportScene?.('glb', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
@@ -384,7 +394,7 @@ export function SettingsPanel({
           </Button>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('stl')}
+            onClick={() => exportScene?.('stl', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
@@ -392,7 +402,7 @@ export function SettingsPanel({
           </Button>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('obj')}
+            onClick={() => exportScene?.('obj', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />

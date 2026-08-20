@@ -12,6 +12,14 @@ import { SCENE_THEME_IDS } from '../lib/scene-themes'
 export type RenderContext = 'editor' | 'viewer'
 export type MetricNotation = 'meters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
+export type SceneExportFormat = 'glb' | 'stl' | 'obj'
+export type SceneExportOptions = {
+  onlyVisible?: boolean
+}
+export type SceneExport = (
+  format?: SceneExportFormat,
+  options?: SceneExportOptions,
+) => Promise<void>
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -148,8 +156,8 @@ type ViewerState = {
   bumpGeometryRevision: () => void
 
   // Export functionality
-  exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
-  setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
+  exportScene: SceneExport | null
+  setExportScene: (fn: SceneExport | null) => void
 
   debugColors: boolean
   setDebugColors: (enabled: boolean) => void

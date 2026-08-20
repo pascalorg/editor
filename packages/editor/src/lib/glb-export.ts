@@ -48,6 +48,7 @@ export type GlbExport = {
 
 export type GlbExportOptions = {
   textures?: 'embed' | 'reference'
+  onlyVisible?: boolean
 }
 
 /** Resolve after the next couple of animation frames, giving React/R3F time to
@@ -125,10 +126,7 @@ export async function exportSceneToGlb(
   const restoreLevels = snapLevelsToTruePositions()
   let prepared: ReturnType<typeof prepareSceneForExport>
   try {
-    prepared =
-      textureMode === 'reference'
-        ? prepareSceneForExport(sceneGroup, nodes, { textures: 'reference' })
-        : prepareSceneForExport(sceneGroup, nodes)
+    prepared = prepareSceneForExport(sceneGroup, nodes, options)
   } finally {
     restoreLevels()
     emitter.emit('thumbnail:after-capture', undefined)
@@ -152,7 +150,7 @@ export async function exportSceneToGlb(
       (error) => {
         reject(error)
       },
-      { binary: true, animations },
+      { binary: true, animations, onlyVisible: options.onlyVisible ?? true },
     )
   })
 }
@@ -197,6 +195,10 @@ export function prepareSceneForExport(
     }
   }
 
+  if (options.onlyVisible ?? true) {
+    pruneHiddenSceneNodes(cloneByOriginal, nodes)
+  }
+
   // Object3Ds that carry node identity — never strip these even when they sit on
   // a non-scene layer. Some are metadata-only: a zone's visible fill/wall meshes
   // are stripped, but its identity node stays to carry the polygon that /viewer
@@ -211,11 +213,55 @@ export function prepareSceneForExport(
   sanitizeMaterialGroups(scene, identityNodes)
   convertMaterials(scene, options.textures ?? 'embed')
 
-  const { clips, clipNamesByNode } = bakeAnimationClips(cloneByOriginal, nodes)
+  const retainedCloneByOriginal = retainedClones(scene, cloneByOriginal)
+  const { clips, clipNamesByNode } = bakeAnimationClips(retainedCloneByOriginal, nodes)
 
-  stampIdentity(scene, cloneByOriginal, nodes, clipNamesByNode)
+  stampIdentity(scene, retainedCloneByOriginal, nodes, clipNamesByNode)
 
   return { scene, animations: clips }
+}
+
+function pruneHiddenSceneNodes(
+  cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,
+  nodes: Record<string, AnyNode>,
+) {
+  const visibility = new Map<string, boolean>()
+
+  const isVisible = (id: string, path: Set<string>): boolean => {
+    const cached = visibility.get(id)
+    if (cached !== undefined) return cached
+
+    const node = nodes[id]
+    if (!node) return true
+    if (node.visible === false) {
+      visibility.set(id, false)
+      return false
+    }
+    if (!node.parentId || path.has(id)) {
+      visibility.set(id, true)
+      return true
+    }
+
+    path.add(id)
+    const visible = isVisible(node.parentId, path)
+    path.delete(id)
+    visibility.set(id, visible)
+    return visible
+  }
+
+  for (const [id, original] of sceneRegistry.nodes) {
+    if (isVisible(id, new Set())) continue
+    cloneByOriginal.get(original)?.removeFromParent()
+  }
+}
+
+function retainedClones(
+  root: THREE.Object3D,
+  cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,
+): Map<THREE.Object3D, THREE.Object3D> {
+  const retained = new Set<THREE.Object3D>()
+  root.traverse((object) => retained.add(object))
+  return new Map(Array.from(cloneByOriginal.entries()).filter(([, clone]) => retained.has(clone)))
 }
 
 /**
