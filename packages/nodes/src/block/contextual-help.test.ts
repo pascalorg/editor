@@ -9,7 +9,6 @@ describe('block contextual help', () => {
     useBlockEditSession.setState({
       nodeId: null,
       selection: createBlockSelection('face'),
-      activeMaterialSlotId: null,
     })
   })
 

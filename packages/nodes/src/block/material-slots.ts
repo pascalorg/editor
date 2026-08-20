@@ -1,9 +1,4 @@
-import {
-  type BlockTopology,
-  type MaterialRef,
-  parseMaterialRef,
-  toSceneMaterialRef,
-} from '@pascal-app/core'
+import type { BlockTopology, MaterialRef } from '@pascal-app/core'
 
 export const BLOCK_BODY_SLOT_ID = 'body'
 
@@ -42,29 +37,19 @@ export type BlockMaterialSlotCreationResult = {
   slotNames: Record<string, string>
 }
 
-function materialSlotsFromNode(node: unknown): Record<string, unknown> | null {
-  if (!node || typeof node !== 'object' || !('slots' in node)) return null
-  const slots = (node as { slots?: unknown }).slots
-  return slots && typeof slots === 'object' && !Array.isArray(slots)
-    ? (slots as Record<string, unknown>)
-    : null
-}
-
-export function collectReusableBlockMaterialRefs(
-  nodes: readonly unknown[],
-  sceneMaterialIds: readonly string[],
-): MaterialRef[] {
-  const refs = new Set<MaterialRef>()
-  for (const node of nodes) {
-    const slots = materialSlotsFromNode(node)
-    if (!slots) continue
-    for (const value of Object.values(slots)) {
-      if (typeof value === 'string' && parseMaterialRef(value)) refs.add(value)
+export type BlockAssignedMaterialSlotCreationResult =
+  | (BlockMaterialSlotCreationResult & {
+      topology: BlockTopology
+      slots: BlockMaterialSlots
+      changed: true
+    })
+  | {
+      topology: BlockTopology
+      slots: BlockMaterialSlots
+      slotId: null
+      slotNames: BlockMaterialSlotNames
+      changed: false
     }
-  }
-  for (const id of sceneMaterialIds) refs.add(toSceneMaterialRef(id))
-  return [...refs]
-}
 
 export function blockMaterialSlotIds(
   topology: BlockTopology,
@@ -76,6 +61,16 @@ export function blockMaterialSlotIds(
   for (const slotId of Object.keys(slots ?? {})) slotIds.add(slotId)
   for (const face of topology.faces) slotIds.add(face.materialSlot)
   return [...slotIds]
+}
+
+export function unpaintedBlockMaterialSlotIds(
+  topology: BlockTopology,
+  slots: BlockMaterialSlots,
+  slotNames?: BlockMaterialSlotNames,
+): string[] {
+  return blockMaterialSlotIds(topology, slots, slotNames).filter(
+    (slotId) => slotId !== BLOCK_BODY_SLOT_ID && !slots?.[slotId],
+  )
 }
 
 export function createBlockMaterialSlot(
@@ -90,6 +85,33 @@ export function createBlockMaterialSlot(
   return {
     slotId,
     slotNames: { ...slotNames, [slotId]: `Slot ${index}` },
+  }
+}
+
+export function createAssignedBlockMaterialSlot(
+  topology: BlockTopology,
+  slots: BlockMaterialSlots,
+  slotNames: BlockMaterialSlotNames,
+  selectedFaceIds: readonly string[],
+): BlockAssignedMaterialSlotCreationResult {
+  const selected = new Set(selectedFaceIds)
+  if (!topology.faces.some((face) => selected.has(face.id))) {
+    return { topology, slots, slotId: null, slotNames, changed: false }
+  }
+  const created = createBlockMaterialSlot(topology, slots, slotNames)
+  const assigned = assignBlockMaterial(
+    topology,
+    slots,
+    selectedFaceIds,
+    { kind: 'slot', slotId: created.slotId },
+    created.slotNames,
+  )
+  return {
+    topology: assigned.topology,
+    slots: assigned.slots,
+    slotId: created.slotId,
+    slotNames: created.slotNames,
+    changed: true,
   }
 }
 
@@ -190,28 +212,6 @@ export function removeBlockMaterialSlot(
     fallbackSlotId,
     changed: true,
   }
-}
-
-export function selectBlockFacesByMaterialSlot(
-  topology: BlockTopology,
-  selectedFaceIds: readonly string[],
-  slotId: string,
-  operation: 'select' | 'deselect',
-): string[] {
-  const matching = new Set(
-    topology.faces.filter((face) => face.materialSlot === slotId).map((face) => face.id),
-  )
-  if (operation === 'deselect') {
-    return selectedFaceIds.filter((faceId) => !matching.has(faceId))
-  }
-
-  const selected = new Set(selectedFaceIds)
-  return [
-    ...selectedFaceIds,
-    ...topology.faces
-      .filter((face) => matching.has(face.id) && !selected.has(face.id))
-      .map((face) => face.id),
-  ]
 }
 
 export function assignBlockMaterial(

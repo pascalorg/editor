@@ -171,6 +171,9 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
   return true
 }
 
+export const canRunGlobalRotationShortcut = () =>
+  useInteractionScope.getState().scope.kind !== 'mesh-editing'
+
 export const useKeyboard = ({
   isVersionPreviewMode = false,
   disabled = false,
@@ -480,7 +483,8 @@ export const useKeyboard = ({
         !e.metaKey &&
         !e.ctrlKey &&
         !isVersionPreviewMode &&
-        !isPlacingOpening()
+        !isPlacingOpening() &&
+        canRunGlobalRotationShortcut()
       ) {
         // `!metaKey && !ctrlKey` lets Cmd/Ctrl+R reach the browser reload instead
         // of rotating/flipping the selected node.

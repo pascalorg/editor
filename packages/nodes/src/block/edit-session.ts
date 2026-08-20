@@ -5,11 +5,9 @@ import { type BlockSelectionState, createBlockSelection } from './selection-mode
 type BlockEditSessionState = {
   nodeId: string | null
   selection: BlockSelectionState
-  activeMaterialSlotId: string | null
   begin: (nodeId: string, selection: BlockSelectionState) => void
   end: (nodeId: string) => void
   setSelection: (nodeId: string, selection: BlockSelectionState) => void
-  setActiveMaterialSlot: (nodeId: string, slotId: string) => void
   reconcileSelection: (nodeId: string, topology: BlockTopology) => void
 }
 
@@ -18,18 +16,13 @@ const emptySelection = () => createBlockSelection('face')
 const useBlockEditSession = create<BlockEditSessionState>((set) => ({
   nodeId: null,
   selection: emptySelection(),
-  activeMaterialSlotId: null,
-  begin: (nodeId, selection) => set({ nodeId, selection, activeMaterialSlotId: null }),
+  begin: (nodeId, selection) => set({ nodeId, selection }),
   end: (nodeId) =>
     set((state) =>
-      state.nodeId === nodeId
-        ? { nodeId: null, selection: emptySelection(), activeMaterialSlotId: null }
-        : state,
+      state.nodeId === nodeId ? { nodeId: null, selection: emptySelection() } : state,
     ),
   setSelection: (nodeId, selection) =>
     set((state) => (state.nodeId === nodeId ? { selection } : state)),
-  setActiveMaterialSlot: (nodeId, activeMaterialSlotId) =>
-    set((state) => (state.nodeId === nodeId ? { activeMaterialSlotId } : state)),
   reconcileSelection: (nodeId, topology) =>
     set((state) => {
       if (state.nodeId !== nodeId) return state

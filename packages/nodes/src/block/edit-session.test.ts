@@ -8,7 +8,6 @@ describe('block edit session', () => {
     useBlockEditSession.setState({
       nodeId: null,
       selection: createBlockSelection('face'),
-      activeMaterialSlotId: null,
     })
   })
 
@@ -32,13 +31,11 @@ describe('block edit session', () => {
     const selection = createBlockSelection('face', ['f-top'])
     useBlockEditSession.getState().begin('block_1', selection)
     useBlockEditSession.getState().setSelection('block_2', createBlockSelection('vertex', ['v0']))
-    useBlockEditSession.getState().setActiveMaterialSlot('block_2', 'accent')
     useBlockEditSession.getState().end('block_2')
 
     expect(useBlockEditSession.getState()).toMatchObject({
       nodeId: 'block_1',
       selection,
-      activeMaterialSlotId: null,
     })
   })
 
@@ -60,13 +57,11 @@ describe('block edit session', () => {
 
   test('ends only the owned session and resets transient selection', () => {
     useBlockEditSession.getState().begin('block_1', createBlockSelection('face', ['f-top']))
-    useBlockEditSession.getState().setActiveMaterialSlot('block_1', 'accent')
     useBlockEditSession.getState().end('block_1')
 
     expect(useBlockEditSession.getState()).toMatchObject({
       nodeId: null,
       selection: { mode: 'face', ids: [], activeId: null },
-      activeMaterialSlotId: null,
     })
   })
 })

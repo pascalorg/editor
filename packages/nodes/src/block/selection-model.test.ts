@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createBoxBlockTopology } from '@pascal-app/core'
 import {
+  blockSelectionChanged,
   convertBlockSelection,
   createBlockSelection,
   invertBlockSelection,
@@ -38,5 +39,11 @@ describe('block component selection', () => {
     const inverse = invertBlockSelection(topology, createBlockSelection('edge', ['e0', 'e1']))
     expect(inverse.ids).toHaveLength(10)
     expect(inverse.ids).not.toContain('e0')
+  })
+
+  test('treats an identical selection as a no-op', () => {
+    const selection = createBlockSelection('face')
+    expect(blockSelectionChanged(selection, { ...selection, ids: [...selection.ids] })).toBe(false)
+    expect(blockSelectionChanged(selection, createBlockSelection('face', ['f-top']))).toBe(true)
   })
 })

@@ -36,6 +36,7 @@ import {
   Eye,
   EyeOff,
   Move3D,
+  Rotate3D,
   Rows3,
   Scaling,
   ScanLine,
@@ -55,12 +56,15 @@ import {
 import {
   BufferGeometry,
   type Camera,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
   type Group,
   LineSegments,
+  type Material,
+  Mesh,
   type Object3D,
   Plane,
   PlaneGeometry,
@@ -86,9 +90,26 @@ import { triangulateBlockFace } from './geometry'
 import { BLOCK_WHEEL_OPTIONS, consumeBlockGestureWheel } from './gesture-wheel'
 import { type BlockSfxAction, blockSfx } from './interaction-sfx'
 import { resolveLoopCutPointerAction, resolveLoopCutSlideFactor } from './loop-cut-interaction'
-import { signedAngleAroundAxis, unwrapRotationDelta } from './rotation-drag'
+import { BLOCK_BODY_SLOT_ID, unpaintedBlockMaterialSlotIds } from './material-slots'
+import {
+  type BlockActiveTransform,
+  type BlockAxisVisualState,
+  type BlockTransformAxis,
+  type BlockTransformOperation,
+  blockAxisDelta,
+  blockAxisVisualState,
+  blockModalTransformStatus,
+  blockRotationPointerAngle,
+  blockTransformAxisFromKey,
+} from './modal-transform'
+import {
+  lockedRotationAngleFromHits,
+  signedAngleAroundAxis,
+  unwrapRotationDelta,
+} from './rotation-drag'
 import {
   type BlockSelectionState,
+  blockSelectionChanged,
   clearBlockSelection,
   convertBlockSelection,
   invertBlockSelection,
@@ -108,13 +129,10 @@ import {
 
 type ComponentMode = BlockSelection['mode']
 type Point = [number, number, number]
-type Axis = 'x' | 'y' | 'z'
+type Axis = BlockTransformAxis
 type PlaneAxes = 'xy' | 'xz' | 'yz'
-type TransformOperation = 'translate' | 'rotate' | 'scale'
-type ActiveTransform = {
-  operation: TransformOperation
-  constraint: Axis | 'uniform'
-}
+type TransformOperation = BlockTransformOperation
+type ActiveTransform = BlockActiveTransform
 type TransformTool = 'transform' | 'loop-cut' | 'bevel'
 type TopologyOperator = 'extrude' | 'inset' | 'merge' | 'dissolve' | 'delete'
 type ToolbarPanel = 'operations' | 'selection' | null
@@ -628,16 +646,18 @@ function AxisTransformHandle({
   axis,
   length,
   radius,
-  moveActive,
-  scaleActive,
+  moveState,
+  scaleState,
+  disabled,
   onMovePointerDown,
   onScalePointerDown,
 }: {
   axis: Axis
   length: number
   radius: number
-  moveActive: boolean
-  scaleActive: boolean
+  moveState: BlockAxisVisualState
+  scaleState: BlockAxisVisualState
+  disabled: boolean
   onMovePointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
   onScalePointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
 }) {
@@ -689,12 +709,14 @@ function AxisTransformHandle({
   )
   useEffect(() => {
     moveMaterial.color.set(
-      moveActive || hovered === 'translate' ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis],
+      hovered === 'translate' && moveState !== 'faded' ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis],
     )
+    moveMaterial.opacity = moveState === 'faded' ? 0.14 : 1
     scaleMaterial.color.set(
-      scaleActive || hovered === 'scale' ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis],
+      hovered === 'scale' && scaleState !== 'faded' ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis],
     )
-  }, [axis, hovered, moveActive, moveMaterial, scaleActive, scaleMaterial])
+    scaleMaterial.opacity = scaleState === 'faded' ? 0.14 : 1
+  }, [axis, hovered, moveMaterial, moveState, scaleMaterial, scaleState])
   useEffect(
     () => () => {
       shaftGeometry.dispose()
@@ -744,12 +766,14 @@ function AxisTransformHandle({
         layers={EDITOR_LAYER}
         material={hitMaterial}
         onPointerDown={(event) => {
+          if (disabled) return
           event.stopPropagation()
           event.nativeEvent.stopImmediatePropagation()
           swallowNextClick()
           onMovePointerDown(axis, event)
         }}
         onPointerEnter={(event) => {
+          if (disabled) return
           event.stopPropagation()
           setHovered('translate')
           document.body.style.cursor = 'grab'
@@ -759,6 +783,7 @@ function AxisTransformHandle({
           if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
         }}
         position={[0, length * 0.5, 0]}
+        raycast={disabled ? () => {} : undefined}
         renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
       <mesh
@@ -774,12 +799,14 @@ function AxisTransformHandle({
         layers={EDITOR_LAYER}
         material={hitMaterial}
         onPointerDown={(event) => {
+          if (disabled) return
           event.stopPropagation()
           event.nativeEvent.stopImmediatePropagation()
           swallowNextClick()
           onScalePointerDown(axis, event)
         }}
         onPointerEnter={(event) => {
+          if (disabled) return
           event.stopPropagation()
           setHovered('scale')
           document.body.style.cursor = 'grab'
@@ -789,6 +816,7 @@ function AxisTransformHandle({
           if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
         }}
         position={[0, scalePosition, 0]}
+        raycast={disabled ? () => {} : undefined}
         renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
     </group>
@@ -799,13 +827,15 @@ function PlaneMoveHandle({
   plane,
   offset,
   size,
-  active,
+  state,
+  disabled,
   onPointerDown,
 }: {
   plane: PlaneAxes
   offset: number
   size: number
-  active: boolean
+  state: BlockAxisVisualState
+  disabled: boolean
   onPointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
 }) {
   const [hovered, setHovered] = useState(false)
@@ -837,8 +867,9 @@ function PlaneMoveHandle({
     [],
   )
   useEffect(() => {
-    material.color.set(active || hovered ? PIVOT_HOVERED_COLOR : AXIS_COLORS[normalAxis])
-  }, [active, hovered, material, normalAxis])
+    material.color.set(hovered && state !== 'faded' ? PIVOT_HOVERED_COLOR : AXIS_COLORS[normalAxis])
+    material.opacity = state === 'faded' ? 0.1 : 1
+  }, [hovered, material, normalAxis, state])
   useEffect(
     () => () => {
       geometry.dispose()
@@ -871,12 +902,14 @@ function PlaneMoveHandle({
         layers={EDITOR_LAYER}
         material={hitMaterial}
         onPointerDown={(event) => {
+          if (disabled) return
           event.stopPropagation()
           event.nativeEvent.stopImmediatePropagation()
           swallowNextClick()
           onPointerDown(normalAxis, event)
         }}
         onPointerEnter={(event) => {
+          if (disabled) return
           event.stopPropagation()
           setHovered(true)
           document.body.style.cursor = 'move'
@@ -885,6 +918,7 @@ function PlaneMoveHandle({
           setHovered(false)
           if (document.body.style.cursor === 'move') document.body.style.cursor = ''
         }}
+        raycast={disabled ? () => {} : undefined}
         renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
     </group>
@@ -895,13 +929,15 @@ function RotationHandle({
   axis,
   radius,
   tube,
-  active,
+  state,
+  disabled,
   onPointerDown,
 }: {
   axis: Axis
   radius: number
   tube: number
-  active: boolean
+  state: BlockAxisVisualState
+  disabled: boolean
   onPointerDown: (axis: Axis, event: ThreeEvent<PointerEvent>) => void
 }) {
   const [hovered, setHovered] = useState(false)
@@ -935,8 +971,9 @@ function RotationHandle({
     [axis],
   )
   useEffect(() => {
-    material.color.set(active || hovered ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis])
-  }, [active, axis, hovered, material])
+    material.color.set(hovered && state !== 'faded' ? PIVOT_HOVERED_COLOR : AXIS_COLORS[axis])
+    material.opacity = state === 'faded' ? 0.14 : 1
+  }, [axis, hovered, material, state])
   useEffect(
     () => () => {
       ringGeometry.dispose()
@@ -963,12 +1000,14 @@ function RotationHandle({
         layers={EDITOR_LAYER}
         material={hitMaterial}
         onPointerDown={(event) => {
+          if (disabled) return
           event.stopPropagation()
           event.nativeEvent.stopImmediatePropagation()
           swallowNextClick()
           onPointerDown(axis, event)
         }}
         onPointerEnter={(event) => {
+          if (disabled) return
           event.stopPropagation()
           setHovered(true)
           document.body.style.cursor = 'grab'
@@ -977,6 +1016,7 @@ function RotationHandle({
           setHovered(false)
           if (document.body.style.cursor === 'grab') document.body.style.cursor = ''
         }}
+        raycast={disabled ? () => {} : undefined}
         renderOrder={GIZMO_HIT_RENDER_ORDER}
       />
     </group>
@@ -1284,6 +1324,7 @@ function BlockEditor({
   const [xray, setXray] = useState(false)
   const [previewTopology, setPreviewTopology] = useState<BlockTopology | null>(null)
   const [activeTransform, setActiveTransform] = useState<ActiveTransform | null>(null)
+  const [keyboardTransformActive, setKeyboardTransformActive] = useState(false)
   const [loopCutSegments, setLoopCutSegments] = useState<[Point, Point][] | null>(null)
   const [loopCutEdgeId, setLoopCutEdgeId] = useState<string | null>(null)
   const [loopCutSliding, setLoopCutSliding] = useState(false)
@@ -1359,6 +1400,7 @@ function BlockEditor({
     setPreviewTopology(null)
     setTransformTool('transform')
     setActiveTransform(null)
+    setKeyboardTransformActive(false)
     setLoopCutSegments(null)
     setLoopCutEdgeId(null)
     setLoopCutSliding(false)
@@ -1391,8 +1433,48 @@ function BlockEditor({
     setLoopCutEdgeId(null)
     setLoopCutSliding(false)
     setActiveTransform(null)
+    setKeyboardTransformActive(false)
     useBlockEditSession.getState().end(node.id)
   }, [editing, node.id])
+
+  useEffect(() => {
+    if (!editing) return
+    const unpaintedSlotIds = new Set(
+      unpaintedBlockMaterialSlotIds(node.topology, node.slots, node.slotNames),
+    )
+    if (unpaintedSlotIds.size === 0) return
+
+    const restores: Array<{ mesh: Mesh; material: Material | Material[] }> = []
+    const ownedMaterials: Material[] = []
+    target.traverse((child) => {
+      if (!(child instanceof Mesh)) return
+      const slotIds = Array.isArray(child.userData.slotIds)
+        ? (child.userData.slotIds as string[])
+        : []
+      if (!slotIds.some((slotId) => unpaintedSlotIds.has(slotId))) return
+      const previousMaterial = child.material
+      const sourceMaterials = Array.isArray(previousMaterial)
+        ? previousMaterial
+        : [previousMaterial]
+      const nextMaterials = sourceMaterials.map((material, index) => {
+        const slotId = slotIds[index]
+        if (!(slotId && slotId !== BLOCK_BODY_SLOT_ID && unpaintedSlotIds.has(slotId))) {
+          return material
+        }
+        const tinted = material.clone()
+        if ('color' in tinted && tinted.color instanceof Color) tinted.color.set('#7768d8')
+        ownedMaterials.push(tinted)
+        return tinted
+      })
+      restores.push({ mesh: child, material: previousMaterial })
+      child.material = Array.isArray(previousMaterial) ? nextMaterials : nextMaterials[0]!
+    })
+
+    return () => {
+      for (const restore of restores) restore.mesh.material = restore.material
+      for (const material of ownedMaterials) material.dispose()
+    }
+  }, [editing, node.slotNames, node.slots, node.topology, target])
 
   useEffect(() => {
     if (!editing) return
@@ -1439,7 +1521,10 @@ function BlockEditor({
     const onGridClick = () => {
       const scope = useInteractionScope.getState().scope
       if (scope.kind !== 'mesh-editing' || scope.nodeId !== node.id || cancelDragRef.current) return
-      useBlockEditSession.getState().setSelection(node.id, { mode, ids: [], activeId: null })
+      const session = useBlockEditSession.getState()
+      const next = { mode, ids: [], activeId: null }
+      if (!blockSelectionChanged(session.selection, next)) return
+      session.setSelection(node.id, next)
       setError(null)
       playBlockSfx('component-select')
     }
@@ -1563,6 +1648,7 @@ function BlockEditor({
     (id: string, additive: boolean, event: ThreeEvent<MouseEvent>) => {
       if (!componentIsVisible(id, event)) return
       const next = selectBlockComponent({ mode, ids: selectedIds, activeId }, id, additive)
+      if (!blockSelectionChanged({ mode, ids: selectedIds, activeId }, next)) return
       useBlockEditSession.getState().setSelection(node.id, next)
       setError(null)
       playBlockSfx('component-select')
@@ -1594,6 +1680,270 @@ function BlockEditor({
       return raycaster.ray
     },
     [camera, gl.domElement],
+  )
+
+  const beginKeyboardTransformModal = useCallback(
+    (operation: 'translate' | 'rotate') => {
+      if (!ownsEditSession() || selectedIds.length === 0 || cancelDragRef.current) return false
+      const origin = selectionCentroid(displayTopology, selection)
+      if (!origin) return false
+      const pivotClient = localPointToClient(origin, target, camera, gl.domElement)
+      if (!pivotClient) return false
+
+      target.updateWorldMatrix(true, false)
+      const originLocal = new Vector3(...origin)
+      const worldOrigin = target.localToWorld(originLocal.clone())
+      const startPointer =
+        lastPointerClientRef.current?.clone() ?? pivotClient.clone().add(new Vector2(80, 0))
+      const startRay = makeRay(startPointer.x, startPointer.y)
+      const viewAxisWorld = camera.getWorldDirection(new Vector3()).normalize()
+      const viewPlane = new Plane().setFromNormalAndCoplanarPoint(viewAxisWorld, worldOrigin)
+      const startPlaneHit = startRay.intersectPlane(viewPlane, new Vector3()) ?? worldOrigin.clone()
+      const targetWorldQuaternion = target.getWorldQuaternion(new Quaternion())
+      const freeRotationAxis = viewAxisWorld
+        .clone()
+        .applyQuaternion(targetWorldQuaternion.clone().invert())
+        .normalize()
+      const baseTopology = displayTopology
+      const baseSelection = selection
+      const previousInputDragging = useViewer.getState().inputDragging
+      const previousCursor = document.body.style.cursor
+      let activeAxis: Axis | null = null
+      let latestTopology: BlockTopology | null = null
+      let latestMagnitude = 0
+      let previousWrappedAngle = 0
+      let accumulatedAngle = 0
+      let lockedRotationInitialHit: Vector3 | null = null
+      let lockedRotationPlane: Plane | null = null
+      let lockedRotationWorldAxis: Vector3 | null = null
+      let lastClientX = startPointer.x
+      let lastClientY = startPointer.y
+      let lastAltKey = false
+      let lastSnapValue: string | number | null = null
+      let finished = false
+
+      const worldAxisFor = (axis: Axis) =>
+        target
+          .localToWorld(originLocal.clone().add(new Vector3(...AXIS_VECTORS[axis])))
+          .sub(worldOrigin)
+          .normalize()
+
+      const updatePreview = (clientX: number, clientY: number, altKey: boolean) => {
+        lastClientX = clientX
+        lastClientY = clientY
+        lastAltKey = altKey
+        const ray = makeRay(clientX, clientY)
+        let command: BlockCommand
+        let snapValue: string | number
+
+        if (operation === 'translate') {
+          let delta: Point
+          if (activeAxis) {
+            const worldAxis = worldAxisFor(activeAxis)
+            const startParameter = closestAxisParameterToRay(worldOrigin, worldAxis, startRay)
+            const currentParameter = closestAxisParameterToRay(worldOrigin, worldAxis, ray)
+            const localPoint = target.worldToLocal(
+              worldOrigin.clone().addScaledVector(worldAxis, currentParameter - startParameter),
+            )
+            const axisIndex = activeAxis === 'x' ? 0 : activeAxis === 'y' ? 1 : 2
+            delta = blockAxisDelta(
+              activeAxis,
+              localPoint.getComponent(axisIndex) - origin[axisIndex],
+            )
+          } else {
+            const currentHit = ray.intersectPlane(viewPlane, new Vector3())
+            if (!currentHit) return
+            const localPoint = target.worldToLocal(
+              worldOrigin.clone().add(currentHit.clone().sub(startPlaneHit)),
+            )
+            delta = [localPoint.x - origin[0], localPoint.y - origin[1], localPoint.z - origin[2]]
+          }
+          const snapping = isGridSnapActive() && !altKey
+          if (snapping) {
+            const step = useEditor.getState().gridSnapStep
+            if (step > 0) delta = delta.map((value) => Math.round(value / step) * step) as Point
+          }
+          latestMagnitude = Math.hypot(...delta)
+          snapValue = delta.join(':')
+          if (snapping && latestMagnitude > 1e-6 && snapValue !== lastSnapValue) {
+            playBlockSfx('move-step')
+          }
+          command = { type: 'translate-components', selection: baseSelection, delta }
+        } else {
+          let wrappedAngle: number
+          if (
+            activeAxis &&
+            lockedRotationInitialHit &&
+            lockedRotationPlane &&
+            lockedRotationWorldAxis
+          ) {
+            const currentHit = ray.intersectPlane(lockedRotationPlane, new Vector3())
+            if (!currentHit) return
+            const lockedAngle = lockedRotationAngleFromHits(
+              worldOrigin,
+              lockedRotationInitialHit,
+              currentHit,
+              lockedRotationWorldAxis,
+            )
+            if (lockedAngle === null) {
+              if (currentHit.distanceToSquared(worldOrigin) > 1e-6) {
+                lockedRotationInitialHit = currentHit.clone()
+              }
+              wrappedAngle = 0
+            } else {
+              wrappedAngle = lockedAngle
+            }
+          } else {
+            wrappedAngle = blockRotationPointerAngle(
+              pivotClient,
+              startPointer,
+              new Vector2(clientX, clientY),
+            )
+          }
+          accumulatedAngle += unwrapRotationDelta(previousWrappedAngle, wrappedAngle)
+          previousWrappedAngle = wrappedAngle
+          let angle = accumulatedAngle
+          const snapping = isAngleSnapActive() && !altKey
+          if (snapping) {
+            const step = (ROTATION_SNAP_ANGLE_DEGREES * Math.PI) / 180
+            angle = Math.round(angle / step) * step
+          }
+          latestMagnitude = Math.abs(angle)
+          snapValue = angle
+          if (snapping && latestMagnitude > 1e-6 && snapValue !== lastSnapValue) {
+            playBlockSfx('rotate-step')
+          }
+          command = {
+            type: 'rotate-components',
+            selection: baseSelection,
+            pivot: origin,
+            axis: activeAxis ? AXIS_VECTORS[activeAxis] : (freeRotationAxis.toArray() as Point),
+            angle,
+          }
+        }
+
+        lastSnapValue = snapValue
+        const result = applyBlockCommand(baseTopology, command)
+        if (!result.ok) {
+          setError(result.error)
+          return
+        }
+        latestTopology = result.topology
+        setPreviewTopology(result.topology)
+        useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
+        useScene.getState().markDirty(node.id)
+        setError(null)
+      }
+
+      const finish = (commit: boolean) => {
+        if (finished) return
+        finished = true
+        window.removeEventListener('pointermove', onMove, true)
+        window.removeEventListener('pointerdown', onPointerDown, true)
+        window.removeEventListener('keydown', onKeyDown, true)
+        window.removeEventListener('contextmenu', onContextMenu, true)
+        window.removeEventListener('blur', onCancel)
+        cancelDragRef.current = null
+        useLiveNodeOverrides.getState().clear(node.id)
+        useScene.getState().markDirty(node.id)
+        useViewer.getState().setInputDragging(previousInputDragging)
+        document.body.style.cursor = previousCursor
+        setPreviewTopology(null)
+        setActiveTransform(null)
+        setKeyboardTransformActive(false)
+        if (commit && latestTopology && latestMagnitude > 1e-6) {
+          useScene.getState().updateNode(node.id, { topology: latestTopology })
+          playBlockSfx('finish')
+        } else if (!commit) {
+          playBlockSfx('cancel')
+        }
+        if (ownsEditSession()) useInteractionScope.getState().begin(meshEditScope(node.id))
+        swallowNextClick()
+      }
+
+      const onMove = (pointerEvent: PointerEvent) => {
+        lastPointerClientRef.current = new Vector2(pointerEvent.clientX, pointerEvent.clientY)
+        updatePreview(pointerEvent.clientX, pointerEvent.clientY, pointerEvent.altKey)
+      }
+      const onPointerDown = (pointerEvent: PointerEvent) => {
+        if (pointerEvent.button !== 0 && pointerEvent.button !== 2) return
+        pointerEvent.preventDefault()
+        pointerEvent.stopImmediatePropagation()
+        finish(pointerEvent.button === 0)
+      }
+      const onKeyDown = (keyboardEvent: KeyboardEvent) => {
+        const element = keyboardEvent.target as HTMLElement | null
+        if (
+          element?.tagName === 'INPUT' ||
+          element?.tagName === 'TEXTAREA' ||
+          element?.isContentEditable
+        )
+          return
+        const axis = blockTransformAxisFromKey(keyboardEvent.key)
+        if (axis) {
+          keyboardEvent.preventDefault()
+          keyboardEvent.stopImmediatePropagation()
+          activeAxis = axis
+          if (operation === 'rotate') {
+            lockedRotationWorldAxis = worldAxisFor(axis)
+            lockedRotationPlane = new Plane().setFromNormalAndCoplanarPoint(
+              lockedRotationWorldAxis,
+              worldOrigin,
+            )
+            lockedRotationInitialHit = makeRay(lastClientX, lastClientY).intersectPlane(
+              lockedRotationPlane,
+              new Vector3(),
+            )
+            previousWrappedAngle = 0
+            accumulatedAngle = 0
+          }
+          setActiveTransform({ operation, constraint: axis })
+          lastSnapValue = null
+          updatePreview(lastClientX, lastClientY, lastAltKey)
+        } else if (keyboardEvent.key === 'Enter') {
+          keyboardEvent.preventDefault()
+          keyboardEvent.stopImmediatePropagation()
+          finish(true)
+        } else if (keyboardEvent.key === 'Escape') {
+          keyboardEvent.preventDefault()
+          keyboardEvent.stopImmediatePropagation()
+          finish(false)
+        }
+      }
+      const onContextMenu = (event: Event) => {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
+      const onCancel = () => finish(false)
+
+      useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', operation))
+      playBlockSfx('drag-start')
+      useViewer.getState().setInputDragging(true)
+      setTransformTool('transform')
+      setToolbarPanel(null)
+      setActiveTransform({ operation, constraint: 'free' })
+      setKeyboardTransformActive(true)
+      setError(null)
+      document.body.style.cursor = operation === 'translate' ? 'move' : 'crosshair'
+      cancelDragRef.current = onCancel
+      window.addEventListener('pointermove', onMove, true)
+      window.addEventListener('pointerdown', onPointerDown, true)
+      window.addEventListener('keydown', onKeyDown, true)
+      window.addEventListener('contextmenu', onContextMenu, true)
+      window.addEventListener('blur', onCancel, { once: true })
+      return true
+    },
+    [
+      camera,
+      displayTopology,
+      gl.domElement,
+      makeRay,
+      node.id,
+      ownsEditSession,
+      selectedIds.length,
+      selection,
+      target,
+    ],
   )
 
   const beginTranslationDrag = useCallback(
@@ -2460,6 +2810,7 @@ function BlockEditor({
   }
 
   const updateSelection = (next: BlockSelectionState) => {
+    if (!blockSelectionChanged({ mode, ids: selectedIds, activeId }, next)) return
     useBlockEditSession.getState().setSelection(node.id, next)
     setError(null)
     playBlockSfx('component-select')
@@ -2473,6 +2824,7 @@ function BlockEditor({
     updateSelection(clearBlockSelection({ mode, ids: selectedIds, activeId }))
 
   const keyboardActionsRef = useRef({
+    beginKeyboardTransformModal,
     beginUniformScaleModal,
     canBevel: mode === 'edge',
     clearSelection,
@@ -2486,6 +2838,7 @@ function BlockEditor({
     selectAll,
   })
   keyboardActionsRef.current = {
+    beginKeyboardTransformModal,
     beginUniformScaleModal,
     canBevel: mode === 'edge',
     clearSelection,
@@ -2526,10 +2879,7 @@ function BlockEditor({
       } else if (key === 'i' && (event.ctrlKey || event.metaKey)) {
         actions.invertSelection()
       } else if (key === 'g') {
-        if (actions.hasSelection) {
-          playBlockSfx('tool-select')
-          setTransformTool('transform')
-        }
+        if (actions.hasSelection) actions.beginKeyboardTransformModal('translate')
       } else if (key === 'e') {
         actions.extrudeSelectedFace()
       } else if (key === 'i') {
@@ -2540,8 +2890,7 @@ function BlockEditor({
           setTransformTool('loop-cut')
           setToolbarPanel(null)
         } else if (actions.hasSelection) {
-          playBlockSfx('tool-select')
-          setTransformTool('transform')
+          actions.beginKeyboardTransformModal('rotate')
         }
       } else if (key === 's') {
         if (actions.hasSelection) {
@@ -2584,14 +2933,17 @@ function BlockEditor({
   const operationAvailability = blockOperationAvailability(mode, selectedIds.length)
   const loopCutActive = transformTool === 'loop-cut'
   const bevelActive = transformTool === 'bevel'
-  const componentStatus = blockComponentStatus({
-    mode,
-    selectedCount: selectedIds.length,
-    tool: transformTool,
-    loopCutCount,
-    loopCutFactor,
-    bevelSegments,
-  })
+  const componentStatus =
+    keyboardTransformActive && activeTransform
+      ? blockModalTransformStatus(activeTransform)
+      : blockComponentStatus({
+          mode,
+          selectedCount: selectedIds.length,
+          tool: transformTool,
+          loopCutCount,
+          loopCutFactor,
+          bevelSegments,
+        })
 
   return (
     <group ref={outerRef}>
@@ -2665,42 +3017,41 @@ function BlockEditor({
               {(['x', 'y', 'z'] as const).map((axis) => (
                 <AxisTransformHandle
                   axis={axis}
+                  disabled={Boolean(activeTransform)}
                   key={axis}
                   length={gizmoLength}
-                  moveActive={
-                    activeTransform?.operation === 'translate' &&
-                    activeTransform.constraint === axis
-                  }
+                  moveState={blockAxisVisualState(activeTransform, 'translate', axis)}
                   onMovePointerDown={beginTranslationDrag}
                   onScalePointerDown={beginScaleDrag}
                   radius={gizmoRadius}
-                  scaleActive={
-                    activeTransform?.operation === 'scale' && activeTransform.constraint === axis
-                  }
+                  scaleState={blockAxisVisualState(activeTransform, 'scale', axis)}
                 />
               ))}
               {(Object.keys(PLANE_NORMAL) as PlaneAxes[]).map((plane) => (
                 <PlaneMoveHandle
-                  active={
-                    activeTransform?.operation === 'translate' &&
-                    activeTransform.constraint === PLANE_NORMAL[plane]
-                  }
+                  disabled={Boolean(activeTransform)}
                   key={plane}
                   offset={planeHandleOffset}
                   onPointerDown={beginTranslationDrag}
                   plane={plane}
                   size={planeHandleSize}
+                  state={
+                    !activeTransform ||
+                    (activeTransform.operation === 'translate' &&
+                      activeTransform.constraint === 'free')
+                      ? 'normal'
+                      : 'faded'
+                  }
                 />
               ))}
               {(['x', 'y', 'z'] as const).map((axis) => (
                 <RotationHandle
-                  active={
-                    activeTransform?.operation === 'rotate' && activeTransform.constraint === axis
-                  }
                   axis={axis}
+                  disabled={Boolean(activeTransform)}
                   key={`rotate-${axis}`}
                   onPointerDown={beginRotationDrag}
                   radius={rotationGizmoRadius}
+                  state={blockAxisVisualState(activeTransform, 'rotate', axis)}
                   tube={gizmoRadius}
                 />
               ))}
@@ -2804,6 +3155,22 @@ function BlockEditor({
                 {toolbarPanel === 'operations' ? (
                   <ToolbarPanelFrame label="Mesh operations" className="w-80 p-1.5">
                     <div className="space-y-0.5">
+                      <ToolbarOperationItem
+                        disabled={selectedIds.length === 0}
+                        label="Move selection"
+                        onClick={() => beginKeyboardTransformModal('translate')}
+                        shortcut="G"
+                      >
+                        <Move3D className="h-4 w-4" />
+                      </ToolbarOperationItem>
+                      <ToolbarOperationItem
+                        disabled={selectedIds.length === 0}
+                        label="Rotate selection"
+                        onClick={() => beginKeyboardTransformModal('rotate')}
+                        shortcut="R"
+                      >
+                        <Rotate3D className="h-4 w-4" />
+                      </ToolbarOperationItem>
                       <ToolbarOperationItem
                         controls={
                           <input
