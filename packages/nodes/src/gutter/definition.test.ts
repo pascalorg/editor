@@ -22,8 +22,7 @@ describe('gutter paint capability', () => {
         materialPreset: 'library:metal-steel',
       }),
     ).toEqual({
-      material: undefined,
-      materialPreset: 'library:metal-steel',
+      slots: { surface: 'library:metal-steel' },
     })
   })
 })
