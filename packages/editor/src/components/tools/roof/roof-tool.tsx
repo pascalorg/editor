@@ -33,6 +33,7 @@ import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
+import { resolveRoofDraftPlacement } from './roof-draft-orientation'
 
 const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
@@ -106,6 +107,7 @@ const commitRoofPlacement = (
   corner1: [number, number, number],
   corner2: [number, number, number],
   selectedIds: string[],
+  quarterTurn: boolean,
 ): AnyNode['id'] => {
   const { createNode, createNodes, nodes } = useScene.getState()
 
@@ -119,8 +121,8 @@ const commitRoofPlacement = (
   const centerX = (corner1[0] + corner2[0]) / 2
   const centerZ = (corner1[2] + corner2[2]) / 2
 
-  const width = Math.max(Math.abs(corner2[0] - corner1[0]), 1)
-  const depth = Math.max(Math.abs(corner2[2] - corner1[2]), 1)
+  const footprintWidth = Math.max(Math.abs(corner2[0] - corner1[0]), 1)
+  const footprintDepth = Math.max(Math.abs(corner2[2] - corner1[2]), 1)
 
   // Determine if there is an active roof node we should add to
   let targetRoofId: RoofNode['id'] | null = null
@@ -155,14 +157,22 @@ const commitRoofPlacement = (
       localZ = dx * Math.sin(angle) + dz * Math.cos(angle)
     }
 
+    const placement = resolveRoofDraftPlacement(
+      footprintWidth,
+      footprintDepth,
+      quarterTurn,
+      targetRoof.rotation,
+    )
+
     const segment = RoofSegmentNode.parse({
       wallHeight: DEFAULT_WALL_HEIGHT,
       pitch: DEFAULT_PITCH_DEG,
       roofType: 'gable',
       ...defaults,
-      width,
-      depth,
+      width: placement.width,
+      depth: placement.depth,
       position: [localX, 0, localZ],
+      rotation: placement.rotation,
     })
 
     createNode(segment, targetRoofId as AnyNode['id'])
@@ -173,6 +183,13 @@ const commitRoofPlacement = (
   // Count existing roofs for naming
   const roofCount = Object.values(nodes).filter((n) => n.type === 'roof').length
   const name = `Roof ${roofCount + 1}`
+  const roofRotation = typeof defaults.rotation === 'number' ? defaults.rotation : 0
+  const placement = resolveRoofDraftPlacement(
+    footprintWidth,
+    footprintDepth,
+    quarterTurn,
+    roofRotation,
+  )
 
   // Create the segment first (centered in its new parent)
   const segment = RoofSegmentNode.parse({
@@ -180,9 +197,10 @@ const commitRoofPlacement = (
     pitch: DEFAULT_PITCH_DEG,
     roofType: 'gable',
     ...defaults,
-    width,
-    depth,
+    width: placement.width,
+    depth: placement.depth,
     position: [0, 0, 0],
+    rotation: placement.rotation,
   })
 
   // Create the roof container. Segment-shaped params (roofType, pitch, …) are
@@ -384,6 +402,8 @@ export const RoofTool: React.FC = () => {
 
   const corner1Ref = useRef<[number, number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
+  const quarterTurnRef = useRef(false)
+  const [quarterTurn, setQuarterTurn] = useState(false)
   const [preview, setPreview] = useState<PreviewState>({
     corner1: null,
     cursorPosition: [0, 0, 0],
@@ -394,6 +414,7 @@ export const RoofTool: React.FC = () => {
     if (!currentLevelId) return
 
     outlineRef.current.geometry = new BufferGeometry()
+    useFloorplanDraftPreview.getState().setRoofDraftQuarterTurn(quarterTurnRef.current)
 
     // Alignment candidates — anchors of every alignable object on the active
     // level plus the wall corners of the floor directly below, so a roof drawn
@@ -496,6 +517,7 @@ export const RoofTool: React.FC = () => {
           corner1Ref.current,
           [gridX, y, gridZ],
           selectedIdsRef.current,
+          quarterTurnRef.current,
         )
 
         setSelection({ selectedIds: [roofId as AnyNode['id']] })
@@ -533,20 +555,49 @@ export const RoofTool: React.FC = () => {
       clearSurfacePlanSnapFeedback()
     }
 
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target instanceof HTMLElement && event.target.isContentEditable)
+      ) {
+        return
+      }
+      if (
+        (event.key !== 'r' && event.key !== 'R') ||
+        event.repeat ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      const nextQuarterTurn = !quarterTurnRef.current
+      quarterTurnRef.current = nextQuarterTurn
+      setQuarterTurn(nextQuarterTurn)
+      useFloorplanDraftPreview.getState().setRoofDraftQuarterTurn(nextQuarterTurn)
+      sfxEmitter.emit('sfx:item-rotate')
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown)
       clearSurfacePlanSnapFeedback()
 
       corner1Ref.current = null
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setRoofDraftStart(null)
       draftPreview.setRoofDraftEnd(null)
+      draftPreview.setRoofDraftQuarterTurn(false)
     }
   }, [currentLevelId, setSelection])
 
@@ -563,23 +614,33 @@ export const RoofTool: React.FC = () => {
 
   const roofGhostGeometry = useMemo(() => {
     if (!previewDimensions) return null
-    return buildRoofGhostGeometry(
+    const placement = resolveRoofDraftPlacement(
       previewDimensions.length,
       previewDimensions.width,
+      quarterTurn,
+    )
+    return buildRoofGhostGeometry(
+      placement.width,
+      placement.depth,
       DEFAULT_WALL_HEIGHT,
       DEFAULT_PITCH_DEG,
     )
-  }, [previewDimensions])
+  }, [previewDimensions, quarterTurn])
 
   const roofGhostEdges = useMemo(() => {
     if (!previewDimensions) return null
-    return buildRoofGhostEdges(
+    const placement = resolveRoofDraftPlacement(
       previewDimensions.length,
       previewDimensions.width,
+      quarterTurn,
+    )
+    return buildRoofGhostEdges(
+      placement.width,
+      placement.depth,
       DEFAULT_WALL_HEIGHT,
       DEFAULT_PITCH_DEG,
     )
-  }, [previewDimensions])
+  }, [previewDimensions, quarterTurn])
 
   useEffect(
     () => () => {
@@ -625,6 +686,7 @@ export const RoofTool: React.FC = () => {
         <group
           layers={EDITOR_LAYER}
           position={[previewDimensions.centerX, levelY + GRID_OFFSET, previewDimensions.centerZ]}
+          rotation={[0, quarterTurn ? Math.PI / 2 : 0, 0]}
         >
           {roofGhostGeometry && (
             <mesh geometry={roofGhostGeometry} layers={EDITOR_LAYER} renderOrder={1}>
