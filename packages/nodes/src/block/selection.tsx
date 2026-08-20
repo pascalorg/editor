@@ -1330,7 +1330,10 @@ function LastOperationControls({
     update: (value: number) => BlockCommand,
     options: { min?: number; max?: number; step?: number } = {},
   ) => (
-    <label className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+    <label
+      className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"
+      key={label}
+    >
       <span>{label}</span>
       <input
         aria-label={label}
