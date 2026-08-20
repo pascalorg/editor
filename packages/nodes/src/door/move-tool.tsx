@@ -37,6 +37,11 @@ import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
 } from '../shared/opening-guides-runtime'
+import { beginOpeningMoveHistorySession } from '../shared/opening-move-history'
+import {
+  isWallMeshHidden,
+  shouldIgnoreWallEventForOpeningMove,
+} from '../shared/opening-move-wall-gate'
 import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
@@ -99,7 +104,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
   }, [])
 
   useEffect(() => {
-    useScene.temporal.getState().pause()
+    // One undo entry per gesture: hold the REFCOUNTED history pause for the
+    // move's lifetime (a raw `temporal.pause()` is invisible to
+    // `getSceneHistoryPauseDepth()`, so a cooperating system's balanced
+    // pause/resume pair could zero the refcount mid-drag and resume tracking
+    // — every mid-drag write then became its own undo entry). The commit
+    // paths run their single tracked write through `history.commitStep`.
+    const history = beginOpeningMoveHistorySession()
     // This tool's whole cursor model is the wall surface (`wall:enter` /
     // `wall:move` / `wall:click`). Walls hidden by the wall-mode pass (X-ray
     // 'down' mode) are pointer-transparent for selection; hold their pointer
@@ -279,6 +290,20 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       }
     }
 
+    // While MOVING an existing door, a HIDDEN wall may drive the drag only if
+    // it is the door's own wall (grab wall / current mid-drag host) — an
+    // interposed hidden wall between the camera and the door's wall must not
+    // capture the drag and silently re-parent the door on commit. Ignored
+    // events are NOT stopPropagation'd, so the ray falls through to the own
+    // wall behind. Fresh placements (`isNew`) keep the all-walls behavior.
+    const wallEventIgnored = (event: WallEvent) =>
+      !isNew &&
+      shouldIgnoreWallEventForOpeningMove({
+        eventWallId: event.node.id,
+        eventWallHidden: isWallMeshHidden(event.node.id),
+        ownWallIds: [original.wallId, currentHostId],
+      })
+
     const resolveMoveTarget = (event: WallEvent) => {
       if (!isValidWallSideFace(event.normal)) return
       if (isCurvedWall(event.node)) {
@@ -446,6 +471,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const onWallEnter = (event: WallEvent) => {
+      // Interposed hidden wall: ignore WITHOUT tearing down the current
+      // preview or stopping propagation — the own wall behind it (a later,
+      // farther intersection on this same ray) emits its own event.
+      if (wallEventIgnored(event)) return
       const target = resolveMoveTarget(event)
       if (!target) {
         onWallLeave()
@@ -462,6 +491,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     const onWallMove = (event: WallEvent) => {
+      // See onWallEnter — interposed hidden walls never own the move.
+      if (wallEventIgnored(event)) return
       if (!isValidWallSideFace(event.normal)) {
         onWallLeave()
         return
@@ -499,8 +530,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       let placedId: string
 
       if (isNew) {
+        // Duplicate mode: delete the transient draft while history is still
+        // paused, then create the real node as the gesture's ONE tracked
+        // write — undo removes the new door entirely.
         useScene.getState().deleteNode(movingDoorNode.id)
-        useScene.temporal.getState().resume()
 
         const cloned = structuredClone(movingDoorNode) as any
         delete cloned.id
@@ -518,9 +551,14 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           // must be visible regardless of the pre-commit free-follow state.
           visible: true,
         })
-        useScene.getState().createNode(node, target.wallId as AnyNodeId)
+        history.commitStep(() => {
+          useScene.getState().createNode(node, target.wallId as AnyNodeId)
+        })
         placedId = node.id
       } else {
+        // Move mode: restore the exact pre-drag state while history is still
+        // paused (the clean undo baseline), then apply the drop as the
+        // gesture's ONE tracked write — undo reverts to the original state.
         useScene.getState().updateNode(movingDoorNode.id, {
           position: original.position,
           rotation: original.rotation,
@@ -532,17 +570,18 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           metadata: original.metadata,
           visible: original.visible,
         })
-        useScene.temporal.getState().resume()
 
-        useScene.getState().updateNode(movingDoorNode.id, {
-          position: [target.clampedX, target.clampedY, 0],
-          rotation: [0, target.itemRotation, 0],
-          side: target.side,
-          parentId: target.wallId,
-          wallId: target.wallId,
-          roofSegmentId: undefined,
-          metadata: {},
-          visible: true,
+        history.commitStep(() => {
+          useScene.getState().updateNode(movingDoorNode.id, {
+            position: [target.clampedX, target.clampedY, 0],
+            rotation: [0, target.itemRotation, 0],
+            side: target.side,
+            parentId: target.wallId,
+            wallId: target.wallId,
+            roofSegmentId: undefined,
+            metadata: {},
+            visible: true,
+          })
         })
 
         if (original.parentId && original.parentId !== target.wallId) {
@@ -553,7 +592,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
       markHostDirty(target.wallId)
       useLiveTransforms.getState().clear(movingDoorNode.id)
-      useScene.temporal.getState().pause()
 
       triggerSFX('sfx:structure-build')
       hideCursor()
@@ -563,6 +601,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     const onWallClick = (event: WallEvent) => {
       if (committed) return
+      // A click on an interposed hidden wall must not commit / re-parent;
+      // let it fall through to the own wall behind (see onWallEnter).
+      if (wallEventIgnored(event)) return
       if (!isValidWallSideFace(event.normal)) return
       if (isCurvedWall(event.node)) return
       if (event.node.parentId !== getLevelId()) return
@@ -755,8 +796,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       let placedId: string
 
       if (isNew) {
+        // See commitToWall — delete the draft paused, create as the ONE
+        // tracked write.
         useScene.getState().deleteNode(movingDoorNode.id)
-        useScene.temporal.getState().resume()
 
         const cloned = structuredClone(movingDoorNode) as any
         delete cloned.id
@@ -772,9 +814,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           parentId: segmentId,
           visible: true,
         })
-        useScene.getState().createNode(node, segmentId as AnyNodeId)
+        history.commitStep(() => {
+          useScene.getState().createNode(node, segmentId as AnyNodeId)
+        })
         placedId = node.id
       } else {
+        // See commitToWall — restore the pre-drag baseline paused, drop as
+        // the ONE tracked write.
         useScene.getState().updateNode(movingDoorNode.id, {
           position: original.position,
           rotation: original.rotation,
@@ -786,18 +832,19 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
           metadata: original.metadata,
           visible: original.visible,
         })
-        useScene.temporal.getState().resume()
 
-        useScene.getState().updateNode(movingDoorNode.id, {
-          position: target.position,
-          rotation: [0, 0, 0],
-          side: 'front',
-          parentId: segmentId,
-          wallId: undefined,
-          roofSegmentId: segmentId,
-          roofFace: target.face.id,
-          metadata: {},
-          visible: true,
+        history.commitStep(() => {
+          useScene.getState().updateNode(movingDoorNode.id, {
+            position: target.position,
+            rotation: [0, 0, 0],
+            side: 'front',
+            parentId: segmentId,
+            wallId: undefined,
+            roofSegmentId: segmentId,
+            roofFace: target.face.id,
+            metadata: {},
+            visible: true,
+          })
         })
 
         if (original.parentId && original.parentId !== segmentId) {
@@ -808,7 +855,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
       markHostDirty(segmentId)
       useLiveTransforms.getState().clear(movingDoorNode.id)
-      useScene.temporal.getState().pause()
 
       triggerSFX('sfx:structure-build')
       hideCursor()
@@ -846,7 +892,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         })
         if (original.parentId) markHostDirty(original.parentId)
       }
-      useScene.temporal.getState().resume()
+      // The revert writes above ran under the gesture's history pause (never
+      // tracked); ending the session here keeps a cancelled move out of undo
+      // entirely. `end` is idempotent — the effect cleanup's end() is a no-op.
+      history.end()
       hideCursor()
       exitMoveMode()
     }
@@ -1013,7 +1062,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       useFacingPose.getState().clear()
       clearPlacementSurface()
       releaseHiddenWallHold()
-      useScene.temporal.getState().resume()
+      history.end()
       emitter.off('wall:enter', onWallEnter)
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
