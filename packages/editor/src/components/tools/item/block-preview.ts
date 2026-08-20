@@ -35,7 +35,12 @@ export function resolveBlockFaceSwitch(
 }
 
 export function shouldDetachBlockFaceOnLeave(attachTo: string | undefined): boolean {
-  return !attachTo
+  return (
+    attachTo === undefined ||
+    attachTo === 'wall' ||
+    attachTo === 'wall-side' ||
+    attachTo === 'ceiling'
+  )
 }
 
 export function clampBlockFacePosition(

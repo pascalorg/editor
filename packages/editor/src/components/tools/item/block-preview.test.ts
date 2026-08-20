@@ -39,10 +39,10 @@ describe('resolveBlockFaceSwitch', () => {
 })
 
 describe('shouldDetachBlockFaceOnLeave', () => {
-  test('keeps attached items on the last valid block face during transient leave events', () => {
-    expect(shouldDetachBlockFaceOnLeave('wall')).toBe(false)
-    expect(shouldDetachBlockFaceOnLeave('wall-side')).toBe(false)
-    expect(shouldDetachBlockFaceOnLeave('ceiling')).toBe(false)
+  test('detaches attached items when they leave a block face', () => {
+    expect(shouldDetachBlockFaceOnLeave('wall')).toBe(true)
+    expect(shouldDetachBlockFaceOnLeave('wall-side')).toBe(true)
+    expect(shouldDetachBlockFaceOnLeave('ceiling')).toBe(true)
   })
 
   test('allows free floor items to leave a block face', () => {
