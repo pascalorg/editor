@@ -25,3 +25,7 @@ WebSocket, WebRTC, or collaboration backend is required by this package.
 `CaptureRuntime` keeps telemetry host-neutral: pass `onError` to report source or per-stream
 failures in the host, then increment `retryKey` to reload every affected session. Direct
 `useCaptureSource()` consumers can call its `retry()` function instead.
+
+Hosts can pass `defaultLayerVisibility` to keep expensive optional layers disabled until a user
+enables them. Persisted values in the scan node's `layers` map always override those host defaults;
+without host defaults, every available layer remains visible for backwards compatibility.

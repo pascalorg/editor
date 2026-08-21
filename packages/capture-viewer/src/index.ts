@@ -8,6 +8,7 @@ export {
   type CaptureStreamRendererProps,
 } from './capture-runtime'
 export { resolveCaptureFrameMatrix } from './frame'
+export { isCaptureLayerVisible } from './layer-visibility'
 export {
   CaptureDeviceMotionLayer,
   DEVICE_MOTION_PLAYBACK_SPEED,

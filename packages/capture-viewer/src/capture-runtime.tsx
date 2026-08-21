@@ -27,6 +27,7 @@ import {
 } from 'react'
 import type { Object3D } from 'three'
 import { resolveCaptureFrameMatrix } from './frame'
+import { isCaptureLayerVisible } from './layer-visibility'
 import { CaptureDeviceMotionLayer } from './layers/device-motion-layer'
 import { CapturePointCloudLayer } from './layers/point-cloud-layer'
 import { CaptureRoomModel } from './layers/room-model-layer'
@@ -68,6 +69,7 @@ export type CaptureRuntimeErrorContext =
     }
 
 export type CaptureRuntimeProps = {
+  defaultLayerVisibility?: Readonly<Record<string, boolean>>
   maxPacketsPerStream?: number
   onError?: (error: Error, context: CaptureRuntimeErrorContext) => void
   renderers?: Readonly<Record<string, CaptureStreamRenderer>>
@@ -76,9 +78,11 @@ export type CaptureRuntimeProps = {
 }
 
 const EMPTY_RENDERERS: Readonly<Record<string, CaptureStreamRenderer>> = {}
+const EMPTY_LAYER_VISIBILITY: Readonly<Record<string, boolean>> = {}
 type CaptureSessionScan = ScanNode & { captureSession: CaptureSessionLocator }
 
 export function CaptureRuntime({
+  defaultLayerVisibility = EMPTY_LAYER_VISIBILITY,
   maxPacketsPerStream = 32,
   onError,
   renderers = EMPTY_RENDERERS,
@@ -98,6 +102,7 @@ export function CaptureRuntime({
     <>
       {scans.map((scan) => (
         <CaptureSessionPortal
+          defaultLayerVisibility={defaultLayerVisibility}
           key={`${scan.id}:${retryKey}`}
           maxPacketsPerStream={maxPacketsPerStream}
           onError={onError}
@@ -111,12 +116,14 @@ export function CaptureRuntime({
 }
 
 function CaptureSessionPortal({
+  defaultLayerVisibility,
   maxPacketsPerStream,
   onError,
   renderers,
   resolveSource,
   scan,
 }: {
+  defaultLayerVisibility: Readonly<Record<string, boolean>>
   maxPacketsPerStream: number
   onError?: (error: Error, context: CaptureRuntimeErrorContext) => void
   renderers: Readonly<Record<string, CaptureStreamRenderer>>
@@ -157,7 +164,7 @@ function CaptureSessionPortal({
     <group {...handlers}>
       {descriptor.streams.map((stream) => {
         const layerKey = captureLayerKey(stream)
-        if ((scan.layers[layerKey] ?? true) === false) return null
+        if (!isCaptureLayerVisible(scan.layers, layerKey, defaultLayerVisibility)) return null
         if (!isCaptureStreamRenderable(stream, customRendererKeys)) return null
         const renderKey = captureStreamRenderKey(stream)
         const packets = sourceState.packets[stream.id] ?? []
