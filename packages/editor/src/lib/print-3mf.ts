@@ -50,21 +50,33 @@ function decimal(value: number): string {
   return rounded.toFixed(9).replace(/\.?0+$/, '')
 }
 
-function appendMeshObject(lines: string[], part: Print3mfPart, objectId: number) {
-  lines.push(`    <object id="${objectId}" type="model" name="${escapeXml(part.name)}">`)
+type PlacedPrint3mfPart = {
+  part: Print3mfPart
+  translateX: number
+  translateY: number
+  vertexStart: number
+  triangleStart: number
+}
+
+function appendMeshObject(lines: string[], name: string, parts: PlacedPrint3mfPart[]) {
+  lines.push(`    <object id="1" type="model" name="${escapeXml(name)}">`)
   lines.push('      <mesh>')
   lines.push('        <vertices>')
-  for (let offset = 0; offset < part.mesh.positions.length; offset += 3) {
-    lines.push(
-      `          <vertex x="${decimal(part.mesh.positions[offset]!)}" y="${decimal(part.mesh.positions[offset + 1]!)}" z="${decimal(part.mesh.positions[offset + 2]!)}"/>`,
-    )
+  for (const { part, translateX, translateY } of parts) {
+    for (let offset = 0; offset < part.mesh.positions.length; offset += 3) {
+      lines.push(
+        `          <vertex x="${decimal(part.mesh.positions[offset]! + translateX)}" y="${decimal(part.mesh.positions[offset + 1]! + translateY)}" z="${decimal(part.mesh.positions[offset + 2]!)}"/>`,
+      )
+    }
   }
   lines.push('        </vertices>')
   lines.push('        <triangles>')
-  for (let offset = 0; offset < part.mesh.indices.length; offset += 3) {
-    lines.push(
-      `          <triangle v1="${part.mesh.indices[offset]}" v2="${part.mesh.indices[offset + 1]}" v3="${part.mesh.indices[offset + 2]}"/>`,
-    )
+  for (const { part, vertexStart } of parts) {
+    for (let offset = 0; offset < part.mesh.indices.length; offset += 3) {
+      lines.push(
+        `          <triangle v1="${part.mesh.indices[offset]! + vertexStart}" v2="${part.mesh.indices[offset + 1]! + vertexStart}" v3="${part.mesh.indices[offset + 2]! + vertexStart}"/>`,
+      )
+    }
   }
   lines.push('        </triangles>')
   lines.push('      </mesh>')
@@ -75,27 +87,46 @@ export function createPrint3mf(
   parts: Print3mfPart[],
   title = 'Pascal print export',
 ): Uint8Array<ArrayBuffer> {
+  const placements: PlacedPrint3mfPart[] = []
+  let cursorX = 0
+  let vertexStart = 0
+  let triangleStart = 0
+  for (const part of parts) {
+    placements.push({
+      part,
+      translateX: cursorX - part.bounds.min.x,
+      translateY: -part.bounds.min.y,
+      vertexStart,
+      triangleStart,
+    })
+    cursorX += part.bounds.width + PART_GAP_MM
+    vertexStart += part.mesh.positions.length / 3
+    triangleStart += part.mesh.indices.length / 3
+  }
+  const partManifest = placements.map(({ part, vertexStart, triangleStart }) => ({
+    name: part.name,
+    vertexStart,
+    vertexCount: part.mesh.positions.length / 3,
+    triangleStart,
+    triangleCount: part.mesh.indices.length / 3,
+  }))
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">',
     `  <metadata name="Title">${escapeXml(title)}</metadata>`,
     '  <metadata name="Application">Pascal</metadata>',
+    `  <metadata name="Pascal.PartManifest">${escapeXml(JSON.stringify(partManifest))}</metadata>`,
     '  <resources>',
   ]
 
-  for (const [index, part] of parts.entries()) appendMeshObject(lines, part, index + 1)
+  // CHITUBOX 1.3.0 recenters independent 3MF objects, so package the plate as one mesh.
+  if (placements.length > 0) {
+    appendMeshObject(lines, parts.length === 1 ? parts[0]!.name : title, placements)
+  }
   lines.push('  </resources>')
   lines.push('  <build>')
 
-  let cursorX = 0
-  for (const [index, part] of parts.entries()) {
-    const translateX = cursorX - part.bounds.min.x
-    const translateY = -part.bounds.min.y
-    lines.push(
-      `    <item objectid="${index + 1}" transform="1 0 0 0 1 0 0 0 1 ${decimal(translateX)} ${decimal(translateY)} 0"/>`,
-    )
-    cursorX += part.bounds.width + PART_GAP_MM
-  }
+  if (parts.length > 0) lines.push('    <item objectid="1"/>')
   lines.push('  </build>')
   lines.push('</model>')
   lines.push('')

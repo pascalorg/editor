@@ -396,7 +396,7 @@ describe('per-level print STL export', () => {
     expect(bundle.data).toEqual(repeated.data)
   })
 
-  test('packages named, millimeter-unit 3MF objects in a non-overlapping bed layout', async () => {
+  test('packages named parts in one non-overlapping millimeter-unit 3MF plate mesh', async () => {
     const fixture = twoLevelFixture()
     fixture.nodes.level_ground = {
       ...fixture.nodes.level_ground!,
@@ -416,17 +416,34 @@ describe('per-level print STL export', () => {
     const model = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(
       xml,
     ).model
-    const objects = asArray<Record<string, unknown>>(model.resources.object)
+    const object = asArray<Record<string, unknown>>(model.resources.object)[0]!
     const items = asArray<Record<string, string>>(model.build.item)
+    const metadata = asArray<Record<string, string>>(model.metadata)
+    const partManifest = JSON.parse(
+      metadata.find((entry) => entry.name === 'Pascal.PartManifest')!['#text']!,
+    ) as Array<{
+      name: string
+      vertexStart: number
+      vertexCount: number
+      triangleStart: number
+      triangleCount: number
+    }>
+    const mesh = object.mesh as {
+      vertices: { vertex: Record<string, string> | Record<string, string>[] }
+      triangles: { triangle: Record<string, string> | Record<string, string>[] }
+    }
+    const vertices = asArray(mesh.vertices.vertex)
+    const triangles = asArray(mesh.triangles.triangle)
 
     expect(Object.keys(files)).toEqual(['[Content_Types].xml', '_rels/.rels', '3D/3dmodel.model'])
     expect(model.unit).toBe('millimeter')
-    expect(objects.map((object) => object.name)).toEqual([
+    expect(object.name).toBe('Pascal level parts')
+    expect(partManifest.map((part) => part.name)).toEqual([
       '00 Plinth',
       '01 Ground & Entry',
       '02 Upper',
     ])
-    expect(items.map((item) => item.objectid)).toEqual(['1', '2', '3'])
+    expect(items.map((item) => item.objectid)).toEqual(['1'])
     expect(bundle.report.format).toBe('3mf')
     expect(bundle.report.parts.map((part) => part.filename)).toEqual([null, null, null])
     expect(bundle.report.parts.map((part) => part.objectName)).toEqual([
@@ -441,26 +458,19 @@ describe('per-level print STL export', () => {
       [80, 60, 20],
     ]
     let previousMaxX = Number.NEGATIVE_INFINITY
-    for (const [index, object] of objects.entries()) {
-      const mesh = object.mesh as {
-        vertices: { vertex: Record<string, string> | Record<string, string>[] }
-        triangles: { triangle: Record<string, string> | Record<string, string>[] }
-      }
-      const vertices = asArray(mesh.vertices.vertex)
-      const triangles = asArray(mesh.triangles.triangle)
-      const transformValue = items[index]?.transform
-      expect(transformValue).toBeDefined()
-      const transform = transformValue!.split(' ').map(Number)
-      const translation = new THREE.Vector3(transform[9]!, transform[10]!, transform[11]!)
+    for (const [index, part] of partManifest.entries()) {
       const bounds = new THREE.Box3()
-      for (const vertex of vertices) {
+      for (const vertex of vertices.slice(part.vertexStart, part.vertexStart + part.vertexCount)) {
         bounds.expandByPoint(
-          new THREE.Vector3(Number(vertex.x), Number(vertex.y), Number(vertex.z)).add(translation),
+          new THREE.Vector3(Number(vertex.x), Number(vertex.y), Number(vertex.z)),
         )
       }
       const size = bounds.getSize(new THREE.Vector3())
 
-      expect(triangles).toHaveLength(12)
+      expect(part.triangleCount).toBe(12)
+      expect(
+        triangles.slice(part.triangleStart, part.triangleStart + part.triangleCount),
+      ).toHaveLength(12)
       expect(size.x).toBeCloseTo(expectedSizes[index]![0]!, 5)
       expect(size.y).toBeCloseTo(expectedSizes[index]![1]!, 5)
       expect(size.z).toBeCloseTo(expectedSizes[index]![2]!, 5)
@@ -468,6 +478,7 @@ describe('per-level print STL export', () => {
       if (index > 0) expect(bounds.min.x - previousMaxX).toBeCloseTo(5, 5)
       previousMaxX = bounds.max.x
     }
+    expect(items[0]?.transform).toBeUndefined()
     expect(bundle.data).toEqual(repeated.data)
   })
 })

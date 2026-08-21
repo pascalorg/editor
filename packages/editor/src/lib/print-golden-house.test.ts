@@ -59,22 +59,19 @@ function packageObjectSizes(data: Uint8Array): Array<{ name: string; size: THREE
   const files = unzipSync(data)
   const xml = strFromU8(files['3D/3dmodel.model']!)
   const model = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(xml).model
-  const objects = asArray<Record<string, unknown>>(model.resources.object)
-  const items = asArray<Record<string, string>>(model.build.item)
-  return objects.map((object, index) => {
-    const mesh = object.mesh as { vertices: { vertex: Record<string, string>[] } }
-    const vertices = asArray(mesh.vertices.vertex)
-    const transformValue = items[index]?.transform
-    if (!transformValue) throw new Error(`Missing build transform for ${String(object.name)}`)
-    const transform = transformValue.split(' ').map(Number)
-    const translation = new THREE.Vector3(transform[9]!, transform[10]!, transform[11]!)
+  const object = asArray<Record<string, unknown>>(model.resources.object)[0]!
+  const mesh = object.mesh as { vertices: { vertex: Record<string, string>[] } }
+  const vertices = asArray(mesh.vertices.vertex)
+  const metadata = asArray<Record<string, string>>(model.metadata)
+  const partManifest = JSON.parse(
+    metadata.find((entry) => entry.name === 'Pascal.PartManifest')!['#text']!,
+  ) as Array<{ name: string; vertexStart: number; vertexCount: number }>
+  return partManifest.map((part) => {
     const bounds = new THREE.Box3()
-    for (const vertex of vertices) {
-      bounds.expandByPoint(
-        new THREE.Vector3(Number(vertex.x), Number(vertex.y), Number(vertex.z)).add(translation),
-      )
+    for (const vertex of vertices.slice(part.vertexStart, part.vertexStart + part.vertexCount)) {
+      bounds.expandByPoint(new THREE.Vector3(Number(vertex.x), Number(vertex.y), Number(vertex.z)))
     }
-    return { name: String(object.name), size: bounds.getSize(new THREE.Vector3()) }
+    return { name: part.name, size: bounds.getSize(new THREE.Vector3()) }
   })
 }
 

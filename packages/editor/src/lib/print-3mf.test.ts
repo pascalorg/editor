@@ -22,14 +22,20 @@ describe('print 3MF export', () => {
     ).model
     const object = asArray<Record<string, unknown>>(model.resources.object)[0]!
     const item = asArray<Record<string, string>>(model.build.item)[0]!
+    const metadata = asArray<Record<string, string>>(model.metadata)
+    const partManifest = JSON.parse(
+      metadata.find((entry) => entry.name === 'Pascal.PartManifest')!['#text']!,
+    )
     const objectMesh = object.mesh as {
       vertices: { vertex: Record<string, string> | Record<string, string>[] }
       triangles: { triangle: Record<string, string> | Record<string, string>[] }
     }
     const vertices = asArray(objectMesh.vertices.vertex)
     const triangles = asArray(objectMesh.triangles.triangle)
-    expect(item.transform).toBeDefined()
-    const transform = item.transform!.split(' ').map(Number)
+    const bounds = new THREE.Box3()
+    for (const vertex of vertices) {
+      bounds.expandByPoint(new THREE.Vector3(Number(vertex.x), Number(vertex.y), Number(vertex.z)))
+    }
 
     expect(Object.keys(files)).toEqual(['[Content_Types].xml', '_rels/.rels', '3D/3dmodel.model'])
     expect(strFromU8(files['_rels/.rels']!)).toContain('Target="/3D/3dmodel.model"')
@@ -38,7 +44,18 @@ describe('print 3MF export', () => {
     expect(vertices).toHaveLength(8)
     expect(triangles).toHaveLength(12)
     expect(item.objectid).toBe('1')
-    expect(transform.slice(9)).toEqual([50, 30, 0])
+    expect(item.transform).toBeUndefined()
+    expect(partManifest).toEqual([
+      {
+        name: 'Pascal print model',
+        vertexStart: 0,
+        vertexCount: 8,
+        triangleStart: 0,
+        triangleCount: 12,
+      },
+    ])
+    expect(bounds.min.toArray()).toEqual([0, 0, 0])
+    expect(bounds.max.toArray()).toEqual([100, 60, 40])
     expect(first.report.format).toBe('3mf')
     expect(first.report.bounds?.width).toBeCloseTo(100, 6)
     expect(first.report.bounds?.depth).toBeCloseTo(60, 6)
