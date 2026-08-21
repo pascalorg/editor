@@ -149,6 +149,54 @@ describe('capture manifests', () => {
     ).toThrow('existing vertex')
   })
 
+  test('rejects non-finite capture geometry', () => {
+    expect(() =>
+      normalizeCaptureSessionManifest({
+        schemaVersion: 1,
+        sessionId: 'capture_123',
+        projectId: 'project_123',
+        streams: {
+          pointCloud: {
+            kind: 'point-cloud',
+            points: {
+              coordinateSystem: 'arkit-world',
+              positions: [0, 0, Number.POSITIVE_INFINITY],
+            },
+          },
+        },
+      }),
+    ).toThrow()
+
+    expect(() =>
+      normalizeCaptureSessionManifest({
+        schemaVersion: 1,
+        sessionId: 'capture_123',
+        projectId: 'project_123',
+        streams: {
+          surfaceMesh: {
+            kind: 'surface-mesh',
+            mesh: {
+              version: 1,
+              coordinateSystem: 'arkit-world',
+              representation: 'quantized-indexed-triangle-mesh',
+              appearance: 'camera-vertex-color',
+              vertexCount: 3,
+              faceCount: 1,
+              boundsMin: [0, 0, Number.NaN],
+              boundsMax: [1, 1, 0],
+              positionEncoding: 'uint16x3-base64-little-endian',
+              colorEncoding: 'uint8x3-base64-srgb',
+              indexEncoding: 'uint16x3-base64-little-endian',
+              positions: 'AAAAAAAAAAAAAAAAAAAAAAAA',
+              colors: '////////////',
+              indices: 'AAABAAIA',
+            },
+          },
+        },
+      }),
+    ).toThrow()
+  })
+
   test('rejects duplicate stream IDs and backwards time ranges', () => {
     expect(() =>
       normalizeCaptureSessionManifest({

@@ -1,6 +1,7 @@
 export { rewriteLoopbackAssetUrl } from './asset-url'
 export {
   CaptureRuntime,
+  type CaptureRuntimeErrorContext,
   type CaptureRuntimeProps,
   CaptureStreamLayer,
   type CaptureStreamRenderer,

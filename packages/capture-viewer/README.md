@@ -9,6 +9,7 @@ and reference renderers for RoomPlan models, device trajectories, and PLY/live p
 ```tsx
 <Viewer>
   <CaptureRuntime
+    onError={(error, context) => reportCaptureError(error, context)}
     resolveSource={(locator) =>
       createHttpCaptureSource(locator, { credentials: 'include' })
     }
@@ -19,3 +20,7 @@ and reference renderers for RoomPlan models, device trajectories, and PLY/live p
 Unknown streams remain in the descriptor and can be rendered by passing a custom renderer keyed by
 stream role or kind. A live transport implements `CaptureSource.subscribe()`; no particular
 WebSocket, WebRTC, or collaboration backend is required by this package.
+
+`CaptureRuntime` keeps telemetry host-neutral: pass `onError` to report source or per-stream
+failures in the host. `useCaptureSource()` exposes `retry()` so host controls can recover from a
+transient manifest or transport failure without remounting the viewer.

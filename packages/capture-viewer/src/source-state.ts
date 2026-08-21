@@ -5,7 +5,7 @@ import type {
   CaptureSourceResolver,
   CaptureStreamPacket,
 } from '@pascal-app/capture-protocol'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 export type CaptureSourceState = {
   descriptor: CaptureSessionDescriptor | null
@@ -13,9 +13,12 @@ export type CaptureSourceState = {
   error: Error | null
   loading: boolean
   packets: Readonly<Record<string, readonly CaptureStreamPacket[]>>
+  retry: () => void
   source: CaptureSource | null
   streamEpochs: Readonly<Record<string, string>>
 }
+
+type CaptureSourceSnapshot = Omit<CaptureSourceState, 'retry'>
 
 export type UseCaptureSourceOptions = {
   maxPacketsPerStream?: number
@@ -31,7 +34,8 @@ export function useCaptureSource(
   options: UseCaptureSourceOptions = {},
 ): CaptureSourceState {
   const { maxPacketsPerStream = 32, subscribe = true } = options
-  const [state, setState] = useState<CaptureSourceState>({
+  const [retryVersion, setRetryVersion] = useState(0)
+  const [state, setState] = useState<CaptureSourceSnapshot>({
     descriptor: null,
     descriptorVersion: 0,
     error: null,
@@ -58,7 +62,7 @@ export function useCaptureSource(
 
     setState({
       descriptor: null,
-      descriptorVersion: 0,
+      descriptorVersion: retryVersion,
       error: null,
       loading: true,
       packets: EMPTY_PACKETS,
@@ -69,24 +73,27 @@ export function useCaptureSource(
       locator,
       resolveSource,
       abort.signal,
+      retryVersion,
       maxPacketsPerStream,
       subscribe,
       setState,
     )
     return () => abort.abort()
-  }, [locator, maxPacketsPerStream, resolveSource, subscribe])
+  }, [locator, maxPacketsPerStream, resolveSource, retryVersion, subscribe])
 
-  return state
+  const retry = useCallback(() => setRetryVersion((current) => current + 1), [])
+  return { ...state, retry }
 }
 
 async function consumeCaptureSource(
   locator: CaptureSessionLocator,
   resolveSource: CaptureSourceResolver,
   signal: AbortSignal,
+  descriptorVersion: number,
   maxPacketsPerStream: number,
   subscribe: boolean,
   setState: (
-    update: CaptureSourceState | ((current: CaptureSourceState) => CaptureSourceState),
+    update: CaptureSourceSnapshot | ((current: CaptureSourceSnapshot) => CaptureSourceSnapshot),
   ) => void,
 ): Promise<void> {
   try {
@@ -95,7 +102,7 @@ async function consumeCaptureSource(
     if (signal.aborted) return
     setState({
       descriptor,
-      descriptorVersion: 0,
+      descriptorVersion,
       error: null,
       loading: false,
       packets: EMPTY_PACKETS,
@@ -158,7 +165,7 @@ async function consumeCaptureSource(
     if (signal.aborted) return
     setState({
       descriptor: null,
-      descriptorVersion: 0,
+      descriptorVersion,
       error: cause instanceof Error ? cause : new Error('Could not load capture session.'),
       loading: false,
       packets: EMPTY_PACKETS,

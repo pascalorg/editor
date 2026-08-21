@@ -44,16 +44,34 @@ export type CaptureStreamRendererProps = {
 
 export type CaptureStreamRenderer = ComponentType<CaptureStreamRendererProps>
 
+export type CaptureRuntimeErrorContext =
+  | {
+      phase: 'source'
+      scanId: ScanNode['id']
+      sessionId: string
+    }
+  | {
+      layerKey: string
+      phase: 'stream'
+      scanId: ScanNode['id']
+      sessionId: string
+      streamId: string
+      streamKind: string
+    }
+
 export type CaptureRuntimeProps = {
   maxPacketsPerStream?: number
+  onError?: (error: Error, context: CaptureRuntimeErrorContext) => void
   renderers?: Readonly<Record<string, CaptureStreamRenderer>>
   resolveSource: CaptureSourceResolver
 }
 
 const EMPTY_RENDERERS: Readonly<Record<string, CaptureStreamRenderer>> = {}
+type CaptureSessionScan = ScanNode & { captureSession: CaptureSessionLocator }
 
 export function CaptureRuntime({
   maxPacketsPerStream = 32,
+  onError,
   renderers = EMPTY_RENDERERS,
   resolveSource,
 }: CaptureRuntimeProps) {
@@ -61,7 +79,7 @@ export function CaptureRuntime({
   const scans = useMemo(
     () =>
       Object.values(nodes).filter(
-        (node): node is ScanNode => node.type === 'scan' && node.captureSession !== null,
+        (node): node is CaptureSessionScan => node.type === 'scan' && node.captureSession !== null,
       ),
     [nodes],
   )
@@ -72,6 +90,7 @@ export function CaptureRuntime({
         <CaptureSessionPortal
           key={scan.id}
           maxPacketsPerStream={maxPacketsPerStream}
+          onError={onError}
           renderers={renderers}
           resolveSource={resolveSource}
           scan={scan}
@@ -83,22 +102,31 @@ export function CaptureRuntime({
 
 function CaptureSessionPortal({
   maxPacketsPerStream,
+  onError,
   renderers,
   resolveSource,
   scan,
 }: {
   maxPacketsPerStream: number
+  onError?: (error: Error, context: CaptureRuntimeErrorContext) => void
   renderers: Readonly<Record<string, CaptureStreamRenderer>>
   resolveSource: CaptureSourceResolver
-  scan: ScanNode
+  scan: CaptureSessionScan
 }) {
   const [target, setTarget] = useState<Object3D | null>(null)
   const handlers = useNodeEvents(scan, 'scan')
-  const sourceState = useCaptureSource(
-    scan.captureSession as CaptureSessionLocator,
-    resolveSource,
-    { maxPacketsPerStream },
-  )
+  const sourceState = useCaptureSource(scan.captureSession, resolveSource, {
+    maxPacketsPerStream,
+  })
+
+  useEffect(() => {
+    if (!sourceState.error) return
+    onError?.(sourceState.error, {
+      phase: 'source',
+      scanId: scan.id,
+      sessionId: scan.captureSession.sessionId,
+    })
+  }, [onError, scan.captureSession.sessionId, scan.id, sourceState.error])
 
   useFrame(() => {
     const nextTarget = sceneRegistry.nodes.get(scan.id) ?? null
@@ -121,7 +149,18 @@ function CaptureSessionPortal({
           <ErrorBoundary
             fallback={<group />}
             key={renderKey}
+            onError={(error) =>
+              onError?.(error, {
+                layerKey,
+                phase: 'stream',
+                scanId: scan.id,
+                sessionId: scan.captureSession.sessionId,
+                streamId: stream.id,
+                streamKind: stream.kind,
+              })
+            }
             resetKey={`${renderKey}:${sourceState.descriptorVersion}`}
+            scope={`capture:${layerKey}`}
           >
             <Suspense fallback={null}>
               <CaptureStreamLayer

@@ -27,8 +27,8 @@ export const ArkitDeviceMotionTrajectorySchema = DeviceMotionTrajectorySchema.ex
 export const PointCloudPayloadSchema = z
   .object({
     coordinateSystem: z.string().min(1),
-    positions: z.array(z.number()).min(3),
-    colors: z.array(z.number()).optional(),
+    positions: z.array(z.number().finite()).min(3),
+    colors: z.array(z.number().finite()).optional(),
   })
   .superRefine((payload, context) => {
     if (payload.positions.length % 3 !== 0) {
@@ -62,8 +62,8 @@ export const SurfaceMeshPayloadSchema = z
     appearance: z.literal('camera-vertex-color'),
     vertexCount: z.number().int().positive().max(MAX_SURFACE_MESH_VERTICES),
     faceCount: z.number().int().positive().max(MAX_SURFACE_MESH_FACES),
-    boundsMin: z.array(z.number()).length(3),
-    boundsMax: z.array(z.number()).length(3),
+    boundsMin: z.array(z.number().finite()).length(3),
+    boundsMax: z.array(z.number().finite()).length(3),
     positionEncoding: z.literal('uint16x3-base64-little-endian'),
     colorEncoding: z.literal('uint8x3-base64-srgb'),
     indexEncoding: z.literal('uint16x3-base64-little-endian'),
