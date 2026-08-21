@@ -24,3 +24,7 @@ const descriptor = await source.describe()
 
 For live producers, use `PushCaptureSource` directly or implement `CaptureSource.subscribe()` with
 the same descriptor and packet event contract.
+
+The package exports its TypeScript source under the `react-native` condition so Metro can consume
+the workspace package from a clean checkout. Web and Node consumers continue to use the compiled
+ES module output.

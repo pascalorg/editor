@@ -141,8 +141,11 @@ function parsePointPayload(
 }
 
 function numericArray(value: unknown): number[] | null {
-  if (Array.isArray(value) && value.every((entry) => typeof entry === 'number')) return value
-  if (ArrayBuffer.isView(value)) return Array.from(value as unknown as ArrayLike<number>)
+  if (Array.isArray(value) && value.every((entry) => Number.isFinite(entry))) return value
+  if (ArrayBuffer.isView(value)) {
+    const entries = Array.from(value as unknown as ArrayLike<number>)
+    return entries.every(Number.isFinite) ? entries : null
+  }
   return null
 }
 

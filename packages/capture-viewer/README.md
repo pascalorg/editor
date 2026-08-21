@@ -13,6 +13,7 @@ and reference renderers for RoomPlan models, device trajectories, and PLY/live p
     resolveSource={(locator) =>
       createHttpCaptureSource(locator, { credentials: 'include' })
     }
+    retryKey={retryVersion}
   />
 </Viewer>
 ```
@@ -22,5 +23,5 @@ stream role or kind. A live transport implements `CaptureSource.subscribe()`; no
 WebSocket, WebRTC, or collaboration backend is required by this package.
 
 `CaptureRuntime` keeps telemetry host-neutral: pass `onError` to report source or per-stream
-failures in the host. `useCaptureSource()` exposes `retry()` so host controls can recover from a
-transient manifest or transport failure without remounting the viewer.
+failures in the host, then increment `retryKey` to reload every affected session. Direct
+`useCaptureSource()` consumers can call its `retry()` function instead.

@@ -16,7 +16,15 @@ import {
 import { type ScanNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { ErrorBoundary, useNodeEvents } from '@pascal-app/viewer'
 import { createPortal, useFrame } from '@react-three/fiber'
-import { type ComponentType, type ReactNode, Suspense, useEffect, useMemo, useState } from 'react'
+import {
+  type ComponentType,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { Object3D } from 'three'
 import { resolveCaptureFrameMatrix } from './frame'
 import { CaptureDeviceMotionLayer } from './layers/device-motion-layer'
@@ -64,6 +72,7 @@ export type CaptureRuntimeProps = {
   onError?: (error: Error, context: CaptureRuntimeErrorContext) => void
   renderers?: Readonly<Record<string, CaptureStreamRenderer>>
   resolveSource: CaptureSourceResolver
+  retryKey?: number | string
 }
 
 const EMPTY_RENDERERS: Readonly<Record<string, CaptureStreamRenderer>> = {}
@@ -74,6 +83,7 @@ export function CaptureRuntime({
   onError,
   renderers = EMPTY_RENDERERS,
   resolveSource,
+  retryKey = 0,
 }: CaptureRuntimeProps) {
   const nodes = useScene((state) => state.nodes)
   const scans = useMemo(
@@ -88,7 +98,7 @@ export function CaptureRuntime({
     <>
       {scans.map((scan) => (
         <CaptureSessionPortal
-          key={scan.id}
+          key={`${scan.id}:${retryKey}`}
           maxPacketsPerStream={maxPacketsPerStream}
           onError={onError}
           renderers={renderers}
@@ -114,19 +124,24 @@ function CaptureSessionPortal({
   scan: CaptureSessionScan
 }) {
   const [target, setTarget] = useState<Object3D | null>(null)
+  const onErrorRef = useRef(onError)
   const handlers = useNodeEvents(scan, 'scan')
   const sourceState = useCaptureSource(scan.captureSession, resolveSource, {
     maxPacketsPerStream,
   })
 
   useEffect(() => {
+    onErrorRef.current = onError
+  }, [onError])
+
+  useEffect(() => {
     if (!sourceState.error) return
-    onError?.(sourceState.error, {
+    onErrorRef.current?.(sourceState.error, {
       phase: 'source',
       scanId: scan.id,
       sessionId: scan.captureSession.sessionId,
     })
-  }, [onError, scan.captureSession.sessionId, scan.id, sourceState.error])
+  }, [scan.captureSession.sessionId, scan.id, sourceState.error])
 
   useFrame(() => {
     const nextTarget = sceneRegistry.nodes.get(scan.id) ?? null
@@ -145,12 +160,20 @@ function CaptureSessionPortal({
         if ((scan.layers[layerKey] ?? true) === false) return null
         if (!isCaptureStreamRenderable(stream, customRendererKeys)) return null
         const renderKey = captureStreamRenderKey(stream)
+        const packets = sourceState.packets[stream.id] ?? []
+        const streamEpoch =
+          sourceState.streamEpochs[stream.id] ??
+          `descriptor:${descriptor.revisionId ?? ''}:${stream.id}:${stream.frameId ?? ''}`
+        const latestPacket = packets.at(-1)
+        const packetRevision = latestPacket
+          ? `${latestPacket.generation}:${latestPacket.sequence}:${latestPacket.frameId ?? ''}`
+          : 'static'
         return (
           <ErrorBoundary
             fallback={<group />}
             key={renderKey}
             onError={(error) =>
-              onError?.(error, {
+              onErrorRef.current?.(error, {
                 layerKey,
                 phase: 'stream',
                 scanId: scan.id,
@@ -159,21 +182,18 @@ function CaptureSessionPortal({
                 streamKind: stream.kind,
               })
             }
-            resetKey={`${renderKey}:${sourceState.descriptorVersion}`}
+            resetKey={`${renderKey}:${sourceState.descriptorVersion}:${streamEpoch}:${packetRevision}`}
             scope={`capture:${layerKey}`}
           >
             <Suspense fallback={null}>
               <CaptureStreamLayer
                 descriptor={descriptor}
-                packets={sourceState.packets[stream.id] ?? []}
+                packets={packets}
                 renderers={renderers}
                 scan={scan}
                 source={source}
                 stream={stream}
-                streamEpoch={
-                  sourceState.streamEpochs[stream.id] ??
-                  `descriptor:${descriptor.revisionId ?? ''}:${stream.id}:${stream.frameId ?? ''}`
-                }
+                streamEpoch={streamEpoch}
               />
             </Suspense>
           </ErrorBoundary>

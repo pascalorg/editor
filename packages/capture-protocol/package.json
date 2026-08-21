@@ -4,16 +4,18 @@
   "description": "Transport-neutral capture-session manifests and live stream sources for Pascal",
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }
   },
   "files": [
     "dist",
+    "src",
     "README.md"
   ],
   "scripts": {

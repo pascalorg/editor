@@ -37,4 +37,8 @@ describe('buildPointCloudData', () => {
     expect([...data.positions]).toEqual([1, 0, 0, 2, 0, 0])
     expect(data.colors).toBeNull()
   })
+
+  test('drops non-finite live packet geometry', () => {
+    expect(buildPointCloudData([packet(2, [0, 0, Number.NaN])], 100).positions).toHaveLength(0)
+  })
 })
