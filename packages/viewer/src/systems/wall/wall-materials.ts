@@ -304,8 +304,8 @@ const SELECTION_EMISSIVE_INTENSITY = 0.12
 // material affordance the only thing lighting up was the furniture behind
 // them). Same indigo so hover reads as "this will select", weaker so a
 // hovered-then-selected wall still steps up on click.
-const HOVER_EMISSIVE_BLEND = 0.28
-const HOVER_EMISSIVE_INTENSITY = 0.07
+const HOVER_EMISSIVE_BLEND = 0.4
+const HOVER_EMISSIVE_INTENSITY = 0.2
 
 const SELECTION_TEXTURE_MAP_KEYS = [
   'map',
