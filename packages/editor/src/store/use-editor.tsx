@@ -40,6 +40,7 @@ import {
   DEFAULT_CREATABLE_MEASUREMENT_KIND,
   normalizeCreatableMeasurementKind,
 } from '../lib/measurement-kind'
+import type { ModelExport } from '../lib/model-export'
 import {
   cyclePaintScope as cyclePaintScopeValue,
   type PaintHoverInfo,
@@ -459,6 +460,8 @@ type EditorState = {
   // Read by the mobile layout so the viewer container can shrink to preview edits.
   mobilePanelSheetHeight: number
   setMobilePanelSheetHeight: (px: number) => void
+  modelExport: ModelExport | null
+  setModelExport: (modelExport: ModelExport | null) => void
 }
 
 export type PersistedEditorUiState = Pick<
@@ -1365,6 +1368,8 @@ const useEditor = create<EditorState>()(
         set({ floorplanPaneRatio: normalizeFloorplanPaneRatio(ratio) }),
       mobilePanelSheetHeight: 0,
       setMobilePanelSheetHeight: (px) => set({ mobilePanelSheetHeight: Math.max(0, px) }),
+      modelExport: null,
+      setModelExport: (modelExport) => set({ modelExport }),
     }),
     {
       name: 'pascal-editor-ui-preferences',
