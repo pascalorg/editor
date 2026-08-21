@@ -19,6 +19,7 @@ export type BlockCommand =
       type: 'extrude-faces'
       faceIds: string[]
       distance: number
+      axis?: 'x' | 'y' | 'z'
     }
   | {
       type: 'translate-components'
@@ -820,12 +821,18 @@ function extrudeFaces(
     const invalidFace = selectedFaces[normals.findIndex((normal) => !normal)]!
     return { ok: false, error: `Face has no usable normal: ${invalidFace.id}` }
   }
-  const normal = normalize(
-    normals.reduce<Point>(
-      (sum, value) => [sum[0] + value![0], sum[1] + value![1], sum[2] + value![2]],
-      [0, 0, 0],
-    ),
-  )
+  const normal = command.axis
+    ? ([
+        command.axis === 'x' ? 1 : 0,
+        command.axis === 'y' ? 1 : 0,
+        command.axis === 'z' ? 1 : 0,
+      ] as Point)
+    : normalize(
+        normals.reduce<Point>(
+          (sum, value) => [sum[0] + value![0], sum[1] + value![1], sum[2] + value![2]],
+          [0, 0, 0],
+        ),
+      )
   if (!normal) return { ok: false, error: 'Selected face normals cancel each other out' }
 
   const verticesById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex]))

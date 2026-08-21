@@ -111,6 +111,10 @@ export function blockAxisDelta(
   return [axis === 'x' ? distance : 0, axis === 'y' ? distance : 0, axis === 'z' ? distance : 0]
 }
 
+export function blockPointerDistanceForAxis(axis: BlockTransformAxis, distance: number): number {
+  return axis === 'z' ? -distance : distance
+}
+
 export function blockConstrainTranslationDelta(
   delta: [number, number, number],
   constraint: BlockTransformConstraint,

@@ -54,6 +54,28 @@ describe('applyBlockCommand', () => {
     expect(inspectBlockTopology(second.topology)).toEqual([])
   })
 
+  test('extrudes along a selected global axis instead of the face normal', () => {
+    const result = applyBlockCommand(createBoxBlockTopology(), {
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
+      distance: 0.25,
+      axis: 'x',
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const cap = result.topology.faces.find((face) => face.id === 'f-top')!
+    const capVertices = cap.vertexIds.map(
+      (id) => result.topology.vertices.find((vertex) => vertex.id === id)!,
+    )
+    expect(capVertices.map((vertex) => vertex.position)).toEqual([
+      [-0.75, 2.4, -1],
+      [-0.75, 2.4, 1],
+      [1.25, 2.4, 1],
+      [1.25, 2.4, -1],
+    ])
+  })
+
   test('inherits the source face material across an extruded cap and side faces', () => {
     const topology = createBoxBlockTopology()
     topology.faces = topology.faces.map((face) =>

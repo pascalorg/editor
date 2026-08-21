@@ -7,6 +7,7 @@ import {
   blockModalTransformStatus,
   blockNumericDeltaForConstraint,
   blockPlaneVisualState,
+  blockPointerDistanceForAxis,
   blockPrecisionSnapStep,
   blockRotationPointerAngle,
   blockScaleFactorsForConstraint,
@@ -53,6 +54,12 @@ describe('block modal transform', () => {
     expect(blockAxisDelta('x', 1.25)).toEqual([1.25, 0, 0])
     expect(blockAxisDelta('y', -0.5)).toEqual([0, -0.5, 0])
     expect(blockAxisDelta('z', 2)).toEqual([0, 0, 2])
+  })
+
+  test('keeps pointer-derived Z movement aligned with the visible gizmo', () => {
+    expect(blockPointerDistanceForAxis('x', 1.25)).toBe(1.25)
+    expect(blockPointerDistanceForAxis('y', -0.5)).toBe(-0.5)
+    expect(blockPointerDistanceForAxis('z', 0.75)).toBe(-0.75)
   })
 
   test('keeps only the locked operation axis colorful', () => {

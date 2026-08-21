@@ -17,6 +17,7 @@ import { Vector2 } from 'three'
 import { applyBlockCommand, type BlockCommand, type BlockSelection } from './commands'
 import type { BlockSfxAction } from './interaction-sfx'
 import {
+  type BlockExtrudeAxis,
   type BlockModalFaceOperation,
   blockFaceOperationCommand,
   blockFaceOperationValueFromPointer,
@@ -25,7 +26,9 @@ import { beginBlockModalSession } from './modal-session'
 import {
   type BlockModalFeedbackMode,
   blockAccumulatePrecisionPointer,
+  blockPointerDistanceForAxis,
   blockPrecisionSnapStep,
+  blockTransformAxisFromKey,
   blockTransformNumericInputFromKey,
   blockTransformNumericValue,
 } from './modal-transform'
@@ -51,6 +54,7 @@ export type UseBlockFaceOperationOptions = {
   selection: BlockSelection
   setActiveFaceOperation: StateSetter<BlockModalFaceOperation | null>
   setError: StateSetter<string | null>
+  setFaceOperationAxis: StateSetter<BlockExtrudeAxis>
   setFaceOperationValue: StateSetter<string>
   setModalFeedbackMode: StateSetter<BlockModalFeedbackMode>
   setPreviewTopology: StateSetter<BlockTopology | null>
@@ -76,6 +80,7 @@ export function useBlockFaceOperation({
   selection,
   setActiveFaceOperation,
   setError,
+  setFaceOperationAxis,
   setFaceOperationValue,
   setModalFeedbackMode,
   setPreviewTopology,
@@ -108,6 +113,7 @@ export function useBlockFaceOperation({
       let lastSnapValue: number | null = null
       let effectivePointer = { x: startPointer.x, y: startPointer.y }
       let previousRawPointer = { ...effectivePointer }
+      let extrudeAxis: BlockExtrudeAxis = 'normal'
 
       const updatePreview = (
         clientX: number,
@@ -131,6 +137,9 @@ export function useBlockFaceOperation({
             clientY - startPointer.y,
             extent,
           )
+        if (typedValue === null && operation === 'extrude' && extrudeAxis !== 'normal') {
+          value = blockPointerDistanceForAxis(extrudeAxis, value)
+        }
         const snapping =
           operation === 'extrude' && typedValue === null && isGridSnapActive() && !altKey
         if (snapping) {
@@ -158,7 +167,7 @@ export function useBlockFaceOperation({
         }
         const result = applyBlockCommand(
           baseTopology,
-          blockFaceOperationCommand(operation, faceIds, value),
+          blockFaceOperationCommand(operation, faceIds, value, extrudeAxis),
         )
         if (!result.ok) {
           setError(result.error)
@@ -178,13 +187,14 @@ export function useBlockFaceOperation({
         sceneApi.markDirty(nodeId)
         setPreviewTopology(null)
         setActiveFaceOperation(null)
+        setFaceOperationAxis('normal')
         setFaceOperationValue('')
         setTransformNumericInput('')
         setModalFeedbackMode('free')
         if (commitOperation && latestTopology && latestSelection && Math.abs(latestValue) > 1e-6) {
           commit(
             baseTopology,
-            blockFaceOperationCommand(operation, faceIds, latestValue),
+            blockFaceOperationCommand(operation, faceIds, latestValue, extrudeAxis),
             operation === 'extrude' ? 'Extrude' : 'Inset',
           )
           playSfx('operation-commit')
@@ -226,8 +236,17 @@ export function useBlockFaceOperation({
         ) {
           return
         }
+        const nextAxis =
+          operation === 'extrude' ? blockTransformAxisFromKey(keyboardEvent.key) : null
         const nextInput = blockTransformNumericInputFromKey(typedInput, keyboardEvent.key)
-        if (nextInput !== null) {
+        if (nextAxis) {
+          keyboardEvent.preventDefault()
+          keyboardEvent.stopImmediatePropagation()
+          extrudeAxis = nextAxis
+          setFaceOperationAxis(nextAxis)
+          lastSnapValue = null
+          updatePreview(lastClientX, lastClientY, lastAltKey, lastShiftKey)
+        } else if (nextInput !== null) {
           keyboardEvent.preventDefault()
           keyboardEvent.stopImmediatePropagation()
           typedInput = nextInput
@@ -248,6 +267,7 @@ export function useBlockFaceOperation({
       playSfx('operation-start')
       closeToolbar()
       setActiveFaceOperation(operation)
+      setFaceOperationAxis('normal')
       setFaceOperationValue('0')
       setTransformNumericInput('')
       setModalFeedbackMode('free')
@@ -280,6 +300,7 @@ export function useBlockFaceOperation({
       selection,
       setActiveFaceOperation,
       setError,
+      setFaceOperationAxis,
       setFaceOperationValue,
       setModalFeedbackMode,
       setPreviewTopology,

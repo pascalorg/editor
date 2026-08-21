@@ -2,6 +2,7 @@ import type { BlockCommand } from './commands'
 import { type BlockModalFeedbackMode, blockModalFeedbackLabel } from './modal-transform'
 
 export type BlockModalFaceOperation = 'extrude' | 'inset'
+export type BlockExtrudeAxis = 'normal' | 'x' | 'y' | 'z'
 
 export function blockFaceOperationValueFromPointer(
   operation: BlockModalFaceOperation,
@@ -18,9 +19,15 @@ export function blockFaceOperationCommand(
   operation: BlockModalFaceOperation,
   faceIds: string[],
   value: number,
+  extrudeAxis: BlockExtrudeAxis = 'normal',
 ): BlockCommand {
   return operation === 'extrude'
-    ? { type: 'extrude-faces', faceIds, distance: value }
+    ? {
+        type: 'extrude-faces',
+        faceIds,
+        distance: value,
+        ...(extrudeAxis === 'normal' ? {} : { axis: extrudeAxis }),
+      }
     : { type: 'inset-faces', faceIds, amount: value, depth: 0 }
 }
 
@@ -28,8 +35,13 @@ export function blockModalFaceOperationStatus(
   operation: BlockModalFaceOperation,
   value: string,
   feedbackMode: BlockModalFeedbackMode = 'free',
+  extrudeAxis: BlockExtrudeAxis = 'normal',
 ): string {
   const label = operation === 'extrude' ? 'Extrude' : 'Inset'
   const unit = operation === 'extrude' ? 'm' : 'ratio'
-  return `${label} · ${value} ${unit} · ${blockModalFeedbackLabel(feedbackMode)} · type value · click applies · Esc cancels`
+  const axis =
+    operation === 'extrude' && extrudeAxis !== 'normal'
+      ? ` · ${extrudeAxis.toUpperCase()} axis`
+      : ''
+  return `${label} · ${value} ${unit} · ${blockModalFeedbackLabel(feedbackMode)}${axis} · type value · click applies · Esc cancels`
 }

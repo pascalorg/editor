@@ -97,7 +97,11 @@ import {
 } from './last-operation'
 import { resolveLoopCutPointerAction, resolveLoopCutSlideFactor } from './loop-cut-interaction'
 import { BLOCK_BODY_SLOT_ID, unpaintedBlockMaterialSlotIds } from './material-slots'
-import { type BlockModalFaceOperation, blockModalFaceOperationStatus } from './modal-face-operation'
+import {
+  type BlockExtrudeAxis,
+  type BlockModalFaceOperation,
+  blockModalFaceOperationStatus,
+} from './modal-face-operation'
 import { beginBlockModalSession } from './modal-session'
 import {
   type BlockActiveTransform,
@@ -114,6 +118,7 @@ import {
   blockModalTransformStatus,
   blockNumericDeltaForConstraint,
   blockPlaneVisualState,
+  blockPointerDistanceForAxis,
   blockPrecisionSnapStep,
   blockRotationPointerAngle,
   blockScaleFactorsForConstraint,
@@ -1507,6 +1512,7 @@ function BlockEditor({
   const [activeFaceOperation, setActiveFaceOperation] = useState<BlockModalFaceOperation | null>(
     null,
   )
+  const [faceOperationAxis, setFaceOperationAxis] = useState<BlockExtrudeAxis>('normal')
   const [faceOperationValue, setFaceOperationValue] = useState('')
   const [loopCutSegments, setLoopCutSegments] = useState<[Point, Point][] | null>(null)
   const [loopCutEdgeId, setLoopCutEdgeId] = useState<string | null>(null)
@@ -1983,7 +1989,10 @@ function BlockEditor({
             const axisIndex = activeConstraint === 'x' ? 0 : activeConstraint === 'y' ? 1 : 2
             delta = blockAxisDelta(
               activeConstraint,
-              localPoint.getComponent(axisIndex) - origin[axisIndex],
+              blockPointerDistanceForAxis(
+                activeConstraint,
+                localPoint.getComponent(axisIndex) - origin[axisIndex],
+              ),
             )
           } else if (
             activeConstraint &&
@@ -2339,8 +2348,10 @@ function BlockEditor({
             .clone()
             .addScaledVector(worldAxis, parameter - initialParameter)
           const localPoint = target.worldToLocal(worldPoint)
-          delta[axisIndex] =
-            localPoint.getComponent(axisIndex) - originLocal.getComponent(axisIndex)
+          delta[axisIndex] = blockPointerDistanceForAxis(
+            normalAxis,
+            localPoint.getComponent(axisIndex) - originLocal.getComponent(axisIndex),
+          )
         }
         const snapping = isGridSnapActive() && !pointerEvent.altKey
         if (snapping) {
@@ -3339,6 +3350,7 @@ function BlockEditor({
     selection,
     setActiveFaceOperation,
     setError,
+    setFaceOperationAxis,
     setFaceOperationValue,
     setModalFeedbackMode,
     setPreviewTopology,
@@ -3566,11 +3578,18 @@ function BlockEditor({
   const operationAvailability = blockOperationAvailability(mode, selectedIds.length)
   const loopCutActive = transformTool === 'loop-cut'
   const bevelActive = transformTool === 'bevel'
+  const gizmoTransform: BlockActiveTransform | null =
+    activeTransform ??
+    (activeFaceOperation && faceOperationAxis !== 'normal'
+      ? { operation: 'translate', constraint: faceOperationAxis }
+      : null)
+  const gizmoDisabled = Boolean(activeTransform || activeFaceOperation)
   const componentStatus = activeFaceOperation
     ? blockModalFaceOperationStatus(
         activeFaceOperation,
         faceOperationValue || '0',
         modalFeedbackMode,
+        faceOperationAxis,
       )
     : activeTransform
       ? blockModalTransformStatus(activeTransform, transformNumericInput, modalFeedbackMode)
@@ -3656,35 +3675,35 @@ function BlockEditor({
               {(['x', 'y', 'z'] as const).map((axis) => (
                 <AxisTransformHandle
                   axis={axis}
-                  disabled={Boolean(activeTransform)}
+                  disabled={gizmoDisabled}
                   key={axis}
                   length={gizmoLength}
-                  moveState={blockAxisVisualState(activeTransform, 'translate', axis)}
+                  moveState={blockAxisVisualState(gizmoTransform, 'translate', axis)}
                   onMovePointerDown={beginTranslationDrag}
                   onScalePointerDown={beginScaleDrag}
                   radius={gizmoRadius}
-                  scaleState={blockAxisVisualState(activeTransform, 'scale', axis)}
+                  scaleState={blockAxisVisualState(gizmoTransform, 'scale', axis)}
                 />
               ))}
               {(Object.keys(PLANE_NORMAL) as PlaneAxes[]).map((plane) => (
                 <PlaneMoveHandle
-                  disabled={Boolean(activeTransform)}
+                  disabled={gizmoDisabled}
                   key={plane}
                   offset={planeHandleOffset}
                   onPointerDown={beginTranslationDrag}
                   plane={plane}
                   size={planeHandleSize}
-                  state={blockPlaneVisualState(activeTransform, plane)}
+                  state={blockPlaneVisualState(gizmoTransform, plane)}
                 />
               ))}
               {(['x', 'y', 'z'] as const).map((axis) => (
                 <RotationHandle
                   axis={axis}
-                  disabled={Boolean(activeTransform)}
+                  disabled={gizmoDisabled}
                   key={`rotate-${axis}`}
                   onPointerDown={beginRotationDrag}
                   radius={rotationGizmoRadius}
-                  state={blockAxisVisualState(activeTransform, 'rotate', axis)}
+                  state={blockAxisVisualState(gizmoTransform, 'rotate', axis)}
                   tube={gizmoRadius}
                 />
               ))}

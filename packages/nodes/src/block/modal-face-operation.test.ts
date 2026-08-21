@@ -19,6 +19,12 @@ describe('block modal face operation', () => {
       faceIds: ['f-top'],
       distance: -0.4,
     })
+    expect(blockFaceOperationCommand('extrude', ['f-top'], 0.4, 'z')).toEqual({
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
+      distance: 0.4,
+      axis: 'z',
+    })
     expect(blockFaceOperationCommand('inset', ['f-top'], 0.2)).toEqual({
       type: 'inset-faces',
       faceIds: ['f-top'],
@@ -30,6 +36,9 @@ describe('block modal face operation', () => {
   test('reports operation value and modal controls', () => {
     expect(blockModalFaceOperationStatus('extrude', '0.35', 'grid')).toBe(
       'Extrude · 0.35 m · Grid snap · type value · click applies · Esc cancels',
+    )
+    expect(blockModalFaceOperationStatus('extrude', '0.35', 'grid', 'z')).toBe(
+      'Extrude · 0.35 m · Grid snap · Z axis · type value · click applies · Esc cancels',
     )
     expect(blockModalFaceOperationStatus('inset', '0.2')).toBe(
       'Inset · 0.2 ratio · Free · type value · click applies · Esc cancels',
