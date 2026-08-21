@@ -26,6 +26,16 @@ function downloadArtifact(artifact: ModelExportArtifact) {
   URL.revokeObjectURL(url)
 }
 
+function firstBlockingMessage(report: PrintExportReport | PrintLevelBundleReport) {
+  const bundleDiagnostic = report.diagnostics.find((item) => item.severity === 'error')
+  if (bundleDiagnostic || !isPrintLevelBundleReport(report)) return bundleDiagnostic?.message
+
+  for (const part of report.parts) {
+    const partDiagnostic = part.report.diagnostics.find((item) => item.severity === 'error')
+    if (partDiagnostic) return partDiagnostic.message
+  }
+}
+
 export async function preparePrintExport(
   modelExport: ModelExport,
   onlyVisible: boolean,
@@ -47,8 +57,10 @@ export async function preparePrintExport(
   }
 
   if (artifact.metadata.status === 'blocked') {
-    const diagnostic = artifact.metadata.diagnostics.find((item) => item.severity === 'error')
-    throw new Error(diagnostic?.message ?? 'This project cannot be exported as printable parts.')
+    throw new Error(
+      firstBlockingMessage(artifact.metadata) ??
+        'This project cannot be exported as printable parts.',
+    )
   }
 
   return { artifact, report: artifact.metadata }
