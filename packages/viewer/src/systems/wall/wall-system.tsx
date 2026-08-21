@@ -42,11 +42,11 @@ import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../li
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
-import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 import {
   buildOpeningCutoutGeometry,
   getOpeningCutoutBottomPadding,
 } from './opening-cutout-geometry'
+import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
