@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { CaptureStreamPacket } from '@pascal-app/capture-protocol'
 import {
   appendCapturePacket,
+  captureSubscriptionStreamIds,
   nextCaptureStreamEpoch,
   retainLiveCapturePackets,
 } from './source-state'
@@ -106,5 +107,29 @@ describe('retainLiveCapturePackets', () => {
         streams: [{ id: 'points', kind: 'point-cloud', availability: 'ready' }],
       }),
     ).toEqual({})
+  })
+})
+
+describe('captureSubscriptionStreamIds', () => {
+  const descriptor = {
+    schemaVersion: 2,
+    sessionId: 'capture_123',
+    state: 'live',
+    clocks: [],
+    coordinateFrames: [],
+    streams: [
+      { id: 'model', kind: 'room-model', role: 'model', availability: 'ready' },
+      { id: 'points', kind: 'point-cloud', role: 'pointCloud', availability: 'live' },
+    ],
+  } as const
+
+  test('leaves subscriptions unrestricted without a filter', () => {
+    expect(captureSubscriptionStreamIds(descriptor, undefined)).toBeUndefined()
+  })
+
+  test('subscribes only to streams accepted by the host', () => {
+    expect(
+      captureSubscriptionStreamIds(descriptor, (stream) => stream.role !== 'pointCloud'),
+    ).toEqual(['model'])
   })
 })

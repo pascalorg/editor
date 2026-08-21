@@ -29,3 +29,5 @@ failures in the host, then increment `retryKey` to reload every affected session
 Hosts can pass `defaultLayerVisibility` to keep expensive optional layers disabled until a user
 enables them. Persisted values in the scan node's `layers` map always override those host defaults;
 without host defaults, every available layer remains visible for backwards compatibility.
+Hidden sessions and layers are unmounted rather than only made visually transparent, so they stop
+raycasting, artifact work, animation, and live packet subscriptions while disabled.

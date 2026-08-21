@@ -3,6 +3,7 @@ import type {
   CaptureSessionLocator,
   CaptureSource,
   CaptureSourceResolver,
+  CaptureStreamDescriptor,
   CaptureStreamPacket,
 } from '@pascal-app/capture-protocol'
 import { useCallback, useEffect, useState } from 'react'
@@ -22,6 +23,7 @@ type CaptureSourceSnapshot = Omit<CaptureSourceState, 'retry'>
 
 export type UseCaptureSourceOptions = {
   maxPacketsPerStream?: number
+  streamFilter?: (stream: CaptureStreamDescriptor) => boolean
   subscribe?: boolean
 }
 
@@ -33,7 +35,7 @@ export function useCaptureSource(
   resolveSource: CaptureSourceResolver,
   options: UseCaptureSourceOptions = {},
 ): CaptureSourceState {
-  const { maxPacketsPerStream = 32, subscribe = true } = options
+  const { maxPacketsPerStream = 32, streamFilter, subscribe = true } = options
   const [retryVersion, setRetryVersion] = useState(0)
   const [state, setState] = useState<CaptureSourceSnapshot>({
     descriptor: null,
@@ -75,11 +77,12 @@ export function useCaptureSource(
       abort.signal,
       retryVersion,
       maxPacketsPerStream,
+      streamFilter,
       subscribe,
       setState,
     )
     return () => abort.abort()
-  }, [locator, maxPacketsPerStream, resolveSource, retryVersion, subscribe])
+  }, [locator, maxPacketsPerStream, resolveSource, retryVersion, streamFilter, subscribe])
 
   const retry = useCallback(() => setRetryVersion((current) => current + 1), [])
   return { ...state, retry }
@@ -91,6 +94,7 @@ async function consumeCaptureSource(
   signal: AbortSignal,
   descriptorVersion: number,
   maxPacketsPerStream: number,
+  streamFilter: ((stream: CaptureStreamDescriptor) => boolean) | undefined,
   subscribe: boolean,
   setState: (
     update: CaptureSourceSnapshot | ((current: CaptureSourceSnapshot) => CaptureSourceSnapshot),
@@ -111,7 +115,8 @@ async function consumeCaptureSource(
     })
 
     if (!(subscribe && source.subscribe)) return
-    const iterator = source.subscribe({ signal })[Symbol.asyncIterator]()
+    const streamIds = captureSubscriptionStreamIds(descriptor, streamFilter)
+    const iterator = source.subscribe({ signal, streamIds })[Symbol.asyncIterator]()
     const closeIterator = () => void iterator.return?.()
     signal.addEventListener('abort', closeIterator, { once: true })
     try {
@@ -173,6 +178,15 @@ async function consumeCaptureSource(
       streamEpochs: EMPTY_STREAM_EPOCHS,
     })
   }
+}
+
+export function captureSubscriptionStreamIds(
+  descriptor: CaptureSessionDescriptor,
+  streamFilter: ((stream: CaptureStreamDescriptor) => boolean) | undefined,
+): readonly string[] | undefined {
+  return streamFilter
+    ? descriptor.streams.filter(streamFilter).map((stream) => stream.id)
+    : undefined
 }
 
 export function retainLiveCapturePackets(

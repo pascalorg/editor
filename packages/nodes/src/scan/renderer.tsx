@@ -7,6 +7,7 @@ import type { Group, Material, Mesh } from 'three'
 
 export const ScanRenderer = ({ node }: { node: ScanNode }) => {
   const showScans = useViewer((s) => s.showScans)
+  const visible = showScans && node.visible
   const ref = useRef<Group>(null!)
   useRegistry(node.id, 'scan', ref)
 
@@ -16,9 +17,9 @@ export const ScanRenderer = ({ node }: { node: ScanNode }) => {
       ref={ref}
       rotation={node.rotation}
       scale={[node.scale, node.scale, node.scale]}
-      visible={showScans && node.visible}
+      visible={visible}
     >
-      {(node.layers?.model ?? true) && node.url && (
+      {visible && (node.layers?.model ?? true) && node.url && (
         <ScanAsset opacity={node.opacity} url={node.url} />
       )}
     </group>

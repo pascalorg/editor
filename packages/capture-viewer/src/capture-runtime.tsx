@@ -14,12 +14,13 @@ import {
   DeviceMotionTrajectorySchema,
 } from '@pascal-app/capture-protocol'
 import { type ScanNode, sceneRegistry, useScene } from '@pascal-app/core'
-import { ErrorBoundary, useNodeEvents } from '@pascal-app/viewer'
+import { ErrorBoundary, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { createPortal, useFrame } from '@react-three/fiber'
 import {
   type ComponentType,
   type ReactNode,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -27,7 +28,7 @@ import {
 } from 'react'
 import type { Object3D } from 'three'
 import { resolveCaptureFrameMatrix } from './frame'
-import { isCaptureLayerVisible } from './layer-visibility'
+import { isCaptureSessionVisible, isCaptureStreamVisible } from './layer-visibility'
 import { CaptureDeviceMotionLayer } from './layers/device-motion-layer'
 import { CapturePointCloudLayer } from './layers/point-cloud-layer'
 import { CaptureRoomModel } from './layers/room-model-layer'
@@ -90,12 +91,16 @@ export function CaptureRuntime({
   retryKey = 0,
 }: CaptureRuntimeProps) {
   const nodes = useScene((state) => state.nodes)
+  const showScans = useViewer((state) => state.showScans)
   const scans = useMemo(
     () =>
       Object.values(nodes).filter(
-        (node): node is CaptureSessionScan => node.type === 'scan' && node.captureSession !== null,
+        (node): node is CaptureSessionScan =>
+          node.type === 'scan' &&
+          node.captureSession !== null &&
+          isCaptureSessionVisible(showScans, node.visible),
       ),
-    [nodes],
+    [nodes, showScans],
   )
 
   return (
@@ -133,8 +138,16 @@ function CaptureSessionPortal({
   const [target, setTarget] = useState<Object3D | null>(null)
   const onErrorRef = useRef(onError)
   const handlers = useNodeEvents(scan, 'scan')
+  const customRendererKeys = useMemo(() => new Set(Object.keys(renderers)), [renderers])
+  const streamFilter = useCallback(
+    (stream: CaptureStreamDescriptor) =>
+      isCaptureStreamVisible(stream, scan.layers, defaultLayerVisibility) &&
+      isCaptureStreamRenderable(stream, customRendererKeys),
+    [customRendererKeys, defaultLayerVisibility, scan.layers],
+  )
   const sourceState = useCaptureSource(scan.captureSession, resolveSource, {
     maxPacketsPerStream,
+    streamFilter,
   })
 
   useEffect(() => {
@@ -157,15 +170,14 @@ function CaptureSessionPortal({
 
   const descriptor = sourceState.descriptor
   const source = sourceState.source
-  const customRendererKeys = useMemo(() => new Set(Object.keys(renderers)), [renderers])
   if (!(target && descriptor && source)) return null
+
+  const visibleStreams = descriptor.streams.filter(streamFilter)
 
   return createPortal(
     <group {...handlers}>
-      {descriptor.streams.map((stream) => {
+      {visibleStreams.map((stream) => {
         const layerKey = captureLayerKey(stream)
-        if (!isCaptureLayerVisible(scan.layers, layerKey, defaultLayerVisibility)) return null
-        if (!isCaptureStreamRenderable(stream, customRendererKeys)) return null
         const renderKey = captureStreamRenderKey(stream)
         const packets = sourceState.packets[stream.id] ?? []
         const streamEpoch =

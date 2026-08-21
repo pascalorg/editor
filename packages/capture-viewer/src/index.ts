@@ -8,7 +8,11 @@ export {
   type CaptureStreamRendererProps,
 } from './capture-runtime'
 export { resolveCaptureFrameMatrix } from './frame'
-export { isCaptureLayerVisible } from './layer-visibility'
+export {
+  isCaptureLayerVisible,
+  isCaptureSessionVisible,
+  isCaptureStreamVisible,
+} from './layer-visibility'
 export {
   CaptureDeviceMotionLayer,
   DEVICE_MOTION_PLAYBACK_SPEED,
@@ -27,6 +31,7 @@ export {
 export {
   appendCapturePacket,
   type CaptureSourceState,
+  captureSubscriptionStreamIds,
   type UseCaptureSourceOptions,
   useCaptureSource,
 } from './source-state'
