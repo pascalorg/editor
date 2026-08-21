@@ -4,8 +4,8 @@ import {
   TurbineVentNode as TurbineVentNodeSchema,
   type TurbineVentNode as TurbineVentNodeType,
 } from '@pascal-app/core'
-import { surfacePaintCapability } from '../shared/surface-paint'
 import { buildTurbineVentFloorplan } from './floorplan'
+import { turbineVentPaint } from './paint'
 import { turbineVentParametrics } from './parametrics'
 import { TurbineVentNode } from './schema'
 
@@ -81,7 +81,7 @@ const turbineVentHandles: HandleDescriptor<TurbineVentNodeType>[] = [
  */
 export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
   kind: 'turbine-vent',
-  schemaVersion: 1,
+  schemaVersion: 3,
   schema: TurbineVentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -93,11 +93,14 @@ export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
   },
 
   capabilities: {
+    slots: () => [
+      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
+      { slotId: 'head', label: 'Head', default: 'library:preset-softwhite' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
-    // Single painted surface — registry-driven paint dispatch (see chimney).
-    paint: surfacePaintCapability,
+    paint: turbineVentPaint,
     // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
     // slope — no `buildCut`, just the dirty cascade so the parent roof's
     // merged shell rebuilds when the vent moves / resizes.

@@ -13,6 +13,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -42,6 +43,7 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneMaterials = useScene((s) => s.materials)
 
   const overrides = useLiveNodeOverrides(
     (s) => s.get(storeNode.id as AnyNodeId) as Partial<CupolaNode> | undefined,
@@ -68,13 +70,28 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
   }, [segment, node.position[0], node.position[2]])
 
   const material = useMemo(() => {
-    if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const resolve = (role: 'base' | 'body' | 'roof') => {
+      if (!textures) return roleDefault
+      const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
+      if (slotMaterial) return slotMaterial
+      if (node.material) return createMaterial(node.material, shading)
+      if (node.materialPreset) {
+        return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
+      }
+      return roleDefault
     }
-    return node.material
-      ? createMaterial(node.material, shading)
-      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+    return [resolve('base'), resolve('body'), resolve('roof')]
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    node.slots,
+    node.material,
+    node.materialPreset,
+    sceneMaterials,
+  ])
 
   const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), [])
   const composedQuat = useMemo(() => {

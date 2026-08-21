@@ -14,6 +14,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -55,6 +56,7 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneMaterials = useScene((s) => s.materials)
 
   const overrides = useLiveNodeOverrides(
     (s) => s.get(storeNode.id as AnyNodeId) as Partial<DownspoutNode> | undefined,
@@ -135,13 +137,27 @@ const DownspoutRenderer = ({ node: storeNode }: { node: DownspoutNode }) => {
   useEffect(() => () => geometry.dispose(), [geometry])
 
   const material = useMemo(() => {
-    if (!textures || (!node.material && !node.materialPreset)) {
+    if (!textures) {
+      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    }
+    const slotMaterial = resolveMaterialRef(node.slots?.surface, sceneMaterials, shading)
+    if (slotMaterial) return slotMaterial
+    if (!node.material && !node.materialPreset) {
       return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
     }
     return node.material
       ? createMaterial(node.material, shading)
       : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    node.slots?.surface,
+    node.material,
+    node.materialPreset,
+    sceneMaterials,
+  ])
 
   // Map downspout-local geometry into the host segment's local frame (where the
   // trim cut prisms live). Recompose the same outlet pose the inner mesh group

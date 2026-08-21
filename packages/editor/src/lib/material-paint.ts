@@ -47,6 +47,8 @@ export type PaintableMaterialTarget =
       | 'turbine-vent'
       | 'cupola'
       | 'eyebrow-vent'
+      | 'gutter'
+      | 'downspout'
     >
   | 'item'
 

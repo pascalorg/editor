@@ -20,7 +20,7 @@ import {
   SUBTRACTION,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { buildDormerShellGeometry } from './geometry'
 
 // Legacy default for the hung-wall (skirt) height. Used as a fallback
 // when `dormer.wallSkirtHeight` is undefined (e.g. old saved scenes).
@@ -41,57 +41,11 @@ const _scale = new THREE.Vector3(1, 1, 1)
  * the live preview during slider drags so we don't re-run CSG on every
  * pointer move. Also used by the placement / move-tool ghost.
  *
- * Builds a rectangular body + simple roof in dormer-mesh-local. For
- * `flat` dormers the roof triangle is skipped. Other roof types use
- * the gable approximation — it's a rough silhouette by design.
- *
  * The wall sits at material slot 0 and the roof at slot 3 so it picks
  * up the same material array the renderer passes for the CSG output.
  */
 export function buildDormerFallbackGeometry(dormer: DormerNode): THREE.BufferGeometry {
-  const w = Math.max(0.05, dormer.width)
-  const d = Math.max(0.05, dormer.depth)
-  const wallH = Math.max(0.05, dormer.height)
-  const roofH = Math.max(0, dormer.roofHeight)
-  const skirt = dormerSkirtHeight(dormer)
-  const isFlat = dormer.roofType === 'flat' || roofH === 0
-
-  // Body box: foot at y = -skirt, top at y = wallH.
-  // BoxGeometry is indexed; ExtrudeGeometry below is not. mergeGeometries
-  // refuses mixed input ("index attribute exists among all geometries,
-  // or in none of them") — drop the body's index so both inputs match.
-  const indexedBody = new THREE.BoxGeometry(w, wallH + skirt, d)
-  indexedBody.translate(0, (wallH - skirt) / 2, 0)
-  const body = indexedBody.toNonIndexed()
-  indexedBody.dispose()
-  const bVtx = body.getAttribute('position').count
-  body.clearGroups()
-  body.addGroup(0, bVtx, 0)
-
-  if (isFlat) {
-    if (!body.getAttribute('normal')) body.computeVertexNormals()
-    return body
-  }
-
-  // Roof: extruded triangle from eave (y = wallH) to peak (y = wallH + roofH).
-  // Apex points along +Y, base spans the width. Extrude along Z (depth).
-  const roofShape = new THREE.Shape()
-  roofShape.moveTo(-w / 2, 0)
-  roofShape.lineTo(w / 2, 0)
-  roofShape.lineTo(0, roofH)
-  roofShape.lineTo(-w / 2, 0)
-  const roof = new THREE.ExtrudeGeometry(roofShape, { depth: d, bevelEnabled: false })
-  roof.translate(0, wallH, -d / 2)
-
-  const rVtx = roof.getAttribute('position').count
-  roof.clearGroups()
-  roof.addGroup(0, rVtx, 3)
-
-  const merged = mergeGeometries([body, roof], true) ?? body
-  body.dispose()
-  roof.dispose()
-  if (!merged.getAttribute('normal')) merged.computeVertexNormals()
-  return merged
+  return buildDormerShellGeometry(dormer)
 }
 
 export function createDormerArchShape(w: number, h: number, archHeight: number): THREE.Shape {

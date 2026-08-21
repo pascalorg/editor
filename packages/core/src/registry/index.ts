@@ -162,4 +162,3 @@ export type {
   ToolHintChip,
   Vec2,
 } from './types'
-export { useRegistryVersion } from './use-registry-version'

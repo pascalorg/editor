@@ -1,5 +1,16 @@
 import type { EyebrowVentNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import {
+  copyUvToSecondaryChannel,
+  cumulativeProfileDistances,
+  type MetricUv,
+  planarMetricUvs,
+} from '../shared/primitive-uv'
+
+export const EYEBROW_VENT_MATERIAL_INDEX = {
+  hood: 0,
+  front: 1,
+} as const
 
 /**
  * Pure builder for the eyebrow-vent mesh. Three styles, all seated directly on
@@ -35,12 +46,13 @@ export function buildEyebrowVentGeometry(node: EyebrowVentNode): THREE.BufferGeo
   const uv: number[] = []
 
   // The hood seats directly on the roof at y=0 — no flashing plate.
+  let frontStart: number
   if (node.style === 'half-round') {
-    addHalfRound(p, n, uv, w, d, h, 0, slats)
+    frontStart = addHalfRound(p, n, uv, w, d, h, 0, slats)
   } else if (node.style === 'slant-box') {
-    addSlantBox(p, n, uv, w, d, h, 0, slats, backRatio)
+    frontStart = addSlantBox(p, n, uv, w, d, h, 0, slats, backRatio)
   } else {
-    addScoop(p, n, uv, w, d, h, 0, slats)
+    frontStart = addScoop(p, n, uv, w, d, h, 0, slats)
   }
 
   // Double-side the whole mesh at the geometry level: append a back-facing
@@ -50,12 +62,22 @@ export function buildEyebrowVentGeometry(node: EyebrowVentNode): THREE.BufferGeo
   // material, which poisons the MRT scene pass (see the ridge-vent renderer
   // note). Only one of each coplanar pair front-faces any camera, so there's
   // no z-fighting.
+  const frontEnd = p.length / 3
   doubleSide(p, n, uv)
 
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3))
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  geo.addGroup(0, frontStart, EYEBROW_VENT_MATERIAL_INDEX.hood)
+  if (frontEnd > frontStart) {
+    geo.addGroup(frontStart, frontEnd - frontStart, EYEBROW_VENT_MATERIAL_INDEX.front)
+  }
+  geo.addGroup(frontEnd, frontStart, EYEBROW_VENT_MATERIAL_INDEX.hood)
+  if (frontEnd > frontStart) {
+    geo.addGroup(frontEnd + frontStart, frontEnd - frontStart, EYEBROW_VENT_MATERIAL_INDEX.front)
+  }
+  copyUvToSecondaryChannel(geo)
   geo.computeBoundingSphere()
   return geo
 }
@@ -71,7 +93,7 @@ function addScoop(
   h: number,
   yB: number,
   slats: number,
-): void {
+): number {
   const a = w / 2
   const b = h
   const zF = d / 2
@@ -87,16 +109,35 @@ function addScoop(
     const z = zF - v * d
     rings.push(halfRing(a, b, yB, z, scale, NF))
   }
+  const ringUvs = rings.map((ring) => cumulativeProfileDistances(ring))
+  const ringV = [0]
+  for (let i = 1; i <= NZ; i++) {
+    ringV.push(ringV[i - 1]! + averageProfileDistance(rings[i - 1]!, rings[i]!))
+  }
   for (let i = 0; i < NZ; i++) {
-    addBand(p, n, uv, rings[i + 1]!, rings[i]!, NF, (qa, qb, qc, qd) => {
-      const mx = (qa[0]! + qb[0]! + qc[0]! + qd[0]!) / 4
-      const my = (qa[1]! + qb[1]! + qc[1]! + qd[1]!) / 4
-      return [mx, my - yB, 0] // radial-out from the spine
-    })
+    addBand(
+      p,
+      n,
+      uv,
+      rings[i + 1]!,
+      rings[i]!,
+      NF,
+      (qa, qb, qc, qd) => {
+        const mx = (qa[0]! + qb[0]! + qc[0]! + qd[0]!) / 4
+        const my = (qa[1]! + qb[1]! + qc[1]! + qd[1]!) / 4
+        return [mx, my - yB, 0] // radial-out from the spine
+      },
+      ringUvs[i + 1],
+      ringUvs[i],
+      ringV[i + 1],
+      ringV[i],
+    )
   }
 
   // Horizontal louvers filling the front half-ellipse opening.
+  const frontStart = p.length / 3
   addArchLouvers(p, n, uv, a, b, yB, zF - d * 0.04, slats)
+  return frontStart
 }
 
 // ─── Style: half-round (D-shaped louver vent) ─────────────────────────────
@@ -110,7 +151,7 @@ function addHalfRound(
   h: number,
   yB: number,
   slats: number,
-): void {
+): number {
   const a = w / 2
   // Cap the crown at a true half-round — never bulge past a semicircle, so the
   // top reads as a clean, smaller-radius arch. `height` flattens it further.
@@ -121,13 +162,26 @@ function addHalfRound(
 
   const ringF = halfRing(a, b, yB, zF, 1, NF)
   const ringB = halfRing(a, b, yB, zB, 1, NF)
+  const ringU = cumulativeProfileDistances(ringF)
 
   // Curved top shell (constant cross section).
-  addBand(p, n, uv, ringB, ringF, NF, (qa, qb, qc, qd) => {
-    const mx = (qa[0]! + qb[0]! + qc[0]! + qd[0]!) / 4
-    const my = (qa[1]! + qb[1]! + qc[1]! + qd[1]!) / 4
-    return [mx, my - yB, 0]
-  })
+  addBand(
+    p,
+    n,
+    uv,
+    ringB,
+    ringF,
+    NF,
+    (qa, qb, qc, qd) => {
+      const mx = (qa[0]! + qb[0]! + qc[0]! + qd[0]!) / 4
+      const my = (qa[1]! + qb[1]! + qc[1]! + qd[1]!) / 4
+      return [mx, my - yB, 0]
+    },
+    ringU,
+    ringU,
+    d,
+    0,
+  )
 
   // Back cap — fan the rear semicircle, facing -Z.
   const backCenter = [0, yB, zB]
@@ -136,7 +190,9 @@ function addHalfRound(
   }
 
   // Louvered front face (a slat count bumped up — the D-vent reads denser).
+  const frontStart = p.length / 3
   addArchLouvers(p, n, uv, a, b, yB, zF - d * 0.04, slats > 0 ? Math.max(slats, 4) : 0)
+  return frontStart
 }
 
 // ─── Style: slant-box (low hooded box) ────────────────────────────────────
@@ -151,7 +207,7 @@ function addSlantBox(
   yB: number,
   slats: number,
   backRatio: number,
-): void {
+): number {
   const hw = w / 2
   const zF = d / 2
   const zB = -d / 2
@@ -189,6 +245,7 @@ function addSlantBox(
   pushQuad(p, n, uv, [oR, oB, zF], [hw, oB, zF], [hw, oT, zF], [oR, oT, zF], [0, 0, 1]) // right
 
   // Recessed screen panel at the back of the pocket (blocks see-through).
+  const frontStart = p.length / 3
   const screenZ = zF - d * 0.2
   pushQuad(
     p,
@@ -204,6 +261,7 @@ function addSlantBox(
   // Horizontal louvers inside the pocket — bounded by the opening in height
   // and recessed in depth between the frame face and the screen.
   addRectLouvers(p, n, uv, oR, oB, oT, zF - d * 0.07, slats)
+  return frontStart
 }
 
 // ─── Louver helpers ───────────────────────────────────────────────────────
@@ -354,14 +412,35 @@ function addBand(
   rB: number[][],
   lng: number,
   hintFn: (a: number[], b: number[], c: number[], d: number[]) => number[],
+  uA = cumulativeProfileDistances(rA),
+  uB = cumulativeProfileDistances(rB),
+  vA = 0,
+  vB = averageProfileDistance(rA, rB),
 ): void {
   for (let j = 0; j < lng; j++) {
     const a = rA[j]!
     const b = rA[j + 1]!
     const c = rB[j + 1]!
     const d = rB[j]!
-    pushQuad(p, n, uv, a, b, c, d, hintFn(a, b, c, d))
+    pushQuad(p, n, uv, a, b, c, d, hintFn(a, b, c, d), [
+      [uA[j]!, vA],
+      [uA[j + 1]!, vA],
+      [uB[j + 1]!, vB],
+      [uB[j]!, vB],
+    ])
   }
+}
+
+function averageProfileDistance(a: number[][], b: number[][]): number {
+  let total = 0
+  for (let index = 0; index < a.length; index += 1) {
+    total += Math.hypot(
+      b[index]![0]! - a[index]![0]!,
+      b[index]![1]! - a[index]![1]!,
+      b[index]![2]! - a[index]![2]!,
+    )
+  }
+  return total / a.length
 }
 
 // Append a reversed-winding, negated-normal copy of every triangle already in
@@ -410,6 +489,7 @@ function pushQuad(
   c: number[],
   d: number[],
   hint: number[],
+  authoredUvs?: readonly MetricUv[],
 ) {
   let nx = (c[1]! - a[1]!) * (b[2]! - a[2]!) - (c[2]! - a[2]!) * (b[1]! - a[1]!)
   let ny = (c[2]! - a[2]!) * (b[0]! - a[0]!) - (c[0]! - a[0]!) * (b[2]! - a[2]!)
@@ -425,19 +505,19 @@ function pushQuad(
   ny /= len
   nz /= len
 
-  const u = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!)
-  const v = Math.hypot(d[0]! - a[0]!, d[1]! - a[1]!, d[2]! - a[2]!)
+  const faceUvs = authoredUvs ?? planarMetricUvs([a, b, c, d], [nx, ny, nz])
+  const [uvA, uvB, uvC, uvD] = faceUvs as readonly [MetricUv, MetricUv, MetricUv, MetricUv]
 
   if (flip) {
     positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
-    uvs.push(0, 0, u, 0, u, v)
+    uvs.push(...uvA, ...uvB, ...uvC)
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, d[0]!, d[1]!, d[2]!)
-    uvs.push(0, 0, u, v, 0, v)
+    uvs.push(...uvA, ...uvC, ...uvD)
   } else {
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
-    uvs.push(0, 0, u, v, u, 0)
+    uvs.push(...uvA, ...uvC, ...uvB)
     positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
-    uvs.push(0, 0, 0, v, u, v)
+    uvs.push(...uvA, ...uvD, ...uvC)
   }
   for (let i = 0; i < 6; i++) normals.push(nx, ny, nz)
 }
@@ -465,11 +545,16 @@ function pushTri(
   ny /= len
   nz /= len
 
+  const faceUvs = planarMetricUvs([a, b, c], [nx, ny, nz])
+  const uvA = faceUvs[0]!
+  const uvB = faceUvs[1]!
+  const uvC = faceUvs[2]!
   if (flip) {
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
+    uvs.push(...uvA, ...uvC, ...uvB)
   } else {
     positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
+    uvs.push(...uvA, ...uvB, ...uvC)
   }
-  uvs.push(0, 0, 1, 0, 0, 1)
   for (let i = 0; i < 3; i++) normals.push(nx, ny, nz)
 }

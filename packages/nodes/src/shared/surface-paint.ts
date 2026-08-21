@@ -1,38 +1,14 @@
-import type { AnyNode, MaterialSchema, PaintCapability } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef } from '@pascal-app/viewer'
-import type { Material, Mesh, Object3D } from 'three'
+import type { AnyNode, MaterialSchema } from '@pascal-app/core'
+import type { Mesh, Object3D } from 'three'
+import { buildSlotPreviewMaterial, createSlotPaintCapability } from './slot-paint'
 
-/**
- * Paint capability for kinds with a single painted surface (`role: 'surface'`)
- * that register a `<group>` of meshes all sharing one material — the roof
- * vents (box / ridge / turbine / cupola / eyebrow). Replaces the editor's
- * hardcoded `node.type === '<vent>'` paint arms with registry-driven dispatch,
- * the same way chimney / dormer / wall declare their own `paint` capability.
- */
+type LegacySurfaceNode = AnyNode & { material?: MaterialSchema; materialPreset?: string }
 
-type SurfaceNode = AnyNode & {
-  material?: MaterialSchema
-  materialPreset?: string
-}
-
-function buildPreviewMaterial(
-  material: MaterialSchema | undefined,
-  materialPreset: string | undefined,
-): Material | null {
-  if (materialPreset) return createMaterialFromPresetRef(materialPreset)
-  if (material) return createMaterial(material)
-  return null
-}
-
-export const surfacePaintCapability: PaintCapability = {
-  // One paintable surface — every face resolves to it.
+export const surfacePaintCapability = createSlotPaintCapability({
   resolveRole: () => 'surface',
-  buildPatch: ({ material, materialPreset }) => ({ material, materialPreset }) as Partial<AnyNode>,
   applyPreview: ({ material, materialPreset, root }) => {
-    const preview = buildPreviewMaterial(material, materialPreset)
+    const preview = buildSlotPreviewMaterial(material, materialPreset)
     if (!preview) return null
-    // The kinds register a group, so walk the subtree and swap every child
-    // mesh's material, recording a restore for each.
     const restores: Array<() => void> = []
     ;(root as Object3D).traverse((object) => {
       const mesh = object as Mesh
@@ -45,11 +21,11 @@ export const surfacePaintCapability: PaintCapability = {
     })
     if (restores.length === 0) return null
     return () => {
-      for (let i = restores.length - 1; i >= 0; i -= 1) restores[i]?.()
+      for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]?.()
     }
   },
-  getEffectiveMaterial: ({ node }) => {
-    const n = node as SurfaceNode
-    return { material: n.material, materialPreset: n.materialPreset }
+  legacyEffective: (node) => {
+    const legacy = node as LegacySurfaceNode
+    return { material: legacy.material, materialPreset: legacy.materialPreset }
   },
-}
+})

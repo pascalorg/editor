@@ -10,7 +10,6 @@ import {
   type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
-  RoofSegmentNode as RoofSegmentNodeSchema,
   type SkylightNode,
   type SolarPanelNode,
   type TurbineVentNode,
@@ -37,7 +36,6 @@ export default function RoofPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
-  const createNodes = useScene((s) => s.createNodes)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
@@ -168,17 +166,11 @@ export default function RoofPanel() {
 
   const handleAddSegment = useCallback(() => {
     if (!node) return
-    const segment = RoofSegmentNodeSchema.parse({
-      width: 6,
-      depth: 6,
-      wallHeight: 0.5,
-      pitch: 40,
-      roofType: 'gable',
-      position: [2, 0, 2],
-      metadata: { autoRidgeVent: false },
-    })
-    createNodes([{ node: segment, parentId: node.id as AnyNodeId }])
-  }, [node, createNodes])
+    triggerSFX('sfx:item-pick')
+    const editor = useEditor.getState()
+    editor.setTool('roof')
+    if (editor.mode !== 'build') editor.setMode('build')
+  }, [node])
 
   const handleSelectSegment = useCallback(
     (segmentId: string) => {
@@ -272,7 +264,7 @@ export default function RoofPanel() {
         <ActionGroup>
           <ActionButton
             icon={<Plus className="h-3.5 w-3.5" />}
-            label="Add Segment"
+            label="Draw Segment"
             onClick={handleAddSegment}
           />
         </ActionGroup>
