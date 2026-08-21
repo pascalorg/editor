@@ -32,6 +32,17 @@ function binaryStlBounds(buffer: ArrayBuffer): { triangles: number; bounds: THRE
   return { triangles, bounds }
 }
 
+function reverseWinding(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const index = geometry.getIndex()
+  if (!index) throw new Error('Expected indexed geometry')
+  const reversed: number[] = []
+  for (let offset = 0; offset + 2 < index.count; offset += 3) {
+    reversed.push(index.getX(offset), index.getX(offset + 2), index.getX(offset + 1))
+  }
+  geometry.setIndex(reversed)
+  return geometry
+}
+
 describe('print STL export', () => {
   afterEach(() => {
     sceneRegistry.nodes.clear()
@@ -62,6 +73,9 @@ describe('print STL export', () => {
     expect(report.bounds?.height).toBeCloseTo(40, 4)
     expect(report.boundaryEdgeCount).toBe(0)
     expect(report.nonManifoldEdgeCount).toBe(0)
+    expect(report.connectedComponentCount).toBe(1)
+    expect(report.solidComponentCount).toBe(1)
+    expect(report.invertedWinding).toBe(false)
     expect(report.volumeMm3).toBeCloseTo(240_000, 4)
   })
 
@@ -130,9 +144,64 @@ describe('print STL export', () => {
 
     const { report } = prepareSceneForPrint(source, { scale: 100 })
 
-    expect(report.status).toBe('pass')
+    expect(report.status).toBe('warning')
     expect(report.boundaryEdgeCount).toBe(0)
     expect(report.nonManifoldEdgeCount).toBe(0)
+    expect(report.connectedComponentCount).toBe(2)
+    expect(report.solidComponentCount).toBe(2)
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'disconnected_solids', severity: 'warning' }),
+    )
+  })
+
+  test('blocks disconnected solids in a compiled printable part', () => {
+    const source = new THREE.Group()
+    const first = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    const second = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    second.position.x = 2
+    source.add(first, second)
+
+    const { report } = prepareSceneForPrint(source, { scale: 100, compiled: true })
+
+    expect(report.status).toBe('blocked')
+    expect(report.connectedComponentCount).toBe(2)
+    expect(report.solidComponentCount).toBe(2)
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'disconnected_solids', severity: 'error' }),
+    )
+  })
+
+  test('allows an inward shell to represent a sealed cavity without calling it a second solid', () => {
+    const source = new THREE.Group()
+    source.add(
+      new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2)),
+      new THREE.Mesh(reverseWinding(new THREE.BoxGeometry(1, 1, 1))),
+    )
+
+    const { report } = prepareSceneForPrint(source, { scale: 100, compiled: true })
+
+    expect(report.status).toBe('warning')
+    expect(report.connectedComponentCount).toBe(2)
+    expect(report.solidComponentCount).toBe(1)
+    expect(report.invertedWinding).toBe(false)
+    expect(report.volumeMm3).toBeCloseTo(7_000, 4)
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'inward_surface_components', severity: 'warning' }),
+    )
+  })
+
+  test('blocks a globally inside-out closed surface', () => {
+    const mesh = new THREE.Mesh(reverseWinding(new THREE.BoxGeometry(1, 1, 1)))
+
+    const { report } = prepareSceneForPrint(mesh, { scale: 100, compiled: true })
+
+    expect(report.status).toBe('blocked')
+    expect(report.connectedComponentCount).toBe(1)
+    expect(report.solidComponentCount).toBe(0)
+    expect(report.invertedWinding).toBe(true)
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({ code: 'inverted_winding', severity: 'error' }),
+    )
   })
 
   test('uses authoritative indexed incidence for a compiled mesh', () => {

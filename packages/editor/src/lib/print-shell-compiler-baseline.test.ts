@@ -171,6 +171,8 @@ describe('print shell compiler baseline', () => {
 
       const print = exportSceneToPrintStl(compiled.scene!, { scale: 100, compiled: true })
       expect(print.report.status).toBe('pass')
+      expect(print.report.connectedComponentCount).toBe(1)
+      expect(print.report.solidComponentCount).toBe(1)
       expect(print.report.bounds?.width).toBeCloseTo(50, 4)
       expect(print.report.bounds?.depth).toBeCloseTo(30, 4)
       expect(print.report.bounds?.height).toBeCloseTo(27, 4)

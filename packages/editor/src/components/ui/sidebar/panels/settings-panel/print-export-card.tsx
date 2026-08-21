@@ -370,6 +370,11 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
                     {part.report.triangleCount.toLocaleString()} triangles ·{' '}
                     {part.report.status === 'pass' ? 'basic checks passed' : part.report.status}
                   </div>
+                  <div className="mt-1 text-muted-foreground">
+                    Solid components ·{' '}
+                    {part.report.solidComponentCount?.toLocaleString() ?? 'Not checked'} · Surface
+                    shells · {part.report.connectedComponentCount?.toLocaleString() ?? 'Not checked'}
+                  </div>
                   {part.report.minimumFeatureThicknessMm !== undefined && (
                     <div className="mt-1 text-muted-foreground">
                       Minimum known feature ·{' '}
@@ -402,6 +407,22 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
               <dt className="text-muted-foreground">Non-manifold edges</dt>
               <dd className="text-right font-medium">
                 {prepared.report.nonManifoldEdgeCount?.toLocaleString() ?? 'Not checked'}
+              </dd>
+              <dt className="text-muted-foreground">Solid components</dt>
+              <dd className="text-right font-medium">
+                {prepared.report.solidComponentCount?.toLocaleString() ?? 'Not checked'}
+              </dd>
+              <dt className="text-muted-foreground">Surface shells</dt>
+              <dd className="text-right font-medium">
+                {prepared.report.connectedComponentCount?.toLocaleString() ?? 'Not checked'}
+              </dd>
+              <dt className="text-muted-foreground">Face winding</dt>
+              <dd className="text-right font-medium">
+                {prepared.report.invertedWinding === null
+                  ? 'Not checked'
+                  : prepared.report.invertedWinding
+                    ? 'Inverted'
+                    : 'Outward'}
               </dd>
               {prepared.report.minimumFeatureThicknessMm !== undefined && (
                 <>

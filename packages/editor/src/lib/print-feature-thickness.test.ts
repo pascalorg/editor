@@ -47,6 +47,9 @@ const report: PrintExportReport = {
   degenerateTriangleCount: 0,
   boundaryEdgeCount: 0,
   nonManifoldEdgeCount: 0,
+  connectedComponentCount: 1,
+  solidComponentCount: 1,
+  invertedWinding: false,
   volumeMm3: 100,
   diagnostics: [
     {

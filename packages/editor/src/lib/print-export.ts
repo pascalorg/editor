@@ -54,6 +54,9 @@ export type PrintExportReport = {
   degenerateTriangleCount: number
   boundaryEdgeCount: number | null
   nonManifoldEdgeCount: number | null
+  connectedComponentCount: number | null
+  solidComponentCount: number | null
+  invertedWinding: boolean | null
   volumeMm3: number
   minimumFeatureThicknessMm?: number | null
   diagnostics: PrintExportDiagnostic[]
@@ -77,6 +80,8 @@ type BoundsMeasurement = {
 type EdgeTopologyMeasurement = {
   boundaryEdgeCount: number | null
   nonManifoldEdgeCount: number | null
+  connectedComponentCount: number | null
+  componentIndexByTriangle: Int32Array<ArrayBuffer> | null
   edgeCheckComplete: boolean
 }
 
@@ -167,11 +172,10 @@ function pointKey(point: THREE.Vector3): string {
   )},${Math.round(point.z / EDGE_INCIDENCE_EPSILON_METERS)}`
 }
 
-function addEdge(edges: Map<string, number>, a: THREE.Vector3, b: THREE.Vector3) {
+function edgeKey(a: THREE.Vector3, b: THREE.Vector3): string {
   const keyA = pointKey(a)
   const keyB = pointKey(b)
-  const key = keyA < keyB ? `${keyA}|${keyB}` : `${keyB}|${keyA}`
-  edges.set(key, (edges.get(key) ?? 0) + 1)
+  return keyA < keyB ? `${keyA}|${keyB}` : `${keyB}|${keyA}`
 }
 
 function indexedNonManifoldEdgeCount(root: THREE.Object3D): number | null {
@@ -217,27 +221,79 @@ function analyzeEdgeTopology(
 ): EdgeTopologyMeasurement {
   const edges = new Map<string, number>()
   const halfEdgePositions: number[] = []
+  const topologyTriangleIndices: number[] = []
+  const componentParents: number[] = []
+  const componentRanks: number[] = []
   let edgeCheckComplete = true
   let triangleCount = 0
 
+  const findComponent = (triangleIndex: number): number => {
+    let root = triangleIndex
+    while (componentParents[root] !== root) root = componentParents[root]!
+    let current = triangleIndex
+    while (componentParents[current] !== root) {
+      const parent = componentParents[current]!
+      componentParents[current] = root
+      current = parent
+    }
+    return root
+  }
+
+  const unionComponents = (first: number, second: number) => {
+    let firstRoot = findComponent(first)
+    let secondRoot = findComponent(second)
+    if (firstRoot === secondRoot) return
+    const firstRank = componentRanks[firstRoot] ?? 0
+    const secondRank = componentRanks[secondRoot] ?? 0
+    if (firstRank < secondRank) [firstRoot, secondRoot] = [secondRoot, firstRoot]
+    componentParents[secondRoot] = firstRoot
+    if (firstRank === secondRank) componentRanks[firstRoot] = firstRank + 1
+  }
+
+  const addConnectedEdge = (a: THREE.Vector3, b: THREE.Vector3, triangleIndex: number) => {
+    const key = edgeKey(a, b)
+    const encoded = edges.get(key)
+    if (encoded === undefined) {
+      edges.set(key, triangleIndex * 4 + 1)
+      return
+    }
+    const firstTriangle = Math.floor(encoded / 4)
+    const uses = encoded % 4
+    unionComponents(firstTriangle, triangleIndex)
+    edges.set(key, firstTriangle * 4 + Math.min(uses + 1, 3))
+  }
+
   forEachTriangle(root, (a, b, c) => {
+    const triangleIndex = triangleCount
     triangleCount += 1
     if (!isFiniteVector(a) || !isFiniteVector(b) || !isFiniteVector(c)) return
     if (edgeCheckComplete && triangleCount > MAX_EDGE_CHECK_TRIANGLES) {
       edges.clear()
       halfEdgePositions.length = 0
+      topologyTriangleIndices.length = 0
+      componentParents.length = 0
+      componentRanks.length = 0
       edgeCheckComplete = false
     }
     if (!edgeCheckComplete) return
 
-    addEdge(edges, a, b)
-    addEdge(edges, b, c)
-    addEdge(edges, c, a)
+    componentParents[triangleIndex] = triangleIndex
+    componentRanks[triangleIndex] = 0
+    addConnectedEdge(a, b, triangleIndex)
+    addConnectedEdge(b, c, triangleIndex)
+    addConnectedEdge(c, a, triangleIndex)
+    topologyTriangleIndices.push(triangleIndex)
     halfEdgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z)
   })
 
   if (!edgeCheckComplete) {
-    return { boundaryEdgeCount: null, nonManifoldEdgeCount: null, edgeCheckComplete }
+    return {
+      boundaryEdgeCount: null,
+      nonManifoldEdgeCount: null,
+      connectedComponentCount: null,
+      componentIndexByTriangle: null,
+      edgeCheckComplete,
+    }
   }
 
   const connectivityGeometry = new THREE.BufferGeometry()
@@ -246,6 +302,8 @@ function analyzeEdgeTopology(
     new THREE.BufferAttribute(new Float64Array(halfEdgePositions), 3),
   )
   const halfEdges = new HalfEdgeMap() as HalfEdgeMap & {
+    data: Int32Array<ArrayBuffer>
+    disjointConnections: Map<number, number[]> | null
     matchDisjointEdges: boolean
     degenerateEpsilon: number
     unmatchedEdges: number
@@ -254,17 +312,50 @@ function analyzeEdgeTopology(
   halfEdges.degenerateEpsilon = EDGE_CONNECTIVITY_EPSILON_METERS
   halfEdges.updateFrom(connectivityGeometry)
   const boundaryEdgeCount = halfEdges.unmatchedEdges
+  for (let localEdgeIndex = 0; localEdgeIndex < halfEdges.data.length; localEdgeIndex += 1) {
+    const triangleIndex = topologyTriangleIndices[Math.floor(localEdgeIndex / 3)]
+    if (triangleIndex === undefined) continue
+    const siblingEdgeIndex = halfEdges.data[localEdgeIndex] ?? -1
+    if (siblingEdgeIndex >= 0) {
+      const siblingTriangleIndex = topologyTriangleIndices[Math.floor(siblingEdgeIndex / 3)]
+      if (siblingTriangleIndex !== undefined) unionComponents(triangleIndex, siblingTriangleIndex)
+    }
+    for (const disjointEdgeIndex of halfEdges.disjointConnections?.get(localEdgeIndex) ?? []) {
+      const disjointTriangleIndex = topologyTriangleIndices[Math.floor(disjointEdgeIndex / 3)]
+      if (disjointTriangleIndex !== undefined) unionComponents(triangleIndex, disjointTriangleIndex)
+    }
+  }
   connectivityGeometry.dispose()
+
+  const componentIndexByTriangle = new Int32Array(triangleCount)
+  componentIndexByTriangle.fill(-1)
+  const componentIndexByRoot = new Map<number, number>()
+  for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += 1) {
+    if (componentParents[triangleIndex] === undefined) continue
+    const root = findComponent(triangleIndex)
+    let componentIndex = componentIndexByRoot.get(root)
+    if (componentIndex === undefined) {
+      componentIndex = componentIndexByRoot.size
+      componentIndexByRoot.set(root, componentIndex)
+    }
+    componentIndexByTriangle[triangleIndex] = componentIndex
+  }
 
   let nonManifoldEdgeCount = useIndexedIncidence ? indexedNonManifoldEdgeCount(root) : null
   if (nonManifoldEdgeCount === null) {
     nonManifoldEdgeCount = 0
-    for (const count of edges.values()) {
-      if (count > 2) nonManifoldEdgeCount += 1
+    for (const encoded of edges.values()) {
+      if (encoded % 4 > 2) nonManifoldEdgeCount += 1
     }
   }
 
-  return { boundaryEdgeCount, nonManifoldEdgeCount, edgeCheckComplete }
+  return {
+    boundaryEdgeCount,
+    nonManifoldEdgeCount,
+    connectedComponentCount: componentIndexByRoot.size,
+    componentIndexByTriangle,
+    edgeCheckComplete,
+  }
 }
 
 function analyzePrintScene(
@@ -293,8 +384,13 @@ function analyzePrintScene(
   let degenerateTriangleCount = 0
   let signedVolumeMm3 = 0
   let hasFiniteTriangle = false
+  const componentSignedVolumesMm3 =
+    edgeTopology.connectedComponentCount === null
+      ? null
+      : Array.from({ length: edgeTopology.connectedComponentCount }, () => 0)
 
   forEachTriangle(root, (a, b, c) => {
+    const triangleIndex = triangleCount
     triangleCount += 1
     if (!isFiniteVector(a) || !isFiniteVector(b) || !isFiniteVector(c)) {
       invalidTriangleCount += 1
@@ -313,10 +409,32 @@ function analyzePrintScene(
     }
 
     volumeCross.crossVectors(b, c)
-    signedVolumeMm3 += a.dot(volumeCross) / 6
+    const triangleVolumeMm3 = a.dot(volumeCross) / 6
+    signedVolumeMm3 += triangleVolumeMm3
+    const componentIndex = edgeTopology.componentIndexByTriangle?.[triangleIndex] ?? -1
+    if (componentSignedVolumesMm3 && componentIndex >= 0) {
+      componentSignedVolumesMm3[componentIndex] =
+        (componentSignedVolumesMm3[componentIndex] ?? 0) + triangleVolumeMm3
+    }
   })
 
-  const { boundaryEdgeCount, nonManifoldEdgeCount, edgeCheckComplete } = edgeTopology
+  const { boundaryEdgeCount, nonManifoldEdgeCount, connectedComponentCount, edgeCheckComplete } =
+    edgeTopology
+  const hasClosedTopology =
+    edgeCheckComplete &&
+    boundaryEdgeCount === 0 &&
+    nonManifoldEdgeCount === 0 &&
+    invalidTriangleCount === 0 &&
+    degenerateTriangleCount === 0
+  const solidComponentCount =
+    hasClosedTopology && componentSignedVolumesMm3
+      ? componentSignedVolumesMm3.filter((volume) => volume > 1e-6).length
+      : null
+  const inwardComponentCount =
+    hasClosedTopology && componentSignedVolumesMm3
+      ? componentSignedVolumesMm3.filter((volume) => volume < -1e-6).length
+      : null
+  const invertedWinding = hasClosedTopology && triangleCount > 0 ? signedVolumeMm3 < -1e-6 : null
 
   const bounds = hasFiniteTriangle
     ? {
@@ -376,7 +494,38 @@ function analyzePrintScene(
     diagnostics.push({
       severity: 'warning',
       code: 'edge_check_skipped',
-      message: `Edge checks were skipped above ${MAX_EDGE_CHECK_TRIANGLES.toLocaleString()} triangles.`,
+      message: `Edge and connected-component checks were skipped above ${MAX_EDGE_CHECK_TRIANGLES.toLocaleString()} triangles.`,
+    })
+  }
+  if (solidComponentCount !== null && solidComponentCount > 1) {
+    diagnostics.push({
+      severity: compiled ? 'error' : 'warning',
+      code: 'disconnected_solids',
+      message: `${solidComponentCount.toLocaleString()} disconnected outward solid components remain in this ${compiled ? 'compiled part' : 'export'}. ${
+        compiled
+          ? 'Each printable level must be one physically connected solid.'
+          : 'Use structure compilation or split them into separate printable parts.'
+      }`,
+    })
+  } else if (
+    connectedComponentCount !== null &&
+    connectedComponentCount > 1 &&
+    inwardComponentCount !== null &&
+    inwardComponentCount > 0
+  ) {
+    diagnostics.push({
+      severity: 'warning',
+      code: 'inward_surface_components',
+      message: `${connectedComponentCount.toLocaleString()} connected surface shells include ${inwardComponentCount.toLocaleString()} inward-oriented shell${
+        inwardComponentCount === 1 ? '' : 's'
+      }. These may be sealed cavities; inspect the sliced layers before printing.`,
+    })
+  }
+  if (invertedWinding) {
+    diagnostics.push({
+      severity: 'error',
+      code: 'inverted_winding',
+      message: 'The closed surface has globally inverted face winding and must be reoriented.',
     })
   }
   if (triangleCount > 0 && Math.abs(signedVolumeMm3) <= 1e-6) {
@@ -422,6 +571,9 @@ function analyzePrintScene(
     degenerateTriangleCount,
     boundaryEdgeCount,
     nonManifoldEdgeCount,
+    connectedComponentCount,
+    solidComponentCount,
+    invertedWinding,
     volumeMm3: Math.abs(signedVolumeMm3),
     diagnostics,
   }

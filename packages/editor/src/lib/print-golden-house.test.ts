@@ -208,6 +208,9 @@ describe('print golden house', () => {
         expect(part.report.degenerateTriangleCount).toBe(0)
         expect(part.report.boundaryEdgeCount).toBe(0)
         expect(part.report.nonManifoldEdgeCount).toBe(0)
+        expect(part.report.connectedComponentCount).toBe(1)
+        expect(part.report.solidComponentCount).toBe(1)
+        expect(part.report.invertedWinding).toBe(false)
         expect(part.report.volumeMm3).toBeGreaterThan(0)
         expect(part.report.bounds?.min.z).toBeCloseTo(0, 5)
       }
