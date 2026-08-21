@@ -21,6 +21,10 @@ import { BufferGeometry, Float32BufferAttribute } from 'three'
  */
 export function createPlaceholderGeometry(groupCount = 0): BufferGeometry {
   const geometry = new BufferGeometry()
+  // Owning systems (and the wall self-heal sweep in
+  // viewer/systems/wall/wall-placeholder-sweep.ts) can tell "never built"
+  // from "built" without guessing off vertex counts.
+  geometry.userData.placeholder = true
   geometry.setAttribute('position', new Float32BufferAttribute(new Float32Array(9), 3))
   geometry.setAttribute('normal', new Float32BufferAttribute(new Float32Array(9), 3))
   geometry.setAttribute('uv', new Float32BufferAttribute(new Float32Array(6), 2))
