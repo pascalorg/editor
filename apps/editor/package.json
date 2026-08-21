@@ -27,7 +27,7 @@
     "@pascal-app/plugin-articraft": "workspace:*",
     "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#041041dab1366ecd59bf3c74d0dd47a243cc6845",
     "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
-    "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
+    "@pascal-app/plugin-trees": "workspace:*",
     "@pascal-app/viewer": "*",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-three/drei": "^10.7.7",

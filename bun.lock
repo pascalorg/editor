@@ -40,7 +40,7 @@
         "@pascal-app/plugin-articraft": "workspace:*",
         "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#041041dab1366ecd59bf3c74d0dd47a243cc6845",
         "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
-        "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
+        "@pascal-app/plugin-trees": "workspace:*",
         "@pascal-app/viewer": "*",
         "@radix-ui/react-tooltip": "^1.2.8",
         "@react-three/drei": "^10.7.7",
@@ -309,9 +309,9 @@
         "urdf-loader": "^0.13.1",
       },
       "devDependencies": {
-        "@pascal-app/core": "1.0.0-beta.4",
-        "@pascal-app/editor": "1.0.0-beta.4",
-        "@pascal-app/viewer": "1.0.0-beta.4",
+        "@pascal-app/core": "workspace:*",
+        "@pascal-app/editor": "workspace:*",
+        "@pascal-app/viewer": "workspace:*",
         "@react-three/fiber": "^9.5.0",
         "@types/blob-stream": "^0.1.33",
         "@types/bun": "^1.3.5",
@@ -329,9 +329,9 @@
         "zustand": "^5.0.11",
       },
       "peerDependencies": {
-        "@pascal-app/core": ">=1.0.0-beta.4 <1.0.0",
-        "@pascal-app/editor": ">=1.0.0-beta.4 <1.0.0",
-        "@pascal-app/viewer": ">=1.0.0-beta.4 <1.0.0",
+        "@pascal-app/core": "workspace:*",
+        "@pascal-app/editor": "workspace:*",
+        "@pascal-app/viewer": "workspace:*",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
         "three": "^0.185",
@@ -346,9 +346,9 @@
         "@dgreenheck/ez-tree": "^1.1.0",
       },
       "devDependencies": {
-        "@pascal-app/core": "0.9.1",
-        "@pascal-app/editor": "0.9.1",
-        "@pascal-app/viewer": "0.9.1",
+        "@pascal-app/core": "workspace:*",
+        "@pascal-app/editor": "workspace:*",
+        "@pascal-app/viewer": "workspace:*",
         "@react-three/fiber": "^9",
         "@types/bun": "^1.3.5",
         "@types/howler": "^2.2.12",
@@ -363,9 +363,9 @@
         "zustand": "^5",
       },
       "peerDependencies": {
-        "@pascal-app/core": ">=0.9.1 <1",
-        "@pascal-app/editor": ">=0.9.1 <1",
-        "@pascal-app/viewer": ">=0.9.1 <1",
+        "@pascal-app/core": "workspace:*",
+        "@pascal-app/editor": "workspace:*",
+        "@pascal-app/viewer": "workspace:*",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
         "three": "^0.185",
@@ -2225,18 +2225,6 @@
 
     "@oxc-resolver/binding-wasm32-wasi/@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.4", "", { "dependencies": { "@tybys/wasm-util": "^0.10.1" }, "peerDependencies": { "@emnapi/core": "^1.7.1", "@emnapi/runtime": "^1.7.1" } }, "sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow=="],
 
-    "@pascal-app/plugin-articraft/@pascal-app/core": ["@pascal-app/core@1.0.0-beta.4", "", { "dependencies": { "dedent": "^1.7.1", "idb-keyval": "^6.2.2", "mitt": "^3.0.1", "nanoid": "^5.1.6", "zod": "^4.3.5", "zundo": "^2.3.0", "zustand": "^5" }, "peerDependencies": { "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185" } }, "sha512-g07X0t28crhbYrTQcrWImLnRuB/zDLLGAnAt16T8zyp5UBxMMmeh3kPqSqqZQxkDGx261PUG31Qf06TlKcniuw=="],
-
-    "@pascal-app/plugin-articraft/@pascal-app/editor": ["@pascal-app/editor@1.0.0-beta.4", "", { "dependencies": { "@dnd-kit/core": "^6.3.1", "@dnd-kit/sortable": "^10.0.0", "@dnd-kit/utilities": "^3.2.2", "@iconify/react": "^6.0.2", "@number-flow/react": "^0.6.0", "@pascal-app/lingo": "^0.2.0", "@radix-ui/react-alert-dialog": "^1.1.15", "@radix-ui/react-context-menu": "^2.2.16", "@radix-ui/react-dialog": "^1.1.15", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.15", "@radix-ui/react-select": "^2.2.6", "@radix-ui/react-separator": "^1.1.8", "@radix-ui/react-slider": "^1.3.6", "@radix-ui/react-slot": "^1.2.4", "@radix-ui/react-switch": "^1.2.6", "@radix-ui/react-tabs": "^1.1.13", "@radix-ui/react-tooltip": "^1.2.8", "@visual-json/react": "^0.4.0", "blob-stream": "^0.1.3", "class-variance-authority": "^0.7.1", "clsx": "^2.1.1", "cmdk": "^1.1.1", "howler": "^2.2.4", "lucide-react": "^1.7.0", "mitt": "^3.0.1", "motion": "^12.34.3", "nanoid": "^5.1.6", "pdfkit": "^0.19.1", "tailwind-merge": "^3.5.0", "three-mesh-bvh": "~0.9.8", "zod": "^4.3.6", "zustand": "^5.0.11" }, "peerDependencies": { "@pascal-app/core": "^1.0.0-beta.4", "@pascal-app/viewer": "^1.0.0-beta.4", "@react-three/drei": "^10", "@react-three/fiber": "^9", "next": ">=15", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185" } }, "sha512-2ED/NkN+IfimU7rA3ISv7EeVF/MjYOEaXtoIjSLSIrQyf61jWt7Mdt0pdpxR0dm9VGnRa03MqPCG0DJgw2mF6A=="],
-
-    "@pascal-app/plugin-articraft/@pascal-app/viewer": ["@pascal-app/viewer@1.0.0-beta.4", "", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8", "zustand": "^5" }, "peerDependencies": { "@pascal-app/core": "^1.0.0-beta.4", "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185" } }, "sha512-R6TGwIiOhzXNUIWjnG/Qy9GxGS7XQvWOOxgWFekjl3cdejl02M4Z98v90gVw7IDQGmZn/g5CCVJhRaKKtSHBBQ=="],
-
-    "@pascal-app/plugin-trees/@pascal-app/core": ["@pascal-app/core@0.9.1", "", { "dependencies": { "dedent": "^1.7.1", "idb-keyval": "^6.2.2", "mitt": "^3.0.1", "nanoid": "^5.1.6", "zod": "^4.3.5", "zundo": "^2.3.0", "zustand": "^5" }, "peerDependencies": { "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.184" } }, "sha512-v9Fc9johEUbU6lOTdJrF5wlBTtF0DgeTH1e1f+x6lvSYIECeKMeefLQ+K9296KdIIHguSvKgseQtM1XDdOK4NA=="],
-
-    "@pascal-app/plugin-trees/@pascal-app/editor": ["@pascal-app/editor@0.9.1", "", { "dependencies": { "@dnd-kit/core": "^6.3.1", "@dnd-kit/sortable": "^10.0.0", "@dnd-kit/utilities": "^3.2.2", "@iconify/react": "^6.0.2", "@number-flow/react": "^0.6.0", "@radix-ui/react-alert-dialog": "^1.1.15", "@radix-ui/react-context-menu": "^2.2.16", "@radix-ui/react-dialog": "^1.1.15", "@radix-ui/react-dropdown-menu": "^2.1.16", "@radix-ui/react-popover": "^1.1.15", "@radix-ui/react-select": "^2.2.6", "@radix-ui/react-separator": "^1.1.8", "@radix-ui/react-slider": "^1.3.6", "@radix-ui/react-slot": "^1.2.4", "@radix-ui/react-switch": "^1.2.6", "@radix-ui/react-tabs": "^1.1.13", "@radix-ui/react-tooltip": "^1.2.8", "@visual-json/react": "^0.4.0", "class-variance-authority": "^0.7.1", "clsx": "^2.1.1", "cmdk": "^1.1.1", "howler": "^2.2.4", "lucide-react": "^1.7.0", "mitt": "^3.0.1", "motion": "^12.34.3", "nanoid": "^5.1.6", "tailwind-merge": "^3.5.0", "three-mesh-bvh": "~0.9.8", "zod": "^4.3.6", "zustand": "^5.0.11" }, "peerDependencies": { "@pascal-app/core": "^0.9.1", "@pascal-app/viewer": "^0.9.1", "@react-three/drei": "^10", "@react-three/fiber": "^9", "next": ">=15", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.184" } }, "sha512-Lb6PGDtiVpDoUTn5ZGTnoD9oz8qSRN0HVLzZR6sC4KQuTqTPG6sXDBYVLG8BB9tOgeg9i2Hx3scKSoQ/kjdpLw=="],
-
-    "@pascal-app/plugin-trees/@pascal-app/viewer": ["@pascal-app/viewer@0.9.1", "", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8", "zustand": "^5" }, "peerDependencies": { "@pascal-app/core": "^0.9.1", "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.184" } }, "sha512-RqQT4wRpgSJM3OMgD3xppsBVOSK5NEyhLz591G0cLum+e8eaUk7svLed50VIafIarvG3qJjZ9NbKlRI111YTSA=="],
-
     "@react-grab/cli/commander": ["commander@14.0.3", "", {}, "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="],
 
     "@react-grab/cli/ignore": ["ignore@7.0.5", "", {}, "sha512-Hs59xBNfUIunMFgWAbGX5cq6893IbWg4KnrjbYwX3tx0ztorVgTDA6B2sxf8ejHJ4wz8BqGUMYlnzNBer5NvGg=="],
@@ -2274,8 +2262,6 @@
     "deslop-js/minimatch": ["minimatch@10.2.5", "", { "dependencies": { "brace-expansion": "^5.0.5" } }, "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg=="],
 
     "dotenv-expand/dotenv": ["dotenv@16.6.1", "", {}, "sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow=="],
-
-    "editor/@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c", "sha512-16VzWot1oadvxCPqsRwMJbaP0a3u5FESFy7F7++pY5wAAFq9JTFwzHvKAsllrY5TZ5TJ7Y5vSqvbmQk8sy8HaA=="],
 
     "editor/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
