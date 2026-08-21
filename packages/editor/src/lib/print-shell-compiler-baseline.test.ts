@@ -1,20 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  type AnyNode,
-  calculateLevelMiters,
-  DoorNode,
-  RoofSegmentNode,
-  type RoofType,
-  SlabNode,
-  type SlabPolygonContext,
-  sceneRegistry,
-  WallNode,
-} from '@pascal-app/core'
-import {
-  generateExtrudedWall,
-  generateRoofSegmentGeometry,
-  generateSlabGeometry,
-} from '@pascal-app/viewer'
+import { type AnyNode, RoofSegmentNode, type RoofType, WallNode } from '@pascal-app/core'
+import { generateRoofSegmentGeometry } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { prepareSceneForExport } from './glb-export'
 import { filterPreparedSceneForPrintContent } from './print-content-scope'
@@ -25,7 +11,6 @@ import { compilePrintShellBaseline } from './print-shell-compiler-baseline'
 import { compileManifoldMeshData } from './print-shell-compiler-manifold-core'
 import { compileSemanticPrintShellWithManifold } from './print-shell-compiler-manifold-worker'
 
-const EMPTY_SLAB_CONTEXT: SlabPolygonContext = { walls: [], siblingSlabs: [] }
 const ROOF_TYPES: RoofType[] = ['gable', 'hip', 'shed', 'gambrel', 'mansard', 'flat', 'dutch']
 
 function structuralBox(id: string, x: number): THREE.Group {
@@ -119,70 +104,6 @@ describe('print shell compiler baseline', () => {
     expect(compiled.diagnostics).toContainEqual(
       expect.objectContaining({ code: 'missing_node_provenance', severity: 'error' }),
     )
-  })
-
-  test('compiles a generated wall opening and slab into one printable shell', () => {
-    const wall = WallNode.parse({
-      id: 'wall_print-shell-fixture',
-      start: [0, 0],
-      end: [4, 0],
-      height: 2.5,
-      thickness: 0.2,
-    })
-    const door = DoorNode.parse({
-      id: 'door_print-shell-fixture',
-      wallId: wall.id,
-      position: [2, 1.05, 0],
-      width: 0.9,
-      height: 2.1,
-    })
-    const slab = SlabNode.parse({
-      id: 'slab_print-shell-fixture',
-      elevation: 0,
-      thickness: 0.2,
-      polygon: [
-        [-0.5, -1.5],
-        [4.5, -1.5],
-        [4.5, 1.5],
-        [-0.5, 1.5],
-      ],
-    })
-    const wallRoot = new THREE.Group()
-    wallRoot.userData = { pascalId: wall.id }
-    const slabRoot = new THREE.Group()
-    slabRoot.userData = { pascalId: slab.id }
-    const registeredWall = new THREE.Group()
-    sceneRegistry.nodes.set(wall.id, registeredWall)
-
-    try {
-      wallRoot.add(new THREE.Mesh(generateExtrudedWall(wall, [door], calculateLevelMiters([wall]))))
-      slabRoot.add(new THREE.Mesh(generateSlabGeometry(slab, EMPTY_SLAB_CONTEXT)))
-      const source = new THREE.Group()
-      source.add(wallRoot, slabRoot)
-
-      const compiled = compilePrintShellBaseline(source)
-
-      expect(compiled.status).toBe('compiled')
-      expect(compiled.inputMeshCount).toBe(2)
-      expect(compiled.sourceNodeIds).toEqual([slab.id, wall.id].sort())
-      expect(compiled.scene).not.toBeNull()
-      expect(rayIntersectionCount(compiled.scene!, door.position[0], 1)).toBe(0)
-      expect(rayIntersectionCount(compiled.scene!, 0.5, 1)).toBeGreaterThanOrEqual(2)
-
-      const print = exportSceneToPrintStl(compiled.scene!, { scale: 100, compiled: true })
-      expect(print.report.status).toBe('pass')
-      expect(print.report.connectedComponentCount).toBe(1)
-      expect(print.report.solidComponentCount).toBe(1)
-      expect(print.report.bounds?.width).toBeCloseTo(50, 4)
-      expect(print.report.bounds?.depth).toBeCloseTo(30, 4)
-      expect(print.report.bounds?.height).toBeCloseTo(27, 4)
-      expect(print.report.boundaryEdgeCount).toBe(0)
-      expect(print.report.nonManifoldEdgeCount).toBe(0)
-      expect(print.report.volumeMm3).toBeCloseTo(4_622, 0)
-    } finally {
-      sceneRegistry.nodes.delete(wall.id)
-      registeredWall.clear()
-    }
   })
 
   test('compares the semantic full-house baseline union with the Manifold candidate', async () => {

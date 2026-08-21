@@ -1,27 +1,6 @@
 import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
 import type { Object3D } from 'three'
 
-export type SceneExportFormat = 'glb' | 'stl' | 'obj' | 'print-stl' | 'print-3mf'
-export type SceneExportOptions = {
-  onlyVisible?: boolean
-  download?: boolean
-  printScale?: number
-  printScope?: 'whole' | 'levels'
-  printContent?: 'structure' | 'everything'
-  printBase?: 'none' | 'plinth'
-  printMinimumFeatureMm?: number
-  printPlinthMarginMm?: number
-  printPlinthThicknessMm?: number
-}
-export type SceneExportArtifact = {
-  blob: Blob
-  filename: string
-  metadata?: unknown
-}
-export type SceneExport = (
-  format?: SceneExportFormat,
-  options?: SceneExportOptions,
-) => Promise<SceneExportArtifact | null>
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
   levelId: LevelNode['id'] | null
@@ -59,8 +38,8 @@ type ViewerState = {
   outliner: Outliner
   geometryRevision: number
   bumpGeometryRevision: () => void
-  exportScene: SceneExport | null
-  setExportScene: (fn: SceneExport | null) => void
+  exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
+  setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
 }
 declare const useViewer: import('zustand').UseBoundStore<import('zustand').StoreApi<ViewerState>>
 export default useViewer

@@ -69,7 +69,6 @@ export {
   csgEvaluator,
   csgGeometry,
   csgMaterials,
-  HalfEdgeMap,
   INTERSECTION,
   prepareBrushForCSG,
   SUBTRACTION,
@@ -176,10 +175,6 @@ export {
   applyCountryUnitDefault,
   default as useViewer,
   type MetricNotation,
-  type SceneExport,
-  type SceneExportArtifact,
-  type SceneExportFormat,
-  type SceneExportOptions,
   type WallMode,
 } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
@@ -215,11 +210,6 @@ export { ItemLightSystem } from './systems/item-light/item-light-system'
 export { LevelSystem } from './systems/level/level-system'
 export { snapLevelsToTruePositions } from './systems/level/level-utils'
 export { getRoofMaterialArray } from './systems/roof/roof-materials'
-export {
-  buildPrintableRoofSegmentSolids,
-  type PrintRoofSolidDiagnostic,
-  type PrintRoofSolidResult,
-} from './systems/roof/roof-print-solids'
 // Generic roof-segment primitives. Kinds that compose CSG against
 // the roof shell (chimney's self-trim, dormer's virtual-segment cut)
 // read these through the public surface. No kind-specific helpers
@@ -257,21 +247,12 @@ export {
 } from './systems/wall/opening-cutout-geometry'
 export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
-// Canonical wall manufacturing solids stay separate from display CSG so
-// print compilation never has to repair the render mesh.
-export {
-  buildPrintableWallSolids,
-  type PrintWallSolidDiagnostic,
-  type PrintWallSolidOptions,
-  type PrintWallSolidResult,
-} from './systems/wall/wall-print-solids'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
 export {
   drainRebuiltWalls,
-  generateExtrudedWall,
   getPendingWallRebuildCount,
   WallSystem,
 } from './systems/wall/wall-system'

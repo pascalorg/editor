@@ -1,4 +1,3 @@
-import manifoldWasmUrl from 'manifold-3d/manifold.wasm'
 import { compileManifoldMeshData } from './print-shell-compiler-manifold-core'
 import type { ManifoldWorkerRequest, ManifoldWorkerResponse } from './print-shell-compiler-protocol'
 
@@ -11,7 +10,7 @@ const workerScope = self as unknown as {
 }
 
 workerScope.addEventListener('message', async (event) => {
-  const output = await compileManifoldMeshData(event.data.meshes, manifoldWasmUrl)
+  const output = await compileManifoldMeshData(event.data.meshes)
   const response: ManifoldWorkerResponse = { id: event.data.id, ...output }
   const transfer: Transferable[] = []
   if (response.status === 'compiled') {

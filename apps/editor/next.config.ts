@@ -38,14 +38,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/plugin-bones',
     '@dgreenheck/ez-tree',
   ],
-  webpack(config) {
-    config.module.rules.push({ test: /\.wasm$/, type: 'asset/resource' })
-    return config
-  },
   turbopack: {
-    rules: {
-      '*.wasm': { type: 'asset' },
-    },
     resolveAlias: {
       react: './node_modules/react',
       three: './node_modules/three',

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { DoorNode, WallNode, WindowNode } from '@pascal-app/core'
 import * as THREE from 'three'
-import { buildPrintableWallSolids } from './wall-print-solids'
+import { buildPrintableWallSolids } from './print-wall-solids'
 
 function rayIntersectionCount(root: THREE.Object3D, x: number, y: number): number {
   root.updateMatrixWorld(true)

@@ -191,7 +191,7 @@ export function SettingsPanel({
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
-  const exportScene = useViewer((state) => state.exportScene)
+  const modelExport = useEditor((state) => state.modelExport)
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
@@ -387,7 +387,7 @@ export function SettingsPanel({
           </div>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('glb', { onlyVisible: exportOnlyVisible })}
+            onClick={() => modelExport?.('glb', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
@@ -395,7 +395,7 @@ export function SettingsPanel({
           </Button>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('stl', { onlyVisible: exportOnlyVisible })}
+            onClick={() => modelExport?.('stl', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
@@ -403,7 +403,7 @@ export function SettingsPanel({
           </Button>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('obj', { onlyVisible: exportOnlyVisible })}
+            onClick={() => modelExport?.('obj', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />

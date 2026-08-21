@@ -1,12 +1,7 @@
 'use client'
 
 import { emitter, useScene } from '@pascal-app/core'
-import {
-  type SceneExport,
-  type SceneExportArtifact,
-  snapLevelsToTruePositions,
-  useViewer,
-} from '@pascal-app/viewer'
+import { disposeObject3DResources, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
@@ -14,11 +9,13 @@ import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
 import { exportSceneLevelsForPrint } from '../../lib/level-print-export'
+import type { ModelExport, ModelExportArtifact } from '../../lib/model-export'
 import { exportSceneToPrint3mf } from '../../lib/print-3mf'
 import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
 import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
 import { applySemanticPrintFeatureThickness } from '../../lib/print-feature-thickness'
 import { compileSemanticPrintShellWithManifold } from '../../lib/print-shell-compiler-manifold-worker'
+import useEditor from '../../store/use-editor'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,
 // material-less renderables) with an attribute-less geometry — GLTFExporter
@@ -45,9 +42,10 @@ function ensurePositionAttributes(root: THREE.Object3D) {
 export function ExportManager() {
   const scene = useThree((state) => state.scene)
   const setExportScene = useViewer((state) => state.setExportScene)
+  const setModelExport = useEditor((state) => state.setModelExport)
 
   useEffect(() => {
-    const exportFn: SceneExport = async (format = 'glb', options = {}) => {
+    const exportFn: ModelExport = async (format = 'glb', options = {}) => {
       // Find the scene renderer group by name
       const sceneGroup = scene.getObjectByName('scene-renderer')
       if (!sceneGroup) {
@@ -130,41 +128,45 @@ export function ExportManager() {
           const compiled = compileShells
             ? await compileSemanticPrintShellWithManifold(exportScene, nodes)
             : null
-          const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : exportScene
-          const printOptions = {
-            scale,
-            compiled: compiled?.status === 'compiled',
-            indexedTopology: compiled?.backend === 'manifold-3d',
-          }
-          const output =
-            printFormat === '3mf'
-              ? exportSceneToPrint3mf(printSource, printOptions)
-              : exportSceneToPrintStl(printSource, printOptions)
-          let report = compiled
-            ? mergePrintExportDiagnostics(
-                output.report,
-                compiled.diagnostics,
-                new Set(['compiler_pending']),
+          try {
+            const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : exportScene
+            const printOptions = {
+              scale,
+              compiled: compiled?.status === 'compiled',
+              indexedTopology: compiled?.backend === 'manifold-3d',
+            }
+            const output =
+              printFormat === '3mf'
+                ? exportSceneToPrint3mf(printSource, printOptions)
+                : exportSceneToPrintStl(printSource, printOptions)
+            let report = compiled
+              ? mergePrintExportDiagnostics(
+                  output.report,
+                  compiled.diagnostics,
+                  new Set(['compiler_pending']),
+                )
+              : output.report
+            if (compiled) {
+              report = applySemanticPrintFeatureThickness(
+                report,
+                nodes,
+                compiled.sourceNodeIds,
+                minimumFeatureMm,
               )
-            : output.report
-          if (compiled) {
-            report = applySemanticPrintFeatureThickness(
+            }
+            const { buffer } = output
+            const blob = new Blob([buffer], {
+              type: printFormat === '3mf' ? 'model/3mf' : 'model/stl',
+            })
+            return finishArtifact(
+              blob,
+              `print_model_1-${scale}_${date}.${printFormat}`,
+              options.download,
               report,
-              nodes,
-              compiled.sourceNodeIds,
-              minimumFeatureMm,
             )
+          } finally {
+            if (compiled?.scene) disposeObject3DResources(compiled.scene)
           }
-          const { buffer } = output
-          const blob = new Blob([buffer], {
-            type: printFormat === '3mf' ? 'model/3mf' : 'model/stl',
-          })
-          return finishArtifact(
-            blob,
-            `print_model_1-${scale}_${date}.${printFormat}`,
-            options.download,
-            report,
-          )
         }
 
         if (format === 'stl') {
@@ -187,12 +189,16 @@ export function ExportManager() {
       }
     }
 
-    setExportScene(exportFn)
+    setModelExport(exportFn)
+    setExportScene(async (format = 'glb') => {
+      await exportFn(format, { onlyVisible: true })
+    })
 
     return () => {
+      setModelExport(null)
       setExportScene(null)
     }
-  }, [scene, setExportScene])
+  }, [scene, setExportScene, setModelExport])
 
   return null
 }
@@ -202,7 +208,7 @@ function finishArtifact(
   filename: string,
   download: boolean | undefined,
   metadata?: unknown,
-): SceneExportArtifact {
+): ModelExportArtifact {
   if (download !== false) downloadBlob(blob, filename)
   return { blob, filename, metadata }
 }

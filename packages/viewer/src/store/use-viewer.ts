@@ -12,27 +12,6 @@ import { SCENE_THEME_IDS } from '../lib/scene-themes'
 export type RenderContext = 'editor' | 'viewer'
 export type MetricNotation = 'meters' | 'millimeters'
 export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
-export type SceneExportFormat = 'glb' | 'stl' | 'obj' | 'print-stl' | 'print-3mf'
-export type SceneExportOptions = {
-  onlyVisible?: boolean
-  download?: boolean
-  printScale?: number
-  printScope?: 'whole' | 'levels'
-  printContent?: 'structure' | 'everything'
-  printBase?: 'none' | 'plinth'
-  printMinimumFeatureMm?: number
-  printPlinthMarginMm?: number
-  printPlinthThicknessMm?: number
-}
-export type SceneExportArtifact = {
-  blob: Blob
-  filename: string
-  metadata?: unknown
-}
-export type SceneExport = (
-  format?: SceneExportFormat,
-  options?: SceneExportOptions,
-) => Promise<SceneExportArtifact | null>
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -169,8 +148,8 @@ type ViewerState = {
   bumpGeometryRevision: () => void
 
   // Export functionality
-  exportScene: SceneExport | null
-  setExportScene: (fn: SceneExport | null) => void
+  exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
+  setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
 
   debugColors: boolean
   setDebugColors: (enabled: boolean) => void

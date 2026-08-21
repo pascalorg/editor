@@ -4,6 +4,7 @@ import {
   getLevelElevations,
   type LevelNode,
 } from '@pascal-app/core'
+import { disposeObject3DResources } from '@pascal-app/viewer'
 import { type Zippable, zipSync } from 'fflate'
 import * as THREE from 'three'
 import { createPrint3mf, type Print3mfPart } from './print-3mf'
@@ -309,58 +310,62 @@ export async function exportSceneLevelsForPrint(
         ? await options.compileShell(levelScene, nodes)
         : compileSemanticPrintShell(levelScene, nodes)
       : null
-    const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : levelScene
-    const prepared = prepareSceneForPrint(printSource, {
-      scale: options.scale,
-      compiled: compiled?.status === 'compiled',
-      indexedTopology: compiled?.backend === 'manifold-3d',
-      format,
-      ...(sourceBaseMeters === null ? {} : { sourceBedElevationMeters: sourceBaseMeters }),
-    })
-    let report = compiled
-      ? mergePrintExportDiagnostics(
-          prepared.report,
-          compiled.diagnostics,
-          new Set(['compiler_pending']),
+    try {
+      const printSource = compiled ? (compiled.scene ?? new THREE.Group()) : levelScene
+      const prepared = prepareSceneForPrint(printSource, {
+        scale: options.scale,
+        compiled: compiled?.status === 'compiled',
+        indexedTopology: compiled?.backend === 'manifold-3d',
+        format,
+        ...(sourceBaseMeters === null ? {} : { sourceBedElevationMeters: sourceBaseMeters }),
+      })
+      let report = compiled
+        ? mergePrintExportDiagnostics(
+            prepared.report,
+            compiled.diagnostics,
+            new Set(['compiler_pending']),
+          )
+        : prepared.report
+      if (compiled) {
+        report = applySemanticPrintFeatureThickness(
+          report,
+          nodes,
+          compiled.sourceNodeIds,
+          options.minimumFeatureMm,
         )
-      : prepared.report
-    if (compiled) {
-      report = applySemanticPrintFeatureThickness(
+      }
+      const baseDiagnostics = levelBaseDiagnostics(level, label, sourceBaseMeters, report)
+      report = mergePrintExportDiagnostics(report, baseDiagnostics)
+      if (compiled) {
+        diagnostics.push(
+          ...compiled.diagnostics.filter((diagnostic) => diagnostic.severity !== 'info'),
+        )
+      }
+      diagnostics.push(...report.diagnostics.filter(isPrintFeatureThicknessDiagnostic))
+      diagnostics.push(...baseDiagnostics)
+      levelArtifacts.push({
+        filename,
+        objectName,
+        bytes:
+          format === 'stl' ? new Uint8Array(encodePreparedPrintSceneToStl(prepared.scene)) : null,
+        mesh:
+          format === '3mf' && report.bounds && report.invalidTriangleCount === 0
+            ? extractPreparedPrintMesh(prepared.scene)
+            : null,
+        bounds: report.bounds,
+      })
+      levelParts.push({
+        kind: 'level',
+        levelId: level.id,
+        label,
+        objectName,
+        filename,
+        sourceBaseMeters,
         report,
-        nodes,
-        compiled.sourceNodeIds,
-        options.minimumFeatureMm,
-      )
+      })
+    } finally {
+      if (compiled?.scene) disposeObject3DResources(compiled.scene)
     }
-    const baseDiagnostics = levelBaseDiagnostics(level, label, sourceBaseMeters, report)
-    report = mergePrintExportDiagnostics(report, baseDiagnostics)
-    if (compiled) {
-      diagnostics.push(
-        ...compiled.diagnostics.filter((diagnostic) => diagnostic.severity !== 'info'),
-      )
-    }
-    diagnostics.push(...report.diagnostics.filter(isPrintFeatureThicknessDiagnostic))
-    diagnostics.push(...baseDiagnostics)
-    levelArtifacts.push({
-      filename,
-      objectName,
-      bytes:
-        format === 'stl' ? new Uint8Array(encodePreparedPrintSceneToStl(prepared.scene)) : null,
-      mesh:
-        format === '3mf' && report.bounds && report.invalidTriangleCount === 0
-          ? extractPreparedPrintMesh(prepared.scene)
-          : null,
-      bounds: report.bounds,
-    })
-    levelParts.push({
-      kind: 'level',
-      levelId: level.id,
-      label,
-      objectName,
-      filename,
-      sourceBaseMeters,
-      report,
-    })
   }
 
   let plinthArtifact: PreparedLevelArtifact | null = null
@@ -402,44 +407,52 @@ export async function exportSceneLevelsForPrint(
         const mesh = new THREE.Mesh(
           new THREE.BoxGeometry(widthMeters, thicknessMeters, depthMeters),
         )
-        const prepared = prepareSceneForPrint(mesh, { ...options, format })
-        const report = applyPrintFeatureThickness(
-          prepared.report,
-          {
-            features: [{ nodeId: lowestLevel.id, thicknessMm }],
-            unmeasuredNodeIds: [],
-          },
-          options.minimumFeatureMm,
-        )
-        const filename = format === 'stl' ? '00_plinth.stl' : null
-        const objectName = '00 Plinth'
-        plinthArtifact = {
-          filename,
-          objectName,
-          bytes:
-            format === 'stl' ? new Uint8Array(encodePreparedPrintSceneToStl(prepared.scene)) : null,
-          mesh:
-            format === '3mf' && prepared.report.bounds && prepared.report.invalidTriangleCount === 0
-              ? extractPreparedPrintMesh(prepared.scene)
-              : null,
-          bounds: report.bounds,
+        try {
+          const prepared = prepareSceneForPrint(mesh, { ...options, format })
+          const report = applyPrintFeatureThickness(
+            prepared.report,
+            {
+              features: [{ nodeId: lowestLevel.id, thicknessMm }],
+              unmeasuredNodeIds: [],
+            },
+            options.minimumFeatureMm,
+          )
+          const filename = format === 'stl' ? '00_plinth.stl' : null
+          const objectName = '00 Plinth'
+          plinthArtifact = {
+            filename,
+            objectName,
+            bytes:
+              format === 'stl'
+                ? new Uint8Array(encodePreparedPrintSceneToStl(prepared.scene))
+                : null,
+            mesh:
+              format === '3mf' &&
+              prepared.report.bounds &&
+              prepared.report.invalidTriangleCount === 0
+                ? extractPreparedPrintMesh(prepared.scene)
+                : null,
+            bounds: report.bounds,
+          }
+          plinthPart = {
+            kind: 'plinth',
+            levelId: lowestLevel.id,
+            label: 'Plinth',
+            objectName,
+            filename,
+            sourceBaseMeters: null,
+            report,
+          }
+          diagnostics.push(...report.diagnostics.filter(isPrintFeatureThicknessDiagnostic))
+          diagnostics.push({
+            severity: 'info',
+            code: 'rectangular_plinth_experimental',
+            message:
+              'The plinth is a separate rectangular part derived from the lowest level bounds; footprint shaping and connectors are not implemented yet.',
+          })
+        } finally {
+          disposeObject3DResources(mesh)
         }
-        plinthPart = {
-          kind: 'plinth',
-          levelId: lowestLevel.id,
-          label: 'Plinth',
-          objectName,
-          filename,
-          sourceBaseMeters: null,
-          report,
-        }
-        diagnostics.push(...report.diagnostics.filter(isPrintFeatureThicknessDiagnostic))
-        diagnostics.push({
-          severity: 'info',
-          code: 'rectangular_plinth_experimental',
-          message:
-            'The plinth is a separate rectangular part derived from the lowest level bounds; footprint shaping and connectors are not implemented yet.',
-        })
       }
     }
   }

@@ -1,9 +1,9 @@
 import {
   type AnyNode,
   BuildingNode,
-  calculateLevelMiters,
   DoorNode,
   getLevelElevations,
+  getWallThickness,
   LevelNode,
   nodeRegistry,
   RoofSegmentNode,
@@ -14,11 +14,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import {
-  generateExtrudedWall,
-  generateRoofSegmentGeometry,
-  generateSlabGeometry,
-} from '@pascal-app/viewer'
+import { generateRoofSegmentGeometry, generateSlabGeometry } from '@pascal-app/viewer'
 import * as THREE from 'three'
 
 const EMPTY_SLAB_CONTEXT: SlabPolygonContext = { walls: [], siblingSlabs: [] }
@@ -264,7 +260,6 @@ export function createPrintGoldenHouseFixture(): PrintGoldenHouseFixture {
     walls: WallNode[],
     openings: Array<typeof door | typeof window>,
   ) => {
-    const miters = calculateLevelMiters(walls)
     for (const wallNode of walls) {
       const wallRoot = new THREE.Group()
       wallRoot.userData = { pascalId: wallNode.id }
@@ -274,7 +269,16 @@ export function createPrintGoldenHouseFixture(): PrintGoldenHouseFixture {
         wallNode.end[0] - wallNode.start[0],
       )
       const wallOpenings = openings.filter((opening) => opening.wallId === wallNode.id)
-      wallRoot.add(new THREE.Mesh(generateExtrudedWall(wallNode, wallOpenings, miters)))
+      const wallLength = Math.hypot(
+        wallNode.end[0] - wallNode.start[0],
+        wallNode.end[1] - wallNode.start[1],
+      )
+      const wallHeight = wallNode.height ?? 2.5
+      const displayWall = new THREE.Mesh(
+        new THREE.BoxGeometry(wallLength, wallHeight, getWallThickness(wallNode)),
+      )
+      displayWall.position.set(wallLength / 2, wallHeight / 2, 0)
+      wallRoot.add(displayWall)
       for (const opening of wallOpenings) {
         const openingRoot = new THREE.Group()
         openingRoot.userData = { pascalId: opening.id }

@@ -119,4 +119,4 @@ export function subtractCsgBrush(left: Brush, right: Brush, evaluator: Evaluator
 
 // Re-export Brush + SUBTRACTION + ADDITION + INTERSECTION so kinds don't need a
 // direct `three-bvh-csg` dependency.
-export { ADDITION, Brush, HalfEdgeMap, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
+export { ADDITION, Brush, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'

@@ -1,11 +1,6 @@
 import { useScene } from '@pascal-app/core'
-import {
-  type SceneExport,
-  type SceneExportArtifact,
-  useViewer,
-} from '@pascal-app/viewer'
 import { AlertTriangle, CheckCircle2, Download, Printer, XCircle } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from '../../../../../components/ui/primitives/button'
 import {
   isPrintLevelBundleReport,
@@ -13,14 +8,16 @@ import {
   type PrintLevelBundleReport,
 } from '../../../../../lib/level-print-export'
 import type { PrintContentScope } from '../../../../../lib/print-content-scope'
+import type { ModelExport, ModelExportArtifact } from '../../../../../lib/model-export'
 import {
   isPrintExportReport,
   type PrintArtifactFormat,
   type PrintExportReport,
 } from '../../../../../lib/print-export'
+import useEditor from '../../../../../store/use-editor'
 
 export type PreparedPrintExport = {
-  artifact: SceneExportArtifact
+  artifact: ModelExportArtifact
   report: PrintExportReport | PrintLevelBundleReport
 }
 
@@ -30,7 +27,7 @@ function formatMillimeters(value: number): string {
   return value.toFixed(3)
 }
 
-function downloadArtifact(artifact: SceneExportArtifact) {
+function downloadArtifact(artifact: ModelExportArtifact) {
   const url = URL.createObjectURL(artifact.blob)
   const link = document.createElement('a')
   link.href = url
@@ -40,7 +37,7 @@ function downloadArtifact(artifact: SceneExportArtifact) {
 }
 
 export async function preparePrintExport(
-  exportScene: SceneExport,
+  modelExport: ModelExport,
   onlyVisible: boolean,
   scaleInput: string,
   scope: 'whole' | 'levels',
@@ -80,7 +77,7 @@ export async function preparePrintExport(
     }
   }
 
-  const artifact = await exportScene(format === '3mf' ? 'print-3mf' : 'print-stl', {
+  const artifact = await modelExport(format === '3mf' ? 'print-3mf' : 'print-stl', {
     onlyVisible,
     download: false,
     printScale: scale,
@@ -104,7 +101,8 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   const scaleInputId = useId()
   const minimumFeatureInputId = useId()
   const nodes = useScene((state) => state.nodes)
-  const exportScene = useViewer((state) => state.exportScene)
+  const modelExport = useEditor((state) => state.modelExport)
+  const generationRef = useRef(0)
   const [printScale, setPrintScale] = useState('100')
   const [scope, setScope] = useState<'whole' | 'levels'>('levels')
   const [format, setFormat] = useState<PrintArtifactFormat>('3mf')
@@ -118,6 +116,8 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    generationRef.current += 1
+    setIsPreparing(false)
     setPrepared(null)
     setError(null)
   }, [
@@ -131,36 +131,47 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
     plinthMargin,
     plinthThickness,
     minimumFeature,
+    modelExport,
   ])
 
+  useEffect(
+    () => () => {
+      generationRef.current += 1
+    },
+    [],
+  )
+
   const handlePrepare = async () => {
-    if (!exportScene) {
+    if (!modelExport) {
       setError('The 3D exporter is still loading.')
       return
     }
 
+    const generation = generationRef.current + 1
+    generationRef.current = generation
     setIsPreparing(true)
     setPrepared(null)
     setError(null)
     try {
-      setPrepared(
-        await preparePrintExport(
-          exportScene,
-          onlyVisible,
-          printScale,
-          scope,
-          format,
-          content,
-          scope === 'levels' ? base : 'none',
-          plinthMargin,
-          plinthThickness,
-          minimumFeature,
-        ),
+      const next = await preparePrintExport(
+        modelExport,
+        onlyVisible,
+        printScale,
+        scope,
+        format,
+        content,
+        scope === 'levels' ? base : 'none',
+        plinthMargin,
+        plinthThickness,
+        minimumFeature,
       )
+      if (generation === generationRef.current) setPrepared(next)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Print export failed.')
+      if (generation === generationRef.current) {
+        setError(reason instanceof Error ? reason.message : 'Print export failed.')
+      }
     } finally {
-      setIsPreparing(false)
+      if (generation === generationRef.current) setIsPreparing(false)
     }
   }
 
@@ -222,7 +233,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
           <option value="stl">Binary STL fallback</option>
         </select>
         <span className="block text-muted-foreground">
-          3MF declares millimeter units and preserves each level as a named object.
+          3MF declares millimeter units and keeps every level separated on one build plate.
         </span>
       </label>
 
@@ -292,7 +303,9 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
           value={scope}
         >
           <option value="levels">
-            {format === '3mf' ? 'One named object per visible level' : 'One STL per visible level (.zip)'}
+            {format === '3mf'
+              ? 'Separated parts for visible levels'
+              : 'One STL per visible level (.zip)'}
           </option>
           <option value="whole">{format === '3mf' ? 'Whole scene 3MF' : 'Whole scene STL'}</option>
         </select>
@@ -300,7 +313,7 @@ export function PrintExportCard({ onlyVisible }: { onlyVisible: boolean }) {
 
       <Button
         className="w-full justify-start gap-2"
-        disabled={isPreparing || !exportScene}
+        disabled={isPreparing || !modelExport}
         onClick={handlePrepare}
         variant="outline"
       >

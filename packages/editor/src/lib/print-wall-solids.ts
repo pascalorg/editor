@@ -8,6 +8,7 @@ import {
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
+// Manufacturing geometry belongs to the editor layer, not the read-only viewer runtime.
 const DIMENSION_EPSILON = 1e-7
 const SOLID_JOIN_OVERLAP = 1e-5
 

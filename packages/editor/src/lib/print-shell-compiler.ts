@@ -6,13 +6,15 @@ import {
   spatialGridManager,
   type WallNode,
 } from '@pascal-app/core'
-import { buildPrintableRoofSegmentSolids, buildPrintableWallSolids } from '@pascal-app/viewer'
+import { disposeObject3DResources } from '@pascal-app/viewer'
 import * as THREE from 'three'
+import { buildPrintableRoofSegmentSolids } from './print-roof-solids'
 import {
   compilePrintShellBaseline,
   type PrintShellCompileDiagnostic,
   type PrintShellCompileResult,
 } from './print-shell-compiler-baseline'
+import { buildPrintableWallSolids } from './print-wall-solids'
 
 export type SemanticPrintCompileOptions = {
   wallSolids?: boolean
@@ -70,10 +72,7 @@ function copyPreparedTransform(
 }
 
 function disposeGenerated(root: THREE.Object3D) {
-  root.traverse((object) => {
-    const mesh = object as THREE.Mesh
-    if (mesh.isMesh) mesh.geometry.dispose()
-  })
+  disposeObject3DResources(root)
 }
 
 function exportedIdentityIds(root: THREE.Object3D): Set<string> {

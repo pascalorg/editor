@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { SceneExport, SceneExportOptions } from '@pascal-app/viewer'
 import type { PrintLevelBundleReport } from '../../../../../lib/level-print-export'
+import type { ModelExport, ModelExportOptions } from '../../../../../lib/model-export'
 import type { PrintExportReport } from '../../../../../lib/print-export'
 import { preparePrintExport } from './print-export-card'
 
@@ -59,15 +59,15 @@ const levelReport: PrintLevelBundleReport = {
 
 describe('print export card contract', () => {
   test('prepares a visible-only scaled artifact without downloading immediately', async () => {
-    const calls: { format?: string; options?: SceneExportOptions }[] = []
+    const calls: { format?: string; options?: ModelExportOptions }[] = []
     const artifact = { blob: new Blob(['3mf']), filename: 'house.3mf', metadata: report }
-    const exportScene: SceneExport = async (format, options) => {
+    const modelExport: ModelExport = async (format, options) => {
       calls.push({ format, options })
       return artifact
     }
 
     const prepared = await preparePrintExport(
-      exportScene,
+      modelExport,
       true,
       '50',
       'whole',
@@ -98,14 +98,14 @@ describe('print export card contract', () => {
 
   test('rejects invalid scale input before invoking the exporter', async () => {
     let invoked = false
-    const exportScene: SceneExport = async () => {
+    const modelExport: ModelExport = async () => {
       invoked = true
       return null
     }
 
     await expect(
       preparePrintExport(
-        exportScene,
+        modelExport,
         true,
         '0',
         'levels',
@@ -123,15 +123,15 @@ describe('print export card contract', () => {
   })
 
   test('accepts the per-level archive report contract', async () => {
-    const calls: { format?: string; options?: SceneExportOptions }[] = []
+    const calls: { format?: string; options?: ModelExportOptions }[] = []
     const artifact = { blob: new Blob(['zip']), filename: 'levels.zip', metadata: levelReport }
-    const exportScene: SceneExport = async (format, options) => {
+    const modelExport: ModelExport = async (format, options) => {
       calls.push({ format, options })
       return artifact
     }
 
     const prepared = await preparePrintExport(
-      exportScene,
+      modelExport,
       true,
       '50',
       'levels',
@@ -163,14 +163,14 @@ describe('print export card contract', () => {
 
   test('rejects invalid plinth dimensions before invoking the exporter', async () => {
     let invoked = false
-    const exportScene: SceneExport = async () => {
+    const modelExport: ModelExport = async () => {
       invoked = true
       return null
     }
 
     await expect(
       preparePrintExport(
-        exportScene,
+        modelExport,
         true,
         '50',
         'levels',
@@ -187,14 +187,14 @@ describe('print export card contract', () => {
 
   test('rejects an invalid custom minimum feature target before invoking the exporter', async () => {
     let invoked = false
-    const exportScene: SceneExport = async () => {
+    const modelExport: ModelExport = async () => {
       invoked = true
       return null
     }
 
     await expect(
       preparePrintExport(
-        exportScene,
+        modelExport,
         true,
         '50',
         'levels',
@@ -210,14 +210,14 @@ describe('print export card contract', () => {
   })
 
   test('rejects an artifact without the print preflight contract', async () => {
-    const exportScene: SceneExport = async () => ({
+    const modelExport: ModelExport = async () => ({
       blob: new Blob(['stl']),
       filename: 'house.stl',
     })
 
     await expect(
       preparePrintExport(
-        exportScene,
+        modelExport,
         false,
         '100',
         'whole',

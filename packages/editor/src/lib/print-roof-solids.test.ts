@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { DoorNode, RoofSegmentNode, type RoofType } from '@pascal-app/core'
 import * as THREE from 'three'
-import { buildPrintableRoofSegmentSolids } from './roof-print-solids'
+import { buildPrintableRoofSegmentSolids } from './print-roof-solids'
 
 const ROOF_TYPES: RoofType[] = ['gable', 'hip', 'shed', 'gambrel', 'mansard', 'flat', 'dutch']
 

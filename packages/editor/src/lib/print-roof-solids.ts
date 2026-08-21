@@ -12,6 +12,7 @@ import {
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
+// Manufacturing geometry belongs to the editor layer, not the read-only viewer runtime.
 const FACE_EPSILON = 1e-7
 const SURFACE_NORMAL_EPSILON = 1e-6
 
@@ -550,7 +551,8 @@ function blockingDiagnostics(
       continue
     }
     const definition = nodeRegistry.get(child.type)
-    if (!definition || definition.capabilities.roofAccessory?.buildCut) {
+    const roofAccessory = definition?.capabilities.roofAccessory
+    if (!roofAccessory || roofAccessory.buildCut) {
       cutNodeIds.push(child.id)
     }
   }

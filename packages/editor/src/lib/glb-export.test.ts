@@ -3,6 +3,8 @@ import { type AnyNode, DoorNode, registerNode, sceneRegistry } from '@pascal-app
 import { buildDoorPreviewMesh } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import type { GLTFWriter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { prepareSceneForExport, writeTextureReferenceExtras } from './glb-export'
 
 // The reference module reads the storage origin lazily on first use, so
@@ -38,6 +40,35 @@ function nodeMaterial(overrides: Record<string, unknown> = {}) {
 function meshWithNodeMaterial(material: THREE.Material): THREE.Mesh {
   const geometry = new THREE.BoxGeometry(1, 1, 1)
   return new THREE.Mesh(geometry, material)
+}
+
+function sceneWithVisibleAndHiddenBoxes(): {
+  root: THREE.Group
+  nodes: Record<string, AnyNode>
+} {
+  const root = new THREE.Group()
+  const nodes: Record<string, AnyNode> = {}
+
+  for (const [id, visible, x] of [
+    ['item_visible', true, 0],
+    ['item_hidden', false, 2],
+  ] as const) {
+    const group = new THREE.Group()
+    const mesh = meshWithNodeMaterial(nodeMaterial())
+    mesh.position.x = x
+    group.add(mesh)
+    root.add(group)
+    sceneRegistry.nodes.set(id, group)
+    nodes[id] = {
+      object: 'node',
+      id,
+      type: 'item',
+      parentId: null,
+      visible,
+    } as unknown as AnyNode
+  }
+
+  return { root, nodes }
 }
 
 describe('prepareSceneForExport', () => {
@@ -233,6 +264,31 @@ describe('prepareSceneForExport', () => {
       pascalId: itemId,
       kind: 'item',
     })
+  })
+
+  test('traditional binary STL excludes hidden nodes by default and can include them', () => {
+    const { root, nodes } = sceneWithVisibleAndHiddenBoxes()
+
+    const visibleScene = prepareSceneForExport(root, nodes).scene
+    const completeScene = prepareSceneForExport(root, nodes, { onlyVisible: false }).scene
+    const visibleStl = new STLExporter().parse(visibleScene, { binary: true })
+    const completeStl = new STLExporter().parse(completeScene, { binary: true })
+
+    expect(visibleStl.getUint32(80, true)).toBe(12)
+    expect(completeStl.getUint32(80, true)).toBe(24)
+  })
+
+  test('traditional OBJ excludes hidden nodes by default and can include them', () => {
+    const { root, nodes } = sceneWithVisibleAndHiddenBoxes()
+
+    const visibleScene = prepareSceneForExport(root, nodes).scene
+    const completeScene = prepareSceneForExport(root, nodes, { onlyVisible: false }).scene
+    const visibleObj = new OBJExporter().parse(visibleScene)
+    const completeObj = new OBJExporter().parse(completeScene)
+    const vertexCount = (obj: string) => obj.match(/^v /gm)?.length ?? 0
+
+    expect(vertexCount(visibleObj)).toBe(24)
+    expect(vertexCount(completeObj)).toBe(48)
   })
 
   test('neutralises an invisible hitbox root but keeps its visible children', () => {

@@ -1,6 +1,6 @@
-import { HalfEdgeMap } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import { HalfEdgeMap } from 'three-bvh-csg'
 
 const MILLIMETERS_PER_METER = 1000
 const EDGE_CONNECTIVITY_EPSILON_METERS = 1e-5
