@@ -1,7 +1,13 @@
+import { levelBaseElevationAt, terrainSupportLift } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, FenceNode, SlabNode, WallNode } from '../../schema'
+import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
 import { getWallCurveFrameAt, isCurvedWall } from '../../systems/wall/wall-curve'
-import { GROUND_SUPPORT_ID, getFloorPlacedFootprints } from './floor-placed-elevation'
+import {
+  GROUND_SUPPORT_ID,
+  getFloorPlacedElevation,
+  getFloorPlacedFootprints,
+} from './floor-placed-elevation'
 import { SUPPORT_ELEVATION_EPSILON, spatialGridManager } from './spatial-grid-manager'
 
 export type SupportSlabPatch = { supportSlabId: string | undefined }
@@ -16,6 +22,18 @@ export type SupportSlabPatchOptions = {
    */
   maxElevation?: number | null
   /** Pointer- or snap-decided host. Ground is a first-class support source. */
+  preferredSlabId?: string | null
+  /** Persist even an unambiguous host so later overlapping slabs cannot re-elect it. */
+  pinSupport?: boolean
+}
+
+export type FrozenFloorPlacementOptions = {
+  /** Canonical position before floor/support lift is applied. */
+  position: [number, number, number]
+  rotation?: unknown
+  /** Exact level-local elevation hit on a non-slab construction surface. */
+  elevation: number
+  /** Slab/ground supporting that construction surface, when known. */
   preferredSlabId?: string | null
 }
 
@@ -35,6 +53,30 @@ export function resolveSupportSlabPatch(
 
   const maxElevation = options?.maxElevation
   const footprints = getFloorPlacedFootprints(floorPlaced, node, { nodes })
+
+  if (options?.preferredSlabId === GROUND_SUPPORT_ID) {
+    return { supportSlabId: GROUND_SUPPORT_ID }
+  }
+  if (options?.preferredSlabId) {
+    for (const footprint of footprints) {
+      const position = footprint.position ?? (node as { position?: unknown }).position
+      if (!Array.isArray(position) || position.length !== 3) continue
+      const elevation = spatialGridManager.getHostSlabElevationForFootprint(
+        parent.id,
+        options.preferredSlabId,
+        position as [number, number, number],
+        footprint.dimensions,
+        footprint.rotation,
+      )
+      if (
+        elevation !== null &&
+        (maxElevation == null || elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON)
+      ) {
+        return { supportSlabId: options.preferredSlabId }
+      }
+    }
+  }
+
   const candidateElevations = new Set<number>()
   let winner: { slabId: string; elevation: number } | null = null
   let cappedOut = false
@@ -66,12 +108,61 @@ export function resolveSupportSlabPatch(
   }
 
   if (winner !== null) {
-    return { supportSlabId: candidateElevations.size >= 2 ? winner.slabId : undefined }
+    return {
+      supportSlabId:
+        options?.pinSupport || candidateElevations.size >= 2 ? winner.slabId : undefined,
+    }
   }
   // Capped election chose the ground while overlapping slabs sit above the
   // cap: persist the ground host, or the uncapped per-frame election would
   // lift the committed node back onto the deck.
-  return { supportSlabId: cappedOut ? GROUND_SUPPORT_ID : undefined }
+  return {
+    supportSlabId: options?.pinSupport || cappedOut ? GROUND_SUPPORT_ID : undefined,
+  }
+}
+
+/**
+ * Freeze an exact pointed node-top elevation into a floor-placed node's
+ * existing canonical Y offset, while pinning the slab/ground beneath that
+ * surface. This deliberately does not create a live hosting edge to the
+ * pointed node: arbitrary mesh faces can be edited or sloped, so placement
+ * captures the plane the user chose at commit time.
+ */
+export function resolveFrozenFloorPlacementPatch(
+  node: AnyNode,
+  nodes: Record<string, AnyNode>,
+  options: FrozenFloorPlacementOptions,
+): SupportSlabPatch & { position: [number, number, number] } {
+  const effectiveNode = {
+    ...(node as Record<string, unknown>),
+    position: options.position,
+    ...(options.rotation !== undefined ? { rotation: options.rotation } : {}),
+  } as AnyNode
+  const floorPlaced = nodeRegistry.get(effectiveNode.type)?.capabilities?.floorPlaced
+  if (!floorPlaced || (floorPlaced.applies && !floorPlaced.applies(effectiveNode))) {
+    return { supportSlabId: undefined, position: options.position }
+  }
+  const supportPatch = resolveSupportSlabPatch(effectiveNode, nodes, {
+    maxElevation: options.elevation,
+    preferredSlabId: options.preferredSlabId,
+    pinSupport: true,
+  })
+  const pinnedNode = { ...effectiveNode, ...supportPatch } as AnyNode
+  const supportElevation = getFloorPlacedElevation({
+    node: pinnedNode,
+    nodes,
+    position: options.position,
+    rotation: options.rotation,
+  })
+
+  return {
+    ...supportPatch,
+    position: [
+      options.position[0],
+      options.position[1] + options.elevation - supportElevation,
+      options.position[2],
+    ],
+  }
 }
 
 export function resolveWallSupportSlabPatch(
@@ -212,6 +303,10 @@ export function resolveFenceSupportSlabPatch(
   const candidateElevations = new Set<number>()
   let winner: { slabId: string; elevation: number } | null = null
 
+  if (options?.preferredSlabId === GROUND_SUPPORT_ID) {
+    return { supportSlabId: GROUND_SUPPORT_ID }
+  }
+
   for (let i = 1; i < points.length; i++) {
     const [ax, az] = points[i - 1]!
     const [bx, bz] = points[i]!
@@ -222,6 +317,22 @@ export function resolveFenceSupportSlabPatch(
     // getItemFootprint's rotation convention: local +X maps to
     // (cos yRot, sin yRot) in XZ, so the segment angle aligns the band.
     const rotation: [number, number, number] = [0, Math.atan2(bz - az, bx - ax), 0]
+
+    if (options?.preferredSlabId) {
+      const preferredElevation = spatialGridManager.getHostSlabElevationForFootprint(
+        parent.id,
+        options.preferredSlabId,
+        position,
+        dimensions,
+        rotation,
+      )
+      if (
+        preferredElevation !== null &&
+        (maxElevation == null || preferredElevation <= maxElevation + SUPPORT_ELEVATION_EPSILON)
+      ) {
+        return { supportSlabId: options.preferredSlabId }
+      }
+    }
 
     const candidates = spatialGridManager.getSupportCandidatesForFootprint(
       parent.id,
@@ -243,7 +354,168 @@ export function resolveFenceSupportSlabPatch(
     }
   }
 
-  if (winner === null) return { supportSlabId: undefined }
+  if (winner === null) {
+    return { supportSlabId: options?.pinSupport ? GROUND_SUPPORT_ID : undefined }
+  }
   const persist = candidateElevations.size >= 2 || winner.elevation > SUPPORT_ELEVATION_EPSILON
-  return { supportSlabId: persist ? winner.slabId : undefined }
+  return { supportSlabId: options?.pinSupport || persist ? winner.slabId : undefined }
+}
+
+export type FenceConstructionOptions = {
+  supportCap?: number | null
+  preferredSupportSlabId?: string | null
+  constructionElevation?: number | null
+}
+
+export function resolveFenceConstructionSupport(
+  fence: FenceNode,
+  levelId: string,
+  nodes: Record<string, AnyNode>,
+  options?: FenceConstructionOptions,
+): FenceNode {
+  const supportPatch = resolveFenceSupportSlabPatch({ ...fence, parentId: levelId }, nodes, {
+    maxElevation: options?.supportCap ?? null,
+    preferredSlabId: options?.preferredSupportSlabId ?? null,
+    pinSupport: options?.constructionElevation != null,
+  })
+  const host = supportPatch.supportSlabId ? nodes[supportPatch.supportSlabId] : null
+  const baseElevation =
+    host?.type === 'slab'
+      ? host.elevation
+      : levelBaseElevationAt(nodes, levelId, fence.start[0], fence.start[1])
+  const supportOffset =
+    options?.constructionElevation == null
+      ? fence.supportOffset
+      : options.constructionElevation - baseElevation
+
+  return {
+    ...fence,
+    ...supportPatch,
+    supportOffset:
+      supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
+  }
+}
+
+export type WallConstructionOptions = {
+  supportCap?: number | null
+  preferredSupportSlabId?: string | null
+  constructionElevation?: number | null
+  constructionHeight?: number | null
+  flatConstructionBase?: boolean
+  constructionSourceNodeId?: AnyNodeId | null
+}
+
+export function resolveTerrainWallConstructionOptions(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  point: readonly [number, number],
+  defaults?: Record<string, unknown>,
+): WallConstructionOptions | undefined {
+  const constructionElevation = terrainSupportLift(nodes, levelId, point[0], point[1])
+  if (constructionElevation == null) return undefined
+
+  const level = nodes[levelId]
+  const constructionHeight =
+    typeof defaults?.height === 'number'
+      ? defaults.height
+      : level?.type === 'level'
+        ? (level.height ?? DEFAULT_LEVEL_HEIGHT)
+        : DEFAULT_LEVEL_HEIGHT
+
+  return {
+    constructionElevation,
+    constructionHeight,
+    supportCap: constructionElevation,
+  }
+}
+
+export type WallConstructionResolution = {
+  walls: WallNode[]
+  sourceSupportUpdate: { id: AnyNodeId; data: SupportSlabPatch } | null
+}
+
+export function resolveWallConstruction(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  walls: readonly WallNode[],
+  options?: WallConstructionOptions,
+): WallConstructionResolution {
+  let resolvedNodes = nodes
+  let sourceSupportUpdate: WallConstructionResolution['sourceSupportUpdate'] = null
+  const constructionSourceNodeId = options?.constructionSourceNodeId
+  if (constructionSourceNodeId) {
+    const sourceNode = nodes[constructionSourceNodeId]
+    const currentSupport =
+      sourceNode && 'supportSlabId' in sourceNode
+        ? (sourceNode.supportSlabId as string | undefined)
+        : undefined
+    if (sourceNode && currentSupport == null) {
+      const data = resolveSupportSlabPatch(sourceNode, nodes, { pinSupport: true })
+      if (data.supportSlabId != null) {
+        sourceSupportUpdate = { id: constructionSourceNodeId, data }
+        resolvedNodes = {
+          ...nodes,
+          [constructionSourceNodeId]: { ...sourceNode, ...data } as AnyNode,
+        }
+      }
+    }
+  }
+
+  const resolvedWalls = walls.map((createdWall) => {
+    const wallWithParent = { ...createdWall, parentId: levelId as AnyNodeId } as WallNode
+    const terrainBase = terrainSupportLift(
+      resolvedNodes,
+      levelId,
+      createdWall.start[0],
+      createdWall.start[1],
+    )
+    const wallOptions =
+      options?.preferredSupportSlabId === GROUND_SUPPORT_ID &&
+      terrainBase == null &&
+      !options.flatConstructionBase
+        ? undefined
+        : options
+    const preferredSupportSlabId =
+      wallOptions?.flatConstructionBase === true
+        ? GROUND_SUPPORT_ID
+        : (wallOptions?.preferredSupportSlabId ??
+          (wallOptions?.constructionElevation != null && terrainBase != null
+            ? GROUND_SUPPORT_ID
+            : null))
+    const supportPatch = resolveWallSupportSlabPatch(wallWithParent, resolvedNodes, {
+      maxElevation: wallOptions?.supportCap ?? null,
+      preferredSlabId: preferredSupportSlabId,
+    })
+    const sourceSupport = spatialGridManager.getSlabSupportForWall(
+      levelId,
+      createdWall.start,
+      createdWall.end,
+      createdWall.curveOffset,
+      createdWall.thickness,
+      supportPatch.supportSlabId,
+      wallOptions?.supportCap ?? null,
+    )
+    const groundDraft =
+      preferredSupportSlabId === GROUND_SUPPORT_ID &&
+      (terrainBase != null || wallOptions?.flatConstructionBase === true)
+    const supportOffset =
+      groundDraft && wallOptions?.constructionElevation != null
+        ? wallOptions.constructionElevation - sourceSupport.elevation
+        : undefined
+    const preserveDraftHeight =
+      groundDraft &&
+      createdWall.height == null &&
+      wallOptions?.constructionHeight != null &&
+      wallOptions.constructionElevation != null
+
+    return {
+      ...wallWithParent,
+      ...supportPatch,
+      height: preserveDraftHeight ? wallOptions.constructionHeight : createdWall.height,
+      supportOffset:
+        supportOffset != null && Math.abs(supportOffset) > 1e-6 ? supportOffset : undefined,
+    } as WallNode
+  })
+
+  return { walls: resolvedWalls, sourceSupportUpdate }
 }

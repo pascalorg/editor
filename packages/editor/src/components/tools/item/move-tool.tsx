@@ -1,6 +1,6 @@
 import type { AnyNodeId, ElevatorNode, SpawnNode } from '@pascal-app/core'
-import { nodeRegistry } from '@pascal-app/core'
-import { Suspense } from 'react'
+import { createSceneApi, nodeRegistry, useScene } from '@pascal-app/core'
+import { Suspense, useMemo } from 'react'
 import { useMovingNode } from '../../../store/use-interaction-scope'
 import { MoveElevatorTool } from '../elevator/move-elevator-tool'
 import { MoveRegistryNodeTool } from '../registry/move-registry-node-tool'
@@ -28,6 +28,7 @@ export const MoveTool: React.FC<{
   onSpawnMoved?: (nodeId: SpawnNode['id']) => void
 }> = ({ onNodeMoved }) => {
   const movingNode = useMovingNode()
+  const sceneApi = useMemo(() => createSceneApi(useScene), [])
 
   if (!movingNode) return null
 
@@ -37,7 +38,7 @@ export const MoveTool: React.FC<{
   if (RegistryMove) {
     return (
       <Suspense fallback={null}>
-        <RegistryMove node={movingNode} />
+        <RegistryMove node={movingNode} sceneApi={sceneApi} />
       </Suspense>
     )
   }

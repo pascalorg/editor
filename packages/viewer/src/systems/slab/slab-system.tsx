@@ -5,9 +5,9 @@ import {
   polygonsIntersect,
   type SlabNode,
   type SlabPolygonContext,
+  subtractPolygonsFromPolygon,
 } from '@pascal-app/core'
 import * as THREE from 'three'
-import { subtractPolygonsFromPolygon } from '../../lib/polygon-union'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
 // ============================================================================

@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { createStoredNodeCountTracker, isSuspiciousNodeDrop } from './use-auto-save'
+import {
+  createStoredNodeCountTracker,
+  decideExitFlush,
+  isSuspiciousNodeDrop,
+} from './use-auto-save'
 
 describe('isSuspiciousNodeDrop', () => {
   test('blocks populated scenes from being flushed as empty skeletons', () => {
@@ -59,5 +63,73 @@ describe('createStoredNodeCountTracker', () => {
     tracker.trackLoadedGraph(3)
 
     expect(tracker.allowWrite(3)).toBe(true)
+  })
+})
+
+describe('decideExitFlush', () => {
+  test('reproduces the 2026-08-16 scene-wipe sequence and skips the flush', () => {
+    // The exact traced wipe (dev repro, scenes a4993ec9f1ab/1befee38f973 and
+    // the live sessions of 2026-08-18):
+    //  1. useAutoSave subscribes; store = initial empty state.
+    //  2. useHostPanels' mount effect writes default installedPlugins — a
+    //     scene-store change BEFORE the Editor's load effect runs, so the
+    //     session is marked dirty with zero user edits.
+    //  3. The load effect sets loading=true and calls unloadScene(); the
+    //     tracker re-baselines to the transient 0-node state.
+    //  4. StrictMode's simulated unmount (prod: tab close / navigation)
+    //     runs the effect cleanup -> flushOnExit with an EMPTY store.
+    // The flush must be skipped: the store content is transient, not data.
+    expect(
+      decideExitFlush({
+        isLoadingScene: true,
+        hasDirtyChanges: true,
+        storedNodeCount: 0,
+        currentNodeCount: 0,
+      }),
+    ).toBe('skip-loading')
+  })
+
+  test('never flushes while a load is in flight, whatever the counts say', () => {
+    expect(
+      decideExitFlush({
+        isLoadingScene: true,
+        hasDirtyChanges: true,
+        storedNodeCount: 74,
+        currentNodeCount: 74,
+      }),
+    ).toBe('skip-loading')
+  })
+
+  test('does nothing when there are no dirty changes', () => {
+    expect(
+      decideExitFlush({
+        isLoadingScene: false,
+        hasDirtyChanges: false,
+        storedNodeCount: 74,
+        currentNodeCount: 0,
+      }),
+    ).toBe('skip-clean')
+  })
+
+  test('blocks a populated-to-scaffold drop after hydration', () => {
+    expect(
+      decideExitFlush({
+        isLoadingScene: false,
+        hasDirtyChanges: true,
+        storedNodeCount: 74,
+        currentNodeCount: 0,
+      }),
+    ).toBe('blocked-suspicious')
+  })
+
+  test('flushes ordinary dirty sessions on exit', () => {
+    expect(
+      decideExitFlush({
+        isLoadingScene: false,
+        hasDirtyChanges: true,
+        storedNodeCount: 74,
+        currentNodeCount: 75,
+      }),
+    ).toBe('flush')
   })
 })

@@ -40,6 +40,7 @@ type FloorplanDraftPreviewState = {
   wallDraftStart: WallPlanPoint | null
   fenceDraftStart: WallPlanPoint | null
   roofDraftStart: WallPlanPoint | null
+  roofDraftQuarterTurn: boolean
   polygonDraftType: FloorplanPolygonDraftType | null
   polygonDraftPoints: WallPlanPoint[]
   /** Set the snapped cursor point. No-ops (skips the store update, so
@@ -54,6 +55,7 @@ type FloorplanDraftPreviewState = {
   setWallDraftStart(point: WallPlanPoint | null): void
   setFenceDraftStart(point: WallPlanPoint | null): void
   setRoofDraftStart(point: WallPlanPoint | null): void
+  setRoofDraftQuarterTurn(quarterTurn: boolean): void
   setPolygonDraft(type: FloorplanPolygonDraftType | null, points: readonly WallPlanPoint[]): void
   reset(): void
 }
@@ -94,6 +96,7 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
   wallDraftStart: null,
   fenceDraftStart: null,
   roofDraftStart: null,
+  roofDraftQuarterTurn: false,
   polygonDraftType: null,
   polygonDraftPoints: [],
   setCursorPoint: (point) =>
@@ -116,6 +119,10 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
   setWallDraftStart: (point) => set(setPlanPointField('wallDraftStart', point)),
   setFenceDraftStart: (point) => set(setPlanPointField('fenceDraftStart', point)),
   setRoofDraftStart: (point) => set(setPlanPointField('roofDraftStart', point)),
+  setRoofDraftQuarterTurn: (quarterTurn) =>
+    set((state) =>
+      state.roofDraftQuarterTurn === quarterTurn ? state : { roofDraftQuarterTurn: quarterTurn },
+    ),
   setPolygonDraft: (type, points) =>
     set((state) =>
       state.polygonDraftType === type && planPointsEqual(state.polygonDraftPoints, points)
@@ -132,6 +139,7 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
       state.wallDraftStart === null &&
       state.fenceDraftStart === null &&
       state.roofDraftStart === null &&
+      state.roofDraftQuarterTurn === false &&
       state.polygonDraftType === null &&
       state.polygonDraftPoints.length === 0
         ? state
@@ -144,6 +152,7 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
             wallDraftStart: null,
             fenceDraftStart: null,
             roofDraftStart: null,
+            roofDraftQuarterTurn: false,
             polygonDraftType: null,
             polygonDraftPoints: [],
           },

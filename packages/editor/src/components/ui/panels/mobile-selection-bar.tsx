@@ -8,7 +8,9 @@ import { cn } from '../../../lib/utils'
 import { getNodeDisplay } from './node-display'
 
 interface MobileSelectionBarProps {
-  node: AnyNode
+  node: AnyNode | null
+  label?: string
+  icon?: string
   onMove: () => void
   onDuplicate: () => void
   onDelete: () => void
@@ -20,19 +22,23 @@ const ACTION_BTN =
 
 export function MobileSelectionBar({
   node,
+  label,
+  icon,
   onMove,
   onDuplicate,
   onDelete,
   onEdit,
 }: MobileSelectionBarProps) {
-  const { icon, label } = getNodeDisplay(node)
+  const display = getNodeDisplay(node)
+  const resolvedLabel = label ?? display.label
+  const resolvedIcon = icon ?? display.icon
 
   const stop: MouseEventHandler<HTMLButtonElement> = (e) => e.stopPropagation()
 
   return (
     <div className="pointer-events-auto absolute right-3 bottom-6 left-3 z-50 flex h-12 items-stretch gap-1 rounded-2xl border border-border/50 bg-background/95 px-2 shadow-2xl backdrop-blur-xl">
       <button
-        aria-label={`Edit ${label}`}
+        aria-label={`Edit ${resolvedLabel}`}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-white/8',
         )}
@@ -43,10 +49,10 @@ export function MobileSelectionBar({
           alt=""
           className="shrink-0 rounded object-contain"
           height={20}
-          src={icon}
+          src={resolvedIcon}
           width={20}
         />
-        <span className="truncate font-medium text-foreground text-sm">{label}</span>
+        <span className="truncate font-medium text-foreground text-sm">{resolvedLabel}</span>
       </button>
 
       <div className="flex items-center gap-0.5 border-border/40 border-l pl-1">

@@ -1,6 +1,12 @@
 import type { TurbineVentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import {
+  copyUvToSecondaryChannel,
+  cumulativeProfileDistances,
+  type MetricUv,
+  planarMetricUvs,
+} from '../shared/primitive-uv'
 
 /**
  * Pure builders for the turbine vent (whirlybird). The mesh is split into
@@ -206,6 +212,11 @@ function cylinderWall(
   y1: number,
   segs: number,
 ): void {
+  const ring = Array.from({ length: segs + 1 }, (_, index) => {
+    const angle = (index / segs) * Math.PI * 2
+    return [r * Math.cos(angle), y0, r * Math.sin(angle)]
+  })
+  const ringU = cumulativeProfileDistances(ring)
   for (let i = 0; i < segs; i++) {
     const a = (i / segs) * Math.PI * 2
     const b = ((i + 1) / segs) * Math.PI * 2
@@ -223,6 +234,12 @@ function cylinderWall(
       [r * cb, y1, r * sb],
       [r * ca, y1, r * sa],
       out,
+      [
+        [ringU[i]!, y0],
+        [ringU[i + 1]!, y0],
+        [ringU[i + 1]!, y1],
+        [ringU[i]!, y1],
+      ],
     )
   }
 }
@@ -240,7 +257,13 @@ function disc(
   for (let i = 0; i < segs; i++) {
     const a = (i / segs) * Math.PI * 2
     const b = ((i + 1) / segs) * Math.PI * 2
-    pushTri(p, n, uv, center, polar(a, r, y), polar(b, r, y), hint)
+    const edgeA = polar(a, r, y)
+    const edgeB = polar(b, r, y)
+    pushTri(p, n, uv, center, edgeA, edgeB, hint, [
+      [center.x, center.z],
+      [edgeA.x, edgeA.z],
+      [edgeB.x, edgeB.z],
+    ])
   }
 }
 
@@ -268,6 +291,15 @@ function dome(
     grid.push(row)
   }
   const center = new THREE.Vector3(0, y0, 0)
+  const ringU = grid.map((row) =>
+    cumulativeProfileDistances(row.map((point) => [point.x, point.y, point.z])),
+  )
+  const ringV = [0]
+  for (let i = 1; i <= lat; i++) {
+    let distance = 0
+    for (let j = 0; j <= lng; j++) distance += grid[i - 1]![j]!.distanceTo(grid[i]![j]!)
+    ringV.push(ringV[i - 1]! + distance / (lng + 1))
+  }
   for (let i = 0; i < lat; i++) {
     for (let j = 0; j < lng; j++) {
       const a = grid[i]![j]!
@@ -276,7 +308,22 @@ function dome(
       const d = grid[i + 1]![j]!
       const mid = new THREE.Vector3().add(a).add(b).add(c).add(d).multiplyScalar(0.25)
       const hint = mid.clone().sub(center).normalize()
-      pushQuad(p, n, uv, a, b, c, d, [hint.x, hint.y, hint.z])
+      pushQuad(
+        p,
+        n,
+        uv,
+        a,
+        b,
+        c,
+        d,
+        [hint.x, hint.y, hint.z],
+        [
+          [ringU[i]![j]!, ringV[i]!],
+          [ringU[i]![j + 1]!, ringV[i]!],
+          [ringU[i + 1]![j + 1]!, ringV[i + 1]!],
+          [ringU[i + 1]![j]!, ringV[i + 1]!],
+        ],
+      )
     }
   }
 }
@@ -314,6 +361,7 @@ function pushQuad(
   cp: THREE.Vector3 | number[],
   dp: THREE.Vector3 | number[],
   hint: [number, number, number],
+  authoredUvs?: readonly MetricUv[],
 ): void {
   const a = v(ap)
   const b = v(bp)
@@ -334,27 +382,21 @@ function pushQuad(
   ny /= len
   nz /= len
 
-  const abx = b[0]! - a[0]!
-  const aby = b[1]! - a[1]!
-  const abz = b[2]! - a[2]!
-  const adx = d[0]! - a[0]!
-  const ady = d[1]! - a[1]!
-  const adz = d[2]! - a[2]!
-  const u = Math.sqrt(abx * abx + aby * aby + abz * abz)
-  const vv = Math.sqrt(adx * adx + ady * ady + adz * adz)
+  const faceUvs = authoredUvs ?? planarMetricUvs([a, b, c, d], [nx, ny, nz])
+  const [uvA, uvB, uvC, uvD] = faceUvs as readonly [MetricUv, MetricUv, MetricUv, MetricUv]
 
   if (flip) {
     // Reversed winding: (a,b,c) + (a,c,d).
     positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
-    uvs.push(0, 0, u, 0, u, vv)
+    uvs.push(...uvA, ...uvB, ...uvC)
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, d[0]!, d[1]!, d[2]!)
-    uvs.push(0, 0, u, vv, 0, vv)
+    uvs.push(...uvA, ...uvC, ...uvD)
   } else {
     // Default winding: (a,c,b) + (a,d,c).
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
-    uvs.push(0, 0, u, vv, u, 0)
+    uvs.push(...uvA, ...uvC, ...uvB)
     positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
-    uvs.push(0, 0, 0, vv, u, vv)
+    uvs.push(...uvA, ...uvD, ...uvC)
   }
   for (let i = 0; i < 6; i++) normals.push(nx, ny, nz)
 }
@@ -367,6 +409,7 @@ function pushTri(
   bp: THREE.Vector3 | number[],
   cp: THREE.Vector3 | number[],
   hint: [number, number, number],
+  authoredUvs?: readonly MetricUv[],
 ): void {
   const a = v(ap)
   const b = v(bp)
@@ -385,12 +428,17 @@ function pushTri(
   ny /= len
   nz /= len
 
+  const faceUvs = authoredUvs ?? planarMetricUvs([a, b, c], [nx, ny, nz])
+  const uvA = faceUvs[0]!
+  const uvB = faceUvs[1]!
+  const uvC = faceUvs[2]!
   if (flip) {
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
+    uvs.push(...uvA, ...uvC, ...uvB)
   } else {
     positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
+    uvs.push(...uvA, ...uvB, ...uvC)
   }
-  uvs.push(0, 0, 1, 0, 0, 1)
   for (let i = 0; i < 3; i++) normals.push(nx, ny, nz)
 }
 
@@ -399,6 +447,7 @@ function toGeometry(positions: number[], normals: number[], uvs: number[]): THRE
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  copyUvToSecondaryChannel(geo)
   geo.computeBoundingSphere()
   return geo
 }

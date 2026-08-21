@@ -22,6 +22,22 @@ describe('buildBoxVentGeometry', () => {
     expect(box.getAttribute('position').count).toBe(384)
   })
 
+  test.each([
+    'box',
+    'cap',
+    'dome',
+  ] as const)('%s style separates the lower base from the upper cover', (style) => {
+    const geometry = buildBoxVentGeometry(BoxVentNode.parse({ style }))
+    const vertexCount = geometry.getAttribute('position').count
+
+    expect(geometry.groups).toHaveLength(2)
+    expect(geometry.groups[0]).toMatchObject({ start: 0, materialIndex: 0 })
+    expect(geometry.groups[1]).toMatchObject({ materialIndex: 1 })
+    expect(geometry.groups[0]!.count).toBeGreaterThan(0)
+    expect(geometry.groups[1]!.count).toBeGreaterThan(0)
+    expect(geometry.groups[0]!.count + geometry.groups[1]!.count).toBe(vertexCount)
+  })
+
   test('box style: zero bevel still produces a valid closed solid', () => {
     // With bevel=0 the wall-edge dedupe drops the degenerate corner
     // quads, but the bottom + top fan triangulations always include
@@ -90,6 +106,17 @@ describe('buildBoxVentGeometry', () => {
     }
     expect(maxX).toBeCloseTo(0.3)
     expect(maxZ).toBeCloseTo(0.25)
+  })
+
+  test('unwraps the rounded base and cover at metre scale', () => {
+    const geometry = buildBoxVentGeometry(
+      BoxVentNode.parse({ style: 'box', width: 2, depth: 1.5, height: 0.6 }),
+    )
+    const uv = geometry.getAttribute('uv')
+    expect(geometry.getAttribute('uv2').count).toBe(uv.count)
+    const u = Array.from({ length: uv.count }, (_, index) => uv.getX(index))
+
+    expect(Math.max(...u) - Math.min(...u)).toBeGreaterThan(5)
   })
 })
 

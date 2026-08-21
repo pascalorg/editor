@@ -23,6 +23,10 @@ const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
   guide: { icon: '/icons/floorplan.webp', label: 'Guide image' },
 }
 
+export function getTypeDisplay(type: string): NodeDisplay {
+  return TYPE_DEFAULTS[type] ?? { icon: '/icons/select.webp', label: type }
+}
+
 export function getNodeDisplay(node: AnyNode | null | undefined): NodeDisplay {
   if (!node) return { icon: '/icons/select.webp', label: 'Selection' }
   const fallback = TYPE_DEFAULTS[node.type] ?? { icon: '/icons/select.webp', label: node.type }

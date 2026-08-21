@@ -33,7 +33,28 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
-export { BoxVentNode } from './nodes/box-vent'
+export {
+  type AutoDownspoutPlacement,
+  type AutomaticDownspoutInput,
+  planAutomaticDownspouts,
+  resolveAutomaticDownspoutLength,
+} from './nodes/automatic-downspout'
+export {
+  BlockEdge,
+  BlockFace,
+  type BlockFaceFrame,
+  BlockNode,
+  BlockTopology,
+  type BlockTopologyIssue,
+  BlockVertex,
+  blockUndirectedEdgeKey,
+  createBoxBlockTopology,
+  getBlockFaceCentroid,
+  getBlockFaceFrame,
+  getBlockFaceNormal,
+  inspectBlockTopology,
+} from './nodes/block'
+export { BoxVentMaterialRole, BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
 export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
@@ -73,7 +94,7 @@ export {
   setConstructionDimensionDrawingPresentation,
   setConstructionDimensionDrawingSuppressedSegments,
 } from './nodes/construction-dimension'
-export { CupolaNode } from './nodes/cupola'
+export { CupolaMaterialRole, CupolaNode } from './nodes/cupola'
 export {
   DoorNode,
   DoorSegment,
@@ -86,7 +107,12 @@ export {
   type DormerSurfaceMaterialSpec,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
-export { DownspoutNode } from './nodes/downspout'
+export {
+  DownspoutNode,
+  defaultDownspoutMetadata,
+  isDefaultDownspoutNode,
+  usesAutomaticDownspoutLength,
+} from './nodes/downspout'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'
 export { DuctTerminalNode } from './nodes/duct-terminal'
@@ -96,10 +122,25 @@ export {
   ElevatorNode,
   ElevatorShaftStyle,
 } from './nodes/elevator'
-export { EyebrowVentNode } from './nodes/eyebrow-vent'
+export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
-export { GutterNode, GutterOutlet } from './nodes/gutter'
+export {
+  computeGutterEaveY,
+  createDefaultGuttersForSegment,
+  GUTTER_EAVE_TUCK_INWARD,
+  GUTTER_EAVE_TUCK_UP,
+  type GutterEaveSide,
+  type GutterEdgeExclusion,
+  GutterNode,
+  GutterOutlet,
+  type GutterRun,
+  getDefaultGutterSide,
+  getGutterRunsForSegment,
+  hasAutoGutterMetadata,
+  isAutoGutterEnabled,
+  isDefaultGutterNode,
+} from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export type {
   AnimationEffect,
@@ -119,6 +160,13 @@ export {
   isLowProfileItemSurface,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
+export {
+  LeanToConnectionMode,
+  LeanToEndCondition,
+  LeanToExtensionNode,
+  LeanToResizeLock,
+  LeanToRoofEdge,
+} from './nodes/lean-to-extension'
 export { LevelNode } from './nodes/level'
 export { LinesetNode } from './nodes/lineset'
 export { LiquidLineNode } from './nodes/liquid-line'
@@ -167,6 +215,7 @@ export {
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
+  isBandedShedSegment,
   MIN_ROOF_SEGMENT_TRIM_SPAN,
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
@@ -176,6 +225,7 @@ export {
 } from './nodes/roof-segment'
 export type {
   DutchRoofShapeMetrics,
+  RoofShapeEaveSide,
   RoofShapeFaceVertex,
   RoofShapeInsets,
   RoofShapeRatios,
@@ -184,6 +234,7 @@ export {
   getDutchEndSlopeFaces,
   getDutchRoofShapeMetrics,
   getRoofModuleFaces,
+  getRoofShapeEaveSides,
   getRoofShapeInsets,
   getRoofShapeRatios,
 } from './nodes/roof-segment-shape'
@@ -233,7 +284,7 @@ export {
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
-export { TurbineVentNode } from './nodes/turbine-vent'
+export { TurbineVentMaterialRole, TurbineVentNode } from './nodes/turbine-vent'
 export type {
   WallBandSurfaceSlotId,
   WallFaceBand,

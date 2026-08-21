@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { type GridEvent, type NodeEvent, ShelfNode } from '@pascal-app/core'
+import { emitter, type GridEvent, type NodeEvent, ShelfNode } from '@pascal-app/core'
 import { Object3D } from 'three'
-import { getLevelLocalSnappedPosition, resolveAlignedFloorPlacement } from './floor-placement'
+import {
+  getLevelLocalSnappedPosition,
+  isForcePlacementEvent,
+  resolveAlignedFloorPlacement,
+  subscribeFloorPlacementClicks,
+  subscribeFloorPlacementDoubleClicks,
+} from './floor-placement'
 
 const nativeEvent = {} as GridEvent['nativeEvent']
 
@@ -33,5 +39,49 @@ describe('floor placement helpers', () => {
     }
 
     expect(getLevelLocalSnappedPosition('missing-level', event, 0.25)).toEqual([0.25, 0, 0.25])
+  })
+
+  test('recognizes Alt as force placement', () => {
+    const event = {
+      nativeEvent: { altKey: true },
+    } as unknown as GridEvent
+
+    expect(isForcePlacementEvent(event)).toBe(true)
+    expect(
+      isForcePlacementEvent({
+        ...event,
+        nativeEvent: { altKey: false } as GridEvent['nativeEvent'],
+      }),
+    ).toBe(false)
+  })
+
+  test('routes generic node clicks and double-clicks without enumerating node kinds', () => {
+    const node = ShelfNode.parse({ position: [0, 0, 0] })
+    const event: NodeEvent = {
+      node,
+      position: [0, 0, 0],
+      localPosition: [0, 0, 0],
+      object: new Object3D(),
+      stopPropagation: () => {},
+      nativeEvent,
+    }
+    let clicks = 0
+    let doubleClicks = 0
+    const unsubscribeClick = subscribeFloorPlacementClicks(() => {
+      clicks += 1
+    })
+    const unsubscribeDoubleClick = subscribeFloorPlacementDoubleClicks(() => {
+      doubleClicks += 1
+    })
+
+    emitter.emit('node:click', event)
+    emitter.emit('node:double-click', event)
+    unsubscribeClick()
+    unsubscribeDoubleClick()
+    emitter.emit('node:click', event)
+    emitter.emit('node:double-click', event)
+
+    expect(clicks).toBe(1)
+    expect(doubleClicks).toBe(1)
   })
 })

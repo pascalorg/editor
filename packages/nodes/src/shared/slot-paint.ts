@@ -21,8 +21,8 @@ import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
  * Shared paint capability for procedural kinds on the unified slot model
  * (`node.slots: Record<slotId, MaterialRef>` + the shared scene-material
  * palette) — the same data shape items derive from their GLB and the shelf
- * declares via `capabilities.slots`. Distinct from `surface-paint.ts`, which
- * writes the legacy inline `node.material` copy the plan is retiring.
+ * declares via `capabilities.slots`. `surface-paint.ts` configures this helper
+ * for kinds whose entire rendered subtree is one paintable surface.
  *
  * The commit / resolve / effective-material logic is identical across kinds;
  * only the slot-resolution from a pointer hit and the mesh preview differ, so
@@ -67,6 +67,36 @@ function findMatchingSceneMaterial(
   return null
 }
 
+export type SlotPaintMaterialResolution = {
+  ref: string | undefined
+  newSceneMaterial: SceneMaterial | null
+}
+
+export function resolveSlotPaintMaterialRef(
+  materials: Record<SceneMaterialId, SceneMaterial>,
+  material: MaterialSchema | undefined,
+  materialPreset: string | undefined,
+): SlotPaintMaterialResolution | null {
+  if (material === undefined && materialPreset === undefined) {
+    return { ref: undefined, newSceneMaterial: null }
+  }
+  if (materialPreset) return { ref: materialPreset, newSceneMaterial: null }
+  if (!material) return null
+
+  const existing = findMatchingSceneMaterial(materials, material)
+  if (existing) return { ref: toSceneMaterialRef(existing.id), newSceneMaterial: null }
+
+  const id = generateSceneMaterialId()
+  return {
+    ref: toSceneMaterialRef(id),
+    newSceneMaterial: {
+      id,
+      name: `Material ${Object.keys(materials).length + 1}`,
+      material,
+    },
+  }
+}
+
 function commitSlotPaint(
   node: SlotsNode,
   role: string,
@@ -76,30 +106,9 @@ function commitSlotPaint(
   const nodeId = node.id as AnyNodeId
   const state = useScene.getState()
   const currentNode = (state.nodes[nodeId] as SlotsNode | undefined) ?? node
-
-  let ref: string | undefined
-  let newSceneMaterial: SceneMaterial | null = null
-
-  if (material === undefined && materialPreset === undefined) {
-    ref = undefined
-  } else if (materialPreset) {
-    ref = materialPreset
-  } else if (material) {
-    const existing = findMatchingSceneMaterial(state.materials, material)
-    if (existing) {
-      ref = toSceneMaterialRef(existing.id)
-    } else {
-      const id = generateSceneMaterialId()
-      newSceneMaterial = {
-        id,
-        name: `Material ${Object.keys(state.materials).length + 1}`,
-        material,
-      }
-      ref = toSceneMaterialRef(id)
-    }
-  } else {
-    return
-  }
+  const resolution = resolveSlotPaintMaterialRef(state.materials, material, materialPreset)
+  if (!resolution) return
+  const { ref, newSceneMaterial } = resolution
 
   const nextSlots = { ...(currentNode.slots ?? {}) }
   if (ref) nextSlots[role] = ref

@@ -8,6 +8,7 @@ import {
   isActive,
   isIdle,
   isToolDrivenReshape,
+  meshEditScope,
   scopeNodeId,
   selectionEnabled,
 } from '../lib/interaction/scope'
@@ -71,6 +72,7 @@ describe('use-interaction-scope state machine', () => {
       nodeType: 'item',
       view: '3d',
       pressDrag: false,
+      driver: 'move-tool',
     })
     s.update({ pressDrag: true })
     const scope = useInteractionScope.getState().scope
@@ -104,6 +106,7 @@ describe('use-interaction-scope state machine', () => {
       nodeType: 'item',
       view: '3d',
       pressDrag: true,
+      driver: 'move-tool',
     })
     expect(useInteractionScope.getState().scope.kind).toBe('moving')
   })
@@ -114,6 +117,22 @@ describe('use-interaction-scope state machine', () => {
     s.begin({ kind: 'box-select' })
     expect(selectionEnabled(useInteractionScope.getState().scope)).toBe(false)
     expect(isActive(useInteractionScope.getState().scope)).toBe(true)
+  })
+
+  test('mesh edit mode owns its node and disables scene selection for the full session', () => {
+    const s = useInteractionScope.getState()
+    s.begin(meshEditScope('block_1'))
+    expect(scopeNodeId(useInteractionScope.getState().scope)).toBe('block_1')
+    expect(selectionEnabled(useInteractionScope.getState().scope)).toBe(false)
+
+    s.begin(meshEditScope('block_1', 'operating', 'translate'))
+    expect(useInteractionScope.getState().scope).toEqual({
+      kind: 'mesh-editing',
+      nodeId: 'block_1',
+      phase: 'operating',
+      operator: 'translate',
+    })
+    expect(selectionEnabled(useInteractionScope.getState().scope)).toBe(false)
   })
 
   test('end is idempotent', () => {
@@ -188,9 +207,11 @@ describe('derived flag views are leak-free (no parallel flags)', () => {
         nodeType: 'item',
         view: '3d',
         pressDrag: false,
+        driver: 'move-tool',
       },
       { kind: 'moving', node: mockNode('i', 'item'), nodeId: 'i', nodeType: 'item', view: '3d' },
       { kind: 'drafting', tool: 'wall' },
+      { kind: 'mesh-editing', nodeId: 'mesh_1', phase: 'selecting' },
       { kind: 'box-select' },
       { kind: 'painting' },
       { kind: 'sculpting' },

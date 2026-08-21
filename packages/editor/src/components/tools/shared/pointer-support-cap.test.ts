@@ -1,22 +1,45 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   type AnyNodeId,
+  getWallBaseElevationForNodes,
+  nodeRegistry,
+  registerNode,
+  type SlabNode,
   sceneRegistry,
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera } from 'three'
+import { z } from 'zod'
+import useInteractionScope from '../../../store/use-interaction-scope'
+import { createWallOnCurrentLevel } from '../wall/wall-drafting'
 import { resolvePointerSupportSurface } from './pointer-support-cap'
 
 const LEVEL_ID = 'level_test' as AnyNodeId
 const WALL_ID = 'wall_test' as AnyNodeId
+const PLATFORM_ID = 'plugin-platform_test' as AnyNodeId
+const PLATFORM_KIND = 'plugin-platform'
 
 describe('resolvePointerSupportSurface node tops', () => {
+  beforeAll(() => {
+    if (nodeRegistry.has(PLATFORM_KIND)) return
+    registerNode({
+      kind: PLATFORM_KIND,
+      schemaVersion: 1,
+      schema: z.object({}),
+      category: 'structure',
+      defaults: () => ({}),
+      capabilities: { surfaces: { top: { height: 2 } } },
+    } as unknown as AnyNodeDefinition)
+  })
+
   beforeEach(() => {
     spatialGridManager.clear()
     sceneRegistry.clear()
+    useInteractionScope.getState().end()
     useViewer.setState({
       selection: {
         buildingId: null,
@@ -59,12 +82,29 @@ describe('resolvePointerSupportSurface node tops', () => {
     sceneRegistry.clear()
   })
 
-  test('prefers the nearest upward-facing registered node surface over the ground', () => {
-    const wallMesh = new Mesh(new BoxGeometry(2, 2, 0.2), new MeshBasicMaterial())
-    wallMesh.position.y = 1
-    wallMesh.updateMatrixWorld(true)
-    sceneRegistry.nodes.set(WALL_ID, wallMesh)
-    sceneRegistry.byType.wall!.add(WALL_ID)
+  const addPluginPlatform = (z = 0) => {
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [PLATFORM_ID]: {
+          id: PLATFORM_ID,
+          type: PLATFORM_KIND,
+          object: 'node',
+          parentId: LEVEL_ID,
+          visible: true,
+          metadata: {},
+        } as unknown as AnyNode,
+      },
+    }))
+    const platformMesh = new Mesh(new BoxGeometry(4, 2, 4), new MeshBasicMaterial())
+    platformMesh.position.set(0, 1, z)
+    platformMesh.updateMatrixWorld(true)
+    sceneRegistry.nodes.set(PLATFORM_ID, platformMesh)
+    sceneRegistry.byType[PLATFORM_KIND]!.add(PLATFORM_ID)
+  }
+
+  test('discovers a plugin-declared top surface without a kind-name list', () => {
+    addPluginPlatform()
 
     const camera = new PerspectiveCamera()
     camera.position.set(0, 5, 0)
@@ -74,25 +114,131 @@ describe('resolvePointerSupportSurface node tops', () => {
       includeNodeTopSurfaces: true,
     })
 
-    expect(support?.sourceNodeId).toBe(WALL_ID)
+    expect(support?.sourceNodeId).toBe(PLATFORM_ID)
     expect(support?.elevation).toBeCloseTo(2)
     expect(support?.worldPoint).toEqual([0, 2, 0])
   })
 
-  test('keeps the ground result when node-top surfaces are not requested', () => {
-    const wallMesh = new Mesh(new BoxGeometry(2, 2, 0.2), new MeshBasicMaterial())
-    wallMesh.position.y = 1
-    wallMesh.updateMatrixWorld(true)
-    sceneRegistry.nodes.set(WALL_ID, wallMesh)
-    sceneRegistry.byType.wall!.add(WALL_ID)
+  test('keeps the ground result unless node-top surfaces are asked for', () => {
+    addPluginPlatform()
 
     const camera = new PerspectiveCamera()
     camera.position.set(0, 5, 0)
     camera.updateMatrixWorld(true)
 
-    const support = resolvePointerSupportSurface(camera, [0, 0, 0])
+    // The default. A floor placement aims THROUGH whatever upward-facing
+    // geometry sits between the camera and the floor — a room's ceiling, the
+    // top of the wall the ray passes over — so only the tools that build on a
+    // surface opt in.
+    for (const options of [undefined, { includeNodeTopSurfaces: false }]) {
+      const support = resolvePointerSupportSurface(camera, [0, 0, 0], options)
+      expect(support?.sourceNodeId).toBeNull()
+      expect(support?.elevation).toBe(0)
+    }
+  })
 
+  test('never elects the node the active interaction is placing or moving', () => {
+    addPluginPlatform()
+    useInteractionScope.getState().begin({
+      kind: 'placing',
+      node: useScene.getState().nodes[PLATFORM_ID]!,
+      nodeId: PLATFORM_ID,
+      nodeType: PLATFORM_KIND,
+      view: '3d',
+      pressDrag: false,
+      driver: 'registry-tool',
+    })
+
+    const camera = new PerspectiveCamera()
+    camera.position.set(0, 5, 0)
+    camera.updateMatrixWorld(true)
+
+    const support = resolvePointerSupportSurface(camera, [0, 0, 0], {
+      includeNodeTopSurfaces: true,
+    })
+
+    // Its own top would raise it by its own height on every pointer move.
     expect(support?.sourceNodeId).toBeNull()
     expect(support?.elevation).toBe(0)
+  })
+
+  test('uses a plugin-declared top as the wall construction surface', () => {
+    const lowSlab = {
+      id: 'slab_low',
+      type: 'slab',
+      object: 'node',
+      parentId: LEVEL_ID,
+      visible: true,
+      metadata: {},
+      children: [],
+      polygon: [
+        [-2, 1],
+        [2, 1],
+        [2, 3],
+        [-2, 3],
+      ],
+      holes: [],
+      holeMetadata: [],
+      elevation: 0.25,
+      thickness: 0.25,
+      recessed: false,
+      autoFromWalls: false,
+    } as SlabNode
+    const highSlab = {
+      ...lowSlab,
+      id: 'slab_high',
+      polygon: [
+        [-1, 1],
+        [0, 1],
+        [0, 3],
+        [-1, 3],
+      ],
+      elevation: 1,
+    } as SlabNode
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [lowSlab.id]: lowSlab,
+        [highSlab.id]: highSlab,
+      },
+    }))
+    spatialGridManager.handleNodeCreated(lowSlab as AnyNode, LEVEL_ID)
+    spatialGridManager.handleNodeCreated(highSlab as AnyNode, LEVEL_ID)
+    addPluginPlatform(2)
+
+    const camera = new PerspectiveCamera()
+    camera.position.set(0, 5, 2)
+    camera.updateMatrixWorld(true)
+
+    const support = resolvePointerSupportSurface(camera, [0, 0, 2], {
+      includeNodeTopSurfaces: true,
+    })
+
+    expect(support?.sourceNodeId).toBe(PLATFORM_ID)
+    expect(support?.elevation).toBeCloseTo(2)
+    expect(support?.worldPoint).toEqual([0, 2, 2])
+
+    const wall = createWallOnCurrentLevel([-0.75, 2], [0.75, 2], {
+      supportCap: support?.elevation,
+      preferredSupportSlabId: support?.supportSlabId,
+      constructionElevation: support?.elevation,
+      constructionHeight: 2.5,
+      flatConstructionBase: support?.sourceNodeId != null,
+    })
+    expect(wall).not.toBeNull()
+    expect(getWallBaseElevationForNodes(wall!, useScene.getState().nodes)).toBeCloseTo(2)
+    const wallSupport = spatialGridManager.getSlabSupportForWall(
+      LEVEL_ID,
+      wall!.start,
+      wall!.end,
+      wall!.curveOffset,
+      wall!.thickness,
+      wall!.supportSlabId,
+      undefined,
+      wall!.supportOffset,
+    )
+    expect(
+      wallSupport.baseSegments.every((segment) => Math.abs(segment.elevation - 2) < 1e-6),
+    ).toBe(true)
   })
 })

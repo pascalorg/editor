@@ -77,6 +77,11 @@ export type {
   DuplicateSubtreeCloneResult,
   EditorCtx,
   ExportAnimationContext,
+  FaceHostCapability,
+  FaceHostPlacementArgs,
+  FaceHostPlacementResult,
+  FaceHostStoredPlacementArgs,
+  FaceHostStoredValidityArgs,
   FloorPlacedConfig,
   FloorPlacedFootprint,
   FloorPlacedFootprintContext,
@@ -157,4 +162,3 @@ export type {
   ToolHintChip,
   Vec2,
 } from './types'
-export { useRegistryVersion } from './use-registry-version'

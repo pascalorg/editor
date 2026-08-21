@@ -92,7 +92,6 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
   const material = debugColors
     ? getRoofDebugMaterials(shading)
     : customMaterial || getRoofMaterials(shading, textures, colorPreset)
-
   useEffect(() => {
     return () => {
       placeholderGeometry.dispose()

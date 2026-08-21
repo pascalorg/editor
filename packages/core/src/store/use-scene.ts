@@ -381,6 +381,37 @@ function migrateSingleMaterialSlots(
   return { ...node, slots, material: undefined, materialPreset: undefined }
 }
 
+function migrateRoleMaterialSlots(
+  node: Record<string, any>,
+  roles: readonly string[],
+  mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
+) {
+  const slots: Record<string, string> = { ...(node.slots ?? {}) }
+  const next = { ...node }
+  let changed = false
+
+  for (const role of roles) {
+    if (slots[role] === undefined) {
+      const ref = legacySpecToMaterialRef(
+        {
+          material: node[`${role}Material`] ?? node.material,
+          materialPreset: node[`${role}MaterialPreset`] ?? node.materialPreset,
+        },
+        mintedMaterials,
+      )
+      if (ref) {
+        slots[role] = ref
+        changed = true
+      }
+    }
+    if (`${role}Material` in next || `${role}MaterialPreset` in next) changed = true
+    delete next[`${role}Material`]
+    delete next[`${role}MaterialPreset`]
+  }
+
+  return changed ? { ...next, slots } : node
+}
+
 // Stair carries per-role legacy fields (`treadMaterial*` / `sideMaterial*` /
 // `railingMaterial*`) plus a catch-all. Map each to its slot via the same
 // fallback chain the renderer uses (`getEffectiveStairSurfaceMaterial`):
@@ -605,6 +636,50 @@ function migrateWallAssembly(node: Record<string, any>) {
   return assemblyThickness > 0 ? { ...wall, thickness: assemblyThickness } : wall
 }
 
+function migrateBlockRename(
+  id: string,
+  node: Record<string, any>,
+  nodes: Record<string, any>,
+): [string, Record<string, any>] {
+  if (node.type !== 'custom-mesh') return [id, node]
+
+  const desiredId = id.startsWith('custom-mesh_') ? `block_${id.slice('custom-mesh_'.length)}` : id
+  let nextId = desiredId
+  let suffix = 1
+  while (nextId !== id && nodes[nextId]) {
+    nextId = `${desiredId}_${suffix}`
+    suffix += 1
+  }
+  const nextNode = { ...node, id: nextId, type: 'block' }
+
+  if (nextId !== id) {
+    for (const candidate of Object.values(nodes)) {
+      if (!candidate || typeof candidate !== 'object') continue
+      if (candidate.parentId === id) candidate.parentId = nextId
+      if (Array.isArray(candidate.children)) {
+        candidate.children = candidate.children.map((childId: unknown) =>
+          childId === id ? nextId : childId,
+        )
+      }
+    }
+  }
+
+  return [nextId, nextNode]
+}
+
+function migrateBlockHostedItem(node: Record<string, any>) {
+  if (
+    node.type !== 'item' ||
+    node.blockFaceId !== undefined ||
+    node.customMeshFaceId === undefined
+  ) {
+    return node
+  }
+
+  const { customMeshFaceId, ...item } = node
+  return { ...item, blockFaceId: customMeshFaceId }
+}
+
 function migrateNodes(nodes: Record<string, any>): {
   nodes: Record<string, AnyNode>
   mintedMaterials: Record<SceneMaterialId, SceneMaterial>
@@ -617,6 +692,14 @@ function migrateNodes(nodes: Record<string, any>): {
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
   // merged into the scene material map by the caller (`setScene`).
   const mintedMaterials: Record<SceneMaterialId, SceneMaterial> = {}
+
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    const [nextId, nextNode] = migrateBlockRename(id, node, patchedNodes)
+    if (nextId !== id) {
+      delete patchedNodes[id]
+    }
+    patchedNodes[nextId] = migrateBlockHostedItem(nextNode)
+  }
 
   // Pass 1: all node types except elevator.
   // Elevator migration (migrateElevatorParent) mutates level.children to remove
@@ -782,6 +865,42 @@ function migrateNodes(nodes: Record<string, any>): {
       patchedNodes[id] = migrateSingleMaterialSlots(
         patchedNodes[id],
         ['shaft', 'base', 'capital', 'frame'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'gutter' || node.type === 'downspout') {
+      patchedNodes[id] = migrateSingleMaterialSlots(patchedNodes[id], ['surface'], mintedMaterials)
+    }
+
+    if (node.type === 'box-vent') {
+      patchedNodes[id] = migrateRoleMaterialSlots(
+        patchedNodes[id],
+        ['base', 'top'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'cupola') {
+      patchedNodes[id] = migrateRoleMaterialSlots(
+        patchedNodes[id],
+        ['base', 'body', 'roof'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'eyebrow-vent') {
+      patchedNodes[id] = migrateRoleMaterialSlots(
+        patchedNodes[id],
+        ['hood', 'front'],
+        mintedMaterials,
+      )
+    }
+
+    if (node.type === 'turbine-vent') {
+      patchedNodes[id] = migrateRoleMaterialSlots(
+        patchedNodes[id],
+        ['base', 'head'],
         mintedMaterials,
       )
     }

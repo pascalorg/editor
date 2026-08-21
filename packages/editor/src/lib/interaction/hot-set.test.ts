@@ -22,6 +22,13 @@ const wall: HotSetCandidate = {
   exposesTop: false,
   attachClass: 'surface',
 }
+const block: HotSetCandidate = {
+  type: 'block',
+  isFloorLike: false,
+  exposesTop: true,
+  exposesSides: true,
+  attachClass: 'surface',
+}
 const ceiling: HotSetCandidate = {
   type: 'ceiling',
   isFloorLike: false,
@@ -63,8 +70,9 @@ describe('attachClassOf', () => {
 })
 
 describe('isPickableForAttach — wall-mounted (window)', () => {
-  test('only walls are eligible; floor/ceiling/tops are not', () => {
+  test('walls and block faces are eligible; floor/ceiling/tops are not', () => {
     expect(isPickableForAttach('wall', wall)).toBe(true)
+    expect(isPickableForAttach('wall', block)).toBe(true)
     expect(isPickableForAttach('wall', floor)).toBe(false)
     expect(isPickableForAttach('wall', ceiling)).toBe(false)
     expect(isPickableForAttach('wall', table)).toBe(false)
@@ -109,6 +117,7 @@ describe('isCandidateInHotSet — by scope', () => {
       nodeType: 'item',
       view: '3d' as const,
       pressDrag: false,
+      driver: 'move-tool' as const,
     }
     expect(isCandidateInHotSet(scope, surfaceClass, floor)).toBe(true)
     expect(isCandidateInHotSet(scope, surfaceClass, ceilingFan)).toBe(false)

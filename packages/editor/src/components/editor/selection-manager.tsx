@@ -43,6 +43,7 @@ import {
   resolveDirectRotationPatch,
 } from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
+import { selectionEnabled } from '../../lib/interaction/scope'
 import {
   type ActivePaintMaterial,
   buildRoofSegmentSurfaceMaterialPatch,
@@ -1239,6 +1240,7 @@ export const SelectionManager = () => {
     if (movingNode || isCurveReshape) return
 
     const onPointerDown = (event: NodeEvent) => {
+      if (!selectionEnabled(useInteractionScope.getState().scope)) return
       const pointer = pointerEventFromNodeEvent(event)
       if (pointer.button !== 0) return
 
@@ -1392,7 +1394,7 @@ export const SelectionManager = () => {
       if (key === prevKey) return
       prevKey = key
       let wantsMove = false
-      if (hoveredId && !getMovingNode()) {
+      if (hoveredId && !getMovingNode() && selectionEnabled(useInteractionScope.getState().scope)) {
         if (sole === hoveredId) {
           const node = useScene.getState().nodes[sole as AnyNodeId]
           wantsMove = !!node && canDirectMoveNode(node)
@@ -1557,6 +1559,7 @@ export const SelectionManager = () => {
       // body click so only the reshape tool handles the release. (Scoped to
       // `endpoint`: hole-edit relies on node clicks to exit, just below.)
       const activeScope = useInteractionScope.getState().scope
+      if (activeScope.kind === 'mesh-editing') return
       if (activeScope.kind === 'reshaping' && activeScope.reshape === 'endpoint') return
 
       if (dispatchSceneAction(event.node, getEventObject(event))) {
@@ -1773,6 +1776,7 @@ export const SelectionManager = () => {
     const onGridClick = (event: GridEvent) => {
       if (clickHandledRef.current) return
       if (boxSelectHandled) return
+      if (useInteractionScope.getState().scope.kind === 'mesh-editing') return
       const nativeEvent = event.nativeEvent
       if (nativeEvent?.metaKey || nativeEvent?.ctrlKey || nativeEvent?.shiftKey) return
       const { phase, structureLayer } = useEditor.getState()
@@ -1804,6 +1808,7 @@ export const SelectionManager = () => {
     if (movingNode || isCurveReshape) return
 
     const onEnter = (event: NodeEvent) => {
+      if (useInteractionScope.getState().scope.kind === 'mesh-editing') return
       // A host-driven drag (handle resize/rotate, box-select) sets
       // `inputDragging`. useNodeEvents still emits hover events during it so
       // surface move tools keep tracking — but the select-hover outline must
@@ -1852,6 +1857,7 @@ export const SelectionManager = () => {
     }
 
     const onDoubleClick = (event: NodeEvent) => {
+      if (useInteractionScope.getState().scope.kind === 'mesh-editing') return
       let node = resolveCanvasSelectionNode({
         node: resolveSelectModeNodeTarget(event),
         nodes: useScene.getState().nodes,

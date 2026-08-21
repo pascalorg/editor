@@ -35,11 +35,31 @@ export type InteractionScope =
       nodeType: string
       view: InteractionView
       pressDrag: boolean
+      driver: 'move-tool' | 'registry-tool'
     }
   // Moving an existing node.
   | { kind: 'moving'; node: AnyNode; nodeId: string; nodeType: string; view: InteractionView }
   // Dragging a resize/translate/rotate handle of a selected node.
   | { kind: 'handle-drag'; nodeId: string; handle: string }
+  // Editing the internal topology of one block. This scope remains
+  // active for the whole edit-mode session so scene selection and whole-node
+  // movement cannot claim the same pointer stream.
+  | {
+      kind: 'mesh-editing'
+      nodeId: string
+      phase: 'selecting' | 'operating'
+      operator?:
+        | 'translate'
+        | 'rotate'
+        | 'scale'
+        | 'extrude'
+        | 'inset'
+        | 'merge'
+        | 'dissolve'
+        | 'loop-cut'
+        | 'bevel'
+        | 'delete'
+    }
   // Click-to-click drafting of a polyline/polygon kind (wall/fence/slab/…).
   | { kind: 'drafting'; tool: string }
   // Reshaping a selected node's geometry (see ReshapeKind). `holeIndex` is set
@@ -88,6 +108,7 @@ export function scopeNodeId(scope: InteractionScope): string | null {
     case 'placing':
     case 'moving':
     case 'handle-drag':
+    case 'mesh-editing':
     case 'reshaping':
       return scope.nodeId
     default:
@@ -109,6 +130,16 @@ export function movingNodeOf(scope: InteractionScope): AnyNode | null {
 // to selection while this is false.
 export function selectionEnabled(scope: InteractionScope): boolean {
   return scope.kind === 'idle'
+}
+
+export function meshEditScope(
+  nodeId: string,
+  phase: 'selecting' | 'operating' = 'selecting',
+  operator?: Extract<InteractionScope, { kind: 'mesh-editing' }>['operator'],
+): ActiveInteractionScope {
+  return operator
+    ? { kind: 'mesh-editing', nodeId, phase, operator }
+    : { kind: 'mesh-editing', nodeId, phase }
 }
 
 // Derived views of the scope that mirror the legacy `useEditor` flags they

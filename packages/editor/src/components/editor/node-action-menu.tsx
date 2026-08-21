@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { Copy, Group, Move, Search, Spline, Trash2, Ungroup } from 'lucide-react'
+import { Copy, Group, Move, PencilRuler, Search, Spline, Trash2, Ungroup } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
 
 type NodeActionMenuProps = {
@@ -10,6 +10,7 @@ type NodeActionMenuProps = {
   onDelete?: MouseEventHandler<HTMLButtonElement>
   onDuplicate?: MouseEventHandler<HTMLButtonElement>
   onMove?: MouseEventHandler<HTMLButtonElement>
+  onEditMesh?: MouseEventHandler<HTMLButtonElement>
   onCurve?: MouseEventHandler<HTMLButtonElement>
   /** Session group (Ctrl/Cmd+G) — multi-selection floating pill. */
   onGroup?: MouseEventHandler<HTMLButtonElement>
@@ -27,6 +28,7 @@ export function NodeActionMenu({
   onDelete,
   onDuplicate,
   onMove,
+  onEditMesh,
   onCurve,
   onGroup,
   onUngroup,
@@ -63,6 +65,17 @@ export function NodeActionMenu({
           type="button"
         >
           <Move className="h-4 w-4" />
+        </button>
+      )}
+      {onEditMesh && (
+        <button
+          aria-label="Edit mesh"
+          className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          onClick={onEditMesh}
+          title="Edit mesh"
+          type="button"
+        >
+          <PencilRuler className="h-4 w-4" />
         </button>
       )}
       {onGroup && (

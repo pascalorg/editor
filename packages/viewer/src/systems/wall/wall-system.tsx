@@ -46,6 +46,7 @@ import {
   buildOpeningCutoutGeometry,
   getOpeningCutoutBottomPadding,
 } from './opening-cutout-geometry'
+import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
@@ -506,15 +507,17 @@ export function getPendingWallRebuildCount(): number {
   return count
 }
 
+let placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
+
 export const WallSystem = () => {
-  const dirtyNodes = useScene((state) => state.dirtyNodes)
+  // Subscribe so scene writes and override-only changes (no scene write)
+  // still re-run this component. The frame body reads the LIVE set via
+  // `useScene.getState()` — a closure over the subscribed value goes stale
+  // whenever the store REPLACES the set (scene load, plugin install) in the
+  // window before React commits the re-render, and marks added to the new
+  // set in that window would be invisible to the frame.
+  useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
-  // Subscribe so override-only changes (no scene write) still re-run
-  // this component, which lets the gate below pick up the latest
-  // `dirtyNodes` set from the same render pass that received the
-  // override-publishing `markDirty` call. Without this, very fast
-  // drags could land an override and a markDirty in the same React
-  // tick and the next `useFrame` would still see the stale closure.
   useLiveNodeOverrides((s) => s.overrides)
 
   // The miter cache is module-level, so it outlives this mount. Editor
@@ -523,6 +526,25 @@ export const WallSystem = () => {
   useEffect(() => () => clearLevelMiterCache(), [])
 
   useFrame(() => {
+    // Self-heal: any registered wall still on its mount-time placeholder
+    // geometry with NO dirty mark gets re-marked, so a lost mark (system
+    // mounted late, suspense remount, mark consumed elsewhere) can never
+    // strand a wall as a degenerate point forever (QA f2 probe5/probe6 —
+    // scene loaded with the X-ray active never built any of its 24 walls).
+    placeholderSweepCountdown -= 1
+    if (placeholderSweepCountdown <= 0) {
+      placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
+      const sceneState = useScene.getState()
+      sweepUnbuiltWalls({
+        wallIds: sceneRegistry.byType.wall ?? [],
+        geometryOf: (wallId) =>
+          (sceneRegistry.nodes.get(wallId) as THREE.Mesh | undefined)?.geometry ?? null,
+        isDirty: (wallId) => sceneState.dirtyNodes.has(wallId as AnyNodeId),
+        markDirty: (wallId) => sceneState.markDirty(wallId as AnyNodeId),
+      })
+    }
+
+    const dirtyNodes = useScene.getState().dirtyNodes
     const hasDirty = dirtyNodes.size > 0
     const hasPending = pendingAdjacentByLevel.size > 0
     if (!hasDirty && !hasPending) return

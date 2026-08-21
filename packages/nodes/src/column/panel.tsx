@@ -25,6 +25,19 @@ import { useCallback } from 'react'
 const SELECT_CLASS =
   'h-10 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
 
+const MANAGED_LEAN_TO_LAYOUT_FIELDS = new Set<keyof ColumnNode>([
+  'position',
+  'height',
+  'width',
+  'depth',
+  'crossSection',
+  'baseStyle',
+  'baseHeight',
+  'baseWidthScale',
+  'baseDepthScale',
+  'slots',
+])
+
 const COLUMN_PRESET_OPTIONS = Object.entries(COLUMN_PRESETS).map(([value, preset]) => ({
   value: value as ColumnPresetId,
   label: preset.label,
@@ -177,6 +190,21 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
+function isManagedLeanToPost(node: ColumnNode): boolean {
+  const metadata = node.metadata
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
+  const record = metadata as Record<string, unknown>
+  return record.managedByLeanTo !== undefined && record.leanToRole === 'post'
+}
+
+function filterManagedLeanToLayoutUpdates(updates: Partial<ColumnNode>): Partial<ColumnNode> {
+  const filtered = { ...updates }
+  for (const key of MANAGED_LEAN_TO_LAYOUT_FIELDS) {
+    delete filtered[key]
+  }
+  return filtered
+}
+
 function presetUpdates(presetId: ColumnPresetId): Partial<ColumnNode> {
   const { label, ...preset } = COLUMN_PRESETS[presetId]
   return {
@@ -273,9 +301,12 @@ export default function ColumnPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<ColumnNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
+      const nextUpdates =
+        node && isManagedLeanToPost(node) ? filterManagedLeanToLayoutUpdates(updates) : updates
+      if (Object.keys(nextUpdates).length === 0) return
+      updateNode(selectedId as AnyNode['id'], nextUpdates)
     },
-    [selectedId, updateNode],
+    [node, selectedId, updateNode],
   )
 
   const handleClose = useCallback(() => {
@@ -299,6 +330,7 @@ export default function ColumnPanel() {
   if (!(node && node.type === 'column' && selectedId && selectedCount === 1)) return null
   const shaftProfile = node.shaftProfile ?? 'straight'
   const supportStyle = node.supportStyle ?? 'vertical'
+  const managedByLeanTo = isManagedLeanToPost(node)
   const isBraceSupport =
     supportStyle === 'a-frame' ||
     supportStyle === 'y-frame' ||
@@ -527,7 +559,13 @@ export default function ColumnPanel() {
       </PanelSection>
 
       <PanelSection title="Dimensions">
-        {!isBraceSupport && (
+        {managedByLeanTo && (
+          <p className="px-1 pt-1 text-muted-foreground text-xs leading-relaxed">
+            Height and footprint are controlled by the lean-to extension. Rotate or change the
+            support style here; resize from the parent lean-to.
+          </p>
+        )}
+        {!isBraceSupport && !managedByLeanTo && (
           <select
             className={SELECT_CLASS}
             onChange={(event) => {
@@ -544,16 +582,18 @@ export default function ColumnPanel() {
             ))}
           </select>
         )}
-        <SliderControl
-          label="Height"
-          max={20}
-          min={0.8}
-          onChange={(value) => handleUpdate({ height: value })}
-          precision={2}
-          step={0.05}
-          unit="m"
-          value={node.height}
-        />
+        {!managedByLeanTo && (
+          <SliderControl
+            label="Height"
+            max={20}
+            min={0.8}
+            onChange={(value) => handleUpdate({ height: value })}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={node.height}
+          />
+        )}
         {isBraceSupport ? (
           <>
             {(supportStyle === 'a-frame' ||
@@ -623,7 +663,7 @@ export default function ColumnPanel() {
               onChange={(checked) => handleUpdate({ bracePlateEnabled: checked })}
             />
           </>
-        ) : (
+        ) : !managedByLeanTo ? (
           <>
             <SliderControl
               label="Width"
@@ -654,7 +694,7 @@ export default function ColumnPanel() {
               />
             )}
           </>
-        )}
+        ) : null}
       </PanelSection>
 
       {!isBraceSupport && (

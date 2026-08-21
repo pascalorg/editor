@@ -6,6 +6,20 @@ export type RoofShapeFaceVertex = {
   z: number
 }
 
+export type RoofShapeEaveSide = '+X' | '-X' | '+Z' | '-Z'
+
+export function getRoofShapeEaveSides(type: RoofType): RoofShapeEaveSide[] {
+  switch (type) {
+    case 'shed':
+      return ['+Z']
+    case 'gable':
+    case 'gambrel':
+      return ['+Z', '-Z']
+    default:
+      return ['+Z', '-Z', '+X', '-X']
+  }
+}
+
 export type RoofShapeInsets = {
   iF?: number
   iB?: number

@@ -287,6 +287,43 @@ describe('resolveCanvasSelectionNode', () => {
       }),
     ).toBe(proxyGroup)
   })
+
+  test('routes proxied lean-to roof children to the owning extension', () => {
+    const leanTo = {
+      id: 'lean_to_1',
+      type: 'lean-to-extension',
+      metadata: {},
+    } as unknown as AnyNode
+    const roof = {
+      id: 'roof_lean_to',
+      type: 'roof',
+      parentId: leanTo.id,
+      metadata: {
+        managedByLeanTo: leanTo.id,
+        leanToRole: 'roof',
+        nodeSelectionProxyId: leanTo.id,
+      },
+    } as unknown as AnyNode
+    const segment = {
+      id: 'rseg_lean_to',
+      type: 'roof-segment',
+      parentId: roof.id,
+      metadata: {
+        managedByLeanTo: leanTo.id,
+        leanToRole: 'roof-segment',
+        nodeSelectionProxyId: leanTo.id,
+      },
+    } as unknown as AnyNode
+
+    const nodes = {
+      [leanTo.id]: leanTo,
+      [roof.id]: roof,
+      [segment.id]: segment,
+    }
+
+    expect(resolveCanvasSelectionNode({ node: roof, nodes, selectedIds: [] })).toBe(leanTo)
+    expect(resolveCanvasSelectionNode({ node: segment, nodes, selectedIds: [] })).toBe(leanTo)
+  })
 })
 
 describe('shouldPreserveSelectedRoofHostTarget', () => {

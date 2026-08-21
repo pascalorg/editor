@@ -6,7 +6,7 @@ interface ItemHelperProps {
   showEsc?: boolean
   snapContext?: SnapContext | null
   // Whether to advertise Alt = force-place. Only meaningful for kinds that
-  // collision-validate their drop (structural kinds never reject, so it's hidden).
+  // collision-validate their drop.
   showForce?: boolean
   // Set for a fresh point-kind placement (e.g. a positioned preset) so the
   // once/repeat continuation chip shows; null for an existing-node move.

@@ -40,3 +40,7 @@ export function clearPlacementSurface(): void {
 export function getPlacementSurface(): PlacementSurface | null {
   return active ? surface : null
 }
+
+export function usesOrientedPlacementPlane(normal: Vector3): boolean {
+  return Math.abs(normal.y) < 0.95
+}
