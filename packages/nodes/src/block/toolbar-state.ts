@@ -18,6 +18,15 @@ export type BlockGizmoDimensions = {
   planeHandleOffset: number
 }
 
+export type BlockGizmoHitDimensions = {
+  axisRadius: number
+  scaleRadius: number
+  planeSize: number
+  rotationTube: number
+  rotationArc: number
+  rotationStart: number
+}
+
 const FIXED_BLOCK_GIZMO_DIMENSIONS: BlockGizmoDimensions = {
   length: 0.7,
   radius: 0.022,
@@ -91,6 +100,21 @@ export function blockScaleFactorFromDrag(
 
 export function blockGizmoDimensions(_topologyExtent: number): BlockGizmoDimensions {
   return FIXED_BLOCK_GIZMO_DIMENSIONS
+}
+
+export function blockGizmoHitDimensions(
+  radius: number,
+  planeHandleSize: number,
+): BlockGizmoHitDimensions {
+  const rotationStart = Math.PI / 15
+  return {
+    axisRadius: radius * 3,
+    scaleRadius: radius * 3.2,
+    planeSize: planeHandleSize * 1.1,
+    rotationTube: radius * 1.5,
+    rotationArc: Math.PI / 2 - rotationStart * 2,
+    rotationStart,
+  }
 }
 
 export function blockToolbarOffset(topologyExtent: number, gizmoLength: number): number {

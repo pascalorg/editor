@@ -25,9 +25,7 @@ import {
 import { beginBlockModalSession } from './modal-session'
 import {
   type BlockModalFeedbackMode,
-  blockAccumulatePrecisionPointer,
   blockPointerDistanceForAxis,
-  blockPrecisionSnapStep,
   blockTransformAxisFromKey,
   blockTransformNumericInputFromKey,
   blockTransformNumericValue,
@@ -109,22 +107,13 @@ export function useBlockFaceOperation({
       let lastClientX = startPointer.x
       let lastClientY = startPointer.y
       let lastAltKey = false
-      let lastShiftKey = false
       let lastSnapValue: number | null = null
-      let effectivePointer = { x: startPointer.x, y: startPointer.y }
-      let previousRawPointer = { ...effectivePointer }
       let extrudeAxis: BlockExtrudeAxis = 'normal'
 
-      const updatePreview = (
-        clientX: number,
-        clientY: number,
-        altKey: boolean,
-        precision: boolean,
-      ) => {
+      const updatePreview = (clientX: number, clientY: number, altKey: boolean) => {
         lastClientX = clientX
         lastClientY = clientY
         lastAltKey = altKey
-        lastShiftKey = precision
         const typedValue = blockTransformNumericValue(
           typedInput,
           operation === 'extrude' ? 'translate' : 'scale',
@@ -143,13 +132,11 @@ export function useBlockFaceOperation({
         const snapping =
           operation === 'extrude' && typedValue === null && isGridSnapActive() && !altKey
         if (snapping) {
-          const step = blockPrecisionSnapStep(useEditor.getState().gridSnapStep, precision)
+          const step = useEditor.getState().gridSnapStep
           if (step > 0) value = Math.round(value / step) * step
         }
         setFaceOperationValue(typedInput || String(Math.round(value * 1000) / 1000))
-        setModalFeedbackMode(
-          typedInput ? 'exact' : precision ? 'precision' : snapping ? 'grid' : 'free',
-        )
+        setModalFeedbackMode(typedInput ? 'exact' : snapping ? 'grid' : 'free')
         if (Math.abs(value) <= 1e-6) {
           latestTopology = null
           latestSelection = null
@@ -207,19 +194,7 @@ export function useBlockFaceOperation({
 
       const onMove = (pointerEvent: PointerEvent) => {
         lastPointerClientRef.current = new Vector2(pointerEvent.clientX, pointerEvent.clientY)
-        effectivePointer = blockAccumulatePrecisionPointer(
-          effectivePointer,
-          previousRawPointer,
-          pointerEvent,
-          pointerEvent.shiftKey,
-        )
-        previousRawPointer = { x: pointerEvent.clientX, y: pointerEvent.clientY }
-        updatePreview(
-          effectivePointer.x,
-          effectivePointer.y,
-          pointerEvent.altKey,
-          pointerEvent.shiftKey,
-        )
+        updatePreview(pointerEvent.clientX, pointerEvent.clientY, pointerEvent.altKey)
       }
       const onPointerDown = (pointerEvent: PointerEvent, finish: (commit: boolean) => void) => {
         if (pointerEvent.button !== 0 && pointerEvent.button !== 2) return
@@ -245,13 +220,13 @@ export function useBlockFaceOperation({
           extrudeAxis = nextAxis
           setFaceOperationAxis(nextAxis)
           lastSnapValue = null
-          updatePreview(lastClientX, lastClientY, lastAltKey, lastShiftKey)
+          updatePreview(lastClientX, lastClientY, lastAltKey)
         } else if (nextInput !== null) {
           keyboardEvent.preventDefault()
           keyboardEvent.stopImmediatePropagation()
           typedInput = nextInput
           setTransformNumericInput(nextInput)
-          updatePreview(lastClientX, lastClientY, lastAltKey, lastShiftKey)
+          updatePreview(lastClientX, lastClientY, lastAltKey)
         } else if (keyboardEvent.key === 'Enter') {
           keyboardEvent.preventDefault()
           keyboardEvent.stopImmediatePropagation()

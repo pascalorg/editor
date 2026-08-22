@@ -174,10 +174,8 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
 export const canRunGlobalRotationShortcut = () =>
   useInteractionScope.getState().scope.kind !== 'mesh-editing'
 
-export const canCycleSnappingModeShortcut = (hasActiveContext = getActiveSnapContext() != null) => {
-  const scope = useInteractionScope.getState().scope
-  return hasActiveContext && !(scope.kind === 'mesh-editing' && scope.phase === 'operating')
-}
+export const canCycleSnappingModeShortcut = (hasActiveContext = getActiveSnapContext() != null) =>
+  hasActiveContext
 
 export const useKeyboard = ({
   isVersionPreviewMode = false,
@@ -202,7 +200,7 @@ export const useKeyboard = ({
       return ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window')
     }
 
-    // Shift cycles the snapping mode (and a clean-tap Ctrl the grid step)
+    // A clean-tap Shift cycles the snapping mode (and a clean-tap Ctrl the grid step)
     // whenever there's an active snapping context — i.e. exactly when the HUD
     // shows a snapping chip. That single source covers wall/fence/item drafting,
     // every node move (including wall-hosted items + door/window openings, which
@@ -214,8 +212,15 @@ export const useKeyboard = ({
     // and is cleared the instant any other key fires, so chords like Ctrl+Z /
     // Ctrl+C never cycle.
     let ctrlTapClean = false
+    let shiftTapClean = false
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftTapClean = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey
+      } else {
+        shiftTapClean = false
+      }
+
       if (e.key === 'Control' || e.key === 'Meta') {
         // Only a fresh, modifier-free press starts a clean-tap candidate;
         // ignore key-repeat and presses already part of a combo.
@@ -274,15 +279,6 @@ export const useKeyboard = ({
           setTerrainBrush({ radius })
           sfxEmitter.emit('sfx:grid-snap')
         }
-        return
-      }
-
-      if (e.key === 'Shift' && !e.repeat && canCycleSnappingModeShortcut()) {
-        // Cycle the global snapping mode (grid → lines → angles → off).
-        // `'off'` is the snap bypass now, so Shift no longer holds-to-bypass.
-        e.preventDefault()
-        useEditor.getState().cycleSnappingMode()
-        sfxEmitter.emit('sfx:grid-snap')
         return
       }
 
@@ -580,7 +576,12 @@ export const useKeyboard = ({
             sfxEmitter.emit('sfx:item-rotate')
           }
         }
-      } else if ((e.key === 't' || e.key === 'T') && !isVersionPreviewMode && !isPlacingOpening()) {
+      } else if (
+        (e.key === 't' || e.key === 'T') &&
+        !isVersionPreviewMode &&
+        !isPlacingOpening() &&
+        canRunGlobalRotationShortcut()
+      ) {
         // Rotate selected node counter-clockwise
         // Multi-selection → group rotate, mirroring the R arm above.
         if (rotateGroupSelection(-1)) {
@@ -698,6 +699,23 @@ export const useKeyboard = ({
       }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        const wasClean = shiftTapClean
+        shiftTapClean = false
+        if (!wasClean) return
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement ||
+          (e.target instanceof HTMLElement && e.target.isContentEditable)
+        ) {
+          return
+        }
+        if (!canCycleSnappingModeShortcut()) return
+        e.preventDefault()
+        useEditor.getState().cycleSnappingMode()
+        sfxEmitter.emit('sfx:grid-snap')
+        return
+      }
       if (e.key === 'Control' || e.key === 'Meta') {
         const wasClean = ctrlTapClean
         ctrlTapClean = false
@@ -721,6 +739,8 @@ export const useKeyboard = ({
     // registry move overlay) — safe only because none of them claim Ctrl/Cmd+G.
     // `e.code` keeps it on the physical G key across keyboard layouts.
     const handleSessionGroupKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Shift') shiftTapClean = false
+      if (e.key !== 'Control' && e.key !== 'Meta') ctrlTapClean = false
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||

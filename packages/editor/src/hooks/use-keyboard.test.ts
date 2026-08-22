@@ -46,18 +46,18 @@ afterEach(() => {
 })
 
 describe('history shortcuts during block editing', () => {
-  test('reserves R for the active mesh editor', () => {
+  test('reserves global rotation shortcuts for the active mesh editor', () => {
     expect(canRunGlobalRotationShortcut()).toBe(true)
     useInteractionScope.getState().begin(meshEditScope(NODE_ID))
     expect(canRunGlobalRotationShortcut()).toBe(false)
   })
 
-  test('reserves held Shift for precision while a mesh operation is active', () => {
+  test('keeps Shift available to cycle snapping while a mesh operation is active', () => {
     useInteractionScope.getState().begin(meshEditScope(NODE_ID))
     expect(canCycleSnappingModeShortcut(true)).toBe(true)
 
     useInteractionScope.getState().begin(meshEditScope(NODE_ID, 'operating', 'translate'))
-    expect(canCycleSnappingModeShortcut(true)).toBe(false)
+    expect(canCycleSnappingModeShortcut(true)).toBe(true)
   })
 
   test('undoes and redoes mesh changes without leaving component selection mode', () => {

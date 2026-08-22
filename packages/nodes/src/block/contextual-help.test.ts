@@ -26,6 +26,14 @@ describe('block contextual help', () => {
       keys: ['E'],
       label: 'Extrude selected faces',
     })
+    expect(extension?.getHints('block_1')).toContainEqual({
+      keys: ['I'],
+      label: 'Inset selected faces',
+    })
+    expect(extension?.getHints('block_1')).not.toContainEqual({
+      keys: ['T'],
+      label: 'Inset selected faces',
+    })
 
     useBlockEditSession.getState().setSelection('block_1', createBlockSelection('edge', ['e0']))
     expect(extension?.getHints('block_1')).toContainEqual({

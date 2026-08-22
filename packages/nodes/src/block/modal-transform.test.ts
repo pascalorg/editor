@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  blockAccumulatePrecisionPointer,
   blockAxisDelta,
   blockAxisVisualState,
   blockConstrainTranslationDelta,
@@ -8,7 +7,6 @@ import {
   blockNumericDeltaForConstraint,
   blockPlaneVisualState,
   blockPointerDistanceForAxis,
-  blockPrecisionSnapStep,
   blockRotationPointerAngle,
   blockScaleFactorsForConstraint,
   blockTransformAxisFromKey,
@@ -19,31 +17,6 @@ import {
 } from './modal-transform'
 
 describe('block modal transform', () => {
-  test('accumulates held-Shift pointer movement at one tenth speed without jumping', () => {
-    expect(
-      blockAccumulatePrecisionPointer(
-        { x: 120, y: 100 },
-        { x: 120, y: 100 },
-        { x: 140, y: 80 },
-        true,
-      ),
-    ).toEqual({ x: 122, y: 98 })
-    expect(
-      blockAccumulatePrecisionPointer(
-        { x: 122, y: 98 },
-        { x: 140, y: 80 },
-        { x: 150, y: 90 },
-        false,
-      ),
-    ).toEqual({ x: 132, y: 108 })
-  })
-
-  test('uses finer grid and angle increments during precision movement', () => {
-    expect(blockPrecisionSnapStep(0.5, false)).toBe(0.5)
-    expect(blockPrecisionSnapStep(0.5, true)).toBe(0.05)
-    expect(blockPrecisionSnapStep(15, true)).toBe(1.5)
-  })
-
   test('recognizes case-insensitive transform-axis shortcuts', () => {
     expect(blockTransformAxisFromKey('X')).toBe('x')
     expect(blockTransformAxisFromKey('y')).toBe('y')
@@ -56,10 +29,10 @@ describe('block modal transform', () => {
     expect(blockAxisDelta('z', 2)).toEqual([0, 0, 2])
   })
 
-  test('keeps pointer-derived Z movement aligned with the visible gizmo', () => {
+  test('keeps pointer-derived movement aligned with every visible gizmo axis', () => {
     expect(blockPointerDistanceForAxis('x', 1.25)).toBe(1.25)
     expect(blockPointerDistanceForAxis('y', -0.5)).toBe(-0.5)
-    expect(blockPointerDistanceForAxis('z', 0.75)).toBe(-0.75)
+    expect(blockPointerDistanceForAxis('z', 0.75)).toBe(0.75)
   })
 
   test('keeps only the locked operation axis colorful', () => {

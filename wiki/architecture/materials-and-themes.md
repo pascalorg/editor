@@ -68,7 +68,7 @@ Blocks use the reusable `MaterialRef` model through stable, user-named object sl
 
 The geometry builder emits one Three.js group per topology face and a material array ordered by the node's stable slot IDs. It publishes that render-material order as `userData.slotIds` and records each face's vertex range in `geometry.userData.blockFaces`. The paint capability re-raycasts the mesh and maps the hit triangle through those ranges to a stable topology face ID, so preview and commit affect only that face. Face UVs retain the world-scale projection contract below.
 
-The block inspector calls this collection **Slots**. Users can rename slots and change a slot's material through a compact dropdown using deduplicated `MaterialRef`s already used by scene node slots plus reusable scene-material datablocks. While one or more faces are selected in edit mode, clicking a slot binds those faces to it immediately; there is no separate Assign / Select / Deselect button row.
+The block inspector calls this collection **Slots**. Users can rename slots, and the Paint tool changes a slot's material using reusable scene-material datablocks. While one or more faces are selected in edit mode, clicking a slot binds those faces to it immediately; there is no separate Assign / Select / Deselect button row.
 
 Adding a slot while faces are selected creates the slot, binds those faces to it, and assigns a distinct generated accent material in the same scene update. This makes the new surface visibly different in both edit mode and the rendered model before the user chooses a final paint material. With no selected faces, Add Slot is a no-op so it cannot create an invisible, unused slot.
 

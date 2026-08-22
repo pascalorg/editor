@@ -2,7 +2,7 @@ export type BlockTransformAxis = 'x' | 'y' | 'z'
 export type BlockTransformPlane = 'xy' | 'xz' | 'yz'
 export type BlockTransformOperation = 'translate' | 'rotate' | 'scale'
 export type BlockTransformConstraint = BlockTransformAxis | BlockTransformPlane | 'free' | 'uniform'
-export type BlockModalFeedbackMode = 'free' | 'grid' | 'angle' | 'exact' | 'geometry' | 'precision'
+export type BlockModalFeedbackMode = 'free' | 'grid' | 'angle' | 'exact' | 'geometry'
 
 export type BlockActiveTransform = {
   operation: BlockTransformOperation
@@ -12,23 +12,6 @@ export type BlockActiveTransform = {
 export type BlockAxisVisualState = 'normal' | 'active' | 'faded'
 
 export type BlockScreenPoint = { x: number; y: number }
-
-export function blockAccumulatePrecisionPointer(
-  effective: BlockScreenPoint,
-  previousRaw: BlockScreenPoint,
-  currentRaw: BlockScreenPoint,
-  precision: boolean,
-): BlockScreenPoint {
-  const factor = precision ? 0.1 : 1
-  return {
-    x: effective.x + (currentRaw.x - previousRaw.x) * factor,
-    y: effective.y + (currentRaw.y - previousRaw.y) * factor,
-  }
-}
-
-export function blockPrecisionSnapStep(step: number, precision: boolean): number {
-  return precision ? step * 0.1 : step
-}
 
 export function blockRotationPointerAngle(
   pivot: BlockScreenPoint,
@@ -99,9 +82,7 @@ export function blockModalFeedbackLabel(mode: BlockModalFeedbackMode): string {
         ? 'Exact'
         : mode === 'geometry'
           ? 'Geometry snap'
-          : mode === 'precision'
-            ? 'Precision'
-            : 'Free'
+          : 'Free'
 }
 
 export function blockAxisDelta(
@@ -111,8 +92,8 @@ export function blockAxisDelta(
   return [axis === 'x' ? distance : 0, axis === 'y' ? distance : 0, axis === 'z' ? distance : 0]
 }
 
-export function blockPointerDistanceForAxis(axis: BlockTransformAxis, distance: number): number {
-  return axis === 'z' ? -distance : distance
+export function blockPointerDistanceForAxis(_axis: BlockTransformAxis, distance: number): number {
+  return distance
 }
 
 export function blockConstrainTranslationDelta(

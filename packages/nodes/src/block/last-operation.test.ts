@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { BlockNode, createSceneApi, runAsSingleSceneHistoryStep, useScene } from '@pascal-app/core'
 import { applyBlockCommand } from './commands'
 import {
+  commitBlockOperation,
   recordCommittedBlockOperation,
   repeatCommittedBlockOperation,
   replaceCommittedBlockOperation,
@@ -112,5 +113,18 @@ describe('block last operation history transaction', () => {
     ).toEqual([2.9, 2.9, 2.9, 2.9])
     useScene.temporal.getState().undo()
     expect(useScene.getState().nodes[node.id]).toMatchObject({ topology: first.topology })
+  })
+
+  test('does not create history or a last operation when a transform leaves topology unchanged', () => {
+    const committed = commitBlockOperation(services, node.id, 'Scale', node.topology, {
+      type: 'scale-components',
+      selection: { mode: 'face', ids: ['f-top'] },
+      pivot: [0, 2.4, 0],
+      factors: [1, 2, 1],
+    })
+
+    expect(committed).toEqual({ ok: true, changed: false })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    expect(useScene.getState().nodes[node.id]).toEqual(node)
   })
 })

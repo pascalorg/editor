@@ -30,6 +30,16 @@ export type BlockLastOperationReplacement =
   | { ok: true; operation: BlockLastOperation }
   | { ok: false; error: string }
 
+export type BlockOperationCommit =
+  | { ok: true; changed: false }
+  | {
+      ok: true
+      changed: true
+      operation: BlockLastOperation
+      result: SuccessfulBlockCommandResult
+    }
+  | { ok: false; error: string }
+
 type RepeatSelection = BlockSelection & { activeId: string | null }
 type Point = [number, number, number]
 
@@ -100,6 +110,34 @@ export function recordCommittedBlockOperation(
     nodeId,
     resultSelection: result.selection,
     resultTopology: result.topology,
+  }
+}
+
+export function commitBlockOperation(
+  services: BlockOperationServices,
+  nodeId: AnyNodeId,
+  label: string,
+  baseTopology: BlockTopology,
+  command: BlockCommand,
+): BlockOperationCommit {
+  if (services.readOnly) return { ok: false, error: 'Scene is read-only' }
+  const result = applyBlockCommand(baseTopology, command)
+  if (!result.ok) return result
+  if (sameTopology(baseTopology, result.topology)) return { ok: true, changed: false }
+
+  services.sceneApi.update(nodeId, { topology: result.topology })
+  return {
+    ok: true,
+    changed: true,
+    operation: recordCommittedBlockOperation(
+      services,
+      nodeId,
+      label,
+      baseTopology,
+      command,
+      result,
+    ),
+    result,
   }
 }
 

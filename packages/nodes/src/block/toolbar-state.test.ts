@@ -3,6 +3,7 @@ import {
   blockBevelWidthFromDrag,
   blockComponentStatus,
   blockGizmoDimensions,
+  blockGizmoHitDimensions,
   blockOperationAvailability,
   blockScaleFactorFromDrag,
   blockScaleFactors,
@@ -98,5 +99,16 @@ describe('block toolbar state', () => {
 
   test('keeps every transform-gizmo dimension constant while topology moves', () => {
     expect(blockGizmoDimensions(3.4)).toEqual(blockGizmoDimensions(2.4))
+  })
+
+  test('keeps axis and plane hit targets separate and gives the shaft priority at ring crossings', () => {
+    const gizmo = blockGizmoDimensions(2.4)
+    const hits = blockGizmoHitDimensions(gizmo.radius, gizmo.planeHandleSize)
+    const planeNearEdge = gizmo.planeHandleOffset - hits.planeSize / 2
+
+    expect(hits.axisRadius).toBeLessThan(planeNearEdge)
+    expect(hits.rotationTube).toBeLessThan(hits.axisRadius)
+    expect(hits.rotationStart).toBeGreaterThan(0)
+    expect(hits.rotationStart + hits.rotationArc).toBeLessThan(Math.PI / 2)
   })
 })
