@@ -1,16 +1,17 @@
 import type { BlockTopology } from '@pascal-app/core'
 import { create } from 'zustand'
+import type { BlockLastOperation } from './last-operation'
 import { type BlockSelectionState, createBlockSelection } from './selection-model'
 
 type BlockEditSessionState = {
   nodeId: string | null
   selection: BlockSelectionState
-  activeMaterialSlotId: string | null
+  lastOperation: BlockLastOperation | null
   begin: (nodeId: string, selection: BlockSelectionState) => void
   end: (nodeId: string) => void
   setSelection: (nodeId: string, selection: BlockSelectionState) => void
-  setActiveMaterialSlot: (nodeId: string, slotId: string) => void
   reconcileSelection: (nodeId: string, topology: BlockTopology) => void
+  setLastOperation: (nodeId: string, operation: BlockLastOperation | null) => void
 }
 
 const emptySelection = () => createBlockSelection('face')
@@ -18,18 +19,18 @@ const emptySelection = () => createBlockSelection('face')
 const useBlockEditSession = create<BlockEditSessionState>((set) => ({
   nodeId: null,
   selection: emptySelection(),
-  activeMaterialSlotId: null,
-  begin: (nodeId, selection) => set({ nodeId, selection, activeMaterialSlotId: null }),
+  lastOperation: null,
+  begin: (nodeId, selection) => set({ nodeId, selection, lastOperation: null }),
   end: (nodeId) =>
     set((state) =>
       state.nodeId === nodeId
-        ? { nodeId: null, selection: emptySelection(), activeMaterialSlotId: null }
+        ? { nodeId: null, selection: emptySelection(), lastOperation: null }
         : state,
     ),
   setSelection: (nodeId, selection) =>
     set((state) => (state.nodeId === nodeId ? { selection } : state)),
-  setActiveMaterialSlot: (nodeId, activeMaterialSlotId) =>
-    set((state) => (state.nodeId === nodeId ? { activeMaterialSlotId } : state)),
+  setLastOperation: (nodeId, lastOperation) =>
+    set((state) => (state.nodeId === nodeId ? { lastOperation } : state)),
   reconcileSelection: (nodeId, topology) =>
     set((state) => {
       if (state.nodeId !== nodeId) return state

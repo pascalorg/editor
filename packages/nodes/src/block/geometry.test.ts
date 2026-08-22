@@ -277,8 +277,8 @@ describe('buildBlockGeometry', () => {
   test('rebuilds the extruded topology into additional face triangles', () => {
     const node = BlockNode.parse({ name: 'Box' })
     const result = applyBlockCommand(node.topology, {
-      type: 'extrude-face',
-      faceId: 'f-top',
+      type: 'extrude-faces',
+      faceIds: ['f-top'],
       distance: 0.25,
     })
     expect(result.ok).toBe(true)
@@ -295,8 +295,8 @@ describe('buildBlockGeometry', () => {
   test('smooths rounded bevel bands without softening the original box corners', () => {
     const node = BlockNode.parse({ name: 'Box' })
     const result = applyBlockCommand(node.topology, {
-      type: 'bevel-edge',
-      edgeId: 'e0',
+      type: 'bevel-edges',
+      edgeIds: ['e0'],
       width: 0.2,
       segments: 6,
       profile: 0.5,

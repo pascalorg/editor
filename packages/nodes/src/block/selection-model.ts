@@ -11,6 +11,18 @@ export type BlockSelectionState = BlockSelection & {
   activeId: string | null
 }
 
+export function blockSelectionChanged(
+  previous: BlockSelectionState,
+  next: BlockSelectionState,
+): boolean {
+  return (
+    previous.mode !== next.mode ||
+    previous.activeId !== next.activeId ||
+    previous.ids.length !== next.ids.length ||
+    previous.ids.some((id, index) => id !== next.ids[index])
+  )
+}
+
 function idsForMode(topology: BlockTopology, mode: BlockComponentMode): string[] {
   switch (mode) {
     case 'vertex':

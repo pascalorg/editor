@@ -71,13 +71,13 @@ import {
   resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
-import {
-  applyBlockPreviewPose,
-  resolveBlockFaceSwitch,
-  shouldDetachBlockFaceOnLeave,
-} from './block-preview'
 import { shouldCreateFloorDraft } from './draft-creation'
 import { commitFaceHostClick, resolveFaceHostPreviewCommit } from './face-host-commit'
+import {
+  applyFaceHostPreviewPose,
+  resolveFaceHostSwitch,
+  shouldDetachFaceHostOnLeave,
+} from './face-host-preview'
 import {
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
@@ -1569,7 +1569,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       event.stopPropagation()
       const draft = draftNode.current
       const nextFaceId = result.hostFaceId
-      const faceSwitch = resolveBlockFaceSwitch(
+      const faceSwitch = resolveFaceHostSwitch(
         currentFaceHostId(draft),
         nextFaceId,
         pendingFaceHostId,
@@ -1594,7 +1594,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         Object.assign(draft, result.nodeUpdate)
         const mesh = sceneRegistry.nodes.get(draft.id)
         const rotation = result.nodeUpdate.rotation ?? draft.rotation
-        if (mesh) applyBlockPreviewPose(mesh, result.gridPosition, rotation)
+        if (mesh) applyFaceHostPreviewPose(mesh, result.gridPosition, rotation)
         useLiveNodeOverrides.getState().set(draft.id, {
           position: result.gridPosition,
           rotation,
@@ -1622,7 +1622,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onFaceHostLeave = (event: NodeEvent) => {
       pendingFaceHostId = null
-      if (!shouldDetachBlockFaceOnLeave(asset.attachTo)) {
+      if (!shouldDetachFaceHostOnLeave(asset.attachTo)) {
         event.stopPropagation()
         return
       }
@@ -2700,7 +2700,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     } else if (placementState.current.surface === 'block-face') {
       const rotation = draftNode.current.rotation
-      applyBlockPreviewPose(
+      applyFaceHostPreviewPose(
         mesh,
         [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
         rotation,

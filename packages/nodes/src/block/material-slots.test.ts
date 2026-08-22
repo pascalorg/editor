@@ -4,33 +4,15 @@ import {
   assignBlockMaterial,
   blockMaterialSelection,
   blockMaterialSlotIds,
-  collectReusableBlockMaterialRefs,
+  createAssignedBlockMaterialSlot,
   createBlockMaterialSlot,
   removeBlockMaterialSlot,
   renameBlockMaterialSlot,
-  selectBlockFacesByMaterialSlot,
   setBlockMaterialSlot,
+  unpaintedBlockMaterialSlotIds,
 } from './material-slots'
 
 describe('block material slots', () => {
-  test('offers catalog refs already used in scene slots when no scene materials exist', () => {
-    expect(
-      collectReusableBlockMaterialRefs([{ slots: { body: 'library:metal-steel' } }], []),
-    ).toEqual(['library:metal-steel'])
-  })
-
-  test('deduplicates used refs and includes unused reusable scene materials', () => {
-    expect(
-      collectReusableBlockMaterialRefs(
-        [
-          { slots: { body: 'scene:mat_shared', accent: 'library:oak' } },
-          { slots: { trim: 'scene:mat_shared', invalid: 'not-a-material-ref' } },
-        ],
-        ['mat_shared', 'mat_unused'],
-      ),
-    ).toEqual(['scene:mat_shared', 'library:oak', 'scene:mat_unused'])
-  })
-
   test('lists body, persisted, and face-referenced slots in stable order', () => {
     const topology = createBoxBlockTopology()
     topology.faces[0] = { ...topology.faces[0], materialSlot: 'orphaned' }
@@ -56,6 +38,46 @@ describe('block material slots', () => {
     ).toEqual({ body: 'Body', 'slot-1': 'Trim' })
   })
 
+  test('creates a slot and assigns it to the selected faces in one operation', () => {
+    const topology = createBoxBlockTopology()
+    const result = createAssignedBlockMaterialSlot(
+      topology,
+      undefined,
+      { body: 'Body' },
+      ['f-top', 'f-front'],
+      'scene:block-accent',
+    )
+
+    expect(result.changed).toBe(true)
+    expect(result.slotId).toBe('slot-1')
+    expect(result.slotNames).toEqual({ body: 'Body', 'slot-1': 'Slot 1' })
+    expect(result.slots).toEqual({ 'slot-1': 'scene:block-accent' })
+    expect(result.topology.faces.map((face) => face.materialSlot)).toEqual([
+      'body',
+      'slot-1',
+      'slot-1',
+      'body',
+      'body',
+      'body',
+    ])
+  })
+
+  test('does not create an empty slot when no faces are selected', () => {
+    const topology = createBoxBlockTopology()
+    const slotNames = { body: 'Body' }
+    const result = createAssignedBlockMaterialSlot(
+      topology,
+      undefined,
+      slotNames,
+      [],
+      'scene:block-accent',
+    )
+
+    expect(result.changed).toBe(false)
+    expect(result.topology).toBe(topology)
+    expect(result.slotNames).toBe(slotNames)
+  })
+
   test('updates a slot material without changing face assignments', () => {
     const slots = { body: 'library:wood' }
     expect(setBlockMaterialSlot(slots, 'body', 'library:metal-steel')).toEqual({
@@ -66,6 +88,19 @@ describe('block material slots', () => {
       slots: undefined,
       changed: true,
     })
+  })
+
+  test('identifies unpainted non-body slots for the edit-mode tint', () => {
+    const topology = createBoxBlockTopology()
+    topology.faces[1] = { ...topology.faces[1], materialSlot: 'accent' }
+
+    expect(
+      unpaintedBlockMaterialSlotIds(
+        topology,
+        { body: 'library:wood', painted: 'library:metal-steel' },
+        { accent: 'Accent', painted: 'Painted' },
+      ),
+    ).toEqual(['accent'])
   })
 
   test('reports single and mixed face assignments using the active face', () => {
@@ -85,26 +120,6 @@ describe('block material slots', () => {
       kind: 'empty',
       activeSlotId: null,
     })
-  })
-
-  test('selects and deselects every face assigned to a slot without replacing other selection', () => {
-    const topology = createBoxBlockTopology()
-    topology.faces[1] = { ...topology.faces[1], materialSlot: 'accent' }
-    topology.faces[2] = { ...topology.faces[2], materialSlot: 'accent' }
-
-    expect(selectBlockFacesByMaterialSlot(topology, ['f-bottom'], 'accent', 'select')).toEqual([
-      'f-bottom',
-      'f-top',
-      'f-front',
-    ])
-    expect(
-      selectBlockFacesByMaterialSlot(
-        topology,
-        ['f-bottom', 'f-top', 'f-front'],
-        'accent',
-        'deselect',
-      ),
-    ).toEqual(['f-bottom'])
   })
 
   test('removes a material slot and remaps all of its faces to the first slot', () => {
