@@ -146,11 +146,16 @@ export {
 export { type HiddenReason, hideFromScene, showInScene } from './lib/scene-visibility'
 export {
   createSnapshotPipeline,
+  SNAPSHOT_CHANNEL_MIME_TYPES,
+  SNAPSHOT_CHANNELS,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
   type SnapshotCaptureMode,
+  type SnapshotCaptureOptions,
   type SnapshotCaptureResult,
+  type SnapshotChannel,
+  type SnapshotChannelCaptureResult,
   type SnapshotCropRegion,
   type SnapshotPipeline,
   type SnapshotSize,
