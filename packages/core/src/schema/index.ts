@@ -54,7 +54,7 @@ export {
   getBlockFaceNormal,
   inspectBlockTopology,
 } from './nodes/block'
-export { BoxVentNode } from './nodes/box-vent'
+export { BoxVentMaterialRole, BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
 export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
@@ -94,7 +94,7 @@ export {
   setConstructionDimensionDrawingPresentation,
   setConstructionDimensionDrawingSuppressedSegments,
 } from './nodes/construction-dimension'
-export { CupolaNode } from './nodes/cupola'
+export { CupolaMaterialRole, CupolaNode } from './nodes/cupola'
 export {
   DoorNode,
   DoorSegment,
@@ -122,7 +122,7 @@ export {
   ElevatorNode,
   ElevatorShaftStyle,
 } from './nodes/elevator'
-export { EyebrowVentNode } from './nodes/eyebrow-vent'
+export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
@@ -225,6 +225,7 @@ export {
 } from './nodes/roof-segment'
 export type {
   DutchRoofShapeMetrics,
+  RoofShapeEaveSide,
   RoofShapeFaceVertex,
   RoofShapeInsets,
   RoofShapeRatios,
@@ -233,6 +234,7 @@ export {
   getDutchEndSlopeFaces,
   getDutchRoofShapeMetrics,
   getRoofModuleFaces,
+  getRoofShapeEaveSides,
   getRoofShapeInsets,
   getRoofShapeRatios,
 } from './nodes/roof-segment-shape'
@@ -278,7 +280,7 @@ export {
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
-export { TurbineVentNode } from './nodes/turbine-vent'
+export { TurbineVentMaterialRole, TurbineVentNode } from './nodes/turbine-vent'
 export type {
   WallBandSurfaceSlotId,
   WallFaceBand,

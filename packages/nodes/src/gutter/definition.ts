@@ -4,6 +4,7 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { surfacePaintCapability } from '../shared/surface-paint'
 import { buildGutterFloorplan } from './floorplan'
 import { snapLengthToCorner } from './length-snap'
 import { gutterParametrics } from './parametrics'
@@ -140,7 +141,7 @@ const gutterHandles: HandleDescriptor<GutterNodeType>[] = [
  */
 export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   kind: 'gutter',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: GutterNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -156,9 +157,11 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   },
 
   capabilities: {
+    slots: () => [{ slotId: 'surface', label: 'Surface', default: 'library:preset-softwhite' }],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    paint: { ...surfacePaintCapability, materialTarget: 'gutter' },
     // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
     // eave fascia — no `buildCut`, just the dirty cascade so the
     // parent roof's merged shell rebuilds when the gutter moves /

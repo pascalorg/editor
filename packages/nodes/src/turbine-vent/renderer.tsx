@@ -13,6 +13,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -50,6 +51,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneMaterials = useScene((s) => s.materials)
 
   // Merge live overrides (panel slider drags) on top of the store node so
   // the mesh updates frame-by-frame without polluting undo history.
@@ -99,13 +101,31 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
   }, [segment, node.position[0], node.position[2]])
 
   const material = useMemo(() => {
-    if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    const resolve = (role: 'base' | 'head') => {
+      if (!textures) return roleDefault
+      const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
+      if (slotMaterial) return slotMaterial
+      if (node.material) return createMaterial(node.material, shading)
+      if (node.materialPreset) {
+        return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
+      }
+      return roleDefault
     }
-    return node.material
-      ? createMaterial(node.material, shading)
-      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+    return {
+      base: resolve('base'),
+      head: resolve('head'),
+    }
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    node.slots,
+    node.material,
+    node.materialPreset,
+    sceneMaterials,
+  ])
 
   // Compose slope tilt + yaw onto a single quaternion so the registered
   // ref's local frame is vent-mesh-local (handles read this frame).
@@ -163,7 +183,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
         <mesh
           castShadow
           geometry={clippedBase ?? baseGeometry}
-          material={material}
+          material={material.base}
           name="turbine-vent-base"
           receiveShadow
           {...handlers}
@@ -172,7 +192,7 @@ const TurbineVentRenderer = ({ node: storeNode }: { node: TurbineVentNode }) => 
           <mesh
             castShadow
             geometry={clippedHead ?? headGeometry}
-            material={material}
+            material={material.head}
             name="turbine-vent-head"
             receiveShadow
             {...handlers}

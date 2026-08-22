@@ -29,6 +29,7 @@ import useFloorplanMode from './../../../../../store/use-floorplan-mode'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
+import { PrintExportButton } from './print-export-button'
 
 type SceneNode = Record<string, unknown> & {
   id?: unknown
@@ -190,11 +191,12 @@ export function SettingsPanel({
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
-  const exportScene = useViewer((state) => state.exportScene)
+  const modelExport = useEditor((state) => state.modelExport)
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
+  const [exportOnlyVisible, setExportOnlyVisible] = useState(true)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
     () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
@@ -374,9 +376,18 @@ export function SettingsPanel({
 
         <div className="space-y-2">
           <div className="font-medium text-muted-foreground text-xs">3D model</div>
+          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+            <div>
+              <div className="font-medium text-sm">Visible nodes only</div>
+              <div className="text-muted-foreground text-xs">
+                Exclude hidden furniture and other hidden scene nodes
+              </div>
+            </div>
+            <Switch checked={exportOnlyVisible} onCheckedChange={setExportOnlyVisible} />
+          </div>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('glb')}
+            onClick={() => modelExport?.('glb', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
@@ -384,7 +395,7 @@ export function SettingsPanel({
           </Button>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('stl')}
+            onClick={() => modelExport?.('stl', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
@@ -392,12 +403,14 @@ export function SettingsPanel({
           </Button>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('obj')}
+            onClick={() => modelExport?.('obj', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
             Export OBJ
           </Button>
+
+          <PrintExportButton onlyVisible={exportOnlyVisible} />
         </div>
 
         <div className="space-y-2">

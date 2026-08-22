@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getRoofSegmentSurfaceY, type RoofSegmentNode } from '@pascal-app/core'
+import { getRoofSegmentSurfaceY, type RoofSegmentNode, type RoofType } from '@pascal-app/core'
 import { getDormerExposedFaces } from '../csg-geometry'
 import {
   buildDormerGhostGeometry,
@@ -28,6 +28,39 @@ describe('buildDormerGhostGeometry (placement preview)', () => {
     a.computeBoundingBox()
     b.computeBoundingBox()
     expect(b.boundingBox!.max.y).toBeGreaterThan(a.boundingBox!.max.y)
+  })
+
+  test.each([
+    ['flat', 1],
+    ['gable', 2],
+    ['hip', 2],
+    ['shed', 2],
+    ['gambrel', 3],
+    ['mansard', 3],
+    ['dutch', 4],
+  ] satisfies [
+    RoofType,
+    number,
+  ][])('builds the canonical %s height profile', (roofType, levels) => {
+    const wallHeight = 1
+    const geo = buildDormerGhostGeometry(
+      DormerNode.parse({ roofType, width: 4, depth: 3, height: wallHeight, roofHeight: 1.2 }),
+    )
+    const position = geo.getAttribute('position')
+    const roofLevels = new Set<number>()
+    for (let index = 0; index < position.count; index++) {
+      const y = position.getY(index)
+      if (y >= wallHeight - 0.001) roofLevels.add(Math.round(y * 1000))
+    }
+
+    expect(roofLevels.size).toBe(levels)
+  })
+
+  test('assigns roof faces to the roof material slot', () => {
+    const geo = buildDormerGhostGeometry(DormerNode.parse({ roofType: 'mansard' }))
+
+    expect(geo.groups.some((group) => group.materialIndex === 0)).toBe(true)
+    expect(geo.groups.some((group) => group.materialIndex === 3)).toBe(true)
   })
 })
 

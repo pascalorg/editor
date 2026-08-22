@@ -786,7 +786,9 @@ describe('lean-to corner joint', () => {
       gutterA.dispose()
       gutterB.dispose()
     }
-  })
+    // The full-angle sweep runs ~6s on CI's 2-core x64 runners — over bun's
+    // default 5s per-test budget (2-3s locally on Apple Silicon).
+  }, 30_000)
 
   test('rejects corners immediately outside the supported 30 to 150 degree range', () => {
     for (const angle of [20, 29.99, 150.01, 160]) {

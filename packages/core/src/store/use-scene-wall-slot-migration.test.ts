@@ -261,4 +261,35 @@ describe('procedural kind surface-material → slots migration', () => {
     expect(slab.slots).toBeUndefined()
     expect(Object.keys(useScene.getState().materials)).toHaveLength(0)
   })
+
+  test('roof accessory role materials migrate to their matching slots', () => {
+    useScene.getState().setScene(
+      sceneWithNode({
+        type: 'box-vent',
+        baseMaterialPreset: 'library:metal-steel',
+        topMaterialPreset: 'library:metal-copper',
+      }),
+      ['site_test'] as never,
+    )
+
+    const vent = (useScene.getState().nodes as Record<string, SlottedNode>).node_test!
+    expect(vent.slots).toEqual({
+      base: 'library:metal-steel',
+      top: 'library:metal-copper',
+    })
+    expect((vent as { baseMaterialPreset?: unknown }).baseMaterialPreset).toBeUndefined()
+    expect((vent as { topMaterialPreset?: unknown }).topMaterialPreset).toBeUndefined()
+  })
+
+  test('gutter and downspout legacy paint migrates to the surface slot', () => {
+    for (const type of ['gutter', 'downspout'] as const) {
+      useScene
+        .getState()
+        .setScene(sceneWithNode({ type, materialPreset: 'library:metal-steel' }), [
+          'site_test',
+        ] as never)
+      const node = (useScene.getState().nodes as Record<string, SlottedNode>).node_test!
+      expect(node.slots).toEqual({ surface: 'library:metal-steel' })
+    }
+  })
 })

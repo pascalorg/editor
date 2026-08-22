@@ -5,6 +5,7 @@ import {
   getDutchRoofShapeMetrics,
   getEffectiveNode,
   getRoofModuleFaces,
+  getRoofPlanBounds,
   getRoofSegmentSurfaceY,
   getRoofShapeInsets,
   getRoofShapeRatios,
@@ -15,8 +16,11 @@ import {
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
   type RoofNode,
+  type RoofPlanBounds,
   type RoofSegmentNode,
   type RoofType,
+  roofOverlapEntryOwns,
+  roofPlanBoundsOverlap,
   sceneRegistry,
   useLiveNodeOverrides,
   useScene,
@@ -27,7 +31,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
-import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
+import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -152,9 +156,67 @@ function createDegenerateRoofPlaceholder(): THREE.BufferGeometry {
 
 // Pending merged-roof updates carried across frames (for throttling)
 const pendingRoofUpdates = new Set<AnyNodeId>()
+const previousRoofPlanBounds = new Map<AnyNodeId, RoofPlanBounds>()
 const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
 const MAX_SEGMENTS_PER_FRAME = 3
+
+function queueSiblingRoofUpdates(roofId: AnyNodeId, nodes: Record<string, AnyNode>) {
+  pendingRoofUpdates.add(roofId)
+  const roof = nodes[roofId]?.type === 'roof' ? getEffectiveNode(nodes[roofId]) : undefined
+  if (roof?.type !== 'roof' || !roof.parentId) return
+  const currentBounds = getRoofPlanBounds({
+    position: roof.position,
+    rotation: roof.rotation,
+    segments: (roof.children ?? []).flatMap((id) => {
+      const segment = nodes[id as AnyNodeId]
+      if (segment?.type !== 'roof-segment') return []
+      const effective = getEffectiveNode(segment)
+      return [
+        {
+          position: effective.position,
+          rotation: effective.rotation,
+          width: effective.width,
+          depth: effective.depth,
+        },
+      ]
+    }),
+  })
+  const oldBounds = previousRoofPlanBounds.get(roofId)
+  if (currentBounds) previousRoofPlanBounds.set(roofId, currentBounds)
+  const parent = nodes[roof.parentId as AnyNodeId]
+  if (!parent || !('children' in parent) || !Array.isArray(parent.children)) return
+  for (const siblingId of parent.children) {
+    const sibling = nodes[siblingId as AnyNodeId]
+    if (sibling?.type !== 'roof' || sibling.id === roofId) continue
+    const effectiveSibling = getEffectiveNode(sibling)
+    const siblingBounds = getRoofPlanBounds({
+      position: effectiveSibling.position,
+      rotation: effectiveSibling.rotation,
+      segments: (effectiveSibling.children ?? []).flatMap((id) => {
+        const segment = nodes[id as AnyNodeId]
+        if (segment?.type !== 'roof-segment') return []
+        const effective = getEffectiveNode(segment)
+        return [
+          {
+            position: effective.position,
+            rotation: effective.rotation,
+            width: effective.width,
+            depth: effective.depth,
+          },
+        ]
+      }),
+    })
+    if (!siblingBounds) continue
+    previousRoofPlanBounds.set(sibling.id, siblingBounds)
+    if (
+      (currentBounds && roofPlanBoundsOverlap(currentBounds, siblingBounds)) ||
+      (oldBounds && roofPlanBoundsOverlap(oldBounds, siblingBounds))
+    ) {
+      pendingRoofUpdates.add(sibling.id)
+    }
+  }
+}
 
 // ============================================================================
 // ROOF SYSTEM
@@ -174,6 +236,7 @@ export const RoofSystem = () => {
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {
       pendingRoofUpdates.clear()
+      previousRoofPlanBounds.clear()
       warnedMergedRoofNaNIds.clear()
       for (const cached of mergedRoofSegmentGeometryCache.values()) {
         disposeCachedMergedRoofSegmentGeometrySet(cached)
@@ -259,10 +322,10 @@ export const RoofSystem = () => {
         }
         // Queue the parent roof for a merged geometry update
         if (effectiveSegment.parentId) {
-          pendingRoofUpdates.add(effectiveSegment.parentId as AnyNodeId)
+          queueSiblingRoofUpdates(effectiveSegment.parentId as AnyNodeId, nodes)
         }
       } else if (node.type === 'roof') {
-        pendingRoofUpdates.add(id as AnyNodeId)
+        queueSiblingRoofUpdates(id as AnyNodeId, nodes)
         clearDirty(id as AnyNodeId)
       }
     })
@@ -508,8 +571,7 @@ function updateMergedRoofGeometry(
 
   let totalShinSlab: Brush | null = null
   let totalDeckSlab: Brush | null = null
-  let totalWall: Brush | null = null
-  let totalInner: Brush | null = null
+  let totalWallShell: Brush | null = null
   const rakeBoardGeometries: THREE.BufferGeometry[] = []
   const directSegmentGeometries: THREE.BufferGeometry[] = []
   const csgChildren: RoofSegmentNode[] = []
@@ -525,13 +587,14 @@ function updateMergedRoofGeometry(
       () => buildCustomShedGeometry(child),
     )
     if (directGeometry) {
-      const withPanels = addShedInsetEndPanels(directGeometry, [child], false)
+      let withPanels = addShedInsetEndPanels(directGeometry, [child], false)
       _matrix.compose(
         _position.set(child.position[0], child.position[1], child.position[2]),
         _quaternion.setFromAxisAngle(_yAxis, child.rotation),
         _scale,
       )
       withPanels.applyMatrix4(_matrix)
+      withPanels = clipDirectRoofGeometryAgainstSiblings(withPanels, child, nodes, 'roof')
       directSegmentGeometries.push(withPanels)
       continue
     }
@@ -540,6 +603,17 @@ function updateMergedRoofGeometry(
     if (!brushes) continue
     if (brushes.rakeBoards) {
       rakeBoardGeometries.push(brushes.rakeBoards)
+    }
+
+    const occludingInterior = buildOccludingRoofInterior(child, nodes, 'roof')
+    if (occludingInterior) {
+      const exposedShingles = subtractCsgBrush(brushes.shinSlab, occludingInterior, csgEvaluator)
+      brushes.shinSlab.geometry.dispose()
+      brushes.shinSlab = exposedShingles
+
+      const exposedDeck = subtractCsgBrush(brushes.deckSlab, occludingInterior, csgEvaluator)
+      brushes.deckSlab.geometry.dispose()
+      brushes.deckSlab = exposedDeck
     }
 
     if (totalShinSlab) {
@@ -566,26 +640,32 @@ function updateMergedRoofGeometry(
       brushes.wallBrush.geometry.dispose()
       brushes.innerBrush.geometry.dispose()
     } else {
-      if (totalWall) {
-        const next: Brush = csgEvaluator.evaluate(totalWall, brushes.wallBrush, ADDITION) as Brush
-        totalWall.geometry.dispose()
-        brushes.wallBrush.geometry.dispose()
-        prepareBrushForCSG(next)
-        totalWall = next
-      } else {
-        totalWall = brushes.wallBrush
+      let wallShell = csgEvaluator.evaluate(
+        brushes.wallBrush,
+        brushes.innerBrush,
+        SUBTRACTION,
+      ) as Brush
+      brushes.wallBrush.geometry.dispose()
+      brushes.innerBrush.geometry.dispose()
+      prepareBrushForCSG(wallShell)
+
+      if (occludingInterior) {
+        const exposedWall = subtractCsgBrush(wallShell, occludingInterior, csgEvaluator)
+        wallShell.geometry.dispose()
+        wallShell = exposedWall
       }
 
-      if (totalInner) {
-        const next: Brush = csgEvaluator.evaluate(totalInner, brushes.innerBrush, ADDITION) as Brush
-        totalInner.geometry.dispose()
-        brushes.innerBrush.geometry.dispose()
+      if (totalWallShell) {
+        const next = csgEvaluator.evaluate(totalWallShell, wallShell, ADDITION) as Brush
+        totalWallShell.geometry.dispose()
+        wallShell.geometry.dispose()
         prepareBrushForCSG(next)
-        totalInner = next
+        totalWallShell = next
       } else {
-        totalInner = brushes.innerBrush
+        totalWallShell = wallShell
       }
     }
+    occludingInterior?.geometry.dispose()
   }
 
   if (totalShinSlab && totalDeckSlab) {
@@ -593,11 +673,8 @@ function updateMergedRoofGeometry(
       const shinDeck = csgEvaluator.evaluate(totalShinSlab, totalDeckSlab, ADDITION)
       prepareBrushForCSG(shinDeck)
       let combined = shinDeck
-      let finalWallTrimmed: Brush | null = null
-      if (totalWall && totalInner) {
-        finalWallTrimmed = csgEvaluator.evaluate(totalWall, totalInner, SUBTRACTION)
-        prepareBrushForCSG(finalWallTrimmed)
-        combined = csgEvaluator.evaluate(shinDeck, finalWallTrimmed, ADDITION)
+      if (totalWallShell) {
+        combined = csgEvaluator.evaluate(shinDeck, totalWallShell, ADDITION)
       }
       prepareBrushForCSG(combined)
 
@@ -611,12 +688,10 @@ function updateMergedRoofGeometry(
           warnedMergedRoofNaNIds.add(roofNode.id)
         }
         resultGeo.dispose()
-        finalWallTrimmed?.geometry.dispose()
         if (combined !== shinDeck) shinDeck.geometry.dispose()
         totalShinSlab.geometry.dispose()
         totalDeckSlab.geometry.dispose()
-        totalWall?.geometry.dispose()
-        totalInner?.geometry.dispose()
+        totalWallShell?.geometry.dispose()
         for (const geometry of rakeBoardGeometries) geometry.dispose()
         for (const geometry of directSegmentGeometries) geometry.dispose()
         return
@@ -653,7 +728,6 @@ function updateMergedRoofGeometry(
       mergedMesh.geometry.dispose()
       mergedMesh.geometry = finalGeo
 
-      finalWallTrimmed?.geometry.dispose()
       if (combined !== shinDeck) shinDeck.geometry.dispose()
     } catch (e) {
       console.error('Merged roof CSG failed:', e)
@@ -661,8 +735,7 @@ function updateMergedRoofGeometry(
 
     totalShinSlab.geometry.dispose()
     totalDeckSlab.geometry.dispose()
-    totalWall?.geometry.dispose()
-    totalInner?.geometry.dispose()
+    totalWallShell?.geometry.dispose()
     for (const geometry of rakeBoardGeometries) geometry.dispose()
   }
 
@@ -1585,7 +1658,10 @@ export function generateRoofSegmentGeometry(
     buildCustomShedGeometry(node),
   )
   if (directShedGeometry) {
-    const result = addShedInsetEndPanels(directShedGeometry, [node], false)
+    let result = addShedInsetEndPanels(directShedGeometry, [node], false)
+    if (nodes) {
+      result = clipDirectRoofGeometryAgainstSiblings(result, node, nodes, 'segment')
+    }
     result.computeVertexNormals()
     ensureRenderableGeometryAttributes(result)
     return result
@@ -1614,6 +1690,14 @@ export function generateRoofSegmentGeometry(
       combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
     }
     prepareBrushForCSG(combined)
+
+    const siblingInterior = nodes ? buildOccludingRoofInterior(node, nodes, 'segment') : null
+    if (siblingInterior) {
+      const unclipped = combined
+      combined = subtractCsgBrush(unclipped, siblingInterior, csgEvaluator)
+      unclipped.geometry.dispose()
+      siblingInterior.geometry.dispose()
+    }
 
     resultGeo = csgGeometry(combined)
     if (geometryHasInvalidAttributes(resultGeo)) {
@@ -1665,6 +1749,154 @@ export function generateRoofSegmentGeometry(
   resultGeo.computeVertexNormals()
   ensureRenderableGeometryAttributes(resultGeo)
   return resultGeo
+}
+
+function clipDirectRoofGeometryAgainstSiblings(
+  geometry: THREE.BufferGeometry,
+  node: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+  space: 'roof' | 'segment',
+): THREE.BufferGeometry {
+  const siblingInterior = buildOccludingRoofInterior(node, nodes, space)
+  if (!siblingInterior) return geometry
+
+  const brush = new Brush(geometry, dummyMats)
+  prepareBrushForCSG(brush)
+  try {
+    const clipped = subtractCsgBrush(brush, siblingInterior, csgEvaluator)
+    const clippedGeometry = csgGeometry(clipped)
+    const clippedMaterials = csgMaterials(clipped)
+    const materialIndices = new Map<THREE.Material, number>([
+      [dummyMats[0], 0],
+      [dummyMats[1], 1],
+      [dummyMats[2], 2],
+      [dummyMats[3], 3],
+    ])
+    for (const group of clippedGeometry.groups) {
+      group.materialIndex = mapRoofGroupMaterialIndex(
+        group.materialIndex,
+        clippedMaterials,
+        materialIndices,
+      )
+    }
+    geometry.dispose()
+    clippedGeometry.computeVertexNormals()
+    ensureRenderableGeometryAttributes(clippedGeometry)
+    return clippedGeometry
+  } catch (error) {
+    console.error('Direct roof intersection CSG failed:', error)
+    return geometry
+  } finally {
+    siblingInterior.geometry.dispose()
+  }
+}
+
+function buildOccludingRoofInterior(
+  node: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+  space: 'roof' | 'segment',
+): Brush | null {
+  if (!node.parentId) return null
+  const parent = nodes[node.parentId as AnyNodeId]
+  if (parent?.type !== 'roof') return null
+
+  const roofEntries = collectSiblingRoofEntries(parent, nodes)
+  const currentEntry = roofEntries.find(({ segment }) => segment.id === node.id)
+  if (!currentEntry) return null
+  const targetRoofInverse = composeRoofTransform(parent).invert()
+  const targetSegmentInverse = composeSegmentTransform(node).invert()
+  let combinedInterior: Brush | null = null
+
+  for (let siblingIndex = 0; siblingIndex < roofEntries.length; siblingIndex++) {
+    const entry = roofEntries[siblingIndex]!
+    const sibling = entry.segment
+    if (sibling.id === node.id) continue
+    if (sibling.roofType === 'shed') continue
+    const siblingOwnsOverlap = roofOverlapEntryOwns(
+      {
+        roofId: String(entry.roof.id),
+        segmentId: String(sibling.id),
+        width: sibling.width,
+        depth: sibling.depth,
+      },
+      {
+        roofId: String(currentEntry.roof.id),
+        segmentId: String(node.id),
+        width: node.width,
+        depth: node.depth,
+      },
+    )
+    if (!siblingOwnsOverlap) continue
+    const siblingBrushes = getRoofSegmentBrushes(sibling)
+    if (!siblingBrushes) continue
+
+    const siblingInTargetRoof = new THREE.Matrix4()
+      .multiplyMatrices(targetRoofInverse, composeRoofTransform(entry.roof))
+      .multiply(composeSegmentTransform(sibling))
+    const relativeMatrix =
+      space === 'segment'
+        ? new THREE.Matrix4().multiplyMatrices(targetSegmentInverse, siblingInTargetRoof)
+        : siblingInTargetRoof
+    csgGeometry(siblingBrushes.innerBrush).applyMatrix4(relativeMatrix)
+    siblingBrushes.innerBrush.updateMatrixWorld()
+
+    siblingBrushes.shinSlab.geometry.dispose()
+    siblingBrushes.deckSlab.geometry.dispose()
+    siblingBrushes.wallBrush.geometry.dispose()
+    siblingBrushes.rakeBoards?.dispose()
+
+    if (combinedInterior) {
+      const next = csgEvaluator.evaluate(
+        combinedInterior,
+        siblingBrushes.innerBrush,
+        ADDITION,
+      ) as Brush
+      combinedInterior.geometry.dispose()
+      siblingBrushes.innerBrush.geometry.dispose()
+      prepareBrushForCSG(next)
+      combinedInterior = next
+    } else {
+      combinedInterior = siblingBrushes.innerBrush
+    }
+  }
+
+  return combinedInterior
+}
+
+function collectSiblingRoofEntries(
+  targetRoof: RoofNode,
+  nodes: Record<string, AnyNode>,
+): Array<{ roof: RoofNode; segment: RoofSegmentNode }> {
+  const parent = targetRoof.parentId ? nodes[targetRoof.parentId as AnyNodeId] : undefined
+  const orderedRoofIds =
+    parent && 'children' in parent && Array.isArray(parent.children)
+      ? parent.children.filter((id): id is RoofNode['id'] => nodes[id]?.type === 'roof')
+      : [targetRoof.id]
+  if (!orderedRoofIds.includes(targetRoof.id)) orderedRoofIds.push(targetRoof.id)
+
+  return orderedRoofIds.flatMap((roofId) => {
+    const roof = getEffectiveNode(nodes[roofId] as RoofNode)
+    return (roof.children ?? []).flatMap((segmentId) => {
+      const segment = nodes[segmentId as AnyNodeId]
+      return segment?.type === 'roof-segment' ? [{ roof, segment: getEffectiveNode(segment) }] : []
+    })
+  })
+}
+
+function composeRoofTransform(roof: RoofNode): THREE.Matrix4 {
+  return new THREE.Matrix4().compose(
+    new THREE.Vector3(...roof.position),
+    new THREE.Quaternion().setFromAxisAngle(_yAxis, roof.rotation ?? 0),
+    new THREE.Vector3(1, 1, 1),
+  )
+}
+
+function composeSegmentTransform(segment: RoofSegmentNode): THREE.Matrix4 {
+  return new THREE.Matrix4().compose(
+    new THREE.Vector3(...segment.position),
+    new THREE.Quaternion().setFromAxisAngle(_yAxis, segment.rotation ?? 0),
+    new THREE.Vector3(1, 1, 1),
+  )
 }
 
 // ============================================================================

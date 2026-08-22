@@ -3,11 +3,15 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+export const TurbineVentMaterialRole = z.enum(['base', 'head'])
+export type TurbineVentMaterialRole = z.infer<typeof TurbineVentMaterialRole>
+
 export const TurbineVentNode = BaseNode.extend({
   id: objectId('tvent'),
   type: nodeType('turbine-vent'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Default to the white preset so a freshly-placed turbine reads as
   // clean painted/galvanised metal and the paint inspector shows "White"
   // as the current selection (matches box-vent's reasoning).

@@ -189,15 +189,16 @@ export const useKeyboard = ({
       return
     }
 
-    // True while a door/window is being placed: either a fresh clone is moving
-    // (preset / duplicate path) or a door/window build tool is armed. The
-    // placement tool owns R/T then (flip the draft before commit), so the
-    // global selection-based R/T handler must stand down to avoid double-firing.
-    const isPlacingOpening = () => {
+    // True while an active placement tool owns R/T. Door/window tools flip the
+    // draft and the roof tool turns its draft axes, so the global
+    // selection-based handler must stand down to avoid double-firing.
+    const isToolOwnedRotation = () => {
       const ed = useEditor.getState()
       const moving = getMovingNode()
       if (moving?.type === 'door' || moving?.type === 'window') return true
-      return ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window')
+      return (
+        ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window' || ed.tool === 'roof')
+      )
     }
 
     // A clean-tap Shift cycles the snapping mode (and a clean-tap Ctrl the grid step)
@@ -483,7 +484,7 @@ export const useKeyboard = ({
         !e.metaKey &&
         !e.ctrlKey &&
         !isVersionPreviewMode &&
-        !isPlacingOpening() &&
+        !isToolOwnedRotation() &&
         canRunGlobalRotationShortcut()
       ) {
         // `!metaKey && !ctrlKey` lets Cmd/Ctrl+R reach the browser reload instead
@@ -493,10 +494,9 @@ export const useKeyboard = ({
         // open/close toggle lives on E. Windows still use R to toggle
         // their open/closed state.
         //
-        // Skipped entirely while a door/window placement is active
-        // (`isPlacingOpening`): the placement tool owns R then (flip the draft
-        // before commit), and the user can have a node selected at the same
-        // time — without this guard both would fire (double flip + sfx).
+        // Skipped entirely while a door/window placement or roof draft is active:
+        // those tools own R, and the user can have a node selected at the same
+        // time. Without this guard both the draft and selection would rotate.
         //
         // References (guide/scan) live in `selectedReferenceId`, not the viewer
         // selection — check them first, like the Delete arm below.
@@ -579,7 +579,7 @@ export const useKeyboard = ({
       } else if (
         (e.key === 't' || e.key === 'T') &&
         !isVersionPreviewMode &&
-        !isPlacingOpening() &&
+        !isToolOwnedRotation() &&
         canRunGlobalRotationShortcut()
       ) {
         // Rotate selected node counter-clockwise

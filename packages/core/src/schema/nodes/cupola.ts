@@ -3,11 +3,15 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+export const CupolaMaterialRole = z.enum(['base', 'body', 'roof'])
+export type CupolaMaterialRole = z.infer<typeof CupolaMaterialRole>
+
 export const CupolaNode = BaseNode.extend({
   id: objectId('cupola'),
   type: nodeType('cupola'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Default to the white preset so a freshly-placed cupola reads as clean
   // painted metal and the paint inspector shows "White" (matches box-vent).
   materialPreset: z.string().default('preset-white'),

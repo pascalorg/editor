@@ -8,6 +8,11 @@ import {
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import {
+  applyCylinderWorldUvs,
+  applyPlanarWorldUvs,
+  copyUvToSecondaryChannel,
+} from '../shared/primitive-uv'
 import { type GutterMitres, NO_MITRES } from './corner-mitre'
 import {
   OUTLET_STUB_LENGTH,
@@ -238,10 +243,14 @@ export function buildGutterGeometry(
     }
     const cutGeometry = csgGeometry(workingBrush)
     merged.dispose()
-    return bendGutterGeometryAlongArc(cutGeometry, node, mitres)
+    const finished = bendGutterGeometryAlongArc(cutGeometry, node, mitres)
+    copyUvToSecondaryChannel(finished)
+    return finished
   }
 
-  return bendGutterGeometryAlongArc(merged, node, mitres)
+  const finished = bendGutterGeometryAlongArc(merged, node, mitres)
+  copyUvToSecondaryChannel(finished)
+  return finished
 }
 
 function gutterArcSteps(node: GutterNode, length: number): number {
@@ -610,6 +619,7 @@ function buildHangers(
       HANGER_BAR_THICKNESS,
       strapDepth,
     ).toNonIndexed()
+    applyPlanarWorldUvs(bar)
     // Center the bar at X = position, Y just above the rim line, Z
     // straddling 0 so the strap covers the full back-to-front span.
     bar.translate(x, HANGER_BAR_THICKNESS / 2 + 0.001, rimWidth / 2)
@@ -683,14 +693,18 @@ function resolveOutletPlacements(
 /** Cylinder (round) or box (rect) sized to `dims`, height `h` along Y. */
 function outletSolid(dims: OutletDims, h: number): THREE.BufferGeometry {
   if (dims.shape === 'round') {
-    return new THREE.CylinderGeometry(
+    const geometry = new THREE.CylinderGeometry(
       dims.halfX,
       dims.halfX,
       h,
       OUTLET_RADIAL_SEGMENTS,
     ).toNonIndexed()
+    applyCylinderWorldUvs(geometry, dims.halfX, h)
+    return geometry
   }
-  return new THREE.BoxGeometry(2 * dims.halfX, h, 2 * dims.halfZ).toNonIndexed()
+  const geometry = new THREE.BoxGeometry(2 * dims.halfX, h, 2 * dims.halfZ).toNonIndexed()
+  applyPlanarWorldUvs(geometry)
+  return geometry
 }
 
 /**
@@ -719,12 +733,14 @@ function buildOutletFunnel(p: OutletPlacement, size: number): THREE.BufferGeomet
       OUTLET_FLARE_HEIGHT,
       OUTLET_RADIAL_SEGMENTS,
     ).toNonIndexed()
+    applyCylinderWorldUvs(funnel, p.outer.halfX * OUTLET_FLARE_SCALE, OUTLET_FLARE_HEIGHT)
   } else {
     funnel = new THREE.BoxGeometry(
       2 * p.outer.halfX * OUTLET_FLARE_SCALE,
       OUTLET_FLARE_HEIGHT,
       2 * p.outer.halfZ * OUTLET_FLARE_SCALE,
     ).toNonIndexed()
+    applyPlanarWorldUvs(funnel)
   }
   funnel.translate(p.x, centerY, p.z)
   return funnel
