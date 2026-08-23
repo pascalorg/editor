@@ -158,9 +158,14 @@ export function resolvePointerSupportSurface(
   // lifts anything placed inside a finished room. Only the tools that build ON
   // a surface (wall / column / fence / stair / block) mean that, and they say
   // so. Everything else places against the floor the pointer indicates.
+  //
+  // `capabilities` is typed required on NodeDefinition, but this enumerates
+  // EVERY registered kind — including plugin bundles that bypass the type at
+  // runtime. A minimal definition without `capabilities` must read as "no top
+  // surface", not crash the resolver (night-8 CI, run 32580694134).
   const nodeTopSurfaceKinds = options?.includeNodeTopSurfaces
     ? Array.from(nodeRegistry.entries())
-        .filter(([, definition]) => definition.capabilities.surfaces?.top !== undefined)
+        .filter(([, definition]) => definition.capabilities?.surfaces?.top !== undefined)
         .map(([kind]) => kind)
     : []
   if (nodeTopSurfaceKinds.some((kind) => (sceneRegistry.byType[kind]?.size ?? 0) > 0)) {

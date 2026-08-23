@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -143,6 +143,15 @@ function levelWalls(): WallNode[] {
 }
 
 describe('createWallOnCurrentLevel', () => {
+  // Set by tests that mutate the process-wide node registry; restored here
+  // so the mutation can't leak into later test files (order-dependent flakes).
+  let restoreRegistry: (() => void) | undefined
+
+  afterEach(() => {
+    restoreRegistry?.()
+    restoreRegistry = undefined
+  })
+
   beforeEach(() => {
     useViewer.setState({
       selection: {
@@ -314,6 +323,10 @@ describe('createWallOnCurrentLevel', () => {
   })
 
   test('pins an existing construction source before a generated room slab can lift it', () => {
+    // The reset + throwaway `block` registration is scoped to this test —
+    // the registry is a process-wide singleton, so leaking it would leave
+    // later test FILES with a stripped registry (order-dependent flakes).
+    restoreRegistry = nodeRegistry._snapshot()
     nodeRegistry._reset()
     spatialGridManager.clear()
     registerNode({
