@@ -227,7 +227,11 @@ function SidebarResizer({ side }: { side: 'left' | 'right' }) {
     <div
       className={cn(
         'absolute top-0 bottom-0 z-50 w-2 cursor-col-resize transition-colors hover:bg-primary/50',
-        side === 'left' ? '-right-1' : '-left-1',
+        // Sits entirely OUTSIDE the panel. At `-right-1` the 8px handle
+        // straddled the edge, putting 4px of itself at z-50 over the scroll
+        // container's scrollbar — so aiming for the bar grabbed the resize
+        // handle and the sidebar resized instead of the list scrolling.
+        side === 'left' ? '-right-2' : '-left-2',
       )}
       onPointerDown={handlePointerDown}
     />

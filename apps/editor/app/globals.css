@@ -161,6 +161,42 @@
   corner-shape: squircle;
 }
 
+/*
+ * The app's own scrollbar, for panes that should show one.
+ *
+ * `.subtle-scrollbar` was written on three scroll containers but never
+ * defined, so those panes fell back to the browser's default bar — wider than
+ * anything else in the chrome, and painted in the browser's colours rather
+ * than the theme's.
+ *
+ * Kept narrow deliberately: the sidebar's resize handle reaches a few pixels
+ * into the panel, and a fat bar puts its draggable edge under that handle.
+ */
+.subtle-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--sidebar-foreground) 25%, transparent) transparent;
+}
+.subtle-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.subtle-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.subtle-scrollbar::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--sidebar-foreground) 22%, transparent);
+  border-radius: 4px;
+  /* Inset so the thumb reads as floating in the gutter rather than filling it. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.subtle-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--sidebar-foreground) 40%, transparent);
+}
+.subtle-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
