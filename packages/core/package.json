@@ -75,6 +75,7 @@
     "three": "^0.185"
   },
   "dependencies": {
+    "@pascal-app/capture-protocol": "^1.0.0-beta.4",
     "dedent": "^1.7.1",
     "idb-keyval": "^6.2.2",
     "mitt": "^3.0.1",

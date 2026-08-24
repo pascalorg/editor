@@ -9,7 +9,7 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Hammer, Layers } from 'lucide-react'
+import { Hammer, Layers, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -62,6 +62,22 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
         className="h-8 w-8 object-contain"
         height={32}
         src="/icons/build.webp"
+        width={32}
+      />
+    ),
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    component: () => null,
+    mobileDefaultSnap: 0.5,
+    mobileIcon: <Settings className="h-5 w-5" />,
+    icon: (
+      <Image
+        alt=""
+        className="h-8 w-8 object-contain"
+        height={32}
+        src="/icons/settings.webp"
         width={32}
       />
     ),

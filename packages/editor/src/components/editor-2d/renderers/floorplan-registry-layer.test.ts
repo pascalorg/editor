@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import type {
   AnyNode,
   AnyNodeId,
@@ -447,11 +447,19 @@ describe('floorplan annotation overlay routing', () => {
 })
 
 describe('computeAffectedSiblingIds', () => {
+  // The cabinet fixture definitions have no `capabilities` — leaking them
+  // past this describe crashes any later test FILE that enumerates the
+  // registry (night-8 CI: pointer-support-cap.test.ts, run 32580694134).
+  let restoreRegistry: () => void
+
   beforeEach(() => {
+    restoreRegistry = nodeRegistry._snapshot()
     nodeRegistry._reset()
     registerCabinetFloorplanDefinition('cabinet')
     registerCabinetFloorplanDefinition('cabinet-module')
   })
+
+  afterEach(() => restoreRegistry())
 
   test('propagates cabinet live overrides through the cabinet family', () => {
     const run = cabinetRun('cabinet_run', ['cabinet-module_main', 'cabinet-module_corner'])
@@ -545,6 +553,16 @@ describe('collectFloorplanDependencyNodes', () => {
 })
 
 describe('collectFloorplanLinkedLevelNodes', () => {
+  // Same containment as computeAffectedSiblingIds above: the fixture
+  // definition has no `capabilities`, so it must not outlive this describe.
+  let restoreRegistry: () => void
+
+  beforeEach(() => {
+    restoreRegistry = nodeRegistry._snapshot()
+  })
+
+  afterEach(() => restoreRegistry())
+
   test('projects a node onto a linked destination level with its real children', () => {
     nodeRegistry._reset()
     registerNode({
