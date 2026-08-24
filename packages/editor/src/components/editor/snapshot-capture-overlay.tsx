@@ -29,6 +29,31 @@ interface Drag {
 }
 
 // Output presets for `standard` captures — long edge stays near 1920.
+/**
+ * Output size as a multiplier on the aspect presets rather than a second size
+ * table: the aspects already fix the shape, and a table per (aspect x
+ * resolution) is thirty numbers to keep in agreement instead of three.
+ */
+const RESOLUTION_SCALES = [
+  { id: '1x', label: '1080p', scale: 1 },
+  { id: '2x', label: '1440p', scale: 4 / 3 },
+  { id: '4x', label: '4K', scale: 2 },
+] as const
+type ResolutionId = (typeof RESOLUTION_SCALES)[number]['id']
+
+/**
+ * webp at 0.9 stays the default — a re-renderable capture, an order of
+ * magnitude under PNG. The other two exist because a download is not a
+ * thumbnail: someone exporting a hero shot may want every bit, and PNG is the
+ * one people hand to a print workflow without being asked to convert it.
+ */
+const ENCODINGS = [
+  { id: 'webp', label: 'WebP', mime: 'image/webp', quality: 0.9 },
+  { id: 'webp-max', label: 'WebP max', mime: 'image/webp', quality: 1 },
+  { id: 'png', label: 'PNG', mime: 'image/png', quality: 1 },
+] as const
+type EncodingId = (typeof ENCODINGS)[number]['id']
+
 const STANDARD_SIZES: Record<SnapshotStandardAspect, { w: number; h: number }> = {
   '16:9': { w: 1920, h: 1080 },
   '9:16': { w: 1080, h: 1920 },
@@ -128,6 +153,8 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const [drag, setDrag] = useState<Drag | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [captureState, setCaptureState] = useState<CaptureState>('idle')
+  const [resolutionId, setResolutionId] = useState<ResolutionId>('1x')
+  const [encodingId, setEncodingId] = useState<EncodingId>('webp')
   const overlayRef = useRef<HTMLDivElement>(null)
   // Overlay size drives the computed standard-frame rect + resolution HUD.
   const [overlaySize, setOverlaySize] = useState<{ w: number; h: number } | null>(null)
@@ -179,17 +206,25 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     }
   }, [isCaptureMode, isPreset, requestedCrop, requestedAspect])
 
-  // Listen for snapshot saved to show feedback then exit
+  // Leave 'capturing' when the generator reports back — on either outcome.
   useEffect(() => {
-    const handler = () => {
+    const onSaved = () => {
       setCaptureState('saved')
       setTimeout(() => {
         setCaptureMode(false)
         setCaptureState('idle')
       }, 1500)
     }
-    emitter.on('snapshot:saved', handler)
-    return () => emitter.off('snapshot:saved', handler)
+    // A failed capture returns to 'idle' and stays in capture mode, so the
+    // framing the user set up is still there to retry from. Closing the overlay
+    // would throw that away and read as if something had been saved.
+    const onFailed = () => setCaptureState('idle')
+    emitter.on('snapshot:saved', onSaved)
+    emitter.on('snapshot:failed', onFailed)
+    return () => {
+      emitter.off('snapshot:saved', onSaved)
+      emitter.off('snapshot:failed', onFailed)
+    }
   }, [setCaptureMode])
 
   const dismiss = useCallback(() => setCaptureMode(false), [setCaptureMode])
@@ -321,37 +356,54 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     [captureState, drag],
   )
 
-  const handleCapture = useCallback(() => {
-    if (captureState !== 'idle') return
+  const handleCapture = useCallback(
+    (intent: 'download' | 'scene-preview' = 'download') => {
+      if (captureState !== 'idle') return
 
-    let cropRegion: { x: number; y: number; width: number; height: number } | undefined
-    if (mode === 'area' && drag && overlayRef.current) {
-      const rect = overlayRef.current.getBoundingClientRect()
-      const x0 = Math.min(drag.start.x, drag.end.x)
-      const y0 = Math.min(drag.start.y, drag.end.y)
-      const w = Math.abs(drag.end.x - drag.start.x)
-      const h = Math.abs(drag.end.y - drag.start.y)
-      cropRegion = {
-        x: x0 / rect.width,
-        y: y0 / rect.height,
-        width: w / rect.width,
-        height: h / rect.height,
+      let cropRegion: { x: number; y: number; width: number; height: number } | undefined
+      if (mode === 'area' && drag && overlayRef.current) {
+        const rect = overlayRef.current.getBoundingClientRect()
+        const x0 = Math.min(drag.start.x, drag.end.x)
+        const y0 = Math.min(drag.start.y, drag.end.y)
+        const w = Math.abs(drag.end.x - drag.start.x)
+        const h = Math.abs(drag.end.y - drag.start.y)
+        cropRegion = {
+          x: x0 / rect.width,
+          y: y0 / rect.height,
+          width: w / rect.width,
+          height: h / rect.height,
+        }
       }
-    }
 
-    setCaptureState('capturing')
-    triggerSFX('sfx:snapshot-capture')
-    emitter.emit('camera-controls:generate-thumbnail', {
-      projectId,
-      captureMode: mode,
-      cropRegion,
-      standardSize: mode === 'standard' ? STANDARD_SIZES[standardAspect] : undefined,
-      // In preset mode, the ThumbnailGenerator should keep the alpha
-      // channel transparent so the saved preset thumbnail composes
-      // cleanly onto any palette background.
-      transparent: isPreset,
-    })
-  }, [captureState, mode, drag, projectId, isPreset, standardAspect])
+      const scale = RESOLUTION_SCALES.find((r) => r.id === resolutionId)?.scale ?? 1
+      const base = STANDARD_SIZES[standardAspect]
+      const encoding = ENCODINGS.find((e) => e.id === encodingId) ?? ENCODINGS[0]
+
+      setCaptureState('capturing')
+      triggerSFX('sfx:snapshot-capture')
+      emitter.emit('camera-controls:generate-thumbnail', {
+        projectId,
+        captureMode: mode,
+        cropRegion,
+        standardSize:
+          mode === 'standard'
+            ? { w: Math.round(base.w * scale), h: Math.round(base.h * scale) }
+            : undefined,
+        // In preset mode, the ThumbnailGenerator should keep the alpha
+        // channel transparent so the saved preset thumbnail composes
+        // cleanly onto any palette background.
+        transparent: isPreset,
+        intent,
+        mime: encoding.mime,
+        quality: encoding.quality,
+        // Viewport and area captures clamp to keep a retina grab from landing
+        // multi-megabyte; the chosen resolution raises that ceiling with them,
+        // or asking for 4K would silently return the same 2048px image.
+        maxEdge: Math.round(2048 * scale),
+      })
+    },
+    [captureState, mode, drag, projectId, isPreset, standardAspect, resolutionId, encodingId],
+  )
 
   if (!isCaptureMode) return null
 
@@ -626,7 +678,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           aria-label={isPreset ? 'Capture' : 'Take snapshot'}
           className="group pointer-events-auto relative grid h-14 w-14 place-items-center rounded-full disabled:opacity-50"
           disabled={captureDisabled}
-          onClick={handleCapture}
+          onClick={() => handleCapture(isPreset ? 'scene-preview' : 'download')}
           type="button"
         >
           <span className="absolute inset-0 rounded-full border-[3px] border-white shadow-lg" />
@@ -653,7 +705,74 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
                 ? 'Capture'
                 : 'Take snapshot'}
         </span>
+
+        {/* Output settings and the second action.
+            Hidden in preset mode: that flow captures a transparent thumbnail at
+            a fixed size for the palette, so neither the resolution nor the
+            encoding is the user's to choose there, and "set scene preview" is
+            what its shutter already does. */}
+        {!isPreset && (
+          <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5">
+            <SegmentedRow
+              label="Size"
+              onSelect={(id) => setResolutionId(id as ResolutionId)}
+              options={RESOLUTION_SCALES.map((r) => ({ id: r.id, label: r.label }))}
+              selected={resolutionId}
+            />
+            <SegmentedRow
+              label="Format"
+              onSelect={(id) => setEncodingId(id as EncodingId)}
+              options={ENCODINGS.map((e) => ({ id: e.id, label: e.label }))}
+              selected={encodingId}
+            />
+            <button
+              className="rounded-lg border border-white/15 bg-neutral-950/85 px-3 py-1.5 text-[11px] text-white/85 backdrop-blur-md transition-colors hover:bg-neutral-800/85 disabled:opacity-40"
+              disabled={captureDisabled}
+              onClick={() => handleCapture('scene-preview')}
+              title="Use this framing as the scene card's preview image"
+              type="button"
+            >
+              Set scene preview
+            </button>
+          </div>
+        )}
       </div>
+    </div>
+  )
+}
+
+/** A labelled row of exclusive choices, styled to match the overlay's chrome. */
+function SegmentedRow({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  label: string
+  options: ReadonlyArray<{ id: string; label: string }>
+  selected: string
+  onSelect: (id: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-lg border border-white/15 bg-neutral-950/85 px-2 py-1 backdrop-blur-md">
+      <span className="font-mono text-[9.5px] text-white/45 uppercase tracking-[0.1em]">
+        {label}
+      </span>
+      {options.map((option) => (
+        <button
+          aria-pressed={selected === option.id}
+          className={`rounded px-1.5 py-0.5 text-[11px] transition-colors ${
+            selected === option.id
+              ? 'bg-white/90 font-medium text-neutral-900'
+              : 'text-white/70 hover:text-white'
+          }`}
+          key={option.id}
+          onClick={() => onSelect(option.id)}
+          type="button"
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   )
 }

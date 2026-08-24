@@ -191,6 +191,32 @@ export interface ThumbnailGenerateEvent {
    * any palette background.
    */
   transparent?: boolean
+  /**
+   * What the captured image is for.
+   *
+   * `'scene-preview'` (the default, and the only behaviour before this field
+   * existed) hands the blob to the host's `onThumbnailCapture`, which is how
+   * the scene card's preview gets set — the app downscales it hard and drops
+   * it if it will not fit the row. `'download'` saves the image to disk at the
+   * size and quality it was captured at, which is what a person pressing
+   * "Take snapshot" is asking for. They are different jobs and neither should
+   * silently do the other.
+   */
+  intent?: 'scene-preview' | 'download'
+  /**
+   * Encoding overrides. Default to `SNAPSHOT_MIME` / `SNAPSHOT_QUALITY`
+   * (webp at 0.9), which stay the right choice for a scene preview; a download
+   * may want lossless or a higher quality.
+   */
+  mime?: string
+  quality?: number
+  /**
+   * Raises the longest-edge clamp for `viewport` and `area` captures, which
+   * otherwise cap at `SNAPSHOT_MAX_EDGE` to keep retina captures from landing
+   * multi-megabyte. A download asking for 4K needs the ceiling lifted; a scene
+   * preview never does.
+   */
+  maxEdge?: number
 }
 
 export interface CameraControlFitSceneEvent {
@@ -262,6 +288,9 @@ type ThumbnailEvents = {
 
 type SnapshotEvents = {
   'snapshot:saved': undefined
+  /** The capture did not produce an image. Paired with `snapshot:saved` so a UI
+   *  waiting on the capture has an exit on both outcomes, not just the happy one. */
+  'snapshot:failed': undefined
   'camera:go-to-position': { position: [number, number, number]; target: [number, number, number] }
 }
 
