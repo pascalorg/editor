@@ -9,11 +9,13 @@ import {
   type ZoneQuantityValue,
 } from '@pascal-app/core'
 import {
+  collectZoneObjectIds,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
   MetricControl,
   PanelSection,
+  resolveNodeDisplayName,
   ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -407,6 +409,61 @@ export default function ZoneQuantitiesPanel() {
           />
         </div>
       </PanelSection>
+
+      <ZoneContentsSection zone={effectiveZone} />
     </>
+  )
+}
+
+/**
+ * What is standing in this zone, grouped by kind.
+ *
+ * Grouped rather than listed one row per node: a zone of racking is a hundred
+ * identical entries, and "Pallet Rack x 96" is the answer to "what is in here",
+ * where ninety-six rows of the same words is not.
+ */
+function ZoneContentsSection({ zone }: { zone: ZoneNode | undefined }) {
+  const groups = useScene(
+    useShallow((state) => {
+      // `effectiveZone` rather than the stored one, so the count tracks the
+      // polygon actually on screen while a zone is being dragged or is derived
+      // from its boundary walls.
+      const ids = zone ? collectZoneObjectIds(state.nodes, zone) : []
+      const counts = new Map<string, number>()
+      for (const id of ids) {
+        const node = state.nodes[id]
+        if (!node) continue
+        const label = resolveNodeDisplayName(node, state.nodes) || node.type
+        counts.set(label, (counts.get(label) ?? 0) + 1)
+      }
+      return [...counts.entries()]
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    }),
+  )
+
+  const total = groups.reduce((sum, group) => sum + group.count, 0)
+
+  return (
+    <PanelSection title="Zone contents">
+      {groups.length === 0 ? (
+        <p className="text-muted-foreground text-xs">Nothing standing in this zone.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {groups.map((group) => (
+            <div className="flex items-baseline justify-between gap-3 text-xs" key={group.label}>
+              <span className="min-w-0 truncate text-foreground">{group.label}</span>
+              <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                {group.count}
+              </span>
+            </div>
+          ))}
+          <div className="mt-1 flex items-baseline justify-between gap-3 border-border/50 border-t pt-1.5 text-xs">
+            <span className="text-muted-foreground">Total</span>
+            <span className="shrink-0 font-mono text-foreground tabular-nums">{total}</span>
+          </div>
+        </div>
+      )}
+    </PanelSection>
   )
 }

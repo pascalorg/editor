@@ -489,6 +489,9 @@ export {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './lib/measurements'
+// Zone membership and node naming — read by the zone kind's own panel, which
+// lives in `packages/nodes` and so can only reach these through the barrel.
+export { resolveNodeDisplayName } from './lib/node-display-name'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,
@@ -567,6 +570,7 @@ export {
   snapBuildingLocalToWorldGrid,
   snapWorldXZForActiveBuilding,
 } from './lib/world-grid-snap'
+export { collectZoneContentIds, collectZoneObjectIds } from './lib/zone-content'
 export { subscribeCameraPose } from './store/camera-pose-store'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'

@@ -96,6 +96,54 @@ function wallLiesOnZoneBoundary(wall: WallNode, polygon: Point2D[]): boolean {
   })
 }
 
+/**
+ * The objects standing inside a zone, whatever kind they are.
+ *
+ * Separate from `collectZoneContentIds`, which answers a different question.
+ * That one gathers the fabric a zone is made of — its boundary walls and the
+ * slab and ceiling that match its footprint — plus `item` nodes, and it drives
+ * "Delete with contents". This one answers "what is standing in here", which is
+ * what a contents list shows.
+ *
+ * Kind-agnostic on purpose. `collectZoneContentIds` tests `node.type === 'item'`
+ * and so sees none of the objects a plugin contributes — a rack is
+ * `warehouse:pallet-rack`, not `item` — which is why a zone full of racking
+ * reported nothing inside it. Anything parented to the zone's level that has a
+ * position and is not part of the zone's own fabric is tested here, so a kind
+ * added later is included without this function being touched again.
+ *
+ * Containment is `pointInPolygonWithTolerance`, the same predicate the delete
+ * path uses for items. The repo has several point-in-polygon implementations
+ * with different boundary rules; reusing this one keeps the list agreeing with
+ * the action the user reaches for next.
+ */
+export function collectZoneObjectIds(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  zone: ZoneNode,
+): AnyNodeId[] {
+  const levelId = zone.parentId
+  if (!levelId) return []
+
+  const footprint = zone.polygon.map((point) => [point[0], point[1]] as Point2D)
+
+  // The zone's own fabric, not things standing in it. Walls, slabs and ceilings
+  // are matched by shape rather than by a point, and a zone never contains
+  // another zone.
+  const fabric = new Set(['wall', 'slab', 'ceiling', 'zone'])
+
+  return Object.values(nodes)
+    .filter((node) => {
+      if (node.parentId !== levelId) return false
+      if (fabric.has(node.type)) return false
+      const position = (node as { position?: unknown }).position
+      if (!Array.isArray(position) || position.length < 3) return false
+      const [x, , z] = position as number[]
+      if (typeof x !== 'number' || typeof z !== 'number') return false
+      return pointInPolygonWithTolerance([x, z], footprint)
+    })
+    .map((node) => node.id as AnyNodeId)
+}
+
 export function collectZoneContentIds(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   zone: ZoneNode,
