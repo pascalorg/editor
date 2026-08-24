@@ -1,14 +1,11 @@
 {
+  "root": false,
   "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
   // House lint stack (D22): Ultracite presets over Biome, triple-pinned —
   // this file, the lefthook pre-commit command, and the devDeps all name
   // @biomejs/biome 2.4.16 + ultracite 7.8.2. Config over comments: when a rule
   // fights how this codebase actually works, turn it off HERE with a reason.
-  "extends": [
-    "ultracite/biome/core",
-    "ultracite/biome/next",
-    "ultracite/biome/react"
-  ],
+  "extends": ["ultracite/biome/core", "ultracite/biome/next", "ultracite/biome/react"],
   "vcs": {
     "enabled": true,
     "clientKind": "git",
