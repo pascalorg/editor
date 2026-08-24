@@ -183,7 +183,7 @@ export function newCabinetCompartment<T extends CabinetCompartmentType>(
 }
 
 export function fridgeCabinetStack(type: CabinetFridgeCompartmentType): CabinetCompartment[] {
-  return [newCabinetCompartment(type), { ...newCabinetCompartment('drawer'), drawerCount: 1 }]
+  return [newCabinetCompartment(type)]
 }
 
 export function cooktopCabinetStack(type: CabinetCooktopCompartmentType): CabinetCompartment[] {
@@ -401,6 +401,31 @@ export function minCabinetCarcassHeightForStack(
   )
 }
 
+export function removeCabinetCompartmentStack(
+  node: Pick<CabinetStackOwner, 'carcassHeight' | 'stack' | 'width'>,
+  index: number,
+): { stack: CabinetCompartment[]; carcassHeight?: number } {
+  const stack = stackForCabinet(node)
+  if (index < 0 || index >= stack.length || stack.length <= 1) return { stack }
+
+  const next = stack.filter((_, compartmentIndex) => compartmentIndex !== index)
+  if (index !== stack.length - 1) return { stack: next }
+
+  const hasFlexibleCompartment = next.some(
+    (compartment) => explicitCompartmentHeight(compartment) == null,
+  )
+  if (hasFlexibleCompartment) return { stack: next }
+
+  const occupiedHeight = next.reduce(
+    (sum, compartment) => sum + (explicitCompartmentHeight(compartment) ?? 0),
+    0,
+  )
+  return {
+    stack: next,
+    carcassHeight: Math.max(0.4, occupiedHeight),
+  }
+}
+
 export function replaceCabinetCompartmentStack(
   node: Pick<CabinetStackOwner, 'carcassHeight' | 'stack' | 'width'>,
   index: number,
@@ -411,9 +436,18 @@ export function replaceCabinetCompartmentStack(
   const stack = stackForCabinet(node)
   if (index < 0 || index >= stack.length) return stack
 
+  const current = stack[index]
+  const replacement =
+    current &&
+    typeof current.height === 'number' &&
+    current.height > 0 &&
+    explicitCompartmentHeight(next) == null
+      ? { ...next, height: current.height }
+      : next
   const replaced = stack.map((compartment, compartmentIndex) =>
-    compartmentIndex === index ? next : compartment,
+    compartmentIndex === index ? replacement : compartment,
   )
+  if (isFridgeCompartmentType(next.type)) return [replacement]
   if (lockedApplianceHeight(next) == null) return replaced
   if (isHoodCompartmentType(next.type)) return replaced
   if (next.type === 'dishwasher') return replaced
@@ -432,9 +466,6 @@ export function replaceCabinetCompartmentStack(
   if (node.carcassHeight - lockedHeight < minHeight) return replaced
 
   const filler = newCabinetCompartment(fillerType)
-  if (isFridgeCompartmentType(next.type)) {
-    return [...replaced.slice(0, index + 1), filler, ...replaced.slice(index + 1)]
-  }
   return [...replaced.slice(0, index), filler, ...replaced.slice(index)]
 }
 
@@ -474,13 +505,11 @@ export function resizeCabinetCompartmentStack(
   if (stack.length === 0 || index < 0 || index >= stack.length) return stack
   if (stack.length === 1) {
     const compartment = stack[0]!
+    const height = Math.max(minHeight, Math.min(targetHeight, node.carcassHeight))
     return [
       {
         ...compartment,
-        height:
-          lockedApplianceHeight(compartment) != null
-            ? Math.max(minHeight, Math.min(targetHeight, node.carcassHeight))
-            : node.carcassHeight,
+        height,
       },
     ]
   }

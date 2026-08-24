@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  CABINET_METRIC_DEFAULTS,
   type CabinetModuleNode,
   type CabinetNode,
   calculateLevelMiters,
@@ -26,6 +27,7 @@ import {
 } from './schema'
 import {
   backAnchoredModuleZ,
+  DEFAULT_CEILING_HEIGHT,
   hoodCompartmentHeight,
   newCabinetCompartment,
   stackForCabinet,
@@ -42,10 +44,10 @@ import {
 
 export const CABINET_BASE_WIDTH = 0.5
 export const CABINET_WALL_DEPTH = 0.32
-export const CABINET_BASE_DEPTH = 0.5
-export const CABINET_WALL_CARCASS_HEIGHT = 0.72
-export const CABINET_TALL_DEPTH = 0.58
-export const CABINET_TALL_PLINTH_HEIGHT = 0.1
+export const CABINET_BASE_DEPTH = CABINET_METRIC_DEFAULTS.depth
+export const CABINET_WALL_CARCASS_HEIGHT = CABINET_METRIC_DEFAULTS.carcassHeight
+export const CABINET_TALL_DEPTH = CABINET_METRIC_DEFAULTS.depth
+export const CABINET_TALL_PLINTH_HEIGHT = CABINET_METRIC_DEFAULTS.plinthHeight
 export const CABINET_TALL_CARCASS_HEIGHT = 2.07
 export const CABINET_EDGE_EPSILON = 1e-4
 const MIN_CORNER_CONNECTED_WIDTH = 0.3
@@ -81,9 +83,9 @@ export type WallCornerDepthIndex = ReadonlyArray<{
   wallLegRunId: AnyNodeId
 }>
 
-type CabinetRunStylePatch = Pick<
+export type CabinetRunStylePatch = Pick<
   Partial<CabinetNode>,
-  'frontStyle' | 'frontOverlay' | 'handleStyle' | 'handlePosition'
+  'frontStyle' | 'frontOverlay' | 'handleStyle' | 'handlePosition' | 'frontGap'
 >
 
 export function cabinetMetadataRecord(
@@ -319,6 +321,43 @@ export function wallBottomHeightForTallAlignment() {
   )
 }
 
+/** Resolve the remaining vertical space above a wall/tall module. */
+export function cabinetCeilingGap(
+  node: CabinetModuleNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): number {
+  let worldY = node.position[1]
+  let current: AnyNode = node
+  const visited = new Set<AnyNodeId>()
+  let level: AnyNode | undefined
+
+  while (current.parentId) {
+    const currentId = current.id as AnyNodeId
+    if (visited.has(currentId)) break
+    visited.add(currentId)
+    const parent: AnyNode | undefined = nodes[current.parentId as AnyNodeId]
+    if (!parent) break
+    if (parent.type === 'level') {
+      level = parent
+      break
+    }
+    if (parent.type !== 'cabinet' && parent.type !== 'cabinet-module') break
+    worldY += parent.position[1]
+    current = parent
+  }
+
+  const ceilingHeight =
+    level?.type === 'level' && typeof level.height === 'number'
+      ? level.height
+      : DEFAULT_CEILING_HEIGHT
+  const currentTop =
+    worldY +
+    (node.showPlinth ? node.plinthHeight : 0) +
+    node.carcassHeight +
+    (node.withCountertop ? node.countertopThickness : 0)
+  return Math.max(0.05, ceilingHeight - currentTop)
+}
+
 /** Local Z offset that makes a shallower wall cabinet's back flush with its deeper base. */
 export function backAlignZ(baseDepth: number, wallDepth: number) {
   return -(baseDepth - wallDepth) / 2
@@ -333,6 +372,22 @@ export function wallChildOf(
     if (child?.type === 'cabinet-module') return child
   }
   return null
+}
+
+export function applyCabinetModuleFrontPatch({
+  module,
+  patch,
+  sceneApi,
+}: {
+  module: CabinetModuleNode
+  patch: CabinetRunStylePatch
+  sceneApi: SceneApi
+}) {
+  sceneApi.update(module.id as AnyNodeId, patch as Partial<AnyNode>)
+  const wallChild = wallChildOf(module, sceneApi.nodes())
+  if (wallChild) {
+    sceneApi.update(wallChild.id as AnyNodeId, patch as Partial<AnyNode>)
+  }
 }
 
 export function resolveCabinetType(module: CabinetModuleNode, run?: CabinetNode): 'base' | 'tall' {

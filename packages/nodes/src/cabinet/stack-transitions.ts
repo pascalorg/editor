@@ -2,6 +2,7 @@ import type {
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
 } from '@pascal-app/core'
+import { CABINET_METRIC_DEFAULTS } from '@pascal-app/core'
 import { resolveCabinetType } from './run-ops'
 import {
   type CabinetCompartment,
@@ -12,6 +13,7 @@ import {
   cooktopCabinetStack,
   DISHWASHER_STANDARD_HEIGHT,
   DISHWASHER_STANDARD_WIDTH,
+  FRIDGE_COLUMN_HEIGHT,
   FRIDGE_COLUMN_WIDTH,
   FRIDGE_WIDE_WIDTH,
   fridgeCabinetStack,
@@ -29,8 +31,8 @@ import {
 } from './stack'
 
 const BASE_MODULE_WIDTH = 0.5
-const BASE_CARCASS_HEIGHT = 0.72
-const WALL_CARCASS_HEIGHT = 0.72
+const BASE_CARCASS_HEIGHT = CABINET_METRIC_DEFAULTS.carcassHeight
+const WALL_CARCASS_HEIGHT = CABINET_METRIC_DEFAULTS.carcassHeight
 const TALL_CARCASS_HEIGHT = TALL_CABINET_CARCASS_HEIGHT
 
 export function resolveCompartmentTransition({
@@ -78,9 +80,9 @@ export function resolveCompartmentTransition({
             : next.type === 'fridge-double'
               ? FRIDGE_WIDE_WIDTH
               : FRIDGE_COLUMN_WIDTH,
-          depth: parentRun?.depth ?? 0.5,
-          carcassHeight: TALL_CARCASS_HEIGHT,
-          plinthHeight: 0.1,
+          depth: parentRun?.depth ?? CABINET_METRIC_DEFAULTS.depth,
+          carcassHeight: enteringFridge ? FRIDGE_COLUMN_HEIGHT : TALL_CARCASS_HEIGHT,
+          plinthHeight: CABINET_METRIC_DEFAULTS.plinthHeight,
           toeKickDepth: 0.075,
           countertopThickness: 0,
           countertopOverhang: parentRun?.countertopOverhang ?? 0.02,
@@ -100,9 +102,9 @@ export function resolveCompartmentTransition({
                 : enteringCooktop
                   ? COOKTOP_STANDARD_WIDTH
                   : BASE_MODULE_WIDTH,
-          depth: parentRun?.depth ?? 0.5,
+          depth: parentRun?.depth ?? CABINET_METRIC_DEFAULTS.depth,
           carcassHeight: parentRun?.carcassHeight ?? BASE_CARCASS_HEIGHT,
-          plinthHeight: parentRun?.plinthHeight ?? 0.1,
+          plinthHeight: parentRun?.plinthHeight ?? CABINET_METRIC_DEFAULTS.plinthHeight,
           toeKickDepth: parentRun?.toeKickDepth ?? 0.075,
           countertopThickness: 0,
           countertopOverhang: parentRun?.countertopOverhang ?? 0.02,
@@ -114,9 +116,9 @@ export function resolveCompartmentTransition({
     ? {
         cabinetType: 'base',
         width: DISHWASHER_STANDARD_WIDTH,
-        depth: parentRun?.depth ?? 0.5,
+        depth: parentRun?.depth ?? CABINET_METRIC_DEFAULTS.depth,
         carcassHeight: DISHWASHER_STANDARD_HEIGHT,
-        plinthHeight: parentRun?.plinthHeight ?? 0.1,
+        plinthHeight: parentRun?.plinthHeight ?? CABINET_METRIC_DEFAULTS.plinthHeight,
         toeKickDepth: parentRun?.toeKickDepth ?? 0.075,
         countertopThickness: 0,
         countertopOverhang: parentRun?.countertopOverhang ?? 0.02,

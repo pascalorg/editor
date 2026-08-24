@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
+import { type AnyNodeId, LevelNode, WallNode } from '@pascal-app/core'
 import { cabinetPresetById } from '../presets'
 import { CabinetNode } from '../schema'
+import { runHasTwoWallConstraints } from '../run-layout'
+import { resolveCompartmentTransition } from '../stack-transitions'
 import {
   backAnchoredModuleZ,
   type CabinetCompartment,
@@ -30,6 +33,7 @@ import {
   PULL_OUT_PANTRY_DEFAULT_SHELF_COUNT,
   PULL_OUT_PANTRY_STANDARD_WIDTH,
   reflowCabinetRunModules,
+  removeCabinetCompartmentStack,
   replaceCabinetCompartmentStack,
   resizeCabinetCompartmentStack,
   TALL_CABINET_CARCASS_HEIGHT,
@@ -86,6 +90,16 @@ describe('resizeCabinetCompartmentStack', () => {
     const rows = normalizeCabinetStack({ width: 0.6, carcassHeight: 1.2, stack: resized })
     expect(rows[1]!.height).toBeCloseTo(OVEN_DEFAULT_HEIGHT)
     expect(rows[0]!.height + rows[1]!.height + rows[2]!.height).toBeCloseTo(1.2)
+  })
+
+  test('uses the requested height for a single flexible compartment', () => {
+    const resized = resizeCabinetCompartmentStack(
+      { width: 0.6, carcassHeight: 0.72, stack: [{ id: 'top', type: 'shelf' }] },
+      0,
+      0.42,
+    )
+
+    expect(resized[0]!.height).toBeCloseTo(0.42)
   })
 })
 
@@ -150,21 +164,37 @@ describe('appliance compartments', () => {
     expect(FRIDGE_COLUMN_HEIGHT).toBeCloseTo(1.78)
   })
 
-  test('fridgeCabinetStack fills the tall-cabinet remainder with a drawer front', () => {
+  test('fridgeCabinetStack creates only the refrigerator compartment', () => {
     const stack = fridgeCabinetStack('fridge-single')
     const rows = normalizeCabinetStack({
       width: FRIDGE_COLUMN_WIDTH,
-      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
       stack,
     })
 
-    expect(stack).toHaveLength(2)
+    expect(stack).toHaveLength(1)
     expect(stack[0]!.type).toBe('fridge-single')
     expect(stack[0]!.height).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
-    expect(stack[1]!.type).toBe('drawer')
-    expect(stack[1]!.drawerCount).toBe(1)
     expect(rows[0]!.height).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
-    expect(rows[1]!.height).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT - FRIDGE_COLUMN_HEIGHT)
+  })
+
+  test('removing the top fridge filler compacts the carcass to the fridge height', () => {
+    const stack: CabinetCompartment[] = [
+      newCabinetCompartment('fridge-single'),
+      { ...newCabinetCompartment('drawer'), drawerCount: 1 },
+    ]
+    const result = removeCabinetCompartmentStack(
+      {
+        width: FRIDGE_COLUMN_WIDTH,
+        carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+        stack,
+      },
+      1,
+    )
+
+    expect(result.stack).toHaveLength(1)
+    expect(result.stack[0]!.type).toBe('fridge-single')
+    expect(result.carcassHeight).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
   })
 
   test('fridge preset inherits the run depth instead of using appliance depth', () => {
@@ -172,11 +202,9 @@ describe('appliance compartments', () => {
 
     const patch = cabinetPresetById('fridge-single').createPatch(run)
     expect(patch.depth).toBeCloseTo(run.depth)
-    expect(patch.carcassHeight).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT)
-    expect(patch.stack).toHaveLength(2)
+    expect(patch.carcassHeight).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
+    expect(patch.stack).toHaveLength(1)
     expect(patch.stack?.[0]?.type).toBe('fridge-single')
-    expect(patch.stack?.[1]?.type).toBe('drawer')
-    expect(patch.stack?.[1]?.drawerCount).toBe(1)
   })
 
   test('cooktop stack keeps storage below a countertop-mounted overlay', () => {
@@ -372,6 +400,30 @@ describe('appliance compartments', () => {
     expect(replaced[1]!.type).toBe('microwave')
   })
 
+  test('changing a configured flexible row type keeps its explicit height', () => {
+    const replaced = replaceCabinetCompartmentStack(
+      {
+        width: 0.6,
+        carcassHeight: 1.2,
+        stack: [
+          { id: 'drawer', type: 'drawer', height: 0.44, drawerCount: 2 },
+          { id: 'door', type: 'door', height: 0.76, doorType: 'double' },
+        ],
+      },
+      0,
+      { id: 'drawer', type: 'shelf', shelfCount: 1 },
+    )
+
+    expect(replaced[0]!.type).toBe('shelf')
+    expect(replaced[0]!.height).toBeCloseTo(0.44)
+    expect(normalizeCabinetStack({ width: 0.6, carcassHeight: 1.2, stack: replaced })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ index: 0, height: 0.44 }),
+        expect.objectContaining({ index: 1, height: 0.76 }),
+      ]),
+    )
+  })
+
   test('replacing a single compartment with a refrigerator does not add a filler row', () => {
     const replaced = replaceCabinetCompartmentStack(
       {
@@ -388,7 +440,26 @@ describe('appliance compartments', () => {
     expect(replaced[0]!.type).toBe('fridge-single')
   })
 
-  test('replacing a tall cabinet compartment with a refrigerator adds a drawer filler', () => {
+  test('switching a tall cabinet compartment to a refrigerator removes the top filler and compacts the carcass', () => {
+    const node = CabinetNode.parse({
+      width: 0.6,
+      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+      stack: [{ id: 'door', type: 'door', doorType: 'double' }],
+    })
+
+    const transition = resolveCompartmentTransition({
+      node,
+      parentRun: undefined,
+      index: 0,
+      next: { id: 'door', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT },
+    })
+
+    expect(transition.stack).toHaveLength(1)
+    expect(transition.stack[0]!.type).toBe('fridge-single')
+    expect(transition.modulePatch.carcassHeight).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
+  })
+
+  test('replacing a tall cabinet compartment with a refrigerator removes all filler rows', () => {
     const replaced = replaceCabinetCompartmentStack(
       {
         width: FRIDGE_COLUMN_WIDTH,
@@ -399,17 +470,8 @@ describe('appliance compartments', () => {
       { id: 'fridge', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT },
       'drawer',
     )
-    const rows = normalizeCabinetStack({
-      width: FRIDGE_COLUMN_WIDTH,
-      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
-      stack: replaced,
-    })
-
-    expect(replaced).toHaveLength(2)
+    expect(replaced).toHaveLength(1)
     expect(replaced[0]!.type).toBe('fridge-single')
-    expect(replaced[1]!.type).toBe('drawer')
-    expect(rows[0]!.height).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
-    expect(rows[1]!.height).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT - FRIDGE_COLUMN_HEIGHT)
   })
 
   test('newCabinetCompartment seeds fixed range hood heights', () => {
@@ -475,6 +537,72 @@ describe('reflowCabinetRunModules', () => {
     expect(reflowed[1]!.width).toBeCloseTo(0.9)
     expect(reflowed[0]!.position[1]).toBeCloseTo(0.1)
     expect(reflowed[2]!.position[1]).toBeCloseTo(0.1)
+  })
+
+  test('leaves neighboring widths unchanged when an open run grows', () => {
+    const modules = [
+      { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.75)
+
+    expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.75, 0.5])
+  })
+
+  test('recognizes two perpendicular wall constraints without treating a back wall as one', () => {
+    const level = LevelNode.parse({ id: 'level_run-constraints' })
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-constraints',
+      parentId: level.id,
+      position: [0.75, 0, 0],
+      width: 1.5,
+      depth: 0.6,
+    })
+    const modules = [
+      { id: 'left', position: [-0.5, 0, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0, 0] as [number, number, number], width: 0.5 },
+    ]
+    const leftWall = WallNode.parse({
+      id: 'wall_run-constraints-left',
+      parentId: level.id,
+      start: [0, -0.5],
+      end: [0, 0.5],
+    })
+    const rightWall = WallNode.parse({
+      id: 'wall_run-constraints-right',
+      parentId: level.id,
+      start: [1.5, -0.5],
+      end: [1.5, 0.5],
+    })
+    const backWall = WallNode.parse({
+      id: 'wall_run-constraints-back',
+      parentId: level.id,
+      start: [0, -0.3],
+      end: [1.5, -0.3],
+    })
+    const nodes = {
+      [level.id as AnyNodeId]: level,
+      [leftWall.id as AnyNodeId]: leftWall,
+      [rightWall.id as AnyNodeId]: rightWall,
+      [backWall.id as AnyNodeId]: backWall,
+    }
+
+    expect(runHasTwoWallConstraints(run, modules, nodes)).toBe(true)
+    expect(
+      runHasTwoWallConstraints(run, modules, {
+        [level.id as AnyNodeId]: level,
+        [leftWall.id as AnyNodeId]: leftWall,
+      }),
+    ).toBe(false)
+    expect(
+      runHasTwoWallConstraints(run, modules, {
+        [level.id as AnyNodeId]: level,
+        [backWall.id as AnyNodeId]: backWall,
+      }),
+    ).toBe(false)
   })
 
   test('fits a wider preset inside the existing run by reducing adjacent modules', () => {

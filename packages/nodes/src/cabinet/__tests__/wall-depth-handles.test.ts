@@ -167,13 +167,14 @@ describe('wall cabinet depth handles', () => {
 
     for (const cabinet of [baseA, wallA]) {
       const handles = buildModuleHandles(cabinet, sceneApi)
-      expect(handles).toHaveLength(3)
+      expect(handles).toHaveLength(4)
       expect(handles.map((handle) => handle.kind)).toEqual([
         'linear-resize',
         'linear-resize',
         'linear-resize',
+        'linear-resize',
       ])
-      expect(handles.map((handle) => handle.axis)).toEqual(['x', 'x', 'z'])
+      expect(handles.map((handle) => handle.axis)).toEqual(['x', 'x', 'z', 'y'])
 
       const widthHandles = handles.filter(
         (handle): handle is LinearResizeHandle<CabinetModuleNodeType> =>

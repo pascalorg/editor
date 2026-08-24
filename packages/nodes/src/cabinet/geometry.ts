@@ -1,4 +1,4 @@
-import type { CabinetNode, GeometryContext } from '@pascal-app/core'
+import type { CabinetModuleNode, CabinetNode, GeometryContext } from '@pascal-app/core'
 import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import { Group } from 'three'
 import { addCooktopCompartment } from './geometry/cooktop'
@@ -14,7 +14,12 @@ import { addRangeHoodCompartment } from './geometry/hood'
 import { addApplianceCompartment } from './geometry/oven-microwave'
 import { addPullOutPantryCompartment } from './geometry/pantry'
 import { buildCabinetRunGeometry } from './geometry/run'
-import { addBox, type CabinetGeometryNode, getCabinetSlotMaterials } from './geometry/shared'
+import {
+  addBox,
+  type CabinetGeometryNode,
+  type CabinetSlotMaterials,
+  getCabinetSlotMaterials,
+} from './geometry/shared'
 import { addSinkCompartment, cutSinkIntoCountertop, sinkBowls } from './geometry/sink'
 import {
   type CabinetHoodCompartmentType,
@@ -32,6 +37,105 @@ const CORNER_FILLER_SIDE_INSET = 0.001
 const WALL_CORNER_FILLER_FRONT_HEIGHT_INSET = 0.001
 const SINK_FALSE_FRONT_HEIGHT = 0.22
 const MIN_RENDERABLE_BRIDGE_FILLER_WIDTH = 1e-4
+
+function addTopFinishGeometry(
+  group: Group,
+  node: CabinetModuleNode,
+  materials: CabinetSlotMaterials,
+  topY: number,
+) {
+  if (!node.topFinish || node.topFinish === 'none') return
+
+  const height = Math.max(0.05, node.topFinishHeight ?? 0.33)
+  const board = node.boardThickness
+  const depth = Math.min(node.depth, Math.max(0.15, node.topFinishDepth ?? node.depth))
+  const backInset = Math.min(0.012, depth * 0.08)
+  const backThickness = Math.min(0.006, board / 2)
+  const centerZ = (node.depth - depth) / 2
+  const inset = node.frontOverlay === 'inset'
+  const topFrontZ = inset
+    ? centerZ + depth / 2 - node.frontThickness / 2 - 0.0015
+    : centerZ + depth / 2 + node.frontThickness / 2 - 0.0015
+
+  if (node.topFinish === 'trim') {
+    addBox(
+      group,
+      [node.width, height, depth],
+      [0, topY + height / 2, centerZ],
+      materials.carcass,
+      'cabinet-top-trim',
+      'carcass',
+    )
+    return
+  }
+
+  const innerLeft = -node.width / 2 + (node.openSide === 'left' ? 0 : board)
+  const innerRight = node.width / 2 - (node.openSide === 'right' ? 0 : board)
+  const innerWidth = Math.max(0.01, innerRight - innerLeft)
+  // Keep the upper front's reveal contract identical to the parent cabinet.
+  // Overlay fronts reserve one extra front gap at the opening edge; addDoorFronts
+  // applies the remaining leaf-to-leaf gaps. Inset fronts use the carcass opening.
+  const faceWidth = inset ? innerWidth : Math.max(0.01, node.width - node.frontGap)
+  const topDoorCompartment = stackForCabinet(node).find(
+    (compartment) => compartment.type === 'door',
+  )
+  const topDoorType = topDoorCompartment
+    ? compartmentDoorType(topDoorCompartment, node.width)
+    : node.width > 0.5
+      ? 'double'
+      : 'single-left'
+  addBox(
+    group,
+    [board, height, depth],
+    [-node.width / 2 + board / 2, topY + height / 2, centerZ],
+    materials.carcass,
+    'cabinet-top-cabinet-side-left',
+    'carcass',
+  )
+  addBox(
+    group,
+    [board, height, depth],
+    [node.width / 2 - board / 2, topY + height / 2, centerZ],
+    materials.carcass,
+    'cabinet-top-cabinet-side-right',
+    'carcass',
+  )
+  addBox(
+    group,
+    [innerWidth, board, depth],
+    [0, topY + board / 2, centerZ],
+    materials.carcass,
+    'cabinet-top-cabinet-bottom',
+    'carcass',
+  )
+  addBox(
+    group,
+    [innerWidth, board, depth],
+    [0, topY + height - board / 2, centerZ],
+    materials.carcass,
+    'cabinet-top-cabinet-top',
+    'carcass',
+  )
+  addBox(
+    group,
+    [innerWidth, Math.max(0.001, height - board * 2), backThickness],
+    [0, topY + height / 2, centerZ - depth / 2 + backInset + backThickness / 2],
+    materials.carcass,
+    'cabinet-top-cabinet-back',
+    'carcass',
+  )
+  addDoorFronts(
+    group,
+    node,
+    materials,
+    faceWidth,
+    inset ? Math.max(0.01, height - board * 2) : height,
+    0,
+    topY + height / 2,
+    topFrontZ,
+    topDoorType,
+  )
+}
 
 export function buildCabinetGeometry(
   node: CabinetGeometryNode,
@@ -513,6 +617,8 @@ export function buildCabinetGeometry(
       )
     }
   })
+
+  addTopFinishGeometry(group, node, materials, topY)
 
   return group
 }

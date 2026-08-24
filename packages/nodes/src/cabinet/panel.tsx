@@ -1,6 +1,7 @@
 'use client'
 
 import type {
+  AnyNode,
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
@@ -26,13 +27,24 @@ import {
 } from './interaction'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
+  CABINET_REVEAL_GAPS,
+  type CabinetRevealGapId,
+  cabinetRevealGapById,
+  cabinetRevealGapId,
+} from './reveals'
+import { runHasTwoWallConstraints } from './run-layout'
+import {
   addWallChildAbove,
+  applyCabinetModuleFrontPatch,
   backAlignZ,
+  type CabinetRunStylePatch,
+  cabinetCeilingGap,
   resolveCabinetType,
   runModuleBaseY,
   switchCabinetToBase,
   switchCabinetToTall,
   syncCornerRunsFromSourceModule,
+  syncCornerStyleGroupFromRun,
   wallChildOf,
 } from './run-ops'
 import {
@@ -48,10 +60,17 @@ import {
   minCabinetCarcassHeightForStack,
   newCabinetCompartment,
   normalizeCabinetStack,
+  removeCabinetCompartmentStack,
   resizeCabinetCompartmentStack,
   stackForCabinet,
 } from './stack'
 import { resolveCompartmentTransition } from './stack-transitions'
+import {
+  CABINET_STANDARD_WIDTHS,
+  type CabinetStandardWidthId,
+  cabinetStandardWidthById,
+  cabinetStandardWidthId,
+} from './widths'
 
 const HANDLE_STYLE_OPTIONS = [
   { value: 'bar', label: 'Bar' },
@@ -81,6 +100,12 @@ const FRONT_STYLE_OPTIONS = [
 const CABINET_TIER_OPTIONS = [
   { value: 'base', label: 'Base Cabinet' },
   { value: 'tall', label: 'Tall Cabinet' },
+] as const
+
+const TOP_FINISH_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'top-cabinet', label: 'Top Cabinet' },
+  { value: 'trim', label: 'Trim / Soffit' },
 ] as const
 
 const EMPTY_MODULES: CabinetModuleNodeType[] = []
@@ -157,6 +182,44 @@ export default function CabinetPanel() {
           nextPatch.carcassHeight,
           minCabinetCarcassHeightForStack(liveBeforeUpdate),
         )
+      }
+      if (liveBeforeUpdate?.type === 'cabinet-module') {
+        const frontPatch: CabinetRunStylePatch = {}
+        if ('frontStyle' in nextPatch) frontPatch.frontStyle = nextPatch.frontStyle
+        if ('frontOverlay' in nextPatch) frontPatch.frontOverlay = nextPatch.frontOverlay
+        if ('handleStyle' in nextPatch) frontPatch.handleStyle = nextPatch.handleStyle
+        if ('handlePosition' in nextPatch) frontPatch.handlePosition = nextPatch.handlePosition
+        if (Object.keys(frontPatch).length > 0) {
+          applyCabinetModuleFrontPatch({
+            module: liveBeforeUpdate,
+            patch: frontPatch,
+            sceneApi: createSceneApi(useScene),
+          })
+        }
+      }
+      if (
+        liveBeforeUpdate?.type === 'cabinet-module' &&
+        liveBeforeUpdate.parentId &&
+        parentRun?.type === 'cabinet' &&
+        typeof nextPatch.frontGap === 'number'
+      ) {
+        const frontGap = nextPatch.frontGap
+        scene.updateNode(parentRun.id as AnyNodeId, { frontGap })
+        for (const module of modules) {
+          scene.updateNode(module.id as AnyNodeId, { frontGap })
+          const wallChild = wallChildOf(
+            module,
+            scene.nodes as Record<string, CabinetEditableNode | undefined>,
+          )
+          if (wallChild) scene.updateNode(wallChild.id as AnyNodeId, { frontGap })
+        }
+        bumpRunLayoutRevisionViaStore(scene, parentRun)
+        syncCornerStyleGroupFromRun({
+          run: parentRun,
+          patch: { frontGap },
+          sceneApi: createSceneApi(useScene),
+        })
+        return
       }
       if (
         liveBeforeUpdate?.type === 'cabinet-module' &&
@@ -303,9 +366,18 @@ export default function CabinetPanel() {
     const transition = resolveCompartmentTransition({ node, parentRun, index, next })
     commitStack(transition.stack, transition.modulePatch)
   }
-  const resizeAt = (index: number, height: number) =>
-    commitStack(resizeCabinetCompartmentStack(node, index, height))
-  const removeAt = (index: number) => commitStack(stack.filter((_, i) => i !== index))
+  const resizeAt = (index: number, height: number) => {
+    const resized = resizeCabinetCompartmentStack(node, index, height)
+    const extraPatch: Partial<CabinetModuleNodeType> =
+      stack.length === 1 && resized[0]
+        ? { carcassHeight: resized[0].height ?? node.carcassHeight }
+        : {}
+    commitStack(resized, extraPatch)
+  }
+  const removeAt = (index: number) => {
+    const result = removeCabinetCompartmentStack(node, index)
+    commitStack(result.stack, result.carcassHeight == null ? {} : result)
+  }
   const addCompartment = () => commitStack([...stack, newCabinetCompartment('shelf')])
   const moveCompartment = (index: number, delta: -1 | 1) => {
     const target = index + delta
@@ -355,6 +427,12 @@ export default function CabinetPanel() {
   const hasWallCabinet = node?.type === 'cabinet-module' ? Boolean(wallChild) : false
 
   const isWallChildModule = node?.type === 'cabinet-module' && parentIsModule
+  const canAddTopFinish =
+    node.type === 'cabinet-module' &&
+    !isHoodOnlyNode &&
+    (isWallChildModule ||
+      resolveCabinetType(node, parentRun) === 'tall' ||
+      parentRun?.runTier === 'wall')
 
   const applyPreset = (presetId: CabinetPresetId) => {
     if (node?.type !== 'cabinet-module') return
@@ -387,7 +465,11 @@ export default function CabinetPanel() {
         modules,
         parentRun,
         patch: nextPatch,
-        preserveExtent: true,
+        preserveExtent: runHasTwoWallConstraints(
+          parentRun,
+          modules,
+          scene.nodes as Record<AnyNodeId, AnyNode>,
+        ),
         scene,
         selected: node,
       })
@@ -396,6 +478,9 @@ export default function CabinetPanel() {
     }
     setSelection({ selectedIds: [node.id] })
   }
+
+  const standardWidth =
+    node.type === 'cabinet-module' ? cabinetStandardWidthId(node.width) : 'custom'
 
   if (node.type === 'cabinet' && modules.length > 0) {
     return <CabinetRunPanel modules={modules} node={node} onClose={close} />
@@ -427,6 +512,26 @@ export default function CabinetPanel() {
       )}
 
       <PanelSection title="Dimensions">
+        {node.type === 'cabinet-module' && !isHoodOnlyNode && (
+          <div className="space-y-1 px-1 pb-2">
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Standard width
+            </div>
+            <SegmentedControl
+              mixed={standardWidth === 'custom'}
+              onChange={(value) =>
+                updateNode({
+                  width: cabinetStandardWidthById(value as CabinetStandardWidthId).value,
+                })
+              }
+              options={CABINET_STANDARD_WIDTHS.map((option) => ({
+                label: option.label,
+                value: option.id,
+              }))}
+              value={standardWidth === 'custom' ? '600' : standardWidth}
+            />
+          </div>
+        )}
         <SliderControl
           label="Width"
           max={3}
@@ -497,6 +602,68 @@ export default function CabinetPanel() {
                   <ActionButton label="Add chimney" onClick={addHoodAbove} />
                 </>
               ))}
+          </div>
+        </PanelSection>
+      )}
+
+      {canAddTopFinish && (
+        <PanelSection title="Top / Ceiling">
+          <div className="space-y-2 px-1 pb-2">
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Finish
+              </div>
+              <SegmentedControl
+                onChange={(value) =>
+                  updateNode({
+                    topFinish: value as CabinetModuleNodeType['topFinish'],
+                    ...(value !== 'none' && node.topFinish === 'none'
+                      ? { topFinishDepth: node.depth }
+                      : {}),
+                  })
+                }
+                options={TOP_FINISH_OPTIONS.map((option) => ({
+                  label: option.label,
+                  value: option.value,
+                }))}
+                value={node.topFinish ?? 'none'}
+              />
+            </div>
+            {node.topFinish !== 'none' && (
+              <>
+                <ActionButton
+                  label="Fill to ceiling"
+                  onClick={() =>
+                    updateNode({
+                      topFinishHeight: cabinetCeilingGap(
+                        node,
+                        useScene.getState().nodes as Record<AnyNodeId, AnyNode>,
+                      ),
+                    })
+                  }
+                />
+                <SliderControl
+                  label="Top height"
+                  max={1.2}
+                  min={0.05}
+                  onChange={(value) => updateNode({ topFinishHeight: value })}
+                  precision={2}
+                  step={0.01}
+                  unit="m"
+                  value={node.topFinishHeight}
+                />
+                <SliderControl
+                  label="Top depth"
+                  max={1.2}
+                  min={0.15}
+                  onChange={(value) => updateNode({ topFinishDepth: value })}
+                  precision={2}
+                  step={0.01}
+                  unit="m"
+                  value={node.topFinishDepth}
+                />
+              </>
+            )}
           </div>
         </PanelSection>
       )}
@@ -616,6 +783,28 @@ export default function CabinetPanel() {
                     label: option.label,
                   }))}
                   value={node.frontOverlay ?? 'full'}
+                />
+              </div>
+              <div>
+                <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Reveal gap
+                </div>
+                <SegmentedControl
+                  mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
+                  onChange={(value) =>
+                    updateNode({
+                      frontGap: cabinetRevealGapById(value as CabinetRevealGapId).value,
+                    })
+                  }
+                  options={CABINET_REVEAL_GAPS.map((gap) => ({
+                    value: gap.id,
+                    label: gap.label,
+                  }))}
+                  value={
+                    cabinetRevealGapId(node.frontGap) === 'custom'
+                      ? '3'
+                      : cabinetRevealGapId(node.frontGap)
+                  }
                 />
               </div>
             </div>

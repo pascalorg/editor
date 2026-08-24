@@ -15,6 +15,15 @@ const cooktopFields = {
 }
 
 export const CabinetFrontStyleSchema = z.enum(['slab', 'shaker', 'raised-arch'])
+export const CabinetTopFinishSchema = z.enum(['none', 'top-cabinet', 'trim'])
+
+/** Canonical metric cabinet family used when no regional profile is selected. */
+export const CABINET_METRIC_DEFAULTS = {
+  depth: 0.6,
+  carcassHeight: 0.8,
+  plinthHeight: 0.1,
+  countertopThickness: 0.02,
+} as const
 
 // Discriminated on `type` so invalid field combinations (a drawer with a
 // pantry rack style, a fridge with burner state) are unrepresentable. New
@@ -83,13 +92,17 @@ const cabinetBoxFields = {
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),
   width: z.number().min(0.05).max(3).default(0.5),
-  depth: z.number().min(0.3).max(1.2).default(0.5),
-  carcassHeight: z.number().min(0.4).max(2.4).default(0.72),
+  depth: z.number().min(0.3).max(1.2).default(CABINET_METRIC_DEFAULTS.depth),
+  carcassHeight: z.number().min(0.4).max(2.4).default(CABINET_METRIC_DEFAULTS.carcassHeight),
   operationState: z.number().min(0).max(1).default(0),
-  plinthHeight: z.number().min(0).max(0.3).default(0.1),
+  plinthHeight: z.number().min(0).max(0.3).default(CABINET_METRIC_DEFAULTS.plinthHeight),
   toeKickDepth: z.number().min(0).max(0.2).default(0.075),
   boardThickness: z.number().min(0.01).max(0.08).default(0.018),
-  countertopThickness: z.number().min(0).max(0.08).default(0.02),
+  countertopThickness: z
+    .number()
+    .min(0)
+    .max(0.08)
+    .default(CABINET_METRIC_DEFAULTS.countertopThickness),
   countertopOverhang: z.number().min(0).max(0.12).default(0.02),
   // Extra slab reach off the back edge (island seating side) — up to a
   // 45 cm knee-space overhang, unlike the small uniform front/side overhang.
@@ -144,6 +157,11 @@ export const CabinetModuleNode = BaseNode.extend({
   // Corner-pocket fillers carry a small internal shelf so the dead corner reads
   // as reachable storage instead of an empty boxed void.
   cornerShelf: z.boolean().optional(),
+  // Optional upper termination for wall/tall compositions. It is deliberately
+  // separate from carcassHeight so the main cabinet proportions stay stable.
+  topFinish: CabinetTopFinishSchema.default('none'),
+  topFinishHeight: z.number().min(0.05).max(1.2).default(0.33),
+  topFinishDepth: z.number().min(0.15).max(1.2).default(0.32),
   ...cabinetBoxFields,
 }).describe('Parametric module inside a modular cabinet run')
 

@@ -1,16 +1,17 @@
 import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
+import { CABINET_METRIC_DEFAULTS } from '@pascal-app/core'
 import {
   COOKTOP_STANDARD_WIDTH,
   cooktopCabinetStack,
   DISHWASHER_STANDARD_HEIGHT,
   DISHWASHER_STANDARD_WIDTH,
+  FRIDGE_COLUMN_HEIGHT,
   FRIDGE_COLUMN_WIDTH,
   fridgeCabinetStack,
   MICROWAVE_STANDARD_WIDTH,
   newCabinetCompartment,
   SINK_STANDARD_WIDTH,
   sinkCabinetStack,
-  TALL_CABINET_CARCASS_HEIGHT,
 } from './stack'
 
 export type CabinetPresetId =
@@ -32,9 +33,9 @@ export type CabinetPreset = {
 
 const baseShared = (run?: CabinetNode): Partial<CabinetModuleNode> => ({
   cabinetType: 'base',
-  depth: run?.depth ?? 0.5,
-  carcassHeight: run?.carcassHeight ?? 0.72,
-  plinthHeight: run?.plinthHeight ?? 0.1,
+  depth: run?.depth ?? CABINET_METRIC_DEFAULTS.depth,
+  carcassHeight: run?.carcassHeight ?? CABINET_METRIC_DEFAULTS.carcassHeight,
+  plinthHeight: run?.plinthHeight ?? CABINET_METRIC_DEFAULTS.plinthHeight,
   toeKickDepth: run?.toeKickDepth ?? 0.075,
   countertopThickness: 0,
   countertopOverhang: run?.countertopOverhang ?? 0.02,
@@ -42,7 +43,7 @@ const baseShared = (run?: CabinetNode): Partial<CabinetModuleNode> => ({
   withCountertop: false,
 })
 
-const runDepth = (run?: CabinetNode) => run?.depth ?? 0.5
+const runDepth = (run?: CabinetNode) => run?.depth ?? CABINET_METRIC_DEFAULTS.depth
 
 export const CABINET_PRESETS: CabinetPreset[] = [
   {
@@ -134,9 +135,9 @@ export const CABINET_PRESETS: CabinetPreset[] = [
       cabinetType: 'tall',
       name: 'Tall Pantry',
       width: 0.5,
-      depth: run?.depth ?? 0.5,
+      depth: run?.depth ?? CABINET_METRIC_DEFAULTS.depth,
       carcassHeight: 2.07,
-      plinthHeight: 0.1,
+      plinthHeight: CABINET_METRIC_DEFAULTS.plinthHeight,
       toeKickDepth: 0.075,
       countertopThickness: 0,
       countertopOverhang: run?.countertopOverhang ?? 0.02,
@@ -155,9 +156,9 @@ export const CABINET_PRESETS: CabinetPreset[] = [
       cabinetType: 'tall',
       name: 'Oven Tower',
       width: MICROWAVE_STANDARD_WIDTH,
-      depth: run?.depth ?? 0.5,
+      depth: run?.depth ?? CABINET_METRIC_DEFAULTS.depth,
       carcassHeight: 2.07,
-      plinthHeight: 0.1,
+      plinthHeight: CABINET_METRIC_DEFAULTS.plinthHeight,
       toeKickDepth: 0.075,
       countertopThickness: 0,
       countertopOverhang: run?.countertopOverhang ?? 0.02,
@@ -182,8 +183,8 @@ export const CABINET_PRESETS: CabinetPreset[] = [
       name: 'Single Door Refrigerator',
       width: FRIDGE_COLUMN_WIDTH,
       depth: runDepth(run),
-      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
-      plinthHeight: 0.1,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      plinthHeight: CABINET_METRIC_DEFAULTS.plinthHeight,
       toeKickDepth: 0.075,
       countertopThickness: 0,
       countertopOverhang: run?.countertopOverhang ?? 0.02,

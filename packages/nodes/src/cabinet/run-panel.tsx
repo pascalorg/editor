@@ -18,6 +18,18 @@ import { useViewer } from '@pascal-app/viewer'
 import { Plus, Trash } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import {
+  CABINET_DIMENSION_PROFILES,
+  type CabinetDimensionProfileId,
+  cabinetDimensionProfileById,
+  cabinetDimensionProfileId,
+} from './profiles'
+import {
+  CABINET_REVEAL_GAPS,
+  type CabinetRevealGapId,
+  cabinetRevealGapById,
+  cabinetRevealGapId,
+} from './reveals'
+import {
   addCabinetModuleSide,
   backAlignZ,
   bumpCabinetRunLayoutRevision,
@@ -42,6 +54,7 @@ const RUN_MODULE_SYNC_PATCH_KEYS = new Set<keyof CabinetNodeType>([
   'frontOverlay',
   'handleStyle',
   'handlePosition',
+  'frontGap',
 ])
 const RUN_DEPTH_PATCH_KEY = 'depth'
 const PRESET_WIDTH_DEBT_KEY = 'cabinetPresetWidthDebtBySource'
@@ -242,6 +255,7 @@ export function CabinetRunPanel({
       if ('frontOverlay' in nextPatch) stylePatch.frontOverlay = nextNode.frontOverlay
       if ('handleStyle' in nextPatch) stylePatch.handleStyle = nextNode.handleStyle
       if ('handlePosition' in nextPatch) stylePatch.handlePosition = nextNode.handlePosition
+      if ('frontGap' in nextPatch) stylePatch.frontGap = nextNode.frontGap
 
       for (const module of modules) {
         const modulePatch: Partial<CabinetModuleNodeType> = {}
@@ -262,6 +276,7 @@ export function CabinetRunPanel({
           if ('frontOverlay' in nextPatch) modulePatch.frontOverlay = nextNode.frontOverlay
           if ('handleStyle' in nextPatch) modulePatch.handleStyle = nextNode.handleStyle
           if ('handlePosition' in nextPatch) modulePatch.handlePosition = nextNode.handlePosition
+          if ('frontGap' in nextPatch) modulePatch.frontGap = nextNode.frontGap
         }
         scene.updateNode(module.id, modulePatch)
 
@@ -276,6 +291,7 @@ export function CabinetRunPanel({
               frontOverlay: nextNode.frontOverlay,
               handleStyle: nextNode.handleStyle,
               handlePosition: nextNode.handlePosition,
+              ...('frontGap' in nextPatch ? { frontGap: nextNode.frontGap } : {}),
             })
           }
         }
@@ -310,6 +326,20 @@ export function CabinetRunPanel({
       if (id) setSelection({ selectedIds: [id] })
     },
     [node, setSelection],
+  )
+
+  const dimensionProfile = cabinetDimensionProfileId(node)
+  const applyDimensionProfile = useCallback(
+    (profileId: CabinetDimensionProfileId) => {
+      const profile = cabinetDimensionProfileById(profileId)
+      updateRun({
+        carcassHeight: profile.carcassHeight,
+        countertopThickness: profile.countertopThickness,
+        depth: profile.depth,
+        plinthHeight: profile.plinthHeight,
+      })
+    },
+    [updateRun],
   )
 
   const deleteModule = useCallback(
@@ -382,6 +412,25 @@ export function CabinetRunPanel({
 
       <PanelSection title="Shared Plinth & Countertop">
         <div className="space-y-2 px-1 pb-2">
+          {node.runTier === 'base' && (
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Standard dimensions
+              </div>
+              <SegmentedControl
+                mixed={dimensionProfile === 'custom'}
+                onChange={(value) => applyDimensionProfile(value as CabinetDimensionProfileId)}
+                options={CABINET_DIMENSION_PROFILES.map((profile) => ({
+                  label: profile.label,
+                  value: profile.id,
+                }))}
+                value={dimensionProfile === 'us-base' ? 'us-base' : 'metric-base'}
+              />
+              <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+                Applies depth, carcass, plinth, and countertop thickness to this run.
+              </p>
+            </div>
+          )}
           <SliderControl
             label="Depth"
             max={1.2}
@@ -556,6 +605,28 @@ export function CabinetRunPanel({
                 label: option.label,
               }))}
               value={node.frontOverlay ?? 'full'}
+            />
+          </div>
+          <div>
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Reveal gap
+            </div>
+            <SegmentedControl
+              mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
+              onChange={(value) =>
+                updateRun({
+                  frontGap: cabinetRevealGapById(value as CabinetRevealGapId).value,
+                })
+              }
+              options={CABINET_REVEAL_GAPS.map((gap) => ({
+                value: gap.id,
+                label: gap.label,
+              }))}
+              value={
+                cabinetRevealGapId(node.frontGap) === 'custom'
+                  ? '3'
+                  : cabinetRevealGapId(node.frontGap)
+              }
             />
           </div>
         </div>

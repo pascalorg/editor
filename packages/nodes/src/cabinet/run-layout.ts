@@ -1,4 +1,11 @@
-import type { AnyNode, CabinetModuleNode, CabinetNode, GeometryContext } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AnyNodeId,
+  CabinetModuleNode,
+  CabinetNode,
+  GeometryContext,
+  WallNode,
+} from '@pascal-app/core'
 
 /**
  * Straight-line run layout math — the single home for the "modules sit on the
@@ -30,6 +37,84 @@ export function moduleMinX(module: Pick<CabinetModuleNode, 'position' | 'width'>
 
 export function moduleMaxX(module: Pick<CabinetModuleNode, 'position' | 'width'>): number {
   return module.position[0] + module.width / 2
+}
+
+function levelIdForRun(
+  run: Pick<CabinetNode, 'parentId'>,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): AnyNodeId | null {
+  let parentId = run.parentId as AnyNodeId | null
+  const visited = new Set<AnyNodeId>()
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId)
+    const parent = nodes[parentId]
+    if (!parent) return null
+    if (parent.type === 'level') return parent.id as AnyNodeId
+    parentId = parent.parentId as AnyNodeId | null
+  }
+  return null
+}
+
+function distanceToSegment(
+  point: readonly [number, number],
+  start: readonly [number, number],
+  end: readonly [number, number],
+): number {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const lengthSquared = dx * dx + dz * dz
+  if (lengthSquared <= 1e-8) return Math.hypot(point[0] - start[0], point[1] - start[1])
+  const t = Math.max(
+    0,
+    Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dz) / lengthSquared),
+  )
+  return Math.hypot(point[0] - (start[0] + t * dx), point[1] - (start[1] + t * dz))
+}
+
+function hasWallAtRunEnd({
+  endX,
+  run,
+  walls,
+}: {
+  endX: number
+  run: Pick<CabinetNode, 'depth' | 'position' | 'rotation'>
+  walls: readonly WallNode[]
+}): boolean {
+  const worldPoint = runLocalToPlan(run, [endX, 0, 0])
+  const point: readonly [number, number] = [worldPoint[0], worldPoint[2]]
+  const runAxis: readonly [number, number] = [Math.cos(run.rotation), -Math.sin(run.rotation)]
+  const maxDistance = run.depth / 2 + 0.08
+
+  return walls.some((wall) => {
+    const dx = wall.end[0] - wall.start[0]
+    const dz = wall.end[1] - wall.start[1]
+    const length = Math.hypot(dx, dz)
+    if (length <= 1e-6) return false
+    const wallAxis: readonly [number, number] = [dx / length, dz / length]
+    if (Math.abs(runAxis[0] * wallAxis[0] + runAxis[1] * wallAxis[1]) > 0.2) return false
+    return distanceToSegment(point, wall.start, wall.end) <= maxDistance + (wall.thickness ?? 0.2) / 2
+  })
+}
+
+/**
+ * A preset may consume neighboring width only when both run ends are hard
+ * constrained by perpendicular walls. A back wall is parallel to the run and
+ * therefore does not make the run's horizontal extent fixed.
+ */
+export function runHasTwoWallConstraints(
+  run: Pick<CabinetNode, 'depth' | 'parentId' | 'position' | 'rotation' | 'width'>,
+  modules: readonly ModuleLike[],
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): boolean {
+  const levelId = levelIdForRun(run, nodes)
+  if (!levelId) return false
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+  )
+  if (walls.length === 0) return false
+  const minX = modules.length > 0 ? runMinX(modules) : -run.width / 2
+  const maxX = modules.length > 0 ? runMaxX(modules) : run.width / 2
+  return hasWallAtRunEnd({ endX: minX, run, walls }) && hasWallAtRunEnd({ endX: maxX, run, walls })
 }
 
 export function runMinX(modules: readonly ModuleLike[]): number {

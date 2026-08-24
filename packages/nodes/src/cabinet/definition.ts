@@ -11,7 +11,11 @@ import type {
   NodeDefinition,
   SceneApi,
 } from '@pascal-app/core'
-import { findLevelAncestorId, selectionProxyIdFromMetadata } from '@pascal-app/core'
+import {
+  CABINET_METRIC_DEFAULTS,
+  findLevelAncestorId,
+  selectionProxyIdFromMetadata,
+} from '@pascal-app/core'
 import { bakeCabinetAnimationClip } from './animation'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
@@ -443,7 +447,12 @@ function includeCabinetModuleBounds(
   bounds.minY = Math.min(bounds.minY, y - (module.showPlinth ? module.plinthHeight : 0))
   bounds.maxY = Math.max(
     bounds.maxY,
-    y + module.carcassHeight + (module.withCountertop ? module.countertopThickness : 0),
+    y +
+      module.carcassHeight +
+      (module.withCountertop ? module.countertopThickness : 0) +
+      (module.topFinish === 'top-cabinet' || module.topFinish === 'trim'
+        ? (module.topFinishHeight ?? 0.33)
+        : 0),
   )
   bounds.minZ = Math.min(bounds.minZ, z - module.depth / 2)
   bounds.maxZ = Math.max(bounds.maxZ, z + module.depth / 2)
@@ -492,7 +501,12 @@ function cabinetLocalBounds(
     minX: -node.width / 2,
     maxX: node.width / 2,
     minY: 0,
-    maxY: cabinetTotalHeight(node),
+    maxY:
+      cabinetTotalHeight(node) +
+      (node.type === 'cabinet-module' &&
+      (node.topFinish === 'top-cabinet' || node.topFinish === 'trim')
+        ? (node.topFinishHeight ?? 0.33)
+        : 0),
     minZ: -node.depth / 2,
     maxZ: node.depth / 2,
   }
@@ -1814,6 +1828,17 @@ function isHoodOnlyCabinet(node: CabinetEditableNode): boolean {
   return stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
 }
 
+function cabinetModuleHeightHandleVisible(
+  node: CabinetModuleNodeType,
+  sceneApi: SceneApi,
+): boolean {
+  const parent = node.parentId ? sceneApi.get(node.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) {
+    return parent.runTier === 'wall' || resolveCabinetType(node, parent) === 'tall'
+  }
+  return isCabinetModule(parent) && wallChildOf(parent, sceneApi.nodes())?.id === node.id
+}
+
 function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
   return [
     {
@@ -1829,6 +1854,10 @@ function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
     {
       ...cabinetDepthHandle(),
       visible: (node) => !isCabinetWidthFiller(node),
+    } as HandleDescriptor<CabinetModuleNodeType>,
+    {
+      ...cabinetHeightHandle(),
+      visible: cabinetModuleHeightHandleVisible,
     } as HandleDescriptor<CabinetModuleNodeType>,
   ]
 }
@@ -1852,13 +1881,13 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     runTier: 'base',
     children: [],
     width: 0.5,
-    depth: 0.5,
-    carcassHeight: 0.72,
+    depth: CABINET_METRIC_DEFAULTS.depth,
+    carcassHeight: CABINET_METRIC_DEFAULTS.carcassHeight,
     operationState: 0,
-    plinthHeight: 0.1,
+    plinthHeight: CABINET_METRIC_DEFAULTS.plinthHeight,
     toeKickDepth: 0.075,
     boardThickness: 0.018,
-    countertopThickness: 0.02,
+    countertopThickness: CABINET_METRIC_DEFAULTS.countertopThickness,
     countertopOverhang: 0.02,
     countertopBackOverhang: 0,
     withFinishedBack: false,
@@ -2025,7 +2054,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
 export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> = {
   kind: 'cabinet-module',
-  schemaVersion: 4,
+  schemaVersion: 5,
   schema: CabinetModuleNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -2042,8 +2071,8 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     children: [],
     cabinetType: 'base',
     width: 0.5,
-    depth: 0.5,
-    carcassHeight: 0.72,
+    depth: CABINET_METRIC_DEFAULTS.depth,
+    carcassHeight: CABINET_METRIC_DEFAULTS.carcassHeight,
     operationState: 0,
     plinthHeight: 0,
     toeKickDepth: 0.075,
@@ -2057,6 +2086,9 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     moduleKind: 'standard' as const,
     openSide: undefined,
     cornerShelf: false,
+    topFinish: 'none' as const,
+    topFinishHeight: 0.33,
+    topFinishDepth: 0.32,
     frontStyle: 'slab',
     handleStyle: 'bar',
     handlePosition: 'auto',
@@ -2136,6 +2168,9 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       n.withCountertop,
       n.openSide ?? null,
       n.cornerShelf ?? false,
+      n.topFinish,
+      n.topFinishHeight,
+      n.topFinishDepth,
       JSON.stringify(n.material ?? null),
       JSON.stringify(n.materialPreset ?? null),
       JSON.stringify(n.slots ?? null),
