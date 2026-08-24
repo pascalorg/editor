@@ -126,10 +126,15 @@ export function blockToolbarOffset(topologyExtent: number, gizmoLength: number):
 export function blockBevelWidthFromDrag(
   deltaX: number,
   deltaY: number,
-  topologyExtent: number,
-  viewportHeight: number,
+  {
+    topologyExtent,
+    projectedExtentPixels,
+  }: {
+    topologyExtent: number
+    projectedExtentPixels: number
+  },
 ): number {
   const safeExtent = Math.max(Math.abs(topologyExtent), 0.001)
-  const safeViewportHeight = Math.max(Math.abs(viewportHeight), 1)
-  return (Math.hypot(deltaX, deltaY) * safeExtent) / safeViewportHeight
+  const safeProjectedExtent = Math.max(Math.abs(projectedExtentPixels), 1)
+  return (Math.hypot(deltaX, deltaY) * safeExtent) / safeProjectedExtent
 }

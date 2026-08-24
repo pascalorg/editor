@@ -36,3 +36,19 @@ export function blockLocalPointToClient(
     rect.top + ((1 - projected.y) / 2) * rect.height,
   )
 }
+
+export function blockTopologyClientExtent(
+  topology: BlockTopology,
+  target: Object3D,
+  camera: Camera,
+  canvas: HTMLCanvasElement,
+): number | null {
+  const points = topology.vertices
+    .map((vertex) => blockLocalPointToClient(vertex.position, target, camera, canvas))
+    .filter((point): point is Vector2 => point !== null)
+  if (points.length === 0) return null
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+  const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys))
+  return Number.isFinite(extent) && extent > 1e-6 ? extent : null
+}

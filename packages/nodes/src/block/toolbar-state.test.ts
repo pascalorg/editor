@@ -83,9 +83,33 @@ describe('block toolbar state', () => {
   })
 
   test('maps bevel pointer travel into topology-relative width', () => {
-    expect(blockBevelWidthFromDrag(60, 80, 2, 1000)).toBeCloseTo(0.2)
-    expect(blockBevelWidthFromDrag(0, 0, 2, 1000)).toBe(0)
-    expect(blockBevelWidthFromDrag(10, 0, 2, 0)).toBe(20)
+    expect(
+      blockBevelWidthFromDrag(60, 80, {
+        topologyExtent: 2,
+        projectedExtentPixels: 1000,
+      }),
+    ).toBeCloseTo(0.2)
+    expect(
+      blockBevelWidthFromDrag(0, 0, {
+        topologyExtent: 2,
+        projectedExtentPixels: 1000,
+      }),
+    ).toBe(0)
+  })
+
+  test('keeps bevel sensitivity consistent as projected size changes', () => {
+    expect(
+      blockBevelWidthFromDrag(100, 0, {
+        topologyExtent: 2,
+        projectedExtentPixels: 400,
+      }),
+    ).toBeCloseTo(0.5)
+    expect(
+      blockBevelWidthFromDrag(50, 0, {
+        topologyExtent: 2,
+        projectedExtentPixels: 200,
+      }),
+    ).toBeCloseTo(0.5)
   })
 
   test('keeps the floating toolbar clear of the vertical transform handle', () => {

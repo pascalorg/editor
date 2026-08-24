@@ -13,8 +13,13 @@ import {
 } from '@pascal-app/editor'
 import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback } from 'react'
 import type { Camera, Object3D } from 'three'
-import { Vector2 } from 'three'
-import { applyBlockCommand, type BlockCommand, type BlockSelection } from './commands'
+import { Vector2, Vector3 } from 'three'
+import {
+  applyBlockCommand,
+  type BlockCommand,
+  type BlockSelection,
+  blockFaceNormal,
+} from './commands'
 import type { BlockSfxAction } from './interaction-sfx'
 import {
   type BlockExtrudeAxis,
@@ -30,7 +35,11 @@ import {
   blockTransformNumericInputFromKey,
   blockTransformNumericValue,
 } from './modal-transform'
-import { blockLocalPointToClient, blockSelectionCentroid } from './selection-geometry'
+import {
+  blockLocalPointToClient,
+  blockSelectionCentroid,
+  blockTopologyClientExtent,
+} from './selection-geometry'
 
 type StateSetter<T> = Dispatch<SetStateAction<T>>
 
@@ -96,6 +105,34 @@ export function useBlockFaceOperation({
       if (!origin) return false
       const pivotClient = blockLocalPointToClient(origin, target, camera, canvas)
       if (!pivotClient) return false
+      const projectedExtent = blockTopologyClientExtent(displayTopology, target, camera, canvas)
+      if (!projectedExtent) return false
+
+      const selectedFaceNormal = faceIds.reduce((sum, id) => {
+        const face = displayTopology.faces.find((candidate) => candidate.id === id)!
+        const normal = blockFaceNormal(displayTopology, face)
+        return normal ? sum.add(new Vector3(...normal)) : sum
+      }, new Vector3())
+      if (selectedFaceNormal.lengthSq() > 1e-12) selectedFaceNormal.normalize()
+
+      const projectedExtrusionDirection = (axis: BlockExtrudeAxis) => {
+        const direction =
+          axis === 'normal'
+            ? selectedFaceNormal
+            : new Vector3(axis === 'x' ? 1 : 0, axis === 'y' ? 1 : 0, axis === 'z' ? 1 : 0)
+        if (direction.lengthSq() <= 1e-12) return null
+        const endpointClient = blockLocalPointToClient(
+          [
+            origin[0] + direction.x * 0.1,
+            origin[1] + direction.y * 0.1,
+            origin[2] + direction.z * 0.1,
+          ],
+          target,
+          camera,
+          canvas,
+        )
+        return endpointClient?.sub(pivotClient) ?? null
+      }
 
       const startPointer =
         lastPointerClientRef.current?.clone() ?? pivotClient.clone().add(new Vector2(80, 0))
@@ -109,6 +146,7 @@ export function useBlockFaceOperation({
       let lastAltKey = false
       let lastSnapValue: number | null = null
       let extrudeAxis: BlockExtrudeAxis = 'normal'
+      let extrusionDirection = projectedExtrusionDirection(extrudeAxis)
 
       const updatePreview = (clientX: number, clientY: number, altKey: boolean) => {
         lastClientX = clientX
@@ -122,9 +160,12 @@ export function useBlockFaceOperation({
           typedValue ??
           blockFaceOperationValueFromPointer(
             operation,
-            clientX - startPointer.x,
-            clientY - startPointer.y,
+            startPointer,
+            { x: clientX, y: clientY },
+            pivotClient,
             extent,
+            projectedExtent,
+            extrusionDirection,
           )
         if (typedValue === null && operation === 'extrude' && extrudeAxis !== 'normal') {
           value = blockPointerDistanceForAxis(extrudeAxis, value)
@@ -218,6 +259,7 @@ export function useBlockFaceOperation({
           keyboardEvent.preventDefault()
           keyboardEvent.stopImmediatePropagation()
           extrudeAxis = nextAxis
+          extrusionDirection = projectedExtrusionDirection(nextAxis)
           setFaceOperationAxis(nextAxis)
           lastSnapValue = null
           updatePreview(lastClientX, lastClientY, lastAltKey)

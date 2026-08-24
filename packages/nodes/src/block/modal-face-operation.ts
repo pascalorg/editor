@@ -4,15 +4,42 @@ import { type BlockModalFeedbackMode, blockModalFeedbackLabel } from './modal-tr
 export type BlockModalFaceOperation = 'extrude' | 'inset'
 export type BlockExtrudeAxis = 'normal' | 'x' | 'y' | 'z'
 
+type BlockPointerClientPosition = {
+  x: number
+  y: number
+}
+
 export function blockFaceOperationValueFromPointer(
   operation: BlockModalFaceOperation,
-  deltaX: number,
-  deltaY: number,
+  startPointer: BlockPointerClientPosition,
+  currentPointer: BlockPointerClientPosition,
+  pivot: BlockPointerClientPosition,
   topologyExtent: number,
+  projectedExtentPixels: number,
+  extrusionDirection?: BlockPointerClientPosition | null,
 ): number {
-  const pointerTravel = deltaX - deltaY
-  if (operation === 'extrude') return pointerTravel * 0.01
-  return Math.min(0.95, Math.max(0, pointerTravel / (Math.max(0.5, topologyExtent) * 100)))
+  const safeProjectedExtent = Math.max(1, Math.abs(projectedExtentPixels))
+  if (operation === 'extrude') {
+    const directionLength = extrusionDirection
+      ? Math.hypot(extrusionDirection.x, extrusionDirection.y)
+      : 0
+    if (extrusionDirection && directionLength > 1e-6) {
+      const pointerTravel =
+        ((currentPointer.x - startPointer.x) * extrusionDirection.x +
+          (currentPointer.y - startPointer.y) * extrusionDirection.y) /
+        directionLength
+      return (pointerTravel / safeProjectedExtent) * topologyExtent
+    }
+    return (
+      ((currentPointer.x - startPointer.x - (currentPointer.y - startPointer.y)) /
+        safeProjectedExtent) *
+      topologyExtent
+    )
+  }
+  const startDistance = Math.hypot(startPointer.x - pivot.x, startPointer.y - pivot.y)
+  const currentDistance = Math.hypot(currentPointer.x - pivot.x, currentPointer.y - pivot.y)
+  const inwardTravel = startDistance - currentDistance
+  return Math.min(0.95, Math.max(0, inwardTravel / safeProjectedExtent))
 }
 
 export function blockFaceOperationCommand(

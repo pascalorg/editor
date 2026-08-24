@@ -131,6 +131,7 @@ import {
   unwrapRotationDelta,
 } from './rotation-drag'
 import {
+  blockTopologyClientExtent,
   blockLocalPointToClient as localPointToClient,
   type BlockPoint as Point,
   blockSelectionCentroid as selectionCentroid,
@@ -2875,9 +2876,15 @@ function BlockEditor({
       if (!displayTopology.edges.some((edge) => edge.id === edgeId)) return
       const edgeIds = mode === 'edge' && selectedIds.includes(edgeId) ? [...selectedIds] : [edgeId]
       const baseTopology = displayTopology
+      const projectedExtentPixels = blockTopologyClientExtent(
+        baseTopology,
+        target,
+        camera,
+        gl.domElement,
+      )
+      if (!projectedExtentPixels) return
       const startClientX = event.nativeEvent.clientX
       const startClientY = event.nativeEvent.clientY
-      const viewportHeight = gl.domElement.clientHeight
       const previousInputDragging = useViewer.getState().inputDragging
       const previousCursor = document.body.style.cursor
       let activeSegments = bevelSegments
@@ -2930,7 +2937,10 @@ function BlockEditor({
         const deltaX = pointerEvent.clientX - startClientX
         const deltaY = pointerEvent.clientY - startClientY
         if (Math.hypot(deltaX, deltaY) < 2) return
-        const width = blockBevelWidthFromDrag(deltaX, deltaY, extent, viewportHeight)
+        const width = blockBevelWidthFromDrag(deltaX, deltaY, {
+          topologyExtent: extent,
+          projectedExtentPixels,
+        })
         const widthStep = Math.floor(width / Math.max(0.01, extent * 0.025))
         if (widthStep > 0 && widthStep !== lastWidthStep) {
           lastWidthStep = widthStep
@@ -2997,6 +3007,7 @@ function BlockEditor({
     },
     [
       bevelSegments,
+      camera,
       commitAdjustableOperation,
       displayTopology,
       extent,
@@ -3005,6 +3016,7 @@ function BlockEditor({
       node.id,
       ownsEditSession,
       selectedIds,
+      target,
       sceneApi.markDirty,
     ],
   )
