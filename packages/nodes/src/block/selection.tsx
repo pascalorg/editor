@@ -24,7 +24,6 @@ import {
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import {
@@ -1488,6 +1487,7 @@ function LastOperationPanel({
 
 function BlockEditor({
   historyApi,
+  interactionApi,
   node,
   readOnly,
   sceneApi,
@@ -1495,6 +1495,7 @@ function BlockEditor({
   mirrorTarget,
 }: {
   historyApi: SelectionAffordanceProps['historyApi']
+  interactionApi: SelectionAffordanceProps['interactionApi']
   node: BlockNode
   readOnly: boolean
   sceneApi: SelectionAffordanceProps['sceneApi']
@@ -2241,6 +2242,7 @@ function BlockEditor({
       setModalFeedbackMode('free')
       setError(null)
       beginBlockModalSession({
+        beginInputDrag: interactionApi.beginInputDrag,
         cancelRef: cancelDragRef,
         cursor: operation === 'translate' ? 'move' : 'crosshair',
         onFinish: complete,
@@ -2256,6 +2258,7 @@ function BlockEditor({
       displayTopology,
       extent,
       gl.domElement,
+      interactionApi.beginInputDrag,
       makeRay,
       node.id,
       ownsEditSession,
@@ -2291,7 +2294,7 @@ function BlockEditor({
       const axisIndex = normalAxis === 'x' ? 0 : normalAxis === 'y' ? 1 : 2
       const baseTopology = displayTopology
       const baseSelection = selection
-      const previousInputDragging = useViewer.getState().inputDragging
+      const restoreInputDragging = interactionApi.beginInputDrag()
       const previousCursor = document.body.style.cursor
       let latestTopology: BlockTopology | null = null
       let latestDelta: Point = [0, 0, 0]
@@ -2300,7 +2303,6 @@ function BlockEditor({
 
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'translate'))
       playBlockSfx('drag-start')
-      useViewer.getState().setInputDragging(true)
       setActiveTransform({ operation: 'translate', constraint })
       setTransformNumericInput('0')
       setModalFeedbackMode('free')
@@ -2391,7 +2393,7 @@ function BlockEditor({
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
         sceneApi.markDirty(node.id)
-        useViewer.getState().setInputDragging(previousInputDragging)
+        restoreInputDragging()
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
         setActiveTransform(null)
@@ -2426,6 +2428,7 @@ function BlockEditor({
       displayTopology,
       extent,
       gl.domElement,
+      interactionApi.beginInputDrag,
       makeRay,
       node.id,
       ownsEditSession,
@@ -2458,7 +2461,7 @@ function BlockEditor({
       const rotationPlane = new Plane().setFromNormalAndCoplanarPoint(worldAxis, worldOrigin)
       const baseTopology = displayTopology
       const baseSelection = selection
-      const previousInputDragging = useViewer.getState().inputDragging
+      const restoreInputDragging = interactionApi.beginInputDrag()
       const previousCursor = document.body.style.cursor
       let previousWrappedAngle = 0
       let accumulatedAngle = 0
@@ -2469,7 +2472,6 @@ function BlockEditor({
 
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'rotate'))
       playBlockSfx('drag-start')
-      useViewer.getState().setInputDragging(true)
       setActiveTransform({ operation: 'rotate', constraint: axis })
       setTransformNumericInput('0')
       setModalFeedbackMode('free')
@@ -2529,7 +2531,7 @@ function BlockEditor({
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
         sceneApi.markDirty(node.id)
-        useViewer.getState().setInputDragging(previousInputDragging)
+        restoreInputDragging()
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
         setActiveTransform(null)
@@ -2567,6 +2569,7 @@ function BlockEditor({
     [
       commitAdjustableOperation,
       displayTopology,
+      interactionApi.beginInputDrag,
       makeRay,
       node.id,
       ownsEditSession,
@@ -2594,7 +2597,7 @@ function BlockEditor({
       const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
       const baseTopology = displayTopology
       const baseSelection = selection
-      const previousInputDragging = useViewer.getState().inputDragging
+      const restoreInputDragging = interactionApi.beginInputDrag()
       const previousCursor = document.body.style.cursor
       let latestFactor = 1
       let lastSnapFactor: number | null = null
@@ -2603,7 +2606,6 @@ function BlockEditor({
 
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'scale'))
       playBlockSfx('drag-start')
-      useViewer.getState().setInputDragging(true)
       setActiveTransform({ operation: 'scale', constraint: axis })
       setTransformNumericInput('1')
       setModalFeedbackMode('free')
@@ -2659,7 +2661,7 @@ function BlockEditor({
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
         sceneApi.markDirty(node.id)
-        useViewer.getState().setInputDragging(previousInputDragging)
+        restoreInputDragging()
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
         setActiveTransform(null)
@@ -2697,6 +2699,7 @@ function BlockEditor({
       displayTopology,
       commitAdjustableOperation,
       gizmoLength,
+      interactionApi.beginInputDrag,
       makeRay,
       node.id,
       ownsEditSession,
@@ -2848,6 +2851,7 @@ function BlockEditor({
     setModalFeedbackMode('free')
     setError(null)
     beginBlockModalSession({
+      beginInputDrag: interactionApi.beginInputDrag,
       cancelRef: cancelDragRef,
       cursor: 'nwse-resize',
       onFinish: complete,
@@ -2862,6 +2866,7 @@ function BlockEditor({
     displayTopology,
     gizmoLength,
     gl.domElement,
+    interactionApi.beginInputDrag,
     node.id,
     ownsEditSession,
     selectedIds.length,
@@ -2885,7 +2890,7 @@ function BlockEditor({
       if (!projectedExtentPixels) return
       const startClientX = event.nativeEvent.clientX
       const startClientY = event.nativeEvent.clientY
-      const previousInputDragging = useViewer.getState().inputDragging
+      const restoreInputDragging = interactionApi.beginInputDrag()
       const previousCursor = document.body.style.cursor
       let activeSegments = bevelSegments
       let latestWidth = 0
@@ -2904,7 +2909,6 @@ function BlockEditor({
       setBevelWidth(0)
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'bevel'))
       playBlockSfx('operation-start')
-      useViewer.getState().setInputDragging(true)
       document.body.style.cursor = 'ew-resize'
 
       const updatePreview = (width: number, segments = activeSegments) => {
@@ -2971,7 +2975,7 @@ function BlockEditor({
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
         sceneApi.markDirty(node.id)
-        useViewer.getState().setInputDragging(previousInputDragging)
+        restoreInputDragging()
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
         if (commit && latestTopology && latestSelection && latestWidth > 1e-6) {
@@ -3012,6 +3016,7 @@ function BlockEditor({
       displayTopology,
       extent,
       gl.domElement,
+      interactionApi.beginInputDrag,
       mode,
       node.id,
       ownsEditSession,
@@ -3098,7 +3103,7 @@ function BlockEditor({
       const worldAxis = worldDirection.normalize()
       const initialParameter = closestAxisParameterToRay(worldStart, worldAxis, event.ray)
       const baseTopology = node.topology
-      const previousInputDragging = useViewer.getState().inputDragging
+      const restoreInputDragging = interactionApi.beginInputDrag()
       const previousCursor = document.body.style.cursor
       let latestTopology: BlockTopology | null = null
       let latestSelection: BlockSelection | null = null
@@ -3136,7 +3141,6 @@ function BlockEditor({
 
       useInteractionScope.getState().begin(meshEditScope(node.id, 'operating', 'loop-cut'))
       playBlockSfx('operation-start')
-      useViewer.getState().setInputDragging(true)
       setLoopCutSliding(true)
       document.body.style.cursor = 'ew-resize'
 
@@ -3181,7 +3185,7 @@ function BlockEditor({
         cancelDragRef.current = null
         useLiveNodeOverrides.getState().clear(node.id)
         sceneApi.markDirty(node.id)
-        useViewer.getState().setInputDragging(previousInputDragging)
+        restoreInputDragging()
         document.body.style.cursor = previousCursor
         setPreviewTopology(null)
         setLoopCutSegments(null)
@@ -3232,6 +3236,7 @@ function BlockEditor({
     },
     [
       commitAdjustableOperation,
+      interactionApi.beginInputDrag,
       loopCutCount,
       makeRay,
       node.id,
@@ -3255,6 +3260,7 @@ function BlockEditor({
     nodeId: node.id,
     ownsEditSession,
     playSfx: playBlockSfx,
+    beginInputDrag: interactionApi.beginInputDrag,
     sceneApi,
     selectedIds,
     selection,
@@ -3474,12 +3480,12 @@ function BlockEditor({
   const moveNode = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     useEditor.getState().setMovingNode(node)
-    useViewer.getState().setSelection({ selectedIds: [] })
+    interactionApi.clearSelection()
     triggerSFX('sfx:item-pick')
   }
   const deleteNode = (event: ReactMouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
-    useViewer.getState().setSelection({ selectedIds: [] })
+    interactionApi.clearSelection()
     sceneApi.delete(node.id)
     playBlockSfx('delete')
   }
@@ -3932,12 +3938,14 @@ function BlockEditor({
 
 const BlockSelectionAffordance = ({
   historyApi,
+  interactionApi,
   node,
   readOnly,
   sceneApi,
 }: SelectionAffordanceProps) => {
   const blockNode = node.type === 'block' ? node : null
   const [target, setTarget] = useState<Object3D | null>(null)
+  const targetRef = useRef<Object3D | null>(null)
   const nodeId = blockNode?.id ?? null
   const scopeAllowsAffordance = useInteractionScope(
     (state) =>
@@ -3945,26 +3953,19 @@ const BlockSelectionAffordance = ({
       (state.scope.kind === 'mesh-editing' && state.scope.nodeId === nodeId),
   )
 
-  useEffect(() => {
-    if (!nodeId) {
-      setTarget(null)
-      return
-    }
-    let frameId = 0
-    const resolve = () => {
-      const next = sceneRegistry.nodes.get(nodeId) ?? null
-      setTarget((current) => (current === next ? current : next))
-      if (!next) frameId = window.requestAnimationFrame(resolve)
-    }
-    resolve()
-    return () => window.cancelAnimationFrame(frameId)
-  }, [nodeId])
+  useFrame(() => {
+    const next = nodeId ? (sceneRegistry.nodes.get(nodeId) ?? null) : null
+    if (targetRef.current === next) return
+    targetRef.current = next
+    setTarget(next)
+  })
 
   if (!blockNode || !target || !scopeAllowsAffordance) return null
   const mount = target.parent ?? target
   return createPortal(
     <BlockEditor
       historyApi={historyApi}
+      interactionApi={interactionApi}
       mirrorTarget={mount !== target}
       node={blockNode}
       readOnly={readOnly}

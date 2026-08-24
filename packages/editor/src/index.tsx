@@ -101,6 +101,7 @@ export {
 } from './components/editor-2d/svg-paths'
 export type {
   SelectionAffordanceHistoryApi,
+  SelectionAffordanceInteractionApi,
   SelectionAffordanceProps,
 } from './components/systems/selection-affordance-services'
 // Phase 5 Stage D transitional exports — pure drafting / angle helpers

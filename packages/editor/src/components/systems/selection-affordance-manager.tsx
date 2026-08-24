@@ -11,6 +11,7 @@ import { type ComponentType, Suspense, useMemo } from 'react'
 import { getRegistryAffordanceTool } from '../tools/shared/affordance-dispatch'
 import type {
   SelectionAffordanceHistoryApi,
+  SelectionAffordanceInteractionApi,
   SelectionAffordanceProps,
 } from './selection-affordance-services'
 
@@ -50,6 +51,22 @@ export function SelectionAffordanceManager() {
     }),
     [],
   )
+  const interactionApi = useMemo<SelectionAffordanceInteractionApi>(
+    () => ({
+      beginInputDrag: () => {
+        const previous = useViewer.getState().inputDragging
+        let restored = false
+        useViewer.getState().setInputDragging(true)
+        return () => {
+          if (restored) return
+          restored = true
+          useViewer.getState().setInputDragging(previous)
+        }
+      },
+      clearSelection: () => useViewer.getState().setSelection({ selectedIds: [] }),
+    }),
+    [],
+  )
 
   const Component = useMemo<ComponentType<SelectionAffordanceProps> | null>(() => {
     if (!selectedNode) return null
@@ -61,6 +78,7 @@ export function SelectionAffordanceManager() {
     <Suspense fallback={null}>
       <Component
         historyApi={historyApi}
+        interactionApi={interactionApi}
         node={selectedNode}
         readOnly={readOnly}
         sceneApi={sceneApi}

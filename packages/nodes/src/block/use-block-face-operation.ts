@@ -7,6 +7,7 @@ import {
 import {
   isGridSnapActive,
   meshEditScope,
+  type SelectionAffordanceProps,
   swallowNextClick,
   useEditor,
   useInteractionScope,
@@ -44,6 +45,7 @@ import {
 type StateSetter<T> = Dispatch<SetStateAction<T>>
 
 export type UseBlockFaceOperationOptions = {
+  beginInputDrag: SelectionAffordanceProps['interactionApi']['beginInputDrag']
   camera: Camera
   cancelRef: MutableRefObject<(() => void) | null>
   canvas: HTMLCanvasElement
@@ -70,6 +72,7 @@ export type UseBlockFaceOperationOptions = {
 }
 
 export function useBlockFaceOperation({
+  beginInputDrag,
   camera,
   cancelRef,
   canvas,
@@ -290,6 +293,7 @@ export function useBlockFaceOperation({
       setModalFeedbackMode('free')
       setError(null)
       beginBlockModalSession({
+        beginInputDrag,
         cancelRef,
         cursor: operation === 'extrude' ? 'ns-resize' : 'nwse-resize',
         onFinish: complete,
@@ -300,6 +304,7 @@ export function useBlockFaceOperation({
       return true
     },
     [
+      beginInputDrag,
       camera,
       cancelRef,
       canvas,

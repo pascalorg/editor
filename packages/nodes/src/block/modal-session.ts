@@ -1,9 +1,10 @@
-import { useViewer } from '@pascal-app/viewer'
+import type { SelectionAffordanceInteractionApi } from '@pascal-app/editor'
 import type { MutableRefObject } from 'react'
 
 type FinishModal = (commit: boolean) => void
 
 export type BlockModalSessionOptions = {
+  beginInputDrag: SelectionAffordanceInteractionApi['beginInputDrag']
   cancelRef: MutableRefObject<(() => void) | null>
   cursor: string
   onFinish: (commit: boolean) => void
@@ -13,6 +14,7 @@ export type BlockModalSessionOptions = {
 }
 
 export function beginBlockModalSession({
+  beginInputDrag,
   cancelRef,
   cursor,
   onFinish,
@@ -20,7 +22,7 @@ export function beginBlockModalSession({
   onPointerDown,
   onPointerMove,
 }: BlockModalSessionOptions): FinishModal {
-  const previousInputDragging = useViewer.getState().inputDragging
+  const restoreInputDragging = beginInputDrag()
   const previousCursor = document.body.style.cursor
   let finished = false
 
@@ -41,12 +43,11 @@ export function beginBlockModalSession({
     window.removeEventListener('contextmenu', onContextMenu, true)
     window.removeEventListener('blur', onCancel)
     cancelRef.current = null
-    useViewer.getState().setInputDragging(previousInputDragging)
+    restoreInputDragging()
     document.body.style.cursor = previousCursor
     onFinish(commit)
   }
 
-  useViewer.getState().setInputDragging(true)
   document.body.style.cursor = cursor
   cancelRef.current = onCancel
   if (onPointerMove) window.addEventListener('pointermove', onPointerMove, true)
