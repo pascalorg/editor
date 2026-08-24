@@ -1969,6 +1969,28 @@ export type MovableConfig = {
    * run snapping flush to a wall while the whole selected kitchen moves as one).
    */
   groupMoveSnap?: (args: GroupMoveSnapArgs) => [number, number, number] | null
+  /**
+   * Kind-owned validity test for a candidate drop, run on every pointer move
+   * of a drag. Returning false paints the drag box red and refuses the drop;
+   * Alt forces it, exactly as it does for `floorPlaced.collides`.
+   *
+   * `collides` answers the same question from the spatial grid, which compares
+   * plan rectangles and sees no Y at all. That is right for furniture on a
+   * floor and wrong for anything whose usable volume is mostly air: to the grid
+   * a conveyor threading the walkway under a racking run is indistinguishable
+   * from one driven through its uprights, so such kinds must leave `collides`
+   * off — and then nothing checked their moves at all. They could be placed
+   * correctly and then dragged into solid steel.
+   *
+   * Declaring this does not switch `collides` on: the two compose, and a kind
+   * may declare either, both, or neither.
+   */
+  canMoveTo?: (args: {
+    node: AnyNode
+    position: [number, number, number]
+    rotationY: number
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => boolean
   override?: (ctx: CapabilityCtx) => MovableConfig | null
 }
 
