@@ -173,6 +173,7 @@ const treeNodeByType: Record<string, TreeNodeComponent> = {
   'eyebrow-vent': RegistryTreeNode,
   skylight: RegistryTreeNode,
   roof: RoofTreeNode,
+  scan: RegistryTreeNode,
   stair: StairTreeNode,
   door: DoorTreeNode,
   window: WindowTreeNode,

@@ -430,6 +430,12 @@ export {
   subscribeHistoryCommandState,
 } from './lib/history'
 export {
+  type EditorHostTreeChildren,
+  type EditorHostTreeChildrenProps,
+  editorHostTreeChildrenRegistry,
+  registerEditorHostTreeChildren,
+} from './lib/host-tree-children'
+export {
   boundaryReshapeScope,
   curveReshapeScope,
   endpointReshapeScope,

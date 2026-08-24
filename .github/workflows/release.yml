@@ -8,6 +8,8 @@ on:
         required: true
         type: choice
         options:
+          - capture-protocol
+          - capture-viewer
           - core
           - viewer
           - editor
@@ -128,7 +130,7 @@ jobs:
           # peerDeps sync below must use shell vars, not env indirection.
           declare -A NEW_VERSIONS
 
-          for pkg in core viewer editor nodes mcp ifc-converter cli; do
+          for pkg in capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli; do
             if [ "$TARGET" = "$pkg" ] || [ "$TARGET" = "all" ]; then
               CUR=$(jq -r '.version' packages/$pkg/package.json)
               NEW=$(bump_version "$CUR")
@@ -141,25 +143,76 @@ jobs:
             fi
           done
 
-          # Sync inter-package references in peerDependencies and devDependencies.
+          # Sync inter-package references in dependencies, peerDependencies, and devDependencies.
           # Anything that references a bumped @pascal-app/* package is updated to ^NEW.
-          for pkg in core viewer editor nodes mcp ifc-converter cli; do
+          for pkg in capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli; do
             FILE=packages/$pkg/package.json
-            for dep in core viewer editor nodes mcp ifc-converter cli; do
+            for dep in capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli; do
               VAL="${NEW_VERSIONS[$dep]}"
               [ -z "$VAL" ] && continue
               jq --arg name "@pascal-app/$dep" --arg v "^$VAL" '
-                if .peerDependencies[$name] then .peerDependencies[$name] = $v else . end
+                if .dependencies[$name] then .dependencies[$name] = $v else . end
+                | if .peerDependencies[$name] then .peerDependencies[$name] = $v else . end
                 | if .devDependencies[$name] then .devDependencies[$name] = $v else . end
               ' "$FILE" > tmp.json && mv tmp.json "$FILE"
             done
           done
 
           echo "=== @pascal-app/* refs after sync ==="
-          for pkg in core viewer editor nodes mcp ifc-converter cli; do
+          for pkg in capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli; do
             echo "--- packages/$pkg/package.json ---"
-            jq '{ peerDependencies: (.peerDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), devDependencies: (.devDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))) }' packages/$pkg/package.json
+            jq '{ dependencies: (.dependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), peerDependencies: (.peerDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), devDependencies: (.devDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))) }' packages/$pkg/package.json
           done
+
+          # Version and dependency ranges changed after the frozen install.
+          # Refresh the lockfile so the release commit remains reproducible.
+          bun install
+
+          # A single-package release may depend on another package introduced
+          # by this monorepo. Refuse to publish an uninstallable package when
+          # that dependency is not part of this run and is absent from npm.
+          RELEASE_PACKAGES="capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli"
+          if [ "$TARGET" != "all" ]; then
+            FILE="packages/$TARGET/package.json"
+            while IFS=$'\t' read -r DEP RANGE; do
+              SLUG="${DEP#@pascal-app/}"
+              case " $RELEASE_PACKAGES " in
+                *" $SLUG "*)
+                  if ! npm view "$DEP@$RANGE" version >/dev/null 2>&1; then
+                    echo "Missing required published dependency: $DEP@$RANGE"
+                    echo "Release $SLUG first or use the all-package release."
+                    exit 1
+                  fi
+                  ;;
+              esac
+            done < <(
+              jq -r '
+                [(.dependencies // {}), (.peerDependencies // {})]
+                | add
+                | to_entries[]
+                | select(.key | startswith("@pascal-app/"))
+                | [.key, .value]
+                | @tsv
+              ' "$FILE"
+            )
+          fi
+
+      - name: Build & publish capture protocol
+        if: inputs.package == 'capture-protocol' || inputs.package == 'all'
+        working-directory: packages/capture-protocol
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          bun run build
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION"
+            npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION is already published; continuing release recovery"
+          else
+            npm publish --access public --tag "$NPM_TAG"
+            echo "📦 Published @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION"
+          fi
 
       - name: Validate portable editor runtime
         if: inputs.package == 'cli' || inputs.package == 'all'
@@ -204,6 +257,23 @@ jobs:
           else
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/viewer@$VIEWER_VERSION"
+          fi
+
+      - name: Build & publish capture viewer
+        if: inputs.package == 'capture-viewer' || inputs.package == 'all'
+        working-directory: packages/capture-viewer
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          bun run build
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION"
+            npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION is already published; continuing release recovery"
+          else
+            npm publish --access public --tag "$NPM_TAG"
+            echo "📦 Published @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION"
           fi
 
       - name: Publish editor
@@ -298,6 +368,10 @@ jobs:
           PKGS=""
           TAGS=""
 
+          if [ -n "$CAPTURE_PROTOCOL_VERSION" ]; then
+            PKGS="$PKGS @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION"
+            TAGS="$TAGS @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION"
+          fi
           if [ -n "$CORE_VERSION" ]; then
             PKGS="$PKGS @pascal-app/core@$CORE_VERSION"
             TAGS="$TAGS @pascal-app/core@$CORE_VERSION"
@@ -305,6 +379,10 @@ jobs:
           if [ -n "$VIEWER_VERSION" ]; then
             PKGS="$PKGS @pascal-app/viewer@$VIEWER_VERSION"
             TAGS="$TAGS @pascal-app/viewer@$VIEWER_VERSION"
+          fi
+          if [ -n "$CAPTURE_VIEWER_VERSION" ]; then
+            PKGS="$PKGS @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION"
+            TAGS="$TAGS @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION"
           fi
           if [ -n "$EDITOR_VERSION" ]; then
             PKGS="$PKGS @pascal-app/editor@$EDITOR_VERSION"

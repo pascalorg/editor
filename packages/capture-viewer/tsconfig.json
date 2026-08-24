@@ -10,5 +10,5 @@
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"],
-  "references": [{ "path": "../capture-protocol" }]
+  "references": [{ "path": "../capture-protocol" }, { "path": "../core" }, { "path": "../viewer" }]
 }

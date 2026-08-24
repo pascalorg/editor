@@ -17,6 +17,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [measurements](measurements.md) | Persistent measurement data, 2D/3D draft ownership, snapping, units, and visibility |
 | [interaction-scope](interaction-scope.md) | The authoritative interaction state machine ("the spine"): `InteractionScope` union, the begin/update/end/endIf contract, the raycast hot-set, and the overlay scope matrix |
 | [viewer-isolation](viewer-isolation.md) | Keeping `@pascal-app/viewer` editor-agnostic |
+| [capture-runtime](capture-runtime.md) | Open capture protocol, host source boundary, static/live viewer layers, and stream extension |
 | [selection-managers](selection-managers.md) | Two-layer selection (viewer + editor), events, outliner |
 | [selection-groups](selection-groups.md) | Session multi-select groups (Ctrl/Cmd+G), expand-on-click, how they differ from collections |
 | [scene-registry](scene-registry.md) | Global node ID → Object3D map and `useRegistry` |
