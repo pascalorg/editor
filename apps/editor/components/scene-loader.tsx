@@ -13,6 +13,7 @@ import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
 import { PresenceBar } from './presence-bar'
 import { useScenePresence } from './use-scene-presence'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
+import { WarehouseStatsTab } from '@ovurrsl/plugin-warehouse'
 
 export interface SceneMeta {
   id: string
@@ -290,6 +291,7 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
         settingsPanelProps={{ accountSection: <AccountSettingsSection /> }}
+        sitePanelProps={{ children: <WarehouseStatsTab /> }}
         sidebarTabs={EDITOR_SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}

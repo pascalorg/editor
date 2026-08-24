@@ -29,6 +29,7 @@ import {
 import {
   Box,
   Boxes,
+  Camera,
   Check,
   ChevronsLeft,
   ChevronsRight,
@@ -692,6 +693,28 @@ function WalkthroughButton() {
   )
 }
 
+function ScreenshotButton() {
+  const isCaptureMode = useEditor((state) => state.isCaptureMode)
+  const setCaptureMode = useEditor((state) => state.setCaptureMode)
+  const handleClick = useCallback(() => {
+    setCaptureMode(!isCaptureMode)
+  }, [isCaptureMode, setCaptureMode])
+
+  return (
+    <ToolbarTooltip label={isCaptureMode ? 'Exit screenshot' : 'Screenshot'}>
+      <button
+        aria-label="Screenshot"
+        aria-pressed={isCaptureMode}
+        className={cn(TOOLBAR_BTN, isCaptureMode && 'bg-white/10 text-foreground')}
+        onClick={handleClick}
+        type="button"
+      >
+        <Camera className="h-4 w-4" />
+      </button>
+    </ToolbarTooltip>
+  )
+}
+
 function PreviewButton() {
   return (
     <ToolbarTooltip label="Preview mode">
@@ -848,6 +871,7 @@ export function CommunityViewerToolbarRight() {
         <DisplayMenu />
         <div className="my-1.5 w-px bg-border/50" />
         <WalkthroughButton />
+        <ScreenshotButton />
         <PreviewButton />
       </div>
     </>

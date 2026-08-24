@@ -7,6 +7,7 @@ import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
 } from '@/components/viewer-toolbar'
+import { WarehouseStatsTab } from '@ovurrsl/plugin-warehouse'
 
 const PROJECT_ID = 'local-editor'
 
@@ -26,6 +27,7 @@ export function EditorApp() {
         layoutVersion="v2"
         projectId={PROJECT_ID}
         settingsPanelProps={{ accountSection: <AccountSettingsSection /> }}
+        sitePanelProps={{ children: <WarehouseStatsTab /> }}
         sidebarTabs={EDITOR_SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
