@@ -60,6 +60,7 @@
   "workspaces": [
     "apps/*",
     "packages/*",
-    "tooling/*"
+    "tooling/*",
+    "!packages/lingo"
   ]
 }

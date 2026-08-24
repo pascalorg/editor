@@ -245,15 +245,6 @@
         "typescript": "6.0.3",
       },
     },
-    "packages/lingo": {
-      "name": "lingo-monorepo",
-      "devDependencies": {
-        "@biomejs/biome": "2.4.16",
-        "lefthook": "^2.1.6",
-        "turbo": "^2.5.0",
-        "ultracite": "7.8.2",
-      },
-    },
     "packages/mcp": {
       "name": "@pascal-app/mcp",
       "version": "1.0.0-beta.6",
@@ -1709,7 +1700,6 @@
 
     "linebreak": ["linebreak@1.1.0", "", { "dependencies": { "base64-js": "0.0.8", "unicode-trie": "^2.0.0" } }, "sha512-MHp03UImeVhB7XZtjd0E4n6+3xr5Dq/9xI/5FptGk5FrbDR3zagPa2DS6U8ks/3HjbKWG9Q1M2ufOzxV2qLYSQ=="],
 
-    "lingo-monorepo": ["lingo-monorepo@workspace:packages/lingo"],
 
     "locate-path": ["locate-path@6.0.0", "", { "dependencies": { "p-locate": "^5.0.0" } }, "sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw=="],
 
