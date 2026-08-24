@@ -30,6 +30,7 @@ import { DormerWindowsSection } from './panel-windows-section'
 import { planDormerWindowRow } from './window-layout'
 
 type RoofType = DormerNode['roofType']
+type ShedHighSide = DormerNode['shedHighSide']
 type DormerSection = 'dormer' | 'window'
 
 const ROOF_TYPE_OPTIONS: Array<{ label: string; value: RoofType }> = [
@@ -40,6 +41,11 @@ const ROOF_TYPE_OPTIONS: Array<{ label: string; value: RoofType }> = [
   { label: 'Dutch', value: 'dutch' },
   { label: 'Mansard', value: 'mansard' },
   { label: 'Flat', value: 'flat' },
+]
+
+const SHED_HIGH_SIDE_OPTIONS: Array<{ label: string; value: ShedHighSide }> = [
+  { label: 'Rise Back', value: 'back' },
+  { label: 'Rise Front', value: 'front' },
 ]
 
 const SECTION_OPTIONS: Array<{ label: string; value: DormerSection }> = [
@@ -322,7 +328,7 @@ export default function DormerPanel() {
               value={Math.round(node.height * 100) / 100}
             />
             <SliderControl
-              label="Roof Height"
+              label={node.roofType === 'shed' ? 'Pitch Rise' : 'Roof Height'}
               max={3}
               min={0}
               onChange={(v) => previewProp({ roofHeight: v })}
@@ -357,6 +363,31 @@ export default function DormerPanel() {
               })}
             </div>
           </PanelSection>
+
+          {node.roofType === 'shed' && (
+            <PanelSection title="Pitch Direction">
+              <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
+                {SHED_HIGH_SIDE_OPTIONS.map((option) => {
+                  const isSelected = node.shedHighSide === option.value
+                  return (
+                    <button
+                      className={cn(
+                        'flex min-h-10 items-center justify-center rounded-lg border px-2 py-2 text-xs transition-colors',
+                        isSelected
+                          ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                          : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                      )}
+                      key={option.value}
+                      onClick={() => handleUpdate({ shedHighSide: option.value })}
+                      type="button"
+                    >
+                      <span className="truncate font-medium">{option.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </PanelSection>
+          )}
         </>
       )}
 

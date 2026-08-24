@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   getRoofSegmentSurfaceY,
+  getWallArcData,
   getWallCurveLength,
   LeanToExtensionNode,
   WallNode,
@@ -217,7 +218,7 @@ function getSegmentSlopeFrameForTest(segment: ReturnType<typeof createLeanToAsse
   return { cosTheta: Math.cos(radians) }
 }
 
-function countTopMaterialVerticalTriangles(geometry: THREE.BufferGeometry): number {
+function countTopMaterialNonUpwardTriangles(geometry: THREE.BufferGeometry): number {
   const position = geometry.getAttribute('position')
   const index = geometry.index
   if (!index) return 0
@@ -231,6 +232,25 @@ function countTopMaterialVerticalTriangles(geometry: THREE.BufferGeometry): numb
       const c = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 2))
       const normal = b.sub(a).cross(c.sub(a)).normalize()
       if (normal.y < 0.2) count++
+    }
+  }
+  return count
+}
+
+function countEdgeMaterialVerticalTriangles(geometry: THREE.BufferGeometry): number {
+  const position = geometry.getAttribute('position')
+  const index = geometry.index
+  if (!index) return 0
+  let count = 0
+  for (const group of geometry.groups) {
+    if (group.materialIndex !== 0) continue
+    const end = Math.min(index.count, group.start + group.count)
+    for (let offset = group.start; offset + 2 < end; offset += 3) {
+      const a = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset))
+      const b = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 1))
+      const c = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 2))
+      const normal = b.sub(a).cross(c.sub(a)).normalize()
+      if (Math.abs(normal.y) < 0.01) count++
     }
   }
   return count
@@ -880,12 +900,19 @@ describe('lean-to corner joint', () => {
       (box, mesh) => box.union(new THREE.Box3().setFromObject(mesh)),
       new THREE.Box3(),
     )
+    const curvedWallArc = getWallArcData(wallB)!
+    const curvedHostFaceRadius = Math.abs(leanToB.spanArcCenterZ!)
     const raycaster = new THREE.Raycaster()
     raycaster.ray.direction.set(0, -1, 0)
     let gaps = 0
     let overlaps = 0
     for (let x = bounds.min.x + 0.031; x < bounds.max.x; x += 0.1) {
       for (let z = bounds.min.z + 0.057; z < bounds.max.z; z += 0.1) {
+        if (
+          Math.hypot(x - curvedWallArc.center.x, z - curvedWallArc.center.y) < curvedHostFaceRadius
+        ) {
+          continue
+        }
         raycaster.ray.origin.set(x, 10, z)
         if (!untrimmedMeshes.some((mesh) => raycaster.intersectObject(mesh, false).length > 0)) {
           continue
@@ -899,9 +926,123 @@ describe('lean-to corner joint', () => {
     }
     expect(gaps * 0.1 * 0.1).toBeLessThan(0.05)
     expect(overlaps).toBe(0)
+    expect(countTopMaterialNonUpwardTriangles(roofMeshes[1]!.geometry)).toBe(0)
     expect(closestMeshDistance(roofMeshes[1]!.geometry, roofMeshes[0]!.geometry)).toBeLessThan(1e-4)
     expect(closestMeshDistance(roofMeshes[1]!.geometry, roofMeshes[2]!.geometry)).toBeLessThan(1e-4)
     for (const mesh of [...roofMeshes, ...untrimmedMeshes]) mesh.geometry.dispose()
+  })
+
+  test('keeps the exported tight curved canopy roof skin facing upward', () => {
+    const walls = [
+      WallNode.parse({
+        id: 'wall_exported_left',
+        parentId: 'level_exported',
+        start: [-3, 6],
+        end: [-3, 0],
+      }),
+      WallNode.parse({
+        id: 'wall_exported_curve',
+        parentId: 'level_exported',
+        start: [-3, 0],
+        end: [2, -3],
+        curveOffset: -2.91547594742265,
+      }),
+      WallNode.parse({
+        id: 'wall_exported_right',
+        parentId: 'level_exported',
+        start: [2, -3],
+        end: [8, -3],
+      }),
+    ]
+    const leanTos = walls.map((wall, index) => ({
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(wall, getWallCurveLength(wall) / 2, 'front')!,
+        wall,
+      ),
+      id: `leanto_exported_${index}`,
+      projection: index === 1 ? 2.7993049913193615 : 2.5,
+      pitch: index === 1 ? 8.949098978949332 : 10,
+    }))
+    const nodes = Object.fromEntries(
+      [...walls, ...leanTos].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const segment = createLeanToAssembly(leanTos[1]!, undefined, nodes).segment
+    const geometry = generateRoofSegmentGeometry(segment)
+
+    expect(segment.shedFootprintPieces).toHaveLength(38)
+    expect(countTopMaterialNonUpwardTriangles(geometry)).toBe(0)
+    expect(countEdgeMaterialVerticalTriangles(geometry)).toBeLessThan(
+      segment.shedFootprintPieces!.length * 4,
+    )
+
+    geometry.dispose()
+  })
+
+  test('keeps tangent straight sheds outside a semicircular host wall', () => {
+    const walls = [
+      WallNode.parse({
+        id: 'wall_semicircle_left',
+        parentId: 'level_semicircle',
+        start: [4, -7.5],
+        end: [4, 5],
+      }),
+      WallNode.parse({
+        id: 'wall_semicircle_curve',
+        parentId: 'level_semicircle',
+        start: [4, 5],
+        end: [-3, 12],
+        curveOffset: -4.949747468305833,
+      }),
+      WallNode.parse({
+        id: 'wall_semicircle_right',
+        parentId: 'level_semicircle',
+        start: [-3, 12],
+        end: [-12, 12],
+      }),
+    ]
+    const spans = [12.2, 15.238990719656629, 8.7]
+    const leanTos = walls.map((wall, index) => ({
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(wall, getWallCurveLength(wall) / 2, 'front')!,
+        wall,
+      ),
+      id: `leanto_semicircle_${index}`,
+      span: spans[index]!,
+      projection: 2.5,
+      pitch: 10,
+    }))
+    const nodes = Object.fromEntries(
+      [...walls, ...leanTos].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const assemblies = leanTos.map((leanTo) => createLeanToAssembly(leanTo, undefined, nodes))
+    const meshes = assemblies.map(
+      (assembly, index) =>
+        new THREE.Mesh(
+          generateRoofSegmentGeometry(assembly.segment).applyMatrix4(
+            segmentWorldMatrix(walls[index]!, leanTos[index]!, assembly.segment),
+          ),
+        ),
+    )
+    const arc = getWallArcData(walls[1]!)!
+    const raycaster = new THREE.Raycaster()
+    raycaster.ray.direction.set(0, -1, 0)
+    let intrusions = 0
+    for (let x = arc.center.x - arc.radius; x <= arc.center.x + arc.radius; x += 0.1) {
+      for (let z = arc.center.y - arc.radius; z <= arc.center.y + arc.radius; z += 0.1) {
+        if (Math.hypot(x - arc.center.x, z - arc.center.y) >= arc.radius - 0.05) continue
+        raycaster.ray.origin.set(x, 10, z)
+        for (const index of [0, 2]) {
+          if (raycaster.intersectObject(meshes[index]!, false).length > 0) intrusions++
+        }
+      }
+    }
+
+    expect(assemblies.map((assembly) => assembly.segment.shedFootprintPieces?.length)).toEqual([
+      102, 48, 77,
+    ])
+    expect(intrusions).toBe(0)
+
+    for (const mesh of meshes) mesh.geometry.dispose()
   })
 
   test('resolves a reciprocal 60 degree corner with its true gutter mitre', () => {
@@ -1140,8 +1281,8 @@ describe('lean-to corner joint', () => {
 
     assertTopGeometryFollowsRoofSlab(localGeometries[0]!, segmentA)
     assertTopGeometryFollowsRoofSlab(localGeometries[1]!, segmentB)
-    expect(countTopMaterialVerticalTriangles(localGeometries[0]!)).toBe(0)
-    expect(countTopMaterialVerticalTriangles(localGeometries[1]!)).toBe(0)
+    expect(countTopMaterialNonUpwardTriangles(localGeometries[0]!)).toBe(0)
+    expect(countTopMaterialNonUpwardTriangles(localGeometries[1]!)).toBe(0)
 
     const meshes = [
       new THREE.Mesh(

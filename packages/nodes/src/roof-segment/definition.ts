@@ -174,6 +174,24 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
   }
 }
 
+function conicalRoofSegmentRadiusHandle(): HandleDescriptor<RoofSegmentNodeType> {
+  return {
+    kind: 'radial-resize',
+    axis: 'x',
+    min: MIN_ROOF_DIM / 2,
+    currentValue: (n) => n.width / 2,
+    apply: (_initial, radius) => ({ width: radius * 2, depth: radius * 2 }),
+    placement: {
+      position: (n) => [n.width / 2 + SIDE_HANDLE_OFFSET, getSideResizeHandleY(n, 0), 0],
+    },
+    decoration: {
+      kind: 'ring',
+      radius: (n) => n.width / 2,
+      y: (n) => getSideResizeHandleY(n, 0),
+    },
+  }
+}
+
 // Wall-height tracker — dashed vertical leader from the floor up to a
 // draggable cube at the wall top, centred on the footprint. Replaces
 // the old -X-side chevron so the wall-top control reads as "the wall is
@@ -282,11 +300,17 @@ const roofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
   roofSegmentRotateHandle(),
 ]
 
+const conicalRoofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
+  conicalRoofSegmentRadiusHandle(),
+  roofSegmentWallHeightHandle(),
+  roofSegmentPitchHandle(),
+]
+
 function resolveRoofSegmentHandles(
   node: RoofSegmentNodeType,
 ): HandleDescriptor<RoofSegmentNodeType>[] {
   if (isManagedLeanToRoofSegment(node)) return []
-  return node.roofType === 'conical' ? roofSegmentHandles.slice(0, -1) : roofSegmentHandles
+  return node.roofType === 'conical' ? conicalRoofSegmentHandles : roofSegmentHandles
 }
 
 /**

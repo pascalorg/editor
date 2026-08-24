@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getRoofSegmentSurfaceY, type RoofSegmentNode, type RoofType } from '@pascal-app/core'
-import { getDormerExposedFaces } from '../csg-geometry'
+import { buildDormerRoofCut, getDormerExposedFaces } from '../csg-geometry'
 import {
   buildDormerGhostGeometry,
   dormerSupportsArch,
@@ -28,6 +28,46 @@ describe('buildDormerGhostGeometry (placement preview)', () => {
     a.computeBoundingBox()
     b.computeBoundingBox()
     expect(b.boundingBox!.max.y).toBeGreaterThan(a.boundingBox!.max.y)
+  })
+
+  test('shedHighSide flips the shed pitch direction', () => {
+    const backHigh = buildDormerGhostGeometry(
+      DormerNode.parse({
+        roofType: 'shed',
+        shedHighSide: 'back',
+        width: 4,
+        depth: 3,
+        height: 1,
+        roofHeight: 1.2,
+      }),
+    )
+    const frontHigh = buildDormerGhostGeometry(
+      DormerNode.parse({
+        roofType: 'shed',
+        shedHighSide: 'front',
+        width: 4,
+        depth: 3,
+        height: 1,
+        roofHeight: 1.2,
+      }),
+    )
+
+    const edgeMaxY = (geometry: typeof backHigh, z: number) => {
+      const position = geometry.getAttribute('position')
+      let maxY = -Infinity
+      for (let index = 0; index < position.count; index++) {
+        if (Math.abs(position.getZ(index) - z) < 0.001) {
+          maxY = Math.max(maxY, position.getY(index))
+        }
+      }
+      return maxY
+    }
+
+    expect(edgeMaxY(backHigh, -1.5)).toBeGreaterThan(edgeMaxY(backHigh, 1.5))
+    expect(edgeMaxY(frontHigh, 1.5)).toBeGreaterThan(edgeMaxY(frontHigh, -1.5))
+
+    backHigh.dispose()
+    frontHigh.dispose()
   })
 
   test.each([
@@ -61,6 +101,40 @@ describe('buildDormerGhostGeometry (placement preview)', () => {
 
     expect(geo.groups.some((group) => group.materialIndex === 0)).toBe(true)
     expect(geo.groups.some((group) => group.materialIndex === 3)).toBe(true)
+  })
+})
+
+describe('buildDormerRoofCut', () => {
+  test('keeps the committed shed cut aligned with the configured high side', () => {
+    const makeCut = (shedHighSide: 'back' | 'front') =>
+      buildDormerRoofCut(
+        DormerNode.parse({
+          roofType: 'shed',
+          shedHighSide,
+          width: 4,
+          depth: 3,
+          height: 1,
+          roofHeight: 1.2,
+        }),
+      )!
+    const backHigh = makeCut('back')
+    const frontHigh = makeCut('front')
+    const edgeMaxY = (geometry: typeof backHigh, z: number) => {
+      const position = geometry.getAttribute('position')
+      let maxY = -Infinity
+      for (let index = 0; index < position.count; index++) {
+        if (Math.abs(position.getZ(index) - z) < 0.001) {
+          maxY = Math.max(maxY, position.getY(index))
+        }
+      }
+      return maxY
+    }
+
+    expect(edgeMaxY(backHigh, -1.45)).toBeGreaterThan(edgeMaxY(backHigh, 1.45))
+    expect(edgeMaxY(frontHigh, 1.45)).toBeGreaterThan(edgeMaxY(frontHigh, -1.45))
+
+    backHigh.dispose()
+    frontHigh.dispose()
   })
 })
 

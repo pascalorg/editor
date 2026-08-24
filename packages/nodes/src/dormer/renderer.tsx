@@ -141,6 +141,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     segment,
     node.id,
     node.roofType,
+    node.shedHighSide,
     node.width,
     node.depth,
     node.height,

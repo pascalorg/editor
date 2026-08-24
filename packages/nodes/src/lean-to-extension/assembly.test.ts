@@ -606,6 +606,50 @@ describe('lean-to assembly', () => {
     )
   })
 
+  test('extends upper-storey pillars through open space to site ground', () => {
+    const building = BuildingNode.parse({
+      id: 'building_upper_post',
+      children: ['level_lower_post', 'level_upper_post'],
+    })
+    const lower = LevelNode.parse({
+      id: 'level_lower_post',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+    })
+    const upper = LevelNode.parse({
+      id: 'level_upper_post',
+      parentId: building.id,
+      level: 1,
+      height: 3,
+      children: ['wall_upper_post'],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_upper_post',
+      parentId: upper.id,
+      start: [-2, 0],
+      end: [2, 0],
+      thickness: 0.1,
+    })
+    const leanTo = LeanToExtensionNode.parse({
+      parentId: wall.id,
+      position: [2, 0, wall.thickness / 2],
+      projection: 2.5,
+    })
+    const nodes = Object.fromEntries(
+      [building, lower, upper, wall, leanTo].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const baseY = resolveLeanToPostBaseY(leanTo, wall, nodes, 0)
+    const post = leanToPostLayoutPatch(leanTo, 0, baseY)
+
+    expect(post.position[1]).toBeCloseTo(-3.02, 6)
+    expect(post.position[1] + post.height).toBeCloseTo(
+      resolveLeanToLayout(leanTo).postHeight + 0.02,
+      6,
+    )
+  })
+
   test('keeps a swapped pillar beneath the beam while its shaft clears the gutter', () => {
     const leanTo = LeanToExtensionNode.parse({ lowOverhang: 0.25, projection: 2.5 })
     const swapped = {

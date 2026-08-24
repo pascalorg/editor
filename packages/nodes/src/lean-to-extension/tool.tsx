@@ -29,6 +29,7 @@ import {
   resolveLeanToWallPlacement,
   resolveLeanToWallSurfaceHit,
 } from './layout'
+import { isLeanToHostOnLevel } from './placement-scope'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import LeanToExtensionPreview from './preview'
 import {
@@ -103,6 +104,10 @@ const LeanToExtensionTool = () => {
 
     const updateConicalSegmentTarget = (event: RoofSegmentEvent) => {
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+      if (!isLeanToHostOnLevel(event.node, nodes, activeLevelId)) {
+        setPreview(null)
+        return null
+      }
       const node = resolveConicalLeanToSurfaceHit(event.node, event.localPosition, event.normal)
       if (!node) {
         setPreview(null)
@@ -114,8 +119,14 @@ const LeanToExtensionTool = () => {
     }
 
     const updateConicalRoofTarget = (event: RoofEvent) => {
-      if (event.object.name !== 'merged-roof') return null
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+      if (
+        !isLeanToHostOnLevel(event.node, nodes, activeLevelId) ||
+        event.object.name !== 'merged-roof'
+      ) {
+        setPreview(null)
+        return null
+      }
       for (const childId of event.node.children) {
         const segment = nodes[childId as AnyNodeId]
         if (segment?.type !== 'roof-segment' || segment.roofType !== 'conical') continue
@@ -157,6 +168,11 @@ const LeanToExtensionTool = () => {
     }
 
     const updateTarget = (event: WallEvent) => {
+      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+      if (!isLeanToHostOnLevel(event.node, nodes, activeLevelId)) {
+        setPreview(null)
+        return null
+      }
       const hit = resolveLeanToWallSurfaceHit(event.node, event.localPosition, event.normal)
       if (!hit) {
         setPreview(null)
@@ -167,7 +183,6 @@ const LeanToExtensionTool = () => {
         setPreview(null)
         return null
       }
-      const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const attachment = resolveLeanToRoofAttachment(wallPlacement, event.node, nodes)
       const autoSpannedNode = attachment
         ? applyLeanToRoofAttachment(wallPlacement, attachment)

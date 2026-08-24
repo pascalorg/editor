@@ -524,6 +524,60 @@ function polygonSignedArea(polygon: readonly LeanToPlanPoint[]): number {
   return area / 2
 }
 
+function pointInPlanPolygon(
+  point: readonly [number, number],
+  polygon: readonly LeanToPlanPoint[],
+): boolean {
+  let inside = false
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const current = polygon[index]!
+    const prior = polygon[previous]!
+    const edgeX = current[0] - prior[0]
+    const edgeZ = current[1] - prior[1]
+    const cross = (point[0] - prior[0]) * edgeZ - (point[1] - prior[1]) * edgeX
+    const dot =
+      (point[0] - prior[0]) * (point[0] - current[0]) +
+      (point[1] - prior[1]) * (point[1] - current[1])
+    if (Math.abs(cross) <= PLAN_TOLERANCE && dot <= PLAN_TOLERANCE) return true
+    if (
+      current[1] > point[1] !== prior[1] > point[1] &&
+      point[0] <
+        ((prior[0] - current[0]) * (point[1] - current[1])) / (prior[1] - current[1]) + current[0]
+    ) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
+function connectedPlanPolygonComponent(
+  polygons: LeanToPlanPoint[][],
+  probe: readonly [number, number],
+): LeanToPlanPoint[][] {
+  const connected = new Set<number>()
+  const queue = polygons.flatMap((polygon, index) =>
+    pointInPlanPolygon(probe, polygon) ? [index] : [],
+  )
+  for (const index of queue) connected.add(index)
+
+  while (queue.length > 0) {
+    const currentIndex = queue.shift()!
+    const current = polygons[currentIndex]!
+    for (let candidateIndex = 0; candidateIndex < polygons.length; candidateIndex++) {
+      if (connected.has(candidateIndex)) continue
+      const candidate = polygons[candidateIndex]!
+      const touches =
+        current.some((point) => pointInPlanPolygon(point, candidate)) ||
+        candidate.some((point) => pointInPlanPolygon(point, current))
+      if (!touches) continue
+      connected.add(candidateIndex)
+      queue.push(candidateIndex)
+    }
+  }
+
+  return polygons.filter((_, index) => connected.has(index))
+}
+
 function intersectConvexPolygons(
   subject: readonly LeanToPlanPoint[],
   clip: readonly LeanToPlanPoint[],
@@ -791,6 +845,19 @@ function resolveCurvedStraightConcaveRoofPiece(
   const probeDelta = worldHeightDelta(probeWorld)
   if (probeDelta === null || Math.abs(probeDelta) <= PLAN_TOLERANCE) return null
   const curvedRetainedSign = Math.sign(probeDelta)
+  const straightSide = ownCurved ? candidateSide : side
+  const straightLayout = resolveLeanToLayout(straight)
+  const straightEdges = roofPlanEdges(straight)
+  const straightSideSign = straightSide === 'left' ? -1 : 1
+  const straightProbe = leanToPointToWorld(
+    straightWall,
+    straight,
+    straightLayout.roofCenterX -
+      straightSideSign *
+        (straightLayout.roofWidth / 2 - Math.min(0.1, straightLayout.roofWidth / 4)),
+    (straightEdges.back + straightEdges.front) / 2,
+  )
+  if (!straightProbe) return null
 
   // The equal-height cut only divides the shared footprint. Applying it to the
   // whole curved band removes roof area that the straight neighbor never covers.
@@ -815,6 +882,8 @@ function resolveCurvedStraightConcaveRoofPiece(
     for (const facet of curvedFacets) {
       exclusive = exclusive.flatMap((polygon) => subtractConvexPolygon(polygon, facet))
     }
+    const connectedExclusive = connectedPlanPolygonComponent(exclusive, straightProbe)
+    if (connectedExclusive.length > 0) exclusive = connectedExclusive
     const retainedOverlap = overlaps.flatMap((overlap) => {
       const piece = clipToRetainedRoofSide(overlap, worldHeightDelta, -curvedRetainedSign)
       return piece.length >= 3 ? [piece] : []

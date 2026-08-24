@@ -8,7 +8,9 @@ import {
   GutterNode,
   type GutterNode as GutterNodeType,
   generateId,
+  getLevelElevations,
   getWallBaseElevationForNodes,
+  heightAt,
   type LeanToExtensionNode,
   levelBaseElevationAt,
   RoofNode,
@@ -16,6 +18,7 @@ import {
   RoofSegmentNode,
   type RoofSegmentNode as RoofSegmentNodeType,
   spatialGridManager,
+  terrainFieldOf,
   type WallNode,
 } from '@pascal-app/core'
 import { resolveEaveSnap } from '../gutter/eave-snap'
@@ -223,6 +226,30 @@ export function resolveLeanToPostGutterSetback(
   return Math.min(gutterClearanceSetback, leanTo.beamWidth / 2)
 }
 
+function siteGroundYInLevelFrame(
+  nodes: Record<string, AnyNode>,
+  levelId: string,
+  x: number,
+  z: number,
+): number {
+  const elevation = getLevelElevations(nodes).get(levelId)
+  if (!elevation) return levelBaseElevationAt(nodes, levelId, x, z)
+
+  const building = elevation.buildingId ? nodes[elevation.buildingId] : undefined
+  const buildingPosition: [number, number, number] =
+    building?.type === 'building' ? building.position : [0, 0, 0]
+  const buildingRotation = building?.type === 'building' ? building.rotation[1] : 0
+  const cos = Math.cos(buildingRotation)
+  const sin = Math.sin(buildingRotation)
+  const worldX = buildingPosition[0] + x * cos + z * sin
+  const worldZ = buildingPosition[2] - x * sin + z * cos
+  const site = Object.values(nodes).find((node) => node.type === 'site')
+  const terrain = terrainFieldOf(site)
+  const groundWorldY = terrain ? heightAt(terrain, worldX, worldZ) : 0
+  const levelWorldY = buildingPosition[1] + elevation.baseY
+  return groundWorldY - levelWorldY
+}
+
 export function resolveLeanToPostBaseY(
   leanTo: LeanToExtensionNode,
   wall: WallNode,
@@ -269,7 +296,7 @@ export function resolveLeanToPostBaseYAtLocalPosition(
   )
   const groundY =
     support.slabId === null
-      ? levelBaseElevationAt(nodes, levelId, position[0], position[2])
+      ? siteGroundYInLevelFrame(nodes, levelId, position[0], position[2])
       : support.elevation
   return (
     groundY - getWallBaseElevationForNodes(wall, nodes) - leanTo.position[1] - POST_GROUND_EMBED

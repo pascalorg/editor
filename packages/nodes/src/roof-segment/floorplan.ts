@@ -139,9 +139,8 @@ export function buildRoofSegmentFloorplan(
   // The shape math lives in `getRoofSegmentPlanLinework` (exported for the
   // roof builder to consume).
 
-  // Selection chrome — orange move-handle dot at the centre, four
-  // perpendicular side resize-arrows (width on X, depth on Z), and a
-  // rotate-arrow at the +X/+Z corner. Sister to the 3D handles in
+  // Selection chrome — orange move-handle dot at the centre, footprint
+  // resize arrows, and a rotate-arrow at the +X/+Z corner. Sister to the 3D handles in
   // `definition.ts`. Resize/rotate route through the matching
   // `floorplanAffordances`; the dot drives body-move via
   // `def.floorplanMoveTarget`.
@@ -162,27 +161,39 @@ export function buildRoofSegmentFloorplan(
       lx * cos - ly * sin,
       lx * sin + ly * cos,
     ]
-    const sides: Array<{
-      local: [number, number]
-      localAngle: number
-      axis: 'x' | 'z'
-      side: 1 | -1
-    }> = [
-      { local: [halfW + sideArrowOffset, 0], localAngle: 0, axis: 'x', side: 1 },
-      { local: [-(halfW + sideArrowOffset), 0], localAngle: Math.PI, axis: 'x', side: -1 },
-      { local: [0, halfD + sideArrowOffset], localAngle: Math.PI / 2, axis: 'z', side: 1 },
-      { local: [0, -(halfD + sideArrowOffset)], localAngle: -Math.PI / 2, axis: 'z', side: -1 },
-    ]
-    for (const s of sides) {
-      const [ox, oz] = rotateLocal(s.local[0], s.local[1])
-      const [tx, tz] = rotateLocal(Math.cos(s.localAngle), Math.sin(s.localAngle))
+    if (node.roofType === 'conical') {
+      const [ox, oz] = rotateLocal(halfW + sideArrowOffset, 0)
+      const [tx, tz] = rotateLocal(1, 0)
       children.push({
         kind: 'move-arrow',
         point: [cx + ox, cz + oz],
         angle: Math.atan2(tz, tx),
         affordance: 'roof-segment-resize',
-        payload: { axis: s.axis, side: s.side },
+        payload: { mode: 'radial' },
       })
+    } else {
+      const sides: Array<{
+        local: [number, number]
+        localAngle: number
+        axis: 'x' | 'z'
+        side: 1 | -1
+      }> = [
+        { local: [halfW + sideArrowOffset, 0], localAngle: 0, axis: 'x', side: 1 },
+        { local: [-(halfW + sideArrowOffset), 0], localAngle: Math.PI, axis: 'x', side: -1 },
+        { local: [0, halfD + sideArrowOffset], localAngle: Math.PI / 2, axis: 'z', side: 1 },
+        { local: [0, -(halfD + sideArrowOffset)], localAngle: -Math.PI / 2, axis: 'z', side: -1 },
+      ]
+      for (const side of sides) {
+        const [ox, oz] = rotateLocal(side.local[0], side.local[1])
+        const [tx, tz] = rotateLocal(Math.cos(side.localAngle), Math.sin(side.localAngle))
+        children.push({
+          kind: 'move-arrow',
+          point: [cx + ox, cz + oz],
+          angle: Math.atan2(tz, tx),
+          affordance: 'roof-segment-resize',
+          payload: { axis: side.axis, side: side.side },
+        })
+      }
     }
 
     // Rotate-arrow at the +X / +Z corner. Local angle π/4 puts the

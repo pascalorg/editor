@@ -1,7 +1,7 @@
 // @ts-expect-error - bun:test is provided by the Bun runtime; viewer does not
 // include Bun globals in its package tsconfig.
 import { describe, expect, test } from 'bun:test'
-import { RoofSegmentNode } from '@pascal-app/core'
+import { RoofNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { generateRoofSegmentGeometry } from './roof-system'
 
@@ -114,6 +114,43 @@ describe('roof system shed geometry', () => {
 
     expect(wallVertexYs.length).toBeGreaterThan(0)
     expect(Math.min(...wallVertexYs)).toBeLessThan(segment.wallHeight / 2)
+
+    geometry.dispose()
+  })
+
+  test('omits overlapping wall shells from legacy composite shed roofs', () => {
+    const roof = RoofNode.parse({
+      id: 'roof_legacy_composite_shed',
+      type: 'roof',
+      children: ['rseg_legacy_shed_a', 'rseg_legacy_shed_b'],
+    })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_legacy_shed_a',
+      type: 'roof-segment',
+      parentId: roof.id,
+      roofType: 'shed',
+      width: 8,
+      depth: 6,
+      wallHeight: 0.1,
+      wallThickness: 0.1,
+      pitch: 25,
+      overhang: 0.3,
+      deckThickness: 0.1,
+      shingleThickness: 0.05,
+    })
+    const sibling = RoofSegmentNode.parse({
+      ...segment,
+      id: 'rseg_legacy_shed_b',
+      position: [2, 0, 0],
+      rotation: Math.PI / 4,
+    })
+    const geometry = generateRoofSegmentGeometry(segment, {
+      [roof.id]: roof,
+      [segment.id]: segment,
+      [sibling.id]: sibling,
+    })
+
+    expect(geometry.groups.some((group) => group.materialIndex === 2)).toBe(false)
 
     geometry.dispose()
   })

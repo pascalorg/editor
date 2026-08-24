@@ -1,6 +1,6 @@
 'use client'
 
-import { nodeRegistry, type RoofType, useRegistryVersion } from '@pascal-app/core'
+import { nodeRegistry, useRegistryVersion } from '@pascal-app/core'
 import {
   type FloorplanMode,
   getFloorplanNodeExtension,
@@ -175,20 +175,12 @@ type RoofFeature = {
   label: string
   iconSrc: string
   kind?: string
-  roofType?: RoofType
 }
 
 const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.webp'
 
 function collectRoofFeatures(): RoofFeature[] {
-  const features: RoofFeature[] = [
-    {
-      id: 'roof-shape:conical',
-      label: 'Conical roof',
-      iconSrc: ROOF_FEATURE_FALLBACK_ICON,
-      roofType: 'conical',
-    },
-  ]
+  const features: RoofFeature[] = []
   for (const [kind, def] of nodeRegistry.entries()) {
     if (
       def.capabilities.roofAccessory === undefined &&
@@ -222,11 +214,6 @@ function activateRoofFeatureTool(feature: RoofFeature): void {
   ed.setStructureLayer('elements')
   ed.setCatalogCategory(null)
   ed.setMode('build')
-  if (feature.roofType) {
-    ed.setToolDefaults('roof', { roofType: feature.roofType })
-    ed.setTool('roof')
-    return
-  }
   if (feature.kind) ed.setTool(feature.kind)
 }
 
@@ -247,7 +234,6 @@ const MEP_TOOL_KINDS = new Set<string>([
 
 export function BuildTab() {
   const activeTool = useEditor((s) => s.tool)
-  const activeRoofType = useEditor((s) => s.toolDefaults.roof?.roofType)
   const mode = useEditor((s) => s.mode)
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
@@ -289,7 +275,7 @@ export function BuildTab() {
   // The roof Features sub-grid arms roof-accessory tools (skylight, chimney,
   // …); keep the Roof tile lit (and its panel open) while any of them is the
   // active tool, the same way MEP stays lit for its sub-grid tools.
-  const activeRoofFeatureId = getActiveRoofFeatureId(roofFeatures, activeTool, activeRoofType)
+  const activeRoofFeatureId = getActiveRoofFeatureId(roofFeatures, activeTool)
   const isRoofFeatureActive = mode === 'build' && activeRoofFeatureId !== null
   const isMepActive = mode === 'build' && !!activeTool && MEP_TOOL_KINDS.has(activeTool)
 

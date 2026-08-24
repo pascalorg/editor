@@ -56,6 +56,9 @@ describe('getRoofSegmentPlanLinework', () => {
     expect(geometry.children.filter((child) => child.kind === 'circle')).toHaveLength(2)
     expect(geometry.children.some((child) => child.kind === 'polygon')).toBe(false)
     expect(geometry.children.some((child) => child.kind === 'rotate-arrow')).toBe(false)
+    const resizeArrows = geometry.children.filter((child) => child.kind === 'move-arrow')
+    expect(resizeArrows).toHaveLength(1)
+    expect(resizeArrows[0]).toMatchObject({ payload: { mode: 'radial' } })
     expect(getRoofSegmentPlanLinework(node)).toEqual({
       ridges: [],
       hips: [],

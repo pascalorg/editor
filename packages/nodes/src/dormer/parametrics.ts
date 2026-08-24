@@ -26,6 +26,13 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
           display: 'select',
         },
         { key: 'roofHeight', kind: 'number', unit: 'm', min: 0, max: 2, step: 0.05 },
+        {
+          key: 'shedHighSide',
+          kind: 'enum',
+          options: ['back', 'front'],
+          display: 'segmented',
+          visibleIf: (n) => n.roofType === 'shed',
+        },
       ],
     },
     {

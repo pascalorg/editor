@@ -3,6 +3,7 @@ import {
   getActiveRoofHeight,
   type HandleDescriptor,
   type LinearResizeHandle,
+  type RadialResizeHandle,
   type RoofSegmentNode,
 } from '@pascal-app/core'
 import { roofSegmentDefinition } from './definition'
@@ -64,20 +65,25 @@ function pitchHandle(): LinearResizeHandle<RoofSegmentNode> {
 }
 
 describe('roof-segment resize handles', () => {
-  test('keeps conical diameter circular and omits rotation', () => {
+  test('uses one center-anchored radius handle for a conical segment', () => {
     const node = segment({ roofType: 'conical', width: 6, depth: 6 })
     const conicalHandles = handles(node)
-    const widthHandle = conicalHandles.find(
-      (handle): handle is LinearResizeHandle<RoofSegmentNode> =>
-        handle.kind === 'linear-resize' && handle.axis === 'x' && handle.anchor === 'min',
+    const radiusHandles = conicalHandles.filter(
+      (handle): handle is RadialResizeHandle<RoofSegmentNode> => handle.kind === 'radial-resize',
     )
-    const depthHandle = conicalHandles.find(
-      (handle): handle is LinearResizeHandle<RoofSegmentNode> =>
-        handle.kind === 'linear-resize' && handle.axis === 'z' && handle.anchor === 'min',
+    const sideHandles = conicalHandles.filter(
+      (handle) => handle.kind === 'linear-resize' && (handle.axis === 'x' || handle.axis === 'z'),
     )
+    const radiusHandle = radiusHandles[0]
 
-    expect(widthHandle?.apply(node, 8, undefined as never)).toMatchObject({ width: 8, depth: 8 })
-    expect(depthHandle?.apply(node, 9, undefined as never)).toMatchObject({ width: 9, depth: 9 })
+    expect(radiusHandles).toHaveLength(1)
+    expect(sideHandles).toHaveLength(0)
+    expect(radiusHandle?.currentValue(node)).toBe(3)
+    expect({ ...node, ...radiusHandle?.apply(node, 4, undefined as never) }).toMatchObject({
+      width: 8,
+      depth: 8,
+      position: [10, 0, 20],
+    })
     expect(conicalHandles.some((handle) => handle.kind === 'arc-resize')).toBe(false)
   })
 

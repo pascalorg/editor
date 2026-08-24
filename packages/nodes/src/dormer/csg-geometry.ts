@@ -23,7 +23,7 @@ import {
   SUBTRACTION,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import { buildDormerShellGeometry } from './geometry'
+import { buildDormerShellGeometry, getDormerBodyYaw } from './geometry'
 
 // Legacy default for the hung-wall (skirt) height. Used as a fallback
 // when `dormer.wallSkirtHeight` is undefined (e.g. old saved scenes).
@@ -256,7 +256,7 @@ export function generateDormerGeometry(
   hostedWindows: readonly WindowNode[] = [],
 ): THREE.BufferGeometry {
   const isShed = dormer.roofType === 'shed'
-  const yawBake = isShed ? 0 : Math.PI / 2
+  const yawBake = getDormerBodyYaw(dormer)
   const segWidth = isShed ? dormer.width : dormer.depth
   const segDepth = isShed ? dormer.depth : dormer.width
   const skirt = dormerSkirtHeight(dormer)
@@ -531,10 +531,10 @@ export function generateDormerGeometry(
  * Shapes per roof type:
  * - **flat**:                a plain box (top flush with the eave; the
  *                            dormer body has no roof above wallH).
- * - **shed**:                trapezoid in YZ, extruded along X. Eave
- *                            at z=+d/2 (y=wallH), peak at z=-d/2
- *                            (y=wallH+roofH) — matches the slope
- *                            direction the dormer body uses.
+ * - **shed**:                trapezoid in YZ, extruded along X. The
+ *                            base shape is high at z=-d/2; the caller
+ *                            flips it when the configured high side is
+ *                            the front.
  * - **gable / gambrel**:     pentagon (rectangle + symmetric triangle)
  *                            in XY, extruded along Z. Ridge runs
  *                            along Z (mesh-Z = virtualSegment-X after
@@ -813,10 +813,13 @@ export function buildDormerRoofCut(dormer: DormerNode): THREE.BufferGeometry | n
   //   - gable / gambrel:        pentagon (narrows along width axis)
   const geo = buildDormerCutShape(dormer.roofType, innerW, innerD, skirt, wallH, roofH)
 
-  // Yaw in the geometry's own (un-translated) frame so the cut aligns
-  // with the dormer's footprint after rotation.
-  if (Math.abs(dormer.rotation) > 1e-4) {
-    geo.rotateY(dormer.rotation)
+  // Yaw in the geometry's own (un-translated) frame so the cut follows
+  // both the shed pitch direction and the dormer's footprint rotation.
+  const shedDirectionYaw =
+    dormer.roofType === 'shed' && dormer.shedHighSide === 'front' ? Math.PI : 0
+  const cutYaw = shedDirectionYaw + dormer.rotation
+  if (Math.abs(cutYaw) > 1e-4) {
+    geo.rotateY(cutYaw)
   }
 
   // Translate into segment-local. position[1] becomes the dormer's

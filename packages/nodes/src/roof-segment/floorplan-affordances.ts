@@ -14,7 +14,7 @@ import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 const MIN_ROOF_DIM = 1
 
-type RoofSegmentResizePayload = { axis: 'x' | 'z'; side: 1 | -1 }
+type RoofSegmentResizePayload = { mode: 'radial' } | { axis: 'x' | 'z'; side: 1 | -1 }
 
 // Resolve world-space center + effective rotation of a roof segment by
 // composing the parent roof's position + rotation with the segment's
@@ -61,14 +61,44 @@ function resolveSegmentFrame(
  */
 export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> = {
   start({ node, payload, nodes, initialPlanPoint }) {
-    const { axis, side } = payload as RoofSegmentResizePayload
+    const resize = payload as RoofSegmentResizePayload
     const segmentId = node.id as AnyNodeId
+    const { cx, cz } = resolveSegmentFrame(node, nodes)
+    if ('mode' in resize) {
+      const initialRadius = node.width / 2
+      const initialPointerRadius = Math.hypot(initialPlanPoint[0] - cx, initialPlanPoint[1] - cz)
+      let lastRadius = initialRadius
+
+      return {
+        affectedIds: [segmentId],
+        apply({ planPoint }) {
+          const pointerRadius = Math.hypot(planPoint[0] - cx, planPoint[1] - cz)
+          lastRadius = Math.max(
+            MIN_ROOF_DIM / 2,
+            initialRadius + pointerRadius - initialPointerRadius,
+          )
+          const diameter = lastRadius * 2
+          useLiveNodeOverrides.getState().set(segmentId, { width: diameter, depth: diameter })
+          useScene.getState().markDirty(segmentId)
+        },
+        canCommit() {
+          return true
+        },
+        commit() {
+          useLiveNodeOverrides.getState().clear(segmentId)
+          const diameter = lastRadius * 2
+          useScene.getState().updateNode(segmentId, { width: diameter, depth: diameter })
+        },
+      }
+    }
+
+    const { axis, side } = resize
     const initialValue = axis === 'x' ? node.width : node.depth
     const initialPosition = node.position
     const segmentRotation = node.rotation ?? 0
     const armX = axis === 'x' ? Math.cos(segmentRotation) : Math.sin(segmentRotation)
     const armZ = axis === 'x' ? -Math.sin(segmentRotation) : Math.cos(segmentRotation)
-    const { cx, cz, effRot } = resolveSegmentFrame(node, nodes)
+    const { effRot } = resolveSegmentFrame(node, nodes)
     const cosEff = Math.cos(effRot)
     const sinEff = Math.sin(effRot)
     // Project (planPoint - center) onto the segment's local X or Z axis

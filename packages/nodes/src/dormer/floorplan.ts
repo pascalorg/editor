@@ -24,9 +24,9 @@ import type {
  *
  * Per-type roof linework follows the dormer's own roof geometry
  * (`buildDormerCutShape` in csg-geometry.ts): gable ridge runs along Z,
- * shed slopes high-at-back (−Z) to low-at-front (+Z), hip ridges along the
- * longer axis. Gambrel falls back to gable; dutch/mansard to hip — the
- * same fallbacks the 3D cut uses.
+ * shed arrows follow the configured high-to-low direction, and hip ridges
+ * run along the longer axis. Gambrel falls back to gable; dutch/mansard to
+ * hip — the same fallbacks the 3D cut uses.
  */
 export function buildDormerFloorplan(
   node: DormerNode,
@@ -134,10 +134,9 @@ export function buildDormerFloorplan(
   const type = node.roofType
   if (node.roofHeight > 0 && type !== 'flat') {
     if (type === 'shed') {
-      // Slopes from the high back (−Z) down to the low front (+Z); show a
-      // downslope arrow pointing toward the front.
-      const tail = toPlan(0, -hd * 0.55)
-      const head = toPlan(0, hd * 0.55)
+      const highZ = node.shedHighSide === 'front' ? hd * 0.55 : -hd * 0.55
+      const tail = toPlan(0, highZ)
+      const head = toPlan(0, -highZ)
       const dx = head[0] - tail[0]
       const dy = head[1] - tail[1]
       const len = Math.hypot(dx, dy) || 1

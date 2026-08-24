@@ -75,6 +75,7 @@ export const DormerNode = BaseNode.extend({
 
   roofType: RoofType.default('gable'),
   roofHeight: z.number().default(DORMER_DEFAULTS.ROOF_HEIGHT),
+  shedHighSide: z.enum(['back', 'front']).default('back'),
 
   // Height of the hung wall (the "skirt") that extends below the eave
   // into the host roof — this is the wall area the window opening is
@@ -111,8 +112,9 @@ export const DormerNode = BaseNode.extend({
   dedent`
   Dormer — a small house-shaped protrusion sitting on top of a roof
   segment. width × depth × height defines the box base; roofType and
-  roofHeight define the dormer's own roof shape. WindowNode children
-  are hosted on its wall faces and use the regular window item model.
+  roofHeight define the dormer's own roof shape. shedHighSide controls
+  the pitch direction for shed roofs. WindowNode children are hosted on
+  its wall faces and use the regular window item model.
   `,
 )
 

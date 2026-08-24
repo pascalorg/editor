@@ -448,7 +448,7 @@ const dormerHandles: HandleDescriptor<DormerNodeType>[] = [
  */
 export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   kind: 'dormer',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: DormerNode,
   category: 'structure',
   surfaceRole: 'roof',
