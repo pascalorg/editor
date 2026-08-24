@@ -16,9 +16,10 @@ type Point = [number, number, number]
 
 export type BlockCommand =
   | {
-      type: 'extrude-face'
-      faceId: string
+      type: 'extrude-faces'
+      faceIds: string[]
       distance: number
+      axis?: 'x' | 'y' | 'z'
     }
   | {
       type: 'translate-components'
@@ -39,8 +40,8 @@ export type BlockCommand =
       factors: Point
     }
   | {
-      type: 'inset-face'
-      faceId: string
+      type: 'inset-faces'
+      faceIds: string[]
       amount: number
       depth: number
     }
@@ -53,8 +54,12 @@ export type BlockCommand =
       vertexIds: string[]
     }
   | {
-      type: 'dissolve-edge'
-      edgeId: string
+      type: 'dissolve-edges'
+      edgeIds: string[]
+    }
+  | {
+      type: 'dissolve-faces'
+      faceIds: string[]
     }
   | {
       type: 'loop-cut'
@@ -63,8 +68,8 @@ export type BlockCommand =
       cuts?: number
     }
   | {
-      type: 'bevel-edge'
-      edgeId: string
+      type: 'bevel-edges'
+      edgeIds: string[]
       width: number
       segments: number
       profile: number
@@ -503,12 +508,18 @@ function rebuildEdgesFromFaces(
   return edges
 }
 
-function bevelEdge(
+type BevelParameters = Pick<
+  Extract<BlockCommand, { type: 'bevel-edges' }>,
+  'width' | 'segments' | 'profile' | 'clampOverlap'
+>
+
+function bevelOneEdge(
   topology: BlockTopology,
-  command: Extract<BlockCommand, { type: 'bevel-edge' }>,
+  edgeId: string,
+  command: BevelParameters,
 ): BlockCommandResult {
-  const edge = topology.edges.find((entry) => entry.id === command.edgeId)
-  if (!edge) return { ok: false, error: `Edge not found: ${command.edgeId}` }
+  const edge = topology.edges.find((entry) => entry.id === edgeId)
+  if (!edge) return { ok: false, error: `Edge not found: ${edgeId}` }
   const segments = Math.floor(command.segments)
   if (!Number.isFinite(command.width) || command.width <= 0)
     return { ok: false, error: 'Bevel width must be positive' }
@@ -708,21 +719,121 @@ function bevelEdge(
   }
 }
 
-function extrudeFace(
+function bevelEdges(
   topology: BlockTopology,
-  command: Extract<BlockCommand, { type: 'extrude-face' }>,
+  command: Extract<BlockCommand, { type: 'bevel-edges' }>,
 ): BlockCommandResult {
-  const faceIndex = topology.faces.findIndex((face) => face.id === command.faceId)
-  const face = topology.faces[faceIndex]
-  if (!face) return { ok: false, error: `Face not found: ${command.faceId}` }
+  const edgeIds = [...new Set(command.edgeIds)]
+  if (edgeIds.length === 0) return { ok: false, error: 'Select an edge to bevel' }
+  const selectedEdges = edgeIds.map((id) => topology.edges.find((edge) => edge.id === id))
+  const missingIndex = selectedEdges.findIndex((edge) => !edge)
+  if (missingIndex >= 0) return { ok: false, error: `Edge not found: ${edgeIds[missingIndex]}` }
+  const originalVertexById = new Map(
+    topology.vertices.map((vertex) => [vertex.id, vertex.position]),
+  )
+  const originalSegments = new Map(
+    selectedEdges.map((edge) => [
+      edge!.id,
+      [
+        originalVertexById.get(edge!.vertexIds[0])!,
+        originalVertexById.get(edge!.vertexIds[1])!,
+      ] as [Point, Point],
+    ]),
+  )
+
+  let current = topology
+  const selectedResultIds: string[] = []
+  for (const edgeId of edgeIds) {
+    const originalSegment = originalSegments.get(edgeId)!
+    const vertexById = new Map(current.vertices.map((vertex) => [vertex.id, vertex.position]))
+    const distance = (left: Point, right: Point) =>
+      Math.hypot(left[0] - right[0], left[1] - right[1], left[2] - right[2])
+    const remappedEdge =
+      current.edges.find((edge) => edge.id === edgeId) ??
+      current.edges.reduce<{ edge: BlockEdge; score: number } | null>((best, edge) => {
+        const start = vertexById.get(edge.vertexIds[0])!
+        const end = vertexById.get(edge.vertexIds[1])!
+        const score = Math.min(
+          distance(start, originalSegment[0]) + distance(end, originalSegment[1]),
+          distance(start, originalSegment[1]) + distance(end, originalSegment[0]),
+        )
+        return !best || score < best.score ? { edge, score } : best
+      }, null)?.edge
+    if (!remappedEdge) return { ok: false, error: `Could not remap bevel edge: ${edgeId}` }
+    const result = bevelOneEdge(current, remappedEdge.id, command)
+    if (!result.ok) return result
+    current = result.topology
+    selectedResultIds.push(...result.selection.ids)
+  }
+  const survivingIds = new Set(current.edges.map((edge) => edge.id))
+  return {
+    ok: true,
+    topology: current,
+    selection: {
+      mode: 'edge',
+      ids: [...new Set(selectedResultIds)].filter((id) => survivingIds.has(id)),
+    },
+  }
+}
+
+function extrudeFaces(
+  topology: BlockTopology,
+  command: Extract<BlockCommand, { type: 'extrude-faces' }>,
+): BlockCommandResult {
+  const selectedFaceIds = new Set(command.faceIds)
+  const selectedFaces = topology.faces.filter((face) => selectedFaceIds.has(face.id))
+  if (selectedFaces.length !== selectedFaceIds.size || selectedFaces.length === 0) {
+    const missing = command.faceIds.find((id) => !topology.faces.some((face) => face.id === id))
+    return { ok: false, error: missing ? `Face not found: ${missing}` : 'Select a face to extrude' }
+  }
   if (!Number.isFinite(command.distance) || Math.abs(command.distance) < 1e-6) {
     return {
       ok: false,
       error: 'Extrude distance must be a non-zero finite number',
     }
   }
-  const normal = blockFaceNormal(topology, face)
-  if (!normal) return { ok: false, error: `Face has no usable normal: ${face.id}` }
+  const edgeKeysByFace = new Map(
+    selectedFaces.map((face) => [
+      face.id,
+      face.vertexIds.map((id, index) =>
+        blockUndirectedEdgeKey(id, face.vertexIds[(index + 1) % face.vertexIds.length]!),
+      ),
+    ]),
+  )
+  const connected = new Set<string>([selectedFaces[0]!.id])
+  const queue = [selectedFaces[0]!.id]
+  while (queue.length > 0) {
+    const faceId = queue.shift()!
+    const keys = new Set(edgeKeysByFace.get(faceId))
+    for (const candidate of selectedFaces) {
+      if (connected.has(candidate.id)) continue
+      if (edgeKeysByFace.get(candidate.id)!.some((key) => keys.has(key))) {
+        connected.add(candidate.id)
+        queue.push(candidate.id)
+      }
+    }
+  }
+  if (connected.size !== selectedFaces.length) {
+    return { ok: false, error: 'Extrude Region requires connected faces' }
+  }
+  const normals = selectedFaces.map((face) => blockFaceNormal(topology, face))
+  if (normals.some((normal) => !normal)) {
+    const invalidFace = selectedFaces[normals.findIndex((normal) => !normal)]!
+    return { ok: false, error: `Face has no usable normal: ${invalidFace.id}` }
+  }
+  const normal = command.axis
+    ? ([
+        command.axis === 'x' ? 1 : 0,
+        command.axis === 'y' ? 1 : 0,
+        command.axis === 'z' ? 1 : 0,
+      ] as Point)
+    : normalize(
+        normals.reduce<Point>(
+          (sum, value) => [sum[0] + value![0], sum[1] + value![1], sum[2] + value![2]],
+          [0, 0, 0],
+        ),
+      )
+  if (!normal) return { ok: false, error: 'Selected face normals cancel each other out' }
 
   const verticesById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex]))
   const allocateVertexId = nextNumericId(
@@ -740,12 +851,13 @@ function extrudeFace(
   const duplicateIds = new Map<string, string>()
   const newVertices: BlockVertex[] = []
 
-  for (const vertexId of face.vertexIds) {
+  const selectedVertexIds = new Set(selectedFaces.flatMap((face) => face.vertexIds))
+  for (const vertexId of selectedVertexIds) {
     const vertex = verticesById.get(vertexId)
     if (!vertex)
       return {
         ok: false,
-        error: `Face references missing vertex: ${vertexId}`,
+        error: `Selected face references missing vertex: ${vertexId}`,
       }
     const id = allocateVertexId()
     duplicateIds.set(vertexId, id)
@@ -759,36 +871,52 @@ function extrudeFace(
     })
   }
 
-  const capVertexIds = face.vertexIds.map((vertexId) => duplicateIds.get(vertexId)!)
-  const newEdges: BlockEdge[] = []
+  const boundaryByKey = new Map<
+    string,
+    { count: number; a: string; b: string; source: BlockFace }
+  >()
+  for (const face of selectedFaces) {
+    for (let index = 0; index < face.vertexIds.length; index += 1) {
+      const a = face.vertexIds[index]!
+      const b = face.vertexIds[(index + 1) % face.vertexIds.length]!
+      const key = blockUndirectedEdgeKey(a, b)
+      const boundary = boundaryByKey.get(key)
+      if (boundary) boundary.count += 1
+      else boundaryByKey.set(key, { count: 1, a, b, source: face })
+    }
+  }
   const sideFaces: BlockFace[] = []
-  for (let index = 0; index < face.vertexIds.length; index += 1) {
-    const a = face.vertexIds[index]!
-    const b = face.vertexIds[(index + 1) % face.vertexIds.length]!
+  for (const boundary of boundaryByKey.values()) {
+    if (boundary.count !== 1) continue
+    const { a, b, source } = boundary
     const newA = duplicateIds.get(a)!
     const newB = duplicateIds.get(b)!
-    newEdges.push({ id: allocateEdgeId(), vertexIds: [newA, newB] })
-    newEdges.push({ id: allocateEdgeId(), vertexIds: [a, newA] })
     sideFaces.push({
       id: allocateFaceId(),
       vertexIds: [a, b, newB, newA],
-      materialSlot: face.materialSlot,
+      materialSlot: source.materialSlot,
     })
   }
 
-  const faces = topology.faces.slice()
-  faces[faceIndex] = { ...face, vertexIds: capVertexIds }
+  const faces = [
+    ...topology.faces.map((face) =>
+      selectedFaceIds.has(face.id)
+        ? { ...face, vertexIds: face.vertexIds.map((id) => duplicateIds.get(id)!) }
+        : face,
+    ),
+    ...sideFaces,
+  ]
   const nextTopology: BlockTopology = {
     vertices: [...topology.vertices, ...newVertices],
-    edges: [...topology.edges, ...newEdges],
-    faces: [...faces, ...sideFaces],
+    edges: rebuildEdgesFromFaces(topology, faces, allocateEdgeId),
+    faces,
   }
   const issues = inspectBlockTopology(nextTopology)
   if (issues.length > 0) return { ok: false, error: issues[0]!.message }
   return {
     ok: true,
     topology: nextTopology,
-    selection: { mode: 'face', ids: [face.id] },
+    selection: { mode: 'face', ids: selectedFaces.map((face) => face.id) },
   }
 }
 
@@ -922,20 +1050,22 @@ function scaleComponents(
   ])
 }
 
-function insetFace(
+function insetOneFace(
   topology: BlockTopology,
-  command: Extract<BlockCommand, { type: 'inset-face' }>,
+  faceId: string,
+  amount: number,
+  depth: number,
 ): BlockCommandResult {
-  const faceIndex = topology.faces.findIndex((face) => face.id === command.faceId)
+  const faceIndex = topology.faces.findIndex((face) => face.id === faceId)
   const face = topology.faces[faceIndex]
-  if (!face) return { ok: false, error: `Face not found: ${command.faceId}` }
-  if (!Number.isFinite(command.amount) || command.amount <= 0 || command.amount >= 1) {
+  if (!face) return { ok: false, error: `Face not found: ${faceId}` }
+  if (!Number.isFinite(amount) || amount <= 0 || amount >= 1) {
     return {
       ok: false,
       error: 'Inset amount must be greater than 0 and less than 1',
     }
   }
-  if (!Number.isFinite(command.depth)) return { ok: false, error: 'Inset depth must be finite' }
+  if (!Number.isFinite(depth)) return { ok: false, error: 'Inset depth must be finite' }
   const centroid = blockFaceCentroid(topology, face)
   const normal = blockFaceNormal(topology, face)
   if (!(centroid && normal)) return { ok: false, error: `Face cannot be inset: ${face.id}` }
@@ -967,15 +1097,9 @@ function insetFace(
     newVertices.push({
       id,
       position: [
-        vertex.position[0] +
-          (centroid[0] - vertex.position[0]) * command.amount +
-          normal[0] * command.depth,
-        vertex.position[1] +
-          (centroid[1] - vertex.position[1]) * command.amount +
-          normal[1] * command.depth,
-        vertex.position[2] +
-          (centroid[2] - vertex.position[2]) * command.amount +
-          normal[2] * command.depth,
+        vertex.position[0] + (centroid[0] - vertex.position[0]) * amount + normal[0] * depth,
+        vertex.position[1] + (centroid[1] - vertex.position[1]) * amount + normal[1] * depth,
+        vertex.position[2] + (centroid[2] - vertex.position[2]) * amount + normal[2] * depth,
       ],
     })
   }
@@ -1009,6 +1133,24 @@ function insetFace(
     topology: nextTopology,
     selection: { mode: 'face', ids: [face.id] },
   }
+}
+
+function insetFaces(
+  topology: BlockTopology,
+  command: Extract<BlockCommand, { type: 'inset-faces' }>,
+): BlockCommandResult {
+  const faceIds = [...new Set(command.faceIds)]
+  if (faceIds.length === 0) return { ok: false, error: 'Select a face to inset' }
+  const missing = faceIds.find((id) => !topology.faces.some((face) => face.id === id))
+  if (missing) return { ok: false, error: `Face not found: ${missing}` }
+
+  let current = topology
+  for (const faceId of faceIds) {
+    const result = insetOneFace(current, faceId, command.amount, command.depth)
+    if (!result.ok) return result
+    current = result.topology
+  }
+  return { ok: true, topology: current, selection: { mode: 'face', ids: faceIds } }
 }
 
 function deleteComponents(
@@ -1063,7 +1205,9 @@ function mergeVertices(
   const selectedVertices = topology.vertices.filter((vertex) => selected.has(vertex.id))
   if (selectedVertices.length < 2)
     return { ok: false, error: 'Select at least two vertices to merge' }
-  const keepId = selectedVertices[0]!.id
+  const keepId = [...command.vertexIds]
+    .reverse()
+    .find((id) => selectedVertices.some((v) => v.id === id))!
   const center = selectedVertices.reduce<Point>(
     (sum, vertex) => [
       sum[0] + vertex.position[0],
@@ -1151,12 +1295,9 @@ function longFacePath(face: BlockFace, start: string, end: string): string[] | n
   return backward.at(-1) === end && backward.length > 2 ? backward : null
 }
 
-function dissolveEdge(
-  topology: BlockTopology,
-  command: Extract<BlockCommand, { type: 'dissolve-edge' }>,
-): BlockCommandResult {
-  const edge = topology.edges.find((entry) => entry.id === command.edgeId)
-  if (!edge) return { ok: false, error: `Edge not found: ${command.edgeId}` }
+function dissolveOneEdge(topology: BlockTopology, edgeId: string): BlockCommandResult {
+  const edge = topology.edges.find((entry) => entry.id === edgeId)
+  if (!edge) return { ok: false, error: `Edge not found: ${edgeId}` }
   const [a, b] = edge.vertexIds
   const adjacentFaces = topology.faces.filter((face) => faceContainsEdge(face, a, b))
   if (adjacentFaces.length !== 2) {
@@ -1195,6 +1336,65 @@ function dissolveEdge(
   }
 }
 
+function dissolveEdges(
+  topology: BlockTopology,
+  command: Extract<BlockCommand, { type: 'dissolve-edges' }>,
+): BlockCommandResult {
+  const edgeIds = [...new Set(command.edgeIds)]
+  if (edgeIds.length === 0) return { ok: false, error: 'Select an edge to dissolve' }
+  const missing = edgeIds.find((id) => !topology.edges.some((edge) => edge.id === id))
+  if (missing) return { ok: false, error: `Edge not found: ${missing}` }
+
+  let current = topology
+  const resultFaceIds: string[] = []
+  for (const edgeId of edgeIds) {
+    const result = dissolveOneEdge(current, edgeId)
+    if (!result.ok) return result
+    current = result.topology
+    resultFaceIds.push(...result.selection.ids)
+  }
+  const survivingFaceIds = new Set(current.faces.map((face) => face.id))
+  return {
+    ok: true,
+    topology: current,
+    selection: {
+      mode: 'face',
+      ids: [...new Set(resultFaceIds)].filter((id) => survivingFaceIds.has(id)),
+    },
+  }
+}
+
+function dissolveFaces(
+  topology: BlockTopology,
+  command: Extract<BlockCommand, { type: 'dissolve-faces' }>,
+): BlockCommandResult {
+  const faceIds = new Set(command.faceIds)
+  if (faceIds.size < 2) return { ok: false, error: 'Select at least two faces to dissolve' }
+  const missing = [...faceIds].find((id) => !topology.faces.some((face) => face.id === id))
+  if (missing) return { ok: false, error: `Face not found: ${missing}` }
+  const internalEdgeIds = topology.edges
+    .filter((edge) => {
+      const incidentSelectedFaces = topology.faces.filter(
+        (face) => faceIds.has(face.id) && faceContainsEdge(face, ...edge.vertexIds),
+      )
+      return incidentSelectedFaces.length === 2
+    })
+    .map((edge) => edge.id)
+  if (internalEdgeIds.length === 0) {
+    return { ok: false, error: 'Selected faces do not share a dissolvable boundary' }
+  }
+  const result = dissolveEdges(topology, { type: 'dissolve-edges', edgeIds: internalEdgeIds })
+  if (!result.ok) return result
+  const survivingSelectedIds = result.topology.faces
+    .filter((face) => faceIds.has(face.id))
+    .map((face) => face.id)
+  return {
+    ok: true,
+    topology: result.topology,
+    selection: { mode: 'face', ids: survivingSelectedIds },
+  }
+}
+
 export function applyBlockCommand(
   topology: BlockTopology,
   command: BlockCommand,
@@ -1202,25 +1402,27 @@ export function applyBlockCommand(
   const issues = inspectBlockTopology(topology)
   if (issues.length > 0) return { ok: false, error: issues[0]!.message }
   switch (command.type) {
-    case 'extrude-face':
-      return extrudeFace(topology, command)
+    case 'extrude-faces':
+      return extrudeFaces(topology, command)
     case 'translate-components':
       return translateComponents(topology, command)
     case 'rotate-components':
       return rotateComponents(topology, command)
     case 'scale-components':
       return scaleComponents(topology, command)
-    case 'inset-face':
-      return insetFace(topology, command)
+    case 'inset-faces':
+      return insetFaces(topology, command)
     case 'delete-components':
       return deleteComponents(topology, command)
     case 'merge-vertices':
       return mergeVertices(topology, command)
-    case 'dissolve-edge':
-      return dissolveEdge(topology, command)
+    case 'dissolve-edges':
+      return dissolveEdges(topology, command)
+    case 'dissolve-faces':
+      return dissolveFaces(topology, command)
     case 'loop-cut':
       return loopCut(topology, command)
-    case 'bevel-edge':
-      return bevelEdge(topology, command)
+    case 'bevel-edges':
+      return bevelEdges(topology, command)
   }
 }

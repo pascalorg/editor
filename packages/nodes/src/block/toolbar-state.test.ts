@@ -3,6 +3,7 @@ import {
   blockBevelWidthFromDrag,
   blockComponentStatus,
   blockGizmoDimensions,
+  blockGizmoHitDimensions,
   blockOperationAvailability,
   blockScaleFactorFromDrag,
   blockScaleFactors,
@@ -11,7 +12,7 @@ import {
 } from './toolbar-state'
 
 describe('block toolbar state', () => {
-  test('enables face operations only for one selected face', () => {
+  test('enables face operations for one or more selected faces', () => {
     expect(blockOperationAvailability('face', 1)).toEqual({
       extrude: true,
       inset: true,
@@ -19,7 +20,7 @@ describe('block toolbar state', () => {
       dissolve: false,
       bevel: false,
     })
-    expect(blockOperationAvailability('face', 2).extrude).toBe(false)
+    expect(blockOperationAvailability('face', 2)).toMatchObject({ extrude: true, inset: true })
   })
 
   test('enables component-specific vertex and edge operations', () => {
@@ -29,6 +30,8 @@ describe('block toolbar state', () => {
       dissolve: true,
       bevel: true,
     })
+    expect(blockOperationAvailability('edge', 2).dissolve).toBe(true)
+    expect(blockOperationAvailability('face', 2).dissolve).toBe(true)
     expect(blockOperationAvailability('edge', 0).bevel).toBe(true)
   })
 
@@ -47,8 +50,23 @@ describe('block toolbar state', () => {
         loopCutCount: 1,
         loopCutFactor: 0.5,
         bevelSegments: 6,
+        bevelWidth: 0,
       }),
     ).toBeNull()
+  })
+
+  test('shows live bevel width and segment count', () => {
+    expect(
+      blockComponentStatus({
+        mode: 'edge',
+        selectedCount: 1,
+        tool: 'bevel',
+        loopCutCount: 1,
+        loopCutFactor: 0.5,
+        bevelSegments: 6,
+        bevelWidth: 0.2,
+      }),
+    ).toBe('Bevel · width 0.2 m · 6 segments · drag changes width · wheel changes segments')
   })
 
   test('builds uniform and axis-specific scale factors', () => {
@@ -65,9 +83,33 @@ describe('block toolbar state', () => {
   })
 
   test('maps bevel pointer travel into topology-relative width', () => {
-    expect(blockBevelWidthFromDrag(60, 80, 2, 1000)).toBeCloseTo(0.2)
-    expect(blockBevelWidthFromDrag(0, 0, 2, 1000)).toBe(0)
-    expect(blockBevelWidthFromDrag(10, 0, 2, 0)).toBe(20)
+    expect(
+      blockBevelWidthFromDrag(60, 80, {
+        topologyExtent: 2,
+        projectedExtentPixels: 1000,
+      }),
+    ).toBeCloseTo(0.2)
+    expect(
+      blockBevelWidthFromDrag(0, 0, {
+        topologyExtent: 2,
+        projectedExtentPixels: 1000,
+      }),
+    ).toBe(0)
+  })
+
+  test('keeps bevel sensitivity consistent as projected size changes', () => {
+    expect(
+      blockBevelWidthFromDrag(100, 0, {
+        topologyExtent: 2,
+        projectedExtentPixels: 400,
+      }),
+    ).toBeCloseTo(0.5)
+    expect(
+      blockBevelWidthFromDrag(50, 0, {
+        topologyExtent: 2,
+        projectedExtentPixels: 200,
+      }),
+    ).toBeCloseTo(0.5)
   })
 
   test('keeps the floating toolbar clear of the vertical transform handle', () => {
@@ -81,5 +123,16 @@ describe('block toolbar state', () => {
 
   test('keeps every transform-gizmo dimension constant while topology moves', () => {
     expect(blockGizmoDimensions(3.4)).toEqual(blockGizmoDimensions(2.4))
+  })
+
+  test('keeps axis and plane hit targets separate and gives the shaft priority at ring crossings', () => {
+    const gizmo = blockGizmoDimensions(2.4)
+    const hits = blockGizmoHitDimensions(gizmo.radius, gizmo.planeHandleSize)
+    const planeNearEdge = gizmo.planeHandleOffset - hits.planeSize / 2
+
+    expect(hits.axisRadius).toBeLessThan(planeNearEdge)
+    expect(hits.rotationTube).toBeLessThan(hits.axisRadius)
+    expect(hits.rotationStart).toBeGreaterThan(0)
+    expect(hits.rotationStart + hits.rotationArc).toBeLessThan(Math.PI / 2)
   })
 })
