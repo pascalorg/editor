@@ -8,6 +8,14 @@ import {
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 
+/**
+ * Shrinks a control group to fit the snapped-to-top rail, which is `h-8` with
+ * `overflow-hidden` — the default `h-11` button below would be clipped there.
+ * Lives beside that default so the two sizes stay visible to each other.
+ */
+export const COMPACT_GROUP =
+  'gap-0 [&_button]:h-7 [&_button]:w-7 [&_svg]:h-4 [&_svg]:w-4 [&_img]:h-5 [&_img]:w-5'
+
 interface ActionButtonProps extends React.ComponentProps<typeof Button> {
   label: string
   shortcut?: string
