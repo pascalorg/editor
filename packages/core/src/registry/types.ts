@@ -2182,11 +2182,23 @@ export type VerticalOpeningConfig = {
    */
   polygon: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => Array<[number, number]>
   /**
-   * Whether this node passes through the given level's floor. Called once per
+   * Whether this node passes through the given surface. Called once per
    * candidate surface, so the kind decides its own service range — a lift
    * serving floors 1-3 answers true for 2 and 3 and false for 4.
+   *
+   * `surface` matters because a level's slab and its ceiling sit at opposite
+   * ends of the level: for a shaft spanning floors 1-3 the cut slabs are 2 and
+   * 3, while the cut ceilings are 1 and 2. A predicate that cannot tell them
+   * apart is wrong at one end or the other — it either leaves the ceiling of
+   * the bottom floor sealed across the shaft, or cuts a hole in the ceiling of
+   * the top one.
    */
-  servesLevel: (node: AnyNode, levelId: string, nodes: Readonly<Record<string, AnyNode>>) => boolean
+  servesLevel: (
+    node: AnyNode,
+    levelId: string,
+    nodes: Readonly<Record<string, AnyNode>>,
+    surface: 'slab' | 'ceiling',
+  ) => boolean
 }
 
 export type FloorPlacedConfig = {

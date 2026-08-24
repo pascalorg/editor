@@ -305,4 +305,52 @@ describe('verticalOpening capability', () => {
     expect(update?.data.holeMetadata?.[0]?.source).toBe('manual')
     expect(update?.data.holeMetadata?.[1]?.source).toBe('verticalOpening')
   })
+
+  /**
+   * A level's slab and its ceiling sit at opposite ends of the level, so a
+   * shaft crosses different sets of them: floors 1-3 means slabs 2 and 3 but
+   * ceilings 1 and 2. Without the surface argument the kind answers one
+   * question for both and is wrong at one end — here, sealing the ceiling
+   * across the shaft or cutting the ceiling of the top floor.
+   */
+  test('lets the kind answer per surface', () => {
+    registerNode({
+      kind: 'test:lift',
+      schemaVersion: 1,
+      schema: {} as never,
+      category: 'furnish',
+      defaults: () => ({}) as never,
+      capabilities: {
+        verticalOpening: {
+          polygon: () => [
+            [-1, -1],
+            [1, -1],
+            [1, 1],
+            [-1, 1],
+          ],
+          servesLevel: (_node, _levelId, _nodes, surface) => surface === 'slab',
+        },
+      },
+      presentation: { label: 'Lift', icon: { kind: 'iconify', name: 'lucide:square' } },
+    } as never)
+
+    const { nodes, slabId } = sceneWithLift()
+    const ground = Object.values(nodes).find((node) => node.type === 'level')!
+    const ceiling = CeilingNode.parse({
+      name: 'Ceiling',
+      parentId: ground.id,
+      polygon: [
+        [-10, -10],
+        [10, -10],
+        [10, 10],
+        [-10, 10],
+      ],
+    })
+    nodes[ceiling.id] = ceiling as AnyNode
+
+    const updates = syncAutoElevatorOpenings(nodes)
+
+    expect(updates.find((u) => u.id === slabId)?.data.holes).toHaveLength(1)
+    expect(updates.find((u) => u.id === ceiling.id)).toBeUndefined()
+  })
 })
