@@ -87,6 +87,7 @@ function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSe
       const newCenterZ = anchorZ + sign * (newWidth / 2) * armZ
       return {
         width: newWidth,
+        ...(initial.roofType === 'conical' ? { depth: newWidth } : {}),
         position: [newCenterX, initial.position[1], newCenterZ],
       }
     },
@@ -129,6 +130,14 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
       const anchorZ = initial.position[2] - sign * (initial.depth / 2) * armZ
       const newCenterX = anchorX + sign * (newDepth / 2) * armX
       const newCenterZ = anchorZ + sign * (newDepth / 2) * armZ
+
+      if (initial.roofType === 'conical') {
+        return {
+          width: newDepth,
+          depth: newDepth,
+          position: [newCenterX, initial.position[1], newCenterZ],
+        }
+      }
 
       // Preserve peak height — back-solve pitch for the new depth so
       // the assembled roof height matches what it was before the drag.
@@ -276,7 +285,8 @@ const roofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
 function resolveRoofSegmentHandles(
   node: RoofSegmentNodeType,
 ): HandleDescriptor<RoofSegmentNodeType>[] {
-  return isManagedLeanToRoofSegment(node) ? [] : roofSegmentHandles
+  if (isManagedLeanToRoofSegment(node)) return []
+  return node.roofType === 'conical' ? roofSegmentHandles.slice(0, -1) : roofSegmentHandles
 }
 
 /**

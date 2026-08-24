@@ -64,6 +64,23 @@ function pitchHandle(): LinearResizeHandle<RoofSegmentNode> {
 }
 
 describe('roof-segment resize handles', () => {
+  test('keeps conical diameter circular and omits rotation', () => {
+    const node = segment({ roofType: 'conical', width: 6, depth: 6 })
+    const conicalHandles = handles(node)
+    const widthHandle = conicalHandles.find(
+      (handle): handle is LinearResizeHandle<RoofSegmentNode> =>
+        handle.kind === 'linear-resize' && handle.axis === 'x' && handle.anchor === 'min',
+    )
+    const depthHandle = conicalHandles.find(
+      (handle): handle is LinearResizeHandle<RoofSegmentNode> =>
+        handle.kind === 'linear-resize' && handle.axis === 'z' && handle.anchor === 'min',
+    )
+
+    expect(widthHandle?.apply(node, 8, undefined as never)).toMatchObject({ width: 8, depth: 8 })
+    expect(depthHandle?.apply(node, 9, undefined as never)).toMatchObject({ width: 9, depth: 9 })
+    expect(conicalHandles.some((handle) => handle.kind === 'arc-resize')).toBe(false)
+  })
+
   test('place shed side handles at roof level', () => {
     const node = segment()
     const roofHeight = getActiveRoofHeight(node)

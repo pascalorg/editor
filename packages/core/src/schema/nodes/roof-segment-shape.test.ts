@@ -7,6 +7,35 @@ import {
 } from './roof-segment-shape'
 
 describe('roof segment shape', () => {
+  test('conical shell is circular, closed, and rises to one apex', () => {
+    const faces = getRoofModuleFaces({
+      type: 'conical',
+      w: 8,
+      d: 8,
+      wh: 2,
+      rh: 4,
+      baseY: 0,
+      insets: {},
+      baseW: 8,
+      baseD: 8,
+      tanTheta: 1,
+      shapeRatios: getRoofShapeRatios({}),
+    })
+    const bottom = faces[0]
+    const roofFaces = faces.filter((face) => face.some((vertex) => vertex.y === 6))
+
+    expect(faces).toHaveLength(97)
+    expect(bottom).toHaveLength(48)
+    expect(bottom.every((vertex) => Math.abs(Math.hypot(vertex.x, vertex.z) - 4) < 1e-6)).toBe(true)
+    expect(roofFaces).toHaveLength(48)
+    expect(
+      roofFaces.every(
+        (face) =>
+          face.filter((vertex) => vertex.x === 0 && vertex.y === 6 && vertex.z === 0).length === 1,
+      ),
+    ).toBe(true)
+  })
+
   test('dutch shell is built as one complete non-duplicated face set', () => {
     const wh = 3
     const rh = 2

@@ -73,19 +73,33 @@ export function buildRoofSegmentFloorplan(
   const baseInk = '#111111'
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : baseInk
 
+  const footprint: FloorplanGeometry =
+    node.roofType === 'conical'
+      ? {
+          kind: 'circle',
+          cx,
+          cy: cz,
+          r: halfWidth,
+          fill: stroke,
+          fillOpacity: 0,
+          stroke: 'none',
+          strokeWidth: 0,
+          pointerEvents: 'all',
+        }
+      : {
+          kind: 'polygon',
+          points,
+          fill: stroke,
+          fillOpacity: 0,
+          stroke: 'none',
+          strokeWidth: 0,
+          pointerEvents: 'all',
+        }
   const children: FloorplanGeometry[] = [
     // Invisible hit-target — full footprint, transparent fill, captures
     // clicks across the entire roof rectangle (so the user doesn't need
     // to pixel-hunt the outline strokes).
-    {
-      kind: 'polygon',
-      points,
-      fill: stroke,
-      fillOpacity: 0,
-      stroke: 'none',
-      strokeWidth: 0,
-      pointerEvents: 'all',
-    },
+    footprint,
   ]
 
   // The segment's own rectangle outline + fill render ONLY while it's
@@ -95,15 +109,28 @@ export function buildRoofSegmentFloorplan(
   // (`buildRoofFloorplan`), so overlapping segments read as one combined
   // shape instead of stacked rectangles. Ridges/hips below always draw.
   if (showSelectedChrome) {
-    children.push({
-      kind: 'polygon',
-      points,
-      fill: '#fed7aa',
-      fillOpacity: 0.55,
-      stroke,
-      strokeWidth: 0.035,
-      strokeLinejoin: 'miter',
-    })
+    children.push(
+      node.roofType === 'conical'
+        ? {
+            kind: 'circle',
+            cx,
+            cy: cz,
+            r: halfWidth,
+            fill: '#fed7aa',
+            fillOpacity: 0.55,
+            stroke,
+            strokeWidth: 0.035,
+          }
+        : {
+            kind: 'polygon',
+            points,
+            fill: '#fed7aa',
+            fillOpacity: 0.55,
+            stroke,
+            strokeWidth: 0.035,
+            strokeLinejoin: 'miter',
+          },
+    )
   }
 
   // NOTE: the ridge / hip / break / slope linework is NOT drawn here — the
@@ -161,15 +188,17 @@ export function buildRoofSegmentFloorplan(
     // Rotate-arrow at the +X / +Z corner. Local angle π/4 puts the
     // curved arrow's bow at the diagonal corner so it reads as a
     // rotation gizmo around the segment centre.
-    const [cornerX, cornerZ] = rotateLocal(halfW + rotateCornerOffset, halfD + rotateCornerOffset)
-    const [radialX, radialZ] = rotateLocal(1, 1)
-    children.push({
-      kind: 'rotate-arrow',
-      point: [cx + cornerX, cz + cornerZ],
-      angle: Math.atan2(radialZ, radialX),
-      affordance: 'roof-segment-rotate',
-      pivot: [cx, cz],
-    })
+    if (node.roofType !== 'conical') {
+      const [cornerX, cornerZ] = rotateLocal(halfW + rotateCornerOffset, halfD + rotateCornerOffset)
+      const [radialX, radialZ] = rotateLocal(1, 1)
+      children.push({
+        kind: 'rotate-arrow',
+        point: [cx + cornerX, cz + cornerZ],
+        angle: Math.atan2(radialZ, radialX),
+        affordance: 'roof-segment-rotate',
+        pivot: [cx, cz],
+      })
+    }
   }
 
   return { kind: 'group', children }
@@ -233,6 +262,7 @@ export function getRoofSegmentPlanLinework(node: RoofSegmentNode): {
   }
 
   switch (node.roofType) {
+    case 'conical':
     case 'flat':
       break
     case 'gable':

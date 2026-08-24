@@ -10,6 +10,8 @@ export type RoofShapeEaveSide = '+X' | '-X' | '+Z' | '-Z'
 
 export function getRoofShapeEaveSides(type: RoofType): RoofShapeEaveSide[] {
   switch (type) {
+    case 'conical':
+      return []
     case 'shed':
       return ['+Z']
     case 'gable':
@@ -158,7 +160,12 @@ export function getRoofShapeInsets(input: {
   let iB = 0
   let iL = 0
   let iR = 0
-  if (input.roofType === 'hip' || input.roofType === 'mansard' || input.roofType === 'dutch') {
+  if (
+    input.roofType === 'hip' ||
+    input.roofType === 'mansard' ||
+    input.roofType === 'dutch' ||
+    input.roofType === 'conical'
+  ) {
     iF = inset
     iB = inset
     iL = inset
@@ -290,6 +297,40 @@ export function getRoofModuleFaces(input: {
 }): RoofShapeFaceVertex[][] {
   const v = (x: number, y: number, z: number): RoofShapeFaceVertex => ({ x, y, z })
   const { iF = 0, iB = 0, iL = 0, iR = 0 } = input.insets
+
+  if (input.type === 'conical') {
+    const radialSegments = 48
+    const eaveRadius = Math.max(0.005, input.w / 2)
+    const radialInset = (iF + iB + iL + iR) / 4
+    const baseRadius = Math.max(0.005, eaveRadius - radialInset)
+    const eaveY = input.wh
+    const peak = v(0, input.wh + Math.max(0.001, input.rh), 0)
+    const bottomRing = Array.from({ length: radialSegments }, (_, index) => {
+      const angle = (-index / radialSegments) * Math.PI * 2
+      return v(Math.cos(angle) * baseRadius, input.baseY, Math.sin(angle) * baseRadius)
+    })
+    const eaveRing = Array.from({ length: radialSegments }, (_, index) => {
+      const angle = (-index / radialSegments) * Math.PI * 2
+      return v(Math.cos(angle) * eaveRadius, eaveY, Math.sin(angle) * eaveRadius)
+    })
+    const faces: RoofShapeFaceVertex[][] = [[...bottomRing].reverse()]
+
+    for (let index = 0; index < radialSegments; index += 1) {
+      const next = (index + 1) % radialSegments
+      faces.push([bottomRing[index]!, bottomRing[next]!, eaveRing[next]!, eaveRing[index]!])
+    }
+
+    if (input.rh === 0) {
+      faces.push([...eaveRing].reverse())
+    } else {
+      for (let index = 0; index < radialSegments; index += 1) {
+        const next = (index + 1) % radialSegments
+        faces.push([eaveRing[index]!, eaveRing[next]!, peak])
+      }
+    }
+
+    return faces
+  }
 
   const b1 = v(-input.w / 2 + iL, input.baseY, input.d / 2 - iF)
   const b2 = v(input.w / 2 - iR, input.baseY, input.d / 2 - iF)

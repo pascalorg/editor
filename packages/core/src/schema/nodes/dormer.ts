@@ -3,11 +3,21 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import { RoofType } from './roof-segment'
+import { WindowNode } from './window'
 
 export type DormerSurfaceMaterialRole = 'top' | 'side' | 'wall'
 export type DormerSurfaceMaterialSpec = {
   material?: z.infer<typeof MaterialSchema>
   materialPreset?: string
+}
+
+export const DormerWallFace = z.enum(['front', 'back', 'right', 'left'])
+export type DormerWallFace = z.infer<typeof DormerWallFace>
+
+export type DormerWallFaceFrame = {
+  origin: [number, number, number]
+  yaw: number
+  width: number
 }
 
 /**
@@ -71,9 +81,8 @@ export const DormerNode = BaseNode.extend({
   // cut through. Larger values let the dormer host taller windows.
   wallSkirtHeight: z.number().default(DORMER_DEFAULTS.WALL_SKIRT_HEIGHT),
 
-  // Window is rendered as parametric geometry on the dormer's front
-  // face — not a child node. The fields below mirror the legacy panel
-  // controls; geometry beyond the simple opening box is deferred.
+  // Legacy inline-window controls. Existing scenes are promoted to a hosted
+  // WindowNode during scene migration; these fields remain for archive data.
   windowWidth: z.number().default(DORMER_DEFAULTS.WINDOW_WIDTH),
   windowHeight: z.number().default(DORMER_DEFAULTS.WINDOW_HEIGHT),
   windowOffsetX: z.number().default(DORMER_DEFAULTS.WINDOW_OFFSET_X),
@@ -94,17 +103,96 @@ export const DormerNode = BaseNode.extend({
   windowSill: z.boolean().default(false),
   windowSillDepth: z.number().default(DORMER_DEFAULTS.WINDOW_SILL_DEPTH),
   windowSillThickness: z.number().default(DORMER_DEFAULTS.WINDOW_SILL_THICKNESS),
+
+  // Hosted windows use the same recursive scene-graph contract as walls and
+  // roof segments. Legacy window* fields above are retained for migration.
+  children: z.array(WindowNode.shape.id).default([]),
 }).describe(
   dedent`
   Dormer — a small house-shaped protrusion sitting on top of a roof
   segment. width × depth × height defines the box base; roofType and
-  roofHeight define the dormer's own roof shape. The window opening
-  is parametric geometry on the dormer's front face, not a hosted
-  child node.
+  roofHeight define the dormer's own roof shape. WindowNode children
+  are hosted on its wall faces and use the regular window item model.
   `,
 )
 
 export type DormerNode = z.infer<typeof DormerNode>
+
+export function getDormerWallFaceFrame(
+  dormer: Pick<DormerNode, 'width' | 'depth'>,
+  face: DormerWallFace,
+): DormerWallFaceFrame {
+  switch (face) {
+    case 'back':
+      return { origin: [0, 0, -dormer.depth / 2], yaw: Math.PI, width: dormer.width }
+    case 'right':
+      return { origin: [dormer.width / 2, 0, 0], yaw: Math.PI / 2, width: dormer.depth }
+    case 'left':
+      return { origin: [-dormer.width / 2, 0, 0], yaw: -Math.PI / 2, width: dormer.depth }
+    default:
+      return { origin: [0, 0, dormer.depth / 2], yaw: 0, width: dormer.width }
+  }
+}
+
+export function getDormerWallVerticalBounds(
+  dormer: Pick<DormerNode, 'height' | 'wallSkirtHeight'>,
+) {
+  return {
+    min: -(dormer.wallSkirtHeight ?? DORMER_DEFAULTS.WALL_SKIRT_HEIGHT),
+    max: Math.max(0, dormer.height),
+  }
+}
+
+export function createDormerDefaultWindow(
+  dormer: Pick<
+    DormerNode,
+    | 'id'
+    | 'width'
+    | 'wallSkirtHeight'
+    | 'windowWidth'
+    | 'windowHeight'
+    | 'windowOffsetX'
+    | 'windowOffsetY'
+    | 'windowFrameThickness'
+    | 'windowFrameDepth'
+    | 'windowColumns'
+    | 'windowRows'
+    | 'windowDividerThickness'
+    | 'windowShape'
+    | 'windowArchHeight'
+    | 'windowCornerRadii'
+    | 'windowSill'
+    | 'windowSillDepth'
+    | 'windowSillThickness'
+  >,
+  id: string,
+): WindowNode {
+  const skirt = dormer.wallSkirtHeight ?? DORMER_DEFAULTS.WALL_SKIRT_HEIGHT
+  const equalRatios = (count: number) => Array.from({ length: Math.max(1, count) }, () => 1)
+  return WindowNode.parse({
+    id,
+    parentId: dormer.id,
+    dormerId: dormer.id,
+    dormerFace: 'front',
+    position: [dormer.windowOffsetX, -skirt / 2 + dormer.windowOffsetY, 0],
+    rotation: [0, 0, 0],
+    side: 'front',
+    width: dormer.windowWidth,
+    height: dormer.windowHeight,
+    openingShape: dormer.windowShape,
+    archHeight: dormer.windowArchHeight,
+    openingCornerRadii: dormer.windowCornerRadii,
+    frameThickness: dormer.windowFrameThickness,
+    frameDepth: dormer.windowFrameDepth,
+    columnRatios: equalRatios(dormer.windowColumns),
+    rowRatios: equalRatios(dormer.windowRows),
+    columnDividerThickness: dormer.windowDividerThickness,
+    rowDividerThickness: dormer.windowDividerThickness,
+    sill: dormer.windowSill,
+    sillDepth: dormer.windowSillDepth,
+    sillThickness: dormer.windowSillThickness,
+  })
+}
 
 /**
  * Per-surface material resolution. Fall-through order:

@@ -2,10 +2,11 @@ import { type AnyNodeId, type DormerNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { SnapTargetIcon } from '../../../snap-target-badge'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
+import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface DormerTreeNodeProps {
@@ -26,8 +27,12 @@ export const DormerTreeNode = memo(function DormerTreeNode({
   isLast,
 }: DormerTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const node = useScene((s) => s.nodes[nodeId] as DormerNode | undefined)
+  const children = useScene(
+    useShallow((s) => (s.nodes[nodeId] as DormerNode | undefined)?.children ?? []),
+  )
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -55,8 +60,8 @@ export const DormerTreeNode = memo(function DormerTreeNode({
     <TreeNodeWrapper
       actions={<TreeNodeActions nodeId={nodeId} />}
       depth={depth}
-      expanded={false}
-      hasChildren={false}
+      expanded={expanded}
+      hasChildren={children.length > 0}
       icon={
         <SnapTargetIcon target="roof">
           <Image
@@ -86,7 +91,16 @@ export const DormerTreeNode = memo(function DormerTreeNode({
       onDoubleClick={() => focusTreeNode(nodeId)}
       onMouseEnter={() => setHoveredId(nodeId)}
       onMouseLeave={() => setHoveredId(null)}
-      onToggle={() => {}}
-    />
+      onToggle={() => setExpanded((value) => !value)}
+    >
+      {children.map((childId, index) => (
+        <TreeNode
+          depth={depth + 1}
+          isLast={index === children.length - 1}
+          key={childId}
+          nodeId={childId as AnyNodeId}
+        />
+      ))}
+    </TreeNodeWrapper>
   )
 })

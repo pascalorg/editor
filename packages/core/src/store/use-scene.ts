@@ -9,6 +9,7 @@ import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
+import { createDormerDefaultWindow, DormerNode as DormerNodeSchema } from '../schema/nodes/dormer'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
 import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
 import {
@@ -793,6 +794,30 @@ function migrateNodes(nodes: Record<string, any>): {
       const normalized = normalizeWindowNode(node)
       if (normalized) {
         patchedNodes[id] = normalized
+      }
+    }
+
+    // Dormers originally rendered one inline parametric window. Promote that
+    // default to a real hosted WindowNode so additional windows can use the
+    // regular window tool and inspector without changing the old appearance.
+    if (node.type === 'dormer') {
+      const dormer = DormerNodeSchema.parse({
+        ...patchedNodes[id],
+        children: getStringArray((patchedNodes[id] as { children?: unknown }).children),
+      })
+      const children = getStringArray(dormer.children)
+      const hasHostedWindow = children.some((childId) => patchedNodes[childId]?.type === 'window')
+      if (!hasHostedWindow) {
+        const baseWindowId = `window_${id.replace(/^dormer_/, '')}_default`
+        let windowId = baseWindowId
+        let suffix = 1
+        while (patchedNodes[windowId]) {
+          windowId = `${baseWindowId}_${suffix}`
+          suffix += 1
+        }
+        const window = createDormerDefaultWindow(dormer, windowId)
+        patchedNodes[windowId] = window
+        patchedNodes[id] = { ...dormer, children: [...children, window.id] }
       }
     }
 

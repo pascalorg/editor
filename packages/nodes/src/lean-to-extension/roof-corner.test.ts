@@ -14,7 +14,7 @@ import { bendLocalPoint } from './arc'
 import { createLeanToAssembly, leanToCornerPostIndex, managedLeanToPostIndex } from './assembly'
 import { resolveLeanToCornerJoints } from './corner-joint'
 import { leanToWallLocalPose, resolveLeanToWallPlacement } from './layout'
-import { applyLeanToWallAutoSpan } from './roof-attachment'
+import { applyLeanToWallAutoSpan, applyLeanToWallCornerSpan } from './roof-attachment'
 
 function cornerFixture(reverseWalls = false, sideOverhang = 0) {
   const wallA = WallNode.parse({
@@ -685,6 +685,167 @@ describe('lean-to corner joint', () => {
     curvedGutter.dispose()
     straightGutter.dispose()
     for (const mesh of expectedMeshes) mesh.geometry.dispose()
+  })
+
+  test('connects three consecutive curved-straight-curved canopies through both ends', () => {
+    const wallA = WallNode.parse({
+      id: 'wall_chain_curved_a',
+      parentId: 'level_chain',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: -0.5,
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_chain_straight',
+      parentId: 'level_chain',
+      start: [6, 0],
+      end: [6, -6],
+    })
+    const wallC = WallNode.parse({
+      id: 'wall_chain_curved_c',
+      parentId: 'level_chain',
+      start: [6, -6],
+      end: [12, -6],
+      curveOffset: -0.5,
+    })
+    const leanToA = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(wallA, getWallCurveLength(wallA) / 2, 'front')!,
+        wallA,
+      ),
+      id: 'leanto_chain_curved_a',
+    }
+    const overlongLeanToB = {
+      ...applyLeanToWallAutoSpan(resolveLeanToWallPlacement(wallB, 3, 'front')!, wallB),
+      id: 'leanto_chain_straight',
+      autoSpan: false,
+      span: 7,
+      highEdgeHeight: 3.1,
+      pitch: 16,
+    }
+    const leanToB = applyLeanToWallCornerSpan(overlongLeanToB, wallB)
+    const leanToC = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(wallC, getWallCurveLength(wallC) / 2, 'front')!,
+        wallC,
+      ),
+      id: 'leanto_chain_curved_c',
+    }
+    const nodes = Object.fromEntries(
+      [wallA, wallB, wallC, leanToA, leanToB, leanToC].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    expect(leanToB.span).toBeCloseTo(5.7, 8)
+    expect(leanToB.position[0]).toBeCloseTo(3, 8)
+
+    const jointsB = resolveLeanToCornerJoints(leanToB, wallB, nodes)
+    const jointsC = resolveLeanToCornerJoints(leanToC, wallC, nodes)
+    const seamAB = jointsB.left?.seam?.map((point) => cornerPlanPointToWorld(wallB, leanToB, point))
+    const seamBC = jointsB.right?.seam?.map((point) =>
+      cornerPlanPointToWorld(wallB, leanToB, point),
+    )
+    const reciprocalSeamBC = jointsC.left?.seam?.map((point) =>
+      cornerPlanPointToWorld(wallC, leanToC, point),
+    )
+
+    expect(jointsB.left?.neighborId).toBe(leanToA.id)
+    expect(jointsB.right?.neighborId).toBe(leanToC.id)
+    expect(jointsC.left?.neighborId).toBe(leanToB.id)
+    expect(seamAB).toHaveLength(2)
+    expect(seamBC).toHaveLength(2)
+    expect(reciprocalSeamBC).toHaveLength(2)
+    expect(pointSetHausdorffDistance(seamBC!, reciprocalSeamBC!)).toBeLessThan(1e-5)
+    expect(jointsB.left?.roofPiece.length).toBeGreaterThanOrEqual(3)
+    expect(jointsB.right?.roofPiece.length).toBeGreaterThanOrEqual(3)
+
+    const assemblyB = createLeanToAssembly(leanToB, undefined, nodes)
+    const assemblyC = createLeanToAssembly(leanToC, undefined, nodes)
+    const geometryB = generateRoofSegmentGeometry(assemblyB.segment).applyMatrix4(
+      segmentWorldMatrix(wallB, leanToB, assemblyB.segment),
+    )
+    const geometryC = generateRoofSegmentGeometry(assemblyC.segment).applyMatrix4(
+      segmentWorldMatrix(wallC, leanToC, assemblyC.segment),
+    )
+    expect(closestMeshDistance(geometryB, geometryC)).toBeLessThan(0.06)
+    expect(jointsB.right?.roofExtension).toBe(0)
+    expect(jointsC.left?.roofExtension).toBe(0)
+    expect(jointsB.right?.gutterMitre).toBeCloseTo(jointsC.left?.gutterMitre ?? 0, 8)
+    geometryB.dispose()
+    geometryC.dispose()
+  })
+
+  test('keeps both joins of a fully inward curved middle canopy connected', () => {
+    const wallA = WallNode.parse({
+      id: 'wall_inward_chain_left',
+      parentId: 'level_inward_chain',
+      start: [-4, -4],
+      end: [0, 0],
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_inward_chain_center',
+      parentId: 'level_inward_chain',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: -3,
+    })
+    const wallC = WallNode.parse({
+      id: 'wall_inward_chain_right',
+      parentId: 'level_inward_chain',
+      start: [6, 0],
+      end: [10, -4],
+    })
+    const leanToA = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(wallA, getWallCurveLength(wallA) / 2, 'front')!,
+        wallA,
+      ),
+      id: 'leanto_inward_chain_left',
+    }
+    const leanToB = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(wallB, getWallCurveLength(wallB) / 2, 'front')!,
+        wallB,
+      ),
+      id: 'leanto_inward_chain_center',
+    }
+    const leanToC = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(wallC, getWallCurveLength(wallC) / 2, 'front')!,
+        wallC,
+      ),
+      id: 'leanto_inward_chain_right',
+    }
+    const nodes = Object.fromEntries(
+      [wallA, wallB, wallC, leanToA, leanToB, leanToC].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const jointsA = resolveLeanToCornerJoints(leanToA, wallA, nodes)
+    const jointsB = resolveLeanToCornerJoints(leanToB, wallB, nodes)
+    const jointsC = resolveLeanToCornerJoints(leanToC, wallC, nodes)
+
+    expect(jointsB.left?.neighborId).toBe(leanToA.id)
+    expect(jointsB.right?.neighborId).toBe(leanToC.id)
+    expect(jointsB.left?.roofPiece.length).toBeGreaterThanOrEqual(3)
+    expect(jointsB.right?.roofPiece.length).toBeGreaterThanOrEqual(3)
+
+    for (const [own, reciprocal, ownWall, ownLeanTo, reciprocalWall, reciprocalLeanTo] of [
+      [jointsB.left, jointsA.right, wallB, leanToB, wallA, leanToA],
+      [jointsB.right, jointsC.left, wallB, leanToB, wallC, leanToC],
+    ] as const) {
+      const ownSeam = own?.seam?.map((point) =>
+        cornerPlanPointToWorld(ownWall, ownLeanTo, point),
+      )
+      const reciprocalSeam = reciprocal?.seam?.map((point) =>
+        cornerPlanPointToWorld(reciprocalWall, reciprocalLeanTo, point),
+      )
+      expect(ownSeam).toHaveLength(2)
+      expect(reciprocalSeam).toHaveLength(2)
+      expect(pointSetHausdorffDistance(ownSeam!, reciprocalSeam!)).toBeLessThan(1e-5)
+    }
+
+    const centerAssembly = createLeanToAssembly(leanToB, undefined, nodes)
+    expect(centerAssembly.segment.shedFootprintPieces).toHaveLength(1)
+    expect(centerAssembly.segment.shedFootprintPieces?.[0]).toHaveLength(5)
   })
 
   test('resolves a reciprocal 60 degree corner with its true gutter mitre', () => {

@@ -96,6 +96,11 @@ export function MyTool() {
     mode-positioned point, so grid quantise / angle lock / free placement are respected right up to
     the wall and only the last few cm stick. It is **not** a Shift bypass and must not be gated on
     modifiers. See `snapWallDraftPointDetailed` in `components/tools/wall/wall-drafting.ts`.
+  - **Sanctioned exception — lean-to structural connection snap.** Moving or resizing a
+    `lean-to-extension` keeps a tight, mode-independent edge/height catch to a neighboring
+    extension. This is connectivity: the joined roofs become one structural run with shared
+    gutter ends and a single joint post. It runs after the active grid/free proposal and is
+    bypassed only by held Alt. The same rule applies in 2D and 3D.
 - **Constraints and guides can be decoupled.** When a stronger constraint owns the proposal —
   a wall segment's 45° lock while in `angles` mode — the tool may still publish passive dashed
   alignment/proximity guides as long as it does not apply the guide snap delta. Use this for chained

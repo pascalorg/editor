@@ -11,7 +11,9 @@ import {
   canDirectMoveNode,
   resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
+  resolveHandlePortalTargetId,
   resolveMoveActionNode,
+  shouldShowMoveCrossHandle,
   snapDirectRotationDelta,
 } from './direct-manipulation'
 
@@ -113,6 +115,77 @@ describe('canDirectMoveNode', () => {
     registerTestDefinition(kind, {})
 
     expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
+  })
+})
+
+describe('shouldShowMoveCrossHandle', () => {
+  test('shows the drag grip only for dormer-hosted windows', () => {
+    expect(
+      shouldShowMoveCrossHandle({
+        id: 'window_dormer',
+        type: 'window',
+        dormerId: 'dormer_1',
+      } as unknown as AnyNode),
+    ).toBe(true)
+    expect(
+      shouldShowMoveCrossHandle({
+        id: 'window_wall',
+        type: 'window',
+        wallId: 'wall_1',
+      } as unknown as AnyNode),
+    ).toBe(false)
+    expect(shouldShowMoveCrossHandle({ id: 'door_1', type: 'door' } as unknown as AnyNode)).toBe(
+      false,
+    )
+  })
+})
+
+describe('resolveHandlePortalTargetId', () => {
+  test('portals dormer-window handles outside the hidden roof-segment container', () => {
+    const roof = { id: 'roof_1', type: 'roof' } as unknown as AnyNode
+    const segment = {
+      id: 'roof_segment_1',
+      type: 'roof-segment',
+      parentId: roof.id,
+    } as unknown as AnyNode
+    const dormer = {
+      id: 'dormer_1',
+      type: 'dormer',
+      parentId: segment.id,
+    } as unknown as AnyNode
+    const window = {
+      id: 'window_1',
+      type: 'window',
+      parentId: dormer.id,
+      dormerId: dormer.id,
+    } as unknown as AnyNode
+    const nodes = {
+      [roof.id]: roof,
+      [segment.id]: segment,
+      [dormer.id]: dormer,
+      [window.id]: window,
+    }
+
+    expect(resolveHandlePortalTargetId(window, nodes, 'grandparent')).toBe(roof.id)
+  })
+
+  test('keeps the regular grandparent portal for wall-hosted windows', () => {
+    const level = { id: 'level_1', type: 'level' } as unknown as AnyNode
+    const wall = {
+      id: 'wall_1',
+      type: 'wall',
+      parentId: level.id,
+    } as unknown as AnyNode
+    const window = {
+      id: 'window_1',
+      type: 'window',
+      parentId: wall.id,
+      wallId: wall.id,
+    } as unknown as AnyNode
+
+    expect(
+      resolveHandlePortalTargetId(window, { [level.id]: level, [wall.id]: wall }, 'grandparent'),
+    ).toBe(level.id)
   })
 })
 

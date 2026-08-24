@@ -89,4 +89,42 @@ describe('scene window migrations', () => {
     expect(window.height).toBe(1.5)
     expect(window.wallId).toBe('wall_test')
   })
+
+  test('promotes a legacy dormer window into a hosted window child', () => {
+    useScene.getState().setScene(
+      {
+        dormer_test: {
+          object: 'node',
+          id: 'dormer_test',
+          type: 'dormer',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          roofSegmentId: 'segment_test',
+          width: 3,
+          depth: 2,
+          wallSkirtHeight: 2.5,
+          windowWidth: 0.8,
+          windowHeight: 1.2,
+          windowOffsetX: 0.4,
+          windowOffsetY: 1,
+          windowColumns: 2,
+          windowRows: 3,
+        },
+      } as unknown as Record<string, AnyNode>,
+      ['dormer_test'] as never,
+    )
+
+    const dormer = useScene.getState().nodes.dormer_test as Extract<AnyNode, { type: 'dormer' }>
+    const childId = dormer.children[0]
+    const window = useScene.getState().nodes[childId] as Extract<AnyNode, { type: 'window' }>
+
+    expect(childId).toMatch(/^window_test_default/)
+    expect(window.parentId).toBe('dormer_test')
+    expect(window.dormerId).toBe('dormer_test')
+    expect(window.dormerFace).toBe('front')
+    expect(window.position).toEqual([0.4, -0.25, 0])
+    expect(window.columnRatios).toEqual([1, 1])
+    expect(window.rowRatios).toEqual([1, 1, 1])
+  })
 })

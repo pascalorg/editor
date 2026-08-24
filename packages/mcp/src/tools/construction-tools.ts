@@ -18,7 +18,16 @@ import { publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema, Vec3Schema } from './schemas'
 
-const ROOF_TYPES = ['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'] as const
+const ROOF_TYPES = [
+  'hip',
+  'gable',
+  'shed',
+  'gambrel',
+  'dutch',
+  'mansard',
+  'flat',
+  'conical',
+] as const
 const RAILING_MODES = ['none', 'left', 'right', 'both'] as const
 
 export const createStoryShellInput = {
@@ -361,9 +370,16 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       materialPreset,
       name,
     }) => {
+      const effectiveWidth = roofType === 'conical' ? Math.max(width, depth) : width
+      const effectiveDepth = roofType === 'conical' ? effectiveWidth : depth
       // Peak height is derived from pitch + footprint + type; we still
       // need it to size the auto-generated roof level container below.
-      const peakHeight = getActiveRoofHeight({ roofType, pitch, width, depth })
+      const peakHeight = getActiveRoofHeight({
+        roofType,
+        pitch,
+        width: effectiveWidth,
+        depth: effectiveDepth,
+      })
       const referenceLevel = assertNode(bridge, levelId, 'level')
       const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
       let targetRoofLevelId = levelId as AnyNodeId
@@ -397,8 +413,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
 
       const segment = RoofSegmentNode.parse({
         roofType,
-        width,
-        depth,
+        width: effectiveWidth,
+        depth: effectiveDepth,
         wallHeight,
         pitch,
         wallThickness,

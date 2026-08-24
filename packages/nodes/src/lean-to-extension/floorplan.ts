@@ -1,4 +1,5 @@
 import {
+  type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
@@ -6,16 +7,126 @@ import {
   getWallCurveLength,
   isCurvedWall,
   type LeanToExtensionNode,
+  type RoofNode,
+  type RoofSegmentNode,
   type WallNode,
 } from '@pascal-app/core'
 import { bendLocalPoint, isCurvedLeanTo } from './arc'
 import { leanToFacetCount } from './geometry'
 import { resolveLeanToLayout } from './layout'
 
+function conicalSegmentPlanPose(
+  segment: RoofSegmentNode,
+  ctx: GeometryContext,
+): { center: FloorplanPoint; rotationY: number } {
+  const chain: (RoofNode | RoofSegmentNode)[] = [segment]
+  let parentId = segment.parentId
+  while (parentId) {
+    const parent = ctx.resolve(parentId as AnyNodeId)
+    if (parent?.type !== 'roof' && parent?.type !== 'roof-segment') break
+    chain.push(parent)
+    parentId = parent.parentId
+  }
+
+  let x = 0
+  let z = 0
+  let rotationY = 0
+  for (const node of chain.reverse()) {
+    const cos = Math.cos(rotationY)
+    const sin = Math.sin(rotationY)
+    x += node.position[0] * cos + node.position[2] * sin
+    z += -node.position[0] * sin + node.position[2] * cos
+    rotationY += node.rotation
+  }
+  return { center: [x, z], rotationY }
+}
+
+function buildConicalLeanToFloorplan(
+  node: LeanToExtensionNode,
+  segment: RoofSegmentNode,
+  ctx: GeometryContext,
+): FloorplanGeometry {
+  const layout = resolveLeanToLayout(node)
+  const pose = conicalSegmentPlanPose(segment, ctx)
+  const rotationY = pose.rotationY + node.rotation[1]
+  const cos = Math.cos(rotationY)
+  const sin = Math.sin(rotationY)
+  const toWorld = (localX: number, localZ: number): FloorplanPoint => {
+    const bent = bendLocalPoint(node, localX, localZ)
+    const x = node.position[0] + bent.x
+    const z = node.position[2] + bent.y
+    return [pose.center[0] + x * cos + z * sin, pose.center[1] - x * sin + z * cos]
+  }
+  const facets = leanToFacetCount(node)
+  const highEdge: FloorplanPoint[] = []
+  const lowEdge: FloorplanPoint[] = []
+  for (let index = 0; index <= facets; index++) {
+    const localX = -layout.span / 2 + (layout.span * index) / facets
+    highEdge.push(toWorld(localX, -node.highOverhang))
+    lowEdge.push(toWorld(localX, layout.projection + node.lowOverhang))
+  }
+
+  const selected = ctx.viewState?.selected ?? false
+  const stroke = selected ? '#f97316' : '#475569'
+  const children: FloorplanGeometry[] = [
+    {
+      kind: 'polygon',
+      points: [...highEdge, ...lowEdge.reverse()],
+      fill: selected ? '#ffedd5' : '#e2e8f0',
+      fillOpacity: 0.65,
+      stroke,
+      strokeWidth: selected ? 2 : 1.25,
+      vectorEffect: 'non-scaling-stroke',
+    },
+    {
+      kind: 'polyline',
+      points: Array.from({ length: facets + 1 }, (_, index) => {
+        const localX = -layout.span / 2 + (layout.span * index) / facets
+        return toWorld(localX, layout.beamZ)
+      }),
+      stroke,
+      strokeWidth: selected ? 3 : 2,
+      vectorEffect: 'non-scaling-stroke',
+    },
+  ]
+  for (const x of layout.postXs) {
+    const [postX, postZ] = toWorld(x, layout.beamZ)
+    children.push({
+      kind: 'rect',
+      x: postX - node.postWidth / 2,
+      y: postZ - node.postDepth / 2,
+      width: node.postWidth,
+      height: node.postDepth,
+      fill: stroke,
+      stroke,
+      strokeWidth: 1,
+      vectorEffect: 'non-scaling-stroke',
+    })
+  }
+  if (selected) {
+    const point = toWorld(0, layout.roofRun + 0.12)
+    children.push({
+      kind: 'move-arrow',
+      point,
+      angle: Math.atan2(Math.cos(rotationY), Math.sin(rotationY)),
+      affordance: 'lean-to-resize',
+      payload: { dimension: 'projection' },
+    })
+  }
+  return { kind: 'group', children }
+}
+
 export function buildLeanToExtensionFloorplan(
   node: LeanToExtensionNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
+  if (
+    ctx.parent?.type === 'roof-segment' &&
+    ctx.parent.roofType === 'conical' &&
+    node.hostKind === 'conical-roof'
+  ) {
+    return buildConicalLeanToFloorplan(node, ctx.parent, ctx)
+  }
   const wall = ctx.parent as WallNode | null
   if (wall?.type !== 'wall') return null
 

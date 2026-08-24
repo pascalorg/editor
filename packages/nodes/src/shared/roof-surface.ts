@@ -136,7 +136,12 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
   let shinTopD = shinBotD
   let transZ = 0
 
-  if (roofType === 'hip' || roofType === 'mansard' || roofType === 'dutch') {
+  if (
+    roofType === 'hip' ||
+    roofType === 'mansard' ||
+    roofType === 'dutch' ||
+    roofType === 'conical'
+  ) {
     shinTopW += 2 * stSin
     shinTopD += 2 * stSin
   } else if (roofType === 'gable' || roofType === 'gambrel') {
@@ -432,6 +437,12 @@ export function getAnalyticalNormal(
   // Single slope falling toward +Z (ridge at -Z, eave at +Z).
   if (roofType === 'shed') {
     return buildSlopeNormal(0, 1, primaryTan, out)
+  }
+
+  if (roofType === 'conical') {
+    const radius = Math.hypot(lx, lz)
+    if (radius <= 1e-6) return out.set(0, 1, 0)
+    return buildSlopeNormal(lx / radius, lz / radius, primaryTan, out)
   }
 
   // 4-sided slopes: the dominant axis chooses which face the point sits

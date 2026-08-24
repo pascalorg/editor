@@ -356,14 +356,14 @@ export function leanToPlacementConflicts(
     if (node.type !== 'lean-to-extension' || node.id === leanTo.id || node.parentId === wall.id)
       continue
     const host = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
-    const supportedConcaveJoint =
+    const supportedCornerJoint =
       host?.type === 'wall' &&
       Object.values(resolveLeanToCornerJoints(leanTo, wall, nodes)).some(
-        (joint) => joint?.kind === 'concave' && joint.neighborId === node.id,
+        (joint) => joint?.neighborId === node.id,
       )
     if (
       host?.type === 'wall' &&
-      !supportedConcaveJoint &&
+      !supportedCornerJoint &&
       boundsOverlap(
         candidateWorldBounds,
         transformBounds(planBounds(node, host), ancestorBuilding(host, nodes)),

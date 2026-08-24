@@ -95,6 +95,15 @@ export {
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
+  type ConicalRoofInvalidPlacement,
+  type ConicalRoofLevelPlacement,
+  type ConicalRoofPlacement,
+  type ConicalRoofSurfacePlacement,
+  type ResolveConicalRoofPlacementInput,
+  type RoofPlacementMode,
+  resolveConicalRoofPlacement,
+} from './lib/conical-roof-placement'
+export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
   getGarageVisibleOpeningRatio,
@@ -144,6 +153,7 @@ export {
   type RoofPlanSegment,
   roofOverlapEntryOwns,
   roofPlanBoundsOverlap,
+  roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {

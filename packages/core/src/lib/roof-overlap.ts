@@ -1,6 +1,9 @@
 export type RoofOverlapEntry = {
   roofId: string
   segmentId: string
+  supportRoofId?: string
+  supportRoofSegmentId?: string
+  roofType?: string
   width: number
   depth: number
 }
@@ -35,6 +38,15 @@ export function roofOverlapEntryOwns(
   current: RoofOverlapEntry,
   epsilon = 1e-6,
 ): boolean {
+  const candidateIsMountedOnCurrent =
+    candidate.supportRoofId === current.roofId ||
+    candidate.supportRoofSegmentId === current.segmentId
+  if (candidateIsMountedOnCurrent) return false
+
+  const currentIsMountedOnCandidate =
+    current.supportRoofId === candidate.roofId ||
+    current.supportRoofSegmentId === candidate.segmentId
+  if (currentIsMountedOnCandidate) return true
   const candidateArea = candidate.width * candidate.depth
   const currentArea = current.width * current.depth
   return (
@@ -42,6 +54,24 @@ export function roofOverlapEntryOwns(
     (Math.abs(candidateArea - currentArea) <= epsilon &&
       compareRoofOverlapIdentity(candidate, current) < 0)
   )
+}
+
+export function roofPlanOverlapEntryOwns(
+  candidate: RoofOverlapEntry,
+  current: RoofOverlapEntry,
+  epsilon = 1e-6,
+): boolean {
+  const candidateIsMountedOnCurrent =
+    candidate.supportRoofId === current.roofId ||
+    candidate.supportRoofSegmentId === current.segmentId
+  if (candidateIsMountedOnCurrent) return true
+
+  const currentIsMountedOnCandidate =
+    current.supportRoofId === candidate.roofId ||
+    current.supportRoofSegmentId === candidate.segmentId
+  if (currentIsMountedOnCandidate) return false
+
+  return roofOverlapEntryOwns(candidate, current, epsilon)
 }
 
 export function getRoofPlanBounds(roof: RoofPlan): RoofPlanBounds | null {

@@ -15,6 +15,7 @@ describe('roof system shed geometry', () => {
     const sideInfillX: number[] = []
     const sideInfillNormals: THREE.Vector3[] = []
     const roofSideX: number[] = []
+    const wallVertexYs: number[] = []
     const a = new THREE.Vector3()
     const b = new THREE.Vector3()
     const c = new THREE.Vector3()
@@ -38,22 +39,28 @@ describe('roof system shed geometry', () => {
         }
 
         if (group.materialIndex === 2) {
-          sideInfillNormals.push(normal.clone())
-          for (const vertexIndex of [ia, ib, ic]) {
-            const x = position.getX(vertexIndex)
-            const y = position.getY(vertexIndex)
-            if (y >= segment.wallHeight - 0.001) {
-              sideInfillX.push(x)
+          const vertexIndices = [ia, ib, ic]
+          for (const vertexIndex of vertexIndices) {
+            wallVertexYs.push(position.getY(vertexIndex))
+          }
+          if (
+            vertexIndices.every(
+              (vertexIndex) => position.getY(vertexIndex) >= segment.wallHeight - 0.05,
+            )
+          ) {
+            sideInfillNormals.push(normal.clone())
+            for (const vertexIndex of vertexIndices) {
+              sideInfillX.push(position.getX(vertexIndex))
             }
           }
         }
       }
     }
 
-    return { geometry, roofSideX, sideInfillNormals, sideInfillX }
+    return { geometry, roofSideX, sideInfillNormals, sideInfillX, wallVertexYs }
   }
 
-  test('keeps standalone shed side infill inside the overhanging roof edge', () => {
+  test('keeps the standalone shed wall shell beneath the overhanging roof edge', () => {
     const segment = RoofSegmentNode.parse({
       id: 'rseg_shed',
       type: 'roof-segment',
@@ -68,15 +75,45 @@ describe('roof system shed geometry', () => {
       shingleThickness: 0.05,
     })
     const wallSideX = segment.width / 2
-    const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
+    const { geometry, roofSideX, wallVertexYs } = inspectShedGeometry(segment)
 
-    expect(sideInfillNormals).toHaveLength(2)
-    expect(sideInfillX.length).toBeGreaterThan(0)
-    expect(sideInfillNormals.every((panelNormal) => Math.abs(panelNormal.x) > 0.95)).toBe(true)
-    expect(sideInfillNormals.every((panelNormal) => Math.abs(panelNormal.z) < 0.05)).toBe(true)
-    expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeLessThan(wallSideX - 0.05)
-    expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeGreaterThan(wallSideX - 0.15)
+    expect(wallVertexYs.length).toBeGreaterThan(0)
+    expect(Math.min(...wallVertexYs)).toBeLessThan(segment.wallHeight / 2)
     expect(Math.max(...roofSideX)).toBeGreaterThan(wallSideX + segment.overhang * 0.5)
+
+    geometry.dispose()
+  })
+
+  test('retains the wall shell when changing a standalone segment to shed', () => {
+    const original = RoofSegmentNode.parse({
+      id: 'rseg_switched_to_shed',
+      type: 'roof-segment',
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+      wallHeight: 2.6,
+      wallThickness: 0.1,
+      pitch: 25,
+      overhang: 0.3,
+      deckThickness: 0.1,
+      shingleThickness: 0.05,
+    })
+    const segment = RoofSegmentNode.parse({ ...original, roofType: 'shed' })
+    const geometry = generateRoofSegmentGeometry(segment)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()
+    expect(index).not.toBeNull()
+
+    const wallVertexYs: number[] = []
+    for (const group of geometry.groups) {
+      if (group.materialIndex !== 2) continue
+      for (let offset = group.start; offset < group.start + group.count; offset += 1) {
+        wallVertexYs.push(position.getY(index!.getX(offset)))
+      }
+    }
+
+    expect(wallVertexYs.length).toBeGreaterThan(0)
+    expect(Math.min(...wallVertexYs)).toBeLessThan(segment.wallHeight / 2)
 
     geometry.dispose()
   })
@@ -102,6 +139,7 @@ describe('roof system shed geometry', () => {
       shedSideInfillSpan: span,
       shedSideInfillMinX: -infillHalfWidth,
       shedSideInfillMaxX: infillHalfWidth,
+      metadata: { managedByLeanTo: 'lean_to_test', leanToRole: 'roof-segment' },
     })
     const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
 

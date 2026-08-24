@@ -458,7 +458,7 @@ function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
   let depth = baseDepth
   let translateZ = 0
 
-  if (['hip', 'mansard', 'dutch'].includes(node.roofType)) {
+  if (['hip', 'mansard', 'dutch', 'conical'].includes(node.roofType)) {
     width += shingleHorizontalThickness * 2
     depth += shingleHorizontalThickness * 2
   } else if (['gable', 'gambrel'].includes(node.roofType)) {

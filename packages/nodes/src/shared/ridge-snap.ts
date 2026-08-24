@@ -43,7 +43,7 @@ export function resolveRidgeSnap(
   cursorLocalZ: number,
 ): RidgeSnap | null {
   const roofType = segment.roofType ?? 'gable'
-  if (roofType === 'flat') return null
+  if (roofType === 'flat' || roofType === 'conical') return null
 
   const lines =
     roofType === 'shed'

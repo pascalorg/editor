@@ -8,8 +8,9 @@ import {
   useLiveNodeOverrides,
   type WallNode,
 } from '@pascal-app/core'
-import { getSegmentGridStep } from '@pascal-app/editor'
-import { resolveLeanToEdgeSnapTargets, resolveLeanToMoveCenterX } from './layout'
+import { getSegmentGridStep, isGridSnapActive } from '@pascal-app/editor'
+import { resolveLeanToEdgeSnapTargets, resolveLeanToMoveProposal } from './layout'
+import { leanToManagedPreviewOverrides } from './managed-preview'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 
 // Arc-length along the wall centerline to the point on it nearest the
@@ -53,9 +54,12 @@ export const leanToFloorplanMoveTarget: FloorplanMoveTarget<LeanToExtensionNode>
   const nodeId = node.id as AnyNodeId
   const wall = node.parentId ? (sceneApi?.get(node.parentId as AnyNodeId) as WallNode) : undefined
   let lastPatch: Partial<LeanToExtensionNode> | null = null
+  const previewIds = new Set(
+    sceneApi ? leanToManagedPreviewOverrides(node, {}, sceneApi).map(([id]) => id) : [],
+  )
 
   return {
-    affectedIds: [nodeId],
+    affectedIds: [nodeId, ...previewIds],
     apply({ planPoint, modifiers }) {
       if (wall?.type !== 'wall' || !sceneApi) return
       const rawLocalX = isCurvedWall(wall)
@@ -68,39 +72,68 @@ export const leanToFloorplanMoveTarget: FloorplanMoveTarget<LeanToExtensionNode>
               ((planPoint[0] - wall.start[0]) * dx + (planPoint[1] - wall.start[1]) * dz) / length
             )
           })()
-      const step = modifiers.altKey ? 0 : getSegmentGridStep()
+      const step = !modifiers.altKey && isGridSnapActive() ? getSegmentGridStep() : 0
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+      const proposal = resolveLeanToMoveProposal({
+        node,
+        wall,
+        rawLocalX,
+        rawHighEdgeHeight: node.highEdgeHeight,
+        snapStep: step,
+        edgeSnapTargets: modifiers.altKey ? [] : resolveLeanToEdgeSnapTargets(node, wall, nodes),
+      })
       const position: LeanToExtensionNode['position'] = [
-        resolveLeanToMoveCenterX(
-          node,
-          wall,
-          rawLocalX,
-          step,
-          modifiers.altKey ? [] : resolveLeanToEdgeSnapTargets(node, wall, nodes),
-        ),
+        proposal.centerX,
         node.position[1],
         node.position[2],
       ]
+      const connectionOffset =
+        node.connectionMode === 'auto'
+          ? Math.max(
+              -1,
+              Math.min(1, node.connectionOffset + proposal.highEdgeHeight - node.highEdgeHeight),
+            )
+          : node.connectionOffset
       const candidate = resolveLeanToEndAbutments(
-        { ...node, position, autoSpan: false },
+        {
+          ...node,
+          position,
+          highEdgeHeight: proposal.highEdgeHeight,
+          lowEdgeHeight: proposal.lowEdgeHeight,
+          connectionOffset,
+          autoSpan: false,
+        },
         wall,
         nodes,
       )
       const patch: Partial<LeanToExtensionNode> = {
         position,
+        highEdgeHeight: proposal.highEdgeHeight,
+        lowEdgeHeight: proposal.lowEdgeHeight,
+        connectionOffset,
         autoSpan: false,
         leftEndCondition: candidate.leftEndCondition,
         rightEndCondition: candidate.rightEndCondition,
         downspoutPosition: candidate.downspoutPosition,
       }
-      useLiveNodeOverrides.getState().set(nodeId, patch)
-      sceneApi.markDirty(nodeId)
-      lastPatch = leanToPlacementConflicts(candidate, wall, nodes).length === 0 ? patch : null
+      const previewEntries: ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> = [
+        [nodeId, patch as Partial<AnyNode>],
+        ...leanToManagedPreviewOverrides(node, patch, sceneApi),
+      ]
+      useLiveNodeOverrides.getState().setMany(previewEntries)
+      for (const [id] of previewEntries) {
+        previewIds.add(id)
+        sceneApi.markDirty(id)
+      }
+      lastPatch =
+        modifiers.altKey || leanToPlacementConflicts(candidate, wall, nodes).length === 0
+          ? patch
+          : null
     },
     canCommit: () => lastPatch !== null,
     commit() {
       if (!(lastPatch && sceneApi)) return
-      useLiveNodeOverrides.getState().clear(nodeId)
+      for (const id of [nodeId, ...previewIds]) useLiveNodeOverrides.getState().clear(id)
       sceneApi.update(nodeId, lastPatch as Partial<AnyNode>)
     },
   }

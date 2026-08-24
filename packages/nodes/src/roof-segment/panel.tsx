@@ -43,6 +43,10 @@ const ROOF_TYPE_OPTIONS_2: { label: string; value: RoofType }[] = [
   { label: 'Mansard', value: 'mansard' },
 ]
 
+const ROOF_TYPE_OPTIONS_3: { label: string; value: RoofType }[] = [
+  { label: 'Conical', value: 'conical' },
+]
+
 // Carpenter / roofer convention: rise over a 12" run, converted to degrees.
 // atan(3/12) ≈ 14.04°, atan(6/12) ≈ 26.57°, atan(9/12) ≈ 36.87°, atan(12/12) = 45°.
 const PITCH_PRESETS: { label: string; deg: number }[] = [
@@ -127,23 +131,43 @@ export default function RoofSegmentPanel() {
   const handleRoofTypeChange = useCallback(
     (roofType: RoofType) => {
       if (isManagedLeanToRoofSegment(node?.metadata)) return
+      if (roofType === 'conical' && node) {
+        const scene = useScene.getState()
+        const defaultVentIds = (node.children ?? []).filter((childId) =>
+          isDefaultRidgeVentNode(scene.nodes[childId as AnyNodeId], node.id),
+        ) as AnyNodeId[]
+        if (defaultVentIds.length > 0) scene.deleteNodes(defaultVentIds)
+      }
       // Switching to Dutch resets the shape parameters to their defaults so the
       // gablet is well-formed regardless of the leftover values from the
       // previous roof type.
       handleUpdate(
-        roofType === 'dutch'
+        roofType === 'conical'
           ? {
               roofType,
-              dutchHipWidthRatio: ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
-              dutchHipHeightRatio: ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
-              dutchWaistLengthRatio: ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
-              dutchGabletRake: ROOF_SHAPE_DEFAULTS.dutchGabletRake,
-              dutchTopRakeThickness: ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness,
+              depth: node?.width ?? 8,
+              rotation: 0,
+              trim: EMPTY_TRIM,
+              metadata: {
+                ...metadataRecord(node?.metadata),
+                autoGutter: false,
+                autoRidgeVent: false,
+                showTrimPlanes: false,
+              },
             }
-          : { roofType },
+          : roofType === 'dutch'
+            ? {
+                roofType,
+                dutchHipWidthRatio: ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
+                dutchHipHeightRatio: ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+                dutchWaistLengthRatio: ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+                dutchGabletRake: ROOF_SHAPE_DEFAULTS.dutchGabletRake,
+                dutchTopRakeThickness: ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness,
+              }
+            : { roofType },
       )
     },
-    [handleUpdate, node?.metadata],
+    [handleUpdate, node],
   )
 
   const handleClose = useCallback(() => {
@@ -310,67 +334,92 @@ export default function RoofSegmentPanel() {
           value={node.roofType}
           disabled={managedLeanToRoofSegment}
         />
-      </PanelSection>
-
-      <PanelSection title="Trim">
-        <ActionGroup>
-          <ActionButton
-            icon={
-              showTrimPlanes ? (
-                <Check className="h-3.5 w-3.5" />
-              ) : (
-                <Pencil className="h-3.5 w-3.5" />
-              )
-            }
-            label={showTrimPlanes ? 'Done editing' : 'Edit footprint'}
-            onClick={() => (showTrimPlanes ? handleBack() : handleTrimEditing(true))}
-          />
-          <ActionButton
-            className="disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!hasSegmentTrim(node)}
-            icon={<RotateCcw className="h-3.5 w-3.5" />}
-            label="Reset"
-            onClick={handleResetTrim}
-          />
-        </ActionGroup>
-        {node.roofType !== 'shed' && node.roofType !== 'flat' && (
-          <ToggleControl
-            checked={autoRidgeVentEnabled}
-            label="Auto ridge vent"
-            onChange={handleAutoRidgeVentToggle}
-          />
-        )}
-      </PanelSection>
-
-      <PanelSection title="Drainage">
-        <ToggleControl
-          checked={autoGutterEnabled}
-          label="Auto gutters"
-          onChange={handleAutoGutterToggle}
+        <SegmentedControl
+          onChange={(v) => handleRoofTypeChange(v)}
+          options={ROOF_TYPE_OPTIONS_3}
+          value={node.roofType}
+          disabled={managedLeanToRoofSegment}
         />
       </PanelSection>
+
+      {node.roofType !== 'conical' && (
+        <PanelSection title="Trim">
+          <ActionGroup>
+            <ActionButton
+              icon={
+                showTrimPlanes ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Pencil className="h-3.5 w-3.5" />
+                )
+              }
+              label={showTrimPlanes ? 'Done editing' : 'Edit footprint'}
+              onClick={() => (showTrimPlanes ? handleBack() : handleTrimEditing(true))}
+            />
+            <ActionButton
+              className="disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!hasSegmentTrim(node)}
+              icon={<RotateCcw className="h-3.5 w-3.5" />}
+              label="Reset"
+              onClick={handleResetTrim}
+            />
+          </ActionGroup>
+          {node.roofType !== 'shed' && node.roofType !== 'flat' && (
+            <ToggleControl
+              checked={autoRidgeVentEnabled}
+              label="Auto ridge vent"
+              onChange={handleAutoRidgeVentToggle}
+            />
+          )}
+        </PanelSection>
+      )}
+
+      {node.roofType !== 'conical' && (
+        <PanelSection title="Drainage">
+          <ToggleControl
+            checked={autoGutterEnabled}
+            label="Auto gutters"
+            onChange={handleAutoGutterToggle}
+          />
+        </PanelSection>
+      )}
 
       <PanelSection title="Footprint">
-        <SliderControl
-          label="Width"
-          max={25}
-          min={0.5}
-          onChange={(v) => handleUpdate({ width: v })}
-          precision={2}
-          step={0.5}
-          unit="m"
-          value={Math.round(node.width * 100) / 100}
-        />
-        <SliderControl
-          label="Depth"
-          max={25}
-          min={0.5}
-          onChange={(v) => handleUpdate({ depth: v })}
-          precision={2}
-          step={0.5}
-          unit="m"
-          value={Math.round(node.depth * 100) / 100}
-        />
+        {node.roofType === 'conical' ? (
+          <SliderControl
+            label="Diameter"
+            max={25}
+            min={0.5}
+            onChange={(v) => handleUpdate({ width: v, depth: v })}
+            precision={2}
+            step={0.5}
+            unit="m"
+            value={Math.round(node.width * 100) / 100}
+          />
+        ) : (
+          <>
+            <SliderControl
+              label="Width"
+              max={25}
+              min={0.5}
+              onChange={(v) => handleUpdate({ width: v })}
+              precision={2}
+              step={0.5}
+              unit="m"
+              value={Math.round(node.width * 100) / 100}
+            />
+            <SliderControl
+              label="Depth"
+              max={25}
+              min={0.5}
+              onChange={(v) => handleUpdate({ depth: v })}
+              precision={2}
+              step={0.5}
+              unit="m"
+              value={Math.round(node.depth * 100) / 100}
+            />
+          </>
+        )}
       </PanelSection>
 
       <PanelSection title="Wall Height">
@@ -609,34 +658,38 @@ export default function RoofSegmentPanel() {
           unit="m"
           value={Math.round(node.position[2] * 100) / 100}
         />
-        <SliderControl
-          label="Rotation"
-          max={180}
-          min={-180}
-          onChange={(degrees) => {
-            handleUpdate({ rotation: (degrees * Math.PI) / 180 })
-          }}
-          precision={0}
-          step={1}
-          unit="°"
-          value={Math.round((node.rotation * 180) / Math.PI)}
-        />
-        <div className="flex gap-1.5 px-1 pt-2 pb-1">
-          <ActionButton
-            label="-45°"
-            onClick={() => {
-              triggerSFX('sfx:item-rotate')
-              handleUpdate({ rotation: node.rotation - Math.PI / 4 })
-            }}
-          />
-          <ActionButton
-            label="+45°"
-            onClick={() => {
-              triggerSFX('sfx:item-rotate')
-              handleUpdate({ rotation: node.rotation + Math.PI / 4 })
-            }}
-          />
-        </div>
+        {node.roofType !== 'conical' && (
+          <>
+            <SliderControl
+              label="Rotation"
+              max={180}
+              min={-180}
+              onChange={(degrees) => {
+                handleUpdate({ rotation: (degrees * Math.PI) / 180 })
+              }}
+              precision={0}
+              step={1}
+              unit="°"
+              value={Math.round((node.rotation * 180) / Math.PI)}
+            />
+            <div className="flex gap-1.5 px-1 pt-2 pb-1">
+              <ActionButton
+                label="-45°"
+                onClick={() => {
+                  triggerSFX('sfx:item-rotate')
+                  handleUpdate({ rotation: node.rotation - Math.PI / 4 })
+                }}
+              />
+              <ActionButton
+                label="+45°"
+                onClick={() => {
+                  triggerSFX('sfx:item-rotate')
+                  handleUpdate({ rotation: node.rotation + Math.PI / 4 })
+                }}
+              />
+            </div>
+          </>
+        )}
       </PanelSection>
 
       <PanelSection title="Actions">

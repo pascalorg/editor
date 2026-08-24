@@ -1,10 +1,11 @@
 import type { AnyNode, LeanToExtensionNode, WallNode } from '@pascal-app/core'
 import { bendLocalPoint, isCurvedLeanTo, leanToArcFrameAtLocalX } from './arc'
 import { leanToWallLocalPose, resolveLeanToLayout } from './layout'
+import { applyLeanToWallCornerSpan } from './roof-attachment'
 
 export type LeanToCornerSide = 'left' | 'right'
 export type LeanToPlanPoint = [number, number]
-export type LeanToCornerKind = 'convex' | 'concave'
+export type LeanToCornerKind = 'convex' | 'concave' | 'linear'
 
 export type LeanToCornerJoint = {
   side: LeanToCornerSide
@@ -27,6 +28,9 @@ const WALL_CONNECTION_TRIM = 0.002
 const PLAN_TOLERANCE = 1e-6
 const MIN_CORNER_ANGLE = Math.PI / 6
 const MAX_CORNER_ANGLE = (5 * Math.PI) / 6
+const LINEAR_DIRECTION_TOLERANCE = 1e-3
+const LINEAR_JOIN_PLAN_TOLERANCE = 0.03
+const LINEAR_JOIN_HEIGHT_TOLERANCE = 0.02
 
 function planDistance(a: readonly [number, number], b: readonly [number, number]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1])
@@ -106,6 +110,11 @@ function cornerKindFromDirections(
   if (!(outward && candidateOutward && away && candidateAway)) return null
   const candidateAcrossOwn = outward[0] * candidateAway[0] + outward[1] * candidateAway[1]
   const ownAcrossCandidate = candidateOutward[0] * away[0] + candidateOutward[1] * away[1]
+  const outwardDot = outward[0] * candidateOutward[0] + outward[1] * candidateOutward[1]
+  const awayDot = away[0] * candidateAway[0] + away[1] * candidateAway[1]
+  if (outwardDot >= 1 - LINEAR_DIRECTION_TOLERANCE && awayDot <= -1 + LINEAR_DIRECTION_TOLERANCE) {
+    return 'linear'
+  }
   if (candidateAcrossOwn < -PLAN_TOLERANCE && ownAcrossCandidate < -PLAN_TOLERANCE) {
     return 'convex'
   }
@@ -113,6 +122,102 @@ function cornerKindFromDirections(
     return 'concave'
   }
   return null
+}
+
+function roofEndWorldPoint(
+  wall: WallNode,
+  leanTo: LeanToExtensionNode,
+  side: LeanToCornerSide,
+): LeanToPlanPoint | null {
+  const layout = resolveLeanToLayout(leanTo)
+  const sign = side === 'left' ? -1 : 1
+  return leanToPointToWorld(wall, leanTo, layout.roofCenterX + sign * (layout.roofWidth / 2), 0)
+}
+
+function candidateRoofSideAtPoint(
+  wall: WallNode,
+  leanTo: LeanToExtensionNode,
+  point: readonly [number, number],
+): LeanToCornerSide | null {
+  const left = roofEndWorldPoint(wall, leanTo, 'left')
+  const right = roofEndWorldPoint(wall, leanTo, 'right')
+  if (left && planDistance(left, point) <= LINEAR_JOIN_PLAN_TOLERANCE) return 'left'
+  if (right && planDistance(right, point) <= LINEAR_JOIN_PLAN_TOLERANCE) return 'right'
+  return null
+}
+
+function resolveLinearJoint(
+  wall: WallNode,
+  leanTo: LeanToExtensionNode,
+  side: LeanToCornerSide,
+  candidateWall: WallNode,
+  candidate: LeanToExtensionNode,
+  candidateSide: LeanToCornerSide,
+): Pick<LeanToCornerJoint, 'roofPiece' | 'seam' | 'beamExtension' | 'sharedPostPosition'> | null {
+  const layout = resolveLeanToLayout(leanTo)
+  const candidateLayout = resolveLeanToLayout(candidate)
+  const sign = side === 'left' ? -1 : 1
+  const candidateSign = candidateSide === 'left' ? -1 : 1
+  const sideX = layout.roofCenterX + sign * (layout.roofWidth / 2)
+  const candidateSideX =
+    candidateLayout.roofCenterX + candidateSign * (candidateLayout.roofWidth / 2)
+  const edges = roofPlanEdges(leanTo)
+  const candidateEdges = roofPlanEdges(candidate)
+  const ownBack = leanToPointToWorld(wall, leanTo, sideX, edges.back)
+  const ownFront = leanToPointToWorld(wall, leanTo, sideX, edges.front)
+  const candidateBack = leanToPointToWorld(
+    candidateWall,
+    candidate,
+    candidateSideX,
+    candidateEdges.back,
+  )
+  const candidateFront = leanToPointToWorld(
+    candidateWall,
+    candidate,
+    candidateSideX,
+    candidateEdges.front,
+  )
+  if (!(ownBack && ownFront && candidateBack && candidateFront)) return null
+  if (
+    planDistance(ownBack, candidateBack) > LINEAR_JOIN_PLAN_TOLERANCE ||
+    planDistance(ownFront, candidateFront) > LINEAR_JOIN_PLAN_TOLERANCE
+  ) {
+    return null
+  }
+
+  for (const point of [ownBack, ownFront] as const) {
+    const ownHeight = leanToTopHeightAtWorld(wall, leanTo, point)
+    const candidateHeight = leanToTopHeightAtWorld(candidateWall, candidate, point)
+    if (
+      ownHeight === null ||
+      candidateHeight === null ||
+      Math.abs(ownHeight - candidateHeight) > LINEAR_JOIN_HEIGHT_TOLERANCE
+    ) {
+      return null
+    }
+  }
+
+  const ownBeam = leanToPointToWorld(wall, leanTo, sideX, layout.beamZ)
+  const candidateBeam = leanToPointToWorld(
+    candidateWall,
+    candidate,
+    candidateSideX,
+    candidateLayout.beamZ,
+  )
+  if (!(ownBeam && candidateBeam)) return null
+  if (planDistance(ownBeam, candidateBeam) > LINEAR_JOIN_PLAN_TOLERANCE) return null
+
+  const structuralSideX = sign * (layout.span / 2)
+  const beamExtension = Math.max(0, sign * (sideX - structuralSideX))
+  return {
+    roofPiece: [],
+    seam: [
+      [sideX, edges.back],
+      [sideX, edges.front],
+    ],
+    beamExtension,
+    sharedPostPosition: [sideX, 0, layout.beamZ],
+  }
 }
 
 function cornerInteriorAngle(
@@ -570,6 +675,52 @@ function resolveConcaveRoofPiece(
   }
 }
 
+function resolveCurvedStraightConcaveRoofPiece(
+  leanTo: LeanToExtensionNode,
+  wall: WallNode,
+  side: LeanToCornerSide,
+  candidate: LeanToExtensionNode,
+  candidateWall: WallNode,
+  candidateSide: LeanToCornerSide,
+): { piece: LeanToPlanPoint[]; seam: [LeanToPlanPoint, LeanToPlanPoint] | null } | null {
+  const ownCurved = isCurvedLeanTo(leanTo)
+  const candidateCurved = isCurvedLeanTo(candidate)
+  if (ownCurved === candidateCurved) return null
+  const direct = resolveConcaveRoofPiece(leanTo, wall, side, candidate, candidateWall)
+  if ((direct.piece.length >= 3 && direct.seam) || !ownCurved) return null
+
+  // At a semicircle the curved parameter-space boundary can touch the same
+  // roof plane at both ends, while the straight neighbor still yields the seam.
+  const reciprocal = resolveConcaveRoofPiece(
+    candidate,
+    candidateWall,
+    candidateSide,
+    leanTo,
+    wall,
+  )
+  if (!reciprocal.seam) return null
+  const seamWorld = reciprocal.seam.map((point) =>
+    leanToPointToWorld(candidateWall, candidate, point[0], point[1]),
+  )
+  if (seamWorld.some((point) => !point)) return null
+  const localized = seamWorld.map((point) => worldPointToLeanTo(wall, leanTo, point!))
+  if (localized.some((point) => !point)) return null
+
+  const layout = resolveLeanToLayout(leanTo)
+  const edges = roofPlanEdges(leanTo)
+  const [backSeam, frontSeam] = (localized as LeanToPlanPoint[]).sort(
+    (left, right) => left[1] - right[1],
+  ) as [LeanToPlanPoint, LeanToPlanPoint]
+  const leftX = layout.roofCenterX - layout.roofWidth / 2
+  const rightX = layout.roofCenterX + layout.roofWidth / 2
+  const piece: LeanToPlanPoint[] =
+    side === 'left'
+      ? [backSeam, [rightX, edges.back], [rightX, edges.front], frontSeam]
+      : [[leftX, edges.back], backSeam, frontSeam, [leftX, edges.front]]
+
+  return { piece, seam: [backSeam, frontSeam] }
+}
+
 export function applyLeanToCornerRoofPieces(
   base: LeanToPlanPoint[],
   joints: Partial<Record<LeanToCornerSide, LeanToCornerJoint>>,
@@ -688,8 +839,9 @@ export function resolveLeanToCornerJoints(
   wall: WallNode | undefined,
   nodes: Record<string, AnyNode> | undefined,
 ): Partial<Record<LeanToCornerSide, LeanToCornerJoint>> {
-  if (!leanTo.autoMiterCorners || !wall || !nodes) return {}
+  if (!wall || !nodes) return {}
   if (!wallFrame(wall)) return {}
+  const cornerLeanTo = applyLeanToWallCornerSpan(leanTo, wall)
   const tolerance = Math.max(
     0.35,
     (wall.thickness ?? 0.1) + Math.max(leanTo.leftOverhang, leanTo.rightOverhang),
@@ -697,116 +849,196 @@ export function resolveLeanToCornerJoints(
   const joints: Partial<Record<LeanToCornerSide, LeanToCornerJoint>> = {}
 
   for (const side of ['left', 'right'] as const) {
-    const endpoint = endWorldPoint(wall, leanTo, side)
-    if (!endpoint) continue
+    const endpoint = endWorldPoint(wall, cornerLeanTo, side)
+    const roofEndpoint = roofEndWorldPoint(wall, cornerLeanTo, side)
+    if (!(endpoint && roofEndpoint)) continue
     for (const candidate of Object.values(nodes)) {
       if (candidate.type !== 'lean-to-extension' || candidate.id === leanTo.id) continue
-      if (!candidate.autoMiterCorners) continue
       const candidateWall = candidate.parentId ? nodes[candidate.parentId] : undefined
       if (candidateWall?.type !== 'wall' || candidateWall.parentId !== wall.parentId) continue
       if (!wallFrame(candidateWall)) continue
-      const neighborSide = candidateSideAtPoint(candidateWall, candidate, endpoint, tolerance)
+      const cornerCandidate = applyLeanToWallCornerSpan(candidate, candidateWall)
+      const linearNeighborSide = candidateRoofSideAtPoint(
+        candidateWall,
+        cornerCandidate,
+        roofEndpoint,
+      )
+      if (linearNeighborSide) {
+        const linearKind = cornerKindFromDirections(
+          wall,
+          cornerLeanTo,
+          side,
+          candidateWall,
+          cornerCandidate,
+          linearNeighborSide,
+        )
+        const linearJoint =
+          linearKind === 'linear'
+            ? resolveLinearJoint(
+                wall,
+                cornerLeanTo,
+                side,
+                candidateWall,
+                cornerCandidate,
+                linearNeighborSide,
+              )
+            : null
+        if (linearJoint) {
+          joints[side] = {
+            side,
+            kind: 'linear',
+            neighborId: candidate.id,
+            neighborSide: linearNeighborSide,
+            roofExtension: 0,
+            roofPiece: linearJoint.roofPiece,
+            seam: linearJoint.seam,
+            beamExtension: linearJoint.beamExtension,
+            gutterMitre: 0,
+            sharedPostOwner: String(cornerLeanTo.id) < String(candidate.id),
+            sharedPostPosition: linearJoint.sharedPostPosition,
+          }
+          break
+        }
+      }
+      if (!leanTo.autoMiterCorners || !candidate.autoMiterCorners) continue
+      const neighborSide = candidateSideAtPoint(candidateWall, cornerCandidate, endpoint, tolerance)
       if (!neighborSide) continue
       const kind = cornerKindFromDirections(
         wall,
-        leanTo,
+        cornerLeanTo,
         side,
         candidateWall,
-        candidate,
+        cornerCandidate,
         neighborSide,
       )
-      if (!kind) continue
-      if (kind === 'concave' && (isCurvedLeanTo(leanTo) || isCurvedLeanTo(candidate))) continue
-      if (!isSupportedHostCorner(wall, leanTo, side, candidateWall, candidate, neighborSide)) {
+      if (!kind || kind === 'linear') continue
+      if (
+        !isSupportedHostCorner(
+          wall,
+          cornerLeanTo,
+          side,
+          candidateWall,
+          cornerCandidate,
+          neighborSide,
+        )
+      ) {
         continue
       }
       const interiorAngle = cornerInteriorAngle(
         wall,
-        leanTo,
+        cornerLeanTo,
         side,
         candidateWall,
-        candidate,
+        cornerCandidate,
         neighborSide,
       )
       if (interiorAngle === null) continue
 
-      const candidateLayout = resolveLeanToLayout(candidate)
-      const layout = resolveLeanToLayout(leanTo)
+      const candidateLayout = resolveLeanToLayout(cornerCandidate)
+      const layout = resolveLeanToLayout(cornerLeanTo)
+      // A curved concave join is trimmed at the shared roof seam. Extending
+      // the run from a straight chord into the curved band is not a valid
+      // construction: the line/circle intersection can select the distant
+      // branch and create runaway beam and gutter lengths.
+      const curvedConcaveJoint =
+        kind === 'concave' && (isCurvedLeanTo(cornerLeanTo) || isCurvedLeanTo(cornerCandidate))
       const sideSign = side === 'left' ? -1 : 1
-      const ownEdges = roofPlanEdges(leanTo)
-      const candidateEdges = roofPlanEdges(candidate)
+      const ownEdges = roofPlanEdges(cornerLeanTo)
+      const candidateEdges = roofPlanEdges(cornerCandidate)
       const roofSideX = layout.roofCenterX + sideSign * (layout.roofWidth / 2)
-      const roofExtension =
-        extensionToRunIntersection(
-          wall,
-          leanTo,
-          side,
-          roofSideX,
-          ownEdges.front,
-          candidateWall,
-          candidate,
-          candidateEdges.front,
-        ) ?? 0
+      const roofExtension = curvedConcaveJoint
+        ? 0
+        : (extensionToRunIntersection(
+            wall,
+            cornerLeanTo,
+            side,
+            roofSideX,
+            ownEdges.front,
+            candidateWall,
+            cornerCandidate,
+            candidateEdges.front,
+          ) ?? 0)
       const candidateSideSign = neighborSide === 'left' ? -1 : 1
       const candidateRoofSideX =
         candidateLayout.roofCenterX + candidateSideSign * (candidateLayout.roofWidth / 2)
-      const candidateRoofExtension =
-        extensionToRunIntersection(
-          candidateWall,
-          candidate,
-          neighborSide,
-          candidateRoofSideX,
-          candidateEdges.front,
-          wall,
-          leanTo,
-          ownEdges.front,
-        ) ?? 0
+      const candidateRoofExtension = curvedConcaveJoint
+        ? 0
+        : (extensionToRunIntersection(
+            candidateWall,
+            cornerCandidate,
+            neighborSide,
+            candidateRoofSideX,
+            candidateEdges.front,
+            wall,
+            cornerLeanTo,
+            ownEdges.front,
+          ) ?? 0)
       const curvedStraightRoof =
         kind === 'convex'
           ? resolveCurvedStraightRoofPiece(
-              leanTo,
+              cornerLeanTo,
               wall,
               side,
               roofExtension,
-              candidate,
+              cornerCandidate,
               candidateWall,
               neighborSide,
               candidateRoofExtension,
             )
           : null
+      const curvedStraightConcaveRoof =
+        kind === 'concave'
+          ? resolveCurvedStraightConcaveRoofPiece(
+              cornerLeanTo,
+              wall,
+              side,
+              cornerCandidate,
+              candidateWall,
+              neighborSide,
+            )
+          : null
       const roof =
         curvedStraightRoof ??
+        curvedStraightConcaveRoof ??
         (kind === 'convex'
-          ? resolveRoofPiece(leanTo, wall, side, roofExtension, candidate, candidateWall)
-          : resolveConcaveRoofPiece(leanTo, wall, side, candidate, candidateWall))
-      const seam = curvedStraightRoof
+          ? resolveRoofPiece(
+              cornerLeanTo,
+              wall,
+              side,
+              roofExtension,
+              cornerCandidate,
+              candidateWall,
+            )
+          : resolveConcaveRoofPiece(cornerLeanTo, wall, side, cornerCandidate, candidateWall))
+      const seam = curvedStraightRoof || curvedStraightConcaveRoof
         ? roof.seam
         : sharedRoofSeam(
             wall,
-            leanTo,
+            cornerLeanTo,
             side,
             roofExtension,
             candidateWall,
-            candidate,
+            cornerCandidate,
             neighborSide,
             candidateRoofExtension,
             kind,
           )
-      const beamExtension =
-        extensionToRunIntersection(
-          wall,
-          leanTo,
-          side,
-          sideSign * (layout.span / 2),
-          layout.beamZ,
-          candidateWall,
-          candidate,
-          candidateLayout.beamZ,
-        ) ?? 0
-      const gutterAway = gutterAwayFromJointDirection(wall, leanTo, side, roofExtension)
+      const beamExtension = curvedConcaveJoint
+        ? 0
+        : (extensionToRunIntersection(
+            wall,
+            cornerLeanTo,
+            side,
+            sideSign * (layout.span / 2),
+            layout.beamZ,
+            candidateWall,
+            cornerCandidate,
+            candidateLayout.beamZ,
+          ) ?? 0)
+      const gutterAway = gutterAwayFromJointDirection(wall, cornerLeanTo, side, roofExtension)
       const candidateGutterAway = gutterAwayFromJointDirection(
         candidateWall,
-        candidate,
+        cornerCandidate,
         neighborSide,
         candidateRoofExtension,
       )
@@ -832,7 +1064,7 @@ export function resolveLeanToCornerJoints(
         seam: seam ?? roof.seam,
         beamExtension,
         gutterMitre: (kind === 'concave' ? -1 : 1) * ((Math.PI - gutterInteriorAngle) / 2),
-        sharedPostOwner: String(leanTo.id) < String(candidate.id),
+        sharedPostOwner: String(cornerLeanTo.id) < String(candidate.id),
         sharedPostPosition: [
           (side === 'left' ? -layout.span / 2 : layout.span / 2) +
             (side === 'left' ? -beamExtension : beamExtension),

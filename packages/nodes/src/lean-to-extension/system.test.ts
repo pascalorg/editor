@@ -6,12 +6,15 @@ import {
   createSceneApi,
   LeanToExtensionNode,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
   type SceneCommit,
   subscribeSceneCommits,
   useScene,
   WallNode,
 } from '@pascal-app/core'
 import { createLeanToAssembly, leanToCornerPostIndex, managedLeanToPostIndex } from './assembly'
+import { resolveConicalLeanToPlacement } from './conical-host'
 import { initializeLeanToExtensionSync } from './system'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -105,6 +108,69 @@ describe('lean-to scene commit boundary', () => {
     expect(postAfterParentEdit.rotation).toBe(Math.PI)
     expect(postAfterParentEdit.supportStyle).toBe('k-brace')
     expect(postAfterParentEdit.height).not.toBe(heightBeforeParentEdit)
+  })
+
+  test('tracks the conical host diameter and cylindrical wall height', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_conical_sync', level: 0 })
+    const roof = RoofNode.parse({
+      id: 'roof_conical_sync',
+      parentId: level.id,
+      children: ['rseg_conical_sync'],
+    })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_conical_sync',
+      parentId: roof.id,
+      roofType: 'conical',
+      width: 8,
+      depth: 8,
+      wallHeight: 3,
+      children: ['leanto_conical_sync'],
+    })
+    const leanTo = resolveConicalLeanToPlacement(segment, {
+      id: 'leanto_conical_sync',
+      projection: 3,
+    })!
+    const assembly = createLeanToAssembly(leanTo)
+    const nodes = Object.fromEntries(
+      [
+        { ...level, children: [roof.id] },
+        roof,
+        segment,
+        assembly.extension,
+        ...assembly.children,
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    useScene.getState().updateNode(segment.id as AnyNodeId, {
+      width: 10,
+      depth: 10,
+      wallHeight: 3.5,
+    })
+
+    const synced = useScene.getState().nodes[leanTo.id as AnyNodeId]
+    expect(synced?.type).toBe('lean-to-extension')
+    if (synced?.type !== 'lean-to-extension') return
+    expect(synced.projection).toBe(3)
+    expect(synced.span).toBeCloseTo(10 * Math.PI)
+    expect(synced.position).toEqual([0, 0, 5])
+    expect(synced.spanArcCenterZ).toBe(-5)
+    expect(synced.spanArcRadius).toBe(5)
+    expect(synced.highEdgeHeight).toBe(3.5)
+    const posts = synced.children
+      .map((id) => useScene.getState().nodes[id as AnyNodeId])
+      .filter((node) => node?.type === 'column')
+    expect(posts).toHaveLength(11)
   })
 
   test('preserves the resolved free wall span across commit synchronization', () => {
@@ -264,6 +330,86 @@ describe('lean-to scene commit boundary', () => {
         return index === leanToCornerPostIndex('left') || index === leanToCornerPostIndex('right')
       })
     expect(cornerPosts).toHaveLength(1)
+  })
+
+  test('synchronizes an edge-snapped straight run with open gutters and one joint pillar', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_linear_sync', level: 0 })
+    const wall = WallNode.parse({
+      id: 'wall_linear_sync',
+      parentId: level.id,
+      start: [0, 0],
+      end: [12, 0],
+    })
+    const left = LeanToExtensionNode.parse({
+      id: 'leanto_linear_sync_left',
+      parentId: wall.id,
+      position: [2, 0, 0.05],
+      span: 4,
+    })
+    const right = LeanToExtensionNode.parse({
+      id: 'leanto_linear_sync_right',
+      parentId: wall.id,
+      position: [6.3, 0, 0.05],
+      span: 4,
+    })
+    const leftAssembly = createLeanToAssembly(left)
+    const rightAssembly = createLeanToAssembly(right)
+    const nodes = Object.fromEntries(
+      [
+        { ...level, children: [wall.id] },
+        { ...wall, children: [left.id, right.id] },
+        leftAssembly.extension,
+        ...leftAssembly.children,
+        rightAssembly.extension,
+        ...rightAssembly.children,
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    const synced = useScene.getState().nodes
+    const extensions = [left.id, right.id].map((id) => synced[id as AnyNodeId])
+    expect(extensions.every((node) => node?.type === 'lean-to-extension')).toBe(true)
+    const posts = extensions.flatMap((node) =>
+      node?.type === 'lean-to-extension'
+        ? node.children
+            .map((id) => synced[id as AnyNodeId])
+            .filter((child) => child?.type === 'column')
+        : [],
+    )
+    const jointPosts = posts.filter((post) => {
+      if (post?.type !== 'column') return false
+      const index = managedLeanToPostIndex(post)
+      return index === leanToCornerPostIndex('left') || index === leanToCornerPostIndex('right')
+    })
+    expect(jointPosts).toHaveLength(1)
+
+    const gutters = extensions.map((node) => {
+      if (node?.type !== 'lean-to-extension') return undefined
+      const roof = node.children
+        .map((id) => synced[id as AnyNodeId])
+        .find((child) => child?.type === 'roof')
+      if (roof?.type !== 'roof') return undefined
+      const segment = roof.children
+        .map((id) => synced[id as AnyNodeId])
+        .find((child) => child?.type === 'roof-segment')
+      return segment?.type === 'roof-segment'
+        ? segment.children
+            .map((id) => synced[id as AnyNodeId])
+            .find((child) => child?.type === 'gutter')
+        : undefined
+    })
+    expect(gutters[0]?.type === 'gutter' && gutters[0].endCapRight).toBe(false)
+    expect(gutters[1]?.type === 'gutter' && gutters[1].endCapLeft).toBe(false)
   })
 
   test('removes regular posts outside a synchronized internal L valley', () => {

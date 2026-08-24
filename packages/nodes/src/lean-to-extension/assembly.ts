@@ -21,6 +21,7 @@ import {
 import { resolveEaveSnap } from '../gutter/eave-snap'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { bendLocalPoint, bendRotationYAtLocalX, isCurvedLeanTo } from './arc'
+import { isClosedLoopLeanTo } from './conical-host'
 import {
   applyLeanToCornerRoofPieces,
   LEAN_TO_CORNER_JOINTS_KEY,
@@ -336,8 +337,10 @@ export function resolveLeanToPostIndexes(
     if (side === 'high') return true
     const x = layout.postXs[index] ?? 0
     const left = cornerJoints.left
+    if (left?.kind === 'linear' && index === 0) return false
     if (left?.kind === 'concave' && x <= left.sharedPostPosition[0] + 1e-6) return false
     const right = cornerJoints.right
+    if (right?.kind === 'linear' && index === layout.postXs.length - 1) return false
     if (right?.kind === 'concave' && x >= right.sharedPostPosition[0] - 1e-6) return false
     return true
   })
@@ -411,6 +414,9 @@ export function leanToRoofSegmentLayoutPatch(
     polygon.map(([x = 0, z = 0]) => [x - roofCenterX, z - roofCenterZ] as [number, number]),
   )
   const jointSides = Object.values(cornerJoints).flatMap((joint) => (joint ? [joint.side] : []))
+  const hasShapedCorner = Object.values(cornerJoints).some(
+    (joint) => joint && joint.kind !== 'linear',
+  )
   const sideMemberFaceInset = Math.min(
     Math.max(0, leanTo.rafterWidth / 2),
     Math.max(0, layout.span / 2 - 0.01),
@@ -447,7 +453,7 @@ export function leanToRoofSegmentLayoutPatch(
     shedSideInfillSpan: layout.span,
     shedSideInfillMinX: -layout.span / 2 - sideMemberFaceInset - roofCenterX,
     shedSideInfillMaxX: layout.span / 2 + sideMemberFaceInset - roofCenterX,
-    shedFootprintPieces: jointSides.length > 0 ? roofPieces : undefined,
+    shedFootprintPieces: hasShapedCorner ? roofPieces : undefined,
     shedOpenEndSides: jointSides.length > 0 ? jointSides : undefined,
     metadata: managedMetadata(leanTo, 'roof-segment'),
     trim: {
@@ -486,6 +492,8 @@ export function leanToGutterLayoutPatch(
   | 'visible'
   | 'profile'
   | 'size'
+  | 'endCapLeft'
+  | 'endCapRight'
   | 'outlets'
   | 'metadata'
 > {
@@ -529,6 +537,11 @@ export function leanToGutterLayoutPatch(
     if (!(leanTo.gutterEnabled && joint && nodes)) return 0
     const neighbor = nodes[joint.neighborId]
     return neighbor?.type === 'lean-to-extension' && neighbor.gutterEnabled ? joint.gutterMitre : 0
+  }
+  const gutterOpenAtJoint = (joint: LeanToCornerJoint | undefined): boolean => {
+    if (!(leanTo.gutterEnabled && joint && nodes)) return false
+    const neighbor = nodes[joint.neighborId]
+    return neighbor?.type === 'lean-to-extension' && neighbor.gutterEnabled
   }
   const length = Math.max(0.05, segment.width + 2 * segment.overhang)
   const jointAwareDownspoutPosition =
@@ -583,6 +596,8 @@ export function leanToGutterLayoutPatch(
     visible: leanTo.gutterEnabled,
     profile: leanTo.gutterProfile,
     size: leanTo.gutterSize,
+    endCapLeft: !isClosedLoopLeanTo(leanTo) && !gutterOpenAtJoint(cornerJoints.left),
+    endCapRight: !isClosedLoopLeanTo(leanTo) && !gutterOpenAtJoint(cornerJoints.right),
     outlets: leanTo.gutterEnabled && leanTo.downspoutEnabled ? [outlet] : [],
     metadata: {
       ...metadataRecord(gutter?.metadata),

@@ -64,6 +64,32 @@ export function canDirectMoveNode(node: AnyNode): boolean {
   return isMovable(node)
 }
 
+export function shouldShowMoveCrossHandle(node: AnyNode): boolean {
+  return node.type === 'window' && Boolean(node.dormerId)
+}
+
+export function resolveHandlePortalTargetId(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+  portal: 'parent' | 'grandparent',
+): string | null {
+  const parentId = node.parentId
+  if (!parentId || portal === 'parent') return parentId ?? null
+
+  const grandparent = nodes[parentId]?.parentId
+  if (!grandparent) return null
+
+  // Unpainted roof segments render inside a hidden group. A dormer window's
+  // normal grandparent is that segment, so handles portalled there inherit
+  // visibility=false. The roof is the nearest visible portal container.
+  if (node.type === 'window' && node.dormerId === parentId) {
+    const host = nodes[grandparent]
+    if (host?.type === 'roof-segment' && host.parentId) return host.parentId
+  }
+
+  return grandparent
+}
+
 export function resolveDirectManipulationNode(
   node: AnyNode,
   nodes: Readonly<Record<string, AnyNode | undefined>>,

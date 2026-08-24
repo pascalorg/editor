@@ -199,9 +199,9 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
       cutScope: 'wall',
       dirtyHandledByOwnSystem: true,
     },
-    // `wallId` / `roofSegmentId` are re-derived from the surface under
+    // `wallId` / `roofSegmentId` / `dormerId` are re-derived from the surface under
     // the cursor at preset placement time — see door for the pattern.
-    hostRefFields: ['wallId', 'roofSegmentId', 'roofFace'],
+    hostRefFields: ['wallId', 'roofSegmentId', 'roofFace', 'dormerId', 'dormerFace'],
     // Frame / glass slots painted through the registry. The window system tags
     // each mesh with its `userData.slotId`; paint writes `node.slots`.
     slots: () => windowSlots(),

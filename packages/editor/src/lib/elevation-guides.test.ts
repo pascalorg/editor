@@ -4,6 +4,7 @@ import useElevationGuides from '../store/use-elevation-guides'
 import {
   clearStructuralElevationGuide,
   collectElevationSnapTargets,
+  publishResolvedElevationGuide,
   publishStructuralElevationGuide,
   resolveElevationSnapMatch,
   resolveStructuralElevationSnap,
@@ -103,5 +104,27 @@ describe('elevation guides', () => {
 
     publishStructuralElevationGuide(source, 0.7, nodes)
     expect(useElevationGuides.getState().guide).toBeNull()
+  })
+
+  test('publishes an explicitly resolved neighboring datum', () => {
+    const { level } = structuralScene()
+    useElevationGuides.setState({ guide: null })
+
+    publishResolvedElevationGuide(
+      { nodeId: 'leanto_moving', levelId: level.id, anchor: [2, 1] },
+      {
+        id: 'leanto_neighbor:high-edge',
+        elevation: 3.4,
+        anchor: [5, 1],
+        label: 'Neighbor shed edge',
+      },
+    )
+
+    expect(useElevationGuides.getState().guide).toMatchObject({
+      ownerId: 'leanto_moving',
+      elevation: 3.4,
+      direction: [1, 0],
+      label: 'Neighbor shed edge',
+    })
   })
 })

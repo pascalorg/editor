@@ -182,6 +182,13 @@ export type LinearResizeHandle<N> = {
   gridSnap?: boolean
   /** Kind-owned magnetic snap for the resized scalar, gated by the active snapping mode. */
   magneticSnap?: (node: N, newValue: number, sceneApi: SceneApi) => number
+  /**
+   * Kind-owned structural connection snap. Unlike alignment snapping, this is
+   * active in every snapping mode and is bypassed only by the held Alt force
+   * modifier. Use it when the snapped result changes connectivity, such as two
+   * lean-to roof edges becoming one continuous run.
+   */
+  connectionSnap?: (node: N, newValue: number, sceneApi: SceneApi) => number
   placement: HandlePlacement<N>
   /**
    * Dimension this handle steers (e.g. `'height'`). When set, the editor

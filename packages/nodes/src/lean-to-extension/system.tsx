@@ -35,6 +35,7 @@ import {
   resolveLeanToPostGutterSetback,
   resolveLeanToPostIndexes,
 } from './assembly'
+import { resolveConicalLeanToPlacement } from './conical-host'
 import {
   LEAN_TO_CORNER_JOINTS_KEY,
   leanToCornerJointMetadata,
@@ -46,6 +47,7 @@ import {
   applyLeanToAvailableWallSpan,
   applyLeanToRoofAttachment,
   applyLeanToWallAutoSpan,
+  applyLeanToWallCornerSpan,
   clearLeanToRoofAttachment,
   resolveLeanToHostRoof,
   resolveLeanToRoofAttachment,
@@ -173,6 +175,8 @@ function gutterNeedsLayoutUpdate(
     gutter.visible !== expected.visible ||
     gutter.profile !== expected.profile ||
     gutter.size !== expected.size ||
+    gutter.endCapLeft !== expected.endCapLeft ||
+    gutter.endCapRight !== expected.endCapRight ||
     JSON.stringify(gutter.outlets) !== JSON.stringify(expected.outlets) ||
     JSON.stringify(gutter.metadata) !== JSON.stringify(expected.metadata)
   )
@@ -236,6 +240,7 @@ function extensionSignature(
 ): string {
   return JSON.stringify([
     leanToGroundSignature(leanTo, nodes),
+    leanTo.hostKind,
     leanTo.span,
     leanTo.spanArcCenterZ,
     leanTo.spanArcRadius,
@@ -348,11 +353,14 @@ function resolveEffectiveLeanTo(
   nodes: Record<AnyNodeId, AnyNode>,
 ): LeanToExtensionNode {
   const parent = leanTo.parentId ? nodes[leanTo.parentId as AnyNodeId] : undefined
+  if (parent?.type === 'roof-segment' && leanTo.hostKind === 'conical-roof') {
+    return resolveConicalLeanToPlacement(parent, leanTo) ?? leanTo
+  }
   if (parent?.type !== 'wall') {
     return leanTo.connectionMode === 'manual' ? leanTo : clearLeanToRoofAttachment(leanTo)
   }
   const wall = parent as WallNode
-  const wallSpanningLeanTo = applyLeanToWallAutoSpan(leanTo, wall)
+  const wallSpanningLeanTo = applyLeanToWallCornerSpan(applyLeanToWallAutoSpan(leanTo, wall), wall)
   const retained =
     leanTo.hostRoofSegmentId && leanTo.hostRoofEdge
       ? resolveLeanToRoofAttachment(wallSpanningLeanTo, wall, nodes, {
@@ -369,17 +377,14 @@ function resolveEffectiveLeanTo(
     leanTo.connectionMode === 'manual'
       ? wallSpanningLeanTo
       : attachment
-        ? applyLeanToRoofAttachment(leanTo, attachment)
+        ? applyLeanToRoofAttachment(wallSpanningLeanTo, attachment)
         : clearLeanToRoofAttachment(wallSpanningLeanTo)
-  const withoutStaleJointEnds = leanTo.autoMiterCorners
-    ? {
-        ...resolved,
-        leftEndCondition:
-          resolved.leftEndCondition === 'joined' ? 'open' : resolved.leftEndCondition,
-        rightEndCondition:
-          resolved.rightEndCondition === 'joined' ? 'open' : resolved.rightEndCondition,
-      }
-    : resolved
+  const withoutStaleJointEnds = {
+    ...resolved,
+    leftEndCondition: resolved.leftEndCondition === 'joined' ? 'open' : resolved.leftEndCondition,
+    rightEndCondition:
+      resolved.rightEndCondition === 'joined' ? 'open' : resolved.rightEndCondition,
+  }
   const available = applyLeanToAvailableWallSpan(
     withoutStaleJointEnds,
     wall,

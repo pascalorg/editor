@@ -636,7 +636,7 @@ function updateMergedRoofGeometry(
       totalDeckSlab = brushes.deckSlab
     }
 
-    if (child.roofType === 'shed') {
+    if (child.roofType === 'shed' && isManagedLeanToRoofSegment(child)) {
       brushes.wallBrush.geometry.dispose()
       brushes.innerBrush.geometry.dispose()
     } else {
@@ -1036,6 +1036,13 @@ function readShedOpenEndSides(node: RoofSegmentNode): Set<ShedEndSide> {
   return new Set(value.filter((side): side is ShedEndSide => side === 'left' || side === 'right'))
 }
 
+function isManagedLeanToRoofSegment(node: Pick<RoofSegmentNode, 'metadata'>): boolean {
+  const metadata = node.metadata
+  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return false
+  const record = metadata as Record<string, unknown>
+  return record.managedByLeanTo !== undefined && record.leanToRole === 'roof-segment'
+}
+
 function hasSegmentTrim(node: RoofSegmentNode): boolean {
   const trim = normalizeRoofSegmentTrim(node)
   return (
@@ -1430,7 +1437,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   let shinTopD = shinBotD
   let transZ = 0
 
-  if (['hip', 'mansard', 'dutch'].includes(roofType)) {
+  if (['hip', 'mansard', 'dutch', 'conical'].includes(roofType)) {
     shinTopW += 2 * stSin
     shinTopD += 2 * stSin
   } else if (['gable', 'gambrel'].includes(roofType)) {
@@ -1684,7 +1691,7 @@ export function generateRoofSegmentGeometry(
     prepareBrushForCSG(shinDeck)
     let combined = shinDeck
     let hollowWall: Brush | null = null
-    if (node.roofType !== 'shed') {
+    if (!(node.roofType === 'shed' && isManagedLeanToRoofSegment(node))) {
       hollowWall = csgEvaluator.evaluate(wallBrush, innerBrush, SUBTRACTION)
       prepareBrushForCSG(hollowWall)
       combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
@@ -1813,18 +1820,8 @@ function buildOccludingRoofInterior(
     if (sibling.id === node.id) continue
     if (sibling.roofType === 'shed') continue
     const siblingOwnsOverlap = roofOverlapEntryOwns(
-      {
-        roofId: String(entry.roof.id),
-        segmentId: String(sibling.id),
-        width: sibling.width,
-        depth: sibling.depth,
-      },
-      {
-        roofId: String(currentEntry.roof.id),
-        segmentId: String(node.id),
-        width: node.width,
-        depth: node.depth,
-      },
+      roofOverlapEntry(entry.roof, sibling, nodes),
+      roofOverlapEntry(currentEntry.roof, node, nodes),
     )
     if (!siblingOwnsOverlap) continue
     const siblingBrushes = getRoofSegmentBrushes(sibling)
@@ -1861,6 +1858,28 @@ function buildOccludingRoofInterior(
   }
 
   return combinedInterior
+}
+
+function roofOverlapEntry(
+  roof: RoofNode,
+  segment: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+) {
+  const supportSegment =
+    roof.support?.kind === 'roof' ? nodes[roof.support.roofSegmentId as AnyNodeId] : undefined
+  return {
+    roofId: String(roof.id),
+    segmentId: String(segment.id),
+    supportRoofId:
+      supportSegment?.type === 'roof-segment' && supportSegment.parentId
+        ? String(supportSegment.parentId)
+        : undefined,
+    supportRoofSegmentId:
+      roof.support?.kind === 'roof' ? String(roof.support.roofSegmentId) : undefined,
+    roofType: segment.roofType,
+    width: segment.width,
+    depth: segment.depth,
+  }
 }
 
 function collectSiblingRoofEntries(
@@ -2863,7 +2882,9 @@ function addShedInsetEndPanels(
   segments: readonly RoofSegmentNode[],
   applySegmentTransform: boolean,
 ): THREE.BufferGeometry {
-  const shedSegments = segments.filter((segment) => segment.roofType === 'shed')
+  const shedSegments = segments.filter(
+    (segment) => segment.roofType === 'shed' && isManagedLeanToRoofSegment(segment),
+  )
   if (shedSegments.length === 0) return geometry
 
   const panelGeometries: THREE.BufferGeometry[] = []
@@ -3115,7 +3136,7 @@ export function getRoofOuterSurfaceFrameAtPoint(
   let shinTopW = shinBotW
   let shinTopD = shinBotD
   let transZ = 0
-  if (['hip', 'mansard', 'dutch'].includes(roofType)) {
+  if (['hip', 'mansard', 'dutch', 'conical'].includes(roofType)) {
     shinTopW += 2 * stSin
     shinTopD += 2 * stSin
   } else {
@@ -3146,7 +3167,7 @@ export function getRoofOuterSurfaceFrameAtPoint(
     let iL = 0
     let iR = 0
 
-    if (roofType === 'hip') {
+    if (roofType === 'hip' || roofType === 'conical') {
       iF = inset
       iB = inset
       iL = inset

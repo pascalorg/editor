@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { RoofSegmentNode } from '@pascal-app/core'
-import { getRoofSegmentPlanLinework } from './floorplan'
+import {
+  type FloorplanGeometry,
+  type GeometryContext,
+  RoofNode,
+  type RoofSegmentNode,
+} from '@pascal-app/core'
+import { buildRoofSegmentFloorplan, getRoofSegmentPlanLinework } from './floorplan'
 
 function dutchSegment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode {
   return {
@@ -34,6 +39,31 @@ function dutchSegment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode
 }
 
 describe('getRoofSegmentPlanLinework', () => {
+  test('renders conical selection and hit chrome as a circle', () => {
+    const roof = RoofNode.parse({ id: 'roof_test', children: ['rseg_test'] })
+    const node = dutchSegment({
+      parentId: roof.id,
+      roofType: 'conical',
+      width: 6,
+      depth: 6,
+    })
+    const geometry = buildRoofSegmentFloorplan(node, {
+      parent: roof,
+      viewState: { selected: true },
+    } as GeometryContext) as Extract<FloorplanGeometry, { kind: 'group' }>
+
+    expect(geometry.kind).toBe('group')
+    expect(geometry.children.filter((child) => child.kind === 'circle')).toHaveLength(2)
+    expect(geometry.children.some((child) => child.kind === 'polygon')).toBe(false)
+    expect(geometry.children.some((child) => child.kind === 'rotate-arrow')).toBe(false)
+    expect(getRoofSegmentPlanLinework(node)).toEqual({
+      ridges: [],
+      hips: [],
+      breaks: [],
+      slope: null,
+    })
+  })
+
   test('draws a dutch width-axis upper ridge plus waist linework', () => {
     const linework = getRoofSegmentPlanLinework(dutchSegment())
 

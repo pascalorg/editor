@@ -12,7 +12,9 @@ import {
   resolveLeanToEdgeSnapTargets,
   resolveLeanToLayout,
   resolveLeanToMoveCenterX,
+  resolveLeanToMoveProposal,
   resolveLeanToParentPose,
+  resolveLeanToSpanResizeProposal,
   resolveLeanToWallPlacement,
   resolveLeanToWallSurfaceHit,
 } from './layout'
@@ -201,7 +203,7 @@ describe('lean-to wall placement', () => {
     const adjacent = LeanToExtensionNode.parse({
       id: 'leanto_right',
       parentId: adjacentWall.id,
-      position: [1.2, 0, 0.05],
+      position: [1, 0, 0.05],
       span: 2,
       leftOverhang: 0,
       rightOverhang: 0,
@@ -217,11 +219,195 @@ describe('lean-to wall placement', () => {
       resolveLeanToMoveCenterX(
         moving,
         wall,
-        4.1,
+        3.9,
         0,
         resolveLeanToEdgeSnapTargets(moving, wall, nodes),
       ),
     ).toBe(4)
+  })
+
+  test('aligns the moving roof height when its edge magnetically snaps to a neighbor', () => {
+    const wall = WallNode.parse({
+      id: 'wall_left',
+      parentId: 'level_test',
+      start: [0, 0],
+      end: [5, 0],
+    })
+    const adjacentWall = WallNode.parse({
+      id: 'wall_right',
+      parentId: 'level_test',
+      start: [5, 0],
+      end: [10, 0],
+    })
+    const moving = LeanToExtensionNode.parse({
+      id: 'leanto_left',
+      parentId: wall.id,
+      position: [2, 0, 0.05],
+      span: 2,
+      highEdgeHeight: 2.8,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const adjacent = LeanToExtensionNode.parse({
+      id: 'leanto_right',
+      parentId: adjacentWall.id,
+      position: [1, 0, 0.05],
+      span: 2,
+      highEdgeHeight: 3.4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const nodes = {
+      [wall.id]: wall,
+      [adjacentWall.id]: adjacentWall,
+      [moving.id]: moving,
+      [adjacent.id]: adjacent,
+    } as Record<string, AnyNode>
+
+    const proposal = resolveLeanToMoveProposal({
+      node: moving,
+      wall,
+      rawLocalX: 3.9,
+      rawHighEdgeHeight: 3,
+      edgeSnapTargets: resolveLeanToEdgeSnapTargets(moving, wall, nodes),
+    })
+
+    expect(proposal.centerX).toBe(4)
+    expect(proposal.highEdgeHeight).toBe(3.4)
+    expect(proposal.lowEdgeHeight - moving.lowEdgeHeight).toBeCloseTo(0.6)
+  })
+
+  test('stops a span resize at the host wall end', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [10, 0] })
+    const leanTo = LeanToExtensionNode.parse({
+      parentId: wall.id,
+      position: [4, 0, 0.05],
+      span: 4,
+      leftOverhang: 0.2,
+      rightOverhang: 0.2,
+    })
+
+    const proposal = resolveLeanToSpanResizeProposal({
+      node: leanTo,
+      wall,
+      rawSpan: 7.65,
+      side: 'right',
+    })
+
+    expect(proposal.span).toBeCloseTo(7.8)
+    expect(proposal.position[0]).toBeCloseTo(5.9)
+    expect(proposal.position[0] + proposal.span / 2 + leanTo.rightOverhang).toBeCloseTo(10)
+  })
+
+  test('fits a resized span to its neighbor and adopts the same roof plane', () => {
+    const wall = WallNode.parse({
+      id: 'wall_span_left',
+      parentId: 'level_test',
+      start: [0, 0],
+      end: [5, 0],
+    })
+    const adjacentWall = WallNode.parse({
+      id: 'wall_span_right',
+      parentId: 'level_test',
+      start: [5, 0],
+      end: [10, 0],
+    })
+    const moving = LeanToExtensionNode.parse({
+      id: 'leanto_span_left',
+      parentId: wall.id,
+      position: [2, 0, 0.05],
+      span: 2,
+      highEdgeHeight: 2.8,
+      pitch: 8,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const adjacent = LeanToExtensionNode.parse({
+      id: 'leanto_span_right',
+      parentId: adjacentWall.id,
+      position: [1, 0, 0.05],
+      span: 2,
+      highEdgeHeight: 3.4,
+      pitch: 12,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const nodes = {
+      [wall.id]: wall,
+      [adjacentWall.id]: adjacentWall,
+      [moving.id]: moving,
+      [adjacent.id]: adjacent,
+    } as Record<string, AnyNode>
+
+    const proposal = resolveLeanToSpanResizeProposal({
+      node: moving,
+      wall,
+      rawSpan: 3.85,
+      side: 'right',
+      edgeSnapTargets: resolveLeanToEdgeSnapTargets(moving, wall, nodes),
+    })
+
+    expect(proposal.span).toBe(4)
+    expect(proposal.position[0]).toBe(3)
+    expect(proposal.highEdgeHeight).toBe(3.4)
+    expect(proposal.pitch).toBe(12)
+    expect(proposal.lowEdgeHeight).toBeCloseTo(
+      proposal.highEdgeHeight - moving.projection * Math.tan((proposal.pitch * Math.PI) / 180),
+    )
+    expect(proposal.target?.nodeId).toBe(adjacent.id)
+  })
+
+  test('aligns a straight span with a curved roof at their tangent wall end', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_resize_curved',
+      parentId: 'level_test',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: 1,
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_resize_tangent',
+      parentId: 'level_test',
+      start: [6, 0],
+      end: [10.8, 3.6],
+    })
+    const curvedLength = getWallCurveLength(curvedWall)
+    const straightLength = getWallCurveLength(straightWall)
+    const curved = LeanToExtensionNode.parse({
+      id: 'leanto_resize_curved',
+      parentId: curvedWall.id,
+      position: [curvedLength / 2, 0, 0.05],
+      span: curvedLength - 0.3,
+      highEdgeHeight: 3.5,
+      pitch: 14,
+    })
+    const straight = LeanToExtensionNode.parse({
+      id: 'leanto_resize_tangent',
+      parentId: straightWall.id,
+      position: [3.75, 0, 0.05],
+      span: 4.2,
+      highEdgeHeight: 2.8,
+      pitch: 8,
+    })
+    const nodes = {
+      [curvedWall.id]: curvedWall,
+      [straightWall.id]: straightWall,
+      [curved.id]: curved,
+      [straight.id]: straight,
+    } as Record<string, AnyNode>
+
+    const proposal = resolveLeanToSpanResizeProposal({
+      node: straight,
+      wall: straightWall,
+      rawSpan: straightLength - 0.45,
+      side: 'left',
+      edgeSnapTargets: resolveLeanToEdgeSnapTargets(straight, straightWall, nodes),
+    })
+
+    expect(proposal.position[0] - proposal.span / 2 - straight.leftOverhang).toBeCloseTo(0)
+    expect(proposal.highEdgeHeight).toBe(3.5)
+    expect(proposal.pitch).toBe(14)
+    expect(proposal.target?.nodeId).toBe(curved.id)
   })
 
   test('keeps existing roof data unchanged when parsed with the extended node union', () => {

@@ -1,13 +1,16 @@
 import {
   type DormerNode,
+  getDormerWallFaceFrame,
   getPitchFromActiveRoofHeight,
   getRoofSegmentSurfaceY,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
+  type WindowNode,
 } from '@pascal-app/core'
 import {
   ADDITION,
   Brush,
+  buildOpeningCutoutGeometry,
   computeGeometryBoundsTree,
   csgEvaluator,
   csgGeometry,
@@ -145,6 +148,21 @@ function createDormerWindowCutGeometry(
   return new THREE.BoxGeometry(w, h, depth)
 }
 
+function createHostedWindowCutGeometry(window: WindowNode): THREE.BufferGeometry {
+  const depth = 0.4
+  return buildOpeningCutoutGeometry(
+    window,
+    {
+      left: -window.width / 2,
+      right: window.width / 2,
+      bottom: -window.height / 2,
+      top: window.height / 2,
+    },
+    depth,
+    0.05,
+  )
+}
+
 // Exposure datum: a face shows its window when the window CENTER clears
 // the host's structural surface line (≥ half the window visible).
 // Gating on the window BOTTOM suppressed the default window on the
@@ -235,6 +253,7 @@ export function getDormerSkirtWindowDims(dormer: DormerNode): {
 export function generateDormerGeometry(
   dormer: DormerNode,
   hostSegment: RoofSegmentNode,
+  hostedWindows: readonly WindowNode[] = [],
 ): THREE.BufferGeometry {
   const isShed = dormer.roofType === 'shed'
   const yawBake = isShed ? 0 : Math.PI / 2
@@ -388,20 +407,24 @@ export function generateDormerGeometry(
       dormerSolid = trimmed
     }
 
-    // Cut window openings on exposed gable faces.
-    const exposed = getDormerExposedFaces(dormer, hostSegment)
-    const skirtWin = getDormerSkirtWindowDims(dormer)
-    const gableHalfZ = dormer.depth / 2
-    const cutDepth = 0.4
-
-    const cutFace = (zSign: number) => {
-      const cutGeo = createDormerWindowCutGeometry(
-        dormer,
-        skirtWin.width,
-        skirtWin.height,
-        cutDepth,
+    // Cut hosted window openings in dormer-local face coordinates. Scenes
+    // loaded through the core migration always have a child window; the
+    // legacy branch keeps direct geometry callers and un-migrated previews
+    // visually compatible.
+    const cutWindow = (window: WindowNode) => {
+      const face = window.dormerFace ?? 'front'
+      const frame = getDormerWallFaceFrame(dormer, face)
+      const cutGeo = createHostedWindowCutGeometry(window)
+      cutGeo.rotateY(frame.yaw)
+      cutGeo.translate(
+        frame.origin[0] +
+          window.position[0] * Math.cos(frame.yaw) -
+          window.position[2] * Math.sin(frame.yaw),
+        window.position[1],
+        frame.origin[2] +
+          window.position[0] * Math.sin(frame.yaw) +
+          window.position[2] * Math.cos(frame.yaw),
       )
-      cutGeo.translate(skirtWin.offsetX, skirtWin.centerY, zSign * gableHalfZ)
       if (!cutGeo.getIndex()) {
         const posCount = cutGeo.getAttribute('position').count
         const idx = new Uint32Array(posCount)
@@ -421,8 +444,36 @@ export function generateDormerGeometry(
       dormerSolid = result
     }
 
-    if (exposed.front) cutFace(+1)
-    if (exposed.back) cutFace(-1)
+    if (hostedWindows.length > 0) {
+      for (const window of hostedWindows) cutWindow(window)
+    } else {
+      const exposed = getDormerExposedFaces(dormer, hostSegment)
+      const skirtWin = getDormerSkirtWindowDims(dormer)
+      const gableHalfZ = dormer.depth / 2
+      const cutLegacyFace = (zSign: number) => {
+        const cutGeo = createDormerWindowCutGeometry(dormer, skirtWin.width, skirtWin.height, 0.4)
+        cutGeo.translate(skirtWin.offsetX, skirtWin.centerY, zSign * gableHalfZ)
+        if (!cutGeo.getIndex()) {
+          const posCount = cutGeo.getAttribute('position').count
+          const idx = new Uint32Array(posCount)
+          for (let i = 0; i < posCount; i++) idx[i] = i
+          cutGeo.setIndex(new THREE.BufferAttribute(idx, 1))
+        }
+        const idxCount = cutGeo.getIndex()!.count
+        cutGeo.clearGroups()
+        cutGeo.addGroup(0, idxCount, 0)
+        computeGeometryBoundsTree(cutGeo)
+        const brush = new Brush(cutGeo, roofCsgDummyMats[0])
+        prepareBrushForCSG(brush)
+        const result = csgEvaluator.evaluate(dormerSolid!, brush, SUBTRACTION) as Brush
+        prepareBrushForCSG(result)
+        dormerSolid!.geometry.dispose()
+        brush.geometry.dispose()
+        dormerSolid = result
+      }
+      if (exposed.front) cutLegacyFace(+1)
+      if (exposed.back) cutLegacyFace(-1)
+    }
 
     resultGeo = csgGeometry(dormerSolid)
     const resultMaterials = csgMaterials(dormerSolid)

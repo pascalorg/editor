@@ -4,7 +4,7 @@ import {
   type GeometryContext,
   type RoofNode,
   type RoofSegmentNode,
-  roofOverlapEntryOwns,
+  roofPlanOverlapEntryOwns,
   subtractPolygonsFromPolygon,
   unionPolygons,
 } from '@pascal-app/core'
@@ -27,6 +27,26 @@ type PlanEntry = {
   plan: SegPlan
 }
 
+function overlapEntry(entry: PlanEntry, ctx: GeometryContext) {
+  const supportSegment =
+    entry.roof.support?.kind === 'roof'
+      ? ctx.resolve<RoofSegmentNode>(entry.roof.support.roofSegmentId)
+      : undefined
+  return {
+    roofId: String(entry.roof.id),
+    segmentId: String(entry.segment.id),
+    supportRoofId:
+      supportSegment?.type === 'roof-segment' && supportSegment.parentId
+        ? String(supportSegment.parentId)
+        : undefined,
+    supportRoofSegmentId:
+      entry.roof.support?.kind === 'roof' ? String(entry.roof.support.roofSegmentId) : undefined,
+    roofType: entry.segment.roofType,
+    width: entry.segment.width,
+    depth: entry.segment.depth,
+  }
+}
+
 /** A segment's footprint + ridge/hip/break/slope linework, in world plan coords. */
 function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
   const cosRoof = Math.cos(-roof.rotation)
@@ -47,8 +67,15 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
     tp(s[0][0], s[0][1]),
     tp(s[1][0], s[1][1]),
   ]
+  const footprint =
+    seg.roofType === 'conical'
+      ? Array.from({ length: 48 }, (_, index) => {
+          const angle = (-index / 48) * Math.PI * 2
+          return tp(Math.cos(angle) * hw, Math.sin(angle) * hw)
+        })
+      : [tp(-hw, -hd), tp(hw, -hd), tp(hw, hd), tp(-hw, hd)]
   return {
-    footprint: [tp(-hw, -hd), tp(hw, -hd), tp(hw, hd), tp(-hw, hd)],
+    footprint,
     ridges: lw.ridges.map(mapSeg),
     hips: lw.hips.map(mapSeg),
     breaks: lw.breaks.map(mapSeg),
@@ -153,20 +180,7 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
       .filter((candidate) => {
         if (candidate.segment.id === entry.segment.id) return false
         if (candidate.segment.roofType === 'shed') return false
-        return roofOverlapEntryOwns(
-          {
-            roofId: String(candidate.roof.id),
-            segmentId: String(candidate.segment.id),
-            width: candidate.segment.width,
-            depth: candidate.segment.depth,
-          },
-          {
-            roofId: String(entry.roof.id),
-            segmentId: String(entry.segment.id),
-            width: entry.segment.width,
-            depth: entry.segment.depth,
-          },
-        )
+        return roofPlanOverlapEntryOwns(overlapEntry(candidate, ctx), overlapEntry(entry, ctx))
       })
       .map((candidate) => candidate.plan.footprint)
     return {

@@ -101,12 +101,13 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
           initialPosition[2] + centerOffset * armZ,
         ]
         lastValue = newValue
-        useLiveNodeOverrides
-          .getState()
-          .set(
-            segmentId,
-            axis === 'x' ? { width: newValue, position } : { depth: newValue, position },
-          )
+        const dimensions =
+          node.roofType === 'conical'
+            ? { width: newValue, depth: newValue }
+            : axis === 'x'
+              ? { width: newValue }
+              : { depth: newValue }
+        useLiveNodeOverrides.getState().set(segmentId, { ...dimensions, position })
         useScene.getState().markDirty(segmentId)
       },
       canCommit() {
@@ -120,12 +121,13 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
           initialPosition[1],
           initialPosition[2] + centerOffset * armZ,
         ]
-        useScene
-          .getState()
-          .updateNode(
-            segmentId,
-            axis === 'x' ? { width: lastValue, position } : { depth: lastValue, position },
-          )
+        const dimensions =
+          node.roofType === 'conical'
+            ? { width: lastValue, depth: lastValue }
+            : axis === 'x'
+              ? { width: lastValue }
+              : { depth: lastValue }
+        useScene.getState().updateNode(segmentId, { ...dimensions, position })
       },
     }
   },

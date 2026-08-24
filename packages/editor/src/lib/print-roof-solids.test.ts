@@ -3,14 +3,23 @@ import { DoorNode, RoofSegmentNode, type RoofType } from '@pascal-app/core'
 import * as THREE from 'three'
 import { buildPrintableRoofSegmentSolids } from './print-roof-solids'
 
-const ROOF_TYPES: RoofType[] = ['gable', 'hip', 'shed', 'gambrel', 'mansard', 'flat', 'dutch']
+const ROOF_TYPES: RoofType[] = [
+  'gable',
+  'hip',
+  'shed',
+  'gambrel',
+  'mansard',
+  'flat',
+  'dutch',
+  'conical',
+]
 
 function fixture(roofType: RoofType, overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode {
   return RoofSegmentNode.parse({
     id: `rseg_print-${roofType}`,
     roofType,
     width: 4,
-    depth: 3,
+    depth: roofType === 'conical' ? 4 : 3,
     wallHeight: 0.5,
     pitch: 30,
     wallThickness: 0.15,

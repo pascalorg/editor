@@ -2,6 +2,21 @@ import { describe, expect, test } from 'bun:test'
 import { getRoofSegmentSurfaceY, ROOF_SHAPE_DEFAULTS, RoofSegmentNode } from './roof-segment'
 
 describe('getRoofSegmentSurfaceY', () => {
+  test('falls linearly from a conical apex in every radial direction', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'conical',
+      width: 8,
+      depth: 8,
+      wallHeight: 2,
+      pitch: 45,
+    })
+
+    expect(getRoofSegmentSurfaceY(segment, 0, 0)).toBeCloseTo(6, 6)
+    expect(getRoofSegmentSurfaceY(segment, 2, 0)).toBeCloseTo(4, 6)
+    expect(getRoofSegmentSurfaceY(segment, 0, 4)).toBeCloseTo(2, 6)
+    expect(getRoofSegmentSurfaceY(segment, Math.SQRT2, Math.SQRT2)).toBeCloseTo(4, 6)
+  })
+
   test('keeps the Dutch width-axis rake on the upper gable slope', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'dutch',

@@ -5,6 +5,7 @@ import { ColumnNode } from './column'
 import { RoofNode } from './roof'
 
 export const LeanToConnectionMode = z.enum(['auto', 'manual'])
+export const LeanToHostKind = z.enum(['wall', 'conical-roof'])
 export const LeanToRoofEdge = z.enum(['+X', '-X', '+Z', '-Z'])
 export const LeanToResizeLock = z.enum([
   'preserve-high-edge',
@@ -28,6 +29,7 @@ export const LeanToExtensionNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   children: z.array(z.union([ColumnNode.shape.id, RoofNode.shape.id])).default([]),
+  hostKind: LeanToHostKind.default('wall'),
 
   span: z.number().min(0.5).max(100).default(4),
   autoSpan: z.boolean().default(true),
@@ -105,8 +107,8 @@ export const LeanToExtensionNode = BaseNode.extend({
   footingStyle: LeanToFootingStyle.default('none'),
 }).describe(
   dedent`
-  Wall-hosted lean-to roof extension.
-  The high edge attaches to the host wall and the mono-pitch roof falls along
+  Hosted lean-to roof extension.
+  The high edge attaches to a wall or wraps around a conical roof's cylindrical base, and the mono-pitch roof falls along
   local +Z to a beam supported by a managed row of column children. Its roof is a standard
   shed roof segment with standard gutter and downspout children. It is an open canopy, not a
   standalone enclosed shed roof.

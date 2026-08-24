@@ -102,9 +102,13 @@ export {
   OpeningDimensionReference,
 } from './nodes/door'
 export {
+  createDormerDefaultWindow,
   DormerNode,
   type DormerSurfaceMaterialRole,
   type DormerSurfaceMaterialSpec,
+  DormerWallFace,
+  getDormerWallFaceFrame,
+  getDormerWallVerticalBounds,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
 export {
@@ -197,7 +201,7 @@ export {
   type RidgeVentLine,
   RidgeVentNode,
 } from './nodes/ridge-vent'
-export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
+export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export type {
   DutchRoofMetrics,

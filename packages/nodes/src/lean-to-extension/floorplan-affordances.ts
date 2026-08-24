@@ -10,6 +10,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { getSegmentGridStep } from '@pascal-app/editor'
+import { resolveLeanToEdgeSnapTargets, resolveLeanToSpanResizeProposal } from './layout'
 import { deriveLeanToResizePatch } from './parametrics'
 
 type ResizePayload = { dimension: 'projection' | 'span'; side?: 1 | -1 }
@@ -44,28 +45,41 @@ export const leanToResizeAffordance: FloorplanAffordance<LeanToExtensionNode> = 
     const axis = dimension === 'projection' ? outward : along
     const initialAxis = initialPlanPoint[0] * axis[0] + initialPlanPoint[1] * axis[1]
     const initialValue = dimension === 'projection' ? node.projection : node.span
-    const initialPosition = node.position
     let lastPatch: Partial<LeanToExtensionNode> = {}
 
     return {
       affectedIds: [node.id as AnyNodeId],
-      apply({ planPoint }) {
+      apply({ planPoint, modifiers }) {
         const currentAxis = planPoint[0] * axis[0] + planPoint[1] * axis[1]
         const raw = initialValue + (currentAxis - initialAxis) * side
-        const step = getSegmentGridStep()
+        const step = modifiers.altKey ? 0 : getSegmentGridStep()
         const value = Math.max(0.5, step > 0 ? snapScalar(raw, step) : raw)
         lastPatch =
           dimension === 'projection'
             ? { projection: value, ...deriveLeanToResizePatch(node, { projection: value }) }
-            : {
-                span: value,
-                autoSpan: false,
-                position: [
-                  initialPosition[0] + (side * (value - initialValue)) / 2,
-                  initialPosition[1],
-                  initialPosition[2],
-                ],
-              }
+            : (() => {
+                const proposal = resolveLeanToSpanResizeProposal({
+                  node,
+                  wall,
+                  rawSpan: value,
+                  side: side > 0 ? 'right' : 'left',
+                  edgeSnapTargets: modifiers.altKey
+                    ? []
+                    : resolveLeanToEdgeSnapTargets(node, wall, nodes),
+                })
+                return {
+                  span: proposal.span,
+                  autoSpan: false,
+                  position: proposal.position,
+                  ...(proposal.target
+                    ? {
+                        highEdgeHeight: proposal.highEdgeHeight,
+                        lowEdgeHeight: proposal.lowEdgeHeight,
+                        pitch: proposal.pitch,
+                      }
+                    : {}),
+                }
+              })()
         useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
         sceneApi.markDirty(node.id as AnyNodeId)
       },

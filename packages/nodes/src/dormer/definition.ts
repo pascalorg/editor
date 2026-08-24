@@ -433,9 +433,8 @@ const dormerHandles: HandleDescriptor<DormerNodeType>[] = [
 
 /**
  * Dormer — a small house-shaped protrusion sitting on top of a roof
- * segment. The window opening is inlined into the dormer's schema
- * (window* fields drive parametric geometry on the front face), not
- * a hosted child node — so `relations.hosts` stays unset.
+ * segment. Windows are hosted child nodes; the legacy window* fields remain
+ * in the schema only so scene migration can preserve older dormers.
  *
  * **Scope of this port — stub.** Schema is complete (every field from
  * the archive, including the four per-surface material slots and the
@@ -449,7 +448,7 @@ const dormerHandles: HandleDescriptor<DormerNodeType>[] = [
  */
 export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   kind: 'dormer',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: DormerNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -465,7 +464,9 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    duplicable: true,
+    // Dormers own their WindowNode children. Duplicate the complete subtree
+    // so the copied dormer never aliases windows from the source dormer.
+    duplicable: { subtree: true },
     deletable: true,
     // Mounts on a roof segment via `roofSegmentId`. Dirty marks
     // cascade to the host segment's parent roof so its merged shell
@@ -480,6 +481,11 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
     // preview through this entry rather than carrying a kind-name
     // arm.
     paint: dormerPaint,
+  },
+
+  relations: {
+    hosts: ['window'],
+    cascadeDelete: 'descendants',
   },
 
   affordanceTools: {

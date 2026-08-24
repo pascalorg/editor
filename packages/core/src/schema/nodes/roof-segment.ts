@@ -4,7 +4,16 @@ import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 
-export const RoofType = z.enum(['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'])
+export const RoofType = z.enum([
+  'hip',
+  'gable',
+  'shed',
+  'gambrel',
+  'dutch',
+  'mansard',
+  'flat',
+  'conical',
+])
 
 export type RoofType = z.infer<typeof RoofType>
 
@@ -195,7 +204,7 @@ export const RoofSegmentNode = BaseNode.extend({
   Roof segment node - an individual roof module within a roof group.
   Each segment generates a complete architectural volume (walls + roof).
   Multiple segments can be combined to form complex roof shapes.
-  - roofType: hip, gable, shed, gambrel, dutch, mansard, flat
+  - roofType: hip, gable, shed, gambrel, dutch, mansard, flat, conical
   - width/depth: footprint dimensions
   - trim: segment-local side cut distances
   - wallHeight: height of walls below the roof
@@ -453,6 +462,8 @@ export function getDutchRoofMetrics(
 function getPrimarySlopeRun(input: PitchInputs & ShapeRatios): number {
   const min = Math.min(input.width, input.depth)
   switch (input.roofType) {
+    case 'conical':
+      return input.width / 2
     case 'shed':
       return input.depth
     case 'gable':
@@ -560,6 +571,7 @@ export function getRoofSegmentVisibleTopBounds(
 
   if (
     segment.roofType === 'hip' ||
+    segment.roofType === 'conical' ||
     segment.roofType === 'mansard' ||
     segment.roofType === 'dutch'
   ) {
@@ -673,6 +685,12 @@ export function getRoofSegmentSurfaceY(
     const fx = node.width > 0 ? Math.abs(localX) / (node.width / 2) : 0
     const fz = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
     return peakY - Math.max(fx, fz) * activeRh
+  }
+
+  if (node.roofType === 'conical') {
+    const radius = Math.max(0.0001, node.width / 2)
+    const radialProgress = Math.min(1, Math.hypot(localX, localZ) / radius)
+    return peakY - radialProgress * activeRh
   }
 
   const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0

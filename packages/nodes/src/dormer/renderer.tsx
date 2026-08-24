@@ -1,24 +1,30 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type DormerNode,
+  type DormerWallFace,
+  getDormerWallFaceFrame,
   getEffectiveDormerSurfaceMaterial,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
+  type WindowNode,
 } from '@pascal-app/core'
 import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  NodeRenderer,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import {
   buildDormerFallbackGeometry,
@@ -43,6 +49,18 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const node = useMemo(
     () => (liveOverrides ? ({ ...storeNode, ...liveOverrides } as DormerNode) : storeNode),
     [storeNode, liveOverrides],
+  )
+
+  const childNodes = useScene(
+    useShallow((state) =>
+      (node.children ?? [])
+        .map((childId) => state.nodes[childId as AnyNodeId])
+        .filter((child): child is AnyNode => child !== undefined),
+    ),
+  )
+  const hostedWindows = useMemo(
+    () => childNodes.filter((child): child is WindowNode => child.type === 'window'),
+    [childNodes],
   )
 
   const segment = useScene((state) =>
@@ -117,7 +135,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const geometry = useMemo(() => {
     if (!segment) return null
     if (isLiveDrag) return buildDormerFallbackGeometry(node)
-    return generateDormerGeometry(node, segment)
+    return generateDormerGeometry(node, segment, hostedWindows)
   }, [
     isLiveDrag,
     segment,
@@ -142,6 +160,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.windowCornerRadii[1],
     node.windowCornerRadii[2],
     node.windowCornerRadii[3],
+    hostedWindows,
   ])
 
   useEffect(() => () => geometry?.dispose(), [geometry])
@@ -174,12 +193,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // local frame is *dormer-local* — that's what `NodeArrowHandles`
   // reads to place its chevrons. Mirrors chimney's structure.
   return (
-    <group
-      position={segment.position}
-      rotation-y={segment.rotation ?? 0}
-      visible={node.visible}
-      {...handlers}
-    >
+    <group position={segment.position} rotation-y={segment.rotation ?? 0} visible={node.visible}>
       <group
         position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
         ref={ref}
@@ -191,15 +205,44 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
           material={material}
           name="dormer-body"
           receiveShadow
+          {...handlers}
         />
-        <DormerWindowAssembly
-          dormerToSegment={localToSegment}
-          frameMaterial={frameSideMat}
-          glassMaterial={glassMat}
-          node={node}
-          segment={segment}
-        />
+        {hostedWindows.length === 0 && (
+          <DormerWindowAssembly
+            dormerToSegment={localToSegment}
+            frameMaterial={frameSideMat}
+            glassMaterial={glassMat}
+            node={node}
+            segment={segment}
+          />
+        )}
+        {hostedWindows.map((window) => (
+          <DormerWindowHostFrame
+            dormer={node}
+            face={window.dormerFace ?? 'front'}
+            key={`${node.id}:${window.id}`}
+          >
+            <NodeRenderer nodeId={window.id} />
+          </DormerWindowHostFrame>
+        ))}
       </group>
+    </group>
+  )
+}
+
+function DormerWindowHostFrame({
+  dormer,
+  face,
+  children,
+}: {
+  dormer: DormerNode
+  face: DormerWallFace
+  children: ReactNode
+}) {
+  const frame = getDormerWallFaceFrame(dormer, face)
+  return (
+    <group position={frame.origin} rotation-y={frame.yaw}>
+      {children}
     </group>
   )
 }
