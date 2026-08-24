@@ -14,6 +14,7 @@ export type LeanToCornerJoint = {
   neighborSide: LeanToCornerSide
   roofExtension: number
   roofPiece: LeanToPlanPoint[]
+  roofPieces?: LeanToPlanPoint[][]
   seam: [LeanToPlanPoint, LeanToPlanPoint] | null
   beamExtension: number
   gutterMitre: number
@@ -557,6 +558,81 @@ function intersectConvexPolygons(
   return result
 }
 
+function clipPolygonToHalfPlane(
+  polygon: readonly LeanToPlanPoint[],
+  edgeStart: LeanToPlanPoint,
+  edgeEnd: LeanToPlanPoint,
+  orientation: number,
+  keepInside: boolean,
+): LeanToPlanPoint[] {
+  const clipped: LeanToPlanPoint[] = []
+  const edgeSide = (point: readonly [number, number]) =>
+    orientation *
+    ((edgeEnd[0] - edgeStart[0]) * (point[1] - edgeStart[1]) -
+      (edgeEnd[1] - edgeStart[1]) * (point[0] - edgeStart[0]))
+  for (let index = 0; index < polygon.length; index++) {
+    const current = polygon[index]!
+    const next = polygon[(index + 1) % polygon.length]!
+    const currentSide = edgeSide(current)
+    const nextSide = edgeSide(next)
+    const currentInside = keepInside
+      ? currentSide >= -PLAN_TOLERANCE
+      : currentSide <= PLAN_TOLERANCE
+    const nextInside = keepInside ? nextSide >= -PLAN_TOLERANCE : nextSide <= PLAN_TOLERANCE
+    if (currentInside) clipped.push([current[0], current[1]])
+    if (currentInside === nextInside) continue
+    const ratio = currentSide / (currentSide - nextSide)
+    clipped.push([
+      current[0] + (next[0] - current[0]) * ratio,
+      current[1] + (next[1] - current[1]) * ratio,
+    ])
+  }
+  return clipped.filter(
+    (point, index) => index === 0 || planDistance(point, clipped[index - 1]!) > PLAN_TOLERANCE,
+  )
+}
+
+function subtractConvexPolygon(
+  subject: readonly LeanToPlanPoint[],
+  clip: readonly LeanToPlanPoint[],
+): LeanToPlanPoint[][] {
+  if (subject.length < 3) return []
+  if (clip.length < 3) return [subject.map((point) => [point[0], point[1]])]
+  const orientation = Math.sign(polygonSignedArea(clip)) || 1
+  let remaining = subject.map((point) => [point[0], point[1]] as LeanToPlanPoint)
+  const outside: LeanToPlanPoint[][] = []
+  for (let index = 0; index < clip.length && remaining.length >= 3; index++) {
+    const edgeStart = clip[index]!
+    const edgeEnd = clip[(index + 1) % clip.length]!
+    const fragment = clipPolygonToHalfPlane(remaining, edgeStart, edgeEnd, orientation, false)
+    if (fragment.length >= 3 && Math.abs(polygonSignedArea(fragment)) > PLAN_TOLERANCE) {
+      outside.push(fragment)
+    }
+    remaining = clipPolygonToHalfPlane(remaining, edgeStart, edgeEnd, orientation, true)
+  }
+  return outside
+}
+
+function roofWorldFacets(wall: WallNode, leanTo: LeanToExtensionNode): LeanToPlanPoint[][] {
+  const layout = resolveLeanToLayout(leanTo)
+  const edges = roofPlanEdges(leanTo)
+  const facetCount = isCurvedLeanTo(leanTo)
+    ? Math.max(4, Math.min(32, Math.ceil(layout.roofWidth / 0.4)))
+    : 1
+  const leftX = layout.roofCenterX - layout.roofWidth / 2
+  const facetWidth = layout.roofWidth / facetCount
+  return Array.from({ length: facetCount }, (_, index) => {
+    const minX = leftX + index * facetWidth
+    const maxX = index === facetCount - 1 ? leftX + layout.roofWidth : minX + facetWidth
+    return [
+      leanToPointToWorld(wall, leanTo, minX, edges.back),
+      leanToPointToWorld(wall, leanTo, maxX, edges.back),
+      leanToPointToWorld(wall, leanTo, maxX, edges.front),
+      leanToPointToWorld(wall, leanTo, minX, edges.front),
+    ].flatMap((point) => (point ? [point] : []))
+  }).filter((polygon) => polygon.length >= 3)
+}
+
 function sharedRoofSeam(
   wall: WallNode,
   leanTo: LeanToExtensionNode,
@@ -682,61 +758,142 @@ function resolveCurvedStraightConcaveRoofPiece(
   candidate: LeanToExtensionNode,
   candidateWall: WallNode,
   candidateSide: LeanToCornerSide,
-): { piece: LeanToPlanPoint[]; seam: [LeanToPlanPoint, LeanToPlanPoint] | null } | null {
+): {
+  piece: LeanToPlanPoint[]
+  pieces: LeanToPlanPoint[][]
+  seam: [LeanToPlanPoint, LeanToPlanPoint] | null
+} | null {
   const ownCurved = isCurvedLeanTo(leanTo)
   const candidateCurved = isCurvedLeanTo(candidate)
   if (ownCurved === candidateCurved) return null
-  const direct = resolveConcaveRoofPiece(leanTo, wall, side, candidate, candidateWall)
-  if ((direct.piece.length >= 3 && direct.seam) || !ownCurved) return null
+  const curved = ownCurved ? leanTo : candidate
+  const curvedWall = ownCurved ? wall : candidateWall
+  const curvedSide = ownCurved ? side : candidateSide
+  const straight = ownCurved ? candidate : leanTo
+  const straightWall = ownCurved ? candidateWall : wall
+  const curvedLayout = resolveLeanToLayout(curved)
 
-  // At a semicircle the curved parameter-space boundary can touch the same
-  // roof plane at both ends, while the straight neighbor still yields the seam.
-  const reciprocal = resolveConcaveRoofPiece(
-    candidate,
-    candidateWall,
-    candidateSide,
-    leanTo,
-    wall,
+  const curvedEdges = roofPlanEdges(curved)
+  const curvedSideSign = curvedSide === 'left' ? -1 : 1
+  const curvedSideX = curvedLayout.roofCenterX + curvedSideSign * (curvedLayout.roofWidth / 2)
+  const probeWorld = leanToPointToWorld(
+    curvedWall,
+    curved,
+    curvedSideX - curvedSideSign * Math.min(0.1, curvedLayout.roofWidth / 4),
+    curvedEdges.back,
   )
-  if (!reciprocal.seam) return null
-  const seamWorld = reciprocal.seam.map((point) =>
-    leanToPointToWorld(candidateWall, candidate, point[0], point[1]),
+  if (!probeWorld) return null
+  const worldHeightDelta = (point: readonly [number, number]) => {
+    const curvedHeight = leanToTopHeightAtWorld(curvedWall, curved, point)
+    const straightHeight = leanToTopHeightAtWorld(straightWall, straight, point)
+    return curvedHeight === null || straightHeight === null ? null : curvedHeight - straightHeight
+  }
+  const probeDelta = worldHeightDelta(probeWorld)
+  if (probeDelta === null || Math.abs(probeDelta) <= PLAN_TOLERANCE) return null
+  const curvedRetainedSign = Math.sign(probeDelta)
+
+  // The equal-height cut only divides the shared footprint. Applying it to the
+  // whole curved band removes roof area that the straight neighbor never covers.
+  const curvedFacets = roofWorldFacets(curvedWall, curved)
+  const straightBase = roofWorldFacets(straightWall, straight)[0]
+  if (!straightBase) return null
+  const overlaps = curvedFacets
+    .map((facet) => intersectConvexPolygons(facet, straightBase))
+    .filter((polygon) => polygon.length >= 3)
+  if (overlaps.length === 0) return null
+
+  let retainedWorld: LeanToPlanPoint[][]
+  if (ownCurved) {
+    retainedWorld = curvedFacets.flatMap((facet) => {
+      const overlap = intersectConvexPolygons(facet, straightBase)
+      const exclusive = subtractConvexPolygon(facet, straightBase)
+      const retainedOverlap = clipToRetainedRoofSide(overlap, worldHeightDelta, curvedRetainedSign)
+      return [...exclusive, ...(retainedOverlap.length >= 3 ? [retainedOverlap] : [])]
+    })
+  } else {
+    let exclusive = [straightBase]
+    for (const facet of curvedFacets) {
+      exclusive = exclusive.flatMap((polygon) => subtractConvexPolygon(polygon, facet))
+    }
+    const retainedOverlap = overlaps.flatMap((overlap) => {
+      const piece = clipToRetainedRoofSide(overlap, worldHeightDelta, -curvedRetainedSign)
+      return piece.length >= 3 ? [piece] : []
+    })
+    retainedWorld = [...exclusive, ...retainedOverlap]
+  }
+
+  const seamWorld: LeanToPlanPoint[] = []
+  for (const overlap of overlaps) {
+    for (let index = 0; index < overlap.length; index++) {
+      const current = overlap[index]!
+      const next = overlap[(index + 1) % overlap.length]!
+      const currentDelta = worldHeightDelta(current)
+      const nextDelta = worldHeightDelta(next)
+      if (currentDelta === null || nextDelta === null) continue
+      if (Math.abs(currentDelta) <= PLAN_TOLERANCE) seamWorld.push(current)
+      if (currentDelta * nextDelta >= 0) continue
+      const ratio = currentDelta / (currentDelta - nextDelta)
+      seamWorld.push([
+        current[0] + (next[0] - current[0]) * ratio,
+        current[1] + (next[1] - current[1]) * ratio,
+      ])
+    }
+  }
+  const uniqueSeam = seamWorld.filter(
+    (point, index) =>
+      seamWorld.findIndex(
+        (candidatePoint) => planDistance(point, candidatePoint) <= PLAN_TOLERANCE,
+      ) === index,
   )
-  if (seamWorld.some((point) => !point)) return null
-  const localized = seamWorld.map((point) => worldPointToLeanTo(wall, leanTo, point!))
-  if (localized.some((point) => !point)) return null
+  let seamEndpoints: [LeanToPlanPoint, LeanToPlanPoint] | null = null
+  for (const first of uniqueSeam) {
+    for (const second of uniqueSeam) {
+      if (!seamEndpoints || planDistance(first, second) > planDistance(...seamEndpoints)) {
+        seamEndpoints = [first, second]
+      }
+    }
+  }
+  const pieces = retainedWorld.flatMap((polygon) => {
+    const localized = polygon.map((point) => worldPointToLeanTo(wall, leanTo, point))
+    if (localized.some((point) => !point)) return []
+    const piece = localized as LeanToPlanPoint[]
+    return piece.length >= 3 && Math.abs(polygonSignedArea(piece)) > PLAN_TOLERANCE ? [piece] : []
+  })
+  const localizedSeam = seamEndpoints?.map((point) => worldPointToLeanTo(wall, leanTo, point))
+  const seam =
+    localizedSeam?.[0] && localizedSeam[1]
+      ? ([localizedSeam[0], localizedSeam[1]] as [LeanToPlanPoint, LeanToPlanPoint])
+      : null
+  if (pieces.length === 0 || !seam) return null
 
-  const layout = resolveLeanToLayout(leanTo)
-  const edges = roofPlanEdges(leanTo)
-  const [backSeam, frontSeam] = (localized as LeanToPlanPoint[]).sort(
-    (left, right) => left[1] - right[1],
-  ) as [LeanToPlanPoint, LeanToPlanPoint]
-  const leftX = layout.roofCenterX - layout.roofWidth / 2
-  const rightX = layout.roofCenterX + layout.roofWidth / 2
-  const piece: LeanToPlanPoint[] =
-    side === 'left'
-      ? [backSeam, [rightX, edges.back], [rightX, edges.front], frontSeam]
-      : [[leftX, edges.back], backSeam, frontSeam, [leftX, edges.front]]
-
-  return { piece, seam: [backSeam, frontSeam] }
+  return { piece: pieces[0]!, pieces, seam }
 }
 
 export function applyLeanToCornerRoofPieces(
   base: LeanToPlanPoint[],
   joints: Partial<Record<LeanToCornerSide, LeanToCornerJoint>>,
 ): LeanToPlanPoint[][] {
-  let retained = base
+  let retained = [base]
   const additions: LeanToPlanPoint[][] = []
   for (const side of ['left', 'right'] as const) {
     const joint = joints[side]
     if (!joint || joint.roofPiece.length < 3) continue
     if (joint.kind === 'concave') {
-      retained = intersectConvexPolygons(retained, joint.roofPiece)
+      const clips = joint.roofPieces ?? [joint.roofPiece]
+      retained = retained.flatMap((subject) =>
+        clips.flatMap((clip) => {
+          const intersection = intersectConvexPolygons(subject, clip)
+          return intersection.length >= 3 &&
+            Math.abs(polygonSignedArea(intersection)) > PLAN_TOLERANCE
+            ? [intersection]
+            : []
+        }),
+      )
     } else {
       additions.push(joint.roofPiece)
     }
   }
-  return [...(retained.length >= 3 ? [retained] : []), ...additions]
+  return [...retained, ...additions]
 }
 
 function resolveRoofPiece(
@@ -1010,19 +1167,20 @@ export function resolveLeanToCornerJoints(
               candidateWall,
             )
           : resolveConcaveRoofPiece(cornerLeanTo, wall, side, cornerCandidate, candidateWall))
-      const seam = curvedStraightRoof || curvedStraightConcaveRoof
-        ? roof.seam
-        : sharedRoofSeam(
-            wall,
-            cornerLeanTo,
-            side,
-            roofExtension,
-            candidateWall,
-            cornerCandidate,
-            neighborSide,
-            candidateRoofExtension,
-            kind,
-          )
+      const seam =
+        curvedStraightRoof || curvedStraightConcaveRoof
+          ? roof.seam
+          : sharedRoofSeam(
+              wall,
+              cornerLeanTo,
+              side,
+              roofExtension,
+              candidateWall,
+              cornerCandidate,
+              neighborSide,
+              candidateRoofExtension,
+              kind,
+            )
       const beamExtension = curvedConcaveJoint
         ? 0
         : (extensionToRunIntersection(
@@ -1061,6 +1219,7 @@ export function resolveLeanToCornerJoints(
         neighborSide,
         roofExtension,
         roofPiece: roof.piece,
+        roofPieces: curvedStraightConcaveRoof?.pieces,
         seam: seam ?? roof.seam,
         beamExtension,
         gutterMitre: (kind === 'concave' ? -1 : 1) * ((Math.PI - gutterInteriorAngle) / 2),

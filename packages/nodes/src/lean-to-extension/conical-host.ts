@@ -39,7 +39,8 @@ export function resolveConicalLeanToPlacement(
   if (segment.roofType !== 'conical') return null
 
   const radius = segment.width / 2
-  const highEdgeHeight = Math.max(0.8, segment.wallHeight)
+  const hostHeightOffset = source.hostHeightOffset ?? 0
+  const highEdgeHeight = Math.max(0.8, Math.min(10, segment.wallHeight + hostHeightOffset))
   const projection = source.projection ?? LeanToExtensionNode.shape.projection.parse(undefined)
   const pitch = source.pitch ?? LeanToExtensionNode.shape.pitch.parse(undefined)
   const lowEdgeHeight = highEdgeHeight - projection * Math.tan((pitch * Math.PI) / 180)
@@ -48,6 +49,7 @@ export function resolveConicalLeanToPlacement(
     ...source,
     parentId: segment.id,
     hostKind: 'conical-roof',
+    hostHeightOffset,
     position: [0, 0, radius],
     rotation: [0, 0, 0],
     span: 2 * Math.PI * radius,
@@ -126,11 +128,12 @@ export function findConicalLeanToHostInPlan(
   point: readonly [number, number],
   nodes: Record<AnyNodeId, AnyNode>,
   activeLevelId: AnyNodeId,
+  options?: { includeOccupied?: boolean },
 ): ConicalLeanToPlanHost | null {
   let closest: (ConicalLeanToPlanHost & { distance: number }) | null = null
   for (const candidate of Object.values(nodes)) {
     if (candidate.type !== 'roof-segment' || candidate.roofType !== 'conical') continue
-    if (isConicalLeanToHostOccupied(candidate.id, nodes)) continue
+    if (!options?.includeOccupied && isConicalLeanToHostOccupied(candidate.id, nodes)) continue
     const pose = resolveSegmentPlanPose(candidate, nodes, activeLevelId)
     if (!pose) continue
     const distance = Math.hypot(point[0] - pose.center[0], point[1] - pose.center[1])

@@ -30,6 +30,7 @@ export const LeanToExtensionNode = BaseNode.extend({
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   children: z.array(z.union([ColumnNode.shape.id, RoofNode.shape.id])).default([]),
   hostKind: LeanToHostKind.default('wall'),
+  hostHeightOffset: z.number().min(-10).max(10).default(0),
 
   span: z.number().min(0.5).max(100).default(4),
   autoSpan: z.boolean().default(true),

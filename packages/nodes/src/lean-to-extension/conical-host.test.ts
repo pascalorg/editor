@@ -48,6 +48,20 @@ describe('resolveConicalLeanToPlacement', () => {
     expect(resolveConicalLeanToPlacement(segment)).toBeNull()
   })
 
+  test('keeps an edited canopy height offset when the host changes', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'conical',
+      width: 8,
+      depth: 8,
+      wallHeight: 3.5,
+    })
+
+    const leanTo = resolveConicalLeanToPlacement(segment, { hostHeightOffset: 0.75 })
+
+    expect(leanTo?.highEdgeHeight).toBe(4.25)
+    expect(leanTo?.hostHeightOffset).toBe(0.75)
+  })
+
   test('closes the assembly without duplicate seam members or gutter caps', () => {
     const segment = RoofSegmentNode.parse({
       roofType: 'conical',
@@ -109,5 +123,8 @@ describe('resolveConicalLeanToPlacement', () => {
     const existing = resolveConicalLeanToPlacement(segment, { id: 'leanto_plan_host' })!
     nodes[existing.id as AnyNodeId] = existing
     expect(findConicalLeanToHostInPlan([6, 3], nodes, level.id)).toBeNull()
+    expect(
+      findConicalLeanToHostInPlan([6, 3], nodes, level.id, { includeOccupied: true })?.segment.id,
+    ).toBe(segment.id)
   })
 })

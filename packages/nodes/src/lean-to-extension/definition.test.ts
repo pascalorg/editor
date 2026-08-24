@@ -5,8 +5,10 @@ import {
   type LeanToExtensionNode,
   LeanToExtensionNode as LeanToExtensionNodeSchema,
   type LinearResizeHandle,
+  RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import { resolveConicalLeanToPlacement } from './conical-host'
 import { leanToExtensionDefinition } from './definition'
 import { resolveLeanToLayout } from './layout'
 
@@ -48,6 +50,13 @@ function heightHandle(): LinearResizeHandle<LeanToExtensionNode> {
   return linearHandle('y', 'min')
 }
 
+function circularRadiusHandles(): LinearResizeHandle<LeanToExtensionNode>[] {
+  return handles().filter(
+    (handle): handle is LinearResizeHandle<LeanToExtensionNode> =>
+      handle.kind === 'linear-resize' && handle.measureLabel === 'Host radius',
+  )
+}
+
 function pitchHandle(): LinearResizeHandle<LeanToExtensionNode> {
   const handle = handles().find(
     (candidate): candidate is LinearResizeHandle<LeanToExtensionNode> =>
@@ -81,12 +90,65 @@ describe('lean-to extension span handles', () => {
     ])
   })
 
-  test('hides host-controlled span and height arrows on a closed conical loop', () => {
-    const circular = node({ hostKind: 'conical-roof' })
+  test('shows height and horizontal radius arrows on a closed conical loop', () => {
+    const host = RoofSegmentNode.parse({
+      id: 'rseg_circular_visibility',
+      roofType: 'conical',
+      width: 8,
+      depth: 8,
+      wallHeight: 3,
+    })
+    const circular = resolveConicalLeanToPlacement(host, {
+      id: 'leanto_circular_visibility',
+    })!
+    const nodes = { [host.id]: host, [circular.id]: circular } as Record<string, AnyNode>
+    const sceneApi = { get: (id: string) => nodes[id], nodes: () => nodes } as never
 
-    expect(spanHandle('min').visible?.(circular, undefined as never)).toBe(false)
-    expect(spanHandle('max').visible?.(circular, undefined as never)).toBe(false)
-    expect(heightHandle().visible?.(circular, undefined as never)).toBe(false)
+    expect(spanHandle('min').visible?.(circular, sceneApi)).toBe(false)
+    expect(spanHandle('max').visible?.(circular, sceneApi)).toBe(false)
+    expect(heightHandle().visible?.(circular, sceneApi) ?? true).toBe(true)
+    expect(circularRadiusHandles()).toHaveLength(2)
+    expect(
+      circularRadiusHandles().every((handle) => handle.visible?.(circular, sceneApi) ?? true),
+    ).toBe(true)
+    expect(heightHandle().apply(circular, 3.75, sceneApi)).toMatchObject({
+      highEdgeHeight: 3.75,
+      hostHeightOffset: 0.75,
+    })
+  })
+
+  test('resizes the circular host and keeps the closed loop attached', () => {
+    const host = RoofSegmentNode.parse({
+      id: 'rseg_circular_handle',
+      roofType: 'conical',
+      width: 8,
+      depth: 8,
+      wallHeight: 3,
+    })
+    const circular = resolveConicalLeanToPlacement(host, { id: 'leanto_circular_handle' })!
+    const nodes = { [host.id]: host, [circular.id]: circular } as Record<string, AnyNode>
+    const updates: Array<{ id: string; patch: Partial<AnyNode> }> = []
+    const sceneApi = {
+      get: (id: string) => nodes[id],
+      nodes: () => nodes,
+      update: (id: string, patch: Partial<AnyNode>) => updates.push({ id, patch }),
+    } as never
+    const handle = circularRadiusHandles()[0]!
+
+    expect(handle.currentValue(circular)).toBe(4)
+    const patch = handle.apply(circular, 5, sceneApi)
+    expect(patch).toMatchObject({
+      span: 10 * Math.PI,
+      spanArcCenterZ: -5,
+      spanArcRadius: 5,
+      position: [0, 0, 5],
+    })
+    expect(new Map(handle.previewOverrides?.(circular, 5, sceneApi) ?? []).get(host.id)).toEqual({
+      width: 10,
+      depth: 10,
+    })
+    handle.commit?.(circular, patch, sceneApi)
+    expect(updates).toContainEqual({ id: host.id, patch: { width: 10, depth: 10 } })
   })
 
   test('places projection arrow at the same low roof edge height', () => {

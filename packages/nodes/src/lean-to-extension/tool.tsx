@@ -46,6 +46,7 @@ type PreviewPose = {
   node: LeanToExtensionNode
   position: [number, number, number]
   rotationY: number
+  valid: boolean
 }
 
 const LeanToExtensionTool = () => {
@@ -86,6 +87,7 @@ const LeanToExtensionTool = () => {
       node: LeanToExtensionNode,
       localPosition: readonly [number, number, number],
       extraRotationY = 0,
+      valid = true,
     ): PreviewPose => {
       const position = event.object.localToWorld(new Vector3(...localPosition))
       const rotationY =
@@ -95,22 +97,20 @@ const LeanToExtensionTool = () => {
         node,
         position: [position.x, position.y, position.z],
         rotationY,
+        valid,
       }
     }
 
     const updateConicalSegmentTarget = (event: RoofSegmentEvent) => {
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
-      if (isConicalLeanToHostOccupied(event.node.id, nodes)) {
-        setPreview(null)
-        return null
-      }
       const node = resolveConicalLeanToSurfaceHit(event.node, event.localPosition, event.normal)
       if (!node) {
         setPreview(null)
         return null
       }
-      setPreview(worldPreviewPose(event, node, node.position))
-      return node
+      const valid = !isConicalLeanToHostOccupied(event.node.id, nodes)
+      setPreview(worldPreviewPose(event, node, node.position, 0, valid))
+      return valid ? node : null
     }
 
     const updateConicalRoofTarget = (event: RoofEvent) => {
@@ -119,7 +119,6 @@ const LeanToExtensionTool = () => {
       for (const childId of event.node.children) {
         const segment = nodes[childId as AnyNodeId]
         if (segment?.type !== 'roof-segment' || segment.roofType !== 'conical') continue
-        if (isConicalLeanToHostOccupied(segment.id, nodes)) continue
         const cos = Math.cos(segment.rotation)
         const sin = Math.sin(segment.rotation)
         const dx = event.localPosition[0] - segment.position[0]
@@ -139,6 +138,7 @@ const LeanToExtensionTool = () => {
           : undefined
         const node = resolveConicalLeanToSurfaceHit(segment, localPosition, normal)
         if (!node) continue
+        const valid = !isConicalLeanToHostOccupied(segment.id, nodes)
         const crownX = segment.position[0] + node.position[0] * cos + node.position[2] * sin
         const crownZ = segment.position[2] - node.position[0] * sin + node.position[2] * cos
         setPreview(
@@ -147,9 +147,10 @@ const LeanToExtensionTool = () => {
             node,
             [crownX, segment.position[1] + node.position[1], crownZ],
             segment.rotation,
+            valid,
           ),
         )
-        return node
+        return valid ? node : null
       }
       setPreview(null)
       return null
@@ -178,10 +179,7 @@ const LeanToExtensionTool = () => {
         wallPlacement.position[0],
       )
       const node = resolveLeanToEndAbutments(attachedNode, event.node, nodes)
-      if (leanToPlacementConflicts(node, event.node, nodes).length > 0) {
-        setPreview(null)
-        return null
-      }
+      const valid = leanToPlacementConflicts(node, event.node, nodes).length === 0
       const pose = leanToWallLocalPose(event.node, node, resolveBaseY(event.node))
       setPreview((current) => ({
         node:
@@ -189,8 +187,9 @@ const LeanToExtensionTool = () => {
             ? current.node
             : node,
         ...pose,
+        valid,
       }))
-      return node
+      return valid ? node : null
     }
 
     const onWallMove = (event: WallEvent) => {
@@ -298,7 +297,7 @@ const LeanToExtensionTool = () => {
   if (!preview || viewMode !== '3d') return null
   return (
     <group position={preview.position} rotation={[0, preview.rotationY, 0]}>
-      <LeanToExtensionPreview node={preview.node} />
+      <LeanToExtensionPreview invalid={!preview.valid} node={preview.node} />
     </group>
   )
 }

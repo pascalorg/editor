@@ -1,8 +1,10 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   findLevelAncestorId,
   type HandleDescriptor,
   type NodeDefinition,
+  type RoofSegmentNode,
   type SceneApi,
   type WallNode,
 } from '@pascal-app/core'
@@ -35,6 +37,12 @@ const PITCH_HANDLE_OFFSET = 0.3
 const ROOF_EDGE_SNAP_TOLERANCE = 0.3
 const MIN_PITCH = 1
 const MAX_PITCH = 45
+
+function resolveConicalHost(node: LeanToExtensionNode, sceneApi: SceneApi): RoofSegmentNode | null {
+  if (!(node.hostKind === 'conical-roof' && node.parentId)) return null
+  const segment = sceneApi.get(node.parentId as AnyNodeId)
+  return segment?.type === 'roof-segment' && segment.roofType === 'conical' ? segment : null
+}
 
 function resolveHostWall(node: LeanToExtensionNode, sceneApi: SceneApi): WallNode | null {
   if (!node.parentId) return null
@@ -104,6 +112,19 @@ function highEdgeHeightPatch(
   newValue: number,
   sceneApi: SceneApi,
 ): Partial<LeanToExtensionNode> {
+  const conicalHost = resolveConicalHost(node, sceneApi)
+  if (conicalHost) {
+    return {
+      ...deriveLeanToResizePatch(node, { highEdgeHeight: newValue }),
+      hostHeightOffset: newValue - conicalHost.wallHeight,
+      connectionMode: 'manual',
+      hostRoofId: undefined,
+      hostRoofSegmentId: undefined,
+      hostRoofEdge: undefined,
+      hostRoofEdgeRange: undefined,
+      connectionInset: 0,
+    }
+  }
   const wall = resolveHostWall(node, sceneApi)
   const attachment = wall
     ? resolveLeanToRoofAttachment({ ...node, highEdgeHeight: newValue }, wall, sceneApi.nodes())
@@ -149,7 +170,6 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
     apply: highEdgeHeightPatch,
     previewOverrides: (node, newValue, sceneApi) =>
       leanToManagedPreviewOverrides(node, highEdgeHeightPatch(node, newValue, sceneApi), sceneApi),
-    visible: (node) => node.hostKind !== 'conical-roof',
     onDrag: publishAdjacentHeightGuide,
     onDragEnd: (node) => clearStructuralElevationGuide(node.id),
     placement: {
@@ -288,6 +308,62 @@ function spanHandle(side: 'left' | 'right'): HandleDescriptor<LeanToExtensionNod
   }
 }
 
+function circularRadiusPatch(
+  node: LeanToExtensionNode,
+  radius: number,
+): Partial<LeanToExtensionNode> {
+  return {
+    span: 2 * Math.PI * radius,
+    autoSpan: true,
+    position: [0, node.position[1], radius],
+    spanArcCenterZ: -radius,
+    spanArcRadius: radius,
+  }
+}
+
+function circularRadiusHandle(side: 'left' | 'right'): HandleDescriptor<LeanToExtensionNode> {
+  const sign = side === 'right' ? 1 : -1
+  return {
+    kind: 'linear-resize',
+    axis: 'x',
+    anchor: side === 'right' ? 'min' : 'max',
+    min: 0.25,
+    max: 12.5,
+    gridSnap: true,
+    currentValue: (node) => node.spanArcRadius ?? node.span / (2 * Math.PI),
+    apply: (node, radius) => circularRadiusPatch(node, radius),
+    previewOverrides: (node, radius, sceneApi) => {
+      const patch = circularRadiusPatch(node, radius)
+      const host = resolveConicalHost(node, sceneApi)
+      const entries: Array<readonly [AnyNodeId, Partial<AnyNode>]> = host
+        ? [[host.id as AnyNodeId, { width: radius * 2, depth: radius * 2 }]]
+        : []
+      entries.push(...leanToManagedPreviewOverrides(node, patch, sceneApi))
+      return entries
+    },
+    commit: (node, patch, sceneApi) => {
+      const host = resolveConicalHost(node, sceneApi)
+      const radius = patch.spanArcRadius
+      if (!(host && typeof radius === 'number')) return
+      sceneApi.update(host.id as AnyNodeId, { width: radius * 2, depth: radius * 2 })
+    },
+    visible: (node, sceneApi) => resolveConicalHost(node, sceneApi) !== null,
+    placement: {
+      position: (node) => {
+        const layout = resolveLeanToLayout(node)
+        const radius = node.spanArcRadius ?? node.span / (2 * Math.PI)
+        return [
+          sign * (radius + layout.projection + node.lowOverhang + SPAN_HANDLE_OFFSET),
+          layout.lowEdgeHeight + HEIGHT_HANDLE_OFFSET,
+          -radius,
+        ]
+      },
+      rotationY: () => (side === 'right' ? 0 : Math.PI),
+    },
+    measureLabel: 'Host radius',
+  }
+}
+
 const leanToExtensionHandles: HandleDescriptor<LeanToExtensionNode>[] = [
   highEdgeHeightHandle(),
   pitchHandle(),
@@ -312,10 +388,11 @@ leanToExtensionHandles.push({
   measureLabel: 'Projection',
 })
 leanToExtensionHandles.push(spanHandle('right'), spanHandle('left'))
+leanToExtensionHandles.push(circularRadiusHandle('right'), circularRadiusHandle('left'))
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 8,
+  schemaVersion: 9,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',

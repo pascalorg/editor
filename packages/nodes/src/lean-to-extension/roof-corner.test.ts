@@ -786,7 +786,7 @@ describe('lean-to corner joint', () => {
       parentId: 'level_inward_chain',
       start: [0, 0],
       end: [6, 0],
-      curveOffset: -3,
+      curveOffset: 3,
     })
     const wallC = WallNode.parse({
       id: 'wall_inward_chain_right',
@@ -796,21 +796,21 @@ describe('lean-to corner joint', () => {
     })
     const leanToA = {
       ...applyLeanToWallAutoSpan(
-        resolveLeanToWallPlacement(wallA, getWallCurveLength(wallA) / 2, 'front')!,
+        resolveLeanToWallPlacement(wallA, getWallCurveLength(wallA) / 2, 'back')!,
         wallA,
       ),
       id: 'leanto_inward_chain_left',
     }
     const leanToB = {
       ...applyLeanToWallAutoSpan(
-        resolveLeanToWallPlacement(wallB, getWallCurveLength(wallB) / 2, 'front')!,
+        resolveLeanToWallPlacement(wallB, getWallCurveLength(wallB) / 2, 'back')!,
         wallB,
       ),
       id: 'leanto_inward_chain_center',
     }
     const leanToC = {
       ...applyLeanToWallAutoSpan(
-        resolveLeanToWallPlacement(wallC, getWallCurveLength(wallC) / 2, 'front')!,
+        resolveLeanToWallPlacement(wallC, getWallCurveLength(wallC) / 2, 'back')!,
         wallC,
       ),
       id: 'leanto_inward_chain_right',
@@ -823,18 +823,19 @@ describe('lean-to corner joint', () => {
     const jointsB = resolveLeanToCornerJoints(leanToB, wallB, nodes)
     const jointsC = resolveLeanToCornerJoints(leanToC, wallC, nodes)
 
-    expect(jointsB.left?.neighborId).toBe(leanToA.id)
-    expect(jointsB.right?.neighborId).toBe(leanToC.id)
+    expect([jointsB.left?.neighborId, jointsB.right?.neighborId].sort()).toEqual(
+      [leanToA.id, leanToC.id].sort(),
+    )
     expect(jointsB.left?.roofPiece.length).toBeGreaterThanOrEqual(3)
     expect(jointsB.right?.roofPiece.length).toBeGreaterThanOrEqual(3)
 
+    const reciprocalFor = (joints: ReturnType<typeof resolveLeanToCornerJoints>) =>
+      Object.values(joints).find((joint) => joint?.neighborId === leanToB.id)
     for (const [own, reciprocal, ownWall, ownLeanTo, reciprocalWall, reciprocalLeanTo] of [
-      [jointsB.left, jointsA.right, wallB, leanToB, wallA, leanToA],
-      [jointsB.right, jointsC.left, wallB, leanToB, wallC, leanToC],
+      [jointsB.right, reciprocalFor(jointsA), wallB, leanToB, wallA, leanToA],
+      [jointsB.left, reciprocalFor(jointsC), wallB, leanToB, wallC, leanToC],
     ] as const) {
-      const ownSeam = own?.seam?.map((point) =>
-        cornerPlanPointToWorld(ownWall, ownLeanTo, point),
-      )
+      const ownSeam = own?.seam?.map((point) => cornerPlanPointToWorld(ownWall, ownLeanTo, point))
       const reciprocalSeam = reciprocal?.seam?.map((point) =>
         cornerPlanPointToWorld(reciprocalWall, reciprocalLeanTo, point),
       )
@@ -844,8 +845,63 @@ describe('lean-to corner joint', () => {
     }
 
     const centerAssembly = createLeanToAssembly(leanToB, undefined, nodes)
-    expect(centerAssembly.segment.shedFootprintPieces).toHaveLength(1)
-    expect(centerAssembly.segment.shedFootprintPieces?.[0]).toHaveLength(5)
+    expect(centerAssembly.segment.shedFootprintPieces!.length).toBeGreaterThan(1)
+    const eavePoints = centerAssembly.segment
+      .shedFootprintPieces!.flat()
+      .filter((point) => point[1] > 1)
+    expect(Math.min(...eavePoints.map((point) => point[0]))).toBeLessThan(-1)
+    expect(Math.max(...eavePoints.map((point) => point[0]))).toBeGreaterThan(1)
+
+    const assemblies = [
+      createLeanToAssembly(leanToA, undefined, nodes),
+      centerAssembly,
+      createLeanToAssembly(leanToC, undefined, nodes),
+    ]
+    const walls = [wallA, wallB, wallC]
+    const leanTos = [leanToA, leanToB, leanToC]
+    const roofMeshes = assemblies.map(
+      (assembly, index) =>
+        new THREE.Mesh(
+          generateRoofSegmentGeometry(assembly.segment).applyMatrix4(
+            segmentWorldMatrix(walls[index]!, leanTos[index]!, assembly.segment),
+          ),
+        ),
+    )
+    const untrimmedMeshes = assemblies.map(
+      (assembly, index) =>
+        new THREE.Mesh(
+          generateRoofSegmentGeometry({
+            ...assembly.segment,
+            shedFootprintPieces: [],
+          }).applyMatrix4(segmentWorldMatrix(walls[index]!, leanTos[index]!, assembly.segment)),
+        ),
+    )
+    const bounds = untrimmedMeshes.reduce(
+      (box, mesh) => box.union(new THREE.Box3().setFromObject(mesh)),
+      new THREE.Box3(),
+    )
+    const raycaster = new THREE.Raycaster()
+    raycaster.ray.direction.set(0, -1, 0)
+    let gaps = 0
+    let overlaps = 0
+    for (let x = bounds.min.x + 0.031; x < bounds.max.x; x += 0.1) {
+      for (let z = bounds.min.z + 0.057; z < bounds.max.z; z += 0.1) {
+        raycaster.ray.origin.set(x, 10, z)
+        if (!untrimmedMeshes.some((mesh) => raycaster.intersectObject(mesh, false).length > 0)) {
+          continue
+        }
+        const owners = roofMeshes.filter(
+          (mesh) => raycaster.intersectObject(mesh, false).length > 0,
+        ).length
+        if (owners === 0) gaps += 1
+        if (owners > 1) overlaps += 1
+      }
+    }
+    expect(gaps * 0.1 * 0.1).toBeLessThan(0.05)
+    expect(overlaps).toBe(0)
+    expect(closestMeshDistance(roofMeshes[1]!.geometry, roofMeshes[0]!.geometry)).toBeLessThan(1e-4)
+    expect(closestMeshDistance(roofMeshes[1]!.geometry, roofMeshes[2]!.geometry)).toBeLessThan(1e-4)
+    for (const mesh of [...roofMeshes, ...untrimmedMeshes]) mesh.geometry.dispose()
   })
 
   test('resolves a reciprocal 60 degree corner with its true gutter mitre', () => {

@@ -13,7 +13,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { bendLocalPoint, isCurvedLeanTo } from './arc'
 import { createLeanToAssembly } from './assembly'
-import { type ConicalLeanToPlanHost, findConicalLeanToHostInPlan } from './conical-host'
+import {
+  type ConicalLeanToPlanHost,
+  findConicalLeanToHostInPlan,
+  isConicalLeanToHostOccupied,
+} from './conical-host'
 import { leanToFacetCount } from './geometry'
 import { resolveLeanToSpanArc, resolveLeanToWallPlacement } from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
@@ -30,6 +34,7 @@ import type { LeanToExtensionNode } from './schema'
 type PlanPoint = [number, number]
 type PlanTarget = {
   node: LeanToExtensionNode
+  valid: boolean
   conicalHost?: ConicalLeanToPlanHost
 }
 
@@ -71,8 +76,16 @@ const FloorplanLeanToExtensionTool = ({
       const point = clientToPlanPoint(group, event.clientX, event.clientY)
       if (!point) return null
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
-      const conicalHost = findConicalLeanToHostInPlan(point, nodes, activeLevelId)
-      if (conicalHost) return { node: conicalHost.node, conicalHost }
+      const conicalHost = findConicalLeanToHostInPlan(point, nodes, activeLevelId, {
+        includeOccupied: true,
+      })
+      if (conicalHost) {
+        return {
+          node: conicalHost.node,
+          valid: !isConicalLeanToHostOccupied(conicalHost.segment.id, nodes),
+          conicalHost,
+        }
+      }
       const hit = findClosestWallInPlan(point, nodes, activeLevelId)
       if (!hit) return null
       const wallPlacement = resolveLeanToWallPlacement(hit.wall, hit.localX, hit.side)
@@ -88,7 +101,10 @@ const FloorplanLeanToExtensionTool = ({
         wallPlacement.position[0],
       )
       const node = resolveLeanToEndAbutments(attachedNode, hit.wall, nodes)
-      return leanToPlacementConflicts(node, hit.wall, nodes).length === 0 ? { node } : null
+      return {
+        node,
+        valid: leanToPlacementConflicts(node, hit.wall, nodes).length === 0,
+      }
     }
     const update = (event: PointerEvent) => {
       consume(event)
@@ -103,7 +119,7 @@ const FloorplanLeanToExtensionTool = ({
       if (event.button !== 0) return
       consume(event)
       const resolved = resolveEvent(event) ?? targetRef.current
-      if (!resolved) return
+      if (!resolved?.valid) return
       const { node } = resolved
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
       const assembly = createLeanToAssembly(node, resolveLeanToHostRoof(node, nodes), nodes)
@@ -168,11 +184,11 @@ const FloorplanLeanToExtensionTool = ({
     return (
       <g ref={groupRef}>
         <polygon
-          fill="rgba(14, 165, 233, 0.2)"
+          fill={target.valid ? 'rgba(14, 165, 233, 0.2)' : 'rgba(239, 68, 68, 0.2)'}
           fillRule="evenodd"
           pointerEvents="none"
           points={points.map((point) => point.join(',')).join(' ')}
-          stroke="#0ea5e9"
+          stroke={target.valid ? '#0ea5e9' : '#ef4444'}
           strokeDasharray="6 4"
           strokeWidth={2}
           vectorEffect="non-scaling-stroke"
@@ -257,10 +273,10 @@ const FloorplanLeanToExtensionTool = ({
   return (
     <g ref={groupRef}>
       <polygon
-        fill="rgba(14, 165, 233, 0.2)"
+        fill={target.valid ? 'rgba(14, 165, 233, 0.2)' : 'rgba(239, 68, 68, 0.2)'}
         pointerEvents="none"
         points={points.map((point) => point.join(',')).join(' ')}
-        stroke="#0ea5e9"
+        stroke={target.valid ? '#0ea5e9' : '#ef4444'}
         strokeDasharray="6 4"
         strokeWidth={2}
         vectorEffect="non-scaling-stroke"
