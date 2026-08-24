@@ -1,16 +1,22 @@
-import { categoryOf } from '@pascal-app/core'
+import { categoryOf, isPluginContributedKind } from '@pascal-app/core'
 
-export type ElementPanelTab = 'structure' | 'furnish'
+export type ElementPanelTab = 'structure' | 'furnish' | 'assets'
 
 /**
- * Which of the site panel's Structure / Furnish tabs a level child belongs to.
- * Zones have their own tab and are filtered out before this runs. Furnish is
- * `categoryOf(kind) === 'furnish'` — the host item / cabinet / shelf and every
- * warehouse plugin kind; everything else that is not furnish falls to Structure.
- * The two tabs are complementary, so a kind is never listed under both (the bug
- * this fixes: plugin objects appeared under Structure *and* Furnish).
+ * Which of the site panel's Structure / Furnish / Assets tabs a level child
+ * belongs to. Zones have their own tab and are filtered out before this runs.
+ *
+ * The three are complementary — a kind is listed under exactly one — which is
+ * the property the earlier two-tab version existed to establish (plugin objects
+ * used to appear under Structure *and* Furnish). Assets is checked first
+ * because a plugin kind is also `categoryOf === 'furnish'`, and it is the more
+ * specific answer: a pallet rack is warehouse equipment before it is furniture,
+ * and mixing a hall of racking into the same list as the host's chairs and
+ * shelves buries both.
  */
 export function elementBelongsToPanelTab(kind: string, tab: ElementPanelTab): boolean {
+  if (isPluginContributedKind(kind)) return tab === 'assets'
+  if (tab === 'assets') return false
   const isFurnish = categoryOf(kind) === 'furnish'
   return tab === 'furnish' ? isFurnish : !isFurnish
 }

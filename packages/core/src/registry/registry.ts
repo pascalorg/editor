@@ -159,6 +159,19 @@ export function getInspectorExtensions(kind: string): InspectorExtension[] {
 }
 
 /**
+ * Whether a kind was contributed by an installed plugin rather than by the host.
+ *
+ * Asked of the registry rather than of the kind string, so it stays true for a
+ * plugin added later and no caller has to write a prefix like `warehouse:` into
+ * host code. Kinds the host registers directly, and those from the built-in
+ * plugin, are not plugin-contributed.
+ */
+export function isPluginContributedKind(kind: string): boolean {
+  const pluginId = getNodePluginId(kind)
+  return !!pluginId && pluginId !== BUILTIN_PLUGIN_ID
+}
+
+/**
  * Whether a registered kind should participate in a project. Kinds registered
  * directly by the host and the built-in plugin are always enabled. An omitted
  * install list means a legacy scene whose plugin state predates persistence, so

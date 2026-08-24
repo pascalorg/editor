@@ -39,7 +39,7 @@ import {
 } from './../../../../../lib/level-duplication'
 import { getDefaultLevelName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
-import { elementBelongsToPanelTab } from './../../../../../lib/panel-tab'
+import { type ElementPanelTab, elementBelongsToPanelTab } from './../../../../../lib/panel-tab'
 import {
   formatAreaLabel,
   getAreaUnitLabel,
@@ -1011,11 +1011,13 @@ const LayerToggle = memo(function LayerToggle() {
   const activeTab =
     phase === 'structure' && structureLayer === 'elements'
       ? 'structure'
-      : phase === 'furnish'
-        ? 'furnish'
-        : phase === 'structure' && structureLayer === 'zones'
-          ? 'zones'
-          : 'none'
+      : phase === 'furnish' && structureLayer === 'assets'
+        ? 'assets'
+        : phase === 'furnish'
+          ? 'furnish'
+          : phase === 'structure' && structureLayer === 'zones'
+            ? 'zones'
+            : 'none'
 
   return (
     <div className="relative flex items-center gap-1 border-border/50 border-b bg-[#2C2C2E] p-1">
@@ -1065,6 +1067,7 @@ const LayerToggle = memo(function LayerToggle() {
         )}
         onClick={() => {
           setPhase('furnish')
+          setStructureLayer('elements')
         }}
       >
         {activeTab === 'furnish' && (
@@ -1088,6 +1091,46 @@ const LayerToggle = memo(function LayerToggle() {
         <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
           <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
             F
+          </span>
+        </div>
+      </button>
+
+      {/* Objects contributed by installed plugins. Their own list rather than
+          a share of Furnish: a hall of racking is hundreds of rows and buries
+          the host's furniture it would otherwise sit beside. */}
+      <button
+        className={cn(
+          'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
+          activeTab === 'assets'
+            ? 'text-foreground'
+            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+        )}
+        onClick={() => {
+          setPhase('furnish')
+          setStructureLayer('assets')
+        }}
+      >
+        {activeTab === 'assets' && (
+          <motion.div
+            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
+            layoutId="layerToggleActiveBg"
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+          />
+        )}
+        <div className="relative z-10 flex flex-col items-center">
+          <img
+            alt="Assets"
+            className={cn(
+              'mb-1 h-6 w-6 transition-all',
+              activeTab !== 'assets' && 'opacity-50 grayscale',
+            )}
+            src="/icons/shelf.webp"
+          />
+          Assets
+        </div>
+        <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
+          <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
+            A
           </span>
         </div>
       </button>
@@ -1339,7 +1382,8 @@ const ContentSection = memo(function ContentSection() {
   // Structure and Furnish are complementary categoryOf views of the same
   // level children — filter each tab to its own category so plugin objects
   // (warehouse:* → furnish) no longer show under both tabs.
-  const elementTab: 'structure' | 'furnish' = phase === 'furnish' ? 'furnish' : 'structure'
+  const elementTab: ElementPanelTab =
+    phase === 'furnish' ? (structureLayer === 'assets' ? 'assets' : 'furnish') : 'structure'
   const elementChildren = useScene(
     useShallow((s) => {
       if (!selectedLevelId) return []

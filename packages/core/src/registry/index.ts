@@ -30,6 +30,7 @@ export {
   isDrawnViaTool,
   isDrawnViaToolKind,
   isNodeKindEnabled,
+  isPluginContributedKind,
   isPresettable,
   isPresettableKind,
   isRegistryMovable,
