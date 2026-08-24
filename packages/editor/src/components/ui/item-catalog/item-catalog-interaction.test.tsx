@@ -31,7 +31,10 @@ function renderItemCatalogTree(props: ItemCatalogProps): {
   const rootElement = capturedElement as React.ReactElement
   const children = (rootElement.props as { children: React.ReactNode[] })?.children
   const flattenedChildren = Array.isArray(children) ? children.flat().filter(Boolean) : [children]
-  const buttons = flattenedChildren.filter((child: any) => child && child.type === 'button')
+  const buttons = flattenedChildren.filter(
+    (child): child is React.ReactElement<Record<string, any>> =>
+      Boolean(child) && (child as React.ReactElement).type === 'button',
+  )
 
   const clickItem = (itemIdOrIndex: string | number) => {
     const button = buttons.find((btn) => {
@@ -72,14 +75,14 @@ describe('ItemCatalog Adversarial Interaction & Callback Challenge (Milestone 1)
 
       tree.clickItem('item-alpha')
       expect(clickCount).toBe(1)
-      expect(receivedItem).toBe(items[0]!)
-      expect(receivedItem?.id).toBe('item-alpha')
+      expect(receivedItem as ItemCatalogItem | null).toBe(items[0]!)
+      expect((receivedItem as ItemCatalogItem | null)?.id).toBe('item-alpha')
       expect((receivedItem as any)?.customProp).toBe(42)
 
       tree.clickItem('item-beta')
       expect(clickCount).toBe(2)
-      expect(receivedItem).toBe(items[1]!)
-      expect(receivedItem?.id).toBe('item-beta')
+      expect(receivedItem as ItemCatalogItem | null).toBe(items[1]!)
+      expect((receivedItem as ItemCatalogItem | null)?.id).toBe('item-beta')
     })
 
     it('onItemClick overrides item.onClick when both are specified', () => {
@@ -113,7 +116,12 @@ describe('ItemCatalog Adversarial Interaction & Callback Challenge (Milestone 1)
         selectedItem: null,
       })
       useViewer.setState({
-        selection: { selectedIds: ['node-123', 'node-456'], zoneId: 'zone-1' },
+        selection: {
+          buildingId: null,
+          levelId: null,
+          selectedIds: ['node-123', 'node-456'],
+          zoneId: 'zone_1',
+        },
       } as any)
 
       let itemClicked: ItemCatalogItem | null = null
@@ -133,14 +141,14 @@ describe('ItemCatalog Adversarial Interaction & Callback Challenge (Milestone 1)
 
       tree.clickItem('delegated-tool-item')
 
-      expect(itemClicked).toBe(item)
+      expect(itemClicked as ItemCatalogItem | null).toBe(item)
       // Editor state must remain unchanged
       expect(useEditor.getState().mode).toBe('select' as any)
       expect(useEditor.getState().tool).toBe('select' as any)
       expect(useEditor.getState().selectedItem).toBeNull()
       // Viewer selection must NOT be cleared
       expect(useViewer.getState().selection.selectedIds).toEqual(['node-123', 'node-456'])
-      expect(useViewer.getState().selection.zoneId).toBe('zone-1')
+      expect(useViewer.getState().selection.zoneId).toBe('zone_1')
     })
   })
 
@@ -184,7 +192,7 @@ describe('ItemCatalog Adversarial Interaction & Callback Challenge (Milestone 1)
         selectedItem: null,
       })
       useViewer.setState({
-        selection: { selectedIds: ['node-preserve'], zoneId: null },
+        selection: { buildingId: null, levelId: null, selectedIds: ['node-preserve'], zoneId: null },
       } as any)
 
       let itemCallbackFired = false
@@ -249,7 +257,7 @@ describe('ItemCatalog Adversarial Interaction & Callback Challenge (Milestone 1)
   describe('Dimension 3: Fallback Editor Selection & Tool Arming', () => {
     it('executes full host placement workflow: clears viewer selection, arms tool, sets build mode', () => {
       useViewer.setState({
-        selection: { selectedIds: ['node-1'], zoneId: 'zone-1' },
+        selection: { buildingId: null, levelId: null, selectedIds: ['node-1'], zoneId: 'zone_1' },
       } as any)
       useEditor.setState({
         mode: 'select' as any,
@@ -268,7 +276,12 @@ describe('ItemCatalog Adversarial Interaction & Callback Challenge (Milestone 1)
       tree.clickItem('rack-01')
 
       // Viewer selection cleared
-      expect(useViewer.getState().selection).toEqual({ selectedIds: [], zoneId: null })
+      expect(useViewer.getState().selection).toEqual({
+        buildingId: null,
+        levelId: null,
+        selectedIds: [],
+        zoneId: null,
+      })
       // Editor tool armed
       expect(useEditor.getState().tool).toBe('rack' as any)
       // Editor mode set to build
