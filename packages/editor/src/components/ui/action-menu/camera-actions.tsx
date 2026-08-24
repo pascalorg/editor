@@ -1,7 +1,6 @@
 'use client'
 
 import { emitter } from '@pascal-app/core'
-import { Camera } from 'lucide-react'
 import Image from 'next/image'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -30,28 +29,8 @@ export function CameraActions({
     emitter.emit('camera-controls:orbit-ccw')
   }
 
-  const takeScreenshot = () => {
-    const canvas = document.querySelector('canvas')
-    if (!canvas) return
-    Object.assign(document.createElement('a'), {
-      href: canvas.toDataURL('image/png'),
-      download: `screenshot_${new Date().toISOString().split('T')[0]}.png`,
-    }).click()
-  }
-
   return (
     <div className={cn('flex items-center', compact ? COMPACT_GROUP : 'gap-1')}>
-      {/* Screenshot */}
-      <ActionButton
-        className="group hover:bg-white/5"
-        label="Screenshot"
-        onClick={takeScreenshot}
-        size="icon"
-        variant="ghost"
-      >
-        <Camera className="h-[24px] w-[24px] opacity-70 transition-opacity group-hover:opacity-100" />
-      </ActionButton>
-
       {!hideOrbit && (
         <>
           {/* Orbit CCW */}

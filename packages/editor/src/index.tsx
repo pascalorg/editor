@@ -236,6 +236,7 @@ export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
+export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS, type CatalogItem } from './components/ui/item-catalog/catalog-items'
 export {
   ItemCatalog,

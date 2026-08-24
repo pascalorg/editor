@@ -1,6 +1,5 @@
 'use client'
 
-import { WarehouseStatsTab } from '@ovurrsl/plugin-warehouse'
 import { Editor } from '@pascal-app/editor'
 import { AccountSettingsSection } from '@/components/account-settings-section'
 import { EDITOR_SIDEBAR_TABS } from '@/components/editor-sidebar-tabs'
@@ -27,7 +26,6 @@ export function EditorApp() {
         layoutVersion="v2"
         projectId={PROJECT_ID}
         settingsPanelProps={{ accountSection: <AccountSettingsSection /> }}
-        sitePanelProps={{ children: <WarehouseStatsTab /> }}
         sidebarTabs={EDITOR_SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}

@@ -62,10 +62,7 @@ export function ActionMenu({ className }: { className?: string }) {
     rectTop: number
     width: number
     height: number
-    minLeft: number
-    maxLeft: number
     minTop: number
-    maxTop: number
   } | null>(null)
 
   const handlePointerDown = useCallback(
@@ -86,10 +83,7 @@ export function ActionMenu({ className }: { className?: string }) {
         rectTop: rect.top,
         width: rect.width,
         height: rect.height,
-        minLeft: bounds.left + DRAG_MARGIN,
-        maxLeft: bounds.right - rect.width - DRAG_MARGIN,
         minTop: bounds.top + DRAG_MARGIN,
-        maxTop: bounds.bottom - rect.height - DRAG_MARGIN,
       }
       dragOffsetRef.current = base
       setIsDragging(true)
@@ -112,34 +106,17 @@ export function ActionMenu({ className }: { className?: string }) {
     const rawTop = drag.rectTop + dy
     const snapped = rawTop <= SNAP_TOP_Y + SNAP_THRESHOLD
     
-    const currentWidth = snapped 
-      ? (drag.width < 450 ? drag.width : 363)
-      : (drag.width >= 450 ? drag.width : 531)
-
-    const currentHeight = snapped
-      ? (drag.height < 45 ? drag.height : 32)
-      : (drag.height >= 45 ? drag.height : 56)
-
-    // Query toolbar boundaries
-    const leftToolbar = document.querySelector('[data-viewer-toolbar-left]')
-    const rightToolbar = document.querySelector('[data-viewer-toolbar-right]')
-    const leftRect = leftToolbar?.getBoundingClientRect()
-    const rightRect = rightToolbar?.getBoundingClientRect()
+    // The rail resizes when it snaps (h-8 compact vs the full bar), and the
+    // offset below has to compensate for that. Measure what is on screen rather
+    // than naming a width: a hardcoded number stops matching the moment a button
+    // is added to or removed from the menu, and the rail then jumps on every drag.
+    const liveRect = menuRef.current?.getBoundingClientRect()
+    const currentWidth = liveRect?.width ?? drag.width
+    const currentHeight = liveRect?.height ?? drag.height
 
     const targetLeft = drag.rectLeft + dx
-    let minLeft = bounds.left + DRAG_MARGIN
-    let maxLeft = bounds.right - currentWidth - DRAG_MARGIN
-
-    // Only apply horizontal toolbar restrictions when snapped (or in snapping range)
-    if (snapped) {
-      if (leftRect) {
-        minLeft = Math.max(minLeft, leftRect.right + DRAG_MARGIN)
-      }
-      if (rightRect) {
-        maxLeft = Math.min(maxLeft, rightRect.left - currentWidth - DRAG_MARGIN)
-      }
-      maxLeft = Math.max(minLeft, maxLeft)
-    }
+    const minLeft = bounds.left + DRAG_MARGIN
+    const maxLeft = bounds.right - currentWidth - DRAG_MARGIN
 
     const SNAP_CENTER_X = bounds.left + (bounds.right - bounds.left - currentWidth) / 2
     const SNAP_BOTTOM_Y = bounds.bottom - currentHeight - 24
@@ -178,7 +155,14 @@ export function ActionMenu({ className }: { className?: string }) {
     }
   }, [])
 
-  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+  const endDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // A press that landed on a button never captured the pointer, and releasing
+    // a capture that was never taken throws — so every click inside the menu
+    // raised a NotFoundError before this guard.
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+    if (!dragRef.current) return
     if (isSnappedToBottomCenterRef.current) {
       setOffset(null)
       dragOffsetRef.current = null
@@ -187,50 +171,30 @@ export function ActionMenu({ className }: { className?: string }) {
     }
     dragRef.current = null
     setIsDragging(false)
-    e.currentTarget.releasePointerCapture(e.pointerId)
   }, [])
 
-  // Nudge the menu back inside the viewer bounds if bounds change (e.g. sidebar toggle or resize)
-  useLayoutEffect(() => {
+  // Re-clamp the rail inside the viewer whenever the bounds can have moved. A
+  // window resize or a sidebar opening changes them with no pointer event of
+  // any kind, and a rail left outside the region cannot be dragged back.
+  const clampIntoBounds = useCallback(() => {
     if (isMobile) return
     const el = menuRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
     const bounds = getDragBounds(el)
-    
+
     const SNAP_TOP_Y = bounds.top + 12
     const isCurrentlySnapped = Math.abs(rect.top - SNAP_TOP_Y) < 5
-    
-    const currentWidth = isCurrentlySnapped 
-      ? (rect.width < 450 ? rect.width : 363)
-      : (rect.width >= 450 ? rect.width : 531)
 
-    const leftToolbar = document.querySelector('[data-viewer-toolbar-left]')
-    const rightToolbar = document.querySelector('[data-viewer-toolbar-right]')
-    const leftRect = leftToolbar?.getBoundingClientRect()
-    const rightRect = rightToolbar?.getBoundingClientRect()
-
-    let minLeft = bounds.left + DRAG_MARGIN
-    let maxLeft = bounds.right - currentWidth - DRAG_MARGIN
-
-    if (isCurrentlySnapped) {
-      if (leftRect) {
-        minLeft = Math.max(minLeft, leftRect.right + DRAG_MARGIN)
-      }
-      if (rightRect) {
-        maxLeft = Math.min(maxLeft, rightRect.left - currentWidth - DRAG_MARGIN)
-      }
-      maxLeft = Math.max(minLeft, maxLeft)
-    }
-
-    const left = clamp(rect.left, minLeft, maxLeft)
-    let top = clamp(rect.top, bounds.top + DRAG_MARGIN, bounds.bottom - rect.height - DRAG_MARGIN)
-    if (isCurrentlySnapped) {
-      top = SNAP_TOP_Y
-      setIsSnappedToTop(true)
-    } else {
-      setIsSnappedToTop(false)
-    }
+    const left = clamp(
+      rect.left,
+      bounds.left + DRAG_MARGIN,
+      bounds.right - rect.width - DRAG_MARGIN,
+    )
+    const top = isCurrentlySnapped
+      ? SNAP_TOP_Y
+      : clamp(rect.top, bounds.top + DRAG_MARGIN, bounds.bottom - rect.height - DRAG_MARGIN)
+    setIsSnappedToTop(isCurrentlySnapped)
 
     const dx = left - rect.left
     const dy = top - rect.top
@@ -239,8 +203,21 @@ export function ActionMenu({ className }: { className?: string }) {
     }
   }, [isMobile])
 
+  useLayoutEffect(() => {
+    clampIntoBounds()
+    if (isMobile) return
+    const region = menuRef.current?.closest('[data-viewer-bounds]')
+    window.addEventListener('resize', clampIntoBounds)
+    const observer = region ? new ResizeObserver(clampIntoBounds) : null
+    if (region && observer) observer.observe(region)
+    return () => {
+      window.removeEventListener('resize', clampIntoBounds)
+      observer?.disconnect()
+    }
+  }, [clampIntoBounds, isMobile])
+
   // On mobile, defer the bottom rail to the selection bar when something
-  // is selected â€” the contextual actions take priority over mode controls.
+  // is selected — the contextual actions take priority over mode controls.
   // Also hide on Chat / Items / Studio tabs; those are contextual workflows
   // (composing / picking furniture / generating renders) where the build
   // menu is irrelevant.
@@ -275,7 +252,8 @@ export function ActionMenu({ className }: { className?: string }) {
         transition={activeTransition}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
       >
         {isMobile ? (
           <div className="flex flex-col items-stretch gap-0.5 px-2 py-1.5">

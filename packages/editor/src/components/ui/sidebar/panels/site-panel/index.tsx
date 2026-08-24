@@ -1576,10 +1576,9 @@ export interface SitePanelProps {
   projectId?: string
   onUploadAsset?: (projectId: string, levelId: string, file: File, type: 'scan' | 'guide') => void
   onDeleteAsset?: (projectId: string, url: string) => void
-  children?: React.ReactNode
 }
 
-export function SitePanel({ projectId, onUploadAsset, onDeleteAsset, children }: SitePanelProps = {}) {
+export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanelProps = {}) {
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
@@ -1689,7 +1688,6 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset, children }:
             </div>
           )}
         </motion.div>
-        {children}
       </div>
     </LayoutGroup>
   )

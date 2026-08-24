@@ -1,6 +1,5 @@
 'use client'
 
-import { WarehouseStatsTab } from '@ovurrsl/plugin-warehouse'
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
@@ -291,7 +290,6 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
         settingsPanelProps={{ accountSection: <AccountSettingsSection /> }}
-        sitePanelProps={{ children: <WarehouseStatsTab /> }}
         sidebarTabs={EDITOR_SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
