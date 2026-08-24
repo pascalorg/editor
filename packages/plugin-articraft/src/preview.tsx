@@ -15,24 +15,11 @@ export default function ArticraftPreview({
   if (node) return <ArticraftVisual ghost node={node} />
 
   const bounds = dimensions ?? [1, 1, 1]
-  const size: Vec3 = [
-    Math.max(0.1, bounds[0]),
-    Math.max(0.1, bounds[1]),
-    Math.max(0.1, bounds[2]),
-  ]
+  const size: Vec3 = [Math.max(0.1, bounds[0]), Math.max(0.1, bounds[1]), Math.max(0.1, bounds[2])]
   return (
-    <mesh
-      layers={EDITOR_LAYER}
-      position={[0, size[1] / 2, 0]}
-      raycast={() => undefined}
-    >
+    <mesh layers={EDITOR_LAYER} position={[0, size[1] / 2, 0]} raycast={() => undefined}>
       <boxGeometry args={size} />
-      <meshStandardMaterial
-        color="#8b5cf6"
-        depthWrite={false}
-        opacity={0.28}
-        transparent
-      />
+      <meshStandardMaterial color="#8b5cf6" depthWrite={false} opacity={0.28} transparent />
     </mesh>
   )
 }

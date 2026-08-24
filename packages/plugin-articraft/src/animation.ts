@@ -1,6 +1,6 @@
 import {
   AnimationClip,
-  Object3D,
+  type Object3D,
   Quaternion,
   QuaternionKeyframeTrack,
   Vector3,
@@ -51,12 +51,20 @@ export function bakeArticraftAnimation(
     entry.target.name = `${node.id}__articraft_joint_${motionIndex}_${safeName(joint.name)}`
     if (joint.type === 'prismatic') {
       const values = times.flatMap((time) =>
-        jointPose(entry.marker, joint, motionValueAtTime(joint, motionIndex, time)).position.toArray(),
+        jointPose(
+          entry.marker,
+          joint,
+          motionValueAtTime(joint, motionIndex, time),
+        ).position.toArray(),
       )
       tracks.push(new VectorKeyframeTrack(`${entry.target.uuid}.position`, times, values))
     } else {
       const values = times.flatMap((time) =>
-        jointPose(entry.marker, joint, motionValueAtTime(joint, motionIndex, time)).quaternion.toArray(),
+        jointPose(
+          entry.marker,
+          joint,
+          motionValueAtTime(joint, motionIndex, time),
+        ).quaternion.toArray(),
       )
       tracks.push(new QuaternionKeyframeTrack(`${entry.target.uuid}.quaternion`, times, values))
     }

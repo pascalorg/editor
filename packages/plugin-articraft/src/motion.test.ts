@@ -19,10 +19,7 @@ describe('persistent articulation motion', () => {
   })
 
   test('provides a bounded fallback for joints without limits', () => {
-    expect(motionRange({ ...hinge, type: 'continuous', limits: null })).toEqual([
-      -Math.PI,
-      Math.PI,
-    ])
+    expect(motionRange({ ...hinge, type: 'continuous', limits: null })).toEqual([-Math.PI, Math.PI])
     expect(motionRange({ ...hinge, type: 'prismatic', limits: null })).toEqual([-1, 1])
   })
 })

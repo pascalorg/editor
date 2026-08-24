@@ -27,11 +27,11 @@ const rotateHandle: HandleDescriptor<ArticraftAssetNode> = {
   axis: 'angular',
   shape: 'rotate',
   apply: (initial, delta) => ({
-    rotation: [
-      initial.rotation[0],
-      initial.rotation[1] - delta,
-      initial.rotation[2],
-    ] as [number, number, number],
+    rotation: [initial.rotation[0], initial.rotation[1] - delta, initial.rotation[2]] as [
+      number,
+      number,
+      number,
+    ],
   }),
   placement: {
     position: (node) => {

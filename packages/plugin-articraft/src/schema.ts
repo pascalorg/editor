@@ -34,7 +34,10 @@ export const ArticraftAssetNode = BaseNode.extend({
   artifact: z.object({
     format: z.enum(['urdf', 'usdz']),
     url: z.string().url(),
-    sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    sha256: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
   }),
   thumbnailUrl: z.string().url().optional(),
   dimensions: Vec3.default([1, 1, 1]),

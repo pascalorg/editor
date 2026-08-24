@@ -1,5 +1,6 @@
 'use client'
 
+import { WarehouseStatsTab } from '@ovurrsl/plugin-warehouse'
 import { Editor } from '@pascal-app/editor'
 import { AccountSettingsSection } from '@/components/account-settings-section'
 import { EDITOR_SIDEBAR_TABS } from '@/components/editor-sidebar-tabs'
@@ -7,7 +8,6 @@ import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
 } from '@/components/viewer-toolbar'
-import { WarehouseStatsTab } from '@ovurrsl/plugin-warehouse'
 
 const PROJECT_ID = 'local-editor'
 

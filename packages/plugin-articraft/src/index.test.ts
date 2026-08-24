@@ -6,9 +6,7 @@ describe('Articraft plugin manifest', () => {
   test('exports one stable custom node kind', () => {
     expect(articraftPlugin.id).toBe('pascal:articraft')
     expect(articraftPlugin.apiVersion).toBe(1)
-    expect(articraftPlugin.nodes?.map((definition) => definition.kind)).toEqual([
-      'articraft:asset',
-    ])
+    expect(articraftPlugin.nodes?.map((definition) => definition.kind)).toEqual(['articraft:asset'])
   })
 
   test('associates the host panel and kind with the plugin', () => {

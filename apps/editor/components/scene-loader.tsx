@@ -1,5 +1,6 @@
 'use client'
 
+import { WarehouseStatsTab } from '@ovurrsl/plugin-warehouse'
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
@@ -13,7 +14,6 @@ import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
 import { PresenceBar } from './presence-bar'
 import { useScenePresence } from './use-scene-presence'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
-import { WarehouseStatsTab } from '@ovurrsl/plugin-warehouse'
 
 export interface SceneMeta {
   id: string

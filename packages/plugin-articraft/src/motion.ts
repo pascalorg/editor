@@ -32,11 +32,7 @@ function getReducedMotionPreference(): boolean {
 }
 
 export function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(
-    subscribeMotionPreference,
-    getReducedMotionPreference,
-    () => false,
-  )
+  return useSyncExternalStore(subscribeMotionPreference, getReducedMotionPreference, () => false)
 }
 
 export function motionRange(joint: ArticraftJoint): [number, number] {
@@ -52,16 +48,8 @@ export function motionValueAtTime(
   elapsedSeconds: number,
 ): number {
   const hasLimits = joint.limits && joint.limits.upper > joint.limits.lower
-  const lower = hasLimits
-    ? joint.limits!.lower
-    : joint.type === 'prismatic'
-      ? -1
-      : -Math.PI
-  const upper = hasLimits
-    ? joint.limits!.upper
-    : joint.type === 'prismatic'
-      ? 1
-      : Math.PI
+  const lower = hasLimits ? joint.limits!.lower : joint.type === 'prismatic' ? -1 : -Math.PI
+  const upper = hasLimits ? joint.limits!.upper : joint.type === 'prismatic' ? 1 : Math.PI
   const progress = (Math.sin(elapsedSeconds * 1.4 + index * 0.7) + 1) / 2
   return lower + (upper - lower) * progress
 }

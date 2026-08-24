@@ -47,7 +47,7 @@ describe('Floor Stack & Placement Preview Guard Tests', () => {
   test('calculateRoofRotation aligns Euler orientation to sloped surface normal', () => {
     const identityMatrix = new Matrix4()
     // Normal tilted 45 degrees along X
-    const slopedNormal: [number, number, number] = [0.7071, 0.7071, 0]
+    const slopedNormal: [number, number, number] = [Math.SQRT1_2, Math.SQRT1_2, 0]
     const [rx, ry, rz] = calculateRoofRotation(slopedNormal, identityMatrix)
 
     // Rotation should not be zero

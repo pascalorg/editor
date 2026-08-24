@@ -2,12 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import * as THREE from 'three'
 import { disposeObject3DResources } from './dispose-object3d'
 import { setGroupsSortedByMaterial } from './geometry-groups'
-import {
-  BATCHED_LAYER,
-  OVERLAY_LAYER,
-  SCENE_LAYER,
-  setSurfaceRaycastLayers,
-} from './layers'
+import { BATCHED_LAYER, OVERLAY_LAYER, SCENE_LAYER, setSurfaceRaycastLayers } from './layers'
 import {
   freezeObjectTransform,
   stampFrozenTransform,

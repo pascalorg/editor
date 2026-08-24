@@ -236,12 +236,12 @@ export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
+export { CATALOG_ITEMS, type CatalogItem } from './components/ui/item-catalog/catalog-items'
 export {
   ItemCatalog,
   type ItemCatalogItem,
   type ItemCatalogProps,
 } from './components/ui/item-catalog/item-catalog'
-export { CATALOG_ITEMS, type CatalogItem } from './components/ui/item-catalog/catalog-items'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
 // Phase 5 Stage E — kinds with bespoke editors (slab holes list,
@@ -354,12 +354,12 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
-export { createEditorApi } from './lib/editor-api'
 export {
   filterEditableIds,
   isNodeEditLocked,
   isNodeIdEditLocked,
 } from './lib/edit-lock'
+export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,
   collectElevationSnapTargets,

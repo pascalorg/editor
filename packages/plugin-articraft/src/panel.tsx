@@ -341,6 +341,7 @@ function Catalog({ scrollContainer }: { scrollContainer: { current: HTMLDivEleme
       <div
         aria-label="Catalog controls"
         data-articraft-catalog-controls
+        role="group"
         style={{
           background: 'var(--sidebar-background, var(--background))',
           borderBottom: '1px solid var(--sidebar-border)',
@@ -389,6 +390,7 @@ function Catalog({ scrollContainer }: { scrollContainer: { current: HTMLDivEleme
           {searchFocused && suggestions.length > 0 && (
             <div
               aria-label="Search suggestions"
+              role="group"
               style={{
                 border: '1px solid var(--border)',
                 borderRadius: 9,
