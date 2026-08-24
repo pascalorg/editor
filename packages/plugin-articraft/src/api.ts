@@ -24,21 +24,21 @@ export function isCatalogItem(value: unknown): value is ArticraftCatalogItem {
   const attribution = object(item?.attribution)
   return Boolean(
     item &&
-    typeof item.id === 'string' &&
-    typeof item.title === 'string' &&
-    (item.source === 'articraft-10k' || item.source === 'generated') &&
-    artifact &&
-    (artifact.format === 'urdf' || artifact.format === 'usdz') &&
-    typeof artifact.url === 'string' &&
-    Array.isArray(item.dimensions) &&
-    item.dimensions.length === 3 &&
-    Array.isArray(item.parts) &&
-    Array.isArray(item.joints) &&
-    object(item.defaultJointValues) &&
-    attribution &&
-    typeof attribution.creator === 'string' &&
-    typeof attribution.license === 'string' &&
-    typeof attribution.sourceUrl === 'string',
+      typeof item.id === 'string' &&
+      typeof item.title === 'string' &&
+      (item.source === 'articraft-10k' || item.source === 'generated') &&
+      artifact &&
+      (artifact.format === 'urdf' || artifact.format === 'usdz') &&
+      typeof artifact.url === 'string' &&
+      Array.isArray(item.dimensions) &&
+      item.dimensions.length === 3 &&
+      Array.isArray(item.parts) &&
+      Array.isArray(item.joints) &&
+      object(item.defaultJointValues) &&
+      attribution &&
+      typeof attribution.creator === 'string' &&
+      typeof attribution.license === 'string' &&
+      typeof attribution.sourceUrl === 'string',
   )
 }
 

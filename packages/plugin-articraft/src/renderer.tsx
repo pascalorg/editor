@@ -15,14 +15,7 @@ import {
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  Group,
-  type Material,
-  type Mesh,
-  type Object3D,
-  Quaternion,
-  Vector3,
-} from 'three'
+import { Group, type Material, type Mesh, type Object3D, Quaternion, Vector3 } from 'three'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { USDLoader } from 'three/examples/jsm/loaders/USDLoader.js'
 import URDFLoader from 'urdf-loader'

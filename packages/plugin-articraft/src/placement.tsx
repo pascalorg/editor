@@ -17,10 +17,7 @@ function snapXZ(x: number, z: number): readonly [number, number] {
   return gridActive ? snapPointToGrid([x, z], editor.gridSnapStep) : [x, z]
 }
 
-function toLevelLocal(
-  levelId: string,
-  world: [number, number, number],
-): [number, number, number] {
+function toLevelLocal(levelId: string, world: [number, number, number]): [number, number, number] {
   const level = sceneRegistry.nodes.get(levelId)
   if (!level) return [world[0], 0, world[2]]
   worldPoint.set(world[0], world[1], world[2])

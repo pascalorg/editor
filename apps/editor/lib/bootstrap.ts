@@ -10,10 +10,10 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
+import { articraftHostPanel, articraftPlugin } from '@pascal-app/plugin-articraft'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
-import { articraftHostPanel, articraftPlugin } from '@pascal-app/plugin-articraft'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
 // throws on duplicate kinds. Flags live in the module closure so they
@@ -101,7 +101,7 @@ extendPluginDiscovery(async () => [streetscapePlugin])
 registerEditorHostPanel({
   ...streetscapeHostPanel,
   creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
-  defaultInstalled: false
+  defaultInstalled: false,
 })
 
 extendPluginDiscovery(async () => [articraftPlugin])

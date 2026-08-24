@@ -7,7 +7,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { filterEditableIds, isNodeEditLocked, isNodeIdEditLocked } from './edit-lock'
+import { filterEditableIds, isNodeIdEditLocked } from './edit-lock'
 
 function makeDef(
   kind: string,

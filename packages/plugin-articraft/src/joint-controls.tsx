@@ -9,9 +9,7 @@ import type { ArticraftAssetNode } from './schema'
 import type { ArticraftJoint } from './types'
 
 export default function ArticraftJointControls() {
-  const selectedId = useViewer((state) => state.selection.selectedIds[0]) as
-    | AnyNodeId
-    | undefined
+  const selectedId = useViewer((state) => state.selection.selectedIds[0]) as AnyNodeId | undefined
   const node = useScene((state) => {
     const value = selectedId ? state.nodes[selectedId] : undefined
     return (value?.type as string | undefined) === 'articraft:asset'
@@ -54,11 +52,7 @@ export default function ArticraftJointControls() {
     useScene.getState().updateNode(node.id as AnyNodeId, { scale: value } as never)
   }
 
-  const setVector = (
-    key: 'position' | 'rotation',
-    index: 0 | 1 | 2,
-    value: number,
-  ) => {
+  const setVector = (key: 'position' | 'rotation', index: 0 | 1 | 2, value: number) => {
     const next = [...node[key]] as [number, number, number]
     next[index] = key === 'rotation' ? toRadians(value) : value
     useScene.getState().updateNode(node.id as AnyNodeId, { [key]: next } as never)
@@ -129,9 +123,11 @@ export default function ArticraftJointControls() {
                 restoreOnCommit={false}
                 step={angular ? 1 : 0.001}
                 unit={angular ? '°' : 'm'}
-                value={angular
-                  ? toDegrees(node.jointValues[joint.name] ?? 0)
-                  : (node.jointValues[joint.name] ?? 0)}
+                value={
+                  angular
+                    ? toDegrees(node.jointValues[joint.name] ?? 0)
+                    : (node.jointValues[joint.name] ?? 0)
+                }
               />
             )
           })

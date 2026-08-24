@@ -4,9 +4,9 @@ import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
 import { EDITOR_LAYER, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
+import { useArticraftPlacement } from './placement'
 import { ArticraftVisual } from './renderer'
 import { ArticraftAssetNode } from './schema'
-import { useArticraftPlacement } from './placement'
 import { useArticraftStore } from './store'
 
 export default function ArticraftTool() {
