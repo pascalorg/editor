@@ -1,5 +1,11 @@
 import { type BoxVentNode, getActiveRoofHeight, type RoofType } from '@pascal-app/core'
 import * as THREE from 'three'
+import { copyUvToSecondaryChannel } from '../shared/primitive-uv'
+
+export const BOX_VENT_MATERIAL_INDEX = {
+  base: 0,
+  top: 1,
+} as const
 
 /**
  * Pure builder for the box-vent mesh. Models a real attic box vent:
@@ -68,11 +74,12 @@ function buildBoxShape(node: BoxVentNode): THREE.BufferGeometry {
   // Lower (smaller) riser. Top is hidden under the cover but include
   // it anyway — overlap is invisible and the geometry stays simple.
   buildRoundedExtrusion(positions, normals, uvs, baseW, baseD, 0, baseH, cornerBevel)
+  const topStartVertex = positions.length / 3
   // Upper (larger) cover. Bottom partially shows where it overhangs the
   // riser, so it's always rendered.
   buildRoundedExtrusion(positions, normals, uvs, w, d, baseH, h, cornerBevel)
 
-  return buildBufferGeometry(positions, normals, uvs)
+  return buildBufferGeometry(positions, normals, uvs, topStartVertex)
 }
 
 // Extruded rounded rectangle: walls follow a rounded-rect profile,
@@ -90,6 +97,7 @@ function buildRoundedExtrusion(
 ): void {
   const profile = roundedRectProfile(w, d, bevel, BOX_CORNER_SEGS)
   const n = profile.length
+  let perimeterU = 0
 
   // Walls: each edge in the closed profile becomes an outward-facing quad.
   for (let i = 0; i < n; i++) {
@@ -110,7 +118,9 @@ function buildRoundedExtrusion(
       [b.x, y1, b.z],
       [a.x, y1, a.z],
       [nx, 0, nz],
+      perimeterU,
     )
+    perimeterU += len
   }
 
   // Top cap (+Y normal): wind triangles CW from above so the cross
@@ -118,14 +128,14 @@ function buildRoundedExtrusion(
   for (let i = 0; i < n; i++) {
     const a = profile[i]!
     const b = profile[(i + 1) % n]!
-    pushTri(positions, normals, uvs, [0, y1, 0], [b.x, y1, b.z], [a.x, y1, a.z], [0, 1, 0])
+    pushTri(positions, normals, uvs, [0, y1, 0], [b.x, y1, b.z], [a.x, y1, a.z], [0, 1, 0], 'xz')
   }
 
   // Bottom cap (-Y normal): wind CCW from above.
   for (let i = 0; i < n; i++) {
     const a = profile[i]!
     const b = profile[(i + 1) % n]!
-    pushTri(positions, normals, uvs, [0, y0, 0], [a.x, y0, a.z], [b.x, y0, b.z], [0, -1, 0])
+    pushTri(positions, normals, uvs, [0, y0, 0], [a.x, y0, a.z], [b.x, y0, b.z], [0, -1, 0], 'xz')
   }
 }
 
@@ -286,6 +296,8 @@ function buildCapShape(node: BoxVentNode): THREE.BufferGeometry {
     )
   }
 
+  const topStartVertex = positions.length / 3
+
   // ── Flange underside (the bit of the cap base that overhangs the body)
   if (overhang > 0 || capGap > 0) {
     pushQuad(
@@ -364,7 +376,7 @@ function buildCapShape(node: BoxVentNode): THREE.BufferGeometry {
     [0, 1, 0],
   )
 
-  return buildBufferGeometry(positions, normals, uvs)
+  return buildBufferGeometry(positions, normals, uvs, topStartVertex)
 }
 
 function clamp01(value: number): number {
@@ -432,8 +444,10 @@ function buildDomeStyleShape(node: BoxVentNode): THREE.BufferGeometry {
   addBand(positions, normals, uvs, flangeBottom, center, lng, down)
   addBand(positions, normals, uvs, flangeBottom, flangeTop, lng, radial)
   addBand(positions, normals, uvs, flangeTop, collarFoot, lng, up)
-  // Lifted collar wall (radial) + the overhanging dome-lip underside (down).
+  // Lifted collar wall (radial).
   addBand(positions, normals, uvs, collarFoot, collarTop, lng, radial)
+  const topStartVertex = positions.length / 3
+  // The overhanging dome-lip underside belongs to the upper cover.
   addBand(positions, normals, uvs, collarTop, domeBase, lng, down)
 
   // Dome cap, base ring → apex.
@@ -446,16 +460,17 @@ function buildDomeStyleShape(node: BoxVentNode): THREE.BufferGeometry {
     return [x / l, y / l, z / l]
   }
   let prev = domeBase
+  let domeV = 0
   for (let i = 1; i <= lat; i++) {
     const phi = (Math.PI / 2) * (i / lat)
     const rf = Math.cos(phi) ** power
     const y = domeBaseY + domeH * Math.sin(phi)
     const ring = ringAt(rx * rf, rz * rf, y, lng)
-    addBand(positions, normals, uvs, prev, ring, lng, domeHint)
+    domeV += addBand(positions, normals, uvs, prev, ring, lng, domeHint, domeV)
     prev = ring
   }
 
-  return buildBufferGeometry(positions, normals, uvs)
+  return buildBufferGeometry(positions, normals, uvs, topStartVertex)
 }
 
 // One ellipse ring of `lng` segments at height `y`. First and last points
@@ -479,14 +494,20 @@ function addBand(
   rB: number[][],
   lng: number,
   hintFn: (a: number[], b: number[], c: number[], d: number[]) => number[],
-): void {
+  vOffset = 0,
+): number {
+  let uOffset = 0
+  let vStep = 0
   for (let j = 0; j < lng; j++) {
     const a = rA[j]!
     const b = rA[j + 1]!
     const c = rB[j + 1]!
     const d = rB[j]!
-    pushQuadOriented(positions, normals, uvs, a, b, c, d, hintFn(a, b, c, d))
+    pushQuadOriented(positions, normals, uvs, a, b, c, d, hintFn(a, b, c, d), uOffset, vOffset)
+    uOffset += Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!)
+    vStep += Math.hypot(d[0]! - a[0]!, d[1]! - a[1]!, d[2]! - a[2]!)
   }
+  return vStep / lng
 }
 
 // Winding-safe quad: triangulates (a,b,c,d) and orients both triangles so
@@ -500,6 +521,8 @@ function pushQuadOriented(
   c: number[],
   d: number[],
   hint: number[],
+  uOffset = 0,
+  vOffset = 0,
 ) {
   let nx = (c[1]! - a[1]!) * (b[2]! - a[2]!) - (c[2]! - a[2]!) * (b[1]! - a[1]!)
   let ny = (c[2]! - a[2]!) * (b[0]! - a[0]!) - (c[0]! - a[0]!) * (b[2]! - a[2]!)
@@ -515,19 +538,18 @@ function pushQuadOriented(
   ny /= len
   nz /= len
 
-  const u = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!)
-  const v = Math.hypot(d[0]! - a[0]!, d[1]! - a[1]!, d[2]! - a[2]!)
+  const quadUvs = surfaceQuadUvs(a, b, c, d, [nx, ny, nz], uOffset, vOffset)
 
   if (flip) {
     positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
-    uvs.push(0, 0, u, 0, u, v)
+    uvs.push(...quadUvs.a, ...quadUvs.b, ...quadUvs.c)
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, d[0]!, d[1]!, d[2]!)
-    uvs.push(0, 0, u, v, 0, v)
+    uvs.push(...quadUvs.a, ...quadUvs.c, ...quadUvs.d)
   } else {
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
-    uvs.push(0, 0, u, v, u, 0)
+    uvs.push(...quadUvs.a, ...quadUvs.c, ...quadUvs.b)
     positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
-    uvs.push(0, 0, 0, v, u, v)
+    uvs.push(...quadUvs.a, ...quadUvs.d, ...quadUvs.c)
   }
   for (let i = 0; i < 6; i++) normals.push(nx, ny, nz)
 }
@@ -538,11 +560,16 @@ function buildBufferGeometry(
   positions: number[],
   normals: number[],
   uvs: number[],
+  topStartVertex: number,
 ): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  const vertexCount = positions.length / 3
+  geo.addGroup(0, topStartVertex, BOX_VENT_MATERIAL_INDEX.base)
+  geo.addGroup(topStartVertex, vertexCount - topStartVertex, BOX_VENT_MATERIAL_INDEX.top)
+  copyUvToSecondaryChannel(geo)
   return geo
 }
 
@@ -555,35 +582,55 @@ function pushQuad(
   c: number[],
   d: number[],
   n: number[],
+  uOffset = 0,
 ) {
   const nLen = Math.sqrt(n[0]! * n[0]! + n[1]! * n[1]! + n[2]! * n[2]!) || 1
   const nx = n[0]! / nLen
   const ny = n[1]! / nLen
   const nz = n[2]! / nLen
 
-  // Dimension-based planar UVs: U follows |b-a| (the quad's "right"
-  // edge) and V follows |d-a| ("up"). Textures then tile at world
-  // scale across every face — a 0.4m vent face uses 0.4 UV units, not
-  // a fixed 0..1 — so a brick / metal / shingle preset reads at a
-  // consistent density on the body, hood, and louvers.
-  const abx = b[0]! - a[0]!
-  const aby = b[1]! - a[1]!
-  const abz = b[2]! - a[2]!
-  const adx = d[0]! - a[0]!
-  const ady = d[1]! - a[1]!
-  const adz = d[2]! - a[2]!
-  const u = Math.sqrt(abx * abx + aby * aby + abz * abz)
-  const v = Math.sqrt(adx * adx + ady * ady + adz * adz)
+  const quadUvs = surfaceQuadUvs(a, b, c, d, [nx, ny, nz], uOffset)
 
   // Winding is (a, c, b) + (a, d, c) so the triangle face direction
   // matches the stored normal (see earlier note on the dark-shading
   // regression this fixed).
   positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
   normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz)
-  uvs.push(0, 0, u, v, u, 0)
+  uvs.push(...quadUvs.a, ...quadUvs.c, ...quadUvs.b)
   positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
   normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz)
-  uvs.push(0, 0, 0, v, u, v)
+  uvs.push(...quadUvs.a, ...quadUvs.d, ...quadUvs.c)
+}
+
+function surfaceQuadUvs(
+  a: number[],
+  b: number[],
+  c: number[],
+  d: number[],
+  normal: number[],
+  uOffset = 0,
+  vOffset = 0,
+): Record<'a' | 'b' | 'c' | 'd', [number, number]> {
+  const ux = b[0]! - a[0]!
+  const uy = b[1]! - a[1]!
+  const uz = b[2]! - a[2]!
+  const uLength = Math.hypot(ux, uy, uz) || 1
+  const unitU = [ux / uLength, uy / uLength, uz / uLength]
+  const unitV = [
+    normal[1]! * unitU[2]! - normal[2]! * unitU[1]!,
+    normal[2]! * unitU[0]! - normal[0]! * unitU[2]!,
+    normal[0]! * unitU[1]! - normal[1]! * unitU[0]!,
+  ]
+  const project = (point: number[]): [number, number] => {
+    const x = point[0]! - a[0]!
+    const y = point[1]! - a[1]!
+    const z = point[2]! - a[2]!
+    return [
+      uOffset + x * unitU[0]! + y * unitU[1]! + z * unitU[2]!,
+      vOffset + x * unitV[0]! + y * unitV[1]! + z * unitV[2]!,
+    ]
+  }
+  return { a: project(a), b: project(b), c: project(c), d: project(d) }
 }
 
 // pushTri: single-triangle counterpart to pushQuad. Caller orders (a, b, c)
@@ -598,24 +645,24 @@ function pushTri(
   b: number[],
   c: number[],
   n: number[],
+  projection: 'surface' | 'xz' = 'surface',
 ) {
   const nLen = Math.sqrt(n[0]! * n[0]! + n[1]! * n[1]! + n[2]! * n[2]!) || 1
   const nx = n[0]! / nLen
   const ny = n[1]! / nLen
   const nz = n[2]! / nLen
 
-  const abx = b[0]! - a[0]!
-  const aby = b[1]! - a[1]!
-  const abz = b[2]! - a[2]!
-  const acx = c[0]! - a[0]!
-  const acy = c[1]! - a[1]!
-  const acz = c[2]! - a[2]!
-  const u = Math.sqrt(abx * abx + aby * aby + abz * abz)
-  const v = Math.sqrt(acx * acx + acy * acy + acz * acz)
+  const uv = (point: number[]): [number, number] => {
+    if (projection === 'xz') return [point[0]!, point[2]!]
+    const mapped = surfaceQuadUvs(a, b, c, c, [nx, ny, nz])
+    if (point === a) return mapped.a
+    if (point === b) return mapped.b
+    return mapped.c
+  }
 
   positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
   normals.push(nx, ny, nz, nx, ny, nz, nx, ny, nz)
-  uvs.push(0, 0, u, 0, 0, v)
+  uvs.push(...uv(a), ...uv(b), ...uv(c))
 }
 
 /**

@@ -4,8 +4,8 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
-import { surfacePaintCapability } from '../shared/surface-paint'
 import { buildCupolaFloorplan } from './floorplan'
+import { cupolaPaint } from './paint'
 import { cupolaParametrics } from './parametrics'
 import { CupolaNode } from './schema'
 
@@ -108,7 +108,7 @@ const cupolaHandles: HandleDescriptor<CupolaNodeType>[] = [
  */
 export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   kind: 'cupola',
-  schemaVersion: 1,
+  schemaVersion: 3,
   schema: CupolaNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -120,11 +120,15 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   },
 
   capabilities: {
+    slots: () => [
+      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
+      { slotId: 'body', label: 'Body', default: 'library:preset-softwhite' },
+      { slotId: 'roof', label: 'Roof', default: 'library:preset-softwhite' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
-    // Single painted surface — registry-driven paint dispatch (see chimney).
-    paint: surfacePaintCapability,
+    paint: cupolaPaint,
     // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
     // slope — no `buildCut`, just the dirty cascade so the parent roof's
     // merged shell rebuilds when the cupola moves / resizes.
@@ -153,7 +157,7 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   presentation: {
     label: 'Cupola',
     description: 'Louvered roof lantern with a dome or pyramid cap and optional finial.',
-    icon: { kind: 'url', src: '/icons/roof.webp' },
+    icon: { kind: 'url', src: '/icons/cupola.webp' },
     paletteSection: 'structure',
     paletteOrder: 122,
   },

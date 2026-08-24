@@ -80,6 +80,11 @@ scaffold under `.github/deploy/`.
 | `packages/core/src/lib/space-detection.ts` | **Keep the missing upper area bound (2026-08-11).** Upstream drops any detected face over 10 000 m²; we dropped only that half of the test, keeping the `< 0.5` floor. The bound cost us five things at once on every building past it — `Space`, auto slab, auto ceiling, auto zone, and `wallClosesRoom`, so the wall tool would not auto-close either — with no error anywhere. Warehouses are 12 000–30 000 m², so for this fork it is not an edge case, it is the normal size. It was not guarding the outer face (already dropped by `signedArea <= 0`, since `nextEdge` walks interior faces counter-clockwise) and it was not a cost guard (the polygon is already built when the check runs). `warehouse-scale rooms` in `space-detection.test.ts` sweeps 100 m² → 30 000 m² and fails on any reinstated ceiling. Proposed upstream; take theirs if they land it. |
 
 | `packages/core/src/systems/stair/{stair-opening-sync,stair-rise}.ts`, `packages/editor/src/lib/stair-levels.ts` | **Fork perf fix (2026-08-13, #19):** kat sorguları `services/level-index.ts` üzerinden (fork'a özgü yeni dosya, WeakMap-memo). Upstream hâlâ her çağrıda tüm sahneyi tarar — 5 000 düğümlü sahnede kat eklemek 2,6 s. Merge'de indeks çağrılarını koru, upstream'in davranış düzeltmelerini indeksli hâlin üstüne uygula. Bekçi: `stair-opening-sync.test.ts` içindeki Proxy `ownKeys` sayacı — upstream'in tarayan hâli geri gelirse kırmızı yanar. |
+| `packages/nodes/src/{wall,ceiling,column}/{panel.tsx,parametrics.ts}`, `packages/editor/src/components/ui/floating-level-selector.tsx` | **Keep ours: no `max` at all (2026-08-24).** Upstream raised the room-envelope caps from 6 m to 20 m (#642, #650). A cap is still a cap: fork PR #17 removed thirteen of them because a warehouse clear height is 10–12 m and high-bay is past 15, and because `SliderControl` clamps *typed* input as well as drag — so a dragged 120 m wall silently became 20 m the moment anyone touched the Length field. No schema has an upper bound; the floors stay. Ceiling is the subtle one: the real constraint is `getCeilingClampBound`, and `Math.min(20, maxHeight)` overrides it exactly as `Math.min(6, maxHeight)` did. Take upstream's *structural* changes around the control (e.g. the `!managedByLeanTo` wrapper on the column height slider) and leave the `max` off. |
+| `apps/editor/package.json` → `@pascal-app/plugin-trees` | Ours is `workspace:*` against the vendored `packages/plugin-trees`; upstream consumes it as `github:pascalorg/plugin-trees#<sha>` and bumps that sha. Keeping `workspace:*` is what the vendored copy requires, and the cost is that trees stops receiving upstream's updates. **Open question, not a settled rule** — switching to the github pin means deciding what happens to `packages/plugin-trees` (and `packages/plugin-articraft` beside it), which is its own change with its own build to prove. Do not do it inside an upstream merge. |
+| `apps/editor/components/scene-loader.tsx` (floating buttons) | Also drop upstream's `Light preview` / `All scenes` overlay block. Both were navigation sitting on top of the drawing; the Scenes rail answers the second from inside the editor and `?disable=postFx` still drives `disablePostFx`, so the flag survives without a permanent button for a diagnostic. |
+| `packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx` | Take upstream's `getTreeNodeComponent` export (their `tree-node.test.ts` imports it) but keep our `def.tree` gate **inside** it, returning `undefined` for a kind that declares no `tree`. Upstream falls back unconditionally, and a level's row maps every one of its children to a `TreeNode` — so an unconditional fallback draws rows for `roof-segment`, `stair-segment`, the duct and pipe fittings and `guide`. Their test only asserts two unnamed kinds route to the *same* thing, which `undefined === undefined` satisfies. |
+| `apps/editor/lib/api-put-empty-guard.test.ts` | Rebuild the fixture. Upstream's is two `qa:box` nodes, correct against upstream's validator and wrong against ours: `lib/graph-schema.ts` routes a plugin kind to that plugin's own `def.schema` and everything unclaimed to `AnyNode`, so an invented kind is refused and every save in the suite returns 400 `invalid_request` before reaching the guard under test. Build the nodes by calling a real kind's schema (`WallNode.parse(...)`) — the same rule the 2026-08-10 log draws from `graph-schema.test.ts`, hit a second time. |
 | `packages/viewer/src/components/viewer/scene-bvh.tsx` | **Fork perf fix (2026-08-13, #20):** tek seferlik mount taraması `lib/scene-bvh-maintainer.ts`'e (fork'a özgü) bağlanan sürekli/bütçeli bakıma çevrildi — upstream'in hâli sahne boş doldurulmadan tarar ve hiçbir şey indekslemez (gezinme süresinin %62'si kaba kuvvet raycast). Merge'de maintainer bağlantısını koru; upstream bileşen API'sine ne eklerse porte et. |
 | `packages/viewer/src/components/renderers/parametric-node-renderer.tsx`, `systems/wall/wall-system.tsx`, `systems/floor-elevation/floor-elevation-system.tsx` | **Fork perf fix (2026-08-13, #21):** statik matris dondurma — parametrik grup `useStaticTransform` ile, duvar mesh'i `updateWallGeometry` sonunda `freezeObjectTransform` ile donar; kat yükseltme yazımı `stampFrozenTransform` ile damgalar. Sıra tuzağı (`matrixAutoUpdate=false` ÖNCE gelirse nesne orijinde çizilir) `lib/static-transform.ts`'te belgeli ve testli. Merge'de üç çağrıyı da koru — upstream'de yoklar ve kaybolmaları hata değil sessiz yavaşlama üretir. |
 
@@ -124,6 +129,62 @@ bad build, and no help at all for a bad migration.
 
 One entry per merge. The point is not history for its own sake: it records what
 was *decided* and what bit us, so the next take is cheaper than this one was.
+
+### 2026-08-24 — beta.5 → 7f629b8c, 55 commits
+
+**What came in.** Lean-to roof extensions with automatic drainage (#651, #690),
+Blender-style custom mesh editing (#638), synchronized 2D viewer modes (#672),
+shared-parameter editing across a homogeneous multi-selection (#680),
+plugin inspector-card extensions (#667), an empty-graph save guard, a batch of
+wall hover/pick correctness fixes (#683, #686, #687, #689, #697), and the
+autosave fix that stopped scenes being wiped during the load window (#682).
+
+**Thirty-five files conflicted. Five of them were not real conflicts.**
+`integration` carries cherry-picks of upstream #607, #608 and #638, so git saw
+two independent additions of the same path and reported add/add. Four of the
+five were byte-identical to the upstream commit they were picked from, and the
+fifth differed by one defensive `?.`. **Check this first on any add/add
+conflict** — `git diff origin/integration:<file> <upstream-sha>:<file>` answers
+it in a second, and taking upstream outright is then strictly an upgrade,
+because upstream has since fixed the same file (#686, #687).
+
+**The empty-graph guard's tests failed for the reason the last log predicted.**
+Upstream's fixture builds two `qa:box` nodes on the reasoning that a foreign
+kind is held to the BaseNode envelope. True upstream, false here — and all
+three tests came back 400 `invalid_request` without ever reaching the guard.
+This is the *second* time an upstream suite has been merged against this fork's
+plugin-aware `graph-schema.ts`. The rule from 2026-08-10 stands and is now
+worth stating as a habit rather than a lesson: **when an upstream test fails
+right after a merge, check whether it is testing upstream's implementation
+before you touch the implementation.**
+
+**A merge tool that eats newlines is worse than one that fails.** The
+conflict-resolution pass here was scripted with a regex whose `\n?` swallowed
+the trailing newline of every kept block. It produced things like
+`from '../../lib/edit-lock'import { getFloatingMenuScale }` and
+`registerEditorHostPanel({ ... })extendPluginDiscovery(...)` in six files.
+Biome caught most of them and `check-types` caught the rest, but one — a
+duplicate `export { createEditorApi }` in `packages/editor/src/index.tsx` —
+was a *semantic* duplicate git had auto-merged, not a scripting slip, and it is
+the kind of thing a conflict-free auto-merge produces without telling anyone.
+**Run `bun run check && bun run check-types && bun run test` before believing a
+merge with no remaining markers.**
+
+**`bun.lock` cannot be regenerated from a sandbox, and this is by design.**
+Upstream bumped `plugin-bones` to `85238a8e`; the lockfile records the sha512
+of each GitHub tarball, and `api.github.com` tarball fetches for repositories
+outside this session's scope return 403. The lock is therefore committed
+unchanged and the **Relock** workflow is dispatched on the merge branch
+afterwards — it exists precisely for this and pushes back to the branch it was
+dispatched on. Until it runs, CI's `--frozen-lockfile` is expected to fail on
+the bones hash and nothing else.
+
+**Plan item 4.3, folded in while `next.config.ts` was already open:**
+`@pascal-app/plugin-articraft` is now in `transpilePackages`. It ships raw
+TypeScript (`"main": "./src/index.ts"`), `lib/bootstrap.ts` imports it, and it
+had never been listed. It builds today only because bun's symlink layout drops
+its real path outside `node_modules` and Next compiles it anyway — a linker
+change would have broken it with no warning.
 
 ### 2026-08-10 — beta.2 → beta.5, 56 commits
 

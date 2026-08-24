@@ -14,6 +14,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera } from 'three'
 import { z } from 'zod'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import { createWallOnCurrentLevel } from '../wall/wall-drafting'
 import { resolvePointerSupportSurface } from './pointer-support-cap'
 
@@ -38,6 +39,7 @@ describe('resolvePointerSupportSurface node tops', () => {
   beforeEach(() => {
     spatialGridManager.clear()
     sceneRegistry.clear()
+    useInteractionScope.getState().end()
     useViewer.setState({
       selection: {
         buildingId: null,
@@ -108,24 +110,54 @@ describe('resolvePointerSupportSurface node tops', () => {
     camera.position.set(0, 5, 0)
     camera.updateMatrixWorld(true)
 
-    const support = resolvePointerSupportSurface(camera, [0, 0, 0])
+    const support = resolvePointerSupportSurface(camera, [0, 0, 0], {
+      includeNodeTopSurfaces: true,
+    })
 
     expect(support?.sourceNodeId).toBe(PLATFORM_ID)
     expect(support?.elevation).toBeCloseTo(2)
     expect(support?.worldPoint).toEqual([0, 2, 0])
   })
 
-  test('keeps the ground result when node-top surfaces are explicitly disabled', () => {
+  test('keeps the ground result unless node-top surfaces are asked for', () => {
     addPluginPlatform()
 
     const camera = new PerspectiveCamera()
     camera.position.set(0, 5, 0)
     camera.updateMatrixWorld(true)
 
-    const support = resolvePointerSupportSurface(camera, [0, 0, 0], {
-      includeNodeTopSurfaces: false,
+    // The default. A floor placement aims THROUGH whatever upward-facing
+    // geometry sits between the camera and the floor — a room's ceiling, the
+    // top of the wall the ray passes over — so only the tools that build on a
+    // surface opt in.
+    for (const options of [undefined, { includeNodeTopSurfaces: false }]) {
+      const support = resolvePointerSupportSurface(camera, [0, 0, 0], options)
+      expect(support?.sourceNodeId).toBeNull()
+      expect(support?.elevation).toBe(0)
+    }
+  })
+
+  test('never elects the node the active interaction is placing or moving', () => {
+    addPluginPlatform()
+    useInteractionScope.getState().begin({
+      kind: 'placing',
+      node: useScene.getState().nodes[PLATFORM_ID]!,
+      nodeId: PLATFORM_ID,
+      nodeType: PLATFORM_KIND,
+      view: '3d',
+      pressDrag: false,
+      driver: 'registry-tool',
     })
 
+    const camera = new PerspectiveCamera()
+    camera.position.set(0, 5, 0)
+    camera.updateMatrixWorld(true)
+
+    const support = resolvePointerSupportSurface(camera, [0, 0, 0], {
+      includeNodeTopSurfaces: true,
+    })
+
+    // Its own top would raise it by its own height on every pointer move.
     expect(support?.sourceNodeId).toBeNull()
     expect(support?.elevation).toBe(0)
   })

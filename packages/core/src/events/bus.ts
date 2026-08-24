@@ -25,6 +25,7 @@ import type {
   GutterNode,
   HvacEquipmentNode,
   ItemNode,
+  LeanToExtensionNode,
   LevelNode,
   LinesetNode,
   LiquidLineNode,
@@ -98,6 +99,7 @@ export type BuildingEvent = NodeEvent<BuildingNode>
 export type CabinetEvent = NodeEvent<CabinetNode>
 export type CabinetModuleEvent = NodeEvent<CabinetModuleNode>
 export type LevelEvent = NodeEvent<LevelNode>
+export type LeanToExtensionEvent = NodeEvent<LeanToExtensionNode>
 export type ZoneEvent = NodeEvent<ZoneNode>
 export type ShelfEvent = NodeEvent<ShelfNode>
 export type SlabEvent = NodeEvent<SlabNode>
@@ -334,6 +336,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'building', BuildingEvent> &
   NodeEvents<'elevator', ElevatorEvent> &
   NodeEvents<'level', LevelEvent> &
+  NodeEvents<'lean-to-extension', LeanToExtensionEvent> &
   NodeEvents<'zone', ZoneEvent> &
   NodeEvents<'slab', SlabEvent> &
   NodeEvents<'shelf', ShelfEvent> &

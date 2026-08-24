@@ -53,18 +53,21 @@ function resolveSegmentFrame(
 
 /**
  * Roof-segment width / depth drag (floor-plan). Mirrors the 3D
- * `linear-resize` handles in `definition.ts` — `anchor: 'center'`
- * means dragging outward on either +/-X (or +/-Z) edge grows the
- * dimension by 2× the segment-local cursor offset while the segment's
- * roof-local position stays put. Projects the plan cursor onto the
- * segment's effective rotation (roof.rotation + segment.rotation) so
- * the math survives any parent-roof rotation.
+ * `linear-resize` handles in `definition.ts`: the dragged side moves
+ * while the opposite side stays fixed. Projects the plan cursor onto
+ * the segment's effective rotation (roof.rotation + segment.rotation)
+ * so the math survives any parent-roof rotation, then writes the
+ * corresponding roof-local center shift alongside the new dimension.
  */
 export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> = {
   start({ node, payload, nodes, initialPlanPoint }) {
     const { axis, side } = payload as RoofSegmentResizePayload
     const segmentId = node.id as AnyNodeId
     const initialValue = axis === 'x' ? node.width : node.depth
+    const initialPosition = node.position
+    const segmentRotation = node.rotation ?? 0
+    const armX = axis === 'x' ? Math.cos(segmentRotation) : Math.sin(segmentRotation)
+    const armZ = axis === 'x' ? -Math.sin(segmentRotation) : Math.cos(segmentRotation)
     const { cx, cz, effRot } = resolveSegmentFrame(node, nodes)
     const cosEff = Math.cos(effRot)
     const sinEff = Math.sin(effRot)
@@ -84,17 +87,26 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
       apply({ planPoint }) {
         const currentLocal = projectLocalAxis(planPoint[0], planPoint[1])
         const delta = (currentLocal - initialLocal) * side
-        const rawValue = initialValue + 2 * delta
+        const rawValue = initialValue + delta
         // Mode-aware grid step (0 outside grid mode, so `lines` / `off` resize
         // freely — the "smooth" behaviour that used to need a held Shift). The
         // reshaping scope opened by the dispatcher resolves the `polygon` set.
         const step = getSegmentGridStep()
         const snappedValue = step > 0 ? snapScalar(rawValue, step) : rawValue
         const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
+        const centerOffset = (side * (newValue - initialValue)) / 2
+        const position: [number, number, number] = [
+          initialPosition[0] + centerOffset * armX,
+          initialPosition[1],
+          initialPosition[2] + centerOffset * armZ,
+        ]
         lastValue = newValue
         useLiveNodeOverrides
           .getState()
-          .set(segmentId, axis === 'x' ? { width: newValue } : { depth: newValue })
+          .set(
+            segmentId,
+            axis === 'x' ? { width: newValue, position } : { depth: newValue, position },
+          )
         useScene.getState().markDirty(segmentId)
       },
       canCommit() {
@@ -102,9 +114,18 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
       },
       commit() {
         useLiveNodeOverrides.getState().clear(segmentId)
+        const centerOffset = (side * (lastValue - initialValue)) / 2
+        const position: [number, number, number] = [
+          initialPosition[0] + centerOffset * armX,
+          initialPosition[1],
+          initialPosition[2] + centerOffset * armZ,
+        ]
         useScene
           .getState()
-          .updateNode(segmentId, axis === 'x' ? { width: lastValue } : { depth: lastValue })
+          .updateNode(
+            segmentId,
+            axis === 'x' ? { width: lastValue, position } : { depth: lastValue, position },
+          )
       },
     }
   },

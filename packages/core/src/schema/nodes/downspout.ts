@@ -3,11 +3,14 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+const DEFAULT_DOWNSPOUT_GENERATOR = 'default-downspout'
+
 export const DownspoutNode = BaseNode.extend({
   id: objectId('downspout'),
   type: nodeType('downspout'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Match the gutter family default — paint inspector reads "White"
   // instead of "no material" on a freshly placed downspout.
   materialPreset: z.string().default('preset-white'),
@@ -30,6 +33,7 @@ export const DownspoutNode = BaseNode.extend({
   // tool can default to the gutter's eave-Y minus building floor on
   // commit so the user doesn't have to set it on every drop.
   length: z.number().default(2.5),
+  lengthMode: z.enum(['to-ground', 'manual']).optional(),
   // Bore diameter, default 0.07 m ≈ 3″ to match the gutter outlet
   // default. Larger downspouts are common on commercial gutters.
   diameter: z.number().default(0.07),
@@ -72,3 +76,28 @@ export const DownspoutNode = BaseNode.extend({
 )
 
 export type DownspoutNode = z.infer<typeof DownspoutNode>
+
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  if (typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>
+  }
+  return {}
+}
+
+export function defaultDownspoutMetadata() {
+  return { generatedBy: DEFAULT_DOWNSPOUT_GENERATOR }
+}
+
+export function isDefaultDownspoutNode(node: unknown, gutterId?: string): node is DownspoutNode {
+  const parsed = DownspoutNode.safeParse(node)
+  if (!parsed.success) return false
+  if (gutterId && parsed.data.gutterId !== gutterId) return false
+  return metadataRecord(parsed.data.metadata).generatedBy === DEFAULT_DOWNSPOUT_GENERATOR
+}
+
+export function usesAutomaticDownspoutLength(node: DownspoutNode): boolean {
+  return (
+    node.lengthMode === 'to-ground' ||
+    (node.lengthMode === undefined && isDefaultDownspoutNode(node))
+  )
+}

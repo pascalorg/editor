@@ -5,6 +5,7 @@ import {
   type SiteNode,
   type TerrainField,
   terrainFieldOf,
+  unionPolygons,
   useLiveNodeOverrides,
   useLiveTerrain,
   useRegistry,
@@ -16,7 +17,6 @@ import {
   getSceneTheme,
   horizonHazeColor,
   NodeRenderer,
-  unionPolygons,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'

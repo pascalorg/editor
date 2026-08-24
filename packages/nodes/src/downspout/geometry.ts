@@ -3,6 +3,12 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { OutletDims } from '../gutter/profile-geometry'
 import {
+  applyCylinderWorldUvs,
+  applyPlanarWorldUvs,
+  applySphereWorldUvs,
+  copyUvToSecondaryChannel,
+} from '../shared/primitive-uv'
+import {
   computeDownspoutPath,
   type DownspoutPath,
   type DownspoutRouting,
@@ -97,6 +103,7 @@ export function buildDownspoutGeometry(
     for (const p of pieces) p.dispose()
   }
   merged.computeVertexNormals()
+  copyUvToSecondaryChannel(merged)
   return merged
 }
 
@@ -117,6 +124,8 @@ function segmentBetween(
     dims.shape === 'round'
       ? new THREE.CylinderGeometry(dims.halfX, dims.halfX, len, RADIAL_SEGMENTS).toNonIndexed()
       : new THREE.BoxGeometry(2 * dims.halfX, len, 2 * dims.halfZ).toNonIndexed()
+  if (dims.shape === 'round') applyCylinderWorldUvs(geo, dims.halfX, len)
+  else applyPlanarWorldUvs(geo)
   // The primitive runs along +Y centred at origin; rotate +Y onto the
   // segment direction, then drop it on the midpoint.
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, dir.normalize()))
@@ -181,6 +190,7 @@ function jointAt(
 ): THREE.BufferGeometry {
   if (dims.shape === 'round') {
     const geo = new THREE.SphereGeometry(dims.halfX, JOINT_SEGMENTS, JOINT_SEGMENTS).toNonIndexed()
+    applySphereWorldUvs(geo, dims.halfX)
     geo.translate(p.x, p.y, p.z)
     return geo
   }
@@ -190,6 +200,7 @@ function jointAt(
   if (bis.lengthSq() < 1e-8) bis.copy(dirOut) // straight-through; degenerate
   bis.normalize()
   const geo = new THREE.BoxGeometry(2 * dims.halfX, 2 * dims.halfZ, 2 * dims.halfZ).toNonIndexed()
+  applyPlanarWorldUvs(geo)
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, bis))
   geo.translate(p.x, p.y, p.z)
   return geo
@@ -221,6 +232,7 @@ function buildStraps(
   for (let i = 0; i < count; i++) {
     const y = count > 1 ? top - STRAP_END_MARGIN - i * stride : (top + bottom) / 2
     const band = new THREE.BoxGeometry(w, STRAP_THICKNESS, d).toNonIndexed()
+    applyPlanarWorldUvs(band)
     band.translate(0, y, z)
     straps.push(band)
   }
@@ -234,6 +246,7 @@ function buildStraps(
 function buildSplash(path: DownspoutPath): THREE.BufferGeometry | null {
   const [bx, by, bz] = path.bottom
   const slab = new THREE.BoxGeometry(SPLASH_WIDTH, SPLASH_THICKNESS, SPLASH_LENGTH).toNonIndexed()
+  applyPlanarWorldUvs(slab)
   // Tilt the far (+Z) end down so it slopes away from the wall.
   slab.rotateX(SPLASH_TILT)
   slab.translate(bx, by - SPLASH_THICKNESS / 2, bz + SPLASH_LENGTH / 2)

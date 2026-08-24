@@ -33,6 +33,7 @@ import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
+import { PointerRaycastLayers } from './pointer-raycast-layers'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
 import { RegisteredSystems } from './registered-systems'
 import { SceneBvh } from './scene-bvh'
@@ -574,6 +575,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     >
       <FrameLimiter fps={maxFps} paused={renderPaused} />
       <ViewerCamera />
+      <PointerRaycastLayers />
       <GPUDeviceWatcher />
       <ToneMappingExposure />
       <SceneReadyTracker

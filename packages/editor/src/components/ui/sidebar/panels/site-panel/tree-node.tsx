@@ -117,6 +117,12 @@ interface TreeNodeProps {
   isLast?: boolean
 }
 
+type TreeNodeComponent = React.ComponentType<{
+  depth: number
+  isLast?: boolean
+  nodeId: AnyNodeId
+}>
+
 // Per-kind tree-node components keyed by `node.type`. Lookup replaces
 // the legacy switch — adding a kind to this map is now the only edit
 // needed in this file (the switch's `case '<kind>':` clauses were
@@ -124,10 +130,7 @@ interface TreeNodeProps {
 // outside the registry; future work moves these to a
 // `def.presentation`-driven generic tree-node and removes this map
 // entirely).
-const treeNodeByType: Record<
-  string,
-  React.ComponentType<{ depth: number; isLast?: boolean; nodeId: AnyNodeId }>
-> = {
+const treeNodeByType: Record<string, TreeNodeComponent> = {
   building: BuildingTreeNode as React.ComponentType<{
     depth: number
     isLast?: boolean
@@ -181,6 +184,24 @@ const treeNodeByType: Record<
   item: ItemTreeNode,
 }
 
+/**
+ * The row component for a kind, or `undefined` when the kind draws no row.
+ *
+ * A kind the map doesn't name falls through to the generic row when it declares
+ * `def.tree`. Without a fallback a registry kind absent from the map drew NO row
+ * at all, so plugin objects were missing from the scene tree entirely — the
+ * `def.tree.label` was computed and never reached a reader.
+ *
+ * Gated on `def.tree` rather than on mere registration, which is where this
+ * differs from upstream's unconditional fallback: plenty of registered kinds are
+ * sub-parts that must stay out of the tree (`roof-segment`, `stair-segment`, the
+ * duct and pipe fittings, `guide`), and a level's row maps every one of its
+ * children to a `TreeNode`. Declaring `tree` is the kind saying it belongs there.
+ */
+export function getTreeNodeComponent(nodeType: string): TreeNodeComponent | undefined {
+  return treeNodeByType[nodeType] ?? (nodeRegistry.get(nodeType)?.tree ? RegistryTreeNode : undefined)
+}
+
 export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
   // Registry-driven row hiding (`def.tree.hidden`) — primitive boolean
   // selector so unrelated scene updates don't re-render every row.
@@ -192,18 +213,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
   const nodeType = useScene((state) => state.nodes[nodeId]?.type)
   if (shouldHide) return null
   if (!nodeType) return null
-  // A kind the map doesn't name falls through to the generic row when it
-  // declares `def.tree` — which is the map comment's own destination, taken
-  // one opt-in step at a time. Without it a registry kind absent from the map
-  // draws NO row at all, so plugin objects were missing from the scene tree
-  // entirely: `def.tree.label` was computed and never reached a reader.
-  //
-  // Gated on `def.tree` rather than mere registration, because plenty of
-  // registered kinds are sub-parts that must stay out of the tree —
-  // `roof-segment`, `stair-segment`, the duct and pipe fittings, `guide`.
-  // Declaring `tree` is the kind saying it belongs there.
-  const Component =
-    treeNodeByType[nodeType] ?? (nodeRegistry.get(nodeType)?.tree ? RegistryTreeNode : undefined)
+  const Component = getTreeNodeComponent(nodeType)
   if (!Component) return null
   return <Component depth={depth} isLast={isLast} nodeId={nodeId} />
 })

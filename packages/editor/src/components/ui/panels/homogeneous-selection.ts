@@ -45,4 +45,3 @@ export function resolveHomogeneousSelection(
   }
   return first.type
 }
-

@@ -355,11 +355,7 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
-export {
-  filterEditableIds,
-  isNodeEditLocked,
-  isNodeIdEditLocked,
-} from './lib/edit-lock'
+export { filterEditableIds, isNodeEditLocked, isNodeIdEditLocked } from './lib/edit-lock'
 export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,

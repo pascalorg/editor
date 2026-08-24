@@ -1,4 +1,11 @@
-import type { RoofSegmentNode, RoofType } from '@pascal-app/core'
+import {
+  computeGutterEaveY,
+  GUTTER_EAVE_TUCK_INWARD,
+  GUTTER_EAVE_TUCK_UP,
+  getRoofShapeEaveSides,
+  type RoofSegmentNode,
+  type RoofType,
+} from '@pascal-app/core'
 
 /**
  * Shared eave-snap math for the gutter's placement + move tools.
@@ -21,8 +28,8 @@ import type { RoofSegmentNode, RoofType } from '@pascal-app/core'
 // drip-edge. These tuck the snap so the gutter reads as "attached to
 // the fascia" rather than "floating at the very tip of the overhang".
 // Tuned by feel — bump them up if the gutter looks too low / outboard.
-export const EAVE_TUCK_INWARD = 0.04
-export const EAVE_TUCK_UP = 0.04
+export const EAVE_TUCK_INWARD = GUTTER_EAVE_TUCK_INWARD
+export const EAVE_TUCK_UP = GUTTER_EAVE_TUCK_UP
 
 export type EaveSide = '+X' | '-X' | '+Z' | '-Z'
 
@@ -53,17 +60,7 @@ export type EaveSnap = {
 export function computeEaveY(
   segment: Pick<RoofSegmentNode, 'wallHeight' | 'overhang' | 'pitch' | 'roofType'>,
 ): number {
-  const wallHeight = segment.wallHeight ?? 0
-  // Flat roofs have no slope drop and no slope-surface-vs-deck-top
-  // offset — the deck top IS the eave line. EAVE_TUCK_UP is a
-  // correction that lifts a SLOPED gutter from the slope-surface up to
-  // the deck-top line; applying it to a flat deck floats the gutter
-  // above the roof and leaves a visible gap between the edge and the
-  // gutter. So mount flat gutters right at the deck top.
-  if ((segment.roofType ?? 'gable') === 'flat') return wallHeight
-  const overhang = segment.overhang ?? 0
-  const pitchRad = ((segment.pitch ?? 0) * Math.PI) / 180
-  return wallHeight - overhang * Math.tan(pitchRad) + EAVE_TUCK_UP
+  return computeGutterEaveY(segment)
 }
 
 /**
@@ -74,7 +71,7 @@ export function computeEaveY(
  *    regardless of which side the cursor is on — clicking on the high
  *    side still rolls the gutter down to the low eave.
  *
- *  - `hip` / `flat` / `dutch`: 4-way. The slope the user is standing
+ *  - Four-eave roofs: the slope the user is standing
  *    on is determined by whichever of `|lx|/halfW` or `|lz|/halfD` is
  *    larger — same `max(fx, fz)` discriminator the segment-hit's
  *    `analyticalSurfaceY` uses for hip. Sign of the dominant axis
@@ -82,11 +79,7 @@ export function computeEaveY(
  *    lower run has all four eaves at the eave line — it gets the same
  *    4-way snap as hip.
  *
- *  - `gable` / `gambrel` / `mansard`: 2-way `±Z`. Mansard has real
- *    4-side eaves in plan, but the segment-hit formula approximates it
- *    as 2-slope (depth-only), so we stay consistent here — the user
- *    can re-place the gutter manually on a side eave if mansard
- *    becomes important.
+ *  - `gable` / `gambrel`: 2-way `±Z`.
  */
 function pickEaveSide(
   roofType: RoofType,
@@ -95,9 +88,10 @@ function pickEaveSide(
   halfW: number,
   halfD: number,
 ): EaveSide {
-  if (roofType === 'shed') return '+Z'
+  const sides = getRoofShapeEaveSides(roofType)
+  if (sides.length === 1) return sides[0]!
 
-  if (roofType === 'hip' || roofType === 'flat' || roofType === 'dutch') {
+  if (sides.includes('+X')) {
     const fx = halfW > 0 ? Math.abs(localX) / halfW : 0
     const fz = halfD > 0 ? Math.abs(localZ) / halfD : 0
     if (fx > fz) return localX < 0 ? '-X' : '+X'

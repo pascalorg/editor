@@ -235,6 +235,22 @@ export function HelperManager() {
     )
   }
 
+  // A single-node resize arrow is still an active snapping interaction. Roof
+  // width/depth handles opt into grid snapping, so keep the mode and grid-step
+  // controls visible for the whole drag instead of falling through to idle
+  // selection hints.
+  if (activeHandleDrag) {
+    return (
+      <ContextualHelperPanel
+        hints={[
+          { keys: ['Drag'], label: 'Resize' },
+          { keys: ['Esc'], label: 'Cancel' },
+        ]}
+        snapContext={snapContext}
+      />
+    )
+  }
+
   // Reshaping a node's geometry (endpoint / curve / polygon corner). Checked
   // before the select branch so the idle "drag selected / add objects" hints
   // never leak over an in-progress reshape — and it gets its own snapping chip.

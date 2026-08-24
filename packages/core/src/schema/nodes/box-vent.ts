@@ -3,11 +3,15 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
+export const BoxVentMaterialRole = z.enum(['base', 'top'])
+export type BoxVentMaterialRole = z.infer<typeof BoxVentMaterialRole>
+
 export const BoxVentNode = BaseNode.extend({
   id: objectId('bvent'),
   type: nodeType('box-vent'),
 
   material: MaterialSchema.optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   // Default to the white preset so newly-placed vents read as clean
   // painted metal — and so the paint inspector shows "White" as the
   // current selection instead of an empty "no material" state, which

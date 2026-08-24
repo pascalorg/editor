@@ -81,7 +81,9 @@ const BlockTool = () => {
     const pointedSurfaceFor = (event: GridEvent | FloorPlacementClickTriggerEvent) =>
       typeof HTMLCanvasElement !== 'undefined' &&
       event.nativeEvent?.target instanceof HTMLCanvasElement
-        ? resolvePointerSupportSurface(cameraRef.current, event.position)
+        ? resolvePointerSupportSurface(cameraRef.current, event.position, {
+            includeNodeTopSurfaces: true,
+          })
         : null
 
     const resolvePlacement = (
