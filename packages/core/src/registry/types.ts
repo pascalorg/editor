@@ -1532,6 +1532,18 @@ export type Capabilities = {
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
   /**
+   * This kind passes vertically through floors and wants the openings cut for
+   * it — a lift, a spiral conveyor, anything whose shaft crosses a slab.
+   *
+   * Declaring it puts the kind into the same sync that already maintains the
+   * elevator's cutouts: the holes are tagged with the node's id, so moving or
+   * deleting the node moves or removes exactly its own holes and leaves the
+   * user's manual cutouts alone. A kind that writes holes itself cannot get
+   * that — a `manual` hole is indistinguishable from one the user drew, so the
+   * old one is stranded on every move.
+   */
+  verticalOpening?: VerticalOpeningConfig
+  /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
    * directly (wall, slab). Lets a kind self-describe where it sits in plan
@@ -2151,6 +2163,27 @@ export type FloorPlacedFootprintsResolver = (
  * `applies` is an optional predicate to skip nodes that share a kind but
  * are mounted off-floor (items attached to a wall / ceiling).
  */
+/**
+ * How a kind describes the shaft it needs cut through floors.
+ *
+ * Both members are functions of the node so a kind can size its opening from
+ * its own parameters — a conveyor's helix diameter, a lift's car plus its
+ * clearances — rather than the host guessing from a bounding box.
+ */
+export type VerticalOpeningConfig = {
+  /**
+   * The opening in world XZ, as a closed polygon. Include whatever clearance
+   * the kind needs: the sync cuts exactly this.
+   */
+  polygon: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => Array<[number, number]>
+  /**
+   * Whether this node passes through the given level's floor. Called once per
+   * candidate surface, so the kind decides its own service range — a lift
+   * serving floors 1-3 answers true for 2 and 3 and false for 4.
+   */
+  servesLevel: (node: AnyNode, levelId: string, nodes: Readonly<Record<string, AnyNode>>) => boolean
+}
+
 export type FloorPlacedConfig = {
   footprint?: FloorPlacedFootprintResolver
   footprints?: FloorPlacedFootprintsResolver

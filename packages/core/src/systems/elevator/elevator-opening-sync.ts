@@ -1,4 +1,6 @@
 import { resolveLevelId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { nodeRegistry } from '../../registry/registry'
+import type { Capabilities } from '../../registry/types'
 import type {
   AnyNode,
   AnyNodeId,
@@ -7,6 +9,7 @@ import type {
   SlabNode,
   SurfaceHoleMetadata,
 } from '../../schema'
+import { isAutoHoleSource } from '../../schema/nodes/surface-hole-metadata'
 import { resolveElevatorServiceLevels } from './elevator-service'
 
 type Point2D = [number, number]
@@ -39,8 +42,27 @@ function metadataEqual(left: SurfaceHoleMetadata[], right: SurfaceHoleMetadata[]
     (entry, index) =>
       entry.source === right[index]?.source &&
       (entry.elevatorId ?? null) === (right[index]?.elevatorId ?? null) &&
-      (entry.stairId ?? null) === (right[index]?.stairId ?? null),
+      (entry.stairId ?? null) === (right[index]?.stairId ?? null) &&
+      (entry.ownerId ?? null) === (right[index]?.ownerId ?? null),
   )
+}
+
+/**
+ * Nodes that declare `capabilities.verticalOpening` and are visible.
+ *
+ * Read from the registry rather than matched on `type`, so a kind contributed
+ * by a plugin gets its floors cut without this file naming it — the elevator's
+ * own cutouts have worked this way since they were written, and the only reason
+ * a plugin could not have them was that the lookup was hardcoded to one type.
+ */
+function collectOpeningOwners(nodes: Record<string, AnyNode>) {
+  const owners: Array<{ node: AnyNode; config: NonNullable<Capabilities['verticalOpening']> }> = []
+  for (const node of Object.values(nodes)) {
+    if (node.visible === false) continue
+    const config = nodeRegistry.get(node.type)?.capabilities?.verticalOpening
+    if (config) owners.push({ node, config })
+  }
+  return owners
 }
 
 function normalizeExistingMetadata(
@@ -168,43 +190,67 @@ export function syncAutoElevatorOpenings(nodes: Record<string, AnyNode>) {
   const elevators = Object.values(nodes).filter(
     (node): node is ElevatorNode => node.type === 'elevator' && node.visible !== false,
   )
+  const openingOwners = collectOpeningOwners(nodes)
   const slabs = Object.values(nodes).filter((node): node is SlabNode => node.type === 'slab')
   const ceilings = Object.values(nodes).filter(
     (node): node is CeilingNode => node.type === 'ceiling',
   )
   const updates: Array<{ id: AnyNodeId; data: Partial<SlabNode | CeilingNode> }> = []
 
-  for (const slab of slabs) {
-    const slabLevelId = resolveLevelId(slab, nodes)
-    const existingHoles = slab.holes ?? []
-    const existingMetadata = normalizeExistingMetadata(existingHoles, slab.holeMetadata)
-    const preservedHoles = existingHoles
+  /**
+   * One pass for both surface kinds.
+   *
+   * Slabs and ceilings were two copies of this, which is how the stair-hole
+   * preservation came to be written twice and why adding a third source meant
+   * editing the same lines in two places. `appliesToSurface` is the only thing
+   * that actually differed.
+   */
+  const syncSurface = (
+    surface: SlabNode | CeilingNode,
+    appliesToSurface: (elevator: ElevatorNode, levelId: string) => boolean,
+  ) => {
+    const levelId = resolveLevelId(surface, nodes)
+    const existingHoles = surface.holes ?? []
+    const existingMetadata = normalizeExistingMetadata(existingHoles, surface.holeMetadata)
+
+    // The user's own cutouts, kept in front so their indices stay stable.
+    const manualHoles = existingHoles
       .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
-      .filter((entry) => entry.metadata.source !== 'elevator')
-    const manualHoles = preservedHoles.filter((entry) => entry.metadata.source !== 'stair')
-    const stairHoles = preservedHoles.filter((entry) => entry.metadata.source === 'stair')
-    const preservedHolePolygons = preservedHoles.map((entry) => entry.polygon)
+      .filter((entry) => !isAutoHoleSource(entry.metadata.source))
+    const manualPolygons = manualHoles.map((entry) => entry.polygon)
+
+    // Stair openings are cut elsewhere; this sync only carries them through.
+    const stairHoles = existingHoles
+      .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
+      .filter((entry) => entry.metadata.source === 'stair')
 
     const elevatorHoles = elevators
-      .filter((elevator) => shouldApplyElevatorToSlab(elevator, slabLevelId, nodes))
+      .filter((elevator) => appliesToSurface(elevator, levelId))
       .map((elevator) => ({
         polygon: getElevatorOpeningPolygon(elevator),
-        metadata: {
-          elevatorId: elevator.id,
-          source: 'elevator' as const,
-        },
+        metadata: { elevatorId: elevator.id, source: 'elevator' as const },
       }))
-      .filter((hole) => polygonContainsPolygon(slab.polygon, hole.polygon))
-      .filter((hole) => !isCoveredByExistingHole(preservedHolePolygons, hole.polygon))
+
+    const declaredHoles = openingOwners
+      .filter(({ node, config }) => config.servesLevel(node, levelId, nodes))
+      .map(({ node, config }) => ({
+        polygon: config.polygon(node, nodes) as Point2D[],
+        metadata: { ownerId: node.id, source: 'verticalOpening' as const },
+      }))
+      .filter((hole) => hole.polygon.length >= 3)
+
+    const cutHoles = [...elevatorHoles, ...declaredHoles]
+      .filter((hole) => polygonContainsPolygon(surface.polygon, hole.polygon))
+      .filter((hole) => !isCoveredByExistingHole(manualPolygons, hole.polygon))
 
     const nextHoles = [
-      ...manualHoles.map((hole) => hole.polygon),
-      ...elevatorHoles.map((hole) => hole.polygon),
+      ...manualPolygons,
+      ...cutHoles.map((hole) => hole.polygon),
       ...stairHoles.map((hole) => hole.polygon),
     ]
     const nextMetadata = [
       ...manualHoles.map((hole) => ({ ...hole.metadata })),
-      ...elevatorHoles.map((hole) => hole.metadata),
+      ...cutHoles.map((hole) => hole.metadata),
       ...stairHoles.map((hole) => ({ ...hole.metadata })),
     ]
 
@@ -212,62 +258,17 @@ export function syncAutoElevatorOpenings(nodes: Record<string, AnyNode>) {
       !polygonsEqual(existingHoles, nextHoles) ||
       !metadataEqual(existingMetadata, nextMetadata)
     ) {
-      updates.push({
-        id: slab.id,
-        data: {
-          holes: nextHoles,
-          holeMetadata: nextMetadata,
-        },
-      })
+      updates.push({ id: surface.id, data: { holes: nextHoles, holeMetadata: nextMetadata } })
     }
   }
 
+  for (const slab of slabs) {
+    syncSurface(slab, (elevator, levelId) => shouldApplyElevatorToSlab(elevator, levelId, nodes))
+  }
   for (const ceiling of ceilings) {
-    const ceilingLevelId = resolveLevelId(ceiling, nodes)
-    const existingHoles = ceiling.holes ?? []
-    const existingMetadata = normalizeExistingMetadata(existingHoles, ceiling.holeMetadata)
-    const preservedHoles = existingHoles
-      .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
-      .filter((entry) => entry.metadata.source !== 'elevator')
-    const manualHoles = preservedHoles.filter((entry) => entry.metadata.source !== 'stair')
-    const stairHoles = preservedHoles.filter((entry) => entry.metadata.source === 'stair')
-    const preservedHolePolygons = preservedHoles.map((entry) => entry.polygon)
-
-    const elevatorHoles = elevators
-      .filter((elevator) => shouldApplyElevatorToCeiling(elevator, ceilingLevelId, nodes))
-      .map((elevator) => ({
-        polygon: getElevatorOpeningPolygon(elevator),
-        metadata: {
-          elevatorId: elevator.id,
-          source: 'elevator' as const,
-        },
-      }))
-      .filter((hole) => polygonContainsPolygon(ceiling.polygon, hole.polygon))
-      .filter((hole) => !isCoveredByExistingHole(preservedHolePolygons, hole.polygon))
-
-    const nextHoles = [
-      ...manualHoles.map((hole) => hole.polygon),
-      ...elevatorHoles.map((hole) => hole.polygon),
-      ...stairHoles.map((hole) => hole.polygon),
-    ]
-    const nextMetadata = [
-      ...manualHoles.map((hole) => ({ ...hole.metadata })),
-      ...elevatorHoles.map((hole) => hole.metadata),
-      ...stairHoles.map((hole) => ({ ...hole.metadata })),
-    ]
-
-    if (
-      !polygonsEqual(existingHoles, nextHoles) ||
-      !metadataEqual(existingMetadata, nextMetadata)
-    ) {
-      updates.push({
-        id: ceiling.id,
-        data: {
-          holes: nextHoles,
-          holeMetadata: nextMetadata,
-        },
-      })
-    }
+    syncSurface(ceiling, (elevator, levelId) =>
+      shouldApplyElevatorToCeiling(elevator, levelId, nodes),
+    )
   }
 
   return updates
