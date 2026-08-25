@@ -6,12 +6,14 @@ import {
   dormerWallFacePointToDormer,
   emitter,
   type GridEvent,
+  getEffectiveNode,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
   sceneRegistry,
   spatialGridManager,
+  useLiveNodeOverrides,
   useScene,
   type WallEvent,
   type WallNode,
@@ -159,7 +161,7 @@ const WindowTool: React.FC = () => {
       const live = useScene.getState().nodes[draft.id as AnyNodeId]
       if (live?.type !== 'window') return
       draftRef.current = live
-      publishPlacementPreview(live, parentNode)
+      publishPlacementPreview(getEffectiveNode(live), parentNode)
     }
 
     let hostKind: HostKind = null
@@ -205,6 +207,7 @@ const WindowTool: React.FC = () => {
         return
       }
       const wallId = draft.parentId
+      useLiveNodeOverrides.getState().clear(draft.id)
       useScene.getState().deleteNode(draft.id)
       draftRef.current = null
       clearPlacementPreview()
@@ -329,7 +332,7 @@ const WindowTool: React.FC = () => {
         useScene.getState().createNode(node, event.node.id as AnyNodeId)
         draftRef.current = node
       } else {
-        useScene.getState().updateNode(draftRef.current.id, {
+        useLiveNodeOverrides.getState().set(draftRef.current.id, {
           position: target.position,
           rotation: [0, itemRotation, 0],
           side,
@@ -416,7 +419,15 @@ const WindowTool: React.FC = () => {
         height,
         useScene.getState().nodes,
       )
-      const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
+      const valid = !hasWallChildOverlap(
+        wall.id,
+        useScene.getState().nodes,
+        clampedX,
+        clampedY,
+        width,
+        height,
+        ignoreId,
+      )
       return { clampedX, clampedY, valid }
     }
 
@@ -461,13 +472,14 @@ const WindowTool: React.FC = () => {
       )
 
       if (wall.id === draftRef.current.parentId) {
-        useScene.getState().updateNode(draftRef.current.id, {
+        useLiveNodeOverrides.getState().set(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,
         })
         markHostDirty(wall.id)
       } else {
+        useLiveNodeOverrides.getState().clear(draftRef.current.id)
         useScene.getState().updateNode(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
@@ -525,6 +537,7 @@ const WindowTool: React.FC = () => {
       draftRef.current = null
       hostKind = null
 
+      useLiveNodeOverrides.getState().clear(draft.id)
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
 
@@ -582,6 +595,7 @@ const WindowTool: React.FC = () => {
       draftRef.current = null
       hostKind = null
 
+      useLiveNodeOverrides.getState().clear(draft.id)
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
 
@@ -847,7 +861,7 @@ const WindowTool: React.FC = () => {
 
       if (draftRef.current && draftRef.current.parentId !== segment.id) destroyDraft()
       if (draftRef.current) {
-        useScene.getState().updateNode(draftRef.current.id, {
+        useLiveNodeOverrides.getState().set(draftRef.current.id, {
           position,
           rotation: [0, 0, 0],
           roofFace: face.id,
@@ -885,6 +899,7 @@ const WindowTool: React.FC = () => {
       draftRef.current = null
       hostKind = null
 
+      useLiveNodeOverrides.getState().clear(draft.id)
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
 

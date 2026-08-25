@@ -9,7 +9,6 @@ import {
   type ItemNode,
   isCurvedWall,
   nearestWallSegment,
-  useScene,
   WALL_SNAP_DISTANCE_M,
   type WallNode,
 } from '@pascal-app/core'
@@ -335,13 +334,13 @@ export function snapLocalXToNeighbors(args: {
  */
 export function hasWallChildOverlap(
   wallId: string,
+  nodes: Readonly<Record<string, AnyNode>>,
   clampedX: number,
   clampedY: number,
   width: number,
   height: number,
   ignoreId?: string,
 ): boolean {
-  const nodes = useScene.getState().nodes
   const wallNode = nodes[wallId as AnyNodeId] as WallNode | undefined
   if (!wallNode) return true
   const halfW = width / 2
@@ -407,7 +406,7 @@ export type OpeningPlacement = {
 
 /**
  * Resolve the placement state from the raw collision result and whether the
- * user is force-placing (Shift). Force-place lifts the collision block, so the
+ * user is force-placing (held Alt). Force-place lifts the collision block, so the
  * opening becomes placeable AND the tint goes green — the preview and the
  * commit gate stay in lockstep because both read this one result.
  */

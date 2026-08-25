@@ -44,6 +44,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // 32-segment arch curves). Commit clears the override and the real
   // CSG mesh kicks back in.
   const liveOverrides = useLiveNodeOverrides((state) => state.get(storeNode.id as AnyNodeId))
+  const liveWindowOverrides = useLiveNodeOverrides((state) => state.overrides)
   const isLiveDrag = !!liveOverrides && Object.keys(liveOverrides).length > 0
   const node = useMemo(
     () => (liveOverrides ? ({ ...storeNode, ...liveOverrides } as DormerNode) : storeNode),
@@ -58,8 +59,17 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     ),
   )
   const hostedWindows = useMemo(
-    () => childNodes.filter((child): child is WindowNode => child.type === 'window'),
-    [childNodes],
+    () =>
+      childNodes
+        .filter((child): child is WindowNode => child.type === 'window')
+        .map((window) => {
+          const override = liveWindowOverrides.get(window.id)
+          return override ? ({ ...window, ...override } as WindowNode) : window
+        }),
+    [childNodes, liveWindowOverrides],
+  )
+  const hasLiveWindowPreview = childNodes.some(
+    (child) => child.type === 'window' && liveWindowOverrides.has(child.id),
   )
 
   const segment = useScene((state) =>
@@ -119,10 +129,11 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(() => {
     if (!segment) return null
-    if (isLiveDrag) return buildDormerFallbackGeometry(node)
+    if (isLiveDrag || hasLiveWindowPreview) return buildDormerFallbackGeometry(node)
     return generateDormerGeometry(node, segment, hostedWindows)
   }, [
     isLiveDrag,
+    hasLiveWindowPreview,
     segment,
     node.id,
     node.roofType,

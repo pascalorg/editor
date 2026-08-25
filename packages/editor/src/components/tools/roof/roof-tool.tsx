@@ -527,7 +527,7 @@ export const RoofTool: React.FC = () => {
     // bodies on the active level + floor below (raising the green beacon),
     // falling back to alignment guides, then to the world-grid snap. The same
     // path the slab/ceiling tools use, so the beacon and coloring match. The
-    // pipeline reads the snapping mode itself (Shift bypass, magnetic on/off),
+    // pipeline reads the active snapping mode (grid / lines / angles / off),
     // so this tool never inspects the flags. `levelId` is intentionally omitted
     // so the explicit floor-below `walls` aren't filtered back out.
     const resolveDraftPoint = (event: GridEvent): [number, number] => {

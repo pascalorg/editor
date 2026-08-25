@@ -8,7 +8,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { getSegmentGridStep, isAngleSnapActive } from '@pascal-app/editor'
+import { getSegmentGridStep, isAngleSnapActive, isGridSnapActive } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
@@ -121,7 +121,7 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
         // Mode-aware grid step (0 outside grid mode, so `lines` / `off` resize
         // freely — the "smooth" behaviour that used to need a held Shift). The
         // reshaping scope opened by the dispatcher resolves the `polygon` set.
-        const step = getSegmentGridStep()
+        const step = isGridSnapActive() ? getSegmentGridStep() : 0
         const snappedValue = step > 0 ? snapScalar(rawValue, step) : rawValue
         const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
         const centerOffset = (side * (newValue - initialValue)) / 2
@@ -236,7 +236,7 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
       // Mode-aware: `getSegmentGridStep()` is 0 outside grid mode (so `lines` /
       // `off` move freely), and the `moving` scope resolves the `polygon` set
       // via the kind's `snapProfile` — no held-Shift bypass.
-      const step = getSegmentGridStep()
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
       const snap = (value: number) => snapScalar(value, step)
       const worldPoint = resolveCursor(planPoint, { snap })
       const dx = worldPoint[0] - roofPosX

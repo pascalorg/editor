@@ -10,7 +10,7 @@ import {
   useLiveNodeOverrides,
   type WallNode,
 } from '@pascal-app/core'
-import { getSegmentGridStep, isAngleSnapActive } from '@pascal-app/editor'
+import { getSegmentGridStep, isAngleSnapActive, isGridSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 import {
   resolveLeanToEdgeSnapTargets,
@@ -60,7 +60,7 @@ export const leanToResizeAffordance: FloorplanAffordance<LeanToExtensionNode> = 
       apply({ planPoint, modifiers }) {
         const currentAxis = planPoint[0] * axis[0] + planPoint[1] * axis[1]
         const raw = initialValue + (currentAxis - initialAxis) * side
-        const step = modifiers.altKey ? 0 : getSegmentGridStep()
+        const step = !modifiers.altKey && isGridSnapActive() ? getSegmentGridStep() : 0
         const value = Math.max(0.5, step > 0 ? snapScalar(raw, step) : raw)
         if (dimension === 'projection') {
           lastPatch = {
