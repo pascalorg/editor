@@ -41,6 +41,7 @@ import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   type DormerWindowTarget,
   dormerEventFromHostedWindow,
+  getDormerWindowWorldNormal,
   getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
 } from '../shared/dormer-wall-opening-placement'
@@ -837,11 +838,16 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         roofFace: undefined,
         visible: false,
       })
+      const worldPosition = dormerWindowWorldPosition(event, target)
+      publishPlacementSurface(
+        new Vector3(...worldPosition),
+        getDormerWindowWorldNormal(event, target),
+      )
       setGhostPose({
-        position: dormerWindowWorldPosition(event, target),
+        position: worldPosition,
         rotationY: getDormerWindowWorldYaw(event, target),
         tint: target.valid || altHeld ? 'valid' : 'invalid',
-        floorY: dormerWindowWorldPosition(event, target)[1],
+        floorY: worldPosition[1],
         side,
       })
       useFacingPose.getState().clear()

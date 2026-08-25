@@ -24,10 +24,12 @@ import {
 import {
   calculateCursorRotation,
   calculateItemRotation,
+  clearPlacementSurface,
   EDITOR_LAYER,
   getSideFromNormal,
   isMagneticSnapActive,
   isValidWallSideFace,
+  publishPlacementSurface,
   snapToHalf,
   triggerSFX,
   useAlignmentGuides,
@@ -42,6 +44,7 @@ import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   type DormerWindowTarget,
   dormerEventFromHostedWindow,
+  getDormerWindowWorldNormal,
   getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
 } from '../shared/dormer-wall-opening-placement'
@@ -221,6 +224,7 @@ const WindowTool: React.FC = () => {
       clearOpeningGuides3D()
       setFallbackPose(null)
       useFacingPose.getState().clear()
+      clearPlacementSurface()
       clearPlacementPreview()
     }
 
@@ -347,12 +351,12 @@ const WindowTool: React.FC = () => {
 
       publishDraftPreview(event.node)
       clearOpeningGuides3D()
-      updateCursor(
-        dormerWindowWorldPosition(event, target),
-        getDormerWindowWorldYaw(event, target),
-        target.valid,
-        0,
+      const worldPosition = dormerWindowWorldPosition(event, target)
+      publishPlacementSurface(
+        new Vector3(...worldPosition),
+        getDormerWindowWorldNormal(event, target),
       )
+      updateCursor(worldPosition, getDormerWindowWorldYaw(event, target), target.valid, 0)
     }
 
     // Sill alignment (snap + guide): a sibling sill/centre/top wins over the

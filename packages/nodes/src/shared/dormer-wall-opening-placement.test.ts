@@ -9,6 +9,7 @@ import {
 import { Object3D } from 'three'
 import {
   dormerEventFromHostedWindow,
+  getDormerWindowWorldNormal,
   getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
   shouldWriteDormerWindowPreviewHost,
@@ -235,6 +236,27 @@ describe('getDormerWindowWorldYaw', () => {
         valid: true,
       }),
     ).toBeCloseTo(0.4 + Math.PI / 2)
+  })
+})
+
+describe('getDormerWindowWorldNormal', () => {
+  test('returns the world-space normal of a rotated dormer face', () => {
+    const dormer = DormerNode.parse({ id: 'dormer_test' })
+    const object = new Object3D()
+    object.rotation.y = 0.4
+    object.updateMatrixWorld(true)
+    const dormerEvent = { ...event(dormer, [0, 0, 0]), object }
+
+    const normal = getDormerWindowWorldNormal(dormerEvent, {
+      dormer,
+      face: 'right',
+      position: [0, 0, 0],
+      valid: true,
+    })
+
+    expect(normal.x).toBeCloseTo(Math.sin(0.4 + Math.PI / 2))
+    expect(normal.y).toBeCloseTo(0)
+    expect(normal.z).toBeCloseTo(Math.cos(0.4 + Math.PI / 2))
   })
 })
 

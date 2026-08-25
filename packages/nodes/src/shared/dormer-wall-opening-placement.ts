@@ -49,12 +49,20 @@ export function dormerEventFromHostedWindow(
 }
 
 export function getDormerWindowWorldYaw(event: DormerEvent, target: DormerWindowTarget): number {
+  const normal = getDormerWindowWorldNormal(event, target)
+  return Math.atan2(normal.x, normal.z)
+}
+
+export function getDormerWindowWorldNormal(
+  event: DormerEvent,
+  target: DormerWindowTarget,
+  out = dormerFaceNormal,
+): Vector3 {
   const frame = getDormerWallFaceFrame(event.node, target.face)
   event.object.updateWorldMatrix(true, false)
-  dormerFaceNormal
+  return out
     .set(Math.sin(frame.yaw), 0, Math.cos(frame.yaw))
     .transformDirection(event.object.matrixWorld)
-  return Math.atan2(dormerFaceNormal.x, dormerFaceNormal.z)
 }
 
 export function shouldWriteDormerWindowPreviewHost(
