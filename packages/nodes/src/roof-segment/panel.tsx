@@ -4,11 +4,14 @@ import {
   type AnyNode,
   type AnyNodeId,
   createDefaultRidgeVentsForSegment,
+  isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
+  normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
   RoofSegmentNode as RoofSegmentNodeSchema,
+  type RoofSegmentTrim,
   type RoofType,
   useScene,
 } from '@pascal-app/core'
@@ -24,7 +27,7 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, Move, Trash2 } from 'lucide-react'
+import { Check, Copy, Move, Pencil, RotateCcw, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 
 const ROOF_TYPE_OPTIONS: { label: string; value: RoofType }[] = [
@@ -49,8 +52,36 @@ const PITCH_PRESETS: { label: string; deg: number }[] = [
   { label: '12/12', deg: 45 },
 ]
 
+const EMPTY_TRIM: RoofSegmentTrim = {
+  left: 0,
+  right: 0,
+  front: 0,
+  back: 0,
+  frontLeft: 0,
+  frontRight: 0,
+  backLeft: 0,
+  backRight: 0,
+  frontLeftX: 0,
+  frontLeftZ: 0,
+  frontRightX: 0,
+  frontRightZ: 0,
+  backLeftX: 0,
+  backLeftZ: 0,
+  backRightX: 0,
+  backRightZ: 0,
+}
+
+function hasSegmentTrim(node: RoofSegmentNode): boolean {
+  return Object.values(normalizeRoofSegmentTrim(node)).some((value) => value > 0)
+}
+
 function shouldShowTrimPlanes(metadata: unknown): boolean {
   return metadataRecord(metadata).showTrimPlanes === true
+}
+
+function isManagedLeanToRoofSegment(metadata: unknown): boolean {
+  const record = metadataRecord(metadata)
+  return record.managedByLeanTo !== undefined && record.leanToRole === 'roof-segment'
 }
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -77,6 +108,13 @@ export default function RoofSegmentPanel() {
     if (current?.type !== 'roof-segment') return false
     return isAutoRidgeVentEnabled(current, s.nodes)
   })
+  const autoGutterEnabled = useScene((s) => {
+    const current = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as RoofSegmentNode | undefined)
+      : undefined
+    if (current?.type !== 'roof-segment') return false
+    return isAutoGutterEnabled(current, s.nodes)
+  })
 
   const handleUpdate = useCallback(
     (updates: Partial<RoofSegmentNode>) => {
@@ -88,6 +126,7 @@ export default function RoofSegmentPanel() {
 
   const handleRoofTypeChange = useCallback(
     (roofType: RoofType) => {
+      if (isManagedLeanToRoofSegment(node?.metadata)) return
       // Switching to Dutch resets the shape parameters to their defaults so the
       // gablet is well-formed regardless of the leftover values from the
       // previous roof type.
@@ -104,19 +143,29 @@ export default function RoofSegmentPanel() {
           : { roofType },
       )
     },
-    [handleUpdate],
+    [handleUpdate, node?.metadata],
   )
 
   const handleClose = useCallback(() => {
+    if (node && shouldShowTrimPlanes(node.metadata)) {
+      updateNode(node.id, {
+        metadata: { ...metadataRecord(node.metadata), showTrimPlanes: false },
+      })
+    }
     setSelection({ selectedIds: [] })
-  }, [setSelection])
+  }, [node, setSelection, updateNode])
 
   const handleBack = useCallback(() => {
     if (node?.parentId) {
+      if (shouldShowTrimPlanes(node.metadata)) {
+        updateNode(node.id, {
+          metadata: { ...metadataRecord(node.metadata), showTrimPlanes: false },
+        })
+      }
       setRoofHostDragArmedId(node.parentId as AnyNodeId)
       setSelection({ selectedIds: [node.parentId] })
     }
-  }, [node?.parentId, setRoofHostDragArmedId, setSelection])
+  }, [node, setRoofHostDragArmedId, setSelection, updateNode])
 
   const handleDuplicate = useCallback(() => {
     if (!node?.parentId) return
@@ -205,9 +254,40 @@ export default function RoofSegmentPanel() {
     [selectedId],
   )
 
+  const handleAutoGutterToggle = useCallback(
+    (checked: boolean) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const current = scene.nodes[selectedId as AnyNodeId] as RoofSegmentNode | undefined
+      if (current?.type !== 'roof-segment') return
+      scene.updateNode(selectedId as AnyNodeId, {
+        metadata: { ...metadataRecord(current.metadata), autoGutter: checked },
+      })
+    },
+    [selectedId],
+  )
+
+  const handleTrimEditing = useCallback(
+    (editing: boolean) => {
+      if (!node) return
+      triggerSFX('sfx:item-pick')
+      handleUpdate({
+        metadata: { ...metadataRecord(node.metadata), showTrimPlanes: editing },
+      })
+    },
+    [handleUpdate, node],
+  )
+
+  const handleResetTrim = useCallback(() => {
+    if (!node || !hasSegmentTrim(node)) return
+    triggerSFX('sfx:item-pick')
+    handleUpdate({ trim: EMPTY_TRIM })
+  }, [handleUpdate, node])
+
   if (!(node && node.type === 'roof-segment' && selectedId)) return null
 
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
+  const managedLeanToRoofSegment = isManagedLeanToRoofSegment(node.metadata)
 
   return (
     <PanelWrapper
@@ -222,24 +302,37 @@ export default function RoofSegmentPanel() {
           onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS}
           value={node.roofType}
+          disabled={managedLeanToRoofSegment}
         />
         <SegmentedControl
           onChange={(v) => handleRoofTypeChange(v)}
           options={ROOF_TYPE_OPTIONS_2}
           value={node.roofType}
+          disabled={managedLeanToRoofSegment}
         />
       </PanelSection>
 
       <PanelSection title="Trim">
-        <ToggleControl
-          checked={showTrimPlanes}
-          label="Show trim planes"
-          onChange={(checked) =>
-            handleUpdate({
-              metadata: { ...metadataRecord(node.metadata), showTrimPlanes: checked },
-            })
-          }
-        />
+        <ActionGroup>
+          <ActionButton
+            icon={
+              showTrimPlanes ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : (
+                <Pencil className="h-3.5 w-3.5" />
+              )
+            }
+            label={showTrimPlanes ? 'Done editing' : 'Edit footprint'}
+            onClick={() => (showTrimPlanes ? handleBack() : handleTrimEditing(true))}
+          />
+          <ActionButton
+            className="disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!hasSegmentTrim(node)}
+            icon={<RotateCcw className="h-3.5 w-3.5" />}
+            label="Reset"
+            onClick={handleResetTrim}
+          />
+        </ActionGroup>
         {node.roofType !== 'shed' && node.roofType !== 'flat' && (
           <ToggleControl
             checked={autoRidgeVentEnabled}
@@ -247,6 +340,14 @@ export default function RoofSegmentPanel() {
             onChange={handleAutoRidgeVentToggle}
           />
         )}
+      </PanelSection>
+
+      <PanelSection title="Drainage">
+        <ToggleControl
+          checked={autoGutterEnabled}
+          label="Auto gutters"
+          onChange={handleAutoGutterToggle}
+        />
       </PanelSection>
 
       <PanelSection title="Footprint">

@@ -232,7 +232,7 @@ export function syncAutoElevatorOpenings(nodes: Record<string, AnyNode>) {
       }))
 
     const declaredHoles = openingOwners
-      .filter(({ node, config }) => config.servesLevel(node, levelId, nodes))
+      .filter(({ node, config }) => config.servesLevel(node, levelId, nodes, surface.type))
       .map(({ node, config }) => ({
         polygon: config.polygon(node, nodes) as Point2D[],
         metadata: { ownerId: node.id, source: 'verticalOpening' as const },

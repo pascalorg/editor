@@ -90,12 +90,14 @@ export async function loadExternalPlugins(): Promise<void> {
 // so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel({ ...treesHostPanel, defaultInstalled: false })
+
 extendPluginDiscovery(async () => [bonesPlugin])
 // Opt-in: Bones ships uninstalled — users enable it per scene from the
 // Plugins panel (engineering X-ray is a specialist view, not a default).
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel({ ...mintHostPanel, defaultInstalled: false })
+
 extendPluginDiscovery(async () => [streetscapePlugin])
 // The upstream manifest still names 'Pascal' as creator; credit the author.
 registerEditorHostPanel({

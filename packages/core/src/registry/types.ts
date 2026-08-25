@@ -793,6 +793,8 @@ export type FloorplanAffordance<N> = {
     initialPlanPoint: FloorplanAffordancePoint
     /** Active editor grid step in meters. */
     gridSnapStep: number
+    /** Injected mutation/read seam for kind-owned affordances. */
+    sceneApi?: SceneApi
   }): FloorplanAffordanceSession
 }
 
@@ -875,6 +877,7 @@ export type FloorplanMoveTargetSession = {
 export type FloorplanMoveTarget<N> = (args: {
   node: N
   nodes: Record<AnyNodeId, AnyNode>
+  sceneApi?: SceneApi
 }) => FloorplanMoveTargetSession
 
 // ─── Plugin manifest ─────────────────────────────────────────────────
@@ -1436,6 +1439,8 @@ export type Presentation = {
   icon: IconRef
   /** Tool palette section. Defaults to `category` when omitted. */
   paletteSection?: 'site' | 'structure' | 'furnish'
+  /** Optional presentation-only subgroup used by palette surfaces. */
+  paletteGroup?: string
   /** Sort key within a palette section; lower numbers come first. */
   paletteOrder?: number
   /** Set true for kinds that exist but should NOT appear in the palette
@@ -1964,6 +1969,28 @@ export type MovableConfig = {
    * run snapping flush to a wall while the whole selected kitchen moves as one).
    */
   groupMoveSnap?: (args: GroupMoveSnapArgs) => [number, number, number] | null
+  /**
+   * Kind-owned validity test for a candidate drop, run on every pointer move
+   * of a drag. Returning false paints the drag box red and refuses the drop;
+   * Alt forces it, exactly as it does for `floorPlaced.collides`.
+   *
+   * `collides` answers the same question from the spatial grid, which compares
+   * plan rectangles and sees no Y at all. That is right for furniture on a
+   * floor and wrong for anything whose usable volume is mostly air: to the grid
+   * a conveyor threading the walkway under a racking run is indistinguishable
+   * from one driven through its uprights, so such kinds must leave `collides`
+   * off — and then nothing checked their moves at all. They could be placed
+   * correctly and then dragged into solid steel.
+   *
+   * Declaring this does not switch `collides` on: the two compose, and a kind
+   * may declare either, both, or neither.
+   */
+  canMoveTo?: (args: {
+    node: AnyNode
+    position: [number, number, number]
+    rotationY: number
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => boolean
   override?: (ctx: CapabilityCtx) => MovableConfig | null
 }
 
@@ -2177,11 +2204,23 @@ export type VerticalOpeningConfig = {
    */
   polygon: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => Array<[number, number]>
   /**
-   * Whether this node passes through the given level's floor. Called once per
+   * Whether this node passes through the given surface. Called once per
    * candidate surface, so the kind decides its own service range — a lift
    * serving floors 1-3 answers true for 2 and 3 and false for 4.
+   *
+   * `surface` matters because a level's slab and its ceiling sit at opposite
+   * ends of the level: for a shaft spanning floors 1-3 the cut slabs are 2 and
+   * 3, while the cut ceilings are 1 and 2. A predicate that cannot tell them
+   * apart is wrong at one end or the other — it either leaves the ceiling of
+   * the bottom floor sealed across the shaft, or cuts a hole in the ceiling of
+   * the top one.
    */
-  servesLevel: (node: AnyNode, levelId: string, nodes: Readonly<Record<string, AnyNode>>) => boolean
+  servesLevel: (
+    node: AnyNode,
+    levelId: string,
+    nodes: Readonly<Record<string, AnyNode>>,
+    surface: 'slab' | 'ceiling',
+  ) => boolean
 }
 
 export type FloorPlacedConfig = {
@@ -2249,7 +2288,7 @@ export type ParametricDescriptor<N> = {
    * Direct store/MCP writes bypass it — keep real invariants in
    * `invariants`.
    */
-  derive?: (next: N, patch: Partial<N>) => Partial<N>
+  derive?: (next: N, patch: Partial<N>, previous?: N) => Partial<N>
   /**
    * Cross-node companion to `derive`: after an inspector edit lands on
    * this node, return patches for OTHER nodes that must follow to keep
@@ -2326,6 +2365,7 @@ export type ParamGroup<N> = {
 export type ParamField<N> =
   | {
       key: keyof N
+      label?: string
       kind: 'number'
       unit?: string
       min?: number
@@ -2334,9 +2374,10 @@ export type ParamField<N> =
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }
-  | { key: keyof N; kind: 'boolean'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'boolean'; visibleIf?: (n: N) => boolean }
   | {
       key: keyof N
+      label?: string
       kind: 'enum'
       options: readonly string[]
       /** Defaults to 'select' (dropdown). 'segmented' renders the inline
@@ -2344,10 +2385,10 @@ export type ParamField<N> =
       display?: 'select' | 'segmented'
       visibleIf?: (n: N) => boolean
     }
-  | { key: keyof N; kind: 'vec3'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; kind: 'color'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; kind: 'material'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'vec3'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'color'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'material'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
   /** Escape hatch for fields that don't map to a single node key —
    *  derived values (`length` from `start`/`end`), sliders with
    *  dynamic min/max (curve sagitta bounded by chord length),
@@ -2355,6 +2396,7 @@ export type ParamField<N> =
    *  update logic. `key` here is just a stable React key/label. */
   | {
       key: string
+      label?: string
       kind: 'custom'
       component: ComponentType<{ node: N; onUpdate: (patch: Partial<N>) => void }>
       visibleIf?: (n: N) => boolean
@@ -2406,6 +2448,19 @@ export type SceneApi = {
   nodes: () => Readonly<Record<AnyNodeId, AnyNode>>
   update: (id: AnyNodeId, patch: Partial<AnyNode>) => void
   upsert: (node: AnyNode, parentId?: AnyNodeId) => AnyNodeId
+  createMany?: (ops: { node: AnyNode; parentId?: AnyNodeId }[]) => void
+  applyChanges?: (changes: {
+    create?: { node: AnyNode; parentId?: AnyNodeId }[]
+    update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
+    delete?: AnyNodeId[]
+  }) => void
+  subscribeNodes?: (
+    listener: (
+      nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+      previous: Readonly<Record<AnyNodeId, AnyNode>>,
+      changedIds: ReadonlySet<AnyNodeId>,
+    ) => void,
+  ) => () => void
   delete: (id: AnyNodeId) => void
   restore: (id: AnyNodeId) => void
   restoreAll: () => void

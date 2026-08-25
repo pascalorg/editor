@@ -355,11 +355,7 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
-export {
-  filterEditableIds,
-  isNodeEditLocked,
-  isNodeIdEditLocked,
-} from './lib/edit-lock'
+export { filterEditableIds, isNodeEditLocked, isNodeIdEditLocked } from './lib/edit-lock'
 export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,
@@ -570,7 +566,11 @@ export {
   snapBuildingLocalToWorldGrid,
   snapWorldXZForActiveBuilding,
 } from './lib/world-grid-snap'
-export { collectZoneContentIds, collectZoneObjectIds } from './lib/zone-content'
+export {
+  collectZoneContentIds,
+  collectZoneObjectIds,
+  collectZoneObjectLabels,
+} from './lib/zone-content'
 export { subscribeCameraPose } from './store/camera-pose-store'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'

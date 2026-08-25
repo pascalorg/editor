@@ -8,6 +8,11 @@ import {
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import {
+  applyCylinderWorldUvs,
+  applyPlanarWorldUvs,
+  copyUvToSecondaryChannel,
+} from '../shared/primitive-uv'
 import { type GutterMitres, NO_MITRES } from './corner-mitre'
 import {
   OUTLET_STUB_LENGTH,
@@ -100,7 +105,7 @@ export function buildGutterGeometry(
     depth: channelLen,
     bevelEnabled: false,
     curveSegments: 16,
-    steps: 1,
+    steps: gutterArcSteps(node, channelLen),
   })
   // Apply the corner-mitre skew while we're still in the source frame.
   // Source axes (pre-rotation): X_cs = outward, Y_cs = vertical,
@@ -158,7 +163,7 @@ export function buildGutterGeometry(
       depth: capLeftLen,
       bevelEnabled: false,
       curveSegments: 16,
-      steps: 1,
+      steps: gutterArcSteps(node, capLeftLen),
     })
     leftCap.rotateY(-Math.PI / 2)
     // Left cap spans [-len/2, -len/2 + capLeftLen]: translate by
@@ -173,7 +178,7 @@ export function buildGutterGeometry(
       depth: capRightLen,
       bevelEnabled: false,
       curveSegments: 16,
-      steps: 1,
+      steps: gutterArcSteps(node, capRightLen),
     })
     rightCap.rotateY(-Math.PI / 2)
     // Right cap spans [+len/2 - capRightLen, +len/2].
@@ -217,7 +222,11 @@ export function buildGutterGeometry(
   // CSG drill — punches each bore through the merged geometry. Runs
   // last so the floor + collars are already in one mesh; each drill
   // cuts both at once, subtracted sequentially.
-  if (placements.length > 0) {
+  // Subtracting a near-end outlet from an already subdivided curved run makes
+  // three-bvh-csg discard the complete cross-section around the drill, leaving
+  // a visible break in the fascia. Keep the curved trough watertight; its collar
+  // and connected downspout still conceal the floor where the bore would sit.
+  if (placements.length > 0 && !node.arc) {
     let workingBrush = new Brush(merged)
     prepareBrushForCSG(workingBrush)
     for (const p of placements) {
@@ -234,10 +243,122 @@ export function buildGutterGeometry(
     }
     const cutGeometry = csgGeometry(workingBrush)
     merged.dispose()
-    return cutGeometry
+    const finished = bendGutterGeometryAlongArc(cutGeometry, node, mitres)
+    copyUvToSecondaryChannel(finished)
+    return finished
   }
 
-  return merged
+  const finished = bendGutterGeometryAlongArc(merged, node, mitres)
+  copyUvToSecondaryChannel(finished)
+  return finished
+}
+
+function gutterArcSteps(node: GutterNode, length: number): number {
+  if (!node.arc || !Number.isFinite(node.arc.radius)) return 1
+  return Math.max(1, Math.min(32, Math.ceil(length / 0.4)))
+}
+
+// Bend the finished straight gutter (length along mesh-+X, outward along mesh-+Z)
+// onto its stored concentric arc. Each vertex keeps its vertical Y; its (x, z) rotate
+// about the arc center by the angle its along-length coordinate subtends, so the trough
+// hugs the same circle as the deck's eave. Absent `arc` is a straight no-op.
+function bendGutterGeometryAlongArc(
+  geometry: THREE.BufferGeometry,
+  node: GutterNode,
+  mitres: GutterMitres,
+): THREE.BufferGeometry {
+  const arc = node.arc
+  if (!arc || !Number.isFinite(arc.radius)) return geometry
+  const signedRef = (Math.sign(arc.centerZ) || 1) * arc.radius
+  const position = geometry.attributes.position!
+  const metadata =
+    node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
+      ? (node.metadata as Record<string, unknown>)
+      : {}
+  const rawStraightEnds = metadata.leanToGutterArcStraightEnds
+  const straightEnds =
+    rawStraightEnds && typeof rawStraightEnds === 'object' && !Array.isArray(rawStraightEnds)
+      ? (rawStraightEnds as Record<string, unknown>)
+      : {}
+  const straightEnd = (side: 'left' | 'right') => {
+    const raw = straightEnds[side]
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+    const value = raw as Record<string, unknown>
+    return typeof value.startX === 'number' && typeof value.endX === 'number'
+      ? { startX: value.startX, endX: value.endX }
+      : null
+  }
+  const leftStraight = straightEnd('left')
+  const rightStraight = straightEnd('right')
+  const bendPoint = (x: number, z: number, phi: number) => {
+    const radial = z - arc.centerZ
+    return {
+      x: arc.centerX - radial * Math.sin(phi),
+      z: arc.centerZ + radial * Math.cos(phi),
+    }
+  }
+  const bendMitredEnd = (x: number, z: number, endX: number) => {
+    const phi = (endX - arc.centerX) / signedRef
+    const base = bendPoint(endX, z, phi)
+    const extension = x - endX
+    return {
+      x: base.x + extension * Math.cos(phi),
+      z: base.z + extension * Math.sin(phi),
+    }
+  }
+  const bendStraightEnd = (x: number, z: number, transition: { startX: number; endX: number }) => {
+    const startPhi = (transition.startX - arc.centerX) / signedRef
+    const endPhi = (transition.endX - arc.centerX) / signedRef
+    const start = bendPoint(transition.startX, 0, startPhi)
+    const end = bendPoint(transition.endX, 0, endPhi)
+    const spanX = transition.endX - transition.startX
+    const direction = Math.sign(spanX) || 1
+    const beyondEnd = Math.max(0, (x - transition.endX) * direction)
+    const pathX = x - beyondEnd * direction
+    const ratio = Math.abs(spanX) > 1e-6 ? (pathX - transition.startX) / spanX : 0
+    let centerX = start.x + (end.x - start.x) * ratio
+    let centerZ = start.z + (end.z - start.z) * ratio
+    const chordLength = Math.hypot(end.x - start.x, end.z - start.z)
+    const tangentX = chordLength > 1e-6 ? (end.x - start.x) / chordLength : Math.cos(startPhi)
+    const tangentZ = chordLength > 1e-6 ? (end.z - start.z) / chordLength : Math.sin(startPhi)
+    centerX += beyondEnd * tangentX
+    centerZ += beyondEnd * tangentZ
+    let normalX = -tangentZ
+    let normalZ = tangentX
+    const midPhi = (startPhi + endPhi) / 2
+    if (normalX * -Math.sin(midPhi) + normalZ * Math.cos(midPhi) < 0) {
+      normalX = -normalX
+      normalZ = -normalZ
+    }
+    return { x: centerX + z * normalX, z: centerZ + z * normalZ }
+  }
+  const rightTan = Math.tan(mitres.right)
+  const leftTan = Math.tan(mitres.left)
+  const halfLength = Math.max(0.05, node.length) / 2
+  const endEpsilon = 1e-4
+  for (let index = 0; index < position.count; index++) {
+    const x = position.getX(index)
+    const z = position.getZ(index)
+    const onRightMitre =
+      mitres.right !== 0 && Math.abs(x - (halfLength + z * rightTan)) < endEpsilon
+    const onLeftMitre = mitres.left !== 0 && Math.abs(x - (-halfLength - z * leftTan)) < endEpsilon
+    const onRightStraight = rightStraight && x >= rightStraight.startX - endEpsilon
+    const onLeftStraight = leftStraight && x <= leftStraight.startX + endEpsilon
+    const bent = onRightStraight
+      ? bendStraightEnd(x, z, rightStraight)
+      : onLeftStraight
+        ? bendStraightEnd(x, z, leftStraight)
+        : onRightMitre
+          ? bendMitredEnd(x, z, halfLength)
+          : onLeftMitre
+            ? bendMitredEnd(x, z, -halfLength)
+            : bendPoint(x, z, (x - arc.centerX) / signedRef)
+    position.setX(index, bent.x)
+    position.setZ(index, bent.z)
+  }
+  position.needsUpdate = true
+  geometry.computeVertexNormals()
+  return geometry
 }
 
 // Remove the extrude's cross-section CAP triangles at a mitred end so two
@@ -498,6 +619,7 @@ function buildHangers(
       HANGER_BAR_THICKNESS,
       strapDepth,
     ).toNonIndexed()
+    applyPlanarWorldUvs(bar)
     // Center the bar at X = position, Y just above the rim line, Z
     // straddling 0 so the strap covers the full back-to-front span.
     bar.translate(x, HANGER_BAR_THICKNESS / 2 + 0.001, rimWidth / 2)
@@ -571,14 +693,18 @@ function resolveOutletPlacements(
 /** Cylinder (round) or box (rect) sized to `dims`, height `h` along Y. */
 function outletSolid(dims: OutletDims, h: number): THREE.BufferGeometry {
   if (dims.shape === 'round') {
-    return new THREE.CylinderGeometry(
+    const geometry = new THREE.CylinderGeometry(
       dims.halfX,
       dims.halfX,
       h,
       OUTLET_RADIAL_SEGMENTS,
     ).toNonIndexed()
+    applyCylinderWorldUvs(geometry, dims.halfX, h)
+    return geometry
   }
-  return new THREE.BoxGeometry(2 * dims.halfX, h, 2 * dims.halfZ).toNonIndexed()
+  const geometry = new THREE.BoxGeometry(2 * dims.halfX, h, 2 * dims.halfZ).toNonIndexed()
+  applyPlanarWorldUvs(geometry)
+  return geometry
 }
 
 /**
@@ -607,12 +733,14 @@ function buildOutletFunnel(p: OutletPlacement, size: number): THREE.BufferGeomet
       OUTLET_FLARE_HEIGHT,
       OUTLET_RADIAL_SEGMENTS,
     ).toNonIndexed()
+    applyCylinderWorldUvs(funnel, p.outer.halfX * OUTLET_FLARE_SCALE, OUTLET_FLARE_HEIGHT)
   } else {
     funnel = new THREE.BoxGeometry(
       2 * p.outer.halfX * OUTLET_FLARE_SCALE,
       OUTLET_FLARE_HEIGHT,
       2 * p.outer.halfZ * OUTLET_FLARE_SCALE,
     ).toNonIndexed()
+    applyPlanarWorldUvs(funnel)
   }
   funnel.translate(p.x, centerY, p.z)
   return funnel

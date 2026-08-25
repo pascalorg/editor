@@ -15,10 +15,13 @@ import { useEffect, useRef } from 'react'
 import type { Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
 import useViewer, { type WallMode } from '../../store/use-viewer'
+import { resolveWallMaterialVariant, type WallMaterialVariant } from './wall-material-variant'
 import {
+  getHoverHighlightMaterials,
   getMaterialsForWall,
   getSelectionHighlightMaterials,
   getWallMaterialHash,
+  type WallMaterials,
 } from './wall-materials'
 
 const tmpVec = new Vector3()
@@ -90,6 +93,36 @@ export function resolveSelectionHighlight(
   return !getWallFaceBandConfig(wall, effectiveWallHeight()).enabled
 }
 
+/** Materialize a resolved variant from the wall's cached material set. */
+function materialsForVariant(variant: WallMaterialVariant, materials: WallMaterials) {
+  switch (variant) {
+    case 'visible':
+      return materials.visible
+    case 'invisible':
+      return materials.invisible
+    case 'translucent':
+      return materials.translucent
+    case 'delete-visible':
+      return materials.deleteVisible
+    case 'delete-invisible':
+      return materials.deleteInvisible
+    case 'delete-translucent':
+      return materials.deleteTranslucent
+    case 'selection-visible':
+      return getSelectionHighlightMaterials(materials.visible)
+    case 'selection-invisible':
+      return getSelectionHighlightMaterials(materials.invisible)
+    case 'selection-translucent':
+      return getSelectionHighlightMaterials(materials.translucent)
+    case 'hover-invisible':
+      return getHoverHighlightMaterials(materials.invisible)
+    default: {
+      const exhaustive: never = variant
+      return exhaustive
+    }
+  }
+}
+
 export const WallCutout = () => {
   const lastCameraPosition = useRef(new Vector3())
   const lastCameraTarget = useRef(new Vector3())
@@ -136,7 +169,20 @@ export const WallCutout = () => {
       sceneState.nodes[hoveredId as AnyNodeId]?.type === 'wall'
         ? hoveredId
         : null
-    const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${deleteHoveredWallId ?? ''}`
+    // Select-mode hover on a wall — the affordance for HIDDEN walls, which
+    // are hover/selection ray targets in X-ray (nearest-first) but draw
+    // (almost) nothing: the hovered wall's stipple film glows so the user
+    // sees WHAT the click would select instead of the furniture behind it
+    // lighting up through the wall. Scoped to the default hover mode so the
+    // paint-preview flows (which snapshot + restore mesh.material
+    // themselves) never interleave with this swap.
+    const selectHoveredWallId =
+      hoverHighlightMode === 'default' &&
+      hoveredId &&
+      sceneState.nodes[hoveredId as AnyNodeId]?.type === 'wall'
+        ? hoveredId
+        : null
+    const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${deleteHoveredWallId ?? ''}::${selectHoveredWallId ?? ''}`
     // Sorting every wall id, hashing each wall's material and JSON-dumping its
     // face bands is a full-scene scan; its inputs are immutable store slices,
     // so identity is enough to know the key cannot have changed.
@@ -191,6 +237,19 @@ export const WallCutout = () => {
         if (wallNode?.type !== 'wall') return
 
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
+        // Pointer transparency for hidden walls: the wall's full-height
+        // collision mesh keeps raycasting even when the wall draws with the
+        // invisible material ('down' mode, cutaway-hidden faces, auto-mode
+        // interior partitions), so it silently swallows clicks aimed at
+        // VISIBLE objects standing behind it — e.g. a plugin's wall-mounted
+        // device/service boxes in X-ray mode (night-5 D4: the arm click on a
+        // south-wall receptacle selected an invisible wall two meters in
+        // front of it instead, and the follow-up click committed a WALL
+        // move). The wall renderer's pointer handlers read this stamp and
+        // pass hidden walls through (delete mode excepted — hidden walls
+        // must stay hover-targetable for deletion). Translucent walls are
+        // visible, so they keep their events.
+        ;(wallMesh as Mesh).userData.wallHidden = wallMode !== 'translucent' && hideWall
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
         const shouldSelectionHighlight = resolveSelectionHighlight(
@@ -222,25 +281,14 @@ export const WallCutout = () => {
           sceneState.materials,
         )
 
-        if (wallMode === 'translucent') {
-          ;(wallMesh as Mesh).material = isDeleteHighlighted
-            ? materials.deleteTranslucent
-            : shouldSelectionHighlight
-              ? getSelectionHighlightMaterials(materials.translucent)
-              : materials.translucent
-        } else if (hideWall) {
-          ;(wallMesh as Mesh).material = isDeleteHighlighted
-            ? materials.deleteInvisible
-            : shouldSelectionHighlight
-              ? getSelectionHighlightMaterials(materials.invisible)
-              : materials.invisible
-        } else {
-          ;(wallMesh as Mesh).material = isDeleteHighlighted
-            ? materials.deleteVisible
-            : shouldSelectionHighlight
-              ? getSelectionHighlightMaterials(materials.visible)
-              : materials.visible
-        }
+        const variant = resolveWallMaterialVariant({
+          translucentMode: wallMode === 'translucent',
+          hidden: hideWall,
+          deleteHighlighted: isDeleteHighlighted,
+          selectionHighlighted: shouldSelectionHighlight,
+          hoverHighlighted: selectHoveredWallId === wallId,
+        })
+        ;(wallMesh as Mesh).material = materialsForVariant(variant, materials)
       })
       lastWallMode.current = wallMode
       lastShading.current = shading

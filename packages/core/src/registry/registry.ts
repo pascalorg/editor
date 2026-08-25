@@ -171,8 +171,7 @@ export function isPluginContributedKind(kind: string): boolean {
   return !!pluginId && pluginId !== BUILTIN_PLUGIN_ID
 }
 
-/**
- * Whether a registered kind should participate in a project. Kinds registered
+/** * Whether a registered kind should participate in a project. Kinds registered
  * directly by the host and the built-in plugin are always enabled. An omitted
  * install list means a legacy scene whose plugin state predates persistence, so
  * loaded plugins remain visible for backward compatibility.

@@ -1,5 +1,17 @@
 import type { CupolaNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import {
+  copyUvToSecondaryChannel,
+  cumulativeProfileDistances,
+  type MetricUv,
+  planarMetricUvs,
+} from '../shared/primitive-uv'
+
+export const CUPOLA_MATERIAL_INDEX = {
+  base: 0,
+  body: 1,
+  roof: 2,
+} as const
 
 /**
  * Pure builder for the cupola mesh — a small louvered roof lantern:
@@ -47,13 +59,17 @@ export function buildCupolaGeometry(node: CupolaNode): THREE.BufferGeometry {
 
   // Base plinth (slightly wider than the body) — closed box.
   addBox(p, n, uv, hw + baseOvh, hd + baseOvh, 0, baseTop)
+  const baseEnd = p.length / 3
   // Body — closed box; the louvers are applied as relief on its walls.
   addBox(p, n, uv, hw, hd, baseTop, bodyTop)
+  const bodyEnd = p.length / 3
   // Cornice — overhanging slab the roof sits on.
   addBox(p, n, uv, hw + cornOvh, hd + cornOvh, bodyTop, corniceTop)
+  const corniceEnd = p.length / 3
 
   // Louvered slats on all four body faces.
   addLouvers(p, n, uv, hw, hd, baseTop, bodyTop)
+  const louversEnd = p.length / 3
 
   // Roof.
   const rhw = hw + cornOvh
@@ -77,6 +93,12 @@ export function buildCupolaGeometry(node: CupolaNode): THREE.BufferGeometry {
   geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3))
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3))
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  geo.addGroup(0, baseEnd, CUPOLA_MATERIAL_INDEX.base)
+  geo.addGroup(baseEnd, bodyEnd - baseEnd, CUPOLA_MATERIAL_INDEX.body)
+  geo.addGroup(bodyEnd, corniceEnd - bodyEnd, CUPOLA_MATERIAL_INDEX.roof)
+  geo.addGroup(corniceEnd, louversEnd - corniceEnd, CUPOLA_MATERIAL_INDEX.body)
+  geo.addGroup(louversEnd, p.length / 3 - louversEnd, CUPOLA_MATERIAL_INDEX.roof)
+  copyUvToSecondaryChannel(geo)
   geo.computeBoundingSphere()
   return geo
 }
@@ -191,18 +213,36 @@ function addDomeRoof(
   const lng = 20
   const lat = 6
   let prev = ringAt(rx, rz, y0, lng)
+  let prevU = cumulativeProfileDistances(prev)
+  let domeV = 0
   for (let i = 1; i <= lat; i++) {
     const phi = (Math.PI / 2) * (i / lat)
     const rf = Math.cos(phi)
     const y = y0 + domeH * Math.sin(phi)
     const ring = ringAt(rx * rf, rz * rf, y, lng)
-    addBand(p, n, uv, prev, ring, lng, (a, _b, c) => {
-      const x = (a[0]! + c[0]!) / 2
-      const yy = (a[1]! + c[1]!) / 2 - y0
-      const z = (a[2]! + c[2]!) / 2
-      return [x, yy, z]
-    })
+    const ringU = cumulativeProfileDistances(ring)
+    const nextV = domeV + averageProfileDistance(prev, ring)
+    addBand(
+      p,
+      n,
+      uv,
+      prev,
+      ring,
+      lng,
+      (a, _b, c) => {
+        const x = (a[0]! + c[0]!) / 2
+        const yy = (a[1]! + c[1]!) / 2 - y0
+        const z = (a[2]! + c[2]!) / 2
+        return [x, yy, z]
+      },
+      prevU,
+      ringU,
+      domeV,
+      nextV,
+    )
     prev = ring
+    prevU = ringU
+    domeV = nextV
   }
 }
 
@@ -219,29 +259,60 @@ function addCylinder(
   const lng = 12
   const bottom = ringAt(r, r, y0, lng)
   const top = ringAt(r, r, y1, lng)
-  addBand(p, n, uv, bottom, top, lng, (a, _b, c) => {
-    const x = (a[0]! + c[0]!) / 2
-    const z = (a[2]! + c[2]!) / 2
-    return [x, 0, z]
-  })
+  const ringU = cumulativeProfileDistances(bottom)
+  addBand(
+    p,
+    n,
+    uv,
+    bottom,
+    top,
+    lng,
+    (a, _b, c) => {
+      const x = (a[0]! + c[0]!) / 2
+      const z = (a[2]! + c[2]!) / 2
+      return [x, 0, z]
+    },
+    ringU,
+    ringU,
+    y0,
+    y1,
+  )
 }
 
 function addSphere(p: number[], n: number[], uv: number[], r: number, cy: number): void {
   const lng = 14
   const lat = 8
   let prev = ringAt(0, 0, cy - r, lng)
+  let prevU = cumulativeProfileDistances(prev)
+  let sphereV = 0
   for (let i = 1; i <= lat; i++) {
     const theta = Math.PI * (i / lat) - Math.PI / 2
     const ry = r * Math.sin(theta)
     const rr = r * Math.cos(theta)
     const ring = ringAt(rr, rr, cy + ry, lng)
-    addBand(p, n, uv, prev, ring, lng, (a, _b, c) => {
-      const x = (a[0]! + c[0]!) / 2
-      const yy = (a[1]! + c[1]!) / 2 - cy
-      const z = (a[2]! + c[2]!) / 2
-      return [x, yy, z]
-    })
+    const ringU = cumulativeProfileDistances(ring)
+    const nextV = sphereV + averageProfileDistance(prev, ring)
+    addBand(
+      p,
+      n,
+      uv,
+      prev,
+      ring,
+      lng,
+      (a, _b, c) => {
+        const x = (a[0]! + c[0]!) / 2
+        const yy = (a[1]! + c[1]!) / 2 - cy
+        const z = (a[2]! + c[2]!) / 2
+        return [x, yy, z]
+      },
+      prevU,
+      ringU,
+      sphereV,
+      nextV,
+    )
     prev = ring
+    prevU = ringU
+    sphereV = nextV
   }
 }
 
@@ -264,14 +335,35 @@ function addBand(
   rB: number[][],
   lng: number,
   hintFn: (a: number[], b: number[], c: number[], d: number[]) => number[],
+  uA = cumulativeProfileDistances(rA),
+  uB = cumulativeProfileDistances(rB),
+  vA = 0,
+  vB = averageProfileDistance(rA, rB),
 ): void {
   for (let j = 0; j < lng; j++) {
     const a = rA[j]!
     const b = rA[j + 1]!
     const c = rB[j + 1]!
     const d = rB[j]!
-    pushQuad(p, n, uv, a, b, c, d, hintFn(a, b, c, d))
+    pushQuad(p, n, uv, a, b, c, d, hintFn(a, b, c, d), [
+      [uA[j]!, vA],
+      [uA[j + 1]!, vA],
+      [uB[j + 1]!, vB],
+      [uB[j]!, vB],
+    ])
   }
+}
+
+function averageProfileDistance(a: number[][], b: number[][]): number {
+  let total = 0
+  for (let index = 0; index < a.length; index += 1) {
+    total += Math.hypot(
+      b[index]![0]! - a[index]![0]!,
+      b[index]![1]! - a[index]![1]!,
+      b[index]![2]! - a[index]![2]!,
+    )
+  }
+  return total / a.length
 }
 
 function sub(a: number[], b: number[]): number[] {
@@ -289,6 +381,7 @@ function pushQuad(
   c: number[],
   d: number[],
   hint: number[],
+  authoredUvs?: readonly MetricUv[],
 ) {
   let nx = (c[1]! - a[1]!) * (b[2]! - a[2]!) - (c[2]! - a[2]!) * (b[1]! - a[1]!)
   let ny = (c[2]! - a[2]!) * (b[0]! - a[0]!) - (c[0]! - a[0]!) * (b[2]! - a[2]!)
@@ -304,19 +397,19 @@ function pushQuad(
   ny /= len
   nz /= len
 
-  const u = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!)
-  const v = Math.hypot(d[0]! - a[0]!, d[1]! - a[1]!, d[2]! - a[2]!)
+  const faceUvs = authoredUvs ?? planarMetricUvs([a, b, c, d], [nx, ny, nz])
+  const [uvA, uvB, uvC, uvD] = faceUvs as readonly [MetricUv, MetricUv, MetricUv, MetricUv]
 
   if (flip) {
     positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
-    uvs.push(0, 0, u, 0, u, v)
+    uvs.push(...uvA, ...uvB, ...uvC)
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, d[0]!, d[1]!, d[2]!)
-    uvs.push(0, 0, u, v, 0, v)
+    uvs.push(...uvA, ...uvC, ...uvD)
   } else {
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
-    uvs.push(0, 0, u, v, u, 0)
+    uvs.push(...uvA, ...uvC, ...uvB)
     positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
-    uvs.push(0, 0, 0, v, u, v)
+    uvs.push(...uvA, ...uvD, ...uvC)
   }
   for (let i = 0; i < 6; i++) normals.push(nx, ny, nz)
 }
@@ -344,11 +437,16 @@ function pushTri(
   ny /= len
   nz /= len
 
+  const faceUvs = planarMetricUvs([a, b, c], [nx, ny, nz])
+  const uvA = faceUvs[0]!
+  const uvB = faceUvs[1]!
+  const uvC = faceUvs[2]!
   if (flip) {
     positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
+    uvs.push(...uvA, ...uvC, ...uvB)
   } else {
     positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
+    uvs.push(...uvA, ...uvB, ...uvC)
   }
-  uvs.push(0, 0, 1, 0, 0, 1)
   for (let i = 0; i < 3; i++) normals.push(nx, ny, nz)
 }

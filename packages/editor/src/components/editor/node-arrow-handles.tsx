@@ -781,6 +781,7 @@ function LinearArrow({
           const linearDescriptor = descriptor.kind === 'linear-resize' ? descriptor : null
           const snappedNext = resolveResizeSnapValue({
             rawValue: rawNext,
+            fallbackValue: lastTickValue,
             gridSnapEnabled: linearDescriptor?.gridSnap === true,
             gridSnapActive: isGridSnapActive(),
             gridSnapStep: useEditor.getState().gridSnapStep,

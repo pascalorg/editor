@@ -144,6 +144,31 @@ export function collectZoneObjectIds(
     .map((node) => node.id as AnyNodeId)
 }
 
+/**
+ * Display labels of everything standing in a zone, one entry per node.
+ *
+ * Labels rather than `{ label, count }` pairs, and counting left to the caller,
+ * because this is read through `useShallow`: that compares array elements with
+ * `Object.is`, so a freshly built object is never equal to its predecessor and
+ * the subscription reports a change on every single render. Strings compare by
+ * value, so an unchanged zone yields an unchanged snapshot and the render
+ * settles. Returning objects here once took the editor down with a React 185
+ * render loop the moment a zone's panel opened.
+ */
+export function collectZoneObjectLabels(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  zone: ZoneNode,
+  displayName: (node: AnyNode, nodes: Readonly<Record<AnyNodeId, AnyNode>>) => string,
+): string[] {
+  const labels: string[] = []
+  for (const id of collectZoneObjectIds(nodes, zone)) {
+    const node = nodes[id]
+    if (!node) continue
+    labels.push(displayName(node, nodes) || node.type)
+  }
+  return labels
+}
+
 export function collectZoneContentIds(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   zone: ZoneNode,

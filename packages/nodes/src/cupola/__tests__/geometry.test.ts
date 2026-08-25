@@ -17,6 +17,9 @@ describe('buildCupolaGeometry', () => {
     expect(p.count).toBeGreaterThan(0)
     expect(geo.getAttribute('normal').count).toBe(p.count)
     expect(geo.getAttribute('uv').count).toBe(p.count)
+    expect(geo.getAttribute('uv2').count).toBe(p.count)
+    expect(new Set(geo.groups.map((group) => group.materialIndex))).toEqual(new Set([0, 1, 2]))
+    expect(geo.groups.reduce((count, group) => count + group.count, 0)).toBe(p.count)
   })
 
   test('both roof styles build finite geometry', () => {
@@ -25,6 +28,16 @@ describe('buildCupolaGeometry', () => {
       expect(geo.getAttribute('position').count).toBeGreaterThan(0)
       expect(allFinite(geo)).toBe(true)
     }
+  })
+
+  test('unwraps the dome perimeter continuously at metre scale', () => {
+    const geo = buildCupolaGeometry(
+      CupolaNode.parse({ width: 2, depth: 2, height: 2, roofStyle: 'dome' }),
+    )
+    const uv = geo.getAttribute('uv')
+    const u = Array.from({ length: uv.count }, (_, index) => uv.getX(index))
+
+    expect(Math.max(...u) - Math.min(...u)).toBeGreaterThan(6)
   })
 
   test('finial adds vertices', () => {

@@ -97,6 +97,18 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
       ) as string | undefined
     }
 
+    if ('hostRoofId' in clonedNode && typeof clonedNode.hostRoofId === 'string') {
+      ;(clonedNode as Record<string, unknown>).hostRoofId = idMap.get(clonedNode.hostRoofId) as
+        | string
+        | undefined
+    }
+
+    if ('hostRoofSegmentId' in clonedNode && typeof clonedNode.hostRoofSegmentId === 'string') {
+      ;(clonedNode as Record<string, unknown>).hostRoofSegmentId = idMap.get(
+        clonedNode.hostRoofSegmentId,
+      ) as string | undefined
+    }
+
     // Remap supportSlabId (persisted slab-support hosts). The 'ground'
     // sentinel is not a node id — keep it as-is.
     if (
@@ -276,6 +288,16 @@ export function cloneLevelSubtree(
     if ('roofSegmentId' in cloned && typeof cloned.roofSegmentId === 'string') {
       ;(cloned as Record<string, unknown>).roofSegmentId =
         idMap.get(cloned.roofSegmentId) ?? cloned.roofSegmentId
+    }
+
+    if ('hostRoofId' in cloned && typeof cloned.hostRoofId === 'string') {
+      ;(cloned as Record<string, unknown>).hostRoofId =
+        idMap.get(cloned.hostRoofId) ?? cloned.hostRoofId
+    }
+
+    if ('hostRoofSegmentId' in cloned && typeof cloned.hostRoofSegmentId === 'string') {
+      ;(cloned as Record<string, unknown>).hostRoofSegmentId =
+        idMap.get(cloned.hostRoofSegmentId) ?? cloned.hostRoofSegmentId
     }
 
     // Remap supportSlabId when the host slab is inside the cloned subtree;

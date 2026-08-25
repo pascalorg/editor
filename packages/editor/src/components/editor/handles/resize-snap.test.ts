@@ -49,4 +49,17 @@ describe('resolveResizeSnapValue', () => {
     ).toBe(0.56)
     expect(magneticSnap).not.toHaveBeenCalled()
   })
+
+  it('keeps the last valid value when pointer projection is non-finite', () => {
+    expect(
+      resolveResizeSnapValue({
+        rawValue: Number.NaN,
+        fallbackValue: 12.3,
+        gridSnapEnabled: false,
+        gridSnapActive: false,
+        gridSnapStep: 0.5,
+        magneticSnapActive: false,
+      }),
+    ).toBe(12.3)
+  })
 })

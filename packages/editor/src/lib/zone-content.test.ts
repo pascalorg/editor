@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId, ZoneNode } from '@pascal-app/core'
-import { collectZoneContentIds, collectZoneObjectIds } from './zone-content'
+import { shallow } from 'zustand/shallow'
+import {
+  collectZoneContentIds,
+  collectZoneObjectIds,
+  collectZoneObjectLabels,
+} from './zone-content'
 
 /**
  * A 10x10 zone with its corner at the origin, on level `level_1`.
@@ -87,5 +92,64 @@ describe('collectZoneObjectIds', () => {
       positioned('ok', 'warehouse:pallet', 5, 5),
     )
     expect(collectZoneObjectIds(scene, zone)).toEqual(['ok' as AnyNodeId])
+  })
+})
+
+describe('collectZoneObjectLabels', () => {
+  // Read widened: a plugin kind is not in `AnyNode['type']`, which is the whole
+  // reason a zone full of racking looked empty before `collectZoneObjectIds`.
+  const displayName = (node: AnyNode) =>
+    (node.type as string) === 'warehouse:pallet-rack' ? 'Pallet Rack' : ''
+
+  test('one label per node standing in the zone', () => {
+    const scene = sceneOf(
+      positioned('a', 'warehouse:pallet-rack', 2, 2),
+      positioned('b', 'warehouse:pallet-rack', 3, 3),
+      positioned('c', 'item', 4, 4),
+      positioned('far', 'warehouse:pallet-rack', 90, 90),
+    )
+
+    expect(collectZoneObjectLabels(scene, zone, displayName)).toEqual([
+      'Pallet Rack',
+      'Pallet Rack',
+      'item',
+    ])
+  })
+
+  /**
+   * THE reason this returns strings.
+   *
+   * The panel reads it through `useShallow`, which compares elements with
+   * `Object.is`. When the selector built `{ label, count }` objects, two calls
+   * over an identical scene were never shallow-equal, so every render reported
+   * a changed snapshot and React never settled — error 185, and the editor went
+   * down the moment a zone panel opened. Nothing about the rendered output
+   * catches that; only the stability of the value does.
+   */
+  test('two calls over an unchanged scene are shallow-equal', () => {
+    const scene = sceneOf(
+      positioned('a', 'warehouse:pallet-rack', 2, 2),
+      positioned('b', 'warehouse:pallet-rack', 3, 3),
+      positioned('c', 'item', 4, 4),
+    )
+
+    expect(
+      shallow(
+        collectZoneObjectLabels(scene, zone, displayName),
+        collectZoneObjectLabels(scene, zone, displayName),
+      ),
+    ).toBe(true)
+  })
+
+  test('a moved node makes it shallow-UNequal, so the panel still updates', () => {
+    const before = sceneOf(positioned('a', 'warehouse:pallet-rack', 2, 2))
+    const after = sceneOf(positioned('a', 'warehouse:pallet-rack', 90, 90))
+
+    expect(
+      shallow(
+        collectZoneObjectLabels(before, zone, displayName),
+        collectZoneObjectLabels(after, zone, displayName),
+      ),
+    ).toBe(false)
   })
 })

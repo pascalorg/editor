@@ -57,6 +57,10 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
       ],
     },
   ],
+  onDeleteCascade: (node, nodes) =>
+    Object.values(nodes)
+      .filter((candidate) => candidate.type === 'downspout' && candidate.gutterId === node.id)
+      .map((candidate) => candidate.id),
   // Lazy-loaded section that lists every downspout attached to this
   // gutter and offers an Add button at the bottom. Outlets are created
   // and removed through this panel (and the downspout placement tool) —

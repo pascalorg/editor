@@ -17,6 +17,9 @@ describe('buildEyebrowVentGeometry', () => {
     expect(p.count).toBeGreaterThan(0)
     expect(geo.getAttribute('normal').count).toBe(p.count)
     expect(geo.getAttribute('uv').count).toBe(p.count)
+    expect(geo.getAttribute('uv2').count).toBe(p.count)
+    expect(new Set(geo.groups.map((group) => group.materialIndex))).toEqual(new Set([0, 1]))
+    expect(geo.groups.reduce((count, group) => count + group.count, 0)).toBe(p.count)
     expect(allFinite(geo)).toBe(true)
   })
 
@@ -25,7 +28,20 @@ describe('buildEyebrowVentGeometry', () => {
       const geo = buildEyebrowVentGeometry(EyebrowVentNode.parse({ style }))
       expect(geo.getAttribute('position').count).toBeGreaterThan(0)
       expect(allFinite(geo)).toBe(true)
+      if (style === 'slant-box') {
+        expect(new Set(geo.groups.map((group) => group.materialIndex))).toEqual(new Set([0, 1]))
+      }
     }
+  })
+
+  test('unwraps the curved hood continuously at metre scale', () => {
+    const geo = buildEyebrowVentGeometry(
+      EyebrowVentNode.parse({ width: 2, depth: 3, height: 1, style: 'half-round' }),
+    )
+    const uv = geo.getAttribute('uv')
+    const u = Array.from({ length: uv.count }, (_, index) => uv.getX(index))
+
+    expect(Math.max(...u) - Math.min(...u)).toBeGreaterThan(3)
   })
 
   test('louvers add vertices', () => {

@@ -79,6 +79,17 @@ function roofMoveHandle(): HandleDescriptor<RoofNodeType> {
 
 const roofHandles: HandleDescriptor<RoofNodeType>[] = [roofMoveHandle()]
 
+function isManagedLeanToRoof(node: RoofNodeType): boolean {
+  const metadata = node.metadata
+  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return false
+  const record = metadata as Record<string, unknown>
+  return record.managedByLeanTo !== undefined && record.leanToRole === 'roof'
+}
+
+function resolveRoofHandles(node: RoofNodeType): HandleDescriptor<RoofNodeType>[] {
+  return isManagedLeanToRoof(node) ? [] : roofHandles
+}
+
 /**
  * Roof — Stage A registration. Wrap-exports the legacy `RoofRenderer`
  * + `RoofSystem` (geometry generation via `getRoofSegmentBrushes` +
@@ -168,7 +179,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   },
 
   parametrics: roofParametrics,
-  handles: roofHandles,
+  handles: resolveRoofHandles,
   floorplan: buildRoofFloorplan,
 
   renderer: {

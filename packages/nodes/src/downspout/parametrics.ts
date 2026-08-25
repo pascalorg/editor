@@ -3,6 +3,7 @@ import { DownspoutPositionEditor } from './inspector-editors'
 import type { DownspoutNode } from './schema'
 
 export const downspoutParametrics: ParametricDescriptor<DownspoutNode> = {
+  derive: (_next, patch) => ('length' in patch ? { lengthMode: 'manual' } : {}),
   groups: [
     {
       label: 'Dimensions',

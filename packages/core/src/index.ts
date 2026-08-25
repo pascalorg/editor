@@ -20,6 +20,7 @@ export type {
   GuideEvent,
   GutterEvent,
   ItemEvent,
+  LeanToExtensionEvent,
   LevelEvent,
   MeasurementEvent,
   NodeEvent,
@@ -42,6 +43,10 @@ export type {
   ZoneEvent,
 } from './events/bus'
 export { emitter, eventSuffixes } from './events/bus'
+export {
+  hiddenWallPointerEventsHeld,
+  holdHiddenWallPointerEvents,
+} from './events/hidden-wall-pointer-hold'
 export { type ItemClipEntry, itemClipRegistry } from './hooks/scene-registry/item-clip-registry'
 export {
   sceneRegistry,
@@ -125,6 +130,21 @@ export {
   polygonsOverlap,
   segmentsIntersect,
 } from './lib/polygon-relations'
+export {
+  type Point2D as PolygonBooleanPoint2D,
+  subtractPolygonsFromPolygon,
+  unionPolygons,
+} from './lib/polygon-union'
+export {
+  compareRoofOverlapIdentity,
+  getRoofPlanBounds,
+  type RoofOverlapEntry,
+  type RoofPlan,
+  type RoofPlanBounds,
+  type RoofPlanSegment,
+  roofOverlapEntryOwns,
+  roofPlanBoundsOverlap,
+} from './lib/roof-overlap'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   getRenderableSlabPolygon,
@@ -265,6 +285,10 @@ export type {
   FloorPlacedFootprintsResolver,
 } from './registry'
 export * from './registry'
+// Exported here rather than from the registry barrel: that barrel is
+// reachable from server-safe graphs (schema → spatial grid → registry)
+// and must stay free of React imports.
+export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
 export * from './services'
 export { getLevelIndex, type LevelIndex } from './services/level-index'
@@ -346,7 +370,6 @@ export {
   stepElevatorRuntimeState,
   stepElevatorRuntimes,
 } from './systems/elevator/elevator-runtime'
-export { ElevatorRuntimeSystem } from './systems/elevator/elevator-runtime-system'
 export {
   type ElevatorLevelEntry,
   resolveElevatorBuildingLevels,

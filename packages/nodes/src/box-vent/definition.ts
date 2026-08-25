@@ -4,8 +4,8 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
-import { surfacePaintCapability } from '../shared/surface-paint'
 import { buildBoxVentFloorplan } from './floorplan'
+import { boxVentPaint } from './paint'
 import { boxVentParametrics } from './parametrics'
 import { BoxVentNode } from './schema'
 
@@ -175,7 +175,7 @@ const boxVentHandles: HandleDescriptor<BoxVentNodeType>[] = [
  */
 export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   kind: 'box-vent',
-  schemaVersion: 1,
+  schemaVersion: 3,
   schema: BoxVentNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -187,11 +187,14 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   },
 
   capabilities: {
+    slots: () => [
+      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
+      { slotId: 'top', label: 'Top', default: 'library:preset-softwhite' },
+    ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
-    // Single painted surface — registry-driven paint dispatch (see chimney).
-    paint: surfacePaintCapability,
+    paint: boxVentPaint,
     // Mounts on a roof segment via `roofSegmentId`. Sits ON TOP of the
     // slope — no `buildCut`, just the dirty cascade so the parent
     // roof's merged shell rebuilds when the vent moves / resizes.
@@ -220,7 +223,7 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   presentation: {
     label: 'Box Vent',
     description: 'Small louvered exhaust vent that sits on a roof slope.',
-    icon: { kind: 'url', src: '/icons/roof.webp' },
+    icon: { kind: 'url', src: '/icons/box-vent.webp' },
     paletteSection: 'structure',
     paletteOrder: 120,
   },

@@ -34,6 +34,13 @@ export type GutterWithSegment = {
   segment: RoofSegmentNode
 }
 
+function prescribedLeanToEaveY(gutter: GutterNode): number | null {
+  const metadata = gutter.metadata
+  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return null
+  const value = (metadata as Record<string, unknown>).leanToGutterEaveY
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
 function guttersMeet(
   a: GutterNode,
   aSeg: RoofSegmentNode,
@@ -64,6 +71,8 @@ export function computeSharedEaveY(
   subjectSegment: RoofSegmentNode,
   siblings: readonly GutterWithSegment[],
 ): number {
+  const prescribed = prescribedLeanToEaveY(subject)
+  if (prescribed !== null) return prescribed
   const subjectBaseY = subjectSegment.position?.[1] ?? 0
   if (siblings.length === 0) return computeEaveY(subjectSegment)
 

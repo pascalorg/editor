@@ -45,6 +45,35 @@ export function createStoredNodeCountTracker(initialNodeCount: number) {
   }
 }
 
+export type ExitFlushDecision = 'skip-clean' | 'skip-loading' | 'blocked-suspicious' | 'flush'
+
+/**
+ * Decides what the unload/unmount flush may do with the store's current
+ * content. Pure so the wipe scenarios stay unit-testable.
+ *
+ * `skip-loading` is the load-bearing branch: while a scene load is in flight
+ * the store passes through an intermediate `unloadScene()` state — zero nodes,
+ * zero roots — that is NOT user data. A flush fired in that window (StrictMode
+ * simulated unmount in dev, a quick tab close or navigation in prod) used to
+ * serialize that empty store and PUT it over the server copy, wiping the scene
+ * at v2. The dirty flag alone cannot protect here: document-level writes that
+ * land before hydration (e.g. the host-panel default `installedPlugins` sync)
+ * mark the session dirty without any user edit.
+ */
+export function decideExitFlush(opts: {
+  isLoadingScene: boolean
+  hasDirtyChanges: boolean
+  storedNodeCount: number
+  currentNodeCount: number
+}): ExitFlushDecision {
+  if (!opts.hasDirtyChanges) return 'skip-clean'
+  if (opts.isLoadingScene) return 'skip-loading'
+  if (isSuspiciousNodeDrop(opts.storedNodeCount, opts.currentNodeCount)) {
+    return 'blocked-suspicious'
+  }
+  return 'flush'
+}
+
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
 interface UseAutoSaveOptions {
@@ -68,7 +97,13 @@ export function useAutoSave({
 }: UseAutoSaveOptions): { isLoadingSceneRef: MutableRefObject<boolean> } {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
-  const isLoadingSceneRef = useRef(false)
+  // Starts TRUE: the scene is "loading" from mount until the Editor's load
+  // effect completes its first hydration. The Editor's load effect runs
+  // several hooks AFTER this one (hook order), so store writes in that gap —
+  // e.g. `useHostPanels` syncing default `installedPlugins` on mount — must
+  // not mark the session dirty or arm a save: the store still holds the empty
+  // pre-hydration state, and flushing it wipes the scene server-side.
+  const isLoadingSceneRef = useRef(true)
   const pendingSaveRef = useRef(false)
   const executeSaveRef = useRef<(() => Promise<void>) | null>(null)
   const hasDirtyChangesRef = useRef(false)
@@ -220,17 +255,31 @@ export function useAutoSave({
     // would otherwise drop the change entirely. `pagehide` fires in cases
     // (mobile Safari, bfcache) where `beforeunload` does not.
     function flushOnExit() {
-      if (!hasDirtyChangesRef.current) return
       const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
       const currentNodeCount = Object.keys(nodes).length
       const previousNodeCount = storedNodeCount.count
-      if (!storedNodeCount.allowWrite(currentNodeCount)) {
+      const decision = decideExitFlush({
+        isLoadingScene: isLoadingSceneRef.current,
+        hasDirtyChanges: hasDirtyChangesRef.current,
+        storedNodeCount: previousNodeCount,
+        currentNodeCount,
+      })
+      if (decision === 'skip-clean') return
+      if (decision === 'skip-loading') {
+        console.warn(
+          '[autosave] Skipped unload flush: a scene load is in flight, the store content is transient. Nothing user-authored is lost.',
+        )
+        return
+      }
+      if (decision === 'blocked-suspicious') {
         console.warn(
           `[autosave] Blocked unload flush: scene dropped from ${previousNodeCount} to ${currentNodeCount} nodes. Likely accidental deletion.`,
         )
         setSaveStatus('error')
         return
       }
+      // 'flush' — adopt the write as the new stored baseline.
+      storedNodeCount.allowWrite(currentNodeCount)
 
       hasDirtyChangesRef.current = false
       const sceneGraph = {

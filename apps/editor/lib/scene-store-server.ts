@@ -42,3 +42,14 @@ export function __resetSceneStoreForTests(): void {
   cachedStore = null
   cachedOperations = null
 }
+
+/**
+ * Test-only injection: other test files in the same bun process may have
+ * mock.module'd the '@pascal-app/mcp/*' subpaths (the mocks stick for
+ * later dynamic imports on some platforms), so route tests inject REAL
+ * instances built from relative source imports instead.
+ */
+export function __setSceneStoreForTests(store: SceneStore, operations: SceneOperations): void {
+  cachedStore = Promise.resolve(store)
+  cachedOperations = Promise.resolve(operations)
+}

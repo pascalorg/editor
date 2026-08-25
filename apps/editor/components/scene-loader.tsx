@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AccountSettingsSection } from '@/components/account-settings-section'
 import { useSession } from '@/components/auth/session-provider'
+import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
 import { PresenceBar } from './presence-bar'
@@ -93,6 +94,10 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
+  // Node count of the graph the server is known to hold. Guards against the
+  // autosave wipe class: a save fired from a not-yet-hydrated (empty) editor
+  // store must never overwrite a populated server copy.
+  const serverNodeCountRef = useRef(meta.nodeCount)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
@@ -137,6 +142,19 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
       }
       if (isRecentRemoteApply) return
 
+      // Wipe guard: never PUT an empty graph over a populated server copy.
+      // An empty serialization here means the editor store was not hydrated
+      // (load in flight or failed), not that the user deleted everything.
+      const outgoingNodeCount = countGraphNodes(graph)
+      if (isEmptyGraphOverwrite(outgoingNodeCount, serverNodeCountRef.current)) {
+        console.error(
+          `[scene-loader] Blocked autosave: refusing to overwrite scene ${meta.id} ` +
+            `(${serverNodeCountRef.current} nodes on the server) with an empty graph.`,
+        )
+        setSaveError('Autosave blocked: the editor tried to save an empty scene')
+        return
+      }
+
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
           method: 'PUT',
@@ -153,6 +171,16 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
         })
 
         if (response.status === 409) {
+          const body = (await response.json().catch(() => null)) as { error?: string } | null
+          if (body?.error === 'empty_graph_rejected') {
+            // Server-side wipe guard (defense in depth behind the client-side
+            // check above) — not a concurrent-session conflict.
+            console.error(
+              `[scene-loader] Server rejected an empty-graph save for scene ${meta.id}.`,
+            )
+            setSaveError('Autosave blocked: the editor tried to save an empty scene')
+            return
+          }
           setConflict(true)
           return
         }
@@ -170,6 +198,7 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
 
         const next = (await response.json()) as SceneMeta
         versionRef.current = next.version
+        serverNodeCountRef.current = next.nodeCount
         setSaveError(null)
       } catch (error) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
@@ -192,6 +221,7 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
       if (payload.version <= versionRef.current) return
 
       versionRef.current = payload.version
+      serverNodeCountRef.current = countGraphNodes(payload.graph)
       lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
       suppressRemoteSaveUntilRef.current = Date.now() + 2500
       applySceneGraphToEditor(payload.graph)

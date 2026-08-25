@@ -53,6 +53,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/ifc-converter',
     '@pascal-app/plugin-streetscape',
     '@pascal-app/plugin-trees',
+    '@pascal-app/plugin-articraft',
     '@mint/pascal-plugin',
     '@pascal-app/plugin-bones',
     '@ovurrsl/plugin-warehouse',
