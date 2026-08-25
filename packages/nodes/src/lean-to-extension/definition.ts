@@ -14,7 +14,7 @@ import {
   publishResolvedElevationGuide,
 } from '@pascal-app/editor'
 import { buildLeanToExtensionFloorplan } from './floorplan'
-import { leanToResizeAffordance } from './floorplan-affordances'
+import { leanToResizeAffordance, leanToRotateAffordance } from './floorplan-affordances'
 import { leanToFloorplanMoveTarget } from './floorplan-move'
 import { buildLeanToExtensionGeometry, leanToExtensionGeometryKey } from './geometry'
 import {
@@ -112,6 +112,13 @@ function highEdgeHeightPatch(
   newValue: number,
   sceneApi: SceneApi,
 ): Partial<LeanToExtensionNode> {
+  if (node.hostKind === 'slab-edge') {
+    return {
+      ...deriveLeanToResizePatch(node, { highEdgeHeight: newValue }),
+      hostHeightOffset: node.hostHeightOffset + newValue - node.highEdgeHeight,
+      connectionMode: 'manual',
+    }
+  }
   const conicalHost = resolveConicalHost(node, sceneApi)
   if (conicalHost) {
     return {
@@ -252,14 +259,18 @@ function spanPatch(
     }
   }
   const localSign = side === 'right' ? 1 : -1
-  const sign = Math.cos(node.rotation[1]) >= 0 ? localSign : -localSign
+  const centerShift = (localSign * (span - node.span)) / 2
+  const cos = Math.cos(node.rotation[1])
+  const sin = Math.sin(node.rotation[1])
+  const deltaX = centerShift * cos
+  const deltaZ = -centerShift * sin
   return {
     span,
     autoSpan: false,
     position: [
-      node.position[0] + (sign * (span - node.span)) / 2,
+      Math.abs(deltaX) < 1e-12 ? node.position[0] : node.position[0] + deltaX,
       node.position[1],
-      node.position[2],
+      Math.abs(deltaZ) < 1e-12 ? node.position[2] : node.position[2] + deltaZ,
     ],
   }
 }
@@ -364,9 +375,35 @@ function circularRadiusHandle(side: 'left' | 'right'): HandleDescriptor<LeanToEx
   }
 }
 
+function freestandingRotationHandle(): HandleDescriptor<LeanToExtensionNode> {
+  return {
+    kind: 'arc-resize',
+    axis: 'angular',
+    shape: 'rotate',
+    apply: (node, delta) => ({
+      rotation: [node.rotation[0], node.rotation[1] - delta, node.rotation[2]],
+    }),
+    visible: (node) => node.hostKind === 'freestanding',
+    placement: {
+      position: (node) => [
+        node.span / 2 + SPAN_HANDLE_OFFSET,
+        resolveLeanToLayout(node).lowEdgeHeight + HEIGHT_HANDLE_OFFSET,
+        node.projection / 2,
+      ],
+      rotationY: () => -Math.PI / 4,
+    },
+    decoration: {
+      kind: 'ring',
+      radius: (node) => Math.hypot(node.span / 2, node.projection / 2) + 0.12,
+      y: (node) => resolveLeanToLayout(node).lowEdgeHeight + HEIGHT_HANDLE_OFFSET,
+    },
+  }
+}
+
 const leanToExtensionHandles: HandleDescriptor<LeanToExtensionNode>[] = [
   highEdgeHeightHandle(),
   pitchHandle(),
+  freestandingRotationHandle(),
 ]
 leanToExtensionHandles.push({
   kind: 'linear-resize',
@@ -392,7 +429,7 @@ leanToExtensionHandles.push(circularRadiusHandle('right'), circularRadiusHandle(
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 9,
+  schemaVersion: 11,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',
@@ -431,18 +468,22 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
   },
   floorplan: buildLeanToExtensionFloorplan,
   floorplanMoveTarget: leanToFloorplanMoveTarget,
-  floorplanAffordances: { 'lean-to-resize': leanToResizeAffordance },
+  floorplanAffordances: {
+    'lean-to-resize': leanToResizeAffordance,
+    'lean-to-rotate': leanToRotateAffordance,
+  },
   affordanceTools: { move: () => import('./move-tool') },
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'Attach to wall or conical roof base' },
+    { key: 'Left click', label: 'Attach to wall/slab edge or place freestanding' },
+    { key: 'R / T', label: 'Rotate freestanding' },
     { key: 'Esc', label: 'Cancel' },
   ],
   presentation: {
-    label: 'Lean-to Extension',
+    label: 'Lean-to Canopy',
     description:
-      'An open mono-pitch roof attached to a wall or wrapped around a conical roof base.',
+      'An attached or freestanding mono-pitch canopy with managed beams, posts, and drainage.',
     icon: { kind: 'url', src: '/icons/lean-to-extension.webp' },
     paletteSection: 'structure',
     paletteGroup: 'roof-features',
@@ -450,6 +491,6 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
   },
   mcp: {
     description:
-      'A hosted open lean-to canopy composed from a standard shed roof segment, standard gutter and downspout accessories, editable column children, ledger, rafters, and a front beam. A conical-roof host forms one closed circular loop.',
+      'An open lean-to canopy that can attach to a wall or upper slab edge, stand freestanding on two post rows, or wrap around a conical roof base. It composes a shed roof segment, gutter, downspout, editable column children, framing, and beams.',
   },
 }

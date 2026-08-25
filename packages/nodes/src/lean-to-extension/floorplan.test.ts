@@ -3,6 +3,8 @@ import {
   type GeometryContext,
   getWallCurveFrameAt,
   getWallCurveLength,
+  LeanToExtensionNode,
+  LevelNode,
   RoofNode,
   RoofSegmentNode,
   WallNode,
@@ -12,6 +14,39 @@ import { buildLeanToExtensionFloorplan } from './floorplan'
 import { resolveLeanToWallPlacement } from './layout'
 
 describe('curved lean-to floorplan', () => {
+  test('draws a freestanding canopy in its level plan frame', () => {
+    const level = LevelNode.parse({ id: 'level_free_canopy', level: 0 })
+    const node = LeanToExtensionNode.parse({
+      parentId: level.id,
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      position: [10, 0, 20],
+      rotation: [0, Math.PI / 2, 0],
+      span: 2,
+      projection: 1,
+      highOverhang: 0,
+      lowOverhang: 0,
+      leftOverhang: 0,
+      rightOverhang: 0,
+    })
+    const geometry = buildLeanToExtensionFloorplan(node, {
+      children: [],
+      parent: level,
+      resolve: () => undefined,
+      siblings: [],
+    } as GeometryContext)
+
+    expect(geometry?.kind).toBe('group')
+    if (geometry?.kind !== 'group') return
+    const roof = geometry.children.find((child) => child.kind === 'polygon')
+    expect(roof?.kind).toBe('polygon')
+    if (roof?.kind !== 'polygon') return
+    expect(Math.min(...roof.points.map((point) => point[0]))).toBeCloseTo(10, 6)
+    expect(Math.max(...roof.points.map((point) => point[0]))).toBeCloseTo(11, 6)
+    expect(Math.min(...roof.points.map((point) => point[1]))).toBeCloseTo(19, 6)
+    expect(Math.max(...roof.points.map((point) => point[1]))).toBeCloseTo(21, 6)
+  })
+
   test('matches the committed back-side frame direction', () => {
     const wall = WallNode.parse({ start: [0, 0], end: [6, 0], curveOffset: 1, thickness: 0.2 })
     const wallLength = getWallCurveLength(wall)

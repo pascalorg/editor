@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNodeId, createDormerDefaultWindow, DormerNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  createDormerDefaultWindow,
+  DormerNode,
+  getDormerDefaultWindowFace,
+  useScene,
+} from '@pascal-app/core'
 import { usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
@@ -69,6 +75,7 @@ const DormerTool = () => {
         const defaultWindow = createDormerDefaultWindow(
           dormer,
           `window_${dormer.id.replace(/^dormer_/, '')}_default`,
+          getDormerDefaultWindowFace(dormer, hit.segment),
         )
         state.createNode(defaultWindow, dormer.id as AnyNodeId)
         state.dirtyNodes.add(hit.segment.id as AnyNodeId)

@@ -120,29 +120,15 @@ describe('roof-segment resize handles', () => {
     expect(backPatch).toMatchObject({ depth: 8, position: [10, 0, 19] })
   })
 
-  test('hides the pitch handle for managed lean-to roof segments', () => {
+  test('hides the pitch handle for parent-managed roof segments', () => {
     const handle = pitchHandle()
-    const managed = segment({
-      metadata: {
-        managedByLeanTo: 'lean_to_test',
-        leanToRole: 'roof-segment',
-      },
-    })
+    const managed = segment({ managedByParent: true })
 
     expect(handle.visible?.(segment(), undefined as never)).not.toBe(false)
     expect(handle.visible?.(managed, undefined as never)).toBe(false)
   })
 
-  test('hides all direct handles for managed lean-to roof segments', () => {
-    expect(
-      handles(
-        segment({
-          metadata: {
-            managedByLeanTo: 'lean_to_test',
-            leanToRole: 'roof-segment',
-          },
-        }),
-      ),
-    ).toEqual([])
+  test('hides all direct handles for parent-managed roof segments', () => {
+    expect(handles(segment({ managedByParent: true }))).toEqual([])
   })
 })

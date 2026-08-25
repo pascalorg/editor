@@ -107,7 +107,13 @@ export {
   type DormerSurfaceMaterialRole,
   type DormerSurfaceMaterialSpec,
   DormerWallFace,
+  dormerPointToWallFace,
+  dormerWallFacePointToDormer,
+  getDormerDefaultWindowFace,
+  getDormerExposedFaces,
   getDormerWallFaceFrame,
+  getDormerWallHorizontalBoundsAtHeight,
+  getDormerWallOpeningVerticalBounds,
   getDormerWallVerticalBounds,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'

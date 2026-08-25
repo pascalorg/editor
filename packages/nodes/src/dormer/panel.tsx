@@ -166,7 +166,9 @@ export default function DormerPanel() {
 
   const handleAddWindow = useCallback(() => {
     if (!node) return
-    const frontWindows = hostedWindows.filter((window) => (window.dormerFace ?? 'front') === 'front')
+    const frontWindows = hostedWindows.filter(
+      (window) => (window.dormerFace ?? 'front') === 'front',
+    )
     const template = frontWindows[0] ?? hostedWindows[0]
     const id = generateId('window')
     const defaultWindow = createDormerDefaultWindow(node, id)
@@ -234,17 +236,16 @@ export default function DormerPanel() {
   const roof = segment?.parentId
     ? (scenestate.nodes[segment.parentId as AnyNodeId] as RoofNode | undefined)
     : undefined
-  const frontWindows = hostedWindows.filter(
-    (window) => (window.dormerFace ?? 'front') === 'front',
-  )
+  const frontWindows = hostedWindows.filter((window) => (window.dormerFace ?? 'front') === 'front')
   const templateWindow = frontWindows[0] ?? hostedWindows[0]
+  const defaultWindow = createDormerDefaultWindow(node, 'window_preview')
   const canAddWindow =
     planDormerWindowRow(node.width, [
       ...frontWindows,
       {
         id: 'window_preview',
-        position: [0, templateWindow?.position[1] ?? 0, 0],
-        width: templateWindow?.width ?? node.windowWidth,
+        position: [0, templateWindow?.position[1] ?? defaultWindow.position[1], 0],
+        width: templateWindow?.width ?? defaultWindow.width,
       },
     ]) !== null
 

@@ -9,7 +9,11 @@ import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
-import { createDormerDefaultWindow, DormerNode as DormerNodeSchema } from '../schema/nodes/dormer'
+import {
+  createDormerDefaultWindow,
+  DormerNode as DormerNodeSchema,
+  getDormerDefaultWindowFace,
+} from '../schema/nodes/dormer'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
 import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
 import {
@@ -815,7 +819,13 @@ function migrateNodes(nodes: Record<string, any>): {
           windowId = `${baseWindowId}_${suffix}`
           suffix += 1
         }
-        const window = createDormerDefaultWindow(dormer, windowId)
+        const host = dormer.roofSegmentId ? patchedNodes[dormer.roofSegmentId] : undefined
+        const hostSegment = host?.type === 'roof-segment' ? (host as RoofSegmentNode) : undefined
+        const window = createDormerDefaultWindow(
+          dormer,
+          windowId,
+          getDormerDefaultWindowFace(dormer, hostSegment),
+        )
         patchedNodes[windowId] = window
         patchedNodes[id] = { ...dormer, children: [...children, window.id] }
       }

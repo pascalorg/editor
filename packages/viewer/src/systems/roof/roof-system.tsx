@@ -1037,16 +1037,10 @@ function readShedOpenEndSides(node: RoofSegmentNode): Set<ShedEndSide> {
   return new Set(value.filter((side): side is ShedEndSide => side === 'left' || side === 'right'))
 }
 
-function isManagedLeanToRoofSegment(node: Pick<RoofSegmentNode, 'metadata'>): boolean {
-  const metadata = node.metadata
-  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return false
-  const record = metadata as Record<string, unknown>
-  return record.managedByLeanTo !== undefined && record.leanToRole === 'roof-segment'
-}
-
 function shouldIncludeRoofSegmentWallShell(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
+  if (node.wallShell === 'include') return true
+  if (node.wallShell === 'omit') return false
   if (node.roofType !== 'shed') return true
-  if (isManagedLeanToRoofSegment(node)) return false
 
   // Older composite roofs use overlapping shed segments as deck pieces. Their
   // wall volumes were never part of the rendered shell and make CSG grow
@@ -2997,7 +2991,7 @@ function addShedInsetEndPanels(
   applySegmentTransform: boolean,
 ): THREE.BufferGeometry {
   const shedSegments = segments.filter(
-    (segment) => segment.roofType === 'shed' && isManagedLeanToRoofSegment(segment),
+    (segment) => segment.roofType === 'shed' && segment.shedInsetEndPanels,
   )
   if (shedSegments.length === 0) return geometry
 

@@ -75,6 +75,12 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
         ? { matchHostRoofStructure: false }
         : {}),
       ...('span' in patch ? { autoSpan: false } : {}),
+      ...(previous.hostKind === 'slab-edge' && typeof patch.highEdgeHeight === 'number'
+        ? {
+            hostHeightOffset:
+              previous.hostHeightOffset + patch.highEdgeHeight - previous.highEdgeHeight,
+          }
+        : {}),
       ...deriveLeanToResizePatch(previous, patch),
     }
   },
@@ -82,7 +88,12 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
     {
       label: 'Size',
       fields: [
-        { key: 'autoSpan', label: 'Match host width', kind: 'boolean' },
+        {
+          key: 'autoSpan',
+          label: 'Match host width',
+          kind: 'boolean',
+          visibleIf: (node) => node.hostKind !== 'freestanding',
+        },
         {
           key: 'span',
           label: 'Width',
@@ -103,7 +114,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
         },
         {
           key: 'highEdgeHeight',
-          label: 'Wall-side height',
+          label: 'High edge height',
           kind: 'number',
           unit: 'm',
           min: 0.8,
@@ -123,12 +134,14 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'enum',
           options: ['auto', 'manual'],
           display: 'segmented',
+          visibleIf: (node) => node.hostKind === 'wall',
         },
         {
           key: 'highSideMode',
-          label: 'Wall side',
+          label: 'High-side support',
           kind: 'enum',
           options: ['wall-ledger', 'independent-high-beam'],
+          visibleIf: (node) => node.hostKind === 'wall',
         },
         {
           key: 'connectionOffset',
@@ -310,7 +323,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
         },
         {
           key: 'highOverhang',
-          label: 'Wall-side overhang',
+          label: 'High-side overhang',
           kind: 'number',
           unit: 'm',
           min: 0,

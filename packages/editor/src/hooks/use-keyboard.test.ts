@@ -7,8 +7,9 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { meshEditScope } from '../lib/interaction/scope'
+import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
-import { runHistoryShortcut } from './use-keyboard'
+import { isToolOwnedRotation, runHistoryShortcut } from './use-keyboard'
 
 type RafFn = (callback: (time: number) => void) => number
 ;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= (
@@ -38,7 +39,22 @@ beforeEach(() => {
 
 afterEach(() => {
   useInteractionScope.getState().end()
+  useEditor.setState({ mode: 'select', tool: null })
   clearSceneHistory()
+})
+
+describe('rotation shortcut ownership', () => {
+  test('leaves R and T to the active item placement tool', () => {
+    useEditor.setState({ mode: 'build', tool: 'item' })
+
+    expect(isToolOwnedRotation()).toBe(true)
+  })
+
+  test('leaves R and T to the active lean-to placement tool', () => {
+    useEditor.setState({ mode: 'build', tool: 'lean-to-extension' })
+
+    expect(isToolOwnedRotation()).toBe(true)
+  })
 })
 
 describe('history shortcuts during block editing', () => {

@@ -146,6 +146,9 @@ export const RoofSegmentNode = BaseNode.extend({
   shedSideInfillMaxX: z.number().optional(),
   shedFootprintPieces: z.array(z.array(z.tuple([z.number(), z.number()])).min(3)).optional(),
   shedOpenEndSides: z.array(z.enum(['left', 'right'])).optional(),
+  managedByParent: z.boolean().default(false),
+  wallShell: z.enum(['auto', 'include', 'omit']).default('auto'),
+  shedInsetEndPanels: z.boolean().default(false),
   // Shape-specific ratios. Only the pair matching `roofType` is read; the
   // rest are inert. Defined on every segment so the panel can flip
   // roofType without losing the previous shape's tuning.

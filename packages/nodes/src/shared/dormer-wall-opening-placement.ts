@@ -2,16 +2,59 @@ import {
   type AnyNode,
   type DormerEvent,
   type DormerNode,
+  dormerPointToWallFace,
   getDormerWallFaceFrame,
-  getDormerWallVerticalBounds,
+  getDormerWallOpeningVerticalBounds,
+  type WindowEvent,
   type WindowNode,
 } from '@pascal-app/core'
+import { type Object3D, Vector3 } from 'three'
 
 export type DormerWindowTarget = {
   dormer: DormerNode
   face: NonNullable<WindowNode['dormerFace']>
   position: [number, number, number]
   valid: boolean
+}
+
+const dormerFaceNormal = new Vector3()
+
+export function dormerEventFromHostedWindow(
+  event: WindowEvent,
+  dormer: DormerNode,
+  object: Object3D,
+): DormerEvent {
+  object.updateWorldMatrix(true, false)
+  const localPoint = object.worldToLocal(new Vector3(...event.position))
+  const face = event.node.dormerFace ?? 'front'
+  const normal: [number, number, number] =
+    face === 'front'
+      ? [0, 0, 1]
+      : face === 'back'
+        ? [0, 0, -1]
+        : face === 'right'
+          ? [1, 0, 0]
+          : [-1, 0, 0]
+
+  return {
+    node: dormer,
+    normal,
+    object,
+    position: event.position,
+    localPosition: [localPoint.x, localPoint.y, localPoint.z],
+    faceIndex: event.faceIndex,
+    nativeEvent: event.nativeEvent,
+    stopPropagation: event.stopPropagation,
+  }
+}
+
+export function getDormerWindowWorldYaw(event: DormerEvent, target: DormerWindowTarget): number {
+  const frame = getDormerWallFaceFrame(event.node, target.face)
+  event.object.updateWorldMatrix(true, false)
+  dormerFaceNormal
+    .set(Math.sin(frame.yaw), 0, Math.cos(frame.yaw))
+    .transformDirection(event.object.matrixWorld)
+  return Math.atan2(dormerFaceNormal.x, dormerFaceNormal.z)
 }
 
 export function shouldWriteDormerWindowPreviewHost(
@@ -51,21 +94,6 @@ function faceFromPoint(
   ).face
 }
 
-function toFaceLocalPoint(
-  dormer: DormerNode,
-  face: DormerWindowTarget['face'],
-  point: [number, number, number],
-): [number, number, number] {
-  const frame = getDormerWallFaceFrame(dormer, face)
-  const dx = point[0] - frame.origin[0]
-  const dz = point[2] - frame.origin[2]
-  return [
-    Math.cos(frame.yaw) * dx + Math.sin(frame.yaw) * dz,
-    point[1],
-    -Math.sin(frame.yaw) * dx + Math.cos(frame.yaw) * dz,
-  ]
-}
-
 function hasWindowOverlap(
   dormer: DormerNode,
   nodes: Readonly<Record<string, AnyNode>>,
@@ -101,22 +129,23 @@ export function resolveDormerWindowTarget(args: {
   height: number
   nodes: Readonly<Record<string, AnyNode>>
   ignoreId?: string
+  snap?: (value: number) => number
 }): DormerWindowTarget | null {
-  const { event, width, height, nodes, ignoreId } = args
+  const { event, width, height, nodes, ignoreId, snap = (value) => value } = args
   const face = faceFromNormal(event.normal) ?? faceFromPoint(event.node, event.localPosition)
 
-  const point = toFaceLocalPoint(event.node, face, event.localPosition)
+  const point = dormerPointToWallFace(event.node, face, event.localPosition)
   const frame = getDormerWallFaceFrame(event.node, face)
-  const vertical = getDormerWallVerticalBounds(event.node)
   const clampedX = Math.max(
-    width / 2,
-    Math.min(frame.width - width / 2, point[0] + frame.width / 2),
+    -frame.width / 2 + width / 2,
+    Math.min(frame.width / 2 - width / 2, snap(point[0])),
   )
+  const vertical = getDormerWallOpeningVerticalBounds(event.node, face, clampedX, width)
   const minY = vertical.min + height / 2
   const maxY = vertical.max - height / 2
   if (maxY < minY) return null
-  const clampedY = Math.max(minY, Math.min(maxY, point[1]))
-  const position: [number, number, number] = [clampedX - frame.width / 2, clampedY, 0]
+  const clampedY = Math.max(minY, Math.min(maxY, snap(point[1])))
+  const position: [number, number, number] = [clampedX, clampedY, 0]
 
   return {
     dormer: event.node,

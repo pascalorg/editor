@@ -43,10 +43,6 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
-import {
-  resolveHandlePortalTargetId,
-  shouldShowMoveCrossHandle,
-} from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
@@ -239,13 +235,15 @@ export function NodeArrowHandles() {
       typeof def.handles === 'function'
         ? def.handles(node as never, descriptorSceneApi)
         : (def.handles as HandleDescriptor[])
-    const showMoveCross = shouldShowMoveCrossHandle(node)
-    return all.filter(
-      (d) =>
-        d.kind !== 'translate' &&
-        !('shape' in d && d.shape === 'move-cross' && !showMoveCross) &&
-        (d.kind !== 'linear-resize' || d.visible?.(node as never, descriptorSceneApi) !== false),
-    )
+    return all.filter((descriptor) => {
+      if (descriptor.kind === 'translate') return false
+      const visible =
+        'visible' in descriptor
+          ? descriptor.visible?.(node as never, descriptorSceneApi)
+          : undefined
+      if ('shape' in descriptor && descriptor.shape === 'move-cross') return visible === true
+      return visible !== false
+    })
   }, [node, def, descriptorSceneApi])
 
   const shouldRender =
@@ -299,10 +297,20 @@ function NodeArrowHandlesForNode({
     ? 'grandparent'
     : 'parent'
 
+  const portalTargetResolver = descriptors.find(
+    (descriptor) => descriptor.portalTarget !== undefined,
+  )?.portalTarget
+  const descriptorSceneApi = useMemo(() => createSceneApi(useScene), [])
+
   // Portal target: the mesh we createPortal into.
-  const portalTargetId = useScene((state) =>
-    resolveHandlePortalTargetId(node, state.nodes, portalMode),
-  )
+  const portalTargetId = useScene((state) => {
+    if (portalTargetResolver) {
+      return portalTargetResolver(node as never, descriptorSceneApi) ?? null
+    }
+    const parentId = node.parentId ?? null
+    if (!parentId || portalMode === 'parent') return parentId
+    return state.nodes[parentId as AnyNodeId]?.parentId ?? null
+  })
   // Outer wrapper mirrors this mesh's local pose. For 'parent' mode the
   // outer IS the node (so handles + drag math both live in node-local).
   // For 'grandparent' the outer rides the parent and an inner group adds

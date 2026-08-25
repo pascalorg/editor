@@ -42,7 +42,9 @@ import {
   resolveLeanToCornerJoints,
 } from './corner-joint'
 import { LEAN_TO_EXTENSION_GEOMETRY_REVISION, resolveLeanToSpanArc } from './layout'
+import { reconcileLeanToSlabEdgePlacement } from './placement'
 import { resolveLeanToEndAbutments } from './placement-validation'
+import { isLeanToPostOmitted } from './post-omissions'
 import {
   applyLeanToAvailableWallSpan,
   applyLeanToRoofAttachment,
@@ -208,9 +210,8 @@ function leanToGroundSignature(
   nodes: Record<AnyNodeId, AnyNode>,
 ): number[] {
   const parent = leanTo.parentId ? nodes[leanTo.parentId as AnyNodeId] : undefined
-  if (parent?.type !== 'wall') return []
-  const wall = parent as WallNode
-  const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
+  const wall = parent?.type === 'wall' ? (parent as WallNode) : undefined
+  const cornerJoints = wall ? resolveLeanToCornerJoints(leanTo, wall, nodes) : {}
   const sides: LeanToPostSide[] =
     leanTo.highSideMode === 'independent-high-beam' ? ['low', 'high'] : ['low']
   const values: number[] = []
@@ -219,8 +220,9 @@ function leanToGroundSignature(
       values.push(resolveLeanToPostBaseY(leanTo, wall, nodes, index, side))
     }
   }
-  for (const joint of Object.values(cornerJoints)) {
+  for (const joint of wall ? Object.values(cornerJoints) : []) {
     if (!joint?.sharedPostOwner) continue
+    if (isLeanToPostOmitted(leanTo, 'low', leanToCornerPostIndex(joint.side))) continue
     const bent = bendLocalPoint(leanTo, joint.sharedPostPosition[0], joint.sharedPostPosition[2])
     values.push(
       resolveLeanToPostBaseYAtLocalPosition(leanTo, wall, nodes, [
@@ -268,6 +270,7 @@ function extensionSignature(
     leanTo.postLayoutMode,
     leanTo.postSpacing,
     leanTo.postInset,
+    leanTo.omittedPostSlots,
     leanTo.postBracing,
     leanTo.footingStyle,
     leanTo.highSideMode,
@@ -320,6 +323,8 @@ function extensionSignature(
 
 function attachmentNeedsUpdate(current: LeanToExtensionNode, next: LeanToExtensionNode): boolean {
   return (
+    current.hostKind !== next.hostKind ||
+    current.highSideMode !== next.highSideMode ||
     current.connectionMode !== next.connectionMode ||
     current.hostRoofId !== next.hostRoofId ||
     current.hostRoofSegmentId !== next.hostRoofSegmentId ||
@@ -335,6 +340,7 @@ function attachmentNeedsUpdate(current: LeanToExtensionNode, next: LeanToExtensi
     current.spanArcCenterZ !== next.spanArcCenterZ ||
     current.spanArcRadius !== next.spanArcRadius ||
     !sameTuple(current.position, next.position) ||
+    !sameTuple(current.rotation, next.rotation) ||
     current.roofThickness !== next.roofThickness ||
     current.shingleThickness !== next.shingleThickness ||
     JSON.stringify(current.metadata) !== JSON.stringify(next.metadata)
@@ -356,8 +362,14 @@ function resolveEffectiveLeanTo(
   if (parent?.type === 'roof-segment' && leanTo.hostKind === 'conical-roof') {
     return resolveConicalLeanToPlacement(parent, leanTo) ?? leanTo
   }
+  if (leanTo.hostKind === 'slab-edge') {
+    return reconcileLeanToSlabEdgePlacement(leanTo, nodes)
+  }
   if (parent?.type !== 'wall') {
-    return leanTo.connectionMode === 'manual' ? leanTo : clearLeanToRoofAttachment(leanTo)
+    const detached = leanTo.connectionMode === 'manual' ? leanTo : clearLeanToRoofAttachment(leanTo)
+    return leanTo.hostKind === 'freestanding'
+      ? { ...detached, highSideMode: 'independent-high-beam' }
+      : detached
   }
   const wall = parent as WallNode
   const wallSpanningLeanTo = applyLeanToWallCornerSpan(applyLeanToWallAutoSpan(leanTo, wall), wall)
@@ -465,6 +477,8 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
         update.push({
           id,
           data: {
+            hostKind: effectiveLeanTo.hostKind,
+            highSideMode: effectiveLeanTo.highSideMode,
             connectionMode: effectiveLeanTo.connectionMode,
             hostRoofId: effectiveLeanTo.hostRoofId,
             hostRoofSegmentId: effectiveLeanTo.hostRoofSegmentId,
@@ -480,6 +494,7 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
             spanArcCenterZ: effectiveLeanTo.spanArcCenterZ,
             spanArcRadius: effectiveLeanTo.spanArcRadius,
             position: effectiveLeanTo.position,
+            rotation: effectiveLeanTo.rotation,
             roofThickness: effectiveLeanTo.roofThickness,
             shingleThickness: effectiveLeanTo.shingleThickness,
             metadata: effectiveLeanTo.metadata,
@@ -583,10 +598,13 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
         for (const index of resolveLeanToPostIndexes(effectiveLeanTo, cornerJoints, side)) {
           const key = `${side}:${index}`
           desiredPostKeys.add(key)
-          const postBaseY =
-            parent?.type === 'wall'
-              ? resolveLeanToPostBaseY(effectiveLeanTo, parent, nodes, index, side)
-              : 0
+          const postBaseY = resolveLeanToPostBaseY(
+            effectiveLeanTo,
+            parent?.type === 'wall' ? parent : undefined,
+            nodes,
+            index,
+            side,
+          )
           const current = managedPosts.get(key)
           const gutterSetback =
             side === 'low' ? resolveLeanToPostGutterSetback(effectiveLeanTo, current) : 0
@@ -620,6 +638,7 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
       for (const joint of Object.values(cornerJoints)) {
         if (!joint?.sharedPostOwner) continue
         const index = leanToCornerPostIndex(joint.side)
+        if (isLeanToPostOmitted(effectiveLeanTo, 'low', index)) continue
         const key = `low:${index}`
         desiredPostKeys.add(key)
         const bentCornerPost = bendLocalPoint(

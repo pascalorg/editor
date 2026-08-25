@@ -197,16 +197,5 @@ export function buildDormerFloorplan(
     }
   }
 
-  // Window on the +Z (front) face — a line just inside the front edge,
-  // spanning the window width centred at its X offset. Marks the glazing
-  // and which way the dormer faces.
-  const ww = node.windowWidth ?? 0
-  if (ww > 0.01) {
-    const halfWin = Math.min(ww, node.width) / 2
-    const center = Math.max(-hw + halfWin, Math.min(hw - halfWin, node.windowOffsetX ?? 0))
-    const inset = Math.min(hd * 0.2, 0.08)
-    line([center - halfWin, hd - inset], [center + halfWin, hd - inset], lineWidth)
-  }
-
   return { kind: 'group', children }
 }

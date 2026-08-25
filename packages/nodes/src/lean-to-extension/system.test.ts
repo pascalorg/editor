@@ -1,20 +1,32 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   type AnyNodeId,
+  BuildingNode,
   clearSceneHistory,
   createSceneApi,
   LeanToExtensionNode,
   LevelNode,
+  nodeRegistry,
   RoofNode,
   RoofSegmentNode,
+  registerNode,
   type SceneCommit,
+  SlabNode,
   subscribeSceneCommits,
   useScene,
   WallNode,
 } from '@pascal-app/core'
-import { createLeanToAssembly, leanToCornerPostIndex, managedLeanToPostIndex } from './assembly'
+import { columnDefinition } from '../column'
+import {
+  createLeanToAssembly,
+  leanToCornerPostIndex,
+  managedLeanToPostIndex,
+  managedLeanToPostSide,
+} from './assembly'
 import { resolveConicalLeanToPlacement } from './conical-host'
+import { resolveLeanToSlabEdgePlacement } from './placement'
 import { initializeLeanToExtensionSync } from './system'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -30,6 +42,12 @@ type RafFn = (callback: (time: number) => void) => number
 let stopSync = () => {}
 
 describe('lean-to scene commit boundary', () => {
+  beforeAll(() => {
+    if (!nodeRegistry.has(columnDefinition.kind)) {
+      registerNode(columnDefinition as unknown as AnyNodeDefinition)
+    }
+  })
+
   beforeEach(() => {
     const level = LevelNode.parse({ id: 'level_lean_commit', level: 0 })
     const wall = WallNode.parse({
@@ -475,5 +493,165 @@ describe('lean-to scene commit boundary', () => {
 
     expect(regularIndexesA).not.toContain(2)
     expect(regularIndexesB).not.toContain(0)
+  })
+
+  test('tracks an upper slab edge while retaining one front row of posts', () => {
+    stopSync()
+    const building = BuildingNode.parse({ id: 'building_slab_host_sync' })
+    const ground = LevelNode.parse({
+      id: 'level_slab_host_ground',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+    })
+    const first = LevelNode.parse({
+      id: 'level_slab_host_first',
+      parentId: building.id,
+      level: 1,
+      height: 3,
+    })
+    const slab = SlabNode.parse({
+      id: 'slab_host_sync',
+      parentId: first.id,
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 4],
+        [0, 4],
+      ],
+      elevation: 0.05,
+      thickness: 0.2,
+    })
+    const hostNodes = {
+      [building.id]: building,
+      [ground.id]: ground,
+      [first.id]: first,
+      [slab.id]: slab,
+    } as Record<AnyNodeId, AnyNode>
+    const leanTo = resolveLeanToSlabEdgePlacement({
+      activeLevelId: ground.id,
+      edgeIndex: 0,
+      edgeT: 0.5,
+      nodes: hostNodes,
+      slab,
+    })!
+    const assembly = createLeanToAssembly(leanTo, undefined, hostNodes)
+    const nodes = Object.fromEntries(
+      [
+        { ...building, children: [ground.id, first.id] },
+        { ...ground, children: [leanTo.id] },
+        { ...first, children: [slab.id] },
+        slab,
+        assembly.extension,
+        ...assembly.children,
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [building.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    useScene.getState().updateNode(slab.id as AnyNodeId, {
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 4],
+        [0, 4],
+      ],
+      elevation: 0.15,
+    })
+
+    const synced = useScene.getState().nodes[leanTo.id as AnyNodeId]
+    expect(synced?.type).toBe('lean-to-extension')
+    if (synced?.type !== 'lean-to-extension') return
+    expect(synced.position).toEqual([4, 0, 0])
+    expect(synced.span).toBeCloseTo(7.9, 6)
+    expect(synced.highEdgeHeight).toBeCloseTo(2.95, 6)
+    const posts = synced.children
+      .map((id) => useScene.getState().nodes[id as AnyNodeId])
+      .filter((node) => node?.type === 'column')
+    expect(posts).toHaveLength(4)
+    expect(
+      posts.every((post) => post?.type === 'column' && managedLeanToPostSide(post) === 'low'),
+    ).toBe(true)
+  })
+
+  test('keeps a deleted freestanding pillar omitted while the remaining pillars resize', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_omitted_post', level: 0 })
+    const leanTo = LeanToExtensionNode.parse({
+      id: 'leanto_omitted_post',
+      parentId: level.id,
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      connectionMode: 'manual',
+      autoSpan: false,
+      span: 4,
+    })
+    const assembly = createLeanToAssembly(leanTo)
+    const nodes = Object.fromEntries(
+      [{ ...level, children: [leanTo.id] }, assembly.extension, ...assembly.children].map(
+        (node) => [node.id, node],
+      ),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    const deletedPost = assembly.posts.find(
+      (post) => managedLeanToPostSide(post) === 'high' && managedLeanToPostIndex(post) === 2,
+    )!
+    const resizingPost = assembly.posts.find(
+      (post) => managedLeanToPostSide(post) === 'low' && managedLeanToPostIndex(post) === 2,
+    )!
+    const originalResizingX = resizingPost.position[0]
+
+    useScene.getState().deleteNode(deletedPost.id as AnyNodeId)
+
+    const afterDelete = useScene.getState().nodes[leanTo.id as AnyNodeId]
+    expect(afterDelete?.type).toBe('lean-to-extension')
+    if (afterDelete?.type !== 'lean-to-extension') return
+    expect(afterDelete.omittedPostSlots).toEqual([{ side: 'high', index: 2, layoutCount: 3 }])
+    expect(
+      afterDelete.children
+        .map((id) => useScene.getState().nodes[id as AnyNodeId])
+        .some(
+          (child) =>
+            child?.type === 'column' &&
+            managedLeanToPostSide(child) === 'high' &&
+            managedLeanToPostIndex(child) === 2,
+        ),
+    ).toBe(false)
+
+    useScene.getState().updateNode(leanTo.id as AnyNodeId, { span: 8 })
+
+    const afterResize = useScene.getState().nodes[leanTo.id as AnyNodeId]
+    expect(afterResize?.type).toBe('lean-to-extension')
+    if (afterResize?.type !== 'lean-to-extension') return
+    const posts = afterResize.children
+      .map((id) => useScene.getState().nodes[id as AnyNodeId])
+      .filter((child): child is Extract<AnyNode, { type: 'column' }> => child?.type === 'column')
+    expect(posts).toHaveLength(7)
+    expect(
+      posts.some(
+        (post) => managedLeanToPostSide(post) === 'high' && managedLeanToPostIndex(post) === 3,
+      ),
+    ).toBe(false)
+    expect(posts.find((post) => post.id === resizingPost.id)?.position[0]).not.toBe(
+      originalResizingX,
+    )
   })
 })

@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   type FloorplanAffordance,
   getWallCurveFrameAt,
@@ -9,38 +10,41 @@ import {
   useLiveNodeOverrides,
   type WallNode,
 } from '@pascal-app/core'
-import { getSegmentGridStep } from '@pascal-app/editor'
+import { getSegmentGridStep, isAngleSnapActive } from '@pascal-app/editor'
+import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 import { resolveLeanToEdgeSnapTargets, resolveLeanToSpanResizeProposal } from './layout'
 import { deriveLeanToResizePatch } from './parametrics'
+import { moveLeanToAlongSlabEdge } from './placement'
 
 type ResizePayload = { dimension: 'projection' | 'span'; side?: 1 | -1 }
 
 export const leanToResizeAffordance: FloorplanAffordance<LeanToExtensionNode> = {
   start({ node, nodes, payload, initialPlanPoint, sceneApi }) {
+    if (!sceneApi) return { affectedIds: [], apply() {}, canCommit: () => false }
     const wall = node.parentId
       ? (nodes[node.parentId as AnyNodeId] as WallNode | undefined)
       : undefined
-    if (wall?.type !== 'wall' || !sceneApi) {
-      return { affectedIds: [], apply() {}, canCommit: () => false }
-    }
     const { dimension, side = 1 } = payload as ResizePayload
     const outwardSign = Math.cos(node.rotation[1]) >= 0 ? 1 : -1
     let along: readonly [number, number]
     let outward: readonly [number, number]
-    // On a curved host the drag axes are the wall arc's tangent / normal at
-    // the lean-to's along-wall position, not the straight chord direction.
-    if (isCurvedWall(wall)) {
+    if (wall?.type === 'wall' && isCurvedWall(wall)) {
       const arcLength = Math.max(1e-6, getWallCurveLength(wall))
       const t = Math.max(0, Math.min(1, node.position[0] / arcLength))
       const frame = getWallCurveFrameAt(wall, t)
       along = [frame.tangent.x, frame.tangent.y]
       outward = [frame.normal.x * outwardSign, frame.normal.y * outwardSign]
-    } else {
+    } else if (wall?.type === 'wall') {
       const dx = wall.end[0] - wall.start[0]
       const dz = wall.end[1] - wall.start[1]
       const length = Math.max(1e-6, Math.hypot(dx, dz))
       along = [dx / length, dz / length]
       outward = [-along[1] * outwardSign, along[0] * outwardSign]
+    } else {
+      const cos = Math.cos(node.rotation[1])
+      const sin = Math.sin(node.rotation[1])
+      along = [cos, -sin]
+      outward = [sin, cos]
     }
     const axis = dimension === 'projection' ? outward : along
     const initialAxis = initialPlanPoint[0] * axis[0] + initialPlanPoint[1] * axis[1]
@@ -54,32 +58,55 @@ export const leanToResizeAffordance: FloorplanAffordance<LeanToExtensionNode> = 
         const raw = initialValue + (currentAxis - initialAxis) * side
         const step = modifiers.altKey ? 0 : getSegmentGridStep()
         const value = Math.max(0.5, step > 0 ? snapScalar(raw, step) : raw)
-        lastPatch =
-          dimension === 'projection'
-            ? { projection: value, ...deriveLeanToResizePatch(node, { projection: value }) }
-            : (() => {
-                const proposal = resolveLeanToSpanResizeProposal({
-                  node,
-                  wall,
-                  rawSpan: value,
-                  side: side > 0 ? 'right' : 'left',
-                  edgeSnapTargets: modifiers.altKey
-                    ? []
-                    : resolveLeanToEdgeSnapTargets(node, wall, nodes),
-                })
-                return {
-                  span: proposal.span,
-                  autoSpan: false,
-                  position: proposal.position,
-                  ...(proposal.target
-                    ? {
-                        highEdgeHeight: proposal.highEdgeHeight,
-                        lowEdgeHeight: proposal.lowEdgeHeight,
-                        pitch: proposal.pitch,
-                      }
-                    : {}),
+        if (dimension === 'projection') {
+          lastPatch = {
+            projection: value,
+            ...deriveLeanToResizePatch(node, { projection: value }),
+          }
+        } else if (wall?.type === 'wall') {
+          const proposal = resolveLeanToSpanResizeProposal({
+            node,
+            wall,
+            rawSpan: value,
+            side: side > 0 ? 'right' : 'left',
+            edgeSnapTargets: modifiers.altKey
+              ? []
+              : resolveLeanToEdgeSnapTargets(node, wall, nodes),
+          })
+          lastPatch = {
+            span: proposal.span,
+            autoSpan: false,
+            position: proposal.position,
+            ...(proposal.target
+              ? {
+                  highEdgeHeight: proposal.highEdgeHeight,
+                  lowEdgeHeight: proposal.lowEdgeHeight,
+                  pitch: proposal.pitch,
                 }
-              })()
+              : {}),
+          }
+        } else {
+          const centerShift = (side * (value - node.span)) / 2
+          const proposedPosition: LeanToExtensionNode['position'] = [
+            node.position[0] + along[0] * centerShift,
+            node.position[1],
+            node.position[2] + along[1] * centerShift,
+          ]
+          const resolved =
+            node.hostKind === 'slab-edge'
+              ? moveLeanToAlongSlabEdge(
+                  { ...node, autoSpan: false, span: value },
+                  [proposedPosition[0], proposedPosition[2]],
+                  nodes as Record<AnyNodeId, AnyNode>,
+                )
+              : null
+          lastPatch = {
+            span: value,
+            autoSpan: false,
+            position: resolved?.position ?? proposedPosition,
+            ...(resolved ? { hostSlabEdgeT: resolved.hostSlabEdgeT } : {}),
+          }
+        }
         useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
         sceneApi.markDirty(node.id as AnyNodeId)
       },
@@ -87,6 +114,43 @@ export const leanToResizeAffordance: FloorplanAffordance<LeanToExtensionNode> = 
       commit() {
         useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
         sceneApi.update(node.id as AnyNodeId, lastPatch)
+      },
+    }
+  },
+}
+
+export const leanToRotateAffordance: FloorplanAffordance<LeanToExtensionNode> = {
+  start({ node, initialPlanPoint, sceneApi }) {
+    if (!(sceneApi && node.hostKind === 'freestanding')) {
+      return { affectedIds: [], apply() {}, canCommit: () => false }
+    }
+    const nodeId = node.id as AnyNodeId
+    const initialAngle = Math.atan2(
+      initialPlanPoint[1] - node.position[2],
+      initialPlanPoint[0] - node.position[0],
+    )
+    let lastRotation = node.rotation[1]
+    return {
+      affectedIds: [nodeId],
+      apply({ planPoint }) {
+        const delta = rotateAffordanceDelta({
+          center: [node.position[0], node.position[2]],
+          initialAngle,
+          planPoint,
+          free: !isAngleSnapActive(),
+        })
+        lastRotation = node.rotation[1] - delta
+        useLiveNodeOverrides.getState().set(nodeId, {
+          rotation: [node.rotation[0], lastRotation, node.rotation[2]],
+        })
+        sceneApi.markDirty(nodeId)
+      },
+      canCommit: () => true,
+      commit() {
+        useLiveNodeOverrides.getState().clear(nodeId)
+        sceneApi.update(nodeId, {
+          rotation: [node.rotation[0], lastRotation, node.rotation[2]],
+        })
       },
     }
   },

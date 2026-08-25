@@ -176,7 +176,8 @@ describe('roof system shed geometry', () => {
       shedSideInfillSpan: span,
       shedSideInfillMinX: -infillHalfWidth,
       shedSideInfillMaxX: infillHalfWidth,
-      metadata: { managedByLeanTo: 'lean_to_test', leanToRole: 'roof-segment' },
+      shedInsetEndPanels: true,
+      wallShell: 'omit',
     })
     const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
 

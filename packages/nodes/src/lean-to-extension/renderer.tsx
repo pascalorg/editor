@@ -31,6 +31,7 @@ const LeanToExtensionRenderer = ({ node }: { node: LeanToExtensionNode }) => {
 
   const overridePosition = liveOverride?.position as [number, number, number] | undefined
   const overrideRotation = liveOverride?.rotation as [number, number, number] | undefined
+  const overrideVisible = liveOverride?.visible
   const effectiveNode: LeanToExtensionNode = {
     ...node,
     position: liveTransform?.position ?? overridePosition ?? node.position,
@@ -50,7 +51,9 @@ const LeanToExtensionRenderer = ({ node }: { node: LeanToExtensionNode }) => {
       position={pose.position}
       ref={ref}
       rotation={[effectiveNode.rotation[0], pose.rotationY, effectiveNode.rotation[2]]}
-      visible={effectiveNode.visible !== false}
+      visible={
+        typeof overrideVisible === 'boolean' ? overrideVisible : effectiveNode.visible !== false
+      }
       {...handlers}
     >
       {effectiveNode.children.map((childId) => (

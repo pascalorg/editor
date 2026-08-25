@@ -1,10 +1,15 @@
 import {
   type AnyNode,
+  type AnyNodeId,
   emitter,
   type ItemNode,
   nodeRegistry,
   resolveSelectionProxyId,
+  useScene,
 } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import useEditor from '../store/use-editor'
+import { emitDeleteSFX } from './sfx-bus'
 
 export type SelectionModifierKeys = {
   meta: boolean
@@ -20,6 +25,20 @@ export type NodeSelectionTarget = {
 }
 
 export function emitCanvasNodeSelection(node: AnyNode): void {
+  if (useEditor.getState().mode === 'delete') {
+    const scene = useScene.getState()
+    if (scene.readOnly) return
+
+    emitDeleteSFX(node.type)
+    scene.deleteNode(node.id as AnyNodeId)
+    if (node.parentId) scene.dirtyNodes.add(node.parentId as AnyNodeId)
+    useViewer.getState().setSelection({ selectedIds: [] })
+    if (useViewer.getState().hoveredId === node.id) {
+      useViewer.setState({ hoveredId: null })
+    }
+    return
+  }
+
   emitter.emit('selection:canvas-node-click', node)
 }
 

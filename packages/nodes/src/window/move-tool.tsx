@@ -1,9 +1,9 @@
 import {
   type AnyNodeId,
   type DormerEvent,
+  dormerWallFacePointToDormer,
   emitter,
   type GridEvent,
-  getDormerWallFaceFrame,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
@@ -13,6 +13,7 @@ import {
   useLiveTransforms,
   useScene,
   type WallEvent,
+  type WindowEvent,
   WindowNode,
 } from '@pascal-app/core'
 import {
@@ -31,13 +32,15 @@ import {
   useAlignmentGuides,
   useEditor,
   useFacingPose,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   type DormerWindowTarget,
+  dormerEventFromHostedWindow,
+  getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
   shouldWriteDormerWindowPreviewHost,
 } from '../shared/dormer-wall-opening-placement'
@@ -92,6 +95,7 @@ const edgeMaterial = new LineBasicNodeMaterial({
  *   new window entirely). On cancel: deletes the node.
  */
 const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode }) => {
+  const { activeLevelId, isCameraDragging, selectNode } = useRegistryToolContext()
   const cursorGroupRef = useRef<Group>(null!)
 
   // The window preview ghost. Shown for the WHOLE move so the user always sees
@@ -271,7 +275,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       }
     }
 
-    const getLevelId = () => useViewer.getState().selection.levelId
+    const getLevelId = () => activeLevelId
     const getLevelYOffset = () => {
       const id = getLevelId()
       return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
@@ -652,7 +656,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
       triggerSFX('sfx:structure-build')
       hideCursor()
-      useViewer.getState().setSelection({ selectedIds: [placedId] })
+      selectNode(placedId as AnyNodeId)
       exitMoveMode()
     }
 
@@ -761,7 +765,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
     const onGridMove = (event: GridEvent) => {
       if (committed) return
-      if (useViewer.getState().cameraDragging) return
+      if (isCameraDragging()) return
       // A wall/roof handler owns the pointer right now — the cursor ray is on a
       // wall/roof that snaps, so skip the floor follow (see `wallOwnsPointer`).
       if (wallOwnsPointer()) return
@@ -778,14 +782,12 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         height: movingWindowNode.height,
         ignoreId: movingWindowNode.id,
         nodes: useScene.getState().nodes,
+        snap: snapToHalf,
       })
 
     const dormerWindowWorldPosition = (event: DormerEvent, target: DormerWindowTarget) => {
-      const frame = getDormerWallFaceFrame(event.node, target.face)
       const point = new Vector3(
-        frame.origin[0] + target.position[0] * Math.cos(frame.yaw),
-        target.position[1],
-        frame.origin[2] + target.position[0] * Math.sin(frame.yaw),
+        ...dormerWallFacePointToDormer(event.node, target.face, target.position),
       )
       event.object.localToWorld(point)
       return [point.x, point.y, point.z] as [number, number, number]
@@ -825,7 +827,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       }
       setGhostPose({
         position: dormerWindowWorldPosition(event, target),
-        rotationY: target.face === 'front' ? 0 : Math.PI,
+        rotationY: getDormerWindowWorldYaw(event, target),
         tint: target.valid || altHeld ? 'valid' : 'invalid',
         floorY: dormerWindowWorldPosition(event, target)[1],
         side,
@@ -902,7 +904,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useLiveTransforms.getState().clear(movingWindowNode.id)
       triggerSFX('sfx:structure-build')
       hideCursor()
-      useViewer.getState().setSelection({ selectedIds: [placedId] })
+      selectNode(placedId as AnyNodeId)
       exitMoveMode()
       event.stopPropagation()
     }
@@ -934,6 +936,33 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useLiveTransforms.getState().clear(movingWindowNode.id)
       lastDormerEvent = null
       lastDormerTarget = null
+    }
+
+    const dormerEventFromWindow = (event: WindowEvent): DormerEvent | null => {
+      const dormerId = event.node.dormerId ?? event.node.parentId
+      const dormer = dormerId ? useScene.getState().nodes[dormerId as AnyNodeId] : undefined
+      const object = dormer ? sceneRegistry.nodes.get(dormer.id as AnyNodeId) : undefined
+      if (!(dormer?.type === 'dormer' && object)) return null
+      return dormerEventFromHostedWindow(event, dormer, object)
+    }
+
+    const onDormerWindowHover = (event: WindowEvent) => {
+      const dormerEvent = dormerEventFromWindow(event)
+      if (dormerEvent) onDormerHover(dormerEvent)
+    }
+
+    const onDormerWindowClick = (event: WindowEvent) => {
+      const dormerEvent = dormerEventFromWindow(event)
+      if (dormerEvent) onDormerClick(dormerEvent)
+    }
+
+    const onDormerWindowLeave = (event: WindowEvent) => {
+      if (
+        event.node.dormerId ||
+        useScene.getState().nodes[event.node.parentId as AnyNodeId]?.type === 'dormer'
+      ) {
+        onDormerLeave()
+      }
     }
 
     // ── Roof-segment wall faces ─────────────────────────────────────
@@ -1083,7 +1112,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
       triggerSFX('sfx:structure-build')
       hideCursor()
-      useViewer.getState().setSelection({ selectedIds: [placedId] })
+      selectNode(placedId as AnyNodeId)
       exitMoveMode()
       event.stopPropagation()
     }
@@ -1207,6 +1236,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     emitter.on('dormer:move', onDormerHover)
     emitter.on('dormer:click', onDormerClick)
     emitter.on('dormer:leave', onDormerLeave)
+    emitter.on('window:enter', onDormerWindowHover)
+    emitter.on('window:move', onDormerWindowHover)
+    emitter.on('window:click', onDormerWindowClick)
+    emitter.on('window:leave', onDormerWindowLeave)
     emitter.on('grid:move', onGridMove)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('pointerup', onPlacementDragPointerUp)
@@ -1305,6 +1338,10 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       emitter.off('dormer:move', onDormerHover)
       emitter.off('dormer:click', onDormerClick)
       emitter.off('dormer:leave', onDormerLeave)
+      emitter.off('window:enter', onDormerWindowHover)
+      emitter.off('window:move', onDormerWindowHover)
+      emitter.off('window:click', onDormerWindowClick)
+      emitter.off('window:leave', onDormerWindowLeave)
       emitter.off('grid:move', onGridMove)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)
@@ -1312,7 +1349,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       window.removeEventListener('keydown', onAltToggle)
       window.removeEventListener('keyup', onAltToggle)
     }
-  }, [movingWindowNode, exitMoveMode])
+  }, [activeLevelId, exitMoveMode, isCameraDragging, movingWindowNode, selectNode])
 
   const edgesGeo = useMemo(() => {
     const boxGeo = new BoxGeometry(

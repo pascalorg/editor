@@ -3,9 +3,9 @@ import {
   type AnyNodeId,
   type DormerEvent,
   type DormerNode,
+  dormerWallFacePointToDormer,
   emitter,
   type GridEvent,
-  getDormerWallFaceFrame,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
@@ -32,13 +32,15 @@ import {
   useEditor,
   useFacingPose,
   usePlacementPreview,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
   type DormerWindowTarget,
+  dormerEventFromHostedWindow,
+  getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
 } from '../shared/dormer-wall-opening-placement'
 import {
@@ -98,6 +100,7 @@ type HostKind = 'wall' | 'roof' | 'dormer' | null
  * engages only on an actual mesh hover — no proximity magnet.
  */
 const WindowTool: React.FC = () => {
+  const { activeLevelId, isCameraDragging, selectNode } = useRegistryToolContext()
   const draftRef = useRef<WindowNode | null>(null)
   const cursorGroupRef = useRef<Group>(null!)
   const edgesRef = useRef<LineSegments>(null!)
@@ -176,7 +179,7 @@ const WindowTool: React.FC = () => {
     // while free-following can re-render the floating ghost with the new facing.
     let lastFloorPoint: { pos: [number, number, number]; floorY: number } | null = null
 
-    const getLevelId = () => useViewer.getState().selection.levelId
+    const getLevelId = () => activeLevelId
     const getLevelYOffset = () => {
       const id = getLevelId()
       return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
@@ -301,12 +304,8 @@ const WindowTool: React.FC = () => {
     }
 
     const dormerWindowWorldPosition = (event: DormerEvent, target: DormerWindowTarget) => {
-      const frame = getDormerWallFaceFrame(event.node, target.face)
-      const [u, v] = target.position
       const point = roofFallbackPoint.set(
-        frame.origin[0] + u * Math.cos(frame.yaw),
-        v,
-        frame.origin[2] + u * Math.sin(frame.yaw),
+        ...dormerWallFacePointToDormer(event.node, target.face, target.position),
       )
       event.object.localToWorld(point)
       return worldToSelectedBuildingLocal(point)
@@ -347,7 +346,7 @@ const WindowTool: React.FC = () => {
       clearOpeningGuides3D()
       updateCursor(
         dormerWindowWorldPosition(event, target),
-        target.face === 'front' ? 0 : Math.PI,
+        getDormerWindowWorldYaw(event, target),
         target.valid,
         0,
       )
@@ -563,7 +562,7 @@ const WindowTool: React.FC = () => {
       })
 
       useScene.getState().createNode(node, wall.id as AnyNodeId)
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      selectNode(node.id)
       triggerSFX('sfx:structure-build')
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
@@ -625,7 +624,7 @@ const WindowTool: React.FC = () => {
 
       state.createNode(node, dormer.id as AnyNodeId)
       state.dirtyNodes.add(dormer.id as AnyNodeId)
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      selectNode(node.id)
       triggerSFX('sfx:structure-build')
       if (useEditor.getState().getContinuation('point') === 'repeat') {
         useScene.temporal.getState().pause()
@@ -712,7 +711,7 @@ const WindowTool: React.FC = () => {
     // NOT snap from proximity — snapping engages only when the cursor ray
     // actually hovers a wall (onWallHover) or roof face (onRoofHover).
     const onGridFreeFollow = (event: GridEvent) => {
-      if (useViewer.getState().cameraDragging) return
+      if (isCameraDragging()) return
       // A wall/roof mesh handler processed this pointermove (shared DOM
       // timeStamp) — it owns the frame and has snapped the draft, so skip the
       // floor follow this tick.
@@ -737,6 +736,7 @@ const WindowTool: React.FC = () => {
         height: draftRef.current?.height ?? FALLBACK_HEIGHT,
         nodes: useScene.getState().nodes,
         ignoreId: draftRef.current?.id,
+        snap: snapToHalf,
       })
 
     const showDormerFallbackCursor = (event: DormerEvent) => {
@@ -786,29 +786,7 @@ const WindowTool: React.FC = () => {
         : undefined
       const object = dormer ? sceneRegistry.nodes.get(dormer.id as AnyNodeId) : undefined
       if (!(dormer?.type === 'dormer' && object)) return null
-
-      object.updateWorldMatrix(true, false)
-      const localPoint = object.worldToLocal(new Vector3(...event.position))
-      const face = event.node.dormerFace ?? 'front'
-      const normal: [number, number, number] =
-        face === 'front'
-          ? [0, 0, 1]
-          : face === 'back'
-            ? [0, 0, -1]
-            : face === 'right'
-              ? [1, 0, 0]
-              : [-1, 0, 0]
-
-      return {
-        node: dormer,
-        normal,
-        object,
-        position: event.position,
-        localPosition: [localPoint.x, localPoint.y, localPoint.z],
-        faceIndex: event.faceIndex,
-        nativeEvent: event.nativeEvent,
-        stopPropagation: event.stopPropagation,
-      }
+      return dormerEventFromHostedWindow(event, dormer, object)
     }
 
     const onDormerWindowHover = (event: WindowEvent) => {
@@ -945,7 +923,7 @@ const WindowTool: React.FC = () => {
       // Rebuild the segment (and the merged roof) so the wall brush
       // picks up the new opening cut.
       useScene.getState().dirtyNodes.add(segment.id as AnyNodeId)
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      selectNode(node.id)
       triggerSFX('sfx:structure-build')
       if (useEditor.getState().getContinuation('point') === 'repeat') {
         useScene.temporal.getState().pause()
@@ -1044,7 +1022,7 @@ const WindowTool: React.FC = () => {
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [])
+  }, [activeLevelId, isCameraDragging, selectNode])
 
   // Cursor geometry: window outline rectangle. Static dims, so build it once and
   // dispose on unmount rather than reallocating (and orphaning) an EdgesGeometry

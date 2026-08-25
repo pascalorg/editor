@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, type DormerEvent, DormerNode, WindowNode } from '@pascal-app/core'
 import {
+  type AnyNode,
+  type DormerEvent,
+  DormerNode,
+  type WindowEvent,
+  WindowNode,
+} from '@pascal-app/core'
+import { Object3D } from 'three'
+import {
+  dormerEventFromHostedWindow,
+  getDormerWindowWorldYaw,
   resolveDormerWindowTarget,
   shouldWriteDormerWindowPreviewHost,
 } from './dormer-wall-opening-placement'
@@ -16,6 +25,37 @@ function event(
     normal,
   } as DormerEvent
 }
+
+describe('dormerEventFromHostedWindow', () => {
+  test('forwards a hosted back-window hit into the dormer coordinate frame', () => {
+    const dormer = DormerNode.parse({ id: 'dormer_test' })
+    const window = WindowNode.parse({
+      dormerFace: 'back',
+      dormerId: dormer.id,
+      id: 'window_test',
+      parentId: dormer.id,
+    })
+    const object = new Object3D()
+    object.position.set(2, 3, 4)
+    object.updateMatrixWorld(true)
+    const stopPropagation = () => {}
+    const windowEvent = {
+      faceIndex: 7,
+      nativeEvent: { timeStamp: 10 },
+      node: window,
+      position: [3, 5, 7],
+      stopPropagation,
+    } as unknown as WindowEvent
+
+    const dormerEvent = dormerEventFromHostedWindow(windowEvent, dormer, object)
+
+    expect(dormerEvent.node).toBe(dormer)
+    expect(dormerEvent.localPosition).toEqual([1, 2, 3])
+    expect(dormerEvent.normal).toEqual([0, 0, -1])
+    expect(dormerEvent.faceIndex).toBe(7)
+    expect(dormerEvent.stopPropagation).toBe(stopPropagation)
+  })
+})
 
 describe('resolveDormerWindowTarget', () => {
   test('clamps a front-face window in dormer-local coordinates', () => {
@@ -86,6 +126,115 @@ describe('resolveDormerWindowTarget', () => {
 
     expect(target?.face).toBe('back')
     expect(target?.valid).toBe(true)
+  })
+
+  test.each([
+    ['front', [0, 0, 1] as const, [0, 0, 1] as const],
+    ['back', [0, 0, -1] as const, [0, 0, -1] as const],
+    ['right', [1.5, 0, 0] as const, [1, 0, 0] as const],
+    ['left', [-1.5, 0, 0] as const, [-1, 0, 0] as const],
+  ])('targets the %s dormer face while dragging', (face, localPosition, normal) => {
+    const dormer = DormerNode.parse({
+      depth: 2,
+      height: 1,
+      id: 'dormer_test',
+      wallSkirtHeight: 2,
+      width: 3,
+    })
+
+    const target = resolveDormerWindowTarget({
+      event: event(dormer, [...localPosition], [...normal]),
+      height: 0.5,
+      nodes: {},
+      width: 0.5,
+    })
+
+    expect(target?.face).toBe(face)
+    expect(target?.valid).toBe(true)
+  })
+
+  test('preserves the rendered horizontal direction on a side face', () => {
+    const dormer = DormerNode.parse({
+      depth: 2,
+      height: 1,
+      id: 'dormer_test',
+      wallSkirtHeight: 2,
+      width: 3,
+    })
+
+    const target = resolveDormerWindowTarget({
+      event: event(dormer, [1.5, 0, -0.5], [1, 0, 0]),
+      height: 0.5,
+      nodes: {},
+      width: 0.5,
+    })
+
+    expect(target?.face).toBe('right')
+    expect(target?.position[0]).toBeCloseTo(0.5)
+  })
+
+  test('uses the live grid step and keeps raw coordinates when grid snapping is off', () => {
+    const dormer = DormerNode.parse({
+      depth: 2,
+      height: 1,
+      id: 'dormer_test',
+      wallSkirtHeight: 2,
+      width: 3,
+    })
+    const resolve = (snap: (value: number) => number) =>
+      resolveDormerWindowTarget({
+        event: event(dormer, [0.36, -0.64, 1], [0, 0, 1]),
+        height: 0.5,
+        nodes: {},
+        snap,
+        width: 0.5,
+      })
+
+    expect(resolve((value) => Math.round(value / 0.5) * 0.5)?.position).toEqual([0.5, -0.5, 0])
+    expect(resolve((value) => Math.round(value / 0.25) * 0.25)?.position).toEqual([0.25, -0.75, 0])
+    expect(resolve((value) => value)?.position).toEqual([0.36, -0.64, 0])
+  })
+
+  test('clamps a side-face window to the sloped shed wall above the eave', () => {
+    const dormer = DormerNode.parse({
+      depth: 4,
+      height: 1,
+      id: 'dormer_test',
+      roofHeight: 2,
+      roofType: 'shed',
+      shedHighSide: 'back',
+      wallSkirtHeight: 2,
+      width: 4,
+    })
+
+    const target = resolveDormerWindowTarget({
+      event: event(dormer, [2, 3, -1], [1, 0, 0]),
+      height: 1,
+      nodes: {},
+      width: 1,
+    })
+
+    expect(target?.face).toBe('right')
+    expect(target?.position).toEqual([1, 1.75, 0])
+  })
+})
+
+describe('getDormerWindowWorldYaw', () => {
+  test('orients the drag preview to side faces and the dormer world rotation', () => {
+    const dormer = DormerNode.parse({ id: 'dormer_test' })
+    const object = new Object3D()
+    object.rotation.y = 0.4
+    object.updateMatrixWorld(true)
+    const dormerEvent = { ...event(dormer, [0, 0, 0]), object }
+
+    expect(
+      getDormerWindowWorldYaw(dormerEvent, {
+        dormer,
+        face: 'right',
+        position: [0, 0, 0],
+        valid: true,
+      }),
+    ).toBeCloseTo(0.4 + Math.PI / 2)
   })
 })
 

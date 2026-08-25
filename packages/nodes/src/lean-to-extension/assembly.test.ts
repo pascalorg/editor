@@ -606,6 +606,46 @@ describe('lean-to assembly', () => {
     )
   })
 
+  test('extends freestanding canopy posts from an upper level down to site ground', () => {
+    const building = BuildingNode.parse({
+      id: 'building_freestanding_post',
+      children: ['level_freestanding_lower', 'level_freestanding_upper'],
+    })
+    const lower = LevelNode.parse({
+      id: 'level_freestanding_lower',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+    })
+    const upper = LevelNode.parse({
+      id: 'level_freestanding_upper',
+      parentId: building.id,
+      level: 1,
+      height: 3,
+    })
+    const leanTo = LeanToExtensionNode.parse({
+      parentId: upper.id,
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      position: [0, 0, 0],
+    })
+    const nodes = {
+      [building.id]: building,
+      [lower.id]: lower,
+      [upper.id]: upper,
+      [leanTo.id]: leanTo,
+    } as Record<string, AnyNode>
+
+    const baseY = resolveLeanToPostBaseY(leanTo, undefined, nodes, 0)
+    const post = leanToPostLayoutPatch(leanTo, 0, baseY)
+
+    expect(post.position[1]).toBeCloseTo(-3.02, 6)
+    expect(post.position[1] + post.height).toBeCloseTo(
+      resolveLeanToLayout(leanTo).postHeight + 0.02,
+      6,
+    )
+  })
+
   test('extends upper-storey pillars through open space to site ground', () => {
     const building = BuildingNode.parse({
       id: 'building_upper_post',

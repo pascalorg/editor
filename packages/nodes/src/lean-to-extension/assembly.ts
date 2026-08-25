@@ -34,6 +34,7 @@ import {
   resolveLeanToCornerJoints,
 } from './corner-joint'
 import { resolveLeanToLayout } from './layout'
+import { isLeanToPostOmitted } from './post-omissions'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
@@ -252,7 +253,7 @@ function siteGroundYInLevelFrame(
 
 export function resolveLeanToPostBaseY(
   leanTo: LeanToExtensionNode,
-  wall: WallNode,
+  wall: WallNode | undefined,
   nodes: Record<string, AnyNode>,
   index: number,
   side: LeanToPostSide = 'low',
@@ -266,11 +267,11 @@ export function resolveLeanToPostBaseY(
 
 export function resolveLeanToPostBaseYAtLocalPosition(
   leanTo: LeanToExtensionNode,
-  wall: WallNode,
+  wall: WallNode | undefined,
   nodes: Record<string, AnyNode>,
   localPosition: readonly [number, number, number],
 ): number {
-  const levelId = wall.parentId
+  const levelId = wall?.parentId ?? leanTo.parentId
   if (!levelId || nodes[levelId]?.type !== 'level') return 0
 
   const postX = localPosition[0]
@@ -278,16 +279,25 @@ export function resolveLeanToPostBaseYAtLocalPosition(
   const leanCos = Math.cos(leanRotation)
   const leanSin = Math.sin(leanRotation)
   const postZ = localPosition[2]
-  const wallLocalX = leanTo.position[0] + postX * leanCos + postZ * leanSin
-  const wallLocalZ = leanTo.position[2] - postX * leanSin + postZ * leanCos
-  const wallAngle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
-  const wallCos = Math.cos(wallAngle)
-  const wallSin = Math.sin(wallAngle)
-  const position: [number, number, number] = [
-    wall.start[0] + wallLocalX * wallCos - wallLocalZ * wallSin,
-    0,
-    wall.start[1] + wallLocalX * wallSin + wallLocalZ * wallCos,
-  ]
+  const position: [number, number, number] = wall
+    ? (() => {
+        const wallLocalX = leanTo.position[0] + postX * leanCos + postZ * leanSin
+        const wallLocalZ = leanTo.position[2] - postX * leanSin + postZ * leanCos
+        const wallAngle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+        const wallCos = Math.cos(wallAngle)
+        const wallSin = Math.sin(wallAngle)
+        return [
+          wall.start[0] + wallLocalX * wallCos - wallLocalZ * wallSin,
+          0,
+          wall.start[1] + wallLocalX * wallSin + wallLocalZ * wallCos,
+        ]
+      })()
+    : [
+        leanTo.position[0] + postX * leanCos + postZ * leanSin,
+        0,
+        leanTo.position[2] - postX * leanSin + postZ * leanCos,
+      ]
+  const wallAngle = wall ? Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0]) : 0
   const support = spatialGridManager.getSlabSupportForItem(
     levelId,
     position,
@@ -299,7 +309,10 @@ export function resolveLeanToPostBaseYAtLocalPosition(
       ? siteGroundYInLevelFrame(nodes, levelId, position[0], position[2])
       : support.elevation
   return (
-    groundY - getWallBaseElevationForNodes(wall, nodes) - leanTo.position[1] - POST_GROUND_EMBED
+    groundY -
+    (wall ? getWallBaseElevationForNodes(wall, nodes) : 0) -
+    leanTo.position[1] -
+    POST_GROUND_EMBED
   )
 }
 
@@ -361,6 +374,7 @@ export function resolveLeanToPostIndexes(
 ): number[] {
   const layout = resolveLeanToLayout(leanTo)
   return Array.from({ length: layout.postXs.length }, (_, index) => index).filter((index) => {
+    if (isLeanToPostOmitted(leanTo, side, index)) return false
     if (side === 'high') return true
     const x = layout.postXs[index] ?? 0
     const left = cornerJoints.left
@@ -392,6 +406,9 @@ export type LeanToRoofSegmentLayoutPatch = Pick<
   | 'shedSideInfillMaxX'
   | 'shedFootprintPieces'
   | 'shedOpenEndSides'
+  | 'managedByParent'
+  | 'wallShell'
+  | 'shedInsetEndPanels'
   | 'trim'
   | 'metadata'
 >
@@ -482,6 +499,9 @@ export function leanToRoofSegmentLayoutPatch(
     shedSideInfillMaxX: layout.span / 2 + sideMemberFaceInset - roofCenterX,
     shedFootprintPieces: hasShapedCorner ? roofPieces : undefined,
     shedOpenEndSides: jointSides.length > 0 ? jointSides : undefined,
+    managedByParent: true,
+    wallShell: 'omit',
+    shedInsetEndPanels: true,
     metadata: managedMetadata(leanTo, 'roof-segment'),
     trim: {
       left: 0,
@@ -744,7 +764,12 @@ export function createLeanToAssembly(
     createManagedLeanToPost(leanTo, index, 'low'),
   )
   for (const joint of Object.values(cornerJoints)) {
-    if (joint?.sharedPostOwner) posts.push(createManagedLeanToCornerPost(leanTo, joint))
+    if (
+      joint?.sharedPostOwner &&
+      !isLeanToPostOmitted(leanTo, 'low', leanToCornerPostIndex(joint.side))
+    ) {
+      posts.push(createManagedLeanToCornerPost(leanTo, joint))
+    }
   }
   if (leanTo.highSideMode === 'independent-high-beam') {
     posts.push(

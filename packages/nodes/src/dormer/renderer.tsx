@@ -31,7 +31,6 @@ import {
   DORMER_GABLE_MATERIAL_INDEX,
   generateDormerGeometry,
 } from './csg-geometry'
-import DormerWindowAssembly from './window-assembly'
 
 const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -117,20 +116,6 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.wallMaterialPreset,
   ])
 
-  // The window frame bars / sill take the 'joinery' role when untextured;
-  // otherwise the deck-side material (slot 1) drives the frame look.
-  const frameSideMat = useMemo(() => {
-    if (!textures) return createSurfaceRoleMaterial('joinery', colorPreset, undefined, sceneTheme)
-    return material[1]!
-  }, [textures, colorPreset, sceneTheme, material])
-
-  // Dormer window glass has no per-node material — it always takes the
-  // themed 'glazing' role (semi-transparent) in both texture modes.
-  const glassMat = useMemo(
-    () => createSurfaceRoleMaterial('glazing', colorPreset, undefined, sceneTheme),
-    [colorPreset, sceneTheme],
-  )
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(() => {
     if (!segment) return null
@@ -151,16 +136,6 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.position[1],
     node.position[2],
     node.rotation,
-    node.windowWidth,
-    node.windowHeight,
-    node.windowOffsetX,
-    node.windowOffsetY,
-    node.windowShape,
-    node.windowArchHeight,
-    node.windowCornerRadii[0],
-    node.windowCornerRadii[1],
-    node.windowCornerRadii[2],
-    node.windowCornerRadii[3],
     hostedWindows,
   ])
 
@@ -208,15 +183,6 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
           receiveShadow
           {...handlers}
         />
-        {hostedWindows.length === 0 && (
-          <DormerWindowAssembly
-            dormerToSegment={localToSegment}
-            frameMaterial={frameSideMat}
-            glassMaterial={glassMat}
-            node={node}
-            segment={segment}
-          />
-        )}
         {hostedWindows.map((window) => (
           <DormerWindowHostFrame
             dormer={node}

@@ -94,15 +94,3 @@ export function buildDormerShellGeometry(node: DormerNode): THREE.BufferGeometry
 export function buildDormerGhostGeometry(node: DormerNode): THREE.BufferGeometry {
   return buildDormerShellGeometry(node)
 }
-
-/**
- * Inspector helper: which window-shape sub-controls to surface for the
- * current dormer.
- */
-export function dormerSupportsArch(node: DormerNode): boolean {
-  return node.windowShape === 'arch'
-}
-
-export function dormerSupportsCornerRadii(node: DormerNode): boolean {
-  return node.windowShape === 'rounded'
-}

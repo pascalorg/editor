@@ -108,7 +108,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   // Drafted as a 2-corner footprint (axis-aligned bbox), not a directional
   // edge → no angle-lock mode (grid / lines / off only).
   snapDraftDirectional: false,
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: RoofNode,
   category: 'structure',
   surfaceRole: 'roof',

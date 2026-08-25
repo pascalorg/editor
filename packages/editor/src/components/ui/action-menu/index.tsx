@@ -1,10 +1,12 @@
 'use client'
 
+import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { motion } from 'motion/react'
 import { TooltipProvider } from './../../../components/ui/primitives/tooltip'
 import { useIsMobile } from './../../../hooks/use-mobile'
 import { useReducedMotion } from './../../../hooks/use-reduced-motion'
+import { shouldShowEditingControls } from './../../../lib/interaction/overlay-policy'
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { CameraActions } from './camera-actions'
@@ -18,6 +20,7 @@ const MOBILE_BOTTOM_OFFSET = 24
 
 export function ActionMenu({ className }: { className?: string }) {
   const isMobile = useIsMobile()
+  const readOnly = useScene((s) => s.readOnly)
   const hasSelectionOnMobile = useViewer((s) => isMobile && s.selection.selectedIds.length > 0)
   const hasReferenceOnMobile = useEditor((s) => isMobile && Boolean(s.selectedReferenceId))
   const CONTEXTUAL_TABS = new Set(['ai', 'items', 'studio'])
@@ -31,7 +34,14 @@ export function ActionMenu({ className }: { className?: string }) {
   // Also hide on Chat / Items / Studio tabs; those are contextual workflows
   // (composing / picking furniture / generating renders) where the build
   // menu is irrelevant.
-  if (hasSelectionOnMobile || hasReferenceOnMobile || isContextualPanelOnMobile) return null
+  if (
+    !shouldShowEditingControls(readOnly) ||
+    hasSelectionOnMobile ||
+    hasReferenceOnMobile ||
+    isContextualPanelOnMobile
+  ) {
+    return null
+  }
 
   const transition = reducedMotion
     ? { duration: 0 }

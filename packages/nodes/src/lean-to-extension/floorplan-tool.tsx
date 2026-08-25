@@ -4,13 +4,14 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { getWallCurveFrameAt, getWallCurveLength, isCurvedWall } from '@pascal-app/core'
 import {
   type FloorplanToolContext,
+  getSegmentGridStep,
+  isGridSnapActive,
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import { bendLocalPoint, isCurvedLeanTo } from './arc'
 import { createLeanToAssembly } from './assembly'
 import {
@@ -19,22 +20,17 @@ import {
   isConicalLeanToHostOccupied,
 } from './conical-host'
 import { leanToFacetCount } from './geometry'
-import { resolveLeanToSpanArc, resolveLeanToWallPlacement } from './layout'
-import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
+import { resolveLeanToSpanArc } from './layout'
 import {
-  applyLeanToAvailableWallSpan,
-  applyLeanToRoofAttachment,
-  applyLeanToWallAutoSpan,
-  clearLeanToRoofAttachment,
-  resolveLeanToHostRoof,
-  resolveLeanToRoofAttachment,
-} from './roof-attachment'
-import type { LeanToExtensionNode } from './schema'
+  type LeanToPlanPlacementTarget,
+  nextLeanToPlacementRotation,
+  resolveLeanToCommitTarget,
+  resolveLeanToPlanPlacement,
+} from './placement'
+import { resolveLeanToHostRoof } from './roof-attachment'
 
 type PlanPoint = [number, number]
-type PlanTarget = {
-  node: LeanToExtensionNode
-  valid: boolean
+type PlanTarget = LeanToPlanPlacementTarget & {
   conicalHost?: ConicalLeanToPlanHost
 }
 
@@ -53,6 +49,7 @@ const FloorplanLeanToExtensionTool = ({
 }: FloorplanToolContext) => {
   const groupRef = useRef<SVGGElement>(null)
   const targetRef = useRef<PlanTarget | null>(null)
+  const rotationRef = useRef(0)
   const [target, setTarget] = useState<PlanTarget | null>(null)
 
   const clearTarget = useCallback(() => {
@@ -66,6 +63,8 @@ const FloorplanLeanToExtensionTool = ({
     const svg = group?.ownerSVGElement
     if (!(group && svg)) return
     useInteractionScope.getState().begin({ kind: 'drafting', tool: 'lean-to-extension' })
+    rotationRef.current = 0
+    let lastFreestandingEvent: PointerEvent | null = null
 
     const consume = (event: Event) => {
       event.preventDefault()
@@ -86,29 +85,20 @@ const FloorplanLeanToExtensionTool = ({
           conicalHost,
         }
       }
-      const hit = findClosestWallInPlan(point, nodes, activeLevelId)
-      if (!hit) return null
-      const wallPlacement = resolveLeanToWallPlacement(hit.wall, hit.localX, hit.side)
-      if (!wallPlacement) return null
-      const attachment = resolveLeanToRoofAttachment(wallPlacement, hit.wall, nodes)
-      const autoSpannedNode = attachment
-        ? applyLeanToRoofAttachment(wallPlacement, attachment)
-        : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), hit.wall)
-      const attachedNode = applyLeanToAvailableWallSpan(
-        autoSpannedNode,
-        hit.wall,
+      const step = !event.altKey && isGridSnapActive() ? getSegmentGridStep() : 0
+      const snap = (value: number) => (step > 0 ? Math.round(value / step) * step : value)
+      return resolveLeanToPlanPlacement({
+        activeLevelId,
+        freestandingPoint: [snap(point[0]), snap(point[1])],
+        freestandingRotationY: rotationRef.current,
         nodes,
-        wallPlacement.position[0],
-      )
-      const node = resolveLeanToEndAbutments(attachedNode, hit.wall, nodes)
-      return {
-        node,
-        valid: leanToPlacementConflicts(node, hit.wall, nodes).length === 0,
-      }
+        point,
+      })
     }
     const update = (event: PointerEvent) => {
       consume(event)
       const node = resolveEvent(event)
+      lastFreestandingEvent = node?.node.hostKind === 'freestanding' ? event : null
       targetRef.current = node
       setTarget(node)
     }
@@ -118,7 +108,7 @@ const FloorplanLeanToExtensionTool = ({
     const commit = (event: MouseEvent) => {
       if (event.button !== 0) return
       consume(event)
-      const resolved = resolveEvent(event) ?? targetRef.current
+      const resolved = resolveLeanToCommitTarget(targetRef.current, resolveEvent(event))
       if (!resolved?.valid) return
       const { node } = resolved
       const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
@@ -134,25 +124,53 @@ const FloorplanLeanToExtensionTool = ({
       triggerSFX('sfx:structure-build')
       if (useEditor.getState().getContinuation('point') !== 'repeat') finishTool()
     }
-    const cancel = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        markToolCancelConsumed()
+        finishTool()
+        return
+      }
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        (event.target instanceof HTMLElement && event.target.isContentEditable)
+      ) {
+        return
+      }
+      if (!lastFreestandingEvent) return
+
+      const nextRotation = nextLeanToPlacementRotation(
+        rotationRef.current,
+        event.key,
+        event.metaKey || event.ctrlKey,
+      )
+      if (nextRotation === rotationRef.current) return
+
       event.preventDefault()
-      event.stopImmediatePropagation()
-      markToolCancelConsumed()
-      finishTool()
+      rotationRef.current = nextRotation
+      triggerSFX('sfx:item-rotate')
+      const resolved = resolveEvent(lastFreestandingEvent)
+      targetRef.current = resolved
+      setTarget(resolved)
+    }
+    const onPointerLeave = (event: PointerEvent) => {
+      lastFreestandingEvent = null
+      clearTarget()
     }
 
     svg.addEventListener('pointerdown', onPointerDown, true)
     svg.addEventListener('pointermove', update, true)
-    svg.addEventListener('pointerleave', clearTarget, true)
+    svg.addEventListener('pointerleave', onPointerLeave, true)
     svg.addEventListener('click', commit, true)
-    window.addEventListener('keydown', cancel, true)
+    window.addEventListener('keydown', onKeyDown, true)
     return () => {
       svg.removeEventListener('pointerdown', onPointerDown, true)
       svg.removeEventListener('pointermove', update, true)
-      svg.removeEventListener('pointerleave', clearTarget, true)
+      svg.removeEventListener('pointerleave', onPointerLeave, true)
       svg.removeEventListener('click', commit, true)
-      window.removeEventListener('keydown', cancel, true)
+      window.removeEventListener('keydown', onKeyDown, true)
       clearTarget()
       useInteractionScope
         .getState()
@@ -199,6 +217,33 @@ const FloorplanLeanToExtensionTool = ({
 
   const node = target?.node
   const wall = node?.parentId ? sceneApi.get(node.parentId as AnyNodeId) : null
+  if (node && (node.hostKind === 'slab-edge' || node.hostKind === 'freestanding')) {
+    const cos = Math.cos(node.rotation[1])
+    const sin = Math.sin(node.rotation[1])
+    const toWorld = (localX: number, localZ: number): [number, number] => [
+      node.position[0] + localX * cos + localZ * sin,
+      node.position[2] - localX * sin + localZ * cos,
+    ]
+    const points = [
+      toWorld(-(node.span / 2 + node.leftOverhang), -node.highOverhang),
+      toWorld(node.span / 2 + node.rightOverhang, -node.highOverhang),
+      toWorld(node.span / 2 + node.rightOverhang, node.projection + node.lowOverhang),
+      toWorld(-(node.span / 2 + node.leftOverhang), node.projection + node.lowOverhang),
+    ]
+    return (
+      <g ref={groupRef}>
+        <polygon
+          fill={target.valid ? 'rgba(14, 165, 233, 0.2)' : 'rgba(239, 68, 68, 0.2)'}
+          pointerEvents="none"
+          points={points.map((point) => point.join(',')).join(' ')}
+          stroke={target.valid ? '#0ea5e9' : '#ef4444'}
+          strokeDasharray="6 4"
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+        />
+      </g>
+    )
+  }
   if (!(node && wall?.type === 'wall')) return <g ref={groupRef} />
 
   const sign = Math.cos(node.rotation[1]) >= 0 ? 1 : -1

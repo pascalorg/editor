@@ -1,4 +1,5 @@
 import type { ParametricDescriptor } from '@pascal-app/core'
+import { leanToPostOmissionPatchesOnDelete } from '../lean-to-extension/post-omissions'
 import type { ColumnNode } from './schema'
 
 /**
@@ -10,6 +11,7 @@ import type { ColumnNode } from './schema'
  * full legacy panel — Stage E will replace it via `customPanel`.
  */
 export const columnParametrics: ParametricDescriptor<ColumnNode> = {
+  onDelete: leanToPostOmissionPatchesOnDelete,
   groups: [
     {
       label: 'Dimensions',

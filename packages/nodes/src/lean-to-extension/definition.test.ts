@@ -68,7 +68,45 @@ function pitchHandle(): LinearResizeHandle<LeanToExtensionNode> {
   return handle
 }
 
+function rotationHandle() {
+  const handle = handles().find((candidate) => candidate.kind === 'arc-resize')
+  if (handle?.kind !== 'arc-resize') throw new Error('Missing rotation handle')
+  return handle
+}
+
 describe('lean-to extension span handles', () => {
+  test('rotates only a freestanding canopy', () => {
+    const freestanding = node({
+      parentId: 'level_free_rotate',
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      rotation: [0, 0, 0],
+    })
+    const handle = rotationHandle()
+
+    expect(handle.visible?.(freestanding, undefined as never)).toBe(true)
+    expect(handle.visible?.(node(), undefined as never)).toBe(false)
+    expect(handle.apply(freestanding, Math.PI / 4, undefined as never)).toEqual({
+      rotation: [0, -Math.PI / 4, 0],
+    })
+  })
+
+  test('resizes a rotated freestanding canopy along its local span axis', () => {
+    const freestanding = node({
+      parentId: 'level_free_resize',
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      position: [10, 0, 20],
+      rotation: [0, Math.PI / 2, 0],
+      span: 4,
+    })
+
+    expect(spanHandle('min').apply(freestanding, 6, undefined as never)).toMatchObject({
+      span: 6,
+      position: [10, 0, 19],
+    })
+  })
+
   test('exposes right and left span arrows on the whole extension', () => {
     expect(spanHandle('min').placement.rotationY?.(node(), undefined as never)).toBe(0)
     expect(spanHandle('max').placement.rotationY?.(node(), undefined as never)).toBe(Math.PI)

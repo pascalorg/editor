@@ -1,10 +1,16 @@
 import type {
   AnyNodeId,
+  DormerNode,
   HandleDescriptor,
   NodeDefinition,
   RoofSegmentNode,
+  SceneApi,
   WallNode,
   WindowNode as WindowNodeType,
+} from '@pascal-app/core'
+import {
+  getDormerWallHorizontalBoundsAtHeight,
+  getDormerWallOpeningVerticalBounds,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import {
@@ -29,15 +35,72 @@ const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
 const MIN_WINDOW_HEIGHT = 0.3
 const MIN_WINDOW_WIDTH = 0.3
-// How far the move cross floats off the wall face (+Z, the window's facing
-// normal) so it's grabbable instead of buried in the sash/frame.
-const MOVE_HANDLE_LIFT = 0.12
+
+export function resolveWindowHandlePortalTarget(
+  window: WindowNodeType,
+  scene: Pick<SceneApi, 'get'>,
+): AnyNodeId | null {
+  const parentId = window.parentId as AnyNodeId | null
+  if (!parentId) return null
+  const grandparentId = (scene.get(parentId) as { parentId?: AnyNodeId | null } | undefined)
+    ?.parentId
+  if (!grandparentId) return null
+  if (window.dormerId !== parentId) return grandparentId
+  return (
+    (scene.get(grandparentId) as { parentId?: AnyNodeId | null } | undefined)?.parentId ??
+    grandparentId
+  )
+}
 
 function readWallLength(w: WindowNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
   if (!w.wallId) return Number.POSITIVE_INFINITY
   const wall = scene.get(w.wallId as AnyNodeId) as WallNode | undefined
   if (!wall) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+}
+
+function resolveDormerHost(
+  window: WindowNodeType,
+  scene: Pick<SceneApi, 'get'>,
+): DormerNode | null {
+  const dormerId = window.dormerId ?? window.parentId
+  if (!dormerId) return null
+  const dormer = scene.get(dormerId as AnyNodeId) as DormerNode | undefined
+  return dormer?.type === 'dormer' ? dormer : null
+}
+
+function readDormerFaceWidthMax(
+  window: WindowNodeType,
+  scene: Pick<SceneApi, 'get'>,
+  localGrowSign: number,
+): number | null {
+  const dormer = resolveDormerHost(window, scene)
+  if (!dormer) return null
+  const bounds = getDormerWallHorizontalBoundsAtHeight(
+    dormer,
+    window.dormerFace ?? 'front',
+    window.position[1] + window.height / 2,
+  )
+  const faceGrowSign = Math.cos(window.rotation[1]) >= 0 ? localGrowSign : -localGrowSign
+  const anchorX = window.position[0] - (faceGrowSign * window.width) / 2
+  return faceGrowSign > 0 ? bounds.max - anchorX : anchorX - bounds.min
+}
+
+function readDormerFaceHeightMax(
+  window: WindowNodeType,
+  scene: Pick<SceneApi, 'get'>,
+  growSign: number,
+): number | null {
+  const dormer = resolveDormerHost(window, scene)
+  if (!dormer) return null
+  const bounds = getDormerWallOpeningVerticalBounds(
+    dormer,
+    window.dormerFace ?? 'front',
+    window.position[0],
+    window.width,
+  )
+  const anchorY = window.position[1] - (growSign * window.height) / 2
+  return growSign > 0 ? bounds.max - anchorY : anchorY - bounds.min
 }
 
 function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeType> {
@@ -49,8 +112,11 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
     // front instead of edge-on (the window sits on a vertical wall).
     faceNormal: true,
     anchor: side === 'right' ? 'min' : 'max',
+    gridSnap: true,
     min: MIN_WINDOW_WIDTH,
     max: (n, scene) => {
+      const dormerMax = readDormerFaceWidthMax(n, scene, sign)
+      if (dormerMax !== null) return Math.max(MIN_WINDOW_WIDTH, dormerMax)
       // Roof-hosted windows clamp against the face profile (the
       // wall-based limits read Infinity when wallId is unset).
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
@@ -79,6 +145,7 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
       rotationY: () => (side === 'right' ? 0 : Math.PI),
     },
     portal: 'grandparent',
+    portalTarget: resolveWindowHandlePortalTarget,
   }
 }
 
@@ -92,8 +159,11 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
     axis: 'y',
     // top arrow anchors at -Y (bottom stays fixed); bottom at +Y (top stays).
     anchor: edge === 'top' ? 'min' : 'max',
+    gridSnap: true,
     min: MIN_WINDOW_HEIGHT,
     max: (n, scene) => {
+      const dormerMax = readDormerFaceHeightMax(n, scene, sign)
+      if (dormerMax !== null) return Math.max(MIN_WINDOW_HEIGHT, dormerMax)
       const roofMax = readRoofFaceHeightMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_HEIGHT, roofMax)
       // Maximum: distance from the anchored edge to the wall's allowed Y
@@ -123,29 +193,11 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       position: (n) => [0, sign * (n.height / 2 + HEIGHT_HANDLE_OFFSET), 0],
     },
     portal: 'grandparent',
-  }
-}
-
-// Press-drag move grip at the window centre, standing in the wall face. Routes
-// through the same move tool as the floating Move button (3D
-// `affordanceTools.move`, 2D `floorplanMoveTarget`) — slide within the wall
-// plane + re-host onto another wall — committing on release, no second click.
-function windowMoveHandle(): HandleDescriptor<WindowNodeType> {
-  return {
-    kind: 'tap-action',
-    shape: 'move-cross',
-    plane: 'node-normal',
-    portal: 'grandparent',
-    cursor: 'move',
-    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
-    placement: {
-      position: () => [0, 0, MOVE_HANDLE_LIFT],
-    },
+    portalTarget: resolveWindowHandlePortalTarget,
   }
 }
 
 const windowHandles: HandleDescriptor<WindowNodeType>[] = [
-  windowMoveHandle(),
   windowWidthHandle('left'),
   windowWidthHandle('right'),
   windowHeightHandle('top'),
@@ -167,7 +219,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
   snapProfile: 'item',
   facingIndicator: true,
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: WindowNode,
   category: 'structure',
   extensions: {

@@ -3,9 +3,10 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { ColumnNode } from './column'
 import { RoofNode } from './roof'
+import { SlabNode } from './slab'
 
 export const LeanToConnectionMode = z.enum(['auto', 'manual'])
-export const LeanToHostKind = z.enum(['wall', 'conical-roof'])
+export const LeanToHostKind = z.enum(['wall', 'slab-edge', 'freestanding', 'conical-roof'])
 export const LeanToRoofEdge = z.enum(['+X', '-X', '+Z', '-Z'])
 export const LeanToResizeLock = z.enum([
   'preserve-high-edge',
@@ -18,6 +19,11 @@ export const LeanToHighSideMode = z.enum(['wall-ledger', 'independent-high-beam'
 export const LeanToPostLayoutMode = z.enum(['count', 'target-spacing'])
 export const LeanToFootingStyle = z.enum(['none', 'base-plate', 'concrete-pad'])
 export const LeanToCoveringType = z.enum(['generic', 'shingle', 'metal-panel'])
+const LeanToOmittedPostSlot = z.object({
+  side: z.enum(['low', 'high']),
+  index: z.number().int(),
+  layoutCount: z.number().int().min(1),
+})
 const DEFAULT_LOW_EDGE_HEIGHT = 2.7 - 3 * Math.tan((5 * Math.PI) / 180)
 const DEFAULT_LEAN_TO_POST_SPACING = 3
 export type LeanToConnectionMode = z.infer<typeof LeanToConnectionMode>
@@ -31,6 +37,9 @@ export const LeanToExtensionNode = BaseNode.extend({
   children: z.array(z.union([ColumnNode.shape.id, RoofNode.shape.id])).default([]),
   hostKind: LeanToHostKind.default('wall'),
   hostHeightOffset: z.number().min(-10).max(10).default(0),
+  hostSlabId: SlabNode.shape.id.optional(),
+  hostSlabEdgeIndex: z.number().int().min(0).optional(),
+  hostSlabEdgeT: z.number().min(0).max(1).optional(),
 
   span: z.number().min(0.5).max(100).default(4),
   autoSpan: z.boolean().default(true),
@@ -104,15 +113,16 @@ export const LeanToExtensionNode = BaseNode.extend({
   postLayoutMode: LeanToPostLayoutMode.default('target-spacing'),
   postSpacing: z.number().min(0.3).max(10).default(DEFAULT_LEAN_TO_POST_SPACING),
   postInset: z.number().min(0).max(3).default(0),
+  omittedPostSlots: z.array(LeanToOmittedPostSlot).default([]),
   postBracing: z.enum(['none', 'knee']).default('none'),
   footingStyle: LeanToFootingStyle.default('none'),
 }).describe(
   dedent`
-  Hosted lean-to roof extension.
-  The high edge attaches to a wall or wraps around a conical roof's cylindrical base, and the mono-pitch roof falls along
-  local +Z to a beam supported by a managed row of column children. Its roof is a standard
-  shed roof segment with standard gutter and downspout children. It is an open canopy, not a
-  standalone enclosed shed roof.
+  Open lean-to canopy.
+  The high edge can attach to a wall, attach to an upper slab edge, stand on an independent
+  high beam, or wrap around a conical roof's cylindrical base. The mono-pitch roof falls along
+  local +Z to a beam supported by managed column children. Its roof is a standard shed roof
+  segment with standard gutter and downspout children, not a standalone enclosed shed roof.
   `,
 )
 

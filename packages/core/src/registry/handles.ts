@@ -70,6 +70,8 @@ export type EditorApi = {
 
 export type HandlePortal = 'self' | 'parent' | 'grandparent'
 
+export type HandlePortalTarget<N> = (node: N, sceneApi: SceneApi) => AnyNodeId | null | undefined
+
 export type HandleAxis = 'x' | 'y' | 'z'
 
 export type HandleAnchor = 'center' | 'min' | 'max'
@@ -205,6 +207,7 @@ export type LinearResizeHandle<N> = {
    * need to ride the wall's rotation.
    */
   portal?: HandlePortal
+  portalTarget?: HandlePortalTarget<N>
   cursor?: Cursor
   /** Optional visual guide shown while the arrow is hovered or dragging. */
   decoration?: HandleDecoration<N>
@@ -267,6 +270,7 @@ export type RadialResizeHandle<N> = {
   max?: number | ((node: N, sceneApi: SceneApi) => number)
   placement: HandlePlacement<N>
   portal?: HandlePortal
+  portalTarget?: HandlePortalTarget<N>
   /** Optional visual guide shown while the arrow is hovered or dragging. */
   decoration?: HandleDecoration<N>
 }
@@ -294,8 +298,10 @@ export type ArcResizeHandle<N = any> = {
   /** Optional metadata for descriptors that bundle two handles per kind. */
   end?: 'start' | 'end'
   apply: (initialNode: N, delta: number, sceneApi: SceneApi) => Partial<N>
+  visible?: (node: N, sceneApi: SceneApi) => boolean
   placement: HandlePlacement<N>
   portal?: HandlePortal
+  portalTarget?: HandlePortalTarget<N>
   /** Optional visual guide shown while the arrow is hovered or dragging. */
   decoration?: HandleDecoration<N>
   /**
@@ -341,6 +347,7 @@ export type EndpointMoveHandle<N> = {
   /** Called with the world-space hit on the ground plane. */
   apply: (node: N, worldPoint: readonly [number, number, number], sceneApi: SceneApi) => Partial<N>
   portal?: HandlePortal
+  portalTarget?: HandlePortalTarget<N>
 }
 
 // Default to `any` so type-erased renderers can hold `HandleDescriptor[]`
@@ -389,7 +396,9 @@ export type TapActionHandle<N = any> = {
    * stands it up against the node's facing plane (a wall face).
    */
   plane?: 'horizontal' | 'node-normal'
+  visible?: (node: N, sceneApi: SceneApi) => boolean
   portal?: HandlePortal
+  portalTarget?: HandlePortalTarget<N>
   cursor?: Cursor
 }
 
@@ -436,6 +445,7 @@ export type TranslateHandle<N = any> = {
    */
   snapExtents?: (node: N, sceneApi: SceneApi) => readonly [number, number] | null
   portal?: HandlePortal
+  portalTarget?: HandlePortalTarget<N>
 }
 
 /**
@@ -455,6 +465,7 @@ export type LatchHandle<N = any> = {
   group: string
   placement: HandlePlacement<N>
   portal?: HandlePortal
+  portalTarget?: HandlePortalTarget<N>
 }
 
 export type HandleDescriptor<N = any> =

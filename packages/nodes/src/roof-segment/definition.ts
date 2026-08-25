@@ -37,13 +37,6 @@ function getPeakHeight(n: RoofSegmentNodeType): number {
   return n.wallHeight + getActiveRoofHeight(n)
 }
 
-function isManagedLeanToRoofSegment(n: RoofSegmentNodeType): boolean {
-  const metadata = n.metadata
-  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return false
-  const record = metadata as Record<string, unknown>
-  return record.managedByLeanTo !== undefined && record.leanToRole === 'roof-segment'
-}
-
 function getSideResizeHandleY(n: RoofSegmentNodeType, localZ: number): number {
   if (n.roofType !== 'shed') return Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2
 
@@ -237,7 +230,7 @@ function roofSegmentPitchHandle(): HandleDescriptor<RoofSegmentNodeType> {
     min: (n) => n.wallHeight,
     gridSnap: true,
     currentValue: (n) => getPeakHeight(n),
-    visible: (n) => !isManagedLeanToRoofSegment(n),
+    visible: (n) => !n.managedByParent,
     apply: (initial, newPeakHeight) => {
       const roofHeight = Math.max(0, newPeakHeight - initial.wallHeight)
       const pitch = getPitchFromActiveRoofHeight({
@@ -309,7 +302,7 @@ const conicalRoofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
 function resolveRoofSegmentHandles(
   node: RoofSegmentNodeType,
 ): HandleDescriptor<RoofSegmentNodeType>[] {
-  if (isManagedLeanToRoofSegment(node)) return []
+  if (node.managedByParent) return []
   return node.roofType === 'conical' ? conicalRoofSegmentHandles : roofSegmentHandles
 }
 
@@ -321,7 +314,7 @@ function resolveRoofSegmentHandles(
  */
 export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   kind: 'roof-segment',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: RoofSegmentNode,
   category: 'structure',
   surfaceRole: 'roof',

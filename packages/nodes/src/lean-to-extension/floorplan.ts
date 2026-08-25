@@ -14,6 +14,7 @@ import {
 import { bendLocalPoint, isCurvedLeanTo } from './arc'
 import { leanToFacetCount } from './geometry'
 import { resolveLeanToLayout } from './layout'
+import { isLeanToPostOmitted } from './post-omissions'
 
 function conicalSegmentPlanPose(
   segment: RoofSegmentNode,
@@ -89,7 +90,8 @@ function buildConicalLeanToFloorplan(
       vectorEffect: 'non-scaling-stroke',
     },
   ]
-  for (const x of layout.postXs) {
+  for (const [index, x] of layout.postXs.entries()) {
+    if (isLeanToPostOmitted(node, 'low', index)) continue
     const [postX, postZ] = toWorld(x, layout.beamZ)
     children.push({
       kind: 'rect',
@@ -116,6 +118,92 @@ function buildConicalLeanToFloorplan(
   return { kind: 'group', children }
 }
 
+function buildLevelLeanToFloorplan(
+  node: LeanToExtensionNode,
+  ctx: GeometryContext,
+): FloorplanGeometry {
+  const layout = resolveLeanToLayout(node)
+  const rotationY = node.rotation[1]
+  const cos = Math.cos(rotationY)
+  const sin = Math.sin(rotationY)
+  const toWorld = (localX: number, localZ: number): FloorplanPoint => [
+    node.position[0] + localX * cos + localZ * sin,
+    node.position[2] - localX * sin + localZ * cos,
+  ]
+  const left = layout.span / 2 + node.leftOverhang
+  const right = layout.span / 2 + node.rightOverhang
+  const high = node.highOverhang
+  const low = layout.projection + node.lowOverhang
+  const points: FloorplanPoint[] = [
+    toWorld(-left, -high),
+    toWorld(right, -high),
+    toWorld(right, low),
+    toWorld(-left, low),
+  ]
+  const selected = ctx.viewState?.selected ?? false
+  const stroke = selected ? '#f97316' : '#475569'
+  const children: FloorplanGeometry[] = [
+    {
+      kind: 'polygon',
+      points,
+      fill: selected ? '#ffedd5' : '#e2e8f0',
+      fillOpacity: 0.65,
+      stroke,
+      strokeWidth: selected ? 2 : 1.25,
+      vectorEffect: 'non-scaling-stroke',
+    },
+    {
+      kind: 'polyline',
+      points: [
+        toWorld(-layout.beamSpan / 2, layout.beamZ),
+        toWorld(layout.beamSpan / 2, layout.beamZ),
+      ],
+      stroke,
+      strokeWidth: selected ? 3 : 2,
+      vectorEffect: 'non-scaling-stroke',
+    },
+  ]
+  const addPostRow = (localZ: number, side: 'low' | 'high') => {
+    for (const [index, x] of layout.postXs.entries()) {
+      if (isLeanToPostOmitted(node, side, index)) continue
+      const [postX, postZ] = toWorld(x, localZ)
+      children.push({
+        kind: 'rect',
+        x: postX - node.postWidth / 2,
+        y: postZ - node.postDepth / 2,
+        width: node.postWidth,
+        height: node.postDepth,
+        fill: stroke,
+        stroke,
+        strokeWidth: 1,
+        vectorEffect: 'non-scaling-stroke',
+      })
+    }
+  }
+  addPostRow(layout.beamZ, 'low')
+  if (node.highSideMode === 'independent-high-beam') addPostRow(0, 'high')
+  if (selected) {
+    children.push({
+      kind: 'move-arrow',
+      point: toWorld(0, layout.roofRun + 0.12),
+      angle: Math.atan2(Math.cos(rotationY), Math.sin(rotationY)),
+      affordance: 'lean-to-resize',
+      payload: { dimension: 'projection' },
+    })
+    if (node.hostKind === 'freestanding') {
+      const point = toWorld(right + 0.25, low + 0.25)
+      children.push({
+        kind: 'rotate-arrow',
+        point,
+        angle: Math.atan2(point[1] - node.position[2], point[0] - node.position[0]),
+        affordance: 'lean-to-rotate',
+        pivot: [node.position[0], node.position[2]],
+      })
+    }
+  }
+  return { kind: 'group', children }
+}
+
 export function buildLeanToExtensionFloorplan(
   node: LeanToExtensionNode,
   ctx: GeometryContext,
@@ -126,6 +214,12 @@ export function buildLeanToExtensionFloorplan(
     node.hostKind === 'conical-roof'
   ) {
     return buildConicalLeanToFloorplan(node, ctx.parent, ctx)
+  }
+  if (
+    ctx.parent?.type === 'level' &&
+    (node.hostKind === 'slab-edge' || node.hostKind === 'freestanding')
+  ) {
+    return buildLevelLeanToFloorplan(node, ctx)
   }
   const wall = ctx.parent as WallNode | null
   if (wall?.type !== 'wall') return null
@@ -229,7 +323,8 @@ export function buildLeanToExtensionFloorplan(
     vectorEffect: 'non-scaling-stroke',
   })
 
-  for (const x of layout.postXs) {
+  for (const [index, x] of layout.postXs.entries()) {
+    if (isLeanToPostOmitted(node, 'low', index)) continue
     const [postX, postZ] = toWorld(x, layout.beamZ)
     children.push({
       kind: 'rect',

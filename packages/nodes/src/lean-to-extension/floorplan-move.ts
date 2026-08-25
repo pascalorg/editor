@@ -11,6 +11,7 @@ import {
 import { getSegmentGridStep, isGridSnapActive } from '@pascal-app/editor'
 import { resolveLeanToEdgeSnapTargets, resolveLeanToMoveProposal } from './layout'
 import { leanToManagedPreviewOverrides } from './managed-preview'
+import { moveLeanToAlongSlabEdge } from './placement'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 
 // Arc-length along the wall centerline to the point on it nearest the
@@ -61,7 +62,49 @@ export const leanToFloorplanMoveTarget: FloorplanMoveTarget<LeanToExtensionNode>
   return {
     affectedIds: [nodeId, ...previewIds],
     apply({ planPoint, modifiers }) {
-      if (wall?.type !== 'wall' || !sceneApi) return
+      if (!sceneApi) return
+      if (node.hostKind === 'freestanding') {
+        const step = !modifiers.altKey && isGridSnapActive() ? getSegmentGridStep() : 0
+        const snap = (value: number) => (step > 0 ? Math.round(value / step) * step : value)
+        const patch: Partial<LeanToExtensionNode> = {
+          position: [snap(planPoint[0]), node.position[1], snap(planPoint[1])],
+        }
+        const previewEntries: ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> = [
+          [nodeId, patch as Partial<AnyNode>],
+          ...leanToManagedPreviewOverrides(node, patch, sceneApi),
+        ]
+        useLiveNodeOverrides.getState().setMany(previewEntries)
+        for (const [id] of previewEntries) {
+          previewIds.add(id)
+          sceneApi.markDirty(id)
+        }
+        lastPatch = patch
+        return
+      }
+      if (node.hostKind === 'slab-edge') {
+        const resolved = moveLeanToAlongSlabEdge(node, planPoint, sceneApi.nodes())
+        if (!resolved) return
+        const patch: Partial<LeanToExtensionNode> = {
+          hostSlabEdgeT: resolved.hostSlabEdgeT,
+          position: resolved.position,
+          rotation: resolved.rotation,
+          span: resolved.span,
+          highEdgeHeight: resolved.highEdgeHeight,
+          lowEdgeHeight: resolved.lowEdgeHeight,
+        }
+        const previewEntries: ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> = [
+          [nodeId, patch as Partial<AnyNode>],
+          ...leanToManagedPreviewOverrides(node, patch, sceneApi),
+        ]
+        useLiveNodeOverrides.getState().setMany(previewEntries)
+        for (const [id] of previewEntries) {
+          previewIds.add(id)
+          sceneApi.markDirty(id)
+        }
+        lastPatch = patch
+        return
+      }
+      if (wall?.type !== 'wall') return
       const rawLocalX = isCurvedWall(wall)
         ? arcLengthUnderPoint(wall, planPoint)
         : (() => {
