@@ -9,7 +9,7 @@ import {
   type ZoneQuantityValue,
 } from '@pascal-app/core'
 import {
-  collectZoneObjectIds,
+  collectZoneObjectLabels,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
@@ -423,26 +423,35 @@ export default function ZoneQuantitiesPanel() {
  * where ninety-six rows of the same words is not.
  */
 function ZoneContentsSection({ zone }: { zone: ZoneNode | undefined }) {
-  const groups = useScene(
-    useShallow((state) => {
-      // `effectiveZone` rather than the stored one, so the count tracks the
-      // polygon actually on screen while a zone is being dragged or is derived
-      // from its boundary walls.
-      const ids = zone ? collectZoneObjectIds(state.nodes, zone) : []
-      const counts = new Map<string, number>()
-      for (const id of ids) {
-        const node = state.nodes[id]
-        if (!node) continue
-        const label = resolveNodeDisplayName(node, state.nodes) || node.type
-        counts.set(label, (counts.get(label) ?? 0) + 1)
-      }
-      return [...counts.entries()]
-        .map(([label, count]) => ({ label, count }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
-    }),
+  /**
+   * The selector returns STRINGS, and the grouping happens outside it.
+   *
+   * `useShallow` compares array elements with `Object.is`, so a selector that
+   * builds fresh `{ label, count }` objects is never equal to its own previous
+   * result. The snapshot then counts as changed on every render, which is an
+   * infinite render loop — React 185, and the panel took the whole editor down
+   * with it. Every other `useShallow` in this codebase maps ids to nodes that
+   * already exist; none constructs a new object, and that is the reason.
+   *
+   * `effectiveZone` rather than the stored zone, so the count tracks the
+   * polygon actually on screen while a zone is dragged or is derived from its
+   * boundary walls.
+   */
+  const labels = useScene(
+    useShallow((state) =>
+      zone ? collectZoneObjectLabels(state.nodes, zone, resolveNodeDisplayName) : [],
+    ),
   )
 
-  const total = groups.reduce((sum, group) => sum + group.count, 0)
+  const groups = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const label of labels) counts.set(label, (counts.get(label) ?? 0) + 1)
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  }, [labels])
+
+  const total = labels.length
 
   return (
     <PanelSection title="Zone contents">
