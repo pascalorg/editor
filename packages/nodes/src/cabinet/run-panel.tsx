@@ -1,6 +1,7 @@
 'use client'
 
 import type {
+  AnyNode,
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
@@ -29,13 +30,16 @@ import {
   cabinetRevealGapById,
   cabinetRevealGapId,
 } from './reveals'
+import { runWallConstraints } from './run-layout'
 import {
   addCabinetModuleSide,
   backAlignZ,
   bumpCabinetRunLayoutRevision,
   cabinetMetadataRecord,
   cornerLinkedSourceModuleForRun,
+  resolveCabinetType,
   runModuleBaseY,
+  syncCornerRunsFromRunSources,
   syncCornerRunsFromSourceModule,
   syncCornerStyleGroupFromRun,
   wallChildOf,
@@ -132,28 +136,48 @@ function metadataWithPresetWidthDebt(
   return rest as CabinetModuleNodeType['metadata']
 }
 
+function canDonatePresetWidth(module: CabinetModuleNodeType, run: CabinetNodeType): boolean {
+  return (
+    resolveCabinetType(module, run) === 'base' &&
+    stackForCabinet(module).every(
+      (compartment) =>
+        compartment.type === 'door' ||
+        compartment.type === 'drawer' ||
+        compartment.type === 'shelf',
+    )
+  )
+}
+
 export function reflowRunModules({
   modules,
   parentRun,
   patch,
-  preserveExtent = false,
   scene,
   selected,
 }: {
   modules: CabinetModuleNodeType[]
   parentRun: CabinetNodeType
   patch: Partial<CabinetModuleNodeType>
-  preserveExtent?: boolean
   scene: ReturnType<typeof useScene.getState>
   selected: CabinetModuleNodeType
-}) {
+}): boolean {
+  const wallConstraints = runWallConstraints(
+    parentRun,
+    modules,
+    scene.nodes as Record<AnyNodeId, AnyNode>,
+  )
+  const eligibleDonorIds = new Set(
+    modules.filter((module) => canDonatePresetWidth(module, parentRun)).map((module) => module.id),
+  )
+  const preserveExtent = wallConstraints.left.constrained && wallConstraints.right.constrained
   const reflowed = reflowCabinetRunModules(modules, selected.id, patch.width ?? selected.width, {
-    preserveExtent,
+    wallConstraints,
+    eligibleDonorIds,
     restorableWidthById: new Map(
       modules.map((module) => [module.id, presetWidthDebt(module, selected.id)]),
     ),
   })
-  if (reflowed.length === 0) return
+  if (reflowed.length === 0) return false
 
   const reflowById = new Map(reflowed.map((entry) => [entry.id, entry]))
   for (const module of [...modules].sort((a, b) => a.position[0] - b.position[0])) {
@@ -207,7 +231,14 @@ export function reflowRunModules({
     }
   }
 
+  syncCornerRunsFromRunSources({
+    baseLayout: 'width-only',
+    previousModules: modules,
+    run: (useScene.getState().nodes[parentRun.id] as CabinetNodeType | undefined) ?? parentRun,
+    sceneApi: createSceneApi(useScene),
+  })
   bumpRunLayoutRevisionViaStore(scene, parentRun)
+  return true
 }
 
 export function CabinetRunPanel({

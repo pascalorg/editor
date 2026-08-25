@@ -54,6 +54,9 @@ export function resolveCompartmentTransition({
   const enteringSink = next.type === 'sink'
   const leavingPullOutPantry = current?.type === 'pull-out-pantry'
   const enteringPullOutPantry = next.type === 'pull-out-pantry'
+  const leavingPullOutForStandardStorage =
+    leavingPullOutPantry &&
+    (next.type === 'shelf' || next.type === 'drawer' || next.type === 'door')
   const leavingHood = current ? isHoodCompartmentType(current.type) : false
   const enteringHood = isHoodCompartmentType(next.type)
   const enteringSingleDishwasher = next.type === 'dishwasher' && stack.length === 1
@@ -136,16 +139,18 @@ export function resolveCompartmentTransition({
           ? sinkCabinetStack()
           : enteringPullOutPantry
             ? [{ ...next, height: TALL_CARCASS_HEIGHT }]
-            : enteringHood
+            : leavingPullOutForStandardStorage
               ? [next]
-              : replaceCabinetCompartmentStack(
-                  node,
-                  index,
-                  next,
-                  node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'base'
-                    ? 'drawer'
-                    : 'door',
-                ),
+              : enteringHood
+                ? [next]
+                : replaceCabinetCompartmentStack(
+                    node,
+                    index,
+                    next,
+                    node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'base'
+                      ? 'drawer'
+                      : 'door',
+                  ),
     modulePatch: {
       ...tallApplianceModulePatch,
       ...standardModulePatch,

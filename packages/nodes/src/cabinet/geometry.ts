@@ -43,6 +43,7 @@ function addTopFinishGeometry(
   node: CabinetModuleNode,
   materials: CabinetSlotMaterials,
   topY: number,
+  isWallCornerFiller = false,
 ) {
   if (!node.topFinish || node.topFinish === 'none') return
 
@@ -53,6 +54,9 @@ function addTopFinishGeometry(
   const backThickness = Math.min(0.006, board / 2)
   const centerZ = (node.depth - depth) / 2
   const inset = node.frontOverlay === 'inset'
+  const isCornerFiller = node.moduleKind === 'corner-filler'
+  const openLeft = node.openSide === 'left'
+  const openRight = node.openSide === 'right'
   const topFrontZ = inset
     ? centerZ + depth / 2 - node.frontThickness / 2 - 0.0015
     : centerZ + depth / 2 + node.frontThickness / 2 - 0.0015
@@ -72,6 +76,79 @@ function addTopFinishGeometry(
   const innerLeft = -node.width / 2 + (node.openSide === 'left' ? 0 : board)
   const innerRight = node.width / 2 - (node.openSide === 'right' ? 0 : board)
   const innerWidth = Math.max(0.01, innerRight - innerLeft)
+  const innerCenterX = (innerLeft + innerRight) / 2
+  if (!openLeft) {
+    addBox(
+      group,
+      [board, height, depth],
+      [-node.width / 2 + board / 2, topY + height / 2, centerZ],
+      materials.carcass,
+      'cabinet-top-cabinet-side-left',
+      'carcass',
+    )
+  }
+  if (!openRight) {
+    addBox(
+      group,
+      [board, height, depth],
+      [node.width / 2 - board / 2, topY + height / 2, centerZ],
+      materials.carcass,
+      'cabinet-top-cabinet-side-right',
+      'carcass',
+    )
+  }
+  addBox(
+    group,
+    [innerWidth, board, depth],
+    [innerCenterX, topY + board / 2, centerZ],
+    materials.carcass,
+    'cabinet-top-cabinet-bottom',
+    'carcass',
+  )
+  addBox(
+    group,
+    [innerWidth, board, depth],
+    [innerCenterX, topY + height - board / 2, centerZ],
+    materials.carcass,
+    'cabinet-top-cabinet-top',
+    'carcass',
+  )
+  addBox(
+    group,
+    [innerWidth, Math.max(0.001, height - board * 2), backThickness],
+    [
+      innerCenterX,
+      topY + height / 2,
+      centerZ - depth / 2 + backInset + backThickness / 2,
+    ],
+    materials.carcass,
+    'cabinet-top-cabinet-back',
+    'carcass',
+  )
+  if (isCornerFiller) {
+    const frontExtension = board / 2 + node.frontGap
+    const wallFrontSharedInset = isWallCornerFiller ? node.frontThickness + node.frontGap : 0
+    const frontLeft =
+      -node.width / 2 -
+      (openLeft ? frontExtension : 0) +
+      (isWallCornerFiller && openRight ? wallFrontSharedInset : 0)
+    const frontRight =
+      node.width / 2 +
+      (openRight ? frontExtension : 0) -
+      (isWallCornerFiller && openLeft ? wallFrontSharedInset : 0)
+    const frontHeight = isWallCornerFiller
+      ? Math.max(0.01, height - WALL_CORNER_FILLER_FRONT_HEIGHT_INSET * 2)
+      : height
+    addBox(
+      group,
+      [Math.max(0.01, frontRight - frontLeft), frontHeight, node.frontThickness],
+      [(frontLeft + frontRight) / 2, topY + height / 2, topFrontZ],
+      materials.front,
+      'cabinet-top-corner-filler-front',
+      'front',
+    )
+    return
+  }
   // Keep the upper front's reveal contract identical to the parent cabinet.
   // Overlay fronts reserve one extra front gap at the opening edge; addDoorFronts
   // applies the remaining leaf-to-leaf gaps. Inset fronts use the carcass opening.
@@ -84,46 +161,6 @@ function addTopFinishGeometry(
     : node.width > 0.5
       ? 'double'
       : 'single-left'
-  addBox(
-    group,
-    [board, height, depth],
-    [-node.width / 2 + board / 2, topY + height / 2, centerZ],
-    materials.carcass,
-    'cabinet-top-cabinet-side-left',
-    'carcass',
-  )
-  addBox(
-    group,
-    [board, height, depth],
-    [node.width / 2 - board / 2, topY + height / 2, centerZ],
-    materials.carcass,
-    'cabinet-top-cabinet-side-right',
-    'carcass',
-  )
-  addBox(
-    group,
-    [innerWidth, board, depth],
-    [0, topY + board / 2, centerZ],
-    materials.carcass,
-    'cabinet-top-cabinet-bottom',
-    'carcass',
-  )
-  addBox(
-    group,
-    [innerWidth, board, depth],
-    [0, topY + height - board / 2, centerZ],
-    materials.carcass,
-    'cabinet-top-cabinet-top',
-    'carcass',
-  )
-  addBox(
-    group,
-    [innerWidth, Math.max(0.001, height - board * 2), backThickness],
-    [0, topY + height / 2, centerZ - depth / 2 + backInset + backThickness / 2],
-    materials.carcass,
-    'cabinet-top-cabinet-back',
-    'carcass',
-  )
   addDoorFronts(
     group,
     node,
@@ -307,6 +344,7 @@ export function buildCabinetGeometry(
         innerCenterX,
       )
     }
+    addTopFinishGeometry(filler, node, materials, topY, isWallCornerFiller)
     return filler
   }
 

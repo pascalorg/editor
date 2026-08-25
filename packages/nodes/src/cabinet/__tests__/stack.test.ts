@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNodeId, LevelNode, WallNode } from '@pascal-app/core'
 import { cabinetPresetById } from '../presets'
-import { CabinetNode } from '../schema'
-import { runHasTwoWallConstraints } from '../run-layout'
-import { resolveCompartmentTransition } from '../stack-transitions'
+import { runWallConstraints } from '../run-layout'
+import { CabinetModuleNode, CabinetNode } from '../schema'
 import {
   backAnchoredModuleZ,
   type CabinetCompartment,
@@ -38,6 +37,7 @@ import {
   resizeCabinetCompartmentStack,
   TALL_CABINET_CARCASS_HEIGHT,
 } from '../stack'
+import { resolveCompartmentTransition } from '../stack-transitions'
 
 const stack: CabinetCompartment[] = [
   { id: 'drawer', type: 'drawer', height: 0.44, drawerCount: 3 },
@@ -424,6 +424,45 @@ describe('appliance compartments', () => {
     )
   })
 
+  test.each([
+    'shelf',
+    'drawer',
+  ] as const)('switching a pull-out pantry to %s restores a default base cabinet', (type) => {
+    const parentRun = CabinetNode.parse({
+      carcassHeight: 0.72,
+      depth: 0.58,
+      plinthHeight: 0.1,
+      toeKickDepth: 0.075,
+    })
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: PULL_OUT_PANTRY_STANDARD_WIDTH,
+      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+      stack: [newCabinetCompartment('pull-out-pantry')],
+    })
+
+    const transition = resolveCompartmentTransition({
+      node,
+      parentRun,
+      index: 0,
+      next: { ...newCabinetCompartment(type), id: node.stack![0]!.id },
+    })
+
+    expect(transition.stack).toHaveLength(1)
+    expect(transition.stack[0]!.type).toBe(type)
+    expect(transition.stack[0]!.height).toBeUndefined()
+    expect(transition.modulePatch).toEqual(
+      expect.objectContaining({
+        cabinetType: 'base',
+        width: 0.5,
+        depth: parentRun.depth,
+        carcassHeight: parentRun.carcassHeight,
+        plinthHeight: parentRun.plinthHeight,
+        toeKickDepth: parentRun.toeKickDepth,
+      }),
+    )
+  })
+
   test('replacing a single compartment with a refrigerator does not add a filler row', () => {
     const replaced = replaceCabinetCompartmentStack(
       {
@@ -551,7 +590,48 @@ describe('reflowCabinetRunModules', () => {
     expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.75, 0.5])
   })
 
-  test('recognizes two perpendicular wall constraints without treating a back wall as one', () => {
+  test('keeps the constrained right edge fixed and moves the run left', () => {
+    const modules = [
+      { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'right', 0.8, {
+      wallConstraints: {
+        left: { constrained: false, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
+    })
+
+    expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.5, 0.8])
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-1.05)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.75)
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('consumes a constrained %s wall gap before growing toward the open end', (side) => {
+    const modules = [
+      { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.7, {
+      wallConstraints: {
+        left: { constrained: side === 'left', slack: side === 'left' ? 0.1 : 0 },
+        right: { constrained: side === 'right', slack: side === 'right' ? 0.1 : 0 },
+      },
+    })
+
+    expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.7, 0.5])
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.85)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.85)
+  })
+
+  test('detects perpendicular wall constraints at each run end', () => {
     const level = LevelNode.parse({ id: 'level_run-constraints' })
     const run = CabinetNode.parse({
       id: 'cabinet_run-constraints',
@@ -590,40 +670,163 @@ describe('reflowCabinetRunModules', () => {
       [backWall.id as AnyNodeId]: backWall,
     }
 
-    expect(runHasTwoWallConstraints(run, modules, nodes)).toBe(true)
+    expect(runWallConstraints(run, modules, nodes)).toEqual({
+      left: { constrained: true, slack: 0 },
+      right: { constrained: true, slack: 0 },
+    })
     expect(
-      runHasTwoWallConstraints(run, modules, {
+      runWallConstraints(run, modules, {
+        [level.id as AnyNodeId]: level,
+        [rightWall.id as AnyNodeId]: rightWall,
+      }),
+    ).toEqual({
+      left: { constrained: false, slack: 0 },
+      right: { constrained: true, slack: 0 },
+    })
+    expect(
+      runWallConstraints(run, modules, {
         [level.id as AnyNodeId]: level,
         [leftWall.id as AnyNodeId]: leftWall,
       }),
-    ).toBe(false)
+    ).toEqual({
+      left: { constrained: true, slack: 0 },
+      right: { constrained: false, slack: 0 },
+    })
     expect(
-      runHasTwoWallConstraints(run, modules, {
+      runWallConstraints(run, modules, {
         [level.id as AnyNodeId]: level,
         [backWall.id as AnyNodeId]: backWall,
       }),
-    ).toBe(false)
+    ).toEqual({
+      left: { constrained: false, slack: 0 },
+      right: { constrained: false, slack: 0 },
+    })
   })
 
-  test('fits a wider preset inside the existing run by reducing adjacent modules', () => {
+  test('measures clear space from each run end to the perpendicular wall face', () => {
+    const level = LevelNode.parse({ id: 'level_run-constraint-slack' })
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-constraint-slack',
+      parentId: level.id,
+      depth: 0.6,
+    })
+    const modules = [
+      { id: 'left', position: [-0.5, 0, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0, 0] as [number, number, number], width: 0.5 },
+    ]
+    const leftWall = WallNode.parse({
+      id: 'wall_run-constraint-slack-left',
+      parentId: level.id,
+      start: [-0.95, -0.5],
+      end: [-0.95, 0.5],
+      thickness: 0.2,
+    })
+    const rightWall = WallNode.parse({
+      id: 'wall_run-constraint-slack-right',
+      parentId: level.id,
+      start: [0.95, -0.5],
+      end: [0.95, 0.5],
+      thickness: 0.2,
+    })
+
+    const constraints = runWallConstraints(run, modules, {
+      [level.id as AnyNodeId]: level,
+      [leftWall.id as AnyNodeId]: leftWall,
+      [rightWall.id as AnyNodeId]: rightWall,
+    })
+
+    expect(constraints.left.constrained).toBe(true)
+    expect(constraints.left.slack).toBeCloseTo(0.1)
+    expect(constraints.right.constrained).toBe(true)
+    expect(constraints.right.slack).toBeCloseTo(0.1)
+  })
+
+  test('consumes wall slack before changing an eligible cabinet width', () => {
     const modules = [
       { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
       { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
       { id: 'right', position: [0.5, 0.1, 0] as [number, number, number], width: 0.5 },
     ]
 
-    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.75, {
-      preserveExtent: true,
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.7, {
+      wallConstraints: {
+        left: { constrained: true, slack: 0.1 },
+        right: { constrained: true, slack: 0.1 },
+      },
+      eligibleDonorIds: new Set(['left', 'right']),
     })
 
-    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.75)
-    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.75)
-    expect(reflowed[0]!.width).toBeCloseTo(0.45)
-    expect(reflowed[1]!.width).toBeCloseTo(0.75)
-    expect(reflowed[2]!.width).toBeCloseTo(0.3)
+    expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.7, 0.5])
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.85)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.85)
   })
 
-  test('uses the side with more reducible width before changing the opposite side', () => {
+  test('changes only the width that remains after consuming wall slack', () => {
+    const modules = [
+      { id: 'left', position: [-0.55, 0.1, 0] as [number, number, number], width: 0.4 },
+      { id: 'middle', position: [-0.1, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.4, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.7, {
+      wallConstraints: {
+        left: { constrained: true, slack: 0.05 },
+        right: { constrained: true, slack: 0.05 },
+      },
+      eligibleDonorIds: new Set(['left']),
+    })
+
+    expect(reflowed[0]!.width).toBeCloseTo(0.3)
+    expect(reflowed[1]!.width).toBeCloseTo(0.7)
+    expect(reflowed[2]!.width).toBeCloseTo(0.5)
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.8)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.7)
+  })
+
+  test('uses the closest eligible base cabinet when both ends are constrained', () => {
+    const modules = [
+      { id: 'base', position: [-0.8, 0.1, 0] as [number, number, number], width: 0.8 },
+      { id: 'appliance', position: [0, 0.1, 0] as [number, number, number], width: 0.8 },
+      { id: 'selected', position: [0.65, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'selected', 0.7, {
+      wallConstraints: {
+        left: { constrained: true, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
+      eligibleDonorIds: new Set(['base']),
+    })
+
+    expect(reflowed[0]!.width).toBeCloseTo(0.6)
+    expect(reflowed[1]!.width).toBeCloseTo(0.8)
+    expect(reflowed[2]!.width).toBeCloseTo(0.7)
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-1.2)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.9)
+  })
+
+  test('skips the closest eligible cabinet when it cannot absorb the width growth', () => {
+    const modules = [
+      { id: 'far', position: [-0.625, 0.1, 0] as [number, number, number], width: 0.9 },
+      { id: 'closest', position: [0, 0.1, 0] as [number, number, number], width: 0.35 },
+      { id: 'selected', position: [0.425, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'selected', 0.7, {
+      wallConstraints: {
+        left: { constrained: true, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
+      eligibleDonorIds: new Set(['far', 'closest']),
+    })
+
+    expect(reflowed[0]!.width).toBeCloseTo(0.7)
+    expect(reflowed[1]!.width).toBeCloseTo(0.35)
+    expect(reflowed[2]!.width).toBeCloseTo(0.7)
+  })
+
+  test('uses the larger donor when two equally close cabinets are eligible', () => {
     const modules = [
       { id: 'left', position: [-0.6, 0.1, 0] as [number, number, number], width: 0.7 },
       { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
@@ -631,7 +834,10 @@ describe('reflowCabinetRunModules', () => {
     ]
 
     const reflowed = reflowCabinetRunModules(modules, 'middle', 0.75, {
-      preserveExtent: true,
+      wallConstraints: {
+        left: { constrained: true, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
     })
 
     expect(reflowed[0]!.width).toBeCloseTo(0.45)
@@ -646,14 +852,20 @@ describe('reflowCabinetRunModules', () => {
       { id: 'right', position: [0.45, 0.1, 0] as [number, number, number], width: 0.4 },
     ]
     const widened = reflowCabinetRunModules(modules, 'middle', 0.75, {
-      preserveExtent: true,
+      wallConstraints: {
+        left: { constrained: true, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
     })
     const restorableWidthById = new Map(
       modules.map((module, index) => [module.id, module.width - widened[index]!.width]),
     )
 
     const restored = reflowCabinetRunModules(widened, 'middle', 0.5, {
-      preserveExtent: true,
+      wallConstraints: {
+        left: { constrained: true, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
       restorableWidthById,
     })
 

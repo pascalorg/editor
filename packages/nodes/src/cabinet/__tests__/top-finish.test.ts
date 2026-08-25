@@ -56,6 +56,76 @@ test('trim finish adds a solid ceiling closure', () => {
   geometry.clear()
 })
 
+test.each(['Corner Filler', 'Wall Bridge Filler', 'Corner Wall Filler'])(
+  '%s renders its selected top cabinet finish',
+  (name) => {
+    const geometry = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        moduleKind: 'corner-filler',
+        name,
+        topFinish: 'top-cabinet',
+      }),
+    )
+
+    expect(geometry.getObjectByName('cabinet-top-cabinet-top')).toBeDefined()
+    geometry.clear()
+  },
+)
+
+test.each([
+  ['Corner Filler', 'left'],
+  ['Wall Bridge Filler', 'right'],
+  ['Corner Wall Filler', 'left'],
+] as const)('%s top cabinet stays doorless and accessible from the %s side', (name, openSide) => {
+  const module = CabinetModuleNode.parse({
+    moduleKind: 'corner-filler',
+    name,
+    openSide,
+    topFinish: 'top-cabinet',
+  })
+  const geometry = buildCabinetGeometry(module)
+  const closedSide = openSide === 'left' ? 'right' : 'left'
+  const expectedInteriorCenterX =
+    openSide === 'left' ? -module.boardThickness / 2 : module.boardThickness / 2
+  const doorFronts: Mesh[] = []
+  geometry.traverse((object) => {
+    if (object.isMesh && object.name.startsWith('cabinet-door-')) {
+      doorFronts.push(object as Mesh)
+    }
+  })
+
+  expect(geometry.getObjectByName(`cabinet-top-cabinet-side-${openSide}`)).toBeUndefined()
+  expect(geometry.getObjectByName(`cabinet-top-cabinet-side-${closedSide}`)).toBeDefined()
+  expect(geometry.getObjectByName('cabinet-top-corner-filler-front')).toBeDefined()
+  expect(geometry.getObjectByName('cabinet-top-cabinet-bottom')?.position.x).toBeCloseTo(
+    expectedInteriorCenterX,
+  )
+  expect(doorFronts).toHaveLength(0)
+  geometry.clear()
+})
+
+test.each(['left', 'right'] as const)(
+  'top cabinet mirrors the parent cabinet open %s side',
+  (openSide) => {
+    const module = CabinetModuleNode.parse({
+      openSide,
+      topFinish: 'top-cabinet',
+    })
+    const geometry = buildCabinetGeometry(module)
+    const closedSide = openSide === 'left' ? 'right' : 'left'
+    const expectedInteriorCenterX =
+      openSide === 'left' ? -module.boardThickness / 2 : module.boardThickness / 2
+
+    expect(geometry.getObjectByName(`cabinet-side-${openSide}`)).toBeUndefined()
+    expect(geometry.getObjectByName(`cabinet-top-cabinet-side-${openSide}`)).toBeUndefined()
+    expect(geometry.getObjectByName(`cabinet-top-cabinet-side-${closedSide}`)).toBeDefined()
+    expect(geometry.getObjectByName('cabinet-top-cabinet-bottom')?.position.x).toBeCloseTo(
+      expectedInteriorCenterX,
+    )
+    geometry.clear()
+  },
+)
+
 test('top cabinet doors reuse the parent overlay and inset reveal rules', () => {
   const overlayNode = CabinetModuleNode.parse({
     width: 0.6,

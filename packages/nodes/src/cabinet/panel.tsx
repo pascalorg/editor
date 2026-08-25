@@ -25,6 +25,7 @@ import {
   onCabinetAnimationChange,
   stopCabinetAnimation,
 } from './interaction'
+import { cabinetModuleSupportsTopFinish } from './panel-visibility'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
   CABINET_REVEAL_GAPS,
@@ -32,7 +33,6 @@ import {
   cabinetRevealGapById,
   cabinetRevealGapId,
 } from './reveals'
-import { runHasTwoWallConstraints } from './run-layout'
 import {
   addWallChildAbove,
   applyCabinetModuleFrontPatch,
@@ -113,11 +113,14 @@ const EMPTY_MODULE_IDS: AnyNodeId[] = []
 
 const PRESET_BUTTON_CLASS =
   'flex h-9 items-center justify-center rounded-md border border-border/40 bg-[#252527] px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-[#303033]'
+const REFLOW_REJECTED_MESSAGE =
+  'No space in this run. No base cabinet can shrink enough to fit this item.'
 
 export default function CabinetPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const [isAnimating, setIsAnimating] = useState(false)
+  const [reflowNotice, setReflowNotice] = useState<{ message: string } | null>(null)
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNodeId] as CabinetEditableNode | undefined) : undefined,
   )
@@ -165,6 +168,20 @@ export default function CabinetPanel() {
       s.nodes[selected.parentId as AnyNodeId]?.type === 'cabinet-module'
     )
   })
+
+  const showReflowRejected = useCallback(() => {
+    setReflowNotice({ message: REFLOW_REJECTED_MESSAGE })
+  }, [])
+
+  useEffect(() => {
+    if (selectedId) setReflowNotice(null)
+  }, [selectedId])
+
+  useEffect(() => {
+    if (!reflowNotice) return
+    const timeout = window.setTimeout(() => setReflowNotice(null), 4000)
+    return () => window.clearTimeout(timeout)
+  }, [reflowNotice])
 
   const updateNode = useCallback(
     (patch: Partial<CabinetEditableNode>) => {
@@ -228,13 +245,15 @@ export default function CabinetPanel() {
         'width' in nextPatch &&
         typeof nextPatch.width === 'number'
       ) {
-        reflowRunModules({
+        const applied = reflowRunModules({
           modules,
           parentRun,
           patch: nextPatch as Partial<CabinetModuleNodeType>,
           scene,
           selected: liveBeforeUpdate,
         })
+        if (applied) setReflowNotice(null)
+        else showReflowRejected()
         return
       }
       if (
@@ -297,7 +316,7 @@ export default function CabinetPanel() {
         }
       }
     },
-    [modules, parentRun, selectedId],
+    [modules, parentRun, selectedId, showReflowRejected],
   )
 
   const close = useCallback(() => {
@@ -342,6 +361,15 @@ export default function CabinetPanel() {
   const rowHeights = new Map(normalized.map((row) => [row.index, row.height]))
   const rows = stack.map((compartment, index) => ({ compartment, index })).reverse()
 
+  const removeWallChildForTallPatch = (
+    patch: Partial<CabinetModuleNodeType>,
+    scene: ReturnType<typeof useScene.getState>,
+  ) => {
+    if (node.type !== 'cabinet-module' || patch.cabinetType !== 'tall') return
+    const child = wallChildOf(node, scene.nodes as Record<string, CabinetEditableNode | undefined>)
+    if (child) scene.deleteNode(child.id as AnyNodeId)
+  }
+
   const commitStack = (
     next: CabinetCompartment[],
     extraPatch: Partial<CabinetModuleNodeType> = {},
@@ -350,16 +378,24 @@ export default function CabinetPanel() {
     const minCarcassHeight = minCabinetCarcassHeightForStack({ ...node, stack: next })
     const targetCarcassHeight = patch.carcassHeight ?? node.carcassHeight
     if (targetCarcassHeight < minCarcassHeight) patch.carcassHeight = minCarcassHeight
+    const scene = useScene.getState()
     if (node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && patch.width) {
-      reflowRunModules({
+      const applied = reflowRunModules({
         modules,
         parentRun,
         patch,
-        scene: useScene.getState(),
+        scene,
         selected: node,
       })
+      if (!applied) {
+        showReflowRejected()
+        return
+      }
+      setReflowNotice(null)
+      removeWallChildForTallPatch(patch, scene)
       return
     }
+    removeWallChildForTallPatch(patch, scene)
     updateNode(patch)
   }
   const replaceAt = (index: number, next: CabinetCompartment) => {
@@ -430,9 +466,11 @@ export default function CabinetPanel() {
   const canAddTopFinish =
     node.type === 'cabinet-module' &&
     !isHoodOnlyNode &&
-    (isWallChildModule ||
-      resolveCabinetType(node, parentRun) === 'tall' ||
-      parentRun?.runTier === 'wall')
+    cabinetModuleSupportsTopFinish({
+      module: node,
+      parentIsModule,
+      parentRun,
+    })
 
   const applyPreset = (presetId: CabinetPresetId) => {
     if (node?.type !== 'cabinet-module') return
@@ -441,13 +479,6 @@ export default function CabinetPanel() {
     if (!preset) return
 
     const patch = preset.createPatch(parentRun)
-    const wallChild = wallChildOf(
-      node,
-      scene.nodes as Record<string, CabinetEditableNode | undefined>,
-    )
-    if (wallChild && patch.cabinetType === 'tall') {
-      scene.deleteNode(wallChild.id as AnyNodeId)
-    }
 
     const nextPatch: Partial<CabinetModuleNodeType> = {
       ...patch,
@@ -461,19 +492,21 @@ export default function CabinetPanel() {
     }
 
     if (parentRun?.type === 'cabinet') {
-      reflowRunModules({
+      const applied = reflowRunModules({
         modules,
         parentRun,
         patch: nextPatch,
-        preserveExtent: runHasTwoWallConstraints(
-          parentRun,
-          modules,
-          scene.nodes as Record<AnyNodeId, AnyNode>,
-        ),
         scene,
         selected: node,
       })
+      if (!applied) {
+        showReflowRejected()
+        return
+      }
+      setReflowNotice(null)
+      removeWallChildForTallPatch(patch, scene)
     } else {
+      removeWallChildForTallPatch(patch, scene)
       scene.updateNode(node.id as AnyNodeId, nextPatch)
     }
     setSelection({ selectedIds: [node.id] })
@@ -720,6 +753,15 @@ export default function CabinetPanel() {
       )}
 
       <PanelSection title="Compartments">
+        {reflowNotice ? (
+          <p
+            aria-live="polite"
+            className="px-1 pb-2 text-xs leading-5 text-amber-400"
+            role="status"
+          >
+            {reflowNotice.message}
+          </p>
+        ) : null}
         <div className="flex flex-col gap-2 px-1 pb-2">
           {rows.map(({ compartment, index }, displayIndex) => (
             <CompartmentCard

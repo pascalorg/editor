@@ -1838,11 +1838,53 @@ function syncDerivedCornerRun({
         ? Math.min(...modules.map((entry) => entry.position[0] - entry.width / 2))
         : Math.max(...modules.map((entry) => entry.position[0] + entry.width / 2)) - nextTotalWidth
     let cursor = fixedEdge
+    const nextPositions = currentWidths.map((width) => {
+      const positionX = cursor + width / 2
+      cursor += width
+      return positionX
+    })
+    const fillerName = role === 'base-leg' ? 'Corner Filler' : 'Corner Wall Filler'
+    const anchorModuleIndex = modules.findIndex((entry) => entry.name === fillerName)
+    const anchorModule = modules[anchorModuleIndex]
+    const canonicalAnchorIndex = anchorModule ? fullNames.indexOf(anchorModule.name) : -1
+    if (anchorModule && canonicalAnchorIndex >= 0) {
+      const rotation = layout.legRotation
+      const layoutRunPosition =
+        role === 'base-leg' ? layout.baseRunPosition : layout.wallRunPosition
+      const anchorWorldPosition = runLocalToPlan({ position: layoutRunPosition, rotation }, [
+        fullCenters[canonicalAnchorIndex] ?? 0,
+        0,
+        0,
+      ])
+      const runWorldPosition = runLocalToPlan({ position: anchorWorldPosition, rotation }, [
+        -(nextPositions[anchorModuleIndex] ?? 0),
+        0,
+        -anchorModule.position[2],
+      ])
+      const frameParent = cabinetFrameParent(run, sceneApi.nodes()) ?? sourceRun
+      const runPosition = worldToCabinetLocalPosition(
+        frameParent,
+        sceneApi.nodes(),
+        runWorldPosition,
+      )
+      const localRotation = worldToCabinetLocalRotation(frameParent, sceneApi.nodes(), rotation)
+      const positionChanged = runPosition.some(
+        (value, index) => Math.abs(value - run.position[index]!) > CABINET_EDGE_EPSILON,
+      )
+      if (
+        positionChanged ||
+        Math.abs(angleDelta(localRotation, run.rotation)) > CABINET_EDGE_EPSILON
+      ) {
+        sceneApi.update(
+          run.id as AnyNodeId,
+          { position: runPosition, rotation: localRotation } as Partial<AnyNode>,
+        )
+      }
+    }
     modules.forEach((entry, index) => {
       const spec = currentSpecs[index]
       if (!spec) return
-      const positionX = cursor + spec.width / 2
-      cursor += spec.width
+      const positionX = nextPositions[index] ?? entry.position[0]
       sceneApi.update(
         entry.id as AnyNodeId,
         {
@@ -2077,10 +2119,12 @@ export function syncCornerRunsFromSourceModule({
 
 export function syncCornerRunsFromRunSources({
   baseLayout = 'full',
+  previousModules = [],
   run,
   sceneApi,
 }: {
   baseLayout?: CornerBaseLayout
+  previousModules?: readonly CabinetModuleNode[]
   run: CabinetNode
   sceneApi: SceneApi
 }) {
@@ -2088,7 +2132,35 @@ export function syncCornerRunsFromRunSources({
     baseLayout === 'width-only' && !cornerDerivedRunLink(run.metadata)
       ? 'preserve-connected-widths'
       : baseLayout
+  const previousModulesById = new Map(previousModules.map((module) => [module.id, module]))
   for (const sourceModule of cornerSourceModulesForRun(run, sceneApi.nodes())) {
+    const previousModule = previousModulesById.get(sourceModule.id)
+    const sourceLink = previousModule ? cornerSourceLink(sourceModule.metadata) : null
+    if (previousModule && sourceLink) {
+      const previousEdge =
+        sourceLink.side === 'left' ? moduleMinX(previousModule) : moduleMaxX(previousModule)
+      const nextEdge =
+        sourceLink.side === 'left' ? moduleMinX(sourceModule) : moduleMaxX(sourceModule)
+      const edgeShift = nextEdge - previousEdge
+      if (Math.abs(edgeShift) > CABINET_EDGE_EPSILON) {
+        // Move the direct leg first so it stays attached even when a wall makes
+        // the canonical corner re-layout reject the otherwise valid live shape.
+        for (const linkedRunId of sourceLink.linkedRunIds) {
+          const linkedRun = sceneApi.get<CabinetNode>(linkedRunId)
+          if (linkedRun?.type !== 'cabinet' || linkedRun.parentId !== run.id) continue
+          sceneApi.update(
+            linkedRun.id as AnyNodeId,
+            {
+              position: [
+                linkedRun.position[0] + edgeShift,
+                linkedRun.position[1],
+                linkedRun.position[2],
+              ],
+            } as Partial<AnyNode>,
+          )
+        }
+      }
+    }
     syncCornerRunsFromSourceModule({
       baseLayout: effectiveBaseLayout,
       module: sourceModule,
