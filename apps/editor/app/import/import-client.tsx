@@ -26,18 +26,27 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
   const [sceneName, setSceneName] = useState(name ?? 'Imported scene')
 
   useEffect(() => {
+    // A new src restarts the flow: reset to fetching so a stale review
+    // (and its Import button) can never act on the previous file, and
+    // ignore every state update from a superseded run — an abort must
+    // not surface as an error either.
+    setPhase({ kind: 'fetching' })
     const parsedSrc = parseImportSrc(src)
     if (!parsedSrc.ok) {
       setPhase({ kind: 'error', message: parsedSrc.reason })
       return
     }
+    let cancelled = false
     const controller = new AbortController()
+    const update = (next: Phase) => {
+      if (!cancelled) setPhase(next)
+    }
     ;(async () => {
       let response: Response
       try {
         response = await fetch(parsedSrc.url, { signal: controller.signal })
       } catch {
-        setPhase({
+        update({
           kind: 'error',
           message:
             'The file could not be fetched. The server hosting it must allow cross-origin requests (CORS).',
@@ -45,29 +54,38 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
         return
       }
       if (!response.ok) {
-        setPhase({ kind: 'error', message: `The file could not be fetched (${response.status}).` })
+        update({ kind: 'error', message: `The file could not be fetched (${response.status}).` })
         return
       }
       const declared = Number(response.headers.get('content-length') ?? 0)
       if (declared > MAX_IMPORT_BYTES) {
-        setPhase({ kind: 'error', message: 'The file is too large to import.' })
+        update({ kind: 'error', message: 'The file is too large to import.' })
         return
       }
-      const text = await response.text()
+      let text: string
+      try {
+        text = await response.text()
+      } catch {
+        update({ kind: 'error', message: 'The file could not be read.' })
+        return
+      }
       if (text.length > MAX_IMPORT_BYTES) {
-        setPhase({ kind: 'error', message: 'The file is too large to import.' })
+        update({ kind: 'error', message: 'The file is too large to import.' })
         return
       }
       let parsed: unknown
       try {
         parsed = JSON.parse(text)
       } catch {
-        setPhase({ kind: 'error', message: 'The file could not be parsed as JSON.' })
+        update({ kind: 'error', message: 'The file could not be parsed as JSON.' })
         return
       }
-      setPhase({ kind: 'review', result: validateBuildJson(parsed) })
+      update({ kind: 'review', result: validateBuildJson(parsed) })
     })()
-    return () => controller.abort()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [src])
 
   const handleImport = useCallback(async () => {
