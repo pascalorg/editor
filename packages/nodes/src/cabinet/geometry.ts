@@ -116,11 +116,7 @@ function addTopFinishGeometry(
   addBox(
     group,
     [innerWidth, Math.max(0.001, height - board * 2), backThickness],
-    [
-      innerCenterX,
-      topY + height / 2,
-      centerZ - depth / 2 + backInset + backThickness / 2,
-    ],
+    [innerCenterX, topY + height / 2, centerZ - depth / 2 + backInset + backThickness / 2],
     materials.carcass,
     'cabinet-top-cabinet-back',
     'carcass',
