@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNodeId, LevelNode, WallNode } from '@pascal-app/core'
+import { type AnyNodeId, LevelNode, SiteNode, WallNode } from '@pascal-app/core'
 import { cabinetPresetById } from '../presets'
 import { runWallConstraints } from '../run-layout'
 import { CabinetModuleNode, CabinetNode } from '../schema'
@@ -590,6 +590,19 @@ describe('reflowCabinetRunModules', () => {
     expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.75, 0.5])
   })
 
+  test('grows an open left-end module outward without moving the opposite end', () => {
+    const modules = [
+      { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'left', 0.76)
+
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-1.01)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.75)
+  })
+
   test('keeps the constrained right edge fixed and moves the run left', () => {
     const modules = [
       { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
@@ -703,6 +716,47 @@ describe('reflowCabinetRunModules', () => {
     })
   })
 
+  test('detects perpendicular walls through an intermediate scene parent', () => {
+    const level = LevelNode.parse({ id: 'level_run-nested-walls' })
+    const room = SiteNode.parse({ id: 'site_run-nested-walls', parentId: level.id })
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-nested-walls',
+      parentId: level.id,
+      position: [0.75, 0, 0],
+      width: 1.5,
+      depth: 0.6,
+    })
+    const modules = [
+      { id: 'left', position: [-0.5, 0, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0, 0] as [number, number, number], width: 0.5 },
+    ]
+    const leftWall = WallNode.parse({
+      id: 'wall_run-nested-walls-left',
+      parentId: room.id,
+      start: [0, -0.5],
+      end: [0, 0.5],
+    })
+    const rightWall = WallNode.parse({
+      id: 'wall_run-nested-walls-right',
+      parentId: room.id,
+      start: [1.5, -0.5],
+      end: [1.5, 0.5],
+    })
+
+    expect(
+      runWallConstraints(run, modules, {
+        [level.id as AnyNodeId]: level,
+        [room.id as AnyNodeId]: room,
+        [leftWall.id as AnyNodeId]: leftWall,
+        [rightWall.id as AnyNodeId]: rightWall,
+      }),
+    ).toEqual({
+      left: { constrained: true, slack: 0 },
+      right: { constrained: true, slack: 0 },
+    })
+  })
+
   test('measures clear space from each run end to the perpendicular wall face', () => {
     const level = LevelNode.parse({ id: 'level_run-constraint-slack' })
     const run = CabinetNode.parse({
@@ -742,7 +796,35 @@ describe('reflowCabinetRunModules', () => {
     expect(constraints.right.slack).toBeCloseTo(0.1)
   })
 
-  test('consumes wall slack before changing an eligible cabinet width', () => {
+  test('detects a perpendicular wall within the requested width growth', () => {
+    const level = LevelNode.parse({ id: 'level_run-growth-constraint' })
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-growth-constraint',
+      parentId: level.id,
+      depth: 0.6,
+    })
+    const modules = [
+      { id: 'selected', position: [0, 0, 0] as [number, number, number], width: 0.6 },
+    ]
+    const rightWall = WallNode.parse({
+      id: 'wall_run-growth-constraint-right',
+      parentId: level.id,
+      start: [0.8, -0.5],
+      end: [0.8, 0.5],
+      thickness: 0.2,
+    })
+    const nodes = {
+      [level.id as AnyNodeId]: level,
+      [rightWall.id as AnyNodeId]: rightWall,
+    }
+
+    expect(runWallConstraints(run, modules, nodes).right.constrained).toBe(false)
+    const constraints = runWallConstraints(run, modules, nodes, { widthGrowth: 0.46 })
+    expect(constraints.right.constrained).toBe(true)
+    expect(constraints.right.slack).toBeCloseTo(0.4)
+  })
+
+  test('keeps the exact two-wall extent and changes one eligible cabinet width', () => {
     const modules = [
       { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
       { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
@@ -757,12 +839,12 @@ describe('reflowCabinetRunModules', () => {
       eligibleDonorIds: new Set(['left', 'right']),
     })
 
-    expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.7, 0.5])
-    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.85)
-    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.85)
+    expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.7, expect.closeTo(0.3)])
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.75)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.75)
   })
 
-  test('changes only the width that remains after consuming wall slack', () => {
+  test('rejects two-wall growth when combined eligible capacity is insufficient', () => {
     const modules = [
       { id: 'left', position: [-0.55, 0.1, 0] as [number, number, number], width: 0.4 },
       { id: 'middle', position: [-0.1, 0.1, 0] as [number, number, number], width: 0.5 },
@@ -777,11 +859,52 @@ describe('reflowCabinetRunModules', () => {
       eligibleDonorIds: new Set(['left']),
     })
 
-    expect(reflowed[0]!.width).toBeCloseTo(0.3)
-    expect(reflowed[1]!.width).toBeCloseTo(0.7)
-    expect(reflowed[2]!.width).toBeCloseTo(0.5)
-    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.8)
-    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.7)
+    expect(reflowed).toEqual([])
+  })
+
+  test('rejects two-wall growth when donor capacity is short by a fraction of a millimetre', () => {
+    const modules = [
+      { id: 'donor', position: [-0.530025, 0.1, 0] as [number, number, number], width: 0.55995 },
+      { id: 'selected', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'selected', 0.76, {
+      wallConstraints: {
+        left: { constrained: true, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
+      eligibleDonorIds: new Set(['donor']),
+    })
+
+    expect(reflowed).toEqual([])
+  })
+
+  test('accepts exact capacity when the final donor contributes a fraction of a millimetre', () => {
+    const modules = [
+      {
+        id: 'large-donor',
+        position: [0.279975, 0.1, 0] as [number, number, number],
+        width: 0.55995,
+      },
+      {
+        id: 'small-donor',
+        position: [0.709975, 0.1, 0] as [number, number, number],
+        width: 0.30005,
+      },
+      { id: 'selected', position: [1.11, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'selected', 0.76, {
+      wallConstraints: {
+        left: { constrained: true, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
+      eligibleDonorIds: new Set(['large-donor', 'small-donor']),
+    })
+
+    expect(reflowed).toHaveLength(3)
+    expect(reflowed[0]!.width).toBeCloseTo(0.3, 5)
+    expect(reflowed[1]!.width).toBeCloseTo(0.3, 5)
   })
 
   test('uses the closest eligible base cabinet when both ends are constrained', () => {
@@ -806,7 +929,7 @@ describe('reflowCabinetRunModules', () => {
     expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.9)
   })
 
-  test('skips the closest eligible cabinet when it cannot absorb the width growth', () => {
+  test('combines the closest eligible cabinets to absorb width growth', () => {
     const modules = [
       { id: 'far', position: [-0.625, 0.1, 0] as [number, number, number], width: 0.9 },
       { id: 'closest', position: [0, 0.1, 0] as [number, number, number], width: 0.35 },
@@ -821,8 +944,8 @@ describe('reflowCabinetRunModules', () => {
       eligibleDonorIds: new Set(['far', 'closest']),
     })
 
-    expect(reflowed[0]!.width).toBeCloseTo(0.7)
-    expect(reflowed[1]!.width).toBeCloseTo(0.35)
+    expect(reflowed[0]!.width).toBeCloseTo(0.75)
+    expect(reflowed[1]!.width).toBeCloseTo(0.3)
     expect(reflowed[2]!.width).toBeCloseTo(0.7)
   })
 
@@ -872,6 +995,25 @@ describe('reflowCabinetRunModules', () => {
     expect(restored.map((module) => module.width)).toEqual([0.7, 0.5, 0.4])
     expect(restored[0]!.position[0] - restored[0]!.width / 2).toBeCloseTo(-0.95)
     expect(restored[2]!.position[0] + restored[2]!.width / 2).toBeCloseTo(0.65)
+  })
+
+  test('keeps a two-wall extent when shrinking without recorded donor debt', () => {
+    const modules = [
+      { id: 'donor', position: [-0.38, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'selected', position: [0.25, 0.1, 0] as [number, number, number], width: 0.76 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'selected', 0.5, {
+      wallConstraints: {
+        left: { constrained: true, slack: 0 },
+        right: { constrained: true, slack: 0 },
+      },
+      eligibleDonorIds: new Set(['donor']),
+    })
+
+    expect(reflowed.map((module) => module.width)).toEqual([0.76, 0.5])
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.63)
+    expect(reflowed[1]!.position[0] + reflowed[1]!.width / 2).toBeCloseTo(0.63)
   })
 })
 

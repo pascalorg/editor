@@ -18,6 +18,7 @@ import {
   planToRunLocal,
   runLocalToPlan,
   runLocalXExtent,
+  runWallConstraints,
   sideInsertX,
   sortRunModules,
 } from './run-layout'
@@ -1105,10 +1106,17 @@ function resolveWallLimitedWidth({
     position: [backLeft[0], 0, backLeft[1]] as [number, number, number],
     rotation,
   }
+  const runAxis: readonly [number, number] = [Math.cos(rotation), -Math.sin(rotation)]
   const miterData = calculateLevelMiters(walls)
   let blockingDistance = Number.POSITIVE_INFINITY
 
   for (const wall of walls) {
+    const wallDx = wall.end[0] - wall.start[0]
+    const wallDz = wall.end[1] - wall.start[1]
+    const wallLength = Math.hypot(wallDx, wallDz)
+    if (wallLength <= WALL_CLEARANCE_EPSILON) continue
+    const axisDot = (wallDx * runAxis[0] + wallDz * runAxis[1]) / wallLength
+    if (Math.abs(axisDot) > 0.2) continue
     const footprint = getWallPlanFootprint(wall, miterData)
     if (footprint.length < 3) continue
 
@@ -1306,9 +1314,16 @@ function computeCornerRunLayout({
   const corner = runLocalToPlan(runWorld, [cornerX, 0, backZ])
   const sourceAxis: [number, number] = [Math.cos(runWorld.rotation), -Math.sin(runWorld.rotation)]
   const sign = side === 'right' ? 1 : -1
+  const sourceWallConstraint = runWallConstraints(run, modules, nodes, {
+    widthGrowth: baseLegDepth,
+  })[side]
+  const sideWallInset =
+    turnSide === side && sourceWallConstraint.constrained
+      ? Math.max(0, baseLegDepth - sourceWallConstraint.slack)
+      : 0
   const shiftedCorner: [number, number] = [
-    corner[0] + sign * baseLegDepth * sourceAxis[0],
-    corner[2] + sign * baseLegDepth * sourceAxis[1],
+    corner[0] + sign * (baseLegDepth - sideWallInset) * sourceAxis[0],
+    corner[2] + sign * (baseLegDepth - sideWallInset) * sourceAxis[1],
   ]
   const legRotation =
     turnSide === 'right' ? runWorld.rotation - Math.PI / 2 : runWorld.rotation + Math.PI / 2

@@ -15,7 +15,7 @@ import {
   SliderControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Pause, Play, Plus } from 'lucide-react'
+import { AlertTriangle, Pause, Play, Plus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { CompartmentCard } from './compartment-card'
@@ -25,7 +25,7 @@ import {
   onCabinetAnimationChange,
   stopCabinetAnimation,
 } from './interaction'
-import { cabinetModuleSupportsTopFinish } from './panel-visibility'
+import { cabinetModuleSupportsPresets, cabinetModuleSupportsTopFinish } from './panel-visibility'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
   CABINET_REVEAL_GAPS,
@@ -65,6 +65,7 @@ import {
   stackForCabinet,
 } from './stack'
 import { resolveCompartmentTransition } from './stack-transitions'
+import { validateCabinetRun } from './validation'
 import {
   CABINET_STANDARD_WIDTHS,
   type CabinetStandardWidthId,
@@ -355,6 +356,8 @@ export default function CabinetPanel() {
   if (!node || (node.type !== 'cabinet' && node.type !== 'cabinet-module')) return null
 
   const stack = stackForCabinet(node)
+  const planningRun = node.type === 'cabinet' ? node : parentRun
+  const planningReport = planningRun ? validateCabinetRun(planningRun, modules) : null
   const isHoodOnlyNode =
     stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
   const normalized = normalizeCabinetStack(node)
@@ -473,7 +476,7 @@ export default function CabinetPanel() {
     })
 
   const applyPreset = (presetId: CabinetPresetId) => {
-    if (node?.type !== 'cabinet-module') return
+    if (node?.type !== 'cabinet-module' || !cabinetModuleSupportsPresets(node)) return
     const scene = useScene.getState()
     const preset = CABINET_PRESETS.find((entry) => entry.id === presetId)
     if (!preset) return
@@ -527,22 +530,24 @@ export default function CabinetPanel() {
       title={node.name || 'Modular Cabinet'}
       width={320}
     >
-      {node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && (
-        <PanelSection title="Presets">
-          <div className="grid grid-cols-2 gap-2 px-1 pb-2">
-            {CABINET_PRESETS.map((preset) => (
-              <button
-                className={PRESET_BUTTON_CLASS}
-                key={preset.id}
-                onClick={() => applyPreset(preset.id)}
-                type="button"
-              >
-                <span className="truncate">{preset.label}</span>
-              </button>
-            ))}
-          </div>
-        </PanelSection>
-      )}
+      {node.type === 'cabinet-module' &&
+        parentRun?.type === 'cabinet' &&
+        cabinetModuleSupportsPresets(node) && (
+          <PanelSection title="Presets">
+            <div className="grid grid-cols-2 gap-2 px-1 pb-2">
+              {CABINET_PRESETS.map((preset) => (
+                <button
+                  className={PRESET_BUTTON_CLASS}
+                  key={preset.id}
+                  onClick={() => applyPreset(preset.id)}
+                  type="button"
+                >
+                  <span className="truncate">{preset.label}</span>
+                </button>
+              ))}
+            </div>
+          </PanelSection>
+        )}
 
       <PanelSection title="Dimensions">
         {node.type === 'cabinet-module' && !isHoodOnlyNode && (
@@ -700,6 +705,32 @@ export default function CabinetPanel() {
           </div>
         </PanelSection>
       )}
+
+      {planningReport &&
+        (planningReport.errors.length > 0 || planningReport.warnings.length > 0) && (
+          <PanelSection title="Planning checks">
+            <div className="space-y-1 px-1 pb-2 text-xs leading-5">
+              {planningReport.errors.map((planningIssue) => (
+                <div
+                  className="flex gap-1.5 text-red-300"
+                  key={`${planningIssue.severity}-${planningIssue.code}-${planningIssue.nodeIds.join('-')}`}
+                >
+                  <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
+                  <span>{planningIssue.message}</span>
+                </div>
+              ))}
+              {planningReport.warnings.map((planningIssue) => (
+                <div
+                  className="flex gap-1.5 text-amber-300"
+                  key={`${planningIssue.severity}-${planningIssue.code}-${planningIssue.nodeIds.join('-')}`}
+                >
+                  <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
+                  <span>{planningIssue.message}</span>
+                </div>
+              ))}
+            </div>
+          </PanelSection>
+        )}
 
       {!isHoodOnlyNode && (
         <PanelSection title="Open Animation">

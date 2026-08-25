@@ -1,6 +1,10 @@
 import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
 import { resolveCabinetType } from './run-ops'
 
+export function cabinetModuleSupportsPresets(module: CabinetModuleNode) {
+  return module.moduleKind !== 'corner-filler'
+}
+
 export function cabinetModuleSupportsTopFinish({
   module,
   parentIsModule,
