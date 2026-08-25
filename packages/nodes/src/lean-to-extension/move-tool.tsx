@@ -22,7 +22,7 @@ import {
   resolveLeanToEdgeSnapTargets,
   resolveLeanToMoveProposal,
 } from './layout'
-import { moveLeanToAlongSlabEdge } from './placement'
+import { moveLeanToAlongSlabEdge, resolveLeanToPlanPosition } from './placement'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import LeanToExtensionPreview from './preview'
 
@@ -225,7 +225,10 @@ const MoveLeanToExtensionTool = ({ node, sceneApi }: MoveLeanToExtensionProps) =
           !event.nativeEvent.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         const snap = (value: number) => (step > 0 ? Math.round(value / step) * step : value)
         return publishPatch({
-          position: [snap(event.localPosition[0]), node.position[1], snap(event.localPosition[2])],
+          position: resolveLeanToPlanPosition(node, [
+            snap(event.localPosition[0]),
+            snap(event.localPosition[2]),
+          ]),
         })
       }
       const onMove = (event: GridEvent) => {

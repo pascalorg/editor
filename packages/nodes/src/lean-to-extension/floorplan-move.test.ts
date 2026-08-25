@@ -42,7 +42,7 @@ describe('lean-to floorplan move snapping', () => {
     session.apply({ planPoint: [3.8, 2.2], modifiers: { altKey: true, shiftKey: false } })
 
     expect(useLiveNodeOverrides.getState().overrides.get(moving.id)?.position).toEqual([
-      3.8, 0, 2.2,
+      3.8, 0, 0.8250000000000002,
     ])
     expect(session.canCommit()).toBe(true)
   })

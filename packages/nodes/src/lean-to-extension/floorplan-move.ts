@@ -11,7 +11,7 @@ import {
 import { getSegmentGridStep, isGridSnapActive } from '@pascal-app/editor'
 import { resolveLeanToEdgeSnapTargets, resolveLeanToMoveProposal } from './layout'
 import { leanToManagedPreviewOverrides } from './managed-preview'
-import { moveLeanToAlongSlabEdge } from './placement'
+import { moveLeanToAlongSlabEdge, resolveLeanToPlanPosition } from './placement'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 
 // Arc-length along the wall centerline to the point on it nearest the
@@ -67,7 +67,7 @@ export const leanToFloorplanMoveTarget: FloorplanMoveTarget<LeanToExtensionNode>
         const step = !modifiers.altKey && isGridSnapActive() ? getSegmentGridStep() : 0
         const snap = (value: number) => (step > 0 ? Math.round(value / step) * step : value)
         const patch: Partial<LeanToExtensionNode> = {
-          position: [snap(planPoint[0]), node.position[1], snap(planPoint[1])],
+          position: resolveLeanToPlanPosition(node, [snap(planPoint[0]), snap(planPoint[1])]),
         }
         const previewEntries: ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> = [
           [nodeId, patch as Partial<AnyNode>],

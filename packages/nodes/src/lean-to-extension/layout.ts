@@ -10,6 +10,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { EAVE_TUCK_INWARD } from '../gutter/eave-snap'
+import { resolveWallAttachmentAtPlanPoint } from '../shared/wall-attach-target'
 import { type LeanToArcFrame, leanToArcFrameAtLocalX } from './arc'
 import { isClosedLoopLeanTo } from './conical-host'
 
@@ -61,27 +62,21 @@ export function resolveLeanToWallSurfaceHit(
   if (!normal) return null
   if (!isCurvedWall(wall)) {
     if (Math.abs(normal[2]) <= 0.7) return null
-    return { localX: localPosition[0], side: normal[2] >= 0 ? 'front' : 'back' }
+  } else if (Math.abs(normal[1]) > 0.7) {
+    return null
   }
-  if (Math.abs(normal[1]) > 0.7) return null
 
-  const arc = getWallArcData(wall)
-  if (!arc) return null
   const chord = getWallChordFrame(wall)
-  const point = {
-    x: chord.start.x + chord.tangent.x * localPosition[0] + chord.normal.x * localPosition[2],
-    y: chord.start.y + chord.tangent.y * localPosition[0] + chord.normal.y * localPosition[2],
-  }
-  const angle = Math.atan2(point.y - arc.center.y, point.x - arc.center.x)
-  let directedAngle = (angle - arc.startAngle) * arc.direction
-  while (directedAngle < 0) directedAngle += Math.PI * 2
-  const t = Math.max(0, Math.min(1, directedAngle / Math.abs(arc.delta)))
-  const frame = getWallCurveFrameAt(wall, t)
-  const signedOffset =
-    (point.x - frame.point.x) * frame.normal.x + (point.y - frame.point.y) * frame.normal.y
+  if (chord.length <= 1e-6) return null
+  const point: [number, number] = [
+    chord.start.x + chord.tangent.x * localPosition[0] + chord.normal.x * localPosition[2],
+    chord.start.y + chord.tangent.y * localPosition[0] + chord.normal.y * localPosition[2],
+  ]
+  const attachment = resolveWallAttachmentAtPlanPoint(wall, point)
+  if (!attachment) return null
   return {
-    localX: getWallCurveLength(wall) * t,
-    side: signedOffset >= 0 ? 'front' : 'back',
+    localX: attachment.localX,
+    side: attachment.side,
   }
 }
 
@@ -189,6 +184,16 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
     postFrames: postXs.map((x) => leanToArcFrameAtLocalX(node, x)),
     rafterFrames: rafterXs.map((x) => leanToArcFrameAtLocalX(node, x)),
   }
+}
+
+/**
+ * Plan-space center of the rendered lean-to footprint, measured from the node
+ * origin. Placement tools use this shared offset so the pointer marks the
+ * center of the whole footprint rather than the high-edge origin.
+ */
+export function resolveLeanToPlanCenter(node: LeanToExtensionNode): [number, number] {
+  const layout = resolveLeanToLayout(node)
+  return [layout.roofCenterX, layout.roofCenterZ]
 }
 
 // The host wall's true circular arc expressed in the lean-to's local frame. The

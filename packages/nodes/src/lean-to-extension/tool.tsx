@@ -28,29 +28,18 @@ import { stopPlacementCommitPropagation } from '../shared/floor-placement'
 import { createLeanToAssembly } from './assembly'
 import { isConicalLeanToHostOccupied, resolveConicalLeanToSurfaceHit } from './conical-host'
 import { leanToExtensionGeometryKey } from './geometry'
-import {
-  leanToWallLocalPose,
-  resolveLeanToWallPlacement,
-  resolveLeanToWallSurfaceHit,
-} from './layout'
+import { leanToWallLocalPose, resolveLeanToWallSurfaceHit } from './layout'
 import {
   findLeanToSlabEdgePlacement,
   type LeanToPlanPlacementTarget,
   nextLeanToPlacementRotation,
   resolveLeanToCommitTarget,
   resolveLeanToPlanPlacement,
+  resolveLeanToWallPlanTarget,
 } from './placement'
 import { isLeanToHostOnLevel } from './placement-scope'
-import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import LeanToExtensionPreview from './preview'
-import {
-  applyLeanToAvailableWallSpan,
-  applyLeanToRoofAttachment,
-  applyLeanToWallAutoSpan,
-  clearLeanToRoofAttachment,
-  resolveLeanToHostRoof,
-  resolveLeanToRoofAttachment,
-} from './roof-attachment'
+import { resolveLeanToHostRoof } from './roof-attachment'
 import type { LeanToExtensionNode } from './schema'
 import { resolveLeanToDoorWallTarget } from './wall-target'
 
@@ -288,35 +277,28 @@ const LeanToExtensionTool = () => {
         setPreview(null)
         return null
       }
-      const wallPlacement = resolveLeanToWallPlacement(event.node, hit.localX, hit.side)
-      if (!wallPlacement) {
+      const target = resolveLeanToWallPlanTarget(event.node, hit.localX, hit.side, nodes)
+      if (!target) {
         lastPreviewTarget = null
         setPreview(null)
         return null
       }
-      const attachment = resolveLeanToRoofAttachment(wallPlacement, event.node, nodes)
-      const autoSpannedNode = attachment
-        ? applyLeanToRoofAttachment(wallPlacement, attachment)
-        : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), event.node)
-      const attachedNode = applyLeanToAvailableWallSpan(
-        autoSpannedNode,
-        event.node,
-        nodes,
-        wallPlacement.position[0],
-      )
-      const node = resolveLeanToEndAbutments(attachedNode, event.node, nodes)
-      const valid = leanToPlacementConflicts(node, event.node, nodes).length === 0
-      const pose = leanToWallLocalPose(event.node, node, resolveBaseY(event.node))
-      lastPreviewTarget = { node, parentId: event.node.id as AnyNodeId, valid }
+      const pose = leanToWallLocalPose(event.node, target.node, resolveBaseY(event.node))
+      lastPreviewTarget = {
+        node: target.node,
+        parentId: event.node.id as AnyNodeId,
+        valid: target.valid,
+      }
       setPreview((current) => ({
         node:
-          current && leanToExtensionGeometryKey(current.node) === leanToExtensionGeometryKey(node)
+          current &&
+          leanToExtensionGeometryKey(current.node) === leanToExtensionGeometryKey(target.node)
             ? current.node
-            : node,
+            : target.node,
         ...pose,
-        valid,
+        valid: target.valid,
       }))
-      return valid ? node : null
+      return target.valid ? target.node : null
     }
 
     const onWallMove = (event: WallEvent) => {

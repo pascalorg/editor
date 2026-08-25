@@ -37,6 +37,16 @@ function planDistance(a: readonly [number, number], b: readonly [number, number]
   return Math.hypot(a[0] - b[0], a[1] - b[1])
 }
 
+function directionsFormSupportedCorner(
+  away: LeanToPlanPoint | null,
+  candidateAway: LeanToPlanPoint | null,
+): boolean {
+  if (!(away && candidateAway)) return false
+  const dot = Math.max(-1, Math.min(1, away[0] * candidateAway[0] + away[1] * candidateAway[1]))
+  const angle = Math.acos(dot)
+  return angle >= MIN_CORNER_ANGLE - PLAN_TOLERANCE && angle <= MAX_CORNER_ANGLE + PLAN_TOLERANCE
+}
+
 function wallFrame(wall: WallNode) {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
@@ -244,12 +254,18 @@ function isSupportedHostCorner(
   candidate: LeanToExtensionNode,
   candidateSide: LeanToCornerSide,
 ): boolean {
-  const away = awayFromEndChordDirection(wall, leanTo, side)
-  const candidateAway = awayFromEndChordDirection(candidateWall, candidate, candidateSide)
-  if (!(away && candidateAway)) return false
-  const dot = Math.max(-1, Math.min(1, away[0] * candidateAway[0] + away[1] * candidateAway[1]))
-  const angle = Math.acos(dot)
-  return angle >= MIN_CORNER_ANGLE - PLAN_TOLERANCE && angle <= MAX_CORNER_ANGLE + PLAN_TOLERANCE
+  if (
+    directionsFormSupportedCorner(
+      awayFromEndDirection(wall, leanTo, side),
+      awayFromEndDirection(candidateWall, candidate, candidateSide),
+    )
+  ) {
+    return true
+  }
+  return directionsFormSupportedCorner(
+    awayFromEndChordDirection(wall, leanTo, side),
+    awayFromEndChordDirection(candidateWall, candidate, candidateSide),
+  )
 }
 
 function leanToPointToWorld(

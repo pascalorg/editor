@@ -192,12 +192,13 @@ function buildLevelLeanToFloorplan(
     })
     if (node.hostKind === 'freestanding') {
       const point = toWorld(right + 0.25, low + 0.25)
+      const center = toWorld(layout.roofCenterX, layout.roofCenterZ)
       children.push({
         kind: 'rotate-arrow',
         point,
-        angle: Math.atan2(point[1] - node.position[2], point[0] - node.position[0]),
+        angle: Math.atan2(point[1] - center[1], point[0] - center[0]),
         affordance: 'lean-to-rotate',
-        pivot: [node.position[0], node.position[2]],
+        pivot: center,
       })
     }
   }

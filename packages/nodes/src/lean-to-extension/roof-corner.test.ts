@@ -707,6 +707,61 @@ describe('lean-to corner joint', () => {
     for (const mesh of expectedMeshes) mesh.geometry.dispose()
   })
 
+  test('joins a 105 degree straight canopy to a semicircular canopy using endpoint tangents', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_semicircle_105_curve',
+      parentId: 'level_semicircle_105',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: -3,
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_semicircle_105_straight',
+      parentId: 'level_semicircle_105',
+      start: [6, 0],
+      end: [0.2044450422655899, -1.552914270615125],
+    })
+    const curved = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(curvedWall, getWallCurveLength(curvedWall) / 2, 'front')!,
+        curvedWall,
+      ),
+      id: 'leanto_semicircle_105_curve',
+    }
+    const straight = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(straightWall, getWallCurveLength(straightWall) / 2, 'front')!,
+        straightWall,
+      ),
+      id: 'leanto_semicircle_105_straight',
+    }
+    const nodes = Object.fromEntries(
+      [curvedWall, straightWall, curved, straight].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const curvedJoint = resolveLeanToCornerJoints(curved, curvedWall, nodes).right
+    const straightJoint = resolveLeanToCornerJoints(straight, straightWall, nodes).left
+
+    expect(curvedJoint?.neighborId).toBe(straight.id)
+    expect(straightJoint?.neighborId).toBe(curved.id)
+    expect(curvedJoint?.seam).toHaveLength(2)
+    expect(straightJoint?.seam).toHaveLength(2)
+
+    const curvedAssembly = createLeanToAssembly(curved, undefined, nodes)
+    const straightAssembly = createLeanToAssembly(straight, undefined, nodes)
+    const curvedGeometry = generateRoofSegmentGeometry(curvedAssembly.segment).applyMatrix4(
+      segmentWorldMatrix(curvedWall, curved, curvedAssembly.segment),
+    )
+    const straightGeometry = generateRoofSegmentGeometry(straightAssembly.segment).applyMatrix4(
+      segmentWorldMatrix(straightWall, straight, straightAssembly.segment),
+    )
+
+    expect(closestMeshDistance(curvedGeometry, straightGeometry)).toBeLessThan(0.05)
+
+    curvedGeometry.dispose()
+    straightGeometry.dispose()
+  })
+
   test('connects three consecutive curved-straight-curved canopies through both ends', () => {
     const wallA = WallNode.parse({
       id: 'wall_chain_curved_a',

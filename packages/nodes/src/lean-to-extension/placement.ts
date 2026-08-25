@@ -6,8 +6,13 @@ import {
   type SlabNode,
   type WallNode,
 } from '@pascal-app/core'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
-import { leanToLowEdgeHeight, resolveLeanToWallPlacement } from './layout'
+import { findClosestWallAttachmentInPlan } from '../shared/wall-attach-target'
+import {
+  LEAN_TO_CORNER_JOINTS_KEY,
+  leanToCornerJointMetadata,
+  resolveLeanToCornerJoints,
+} from './corner-joint'
+import { leanToLowEdgeHeight, resolveLeanToPlanCenter, resolveLeanToWallPlacement } from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import {
   applyLeanToAvailableWallSpan,
@@ -30,6 +35,54 @@ export function resolveLeanToCommitTarget<T>(
   return visibleTarget ?? clickTarget
 }
 
+/** Apply transient corner data so the placement ghost matches the committed assembly. */
+export function resolveLeanToPreviewNode(
+  node: LeanToExtensionNode,
+  wall: WallNode | undefined,
+  nodes: Record<AnyNodeId, AnyNode>,
+): LeanToExtensionNode {
+  if (!wall) return node
+  const joints = resolveLeanToCornerJoints(node, wall, nodes)
+  if (Object.keys(joints).length === 0) return node
+  return {
+    ...node,
+    leftEndCondition: joints.left ? 'joined' : node.leftEndCondition,
+    rightEndCondition: joints.right ? 'joined' : node.rightEndCondition,
+    metadata: {
+      ...(node.metadata && typeof node.metadata === 'object' ? node.metadata : {}),
+      [LEAN_TO_CORNER_JOINTS_KEY]: leanToCornerJointMetadata(joints),
+    },
+  }
+}
+
+export function resolveLeanToWallPlanTarget(
+  wall: WallNode,
+  localX: number,
+  side: 'front' | 'back',
+  nodes: Record<AnyNodeId, AnyNode>,
+): LeanToPlanPlacementTarget | null {
+  const wallPlacement = resolveLeanToWallPlacement(wall, localX, side)
+  if (!wallPlacement) return null
+
+  const attachment = resolveLeanToRoofAttachment(wallPlacement, wall, nodes)
+  const autoSpannedNode = attachment
+    ? applyLeanToRoofAttachment(wallPlacement, attachment)
+    : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), wall)
+  const attachedNode = applyLeanToAvailableWallSpan(
+    autoSpannedNode,
+    wall,
+    nodes,
+    wallPlacement.position[0],
+  )
+  const node = resolveLeanToEndAbutments(attachedNode, wall, nodes)
+  const previewNode = resolveLeanToPreviewNode(node, wall, nodes)
+  return {
+    node: previewNode,
+    valid: leanToPlacementConflicts(node, wall, nodes).length === 0,
+    wall,
+  }
+}
+
 const PLACEMENT_ROTATION_STEP = Math.PI / 4
 
 export function nextLeanToPlacementRotation(
@@ -41,6 +94,21 @@ export function nextLeanToPlacementRotation(
   const direction = key === 'r' || key === 'R' ? 1 : key === 't' || key === 'T' ? -1 : 0
   if (direction === 0) return current
   return (Math.round(current / PLACEMENT_ROTATION_STEP) + direction) * PLACEMENT_ROTATION_STEP
+}
+
+export function resolveLeanToPlanPosition(
+  node: LeanToExtensionNode,
+  point: readonly [number, number],
+): LeanToExtensionNode['position'] {
+  const [centerX, centerZ] = resolveLeanToPlanCenter(node)
+  const rotationY = node.rotation[1]
+  const cos = Math.cos(rotationY)
+  const sin = Math.sin(rotationY)
+  return [
+    point[0] - centerX * cos - centerZ * sin,
+    node.position[1],
+    point[1] + centerX * sin - centerZ * cos,
+  ]
 }
 
 export function resolveLeanToFreestandingPlacement(
@@ -55,11 +123,12 @@ export function resolveLeanToFreestandingPlacement(
     highSideMode: 'independent-high-beam',
     connectionMode: 'manual',
     autoSpan: false,
-    position: [point[0], 0, point[1]],
+    position: [0, 0, 0],
     rotation: [0, rotationY, 0],
   })
   return {
     ...parsed,
+    position: resolveLeanToPlanPosition(parsed, point),
     hostRoofId: undefined,
     hostRoofSegmentId: undefined,
     hostRoofEdge: undefined,
@@ -81,27 +150,10 @@ export function resolveLeanToPlanPlacement({
   nodes: Record<AnyNodeId, AnyNode>
   point: readonly [number, number]
 }): LeanToPlanPlacementTarget {
-  const hit = findClosestWallInPlan(point, nodes, activeLevelId)
+  const hit = findClosestWallAttachmentInPlan(point, nodes, activeLevelId)
   if (hit) {
-    const wallPlacement = resolveLeanToWallPlacement(hit.wall, hit.localX, hit.side)
-    if (wallPlacement) {
-      const attachment = resolveLeanToRoofAttachment(wallPlacement, hit.wall, nodes)
-      const autoSpannedNode = attachment
-        ? applyLeanToRoofAttachment(wallPlacement, attachment)
-        : applyLeanToWallAutoSpan(clearLeanToRoofAttachment(wallPlacement), hit.wall)
-      const attachedNode = applyLeanToAvailableWallSpan(
-        autoSpannedNode,
-        hit.wall,
-        nodes,
-        wallPlacement.position[0],
-      )
-      const node = resolveLeanToEndAbutments(attachedNode, hit.wall, nodes)
-      return {
-        node,
-        valid: leanToPlacementConflicts(node, hit.wall, nodes).length === 0,
-        wall: hit.wall,
-      }
-    }
+    const target = resolveLeanToWallPlanTarget(hit.wall, hit.localX, hit.side, nodes)
+    if (target) return target
   }
 
   const slabAttached = findLeanToSlabEdgePlacement(point, nodes, activeLevelId)

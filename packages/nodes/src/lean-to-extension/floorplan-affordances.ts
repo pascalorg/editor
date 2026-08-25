@@ -12,7 +12,11 @@ import {
 } from '@pascal-app/core'
 import { getSegmentGridStep, isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
-import { resolveLeanToEdgeSnapTargets, resolveLeanToSpanResizeProposal } from './layout'
+import {
+  resolveLeanToEdgeSnapTargets,
+  resolveLeanToPlanCenter,
+  resolveLeanToSpanResizeProposal,
+} from './layout'
 import { deriveLeanToResizePatch } from './parametrics'
 import { moveLeanToAlongSlabEdge } from './placement'
 
@@ -125,16 +129,22 @@ export const leanToRotateAffordance: FloorplanAffordance<LeanToExtensionNode> = 
       return { affectedIds: [], apply() {}, canCommit: () => false }
     }
     const nodeId = node.id as AnyNodeId
+    const [centerX, centerZ] = resolveLeanToPlanCenter(node)
+    const rotationY = node.rotation[1]
+    const center: [number, number] = [
+      node.position[0] + centerX * Math.cos(rotationY) + centerZ * Math.sin(rotationY),
+      node.position[2] - centerX * Math.sin(rotationY) + centerZ * Math.cos(rotationY),
+    ]
     const initialAngle = Math.atan2(
-      initialPlanPoint[1] - node.position[2],
-      initialPlanPoint[0] - node.position[0],
+      initialPlanPoint[1] - center[1],
+      initialPlanPoint[0] - center[0],
     )
     let lastRotation = node.rotation[1]
     return {
       affectedIds: [nodeId],
       apply({ planPoint }) {
         const delta = rotateAffordanceDelta({
-          center: [node.position[0], node.position[2]],
+          center,
           initialAngle,
           planPoint,
           free: !isAngleSnapActive(),
