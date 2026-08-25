@@ -9,7 +9,12 @@ import {
 import { meshEditScope } from '../lib/interaction/scope'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
-import { isToolOwnedRotation, runHistoryShortcut } from './use-keyboard'
+import {
+  canCycleSnappingModeShortcut,
+  canRunGlobalRotationShortcut,
+  isToolOwnedRotation,
+  runHistoryShortcut,
+} from './use-keyboard'
 
 type RafFn = (callback: (time: number) => void) => number
 ;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= (
@@ -58,6 +63,20 @@ describe('rotation shortcut ownership', () => {
 })
 
 describe('history shortcuts during block editing', () => {
+  test('reserves global rotation shortcuts for the active mesh editor', () => {
+    expect(canRunGlobalRotationShortcut()).toBe(true)
+    useInteractionScope.getState().begin(meshEditScope(NODE_ID))
+    expect(canRunGlobalRotationShortcut()).toBe(false)
+  })
+
+  test('keeps Shift available to cycle snapping while a mesh operation is active', () => {
+    useInteractionScope.getState().begin(meshEditScope(NODE_ID))
+    expect(canCycleSnappingModeShortcut(true)).toBe(true)
+
+    useInteractionScope.getState().begin(meshEditScope(NODE_ID, 'operating', 'translate'))
+    expect(canCycleSnappingModeShortcut(true)).toBe(true)
+  })
+
   test('undoes and redoes mesh changes without leaving component selection mode', () => {
     useInteractionScope.getState().begin(meshEditScope(NODE_ID))
 

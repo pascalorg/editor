@@ -185,6 +185,12 @@ export const isToolOwnedRotation = () => {
   )
 }
 
+export const canRunGlobalRotationShortcut = () =>
+  useInteractionScope.getState().scope.kind !== 'mesh-editing'
+
+export const canCycleSnappingModeShortcut = (hasActiveContext = getActiveSnapContext() != null) =>
+  hasActiveContext
+
 export const useKeyboard = ({
   isVersionPreviewMode = false,
   disabled = false,
@@ -206,15 +212,21 @@ export const useKeyboard = ({
     // every node move (including wall-hosted items + door/window openings, which
     // now declare `snapProfile`), and endpoint/polygon reshaping, so the keys
     // never silently stop working. Force-place lives on Alt where a tool supports it.
-    const isSnappingCycleContext = () => getActiveSnapContext() != null
     // A "clean tap" of Ctrl/Meta (pressed and released with NO other key in
     // between) cycles the grid step — same context as the Shift snapping-mode
     // cycle. `ctrlTapClean` starts true the moment Ctrl/Meta goes down alone
     // and is cleared the instant any other key fires, so chords like Ctrl+Z /
     // Ctrl+C never cycle.
     let ctrlTapClean = false
+    let shiftTapClean = false
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftTapClean = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey
+      } else {
+        shiftTapClean = false
+      }
+
       if (e.key === 'Control' || e.key === 'Meta') {
         // Only a fresh, modifier-free press starts a clean-tap candidate;
         // ignore key-repeat and presses already part of a combo.
@@ -273,15 +285,6 @@ export const useKeyboard = ({
           setTerrainBrush({ radius })
           sfxEmitter.emit('sfx:grid-snap')
         }
-        return
-      }
-
-      if (e.key === 'Shift' && !e.repeat && isSnappingCycleContext()) {
-        // Cycle the global snapping mode (grid → lines → angles → off).
-        // `'off'` is the snap bypass now, so Shift no longer holds-to-bypass.
-        e.preventDefault()
-        useEditor.getState().cycleSnappingMode()
-        sfxEmitter.emit('sfx:grid-snap')
         return
       }
 
@@ -486,7 +489,8 @@ export const useKeyboard = ({
         !e.metaKey &&
         !e.ctrlKey &&
         !isVersionPreviewMode &&
-        !isToolOwnedRotation()
+        !isToolOwnedRotation() &&
+        canRunGlobalRotationShortcut()
       ) {
         // `!metaKey && !ctrlKey` lets Cmd/Ctrl+R reach the browser reload instead
         // of rotating/flipping the selected node.
@@ -580,7 +584,8 @@ export const useKeyboard = ({
       } else if (
         (e.key === 't' || e.key === 'T') &&
         !isVersionPreviewMode &&
-        !isToolOwnedRotation()
+        !isToolOwnedRotation() &&
+        canRunGlobalRotationShortcut()
       ) {
         // Rotate selected node counter-clockwise
         // Multi-selection → group rotate, mirroring the R arm above.
@@ -699,6 +704,23 @@ export const useKeyboard = ({
       }
     }
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        const wasClean = shiftTapClean
+        shiftTapClean = false
+        if (!wasClean) return
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement ||
+          (e.target instanceof HTMLElement && e.target.isContentEditable)
+        ) {
+          return
+        }
+        if (!canCycleSnappingModeShortcut()) return
+        e.preventDefault()
+        useEditor.getState().cycleSnappingMode()
+        sfxEmitter.emit('sfx:grid-snap')
+        return
+      }
       if (e.key === 'Control' || e.key === 'Meta') {
         const wasClean = ctrlTapClean
         ctrlTapClean = false
@@ -708,7 +730,7 @@ export const useKeyboard = ({
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
           return
         }
-        if (!isSnappingCycleContext()) return
+        if (!canCycleSnappingModeShortcut()) return
         // Cycle the grid / measurement step (0.5 → 0.25 → 0.1 → 0.05).
         useEditor.getState().cycleGridSnapStep()
         sfxEmitter.emit('sfx:grid-snap')
@@ -722,6 +744,8 @@ export const useKeyboard = ({
     // registry move overlay) — safe only because none of them claim Ctrl/Cmd+G.
     // `e.code` keeps it on the physical G key across keyboard layouts.
     const handleSessionGroupKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Shift') shiftTapClean = false
+      if (e.key !== 'Control' && e.key !== 'Meta') ctrlTapClean = false
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement ||

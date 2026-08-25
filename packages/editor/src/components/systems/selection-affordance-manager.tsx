@@ -1,9 +1,19 @@
 'use client'
 
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  createSceneApi,
+  runAsSingleSceneHistoryStep,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, Suspense, useMemo } from 'react'
 import { getRegistryAffordanceTool } from '../tools/shared/affordance-dispatch'
+import type {
+  SelectionAffordanceHistoryApi,
+  SelectionAffordanceInteractionApi,
+  SelectionAffordanceProps,
+} from './selection-affordance-services'
 
 /**
  * Editor-mounted dispatcher for a kind's selection-time editing UI.
@@ -19,20 +29,60 @@ import { getRegistryAffordanceTool } from '../tools/shared/affordance-dispatch'
  */
 export function SelectionAffordanceManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const selectedKind = useScene((s) => {
+  const selectedNode = useScene((s) => {
     if (selectedIds.length !== 1) return null
-    return s.nodes[selectedIds[0] as AnyNodeId]?.type ?? null
+    return s.nodes[selectedIds[0] as AnyNodeId] ?? null
   })
+  const readOnly = useScene((s) => s.readOnly)
+  const sceneApi = useMemo(() => createSceneApi(useScene), [])
+  const historyApi = useMemo<SelectionAffordanceHistoryApi>(
+    () => ({
+      depth: () => useScene.temporal.getState().pastStates.length,
+      replaceLatest: (expectedDepth, replace) => {
+        if (useScene.temporal.getState().pastStates.length !== expectedDepth) return false
+        let replaced = false
+        runAsSingleSceneHistoryStep(useScene, () => {
+          useScene.temporal.getState().undo()
+          replaced = replace()
+          if (!replaced) useScene.temporal.getState().redo()
+        })
+        return replaced
+      },
+    }),
+    [],
+  )
+  const interactionApi = useMemo<SelectionAffordanceInteractionApi>(
+    () => ({
+      beginInputDrag: () => {
+        const previous = useViewer.getState().inputDragging
+        let restored = false
+        useViewer.getState().setInputDragging(true)
+        return () => {
+          if (restored) return
+          restored = true
+          useViewer.getState().setInputDragging(previous)
+        }
+      },
+      clearSelection: () => useViewer.getState().setSelection({ selectedIds: [] }),
+    }),
+    [],
+  )
 
-  const Component = useMemo<ComponentType | null>(() => {
-    if (!selectedKind) return null
-    return getRegistryAffordanceTool(selectedKind, 'selection')
-  }, [selectedKind])
+  const Component = useMemo<ComponentType<SelectionAffordanceProps> | null>(() => {
+    if (!selectedNode) return null
+    return getRegistryAffordanceTool(selectedNode.type, 'selection')
+  }, [selectedNode])
 
-  if (!Component) return null
+  if (!(Component && selectedNode)) return null
   return (
     <Suspense fallback={null}>
-      <Component />
+      <Component
+        historyApi={historyApi}
+        interactionApi={interactionApi}
+        node={selectedNode}
+        readOnly={readOnly}
+        sceneApi={sceneApi}
+      />
     </Suspense>
   )
 }

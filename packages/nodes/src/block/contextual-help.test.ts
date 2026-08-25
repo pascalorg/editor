@@ -9,7 +9,6 @@ describe('block contextual help', () => {
     useBlockEditSession.setState({
       nodeId: null,
       selection: createBlockSelection('face'),
-      activeMaterialSlotId: null,
     })
   })
 
@@ -26,6 +25,14 @@ describe('block contextual help', () => {
     expect(extension?.getHints('block_1')).toContainEqual({
       keys: ['E'],
       label: 'Extrude selected faces',
+    })
+    expect(extension?.getHints('block_1')).toContainEqual({
+      keys: ['I'],
+      label: 'Inset selected faces',
+    })
+    expect(extension?.getHints('block_1')).not.toContainEqual({
+      keys: ['T'],
+      label: 'Inset selected faces',
     })
 
     useBlockEditSession.getState().setSelection('block_1', createBlockSelection('edge', ['e0']))
