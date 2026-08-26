@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNode,
   deriveZoneQuantityReport,
   resolveAutoZonePolygon,
   useLiveNodeOverrides,
@@ -11,6 +12,8 @@ import {
   type ZoneTakeoffReport,
 } from '@pascal-app/core'
 import {
+  ActionButton,
+  collectZoneObjectIds,
   collectZoneObjectLabels,
   formatAreaLabel,
   formatLinearMeasurement,
@@ -22,22 +25,34 @@ import {
   ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
+import { Download } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import {
+  deriveZoneRackFootprints,
+  type ZoneRackFootprint,
+} from './zone-racks'
 
 type Point2D = readonly [number, number]
 
-function ZonePlanSketch({
+export function ZonePlanSketch({
   edgeLengths,
   metricNotation,
+  nodes,
   polygon,
+  racks,
   unit,
+  zone,
 }: {
   edgeLengths: readonly number[]
   metricNotation: 'meters' | 'millimeters'
+  nodes?: Readonly<Record<string, AnyNode>>
   polygon: readonly Point2D[]
+  racks?: readonly ZoneRackFootprint[]
   unit: 'metric' | 'imperial'
+  zone?: ZoneNode
 }) {
+
   if (polygon.length < 3) {
     return (
       <div className="flex h-28 items-center justify-center rounded-md border border-border/50 text-muted-foreground text-xs">
@@ -68,6 +83,10 @@ function ZonePlanSketch({
     [0, 0] as [number, number],
   )
 
+  const projection = { minX, maxX, minY, maxY, scale, offsetX, offsetY }
+  const effectiveRacks =
+    racks ?? (nodes && zone ? deriveZoneRackFootprints(nodes, zone, projection) : [])
+
   return (
     <svg
       aria-label="Top view with zone edge dimensions"
@@ -89,6 +108,19 @@ function ZonePlanSketch({
         strokeLinejoin="round"
         strokeWidth="1.5"
       />
+      {effectiveRacks.map((rack) => (
+        <g key={rack.id} className="zone-minimap-rack">
+          <polygon
+            data-rack-id={rack.id}
+            fill="#f8fafc"
+            fillOpacity="0.9"
+            points={rack.points.map((point) => `${point[0].toFixed(2)},${point[1].toFixed(2)}`).join(' ')}
+            stroke="#0e7490"
+            strokeLinejoin="round"
+            strokeWidth="1"
+          />
+        </g>
+      ))}
       {projected.map((start, index) => {
         const end = projected[(index + 1) % projected.length]
         if (!end) return null
@@ -374,7 +406,12 @@ export default function ZoneQuantitiesPanel() {
     <>
       <RoomDocumentationPanel zone={effectiveZone} />
       {takeoffReports.map((takeoff) => (
-        <ZoneTakeoffSection key={takeoff.id} report={takeoff} />
+        <ZoneTakeoffSection
+          key={takeoff.id}
+          nodes={effectiveNodes}
+          report={takeoff}
+          zone={effectiveZone}
+        />
       ))}
       <PanelSection
         title={effectiveZone.spaceRole === 'room' ? 'Room quantities' : 'Zone quantities'}
@@ -397,8 +434,10 @@ export default function ZoneQuantitiesPanel() {
         <ZonePlanSketch
           edgeLengths={report.edgeLengths}
           metricNotation={metricNotation}
+          nodes={effectiveNodes}
           polygon={effectiveZone.polygon}
           unit={unit}
+          zone={effectiveZone}
         />
 
         <div className="flex flex-col gap-1.5">
@@ -428,7 +467,41 @@ export default function ZoneQuantitiesPanel() {
   )
 }
 
-function ZoneTakeoffSection({ report }: { report: ZoneTakeoffReport }) {
+function ZoneTakeoffSection({
+  nodes,
+  report,
+  zone,
+}: {
+  nodes?: Readonly<Record<string, AnyNode>>
+  report: ZoneTakeoffReport
+  zone?: ZoneNode
+}) {
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportBom = async () => {
+    if (!nodes || !zone || exporting) return
+    setExporting(true)
+    try {
+      const contentIds = collectZoneObjectIds(nodes, zone)
+      const warehouse = await import('@ovurrsl/plugin-warehouse')
+      if (
+        typeof warehouse?.calculateWarehouseBOM === 'function' &&
+        typeof warehouse?.exportWarehouseBomPdf === 'function'
+      ) {
+        const bom = warehouse.calculateWarehouseBOM(nodes, {
+          filterNodeIds: contentIds,
+          zoneName: zone.name,
+          scopeLabel: `Zone ${zone.name}`,
+        })
+        await warehouse.exportWarehouseBomPdf(bom)
+      }
+    } catch (error) {
+      console.error('Failed to export Zone Bill of Materials PDF:', error)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <PanelSection title={report.title}>
       {report.metrics.length > 0 && (
@@ -492,6 +565,17 @@ function ZoneTakeoffSection({ report }: { report: ZoneTakeoffReport }) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {nodes && zone && (
+        <div className="pt-2">
+          <ActionButton
+            disabled={exporting}
+            icon={<Download className="h-3.5 w-3.5" />}
+            label={exporting ? 'Exporting BOM...' : 'Export Bill of Materials'}
+            onClick={handleExportBom}
+          />
         </div>
       )}
     </PanelSection>
