@@ -156,18 +156,49 @@ test('curved wall roof builder clamps a lower-floor wall to the active floor', (
     level: 0,
     height: 3,
   } as AnyNode
-  const middleLevel = {
-    ...sourceLevel,
-    id: 'level_middle',
-    children: [],
-    level: 1,
-  } as AnyNode
   const activeLevel = {
     ...sourceLevel,
     id: 'level_active',
     children: [],
-    level: 2,
+    level: 1,
   } as AnyNode
+  const wall = wallDefinition.schema.parse({
+    id: 'wall_test',
+    parentId: sourceLevel.id,
+    start: [-2, 0],
+    end: [2, 0],
+    curveOffset: 2,
+    height: 1,
+  })
+  const nodes = Object.fromEntries(
+    [sourceLevel, activeLevel, wall].map((node) => [node.id, node]),
+  ) as Record<AnyNodeId, AnyNode>
+  const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
+  const sceneApi = {
+    createMany: (ops) => created.push(...ops),
+    nodes: () => nodes,
+  } as SceneApi
+
+  createConicalRoofSectorAboveWall(wall, nodes, sceneApi, activeLevel.id as AnyNodeId)
+
+  const createdRoof = created.find((entry) => entry.node.type === 'roof')
+  expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0] })
+})
+
+test('curved wall roof builder rejects walls more than one level below', () => {
+  const sourceLevel = {
+    object: 'node',
+    id: 'level_source',
+    type: 'level',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: ['wall_test'],
+    level: 0,
+    height: 3,
+  } as AnyNode
+  const middleLevel = { ...sourceLevel, id: 'level_middle', children: [], level: 1 } as AnyNode
+  const activeLevel = { ...sourceLevel, id: 'level_active', children: [], level: 2 } as AnyNode
   const wall = wallDefinition.schema.parse({
     id: 'wall_test',
     parentId: sourceLevel.id,
@@ -185,8 +216,8 @@ test('curved wall roof builder clamps a lower-floor wall to the active floor', (
     nodes: () => nodes,
   } as SceneApi
 
-  createConicalRoofSectorAboveWall(wall, nodes, sceneApi, activeLevel.id as AnyNodeId)
-
-  const createdRoof = created.find((entry) => entry.node.type === 'roof')
-  expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0] })
+  expect(
+    createConicalRoofSectorAboveWall(wall, nodes, sceneApi, activeLevel.id as AnyNodeId),
+  ).toBeNull()
+  expect(created).toEqual([])
 })

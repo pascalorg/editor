@@ -135,28 +135,65 @@ describe('roof footprint sources', () => {
 
   test('routes a curved wall click to conical wall placement', () => {
     const wall = WallNode.parse({ start: [-2, 0], end: [2, 0], curveOffset: 2 })
+    const level = LevelNode.parse({ children: [wall.id], level: 0 })
+    const wallOnLevel = { ...wall, parentId: level.id }
+    const nodes = Object.fromEntries([level, wallOnLevel].map((node) => [node.id, node]))
     const selected: string[] = []
     const previewed: Array<string | null> = []
     let stopped = false
     const unsubscribe = subscribeToConicalRoofWallClicks({
       footprintSource: 'walls',
+      currentLevelId: level.id,
+      nodes,
+      onPreview: (previewWall) => previewed.push(previewWall?.id ?? null),
+      onSelect: (selectedWall) => selected.push(selectedWall.id),
+      roofType: 'conical',
+    })
+
+    emitter.emit('wall:enter', { node: wallOnLevel } as WallEvent)
+    emitter.emit('wall:click', {
+      node: wallOnLevel,
+      stopPropagation: () => {
+        stopped = true
+      },
+    } as WallEvent)
+    emitter.emit('wall:leave', { node: wallOnLevel } as WallEvent)
+    unsubscribe()
+
+    expect(selected).toEqual([wall.id])
+    expect(previewed).toEqual([wall.id, null])
+    expect(stopped).toBe(true)
+  })
+
+  test('ignores curved walls more than one level below the active roof level', () => {
+    const wall = WallNode.parse({
+      parentId: 'level_ground',
+      start: [-2, 0],
+      end: [2, 0],
+      curveOffset: 2,
+    })
+    const groundLevel = LevelNode.parse({ id: 'level_ground', children: [wall.id], level: 0 })
+    const middleLevel = LevelNode.parse({ id: 'level_middle', children: [], level: 1 })
+    const activeLevel = LevelNode.parse({ id: 'level_active', children: [], level: 2 })
+    const nodes = Object.fromEntries(
+      [groundLevel, middleLevel, activeLevel, wall].map((node) => [node.id, node]),
+    )
+    const previewed: Array<string | null> = []
+    const selected: string[] = []
+    const unsubscribe = subscribeToConicalRoofWallClicks({
+      footprintSource: 'walls',
+      currentLevelId: activeLevel.id,
+      nodes,
       onPreview: (previewWall) => previewed.push(previewWall?.id ?? null),
       onSelect: (selectedWall) => selected.push(selectedWall.id),
       roofType: 'conical',
     })
 
     emitter.emit('wall:enter', { node: wall } as WallEvent)
-    emitter.emit('wall:click', {
-      node: wall,
-      stopPropagation: () => {
-        stopped = true
-      },
-    } as WallEvent)
-    emitter.emit('wall:leave', { node: wall } as WallEvent)
+    emitter.emit('wall:click', { node: wall, stopPropagation: () => {} } as WallEvent)
     unsubscribe()
 
-    expect(selected).toEqual([wall.id])
-    expect(previewed).toEqual([wall.id, null])
-    expect(stopped).toBe(true)
+    expect(previewed).toEqual([])
+    expect(selected).toEqual([])
   })
 })

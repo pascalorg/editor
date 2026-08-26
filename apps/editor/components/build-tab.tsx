@@ -348,14 +348,15 @@ export function BuildTab() {
     }
     if (conicalSourceRef.current === selectedCurvedWall.id) return
 
-    conicalSourceRef.current = selectedCurvedWall.id
     const segmentId = createConicalRoofSectorAboveWall(
       selectedCurvedWall,
       useScene.getState().nodes,
       createSceneApi(useScene),
       currentLevelId,
     )
-    if (segmentId) setSelection({ selectedIds: [segmentId] })
+    if (!segmentId) return
+    conicalSourceRef.current = selectedCurvedWall.id
+    setSelection({ selectedIds: [segmentId] })
   }, [
     activeFootprintSource,
     activeRoofType,

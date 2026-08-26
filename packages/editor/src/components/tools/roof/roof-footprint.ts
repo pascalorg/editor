@@ -28,6 +28,18 @@ export type RoofFootprintTarget = {
   rectangular: boolean
 }
 
+export function isConicalRoofWallEligible(
+  targetLevelId: LevelNode['id'],
+  wall: WallNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): boolean {
+  const completeNodes = nodes as Record<string, AnyNode>
+  const sourceLevelId = resolveLevelId(wall, completeNodes)
+  if (!sourceLevelId) return false
+  if (sourceLevelId === targetLevelId) return true
+  return getLevelBelow(targetLevelId, completeNodes)?.id === sourceLevelId
+}
+
 export function parseRoofFootprintSource(value: unknown, roofType: RoofType): RoofFootprintSource {
   if (value === 'draw') return 'draw'
   return roofType === 'conical' ? 'walls' : 'room'
@@ -35,6 +47,8 @@ export function parseRoofFootprintSource(value: unknown, roofType: RoofType): Ro
 
 export function subscribeToConicalRoofWallClicks(options: {
   footprintSource: RoofFootprintSource
+  currentLevelId: LevelNode['id'] | null
+  nodes: Readonly<Record<string, AnyNode>>
   onPreview?: (wall: WallNode | null) => void
   onSelect: (wall: WallNode) => void
   roofType: RoofType
@@ -43,7 +57,12 @@ export function subscribeToConicalRoofWallClicks(options: {
 
   let previewedWallId: WallNode['id'] | null = null
   const onWallHover = (event: WallEvent) => {
-    const wall = isCurvedWall(event.node) ? event.node : null
+    const wall =
+      isCurvedWall(event.node) &&
+      options.currentLevelId &&
+      isConicalRoofWallEligible(options.currentLevelId, event.node, options.nodes)
+        ? event.node
+        : null
     const nextId = wall?.id ?? null
     if (nextId === previewedWallId) return
     previewedWallId = nextId
@@ -55,7 +74,13 @@ export function subscribeToConicalRoofWallClicks(options: {
     options.onPreview?.(null)
   }
   const onWallClick = (event: WallEvent) => {
-    if (!isCurvedWall(event.node)) return
+    if (
+      !isCurvedWall(event.node) ||
+      !options.currentLevelId ||
+      !isConicalRoofWallEligible(options.currentLevelId, event.node, options.nodes)
+    ) {
+      return
+    }
     event.stopPropagation()
     options.onSelect(event.node)
   }

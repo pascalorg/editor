@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getLevelBelow,
   getLevelElevations,
   getWallArcData,
   getWallBaseElevationForNodes,
@@ -24,6 +25,9 @@ export function createConicalRoofSectorAboveWall(
   const arc = getWallArcData(wall)
   if (!(arc && nodes[targetLevelId]?.type === 'level')) return null
   const completeNodes = nodes as Record<string, AnyNode>
+  const sourceLevelId = resolveLevelId(wall, completeNodes)
+  const levelBelowId = getLevelBelow(targetLevelId, completeNodes)?.id
+  if (sourceLevelId !== targetLevelId && sourceLevelId !== levelBelowId) return null
   const elevations = getLevelElevations(completeNodes)
   const sourceLevelY = elevations.get(resolveLevelId(wall, completeNodes))?.baseY ?? 0
   const targetLevelY = elevations.get(targetLevelId)?.baseY ?? 0

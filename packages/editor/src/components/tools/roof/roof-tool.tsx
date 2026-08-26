@@ -846,6 +846,8 @@ export const RoofTool: React.FC = () => {
     emitter.on('tool:cancel', onCancel)
     const unsubscribeConicalRoofWallClicks = subscribeToConicalRoofWallClicks({
       footprintSource,
+      currentLevelId,
+      nodes,
       onPreview: (wall) => {
         setPreviewedConicalWallId(wall?.id ?? null)
         setPreviewSelectedIds(wall ? [wall.id] : [])
@@ -876,7 +878,7 @@ export const RoofTool: React.FC = () => {
       draftPreview.setRoofDraftEnd(null)
       draftPreview.setRoofDraftQuarterTurn(false)
     }
-  }, [currentLevelId, footprintSource, roofType, setPreviewSelectedIds, setSelection])
+  }, [currentLevelId, footprintSource, nodes, roofType, setPreviewSelectedIds, setSelection])
 
   const { corner1, cursorPosition, levelY } = preview
 
