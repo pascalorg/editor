@@ -2,7 +2,7 @@
 
 import { type ValidateBuildJsonResult, validateBuildJson } from '@pascal-app/core'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MAX_IMPORT_BYTES, parseImportSrc } from '@/lib/import-src'
 
 type Phase =
@@ -24,6 +24,10 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
   const router = useRouter()
   const [phase, setPhase] = useState<Phase>({ kind: 'fetching' })
   const [sceneName, setSceneName] = useState(name ?? 'Imported scene')
+  // Synchronous re-entry guard: a second tap can fire before React
+  // re-renders into 'creating', and two scenes would be created (review
+  // feedback — especially likely on the mobile hand-off).
+  const creating = useRef(false)
 
   useEffect(() => {
     // A new src restarts the flow: reset to fetching so a stale review
@@ -90,6 +94,8 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
 
   const handleImport = useCallback(async () => {
     if (phase.kind !== 'review' || !phase.result.parsed) return
+    if (creating.current) return
+    creating.current = true
     setPhase({ kind: 'creating' })
     try {
       const response = await fetch('/api/scenes', {
@@ -119,6 +125,9 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
         kind: 'error',
         message: error instanceof Error ? error.message : 'Creating the scene failed.',
       })
+    } finally {
+      // Released in every path: after an error the user may retry.
+      creating.current = false
     }
   }, [phase, router, sceneName])
 
