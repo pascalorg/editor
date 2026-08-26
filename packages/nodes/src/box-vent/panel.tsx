@@ -185,7 +185,7 @@ export default function BoxVentPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={0.8}
+          max={1000}
           min={0.15}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => handleUpdate({ width: v })}
@@ -197,7 +197,7 @@ export default function BoxVentPanel() {
         />
         <SliderControl
           label="Depth"
-          max={0.8}
+          max={1000}
           min={0.15}
           onChange={(v) => previewProp({ depth: v })}
           onCommit={(v) => handleUpdate({ depth: v })}
@@ -209,7 +209,7 @@ export default function BoxVentPanel() {
         />
         <SliderControl
           label="Height"
-          max={0.4}
+          max={1000}
           min={0.05}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => handleUpdate({ height: v })}

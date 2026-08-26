@@ -428,7 +428,7 @@ export default function SkylightPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={3}
+          max={1000}
           min={0.3}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => commitProp({ width: v })}
@@ -440,7 +440,7 @@ export default function SkylightPanel() {
         />
         <SliderControl
           label="Height"
-          max={3}
+          max={1000}
           min={0.3}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => commitProp({ height: v })}

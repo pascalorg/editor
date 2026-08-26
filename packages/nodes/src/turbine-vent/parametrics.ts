@@ -23,8 +23,8 @@ export const turbineVentParametrics: ParametricDescriptor<TurbineVentNode> = {
     {
       label: 'Dimensions',
       fields: [
-        { key: 'diameter', kind: 'number', unit: 'm', min: 0.15, max: 0.7, step: 0.01 },
-        { key: 'height', kind: 'number', unit: 'm', min: 0.2, max: 0.9, step: 0.01 },
+        { key: 'diameter', kind: 'number', unit: 'm', min: 0.15, max: 1000, step: 0.01 },
+        { key: 'height', kind: 'number', unit: 'm', min: 0.2, max: 1000, step: 0.01 },
         { key: 'neckHeight', kind: 'number', unit: 'm', min: 0.02, max: 0.3, step: 0.01 },
         { key: 'vaneCount', kind: 'number', unit: '', min: 6, max: 36, step: 1 },
       ],

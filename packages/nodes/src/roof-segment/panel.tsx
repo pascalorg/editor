@@ -353,7 +353,7 @@ export default function RoofSegmentPanel() {
       <PanelSection title="Footprint">
         <SliderControl
           label="Width"
-          max={25}
+          max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ width: v })}
           precision={2}
@@ -363,7 +363,7 @@ export default function RoofSegmentPanel() {
         />
         <SliderControl
           label="Depth"
-          max={25}
+          max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ depth: v })}
           precision={2}
@@ -376,7 +376,7 @@ export default function RoofSegmentPanel() {
       <PanelSection title="Wall Height">
         <SliderControl
           label="Wall"
-          max={5}
+          max={1000}
           min={0}
           onChange={(v) => handleUpdate({ wallHeight: v })}
           precision={2}
@@ -569,8 +569,6 @@ export default function RoofSegmentPanel() {
       <PanelSection title="Position">
         <SliderControl
           label="X"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = v
@@ -583,8 +581,6 @@ export default function RoofSegmentPanel() {
         />
         <SliderControl
           label="Y"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
@@ -597,8 +593,6 @@ export default function RoofSegmentPanel() {
         />
         <SliderControl
           label="Z"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = v
