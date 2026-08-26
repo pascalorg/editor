@@ -449,8 +449,15 @@ describe('lean-to scene commit boundary', () => {
     expect(syncedFirst).toMatchObject({
       type: 'lean-to-extension',
       rightEndCondition: 'joined',
-      metadata: { leanToFreestandingCanopyJoints: { right: { gutterMitre: -Math.PI / 4 } } },
+      metadata: { leanToFreestandingCanopyJoints: { right: {} } },
     })
+    const jointMetadata = syncedFirst?.metadata as
+      | { leanToFreestandingCanopyJoints?: { right?: { gutterMitre?: number } } }
+      | undefined
+    expect(jointMetadata?.leanToFreestandingCanopyJoints?.right?.gutterMitre).toBeCloseTo(
+      -Math.PI / 4,
+      12,
+    )
     if (syncedFirst?.type !== 'lean-to-extension') return
     const roof = syncedFirst.children
       .map((id) => syncedNodes[id as AnyNodeId])
