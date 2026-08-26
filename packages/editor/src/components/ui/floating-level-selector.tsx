@@ -150,6 +150,9 @@ function LevelRow({
   const storeyHeight = getStoredLevelHeight(level)
   // toFixed(2) + strip one trailing zero: "2.50" → "2.5", "2.75" stays.
   const storeyHeightLabel = `${toDisplay(storeyHeight).toFixed(2).replace(/0$/, '')} ${displayUnit}`
+  // Same rule as the site panel and command palette: the ordinal-0 ground
+  // floor is the vertical model's zero anchor and must never be deletable.
+  const canDeleteLevel = level.level !== 0
 
   // Clean preset values per display system; imperial stores exact meters
   // for whole-foot storey heights.
@@ -304,11 +307,13 @@ function LevelRow({
                 </button>
               )}
               <button
-                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-red-400"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors enabled:hover:bg-white/10 enabled:hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!canDeleteLevel}
                 onClick={(e) => {
                   e.stopPropagation()
                   onRequestDelete()
                 }}
+                title={canDeleteLevel ? 'Delete level' : 'The ground level cannot be deleted'}
                 type="button"
               >
                 <Trash2 className="h-3 w-3" />
