@@ -28,10 +28,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Download } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  deriveZoneRackFootprints,
-  type ZoneRackFootprint,
-} from './zone-racks'
+import { deriveZoneRackFootprints, type ZoneRackFootprint } from './zone-racks'
 
 type Point2D = readonly [number, number]
 
@@ -52,7 +49,6 @@ export function ZonePlanSketch({
   unit: 'metric' | 'imperial'
   zone?: ZoneNode
 }) {
-
   if (polygon.length < 3) {
     return (
       <div className="flex h-28 items-center justify-center rounded-md border border-border/50 text-muted-foreground text-xs">
@@ -114,7 +110,9 @@ export function ZonePlanSketch({
             data-rack-id={rack.id}
             fill="#f8fafc"
             fillOpacity="0.9"
-            points={rack.points.map((point) => `${point[0].toFixed(2)},${point[1].toFixed(2)}`).join(' ')}
+            points={rack.points
+              .map((point) => `${point[0].toFixed(2)},${point[1].toFixed(2)}`)
+              .join(' ')}
             stroke="#0e7490"
             strokeLinejoin="round"
             strokeWidth="1"

@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { AnyNode, ZoneNode } from '@pascal-app/core'
-import {
-  calculateZoneProjection,
-  deriveZoneRackFootprints,
-  getRackDimensions,
-  isPointInZoneFootprint,
-  isWarehouseEquipmentNode,
-} from './zone-racks'
+import { calculateZoneProjection, deriveZoneRackFootprints } from './zone-racks'
 
 describe('R1 Adversarial & Stress Verification: 2D Minimap Racks', () => {
   // ── 1. Non-Orthogonal Rotations & Trigonometric Invariants ───────────────

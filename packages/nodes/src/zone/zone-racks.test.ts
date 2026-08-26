@@ -411,8 +411,12 @@ describe('zone-racks calculation and projection', () => {
   })
 
   test('isWarehouseEquipmentNode correctly identifies warehouse and rack types', () => {
-    expect(isWarehouseEquipmentNode({ id: '1', type: 'warehouse:pallet-rack' } as AnyNode)).toBe(true)
-    expect(isWarehouseEquipmentNode({ id: '2', type: 'warehouse:drive-in-rack' } as AnyNode)).toBe(true)
+    expect(isWarehouseEquipmentNode({ id: '1', type: 'warehouse:pallet-rack' } as AnyNode)).toBe(
+      true,
+    )
+    expect(isWarehouseEquipmentNode({ id: '2', type: 'warehouse:drive-in-rack' } as AnyNode)).toBe(
+      true,
+    )
     expect(isWarehouseEquipmentNode({ id: '3', type: 'warehouse:conveyor' } as AnyNode)).toBe(true)
     expect(isWarehouseEquipmentNode({ id: '4', type: 'longspan-rack' } as AnyNode)).toBe(true)
     expect(isWarehouseEquipmentNode({ id: '5', type: 'm3-shelving' } as AnyNode)).toBe(true)

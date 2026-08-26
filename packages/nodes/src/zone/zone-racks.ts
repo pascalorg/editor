@@ -1,9 +1,4 @@
-import {
-  type AnyNode,
-  type AnyNodeId,
-  pointInPolygon2D,
-  type ZoneNode,
-} from '@pascal-app/core'
+import { type AnyNode, pointInPolygon2D, type ZoneNode } from '@pascal-app/core'
 
 export type Point2D = readonly [number, number]
 
@@ -139,9 +134,7 @@ export function getRackDimensions(node: AnyNode): { width: number; depth: number
 
     const width = laneClearWidth + 2 * uprightWidth
     const depth =
-      typeof n.depth === 'number'
-        ? n.depth
-        : palletsDeep * (palletRunDepth + depthClearance)
+      typeof n.depth === 'number' ? n.depth : palletsDeep * (palletRunDepth + depthClearance)
     return { width, depth }
   }
 
@@ -153,11 +146,7 @@ export function getRackDimensions(node: AnyNode): { width: number; depth: number
     type.includes('gravity-rack')
   ) {
     const bayWidth =
-      typeof n.bayWidth === 'number'
-        ? n.bayWidth
-        : typeof n.width === 'number'
-          ? n.width
-          : 1.5
+      typeof n.bayWidth === 'number' ? n.bayWidth : typeof n.width === 'number' ? n.width : 1.5
     const channelDepth =
       typeof n.channelDepth === 'number'
         ? n.channelDepth
@@ -177,11 +166,7 @@ export function getRackDimensions(node: AnyNode): { width: number; depth: number
           : 2.0
     const uprightWidth = typeof n.uprightWidth === 'number' ? n.uprightWidth : 0.06
     const frameDepth =
-      typeof n.frameDepth === 'number'
-        ? n.frameDepth
-        : typeof n.depth === 'number'
-          ? n.depth
-          : 0.8
+      typeof n.frameDepth === 'number' ? n.frameDepth : typeof n.depth === 'number' ? n.depth : 0.8
 
     const width = bayLength + 2 * uprightWidth
     return { width, depth: frameDepth }
@@ -192,11 +177,7 @@ export function getRackDimensions(node: AnyNode): { width: number; depth: number
     const shelfLength = typeof n.shelfLength === 'number' ? n.shelfLength : 1.0
     const uprightWidth = typeof n.uprightWidth === 'number' ? n.uprightWidth : 0.04
     const shelfDepth =
-      typeof n.shelfDepth === 'number'
-        ? n.shelfDepth
-        : typeof n.depth === 'number'
-          ? n.depth
-          : 0.5
+      typeof n.shelfDepth === 'number' ? n.shelfDepth : typeof n.depth === 'number' ? n.depth : 0.5
 
     const width = shelfLength + 2 * uprightWidth
     return { width, depth: shelfDepth }
@@ -323,7 +304,12 @@ export function deriveZoneRackFootprints(
       continue
     }
     const [posX, , posZ] = pos as number[]
-    if (typeof posX !== 'number' || typeof posZ !== 'number' || !Number.isFinite(posX) || !Number.isFinite(posZ)) {
+    if (
+      typeof posX !== 'number' ||
+      typeof posZ !== 'number' ||
+      !Number.isFinite(posX) ||
+      !Number.isFinite(posZ)
+    ) {
       continue
     }
 
@@ -365,18 +351,21 @@ export function deriveZoneRackFootprints(
     // Rotate 3D world corners around +Y axis:
     // wx = posX + dx * cos(rotY) + dz * sin(rotY)
     // wz = posZ - dx * sin(rotY) + dz * cos(rotY)
-    const worldCorners = localCorners.map(([dx, dz]) => [
-      posX + dx * cosY + dz * sinY,
-      posZ - dx * sinY + dz * cosY,
-    ] as [number, number])
+    const worldCorners = localCorners.map(
+      ([dx, dz]) =>
+        [posX + dx * cosY + dz * sinY, posZ - dx * sinY + dz * cosY] as [number, number],
+    )
 
     // Project world coordinates (wx, wz) into SVG viewport space:
     // sx = offsetX + (wx - minX) * scale
     // sy = offsetY + (maxY - wz) * scale
-    const projectedPoints = worldCorners.map(([wx, wz]) => [
-      proj.offsetX + (wx - proj.minX) * proj.scale,
-      proj.offsetY + (proj.maxY - wz) * proj.scale,
-    ] as [number, number])
+    const projectedPoints = worldCorners.map(
+      ([wx, wz]) =>
+        [
+          proj.offsetX + (wx - proj.minX) * proj.scale,
+          proj.offsetY + (proj.maxY - wz) * proj.scale,
+        ] as [number, number],
+    )
 
     const label = (node as { name?: string }).name
 

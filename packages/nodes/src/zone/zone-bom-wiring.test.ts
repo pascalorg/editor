@@ -1,10 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { calculateWarehouseBOM, generateWarehouseBomPdf } from '@ovurrsl/plugin-warehouse'
 import { type AnyNode, ZoneNode } from '@pascal-app/core'
 import { collectZoneObjectIds } from '@pascal-app/editor'
-import {
-  calculateWarehouseBOM,
-  generateWarehouseBomPdf,
-} from '@ovurrsl/plugin-warehouse'
 
 describe('Zone BOM Export Action Wiring', () => {
   const zoneA = ZoneNode.parse({

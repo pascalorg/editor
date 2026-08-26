@@ -6,7 +6,6 @@ import {
   registerZoneTakeoffExtension,
   type ZoneNode,
   type ZoneTakeoffExtension,
-  type ZoneTakeoffReport,
 } from '@pascal-app/core'
 import { shallow } from 'zustand/shallow'
 import {
@@ -286,7 +285,13 @@ describe('resolveZoneTakeoffReports', () => {
         }
       }
 
-      if (bays === 0 && palletCapacity === 0 && pickingCapacity === 0 && floorPallets === 0 && mezzanines === 0) {
+      if (
+        bays === 0 &&
+        palletCapacity === 0 &&
+        pickingCapacity === 0 &&
+        floorPallets === 0 &&
+        mezzanines === 0
+      ) {
         return null
       }
 
@@ -325,7 +330,13 @@ describe('resolveZoneTakeoffReports', () => {
         ],
         breakdown: [
           ...(palletRackBays > 0
-            ? [{ id: 'selective-pallet-rack', label: 'Selective Pallet Rack', count: palletRackBays }]
+            ? [
+                {
+                  id: 'selective-pallet-rack',
+                  label: 'Selective Pallet Rack',
+                  count: palletRackBays,
+                },
+              ]
             : []),
           ...(driveInLanes > 0
             ? [{ id: 'drive-in-rack', label: 'Drive-In Rack', count: driveInLanes }]
@@ -365,10 +376,7 @@ describe('resolveZoneTakeoffReports', () => {
 
   test('returns stable EMPTY_TAKEOFF_REPORTS when zone has no warehouse objects', () => {
     registerZoneTakeoffExtension(warehouseExtension)
-    const scene = sceneOf(
-      zone as unknown as AnyNode,
-      positioned('item_1', 'item', 5, 5),
-    )
+    const scene = sceneOf(zone as unknown as AnyNode, positioned('item_1', 'item', 5, 5))
     const reports = resolveZoneTakeoffReports(scene, zone)
     expect(reports).toEqual([])
   })
@@ -613,4 +621,3 @@ describe('resolveZoneTakeoffReports', () => {
     expect(shallow(reportsBefore, reportsAfter)).toBe(false)
   })
 })
-

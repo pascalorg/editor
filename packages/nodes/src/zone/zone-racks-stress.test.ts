@@ -1,21 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import type { AnyNode, AnyNodeId, ZoneNode } from '@pascal-app/core'
-import {
-  calculateZoneProjection,
-  deriveZoneRackFootprints,
-  getRackDimensions,
-  isPointInZoneFootprint,
-  isWarehouseEquipmentNode,
-} from './zone-racks'
+import { deriveZoneRackFootprints } from './zone-racks'
 
 const asNodeId = (id: string): AnyNodeId => id as unknown as AnyNodeId
 const asNodes = (nodes: Record<string, AnyNode>): Record<string, AnyNode> => nodes
 
-function createStressZone(
-  id: string,
-  polygon: [number, number][],
-  parentId = 'level_0',
-): ZoneNode {
+function createStressZone(id: string, polygon: [number, number][], parentId = 'level_0'): ZoneNode {
   return {
     id: asNodeId(id),
     type: 'zone',
@@ -121,12 +111,16 @@ describe('Challenger 2: Minimap Racks & Projection Stress Testing', () => {
   })
 
   it('correctly handles 0-level racks and level isolation in minimap footprints', () => {
-    const zoneGround = createStressZone('zone_ground', [
-      [0, 0],
-      [50, 0],
-      [50, 50],
-      [0, 50],
-    ], 'level_0')
+    const zoneGround = createStressZone(
+      'zone_ground',
+      [
+        [0, 0],
+        [50, 0],
+        [50, 50],
+        [0, 50],
+      ],
+      'level_0',
+    )
 
     const nodes: Record<string, AnyNode> = {
       rackGroundZeroLevel: {
@@ -169,7 +163,12 @@ describe('Challenger 2: Minimap Racks & Projection Stress Testing', () => {
       const z = 10 + Math.floor(r / 15) * 10
       nodes[id] = {
         id: asNodeId(id),
-        type: r % 3 === 0 ? 'warehouse:drive-in-rack' : r % 3 === 1 ? 'warehouse:pallet-rack' : 'warehouse:m3-rack',
+        type:
+          r % 3 === 0
+            ? 'warehouse:drive-in-rack'
+            : r % 3 === 1
+              ? 'warehouse:pallet-rack'
+              : 'warehouse:m3-rack',
         parentId: asNodeId('level_0'),
         position: [x, 0, z],
         bayClearWidth: 2.7,

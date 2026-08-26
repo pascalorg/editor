@@ -15,12 +15,7 @@ import {
   registerNode,
   registerZoneTakeoffExtension,
 } from './registry'
-import type {
-  AnyNodeDefinition,
-  InspectorExtension,
-  Plugin,
-  ZoneTakeoffExtension,
-} from './types'
+import type { AnyNodeDefinition, InspectorExtension, Plugin, ZoneTakeoffExtension } from './types'
 
 // Re-registering a kind warns + replaces in dev (HMR) but throws in
 // production — see `registry._register`. `bun test` runs with
@@ -449,4 +444,3 @@ describe('zone takeoff extensions', () => {
     expect(getZoneTakeoffExtensions()).toEqual([])
   })
 })
-

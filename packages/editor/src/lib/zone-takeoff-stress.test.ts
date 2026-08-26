@@ -6,11 +6,9 @@ import {
   registerZoneTakeoffExtension,
   type ZoneNode,
   type ZoneTakeoffExtension,
-  type ZoneTakeoffReport,
 } from '@pascal-app/core'
 import { shallow } from 'zustand/shallow'
 import {
-  collectZoneContentIds,
   collectZoneObjectIds,
   collectZoneObjectLabels,
   resolveZoneTakeoffReports,
@@ -368,10 +366,7 @@ describe('Zone Takeoff Resolution Engine — Adversarial & Stress Suite', () => 
     })
 
     test('resolveZoneTakeoffReports returns identical EMPTY_TAKEOFF_REPORTS reference when empty', () => {
-      const scene = sceneOf(
-        zone as unknown as AnyNode,
-        positioned('wall_1', 'wall', 2, 2),
-      )
+      const scene = sceneOf(zone as unknown as AnyNode, positioned('wall_1', 'wall', 2, 2))
 
       const res1 = resolveZoneTakeoffReports(scene, zone)
       const res2 = resolveZoneTakeoffReports(scene, zone)
