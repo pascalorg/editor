@@ -21,7 +21,12 @@ export const LEAN_TO_EDGE_SNAP_TOLERANCE = 0.25
 export const LEAN_TO_HEIGHT_SNAP_TOLERANCE = 0.15
 const CURVED_INNER_EDGE_CLEARANCE = 0.15
 
+export function isDualSlopeLeanToCanopy(form: LeanToExtensionNode['canopyForm']): boolean {
+  return form === 'gable' || form === 'butterfly'
+}
+
 export type LeanToLayout = {
+  canopyForm: LeanToExtensionNode['canopyForm']
   span: number
   projection: number
   roofRun: number
@@ -41,6 +46,7 @@ export type LeanToLayout = {
   beamSpan: number
   beamCenterY: number
   beamZ: number
+  oppositeBeamZ: number
   postHeight: number
   postXs: number[]
   rafterXs: number[]
@@ -94,11 +100,14 @@ export function applyLeanToCurveProjectionLimit(node: LeanToExtensionNode): Lean
 }
 
 export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
+  const canopyForm = node.hostKind === 'freestanding' ? node.canopyForm : 'mono'
+  const butterfly = canopyForm === 'butterfly'
+  const dualSlope = isDualSlopeLeanToCanopy(canopyForm)
   const span = Math.max(0.5, node.span)
   const projection = Math.max(0.5, node.projection)
-  const highOverhang = Math.max(0, node.highOverhang)
+  const highOverhang = dualSlope ? 0 : Math.max(0, node.highOverhang)
   const lowOverhang = Math.max(0, node.lowOverhang)
-  const roofRun = highOverhang + projection + lowOverhang
+  const roofRun = dualSlope ? projection + lowOverhang : highOverhang + projection + lowOverhang
   const roofWidth = span + Math.max(0, node.leftOverhang) + Math.max(0, node.rightOverhang)
   const roofCenterX = (Math.max(0, node.rightOverhang) - Math.max(0, node.leftOverhang)) / 2
   const requestedPitch = (Math.max(1, Math.min(45, node.pitch)) * Math.PI) / 180
@@ -111,9 +120,13 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
   const pitchRadians = Math.min(requestedPitch, maximumPitch)
   const effectivePitchDegrees = (pitchRadians * 180) / Math.PI
   const lowEdgeHeight = node.highEdgeHeight - projection * Math.tan(pitchRadians)
-  const eaveEdgeHeight = node.highEdgeHeight - (projection + lowOverhang) * Math.tan(pitchRadians)
+  const eaveEdgeHeight = butterfly
+    ? lowEdgeHeight
+    : node.highEdgeHeight - (projection + lowOverhang) * Math.tan(pitchRadians)
   const roofCenterZ = (projection + lowOverhang - highOverhang) / 2
-  const roofCenterY = node.highEdgeHeight - roofCenterZ * Math.tan(pitchRadians)
+  const roofCenterY = butterfly
+    ? lowEdgeHeight + roofCenterZ * Math.tan(pitchRadians)
+    : node.highEdgeHeight - roofCenterZ * Math.tan(pitchRadians)
   const effectiveRoofBuildUp =
     node.roofThickness / Math.max(0.1, Math.cos(pitchRadians)) +
     (node.shingleThickness ?? 0.025) * Math.cos(pitchRadians)
@@ -125,13 +138,18 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
   )
   const rafterCenterZ = rafterRun / 2
   const rafterCenterY =
-    node.highEdgeHeight -
-    rafterCenterZ * Math.tan(pitchRadians) -
+    (butterfly
+      ? lowEdgeHeight + rafterCenterZ * Math.tan(pitchRadians)
+      : node.highEdgeHeight - rafterCenterZ * Math.tan(pitchRadians)) -
     effectiveRoofBuildUp -
     node.rafterHeight / 2
   const beamZ = Math.max(0, projection - node.lowBeamInset)
   const beamTop =
-    node.highEdgeHeight - beamZ * Math.tan(pitchRadians) - effectiveRoofBuildUp - node.rafterHeight
+    (butterfly
+      ? lowEdgeHeight + beamZ * Math.tan(pitchRadians)
+      : node.highEdgeHeight - beamZ * Math.tan(pitchRadians)) -
+    effectiveRoofBuildUp -
+    node.rafterHeight
   const beamCenterY = beamTop - node.beamHeight / 2
   const postHeight = Math.max(MIN_LEAN_TO_POST_HEIGHT, beamCenterY - node.beamHeight / 2)
   const usablePostSpan = Math.max(0.1, span - 2 * Math.max(0, node.postInset))
@@ -159,6 +177,7 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
     : evenlySpacedXs(span, rafterCount, node.rafterEndInset)
 
   return {
+    canopyForm,
     span,
     projection,
     roofRun,
@@ -178,6 +197,7 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
     beamSpan,
     beamCenterY,
     beamZ,
+    oppositeBeamZ: -beamZ,
     postHeight,
     postXs,
     rafterXs,
@@ -193,7 +213,7 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
  */
 export function resolveLeanToPlanCenter(node: LeanToExtensionNode): [number, number] {
   const layout = resolveLeanToLayout(node)
-  return [layout.roofCenterX, layout.roofCenterZ]
+  return [layout.roofCenterX, isDualSlopeLeanToCanopy(layout.canopyForm) ? 0 : layout.roofCenterZ]
 }
 
 // The host wall's true circular arc expressed in the lean-to's local frame. The
@@ -344,7 +364,11 @@ export function resolveLeanToSpanResizeProposal({
   const centerX = fixedStructuralEdge + wallSign * (boundedSpan / 2)
   const draggedRoofEdge = centerX + wallSign * (boundedSpan / 2 + draggedOverhang)
   const wallEdgeX = wallSign > 0 ? wallLength : 0
-  let best: { edgeX: number; distance: number; target: LeanToEdgeSnapTarget | null } = {
+  let best: {
+    edgeX: number
+    distance: number
+    target: LeanToEdgeSnapTarget | null
+  } = {
     edgeX: wallEdgeX,
     distance: Math.abs(draggedRoofEdge - wallEdgeX),
     target: null,
@@ -394,7 +418,11 @@ function snapLeanToMoveCenterToEdges(
 ): { centerX: number; target: LeanToEdgeSnapTarget } | null {
   const movingLeft = centerX - node.span / 2 - Math.max(0, node.leftOverhang)
   const movingRight = centerX + node.span / 2 + Math.max(0, node.rightOverhang)
-  let best: { centerX: number; distance: number; target: LeanToEdgeSnapTarget } | null = null
+  let best: {
+    centerX: number
+    distance: number
+    target: LeanToEdgeSnapTarget
+  } | null = null
 
   for (const target of targets) {
     const leftToRight = Math.abs(movingLeft - target.rightEdgeX)
@@ -431,8 +459,11 @@ export function resolveLeanToHighEdgeHeightSnap(
 ): LeanToHeightSnapMatch | null {
   const movingLeft = node.position[0] - node.span / 2 - Math.max(0, node.leftOverhang)
   const movingRight = node.position[0] + node.span / 2 + Math.max(0, node.rightOverhang)
-  let best: { heightDelta: number; edgeDistance: number; target: LeanToEdgeSnapTarget } | null =
-    null
+  let best: {
+    heightDelta: number
+    edgeDistance: number
+    target: LeanToEdgeSnapTarget
+  } | null = null
 
   for (const target of targets) {
     const edgeDistance = Math.min(

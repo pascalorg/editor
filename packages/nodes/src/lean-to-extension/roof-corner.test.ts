@@ -14,7 +14,8 @@ import { buildGutterGeometry } from '../gutter/geometry'
 import { bendLocalPoint } from './arc'
 import { createLeanToAssembly, leanToCornerPostIndex, managedLeanToPostIndex } from './assembly'
 import { resolveLeanToCornerJoints } from './corner-joint'
-import { leanToWallLocalPose, resolveLeanToWallPlacement } from './layout'
+import { leanToWallLocalPose, resolveLeanToLayout, resolveLeanToWallPlacement } from './layout'
+import { resolveLeanToFreestandingRunPlacement } from './placement'
 import { applyLeanToWallAutoSpan, applyLeanToWallCornerSpan } from './roof-attachment'
 
 function cornerFixture(reverseWalls = false, sideOverhang = 0) {
@@ -144,6 +145,17 @@ function segmentWorldMatrix(
   return new THREE.Matrix4()
     .makeTranslation(...pose.position)
     .multiply(new THREE.Matrix4().makeRotationY(pose.rotationY))
+    .multiply(new THREE.Matrix4().makeTranslation(...segment.position))
+    .multiply(new THREE.Matrix4().makeRotationY(segment.rotation))
+}
+
+function freestandingSegmentWorldMatrix(
+  leanTo: ReturnType<typeof LeanToExtensionNode.parse>,
+  segment: ReturnType<typeof createLeanToAssembly>['segment'],
+) {
+  return new THREE.Matrix4()
+    .makeTranslation(...leanTo.position)
+    .multiply(new THREE.Matrix4().makeRotationY(leanTo.rotation[1]))
     .multiply(new THREE.Matrix4().makeTranslation(...segment.position))
     .multiply(new THREE.Matrix4().makeRotationY(segment.rotation))
 }
@@ -364,6 +376,137 @@ function boundaryVerticesNear(
 }
 
 describe('lean-to corner joint', () => {
+  test('mitres two freestanding mono canopy runs that share a drafted endpoint', () => {
+    const first = resolveLeanToFreestandingRunPlacement('level_free_run', [0, 0], [4, 0])!
+    const second = resolveLeanToFreestandingRunPlacement('level_free_run', [4, 0], [4, 4])!
+    const nodes = { [first.id]: first, [second.id]: second }
+
+    const firstJoint = resolveLeanToCornerJoints(first, undefined, nodes).right
+    const secondJoint = resolveLeanToCornerJoints(second, undefined, nodes).left
+
+    expect(firstJoint?.neighborId).toBe(second.id)
+    expect(secondJoint?.neighborId).toBe(first.id)
+    expect(firstJoint?.seam).not.toBeNull()
+    expect(secondJoint?.seam).not.toBeNull()
+    expect(firstJoint?.sharedPostOwner).not.toBe(secondJoint?.sharedPostOwner)
+  })
+
+  test('emits valid roof outlines for both freestanding corner directions', () => {
+    for (const [turnZ, expectedKind] of [
+      [-4, 'convex'],
+      [4, 'concave'],
+    ] as const) {
+      const first = resolveLeanToFreestandingRunPlacement('level_free_reference', [0, 0], [4, 0])!
+      const second = resolveLeanToFreestandingRunPlacement(
+        'level_free_reference',
+        [4, 0],
+        [4, turnZ],
+      )!
+      const nodes = { [first.id]: first, [second.id]: second }
+      const joints = [
+        resolveLeanToCornerJoints(first, undefined, nodes).right,
+        resolveLeanToCornerJoints(second, undefined, nodes).left,
+      ]
+      const assemblies = [
+        createLeanToAssembly(first, undefined, nodes),
+        createLeanToAssembly(second, undefined, nodes),
+      ]
+
+      expect(joints.map((joint) => joint?.kind)).toEqual([expectedKind, expectedKind])
+      expect(
+        assemblies.every((assembly) => (assembly.segment.shedFootprintPieces?.length ?? 0) > 0),
+      ).toBe(true)
+      for (const [leanTo, assembly] of [
+        [first, assemblies[0]],
+        [second, assemblies[1]],
+      ] as const) {
+        const halfWidth = assembly.segment.width / 2
+        const outlyingPoints = assembly.segment
+          .shedFootprintPieces!.flat()
+          .filter(([x]) => Math.abs(x) > halfWidth + 1e-6)
+        expect(outlyingPoints).toEqual([])
+        if (expectedKind === 'concave') {
+          expect(assembly.segment.width).toBeCloseTo(resolveLeanToLayout(leanTo).roofWidth, 6)
+        }
+      }
+    }
+  })
+
+  test('partitions mirrored freestanding mono canopy V corners without gaps or overlaps', () => {
+    for (const turnZ of [-4, 4]) {
+      const first = resolveLeanToFreestandingRunPlacement('level_free_v', [0, 0], [4, 0])!
+      const second = resolveLeanToFreestandingRunPlacement('level_free_v', [4, 0], [4, turnZ])!
+      const nodes = { [first.id]: first, [second.id]: second }
+      const assemblies = [
+        createLeanToAssembly(first, undefined, nodes),
+        createLeanToAssembly(second, undefined, nodes),
+      ]
+      const leanTos = [first, second]
+      const roofMeshes = assemblies.map(
+        (assembly, index) =>
+          new THREE.Mesh(
+            generateRoofSegmentGeometry(assembly.segment).applyMatrix4(
+              freestandingSegmentWorldMatrix(leanTos[index]!, assembly.segment),
+            ),
+          ),
+      )
+      const baselineMeshes = leanTos
+        .map((leanTo) => createLeanToAssembly(leanTo).segment)
+        .map(
+          (assembly, index) =>
+            new THREE.Mesh(
+              generateRoofSegmentGeometry(assembly).applyMatrix4(
+                freestandingSegmentWorldMatrix(leanTos[index]!, assembly),
+              ),
+            ),
+        )
+      const bounds = baselineMeshes.reduce(
+        (box, mesh) => box.union(new THREE.Box3().setFromObject(mesh)),
+        new THREE.Box3(),
+      )
+      const raycaster = new THREE.Raycaster()
+      raycaster.ray.direction.set(0, -1, 0)
+      const hasBaselineRoofAt = (x: number, z: number) => {
+        raycaster.ray.origin.set(x, 10, z)
+        return baselineMeshes.some((mesh) => raycaster.intersectObject(mesh, false).length > 0)
+      }
+      let gaps = 0
+      const overlaps: Array<{ x: number; z: number; delta: number }> = []
+      for (let x = bounds.min.x + 0.031; x < bounds.max.x; x += 0.08) {
+        for (let z = bounds.min.z + 0.047; z < bounds.max.z; z += 0.08) {
+          const isBaselineInterior = [
+            [x, z],
+            [x - 0.02, z],
+            [x + 0.02, z],
+            [x, z - 0.02],
+            [x, z + 0.02],
+          ].every(([sampleX, sampleZ]) => hasBaselineRoofAt(sampleX!, sampleZ!))
+          if (!isBaselineInterior) continue
+          raycaster.ray.origin.set(x, 10, z)
+          const hits = roofMeshes.flatMap((mesh) =>
+            raycaster.intersectObject(mesh, false).slice(0, 1),
+          )
+          if (hits.length === 0) gaps++
+          const delta =
+            hits.length > 1
+              ? Math.max(...hits.map((hit) => hit.point.y)) -
+                Math.min(...hits.map((hit) => hit.point.y))
+              : 0
+          if (delta > 1e-4) overlaps.push({ x, z, delta })
+        }
+      }
+
+      expect(roofMeshes.map((mesh) => countTopMaterialNonUpwardTriangles(mesh.geometry))).toEqual([
+        0, 0,
+      ])
+      expect({ turnZ, gaps, overlaps }).toEqual({
+        turnZ,
+        gaps: 0,
+        overlaps: [],
+      })
+      for (const mesh of [...roofMeshes, ...baselineMeshes]) mesh.geometry.dispose()
+    }
+  })
   test('partitions an inner L into one valley with connected gutters, beam, and post', () => {
     const { wallA, wallB, leanToA, leanToB, nodes } = innerCornerFixture()
     const jointA = resolveLeanToCornerJoints(leanToA, wallA, nodes).right
@@ -1203,11 +1346,17 @@ describe('lean-to corner joint', () => {
     // default 5s per-test budget (2-3s locally on Apple Silicon).
   }, 30_000)
 
-  test('rejects corners immediately outside the supported 30 to 150 degree range', () => {
+  test('resolves shallow and reflex corners outside the former 30 to 150 degree range', () => {
     for (const angle of [20, 29.99, 150.01, 160]) {
       const { wallA, wallB, leanToA, leanToB, nodes } = angledCornerFixture(angle)
-      expect(resolveLeanToCornerJoints(leanToA, wallA, nodes)).toEqual({})
-      expect(resolveLeanToCornerJoints(leanToB, wallB, nodes)).toEqual({})
+      const jointA = resolveLeanToCornerJoints(leanToA, wallA, nodes).right
+      const jointB = resolveLeanToCornerJoints(leanToB, wallB, nodes).left
+
+      expect(jointA?.neighborId).toBe(leanToB.id)
+      expect(jointB?.neighborId).toBe(leanToA.id)
+      expect(jointA?.seam?.flat().every(Number.isFinite)).toBe(true)
+      expect(jointB?.seam?.flat().every(Number.isFinite)).toBe(true)
+      expect(jointA?.sharedPostOwner).not.toBe(jointB?.sharedPostOwner)
     }
   })
 
@@ -1253,8 +1402,16 @@ describe('lean-to corner joint', () => {
   test('partitions the shared 60 degree roof-corner patch exactly once', () => {
     const { wallA, wallB, leanToA, leanToB, nodes } = angledCornerFixture(60)
     const assemblies = [
-      { wall: wallA, leanTo: leanToA, assembly: createLeanToAssembly(leanToA, undefined, nodes) },
-      { wall: wallB, leanTo: leanToB, assembly: createLeanToAssembly(leanToB, undefined, nodes) },
+      {
+        wall: wallA,
+        leanTo: leanToA,
+        assembly: createLeanToAssembly(leanToA, undefined, nodes),
+      },
+      {
+        wall: wallB,
+        leanTo: leanToB,
+        assembly: createLeanToAssembly(leanToB, undefined, nodes),
+      },
     ]
     const meshes = assemblies.map(({ wall, leanTo, assembly }) => {
       const matrix = segmentWorldMatrix(wall, leanTo, assembly.segment)
@@ -1364,7 +1521,10 @@ describe('lean-to corner joint', () => {
         if (owners.length > 1) overlaps.push([x, z])
         if (owners.length === 1) {
           const owner = owners[0]!
-          samples.set(`${xIndex}:${zIndex}`, { owner, height: hits[owner]!.point.y })
+          samples.set(`${xIndex}:${zIndex}`, {
+            owner,
+            height: hits[owner]!.point.y,
+          })
         }
       }
     }

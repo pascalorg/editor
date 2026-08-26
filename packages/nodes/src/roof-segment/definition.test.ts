@@ -65,6 +65,10 @@ function pitchHandle(): LinearResizeHandle<RoofSegmentNode> {
 }
 
 describe('roof-segment resize handles', () => {
+  test('records the conical full-circle schema update', () => {
+    expect(roofSegmentDefinition.schemaVersion).toBe(4)
+  })
+
   test('uses one center-anchored radius handle for a conical segment', () => {
     const node = segment({ roofType: 'conical', width: 6, depth: 6 })
     const conicalHandles = handles(node)

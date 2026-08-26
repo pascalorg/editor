@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   createDefaultRidgeVentsForSegment,
+  getConicalRoofCoverage,
   isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultRidgeVentNode,
@@ -148,6 +149,7 @@ export default function RoofSegmentPanel() {
               depth: node?.width ?? 8,
               rotation: 0,
               trim: EMPTY_TRIM,
+              conicalFullCircle: true,
               metadata: {
                 ...metadataRecord(node?.metadata),
                 autoGutter: false,
@@ -312,6 +314,7 @@ export default function RoofSegmentPanel() {
 
   const showTrimPlanes = shouldShowTrimPlanes(node.metadata)
   const managedLeanToRoofSegment = isManagedLeanToRoofSegment(node.metadata)
+  const conicalCoverage = getConicalRoofCoverage(node)
 
   return (
     <PanelWrapper
@@ -421,6 +424,47 @@ export default function RoofSegmentPanel() {
           </>
         )}
       </PanelSection>
+
+      {node.roofType === 'conical' && (
+        <PanelSection title="Conical Shape">
+          <ToggleControl
+            checked={!conicalCoverage.fullCircle}
+            label="Clipped version"
+            onChange={(checked) => handleUpdate({ conicalFullCircle: !checked })}
+          />
+          {!conicalCoverage.fullCircle && (
+            <>
+              <SliderControl
+                label="Start Angle"
+                max={180}
+                min={-180}
+                onChange={(degrees) =>
+                  handleUpdate({ conicalStartAngle: (degrees * Math.PI) / 180 })
+                }
+                precision={0}
+                step={1}
+                unit="°"
+                value={Math.round((conicalCoverage.startAngle * 180) / Math.PI)}
+              />
+              <SliderControl
+                label="Arc"
+                max={345}
+                min={15}
+                onChange={(degrees) =>
+                  handleUpdate({
+                    conicalSweepAngle:
+                      (Math.sign(conicalCoverage.sweepAngle) * degrees * Math.PI) / 180,
+                  })
+                }
+                precision={0}
+                step={1}
+                unit="°"
+                value={Math.round((Math.abs(conicalCoverage.sweepAngle) * 180) / Math.PI)}
+              />
+            </>
+          )}
+        </PanelSection>
+      )}
 
       <PanelSection title="Wall Height">
         <SliderControl
@@ -658,7 +702,7 @@ export default function RoofSegmentPanel() {
           unit="m"
           value={Math.round(node.position[2] * 100) / 100}
         />
-        {node.roofType !== 'conical' && (
+        {(node.roofType !== 'conical' || !conicalCoverage.fullCircle) && (
           <>
             <SliderControl
               label="Rotation"

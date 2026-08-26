@@ -294,42 +294,67 @@ export function getRoofModuleFaces(input: {
   shapeRatios: RoofShapeRatios
   excludeDutchEndSlopes?: boolean
   dutchTopRakeThickness?: number
+  conicalStartAngle?: number
+  conicalSweepAngle?: number
 }): RoofShapeFaceVertex[][] {
   const v = (x: number, y: number, z: number): RoofShapeFaceVertex => ({ x, y, z })
   const { iF = 0, iB = 0, iL = 0, iR = 0 } = input.insets
 
   if (input.type === 'conical') {
-    const radialSegments = 48
+    const startAngle = Number.isFinite(input.conicalStartAngle) ? input.conicalStartAngle! : 0
+    const requestedSweep = Number.isFinite(input.conicalSweepAngle)
+      ? input.conicalSweepAngle!
+      : -Math.PI * 2
+    const sweepAngle = Math.max(
+      -Math.PI * 2,
+      Math.min(Math.PI * 2, Math.abs(requestedSweep) < 1e-4 ? 1e-4 : requestedSweep),
+    )
+    const isFullCone = Math.abs(sweepAngle) >= Math.PI * 2 - 1e-4
+    const radialSegments = isFullCone
+      ? 48
+      : Math.max(1, Math.ceil((48 * Math.abs(sweepAngle)) / (Math.PI * 2)))
     const eaveRadius = Math.max(0.005, input.w / 2)
     const radialInset = (iF + iB + iL + iR) / 4
     const baseRadius = Math.max(0.005, eaveRadius - radialInset)
     const eaveY = input.wh
     const peak = v(0, input.wh + Math.max(0.001, input.rh), 0)
-    const bottomRing = Array.from({ length: radialSegments }, (_, index) => {
-      const angle = (-index / radialSegments) * Math.PI * 2
+    const ringPointCount = isFullCone ? radialSegments : radialSegments + 1
+    const bottomRing = Array.from({ length: ringPointCount }, (_, index) => {
+      const angle = startAngle + (index / radialSegments) * sweepAngle
       return v(Math.cos(angle) * baseRadius, input.baseY, Math.sin(angle) * baseRadius)
     })
-    const eaveRing = Array.from({ length: radialSegments }, (_, index) => {
-      const angle = (-index / radialSegments) * Math.PI * 2
+    const eaveRing = Array.from({ length: ringPointCount }, (_, index) => {
+      const angle = startAngle + (index / radialSegments) * sweepAngle
       return v(Math.cos(angle) * eaveRadius, eaveY, Math.sin(angle) * eaveRadius)
     })
-    const faces: RoofShapeFaceVertex[][] = [[...bottomRing].reverse()]
+    const bottomCenter = v(0, input.baseY, 0)
+    const eaveCenter = v(0, eaveY, 0)
+    const faces: RoofShapeFaceVertex[][] = [
+      isFullCone ? [...bottomRing].reverse() : [bottomCenter, ...[...bottomRing].reverse()],
+    ]
 
     for (let index = 0; index < radialSegments; index += 1) {
-      const next = (index + 1) % radialSegments
+      const next = isFullCone ? (index + 1) % radialSegments : index + 1
       faces.push([bottomRing[index]!, bottomRing[next]!, eaveRing[next]!, eaveRing[index]!])
     }
 
     if (input.rh === 0) {
-      faces.push([...eaveRing].reverse())
+      faces.push(isFullCone ? [...eaveRing].reverse() : [eaveCenter, ...[...eaveRing].reverse()])
     } else {
       for (let index = 0; index < radialSegments; index += 1) {
-        const next = (index + 1) % radialSegments
+        const next = isFullCone ? (index + 1) % radialSegments : index + 1
         faces.push([eaveRing[index]!, eaveRing[next]!, peak])
       }
     }
 
-    return faces
+    if (!isFullCone) {
+      faces.push(
+        [bottomCenter, bottomRing[0]!, eaveRing[0]!, peak],
+        [bottomCenter, peak, eaveRing.at(-1)!, bottomRing.at(-1)!],
+      )
+    }
+
+    return sweepAngle > 0 ? faces.map((face) => [...face].reverse()) : faces
   }
 
   const b1 = v(-input.w / 2 + iL, input.baseY, input.d / 2 - iF)

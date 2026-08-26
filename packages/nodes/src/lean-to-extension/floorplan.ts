@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPoint,
@@ -12,8 +13,9 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { bendLocalPoint, isCurvedLeanTo } from './arc'
+import { resolveFreestandingCanopyJoints } from './canopy-joint'
 import { leanToFacetCount } from './geometry'
-import { resolveLeanToLayout } from './layout'
+import { isDualSlopeLeanToCanopy, resolveLeanToLayout } from './layout'
 import { isLeanToPostOmitted } from './post-omissions'
 
 function conicalSegmentPlanPose(
@@ -132,14 +134,40 @@ function buildLevelLeanToFloorplan(
   ]
   const left = layout.span / 2 + node.leftOverhang
   const right = layout.span / 2 + node.rightOverhang
-  const high = node.highOverhang
+  const high = isDualSlopeLeanToCanopy(layout.canopyForm)
+    ? layout.projection + node.lowOverhang
+    : node.highOverhang
   const low = layout.projection + node.lowOverhang
-  const points: FloorplanPoint[] = [
-    toWorld(-left, -high),
-    toWorld(right, -high),
-    toWorld(right, low),
-    toWorld(-left, low),
-  ]
+  const canopyJoints = resolveFreestandingCanopyJoints(
+    node,
+    Object.fromEntries(
+      [node, ...ctx.siblings].map((candidate) => [candidate.id, candidate]),
+    ) as Record<string, AnyNode>,
+  )
+  const edgeXAtZ = (side: 'left' | 'right', z: number) => {
+    const joint = canopyJoints[side]
+    if (!joint) return side === 'left' ? -left : right
+    const structuralX = side === 'left' ? -layout.span / 2 : layout.span / 2
+    if (joint.kind === 'linear') return structuralX
+    const inwardSign = side === 'left' ? 1 : -1
+    const innerSideSign = joint.innerCanopySide === 'positive' ? 1 : -1
+    return structuralX + inwardSign * innerSideSign * (z / joint.trimZ) * joint.trimX
+  }
+  const points: FloorplanPoint[] = isDualSlopeLeanToCanopy(layout.canopyForm)
+    ? [
+        toWorld(edgeXAtZ('left', -high), -high),
+        toWorld(edgeXAtZ('right', -high), -high),
+        ...(canopyJoints.right ? [toWorld(layout.span / 2, 0)] : []),
+        toWorld(edgeXAtZ('right', low), low),
+        toWorld(edgeXAtZ('left', low), low),
+        ...(canopyJoints.left ? [toWorld(-layout.span / 2, 0)] : []),
+      ]
+    : [
+        toWorld(edgeXAtZ('left', -high), -high),
+        toWorld(edgeXAtZ('right', -high), -high),
+        toWorld(edgeXAtZ('right', low), low),
+        toWorld(edgeXAtZ('left', low), low),
+      ]
   const selected = ctx.viewState?.selected ?? false
   const stroke = selected ? '#f97316' : '#475569'
   const children: FloorplanGeometry[] = [
@@ -163,6 +191,18 @@ function buildLevelLeanToFloorplan(
       vectorEffect: 'non-scaling-stroke',
     },
   ]
+  if (isDualSlopeLeanToCanopy(layout.canopyForm)) {
+    children.push({
+      kind: 'polyline',
+      points: [
+        toWorld(-layout.beamSpan / 2, layout.oppositeBeamZ),
+        toWorld(layout.beamSpan / 2, layout.oppositeBeamZ),
+      ],
+      stroke,
+      strokeWidth: selected ? 3 : 2,
+      vectorEffect: 'non-scaling-stroke',
+    })
+  }
   const addPostRow = (localZ: number, side: 'low' | 'high') => {
     for (const [index, x] of layout.postXs.entries()) {
       if (isLeanToPostOmitted(node, side, index)) continue
@@ -181,7 +221,9 @@ function buildLevelLeanToFloorplan(
     }
   }
   addPostRow(layout.beamZ, 'low')
-  if (node.highSideMode === 'independent-high-beam') addPostRow(0, 'high')
+  if (node.highSideMode === 'independent-high-beam') {
+    addPostRow(isDualSlopeLeanToCanopy(layout.canopyForm) ? layout.oppositeBeamZ : 0, 'high')
+  }
   if (selected) {
     children.push({
       kind: 'move-arrow',

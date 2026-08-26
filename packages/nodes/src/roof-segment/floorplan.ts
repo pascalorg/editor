@@ -2,6 +2,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getConicalRoofCoverage,
   getDutchRoofMetrics,
   type RoofNode,
   type RoofSegmentNode,
@@ -52,6 +53,8 @@ export function buildRoofSegmentFloorplan(
     cx + lx * cos - lz * sin,
     cz + lx * sin + lz * cos,
   ]
+  const conicalFootprint = getConicalRoofPlanFootprint(node).map(([x, z]) => toPlan(x, z))
+  const isFullCone = getConicalRoofCoverage(node).fullCircle
 
   const corners: Array<[number, number]> = [
     [-halfWidth, -halfDepth],
@@ -74,7 +77,7 @@ export function buildRoofSegmentFloorplan(
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : baseInk
 
   const footprint: FloorplanGeometry =
-    node.roofType === 'conical'
+    node.roofType === 'conical' && isFullCone
       ? {
           kind: 'circle',
           cx,
@@ -88,7 +91,7 @@ export function buildRoofSegmentFloorplan(
         }
       : {
           kind: 'polygon',
-          points,
+          points: node.roofType === 'conical' ? conicalFootprint : points,
           fill: stroke,
           fillOpacity: 0,
           stroke: 'none',
@@ -110,7 +113,7 @@ export function buildRoofSegmentFloorplan(
   // shape instead of stacked rectangles. Ridges/hips below always draw.
   if (showSelectedChrome) {
     children.push(
-      node.roofType === 'conical'
+      node.roofType === 'conical' && isFullCone
         ? {
             kind: 'circle',
             cx,
@@ -123,7 +126,7 @@ export function buildRoofSegmentFloorplan(
           }
         : {
             kind: 'polygon',
-            points,
+            points: node.roofType === 'conical' ? conicalFootprint : points,
             fill: '#fed7aa',
             fillOpacity: 0.55,
             stroke,
@@ -217,6 +220,20 @@ export function buildRoofSegmentFloorplan(
 
 export type PlanPt = readonly [number, number]
 export type PlanSeg = readonly [PlanPt, PlanPt]
+
+export function getConicalRoofPlanFootprint(node: RoofSegmentNode): PlanPt[] {
+  const coverage = getConicalRoofCoverage(node)
+  const sweep = Math.max(
+    -Math.PI * 2,
+    Math.min(Math.PI * 2, Math.abs(coverage.sweepAngle) < 1e-4 ? 1e-4 : coverage.sweepAngle),
+  )
+  const count = Math.max(1, Math.ceil((48 * Math.abs(sweep)) / (Math.PI * 2)))
+  const arc = Array.from({ length: count + 1 }, (_, index) => {
+    const angle = coverage.startAngle + (index / count) * sweep
+    return [Math.cos(angle) * (node.width / 2), Math.sin(angle) * (node.width / 2)] as PlanPt
+  })
+  return Math.abs(sweep) >= Math.PI * 2 - 1e-4 ? arc.slice(0, -1) : [[0, 0], ...arc]
+}
 
 /**
  * Ridge / hip / break linework for a roof segment in segment-local space

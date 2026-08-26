@@ -8,11 +8,22 @@ import {
 } from '@pascal-app/core'
 import { findClosestWallAttachmentInPlan } from '../shared/wall-attach-target'
 import {
+  canopyCornerJointMetadata,
+  FREESTANDING_CANOPY_JOINTS_KEY,
+  resolveFreestandingCanopyJoints,
+} from './canopy-joint'
+import {
   LEAN_TO_CORNER_JOINTS_KEY,
+  type LeanToCornerSide,
   leanToCornerJointMetadata,
   resolveLeanToCornerJoints,
 } from './corner-joint'
-import { leanToLowEdgeHeight, resolveLeanToPlanCenter, resolveLeanToWallPlacement } from './layout'
+import {
+  isDualSlopeLeanToCanopy,
+  leanToLowEdgeHeight,
+  resolveLeanToPlanCenter,
+  resolveLeanToWallPlacement,
+} from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import {
   applyLeanToAvailableWallSpan,
@@ -41,16 +52,17 @@ export function resolveLeanToPreviewNode(
   wall: WallNode | undefined,
   nodes: Record<AnyNodeId, AnyNode>,
 ): LeanToExtensionNode {
-  if (!wall) return node
   const joints = resolveLeanToCornerJoints(node, wall, nodes)
-  if (Object.keys(joints).length === 0) return node
+  const canopyJoints = resolveFreestandingCanopyJoints(node, nodes)
+  if (Object.keys(joints).length === 0 && Object.keys(canopyJoints).length === 0) return node
   return {
     ...node,
-    leftEndCondition: joints.left ? 'joined' : node.leftEndCondition,
-    rightEndCondition: joints.right ? 'joined' : node.rightEndCondition,
+    leftEndCondition: joints.left || canopyJoints.left ? 'joined' : node.leftEndCondition,
+    rightEndCondition: joints.right || canopyJoints.right ? 'joined' : node.rightEndCondition,
     metadata: {
       ...(node.metadata && typeof node.metadata === 'object' ? node.metadata : {}),
       [LEAN_TO_CORNER_JOINTS_KEY]: leanToCornerJointMetadata(joints),
+      [FREESTANDING_CANOPY_JOINTS_KEY]: canopyCornerJointMetadata(canopyJoints),
     },
   }
 }
@@ -84,6 +96,8 @@ export function resolveLeanToWallPlanTarget(
 }
 
 const PLACEMENT_ROTATION_STEP = Math.PI / 4
+export const LEAN_TO_RUN_CONNECT_SNAP_RADIUS = 0.05
+export const LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS = 0.5
 
 export function nextLeanToPlacementRotation(
   current: number,
@@ -115,10 +129,17 @@ export function resolveLeanToFreestandingPlacement(
   levelId: string,
   point: readonly [number, number],
   rotationY = 0,
+  canopyForm: LeanToExtensionNode['canopyForm'] = 'mono',
 ): LeanToExtensionNode {
   const parsed = LeanToExtensionNode.parse({
-    name: 'Freestanding Lean-to Canopy',
+    name:
+      canopyForm === 'gable'
+        ? 'Freestanding Gable Canopy'
+        : canopyForm === 'butterfly'
+          ? 'Freestanding Butterfly Canopy'
+          : 'Freestanding Lean-to Canopy',
     parentId: levelId,
+    canopyForm,
     hostKind: 'freestanding',
     highSideMode: 'independent-high-beam',
     connectionMode: 'manual',
@@ -137,16 +158,155 @@ export function resolveLeanToFreestandingPlacement(
   }
 }
 
+export function resolveLeanToFreestandingRunPlacement(
+  levelId: string,
+  start: readonly [number, number],
+  end: readonly [number, number],
+  flipProjection = false,
+  canopyForm: LeanToExtensionNode['canopyForm'] = 'mono',
+): LeanToExtensionNode | null {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const span = Math.hypot(dx, dz)
+  if (span < 0.5) return null
+  const from = flipProjection ? end : start
+  const to = flipProjection ? start : end
+  const rotationY = Math.atan2(-(to[1] - from[1]), to[0] - from[0])
+  const midpoint: [number, number] = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
+  const node = resolveLeanToFreestandingPlacement(levelId, midpoint, rotationY, canopyForm)
+  return {
+    ...node,
+    span,
+    position: [midpoint[0], node.position[1], midpoint[1]],
+  }
+}
+
+export type LeanToFreestandingRunEndpointSnap = {
+  nodeId: string
+  point: [number, number]
+  side: LeanToCornerSide
+}
+
+function freestandingRunEndpoint(
+  node: LeanToExtensionNode,
+  side: LeanToCornerSide,
+): [number, number] {
+  const sign = side === 'left' ? -1 : 1
+  const cos = Math.cos(node.rotation[1])
+  const sin = Math.sin(node.rotation[1])
+  return [
+    node.position[0] + sign * cos * (node.span / 2),
+    node.position[2] - sign * sin * (node.span / 2),
+  ]
+}
+
+export function resolveLeanToFreestandingRunEndpointSnap({
+  activeLevelId,
+  canopyForm = 'mono',
+  flipProjection = false,
+  maxDistance = LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS,
+  nodes,
+  proposedEnd,
+  start,
+}: {
+  activeLevelId: AnyNodeId
+  canopyForm?: LeanToExtensionNode['canopyForm']
+  flipProjection?: boolean
+  maxDistance?: number
+  nodes: Record<AnyNodeId, AnyNode>
+  proposedEnd: readonly [number, number]
+  start: readonly [number, number]
+}): LeanToFreestandingRunEndpointSnap | null {
+  let best: (LeanToFreestandingRunEndpointSnap & { distance: number }) | null = null
+  for (const candidate of Object.values(nodes)) {
+    if (
+      candidate.type !== 'lean-to-extension' ||
+      candidate.parentId !== activeLevelId ||
+      candidate.hostKind !== 'freestanding' ||
+      candidate.canopyForm !== canopyForm ||
+      !candidate.autoMiterCorners
+    ) {
+      continue
+    }
+    const candidateEndpoints = {
+      left: freestandingRunEndpoint(candidate, 'left'),
+      right: freestandingRunEndpoint(candidate, 'right'),
+    }
+    if (
+      Object.values(candidateEndpoints).some(
+        (point) => Math.hypot(point[0] - start[0], point[1] - start[1]) <= 1e-4,
+      )
+    ) {
+      continue
+    }
+    for (const side of ['left', 'right'] as const) {
+      if (candidate[side === 'left' ? 'leftEndCondition' : 'rightEndCondition'] === 'joined') {
+        continue
+      }
+      const point = candidateEndpoints[side]
+      const distance = Math.hypot(point[0] - proposedEnd[0], point[1] - proposedEnd[1])
+      if (distance > maxDistance || (best && distance >= best.distance)) continue
+      const proposed = resolveLeanToFreestandingRunPlacement(
+        activeLevelId,
+        start,
+        point,
+        flipProjection,
+        canopyForm,
+      )
+      if (!proposed) continue
+      const ownSide = flipProjection ? 'left' : 'right'
+      const joint = isDualSlopeLeanToCanopy(canopyForm)
+        ? resolveFreestandingCanopyJoints(proposed, nodes)[ownSide]
+        : resolveLeanToCornerJoints(proposed, undefined, nodes)[ownSide]
+      if (joint?.neighborId !== candidate.id || joint.neighborSide !== side) continue
+      best = { distance, nodeId: candidate.id, point, side }
+    }
+  }
+  if (!best) return null
+  return { nodeId: best.nodeId, point: best.point, side: best.side }
+}
+
+export function resolveLeanToFreestandingRunTarget({
+  activeLevelId,
+  canopyForm = 'mono',
+  end,
+  flipProjection = false,
+  nodes,
+  start,
+}: {
+  activeLevelId: AnyNodeId
+  canopyForm?: LeanToExtensionNode['canopyForm']
+  end: readonly [number, number]
+  flipProjection?: boolean
+  nodes: Record<AnyNodeId, AnyNode>
+  start: readonly [number, number]
+}): LeanToPlanPlacementTarget | null {
+  const node = resolveLeanToFreestandingRunPlacement(
+    activeLevelId,
+    start,
+    end,
+    flipProjection,
+    canopyForm,
+  )
+  if (!node) return null
+  return {
+    node: resolveLeanToPreviewNode(node, undefined, nodes),
+    valid: true,
+  }
+}
+
 export function resolveLeanToPlanPlacement({
   activeLevelId,
   freestandingPoint,
   freestandingRotationY = 0,
+  freestandingCanopyForm = 'mono',
   nodes,
   point,
 }: {
   activeLevelId: AnyNodeId
   freestandingPoint: readonly [number, number]
   freestandingRotationY?: number
+  freestandingCanopyForm?: LeanToExtensionNode['canopyForm']
   nodes: Record<AnyNodeId, AnyNode>
   point: readonly [number, number]
 }): LeanToPlanPlacementTarget {
@@ -164,9 +324,18 @@ export function resolveLeanToPlanPlacement({
       activeLevelId,
       freestandingPoint,
       freestandingRotationY,
+      freestandingCanopyForm,
     ),
     valid: true,
   }
+}
+
+export function nextLeanToCanopyForm(
+  current: LeanToExtensionNode['canopyForm'],
+  key: string,
+): LeanToExtensionNode['canopyForm'] {
+  if (key !== 'f' && key !== 'F') return current
+  return current === 'mono' ? 'gable' : current === 'gable' ? 'butterfly' : 'mono'
 }
 
 export function resolveLeanToSlabEdgePlacement({

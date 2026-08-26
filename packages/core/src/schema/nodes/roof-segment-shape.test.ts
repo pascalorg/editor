@@ -36,6 +36,40 @@ describe('roof segment shape', () => {
     ).toBe(true)
   })
 
+  test('conical sector is clipped to its sweep and closes both cut faces', () => {
+    const faces = getRoofModuleFaces({
+      type: 'conical',
+      w: 8,
+      d: 8,
+      wh: 2,
+      rh: 4,
+      baseY: 0,
+      insets: {},
+      baseW: 8,
+      baseD: 8,
+      tanTheta: 1,
+      shapeRatios: getRoofShapeRatios({}),
+      conicalStartAngle: 0,
+      conicalSweepAngle: Math.PI,
+    })
+    const radialCutFaces = faces.filter(
+      (face) =>
+        face.length === 4 &&
+        face.some((vertex) => vertex.x === 0 && vertex.y === 0 && vertex.z === 0) &&
+        face.some((vertex) => vertex.x === 0 && vertex.y === 6 && vertex.z === 0),
+    )
+
+    expect(faces).toHaveLength(51)
+    expect(faces[0]).toHaveLength(26)
+    expect(radialCutFaces).toHaveLength(2)
+    expect(
+      faces
+        .flat()
+        .filter((vertex) => Math.abs(Math.hypot(vertex.x, vertex.z) - 4) < 1e-6)
+        .every((vertex) => vertex.z >= -1e-6),
+    ).toBe(true)
+  })
+
   test('dutch shell is built as one complete non-duplicated face set', () => {
     const wh = 3
     const rh = 2

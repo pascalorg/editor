@@ -62,6 +62,9 @@ export function deriveLeanToResizePatch(
 export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNode> = {
   derive: (next, patch, previous = next) => {
     return {
+      ...(patch.canopyForm === 'gable' || patch.canopyForm === 'butterfly'
+        ? { highSideMode: 'independent-high-beam' as const, autoSpan: false }
+        : {}),
       ...(patch.connectionMode === 'manual'
         ? {
             hostRoofId: undefined,
@@ -88,6 +91,14 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
     {
       label: 'Size',
       fields: [
+        {
+          key: 'canopyForm',
+          label: 'Roof form',
+          kind: 'enum',
+          options: ['mono', 'gable', 'butterfly'],
+          display: 'segmented',
+          visibleIf: (node) => node.hostKind === 'freestanding',
+        },
         {
           key: 'autoSpan',
           label: 'Match host width',
@@ -122,7 +133,15 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           step: 0.05,
           visibleIf: (node) => node.connectionMode === 'manual' || !node.hostRoofSegmentId,
         },
-        { key: 'pitch', label: 'Slope', kind: 'number', unit: '°', min: 1, max: 45, step: 1 },
+        {
+          key: 'pitch',
+          label: 'Slope',
+          kind: 'number',
+          unit: '°',
+          min: 1,
+          max: 45,
+          step: 1,
+        },
       ],
     },
     {
@@ -237,7 +256,11 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           kind: 'enum',
           options: ['hidden', 'rafters', 'purlins', 'covering-specific'],
         },
-        { key: 'autoMiterCorners', label: 'Auto miter corners', kind: 'boolean' },
+        {
+          key: 'autoMiterCorners',
+          label: 'Auto miter corners',
+          kind: 'boolean',
+        },
       ],
     },
     {
@@ -510,7 +533,12 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
           visibleIf: (node) =>
             node.framingStrategy === 'purlins' || node.framingStrategy === 'covering-specific',
         },
-        { key: 'postBracing', label: 'Post bracing', kind: 'enum', options: ['none', 'knee'] },
+        {
+          key: 'postBracing',
+          label: 'Post bracing',
+          kind: 'enum',
+          options: ['none', 'knee'],
+        },
         {
           key: 'footingStyle',
           label: 'Footings',

@@ -171,6 +171,7 @@ export {
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
 export {
+  LeanToCanopyForm,
   LeanToConnectionMode,
   LeanToEndCondition,
   LeanToExtensionNode,
@@ -218,6 +219,7 @@ export type {
 } from './nodes/roof-segment'
 export {
   getActiveRoofHeight,
+  getConicalRoofCoverage,
   getDutchRoofMetrics,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,

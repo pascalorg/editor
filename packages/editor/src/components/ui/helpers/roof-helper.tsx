@@ -27,11 +27,23 @@ const placementHint: ToolHint = {
 
 export function RoofHelper({ snapContext }: { snapContext?: SnapContext | null }) {
   const isConical = useEditor((state) => state.toolDefaults.roof?.roofType === 'conical')
+  const footprintSource = useEditor((state) => state.toolDefaults.roof?.footprintSource)
+  const placementLabel =
+    footprintSource === 'room'
+      ? 'Choose room'
+      : footprintSource === 'walls'
+        ? 'Select curved wall'
+        : isConical
+          ? 'Set diameter'
+          : 'Set corner'
   return (
     <ContextualHelperPanel
       chipHints={isConical ? [placementHint] : []}
       hints={[
-        { keys: ['Left click'], label: 'Set corner' },
+        {
+          keys: ['Left click'],
+          label: placementLabel,
+        },
         ...(!isConical ? [{ keys: ['R'], label: 'Rotate roof direction 90°' }] : []),
         { keys: ['Esc'], label: 'Cancel' },
       ]}

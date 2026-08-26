@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, SceneApi } from '@pascal-app/core'
 import { getFloorplanNodeExtension } from '@pascal-app/editor'
+import { createConicalRoofSectorAboveWall } from './conical-roof'
 import { wallDefinition } from './definition'
 
 test('wallDefinition records the lean-to child schema migration', () => {
@@ -56,4 +57,89 @@ test('wall top surface follows the effective level-bound height', () => {
 
   expect(typeof height).toBe('function')
   expect(typeof height === 'function' ? height(wall, { nodes }) : height).toBe(3.2)
+})
+
+test('curved wall roof builder creates a matching conical sector above it', () => {
+  const level = {
+    object: 'node',
+    id: 'level_test',
+    type: 'level',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: ['wall_test'],
+    level: 0,
+    height: 3,
+  } as AnyNode
+  const wall = wallDefinition.schema.parse({
+    id: 'wall_test',
+    parentId: level.id,
+    start: [-2, 0],
+    end: [2, 0],
+    curveOffset: 2,
+    height: 3,
+  })
+  const nodes = { [level.id]: level, [wall.id]: wall } as Record<AnyNodeId, AnyNode>
+  const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
+  const sceneApi = {
+    createMany: (ops) => created.push(...ops),
+    nodes: () => nodes,
+  } as SceneApi
+  const segmentId = createConicalRoofSectorAboveWall(wall, nodes, sceneApi, level.id as AnyNodeId)
+  const roof = created.find((entry) => entry.node.type === 'roof')?.node
+  const segment = created.find((entry) => entry.node.type === 'roof-segment')?.node
+
+  expect(wallDefinition.quickActions).toBeUndefined()
+  expect(roof).toMatchObject({ position: [0, 3, 0] })
+  expect(segment).toMatchObject({
+    roofType: 'conical',
+    width: 4,
+    depth: 4,
+    wallHeight: 0,
+    conicalFullCircle: true,
+    conicalSweepAngle: Math.PI,
+  })
+  expect(segmentId).toBe(segment?.id)
+})
+
+test('curved wall roof builder parents the roof to the active level', () => {
+  const sourceLevel = {
+    object: 'node',
+    id: 'level_source',
+    type: 'level',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: ['wall_test'],
+    level: 0,
+    height: 3,
+  } as AnyNode
+  const activeLevel = {
+    ...sourceLevel,
+    id: 'level_active',
+    children: [],
+    level: 1,
+  } as AnyNode
+  const wall = wallDefinition.schema.parse({
+    id: 'wall_test',
+    parentId: sourceLevel.id,
+    start: [-2, 0],
+    end: [2, 0],
+    curveOffset: 2,
+    height: 3,
+  })
+  const nodes = Object.fromEntries(
+    [sourceLevel, activeLevel, wall].map((node) => [node.id, node]),
+  ) as Record<AnyNodeId, AnyNode>
+  const created: Array<{ node: AnyNode; parentId?: AnyNodeId }> = []
+  const sceneApi = {
+    createMany: (ops) => created.push(...ops),
+    nodes: () => nodes,
+  } as SceneApi
+
+  createConicalRoofSectorAboveWall(wall, nodes, sceneApi, activeLevel.id as AnyNodeId)
+
+  const createdRoof = created.find((entry) => entry.node.type === 'roof')
+  expect(createdRoof?.parentId).toBe(activeLevel.id)
+  expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0] })
 })

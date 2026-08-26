@@ -6,6 +6,7 @@ import { RoofNode } from './roof'
 import { SlabNode } from './slab'
 
 export const LeanToConnectionMode = z.enum(['auto', 'manual'])
+export const LeanToCanopyForm = z.enum(['mono', 'gable', 'butterfly'])
 export const LeanToHostKind = z.enum(['wall', 'slab-edge', 'freestanding', 'conical-roof'])
 export const LeanToRoofEdge = z.enum(['+X', '-X', '+Z', '-Z'])
 export const LeanToResizeLock = z.enum([
@@ -27,6 +28,7 @@ const LeanToOmittedPostSlot = z.object({
 const DEFAULT_LOW_EDGE_HEIGHT = 2.7 - 3 * Math.tan((5 * Math.PI) / 180)
 const DEFAULT_LEAN_TO_POST_SPACING = 3
 export type LeanToConnectionMode = z.infer<typeof LeanToConnectionMode>
+export type LeanToCanopyForm = z.infer<typeof LeanToCanopyForm>
 export type LeanToRoofEdge = z.infer<typeof LeanToRoofEdge>
 
 export const LeanToExtensionNode = BaseNode.extend({
@@ -35,6 +37,7 @@ export const LeanToExtensionNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   children: z.array(z.union([ColumnNode.shape.id, RoofNode.shape.id])).default([]),
+  canopyForm: LeanToCanopyForm.default('mono'),
   hostKind: LeanToHostKind.default('wall'),
   hostHeightOffset: z.number().min(-10).max(10).default(0),
   hostSlabId: SlabNode.shape.id.optional(),
@@ -118,11 +121,11 @@ export const LeanToExtensionNode = BaseNode.extend({
   footingStyle: LeanToFootingStyle.default('none'),
 }).describe(
   dedent`
-  Open lean-to canopy.
+  Open parametric canopy.
   The high edge can attach to a wall, attach to an upper slab edge, stand on an independent
-  high beam, or wrap around a conical roof's cylindrical base. The mono-pitch roof falls along
-  local +Z to a beam supported by managed column children. Its roof is a standard shed roof
-  segment with standard gutter and downspout children, not a standalone enclosed shed roof.
+  high beam, or wrap around a conical roof's cylindrical base. Attached canopies use a mono-pitch
+  roof. Freestanding canopies can use a mono-pitch, gable, or butterfly roof with managed columns,
+  framing, gutters, and downspouts.
   `,
 )
 

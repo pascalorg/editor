@@ -285,7 +285,13 @@ function spanHandle(side: 'left' | 'right'): HandleDescriptor<LeanToExtensionNod
     max: (node, sceneApi) => {
       const wall = resolveHostWall(node, sceneApi)
       return wall
-        ? resolveLeanToSpanResizeProposal({ node, wall, rawSpan: 100, side, tolerance: 0 }).span
+        ? resolveLeanToSpanResizeProposal({
+            node,
+            wall,
+            rawSpan: 100,
+            side,
+            tolerance: 0,
+          }).span
         : 100
     },
     currentValue: (node) => node.span,
@@ -356,7 +362,10 @@ function circularRadiusHandle(side: 'left' | 'right'): HandleDescriptor<LeanToEx
       const host = resolveConicalHost(node, sceneApi)
       const radius = patch.spanArcRadius
       if (!(host && typeof radius === 'number')) return
-      sceneApi.update(host.id as AnyNodeId, { width: radius * 2, depth: radius * 2 })
+      sceneApi.update(host.id as AnyNodeId, {
+        width: radius * 2,
+        depth: radius * 2,
+      })
     },
     visible: (node, sceneApi) => resolveConicalHost(node, sceneApi) !== null,
     placement: {
@@ -429,7 +438,7 @@ leanToExtensionHandles.push(circularRadiusHandle('right'), circularRadiusHandle(
 
 export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNode> = {
   kind: 'lean-to-extension',
-  schemaVersion: 11,
+  schemaVersion: 13,
   schema: LeanToExtensionNode,
   category: 'structure',
   snapProfile: 'structural',
@@ -476,14 +485,18 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'Attach to wall/slab edge or place freestanding' },
-    { key: 'R / T', label: 'Rotate freestanding' },
-    { key: 'Esc', label: 'Cancel' },
+    {
+      key: 'Left click',
+      label: 'Place canopy or set the next run point',
+    },
+    { key: 'R / T', label: 'Rotate or flip the run side' },
+    { key: 'F', label: 'Cycle mono / gable / butterfly' },
+    { key: 'Esc', label: 'End run / cancel' },
   ],
   presentation: {
-    label: 'Lean-to Canopy',
+    label: 'Canopy',
     description:
-      'An attached or freestanding mono-pitch canopy with managed beams, posts, and drainage.',
+      'An attached mono-pitch or freestanding mono, gable, or butterfly canopy with managed structure and drainage.',
     icon: { kind: 'url', src: '/icons/lean-to-extension.webp' },
     paletteSection: 'structure',
     paletteGroup: 'roof-features',
@@ -491,6 +504,6 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
   },
   mcp: {
     description:
-      'An open lean-to canopy that can attach to a wall or upper slab edge, stand freestanding on two post rows, or wrap around a conical roof base. It composes a shed roof segment, gutter, downspout, editable column children, framing, and beams.',
+      'An open canopy that can attach to a wall or upper slab edge, stand freestanding with a mono, gable, or butterfly roof, or wrap around a conical roof base. It composes standard roof segments, gutters, downspouts, editable column children, framing, and beams.',
   },
 }

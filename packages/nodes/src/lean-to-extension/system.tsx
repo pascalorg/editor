@@ -15,12 +15,18 @@ import type {
 import { useEffect } from 'react'
 import { bendLocalPoint } from './arc'
 import {
+  createManagedLeanToCanopyCornerPost,
   createManagedLeanToCornerPost,
+  createManagedLeanToDrainagePair,
   createManagedLeanToPost,
   createManagedLeanToRoofAssembly,
+  createManagedLeanToRoofSegment,
   isManagedLeanToNode,
   isManagedLeanToPost,
+  type LeanToDrainageSide,
   type LeanToPostSide,
+  type LeanToRoofPlane,
+  leanToCanopyCornerPostLayoutPatch,
   leanToCornerPostIndex,
   leanToCornerPostLayoutPatch,
   leanToDownspoutLayoutPatch,
@@ -28,20 +34,31 @@ import {
   leanToPostLayoutPatch,
   leanToRoofMaterialPatch,
   leanToRoofSegmentLayoutPatch,
+  managedLeanToDrainageSide,
   managedLeanToPostIndex,
   managedLeanToPostSide,
+  managedLeanToRoofPlane,
+  resolveLeanToCanopyPostIndexes,
   resolveLeanToPostBaseY,
   resolveLeanToPostBaseYAtLocalPosition,
   resolveLeanToPostGutterSetback,
-  resolveLeanToPostIndexes,
 } from './assembly'
+import {
+  canopyCornerJointMetadata,
+  FREESTANDING_CANOPY_JOINTS_KEY,
+  resolveFreestandingCanopyJoints,
+} from './canopy-joint'
 import { resolveConicalLeanToPlacement } from './conical-host'
 import {
   LEAN_TO_CORNER_JOINTS_KEY,
   leanToCornerJointMetadata,
   resolveLeanToCornerJoints,
 } from './corner-joint'
-import { LEAN_TO_EXTENSION_GEOMETRY_REVISION, resolveLeanToSpanArc } from './layout'
+import {
+  isDualSlopeLeanToCanopy,
+  LEAN_TO_EXTENSION_GEOMETRY_REVISION,
+  resolveLeanToSpanArc,
+} from './layout'
 import { reconcileLeanToSlabEdgePlacement } from './placement'
 import { resolveLeanToEndAbutments } from './placement-validation'
 import { isLeanToPostOmitted } from './post-omissions'
@@ -136,8 +153,9 @@ function segmentNeedsLayoutUpdate(
   segment: RoofSegmentNode,
   leanTo: LeanToExtensionNode,
   nodes: Record<AnyNodeId, AnyNode>,
+  plane: LeanToRoofPlane = 'primary',
 ) {
-  const expected = leanToRoofSegmentLayoutPatch(leanTo, nodes)
+  const expected = leanToRoofSegmentLayoutPatch(leanTo, nodes, plane)
   return (
     !sameTuple(segment.position, expected.position) ||
     segment.rotation !== expected.rotation ||
@@ -166,8 +184,9 @@ function gutterNeedsLayoutUpdate(
   segment: RoofSegmentNode,
   leanTo: LeanToExtensionNode,
   nodes: Record<string, AnyNode>,
+  drainageSide: LeanToDrainageSide = 'primary',
 ) {
-  const expected = leanToGutterLayoutPatch(segment, leanTo, gutter, nodes)
+  const expected = leanToGutterLayoutPatch(segment, leanTo, gutter, nodes, drainageSide)
   return (
     !sameTuple(gutter.position, expected.position) ||
     gutter.rotation !== expected.rotation ||
@@ -211,16 +230,17 @@ function leanToGroundSignature(
 ): number[] {
   const parent = leanTo.parentId ? nodes[leanTo.parentId as AnyNodeId] : undefined
   const wall = parent?.type === 'wall' ? (parent as WallNode) : undefined
-  const cornerJoints = wall ? resolveLeanToCornerJoints(leanTo, wall, nodes) : {}
+  const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
+  const canopyJoints = resolveFreestandingCanopyJoints(leanTo, nodes)
   const sides: LeanToPostSide[] =
     leanTo.highSideMode === 'independent-high-beam' ? ['low', 'high'] : ['low']
   const values: number[] = []
   for (const side of sides) {
-    for (const index of resolveLeanToPostIndexes(leanTo, cornerJoints, side)) {
+    for (const index of resolveLeanToCanopyPostIndexes(leanTo, cornerJoints, canopyJoints, side)) {
       values.push(resolveLeanToPostBaseY(leanTo, wall, nodes, index, side))
     }
   }
-  for (const joint of wall ? Object.values(cornerJoints) : []) {
+  for (const joint of Object.values(cornerJoints)) {
     if (!joint?.sharedPostOwner) continue
     if (isLeanToPostOmitted(leanTo, 'low', leanToCornerPostIndex(joint.side))) continue
     const bent = bendLocalPoint(leanTo, joint.sharedPostPosition[0], joint.sharedPostPosition[2])
@@ -231,6 +251,14 @@ function leanToGroundSignature(
         bent.y,
       ]),
     )
+  }
+  for (const joint of Object.values(canopyJoints)) {
+    if (!joint?.sharedPostOwner || cornerJoints[joint.side]) continue
+    for (const side of sides) {
+      if (isLeanToPostOmitted(leanTo, side, leanToCornerPostIndex(joint.side))) continue
+      const patch = leanToCanopyCornerPostLayoutPatch(leanTo, joint, side)
+      values.push(resolveLeanToPostBaseYAtLocalPosition(leanTo, wall, nodes, patch.position))
+    }
   }
   return values.map((value) => Math.round(value * 1e5) / 1e5)
 }
@@ -243,6 +271,7 @@ function extensionSignature(
   return JSON.stringify([
     leanToGroundSignature(leanTo, nodes),
     leanTo.hostKind,
+    leanTo.canopyForm,
     leanTo.span,
     leanTo.spanArcCenterZ,
     leanTo.spanArcRadius,
@@ -297,6 +326,8 @@ function extensionSignature(
       .map((node) => ({
         id: node.id,
         parentId: node.parentId,
+        hostKind: node.hostKind,
+        canopyForm: node.canopyForm,
         position: node.position,
         rotation: node.rotation,
         span: node.span,
@@ -324,6 +355,7 @@ function extensionSignature(
 function attachmentNeedsUpdate(current: LeanToExtensionNode, next: LeanToExtensionNode): boolean {
   return (
     current.hostKind !== next.hostKind ||
+    current.canopyForm !== next.canopyForm ||
     current.highSideMode !== next.highSideMode ||
     current.connectionMode !== next.connectionMode ||
     current.hostRoofId !== next.hostRoofId ||
@@ -358,6 +390,9 @@ function resolveEffectiveLeanTo(
   leanTo: LeanToExtensionNode,
   nodes: Record<AnyNodeId, AnyNode>,
 ): LeanToExtensionNode {
+  if (leanTo.hostKind !== 'freestanding' && leanTo.canopyForm !== 'mono') {
+    leanTo = { ...leanTo, canopyForm: 'mono' }
+  }
   const parent = leanTo.parentId ? nodes[leanTo.parentId as AnyNodeId] : undefined
   if (parent?.type === 'roof-segment' && leanTo.hostKind === 'conical-roof') {
     return resolveConicalLeanToPlacement(parent, leanTo) ?? leanTo
@@ -367,9 +402,38 @@ function resolveEffectiveLeanTo(
   }
   if (parent?.type !== 'wall') {
     const detached = leanTo.connectionMode === 'manual' ? leanTo : clearLeanToRoofAttachment(leanTo)
-    return leanTo.hostKind === 'freestanding'
-      ? { ...detached, highSideMode: 'independent-high-beam' }
-      : detached
+    if (leanTo.hostKind !== 'freestanding') return { ...detached, canopyForm: 'mono' }
+    const freestanding = {
+      ...detached,
+      highSideMode: 'independent-high-beam',
+    } as LeanToExtensionNode
+    const withoutStaleJointEnds = {
+      ...freestanding,
+      leftEndCondition:
+        freestanding.leftEndCondition === 'joined' ? 'open' : freestanding.leftEndCondition,
+      rightEndCondition:
+        freestanding.rightEndCondition === 'joined' ? 'open' : freestanding.rightEndCondition,
+    } as LeanToExtensionNode
+    const canopyJoints = resolveFreestandingCanopyJoints(withoutStaleJointEnds, nodes)
+    const monoJoints = isDualSlopeLeanToCanopy(withoutStaleJointEnds.canopyForm)
+      ? {}
+      : resolveLeanToCornerJoints(withoutStaleJointEnds, undefined, nodes)
+    const hasLeftJoint = Boolean(canopyJoints.left ?? monoJoints.left)
+    const hasRightJoint = Boolean(canopyJoints.right ?? monoJoints.right)
+    return {
+      ...withoutStaleJointEnds,
+      leftEndCondition: hasLeftJoint ? 'joined' : withoutStaleJointEnds.leftEndCondition,
+      rightEndCondition: hasRightJoint ? 'joined' : withoutStaleJointEnds.rightEndCondition,
+      metadata: {
+        ...(withoutStaleJointEnds.metadata && typeof withoutStaleJointEnds.metadata === 'object'
+          ? withoutStaleJointEnds.metadata
+          : {}),
+        [LEAN_TO_CORNER_JOINTS_KEY]: isDualSlopeLeanToCanopy(withoutStaleJointEnds.canopyForm)
+          ? {}
+          : leanToCornerJointMetadata(monoJoints),
+        [FREESTANDING_CANOPY_JOINTS_KEY]: canopyCornerJointMetadata(canopyJoints),
+      },
+    }
   }
   const wall = parent as WallNode
   const wallSpanningLeanTo = applyLeanToWallCornerSpan(applyLeanToWallAutoSpan(leanTo, wall), wall)
@@ -478,6 +542,7 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
           id,
           data: {
             hostKind: effectiveLeanTo.hostKind,
+            canopyForm: effectiveLeanTo.canopyForm,
             highSideMode: effectiveLeanTo.highSideMode,
             connectionMode: effectiveLeanTo.connectionMode,
             hostRoofId: effectiveLeanTo.hostRoofId,
@@ -507,8 +572,22 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
         create.push(
           { node: assembly.roof, parentId: leanTo.id },
           { node: assembly.segment, parentId: assembly.roof.id },
+          ...(assembly.oppositeSegment
+            ? [{ node: assembly.oppositeSegment, parentId: assembly.roof.id }]
+            : []),
           { node: assembly.gutter, parentId: assembly.segment.id },
           { node: assembly.downspout, parentId: assembly.segment.id },
+          ...(assembly.oppositeGutter && assembly.oppositeSegment
+            ? [{ node: assembly.oppositeGutter, parentId: assembly.oppositeSegment.id }]
+            : []),
+          ...(assembly.oppositeDownspout && assembly.oppositeSegment
+            ? [
+                {
+                  node: assembly.oppositeDownspout,
+                  parentId: assembly.oppositeSegment.id,
+                },
+              ]
+            : []),
         )
       } else {
         if (
@@ -521,13 +600,133 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
             data: leanToRoofMaterialPatch(hostRoof) as Partial<AnyNode>,
           })
         }
-        const segment = roof.children
+        const managedSegments = roof.children
           .map((childId) => nodes[childId as AnyNodeId])
-          .find(
+          .filter(
             (child): child is RoofSegmentNode =>
               child?.type === 'roof-segment' &&
               isManagedLeanToNode(child, leanTo.id, 'roof-segment'),
           )
+        const segment = managedSegments.find(
+          (candidate) => managedLeanToRoofPlane(candidate) === 'primary',
+        )
+        const oppositeSegment = managedSegments.find(
+          (candidate) => managedLeanToRoofPlane(candidate) === 'opposite',
+        )
+        if (isDualSlopeLeanToCanopy(effectiveLeanTo.canopyForm)) {
+          if (!oppositeSegment) {
+            const createdOppositeSegment = createManagedLeanToRoofSegment(
+              effectiveLeanTo,
+              roof.id,
+              'opposite',
+              nodes,
+            )
+            create.push({
+              node: createdOppositeSegment,
+              parentId: roof.id as AnyNodeId,
+            })
+            if (effectiveLeanTo.canopyForm === 'gable') {
+              const pair = createManagedLeanToDrainagePair(
+                createdOppositeSegment,
+                effectiveLeanTo,
+                'opposite',
+                nodes,
+              )
+              create.push(
+                { node: pair.gutter, parentId: createdOppositeSegment.id as AnyNodeId },
+                { node: pair.downspout, parentId: createdOppositeSegment.id as AnyNodeId },
+              )
+            }
+          } else {
+            const oppositePatch = leanToRoofSegmentLayoutPatch(effectiveLeanTo, nodes, 'opposite')
+            const expectedOppositeSegment = {
+              ...oppositeSegment,
+              ...oppositePatch,
+            } as RoofSegmentNode
+            if (segmentNeedsLayoutUpdate(oppositeSegment, effectiveLeanTo, nodes, 'opposite')) {
+              update.push({
+                id: oppositeSegment.id as AnyNodeId,
+                data: oppositePatch as Partial<AnyNode>,
+              })
+            }
+            const oppositeChildren = oppositeSegment.children.map(
+              (childId) => nodes[childId as AnyNodeId],
+            )
+            const oppositeGutter = oppositeChildren.find(
+              (child): child is GutterNode =>
+                child?.type === 'gutter' &&
+                isManagedLeanToNode(child, leanTo.id, 'gutter') &&
+                managedLeanToDrainageSide(child) === 'opposite',
+            )
+            const oppositeDownspout = oppositeChildren.find(
+              (child): child is DownspoutNode =>
+                child?.type === 'downspout' &&
+                isManagedLeanToNode(child, leanTo.id, 'downspout') &&
+                managedLeanToDrainageSide(child) === 'opposite',
+            )
+            if (effectiveLeanTo.canopyForm === 'gable') {
+              if (!oppositeGutter) {
+                const pair = createManagedLeanToDrainagePair(
+                  expectedOppositeSegment,
+                  effectiveLeanTo,
+                  'opposite',
+                  nodes,
+                )
+                create.push(
+                  { node: pair.gutter, parentId: oppositeSegment.id as AnyNodeId },
+                  { node: pair.downspout, parentId: oppositeSegment.id as AnyNodeId },
+                )
+              } else {
+                const gutterPatch = leanToGutterLayoutPatch(
+                  expectedOppositeSegment,
+                  effectiveLeanTo,
+                  oppositeGutter,
+                  nodes,
+                  'opposite',
+                )
+                const expectedGutter = { ...oppositeGutter, ...gutterPatch } as GutterNode
+                if (
+                  gutterNeedsLayoutUpdate(
+                    oppositeGutter,
+                    expectedOppositeSegment,
+                    effectiveLeanTo,
+                    nodes,
+                    'opposite',
+                  )
+                ) {
+                  update.push({
+                    id: oppositeGutter.id as AnyNodeId,
+                    data: gutterPatch as Partial<AnyNode>,
+                  })
+                }
+                if (
+                  oppositeDownspout &&
+                  downspoutNeedsLayoutUpdate(
+                    oppositeDownspout,
+                    expectedGutter,
+                    expectedOppositeSegment,
+                    effectiveLeanTo,
+                  )
+                ) {
+                  update.push({
+                    id: oppositeDownspout.id as AnyNodeId,
+                    data: leanToDownspoutLayoutPatch(
+                      expectedOppositeSegment,
+                      expectedGutter,
+                      effectiveLeanTo,
+                      oppositeDownspout,
+                    ) as Partial<AnyNode>,
+                  })
+                }
+              }
+            } else {
+              if (oppositeGutter) remove.push(oppositeGutter.id as AnyNodeId)
+              if (oppositeDownspout) remove.push(oppositeDownspout.id as AnyNodeId)
+            }
+          }
+        } else if (oppositeSegment) {
+          remove.push(oppositeSegment.id as AnyNodeId)
+        }
         if (segment) {
           const segmentPatch = leanToRoofSegmentLayoutPatch(effectiveLeanTo, nodes)
           const expectedSegment = {
@@ -540,12 +739,15 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
               data: segmentPatch as Partial<AnyNode>,
             })
           }
-          const gutter = segment.children
-            .map((childId) => nodes[childId as AnyNodeId])
-            .find(
-              (child): child is GutterNode =>
-                child?.type === 'gutter' && isManagedLeanToNode(child, leanTo.id, 'gutter'),
-            )
+          const managedSegmentChildren = segment.children.map(
+            (childId) => nodes[childId as AnyNodeId],
+          )
+          const gutter = managedSegmentChildren.find(
+            (child): child is GutterNode =>
+              child?.type === 'gutter' &&
+              isManagedLeanToNode(child, leanTo.id, 'gutter') &&
+              managedLeanToDrainageSide(child) === 'primary',
+          )
           if (gutter) {
             const gutterPatch = leanToGutterLayoutPatch(
               expectedSegment,
@@ -560,12 +762,12 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
                 data: gutterPatch as Partial<AnyNode>,
               })
             }
-            const downspout = segment.children
-              .map((childId) => nodes[childId as AnyNodeId])
-              .find(
-                (child): child is DownspoutNode =>
-                  child?.type === 'downspout' && isManagedLeanToNode(child, leanTo.id, 'downspout'),
-              )
+            const downspout = managedSegmentChildren.find(
+              (child): child is DownspoutNode =>
+                child?.type === 'downspout' &&
+                isManagedLeanToNode(child, leanTo.id, 'downspout') &&
+                child.gutterId === gutter.id,
+            )
             if (
               downspout &&
               downspoutNeedsLayoutUpdate(
@@ -586,16 +788,40 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
               })
             }
           }
+
+          const oppositeGutter = managedSegmentChildren.find(
+            (child): child is GutterNode =>
+              child?.type === 'gutter' &&
+              isManagedLeanToNode(child, leanTo.id, 'gutter') &&
+              managedLeanToDrainageSide(child) === 'opposite',
+          )
+          const oppositeDownspout = managedSegmentChildren.find(
+            (child): child is DownspoutNode =>
+              child?.type === 'downspout' &&
+              isManagedLeanToNode(child, leanTo.id, 'downspout') &&
+              managedLeanToDrainageSide(child) === 'opposite',
+          )
+          if (oppositeGutter) remove.push(oppositeGutter.id as AnyNodeId)
+          if (oppositeDownspout) remove.push(oppositeDownspout.id as AnyNodeId)
         }
       }
 
-      const cornerJoints =
-        parent?.type === 'wall' ? resolveLeanToCornerJoints(effectiveLeanTo, parent, nodes) : {}
+      const cornerJoints = resolveLeanToCornerJoints(
+        effectiveLeanTo,
+        parent?.type === 'wall' ? parent : undefined,
+        nodes,
+      )
+      const canopyJoints = resolveFreestandingCanopyJoints(effectiveLeanTo, nodes)
       const postSides: LeanToPostSide[] =
         effectiveLeanTo.highSideMode === 'independent-high-beam' ? ['low', 'high'] : ['low']
       const desiredPostKeys = new Set<string>()
       for (const side of postSides) {
-        for (const index of resolveLeanToPostIndexes(effectiveLeanTo, cornerJoints, side)) {
+        for (const index of resolveLeanToCanopyPostIndexes(
+          effectiveLeanTo,
+          cornerJoints,
+          canopyJoints,
+          side,
+        )) {
           const key = `${side}:${index}`
           desiredPostKeys.add(key)
           const postBaseY = resolveLeanToPostBaseY(
@@ -607,7 +833,10 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
           )
           const current = managedPosts.get(key)
           const gutterSetback =
-            side === 'low' ? resolveLeanToPostGutterSetback(effectiveLeanTo, current) : 0
+            side === 'low' ||
+            (side === 'high' && isDualSlopeLeanToCanopy(effectiveLeanTo.canopyForm))
+              ? resolveLeanToPostGutterSetback(effectiveLeanTo, current)
+              : 0
           if (!current) {
             create.push({
               node: {
@@ -646,14 +875,12 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
           joint.sharedPostPosition[0],
           joint.sharedPostPosition[2],
         )
-        const postBaseY =
-          parent?.type === 'wall'
-            ? resolveLeanToPostBaseYAtLocalPosition(effectiveLeanTo, parent, nodes, [
-                bentCornerPost.x,
-                joint.sharedPostPosition[1],
-                bentCornerPost.y,
-              ])
-            : 0
+        const postBaseY = resolveLeanToPostBaseYAtLocalPosition(
+          effectiveLeanTo,
+          parent?.type === 'wall' ? parent : undefined,
+          nodes,
+          [bentCornerPost.x, joint.sharedPostPosition[1], bentCornerPost.y],
+        )
         const current = managedPosts.get(key)
         const gutterSetback = resolveLeanToPostGutterSetback(effectiveLeanTo, current)
         const patch = leanToCornerPostLayoutPatch(effectiveLeanTo, joint, postBaseY, gutterSetback)
@@ -670,6 +897,51 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
             id: current.id as AnyNodeId,
             data: patch as Partial<AnyNode>,
           })
+        }
+      }
+      for (const joint of Object.values(canopyJoints)) {
+        if (!joint?.sharedPostOwner || cornerJoints[joint.side]) continue
+        for (const side of postSides) {
+          const index = leanToCornerPostIndex(joint.side)
+          if (isLeanToPostOmitted(effectiveLeanTo, side, index)) continue
+          const key = `${side}:${index}`
+          desiredPostKeys.add(key)
+          const current = managedPosts.get(key)
+          const gutterSetback = resolveLeanToPostGutterSetback(effectiveLeanTo, current)
+          const ungroundedPatch = leanToCanopyCornerPostLayoutPatch(
+            effectiveLeanTo,
+            joint,
+            side,
+            0,
+            gutterSetback,
+          )
+          const postBaseY = resolveLeanToPostBaseYAtLocalPosition(
+            effectiveLeanTo,
+            parent?.type === 'wall' ? parent : undefined,
+            nodes,
+            ungroundedPatch.position,
+          )
+          const patch = leanToCanopyCornerPostLayoutPatch(
+            effectiveLeanTo,
+            joint,
+            side,
+            postBaseY,
+            gutterSetback,
+          )
+          if (!current) {
+            create.push({
+              node: {
+                ...createManagedLeanToCanopyCornerPost(effectiveLeanTo, joint, side),
+                ...patch,
+              } as ColumnNode,
+              parentId: leanTo.id,
+            })
+          } else if (postPatchNeedsLayoutUpdate(current, patch)) {
+            update.push({
+              id: current.id as AnyNodeId,
+              data: patch as Partial<AnyNode>,
+            })
+          }
         }
       }
       for (const [key, post] of managedPosts) {

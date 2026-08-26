@@ -1,0 +1,144 @@
+import { describe, expect, test } from 'bun:test'
+import { emitter, LevelNode, type WallEvent, WallNode } from '@pascal-app/core'
+import {
+  fitRoofFootprint,
+  parseRoofFootprintSource,
+  resolveRoofFootprintElevation,
+  resolveRoomRoofFootprint,
+  subscribeToConicalRoofWallClicks,
+} from './roof-footprint'
+
+describe('roof footprint sources', () => {
+  test('normalizes footprint sources for the selected roof type', () => {
+    expect(parseRoofFootprintSource('room', 'conical')).toBe('walls')
+    expect(parseRoofFootprintSource('draw', 'conical')).toBe('draw')
+    expect(parseRoofFootprintSource('walls', 'hip')).toBe('room')
+    expect(parseRoofFootprintSource('draw', 'hip')).toBe('draw')
+  })
+
+  test('fits a rotated rectangular room', () => {
+    const target = fitRoofFootprint(
+      'room-1',
+      [
+        [0, 0],
+        [4, 4],
+        [2, 6],
+        [-2, 2],
+      ],
+      [],
+    )
+
+    expect(target?.rectangular).toBe(true)
+    expect(target?.width).toBeCloseTo(Math.sqrt(32))
+    expect(target?.depth).toBeCloseTo(Math.sqrt(8))
+    expect(target?.center[0]).toBeCloseTo(1)
+    expect(target?.center[1]).toBeCloseTo(3)
+    expect(target?.rotation).toBeCloseTo(-Math.PI / 4)
+  })
+
+  test('marks curved and irregular rooms as non-rectangular', () => {
+    const target = fitRoofFootprint(
+      'room-2',
+      [
+        [0, 0],
+        [4, 0],
+        [4, 2],
+        [2, 1],
+        [0, 2],
+      ],
+      [],
+    )
+    expect(target?.rectangular).toBe(false)
+  })
+
+  test('resolves the enclosed room beneath the pointer', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ start: [4, 0], end: [4, 3] }),
+      WallNode.parse({ start: [4, 3], end: [0, 3] }),
+      WallNode.parse({ start: [0, 3], end: [0, 0] }),
+    ]
+    const level = LevelNode.parse({ children: walls.map((wall) => wall.id) })
+    const nodes = Object.fromEntries([level, ...walls].map((node) => [node.id, node]))
+
+    const target = resolveRoomRoofFootprint(level.id, nodes, [2, 1])
+
+    expect(target?.rectangular).toBe(true)
+    expect(target?.wallIds).toHaveLength(4)
+    expect(resolveRoomRoofFootprint(level.id, nodes, [8, 8])).toBeNull()
+  })
+
+  test('resolves a room on the level below the active roof level', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ start: [4, 0], end: [4, 3] }),
+      WallNode.parse({ start: [4, 3], end: [0, 3] }),
+      WallNode.parse({ start: [0, 3], end: [0, 0] }),
+    ]
+    const groundLevel = LevelNode.parse({
+      children: walls.map((wall) => wall.id),
+      level: 0,
+    })
+    const activeLevel = LevelNode.parse({ children: [], level: 1 })
+    const nodes = Object.fromEntries(
+      [groundLevel, activeLevel, ...walls].map((node) => [node.id, node]),
+    )
+
+    const target = resolveRoomRoofFootprint(activeLevel.id, nodes, [2, 1])
+
+    expect(target?.wallIds).toHaveLength(4)
+  })
+
+  test('converts a lower-level room height into the active level frame', () => {
+    const groundLevel = LevelNode.parse({ children: [], height: 3, level: 0 })
+    const activeLevel = LevelNode.parse({ children: [], height: 3, level: 1 })
+    const wall = WallNode.parse({
+      parentId: groundLevel.id,
+      start: [0, 0],
+      end: [4, 0],
+      height: 3,
+    })
+    const nodes = Object.fromEntries(
+      [groundLevel, activeLevel, wall].map((node) => [node.id, node]),
+    )
+    const target = fitRoofFootprint(
+      'room-ground',
+      [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      [wall.id],
+    )
+
+    expect(target && resolveRoofFootprintElevation(activeLevel.id, target, nodes)).toBe(0)
+  })
+
+  test('routes a curved wall click to conical wall placement', () => {
+    const wall = WallNode.parse({ start: [-2, 0], end: [2, 0], curveOffset: 2 })
+    const selected: string[] = []
+    const previewed: Array<string | null> = []
+    let stopped = false
+    const unsubscribe = subscribeToConicalRoofWallClicks({
+      footprintSource: 'walls',
+      onPreview: (previewWall) => previewed.push(previewWall?.id ?? null),
+      onSelect: (selectedWall) => selected.push(selectedWall.id),
+      roofType: 'conical',
+    })
+
+    emitter.emit('wall:enter', { node: wall } as WallEvent)
+    emitter.emit('wall:click', {
+      node: wall,
+      stopPropagation: () => {
+        stopped = true
+      },
+    } as WallEvent)
+    emitter.emit('wall:leave', { node: wall } as WallEvent)
+    unsubscribe()
+
+    expect(selected).toEqual([wall.id])
+    expect(previewed).toEqual([wall.id, null])
+    expect(stopped).toBe(true)
+  })
+})

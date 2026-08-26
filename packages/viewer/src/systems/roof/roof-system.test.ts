@@ -190,6 +190,128 @@ describe('roof system shed geometry', () => {
     geometry.dispose()
   })
 
+  test('does not emit vertical fascia along a connected shed footprint edge', () => {
+    const parent = RoofNode.parse({
+      id: 'roof_connected_shed',
+      type: 'roof',
+      children: ['rseg_connected_a', 'rseg_connected_b'],
+    })
+    const base = RoofSegmentNode.parse({
+      id: 'rseg_connected_a',
+      type: 'roof-segment',
+      parentId: parent.id,
+      roofType: 'shed',
+      width: 2,
+      depth: 2,
+      wallHeight: 0,
+      wallThickness: 0.01,
+      pitch: 15,
+      overhang: 0,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      wallShell: 'omit',
+      shedFootprintPieces: [
+        [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ],
+      ],
+    })
+    const sibling = RoofSegmentNode.parse({
+      ...base,
+      id: 'rseg_connected_b',
+      position: [2, 0, 0],
+    })
+    const nodes = {
+      [parent.id]: parent,
+      [base.id]: base,
+      [sibling.id]: sibling,
+    }
+    const geometry = generateRoofSegmentGeometry(base, nodes)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()!
+    const normal = new THREE.Vector3()
+    let verticalTriangles = 0
+    for (const group of geometry.groups) {
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        const a = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset))
+        const b = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 1))
+        const c = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 2))
+        normal.subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize()
+        if (Math.abs(normal.y) < 1e-6) verticalTriangles += 1
+      }
+    }
+
+    expect(verticalTriangles).toBe(6)
+    geometry.dispose()
+  })
+
+  test('omits the vertical cut face along a managed diagonal shed seam', () => {
+    const parent = RoofNode.parse({
+      id: 'roof_connected_diagonal_shed',
+      type: 'roof',
+      children: ['rseg_diagonal_a', 'rseg_diagonal_b'],
+    })
+    const base = RoofSegmentNode.parse({
+      id: 'rseg_diagonal_a',
+      type: 'roof-segment',
+      parentId: parent.id,
+      roofType: 'shed',
+      width: 2,
+      depth: 2,
+      wallHeight: 0,
+      wallThickness: 0.01,
+      pitch: 15,
+      overhang: 0,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      wallShell: 'omit',
+      managedByParent: true,
+      trim: { frontRightX: 1, frontRightZ: 1 },
+    })
+    const sibling = RoofSegmentNode.parse({
+      ...base,
+      id: 'rseg_diagonal_b',
+      managedByParent: false,
+      trim: {},
+      shedFootprintPieces: [
+        [
+          [1, 0],
+          [1, 1],
+          [0, 1],
+        ],
+      ],
+    })
+    const nodes = {
+      [parent.id]: parent,
+      [base.id]: base,
+      [sibling.id]: sibling,
+    }
+    const geometry = generateRoofSegmentGeometry(base, nodes)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()!
+    const normal = new THREE.Vector3()
+    let diagonalVerticalTriangles = 0
+
+    for (const group of geometry.groups) {
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        const a = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset))
+        const b = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 1))
+        const c = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 2))
+        normal.subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize()
+        if (Math.abs(normal.y) > 1e-6) continue
+        if ([a, b, c].every((point) => Math.abs(point.x + point.z - 1) < 1e-6)) {
+          diagonalVerticalTriangles += 1
+        }
+      }
+    }
+
+    expect(diagonalVerticalTriangles).toBe(0)
+    geometry.dispose()
+  })
+
   test('bends a curved shed deck into a thin concentric band (no balloon)', () => {
     const depth = 2
     // Arc chosen so the back (wall) edge lands at radius 5 and the front edge
@@ -321,6 +443,153 @@ describe('roof system shed geometry', () => {
     expect(topLowYs.length).toBeGreaterThan(0)
     expect(Math.min(...topHighYs)).toBeGreaterThan(Math.max(...topLowYs))
 
+    geometry.dispose()
+  })
+})
+
+describe('roof system conical sector geometry', () => {
+  test('does not leave broad radial closure triangles on a narrow sector', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_narrow_conical_sector',
+      type: 'roof-segment',
+      roofType: 'conical',
+      width: 2,
+      depth: 2,
+      wallHeight: 0,
+      pitch: 40,
+      overhang: 0.3,
+      conicalStartAngle: 0.3,
+      conicalSweepAngle: 0.5,
+    })
+
+    const geometry = generateRoofSegmentGeometry(segment)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()
+    expect(index).not.toBeNull()
+    const a = new THREE.Vector3()
+    const b = new THREE.Vector3()
+    const c = new THREE.Vector3()
+    const ab = new THREE.Vector3()
+    const ac = new THREE.Vector3()
+    const normal = new THREE.Vector3()
+    let broadCutTriangleCount = 0
+    for (let offset = 0; offset < index!.count; offset += 3) {
+      a.fromBufferAttribute(position, index!.getX(offset))
+      b.fromBufferAttribute(position, index!.getX(offset + 1))
+      c.fromBufferAttribute(position, index!.getX(offset + 2))
+      normal.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a))
+      const area = normal.length() / 2
+      normal.normalize()
+      const radii = [a, b, c].map((point) => Math.hypot(point.x, point.z))
+      const ys = [a.y, b.y, c.y]
+      if (
+        Math.abs(normal.y) < 0.05 &&
+        area > 0.1 &&
+        Math.min(...radii) < 0.1 &&
+        Math.max(...radii) > 0.5 &&
+        Math.max(...ys) - Math.min(...ys) > 0.5
+      ) {
+        broadCutTriangleCount += 1
+      }
+    }
+
+    let whiteSlopeArea = 0
+    for (const group of geometry.groups) {
+      if (group.materialIndex !== 0) continue
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        a.fromBufferAttribute(position, index!.getX(offset))
+        b.fromBufferAttribute(position, index!.getX(offset + 1))
+        c.fromBufferAttribute(position, index!.getX(offset + 2))
+        normal.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a))
+        const area = normal.length() / 2
+        normal.normalize()
+        if (normal.y > 0.1) whiteSlopeArea += area
+      }
+    }
+
+    expect(broadCutTriangleCount).toBe(0)
+    expect(whiteSlopeArea).toBeLessThan(0.05)
+    geometry.dispose()
+  })
+
+  test('keeps large sectors free of CSG striping and phantom wall faces', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_large_conical_sector',
+      type: 'roof-segment',
+      roofType: 'conical',
+      width: 10,
+      depth: 10,
+      wallHeight: 0,
+      pitch: 40,
+      overhang: 0.3,
+      conicalStartAngle: 0.3,
+      conicalSweepAngle: 1,
+    })
+
+    const geometry = generateRoofSegmentGeometry(segment)
+    const triangleCount = (geometry.getIndex()?.count ?? 0) / 3
+
+    expect(triangleCount).toBeLessThan(100)
+    expect(geometry.groups.some((group) => group.materialIndex === 2)).toBe(false)
+    geometry.dispose()
+  })
+
+  test('emits canopy wall faces with both windings', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_double_sided_conical_walls',
+      type: 'roof-segment',
+      roofType: 'conical',
+      width: 4,
+      depth: 4,
+      wallHeight: 2,
+      wallThickness: 0.1,
+      pitch: 40,
+      overhang: 0.3,
+      conicalStartAngle: 0.3,
+      conicalSweepAngle: 1,
+    })
+
+    const geometry = generateRoofSegmentGeometry(segment)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()
+    expect(index).not.toBeNull()
+
+    const wallMaterialIndices = new Set<number>()
+    const windingCounts = new Map<string, [number, number]>()
+    const a = new THREE.Vector3()
+    const b = new THREE.Vector3()
+    const c = new THREE.Vector3()
+    const normal = new THREE.Vector3()
+    for (const group of geometry.groups) {
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        a.fromBufferAttribute(position, index!.getX(offset))
+        b.fromBufferAttribute(position, index!.getX(offset + 1))
+        c.fromBufferAttribute(position, index!.getX(offset + 2))
+        const ys = [a.y, b.y, c.y]
+        if (Math.min(...ys) > 0.001 || Math.max(...ys) < segment.wallHeight - 0.001) continue
+        wallMaterialIndices.add(group.materialIndex ?? 0)
+        normal.crossVectors(b.clone().sub(a), c.clone().sub(a)).normalize()
+        const firstNonzero = [normal.x, normal.y, normal.z].find(
+          (coordinate) => Math.abs(coordinate) > 1e-5,
+        )
+        const winding = firstNonzero !== undefined && firstNonzero < 0 ? 1 : 0
+        if (winding === 1) normal.negate()
+        const signature = [normal.x, normal.y, normal.z, normal.dot(a)]
+          .map((coordinate) => coordinate.toFixed(4))
+          .join(',')
+        const counts = windingCounts.get(signature) ?? [0, 0]
+        counts[winding] += 1
+        windingCounts.set(signature, counts)
+      }
+    }
+
+    expect([...wallMaterialIndices]).toEqual([0])
+    expect(windingCounts.size).toBeGreaterThan(0)
+    expect(
+      [...windingCounts.values()].every(
+        ([forwardCount, reverseCount]) => forwardCount > 0 && forwardCount === reverseCount,
+      ),
+    ).toBe(true)
     geometry.dispose()
   })
 })

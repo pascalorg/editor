@@ -67,6 +67,51 @@ describe('getRoofSegmentPlanLinework', () => {
     })
   })
 
+  test('renders a conical sector as a clipped polygon', () => {
+    const roof = RoofNode.parse({ id: 'roof_test', children: ['rseg_test'] })
+    const node = dutchSegment({
+      parentId: roof.id,
+      roofType: 'conical',
+      width: 6,
+      depth: 6,
+      conicalStartAngle: 0,
+      conicalSweepAngle: Math.PI,
+    })
+    const geometry = buildRoofSegmentFloorplan(node, {
+      parent: roof,
+      viewState: { selected: true },
+    } as GeometryContext) as Extract<FloorplanGeometry, { kind: 'group' }>
+    const polygons = geometry.children.filter(
+      (child): child is Extract<FloorplanGeometry, { kind: 'polygon' }> => child.kind === 'polygon',
+    )
+
+    expect(geometry.children.some((child) => child.kind === 'circle')).toBe(false)
+    expect(polygons).toHaveLength(2)
+    expect(polygons[0]?.points[0]).toEqual([0, 0])
+    expect(polygons[0]?.points).toHaveLength(26)
+    expect(geometry.children.some((child) => child.kind === 'rotate-arrow')).toBe(false)
+  })
+
+  test('renders a clipped conical sector as a circle when full coverage is enabled', () => {
+    const roof = RoofNode.parse({ id: 'roof_test', children: ['rseg_test'] })
+    const node = dutchSegment({
+      parentId: roof.id,
+      roofType: 'conical',
+      width: 6,
+      depth: 6,
+      conicalFullCircle: true,
+      conicalStartAngle: 0,
+      conicalSweepAngle: Math.PI,
+    })
+    const geometry = buildRoofSegmentFloorplan(node, {
+      parent: roof,
+      viewState: { selected: true },
+    } as GeometryContext) as Extract<FloorplanGeometry, { kind: 'group' }>
+
+    expect(geometry.children.filter((child) => child.kind === 'circle')).toHaveLength(2)
+    expect(geometry.children.some((child) => child.kind === 'polygon')).toBe(false)
+  })
+
   test('draws a dutch width-axis upper ridge plus waist linework', () => {
     const linework = getRoofSegmentPlanLinework(dutchSegment())
 

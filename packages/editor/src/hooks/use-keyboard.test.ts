@@ -12,6 +12,7 @@ import useInteractionScope from '../store/use-interaction-scope'
 import {
   canCycleSnappingModeShortcut,
   canRunGlobalRotationShortcut,
+  isToolOwnedCanopyForm,
   isToolOwnedRotation,
   runHistoryShortcut,
 } from './use-keyboard'
@@ -59,6 +60,14 @@ describe('rotation shortcut ownership', () => {
     useEditor.setState({ mode: 'build', tool: 'lean-to-extension' })
 
     expect(isToolOwnedRotation()).toBe(true)
+  })
+
+  test('leaves F to the active lean-to placement tool', () => {
+    useEditor.setState({ mode: 'build', tool: 'lean-to-extension' })
+
+    expect(isToolOwnedCanopyForm()).toBe(true)
+    useEditor.setState({ tool: 'wall' })
+    expect(isToolOwnedCanopyForm()).toBe(false)
   })
 })
 

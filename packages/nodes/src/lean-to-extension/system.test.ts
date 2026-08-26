@@ -26,7 +26,7 @@ import {
   managedLeanToPostSide,
 } from './assembly'
 import { resolveConicalLeanToPlacement } from './conical-host'
-import { resolveLeanToSlabEdgePlacement } from './placement'
+import { resolveLeanToFreestandingRunPlacement, resolveLeanToSlabEdgePlacement } from './placement'
 import { initializeLeanToExtensionSync } from './system'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -350,6 +350,138 @@ describe('lean-to scene commit boundary', () => {
     expect(cornerPosts).toHaveLength(1)
   })
 
+  test('synchronizes both sides of a continuous freestanding canopy corner', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_free_run_sync', level: 0 })
+    const first = resolveLeanToFreestandingRunPlacement(level.id, [0, 0], [4, 0])!
+    const second = resolveLeanToFreestandingRunPlacement(level.id, [4, 0], [4, 4])!
+    const firstAssembly = createLeanToAssembly(first)
+    const secondAssembly = createLeanToAssembly(second)
+    const nodes = Object.fromEntries(
+      [
+        { ...level, children: [first.id, second.id] },
+        firstAssembly.extension,
+        ...firstAssembly.children,
+        secondAssembly.extension,
+        ...secondAssembly.children,
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    const syncedNodes = useScene.getState().nodes
+    const syncedFirst = syncedNodes[first.id as AnyNodeId]
+    const syncedSecond = syncedNodes[second.id as AnyNodeId]
+    expect(syncedFirst).toMatchObject({
+      type: 'lean-to-extension',
+      rightEndCondition: 'joined',
+      metadata: { leanToCornerJoints: { right: { gutterMitre: -Math.PI / 4 } } },
+    })
+    expect(syncedSecond).toMatchObject({
+      type: 'lean-to-extension',
+      leftEndCondition: 'joined',
+      metadata: { leanToCornerJoints: { left: { gutterMitre: -Math.PI / 4 } } },
+    })
+    const cornerPosts = [syncedFirst, syncedSecond]
+      .flatMap((node) => node?.children ?? [])
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .filter(
+        (node) =>
+          node?.type === 'column' &&
+          (managedLeanToPostIndex(node) === leanToCornerPostIndex('left') ||
+            managedLeanToPostIndex(node) === leanToCornerPostIndex('right')),
+      )
+    expect(cornerPosts).toHaveLength(1)
+  })
+
+  test.each([
+    'gable',
+    'butterfly',
+  ] as const)('synchronizes continuous %s roof and gutter miters after both runs exist', (canopyForm) => {
+    stopSync()
+    const level = LevelNode.parse({ id: `level_${canopyForm}_run_sync`, level: 0 })
+    const first = resolveLeanToFreestandingRunPlacement(
+      level.id,
+      [0, 0],
+      [4, 0],
+      false,
+      canopyForm,
+    )!
+    const second = resolveLeanToFreestandingRunPlacement(
+      level.id,
+      [4, 0],
+      [4, 4],
+      false,
+      canopyForm,
+    )!
+    const firstAssembly = createLeanToAssembly(first)
+    const secondAssembly = createLeanToAssembly(second)
+    const nodes = Object.fromEntries(
+      [
+        { ...level, children: [first.id, second.id] },
+        firstAssembly.extension,
+        ...firstAssembly.children,
+        secondAssembly.extension,
+        ...secondAssembly.children,
+      ].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    const syncedNodes = useScene.getState().nodes
+    const syncedFirst = syncedNodes[first.id as AnyNodeId]
+    expect(syncedFirst).toMatchObject({
+      type: 'lean-to-extension',
+      rightEndCondition: 'joined',
+      metadata: { leanToFreestandingCanopyJoints: { right: { gutterMitre: -Math.PI / 4 } } },
+    })
+    if (syncedFirst?.type !== 'lean-to-extension') return
+    const roof = syncedFirst.children
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .find((node) => node?.type === 'roof')
+    const segments =
+      roof?.type === 'roof'
+        ? roof.children
+            .map((id) => syncedNodes[id as AnyNodeId])
+            .filter((node) => node?.type === 'roof-segment')
+        : []
+    const primary = segments.find(
+      (segment) =>
+        (segment.metadata as Record<string, unknown> | undefined)?.leanToRoofPlane !== 'opposite',
+    )
+    expect(primary?.trim.right + primary?.trim.left).toBeCloseTo(first.rightOverhang)
+    expect(
+      canopyForm === 'gable' ? primary?.trim.frontRightX : primary?.trim.backLeftX,
+    ).toBeCloseTo(first.projection + first.lowOverhang)
+    const gutter = primary?.children
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .find(
+        (node) =>
+          node?.type === 'gutter' &&
+          (node.metadata as Record<string, unknown> | undefined)?.leanToDrainageSide !== 'opposite',
+      )
+    expect(gutter?.endCapLeft && gutter?.endCapRight).toBe(false)
+    expect(gutter?.metadata).toMatchObject({
+      leanToGutterMitres: { left: canopyForm === 'butterfly' ? -Math.PI / 4 : 0 },
+    })
+  })
+
   test('synchronizes an edge-snapped straight run with open gutters and one joint pillar', () => {
     stopSync()
     const level = LevelNode.parse({ id: 'level_linear_sync', level: 0 })
@@ -653,5 +785,131 @@ describe('lean-to scene commit boundary', () => {
     expect(posts.find((post) => post.id === resizingPost.id)?.position[0]).not.toBe(
       originalResizingX,
     )
+  })
+
+  test('creates each gable eave under its matching managed roof plane', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_initial_gable_sync', level: 0 })
+    const leanTo = LeanToExtensionNode.parse({
+      id: 'leanto_initial_gable_sync',
+      parentId: level.id,
+      canopyForm: 'gable',
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      connectionMode: 'manual',
+      autoSpan: false,
+    })
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes: {
+        [level.id]: { ...level, children: [leanTo.id] },
+        [leanTo.id]: leanTo,
+      },
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    const syncedNodes = useScene.getState().nodes
+    const syncedLeanTo = syncedNodes[leanTo.id as AnyNodeId]
+    expect(syncedLeanTo?.type).toBe('lean-to-extension')
+    if (syncedLeanTo?.type !== 'lean-to-extension') return
+    const roof = syncedLeanTo.children
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .find((node) => node?.type === 'roof')
+    expect(roof?.type).toBe('roof')
+    if (roof?.type !== 'roof') return
+    const segments = roof.children
+      .map((id) => syncedNodes[id as AnyNodeId])
+      .filter((node) => node?.type === 'roof-segment')
+    expect(segments).toHaveLength(2)
+    for (const segment of segments) {
+      const gutters = segment.children
+        .map((id) => syncedNodes[id as AnyNodeId])
+        .filter((node) => node?.type === 'gutter')
+      expect(gutters).toHaveLength(1)
+      expect(gutters[0]?.parentId).toBe(segment.id)
+    }
+  })
+
+  test('reconciles roof planes and drainage while a freestanding canopy changes form', () => {
+    stopSync()
+    const level = LevelNode.parse({ id: 'level_canopy_form_sync', level: 0 })
+    const leanTo = LeanToExtensionNode.parse({
+      id: 'leanto_canopy_form_sync',
+      parentId: level.id,
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      connectionMode: 'manual',
+      autoSpan: false,
+    })
+    const assembly = createLeanToAssembly(leanTo)
+    const nodes = Object.fromEntries(
+      [{ ...level, children: [leanTo.id] }, assembly.extension, ...assembly.children].map(
+        (node) => [node.id, node],
+      ),
+    ) as Record<AnyNodeId, AnyNode>
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set(),
+      materials: {},
+      nodes,
+      readOnly: false,
+      rootNodeIds: [level.id],
+    } as never)
+    clearSceneHistory()
+    stopSync = initializeLeanToExtensionSync(createSceneApi(useScene))
+
+    useScene.getState().updateNode(leanTo.id as AnyNodeId, { canopyForm: 'gable' })
+
+    const gableSegments = Object.values(useScene.getState().nodes).filter(
+      (node) => node.type === 'roof-segment' && node.parentId === assembly.roof.id,
+    )
+    expect(gableSegments).toHaveLength(2)
+    expect(gableSegments.every((segment) => segment.roofType === 'shed')).toBe(true)
+    expect(
+      gableSegments.flatMap((segment) =>
+        segment.children
+          .map((id) => useScene.getState().nodes[id as AnyNodeId])
+          .filter((node) => node?.type === 'gutter'),
+      ),
+    ).toHaveLength(2)
+    const gableRoof = gableSegments[0]
+    if (!gableRoof) return
+
+    useScene.getState().updateNode(leanTo.id as AnyNodeId, { canopyForm: 'butterfly' })
+
+    const butterflySegments = Object.values(useScene.getState().nodes).filter(
+      (node) => node.type === 'roof-segment' && node.parentId === assembly.roof.id,
+    )
+    expect(butterflySegments).toHaveLength(2)
+    expect(butterflySegments.every((segment) => segment.roofType === 'shed')).toBe(true)
+    expect(
+      butterflySegments.flatMap((segment) =>
+        segment.children
+          .map((id) => useScene.getState().nodes[id as AnyNodeId])
+          .filter((node) => node?.type === 'gutter'),
+      ),
+    ).toHaveLength(1)
+
+    useScene.getState().updateNode(leanTo.id as AnyNodeId, { canopyForm: 'mono' })
+
+    const monoRoof = useScene.getState().nodes[gableRoof.id as AnyNodeId]
+    expect(monoRoof?.type).toBe('roof-segment')
+    if (monoRoof?.type !== 'roof-segment') return
+    expect(monoRoof.roofType).toBe('shed')
+    expect(
+      Object.values(useScene.getState().nodes).filter(
+        (node) => node.type === 'roof-segment' && node.parentId === assembly.roof.id,
+      ),
+    ).toHaveLength(1)
+    expect(
+      monoRoof.children
+        .map((id) => useScene.getState().nodes[id as AnyNodeId])
+        .filter((node) => node?.type === 'gutter'),
+    ).toHaveLength(1)
   })
 })

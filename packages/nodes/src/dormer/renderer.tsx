@@ -44,7 +44,6 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // 32-segment arch curves). Commit clears the override and the real
   // CSG mesh kicks back in.
   const liveOverrides = useLiveNodeOverrides((state) => state.get(storeNode.id as AnyNodeId))
-  const liveWindowOverrides = useLiveNodeOverrides((state) => state.overrides)
   const isLiveDrag = !!liveOverrides && Object.keys(liveOverrides).length > 0
   const node = useMemo(
     () => (liveOverrides ? ({ ...storeNode, ...liveOverrides } as DormerNode) : storeNode),
@@ -58,19 +57,26 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
         .filter((child): child is AnyNode => child !== undefined),
     ),
   )
+  const hostedWindowNodes = useMemo(
+    () => childNodes.filter((child): child is WindowNode => child.type === 'window'),
+    [childNodes],
+  )
+  const hostedWindowIds = useMemo(
+    () => hostedWindowNodes.map((window) => window.id),
+    [hostedWindowNodes],
+  )
+  const liveWindowOverrides = useLiveNodeOverrides(
+    useShallow((state) => hostedWindowIds.map((windowId) => state.overrides.get(windowId))),
+  )
   const hostedWindows = useMemo(
     () =>
-      childNodes
-        .filter((child): child is WindowNode => child.type === 'window')
-        .map((window) => {
-          const override = liveWindowOverrides.get(window.id)
-          return override ? ({ ...window, ...override } as WindowNode) : window
-        }),
-    [childNodes, liveWindowOverrides],
+      hostedWindowNodes.map((window, index) => {
+        const override = liveWindowOverrides[index]
+        return override ? ({ ...window, ...override } as WindowNode) : window
+      }),
+    [hostedWindowNodes, liveWindowOverrides],
   )
-  const hasLiveWindowPreview = childNodes.some(
-    (child) => child.type === 'window' && liveWindowOverrides.has(child.id),
-  )
+  const hasLiveWindowPreview = liveWindowOverrides.some((override) => override !== undefined)
 
   const segment = useScene((state) =>
     node.roofSegmentId

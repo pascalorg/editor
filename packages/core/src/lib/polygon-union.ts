@@ -261,6 +261,26 @@ function assembleRings(segments: Segment[]) {
 
   const rings: Point2D[][] = []
 
+  const nextBoundarySegment = (ring: Point2D[], candidates: Segment[]) => {
+    const previous = ring[ring.length - 2]!
+    const current = ring[ring.length - 1]!
+    const incomingX = current[0] - previous[0]
+    const incomingZ = current[1] - previous[1]
+    const reverseIncomingAngle = Math.atan2(-incomingZ, -incomingX)
+    const clockwiseTurn = (segment: Segment) => {
+      const outgoingAngle = Math.atan2(segment.end[1] - current[1], segment.end[0] - current[0])
+      const turn = reverseIncomingAngle - outgoingAngle
+      return ((turn % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)
+    }
+
+    return [...candidates].sort((left, right) => {
+      return (
+        clockwiseTurn(left) - clockwiseTurn(right) ||
+        pointKey(left.end).localeCompare(pointKey(right.end))
+      )
+    })[0]
+  }
+
   for (const firstSegment of segments) {
     if (firstSegment.used) continue
 
@@ -270,7 +290,8 @@ function assembleRings(segments: Segment[]) {
     let currentKey = pointKey(firstSegment.end)
 
     while (currentKey !== startKey) {
-      const next = byStart.get(currentKey)?.find((segment) => !segment.used)
+      const candidates = byStart.get(currentKey)?.filter((segment) => !segment.used) ?? []
+      const next = nextBoundarySegment(ring, candidates)
       if (!next) break
 
       next.used = true

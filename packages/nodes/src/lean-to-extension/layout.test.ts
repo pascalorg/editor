@@ -14,6 +14,7 @@ import {
   resolveLeanToMoveCenterX,
   resolveLeanToMoveProposal,
   resolveLeanToParentPose,
+  resolveLeanToPlanCenter,
   resolveLeanToSpanResizeProposal,
   resolveLeanToWallPlacement,
   resolveLeanToWallSurfaceHit,
@@ -55,6 +56,40 @@ describe('lean-to extension layout', () => {
       postSpacing: 2,
     })
     expect(resolveLeanToLayout(node).postXs).toHaveLength(5)
+  })
+
+  test('resolves a gable canopy as two symmetric roof planes', () => {
+    const node = LeanToExtensionNode.parse({
+      canopyForm: 'gable',
+      hostKind: 'freestanding',
+      projection: 3,
+      lowOverhang: 0.25,
+      highOverhang: 0.4,
+    })
+    const layout = resolveLeanToLayout(node)
+
+    expect(layout.canopyForm).toBe('gable')
+    expect(layout.roofRun).toBeCloseTo(3.25)
+    expect(layout.oppositeBeamZ).toBeCloseTo(-layout.beamZ)
+    expect(layout.roofCenterZ).toBeCloseTo(1.625)
+  })
+
+  test('resolves a butterfly canopy with a low central valley and high outer eaves', () => {
+    const node = LeanToExtensionNode.parse({
+      canopyForm: 'butterfly',
+      hostKind: 'freestanding',
+      projection: 3,
+      lowOverhang: 0.25,
+      highEdgeHeight: 3.2,
+      pitch: 10,
+    })
+    const layout = resolveLeanToLayout(node)
+
+    expect(layout.roofRun).toBeCloseTo(3.25)
+    expect(layout.roofCenterY).toBeGreaterThan(layout.lowEdgeHeight)
+    expect(layout.roofCenterY).toBeLessThan(layout.highEdgeHeight)
+    expect(layout.oppositeBeamZ).toBeCloseTo(-layout.beamZ)
+    expect(resolveLeanToPlanCenter(node)[1]).toBe(0)
   })
 })
 

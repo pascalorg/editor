@@ -1,4 +1,5 @@
 import {
+  getConicalRoofCoverage,
   getRoofModuleFaces,
   getRoofSegmentSurfaceY,
   getRoofShapeInsets,
@@ -90,6 +91,7 @@ function getRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
 }
 
 function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
+  const conicalCoverage = getConicalRoofCoverage(segment)
   return [
     segment.roofType,
     segment.width,
@@ -100,6 +102,8 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
     segment.overhang,
     segment.shingleThickness,
     segment.pitch,
+    conicalCoverage.startAngle,
+    conicalCoverage.sweepAngle,
     segment.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio,
     segment.gambrelLowerHeightRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerHeightRatio,
     segment.mansardSteepWidthRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepWidthRatio,
@@ -111,6 +115,7 @@ function roofSurfaceFaceCacheKey(segment: RoofSegmentNode): string {
 }
 
 function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
+  const conicalCoverage = getConicalRoofCoverage(segment)
   const { roofType, width, depth, wallHeight, wallThickness, deckThickness, overhang } = segment
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
 
@@ -196,6 +201,8 @@ function buildRoofSurfaceFaces(segment: RoofSegmentNode): RoofSurfaceFace[] {
     tanTheta,
     shapeRatios,
     dutchTopRakeThickness: segment.dutchTopRakeThickness,
+    conicalStartAngle: conicalCoverage.startAngle,
+    conicalSweepAngle: conicalCoverage.sweepAngle,
   })
     .filter((face) => faceNormalY(face) > SHINGLE_SURFACE_EPSILON)
     .map((face) => {

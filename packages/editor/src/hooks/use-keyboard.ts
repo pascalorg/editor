@@ -185,6 +185,11 @@ export const isToolOwnedRotation = () => {
   )
 }
 
+export const isToolOwnedCanopyForm = () => {
+  const editor = useEditor.getState()
+  return editor.mode === 'build' && editor.tool === 'lean-to-extension'
+}
+
 export const canRunGlobalRotationShortcut = () =>
   useInteractionScope.getState().scope.kind !== 'mesh-editing'
 
@@ -367,6 +372,7 @@ export const useKeyboard = ({
         useEditor.getState().setMode('select')
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
+        if (isToolOwnedCanopyForm()) return
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
         useEditor.getState().setMode('build')

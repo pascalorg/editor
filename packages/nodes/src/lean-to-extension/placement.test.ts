@@ -11,10 +11,14 @@ import { readLeanToCornerJointMetadata } from './corner-joint'
 import { resolveLeanToLayout, resolveLeanToWallPlacement } from './layout'
 import {
   findLeanToSlabEdgePlacement,
+  nextLeanToCanopyForm,
   nextLeanToPlacementRotation,
   reconcileLeanToSlabEdgePlacement,
   resolveLeanToCommitTarget,
   resolveLeanToFreestandingPlacement,
+  resolveLeanToFreestandingRunEndpointSnap,
+  resolveLeanToFreestandingRunPlacement,
+  resolveLeanToFreestandingRunTarget,
   resolveLeanToPlanPlacement,
   resolveLeanToSlabEdgePlacement,
   resolveLeanToWallPlanTarget,
@@ -70,6 +74,163 @@ describe('lean-to canopy placement', () => {
   test('maps R and T to opposite 45 degree placement rotations', () => {
     expect(nextLeanToPlacementRotation(0, 'r')).toBeCloseTo(Math.PI / 4)
     expect(nextLeanToPlacementRotation(0, 't')).toBeCloseTo(-Math.PI / 4)
+  })
+
+  test('cycles freestanding placement through mono, gable, and butterfly forms', () => {
+    expect(nextLeanToCanopyForm('mono', 'f')).toBe('gable')
+    expect(nextLeanToCanopyForm('gable', 'F')).toBe('butterfly')
+    expect(nextLeanToCanopyForm('butterfly', 'f')).toBe('mono')
+    expect(nextLeanToCanopyForm('gable', 'r')).toBe('gable')
+
+    const target = resolveLeanToPlanPlacement({
+      activeLevelId: 'level_ground',
+      freestandingPoint: [4, 6],
+      freestandingCanopyForm: 'gable',
+      nodes: {},
+      point: [4, 6],
+    })
+    expect(target.node).toMatchObject({
+      canopyForm: 'gable',
+      hostKind: 'freestanding',
+      position: [4, 0, 6],
+    })
+
+    expect(
+      resolveLeanToFreestandingPlacement('level_ground', [4, 6], 0, 'butterfly'),
+    ).toMatchObject({
+      name: 'Freestanding Butterfly Canopy',
+      canopyForm: 'butterfly',
+      position: [4, 0, 6],
+    })
+  })
+
+  test('resolves a continuous freestanding run from its clicked endpoints', () => {
+    const node = resolveLeanToFreestandingRunPlacement('level_ground', [1, 2], [5, 5])
+
+    expect(node).not.toBeNull()
+    expect(node?.canopyForm).toBe('mono')
+    expect(node?.span).toBeCloseTo(5)
+    expect(node?.position).toEqual([3, 0, 3.5])
+    expect(node?.rotation[1]).toBeCloseTo(-Math.atan2(3, 4))
+  })
+
+  test('flips the projection side without changing the continuous run endpoints', () => {
+    const normal = resolveLeanToFreestandingRunPlacement('level_ground', [0, 0], [4, 0])
+    const flipped = resolveLeanToFreestandingRunPlacement('level_ground', [0, 0], [4, 0], true)
+
+    expect(flipped?.span).toBe(normal?.span)
+    expect(flipped?.position).toEqual(normal?.position)
+    expect(Math.abs((flipped?.rotation[1] ?? 0) - (normal?.rotation[1] ?? 0))).toBeCloseTo(Math.PI)
+  })
+
+  test('rejects a continuous run shorter than the canopy minimum span', () => {
+    expect(resolveLeanToFreestandingRunPlacement('level_ground', [0, 0], [0.2, 0])).toBeNull()
+  })
+
+  test.each([
+    'gable',
+    'butterfly',
+  ] as const)('keeps the %s canopy form throughout a continuous run', (canopyForm) => {
+    const node = resolveLeanToFreestandingRunPlacement(
+      'level_ground',
+      [0, 0],
+      [4, 0],
+      false,
+      canopyForm,
+    )
+    const target = resolveLeanToFreestandingRunTarget({
+      activeLevelId: 'level_ground',
+      canopyForm,
+      start: [4, 0],
+      end: [4, 4],
+      nodes: node ? { [node.id]: node } : {},
+    })
+
+    expect(node?.canopyForm).toBe(canopyForm)
+    expect(target?.node.canopyForm).toBe(canopyForm)
+  })
+
+  test.each([
+    'mono',
+    'gable',
+    'butterfly',
+  ] as const)('magnetically closes a continuous %s loop at an exposed endpoint', (canopyForm) => {
+    const first = resolveLeanToFreestandingRunPlacement(
+      'level_ground',
+      [0, 0],
+      [4, 0],
+      false,
+      canopyForm,
+    )!
+    const second = resolveLeanToFreestandingRunPlacement(
+      'level_ground',
+      [4, 0],
+      [4, 4],
+      false,
+      canopyForm,
+    )!
+    const third = resolveLeanToFreestandingRunPlacement(
+      'level_ground',
+      [4, 4],
+      [0, 4],
+      false,
+      canopyForm,
+    )!
+    const snap = resolveLeanToFreestandingRunEndpointSnap({
+      activeLevelId: 'level_ground',
+      canopyForm,
+      maxDistance: 0.5,
+      nodes: Object.fromEntries([first, second, third].map((node) => [node.id, node])),
+      proposedEnd: [0.18, 0.12],
+      start: [0, 4],
+    })
+
+    expect(snap).toMatchObject({
+      nodeId: first.id,
+      point: [0, 0],
+      side: 'left',
+    })
+  })
+
+  test('does not magnetize to an occupied, incompatible, or out-of-range endpoint', () => {
+    const occupied = {
+      ...resolveLeanToFreestandingRunPlacement('level_ground', [0, 0], [4, 0])!,
+      leftEndCondition: 'joined' as const,
+    }
+    const gable = resolveLeanToFreestandingRunPlacement(
+      'level_ground',
+      [8, 0],
+      [12, 0],
+      false,
+      'gable',
+    )!
+    const nodes = { [occupied.id]: occupied, [gable.id]: gable }
+
+    expect(
+      resolveLeanToFreestandingRunEndpointSnap({
+        activeLevelId: 'level_ground',
+        nodes,
+        proposedEnd: [0.1, 0.1],
+        start: [0, 4],
+      }),
+    ).toBeNull()
+    expect(
+      resolveLeanToFreestandingRunEndpointSnap({
+        activeLevelId: 'level_ground',
+        nodes,
+        proposedEnd: [8.1, 0.1],
+        start: [8, 4],
+      }),
+    ).toBeNull()
+    expect(
+      resolveLeanToFreestandingRunEndpointSnap({
+        activeLevelId: 'level_ground',
+        maxDistance: 0.05,
+        nodes: { [occupied.id]: { ...occupied, leftEndCondition: 'open' } },
+        proposedEnd: [0.1, 0.1],
+        start: [0, 4],
+      }),
+    ).toBeNull()
   })
 
   test('commits the visible ghost when the click ray resolves a different target', () => {

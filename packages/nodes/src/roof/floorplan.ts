@@ -8,7 +8,7 @@ import {
   subtractPolygonsFromPolygon,
   unionPolygons,
 } from '@pascal-app/core'
-import { getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
+import { getConicalRoofPlanFootprint, getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
 
 type Pt = [number, number]
 type Seg = [Pt, Pt]
@@ -69,10 +69,7 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
   ]
   const footprint =
     seg.roofType === 'conical'
-      ? Array.from({ length: 48 }, (_, index) => {
-          const angle = (-index / 48) * Math.PI * 2
-          return tp(Math.cos(angle) * hw, Math.sin(angle) * hw)
-        })
+      ? getConicalRoofPlanFootprint(seg).map(([x, z]) => tp(x, z))
       : [tp(-hw, -hd), tp(hw, -hd), tp(hw, hd), tp(-hw, hd)]
   return {
     footprint,

@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  getConicalRoofCoverage,
   getRoofModuleFaces,
   getRoofShapeInsets,
   getRoofShapeRatios,
@@ -412,6 +413,7 @@ function getVolumeFaces(
   node: RoofSegmentNode,
   options: { widthExtension: number; verticalOffset: number; isVoid: boolean },
 ): RoofFace[] {
+  const conicalCoverage = getConicalRoofCoverage(node)
   const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
   const width = Math.max(0.01, node.width + options.widthExtension * 2)
   const depth = Math.max(0.01, node.depth + options.widthExtension * 2)
@@ -437,10 +439,13 @@ function getVolumeFaces(
     tanTheta,
     shapeRatios,
     dutchTopRakeThickness: node.dutchTopRakeThickness,
+    conicalStartAngle: conicalCoverage.startAngle,
+    conicalSweepAngle: conicalCoverage.sweepAngle,
   })
 }
 
 function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
+  const conicalCoverage = getConicalRoofCoverage(node)
   const { activeRh, tanTheta, cosTheta, sinTheta } = getSegmentSlopeFrame(node)
   const shapeRatios = getRoofShapeRatios(node)
   const horizontalOverhang = node.overhang * cosTheta
@@ -498,6 +503,8 @@ function getShingleOuterFaces(node: RoofSegmentNode): RoofFace[] {
     tanTheta,
     shapeRatios,
     dutchTopRakeThickness: node.dutchTopRakeThickness,
+    conicalStartAngle: conicalCoverage.startAngle,
+    conicalSweepAngle: conicalCoverage.sweepAngle,
   })
 
   if (translateZ === 0) return faces
