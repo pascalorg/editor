@@ -1864,7 +1864,7 @@ function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   kind: 'cabinet',
-  schemaVersion: 7,
+  schemaVersion: 8,
   schema: CabinetNode,
   category: 'furnish',
   surfaceRole: 'joinery',
