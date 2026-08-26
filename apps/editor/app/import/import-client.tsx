@@ -106,7 +106,9 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
           message:
             response.status === 401 || response.status === 403
               ? 'You need to be signed in to import a scene.'
-              : `Creating the scene failed (${response.status}).`,
+              : response.status === 413
+                ? 'The scene is too large for the scene store.'
+                : `Creating the scene failed (${response.status}).`,
         })
         return
       }

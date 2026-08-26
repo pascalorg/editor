@@ -7,8 +7,12 @@
  * plain https resource, not about SSRF (no server ever fetches it).
  */
 
-/** Hard cap on the fetched document; matches generous hand-made scenes. */
-export const MAX_IMPORT_BYTES = 25 * 1024 * 1024
+/**
+ * Hard cap on the fetched document. Matches the scene store's own limit
+ * (`DEFAULT_MAX_SCENE_BYTES` in the sqlite scene store, 10 MB): a file
+ * that passes review must not then fail `POST /api/scenes` with a 413.
+ */
+export const MAX_IMPORT_BYTES = 10 * 1024 * 1024
 
 export type ImportSrcResult = { ok: true; url: URL } | { ok: false; reason: string }
 
