@@ -2438,6 +2438,100 @@ function inverseTransformShedPlanPoint(
   return [dx * cos - dz * sin, dx * sin + dz * cos]
 }
 
+function pointInOrNearShedPolygon(
+  point: readonly [number, number],
+  polygon: RoofPlanPolygon,
+  tolerance: number,
+): boolean {
+  if (pointInPolygon2D([point[0], point[1]], polygon, { includeBoundary: false })) return true
+  if (!(tolerance > 0)) return false
+
+  const toleranceSquared = tolerance * tolerance
+  for (let index = 0; index < polygon.length; index++) {
+    const start = polygon[index]!
+    const end = polygon[(index + 1) % polygon.length]!
+    const dx = end[0] - start[0]
+    const dz = end[1] - start[1]
+    const lengthSquared = dx * dx + dz * dz
+    const ratio =
+      lengthSquared > 1e-12
+        ? Math.max(
+            0,
+            Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dz) / lengthSquared),
+          )
+        : 0
+    const closestX = start[0] + dx * ratio
+    const closestZ = start[1] + dz * ratio
+    const distanceSquared =
+      (point[0] - closestX) * (point[0] - closestX) + (point[1] - closestZ) * (point[1] - closestZ)
+    if (distanceSquared <= toleranceSquared) return true
+  }
+  return false
+}
+
+function readMetadataString(node: AnyNode, key: string): string | undefined {
+  const metadata = node.metadata
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined
+  const value = (metadata as Record<string, unknown>)[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+// The lean-to assembly records, per managed shed segment, the ids of the
+// neighbouring lean-tos it is actually joined to. Restricting sibling detection
+// to these keeps a shed from mitering against a run it merely passes near in
+// world space (e.g. the two free ends of a J that overlap across its mouth).
+function shedJointNeighborLeanTos(node: RoofSegmentNode): Set<string> | null {
+  const metadata = node.metadata
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
+  const value = (metadata as Record<string, unknown>).leanToShedJointNeighbors
+  if (!Array.isArray(value)) return null
+  const ids = value.filter((entry): entry is string => typeof entry === 'string')
+  return ids.length > 0 ? new Set(ids) : null
+}
+
+function isJoinedShedSibling(
+  node: RoofSegmentNode,
+  candidate: RoofSegmentNode,
+): boolean {
+  const neighbors = shedJointNeighborLeanTos(node)
+  if (!neighbors) return true
+  const candidateOwner = readMetadataString(candidate, 'managedByLeanTo')
+  return candidateOwner !== undefined && neighbors.has(candidateOwner)
+}
+
+function shedJoinTolerance(
+  node: RoofSegmentNode,
+  sibling: RoofSegmentNode,
+  nodes?: Record<string, AnyNode>,
+): number {
+  const sideOverhang = (segment: RoofSegmentNode) => {
+    const structuralSpan = readFiniteNumber(segment.shedSideInfillSpan)
+    if (structuralSpan !== null) return Math.max(0, (segment.width - structuralSpan) / 2)
+    const managedBy =
+      segment.metadata && typeof segment.metadata === 'object' && !Array.isArray(segment.metadata)
+        ? (segment.metadata as Record<string, unknown>).managedByLeanTo
+        : undefined
+    const owner = typeof managedBy === 'string' ? nodes?.[managedBy] : undefined
+    return owner?.type === 'lean-to-extension'
+      ? Math.max(owner.leftOverhang, owner.rightOverhang)
+      : 0
+  }
+  return Math.max(
+    0.02,
+    Math.min(
+      0.2,
+      Math.max(
+        node.overhang,
+        sibling.overhang,
+        node.wallThickness,
+        sibling.wallThickness,
+        sideOverhang(node),
+        sideOverhang(sibling),
+      ),
+    ),
+  )
+}
+
 function edgeTouchesSiblingShed(
   node: RoofSegmentNode,
   start: readonly [number, number],
@@ -2476,7 +2570,8 @@ function edgeTouchesSiblingShed(
               !Array.isArray(candidate.metadata) &&
               typeof (candidate.metadata as Record<string, unknown>).managedByLeanTo === 'string',
           ))) &&
-      candidate.roofType === 'shed',
+      candidate.roofType === 'shed' &&
+      isJoinedShedSibling(node, candidate),
   )
   if (siblings.length === 0) return false
 
@@ -2507,7 +2602,7 @@ function edgeTouchesSiblingShed(
                 ? [managedShedFootprint(sibling)]
                 : []
           return polygons.some((polygon) =>
-            pointInPolygon2D(local, polygon, { includeBoundary: false }),
+            pointInOrNearShedPolygon(local, polygon, shedJoinTolerance(node, sibling, nodes)),
           )
         })
       ) {
@@ -2555,7 +2650,8 @@ function findSiblingShedAcrossEdge(
               !Array.isArray(candidate.metadata) &&
               typeof (candidate.metadata as Record<string, unknown>).managedByLeanTo === 'string',
           ))) &&
-      candidate.roofType === 'shed',
+      candidate.roofType === 'shed' &&
+      isJoinedShedSibling(node, candidate),
   )
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
@@ -2582,7 +2678,7 @@ function findSiblingShedAcrossEdge(
               ? [managedShedFootprint(sibling)]
               : []
         return polygons.some((polygon) =>
-          pointInPolygon2D(local, polygon, { includeBoundary: false }),
+          pointInOrNearShedPolygon(local, polygon, shedJoinTolerance(node, sibling, nodes)),
         )
       })
     }),
@@ -2615,8 +2711,6 @@ function buildShedJointTransitionFaces(
   nodes: Record<string, AnyNode>,
   verticalThickness: number,
 ): THREE.Vector3[][] {
-  if (String(node.id) > String(sibling.id)) return []
-
   const nodeWorldY = shedWorldYOrigin(node, nodes)
   const siblingWorldY = shedWorldYOrigin(sibling, nodes)
   const siblingThickness = shedVerticalThickness(sibling)
@@ -2636,7 +2730,6 @@ function buildShedJointTransitionFaces(
   const startDelta = startHeights.siblingTop - startHeights.ownTop
   const endDelta = endHeights.siblingTop - endHeights.ownTop
   const tolerance = 1e-5
-  if (Math.abs(startDelta) <= tolerance && Math.abs(endDelta) <= tolerance) return []
 
   const face = (
     firstPoint: readonly [number, number],
@@ -2660,18 +2753,29 @@ function buildShedJointTransitionFaces(
     }
     return [firstOwn, secondOwn, secondSibling, firstSibling]
   }
+  // Geometric ownership: a run closes the step only along the stretch where its
+  // own roof top sits BELOW the sibling's (delta > 0), raising a vertical wall up
+  // to the sibling's top. `delta` is antisymmetric between the two runs, so every
+  // point of a seam is owned by exactly one run — the lower one — independent of
+  // run count, chain vs. loop topology, or random node ids. Flush stretches
+  // (|delta| <= tol) have no step and draw nothing, so a reversed/continuous fold
+  // stays open. This replaces the old id-order tiebreak and the "skip when joined
+  // on both ends" rule, which together left every seam of a closed loop unclosed.
   const faces: THREE.Vector3[][] = []
-  if (startDelta * endDelta < -tolerance * tolerance) {
+  if (startDelta > tolerance && endDelta > tolerance) {
+    pushDoubleSidedFace(faces, face(start, startHeights, end, endHeights))
+  } else if (startDelta > tolerance || endDelta > tolerance) {
     const ratio = startDelta / (startDelta - endDelta)
     const crossingPoint: [number, number] = [
       start[0] + (end[0] - start[0]) * ratio,
       start[1] + (end[1] - start[1]) * ratio,
     ]
     const crossingHeights = heights(crossingPoint)
-    pushDoubleSidedFace(faces, face(start, startHeights, crossingPoint, crossingHeights))
-    pushDoubleSidedFace(faces, face(crossingPoint, crossingHeights, end, endHeights))
-  } else {
-    pushDoubleSidedFace(faces, face(start, startHeights, end, endHeights))
+    if (startDelta > tolerance) {
+      pushDoubleSidedFace(faces, face(start, startHeights, crossingPoint, crossingHeights))
+    } else {
+      pushDoubleSidedFace(faces, face(crossingPoint, crossingHeights, end, endHeights))
+    }
   }
   return faces
 }

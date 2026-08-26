@@ -80,7 +80,9 @@ describe('multi-joint mono canopy', () => {
     ).toBeCloseTo(22.29958447881066)
   })
 
-  test('keeps every roof footprint simple across both joints in the reported layout', () => {
+  // A J-shape (chain of 3+ freestanding straight mono runs) is not mitered: each
+  // run renders as a plain rectangle with no shaped footprint pieces.
+  test('leaves every run un-mitered across both joints in the reported layout', () => {
     const level = LevelNode.parse({ id: 'level_mono_reported_layout', level: 0 })
     const runs = [
       resolveLeanToFreestandingRunPlacement(level.id, [-7, 11.5], [2, 12], false, 'mono')!,
@@ -91,15 +93,14 @@ describe('multi-joint mono canopy', () => {
       string,
       AnyNode
     >
-    const footprints = runs.flatMap(
+    const footprintsByRun = runs.map(
       (run) => createLeanToAssembly(run, undefined, nodes).segment.shedFootprintPieces ?? [],
     )
 
-    expect(footprints.length).toBeGreaterThanOrEqual(runs.length)
-    expect(footprints.some(hasSelfIntersection)).toBe(false)
+    expect(footprintsByRun.every((footprints) => footprints.length === 0)).toBe(true)
   })
 
-  test('keeps every roof partition simple when the first run forms the top of a J', () => {
+  test('leaves every run un-mitered when the first run forms the top of a J', () => {
     const level = LevelNode.parse({ id: 'level_mono_browser_top_first_j', level: 0 })
     const points: Point[] = [
       [-6, 2.5],
@@ -120,16 +121,6 @@ describe('multi-joint mono canopy', () => {
       (run) => createLeanToAssembly(run!, undefined, nodes).segment.shedFootprintPieces ?? [],
     )
 
-    expect(footprintsByRun.every((footprints) => footprints.length > 0)).toBe(true)
-    expect(footprintsByRun.flat().some(hasSelfIntersection)).toBe(false)
-    expect(
-      footprintsByRun.map((footprints) =>
-        footprints.reduce((sum, footprint) => sum + polygonArea(footprint), 0),
-      ),
-    ).toEqual([
-      expect.closeTo(20.481444541008713),
-      expect.closeTo(11.77982856764142),
-      expect.closeTo(6.782585040996875),
-    ])
+    expect(footprintsByRun.every((footprints) => footprints.length === 0)).toBe(true)
   })
 })
