@@ -186,6 +186,26 @@ export function resolveRoofWallTopElevation(
   )
 }
 
+/**
+ * World/building-local Y for a wall-top preview rendered outside a level node.
+ *
+ * Roof nodes are parented to a level, so their stored position is relative to
+ * that level's floor. The conical wall hover ghost is rendered directly in the
+ * building group instead, and therefore needs the active level's world base
+ * added back after resolving the level-relative placement.
+ */
+export function resolveRoofWallTopWorldElevation(
+  targetLevelId: LevelNode['id'],
+  wall: WallNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+  elevations = getLevelElevations(nodes as Record<string, AnyNode>),
+): number {
+  return (
+    (elevations.get(targetLevelId)?.baseY ?? 0) +
+    resolveRoofWallTopElevation(targetLevelId, wall, nodes, elevations)
+  )
+}
+
 function resolveRoomRoofFootprintOnLevel(
   levelId: LevelNode['id'],
   nodes: Readonly<Record<string, AnyNode>>,

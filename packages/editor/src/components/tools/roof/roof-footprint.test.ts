@@ -4,6 +4,7 @@ import {
   fitRoofFootprint,
   parseRoofFootprintSource,
   resolveRoofFootprintElevation,
+  resolveRoofWallTopWorldElevation,
   resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
@@ -113,6 +114,23 @@ describe('roof footprint sources', () => {
     )
 
     expect(target && resolveRoofFootprintElevation(activeLevel.id, target, nodes)).toBe(0)
+  })
+
+  test('keeps a lower-level curved wall hover ghost in the active level world frame', () => {
+    const groundLevel = LevelNode.parse({ children: [], height: 3, level: 0 })
+    const activeLevel = LevelNode.parse({ children: [], height: 3, level: 1 })
+    const wall = WallNode.parse({
+      parentId: groundLevel.id,
+      start: [-2, 0],
+      end: [2, 0],
+      curveOffset: 2,
+      height: 3,
+    })
+    const nodes = Object.fromEntries(
+      [groundLevel, activeLevel, wall].map((node) => [node.id, node]),
+    )
+
+    expect(resolveRoofWallTopWorldElevation(activeLevel.id, wall, nodes)).toBeCloseTo(3)
   })
 
   test('routes a curved wall click to conical wall placement', () => {

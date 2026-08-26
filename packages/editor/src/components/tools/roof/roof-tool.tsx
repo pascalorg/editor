@@ -44,7 +44,7 @@ import {
   parseRoofFootprintSource,
   type RoofFootprintTarget,
   resolveRoofFootprintElevation,
-  resolveRoofWallTopElevation,
+  resolveRoofWallTopWorldElevation,
   resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
@@ -937,7 +937,7 @@ export const RoofTool: React.FC = () => {
       position: [
         arc.center.x,
         currentLevelId
-          ? resolveRoofWallTopElevation(currentLevelId, wall, nodes)
+          ? resolveRoofWallTopWorldElevation(currentLevelId, wall, nodes)
           : getWallBaseElevationForNodes(wall, nodes) + getWallEffectiveHeightForNodes(wall, nodes),
         arc.center.y,
       ] as [number, number, number],
