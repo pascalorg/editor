@@ -17,8 +17,8 @@ export const solarPanelParametrics: ParametricDescriptor<SolarPanelNode> = {
     {
       label: 'Panel dimensions',
       fields: [
-        { key: 'panelWidth', kind: 'number', unit: 'm', min: 0.4, max: 2, step: 0.01 },
-        { key: 'panelHeight', kind: 'number', unit: 'm', min: 0.4, max: 2.5, step: 0.01 },
+        { key: 'panelWidth', kind: 'number', unit: 'm', min: 0.4, max: 1000, step: 0.01 },
+        { key: 'panelHeight', kind: 'number', unit: 'm', min: 0.4, max: 1000, step: 0.01 },
         { key: 'gapX', kind: 'number', unit: 'm', min: 0, max: 0.2, step: 0.005 },
         { key: 'gapY', kind: 'number', unit: 'm', min: 0, max: 0.2, step: 0.005 },
       ],

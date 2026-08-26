@@ -152,8 +152,6 @@ export function ParametricFieldControl({
               <SliderControl
                 key={`${key}-${label}`}
                 label={label}
-                max={axisValue + 5}
-                min={axisValue - 5}
                 mixed={mixed}
                 onChange={(next) => onChange(apply(next))}
                 onCommit={onCommit ? (next) => onCommit(apply(next)) : undefined}

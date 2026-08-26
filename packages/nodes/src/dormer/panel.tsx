@@ -202,7 +202,7 @@ export default function DormerPanel() {
           <PanelSection title="Dimensions">
             <SliderControl
               label="Width"
-              max={4}
+              max={1000}
               min={0.5}
               onChange={(v) => previewProp({ width: v })}
               onCommit={(v) => commitProp({ width: v })}
@@ -214,7 +214,7 @@ export default function DormerPanel() {
             />
             <SliderControl
               label="Depth"
-              max={5}
+              max={1000}
               min={0.5}
               onChange={(v) => previewProp({ depth: v })}
               onCommit={(v) => commitProp({ depth: v })}
@@ -226,7 +226,7 @@ export default function DormerPanel() {
             />
             <SliderControl
               label="Wall Height"
-              max={5}
+              max={1000}
               min={0}
               onChange={(v) => previewProp({ height: v })}
               onCommit={(v) => commitProp({ height: v })}

@@ -306,7 +306,7 @@ export function SlabPanel() {
         {node.recessed ? (
           <SliderControl
             label="Depth"
-            max={2}
+            max={1000}
             min={MIN_SLAB_THICKNESS}
             onChange={handleRecessDepthChange}
             precision={2}
@@ -317,7 +317,7 @@ export function SlabPanel() {
         ) : (
           <SliderControl
             label="Thickness"
-            max={0.5}
+            max={1000}
             min={MIN_SLAB_THICKNESS}
             onChange={handleThicknessChange}
             precision={2}

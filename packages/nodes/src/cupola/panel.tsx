@@ -165,7 +165,7 @@ export default function CupolaPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={2}
+          max={1000}
           min={0.3}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => handleUpdate({ width: v })}
@@ -177,7 +177,7 @@ export default function CupolaPanel() {
         />
         <SliderControl
           label="Depth"
-          max={2}
+          max={1000}
           min={0.3}
           onChange={(v) => previewProp({ depth: v })}
           onCommit={(v) => handleUpdate({ depth: v })}
@@ -189,7 +189,7 @@ export default function CupolaPanel() {
         />
         <SliderControl
           label="Height"
-          max={2.5}
+          max={1000}
           min={0.4}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => handleUpdate({ height: v })}

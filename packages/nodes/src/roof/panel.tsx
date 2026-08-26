@@ -273,8 +273,6 @@ export default function RoofPanel() {
       <PanelSection title="Position">
         <SliderControl
           label="X"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = v
@@ -287,8 +285,6 @@ export default function RoofPanel() {
         />
         <SliderControl
           label="Y"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
@@ -301,8 +297,6 @@ export default function RoofPanel() {
         />
         <SliderControl
           label="Z"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = v

@@ -22,7 +22,7 @@ export const slabParametrics: ParametricDescriptor<SlabNode> = {
           kind: 'number',
           unit: 'm',
           min: MIN_SLAB_THICKNESS,
-          max: 0.5,
+          max: 1000,
           step: 0.01,
           visibleIf: (n) => !n.recessed,
         },
