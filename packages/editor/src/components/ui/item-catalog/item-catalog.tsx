@@ -70,12 +70,22 @@ function renderItemMedia(item: ItemCatalogItem, displayName: string) {
   // 1. Explicit icon property
   if (item.icon) {
     if (typeof item.icon === 'string') {
+      if (isIconifyString(item.icon)) {
+        return (
+          <Icon
+            className="size-7 text-foreground/80 transition-transform duration-200 group-hover:scale-110 group-hover:text-foreground"
+            height={28}
+            icon={item.icon}
+            width={28}
+          />
+        )
+      }
       return (
-        <Icon
-          className="size-7 text-foreground/80 transition-transform duration-200 group-hover:scale-110 group-hover:text-foreground"
-          height={28}
-          icon={item.icon}
-          width={28}
+        <img
+          alt={displayName}
+          className="h-full w-full object-cover p-1"
+          loading="eager"
+          src={resolveCdnUrl(item.icon) || item.icon}
         />
       )
     }
