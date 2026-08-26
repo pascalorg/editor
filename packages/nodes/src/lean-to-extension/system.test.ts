@@ -484,9 +484,13 @@ describe('lean-to scene commit boundary', () => {
           (node.metadata as Record<string, unknown> | undefined)?.leanToDrainageSide !== 'opposite',
       )
     expect(gutter?.endCapLeft && gutter?.endCapRight).toBe(false)
-    expect(gutter?.metadata).toMatchObject({
-      leanToGutterMitres: { left: canopyForm === 'butterfly' ? -Math.PI / 4 : 0 },
-    })
+    const gutterMetadata = gutter?.metadata as
+      | { leanToGutterMitres?: { left?: number } }
+      | undefined
+    expect(gutterMetadata?.leanToGutterMitres?.left).toBeCloseTo(
+      canopyForm === 'butterfly' ? -Math.PI / 4 : 0,
+      12,
+    )
   })
 
   test('synchronizes an edge-snapped straight run with open gutters and one joint pillar', () => {
