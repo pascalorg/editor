@@ -10,6 +10,7 @@ import {
   COOKTOP_DEFAULT_HEIGHT,
   COOKTOP_DEFAULT_INDUCTION_LAYOUT,
   COOKTOP_STANDARD_WIDTH,
+  clampCabinetCarcassHeightForStack,
   cooktopCabinetStack,
   DISHWASHER_STANDARD_HEIGHT,
   DISHWASHER_STANDARD_WIDTH,
@@ -92,14 +93,17 @@ describe('resizeCabinetCompartmentStack', () => {
     expect(rows[0]!.height + rows[1]!.height + rows[2]!.height).toBeCloseTo(1.2)
   })
 
-  test('uses the requested height for a single flexible compartment', () => {
+  test('keeps a single compartment filling the carcass instead of ratcheting its height down', () => {
+    const original: CabinetCompartment[] = [{ id: 'top', type: 'shelf' }]
     const resized = resizeCabinetCompartmentStack(
-      { width: 0.6, carcassHeight: 0.72, stack: [{ id: 'top', type: 'shelf' }] },
+      { width: 0.6, carcassHeight: 0.8, stack: original },
       0,
       0.42,
     )
+    const rows = normalizeCabinetStack({ width: 0.6, carcassHeight: 0.8, stack: resized })
 
-    expect(resized[0]!.height).toBeCloseTo(0.42)
+    expect(resized).toEqual(original)
+    expect(rows[0]!.height).toBeCloseTo(0.8)
   })
 })
 
@@ -195,6 +199,20 @@ describe('appliance compartments', () => {
     expect(result.stack).toHaveLength(1)
     expect(result.stack[0]!.type).toBe('fridge-single')
     expect(result.carcassHeight).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
+  })
+
+  test('clamps carcass height against the replacement stack instead of the stale stack', () => {
+    const nextStack = fridgeCabinetStack('fridge-single')
+    const height = clampCabinetCarcassHeightForStack(
+      {
+        width: FRIDGE_COLUMN_WIDTH,
+        stack: [...nextStack, { ...newCabinetCompartment('drawer'), height: 0.1 }],
+      },
+      FRIDGE_COLUMN_HEIGHT,
+      nextStack,
+    )
+
+    expect(height).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
   })
 
   test('fridge preset inherits the run depth instead of using appliance depth', () => {
@@ -307,6 +325,25 @@ describe('appliance compartments', () => {
     expect(rows[1]!.height).toBeCloseTo(MICROWAVE_DEFAULT_HEIGHT)
   })
 
+  test('switching a compartment to an oven applies the fixed oven width', () => {
+    const parentRun = CabinetNode.parse({ carcassHeight: 0.8 })
+    const node = CabinetModuleNode.parse({
+      parentId: parentRun.id,
+      width: 0.8,
+      carcassHeight: parentRun.carcassHeight,
+      stack: [{ id: 'door', type: 'door', doorType: 'double' }],
+    })
+
+    const transition = resolveCompartmentTransition({
+      node,
+      parentRun,
+      index: 0,
+      next: { id: 'door', type: 'oven', height: OVEN_DEFAULT_HEIGHT },
+    })
+
+    expect(transition.modulePatch.width).toBeCloseTo(0.6)
+  })
+
   test('replacing a single compartment with dishwasher keeps only the fixed washer row', () => {
     const replaced = replaceCabinetCompartmentStack(
       {
@@ -322,6 +359,141 @@ describe('appliance compartments', () => {
     expect(replaced).toHaveLength(1)
     expect(replaced[0]!.type).toBe('dishwasher')
     expect(replaced[0]!.height).toBe(DISHWASHER_STANDARD_HEIGHT)
+  })
+
+  test('dishwasher fills the parent run height without leaving an 8 cm shortfall', () => {
+    const parentRun = CabinetNode.parse({ carcassHeight: 0.8 })
+    const node = CabinetModuleNode.parse({
+      parentId: parentRun.id,
+      carcassHeight: parentRun.carcassHeight,
+      stack: [{ id: 'door', type: 'door', doorType: 'double' }],
+    })
+
+    const transition = resolveCompartmentTransition({
+      node,
+      parentRun,
+      index: 0,
+      next: { id: 'door', type: 'dishwasher', height: DISHWASHER_STANDARD_HEIGHT },
+    })
+    const preset = cabinetPresetById('dishwasher').createPatch(parentRun)
+
+    expect(transition.modulePatch.carcassHeight).toBeCloseTo(parentRun.carcassHeight)
+    expect(transition.stack).toEqual([
+      expect.objectContaining({ type: 'dishwasher', height: parentRun.carcassHeight }),
+    ])
+    expect(preset.carcassHeight).toBeCloseTo(parentRun.carcassHeight)
+    expect(preset.stack).toEqual([
+      expect.objectContaining({ type: 'dishwasher', height: parentRun.carcassHeight }),
+    ])
+  })
+
+  test('dishwasher fills the carcass after its last flexible sibling is removed', () => {
+    const parentRun = CabinetNode.parse({ carcassHeight: 0.8 })
+    const node = CabinetModuleNode.parse({
+      parentId: parentRun.id,
+      carcassHeight: parentRun.carcassHeight,
+      stack: [
+        { id: 'drawer', type: 'drawer', drawerCount: 1 },
+        { id: 'door', type: 'door', doorType: 'double' },
+      ],
+    })
+    const transition = resolveCompartmentTransition({
+      node,
+      parentRun,
+      index: 1,
+      next: { id: 'door', type: 'dishwasher', height: DISHWASHER_STANDARD_HEIGHT },
+    })
+    const transitionedNode = CabinetModuleNode.parse({
+      ...node,
+      ...transition.modulePatch,
+      stack: transition.stack,
+    })
+
+    const removed = removeCabinetCompartmentStack(transitionedNode, 0)
+    const carcassHeight = removed.carcassHeight ?? transitionedNode.carcassHeight
+    const rows = normalizeCabinetStack({ ...transitionedNode, carcassHeight, stack: removed.stack })
+
+    expect(carcassHeight).toBeCloseTo(parentRun.carcassHeight)
+    expect(removed.stack).toEqual([
+      expect.objectContaining({ type: 'dishwasher', height: parentRun.carcassHeight }),
+    ])
+    expect(rows).toEqual([
+      expect.objectContaining({
+        compartment: expect.objectContaining({ type: 'dishwasher' }),
+        y0: 0,
+        y1: parentRun.carcassHeight,
+      }),
+    ])
+  })
+
+  test('removing a filler above a dishwasher restores its fixed appliance height', () => {
+    const cabinetHeight = 0.8
+    const removed = removeCabinetCompartmentStack(
+      {
+        width: DISHWASHER_STANDARD_WIDTH,
+        carcassHeight: cabinetHeight + 0.1,
+        stack: [
+          {
+            id: 'dishwasher',
+            type: 'dishwasher',
+            height: cabinetHeight,
+          },
+          { id: 'drawer', type: 'drawer', height: 0.1, drawerCount: 1 },
+        ],
+      },
+      1,
+    )
+
+    expect(removed.carcassHeight).toBeCloseTo(cabinetHeight)
+    expect(removed.stack).toEqual([
+      expect.objectContaining({
+        type: 'dishwasher',
+        height: cabinetHeight,
+      }),
+    ])
+  })
+
+  test('switching an oven stack to dishwasher removes every filler compartment', () => {
+    const parentRun = CabinetNode.parse({ carcassHeight: 0.8 })
+    const baseNode = CabinetModuleNode.parse({
+      parentId: parentRun.id,
+      carcassHeight: parentRun.carcassHeight,
+      stack: [{ id: 'door', type: 'door', doorType: 'double' }],
+    })
+    const ovenTransition = resolveCompartmentTransition({
+      node: baseNode,
+      parentRun,
+      index: 0,
+      next: { id: 'door', type: 'oven', height: OVEN_DEFAULT_HEIGHT },
+    })
+    const ovenNode = CabinetModuleNode.parse({
+      ...baseNode,
+      ...ovenTransition.modulePatch,
+      stack: ovenTransition.stack,
+    })
+
+    const transition = resolveCompartmentTransition({
+      node: ovenNode,
+      parentRun,
+      index: 1,
+      next: { id: 'door', type: 'dishwasher', height: DISHWASHER_STANDARD_HEIGHT },
+    })
+
+    expect(ovenTransition.stack.map((compartment) => compartment.type)).toEqual(['drawer', 'oven'])
+    expect(transition.stack).toEqual([
+      expect.objectContaining({
+        id: 'door',
+        type: 'dishwasher',
+        height: parentRun.carcassHeight,
+      }),
+    ])
+    expect(transition.modulePatch).toEqual(
+      expect.objectContaining({
+        cabinetType: 'base',
+        width: DISHWASHER_STANDARD_WIDTH,
+        carcassHeight: parentRun.carcassHeight,
+      }),
+    )
   })
 
   test('replacing a single base compartment with cooktop adds a flexible drawer below', () => {
@@ -400,6 +572,27 @@ describe('appliance compartments', () => {
     expect(replaced[1]!.type).toBe('microwave')
   })
 
+  test('replacing a row with an oven releases a configured storage sibling to fit', () => {
+    const replaced = replaceCabinetCompartmentStack(
+      {
+        width: 0.6,
+        carcassHeight: 0.8,
+        stack: [
+          { id: 'drawer', type: 'drawer', height: 0.44, drawerCount: 2 },
+          { id: 'door', type: 'door', doorType: 'double' },
+        ],
+      },
+      1,
+      { id: 'door', type: 'oven', height: OVEN_DEFAULT_HEIGHT },
+    )
+    const rows = normalizeCabinetStack({ width: 0.6, carcassHeight: 0.8, stack: replaced })
+
+    expect(replaced[0]!.height).toBeUndefined()
+    expect(rows[0]!.height).toBeCloseTo(0.8 - OVEN_DEFAULT_HEIGHT)
+    expect(rows[1]!.height).toBeCloseTo(OVEN_DEFAULT_HEIGHT)
+    expect(rows.at(-1)!.y1).toBeCloseTo(0.8)
+  })
+
   test('changing a configured flexible row type keeps its explicit height', () => {
     const replaced = replaceCabinetCompartmentStack(
       {
@@ -461,6 +654,49 @@ describe('appliance compartments', () => {
         toeKickDepth: parentRun.toeKickDepth,
       }),
     )
+  })
+
+  test.each([
+    ['fridge-single', 'shelf'],
+    ['fridge-single', 'drawer'],
+    ['fridge-single', 'door'],
+    ['fridge-double', 'shelf'],
+    ['fridge-double', 'drawer'],
+    ['fridge-double', 'door'],
+    ['fridge-top-freezer', 'shelf'],
+    ['fridge-top-freezer', 'drawer'],
+    ['fridge-top-freezer', 'door'],
+    ['fridge-bottom-freezer', 'shelf'],
+    ['fridge-bottom-freezer', 'drawer'],
+    ['fridge-bottom-freezer', 'door'],
+  ] as const)('switching %s to %s fills the restored base carcass', (fridgeType, storageType) => {
+    const parentRun = CabinetNode.parse({ carcassHeight: 0.8 })
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: FRIDGE_COLUMN_WIDTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      stack: [newCabinetCompartment(fridgeType)],
+    })
+
+    const transition = resolveCompartmentTransition({
+      node,
+      parentRun,
+      index: 0,
+      next: { ...newCabinetCompartment(storageType), id: node.stack![0]!.id },
+    })
+    const transitionedNode = CabinetModuleNode.parse({
+      ...node,
+      ...transition.modulePatch,
+      stack: transition.stack,
+    })
+    const rows = normalizeCabinetStack(transitionedNode)
+
+    expect(transition.stack).toHaveLength(1)
+    expect(transition.stack[0]!.type).toBe(storageType)
+    expect(transition.stack[0]!.height).toBeUndefined()
+    expect(transitionedNode.carcassHeight).toBeCloseTo(parentRun.carcassHeight)
+    expect(rows[0]!.height).toBeCloseTo(parentRun.carcassHeight)
+    expect(rows[0]!.y1).toBeCloseTo(parentRun.carcassHeight)
   })
 
   test('replacing a single compartment with a refrigerator does not add a filler row', () => {
@@ -539,6 +775,41 @@ describe('appliance compartments', () => {
 
     expect(replaced).toHaveLength(1)
     expect(replaced[0]!.type).toBe('hood-pyramid')
+  })
+
+  test.each([
+    ['hood-pyramid', 'shelf'],
+    ['hood-pyramid', 'drawer'],
+    ['hood-pyramid', 'door'],
+    ['hood-curved-glass', 'shelf'],
+    ['hood-curved-glass', 'drawer'],
+    ['hood-curved-glass', 'door'],
+  ] as const)('switching %s to %s fills the restored wall carcass', (hoodType, storageType) => {
+    const node = CabinetModuleNode.parse({
+      width: 0.6,
+      carcassHeight: 0.4,
+      stack: [newCabinetCompartment(hoodType)],
+    })
+
+    const transition = resolveCompartmentTransition({
+      node,
+      parentRun: undefined,
+      index: 0,
+      next: { ...newCabinetCompartment(storageType), id: node.stack![0]!.id },
+    })
+    const transitionedNode = CabinetModuleNode.parse({
+      ...node,
+      ...transition.modulePatch,
+      stack: transition.stack,
+    })
+    const rows = normalizeCabinetStack(transitionedNode)
+
+    expect(transition.stack).toHaveLength(1)
+    expect(transition.stack[0]!.type).toBe(storageType)
+    expect(transition.stack[0]!.height).toBeUndefined()
+    expect(transitionedNode.carcassHeight).toBeCloseTo(0.8)
+    expect(rows[0]!.height).toBeCloseTo(0.8)
+    expect(rows[0]!.y1).toBeCloseTo(0.8)
   })
 
   test('normalizeCabinetStack keeps the hood row at its explicit height', () => {

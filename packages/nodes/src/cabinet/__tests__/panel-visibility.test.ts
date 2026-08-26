@@ -1,6 +1,10 @@
 import { expect, test } from 'bun:test'
 import { CabinetModuleNode } from '@pascal-app/core'
-import { cabinetModuleSupportsPresets, cabinetModuleSupportsTopFinish } from '../panel-visibility'
+import {
+  cabinetModuleSupportsPresets,
+  cabinetModuleSupportsTopFinish,
+  cabinetModuleUsesFixedApplianceWidth,
+} from '../panel-visibility'
 
 test.each([
   'Corner Filler',
@@ -24,4 +28,30 @@ test('structural corner fillers cannot be converted with cabinet presets', () =>
 
   expect(cabinetModuleSupportsPresets(filler)).toBe(false)
   expect(cabinetModuleSupportsPresets(cabinet)).toBe(true)
+})
+
+test.each([
+  'oven',
+  'microwave',
+  'dishwasher',
+  'sink',
+  'cooktop-gas',
+  'cooktop-induction',
+  'pull-out-pantry',
+  'fridge-single',
+  'fridge-double',
+  'fridge-top-freezer',
+  'fridge-bottom-freezer',
+])('%s modules use a fixed appliance width', (type) => {
+  const module = CabinetModuleNode.parse({
+    stack: [{ id: 'appliance', type, height: 0.6 }],
+  })
+
+  expect(cabinetModuleUsesFixedApplianceWidth(module)).toBe(true)
+})
+
+test.each(['shelf', 'drawer', 'door'])('%s modules keep editable standard widths', (type) => {
+  const module = CabinetModuleNode.parse({ stack: [{ id: 'storage', type }] })
+
+  expect(cabinetModuleUsesFixedApplianceWidth(module)).toBe(false)
 })

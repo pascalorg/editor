@@ -11,7 +11,6 @@ import {
   type CabinetHoodCompartmentType,
   COOKTOP_STANDARD_WIDTH,
   cooktopCabinetStack,
-  DISHWASHER_STANDARD_HEIGHT,
   DISHWASHER_STANDARD_WIDTH,
   FRIDGE_COLUMN_HEIGHT,
   FRIDGE_COLUMN_WIDTH,
@@ -22,6 +21,7 @@ import {
   isFridgeCompartmentType,
   isHoodCompartmentType,
   MICROWAVE_STANDARD_WIDTH,
+  OVEN_STANDARD_WIDTH,
   PULL_OUT_PANTRY_STANDARD_WIDTH,
   replaceCabinetCompartmentStack,
   SINK_STANDARD_WIDTH,
@@ -54,12 +54,14 @@ export function resolveCompartmentTransition({
   const enteringSink = next.type === 'sink'
   const leavingPullOutPantry = current?.type === 'pull-out-pantry'
   const enteringPullOutPantry = next.type === 'pull-out-pantry'
-  const leavingPullOutForStandardStorage =
-    leavingPullOutPantry &&
-    (next.type === 'shelf' || next.type === 'drawer' || next.type === 'door')
   const leavingHood = current ? isHoodCompartmentType(current.type) : false
   const enteringHood = isHoodCompartmentType(next.type)
-  const enteringSingleDishwasher = next.type === 'dishwasher' && stack.length === 1
+  const leavingFixedModuleForStandardStorage =
+    (leavingFridge || leavingPullOutPantry || leavingHood) &&
+    (next.type === 'shelf' || next.type === 'drawer' || next.type === 'door')
+  const enteringDishwasher = next.type === 'dishwasher'
+  const dishwasherHeight = parentRun?.carcassHeight ?? BASE_CARCASS_HEIGHT
+  const replacement = enteringDishwasher ? { ...next, height: dishwasherHeight } : next
   const hoodModulePatch: Partial<CabinetModuleNodeType> = enteringHood
     ? {
         carcassHeight: Math.max(
@@ -115,12 +117,12 @@ export function resolveCompartmentTransition({
           withCountertop: false,
         }
       : {}
-  const dishwasherModulePatch: Partial<CabinetModuleNodeType> = enteringSingleDishwasher
+  const dishwasherModulePatch: Partial<CabinetModuleNodeType> = enteringDishwasher
     ? {
         cabinetType: 'base',
         width: DISHWASHER_STANDARD_WIDTH,
         depth: parentRun?.depth ?? CABINET_METRIC_DEFAULTS.depth,
-        carcassHeight: DISHWASHER_STANDARD_HEIGHT,
+        carcassHeight: dishwasherHeight,
         plinthHeight: parentRun?.plinthHeight ?? CABINET_METRIC_DEFAULTS.plinthHeight,
         toeKickDepth: parentRun?.toeKickDepth ?? 0.075,
         countertopThickness: 0,
@@ -133,29 +135,33 @@ export function resolveCompartmentTransition({
   return {
     stack: enteringFridge
       ? fridgeCabinetStack(next.type as CabinetFridgeCompartmentType)
-      : enteringCooktop && stack.length === 1
-        ? cooktopCabinetStack(next.type as CabinetCooktopCompartmentType)
-        : enteringSink && stack.length === 1
-          ? sinkCabinetStack()
-          : enteringPullOutPantry
-            ? [{ ...next, height: TALL_CARCASS_HEIGHT }]
-            : leavingPullOutForStandardStorage
-              ? [next]
-              : enteringHood
+      : enteringDishwasher
+        ? [replacement]
+        : enteringCooktop && stack.length === 1
+          ? cooktopCabinetStack(next.type as CabinetCooktopCompartmentType)
+          : enteringSink && stack.length === 1
+            ? sinkCabinetStack()
+            : enteringPullOutPantry
+              ? [{ ...next, height: TALL_CARCASS_HEIGHT }]
+              : leavingFixedModuleForStandardStorage
                 ? [next]
-                : replaceCabinetCompartmentStack(
-                    node,
-                    index,
-                    next,
-                    node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'base'
-                      ? 'drawer'
-                      : 'door',
-                  ),
+                : enteringHood
+                  ? [next]
+                  : replaceCabinetCompartmentStack(
+                      node,
+                      index,
+                      replacement,
+                      node.type === 'cabinet-module' &&
+                        resolveCabinetType(node, parentRun) === 'base'
+                        ? 'drawer'
+                        : 'door',
+                    ),
     modulePatch: {
       ...tallApplianceModulePatch,
       ...standardModulePatch,
       ...dishwasherModulePatch,
       ...hoodModulePatch,
+      ...(next.type === 'oven' ? { width: OVEN_STANDARD_WIDTH } : {}),
       ...(next.type === 'microwave' ? { width: MICROWAVE_STANDARD_WIDTH } : {}),
       ...(next.type === 'dishwasher' ? { width: DISHWASHER_STANDARD_WIDTH } : {}),
       ...(enteringCooktop ? { width: COOKTOP_STANDARD_WIDTH } : {}),

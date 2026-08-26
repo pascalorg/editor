@@ -25,7 +25,11 @@ import {
   onCabinetAnimationChange,
   stopCabinetAnimation,
 } from './interaction'
-import { cabinetModuleSupportsPresets, cabinetModuleSupportsTopFinish } from './panel-visibility'
+import {
+  cabinetModuleSupportsPresets,
+  cabinetModuleSupportsTopFinish,
+  cabinetModuleUsesFixedApplianceWidth,
+} from './panel-visibility'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
   CABINET_REVEAL_GAPS,
@@ -56,6 +60,7 @@ import {
 import {
   backAnchoredModuleZ,
   type CabinetCompartment,
+  clampCabinetCarcassHeightForStack,
   isHoodCompartmentType,
   minCabinetCarcassHeightForStack,
   newCabinetCompartment,
@@ -196,9 +201,10 @@ export default function CabinetPanel() {
         liveBeforeUpdate?.type === 'cabinet-module' &&
         typeof nextPatch.carcassHeight === 'number'
       ) {
-        nextPatch.carcassHeight = Math.max(
+        nextPatch.carcassHeight = clampCabinetCarcassHeightForStack(
+          liveBeforeUpdate,
           nextPatch.carcassHeight,
-          minCabinetCarcassHeightForStack(liveBeforeUpdate),
+          nextPatch.stack,
         )
       }
       if (liveBeforeUpdate?.type === 'cabinet-module') {
@@ -405,14 +411,8 @@ export default function CabinetPanel() {
     const transition = resolveCompartmentTransition({ node, parentRun, index, next })
     commitStack(transition.stack, transition.modulePatch)
   }
-  const resizeAt = (index: number, height: number) => {
-    const resized = resizeCabinetCompartmentStack(node, index, height)
-    const extraPatch: Partial<CabinetModuleNodeType> =
-      stack.length === 1 && resized[0]
-        ? { carcassHeight: resized[0].height ?? node.carcassHeight }
-        : {}
-    commitStack(resized, extraPatch)
-  }
+  const resizeAt = (index: number, height: number) =>
+    commitStack(resizeCabinetCompartmentStack(node, index, height))
   const removeAt = (index: number) => {
     const result = removeCabinetCompartmentStack(node, index)
     commitStack(result.stack, result.carcassHeight == null ? {} : result)
@@ -517,6 +517,8 @@ export default function CabinetPanel() {
 
   const standardWidth =
     node.type === 'cabinet-module' ? cabinetStandardWidthId(node.width) : 'custom'
+  const usesFixedApplianceWidth =
+    node.type === 'cabinet-module' && cabinetModuleUsesFixedApplianceWidth(node)
 
   if (node.type === 'cabinet' && modules.length > 0) {
     return <CabinetRunPanel modules={modules} node={node} onClose={close} />
@@ -556,6 +558,7 @@ export default function CabinetPanel() {
               Standard width
             </div>
             <SegmentedControl
+              disabled={usesFixedApplianceWidth}
               mixed={standardWidth === 'custom'}
               onChange={(value) =>
                 updateNode({

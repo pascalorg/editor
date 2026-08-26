@@ -2021,8 +2021,6 @@ function syncDerivedCornerRun({
         0,
         0,
       ])
-  // Place relative to the derived run's ACTUAL parent frame — source run for
-  // new scenes, source module for legacy scenes that nested legs under it.
   const frameParent = cabinetFrameParent(run, sceneApi.nodes()) ?? sourceRun
   const runPosition = worldToCabinetLocalPosition(frameParent, sceneApi.nodes(), runWorldPosition)
   const localRotation = worldToCabinetLocalRotation(frameParent, sceneApi.nodes(), rotation)
@@ -2396,8 +2394,6 @@ export function addCornerRun({
   const existingWallTop = sourceWallChildId
     ? (sceneApi.get<CabinetModuleNode>(sourceWallChildId) ?? null)
     : wallChildOf(sourceModule, sceneApi.nodes())
-  // Legs are siblings of the source module under the SOURCE RUN — the run is
-  // the modular cabinet group; the clicked module must not become a container.
   const baseLocalPosition = worldToCabinetLocalPosition(
     sourceRun,
     sceneApi.nodes(),

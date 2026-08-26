@@ -1,4 +1,4 @@
-import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
+import { CABINET_METRIC_DEFAULTS, type CabinetModuleNode, type CabinetNode } from '@pascal-app/core'
 
 type CabinetStackOwner = CabinetNode | CabinetModuleNode
 
@@ -56,6 +56,7 @@ let compartmentIdCounter = 0
 const DEFAULT_SHELF_COUNT = 2
 const DEFAULT_MIN_COMPARTMENT_HEIGHT = 0.1
 
+export const OVEN_STANDARD_WIDTH = 0.6
 export const OVEN_DEFAULT_HEIGHT = 0.595
 export const MICROWAVE_STANDARD_WIDTH = 0.61
 export const MICROWAVE_STANDARD_HEIGHT = 0.39
@@ -396,9 +397,17 @@ export function minCabinetCarcassHeightForStack(
 ): number {
   const stack = stackForCabinet(node)
   return stack.reduce(
-    (sum, compartment) => sum + (lockedApplianceHeight(compartment) ?? minHeight),
+    (sum, compartment) => sum + (explicitCompartmentHeight(compartment) ?? minHeight),
     0,
   )
+}
+
+export function clampCabinetCarcassHeightForStack(
+  node: Pick<CabinetStackOwner, 'stack' | 'width'>,
+  carcassHeight: number,
+  stack = stackForCabinet(node),
+): number {
+  return Math.max(carcassHeight, minCabinetCarcassHeightForStack({ ...node, stack }))
 }
 
 export function removeCabinetCompartmentStack(
@@ -409,6 +418,18 @@ export function removeCabinetCompartmentStack(
   if (index < 0 || index >= stack.length || stack.length <= 1) return { stack }
 
   const next = stack.filter((_, compartmentIndex) => compartmentIndex !== index)
+  const soleCompartment = next[0]
+  if (next.length === 1 && soleCompartment?.type === 'dishwasher') {
+    const applianceHeight = explicitCompartmentHeight(soleCompartment) ?? 0
+    const carcassHeight = Math.max(
+      applianceHeight,
+      Math.min(node.carcassHeight, CABINET_METRIC_DEFAULTS.carcassHeight),
+    )
+    return {
+      stack: [{ ...soleCompartment, height: carcassHeight }],
+      carcassHeight,
+    }
+  }
   if (index !== stack.length - 1) return { stack: next }
 
   const hasFlexibleCompartment = next.some(
@@ -455,9 +476,24 @@ export function replaceCabinetCompartmentStack(
 
   const hasFlexibleSibling = replaced.some(
     (compartment, compartmentIndex) =>
-      compartmentIndex !== index && lockedApplianceHeight(compartment) == null,
+      compartmentIndex !== index && explicitCompartmentHeight(compartment) == null,
   )
   if (hasFlexibleSibling) return replaced
+
+  const configurableStorageSibling = replaced
+    .map((compartment, compartmentIndex) => ({ compartment, compartmentIndex }))
+    .filter(
+      ({ compartment, compartmentIndex }) =>
+        compartmentIndex !== index && lockedApplianceHeight(compartment) == null,
+    )
+    .sort((a, b) => Math.abs(a.compartmentIndex - index) - Math.abs(b.compartmentIndex - index))[0]
+  if (configurableStorageSibling) {
+    return replaced.map((compartment, compartmentIndex) => {
+      if (compartmentIndex !== configurableStorageSibling.compartmentIndex) return compartment
+      const { height: _height, ...flexibleCompartment } = compartment
+      return flexibleCompartment as CabinetCompartment
+    })
+  }
 
   const lockedHeight = replaced.reduce(
     (sum, compartment) => sum + (lockedApplianceHeight(compartment) ?? 0),
@@ -503,16 +539,7 @@ export function resizeCabinetCompartmentStack(
 ): CabinetCompartment[] {
   const stack = stackForCabinet(node)
   if (stack.length === 0 || index < 0 || index >= stack.length) return stack
-  if (stack.length === 1) {
-    const compartment = stack[0]!
-    const height = Math.max(minHeight, Math.min(targetHeight, node.carcassHeight))
-    return [
-      {
-        ...compartment,
-        height,
-      },
-    ]
-  }
+  if (stack.length === 1) return stack
 
   const normalized = normalizeCabinetStack({ ...node, stack })
   const otherRows = normalized.filter((row) => row.index !== index)

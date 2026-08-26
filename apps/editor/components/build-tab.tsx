@@ -2,6 +2,7 @@
 
 import { nodeRegistry } from '@pascal-app/core'
 import {
+  CATALOG_ITEMS,
   type FloorplanMode,
   getFloorplanNodeExtension,
   isFloorplanToolAvailableInMode,
@@ -12,6 +13,7 @@ import {
   useFloorplanMode,
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
+import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import {
@@ -38,7 +40,7 @@ type MepToolKind =
   | 'pipe-trap'
 
 type BuildType = {
-  /** Selection id — equals `kind` for tool types, `'painting'` for paint mode, `'mep'` for the MEP group. */
+  /** Selection id — equals `kind` for tool types, with dedicated ids for modes and groups. */
   id: string
   label: string
   /** Raster asset tile (legacy Build sidebar artwork). */
@@ -72,6 +74,7 @@ const BASE_BUILD_TYPES: BuildType[] = [
   { id: 'column', label: 'Column', iconSrc: '/icons/column.webp', kind: 'column' },
   { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf' },
   { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.webp', kind: 'spawn' },
+  { id: 'kitchen', label: 'Kitchen', iconSrc: '/icons/kitchen.webp' },
   // Group tile — no tool of its own; opens the MEP sub-grid below (like Roof).
   { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
@@ -129,6 +132,9 @@ const MEP_ITEMS: MepItem[] = [
   { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-segment' },
 ]
 
+const MODULAR_CABINET_CATALOG_ITEM = CATALOG_ITEMS.find((item) => item.id === 'cabinet')
+const MODULAR_CABINET_ICON = MODULAR_CABINET_CATALOG_ITEM?.thumbnail ?? '/icons/item.webp'
+
 /**
  * Activate a raw structure draw/cursor tool. Mirrors the editor's own
  * structure-tool activation (`setPhase`/`setStructureLayer`/`setMode`/`setTool`).
@@ -151,6 +157,17 @@ function activateBuildTool(kind: string): void {
   ed.setToolDefaults(kind, null)
   ed.setMode('build')
   ed.setTool(kind)
+}
+
+function activateModularCabinetTool(): void {
+  const ed = useEditor.getState()
+  useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+  if (MODULAR_CABINET_CATALOG_ITEM) ed.setSelectedItem(MODULAR_CABINET_CATALOG_ITEM)
+  ed.setPhase('structure')
+  ed.setStructureLayer('elements')
+  ed.setCatalogCategory(null)
+  ed.setMode('build')
+  ed.setTool('cabinet')
 }
 
 /** Enter material-paint mode — the Build tab's "Painting" category. */
@@ -275,10 +292,12 @@ export function BuildTab() {
   const isRoofFeatureActive =
     mode === 'build' && !!activeTool && roofFeatures.some((f) => f.kind === activeTool)
   const isMepActive = mode === 'build' && !!activeTool && MEP_TOOL_KINDS.has(activeTool)
+  const isKitchenActive = mode === 'build' && activeTool === 'cabinet'
 
   const isTypeActive = (type: BuildType) => {
     if (type.mode) return mode === type.mode
     if (type.id === 'mep') return isMepActive
+    if (type.id === 'kitchen') return isKitchenActive
     if (type.id === 'roof')
       return mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive)
     return mode === 'build' && activeTool === type.kind
@@ -293,6 +312,8 @@ export function BuildTab() {
       // MEP is a group tile: arm its first tool so a usable tool is active
       // (and we leave any prior paint mode), then reveal the MEP sub-grid.
       activateBuildTool('duct-segment')
+    } else if (type.id === 'kitchen') {
+      activateModularCabinetTool()
     } else if (type.kind) {
       activateBuildTool(type.kind)
     }
@@ -410,6 +431,41 @@ export function BuildTab() {
                   </Tooltip>
                 )
               })}
+            </div>
+          </TooltipProvider>
+        </div>
+      ) : isKitchenActive ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Kitchen</div>
+          <TooltipProvider delayDuration={0} disableHoverableContent>
+            <div
+              className="grid gap-1.5 px-0.5"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="group relative flex aspect-square items-center justify-center rounded-xl bg-primary/10 p-1 ring-1 ring-primary/50 transition-all duration-200"
+                    onClick={() => {
+                      triggerSFX('sfx:menu-click')
+                      activateModularCabinetTool()
+                    }}
+                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                    type="button"
+                  >
+                    <Image
+                      alt="Modular Cabinet"
+                      className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                      height={48}
+                      src={MODULAR_CABINET_ICON}
+                      width={48}
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="pointer-events-none" side="top">
+                  Modular Cabinet
+                </TooltipContent>
+              </Tooltip>
             </div>
           </TooltipProvider>
         </div>

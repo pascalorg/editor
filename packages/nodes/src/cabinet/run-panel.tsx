@@ -272,6 +272,33 @@ export function reflowRunModules({
   )
   const preserveExtent =
     effectiveWallConstraints.left.constrained && effectiveWallConstraints.right.constrained
+  const selectedWillShrink = (patch.width ?? selected.width) < selected.width - 1e-4
+  const maximumWidthById = new Map(modules.map((module) => [module.id, presetNominalWidth(module)]))
+  if (preserveExtent && selectedWillShrink) {
+    const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
+    const selectedIndex = sorted.findIndex((module) => module.id === selected.id)
+    const fallbackCandidates = sorted
+      .map((module, index) => ({ index, module }))
+      .filter(({ module }) => module.id !== selected.id && eligibleDonorIds.has(module.id))
+      .sort((a, b) => {
+        const distance = Math.abs(a.index - selectedIndex) - Math.abs(b.index - selectedIndex)
+        return distance !== 0 ? distance : b.index - a.index
+      })
+    const freedWidth = selected.width - (patch.width ?? selected.width)
+    const ordinaryCapacity = fallbackCandidates.reduce((total, { module }) => {
+      const debt = presetWidthDebt(module, selected.id)
+      const nominalWidth = maximumWidthById.get(module.id) ?? MAX_CABINET_WIDTH
+      return total + Math.max(debt, nominalWidth - module.width)
+    }, 0)
+    let extraCapacity = Math.max(0, freedWidth - ordinaryCapacity)
+    for (const { module } of [...fallbackCandidates].reverse()) {
+      if (extraCapacity <= 1e-4) break
+      const nominalWidth = maximumWidthById.get(module.id) ?? MAX_CABINET_WIDTH
+      const addedCapacity = Math.min(extraCapacity, MAX_CABINET_WIDTH - nominalWidth)
+      maximumWidthById.set(module.id, nominalWidth + addedCapacity)
+      extraCapacity -= addedCapacity
+    }
+  }
   const reflowed = reflowCabinetRunModules(modules, selected.id, patch.width ?? selected.width, {
     wallConstraints: effectiveWallConstraints,
     eligibleDonorIds,
@@ -281,7 +308,7 @@ export function reflowRunModules({
         .map((module) => [module.id, MIN_TRIMMED_CORNER_PRESET_WIDTH]),
     ),
     maximumWidth: MAX_CABINET_WIDTH,
-    maximumWidthById: new Map(modules.map((module) => [module.id, presetNominalWidth(module)])),
+    maximumWidthById,
     restorableWidthById: new Map(
       modules.map((module) => [module.id, presetWidthDebt(module, selected.id)]),
     ),

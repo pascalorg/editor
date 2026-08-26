@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, type SceneApi, WallNode } from '@pascal-app/core'
+import { cabinetDefinition } from '../definition'
 import { cabinetQuickActions } from '../quick-actions'
 import { addCabinetModuleSide, addCornerRun } from '../run-ops'
 import { CabinetModuleNode, CabinetNode } from '../schema'
@@ -70,9 +71,16 @@ describe('cabinet quick actions', () => {
     expect(action?.disabled).toBeFalsy()
     const selectedId = action?.run({ sceneApi })?.selectedIds?.[0]
     const selected = selectedId ? sceneApi.get<CabinetModuleNode>(selectedId) : null
+    const derivedRun = selected?.parentId
+      ? sceneApi.get<CabinetNode>(selected.parentId as AnyNodeId)
+      : null
+    const sourceRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId)
 
     expect(selected?.name).toBe('Base Cabinet')
     expect(selected?.moduleKind).toBe('standard')
+    expect(derivedRun?.parentId).toBe(run.id)
+    expect(sourceRun?.children).toContain(derivedRun?.id as AnyNodeId)
+    expect(cabinetDefinition.relations?.hosts).toContain('cabinet')
   })
 
   test('offers and runs an L-corner action from run selection using the end module', () => {

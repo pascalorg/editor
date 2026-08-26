@@ -127,7 +127,7 @@ export const CabinetNode = BaseNode.extend({
   id: objectId('cabinet'),
   type: nodeType('cabinet'),
   runTier: z.enum(['base', 'wall', 'tall']).default('base'),
-  children: z.array(objectId('cabinet-module')).default([]),
+  children: z.array(z.union([objectId('cabinet-module'), objectId('cabinet')])).default([]),
   // Raised bar counter along one run edge: a knee wall topped by a slab at
   // bar height. Run-level because it spans modules like the countertop.
   barLedge: z

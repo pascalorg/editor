@@ -1211,6 +1211,91 @@ describe('cabinet preset run reflow', () => {
     expect(runMaxX(modulesAfter)).toBeCloseTo(initialExtent.maxX)
   })
 
+  test('lets a neighbor absorb the full width when an L source shrinks below its original width', () => {
+    const level = LevelNode.parse({ id: 'level_reflow-l-source-shrink' })
+    const run = CabinetNode.parse({
+      id: 'cabinet_reflow-l-source-shrink',
+      parentId: level.id,
+      children: [
+        'cabinet-module_reflow-l-source-shrink-source',
+        'cabinet-module_reflow-l-source-shrink-neighbor',
+      ],
+    })
+    const source = CabinetModuleNode.parse({
+      id: 'cabinet-module_reflow-l-source-shrink-source',
+      parentId: run.id,
+      position: [-0.25, 0.1, 0],
+      width: 0.64,
+    })
+    const neighbor = CabinetModuleNode.parse({
+      id: 'cabinet-module_reflow-l-source-shrink-neighbor',
+      parentId: run.id,
+      position: [0.32, 0.1, 0],
+      width: 0.5,
+    })
+    seedScene([level, run, source, neighbor] as AnyNode[], level.id as AnyNodeId)
+    const sceneApi = createSceneApi(useScene)
+    expect(addCornerRun({ module: source, run, sceneApi, side: 'left' })).toBeTruthy()
+
+    const nodesAfterCorner = useScene.getState().nodes
+    const liveRun = nodesAfterCorner[run.id] as ReturnType<typeof CabinetNode.parse>
+    const initialModules = liveRun.children
+      .map((id) => nodesAfterCorner[id])
+      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+        Boolean(node?.type === 'cabinet-module'),
+      )
+    const initialExtent = { minX: runMinX(initialModules), maxX: runMaxX(initialModules) }
+    for (const [index, x] of [initialExtent.minX - 0.1, initialExtent.maxX + 0.1].entries()) {
+      sceneApi.upsert(
+        WallNode.parse({
+          id: `wall_reflow-l-source-shrink-${index}`,
+          parentId: level.id,
+          start: [x, -1],
+          end: [x, 1],
+          thickness: 0.2,
+        }) as AnyNode,
+        level.id as AnyNodeId,
+      )
+    }
+    const applyPreset = (presetId: 'base-door' | 'fridge-single') => {
+      const scene = useScene.getState()
+      const parent = scene.nodes[run.id] as ReturnType<typeof CabinetNode.parse>
+      const modules = parent.children
+        .map((id) => scene.nodes[id])
+        .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+          Boolean(node?.type === 'cabinet-module'),
+        )
+      return reflowRunModules({
+        modules,
+        parentRun: parent,
+        patch: cabinetPresetById(presetId).createPatch(parent),
+        scene,
+        selected: scene.nodes[source.id] as ReturnType<typeof CabinetModuleNode.parse>,
+      })
+    }
+
+    expect(applyPreset('fridge-single')).toBe(true)
+    expect(
+      (useScene.getState().nodes[neighbor.id] as ReturnType<typeof CabinetModuleNode.parse>).width,
+    ).toBeCloseTo(0.38)
+    expect(applyPreset('base-door')).toBe(true)
+
+    const nodesAfter = useScene.getState().nodes
+    const modulesAfter = liveRun.children
+      .map((id) => nodesAfter[id])
+      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+        Boolean(node?.type === 'cabinet-module'),
+      )
+    expect((nodesAfter[source.id] as ReturnType<typeof CabinetModuleNode.parse>).width).toBeCloseTo(
+      0.5,
+    )
+    expect(
+      (nodesAfter[neighbor.id] as ReturnType<typeof CabinetModuleNode.parse>).width,
+    ).toBeCloseTo(0.64)
+    expect(runMinX(modulesAfter)).toBeCloseTo(initialExtent.minX)
+    expect(runMaxX(modulesAfter)).toBeCloseTo(initialExtent.maxX)
+  })
+
   test('resizes the closest eligible cabinet when both run ends are constrained', () => {
     const level = LevelNode.parse({ id: 'level_reflow-constrained' })
     const run = CabinetNode.parse({

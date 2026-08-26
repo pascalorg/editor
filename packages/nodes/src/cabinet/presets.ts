@@ -3,7 +3,6 @@ import { CABINET_METRIC_DEFAULTS } from '@pascal-app/core'
 import {
   COOKTOP_STANDARD_WIDTH,
   cooktopCabinetStack,
-  DISHWASHER_STANDARD_HEIGHT,
   DISHWASHER_STANDARD_WIDTH,
   FRIDGE_COLUMN_HEIGHT,
   FRIDGE_COLUMN_WIDTH,
@@ -44,6 +43,8 @@ const baseShared = (run?: CabinetNode): Partial<CabinetModuleNode> => ({
 })
 
 const runDepth = (run?: CabinetNode) => run?.depth ?? CABINET_METRIC_DEFAULTS.depth
+const runCarcassHeight = (run?: CabinetNode) =>
+  run?.carcassHeight ?? CABINET_METRIC_DEFAULTS.carcassHeight
 
 export const CABINET_PRESETS: CabinetPreset[] = [
   {
@@ -82,11 +83,10 @@ export const CABINET_PRESETS: CabinetPreset[] = [
       ...baseShared(run),
       name: 'Dishwasher',
       width: DISHWASHER_STANDARD_WIDTH,
-      carcassHeight: DISHWASHER_STANDARD_HEIGHT,
       handleStyle: 'bar',
       handlePosition: 'top',
       frontOverlay: 'full',
-      stack: [{ ...newCabinetCompartment('dishwasher'), height: DISHWASHER_STANDARD_HEIGHT }],
+      stack: [{ ...newCabinetCompartment('dishwasher'), height: runCarcassHeight(run) }],
     }),
   },
   {

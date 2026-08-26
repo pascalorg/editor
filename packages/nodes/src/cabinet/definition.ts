@@ -1951,7 +1951,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   // Dirty-cascade: a dirtied run re-marks its hosted modules so their
   // composite geometry re-flows with the run (see `cascadeDirty`).
   relations: {
-    hosts: ['cabinet-module'],
+    hosts: ['cabinet', 'cabinet-module'],
   },
 
   parametrics: cabinetParametrics,
