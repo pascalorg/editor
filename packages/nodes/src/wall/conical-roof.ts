@@ -43,10 +43,13 @@ export function createConicalRoofSectorAboveWall(
     name: `Roof ${roofCount + 1}`,
     position: [
       arc.center.x,
-      sourceLevelY +
-        getWallBaseElevationForNodes(wall, completeNodes) +
-        getWallEffectiveHeightForNodes(wall, completeNodes) -
-        targetLevelY,
+      Math.max(
+        0,
+        sourceLevelY +
+          getWallBaseElevationForNodes(wall, completeNodes) +
+          getWallEffectiveHeightForNodes(wall, completeNodes) -
+          targetLevelY,
+      ),
       arc.center.y,
     ],
     children: [segment.id],
