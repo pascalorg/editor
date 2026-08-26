@@ -570,6 +570,7 @@ export {
   collectZoneContentIds,
   collectZoneObjectIds,
   collectZoneObjectLabels,
+  resolveZoneTakeoffReports,
 } from './lib/zone-content'
 export { subscribeCameraPose } from './store/camera-pose-store'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'

@@ -4,9 +4,11 @@ import {
   deriveZoneQuantityReport,
   resolveAutoZonePolygon,
   useLiveNodeOverrides,
+  useRegistryVersion,
   useScene,
   type ZoneNode,
   type ZoneQuantityValue,
+  type ZoneTakeoffReport,
 } from '@pascal-app/core'
 import {
   collectZoneObjectLabels,
@@ -16,6 +18,7 @@ import {
   MetricControl,
   PanelSection,
   resolveNodeDisplayName,
+  resolveZoneTakeoffReports,
   ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -323,6 +326,7 @@ export default function ZoneQuantitiesPanel() {
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const nodes = useScene((state) => state.nodes)
+  const registryVersion = useRegistryVersion()
   const zone = selectedZoneId ? (nodes[selectedZoneId] as ZoneNode | undefined) : undefined
   const livePolygon = useLiveNodeOverrides((state) =>
     selectedZoneId ? state.overrides.get(selectedZoneId)?.polygon : undefined,
@@ -357,12 +361,21 @@ export default function ZoneQuantitiesPanel() {
     () => (effectiveZone ? deriveZoneQuantityReport(effectiveZone, effectiveNodes) : null),
     [effectiveNodes, effectiveZone],
   )
+  const takeoffReports = useMemo(() => {
+    if (!effectiveZone) return []
+    // Track registry version to re-derive takeoff reports when plugins load asynchronously
+    void registryVersion
+    return resolveZoneTakeoffReports(effectiveNodes, effectiveZone)
+  }, [effectiveNodes, effectiveZone, registryVersion])
 
   if (!effectiveZone || !report) return null
 
   return (
     <>
       <RoomDocumentationPanel zone={effectiveZone} />
+      {takeoffReports.map((takeoff) => (
+        <ZoneTakeoffSection key={takeoff.id} report={takeoff} />
+      ))}
       <PanelSection
         title={effectiveZone.spaceRole === 'room' ? 'Room quantities' : 'Zone quantities'}
       >
@@ -412,6 +425,76 @@ export default function ZoneQuantitiesPanel() {
 
       <ZoneContentsSection zone={effectiveZone} />
     </>
+  )
+}
+
+function ZoneTakeoffSection({ report }: { report: ZoneTakeoffReport }) {
+  return (
+    <PanelSection title={report.title}>
+      {report.metrics.length > 0 && (
+        <div className="grid grid-cols-2 gap-1.5">
+          {report.metrics.map((metric) => (
+            <div
+              key={metric.key}
+              className="flex flex-col justify-between rounded-md border border-cyan-950/20 bg-[#f8faf7] p-2 text-slate-950 dark:border-border/60 dark:bg-card dark:text-card-foreground shadow-2xs"
+            >
+              <div className="flex items-center justify-between gap-1 text-muted-foreground text-[10px]">
+                <span className="truncate">{metric.label}</span>
+                {metric.abbreviation && (
+                  <span className="font-mono text-[9px] text-cyan-800 dark:text-cyan-400 font-semibold">
+                    {metric.abbreviation}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="font-semibold font-mono text-base tracking-tight text-foreground tabular-nums">
+                  {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
+                </span>
+              </div>
+              {metric.sublabel && (
+                <span className="mt-0.5 truncate text-[9px] text-muted-foreground">
+                  {metric.sublabel}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {report.breakdown && report.breakdown.length > 0 && (
+        <div className="flex flex-col gap-1.5 pt-1">
+          <div className="font-medium text-[11px] text-muted-foreground">Detailed breakdown</div>
+          {report.breakdown.map((item) => (
+            <div
+              key={item.id}
+              className="flex flex-col rounded-md border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs"
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-medium text-foreground">{item.label}</span>
+                <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                  {typeof item.count === 'number' ? item.count.toLocaleString() : item.count}
+                </span>
+              </div>
+              {item.details && (
+                <div className="mt-0.5 text-[10px] text-muted-foreground">{item.details}</div>
+              )}
+              {item.submetrics && item.submetrics.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 border-border/40 border-t pt-1 font-mono text-[10px] text-muted-foreground">
+                  {item.submetrics.map((sub, sIdx) => (
+                    <span key={sIdx}>
+                      <span className="text-muted-foreground/70">{sub.label}: </span>
+                      <span className="text-foreground">
+                        {typeof sub.value === 'number' ? sub.value.toLocaleString() : sub.value}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </PanelSection>
   )
 }
 

@@ -4,6 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
+import type { ZoneNode } from '../schema/nodes/zone'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
@@ -916,12 +917,54 @@ export type InspectorExtension = {
   component: LazyComponent
 }
 
+export type ZoneTakeoffMetric = {
+  key: string
+  label: string
+  value: string | number
+  abbreviation?: string
+  sublabel?: string
+}
+
+export type ZoneTakeoffBreakdownItem = {
+  id: string
+  label: string
+  count: number
+  details?: string
+  submetrics?: Array<{ label: string; value: string | number }>
+}
+
+export type ZoneTakeoffReport = {
+  id: string
+  title: string
+  icon?: IconRef
+  metrics: ZoneTakeoffMetric[]
+  breakdown?: ZoneTakeoffBreakdownItem[]
+}
+
+export type ZoneTakeoffExtension = {
+  id: string
+  pluginId: string
+  supportsZone: (args: {
+    zone: ZoneNode
+    contentIds: AnyNodeId[]
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  }) => boolean
+  deriveTakeoff: (args: {
+    zone: ZoneNode
+    contentIds: AnyNodeId[]
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  }) => ZoneTakeoffReport | null
+  component?: LazyComponent
+}
+
 export type Plugin = {
   id: string
   apiVersion: 1
   nodes?: AnyNodeDefinition[]
   /** Sections contributed to the floating node inspector card. */
   inspectorExtensions?: InspectorExtension[]
+  /** Extensions that compute detailed takeoff and statistics for zones. */
+  zoneTakeoffExtensions?: ZoneTakeoffExtension[]
 }
 
 // ─── NodeDefinition ──────────────────────────────────────────────────

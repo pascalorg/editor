@@ -4,6 +4,7 @@ import {
   getHostRefFields,
   getInspectorExtensions,
   getNodePluginId,
+  getZoneTakeoffExtensions,
   isDrawnViaTool,
   isDrawnViaToolKind,
   isNodeKindEnabled,
@@ -12,8 +13,14 @@ import {
   loadPlugin,
   nodeRegistry,
   registerNode,
+  registerZoneTakeoffExtension,
 } from './registry'
-import type { AnyNodeDefinition, InspectorExtension, Plugin } from './types'
+import type {
+  AnyNodeDefinition,
+  InspectorExtension,
+  Plugin,
+  ZoneTakeoffExtension,
+} from './types'
 
 // Re-registering a kind warns + replaces in dev (HMR) but throws in
 // production — see `registry._register`. `bun test` runs with
@@ -366,3 +373,80 @@ describe('inspector extensions', () => {
     expect(getInspectorExtensions('wall')).toEqual([])
   })
 })
+
+describe('zone takeoff extensions', () => {
+  beforeEach(() => {
+    nodeRegistry._reset()
+  })
+
+  function makeTakeoffExtension(
+    id: string,
+    overrides: Partial<ZoneTakeoffExtension> = {},
+  ): ZoneTakeoffExtension {
+    return {
+      id,
+      pluginId: 'test:plugin',
+      supportsZone: () => true,
+      deriveTakeoff: () => ({
+        id,
+        title: 'Takeoff Report',
+        metrics: [{ key: 'bays', label: 'Bays', value: 10 }],
+      }),
+      ...overrides,
+    }
+  }
+
+  test('starts empty', () => {
+    expect(getZoneTakeoffExtensions()).toEqual([])
+  })
+
+  test('registerZoneTakeoffExtension adds an extension', () => {
+    const ext = makeTakeoffExtension('test:ext')
+    registerZoneTakeoffExtension(ext)
+    expect(getZoneTakeoffExtensions()).toEqual([ext])
+  })
+
+  test('loadPlugin registers zone takeoff extensions', async () => {
+    const ext = makeTakeoffExtension('test:takeoff')
+    await loadPlugin({
+      id: 'test:plugin',
+      apiVersion: 1,
+      zoneTakeoffExtensions: [ext],
+    })
+    expect(getZoneTakeoffExtensions()).toEqual([ext])
+  })
+
+  test('re-registering the same takeoff extension id replaces in place (HMR)', async () => {
+    const first = makeTakeoffExtension('test:takeoff', { pluginId: 'v1' })
+    const second = makeTakeoffExtension('test:takeoff', { pluginId: 'v2' })
+    await loadPlugin({ id: 'test:plugin', apiVersion: 1, zoneTakeoffExtensions: [first] })
+    await loadPlugin({ id: 'test:plugin', apiVersion: 1, zoneTakeoffExtensions: [second] })
+
+    const list = getZoneTakeoffExtensions()
+    expect(list).toHaveLength(1)
+    expect(list[0]?.pluginId).toBe('v2')
+  })
+
+  test('registering zone takeoff extensions bumps the registry version', async () => {
+    const { getRegistryVersion } = await import('./registry')
+    const before = getRegistryVersion()
+    await loadPlugin({
+      id: 'test:plugin',
+      apiVersion: 1,
+      zoneTakeoffExtensions: [makeTakeoffExtension('test:takeoff')],
+    })
+    expect(getRegistryVersion()).toBeGreaterThan(before)
+  })
+
+  test('_reset clears registered zone takeoff extensions', async () => {
+    await loadPlugin({
+      id: 'test:plugin',
+      apiVersion: 1,
+      zoneTakeoffExtensions: [makeTakeoffExtension('test:takeoff')],
+    })
+    expect(getZoneTakeoffExtensions()).toHaveLength(1)
+    nodeRegistry._reset()
+    expect(getZoneTakeoffExtensions()).toEqual([])
+  })
+})
+

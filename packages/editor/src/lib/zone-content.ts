@@ -2,12 +2,15 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  getZoneTakeoffExtensions,
   type ItemNode,
   pointInPolygon2D,
   pointOnSegment,
   type SlabNode,
   type WallNode,
   type ZoneNode,
+  type ZoneTakeoffExtension,
+  type ZoneTakeoffReport,
 } from '@pascal-app/core'
 
 type Point2D = [number, number]
@@ -200,4 +203,43 @@ export function collectZoneContentIds(
       ...floorItems.map((item) => item.id as AnyNodeId),
     ]),
   )
+}
+
+const EMPTY_TAKEOFF_REPORTS: readonly ZoneTakeoffReport[] = []
+
+/**
+ * Resolves detailed takeoff reports for the contents standing inside a zone
+ * by evaluating all registered (or explicitly provided) ZoneTakeoffExtensions.
+ *
+ * Discovers content IDs via `collectZoneObjectIds(nodes, zone)`, checks
+ * `supportsZone({ zone, contentIds, nodes })`, invokes `deriveTakeoff(...)`,
+ * and returns `ZoneTakeoffReport[]`.
+ *
+ * Returns a stable empty array when no reports are derived to protect callers
+ * using shallow equality against infinite render loops.
+ */
+export function resolveZoneTakeoffReports(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  zone: ZoneNode,
+  extensions?: readonly ZoneTakeoffExtension[],
+): ZoneTakeoffReport[] {
+  const activeExtensions = extensions ?? getZoneTakeoffExtensions()
+  if (!activeExtensions || activeExtensions.length === 0) {
+    return EMPTY_TAKEOFF_REPORTS as ZoneTakeoffReport[]
+  }
+
+  const contentIds = collectZoneObjectIds(nodes, zone)
+  const args = { zone, contentIds, nodes }
+
+  const reports: ZoneTakeoffReport[] = []
+  for (const ext of activeExtensions) {
+    if (ext.supportsZone(args)) {
+      const report = ext.deriveTakeoff(args)
+      if (report) {
+        reports.push(report)
+      }
+    }
+  }
+
+  return reports.length === 0 ? (EMPTY_TAKEOFF_REPORTS as ZoneTakeoffReport[]) : reports
 }
