@@ -1,5 +1,4 @@
 import { Keyboard } from 'lucide-react'
-import { useEffect, useState } from 'react'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -9,7 +8,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from './../../../../../components/ui/primitives/dialog'
-import { ShortcutToken } from './../../../../../components/ui/primitives/shortcut-token'
+import {
+  ShortcutToken,
+  shortcutDisplayValue,
+} from './../../../../../components/ui/primitives/shortcut-token'
 
 type Shortcut = {
   keys: string[]
@@ -20,14 +22,6 @@ type Shortcut = {
 type ShortcutCategory = {
   title: string
   shortcuts: Shortcut[]
-}
-
-const KEY_DISPLAY_MAP: Record<string, string> = {
-  'Arrow Up': '↑',
-  'Arrow Down': '↓',
-  Esc: '⎋',
-  Shift: '⇧',
-  Space: '␣',
 }
 
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
@@ -60,6 +54,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Esc'],
         action: 'Cancel the active tool and return to Select mode',
+        note: 'Mid-draw it cancels only the chain in progress and keeps the tool armed; press it again to leave the tool.',
       },
       { keys: ['Delete / Backspace'], action: 'Delete selected objects' },
       { keys: ['Cmd/Ctrl', 'Z'], action: 'Undo' },
@@ -199,25 +194,13 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   },
 ]
 
-function getDisplayKey(key: string, isMac: boolean): string {
-  if (key === 'Cmd/Ctrl') return isMac ? '⌘' : 'Ctrl'
-  if (key === 'Delete / Backspace') return isMac ? '⌫' : 'Backspace'
-  return KEY_DISPLAY_MAP[key] ?? key
-}
-
 function ShortcutKeys({ keys }: { keys: string[] }) {
-  const [isMac, setIsMac] = useState(true)
-
-  useEffect(() => {
-    setIsMac(navigator.platform.toUpperCase().indexOf('MAC') >= 0)
-  }, [])
-
   return (
     <div className="flex flex-wrap items-center gap-1">
       {keys.map((key, index) => (
         <div className="flex items-center gap-1" key={`${key}-${index}`}>
           {index > 0 ? <span className="text-[10px] text-muted-foreground">+</span> : null}
-          <ShortcutToken displayValue={getDisplayKey(key, isMac)} value={key} />
+          <ShortcutToken displayValue={shortcutDisplayValue(key)} value={key} />
         </div>
       ))}
     </div>

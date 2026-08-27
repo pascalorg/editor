@@ -33,6 +33,25 @@ const COMMAND_VALUES = new Set(['Cmd/Ctrl', 'Cmd', 'Command', 'Meta'])
 const IS_MAC =
   typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC')
 
+// Keys whose printed name and their symbol differ. Kept beside the token rather
+// than in any one consumer so every surface that prints a shortcut — the
+// Keyboard Shortcuts dialog, the community getting-started guide — resolves the
+// same glyph for the same key.
+const KEY_DISPLAY_MAP: Record<string, string> = {
+  'Arrow Down': '↓',
+  'Arrow Up': '↑',
+  Esc: '⎋',
+  Shift: '⇧',
+  Space: '␣',
+}
+
+/** The glyph to print for a shortcut key on the current platform. */
+function shortcutDisplayValue(value: string): string {
+  if (COMMAND_VALUES.has(value)) return IS_MAC ? '⌘' : 'Ctrl'
+  if (value === 'Delete / Backspace') return IS_MAC ? '⌫' : 'Backspace'
+  return KEY_DISPLAY_MAP[value] ?? value
+}
+
 type ShortcutTokenProps = React.ComponentProps<'kbd'> & {
   value: string
   displayValue?: string
@@ -97,4 +116,4 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
   )
 }
 
-export { ShortcutToken }
+export { ShortcutToken, shortcutDisplayValue }
