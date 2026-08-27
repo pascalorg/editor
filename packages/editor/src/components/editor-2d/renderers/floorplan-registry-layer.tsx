@@ -656,6 +656,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         !shouldStartDirectMoveDrag({
           allowPlainDrag,
           commandModifier,
+          handleOwnsPointer: false,
           nodeId: id,
           selectedIds: currentSelectedIds,
         })

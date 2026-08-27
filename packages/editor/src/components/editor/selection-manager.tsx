@@ -39,6 +39,7 @@ import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Ve
 import {
   canDirectMoveNode,
   canDirectRotateNode,
+  pointerEventHitsEditorHandle,
   resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
@@ -1245,6 +1246,7 @@ export const SelectionManager = () => {
       if (!selectionEnabled(useInteractionScope.getState().scope)) return
       const pointer = pointerEventFromNodeEvent(event)
       if (pointer.button !== 0) return
+      const handleOwnsPointer = pointerEventHitsEditorHandle(event.nativeEvent)
 
       // Plain press on a transformable member of a multi-selection arms the
       // group move — dragging slides the whole selection on the ground plane
@@ -1252,6 +1254,7 @@ export const SelectionManager = () => {
       // group-move gizmo cross). A plain click (no drag) still falls through
       // to the normal click handling, which collapses to the pressed node.
       if (
+        !handleOwnsPointer &&
         !(pointer.shiftKey || pointer.altKey || isCommandModifier(pointer)) &&
         armGroupMove3d({
           nodeId: event.node.id as AnyNodeId,
@@ -1280,6 +1283,7 @@ export const SelectionManager = () => {
         !shouldStartDirectMoveDrag({
           allowPlainDrag,
           commandModifier: isCommandModifier(pointer),
+          handleOwnsPointer,
           nodeId: node.id,
           selectedIds: currentSelectedIds,
         })

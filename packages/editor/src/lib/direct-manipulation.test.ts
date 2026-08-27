@@ -9,6 +9,8 @@ import {
 import { z } from 'zod'
 import {
   canDirectMoveNode,
+  EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY,
+  pointerEventHitsEditorHandle,
   resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveMoveActionNode,
@@ -123,6 +125,7 @@ describe('shouldStartDirectMoveDrag', () => {
       shouldStartDirectMoveDrag({
         allowPlainDrag: true,
         commandModifier: false,
+        handleOwnsPointer: false,
         nodeId: 'cabinet_existing',
         selectedIds: [],
       }),
@@ -134,6 +137,7 @@ describe('shouldStartDirectMoveDrag', () => {
       shouldStartDirectMoveDrag({
         allowPlainDrag: false,
         commandModifier: true,
+        handleOwnsPointer: false,
         nodeId: 'item_selected',
         selectedIds: ['item_selected'],
       }),
@@ -142,10 +146,46 @@ describe('shouldStartDirectMoveDrag', () => {
       shouldStartDirectMoveDrag({
         allowPlainDrag: false,
         commandModifier: true,
+        handleOwnsPointer: false,
         nodeId: 'item_other',
         selectedIds: ['item_selected'],
       }),
     ).toBe(false)
+  })
+
+  test('does not arm body dragging when a resize handle owns the pointer', () => {
+    expect(
+      shouldStartDirectMoveDrag({
+        allowPlainDrag: true,
+        commandModifier: false,
+        handleOwnsPointer: true,
+        nodeId: 'cabinet_selected',
+        selectedIds: ['cabinet_selected'],
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('pointerEventHitsEditorHandle', () => {
+  test('recognises a handle hit anywhere in the R3F intersection stack', () => {
+    expect(
+      pointerEventHitsEditorHandle({
+        intersections: [
+          { object: { userData: {} } },
+          {
+            object: {
+              userData: { [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true },
+            },
+          },
+        ],
+      }),
+    ).toBe(true)
+  })
+
+  test('does not claim ordinary scene intersections', () => {
+    expect(pointerEventHitsEditorHandle({ intersections: [{ object: { userData: {} } }] })).toBe(
+      false,
+    )
   })
 })
 
