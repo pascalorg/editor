@@ -3,12 +3,15 @@ import {
   type AnyNodeId,
   type CabinetModuleNode,
   calculateLevelMiters,
+  closestOnSegment,
+  collectLevelWallSegments,
   getWallPlanFootprint,
   getWallThickness,
+  WALL_SNAP_DISTANCE_M,
   type WallNode,
 } from '@pascal-app/core'
 import type { WallHit } from '../shared/wall-attach-target'
-import { findClosestWallInPlan, projectWallLocalPointToPlan } from '../shared/wall-attach-target'
+import { projectWallLocalPointToPlan } from '../shared/wall-attach-target'
 import { snapCabinetFootprintCenter } from './placement-snap'
 import { planToRunLocal, runLocalToPlan } from './run-layout'
 
@@ -16,6 +19,7 @@ const EDGE_SNAP_THRESHOLD = 0.08
 const FACE_MATCH_THRESHOLD = 0.12
 const YAW_MATCH_THRESHOLD = 0.08
 const WALL_FACE_EPSILON = 1e-5
+const WALL_JUNCTION_EPSILON = 0.001
 
 export type CabinetWallSnapNeighbor = {
   minX: number
@@ -34,27 +38,36 @@ export type CabinetWallSnapPlacement = {
   }
 }
 
+export type CabinetRunWallSnapPose = {
+  position: [number, number, number]
+  rotation: number
+}
+
 function angleDelta(a: number, b: number): number {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b))
 }
 
 function snapLocalXToStops({
+  endStop,
   localX,
   neighbors,
-  wallLength,
+  startStop,
   width,
 }: {
+  endStop: number
   localX: number
   neighbors: CabinetWallSnapNeighbor[]
-  wallLength: number
+  startStop: number
   width: number
 }): { localX: number; reason: CabinetWallSnapPlacement['snapReason'] } {
-  if (wallLength <= width) return { localX: wallLength / 2, reason: 'corner' }
+  if (endStop - startStop <= width) {
+    return { localX: (startStop + endStop) / 2, reason: 'corner' }
+  }
 
   const halfWidth = width / 2
   const stops: Array<{ value: number; reason: CabinetWallSnapPlacement['snapReason'] }> = [
-    { value: 0, reason: 'corner' },
-    { value: wallLength, reason: 'corner' },
+    { value: startStop, reason: 'corner' },
+    { value: endStop, reason: 'corner' },
   ]
   for (const neighbor of neighbors) {
     stops.push(
@@ -72,7 +85,9 @@ function snapLocalXToStops({
     for (const stop of stops) {
       const delta = stop.value - movingStop
       const candidateLocalX = localX + delta
-      if (candidateLocalX < halfWidth || candidateLocalX > wallLength - halfWidth) continue
+      if (candidateLocalX < startStop + halfWidth || candidateLocalX > endStop - halfWidth) {
+        continue
+      }
       const distance = Math.abs(delta)
       if (distance > EDGE_SNAP_THRESHOLD) continue
       if (!best || distance < best.distance) {
@@ -82,6 +97,167 @@ function snapLocalXToStops({
   }
 
   return best ? { localX: best.localX, reason: best.reason } : { localX, reason: 'grid' }
+}
+
+function wallAxisYaw(wall: WallNode): number {
+  return -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+}
+
+function findClosestCabinetWallInPlan({
+  excludeIds,
+  fallbackToAnyYaw = false,
+  nodes,
+  parentLevelId,
+  planPoint,
+  yaw,
+}: {
+  excludeIds: readonly AnyNodeId[]
+  fallbackToAnyYaw?: boolean
+  nodes: Record<AnyNodeId, AnyNode>
+  parentLevelId: AnyNodeId
+  planPoint: readonly [number, number]
+  yaw?: number
+}): WallHit | null {
+  const excluded = new Set(excludeIds)
+  let bestAny:
+    | {
+        distance: number
+        hit: WallHit
+      }
+    | undefined
+  let bestCompatible:
+    | {
+        distance: number
+        hit: WallHit
+      }
+    | undefined
+
+  for (const segment of collectLevelWallSegments(nodes, parentLevelId)) {
+    if (excluded.has(segment.wall.id as AnyNodeId)) continue
+    const closest = closestOnSegment(segment, planPoint[0], planPoint[1])
+    if (closest.distance > WALL_SNAP_DISTANCE_M) continue
+    const side = closest.perp >= 0 ? 'front' : 'back'
+    const candidate: { distance: number; hit: WallHit } = {
+      distance: closest.distance,
+      hit: {
+        wall: segment.wall,
+        localX: closest.along,
+        perpDistance: closest.perp,
+        side,
+        dirX: segment.dirX,
+        dirY: segment.dirY,
+        wallLength: segment.length,
+        itemRotation: side === 'front' ? 0 : Math.PI,
+      },
+    }
+    if (!bestAny || candidate.distance < bestAny.distance) bestAny = candidate
+    if (
+      yaw !== undefined &&
+      Math.abs(Math.sin(yaw - wallAxisYaw(segment.wall))) <= Math.sin(YAW_MATCH_THRESHOLD) &&
+      (!bestCompatible || candidate.distance < bestCompatible.distance)
+    ) {
+      bestCompatible = candidate
+    }
+  }
+
+  if (yaw === undefined) return bestAny?.hit ?? null
+  return bestCompatible?.hit ?? (fallbackToAnyYaw ? (bestAny?.hit ?? null) : null)
+}
+
+function pointsMeet(a: readonly [number, number], b: readonly [number, number]): boolean {
+  return Math.hypot(a[0] - b[0], a[1] - b[1]) <= WALL_JUNCTION_EPSILON
+}
+
+function polygonXExtentWithinZBand(
+  points: readonly { x: number; z: number }[],
+  zA: number,
+  zB: number,
+): { minX: number; maxX: number } | null {
+  const minZ = Math.min(zA, zB)
+  const maxZ = Math.max(zA, zB)
+  const xs: number[] = []
+
+  for (let index = 0; index < points.length; index += 1) {
+    const a = points[index]!
+    const b = points[(index + 1) % points.length]!
+    if (a.z >= minZ - WALL_FACE_EPSILON && a.z <= maxZ + WALL_FACE_EPSILON) xs.push(a.x)
+    const dz = b.z - a.z
+    if (Math.abs(dz) <= WALL_FACE_EPSILON) continue
+    for (const boundary of [minZ, maxZ]) {
+      const t = (boundary - a.z) / dz
+      if (t >= -WALL_FACE_EPSILON && t <= 1 + WALL_FACE_EPSILON) {
+        xs.push(a.x + (b.x - a.x) * t)
+      }
+    }
+  }
+
+  return xs.length > 0 ? { minX: Math.min(...xs), maxX: Math.max(...xs) } : null
+}
+
+function resolveCabinetWallUsableSpan({
+  depth,
+  excludeIds,
+  hit,
+  nodes,
+  parentLevelId,
+}: {
+  depth: number
+  excludeIds: readonly AnyNodeId[]
+  hit: WallHit
+  nodes: Record<AnyNodeId, AnyNode>
+  parentLevelId: AnyNodeId
+}): { end: number; start: number } {
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode => node?.type === 'wall' && node.parentId === parentLevelId,
+  )
+  const miterData = calculateLevelMiters(walls)
+  const excluded = new Set(excludeIds)
+  const frontNormal = [-hit.dirY, hit.dirX] as const
+  const normalScale = hit.side === 'front' ? 1 : -1
+  const faceZ = normalScale * (getWallThickness(hit.wall) / 2)
+  const outerZ = faceZ + normalScale * depth
+  let start = 0
+  let end = hit.wallLength
+
+  for (const wall of walls) {
+    if (wall.id === hit.wall.id || excluded.has(wall.id as AnyNodeId)) continue
+    const connectedAtStart = pointsMeet(hit.wall.start, wall.start)
+      ? wall.end
+      : pointsMeet(hit.wall.start, wall.end)
+        ? wall.start
+        : null
+    const connectedAtEnd = pointsMeet(hit.wall.end, wall.start)
+      ? wall.end
+      : pointsMeet(hit.wall.end, wall.end)
+        ? wall.start
+        : null
+    const farPoint = connectedAtStart ?? connectedAtEnd
+    if (!farPoint) continue
+
+    const connectionPoint = connectedAtStart ? hit.wall.start : hit.wall.end
+    const farDx = farPoint[0] - connectionPoint[0]
+    const farDz = farPoint[1] - connectionPoint[1]
+    const returnSide = farDx * frontNormal[0] + farDz * frontNormal[1]
+    if (returnSide * normalScale <= WALL_JUNCTION_EPSILON) continue
+
+    const localFootprint = getWallPlanFootprint(wall, miterData).map((point) => {
+      const dx = point.x - hit.wall.start[0]
+      const dz = point.y - hit.wall.start[1]
+      return {
+        x: dx * hit.dirX + dz * hit.dirY,
+        z: dx * frontNormal[0] + dz * frontNormal[1],
+      }
+    })
+    const extent = polygonXExtentWithinZBand(localFootprint, faceZ, outerZ)
+    if (!extent) continue
+    if (connectedAtStart) start = Math.max(start, extent.maxX)
+    else end = Math.min(end, extent.minX)
+  }
+
+  return {
+    start: Math.min(hit.wallLength, Math.max(0, start)),
+    end: Math.max(0, Math.min(hit.wallLength, end)),
+  }
 }
 
 function cabinetRunWidthAndCenterOffset(
@@ -208,28 +384,33 @@ export function resolveCabinetWallSnapPlacement({
   gridStep = 0,
   faceOffset,
   hit,
+  endStop = hit.wallLength,
   neighbors = [],
+  startStop = 0,
   width,
 }: {
   depth: number
+  endStop?: number
   faceOffset?: number
   gridStep?: number
   hit: WallHit
   neighbors?: CabinetWallSnapNeighbor[]
+  startStop?: number
   width: number
 }): CabinetWallSnapPlacement | null {
-  if (hit.wallLength <= 1e-6) return null
+  if (hit.wallLength <= 1e-6 || endStop <= startStop) return null
 
   const halfWidth = width / 2
   const snappedLocalX = snapCabinetFootprintCenter(hit.localX, width, gridStep)
   const clampedLocalX =
-    hit.wallLength > width
-      ? Math.min(hit.wallLength - halfWidth, Math.max(halfWidth, snappedLocalX))
-      : hit.wallLength / 2
+    endStop - startStop > width
+      ? Math.min(endStop - halfWidth, Math.max(startStop + halfWidth, snappedLocalX))
+      : (startStop + endStop) / 2
   const snapped = snapLocalXToStops({
+    endStop,
     localX: clampedLocalX,
     neighbors,
-    wallLength: hit.wallLength,
+    startStop,
     width,
   })
   const localX = snapped.localX
@@ -242,12 +423,12 @@ export function resolveCabinetWallSnapPlacement({
   const guideOffset = resolvedFaceOffset
   const guideStart = projectWallLocalPointToPlan(
     hit.wall,
-    Math.max(0, localX - halfWidth),
+    Math.max(startStop, localX - halfWidth),
     guideOffset,
   )
   const guideEnd = projectWallLocalPointToPlan(
     hit.wall,
-    Math.min(hit.wallLength, localX + halfWidth),
+    Math.min(endStop, localX + halfWidth),
     guideOffset,
   )
 
@@ -266,6 +447,42 @@ export function resolveCabinetWallSnapPlacement({
       end: [guideEnd[0], 0.025, guideEnd[1]],
     },
   }
+}
+
+export function resolveCabinetWallSnapPlacementInScene({
+  depth,
+  excludeIds = [],
+  gridStep = 0,
+  hit,
+  nodes,
+  parentLevelId,
+  width,
+}: {
+  depth: number
+  excludeIds?: readonly AnyNodeId[]
+  gridStep?: number
+  hit: WallHit
+  nodes: Record<AnyNodeId, AnyNode>
+  parentLevelId: AnyNodeId
+  width: number
+}): CabinetWallSnapPlacement | null {
+  const span = resolveCabinetWallUsableSpan({ depth, excludeIds, hit, nodes, parentLevelId })
+  return resolveCabinetWallSnapPlacement({
+    depth,
+    endStop: span.end,
+    faceOffset: resolveCabinetWallFaceOffset({ hit, nodes, parentLevelId }),
+    gridStep,
+    hit,
+    neighbors: collectCabinetWallSnapNeighbors({
+      excludeIds,
+      hit,
+      nodes,
+      parentLevelId,
+      width,
+    }),
+    startStop: span.start,
+    width,
+  })
 }
 
 /**
@@ -293,30 +510,27 @@ export function resolveCabinetModuleWallSnapLocal({
   run: Extract<AnyNode, { type: 'cabinet' }>
 }): [number, number, number] | null {
   const planCenter = runLocalToPlan(run, candidateLocal)
-  const hit = findClosestWallInPlan([planCenter[0], planCenter[2]], nodes, parentLevelId)
+  const worldYaw = run.rotation + module.rotation
+  const hit = findClosestCabinetWallInPlan({
+    excludeIds,
+    nodes,
+    parentLevelId,
+    planPoint: [planCenter[0], planCenter[2]],
+    yaw: worldYaw,
+  })
   if (!hit) return null
-  if (excludeIds.includes(hit.wall.id as AnyNodeId)) return null
 
-  const faceOffset = resolveCabinetWallFaceOffset({ hit, nodes, parentLevelId })
-  const placement = resolveCabinetWallSnapPlacement({
+  const placement = resolveCabinetWallSnapPlacementInScene({
     depth: module.depth,
-    faceOffset,
+    excludeIds: [...excludeIds, run.id as AnyNodeId],
     gridStep,
     hit,
-    neighbors: collectCabinetWallSnapNeighbors({
-      hit,
-      nodes,
-      // The moving module's own run must not offer edge stops — its span
-      // still includes the module's pre-drag position.
-      excludeIds: [...excludeIds, run.id as AnyNodeId],
-      parentLevelId,
-      width: module.width,
-    }),
+    nodes,
+    parentLevelId,
     width: module.width,
   })
   if (!placement) return null
 
-  const worldYaw = run.rotation + module.rotation
   if (Math.abs(angleDelta(worldYaw, placement.yaw)) > YAW_MATCH_THRESHOLD) return null
 
   return planToRunLocal(run, placement.position[0], candidateLocal[1], placement.position[2])
@@ -325,6 +539,7 @@ export function resolveCabinetModuleWallSnapLocal({
 export function resolveCabinetRunWallSnap({
   cabinet,
   candidatePosition,
+  candidateRotation = cabinet.rotation,
   excludeIds = [],
   gridStep = 0,
   nodes,
@@ -332,49 +547,46 @@ export function resolveCabinetRunWallSnap({
 }: {
   cabinet: Extract<AnyNode, { type: 'cabinet' }>
   candidatePosition: [number, number, number]
+  candidateRotation?: number
   excludeIds?: readonly AnyNodeId[]
   gridStep?: number
   nodes: Record<AnyNodeId, AnyNode>
   parentLevelId: AnyNodeId
-}): [number, number, number] | null {
+}): CabinetRunWallSnapPose | null {
   const run = cabinetRunWidthAndCenterOffset(cabinet, nodes)
-  const axisX = Math.cos(cabinet.rotation)
-  const axisZ = -Math.sin(cabinet.rotation)
+  const axisX = Math.cos(candidateRotation)
+  const axisZ = -Math.sin(candidateRotation)
   const footprintCenter: [number, number] = [
     candidatePosition[0] + axisX * run.centerOffset,
     candidatePosition[2] + axisZ * run.centerOffset,
   ]
-  const hit = findClosestWallInPlan(footprintCenter, nodes, parentLevelId)
+  const hit = findClosestCabinetWallInPlan({
+    excludeIds,
+    fallbackToAnyYaw: true,
+    nodes,
+    parentLevelId,
+    planPoint: footprintCenter,
+    yaw: candidateRotation,
+  })
   if (!hit) return null
-  // A wall moving with the same group (whole-room drag) still sits at its
-  // pre-drag position in `nodes` — snapping to it would tear the group apart.
-  if (excludeIds.includes(hit.wall.id as AnyNodeId)) return null
 
-  const faceOffset = resolveCabinetWallFaceOffset({
+  const placement = resolveCabinetWallSnapPlacementInScene({
+    depth: cabinet.depth,
+    excludeIds,
+    gridStep,
     hit,
     nodes,
     parentLevelId,
-  })
-  const placement = resolveCabinetWallSnapPlacement({
-    depth: cabinet.depth,
-    faceOffset,
-    gridStep,
-    hit,
-    neighbors: collectCabinetWallSnapNeighbors({
-      hit,
-      nodes,
-      excludeIds,
-      parentLevelId,
-      width: run.width,
-    }),
     width: run.width,
   })
   if (!placement) return null
-  if (Math.abs(angleDelta(cabinet.rotation, placement.yaw)) > YAW_MATCH_THRESHOLD) return null
 
-  return [
-    placement.position[0] - Math.cos(placement.yaw) * run.centerOffset,
-    candidatePosition[1],
-    placement.position[2] + Math.sin(placement.yaw) * run.centerOffset,
-  ]
+  return {
+    position: [
+      placement.position[0] - Math.cos(placement.yaw) * run.centerOffset,
+      candidatePosition[1],
+      placement.position[2] + Math.sin(placement.yaw) * run.centerOffset,
+    ],
+    rotation: placement.yaw,
+  }
 }

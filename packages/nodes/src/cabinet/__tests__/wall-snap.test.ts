@@ -406,6 +406,145 @@ describe('collectCabinetWallSnapNeighbors', () => {
 })
 
 describe('resolveCabinetRunWallSnap', () => {
+  test('auto-rotates a misaligned run to face the wall while dragging', () => {
+    const level = LevelNode.parse({
+      id: 'level_auto-rotate',
+      children: ['wall_auto-rotate' as AnyNodeId],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_auto-rotate',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    })
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_auto-rotate',
+      parentId: level.id,
+      position: [1.2, 0, 0.32],
+      rotation: Math.PI / 2,
+      width: 0.6,
+      depth: 0.58,
+    })
+    const nodes = {
+      [level.id]: level,
+      [wall.id]: wall,
+      [cabinet.id]: cabinet,
+    } as Record<AnyNodeId, AnyNode>
+
+    const snapped = resolveCabinetRunWallSnap({
+      cabinet,
+      candidatePosition: cabinet.position,
+      excludeIds: [cabinet.id as AnyNodeId],
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(snapped).not.toBeNull()
+    expect(snapped!.rotation).toBeCloseTo(0)
+    expect(snapped!.position[0]).toBeCloseTo(1.2)
+    expect(snapped!.position[2]).toBeCloseTo(0.39)
+  })
+
+  test('faces away from the opposite wall side when auto-rotating', () => {
+    const level = LevelNode.parse({
+      id: 'level_auto-rotate-back',
+      children: ['wall_auto-rotate-back' as AnyNodeId],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_auto-rotate-back',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    })
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_auto-rotate-back',
+      parentId: level.id,
+      position: [1.2, 0, -0.32],
+      rotation: Math.PI / 2,
+      width: 0.6,
+      depth: 0.58,
+    })
+    const nodes = {
+      [level.id]: level,
+      [wall.id]: wall,
+      [cabinet.id]: cabinet,
+    } as Record<AnyNodeId, AnyNode>
+
+    const snapped = resolveCabinetRunWallSnap({
+      cabinet,
+      candidatePosition: cabinet.position,
+      excludeIds: [cabinet.id as AnyNodeId],
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(snapped).not.toBeNull()
+    expect(Math.abs(snapped!.rotation)).toBeCloseTo(Math.PI)
+    expect(snapped!.position[2]).toBeCloseTo(-0.39)
+  })
+
+  test('keeps a run flush to its facing wall while stopping at the return-wall face', () => {
+    const { level, nodes: wallNodes } = cornerFixture()
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_inside-corner',
+      parentId: level.id,
+      position: [1.65, 0, 0.39],
+      rotation: 0,
+      width: 0.6,
+      depth: 0.58,
+    })
+    const nodes = {
+      ...wallNodes,
+      [cabinet.id]: cabinet,
+    } as Record<AnyNodeId, AnyNode>
+
+    const snapped = resolveCabinetRunWallSnap({
+      cabinet,
+      candidatePosition: cabinet.position,
+      excludeIds: [cabinet.id as AnyNodeId],
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(snapped).not.toBeNull()
+    expect(snapped!.rotation).toBeCloseTo(0)
+    expect(snapped!.position[2]).toBeCloseTo(0.39)
+    expect(snapped!.position[0]).toBeCloseTo(1.6)
+    expect(snapped!.position[0] + cabinet.width / 2).toBeCloseTo(1.9)
+  })
+
+  test('applies the same two-wall constraint from the other leg of the L-corner', () => {
+    const { level, nodes: wallNodes } = cornerFixture()
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_inside-corner-return-leg',
+      parentId: level.id,
+      position: [1.61, 0, 0.35],
+      rotation: -Math.PI / 2,
+      width: 0.6,
+      depth: 0.58,
+    })
+    const nodes = {
+      ...wallNodes,
+      [cabinet.id]: cabinet,
+    } as Record<AnyNodeId, AnyNode>
+
+    const snapped = resolveCabinetRunWallSnap({
+      cabinet,
+      candidatePosition: cabinet.position,
+      excludeIds: [cabinet.id as AnyNodeId],
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(snapped).not.toBeNull()
+    expect(snapped!.rotation).toBeCloseTo(-Math.PI / 2)
+    expect(snapped!.position[0]).toBeCloseTo(1.61)
+    expect(snapped!.position[2]).toBeCloseTo(0.4)
+    expect(snapped!.position[2] - cabinet.width / 2).toBeCloseTo(0.1)
+  })
+
   test('snaps a moved cabinet run flush to the nearest wall while ignoring moving peers', () => {
     const level = LevelNode.parse({
       id: 'level_group-wall-snap',
@@ -467,9 +606,10 @@ describe('resolveCabinetRunWallSnap', () => {
     })
 
     expect(snapped).not.toBeNull()
-    expect(snapped![0]).toBeCloseTo(1.45)
-    expect(snapped![0] - movingModule.width / 2).toBeCloseTo(1)
-    expect(snapped![2]).toBeCloseTo(0.39)
+    expect(snapped!.rotation).toBeCloseTo(0)
+    expect(snapped!.position[0]).toBeCloseTo(1.45)
+    expect(snapped!.position[0] - movingModule.width / 2).toBeCloseTo(1)
+    expect(snapped!.position[2]).toBeCloseTo(0.39)
   })
 
   test('does not snap to a wall that is moving with the same group', () => {

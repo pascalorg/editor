@@ -15,6 +15,14 @@ type ResolvePlanarCursorPositionResult = {
   anchor: PlanarPoint | null
 }
 
+type ResolvePrioritizedPlanarCursorPositionArgs = ResolvePlanarCursorPositionArgs & {
+  resolveAttachment?: (proposal: PlanarPoint) => PlanarPoint | null
+}
+
+type ResolvePrioritizedPlanarCursorPositionResult = ResolvePlanarCursorPositionResult & {
+  attachmentSnapped: boolean
+}
+
 const identity = (value: number) => value
 
 export function resolvePlanarCursorPosition({
@@ -38,5 +46,25 @@ export function resolvePlanarCursorPosition({
       original[1] + snap(cursor[1] - resolvedAnchor[1]),
     ],
     anchor: resolvedAnchor,
+  }
+}
+
+export function resolvePrioritizedPlanarCursorPosition({
+  resolveAttachment,
+  ...args
+}: ResolvePrioritizedPlanarCursorPositionArgs): ResolvePrioritizedPlanarCursorPositionResult {
+  const raw = resolvePlanarCursorPosition({ ...args, snap: identity })
+  const attached = resolveAttachment?.(raw.point) ?? null
+  if (attached) {
+    return {
+      point: attached,
+      anchor: raw.anchor,
+      attachmentSnapped: true,
+    }
+  }
+
+  return {
+    ...resolvePlanarCursorPosition(args),
+    attachmentSnapped: false,
   }
 }

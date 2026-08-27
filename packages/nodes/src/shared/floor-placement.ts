@@ -49,11 +49,13 @@ export function getLevelLocalSnappedPosition(
 
   worldVector.set(event.position[0], event.position[1], event.position[2])
   levelObject.updateWorldMatrix(true, false)
+  if (!bypassGrid) {
+    const [sx, sz] = snapPointToGrid([worldVector.x, worldVector.z], gridStep)
+    worldVector.x = sx
+    worldVector.z = sz
+  }
   levelObject.worldToLocal(worldVector)
-  const [sx, sz] = bypassGrid
-    ? [worldVector.x, worldVector.z]
-    : snapPointToGrid([worldVector.x, worldVector.z], gridStep)
-  return [sx, 0, sz]
+  return [worldVector.x, 0, worldVector.z]
 }
 
 export function resolveAlignedFloorPlacement({

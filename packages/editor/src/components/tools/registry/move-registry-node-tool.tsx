@@ -36,7 +36,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
 import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
-import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
+import { resolvePrioritizedPlanarCursorPosition } from '../../../lib/planar-cursor-placement'
+import { resolveAttachmentPreviewRotation } from '../../../lib/rigid-plan-svg-transform'
 import { movementSfxStepKey } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
@@ -290,6 +291,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // and bumped by R/T. Applied imperatively + mirrored to `useLiveTransforms`,
   // and committed to the scene on drop.
   const rotationRef = useRef(originalRotationY)
+  const freeRotationRef = useRef(originalRotationY)
+  const attachmentRotationRef = useRef<number | null>(null)
   // Snapshot of which ducts / fittings are mated to this node's ports at
   // drag-start (duct fittings only). Drives the "connected ductwork follows"
   // behaviour: connected nodes preview through `useLiveNodeOverrides` during
@@ -403,6 +406,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     dragAnchorRef.current = null
     hasMovedRef.current = false
     rotationRef.current = originalRotationY
+    freeRotationRef.current = originalRotationY
+    attachmentRotationRef.current = null
     altRef.current = false
     validRef.current = true
     // No pointer surface known yet — uncapped election (the node keeps its
@@ -614,16 +619,49 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       const rawZ = pointed?.localPoint?.[2] ?? event.localPosition[2]
       revealFreshPlacement()
 
-      const resolved = resolvePlanarCursorPosition({
+      const magnetic = isMagneticSnapActive()
+      const attachmentEnabled = magnetic || isGridSnapActive()
+      let attachmentRotationY: number | null = null
+      const resolved = resolvePrioritizedPlanarCursorPosition({
         cursor: [rawX, rawZ],
         original: [originalPlanPosition[0], originalPlanPosition[2]],
         anchor: dragAnchorRef.current,
         mode: useAbsoluteCursorPlacement || cursorAttached ? 'absolute' : 'relative',
         // Snap follows the mode (raw in Off via snapToGridStep); Alt = force only.
         snap: snapToGridStep,
+        resolveAttachment:
+          attachmentEnabled && groupMoveSnapConfig
+            ? ([planX, planZ]) => {
+                const snappedPosition = groupMoveSnapConfig({
+                  node,
+                  candidatePosition: canonicalPositionFromPlan(planX, originalPosition[1], planZ),
+                  candidateRotation: rotationRef.current,
+                  movingIds: [node.id as AnyNodeId],
+                  nodes: useScene.getState().nodes as Record<string, AnyNode>,
+                  levelId: (useViewer.getState().selection.levelId as AnyNodeId | null) ?? null,
+                })
+                if (!snappedPosition) return null
+                attachmentRotationY = snappedPosition.rotation ?? null
+                const snappedPlanPosition = getVisualPosition(
+                  snappedPosition.position,
+                  snappedPosition.rotation ?? rotationRef.current,
+                )
+                return [snappedPlanPosition[0], snappedPlanPosition[2]]
+              }
+            : undefined,
       })
       dragAnchorRef.current = resolved.anchor
       let [x, z] = resolved.point
+      const attachmentSnapped = resolved.attachmentSnapped
+      attachmentRotationRef.current = attachmentSnapped ? attachmentRotationY : null
+      const nextRotationY = resolveAttachmentPreviewRotation(
+        freeRotationRef.current,
+        attachmentRotationRef.current,
+      )
+      if (nextRotationY !== rotationRef.current) {
+        rotationRef.current = nextRotationY
+        setCursorRotationY(previewRotationY(nextRotationY))
+      }
 
       // Figma-style alignment snap layered on top of grid snap: when the
       // moving item's edge lines up (on X or Z) with another item's edge,
@@ -632,8 +670,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // point. Alignment "lines" are DISPLAYED in every mode except Off
       // (isAlignmentGuideActive); the magnetic pull toward them applies only in
       // 'lines' mode (magnetic). Alt is force-place, not a snap bypass.
-      const magnetic = isMagneticSnapActive()
-      if (isAlignmentGuideActive() && alignmentCandidates.length > 0) {
+      if (!attachmentSnapped && isAlignmentGuideActive() && alignmentCandidates.length > 0) {
         const result = resolveAlignment({
           moving: movingDragBoundsAnchors(
             node,
@@ -654,25 +691,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         useAlignmentGuides.getState().clear()
       }
 
-      // Kind-owned attachment snap (cabinet → wall): an attach behavior like
-      // door/window wall placement, not an alignment guide — active in every
-      // snapping mode except Off.
-      if ((magnetic || isGridSnapActive()) && groupMoveSnapConfig) {
-        const snappedPosition = groupMoveSnapConfig({
-          node,
-          candidatePosition: canonicalPositionFromPlan(x, originalPosition[1], z),
-          movingIds: [node.id as AnyNodeId],
-          nodes: useScene.getState().nodes as Record<string, AnyNode>,
-          levelId: (useViewer.getState().selection.levelId as AnyNodeId | null) ?? null,
-        })
-        if (snappedPosition) {
-          const snappedPlanPosition = getVisualPosition(snappedPosition)
-          x = snappedPlanPosition[0]
-          z = snappedPlanPosition[2]
-          useAlignmentGuides.getState().clear()
-        }
-      }
-
       // Magnetic port snap (duct terminals): mate a collar onto a nearby
       // duct run end. Takes precedence over grid / alignment snap; Alt
       // bypasses. Only kinds that opted in via `movable.portSnap`.
@@ -691,7 +709,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       }
 
       let position = canonicalPositionFromPlan(x, originalPosition[1], z)
-      if ((magnetic || isGridSnapActive()) && parentFrame?.magneticSnap && frameParent) {
+      if (
+        !attachmentSnapped &&
+        (magnetic || isGridSnapActive()) &&
+        parentFrame?.magneticSnap &&
+        frameParent
+      ) {
         const preSnapPosition = position
         const snappedPosition = parentFrame.magneticSnap(
           node,
@@ -772,7 +795,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
       const nextSnapKey = movementSfxStepKey({
         coords: [x, z],
-        gridSnapActive: isGridSnapActive(),
+        gridSnapActive: isGridSnapActive() && !attachmentSnapped,
         gridStep: useEditor.getState().gridSnapStep,
       })
       const prev = previousSnapRef.current
@@ -978,7 +1001,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       else return
       e.preventDefault()
       sfxEmitter.emit('sfx:item-rotate')
-      rotationRef.current += delta
+      freeRotationRef.current += delta
+      if (attachmentRotationRef.current !== null) return
+      rotationRef.current = freeRotationRef.current
       setCursorRotationY(previewRotationY(rotationRef.current))
       const position = lastCursorRef.current
       const visualPosition = getVisualPosition(position)

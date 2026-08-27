@@ -1952,11 +1952,12 @@ export type MovableConfig = {
   parentFrame?: MovableParentFrame
   /**
    * Optional group-move snap for the generic multi-selection translate gizmo.
-   * Returns an adjusted candidate position for this node when the moving group
-   * should magnetically settle onto a nearby feature (for example, a cabinet
-   * run snapping flush to a wall while the whole selected kitchen moves as one).
+   * Returns an adjusted candidate pose for this node when the moving group
+   * should magnetically settle onto a nearby feature. `rotation` is an
+   * optional level-frame Y yaw for attachments that also own facing, such as a
+   * cabinet run turning to face a wall.
    */
-  groupMoveSnap?: (args: GroupMoveSnapArgs) => [number, number, number] | null
+  groupMoveSnap?: (args: GroupMoveSnapArgs) => GroupMoveSnapResult | null
   override?: (ctx: CapabilityCtx) => MovableConfig | null
 }
 
@@ -2021,9 +2022,15 @@ export type ParentFrameSnapMatch = {
 export type GroupMoveSnapArgs = {
   node: AnyNode
   candidatePosition: [number, number, number]
+  candidateRotation: number
   movingIds: readonly AnyNodeId[]
   nodes: Readonly<Record<string, AnyNode>>
   levelId: AnyNodeId | null
+}
+
+export type GroupMoveSnapResult = {
+  position: [number, number, number]
+  rotation?: number
 }
 
 export type LiveTransformLike = {

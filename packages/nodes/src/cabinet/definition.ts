@@ -6,6 +6,8 @@ import type {
   DuplicateSubtreeCloneArgs,
   DuplicateSubtreeCloneResult,
   FloorPlacedFootprint,
+  GroupMoveSnapArgs,
+  GroupMoveSnapResult,
   HandleDescriptor,
   LinearResizeHandle,
   NodeDefinition,
@@ -261,21 +263,17 @@ function hasCabinetParentId(node: Pick<CabinetEditableNode, 'parentId'>): boolea
 
 function resolveCabinetGroupMoveSnap({
   candidatePosition,
+  candidateRotation,
   levelId,
   movingIds,
   node,
   nodes,
-}: {
-  candidatePosition: [number, number, number]
-  levelId: AnyNodeId | null
-  movingIds: readonly AnyNodeId[]
-  node: AnyNode
-  nodes: Readonly<Record<string, AnyNode>>
-}): [number, number, number] | null {
+}: GroupMoveSnapArgs): GroupMoveSnapResult | null {
   if (node.type !== 'cabinet' || !levelId) return null
   return resolveCabinetRunWallSnap({
     cabinet: node,
     candidatePosition,
+    candidateRotation,
     excludeIds: movingIds,
     gridStep: 0,
     nodes: nodes as Record<AnyNodeId, AnyNode>,
@@ -295,19 +293,13 @@ function resolveCabinetModuleGroupMoveSnap({
   movingIds,
   node,
   nodes,
-}: {
-  candidatePosition: [number, number, number]
-  levelId: AnyNodeId | null
-  movingIds: readonly AnyNodeId[]
-  node: AnyNode
-  nodes: Readonly<Record<string, AnyNode>>
-}): [number, number, number] | null {
+}: GroupMoveSnapArgs): GroupMoveSnapResult | null {
   if (node.type !== 'cabinet-module' || !node.parentId) return null
   const run = nodes[node.parentId]
   if (!isCabinetRun(run)) return null
   const parentLevelId = (levelId ?? run.parentId ?? null) as AnyNodeId | null
   if (!parentLevelId) return null
-  return resolveCabinetModuleWallSnapLocal({
+  const position = resolveCabinetModuleWallSnapLocal({
     candidateLocal: candidatePosition,
     excludeIds: movingIds,
     module: node,
@@ -315,6 +307,7 @@ function resolveCabinetModuleGroupMoveSnap({
     parentLevelId,
     run,
   })
+  return position ? { position } : null
 }
 
 function cabinetLayoutRevision(metadata: CabinetNodeType['metadata']): unknown {

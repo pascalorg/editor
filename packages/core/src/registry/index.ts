@@ -99,6 +99,7 @@ export type {
   FloorplanStyle,
   GeometryContext,
   GroupMoveSnapArgs,
+  GroupMoveSnapResult,
   HostableConfig,
   IconRef,
   InspectorExtension,

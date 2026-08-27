@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { resolvePlanarCursorPosition } from './planar-cursor-placement'
+import {
+  resolvePlanarCursorPosition,
+  resolvePrioritizedPlanarCursorPosition,
+} from './planar-cursor-placement'
 
 const snapHalf = (value: number) => Math.round(value / 0.5) * 0.5
 
@@ -96,5 +99,40 @@ describe('resolvePlanarCursorPosition', () => {
 
     expect(centerMoved.point[0]).toBeCloseTo(moved.point[0])
     expect(centerMoved.point[1]).toBeCloseTo(moved.point[1])
+  })
+})
+
+describe('resolvePrioritizedPlanarCursorPosition', () => {
+  test('wall attachment receives the raw proposal and wins over grid snapping', () => {
+    const attachmentProposals: [number, number][] = []
+    const result = resolvePrioritizedPlanarCursorPosition({
+      cursor: [0.73, 0.32],
+      original: [0, 0],
+      anchor: null,
+      mode: 'absolute',
+      snap: snapHalf,
+      resolveAttachment: (proposal) => {
+        attachmentProposals.push(proposal)
+        return [proposal[0], 0.39]
+      },
+    })
+
+    expect(attachmentProposals).toEqual([[0.73, 0.32]])
+    expect(result.point).toEqual([0.73, 0.39])
+    expect(result.attachmentSnapped).toBe(true)
+  })
+
+  test('falls back to the grid proposal when there is no attachment', () => {
+    const result = resolvePrioritizedPlanarCursorPosition({
+      cursor: [0.73, 0.32],
+      original: [0, 0],
+      anchor: null,
+      mode: 'absolute',
+      snap: snapHalf,
+      resolveAttachment: () => null,
+    })
+
+    expect(result.point).toEqual([0.5, 0.5])
+    expect(result.attachmentSnapped).toBe(false)
   })
 })

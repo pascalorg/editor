@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { emitter, type GridEvent, type NodeEvent, ShelfNode } from '@pascal-app/core'
+import { emitter, type GridEvent, type NodeEvent, ShelfNode, sceneRegistry } from '@pascal-app/core'
 import { Object3D } from 'three'
 import {
   getLevelLocalSnappedPosition,
@@ -39,6 +39,24 @@ describe('floor placement helpers', () => {
     }
 
     expect(getLevelLocalSnappedPosition('missing-level', event, 0.25)).toEqual([0.25, 0, 0.25])
+  })
+
+  test('snaps against the world grid before converting into a translated level frame', () => {
+    const level = new Object3D()
+    level.position.set(0.2, 0, 0.15)
+    sceneRegistry.nodes.set('translated-level', level)
+
+    const event = {
+      position: [0.32, 0, 0.32],
+      localPosition: [0.12, 0, 0.17],
+      nativeEvent,
+    } as unknown as GridEvent
+
+    try {
+      expect(getLevelLocalSnappedPosition('translated-level', event, 0.5)).toEqual([0.3, 0, 0.35])
+    } finally {
+      sceneRegistry.nodes.delete('translated-level')
+    }
   })
 
   test('recognizes Alt as force placement', () => {

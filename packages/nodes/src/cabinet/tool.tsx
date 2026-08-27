@@ -16,6 +16,7 @@ import {
   nodeRegistry,
   resolveAlignment,
   resolveSupportSlabPatch,
+  sceneRegistry,
   spatialGridManager,
   useScene,
   type WallEvent,
@@ -73,18 +74,13 @@ import {
   cabinetRunFootprint,
 } from './definition'
 import { buildCabinetGeometry } from './geometry'
-import { resolveCabinetGridPosition } from './placement-snap'
+import { resolveCabinetGridPosition, resolveCabinetGridPositionInFrame } from './placement-snap'
 import useCabinetPlacementStatus from './placement-status'
 import useCabinetPlacementType from './placement-type'
 import { cabinetPresetById } from './presets'
 import { runLocalToPlan } from './run-layout'
 import { addCabinetModuleSide, addCornerRun, previewCornerAdditionLayout } from './run-ops'
-import {
-  type CabinetWallSnapPlacement,
-  collectCabinetWallSnapNeighbors,
-  resolveCabinetWallFaceOffset,
-  resolveCabinetWallSnapPlacement,
-} from './wall-snap'
+import { type CabinetWallSnapPlacement, resolveCabinetWallSnapPlacementInScene } from './wall-snap'
 
 const PREVIEW_OPACITY = 0.55
 const ROTATE_STEP_RAD = Math.PI / 4
@@ -306,6 +302,18 @@ const CabinetTool = () => {
       previewNode.depth + (islandMode ? ISLAND_SEATING_OVERHANG : 0),
     ] as [number, number, number]
   }, [previewNode, islandMode])
+  const placementSnapFootprint = useMemo(() => {
+    const sideAndFrontOverhang = previewNode.withCountertop ? previewNode.countertopOverhang : 0
+    const backOverhang = islandMode ? ISLAND_SEATING_OVERHANG : 0
+    return {
+      dimensions: [
+        previewNode.width + sideAndFrontOverhang * 2,
+        placementDimensions[1],
+        previewNode.depth + sideAndFrontOverhang + backOverhang,
+      ] as [number, number, number],
+      offset: [0, (sideAndFrontOverhang - backOverhang) / 2] as [number, number],
+    }
+  }, [islandMode, placementDimensions, previewNode])
   const ghost = useMemo(() => {
     const group = buildCabinetGeometry(previewNode)
     group.traverse((child) => {
@@ -473,9 +481,28 @@ const CabinetTool = () => {
       bypassGrid = false,
     ): [number, number, number] => {
       const step = !bypassGrid && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const levelObject = sceneRegistry.nodes.get(activeLevelId)
+      if (step > 0 && levelObject) {
+        levelObject.updateWorldMatrix(true, false)
+        const framePosition = levelObject.getWorldPosition(new Vector3())
+        const frameQuaternion = levelObject.getWorldQuaternion(new Quaternion())
+        const frameRotationY = Math.atan2(
+          2 * (frameQuaternion.w * frameQuaternion.y + frameQuaternion.x * frameQuaternion.z),
+          1 - 2 * (frameQuaternion.y * frameQuaternion.y + frameQuaternion.z * frameQuaternion.z),
+        )
+        return resolveCabinetGridPositionInFrame({
+          raw,
+          dimensions: placementSnapFootprint.dimensions,
+          footprintOffset: placementSnapFootprint.offset,
+          yaw: yawRef.current,
+          step,
+          frame: { position: [framePosition.x, framePosition.z], rotationY: frameRotationY },
+        })
+      }
       return resolveCabinetGridPosition({
         raw,
-        dimensions: placementDimensions,
+        dimensions: placementSnapFootprint.dimensions,
+        footprintOffset: placementSnapFootprint.offset,
         yaw: yawRef.current,
         step,
       })
@@ -566,24 +593,12 @@ const CabinetTool = () => {
     const resolveWallHitPlacement = (hit: WallHit): CabinetPlacement | null => {
       if (!isWallSnapEligible()) return null
       const nodes = useScene.getState().nodes
-      const neighbors = collectCabinetWallSnapNeighbors({
-        hit,
-        nodes,
-        parentLevelId: activeLevelId as AnyNodeId,
-        width: previewNode.width,
-      })
-      const faceOffset = resolveCabinetWallFaceOffset({
-        hit,
-        nodes,
-        parentLevelId: activeLevelId as AnyNodeId,
-      })
-
-      const wallPlacement = resolveCabinetWallSnapPlacement({
+      const wallPlacement = resolveCabinetWallSnapPlacementInScene({
         depth: previewNode.depth,
-        faceOffset,
-        gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+        gridStep: 0,
         hit,
-        neighbors,
+        nodes,
+        parentLevelId: activeLevelId as AnyNodeId,
         width: previewNode.width,
       })
       if (!wallPlacement) return null
@@ -1063,12 +1078,7 @@ const CabinetTool = () => {
         const raw = lastRawPositionRef.current ?? current.position
         const position = resolveAlignedCabinetPosition({
           applyAlignmentSnap: isMagneticSnapActive(),
-          position: resolveCabinetGridPosition({
-            raw,
-            dimensions: placementDimensions,
-            yaw: yawRef.current,
-            step: isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
-          }),
+          position: resolveGridPosition(raw),
           yaw: yawRef.current,
         })
         const next = withPlacementValidity(
@@ -1112,7 +1122,13 @@ const CabinetTool = () => {
       useAlignmentGuides.getState().clear()
       useCabinetPlacementStatus.getState().setBlocked(false)
     }
-  }, [activeLevelId, placementDimensions, previewNode, publishFloorplanPreview])
+  }, [
+    activeLevelId,
+    placementDimensions,
+    placementSnapFootprint,
+    previewNode,
+    publishFloorplanPreview,
+  ])
 
   if (!activeLevelId || !placement) return null
   const stretch = placement.stretch
@@ -1158,17 +1174,16 @@ const CabinetTool = () => {
   })
   const placementRotationY = placement.snappedToWall || stretch ? placement.yaw : yaw
   const placementBoxDimensions: [number, number, number] = [
-    stretch ? stretch.length : placementDimensions[0],
-    placementDimensions[1],
-    placementDimensions[2],
+    stretch
+      ? stretch.length + (previewNode.withCountertop ? previewNode.countertopOverhang * 2 : 0)
+      : placementSnapFootprint.dimensions[0],
+    placementSnapFootprint.dimensions[1],
+    placementSnapFootprint.dimensions[2],
   ]
-  const placementBoxPlanPosition = stretch
-    ? runLocalToPlan({ position: placement.position, rotation: placement.yaw }, [
-        stretch.centerLocalX,
-        0,
-        0,
-      ])
-    : placement.position
+  const placementBoxPlanPosition = runLocalToPlan(
+    { position: placement.position, rotation: placement.yaw },
+    [stretch?.centerLocalX ?? 0, 0, placementSnapFootprint.offset[1]],
+  )
   const placementBoxPosition: [number, number, number] = [
     placementBoxPlanPosition[0],
     visualPosition[1],

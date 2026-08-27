@@ -21,7 +21,11 @@ import { useEffect } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isHistoryShortcut } from '../../lib/history'
 import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
-import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
+import { resolvePrioritizedPlanarCursorPosition } from '../../lib/planar-cursor-placement'
+import {
+  resolveAttachmentPreviewRotation,
+  rigidPlanSvgTransform,
+} from '../../lib/rigid-plan-svg-transform'
 import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
@@ -547,7 +551,15 @@ export function FloorplanRegistryMoveOverlay() {
       candidateAnchors.push(...bboxAnchors(otherId, b.x, b.y, b.x + b.width, b.y + b.height))
     }
 
-    let lastSnapped: [number, number] | null = null
+    const storedRotation = (movingNode as { rotation?: unknown }).rotation
+    const originalRotation =
+      typeof storedRotation === 'number'
+        ? storedRotation
+        : Array.isArray(storedRotation)
+          ? ((storedRotation as [number?, number?, number?])[1] ?? 0)
+          : 0
+    let currentRotation = originalRotation
+    let lastSnapped: { point: [number, number]; rotation: number } | null = null
     let dragAnchor: [number, number] | null = null
 
     // Footprint bounding box drawn around the dragged entry — the 2D
@@ -576,21 +588,46 @@ export function FloorplanRegistryMoveOverlay() {
       const m = toMeters(event.clientX, event.clientY)
       if (!m) return
 
-      // 1) Grid snap baseline. Fresh catalog placement is absolute under
-      // the cursor; existing moves preserve the cursor's grab offset. Grid
-      // follows the active snapping mode (Shift cycles it); raw cursor in
-      // any non-grid mode.
+      // 1) Wall attachment gets the raw proposal before grid/alignment. If no
+      // attachment is available, fresh placement is absolute under the cursor
+      // and existing moves preserve the cursor's grab offset before grid snap.
       const gridStep = useEditor.getState().gridSnapStep
       const snap = (value: number) =>
         isGridSnapActive() ? Math.round(value / gridStep) * gridStep : value
-      const resolved = resolvePlanarCursorPosition({
+      const groupMoveSnap = def?.capabilities?.movable?.groupMoveSnap
+      const attachmentEnabled = isGridSnapActive() || isMagneticSnapActive()
+      let attachmentRotation: number | null = null
+      const resolved = resolvePrioritizedPlanarCursorPosition({
         cursor: [m[0], m[1]],
         original: [originalPosition[0], originalPosition[2]],
         anchor: dragAnchor,
         mode: isFreshPlacement ? 'absolute' : 'relative',
         snap,
+        resolveAttachment:
+          attachmentEnabled && groupMoveSnap
+            ? ([planX, planZ]) => {
+                const snappedPosition = groupMoveSnap({
+                  node: movingNode,
+                  candidatePosition: [planX, originalPosition[1], planZ],
+                  candidateRotation: currentRotation,
+                  movingIds: [movingNode.id as AnyNodeId],
+                  nodes: useScene.getState().nodes as Record<string, AnyNode>,
+                  levelId:
+                    (useViewer.getState().selection.levelId as AnyNodeId | null) ??
+                    (movingNode.parentId as AnyNodeId | undefined) ??
+                    null,
+                })
+                if (!snappedPosition) return null
+                attachmentRotation = snappedPosition.rotation ?? null
+                return [snappedPosition.position[0], snappedPosition.position[2]]
+              }
+            : undefined,
       })
       dragAnchor = resolved.anchor
+      currentRotation = resolveAttachmentPreviewRotation(
+        originalRotation,
+        resolved.attachmentSnapped ? attachmentRotation : null,
+      )
       const [gridX, gridZ] = resolved.point
 
       // 2) Alignment snap layered on top. Treat the grid-snapped point
@@ -601,7 +638,7 @@ export function FloorplanRegistryMoveOverlay() {
       // force-place, not a snap bypass.
       let finalX = gridX
       let finalZ = gridZ
-      if (isAlignmentGuideActive() && candidateAnchors.length > 0) {
+      if (!resolved.attachmentSnapped && isAlignmentGuideActive() && candidateAnchors.length > 0) {
         // Translate the cached local bbox to the proposed pos to get the
         // moving anchors at that location. The entry's untransformed
         // bbox is in world meters relative to the node's origin, so a
@@ -638,35 +675,17 @@ export function FloorplanRegistryMoveOverlay() {
         useAlignmentGuides.getState().clear()
       }
 
-      // 3) Kind-owned attachment snap (cabinet → wall) — 2D parity with the
-      // 3D move tool's `groupMoveSnap` pass. An attach behavior, not an
-      // alignment guide, so it runs in every snapping mode except Off.
-      const groupMoveSnap = def?.capabilities?.movable?.groupMoveSnap
-      if (groupMoveSnap && (isGridSnapActive() || isMagneticSnapActive())) {
-        const snappedPosition = groupMoveSnap({
-          node: movingNode,
-          candidatePosition: [finalX, originalPosition[1], finalZ],
-          movingIds: [movingNode.id as AnyNodeId],
-          nodes: useScene.getState().nodes as Record<string, AnyNode>,
-          levelId:
-            (useViewer.getState().selection.levelId as AnyNodeId | null) ??
-            (movingNode.parentId as AnyNodeId | undefined) ??
-            null,
-        })
-        if (snappedPosition) {
-          finalX = snappedPosition[0]
-          finalZ = snappedPosition[2]
-          useAlignmentGuides.getState().clear()
-        }
-      }
-
-      const dx = finalX - originalPosition[0]
-      const dz = finalZ - originalPosition[2]
+      const transform = rigidPlanSvgTransform({
+        from: [originalPosition[0], originalPosition[2]],
+        fromRotation: originalRotation,
+        to: [finalX, finalZ],
+        toRotation: currentRotation,
+      })
       for (const relatedEntry of relatedEntries) {
-        relatedEntry.setAttribute('transform', `translate(${dx} ${dz})`)
+        relatedEntry.setAttribute('transform', transform)
       }
-      boxEl.setAttribute('transform', `translate(${dx} ${dz})`)
-      lastSnapped = [finalX, finalZ]
+      boxEl.setAttribute('transform', transform)
+      lastSnapped = { point: [finalX, finalZ], rotation: currentRotation }
     }
 
     const onPointerUp = (event: PointerEvent) => {
@@ -675,8 +694,16 @@ export function FloorplanRegistryMoveOverlay() {
 
       const snapped = lastSnapped
       if (!snapped) return
-      const [sx, sz] = snapped
+      const [sx, sz] = snapped.point
       const [, oldY] = originalPosition
+      const rotation = Array.isArray(storedRotation)
+        ? [
+            (storedRotation as [number?, number?, number?])[0] ?? 0,
+            snapped.rotation,
+            (storedRotation as [number?, number?, number?])[2] ?? 0,
+          ]
+        : snapped.rotation
+      const rotationPatch = 'rotation' in movingNode ? { rotation } : {}
       setMovingNodeOrigin('2d')
       let selectedId = movingNode.id as AnyNodeId
       if (originalPath) {
@@ -714,6 +741,7 @@ export function FloorplanRegistryMoveOverlay() {
             movingNode.id as AnyNodeId,
             {
               position: [sx, oldY, sz],
+              ...rotationPatch,
               metadata: stripPlacementMetadataFlags(
                 (movingNode as { metadata?: unknown }).metadata,
               ),
@@ -725,6 +753,7 @@ export function FloorplanRegistryMoveOverlay() {
           movingNode.id as AnyNodeId,
           {
             position: [sx, oldY, sz],
+            ...rotationPatch,
           } as Partial<AnyNode>,
         )
       }

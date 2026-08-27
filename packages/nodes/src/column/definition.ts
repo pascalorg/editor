@@ -2,6 +2,7 @@ import {
   ColumnNode as ColumnNodeSchema,
   type ColumnNode as ColumnNodeType,
   type GroupMoveSnapArgs,
+  type GroupMoveSnapResult,
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
@@ -321,12 +322,12 @@ function resolveColumnStructuralGridMoveSnap({
   candidatePosition,
   nodes,
   levelId,
-}: GroupMoveSnapArgs): [number, number, number] | null {
+}: GroupMoveSnapArgs): GroupMoveSnapResult | null {
   const snap = resolveStructuralGridSnap(
     [candidatePosition[0], candidatePosition[2]],
     collectStructuralGridAxes(nodes, levelId),
   )
-  return snap ? [snap.point[0], candidatePosition[1], snap.point[1]] : null
+  return snap ? { position: [snap.point[0], candidatePosition[1], snap.point[1]] } : null
 }
 
 /**

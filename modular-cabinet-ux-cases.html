@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modular Cabinet — UX Case Atlas</title>
+<style>
+  :root{
+    --bg:#f7f5f1; --card:#ffffff; --ink:#2c2924; --sub:#6b655d; --line:#e5e0d8;
+    --done:#1f7a45; --done-bg:#e4f3e9;
+    --partial:#9a6700; --partial-bg:#fbefd3;
+    --todo:#b3362a; --todo-bg:#fbe6e2;
+    --future:#5b45b8; --future-bg:#ece7fa;
+    --accent:#b45309;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  header{padding:34px 28px 10px;max-width:1500px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 6px}
+  .intro{color:var(--sub);max-width:900px;margin:0 0 14px}
+  .counts{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 4px}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:600;border:1px solid transparent;cursor:pointer;background:#fff;border-color:var(--line)}
+  .pill .dot{width:9px;height:9px;border-radius:50%}
+  .pill.active{outline:2px solid var(--ink);outline-offset:1px}
+  .pill[data-f="done"] .dot{background:var(--done)} .pill[data-f="partial"] .dot{background:var(--partial)}
+  .pill[data-f="todo"] .dot{background:var(--todo)} .pill[data-f="future"] .dot{background:var(--future)}
+  .pill[data-f="all"] .dot{background:var(--ink)}
+  nav.toc{position:sticky;top:0;z-index:5;background:rgba(247,245,241,.96);backdrop-filter:blur(4px);border-bottom:1px solid var(--line);padding:8px 28px;display:flex;gap:6px;flex-wrap:wrap;max-width:100%;}
+  nav.toc a{font-size:12px;font-weight:600;color:var(--sub);text-decoration:none;padding:4px 10px;border-radius:6px}
+  nav.toc a:hover{background:#eee9e1;color:var(--ink)}
+  main{max-width:1500px;margin:0 auto;padding:8px 28px 80px}
+  section{margin-top:38px}
+  section h2{font-size:19px;border-bottom:2px solid var(--line);padding-bottom:8px;margin:0 0 4px}
+  section p.secdesc{color:var(--sub);margin:6px 0 16px;max-width:920px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 2px rgba(40,35,25,.05)}
+  .card .viz{background:#fcfbf8;border-bottom:1px solid var(--line);padding:8px 10px 4px}
+  .card svg{display:block;width:100%;height:auto}
+  .card .body{padding:11px 14px 13px;display:flex;flex-direction:column;gap:6px;flex:1}
+  .card h3{font-size:13.5px;margin:0;display:flex;align-items:flex-start;gap:8px;justify-content:space-between}
+  .card h3 .num{color:#b8b1a6;font-weight:600;margin-right:2px}
+  .st{flex:none;font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 8px;letter-spacing:.02em;white-space:nowrap;margin-top:1px}
+  .st.done{color:var(--done);background:var(--done-bg)} .st.partial{color:var(--partial);background:var(--partial-bg)}
+  .st.todo{color:var(--todo);background:var(--todo-bg)} .st.future{color:var(--future);background:var(--future-bg)}
+  .card .desc{font-size:12.5px;color:var(--sub);margin:0}
+  .keys{display:flex;gap:5px;flex-wrap:wrap}
+  kbd{font:600 10.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;background:#f1ede6;border:1px solid #d8d2c7;border-bottom-width:2px;border-radius:5px;padding:3px 6px;color:#514c44}
+  table.hk{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:12.5px}
+  table.hk th{background:#f1ede6;text-align:left;padding:8px 12px;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--sub)}
+  table.hk td{padding:7px 12px;border-top:1px solid var(--line);vertical-align:top}
+  table.hk td:first-child{white-space:nowrap}
+  .hidden{display:none!important}
+  footer{max-width:1500px;margin:0 auto;padding:0 28px 40px;color:#a49d92;font-size:12px}
+  /* ---- SVG symbol styles ---- */
+  svg .w{fill:#4a443d}
+  svg .c{fill:#faf7f1;stroke:#9a9186;stroke-width:1}
+  svg .g{fill:#e0f1e5;stroke:#2f7d4f;stroke-width:1.2}
+  svg .r{fill:#fdeae7;stroke:#c44536;stroke-width:1.2}
+  svg .p{fill:#efe9fb;stroke:#6a55c0;stroke-width:1.2}
+  svg .gh{fill:rgba(47,125,79,.08);stroke:#2f7d4f;stroke-width:1.1;stroke-dasharray:4 2.5}
+  svg .ghr{fill:rgba(196,69,54,.08);stroke:#c44536;stroke-width:1.1;stroke-dasharray:4 2.5}
+  svg .f{stroke:#6f675b;stroke-width:1.4;fill:none}
+  svg .a{stroke:#b45309;stroke-width:1.4;fill:none}
+  svg .ah{fill:#b45309}
+  svg .ab{stroke:#2563eb;stroke-width:1.4;fill:none}
+  svg .abh{fill:#2563eb}
+  svg .d{stroke:#8a857c;stroke-width:.8;fill:none}
+  svg .tx{font:600 8px -apple-system,sans-serif;fill:#55504a}
+  svg .tm{font:600 7px ui-monospace,monospace;fill:#7a746b}
+  svg .lab{font:600 7.5px -apple-system,sans-serif;fill:#7a746b}
+  svg .vt{font:700 7px -apple-system,sans-serif;fill:#c0bab0;letter-spacing:.12em}
+  svg .xx{stroke:#c44536;stroke-width:2;fill:none;stroke-linecap:round}
+  svg .ck{stroke:#1f7a45;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  svg .ctr{stroke:#7c7468;stroke-width:2;fill:none}
+  svg .grid{stroke:#e3ded5;stroke-width:.6}
+  svg .warn{fill:#fbefd3;stroke:#9a6700;stroke-width:1}
+  svg .keyc{fill:#f1ede6;stroke:#c9c2b6;stroke-width:1;rx:3}
+</style>
+</head>
+<body>
+<header>
+  <h1>Modular Cabinet — UX Case Atlas</h1>
+  <p class="intro">Every UX scenario for the modular cabinet system (<code>packages/nodes/src/cabinet</code>) — what is <b>implemented</b>, what is <b>partial</b>, what is <b>not implemented</b> yet, and what the <b>industry</b> (IKEA Planner, 2020 Design, Chief Architect, Cabinet Vision, Mozaik, ProKitchen, Winner, HomeByMe, Planner 5D…) does that we should consider. Each case has a simple 2D diagram: <b>PLAN</b> = top-down, <b>ELEV</b> = front elevation. Click a status pill to filter. Generated 2026‑08‑26 from the code on <code>t3code/improve-kitchen-cabinets</code>.</p>
+  <div class="counts" id="filters"></div>
+</header>
+<nav class="toc" id="toc"></nav>
+<main id="main"></main>
+<footer>Sources: cabinet package source + tests (run-ops, run-layout, tool, wall-snap, stack, panel, quick-actions, floorplan, validation…), and public feature documentation of the listed industry tools. NKBA numbers are from the 5th-edition planning guidelines summary.</footer>
+
+<script>
+/* ---------------- tiny SVG helpers ---------------- */
+const VB = '0 0 230 132';
+const wall = (x,y,w,h)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" class="w"/>`;
+function cab(x,y,w,h,o={}){
+  const cls = o.cls||'c';
+  let s=`<rect x="${x}" y="${y}" width="${w}" height="${h}" class="${cls}"/>`;
+  const f=('front' in o)?o.front:'b';
+  const i=2.6;
+  if(f==='b') s+=`<line x1="${x+1.5}" y1="${y+h-i}" x2="${x+w-1.5}" y2="${y+h-i}" class="f"/>`;
+  if(f==='t') s+=`<line x1="${x+1.5}" y1="${y+i}" x2="${x+w-1.5}" y2="${y+i}" class="f"/>`;
+  if(f==='l') s+=`<line x1="${x+i}" y1="${y+1.5}" x2="${x+i}" y2="${y+h-1.5}" class="f"/>`;
+  if(f==='r') s+=`<line x1="${x+w-i}" y1="${y+1.5}" x2="${x+w-i}" y2="${y+h-1.5}" class="f"/>`;
+  if(o.label) s+=t(x+w/2,y+h/2+2.8,o.label,'lab');
+  return s;
+}
+const t=(x,y,s,cls='tx',anchor='middle')=>`<text x="${x}" y="${y}" class="${cls}" text-anchor="${anchor}">${s}</text>`;
+function ar(x1,y1,x2,y2,cls='a'){
+  const a=Math.atan2(y2-y1,x2-x1),L=6,W2=2.6;
+  const hx=x2-L*Math.cos(a),hy=y2-L*Math.sin(a);
+  const p1x=hx-W2*Math.sin(a),p1y=hy+W2*Math.cos(a),p2x=hx+W2*Math.sin(a),p2y=hy-W2*Math.cos(a);
+  const hc=cls==='ab'?'abh':'ah';
+  return `<line x1="${x1}" y1="${y1}" x2="${hx}" y2="${hy}" class="${cls}"/><polygon points="${x2},${y2} ${p1x},${p1y} ${p2x},${p2y}" class="${hc}"/>`;
+}
+const dar=(x1,y1,x2,y2,cls='a')=>ar((x1+x2)/2,(y1+y2)/2,x2,y2,cls)+ar((x1+x2)/2,(y1+y2)/2,x1,y1,cls);
+function dim(x1,x2,y,label){
+  return `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" class="d"/><line x1="${x1}" y1="${y-3}" x2="${x1}" y2="${y+3}" class="d"/><line x1="${x2}" y1="${y-3}" x2="${x2}" y2="${y+3}" class="d"/>`+t((x1+x2)/2,y-3.5,label,'tm');
+}
+function vdim(x,y1,y2,label){
+  return `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" class="d"/><line x1="${x-3}" y1="${y1}" x2="${x+3}" y2="${y1}" class="d"/><line x1="${x-3}" y1="${y2}" x2="${x+3}" y2="${y2}" class="d"/>`+`<text x="${x+4}" y="${(y1+y2)/2+2.5}" class="tm" text-anchor="start">${label}</text>`;
+}
+const X=(x,y)=>`<path d="M${x-4} ${y-4} l8 8 M${x+4} ${y-4} l-8 8" class="xx"/>`;
+const CK=(x,y)=>`<path d="M${x-4.5} ${y} l3.2 3.4 l6 -7" class="ck"/>`;
+const tag=s=>t(6,11,s,'vt','start');
+const key=(x,y,s)=>{const w=s.length*5.4+10;return `<rect x="${x}" y="${y}" width="${w}" height="13" rx="3" class="keyc"/>`+t(x+w/2,y+9.5,s,'tm');};
+const gridbg=()=>{let s='';for(let gx=10;gx<230;gx+=20)s+=`<line x1="${gx}" y1="16" x2="${gx}" y2="128" class="grid"/>`;for(let gy=20;gy<132;gy+=20)s+=`<line x1="0" y1="${gy}" x2="230" y2="${gy}" class="grid"/>`;return s;};
+const floor=()=>`<line x1="0" y1="122" x2="230" y2="122" class="w" stroke="#4a443d" stroke-width="2"/>`;
+/* elevation base cabinet: x,w and options */
+function ebase(x,w,o={}){ // plinth 8, carcass 34, ctop 3 => top at 122-45
+  const cls=o.cls||'c';
+  let s=`<rect x="${x+3}" y="${114}" width="${w-6}" height="8" class="${cls}"/>`; // plinth
+  s+=`<rect x="${x}" y="${80}" width="${w}" height="34" class="${cls}"/>`;
+  if(o.ctop!==false) s+=`<line x1="${x-2}" y1="78.6" x2="${x+w+2}" y2="78.6" class="ctr"/>`;
+  if(o.label) s+=t(x+w/2,99,o.label,'lab');
+  return s;
+}
+function ewall(x,w,o={}){ // wall cab: y 26..54
+  let s=`<rect x="${x}" y="26" width="${w}" height="28" class="${o.cls||'c'}"/>`;
+  if(o.label) s+=t(x+w/2,42,o.label,'lab');
+  return s;
+}
+function etall(x,w,o={}){
+  let s=`<rect x="${x+3}" y="114" width="${w-6}" height="8" class="${o.cls||'c'}"/><rect x="${x}" y="26" width="${w}" height="88" class="${o.cls||'c'}"/>`;
+  if(o.label) s+=t(x+w/2,72,o.label,'lab');
+  return s;
+}
+
+/* ---------------- case data ---------------- */
+const CATS=[
+ ['placement','1 · Placement & Snapping','Placing the first cabinet: ghost preview, wall/edge/corner/grid snapping, island mode, continuous run drawing, and the placement gaps the industry has solved.'],
+ ['run','2 · Run Editing & Reflow','Everything that happens to a straight run after placement: adding, resizing, donor reflow between two walls, depth changes, dragging modules, replace and delete behaviors.'],
+ ['corner','3 · Corners, L & U Shapes','Our derived L-corner system (filler + legs + bridge) and the corner cabinet solutions we have not modeled yet.'],
+ ['vertical','4 · Vertical Logic & Stacks','Base / wall / tall tiers, compartment stacks, top finishes, ceiling behavior, and the molding/soffit layer above cabinets.'],
+ ['appliance','5 · Appliances','Each appliance we render and the pairing/clearance conventions kitchen tools enforce around them.'],
+ ['counter','6 · Countertops, Fronts & Finishes','Countertop span logic, islands and bars, fronts, handles, reveals, materials — and the surface features (backsplash, edge profiles, end panels) still open.'],
+ ['interact','7 · Selection, Handles & Hotkeys','What you can do with a selected cabinet: quick actions, 3D handles, keyboard operate, plus interaction patterns common elsewhere.'],
+ ['validate','8 · Validation & Smart Checks','Our live planning checks vs. the NKBA/clearance rule engines pro tools ship.'],
+ ['viz','9 · Visualization & Outputs','2D plan symbology today; elevations, dimensions, swing arcs, BOM/pricing tomorrow.'],
+ ['ai','10 · AI-Assisted (Future)','Where modern planners are heading — all future for us.'],
+];
+
+const CASES=[
+/* ================= 1. PLACEMENT ================= */
+{c:'placement',s:'done',t:'Ghost preview with live validity',k:['Move','Click'],
+ d:'Real cabinet geometry at 55% opacity follows the cursor inside a green (valid) or red (blocked) placement box, with snap-reason labels: “Wall snap”, “Edge snap”, “Corner snap”. Clicks on a red state are swallowed.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,44,30)+cab(120,26,44,30,{cls:'gh'})+t(142,72,'ghost 55%','lab')+`<rect x="116" y="22" width="52" height="38" fill="none" stroke="#2f7d4f" stroke-width="1" stroke-dasharray="2 2"/>`+CK(196,40)},
+{c:'placement',s:'done',t:'Wall snap — back flush, auto-yaw',k:['drag near wall'],
+ d:'Within 0.4 m of a wall the cabinet back sits flush on the (mitred) wall face and yaw follows the face normal. Works identically in the 2D plan via proximity. Only in grid/magnetic snap modes; Off = free placement.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(84,70,44,30,{cls:'gh'})+ar(106,68,106,32)+cab(84,26,44,30,{cls:'g'})+dim(150,150,0,'')+`<line x1="140" y1="26" x2="140" y2="85" class="d" stroke-dasharray="2 2"/>`+t(168,60,'≤ 0.4 m pull-in','tm','start')},
+{c:'placement',s:'done',t:'Slide along wall, edges on grid',k:[],
+ d:'While wall-snapped, the along-wall position is quantized so the cabinet edges (not the center) land on grid lines, clamped inside the wall span. An amber guide bar underlines the snapped face (red when blocked).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+gridbg()+cab(70,26,40,30,{cls:'g'})+`<line x1="66" y1="58" x2="114" y2="58" class="a" stroke-width="2.5" opacity=".8"/>`+dar(30,90,190,90)+t(110,104,'slides along wall, edge-quantized','tm')},
+{c:'placement',s:'done',t:'Edge snap to a neighbor cabinet',k:[],
+ d:'A moving edge within 8 cm of another run’s edge on the same wall face (face within 12 cm, yaw within ±0.08 rad) snaps flush — “Edge snap”. Nearest stop wins over grid.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,50,30)+cab(104,26,44,30,{cls:'gh'})+ar(103,44,92,44)+cab(90,70,44,30,{cls:'g'})+ar(112,68,112,60)+dim(90,104,112,'≤ 8 cm → flush')},
+{c:'placement',s:'done',t:'Corner snap to wall ends',k:[],
+ d:'The moving edge also snaps to the wall start/end. A wall shorter than the cabinet centers the cabinet on it (“corner” reason).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(24,26,46,30,{cls:'gh'})+ar(23,42,12,42)+cab(10,70,46,30,{cls:'g',front:'b'})+t(60,120,'edge kisses the corner','tm','start')+ar(33,68,33,60)},
+{c:'placement',s:'done',t:'Grid snap by footprint edges',k:['⌘ tap = step'],
+ d:'Free placement aligns footprint edges to grid lines (axis-swap after quarter turns). A clean Ctrl/⌘ tap cycles the grid step 0.5 → 0.25 → 0.1 → 0.05 m.',
+ v:()=>tag('PLAN')+gridbg()+cab(50,40,40,30,{cls:'g'})+`<circle cx="50" cy="40" r="2.4" fill="#b45309"/><circle cx="90" cy="70" r="2.4" fill="#b45309"/>`+t(150,52,'edges on grid','tm','start')+key(146,62,'⌘ tap: 0.5/0.25/0.1/0.05')},
+{c:'placement',s:'done',t:'Alignment guides (Figma-style)',k:['Shift = snap mode'],
+ d:'Corner anchors of the moving cabinet align to other nodes within 8 cm; guides display in every mode except Off, but only magnetic (“lines”) mode pulls. Shift cycles grid → lines → angles → off.',
+ v:()=>tag('PLAN')+cab(30,30,44,30)+cab(120,76,44,30,{cls:'g'})+`<line x1="30" y1="24" x2="170" y2="24" class="ab" stroke-dasharray="3 2" opacity="0"/>`+`<line x1="30" y1="30" x2="200" y2="30" class="ab" stroke-dasharray="3 2" opacity="0"/>`+`<line x1="120" y1="20" x2="120" y2="112" class="ab" stroke-dasharray="3 2"/>`+`<line x1="30" y1="60" x2="200" y2="60" class="ab" stroke-dasharray="3 2"/>`+t(196,56,'8 cm','tm')},
+{c:'placement',s:'done',t:'Island placement type',k:['I'],
+ d:'I (or the HUD chip) cycles Cabinet ↔ Island. Island: wall snap off, name “Kitchen Island”, +0.3 m seating back-overhang, finished back on. Switching mid-draft clears a continuous draft.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(80,60,70,32,{cls:'g'})+`<rect x="80" y="52" width="70" height="8" class="warn"/>`+t(115,47,'seating overhang +0.3','tm')+`<circle cx="97" cy="44" r="4" class="d" fill="#fff"/><circle cx="132" cy="44" r="4" class="d" fill="#fff"/>`+key(184,100,'I')},
+{c:'placement',s:'done',t:'Continuous run — drag to fill',k:['C','Click','Dbl-click','Esc'],
+ d:'C toggles Single ↔ Continuous. Click anchors, the rubber band fills the stretch with 0.5 m modules plus one remainder module (dropped below 0.1 m). Click continues the chain; double-click or Esc finishes.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(20,26,40,30,{cls:'g'})+cab(60,26,40,30,{cls:'g'})+cab(100,26,40,30,{cls:'g'})+cab(140,26,22,30,{cls:'gh'})+dim(20,60,70,'0.5')+dim(60,100,70,'0.5')+dim(140,162,70,'rest')+ar(30,100,170,100)+t(196,44,'…','tx')},
+{c:'placement',s:'done',t:'Continuous run — L-turn at a hinge',k:['move sideways'],
+ d:'After a leg commits, lateral cursor movement turns the chain 90° (an L-corner is created, corner filler reserved first); forward movement continues straight. Failed turns roll the whole segment back.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(220,16,10,116)+cab(80,26,40,30,{cls:'g'})+cab(120,26,40,30,{cls:'g'})+cab(160,26,30,30,{cls:'g'})+cab(190,26,30,30,{cls:'gh',front:'l'})+cab(190,56,30,36,{cls:'gh',front:'l'})+ar(175,74,200,74)+ar(205,80,205,100)+t(150,110,'sideways = turn, forward = straight','tm')},
+{c:'placement',s:'done',t:'Force place through collisions',k:['Alt'],
+ d:'Holding Alt bypasses collision entirely (red box turns allowed). Works for single placement, continuous stretch clicks, and mid-drag.',
+ v:()=>tag('PLAN')+cab(60,40,60,36)+cab(100,56,60,36,{cls:'ghr'})+X(114,66)+ar(150,100,132,80)+key(150,102,'Alt = force')},
+{c:'placement',s:'done',t:'2D ↔ 3D placement parity',k:[],
+ d:'The tool listens to emitter events; the 2D floorplan synthesizes the same grid/click events and renders the same ghost as an SVG symbol, so placement, wall snap and continuous runs behave identically in plan view.',
+ v:()=>tag('PLAN / 3D')+`<line x1="115" y1="20" x2="115" y2="122" class="d" stroke-dasharray="4 3"/>`+wall(0,16,110,8)+cab(30,24,40,26,{cls:'g'})+t(55,110,'2D plan','tm')+wall(120,16,110,8)+`<g transform="translate(150 30) skewY(-6)">`+cab(0,0,44,28,{cls:'g'})+`</g>`+t(172,110,'3D view','tm')+t(115,68,'=','tx')},
+{c:'placement',s:'done',t:'Placement audio & facing feedback',k:[],
+ d:'Entering wall snap plays a pick sound, other snaps tick per grid step, commit plays a place sound; a facing indicator shows the front direction (wall normal when snapped).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(90,26,44,30,{cls:'g'})+ar(112,60,112,80)+t(112,92,'front','tm')+t(170,44,'♪ snap ticks','tm','start')},
+{c:'placement',s:'todo',t:'Auto-rotate to face a wall while dragging',k:[],
+ d:'Today a drag never rotates: a run/module only wall-snaps if its yaw already matches (±0.08 rad). Industry tools rotate the cabinet to the wall automatically as you drag near it (IKEA, 2020, Chief Architect).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+`<g transform="rotate(-30 90 80)">`+cab(68,64,44,30)+`</g>`+`<path d="M120 60 A26 26 0 0 0 104 42" class="a" fill="none"/><polygon points="104,42 112,42 106,49" class="ah"/>`+cab(130,26,44,30,{cls:'gh'})+X(196,90)},
+{c:'placement',s:'todo',t:'Curved-wall snapping',k:[],
+ d:'Curved walls are explicitly excluded from cabinet wall attach. No snapping, and no curved/bow cabinet geometry to follow an arc.',
+ v:()=>tag('PLAN')+`<path d="M10 60 Q115 -8 220 60" fill="none" stroke="#4a443d" stroke-width="9"/>`+cab(95,52,44,30,{cls:'ghr'})+X(117,66)},
+{c:'placement',s:'future',t:'Auto-fill a wall / auto-kitchen',k:[],
+ d:'Pick a wall (or room) → tool populates base + wall cabinets from standard widths, resolves the remainder with a filler, places sink/cooktop sensibly. ProKitchen AutoDesign, Winner auto-planning, HomeByMe wizard.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+ar(40,60,40,34)+t(64,62,'click wall','tm','start')+cab(10,26,44,26,{cls:'p'})+cab(54,26,44,26,{cls:'p'})+cab(98,26,50,26,{cls:'p',label:'SINK'})+cab(148,26,44,26,{cls:'p'})+cab(192,26,14,26,{cls:'p',label:''})+t(199,70,'filler','tm')},
+{c:'placement',s:'future',t:'Window & door awareness',k:[],
+ d:'Block or warn when wall cabinets cover a window; suggest centering the sink base under the window. IKEA hard-blocks; ProKitchen/2020 guide.',
+ v:()=>tag('ELEV')+floor()+`<rect x="88" y="30" width="54" height="40" fill="#eaf2fb" stroke="#8fa8c8"/>`+t(115,52,'window','lab')+ewall(30,50)+ewall(150,50,{cls:'ghr'})+X(175,40)+ebase(88,54,{cls:'p',label:'SINK'})+`<line x1="115" y1="30" x2="115" y2="114" class="d" stroke-dasharray="2 2"/>`},
+{c:'placement',s:'future',t:'Typed exact dimensions during placement',k:['Tab'],
+ d:'Live dimensions to walls/neighbors shown while placing; Tab cycles the fields, typing a value repositions exactly (Chief Architect temporary dims, SketchUp measurement box).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(96,26,44,30,{cls:'p'})+dim(10,96,72,'')+`<rect x="34" y="60" width="36" height="14" rx="3" class="keyc"/>`+t(52,70,'600',"tm")+dim(140,220,72,'…')+key(96,100,'Tab ⇥')},
+{c:'placement',s:'todo',t:'Arrow-key nudge',k:['←→↑↓'],
+ d:'No nudge support exists for cabinets (or anything selected). Industry: arrows move by a small step, modifier for a larger one.',
+ v:()=>tag('PLAN')+cab(90,50,44,30)+ar(140,65,164,65)+ar(84,65,60,65)+ar(112,44,112,26)+ar(112,86,112,104)+key(12,104,'←')+key(34,104,'→')+key(56,104,'↑')+key(78,104,'↓')},
+{c:'placement',s:'future',t:'Front-plane alignment for mixed depths',k:[],
+ d:'When a run mixes depths (DW, tall units), pro tools offer aligning the fronts instead of the backs. We always back-align to the wall.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,44,30)+cab(74,26,44,40,{cls:'p'})+cab(118,26,44,30)+`<line x1="20" y1="66" x2="172" y2="66" class="ab" stroke-dasharray="3 2"/>`+t(196,68,'fronts','tm')},
+
+/* ================= 2. RUN EDITING & REFLOW ================= */
+{c:'run',s:'done',t:'Add cabinet left / right',k:['quick action'],
+ d:'Adds a 0.5 m module flush against the run end (or next to the selected module), inheriting depth and back-Z from the connected edge module. Single undo step; disabled — not hidden — when there is no room.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(60,26,44,30)+cab(104,26,44,30)+cab(148,26,40,30,{cls:'g'})+ar(126,80,166,60)+t(126,92,'+ Right (0.5 m)','tm')},
+{c:'run',s:'done',t:'Side add trimmed by a wall',k:[],
+ d:'A wall overlapping the new module’s strip caps its width to the remaining clearance; below 0.3 m the add is rejected and the action disabled with a reason.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(196,16,10,116)+cab(80,26,44,30)+cab(124,26,44,30)+cab(168,26,28,30,{cls:'g'})+dim(168,196,70,'clipped')+t(60,90,'&lt; 0.3 m left → action disabled','tm','start')},
+{c:'run',s:'done',t:'Width change — open run',k:['slider','handles'],
+ d:'Neighbors keep their widths; the run re-packs from the fixed edge (growing the first module grows outward). Width handles only appear on “open” sides with no flush neighbor.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,60,30,{cls:'g'})+cab(100,26,44,30)+cab(144,26,44,30)+ar(102,80,120,80)+ar(146,80,164,80)+ar(188,80,206,80)+dim(40,100,70,'grow')+t(120,104,'neighbors slide, keep widths','tm')},
+{c:'run',s:'done',t:'Width change — one wall-constrained end',k:[],
+ d:'The constrained end consumes its remaining wall gap (slack) first, then the run shifts away from the wall so the constrained edge stays fixed.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,50,30,{cls:'g'})+cab(60,26,44,30)+cab(104,26,44,30)+ar(150,80,180,80)+t(112,100,'wall edge pinned, run shifts right','tm')},
+{c:'run',s:'done',t:'Constrained run reflow (donor system)',k:[],
+ d:'Between two walls the total extent is fixed: growth is absorbed by eligible donors — only plain door/drawer/shelf cabinets (appliances never donate), nearest to the edited module first — in two passes down to 0.3 m, then to trim floors (0.05 for corner-anchored).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+wall(220,16,10,116)+cab(10,26,44,30,{label:'donor'})+cab(54,26,76,30,{cls:'g',label:'grows'})+cab(130,26,46,30,{label:'donor'})+cab(176,26,44,30,{label:'DW ✕'})+dar(20,80,42,80)+dar(140,80,164,80)+t(115,104,'appliances never shrink','tm')},
+{c:'run',s:'done',t:'Reflow rejection when nothing fits',k:[],
+ d:'If combined donor capacity can’t absorb the change (checked to sub-millimetre precision) the edit is a no-op and the panel explains: “No space in this run. No base cabinet can shrink enough to fit this item.”',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+wall(220,16,10,116)+cab(10,26,40,30,{label:'0.3'})+cab(50,26,60,30,{cls:'ghr'})+cab(110,26,40,30,{label:'0.3'})+cab(150,26,70,30,{label:'SINK'})+X(80,42)+`<rect x="34" y="86" width="162" height="18" rx="4" class="warn"/>`+t(115,98,'“No space in this run…”','tm')},
+{c:'run',s:'done',t:'Preset width debt — exact restore',k:[],
+ d:'Donated widths are recorded per donor. Shrinking the appliance later repays the debt first, restoring each donor to its exact pre-donation width — even after alternating presets.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(20,26,34,30,{label:'0.44'})+cab(54,26,80,30,{label:'0.8 sink'})+cab(134,26,34,30,{label:'0.44'})+ar(96,72,96,60)+t(96,84,'swap back →','tm')+cab(20,92,44,26,{cls:'g',label:'0.5'})+cab(64,92,60,26,{cls:'g',label:'0.6'})+cab(124,92,44,26,{cls:'g',label:'0.5'})},
+{c:'run',s:'done',t:'Standard widths & custom detection',k:[],
+ d:'Width chips 300 / 400 / 600 / 800 mm; anything else shows as “custom”. Module bounds 0.3–1.2 m. Fixed-width appliances disable the control.',
+ v:()=>tag('UI')+[300,400,600,800].map((wd,i)=>`<rect x="${16+i*52}" y="40" width="46" height="20" rx="5" class="${i===2?'g':'keyc'}"/>`+t(39+i*52,53,wd,'tm')).join('')+t(115,90,'else → “custom” · appliances lock width','tm')},
+{c:'run',s:'todo',t:'Width increment snapping on handle drag',k:[],
+ d:'Handle resize is continuous between 0.3–1.2 m — no 100 mm / 3-inch increment snap with a modifier override like Chief Architect / Cabinet Vision.',
+ v:()=>tag('PLAN')+cab(50,40,80,30)+ar(134,55,166,55)+[50,70,90,110,130,150].map(x=>`<line x1="${x}" y1="80" x2="${x}" y2="88" class="d"/>`).join('')+t(108,100,'…no detents while dragging','tm')},
+{c:'run',s:'done',t:'Depth change — back stays anchored',k:[],
+ d:'Individual depth edits keep the back edge fixed (center shifts by half the delta) and magnetically match a connected neighbor’s depth within 2 cm.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(50,26,50,30)+cab(100,26,50,42,{cls:'g'})+ar(125,72,125,90)+`<line x1="40" y1="26" x2="170" y2="26" class="ab" stroke-dasharray="3 2"/>`+t(178,30,'back plane','tm','start')},
+{c:'run',s:'done',t:'Group depth resize',k:[],
+ d:'One shared delta applies across differently-deep modules (differences preserved) behind one stable back plane; nested corner runs and wall children are re-seated too.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,44,34,{cls:'g'})+cab(84,26,44,46,{cls:'g'})+cab(128,26,44,34,{cls:'g'})+ar(106,84,106,102)+t(150,96,'Δ applied to all','tm','start')},
+{c:'run',s:'done',t:'Module drag inside a run — magnetic mating',k:['drag'],
+ d:'Sibling edges pull flush within 8 cm; depth aligns to a sibling’s center/front/back when width bands overlap; alignment guides shown. Position is run-local, works in 2D and 3D identically.',
+ v:()=>tag('PLAN')+cab(30,40,44,30)+cab(96,40,44,30,{cls:'g'})+ar(94,55,76,55)+dim(74,96,86,'≤8cm')+cab(160,40,44,30)+t(118,110,'snaps flush; Z aligns center/front/back','tm')},
+{c:'run',s:'partial',t:'Module drag skips collision',k:[],
+ d:'Parent-frame module drags have no floor-collision check by design — overlaps are possible and only flagged afterwards by the overlap validation. Needs live feedback during the drag.',
+ v:()=>tag('PLAN')+cab(60,44,50,30)+cab(94,58,50,30,{cls:'warn'})+t(120,110,'no red box during module drag','tm')},
+{c:'run',s:'todo',t:'Reparent a module into another run',k:[],
+ d:'Dragging a module “out” keeps it a child of the same run (its local position just grows). No adoption into a neighboring run, no run merge/split on drag.',
+ v:()=>tag('PLAN')+cab(20,30,44,26)+cab(64,30,44,26)+cab(150,80,44,26,{cls:'ghr'})+ar(96,52,160,76)+t(80,116,'still owned by run A','tm')+t(56,22,'run A','tm')+t(196,72,'run B?','tm')},
+{c:'run',s:'future',t:'Insert into a full run (push apart)',k:[],
+ d:'Dropping a cabinet between two flush neighbors should push the rest along (or shrink a filler), blocked with a warning when wall-constrained. Today mid-run adds are simply disabled when there is no free slot.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,44,30)+cab(118,26,44,30)+cab(74,26,44,30,{cls:'p'})+ar(52,80,30,80)+ar(184,80,206,80)+t(118,100,'neighbors slide apart','tm')},
+{c:'run',s:'future',t:'Delete & close the gap',k:[],
+ d:'Deleting a mid-run cabinet leaves a hole (we warn with the gap size in mm). Option to slide the remainder closed is a common pro-tool choice.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,44,30)+`<rect x="84" y="26" width="44" height="30" fill="none" stroke="#c44536" stroke-dasharray="3 2"/>`+X(106,41)+cab(128,26,44,30)+ar(150,80,106,80)+t(118,104,'slide left to close?','tm')},
+{c:'run',s:'future',t:'Equalize / balance widths',k:[],
+ d:'Select several cabinets and distribute the available run length equally or proportionally (Cabinet Vision, Mozaik, Winner).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,30,30,{cls:'p'})+cab(60,26,70,30,{cls:'p'})+cab(130,26,50,30,{cls:'p'})+ar(115,70,115,86)+cab(30,92,50,26,{cls:'g'})+cab(80,92,50,26,{cls:'g'})+cab(130,92,50,26,{cls:'g'})},
+{c:'run',s:'done',t:'Replace in place via presets',k:['panel'],
+ d:'Nine presets (base, drawer base, dishwasher, gas/induction hob, sink, tall pantry, oven tower, fridge) swap the stack while keeping position; any width delta rides the reflow/donor system.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,44,30)+cab(84,26,50,30,{cls:'g',label:'SINK'})+cab(134,26,44,30)+ar(109,90,109,62)+t(109,104,'preset swap, position kept','tm')},
+{c:'run',s:'done',t:'Copy / cut / paste with run promotion',k:['⌘C','⌘X','⌘V'],
+ d:'Cabinets and modules are clipboard-supported; selecting a module whose siblings are all selected promotes the cut/copy to the whole run. Paste picks the copy up for placement.',
+ v:()=>tag('PLAN')+cab(30,30,40,26)+cab(70,30,40,26)+`<rect x="26" y="26" width="88" height="34" fill="none" stroke="#2563eb" stroke-dasharray="3 2"/>`+ar(120,44,150,44,'ab')+cab(152,64,40,26,{cls:'gh'})+cab(192,64,38,26,{cls:'gh'})+key(120,96,'⌘C')+key(152,96,'⌘V')},
+{c:'run',s:'future',t:'Duplicate along the run / array',k:[],
+ d:'Ctrl-drag or a “repeat” command placing a copy snapped next to the original, or N copies at spacing (SketchUp ×N, Chief Architect Replicate).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,44,30)+cab(74,26,44,30,{cls:'p'})+cab(118,26,44,30,{cls:'p'})+cab(162,26,44,30,{cls:'p'})+t(118,80,'⌥-drag → ×3','tm')},
+{c:'run',s:'done',t:'Empty-run cleanup cascade',k:['Delete'],
+ d:'Deleting the last surviving child of a run (including via multi-select) deletes the emptied run group automatically; any surviving module or derived leg keeps it alive.',
+ v:()=>tag('PLAN')+`<rect x="60" y="40" width="110" height="36" fill="none" stroke="#9a9186" stroke-dasharray="3 2"/>`+t(115,34,'run group','tm')+cab(70,44,40,26,{cls:'ghr'})+X(90,57)+ar(150,58,190,58)+t(196,60,'∅','tx','start')},
+{c:'run',s:'done',t:'Neighbor countertops re-trim on move',k:[],
+ d:'A frame-loop watcher bumps an adjacency revision on nearby sibling runs whenever one moves or appears, so abutting countertop joins re-trim without manual refresh — placement stays a single undo step.',
+ v:()=>tag('PLAN')+cab(30,40,60,30)+cab(92,40,60,30,{cls:'g'})+`<line x1="26" y1="36" x2="156" y2="36" class="ctr"/>`+ar(122,90,122,74)+t(122,104,'slab joins heal automatically','tm')},
+
+/* ================= 3. CORNERS ================= */
+{c:'corner',s:'done',t:'L-corner quick action',k:['L Left','L Right'],
+ d:'From a base module at a run end: creates a perpendicular base leg (corner-filler pocket + connected cabinet), a matching wall leg, a bridge filler above the corner, and wall cabinets over both — one undo step, selection-proxied as a group.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(54,26,44,30)+cab(10,26,44,30,{label:'src'})+cab(10,56,30,30,{cls:'g',label:'CF'})+cab(10,86,30,36,{cls:'g'})+ar(60,80,32,80)+t(120,80,'“L Left” → filler + leg + bridge','tm','start')},
+{c:'corner',s:'done',t:'Corner filler pocket & corner shelf',k:[],
+ d:'The filler reserves the corner dead space with an angled front and optional corner shelf boards; gaps next to fillers never raise gap warnings.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+`<path d="M10 26 h44 v30 l-14 0 L10 86 z" class="c"/>`+`<line x1="40" y1="56" x2="10" y2="86" class="f"/>`+cab(54,26,44,30)+cab(10,86,30,36)+t(140,60,'angled front + shelf','tm','start')},
+{c:'corner',s:'done',t:'Wall-constrained corner fitting',k:[],
+ d:'The connected leg width starts at the source width and is trimmed against wall footprints in 1 cm steps until a layout fits; a side wall can shrink the source itself (down to 0.05 when trimmed). No usable width → action disabled.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+wall(0,100,80,10)+cab(10,26,44,30)+cab(10,56,30,30,{cls:'g'})+cab(10,86,30,14,{cls:'g'})+ar(25,120,25,104)+t(120,96,'leg clipped by wall, −1 cm steps','tm','start')},
+{c:'corner',s:'partial',t:'Corner sync on source edits',k:[],
+ d:'Editing the source module re-syncs the legs (width/position/depth). Legs stay attached via raw edge shift even when full re-layout bails (wall drawn later, leg gained modules) — but in those states the geometric re-layout is silently skipped.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,54,30,{cls:'g',label:'src +'})+cab(10,56,30,30)+ar(40,96,40,88)+t(130,60,'legs follow the edge','tm','start')+t(130,74,'re-layout can bail silently','tm','start')},
+{c:'corner',s:'done',t:'Style propagation across the corner group',k:[],
+ d:'Front style, overlay, handle style/position and reveal gap propagate through source, legs, bridge and wall children in both directions — even when geometric sync bails.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,44,30,{cls:'g'})+cab(54,26,44,30,{cls:'g'})+cab(10,56,30,30,{cls:'g'})+cab(10,86,30,36,{cls:'g'})+t(120,70,'one shaker/handle/reveal','tm','start')+t(120,84,'edit updates all','tm','start')},
+{c:'corner',s:'done',t:'Depth compensation across the corner',k:[],
+ d:'Growing a leg’s depth eats into the source module’s width (floor 0.05) and shrinks the linked bridge (floor 0.01); bounds are clamped so compensated widths stay within 0.3–1.2. Opposite-turn growth resizes the cabinet in front, not behind.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,36,30,{label:'src −'})+cab(46,26,44,30)+cab(10,56,42,30,{cls:'g',label:'deeper'})+ar(52,71,66,71)+t(130,96,'leg depth ⇄ source width','tm','start')},
+{c:'corner',s:'done',t:'Chained corners (U-shape)',k:[],
+ d:'A second corner can be added from the outer end of an extended leg — left turn off a right leg, corners on both side walls — with nested world transforms verified by tests.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+wall(220,16,10,116)+cab(10,26,50,30)+cab(60,26,55,30)+cab(115,26,55,30)+cab(170,26,50,30)+cab(10,56,30,40)+cab(10,96,30,30)+cab(190,56,30,40)+cab(190,96,30,30)+t(115,90,'U-shaped kitchen','tm')},
+{c:'corner',s:'done',t:'Corner deletion / unlink matrix',k:['Delete'],
+ d:'Delete a leg → only it goes, source unlinks. Delete the source module → legs survive as plain runs. Delete the source run → whole subtree cascades. Delete the wall-top → only the wall-top.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,44,30)+cab(10,56,30,30,{cls:'ghr'})+cab(10,86,30,36,{cls:'ghr'})+X(25,86)+CK(80,70)+t(96,72,'source stays','tm','start')},
+{c:'corner',s:'todo',t:'Diagonal 45° corner cabinet',k:[],
+ d:'No first-class corner module exists — L-corners are emulated by linked runs + fillers. A diagonal-front corner unit occupying both walls (universal in pro tools; run-layout comments anticipate it).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+`<path d="M10 26 h60 v14 L38 86 H10 z" class="p"/>`+`<line x1="66" y1="42" x2="42" y2="82" class="f"/>`+cab(70,26,44,30)+cab(10,86,28,36)+t(130,66,'one diagonal unit','tm','start')},
+{c:'corner',s:'future',t:'Lazy susan / carousel corner',k:[],
+ d:'Pie-cut 90° corner cabinet with rotating shelf hardware; door pair or bifold. IKEA carousel, Chief Architect, 2020.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+`<path d="M10 26 h56 v30 h-26 v26 h-30 z" class="p"/>`+`<circle cx="38" cy="54" r="17" class="d" fill="none" stroke-dasharray="3 2"/>`+ar(52,42,56,50)+t(130,60,'rotating shelves','tm','start')},
+{c:'corner',s:'future',t:'Blind corner + pull filler rule',k:[],
+ d:'Blind-corner cabinet sliding behind the return run, with an enforced pull/offset filler so the adjacent doors and handles clear (2020, Cabinet Vision, Mozaik).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,70,30,{cls:'p',label:'blind'})+`<rect x="10" y="56" width="30" height="12" class="warn"/>`+t(60,66,'pull filler','tm','start')+cab(10,68,30,40)},
+{c:'corner',s:'future',t:'LeMans / magic-corner pull-out',k:[],
+ d:'Hardware accessories (Häfele, Kessebömer, Rev-A-Shelf) attachable to blind corners, pulled from a hardware catalog.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,60,30,{cls:'p'})+`<path d="M30 42 q22 4 34 24" class="a" fill="none"/><polygon points="64,66 58,62 61,57" class="ah"/>`+`<ellipse cx="34" cy="42" rx="12" ry="6" class="d" fill="none"/>`+t(130,60,'kidney trays swing out','tm','start')},
+{c:'corner',s:'future',t:'Corner handle-clash filler enforcement',k:[],
+ d:'Auto-size the inside-corner filler (typ. 1.5–3 in) so knobs/drawer fronts on perpendicular runs can’t collide.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(40,26,44,30)+cab(10,60,30,40)+`<circle cx="44" cy="52" r="2.4" fill="#55504a"/><circle cx="36" cy="64" r="2.4" fill="#55504a"/>`+X(41,58)+t(120,80,'handles collide without filler','tm','start')},
+{c:'corner',s:'partial',t:'Peninsula',k:[],
+ d:'Achievable today by turning an L off a wall run into the room, but there is no dedicated flow, junction resolution, or seating treatment on the free sides.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(20,26,50,30)+cab(70,26,50,30)+cab(70,56,44,34,{cls:'g'})+cab(70,90,44,32,{cls:'g'})+`<circle cx="130" cy="76" r="4" class="d" fill="#fff"/><circle cx="130" cy="102" r="4" class="d" fill="#fff"/>`+t(160,90,'seating side?','tm','start')},
+
+/* ================= 4. VERTICAL ================= */
+{c:'vertical',s:'done',t:'Three tiers — base / wall / tall',k:[],
+ d:'Runs carry a tier; modules a type. Defaults: base carcass 0.8 + plinth 0.1 + top 0.02; wall depth 0.32 with bottom at 1.37; tall carcass 2.07. Tier mismatches are validation errors.',
+ v:()=>tag('ELEV')+floor()+ebase(20,54,{label:'base'})+ewall(20,54,{label:'wall'})+etall(120,44,{label:'tall'})+vdim(190,26,122,'2.07+')+vdim(8,26,54,'')},
+{c:'vertical',s:'done',t:'14 compartment types in a stack',k:[],
+ d:'Shelf, drawer(1–6), door (L/R/double/glass, shelves 0–8), sink, oven, microwave, dishwasher, gas & induction cooktops, pull-out pantry, 4 fridge layouts, 2 hood styles — freely stacked per module.',
+ v:()=>{let s=tag('ELEV')+floor();s+=`<rect x="60" y="80" width="50" height="34" class="c"/><line x1="60" y1="91" x2="110" y2="91" class="f"/><line x1="60" y1="102" x2="110" y2="102" class="f"/>`;s+=`<rect x="63" y="114" width="44" height="8" class="c"/>`;s+=`<line x1="56" y1="78.6" x2="114" y2="78.6" class="ctr"/>`;s+=`<rect x="120" y="46" width="50" height="68" class="c"/><line x1="145" y1="48" x2="145" y2="112" class="f"/>`;s+=`<rect x="123" y="114" width="44" height="8" class="c"/>`;s+=t(88,72,'drawers ×3','lab')+t(145,40,'doors + oven…','lab');return s;}},
+{c:'vertical',s:'done',t:'Stack resize — proportional redistribution',k:['panel'],
+ d:'Resizing one compartment keeps the carcass height constant: flexible siblings absorb the delta proportionally to their slack, each keeping ≥ 0.1 m; appliance rows are locked.',
+ v:()=>tag('ELEV')+floor()+`<rect x="70" y="46" width="60" height="68" class="c"/>`+`<line x1="70" y1="66" x2="130" y2="66" class="f"/><line x1="70" y1="90" x2="130" y2="90" class="f"/>`+`<rect x="73" y="114" width="54" height="8" class="c"/>`+ar(100,58,100,50)+ar(100,74,100,82)+vdim(140,46,114,'total fixed')},
+{c:'vertical',s:'done',t:'Appliance swap auto-filler',k:[],
+ d:'Replacing the only compartment with a fixed-height appliance auto-inserts a flexible drawer (base) or door filler; the fridge owns the whole stack; the dishwasher fills the run height; removing the filler above a DW restores and re-fills.',
+ v:()=>tag('ELEV')+floor()+`<rect x="60" y="80" width="50" height="34" class="c"/>`+t(85,99,'OVEN','lab')+`<rect x="60" y="60" width="50" height="20" class="g"/>`+t(85,72,'auto drawer','lab')+`<rect x="63" y="114" width="44" height="8" class="c"/>`+t(160,88,'gap → filler','tm')},
+{c:'vertical',s:'done',t:'Remove compartment → compaction',k:[],
+ d:'Removing the last row compacts the carcass to the occupied height (min 0.4) when no flexible row remains — no orphaned air inside a cabinet.',
+ v:()=>tag('ELEV')+floor()+`<rect x="55" y="60" width="50" height="54" class="c"/><rect x="55" y="46" width="50" height="14" class="ghr"/>`+X(80,53)+ar(120,52,132,72)+`<rect x="140" y="70" width="50" height="44" class="g"/>`+t(165,124,'')+t(165,64,'shorter carcass','tm')},
+{c:'vertical',s:'done',t:'Base ⇄ Tall switch',k:['quick action'],
+ d:'“Tall” converts a base module (deleting its wall child) to 2.07 carcass, no countertop, 3-shelf doors; “Base” converts back matching run dimensions.',
+ v:()=>tag('ELEV')+floor()+ebase(30,50)+ewall(30,50,{cls:'ghr'})+X(55,40)+ar(96,80,116,80)+etall(130,46,{cls:'g'})},
+{c:'vertical',s:'done',t:'Wall cabinet above a base module',k:['quick action “Wall”'],
+ d:'Adds a wall child aligned to the tall-top line (bottom at 1.37), back-flush, width matched, styling inherited. Blocked — with reason — when it would overlap an existing wall cabinet (OBB test on the level).',
+ v:()=>tag('ELEV')+floor()+ebase(40,54)+ewall(40,54,{cls:'g'})+ar(120,42,98,42)+t(150,44,'+ Wall','tm')+`<line x1="20" y1="26" x2="210" y2="26" class="d" stroke-dasharray="3 2"/>`+t(206,22,'tall top line','tm')},
+{c:'vertical',s:'done',t:'Chimney hood above a base module',k:['quick action'],
+ d:'Adds a hood wall-child (pyramid or curved glass); duct auto-extends to the resolved ceiling (default 2.5 m); hood-only modules hide dimension/front sections and skip the E-operate.',
+ v:()=>tag('ELEV')+floor()+ebase(70,54)+`<rect x="88" y="14" width="18" height="22" class="g"/><path d="M74 54 L120 54 L106 36 L88 36 z" class="g"/>`+t(150,40,'duct → ceiling','tm','start')},
+{c:'vertical',s:'done',t:'Top finish — none / top cabinet / trim',k:['panel'],
+ d:'Wall children, tall modules, fillers and wall runs can carry a top finish: a mini top-cabinet with its own doors, or a trim/soffit board; “Fill to ceiling” sets its height to the remaining gap.',
+ v:()=>tag('ELEV')+floor()+`<line x1="0" y1="14" x2="230" y2="14" class="w" stroke-width="2"/>`+ewall(40,50)+`<rect x="40" y="14" width="50" height="12" class="g"/>`+t(65,10,'')+ewall(130,50)+`<rect x="130" y="14" width="50" height="12" class="g"/><line x1="155" y1="14" x2="155" y2="26" class="f"/>`+t(65,48,'trim','lab')+t(155,48,'top cab','lab')},
+{c:'vertical',s:'partial',t:'Ceiling fit awareness',k:[],
+ d:'Ceiling gap is computed through nested parents (floor 0.05) and “top cabinet &lt; 0.15 → use trim” warns; but nothing blocks or warns when a tall unit + finish genuinely exceeds the ceiling at placement time.',
+ v:()=>tag('ELEV')+floor()+`<line x1="0" y1="20" x2="230" y2="20" class="w" stroke-width="2"/>`+etall(60,46)+vdim(120,20,26,'gap')+t(170,70,'no hard stop','tm')},
+{c:'vertical',s:'future',t:'Wall-cabinet height presets',k:[],
+ d:'Industry lines offer 12/15/18/24/30/36/42 in (400–1000 mm) wall heights as presets per design line; ours is a free slider only.',
+ v:()=>tag('ELEV')+floor()+ewall(30,40)+`<rect x="80" y="14" width="40" height="40" class="p"/>`+`<rect x="130" y="34" width="40" height="20" class="p"/>`+t(50,64,'30&quot;','lab')+t(100,64,'42&quot;','lab')+t(150,64,'15&quot;','lab')},
+{c:'vertical',s:'future',t:'Crown molding auto-run',k:[],
+ d:'A molding profile swept along wall/tall tops, mitering around corners with returns at exposed ends; stacked build-ups (Chief Architect, Cabinet Vision, 2020).',
+ v:()=>tag('ELEV')+floor()+ewall(40,60)+ewall(100,60)+`<path d="M36 26 h128 l6 -8 h-140 z" class="p"/>`+t(180,26,'crown','tm')},
+{c:'vertical',s:'future',t:'Light rail + under-cabinet lighting',k:[],
+ d:'Trim strip along wall-cabinet bottoms concealing puck/strip lights that feed renders and the electrical plan.',
+ v:()=>tag('ELEV')+floor()+ewall(60,90)+`<rect x="60" y="54" width="90" height="5" class="p"/>`+`<path d="M75 62 l-6 14 M105 62 l0 14 M135 62 l6 14" stroke="#e3b341" stroke-width="2"/>`+ebase(60,90)},
+{c:'vertical',s:'partial',t:'Soffit / bulkhead',k:[],
+ d:'The trim top-finish approximates a per-module soffit, but there is no room-level soffit/bulkhead object auto-sized to cabinet depth + reveal.',
+ v:()=>tag('ELEV')+floor()+`<line x1="0" y1="14" x2="230" y2="14" class="w" stroke-width="2"/>`+`<rect x="50" y="14" width="120" height="14" class="p"/>`+ewall(56,50)+ewall(108,56)+t(196,24,'soffit','tm')},
+{c:'vertical',s:'future',t:'Stacked wall cabinets (stackers)',k:[],
+ d:'True secondary cabinets above standard walls up to the ceiling as separate SKUs — richer than our single top-cabinet finish (own doors/glass, catalog identity).',
+ v:()=>tag('ELEV')+floor()+`<line x1="0" y1="14" x2="230" y2="14" class="w" stroke-width="2"/>`+ewall(70,80)+`<rect x="70" y="14" width="80" height="12" class="p"/><line x1="110" y1="14" x2="110" y2="26" class="f"/>`+t(190,22,'stacker','tm')},
+
+/* ================= 5. APPLIANCES ================= */
+{c:'appliance',s:'done',t:'Sink base',k:[],
+ d:'Single / double / 60-40 bowls, CSG cutout in the countertop, basin walls, drain and faucet; 0.8 m fixed width; false front 0.22; the plan symbol draws bowls + faucet dot.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(70,26,80,34)+`<rect x="80" y="32" width="26" height="20" rx="4" fill="#fff" stroke="#6f675b"/><rect x="112" y="32" width="26" height="20" rx="4" fill="#fff" stroke="#6f675b"/><circle cx="109" cy="30" r="2" fill="#6f675b"/>`+dim(70,150,72,'0.8 fixed')},
+{c:'appliance',s:'done',t:'Gas cooktop with live burners',k:['click a knob'],
+ d:'2/4/5-wok/6 burner layouts, toggleable grate, animated tube flames, and in-scene clickable knobs (180 ms eased turn) that toggle each burner without changing selection.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(70,26,76,34)+[88,108,128].map(x=>`<circle cx="${x}" cy="38" r="6.5" class="d" fill="none"/><circle cx="${x}" cy="38" r="2.6" class="d" fill="none"/>`).join('')+[88,108,128].map(x=>`<circle cx="${x}" cy="53" r="2" fill="#55504a"/>`).join('')+ar(160,80,130,58)+t(168,88,'click knob','tm','start')},
+{c:'appliance',s:'done',t:'Induction cooktop',k:[],
+ d:'2- or 4-zone glass surface with active-zone glow; zero stack height (sits in the countertop plane like the sink).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(75,26,76,34)+`<rect x="82" y="31" width="62" height="24" rx="2" fill="#2b2b31"/>`+[97,129].map(x=>`<circle cx="${x}" cy="43" r="8" fill="none" stroke="#8fb7ff" stroke-width="1.4"/>`).join('')},
+{c:'appliance',s:'done',t:'Hood — pyramid / curved glass',k:[],
+ d:'Canopy heights 0.38 / 0.44, depth 0.5; duct auto-extends to the ceiling; hood modules strip plinth/countertop and set carcass to canopy height.',
+ v:()=>tag('ELEV')+floor()+`<rect x="96" y="14" width="16" height="20" class="c"/><path d="M80 50 h48 l-14 -16 h-20 z" class="c"/>`+`<path d="M150 34 q20 4 26 16" fill="none" stroke="#9a9186"/>`+ebase(76,56)+t(180,44,'or curved glass','tm')},
+{c:'appliance',s:'done',t:'Oven & microwave (tower)',k:[],
+ d:'Fixed 0.6×0.595 (oven) and 0.61×0.39 (micro); “Oven Tower” preset stacks drawers + oven + micro + doors in a tall unit; oven door opens 88° in the operate animation.',
+ v:()=>tag('ELEV')+floor()+etall(80,52)+`<rect x="85" y="62" width="42" height="26" fill="#fff" stroke="#6f675b"/><circle cx="106" cy="58" r="1.6" fill="#6f675b"/>`+`<rect x="85" y="34" width="42" height="18" fill="#fff" stroke="#6f675b"/>`+t(106,80,'oven','lab')+t(106,45,'micro','lab')},
+{c:'appliance',s:'done',t:'Dishwasher',k:[],
+ d:'0.6 m wide, integrated front, takes the parent run’s full carcass height; interior racks modeled; disables width control.',
+ v:()=>tag('ELEV')+floor()+ebase(50,50)+ebase(100,50,{label:'DW'})+ebase(150,50)+`<line x1="100" y1="86" x2="150" y2="86" class="f"/>`},
+{c:'appliance',s:'done',t:'Fridge — four layouts',k:[],
+ d:'Single / double / top-freezer / bottom-freezer; forces the module tall (1.78 h, column 0.76 / wide 0.91); depth follows the run; detailed interior; slower 450 ms door animation.',
+ v:()=>tag('ELEV')+floor()+`<rect x="80" y="36" width="56" height="86" class="c"/><line x1="108" y1="38" x2="108" y2="120" class="f"/><line x1="82" y1="64" x2="134" y2="64" class="f"/>`+t(108,30,'REF','lab')},
+{c:'appliance',s:'done',t:'Pull-out pantry',k:[],
+ d:'0.3 m tall pull-out with 2–8 baskets in wire / tray / glass rack styles; forces tall type.',
+ v:()=>tag('ELEV')+floor()+etall(90,30)+[46,64,82,100].map(y=>`<line x1="93" y1="${y}" x2="117" y2="${y}" class="f"/>`).join('')+ar(120,70,144,70)+t(160,72,'pulls out','tm','start')},
+{c:'appliance',s:'done',t:'Fixed widths drive donor reflow',k:[],
+ d:'Appliance presets impose their width; in constrained runs neighbors donate (and are repaid later via width debt). Appliances themselves never donate width.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+wall(220,16,10,116)+cab(10,26,40,30,{label:'−'})+cab(50,26,80,30,{cls:'g',label:'SINK 0.8'})+cab(130,26,44,30,{label:'−'})+cab(174,26,46,30)},
+{c:'appliance',s:'todo',t:'Hood auto-centering over the cooktop',k:[],
+ d:'The hood is just “a wall child above a base module” — nothing snaps it to the cooktop below, warns when it is narrower than the hob, or enforces mounting height (24–30 in electric / 30 in gas).',
+ v:()=>tag('ELEV')+floor()+ebase(60,76)+`<circle cx="84" cy="76" r="0"/>`+`<rect x="76" y="70" width="44" height="6" fill="#2b2b31"/>`+`<path d="M120 46 h40 l-12 -14 h-16 z" class="ghr"/>`+`<line x1="98" y1="70" x2="98" y2="20" class="d" stroke-dasharray="2 2"/>`+X(140,54)+t(60,30,'center line','tm')},
+{c:'appliance',s:'future',t:'Dishwasher-near-sink convention',k:[],
+ d:'Suggest/validate the DW within 36 in of the sink edge (NKBA); prompt for an end support panel when a DW terminates a run (IKEA reminds explicitly).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,70,32,{label:'SINK'})+cab(110,26,50,32,{cls:'p',label:'DW'})+dim(110,160,74,'≤ 36&quot;')+CK(190,42)},
+{c:'appliance',s:'future',t:'Fridge surround & over-fridge cabinet',k:[],
+ d:'Tall flanking panels + a deep (24 in) wall cabinet over the fridge, auto-sized from the appliance dims + ventilation clearance (IKEA enclosure cabinets, 2020, Cabinet Vision).',
+ v:()=>tag('ELEV')+floor()+`<rect x="76" y="36" width="6" height="86" class="p"/><rect x="140" y="36" width="6" height="86" class="p"/>`+`<rect x="76" y="14" width="70" height="22" class="p"/>`+`<rect x="84" y="40" width="54" height="82" class="c"/><line x1="111" y1="42" x2="111" y2="120" class="f"/>`+t(111,30,'deep wall cab','lab')},
+{c:'appliance',s:'future',t:'Cooktop clearances & landing zones',k:[],
+ d:'NKBA landing areas (15 in one side / 12 in the other of a cooktop; 24/18 in at the sink; 15 in at fridge/oven/micro) and combustible clearances as live warnings.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,40,30,{cls:'warn'})+cab(70,26,70,30,{label:'HOB'})+cab(140,26,52,30,{cls:'warn'})+dim(30,70,72,'15&quot;')+dim(140,192,72,'12&quot;')},
+{c:'appliance',s:'partial',t:'Panel-ready appliance fronts',k:[],
+ d:'The dishwasher renders an integrated front; but no door-style panel option for fridges, and panels are not counted anywhere (no BOM).',
+ v:()=>tag('ELEV')+floor()+ebase(60,50,{label:'DW ✓'})+`<rect x="120" y="36" width="52" height="86" class="ghr"/>`+t(146,80,'panel fridge?','lab')},
+{c:'appliance',s:'future',t:'Real appliance SKU catalog',k:[],
+ d:'Manufacturer-accurate appliance models with true dims and clearances (2020 has the largest catalog network; IKEA uses its own SKUs).',
+ v:()=>tag('UI')+[0,1,2].map(i=>`<rect x="${28+i*62}" y="36" width="52" height="52" rx="6" class="keyc"/>`).join('')+t(54,66,'W3030','tm')+t(116,66,'SB36','tm')+t(178,66,'REF36','tm')+t(115,108,'brand · price · clearances','tm')},
+{c:'appliance',s:'future',t:'Appliance garage',k:[],
+ d:'Countertop-sitting cabinet between counter and wall cabinet with tambour or lift door.',
+ v:()=>tag('ELEV')+floor()+ebase(70,80)+ewall(70,80)+`<rect x="70" y="54" width="34" height="25" class="p"/>`+[58,63,68,73].map(y=>`<line x1="72" y1="${y}" x2="102" y2="${y}" class="d"/>`).join('')+t(140,68,'tambour','tm')},
+
+/* ================= 6. COUNTERTOPS & FINISHES ================= */
+{c:'counter',s:'done',t:'Auto countertop spans',k:[],
+ d:'The slab is derived per span: it breaks at gaps, tall modules, top-height changes and depth-footprint changes; equal-depth flush neighbors merge into one continuous slab.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(20,26,44,30)+cab(64,26,44,30)+cab(108,26,30,30,{label:'tall'})+cab(138,26,44,30)+`<line x1="16" y1="60" x2="108" y2="60" class="ctr"/>`+`<line x1="138" y1="60" x2="186" y2="60" class="ctr"/>`+t(123,74,'break','tm')},
+{c:'counter',s:'done',t:'Overhang suppression at abutments',k:[],
+ d:'The 0.02 side overhang is suppressed wherever a span abuts: flush same-height neighbors, tall neighbors, adjacent collinear runs, the mating edge of an L-leg, and bar knee walls. 2D and 3D share this math.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,60,30)+cab(90,26,60,30)+`<line x1="26" y1="60" x2="154" y2="60" class="ctr"/>`+`<line x1="26" y1="26" x2="26" y2="60" class="ctr"/>`+`<line x1="154" y1="26" x2="154" y2="60" class="ctr"/>`+t(90,74,'no lip at the joint','tm')+CK(196,42)},
+{c:'counter',s:'done',t:'Waterfall ends',k:['toggle'],
+ d:'Exposed span ends (nothing abutting) can drop a waterfall slab to the floor.',
+ v:()=>tag('ELEV')+floor()+`<rect x="60" y="76" width="100" height="5" fill="#7c7468"/>`+`<rect x="155" y="76" width="5" height="46" fill="#7c7468"/>`+`<rect x="66" y="81" width="86" height="33" class="c"/><rect x="69" y="114" width="80" height="8" class="c"/>`},
+{c:'counter',s:'done',t:'Island seating overhang & finished back',k:[],
+ d:'Back overhang up to 0.45 m for knee space plus a finished back panel; hidden when a bar sits on the back edge.',
+ v:()=>tag('ELEV')+floor()+`<rect x="60" y="76" width="120" height="5" fill="#7c7468"/>`+`<rect x="66" y="81" width="80" height="33" class="c"/><rect x="69" y="114" width="74" height="8" class="c"/>`+`<circle cx="166" cy="96" r="7" class="d" fill="#fff"/><rect x="163" y="103" width="6" height="19" class="c"/>`+dim(146,180,70,'≤0.45')},
+{c:'counter',s:'done',t:'Bar counter (multi-level)',k:['toggle'],
+ d:'A raised bar on the back/left/right edge: height 0.9–1.3, depth 0.15–0.5, with a knee wall — a true split-level counter.',
+ v:()=>tag('ELEV')+floor()+`<rect x="50" y="76" width="80" height="5" fill="#7c7468"/>`+`<rect x="56" y="81" width="68" height="33" class="c"/>`+`<rect x="130" y="58" width="8" height="64" class="c"/>`+`<rect x="124" y="53" width="60" height="5" fill="#7c7468"/>`+vdim(196,53,122,'0.9–1.3')},
+{c:'counter',s:'done',t:'Cutouts — sink & cooktop',k:[],
+ d:'CSG bowl cutouts and hob openings are cut from the slab; the faucet rises above the run slab when the module has no own top.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+`<line x1="26" y1="60" x2="204" y2="60" class="ctr"/>`+cab(30,26,80,30)+`<rect x="42" y="32" width="24" height="18" rx="4" fill="#fff" stroke="#6f675b"/><rect x="72" y="32" width="24" height="18" rx="4" fill="#fff" stroke="#6f675b"/>`+cab(110,26,70,30)+[128,152].map(x=>`<circle cx="${x}" cy="41" r="6" class="d" fill="none"/>`).join('')},
+{c:'counter',s:'done',t:'Toe kick & shared plinth',k:[],
+ d:'A continuous run plinth with toe-kick recess (depth 0.075, height 0.1 default), show/hide toggle, per-run height — spans the whole run including around corner legs.',
+ v:()=>tag('ELEV')+floor()+`<rect x="40" y="80" width="140" height="34" class="c"/><line x1="36" y1="78.6" x2="184" y2="78.6" class="ctr"/>`+`<rect x="46" y="114" width="128" height="8" class="c"/>`+ar(30,118,44,118)+t(24,110,'recess','tm')},
+{c:'counter',s:'done',t:'Fronts — slab / shaker / raised arch / glass',k:[],
+ d:'Three door profiles plus glass doors (arched frame + pane on raised-arch); overlay or inset mounting; reveal gap presets 2/3/4/6 mm; run-wide style sync.',
+ v:()=>tag('ELEV')+floor()+`<rect x="30" y="60" width="40" height="54" class="c"/>`+`<rect x="80" y="60" width="40" height="54" class="c"/><rect x="87" y="67" width="26" height="40" fill="none" stroke="#9a9186"/>`+`<rect x="130" y="60" width="40" height="54" class="c"/><path d="M137 74 q13 -10 26 0 v33 h-26 z" fill="none" stroke="#9a9186"/>`+t(50,124,'')+t(50,54,'slab','lab')+t(100,54,'shaker','lab')+t(150,54,'arch','lab')},
+{c:'counter',s:'done',t:'Handles — 5 styles, 3 positions',k:[],
+ d:'Bar, knob, scooped cutout (CSG), drilled hole, or none; auto/top/center placement; hardware paints via its own slot.',
+ v:()=>tag('ELEV')+floor()+`<rect x="30" y="60" width="34" height="54" class="c"/><rect x="58" y="66" width="3" height="18" rx="1.5" fill="#55504a"/>`+`<rect x="74" y="60" width="34" height="54" class="c"/><circle cx="102" cy="70" r="3" fill="#55504a"/>`+`<rect x="118" y="60" width="34" height="54" class="c"/><path d="M126 62 h18 a4 4 0 0 1 -18 0" fill="#e8e2d8" stroke="#9a9186"/>`+t(47,54,'bar','lab')+t(91,54,'knob','lab')+t(135,54,'cutout','lab')},
+{c:'counter',s:'done',t:'Paint slots — 8 zones',k:['paint mode'],
+ d:'Front, carcass, countertop, plinth, hardware, glass, appliance, appliance-interior paint independently via slot-based painting resolved from the clicked mesh.',
+ v:()=>tag('ELEV')+floor()+`<rect x="70" y="76" width="90" height="5" fill="#8a6f4e"/>`+`<rect x="76" y="81" width="78" height="33" fill="#dfe8df" stroke="#9a9186"/>`+`<rect x="79" y="114" width="72" height="8" fill="#4e4a44"/>`+`<rect x="112" y="86" width="3" height="14" fill="#b8b1a6"/>`+t(180,92,'each zone','tm')+t(180,102,'paints alone','tm')},
+{c:'counter',s:'done',t:'Metric / US dimension profiles',k:[],
+ d:'“Metric · 600 mm” and “US · 24 in” one-click profiles (depth/carcass/plinth/top); anything else reads “custom”. Standard width chips are metric-only.',
+ v:()=>tag('UI')+`<rect x="30" y="46" width="80" height="24" rx="6" class="g"/>`+t(70,61,'Metric · 600','tm')+`<rect x="120" y="46" width="80" height="24" rx="6" class="keyc"/>`+t(160,61,'US · 24 in','tm')+t(115,96,'imperial widths not offered','tm')},
+{c:'counter',s:'future',t:'Backsplash auto-generation',k:[],
+ d:'Splash surface auto-fills between counter and wall cabinets, wrapping around windows and outlets (Chief Architect custom backsplash, 2020, HomeByMe).',
+ v:()=>tag('ELEV')+floor()+ebase(50,120)+ewall(50,120)+`<rect x="50" y="54" width="120" height="25" class="p"/>`+t(196,68,'splash','tm')},
+{c:'counter',s:'future',t:'Countertop edge profiles',k:[],
+ d:'Bullnose, ogee, eased edge library plus seam placement and slab-size limits.',
+ v:()=>tag('ELEV')+floor()+`<rect x="40" y="70" width="60" height="10" fill="#7c7468"/>`+`<path d="M120 70 h50 q8 5 0 10 h-50 z" fill="#7c7468"/>`+t(70,94,'eased','lab')+t(148,94,'ogee','lab')},
+{c:'counter',s:'partial',t:'Finished end panels',k:[],
+ d:'A finished-back toggle and per-side open-side control exist, but no auto-detection of exposed ends offering applied door-style end panels (IKEA reminds; Cabinet Vision auto-detects).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(60,26,44,30)+cab(104,26,44,30)+`<rect x="148" y="26" width="5" height="30" class="p"/>`+t(186,44,'end panel?','tm')},
+{c:'counter',s:'future',t:'Scribe strips',k:[],
+ d:'Wall-adjacent cabinets get a scribe allowance/strip to be site-trimmed against out-of-plumb walls (Cabinet Vision, Mozaik, Chief Architect auto-clip stiles).',
+ v:()=>tag('PLAN')+`<path d="M10 16 l4 116 h-14 v-116 z" class="w"/>`+wall(0,16,230,10)+`<rect x="14" y="26" width="8" height="30" class="p"/>`+cab(22,26,44,30)+t(120,44,'scribe absorbs the lean','tm','start')},
+
+/* ================= 7. INTERACTION ================= */
+{c:'interact',s:'done',t:'Quick-action bar on selection',k:[],
+ d:'Ordered: Left · L Left · (module: Wall · Tall/Base) · L Right · Right. Blocked actions are disabled with a reason tooltip and a shake — never hidden, so the vocabulary stays learnable.',
+ v:()=>tag('UI')+cab(80,70,70,34)+['←','L','W','T','L','→'].map((s,i)=>`<rect x="${44+i*24}" y="34" width="20" height="16" rx="4" class="${i===2?'keyc':'keyc'}"/>`+t(54+i*24,45,s,'tm')).join('')+`<rect x="92" y="34" width="20" height="16" rx="4" fill="none" stroke="#c44536"/>`+t(102,26,'disabled + why','tm')},
+{c:'interact',s:'done',t:'Width handles steal / give width',k:['drag'],
+ d:'Dragging a width arrow against a flush neighbor exchanges width with it (live preview incl. wall children); handles hidden on closed sides, next to corner fillers. Limits 0.3–1.2 m.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(50,26,60,30,{cls:'g'})+cab(110,26,60,30)+dar(96,41,124,41)+t(115,80,'neighbor shrinks as you grow','tm')},
+{c:'interact',s:'done',t:'Depth / height / rotate handles',k:[],
+ d:'Front depth arrow (magnetic neighbor-depth match at 2 cm), height handle for wall/tall modules, rotate ring at the composite bounds center with 45° snapping. Groups add connected-run + wall-group depth handles.',
+ v:()=>tag('PLAN')+cab(80,40,60,36)+ar(110,80,110,100)+`<path d="M160 58 a26 26 0 0 1 -18 24" class="a" fill="none"/><polygon points="142,82 150,84 146,76" class="ah"/>`+dar(74,58,60,58)},
+{c:'interact',s:'done',t:'Operate — doors & drawers',k:['E'],
+ d:'E animates the selection open/closed (320 ms, 450 ms with a fridge; oven door 88°): a run swings every module together (any-open → close all); a module toggles itself. Mid-animation presses reverse from the live frame; panel offers a 0–100% slider.',
+ v:()=>tag('PLAN')+cab(70,40,50,30)+`<line x1="70" y1="70" x2="56" y2="94" class="f"/><path d="M70 70 A28 28 0 0 0 56 94" class="d" fill="none" stroke-dasharray="2 2"/>`+`<rect x="124" y="70" width="40" height="12" class="c"/>`+cab(124,40,40,30)+key(180,50,'E')},
+{c:'interact',s:'done',t:'In-scene cooktop knob click',k:['Click'],
+ d:'Clicking a gas knob toggles that burner (eased 180 ms, single undo) and consumes the click — the selection does not change.',
+ v:()=>tag('PLAN')+cab(70,30,80,40)+[92,114,136].map(x=>`<circle cx="${x}" cy="62" r="3" fill="#55504a"/>`).join('')+`<circle cx="114" cy="44" r="8" fill="none" stroke="#e3872a" stroke-width="1.6"/>`+ar(150,96,118,68)+t(166,102,'toggle burner','tm','start')},
+{c:'interact',s:'done',t:'Corner-group selection proxy',k:[],
+ d:'All corner-group nodes select as one root for move/rotate affordances, but a direct body click still picks the individual module so legs and wall cabinets stay editable.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,44,30)+cab(54,26,44,30)+cab(10,56,30,40)+`<rect x="6" y="22" width="96" height="78" fill="none" stroke="#2563eb" stroke-dasharray="4 3"/>`+t(150,60,'moves as one','tm','start')+t(150,74,'clicks stay local','tm','start')},
+{c:'interact',s:'done',t:'Sidebar tree flattening',k:[],
+ d:'Hidden corner-leg runs flatten their modules into the source cabinet’s hierarchy; duplicating flattens nested runs to level coordinates and strips the derived metadata.',
+ v:()=>tag('UI')+[['Run',20],['· Cabinet 600',34],['· Corner Filler',48],['· Base Cabinet',62],['· Wall Cabinet',76]].map(([s,y],i)=>t(30,y+16,s,'tm','start')).join('')+`<line x1="24" y1="30" x2="24" y2="94" class="d"/>`+t(150,56,'legs hidden,','tm','start')+t(150,68,'modules inlined','tm','start')},
+{c:'interact',s:'done',t:'Rotate / delete / undo',k:['R','T','Delete','⌘Z'],
+ d:'R/T rotate ±45° (multi-select rotates rigidly about the bounds center); Delete removes with all cascade rules; ⌘Z mid-gesture cancels the gesture instead of undoing history.',
+ v:()=>tag('PLAN')+cab(90,46,50,32)+`<path d="M160 54 a30 30 0 0 1 -14 28" class="a" fill="none"/><polygon points="146,82 154,83 150,75" class="ah"/>`+key(30,100,'R')+key(52,100,'T')+key(74,100,'⌫')+key(98,100,'⌘Z')},
+{c:'interact',s:'partial',t:'Door hinge flip',k:[],
+ d:'Hinge side is editable as door type (left/right) in the compartment card, but there is no one-key flip on selection or during 2D moves (cabinets don’t declare the R-flip used by doors/windows).',
+ v:()=>tag('PLAN')+cab(60,40,44,30)+`<line x1="60" y1="70" x2="50" y2="92" class="f"/>`+dar(110,80,140,80)+cab(150,40,44,30)+`<line x1="194" y1="70" x2="204" y2="92" class="f"/>`+t(118,110,'panel-only today','tm')},
+{c:'interact',s:'future',t:'Eyedropper / apply style to others',k:[],
+ d:'Pick up front/handle/material from one cabinet and stamp it on others (Chief Architect Object Painter, 2020 attribute copy). We only sync within a run/corner group.',
+ v:()=>tag('PLAN')+cab(40,40,44,30,{cls:'g'})+ar(90,55,130,55)+cab(132,40,44,30,{cls:'p'})+t(115,100,'copy style across runs','tm')},
+{c:'interact',s:'future',t:'Right-click contextual commands',k:[],
+ d:'“Add filler”, “add end panel”, “align tops”, “center under window” style context commands (2020, ProKitchen, Chief Architect).',
+ v:()=>tag('UI')+cab(40,36,50,34)+`<rect x="104" y="30" width="96" height="58" rx="6" class="keyc"/>`+['Add filler','End panel','Align tops','Center…'].map((s,i)=>t(112,44+i*13,s,'tm','start')).join('')},
+{c:'interact',s:'future',t:'Lock / group a finished run',k:[],
+ d:'Group and lock a completed run against accidental drags while still allowing panel edits.',
+ v:()=>tag('PLAN')+cab(50,40,44,30)+cab(94,40,44,30)+`<rect x="46" y="36" width="96" height="38" fill="none" stroke="#8a857c" stroke-dasharray="4 3"/>`+`<rect x="106" y="20" width="12" height="9" rx="2" class="keyc"/><path d="M109 20 v-3 a3 3 0 0 1 6 0 v3" fill="none" stroke="#8a857c"/>`},
+{c:'interact',s:'future',t:'Click a dimension to move',k:[],
+ d:'Clicking the on-screen dimension between a cabinet and the wall opens an input; entering a value repositions exactly (Chief Architect’s signature interaction).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(110,26,50,30)+dim(10,110,76,'')+`<rect x="38" y="64" width="42" height="15" rx="3" class="keyc"/>`+t(59,74.5,'450','tm')+ar(90,86,120,60)},
+{c:'interact',s:'future',t:'Elevation click-through editing',k:[],
+ d:'Edit cabinets directly in an elevation view (swap fronts, adjust heights) with the plan staying in sync (2020, Cabinet Vision, Winner).',
+ v:()=>tag('ELEV')+floor()+ebase(40,50)+ebase(90,50)+ewall(40,50)+ewall(90,50)+ar(180,50,142,42)+t(190,56,'click to edit','tm')},
+
+/* ================= 8. VALIDATION ================= */
+{c:'validate',s:'done',t:'Live planning checks panel',k:[],
+ d:'Errors (red) and warnings (amber) from a scene-independent validator, shown in the side panel and shared by editing, previews and export.',
+ v:()=>tag('UI')+`<rect x="40" y="30" width="150" height="20" rx="5" class="r"/>`+t(115,43,'✕ modules overlap','tm')+`<rect x="40" y="56" width="150" height="20" rx="5" class="warn"/>`+t(115,69,'⚠ 37 mm unfilled gap','tm')+`<rect x="40" y="82" width="150" height="20" rx="5" class="warn"/>`+t(115,95,'⚠ top cabinet too short','tm')},
+{c:'validate',s:'done',t:'Module overlap error',k:[],
+ d:'Neighbors intersecting beyond 0.1 mm raise a red error listing both modules.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(60,26,60,30)+cab(104,26,60,30,{cls:'r'})+X(112,41)},
+{c:'validate',s:'done',t:'Gap warning in millimetres',k:[],
+ d:'Unfilled gaps between modules are warned with the exact size in whole mm — suppressed when either neighbor is a filler (fillers exist to own gaps).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,60,30)+cab(124,26,60,30)+dim(100,124,72,'37 mm ⚠')},
+{c:'validate',s:'done',t:'Tier & stack integrity',k:[],
+ d:'Tall modules are required in tall runs and forbidden in wall runs; a carcass shorter than the fixed stack minimum (appliances + 0.1 per flexible row) is an error.',
+ v:()=>tag('ELEV')+floor()+ebase(50,50)+`<rect x="110" y="46" width="44" height="68" class="r"/>`+t(132,80,'tall in','lab')+t(132,90,'wall run','lab')+X(132,60)},
+{c:'validate',s:'done',t:'Blocked-action feedback',k:[],
+ d:'Quick actions disable with a human-readable reason (“No space above—overlaps an existing wall cabinet”) and a shake instead of disappearing.',
+ v:()=>tag('UI')+`<rect x="60" y="40" width="110" height="22" rx="5" class="keyc" opacity=".55"/>`+t(115,54,'+ Wall (disabled)','tm')+`<rect x="40" y="74" width="150" height="18" rx="4" class="warn"/>`+t(115,86,'“No space above…”','tm')},
+{c:'validate',s:'future',t:'Door-swing collision detection',k:[],
+ d:'Detect door swings hitting adjacent handles, walls or appliances (the classic corner drawer-bank clash). Even pro tools are only partial here — mostly plan arcs + designer judgment.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,60,30,40)+`<path d="M40 60 A30 30 0 0 1 70 90" class="d" fill="none" stroke-dasharray="2 2"/>`+cab(40,26,50,30)+X(58,66)},
+{c:'validate',s:'future',t:'Work triangle check',k:[],
+ d:'Sink–cooktop–fridge triangle: each leg 4–9 ft, sum ≤ 26 ft, no leg crossing an island by more than 12 in (NKBA).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(20,26,50,30,{label:'SINK'})+cab(150,26,50,30,{label:'HOB'})+cab(80,86,50,36,{label:'REF',front:'t'})+`<path d="M45 56 L175 56 L105 86 z" fill="none" stroke="#5b45b8" stroke-dasharray="4 3" stroke-width="1.4"/>`},
+{c:'validate',s:'future',t:'Walkway & aisle clearances',k:[],
+ d:'Work aisles ≥ 42 in (48 in multi-cook), walkways ≥ 36 in, ≥ 21 in standing room at an open dishwasher vs. the island (NKBA); live warnings while dragging the island.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(20,26,190,26)+cab(60,86,110,32)+dar(115,56,115,82)+t(148,72,'≥ 42&quot;','tm')},
+{c:'validate',s:'future',t:'NKBA batch rule report',k:[],
+ d:'One-click audit of the whole kitchen against the ~30 NKBA planning guidelines with a pass/fail list (ProKitchen Design Check).',
+ v:()=>tag('UI')+[['Landing at sink',1],['Triangle ≤ 26 ft',1],['Aisle ≥ 42&quot;',0],['DW near sink',1]].map(([s,ok],i)=>t(48,40+i*16,s,'tm','start')+(ok?CK(34,37+i*16):X(34,37+i*16))).join('')},
+{c:'validate',s:'future',t:'ADA / universal design mode',k:[],
+ d:'34 in max counters or variable-height sections, knee clearance at sink/cooktop (27×30×19 in), 60 in turning circle, reach-range checks, side-opening ovens.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,80,30)+`<rect x="110" y="26" width="50" height="30" fill="none" stroke="#5b45b8" stroke-dasharray="3 2"/>`+t(135,44,'knee','lab')+`<circle cx="120" cy="94" r="26" fill="none" stroke="#5b45b8" stroke-dasharray="4 3"/>`+t(120,97,'60&quot;','tm')},
+{c:'validate',s:'future',t:'Catalog constraints & price alerts',k:[],
+ d:'SKU min/max enforcement during resize, custom-size flags affecting price, live cart totals, discontinued-SKU warnings (IKEA, 2020 catalogs).',
+ v:()=>tag('UI')+cab(40,40,60,34)+`<rect x="120" y="42" width="76" height="18" rx="4" class="keyc"/>`+t(158,54,'B24 · $312','tm')+`<rect x="120" y="66" width="76" height="18" rx="4" class="warn"/>`+t(158,78,'custom +20%','tm')},
+
+/* ================= 9. VIZ & OUTPUTS ================= */
+{c:'viz',s:'done',t:'Plan symbols — countertop-first',k:[],
+ d:'The heavy line in plan is the countertop outline (with real overhang trims from the shared span math), so the plan reads like an architect’s drawing; module fronts are lighter lines.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+`<rect x="36" y="26" width="150" height="36" fill="#fff" stroke="#7c7468" stroke-width="2.2"/>`+cab(40,26,48,32,{front:'b'})+cab(88,26,48,32)+cab(136,26,46,32)},
+{c:'viz',s:'done',t:'Above-cut-plane dashed rendering',k:[],
+ d:'Wall-tier runs, wall children and hoods (above the ~1.2 m architectural cut plane) draw as dashed open outlines so base cabinets beneath stay readable.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,60,34)+`<rect x="120" y="26" width="60" height="22" fill="none" stroke="#6f675b" stroke-dasharray="6 4"/>`+t(150,60,'wall cab (dashed)','tm')},
+{c:'viz',s:'done',t:'Appliance symbols & labels',k:[],
+ d:'Sink bowls + faucet, gas rings / induction zones, and upright text labels REF · DW · OV · MW · OV/MW · PAN that stay horizontal regardless of run rotation.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(20,26,50,32,{label:'DW'})+cab(70,26,56,32)+`<rect x="78" y="31" width="18" height="14" rx="3" fill="#fff" stroke="#6f675b"/><rect x="100" y="31" width="18" height="14" rx="3" fill="#fff" stroke="#6f675b"/>`+cab(126,26,50,32,{label:'REF'})+cab(176,26,40,32,{label:'OV'})},
+{c:'viz',s:'done',t:'Lockstep 2D drag rendering',k:[],
+ d:'During a drag, live transforms project into every related symbol — corner legs, wall children and sibling modules move together with no tearing.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+cab(10,26,44,30,{cls:'g'})+cab(54,26,44,30,{cls:'g'})+cab(10,56,30,40,{cls:'g'})+ar(120,70,150,70)+t(180,74,'as one','tm')},
+{c:'viz',s:'done',t:'GLB export with animation',k:[],
+ d:'Cabinet doors/drawers export with a baked 0→1 keyframe clip so downstream viewers can play the open/close.',
+ v:()=>tag('3D')+`<g transform="translate(60 40) skewY(-6)">`+cab(0,0,60,40,{cls:'c'})+`</g>`+`<path d="M150 60 l14 8 l-14 8 z" fill="#55504a"/>`+t(150,96,'.glb + clip','tm')},
+{c:'viz',s:'future',t:'Door swing arcs in plan',k:[],
+ d:'Quarter-circle arcs on doors (and appliance doors) showing swing direction and clash zones — the single most requested plan-reading aid.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(60,26,50,30)+`<line x1="60" y1="56" x2="42" y2="86" class="f"/><path d="M60 56 A34 34 0 0 0 42 86" class="d" fill="none" stroke-dasharray="2 2"/>`+cab(110,26,50,30)+`<line x1="160" y1="56" x2="178" y2="86" class="f"/><path d="M160 56 A34 34 0 0 1 178 86" class="d" fill="none" stroke-dasharray="2 2"/>`},
+{c:'viz',s:'future',t:'Auto chained dimensions',k:[],
+ d:'Chained widths across the run, appliance centerlines, distances to walls/windows — regenerated on every edit (Chief Architect auto-dims, 2020, Winner).',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(30,26,50,28)+cab(80,26,60,28)+cab(140,26,50,28)+dim(30,80,72,'500')+dim(80,140,72,'600')+dim(140,190,72,'500')+dim(30,190,90,'1600')},
+{c:'viz',s:'future',t:'Per-wall elevation views',k:[],
+ d:'Auto-generated straight-on elevations of each wall with door styling and cabinet codes — the standard client/installer deliverable.',
+ v:()=>tag('ELEV')+floor()+ebase(30,44)+ebase(74,44)+ebase(118,44,{label:'DW'})+ewall(30,44)+ewall(74,44)+`<path d="M162 46 h40 l-12 -14 h-16 z" class="c"/>`+ebase(162,44)+t(196,110,'Wall B','tm')},
+{c:'viz',s:'future',t:'Cabinet code labels',k:[],
+ d:'Each unit tagged with its catalog code (B18, SB36, W3030) in plan/elevation, keyed to the quote line items.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(40,26,44,30,{label:'B18'})+cab(84,26,56,30,{label:'SB36'})+cab(140,26,50,30,{label:'B24'})},
+{c:'viz',s:'future',t:'MEP centerlines',k:[],
+ d:'Sink / cooktop / outlet centerlines dimensioned for plumbers and electricians on the install drawing.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(60,26,70,30,{label:'SINK'})+`<line x1="95" y1="16" x2="95" y2="100" class="d" stroke-dasharray="6 3"/>`+dim(10,95,110,'CL 1240')},
+{c:'viz',s:'future',t:'Cut list / BOM / hardware count',k:[],
+ d:'Panels with dimensions and edge banding, hinge/slide/leg counts, article lists (Cabinet Vision, Mozaik, IKEA item list).',
+ v:()=>tag('UI')+[['18× side 720×560',0],['9× door 397×716',0],['36× hinge',0]].map(([s],i)=>t(40,44+i*16,s,'tm','start')).join('')+`<rect x="30" y="28" width="170" height="66" fill="none" stroke="#c9c2b6" rx="6"/>`},
+{c:'viz',s:'future',t:'Pricing & quote',k:[],
+ d:'Live totals as the design changes, quote documents, ordering output (IKEA cart, 2020/Cyncly live pricing, Winner quotations).',
+ v:()=>tag('UI')+`<rect x="60" y="34" width="110" height="52" rx="8" class="keyc"/>`+t(115,54,'Kitchen total','tm')+t(115,72,'$ 12,480','tx')},
+{c:'viz',s:'future',t:'Share links, AR & presentation packs',k:[],
+ d:'Web-shareable 3D scenes, PDF packs, AR on-site preview (HomeByMe, IKEA Place/Kreativ, Planner 5D).',
+ v:()=>tag('UI')+`<rect x="46" y="34" width="56" height="56" rx="8" class="keyc"/>`+t(74,66,'🔗','tx')+`<rect x="126" y="34" width="56" height="56" rx="8" class="keyc"/>`+t(154,66,'AR','tx')},
+
+/* ================= 10. AI ================= */
+{c:'ai',s:'future',t:'Auto-layout from the room shell',k:[],
+ d:'Generate complete kitchen candidates (runs, corner solutions, appliances, island) from the room geometry plus a brief; user picks and refines. ProKitchen AutoDesign, Winner auto-plan, Planner 5D generator.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+wall(0,16,10,116)+wall(220,16,10,116)+cab(10,26,60,26,{cls:'p'})+cab(70,26,60,26,{cls:'p'})+cab(130,26,60,26,{cls:'p'})+cab(10,52,26,50,{cls:'p'})+cab(80,80,70,30,{cls:'p'})+t(115,122,'“generate 3 options”','tm')},
+{c:'ai',s:'future',t:'Natural-language editing',k:[],
+ d:'“Add a 36-inch sink base under the window and move the dishwasher next to it” → placement + reflow executed via the same run-ops the UI uses. Our MCP package is the natural host for this.',
+ v:()=>tag('UI')+`<rect x="24" y="36" width="182" height="24" rx="12" class="keyc"/>`+t(115,51,'“put the sink under the window”','tm')+ar(115,68,115,86)+cab(86,90,58,26,{cls:'p',label:'SINK'})},
+{c:'ai',s:'future',t:'Remainder-fill optimization',k:[],
+ d:'Choose the “best” cabinet mix for leftover run length — maximize drawers, respect budget, prefer standard widths — instead of one dumb remainder module.',
+ v:()=>tag('PLAN')+wall(0,16,230,10)+cab(20,26,60,26)+cab(80,26,60,26)+`<rect x="140" y="26" width="70" height="26" fill="none" stroke="#5b45b8" stroke-dasharray="4 3"/>`+t(175,44,'? optimize','lab')},
+{c:'ai',s:'future',t:'Generative variants scored by rules',k:[],
+ d:'Produce N layout variants and rank them against NKBA checks, budget and style preferences (“more like this”).',
+ v:()=>tag('UI')+[0,1,2].map(i=>`<rect x="${30+i*60}" y="36" width="50" height="40" rx="6" class="keyc"/>`+t(55+i*60,60,['A·92','B·85','C·71'][i],'tm')).join('')+CK(55,90)},
+{c:'ai',s:'future',t:'Style transfer / restyle',k:[],
+ d:'Apply “warm oak shaker” across the whole design in one step, or restyle a photo/scan of an existing kitchen (IKEA Kreativ).',
+ v:()=>tag('UI')+cab(40,40,50,36,{cls:'c'})+ar(98,58,128,58)+cab(132,40,50,36,{cls:'p'})+t(115,100,'one prompt, whole kitchen','tm')},
+];
+
+/* ---------------- hotkey table ---------------- */
+const HOTKEYS=[
+ ['Click','Cabinet tool','Place cabinet / anchor / continue a continuous leg'],
+ ['Double-click','Cabinet tool','Finish a continuous run'],
+ ['I','Cabinet tool','Cycle placement type Cabinet ↔ Island'],
+ ['R / T','Cabinet tool','Rotate ghost ±45° (ignored while wall-snapped or stretching)'],
+ ['C','Cabinet tool','Cycle Single cabinet ↔ Continuous run'],
+ ['Alt','Cabinet tool / drag','Force place — bypass collision'],
+ ['Esc','Cabinet tool','Cancel in-flight continuous draft first, then exit to select'],
+ ['Shift (tap)','Global','Cycle snapping mode grid → lines → angles → off'],
+ ['Ctrl/⌘ (clean tap)','Global','Cycle grid step 0.5 → 0.25 → 0.1 → 0.05 m'],
+ ['E','Selection','Operate: animate doors/drawers of module or whole run'],
+ ['R / T','Selection','Rotate ±45° (multi-select: rigid group rotate)'],
+ ['Delete / ⌫','Selection','Delete with cascade rules (empty run cleanup, corner unlink)'],
+ ['⌘C / ⌘X / ⌘V','Selection','Copy / cut / paste-and-pick-up; full-sibling module selection promotes to the run'],
+ ['⌘Z / ⌘⇧Z','Global','Undo / redo; mid-gesture ⌘Z cancels the gesture instead'],
+ ['R / T while dragging','Move tool','Rotate the dragged run ±45°'],
+ ['Esc / ⌘Z while dragging','Move tool','Cancel the drag, restore pose'],
+ ['Click cooktop knob','Scene','Toggle that gas burner (no selection change)'],
+];
+
+/* ---------------- render ---------------- */
+const STATUS={done:'Implemented',partial:'Partial',todo:'Not implemented',future:'Industry · Future'};
+const main=document.getElementById('main');
+let n=0;
+for(const [id,title,desc] of CATS){
+  const sec=document.createElement('section');sec.id=id;
+  const cases=CASES.filter(x=>x.c===id);
+  sec.innerHTML=`<h2>${title}</h2><p class="secdesc">${desc}</p>`;
+  const grid=document.createElement('div');grid.className='grid';
+  for(const cs of cases){
+    n++;
+    const card=document.createElement('div');card.className='card';card.dataset.s=cs.s;
+    let inner='';
+    try{inner=cs.v();}catch(e){inner=t(115,66,'⚠ '+e.message,'tm');}
+    card.innerHTML=`<div class="viz"><svg viewBox="${VB}" role="img">${inner}</svg></div>
+      <div class="body"><h3><span><span class="num">${String(n).padStart(2,'0')}</span> ${cs.t}</span><span class="st ${cs.s}">${STATUS[cs.s]}</span></h3>
+      ${cs.k&&cs.k.length?`<div class="keys">${cs.k.map(k=>`<kbd>${k}</kbd>`).join('')}</div>`:''}
+      <p class="desc">${cs.d}</p></div>`;
+    grid.appendChild(card);
+  }
+  sec.appendChild(grid);
+  if(id==='interact'){
+    const h=document.createElement('div');
+    h.innerHTML=`<h2 style="margin-top:30px;font-size:16px;border:none">Complete hotkey reference (as implemented)</h2>
+      <table class="hk"><tr><th>Key</th><th>Context</th><th>Action</th></tr>
+      ${HOTKEYS.map(r=>`<tr><td>${r[0].split(' / ').map(k=>`<kbd>${k}</kbd>`).join(' / ')}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</table>
+      <p class="secdesc" style="margin-top:10px">Notably absent today: arrow-key nudge, a hinge-flip key, typed dimension entry (Tab), duplicate-along-run, and a dedicated key to arm the cabinet tool.</p>`;
+    sec.appendChild(h);
+  }
+  main.appendChild(sec);
+}
+/* toc */
+document.getElementById('toc').innerHTML=CATS.map(([id,ti])=>`<a href="#${id}">${ti.replace(/^\d+ · /,'')}</a>`).join('');
+/* filters */
+const counts={all:CASES.length,done:0,partial:0,todo:0,future:0};
+CASES.forEach(c=>counts[c.s]++);
+const F=document.getElementById('filters');
+F.innerHTML=[['all','All'],['done','Implemented'],['partial','Partial'],['todo','Not implemented'],['future','Industry / Future']]
+ .map(([f,l])=>`<button class="pill${f==='all'?' active':''}" data-f="${f}"><span class="dot"></span>${l} · ${counts[f]}</button>`).join('');
+F.addEventListener('click',e=>{
+  const b=e.target.closest('.pill');if(!b)return;
+  F.querySelectorAll('.pill').forEach(p=>p.classList.toggle('active',p===b));
+  const f=b.dataset.f;
+  document.querySelectorAll('.card').forEach(c=>c.classList.toggle('hidden',f!=='all'&&c.dataset.s!==f));
+});
+</script>
+</body>
+</html>
