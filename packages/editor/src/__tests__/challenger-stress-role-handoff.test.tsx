@@ -132,7 +132,7 @@ function buildMassiveScene(targetNodes: number) {
             id: nId,
             parentId: lId,
             position: [n * 2, l * 3, 1],
-            rotation: 0,
+            rotation: [0, 0, 0],
             asset: {
               id: `asset_${n}`,
               name: `Asset ${n}`,

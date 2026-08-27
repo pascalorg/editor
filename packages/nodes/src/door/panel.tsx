@@ -738,7 +738,6 @@ export default function DoorPanel() {
         */}
         <SliderControl
           label="Height"
-          max={1000}
           min={1.0}
           onChange={(v) =>
             handleUpdate({

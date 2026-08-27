@@ -6,7 +6,9 @@ import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-
 
 const appRoot = path.join(import.meta.dir, '..')
 const editorRoot = path.join(appRoot, '..', '..')
-const bootsSrc = path.join(editorRoot, 'node_modules', '@pascal-app/plugin-boots', 'src')
+const bootsSrc = existsSync(path.join(appRoot, 'node_modules', '@pascal-app', 'plugin-boots', 'src'))
+  ? path.join(appRoot, 'node_modules', '@pascal-app', 'plugin-boots', 'src')
+  : path.join(editorRoot, 'node_modules', '@pascal-app', 'plugin-boots', 'src')
 
 describe('Milestone 1 Empirical Challenger — Stress & Adversarial Test Suite', () => {
   

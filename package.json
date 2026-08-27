@@ -26,6 +26,12 @@
     "release:minor": "gh workflow run release.yml -f package=all -f bump=minor",
     "release:major": "gh workflow run release.yml -f package=all -f bump=major"
   },
+  "dependencies": {
+    "lib0": "^0.2.117",
+    "ws": "^8.21.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
     "@typescript/native-preview": "7.0.0-dev.20260624.1",

@@ -4,6 +4,12 @@
   "workspaces": {
     "": {
       "name": "editor",
+      "dependencies": {
+        "lib0": "^0.2.117",
+        "ws": "^8.21.3",
+        "y-protocols": "^1.0.7",
+        "yjs": "^13.6.32",
+      },
       "devDependencies": {
         "@biomejs/biome": "^2.4.16",
         "@typescript/native-preview": "7.0.0-dev.20260624.1",
@@ -63,6 +69,7 @@
         "tailwind-merge": "^3.5.0",
         "tailwindcss": "^4.2.1",
         "three": "^0.185.0",
+        "three-mesh-bvh": "~0.9.8",
         "ulid": "^3.0.2",
         "web-ifc": "^0.0.77",
         "y-protocols": "^1.0.7",

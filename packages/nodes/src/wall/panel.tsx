@@ -274,12 +274,9 @@ export default function WallPanel() {
         */}
         <SliderControl
           label="Length"
-          max={metersToLinearUnit(1000, unit)}
           min={metersToLinearUnit(0.1, unit)}
           onChange={(value) =>
-            handleUpdateLength(
-              linearControlValueToMeters(value, unit, { maxMeters: 1000, minMeters: 0.1 }),
-            )
+            handleUpdateLength(linearControlValueToMeters(value, unit, { minMeters: 0.1 }))
           }
           precision={2}
           step={unit === 'imperial' ? 0.1 : 0.01}
@@ -304,11 +301,10 @@ export default function WallPanel() {
         ) : (
           <SliderControl
             label="Height"
-            max={metersToLinearUnit(1000, unit)}
             min={metersToLinearUnit(0.1, unit)}
             onChange={(v) =>
               handleUpdate({
-                height: linearControlValueToMeters(v, unit, { maxMeters: 1000, minMeters: 0.1 }),
+                height: linearControlValueToMeters(v, unit, { minMeters: 0.1 }),
               })
             }
             precision={2}

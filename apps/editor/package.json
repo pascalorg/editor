@@ -49,6 +49,7 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
     "three": "^0.185.0",
+    "three-mesh-bvh": "~0.9.8",
     "ulid": "^3.0.2",
     "web-ifc": "^0.0.77",
     "lib0": "^0.2.117",
