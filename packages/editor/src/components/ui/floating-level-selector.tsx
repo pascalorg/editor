@@ -577,6 +577,9 @@ export function FloatingLevelSelector() {
           {!draggingLevelId && (
             <button
               className={cn(addButtonClass, 'top-0 -translate-y-1/2')}
+              // A stable hook for host-app onboarding to point at. Static, and
+              // read only from outside: nothing here depends on it.
+              data-guide-target="level-add"
               onClick={handleAddAbove}
               title="Add level above"
               type="button"
