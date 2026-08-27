@@ -319,7 +319,7 @@ describe('Challenger M2: Connection Continuity, State Invariants & Leak Auditing
       await new Promise((r) => setTimeout(r, 10))
 
       expect(MockWebSocket.instances.length).toBe(1)
-      const initialWs = MockWebSocket.instances[0]
+      const initialWs = MockWebSocket.instances[0]!
       expect(initialWs.readyState).toBe(MockWebSocket.OPEN) // OPEN
       const initialDoc = harness.current.doc
       const initialAwareness = harness.current.awarenessService
@@ -395,7 +395,7 @@ describe('Challenger M2: Connection Continuity, State Invariants & Leak Auditing
       await new Promise((r) => setTimeout(r, 10))
 
       expect(MockWebSocket.instances.length).toBe(1)
-      const firstWs = MockWebSocket.instances[0]
+      const firstWs = MockWebSocket.instances[0]!
       const firstDoc = harness.current.doc
 
       // Change sceneId
@@ -448,7 +448,7 @@ describe('Challenger M2: Connection Continuity, State Invariants & Leak Auditing
 
       useViewer.setState({
         selection: {
-          buildingId,
+          buildingId: buildingId as any,
           levelId: null,
           zoneId: null,
           selectedIds: [],
@@ -575,7 +575,7 @@ describe('Challenger M2: Connection Continuity, State Invariants & Leak Auditing
       }
 
       expect(shallowChangedCount).toBe(0)
-      expect(current.selectedSlabId).toBe(slabId)
+      expect(current.selectedSlabId).toBe(slabId as any)
 
       unsub()
     })
@@ -712,7 +712,7 @@ describe('Challenger M2: Connection Continuity, State Invariants & Leak Auditing
       await new Promise((r) => setTimeout(r, 10))
 
       expect(MockWebSocket.instances.length).toBe(1)
-      const ws = MockWebSocket.instances[0]
+      const ws = MockWebSocket.instances[0]!
 
       // 100 rapid role handoffs
       for (let i = 0; i < 100; i++) {

@@ -132,7 +132,7 @@ function buildMassiveScene(targetNodes: number) {
             id: nId,
             parentId: lId,
             position: [n * 2, l * 3, 1],
-            rotation: [0, 0, 0],
+            rotation: 0,
             asset: {
               id: `asset_${n}`,
               name: `Asset ${n}`,
@@ -265,7 +265,7 @@ describe('Empirical Challenger: Multiplayer Role Handoff Stress & Long Task SLA 
       // Measure Viewer -> Editor with active selection
       const sampleIds = Object.keys(nodes).slice(0, 10)
       useViewer.getState().setSelection({
-        buildingId: rootNodeIds[0] ?? null,
+        buildingId: (rootNodeIds[0] as any) ?? null,
         levelId: null,
         zoneId: null,
         selectedIds: sampleIds,
@@ -284,7 +284,7 @@ describe('Empirical Challenger: Multiplayer Role Handoff Stress & Long Task SLA 
     }
   })
 
-  test('EC-2: 500 consecutive high-speed role flips under 200 nodes — 100% compliant (< 50ms), p99 < 25ms', () => {
+  test('EC-2: 500 consecutive high-speed role flips under 200 nodes ï¿½ 100% compliant (< 50ms), p99 < 25ms', () => {
     const { nodes, rootNodeIds } = buildMassiveScene(200)
     useScene.setState({ nodes, rootNodeIds, dirtyNodes: new Set() } as never)
     useScene.temporal.getState().clear()
@@ -311,7 +311,7 @@ describe('Empirical Challenger: Multiplayer Role Handoff Stress & Long Task SLA 
     const p99 = durations[Math.floor(FLIPS * 0.99)]
     const avg = durations.reduce((a, b) => a + b, 0) / FLIPS
 
-    console.log(`[500 Flips Stats] Avg: ${avg.toFixed(3)}ms, p50: ${p50.toFixed(3)}ms, p95: ${p95.toFixed(3)}ms, p99: ${p99.toFixed(3)}ms, Max: ${maxDuration.toFixed(3)}ms`)
+    console.log(`[500 Flips Stats] Avg: ${avg.toFixed(3)}ms, p50: ${p50!.toFixed(3)}ms, p95: ${p95!.toFixed(3)}ms, p99: ${p99!.toFixed(3)}ms, Max: ${maxDuration.toFixed(3)}ms`)
 
     expect(maxDuration).toBeLessThan(MAX_BLOCKING_THRESHOLD_MS)
     expect(p99).toBeLessThan(25)
@@ -331,26 +331,26 @@ describe('Empirical Challenger: Multiplayer Role Handoff Stress & Long Task SLA 
       // 2. Batch mutate 30 nodes
       const allKeys = Object.keys(nodes)
       for (let i = 0; i < 30; i++) {
-        const key = allKeys[i]
-        if (nodes[key]?.type === 'wall') {
+        const key = allKeys[i]!
+        if ((nodes as any)[key]?.type === 'wall') {
           useScene.getState().updateNode(key as AnyNodeId, { height: 4.2 + (i % 3) })
         }
       }
 
       // 3. Live transform thrashing
       for (let i = 0; i < 10; i++) {
-        useLiveTransforms.getState().set(allKeys[i], { position: [i * 2, 0, i] })
-        useLiveNodeOverrides.getState().set(allKeys[i], { position: [i * 2, 0, i] })
+        useLiveTransforms.getState().set(allKeys[i]!, { position: [i * 2, 0, i], rotation: 0 })
+        useLiveNodeOverrides.getState().set(allKeys[i]!, { position: [i * 2, 0, i] })
       }
 
       // 4. Mode and selection switches
       useEditor.getState().setMode('build')
       useEditor.getState().setTool('wall')
       useViewer.getState().setSelection({
-        buildingId: rootNodeIds[0] ?? null,
+        buildingId: (rootNodeIds[0] as any) ?? null,
         levelId: null,
         zoneId: null,
-        selectedIds: [allKeys[0], allKeys[1]],
+        selectedIds: [allKeys[0]!, allKeys[1]!],
       })
     })
 

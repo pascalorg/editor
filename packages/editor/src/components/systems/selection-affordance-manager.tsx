@@ -29,6 +29,7 @@ import type {
  * mounted inside the editor only — loads it for the selected kind.
  */
 export function SelectionAffordanceManager() {
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedId = selectedIds.length === 1 ? (selectedIds[0] as AnyNodeId) : null
   const selectedNode = useScene((s) => {
     if (!selectedId) return null

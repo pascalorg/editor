@@ -242,7 +242,7 @@ describe('Challenger Adversarial Stress & Chaos Verification Suite (<50ms SLA)',
     const metrics = measureExecutionTime(() => {
       useEditor.getState().setPreviewMode(false)
       useViewer.getState().setSelection({
-        buildingId: rootNodeIds[0] ?? null,
+        buildingId: (rootNodeIds[0] as any) ?? null,
         levelId: 'level_chaos_0_0',
         zoneId: null,
         selectedIds: ['wall_chaos_0_0_1', 'wall_chaos_0_0_2'],
@@ -292,7 +292,7 @@ describe('Challenger Adversarial Stress & Chaos Verification Suite (<50ms SLA)',
 
       // 3. Selection change
       useViewer.getState().setSelection({
-        buildingId: rootNodeIds[0] ?? null,
+        buildingId: (rootNodeIds[0] as any) ?? null,
         levelId: 'level_chaos_0_0',
         zoneId: null,
         selectedIds: wallKeys.slice(0, 5),
@@ -301,7 +301,7 @@ describe('Challenger Adversarial Stress & Chaos Verification Suite (<50ms SLA)',
 
     expect(metrics.durationMs).toBeLessThan(SLA_MAX_BLOCKING_MS)
     expect(useEditor.getState().isPreviewMode).toBe(false)
-    expect((useScene.getState().nodes[wallKeys[0]] as WallNode).height).toBe(4.0)
+    expect(((useScene.getState().nodes as any)[wallKeys[0]!] as WallNode).height).toBe(4.0)
   })
 
   test('Chaos Storm 2: 100-node batched mutation storm during role switch stays < 50ms', () => {
@@ -326,7 +326,7 @@ describe('Challenger Adversarial Stress & Chaos Verification Suite (<50ms SLA)',
 
       // 3. Selection change
       useViewer.getState().setSelection({
-        buildingId: rootNodeIds[0] ?? null,
+        buildingId: (rootNodeIds[0] as any) ?? null,
         levelId: 'level_chaos_0_0',
         zoneId: null,
         selectedIds: wallKeys.slice(0, 10),
@@ -335,7 +335,7 @@ describe('Challenger Adversarial Stress & Chaos Verification Suite (<50ms SLA)',
 
     expect(metrics.durationMs).toBeLessThan(SLA_MAX_BLOCKING_MS)
     expect(useEditor.getState().isPreviewMode).toBe(false)
-    expect((useScene.getState().nodes[wallKeys[0]] as WallNode).height).toBe(4.2)
+    expect(((useScene.getState().nodes as any)[wallKeys[0]!] as WallNode).height).toBe(4.2)
   })
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -355,7 +355,7 @@ describe('Challenger Adversarial Stress & Chaos Verification Suite (<50ms SLA)',
         useEditor.getState().setPreviewMode(targetPreview)
         if (i % 5 === 0) {
           useViewer.getState().setSelection({
-            buildingId: rootNodeIds[0] ?? null,
+            buildingId: (rootNodeIds[0] as any) ?? null,
             levelId: 'level_chaos_0_0',
             zoneId: null,
             selectedIds: [`wall_chaos_0_0_${i % 20}`],

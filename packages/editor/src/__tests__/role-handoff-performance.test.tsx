@@ -335,12 +335,12 @@ describe('Multiplayer Role Handoff Performance & Profiling Suite (Viewer -> Edit
       })
       useScene.setState({ nodes, rootNodeIds } as never)
 
-      const targetLevelId = rootNodeIds[0] ? (nodes[rootNodeIds[0]] as BuildingNode).children[0] : null
+      const targetLevelId = rootNodeIds[0] ? ((nodes[rootNodeIds[0]] as BuildingNode).children[0] as any) : null
       useViewer.setState({
         cameraMode: 'orthographic',
         wallMode: 'cutaway',
         selection: {
-          buildingId: rootNodeIds[0] ?? null,
+          buildingId: (rootNodeIds[0] as any) ?? null,
           levelId: targetLevelId ?? null,
           zoneId: null,
           selectedIds: [`wall_perf_0_0_1`],
@@ -552,7 +552,7 @@ describe('Multiplayer Role Handoff Performance & Profiling Suite (Viewer -> Edit
       const selectedIds = ['wall_perf_0_0_1', 'wall_perf_0_0_2', 'item_perf_0_0_3']
       useViewer.setState({
         selection: {
-          buildingId: rootNodeIds[0] ?? null,
+          buildingId: (rootNodeIds[0] as any) ?? null,
           levelId: 'level_perf_0_0',
           zoneId: null,
           selectedIds,
@@ -705,7 +705,7 @@ describe('Multiplayer Role Handoff Performance & Profiling Suite (Viewer -> Edit
       const metrics = measureExecutionTime(() => {
         useEditor.getState().setPreviewMode(false)
         useViewer.getState().setSelection({
-          buildingId: rootNodeIds[0] ?? null,
+          buildingId: (rootNodeIds[0] as any) ?? null,
           levelId: 'level_perf_0_0',
           zoneId: null,
           selectedIds: ['wall_perf_0_0_1', 'item_perf_0_0_2'],
@@ -819,11 +819,11 @@ describe('Multiplayer Role Handoff Performance & Profiling Suite (Viewer -> Edit
 
       // Confirm all buildings and levels intact
       for (const bId of rootNodeIds) {
-        const building = currentNodes[bId] as BuildingNode
+        const building = (currentNodes as any)[bId] as BuildingNode
         expect(building).toBeDefined()
         expect(building.type).toBe('building')
         for (const lId of building.children) {
-          const level = currentNodes[lId] as LevelNode
+          const level = (currentNodes as any)[lId] as LevelNode
           expect(level).toBeDefined()
           expect(level.type).toBe('level')
         }
@@ -884,7 +884,7 @@ describe('Multiplayer Role Handoff Performance & Profiling Suite (Viewer -> Edit
         // 2. Concurrent node updates injected in same event loop tick
         for (let i = 0; i < 10; i++) {
           const targetWallId = `wall_perf_0_0_${i}`
-          if (useScene.getState().nodes[targetWallId]) {
+          if ((useScene.getState().nodes as any)[targetWallId]) {
             useScene.getState().updateNode(targetWallId as AnyNodeId, {
               height: 3.5 + i * 0.1,
             })
@@ -893,7 +893,7 @@ describe('Multiplayer Role Handoff Performance & Profiling Suite (Viewer -> Edit
 
         // 3. Selection change
         useViewer.getState().setSelection({
-          buildingId: rootNodeIds[0] ?? null,
+          buildingId: (rootNodeIds[0] as any) ?? null,
           levelId: 'level_perf_0_0',
           zoneId: null,
           selectedIds: ['wall_perf_0_0_5'],

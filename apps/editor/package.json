@@ -30,6 +30,7 @@
     "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
     "@pascal-app/plugin-trees": "workspace:*",
     "@pascal-app/viewer": "*",
+    "@radix-ui/react-popover": "^1.1.6",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",

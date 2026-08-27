@@ -260,9 +260,8 @@ describe('Empirical Challenger Verification — WebGL Context Retention & State 
       useEditor.getState().setPreviewMode(false)
       useEditor.getState().setMode('material-paint')
       useEditor.getState().setActivePaintMaterial({
-        mode: 'paint',
         materialPreset: 'mat_wood_oak',
-      })
+      } as any)
 
       expect(useEditor.getState().mode).toBe('material-paint')
       expect(useEditor.getState().activePaintMaterial?.materialPreset).toBe('mat_wood_oak')
