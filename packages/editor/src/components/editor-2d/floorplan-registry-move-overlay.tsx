@@ -595,6 +595,7 @@ export function FloorplanRegistryMoveOverlay() {
       const snap = (value: number) =>
         isGridSnapActive() ? Math.round(value / gridStep) * gridStep : value
       const groupMoveSnap = def?.capabilities?.movable?.groupMoveSnap
+      const gridSnapPosition = def?.capabilities?.movable?.gridSnapPosition
       const attachmentEnabled = isGridSnapActive() || isMagneticSnapActive()
       let attachmentRotation: number | null = null
       const resolved = resolvePrioritizedPlanarCursorPosition({
@@ -602,7 +603,25 @@ export function FloorplanRegistryMoveOverlay() {
         original: [originalPosition[0], originalPosition[2]],
         anchor: dragAnchor,
         mode: isFreshPlacement ? 'absolute' : 'relative',
-        snap,
+        snap: gridSnapPosition ? undefined : snap,
+        snapPoint:
+          isGridSnapActive() && gridSnapPosition
+            ? ([planX, planZ]) => {
+                const snappedPosition = gridSnapPosition({
+                  node: movingNode,
+                  candidatePosition: [planX, originalPosition[1], planZ],
+                  candidateRotation: originalRotation,
+                  movingIds: [movingNode.id as AnyNodeId],
+                  nodes: useScene.getState().nodes as Record<string, AnyNode>,
+                  levelId:
+                    (useViewer.getState().selection.levelId as AnyNodeId | null) ??
+                    (movingNode.parentId as AnyNodeId | undefined) ??
+                    null,
+                  gridStep,
+                })
+                return [snappedPosition[0], snappedPosition[2]]
+              }
+            : undefined,
         resolveAttachment:
           attachmentEnabled && groupMoveSnap
             ? ([planX, planZ]) => {

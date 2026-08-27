@@ -81,6 +81,11 @@ test('cabinet creation defaults use the metric 600 mm family', () => {
   }
 })
 
+test('placed cabinet runs and modules opt into ordinary body dragging', () => {
+  expect(cabinetDefinition.capabilities.movable?.directDrag).toBe(true)
+  expect(cabinetModuleDefinition.capabilities.movable?.directDrag).toBe(true)
+})
+
 test('tall modules expose a visible height resize handle', () => {
   const run = CabinetNode.parse({
     id: 'cabinet_height-handle-run',

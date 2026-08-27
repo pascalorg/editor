@@ -6,6 +6,7 @@ import type {
   DuplicateSubtreeCloneArgs,
   DuplicateSubtreeCloneResult,
   FloorPlacedFootprint,
+  GridSnapPositionArgs,
   GroupMoveSnapArgs,
   GroupMoveSnapResult,
   HandleDescriptor,
@@ -27,6 +28,7 @@ import { toggleCabinetOperationState } from './interaction'
 import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
+import { resolveCabinetGridPosition } from './placement-snap'
 import useCabinetPlacementType from './placement-type'
 import { cabinetQuickActions } from './quick-actions'
 import {
@@ -279,6 +281,25 @@ function resolveCabinetGroupMoveSnap({
     nodes: nodes as Record<AnyNodeId, AnyNode>,
     parentLevelId: levelId,
   })
+}
+
+function resolveCabinetMoveGridSnap({
+  candidatePosition,
+  candidateRotation,
+  gridStep,
+  node,
+  nodes,
+}: GridSnapPositionArgs): [number, number, number] {
+  if (!isCabinetRun(node)) return candidatePosition
+  const bounds = cabinetLocalBounds(node, nodes as Readonly<Record<AnyNodeId, AnyNode>>)
+  const snapped = resolveCabinetGridPosition({
+    raw: candidatePosition,
+    dimensions: bounds.size,
+    footprintOffset: [bounds.center[0], bounds.center[2]],
+    yaw: candidateRotation,
+    step: gridStep,
+  })
+  return [snapped[0], candidatePosition[1], snapped[2]]
 }
 
 /**
@@ -1901,7 +1922,9 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     selectable: { hitVolume: 'bbox' },
     movable: {
       axes: ['x', 'z'],
+      directDrag: true,
       gridSnap: true,
+      gridSnapPosition: resolveCabinetMoveGridSnap,
       groupMoveSnap: resolveCabinetGroupMoveSnap,
       override: ({ node }) =>
         selectionProxyIdFromMetadata((node as { metadata?: unknown }).metadata)
@@ -2096,6 +2119,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     selectable: { hitVolume: 'bbox' },
     movable: {
       axes: ['x', 'z'],
+      directDrag: true,
       gridSnap: true,
       parentFrame: cabinetModuleParentFrame,
       groupMoveSnap: resolveCabinetModuleGroupMoveSnap,

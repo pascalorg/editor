@@ -1,14 +1,157 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, LevelNode, WallNode } from '@pascal-app/core'
 import type { WallHit } from '../../shared/wall-attach-target'
+import { cabinetDefinition } from '../definition'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 import {
   collectCabinetWallSnapNeighbors,
+  findClosestCabinetWallInPlan,
   resolveCabinetModuleWallSnapLocal,
   resolveCabinetRunWallSnap,
   resolveCabinetWallFaceOffset,
   resolveCabinetWallSnapPlacement,
 } from '../wall-snap'
+
+describe('curved cabinet wall snap', () => {
+  function curvedFixture() {
+    const level = LevelNode.parse({
+      id: 'level_curved-wall-snap',
+      children: ['wall_curved-snap' as AnyNodeId],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_curved-snap',
+      parentId: level.id,
+      start: [-2, 0],
+      end: [2, 0],
+      curveOffset: 1,
+      thickness: 0.2,
+    })
+    const nodes = { [level.id]: level, [wall.id]: wall } as Record<AnyNodeId, AnyNode>
+    return { level, wall, nodes }
+  }
+
+  test('finds the closest point and local tangent on a curved wall', () => {
+    const { level, wall, nodes } = curvedFixture()
+
+    const hit = findClosestCabinetWallInPlan({
+      excludeIds: [],
+      nodes,
+      parentLevelId: level.id,
+      planPoint: [0, -0.7],
+    })
+
+    expect(hit).not.toBeNull()
+    expect(hit!.wall.id).toBe(wall.id)
+    expect(hit!.localX).toBeCloseTo(hit!.wallLength / 2)
+    expect(hit!.dirX).toBeCloseTo(1)
+    expect(hit!.dirY).toBeCloseTo(0)
+    expect(hit!.side).toBe('front')
+  })
+
+  test('moves and rotates a cabinet back-flush along the curved wall', () => {
+    const { level, wall, nodes: wallNodes } = curvedFixture()
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_curved-snap',
+      parentId: level.id,
+      position: [-0.8, 0, -0.65],
+      rotation: Math.PI / 2,
+      width: 0.6,
+      depth: 0.58,
+    })
+    const nodes = { ...wallNodes, [cabinet.id]: cabinet } as Record<AnyNodeId, AnyNode>
+
+    const snapped = resolveCabinetRunWallSnap({
+      cabinet,
+      candidatePosition: cabinet.position,
+      excludeIds: [cabinet.id as AnyNodeId],
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(snapped).not.toBeNull()
+    expect(snapped!.rotation).not.toBeCloseTo(Math.PI / 2)
+
+    const hit = findClosestCabinetWallInPlan({
+      excludeIds: [cabinet.id as AnyNodeId],
+      nodes,
+      parentLevelId: level.id,
+      planPoint: [snapped!.position[0], snapped!.position[2]],
+    })
+    expect(hit).not.toBeNull()
+    expect(hit!.wall.id).toBe(wall.id)
+    expect(Math.abs(hit!.perpDistance)).toBeCloseTo(0.39, 2)
+  })
+
+  test('registers curved-wall rotation on the already-placed cabinet move path', () => {
+    const { level, nodes: wallNodes } = curvedFixture()
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_existing-curved-snap',
+      parentId: level.id,
+      position: [1.1, 0, 0.2],
+      rotation: Math.PI / 4,
+      width: 0.6,
+      depth: 0.58,
+    })
+    const nodes = { ...wallNodes, [cabinet.id]: cabinet } as Record<AnyNodeId, AnyNode>
+    const groupMoveSnap = cabinetDefinition.capabilities?.movable?.groupMoveSnap
+
+    expect(groupMoveSnap).toBeFunction()
+    const snapped = groupMoveSnap!({
+      candidatePosition: [1.1, 0, -0.45],
+      candidateRotation: cabinet.rotation,
+      levelId: level.id,
+      movingIds: [cabinet.id as AnyNodeId],
+      node: cabinet,
+      nodes,
+    })
+
+    expect(snapped).not.toBeNull()
+    expect(snapped!.rotation).not.toBeCloseTo(cabinet.rotation)
+    expect(snapped!.position).not.toEqual(cabinet.position)
+  })
+})
+
+describe('already-placed cabinet grid snap', () => {
+  test('registers footprint-edge grid snapping for the generic move path', () => {
+    const level = LevelNode.parse({ id: 'level_existing-grid-snap' })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_existing-grid-snap',
+      parentId: 'cabinet_existing-grid-snap',
+      position: [0, 0, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_existing-grid-snap',
+      parentId: level.id,
+      children: [module.id],
+      position: [0, 0, 0],
+      rotation: 0,
+      width: 0.6,
+      depth: 0.58,
+    })
+    const nodes = {
+      [level.id]: level,
+      [cabinet.id]: cabinet,
+      [module.id]: module,
+    } as Record<AnyNodeId, AnyNode>
+    const gridSnapPosition = cabinetDefinition.capabilities?.movable?.gridSnapPosition
+
+    expect(gridSnapPosition).toBeFunction()
+    const snapped = gridSnapPosition!({
+      candidatePosition: [0.83, 0, 0.77],
+      candidateRotation: 0,
+      gridStep: 0.5,
+      levelId: level.id,
+      movingIds: [cabinet.id as AnyNodeId],
+      node: cabinet,
+      nodes,
+    })
+
+    expect(snapped[0] - module.width / 2).toBeCloseTo(0.5)
+    expect(snapped[2] - module.depth / 2).toBeCloseTo(0.5)
+  })
+})
 
 function wallHit(overrides: Partial<WallHit> = {}): WallHit {
   const wall = WallNode.parse({

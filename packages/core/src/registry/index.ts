@@ -98,6 +98,7 @@ export type {
   FloorplanPoint,
   FloorplanStyle,
   GeometryContext,
+  GridSnapPositionArgs,
   GroupMoveSnapArgs,
   GroupMoveSnapResult,
   HostableConfig,

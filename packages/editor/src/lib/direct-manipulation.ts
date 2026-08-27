@@ -64,6 +64,21 @@ export function canDirectMoveNode(node: AnyNode): boolean {
   return isMovable(node)
 }
 
+export function shouldStartDirectMoveDrag({
+  allowPlainDrag,
+  commandModifier,
+  nodeId,
+  selectedIds,
+}: {
+  allowPlainDrag: boolean
+  commandModifier: boolean
+  nodeId: string
+  selectedIds: readonly string[]
+}): boolean {
+  if (commandModifier) return selectedIds.length === 1 && selectedIds[0] === nodeId
+  return allowPlainDrag && selectedIds.length < 2
+}
+
 export function resolveDirectManipulationNode(
   node: AnyNode,
   nodes: Readonly<Record<string, AnyNode | undefined>>,
@@ -80,7 +95,7 @@ export function resolveMoveActionNode(
 ): AnyNode {
   const parentFrame = nodeRegistry.get(node.type)?.capabilities?.movable?.parentFrame
   const parent = parentFrame?.resolveParent(node, nodes as Readonly<Record<string, AnyNode>>)
-  return parent?.type === node.type ? parent : node
+  return parent && (parent.type === node.type || canDirectRotateNode(parent)) ? parent : node
 }
 
 export function snapDirectRotationDelta(delta: number, free: boolean): number {

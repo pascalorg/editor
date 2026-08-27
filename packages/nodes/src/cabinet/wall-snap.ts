@@ -3,15 +3,15 @@ import {
   type AnyNodeId,
   type CabinetModuleNode,
   calculateLevelMiters,
-  closestOnSegment,
-  collectLevelWallSegments,
+  getWallArcData,
+  getWallCurveFrameAt,
   getWallPlanFootprint,
   getWallThickness,
+  isCurvedWall,
   WALL_SNAP_DISTANCE_M,
   type WallNode,
 } from '@pascal-app/core'
 import type { WallHit } from '../shared/wall-attach-target'
-import { projectWallLocalPointToPlan } from '../shared/wall-attach-target'
 import { snapCabinetFootprintCenter } from './placement-snap'
 import { planToRunLocal, runLocalToPlan } from './run-layout'
 
@@ -99,11 +99,76 @@ function snapLocalXToStops({
   return best ? { localX: best.localX, reason: best.reason } : { localX, reason: 'grid' }
 }
 
-function wallAxisYaw(wall: WallNode): number {
-  return -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+function normalizePositiveAngle(angle: number): number {
+  const fullTurn = Math.PI * 2
+  return ((angle % fullTurn) + fullTurn) % fullTurn
 }
 
-function findClosestCabinetWallInPlan({
+function closestCurvedWallPoint(
+  wall: WallNode,
+  planPoint: readonly [number, number],
+): (Omit<WallHit, 'itemRotation' | 'side'> & { distance: number }) | null {
+  const arc = getWallArcData(wall)
+  if (!arc) return null
+
+  const queryAngle = Math.atan2(planPoint[1] - arc.center.y, planPoint[0] - arc.center.x)
+  const sweep = Math.abs(arc.delta)
+  const progress =
+    arc.delta > 0
+      ? normalizePositiveAngle(queryAngle - arc.startAngle)
+      : normalizePositiveAngle(arc.startAngle - queryAngle)
+  let t: number
+  if (progress <= sweep) {
+    t = progress / sweep
+  } else {
+    const start = getWallCurveFrameAt(wall, 0).point
+    const end = getWallCurveFrameAt(wall, 1).point
+    const startDistance = Math.hypot(planPoint[0] - start.x, planPoint[1] - start.y)
+    const endDistance = Math.hypot(planPoint[0] - end.x, planPoint[1] - end.y)
+    t = startDistance <= endDistance ? 0 : 1
+  }
+
+  const frame = getWallCurveFrameAt(wall, t)
+  const dx = planPoint[0] - frame.point.x
+  const dz = planPoint[1] - frame.point.y
+  return {
+    wall,
+    localX: t * arc.radius * sweep,
+    perpDistance: dx * frame.normal.x + dz * frame.normal.y,
+    dirX: frame.tangent.x,
+    dirY: frame.tangent.y,
+    wallLength: arc.radius * sweep,
+    distance: Math.hypot(dx, dz),
+  }
+}
+
+function closestStraightWallPoint(
+  wall: WallNode,
+  planPoint: readonly [number, number],
+): (Omit<WallHit, 'itemRotation' | 'side'> & { distance: number }) | null {
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const wallLength = Math.hypot(dx, dz)
+  if (wallLength <= 1e-6) return null
+  const dirX = dx / wallLength
+  const dirY = dz / wallLength
+  const fromStartX = planPoint[0] - wall.start[0]
+  const fromStartZ = planPoint[1] - wall.start[1]
+  const localX = Math.max(0, Math.min(wallLength, fromStartX * dirX + fromStartZ * dirY))
+  const closestX = wall.start[0] + dirX * localX
+  const closestZ = wall.start[1] + dirY * localX
+  return {
+    wall,
+    localX,
+    perpDistance: fromStartX * -dirY + fromStartZ * dirX,
+    dirX,
+    dirY,
+    wallLength,
+    distance: Math.hypot(planPoint[0] - closestX, planPoint[1] - closestZ),
+  }
+}
+
+export function findClosestCabinetWallInPlan({
   excludeIds,
   fallbackToAnyYaw = false,
   nodes,
@@ -132,28 +197,33 @@ function findClosestCabinetWallInPlan({
       }
     | undefined
 
-  for (const segment of collectLevelWallSegments(nodes, parentLevelId)) {
-    if (excluded.has(segment.wall.id as AnyNodeId)) continue
-    const closest = closestOnSegment(segment, planPoint[0], planPoint[1])
-    if (closest.distance > WALL_SNAP_DISTANCE_M) continue
-    const side = closest.perp >= 0 ? 'front' : 'back'
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'wall' || node.parentId !== parentLevelId) continue
+    const wall = node as WallNode
+    if (excluded.has(wall.id as AnyNodeId)) continue
+    const closest = isCurvedWall(wall)
+      ? closestCurvedWallPoint(wall, planPoint)
+      : closestStraightWallPoint(wall, planPoint)
+    if (!closest || closest.distance > WALL_SNAP_DISTANCE_M) continue
+    const side = closest.perpDistance >= 0 ? 'front' : 'back'
     const candidate: { distance: number; hit: WallHit } = {
       distance: closest.distance,
       hit: {
-        wall: segment.wall,
-        localX: closest.along,
-        perpDistance: closest.perp,
+        wall,
+        localX: closest.localX,
+        perpDistance: closest.perpDistance,
         side,
-        dirX: segment.dirX,
-        dirY: segment.dirY,
-        wallLength: segment.length,
+        dirX: closest.dirX,
+        dirY: closest.dirY,
+        wallLength: closest.wallLength,
         itemRotation: side === 'front' ? 0 : Math.PI,
       },
     }
     if (!bestAny || candidate.distance < bestAny.distance) bestAny = candidate
     if (
       yaw !== undefined &&
-      Math.abs(Math.sin(yaw - wallAxisYaw(segment.wall))) <= Math.sin(YAW_MATCH_THRESHOLD) &&
+      Math.abs(Math.sin(yaw + Math.atan2(closest.dirY, closest.dirX))) <=
+        Math.sin(YAW_MATCH_THRESHOLD) &&
       (!bestCompatible || candidate.distance < bestCompatible.distance)
     ) {
       bestCompatible = candidate
@@ -162,6 +232,29 @@ function findClosestCabinetWallInPlan({
 
   if (yaw === undefined) return bestAny?.hit ?? null
   return bestCompatible?.hit ?? (fallbackToAnyYaw ? (bestAny?.hit ?? null) : null)
+}
+
+function cabinetWallFrameAtLocalX(hit: WallHit, localX: number) {
+  if (isCurvedWall(hit.wall)) {
+    return getWallCurveFrameAt(hit.wall, localX / hit.wallLength)
+  }
+  return {
+    point: {
+      x: hit.wall.start[0] + hit.dirX * localX,
+      y: hit.wall.start[1] + hit.dirY * localX,
+    },
+    tangent: { x: hit.dirX, y: hit.dirY },
+    normal: { x: -hit.dirY, y: hit.dirX },
+  }
+}
+
+function projectCabinetWallLocalPointToPlan(
+  hit: WallHit,
+  localX: number,
+  localZ = 0,
+): [number, number] {
+  const frame = cabinetWallFrameAtLocalX(hit, localX)
+  return [frame.point.x + frame.normal.x * localZ, frame.point.y + frame.normal.y * localZ]
 }
 
 function pointsMeet(a: readonly [number, number], b: readonly [number, number]): boolean {
@@ -207,6 +300,8 @@ function resolveCabinetWallUsableSpan({
   nodes: Record<AnyNodeId, AnyNode>
   parentLevelId: AnyNodeId
 }): { end: number; start: number } {
+  if (isCurvedWall(hit.wall)) return { start: 0, end: hit.wallLength }
+
   const walls = Object.values(nodes).filter(
     (node): node is WallNode => node?.type === 'wall' && node.parentId === parentLevelId,
   )
@@ -283,6 +378,10 @@ export function resolveCabinetWallFaceOffset({
   nodes: Record<AnyNodeId, AnyNode>
   parentLevelId: AnyNodeId
 }): number {
+  if (isCurvedWall(hit.wall)) {
+    return (hit.side === 'front' ? 1 : -1) * (getWallThickness(hit.wall) / 2)
+  }
+
   const walls = Object.values(nodes).filter(
     (node): node is WallNode => node?.type === 'wall' && node.parentId === parentLevelId,
   )
@@ -346,6 +445,8 @@ export function collectCabinetWallSnapNeighbors({
   parentLevelId: AnyNodeId
   width: number
 }): CabinetWallSnapNeighbor[] {
+  if (isCurvedWall(hit.wall)) return []
+
   const frontNormal = [-hit.dirY, hit.dirX] as const
   const normalScale = hit.side === 'front' ? 1 : -1
   const yaw = Math.atan2(frontNormal[0] * normalScale, frontNormal[1] * normalScale)
@@ -414,20 +515,21 @@ export function resolveCabinetWallSnapPlacement({
     width,
   })
   const localX = snapped.localX
-  const centerline = projectWallLocalPointToPlan(hit.wall, localX)
-  const frontNormal = [-hit.dirY, hit.dirX] as const
+  const frame = cabinetWallFrameAtLocalX(hit, localX)
+  const centerline = [frame.point.x, frame.point.y] as const
+  const frontNormal = [frame.normal.x, frame.normal.y] as const
   const normalScale = hit.side === 'front' ? 1 : -1
   const normal = [frontNormal[0] * normalScale, frontNormal[1] * normalScale] as const
   const resolvedFaceOffset = faceOffset ?? (normalScale * getWallThickness(hit.wall)) / 2
   const cabinetCenterOffset = resolvedFaceOffset + normalScale * (depth / 2)
   const guideOffset = resolvedFaceOffset
-  const guideStart = projectWallLocalPointToPlan(
-    hit.wall,
+  const guideStart = projectCabinetWallLocalPointToPlan(
+    hit,
     Math.max(startStop, localX - halfWidth),
     guideOffset,
   )
-  const guideEnd = projectWallLocalPointToPlan(
-    hit.wall,
+  const guideEnd = projectCabinetWallLocalPointToPlan(
+    hit,
     Math.min(endStop, localX + halfWidth),
     guideOffset,
   )

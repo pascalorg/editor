@@ -1917,6 +1917,8 @@ export type CapabilityCtx = { node: AnyNode }
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
+  /** Allow an ordinary primary-button body drag to enter the move tool. */
+  directDrag?: boolean
   /**
    * Pin the dragged node to the cursor (absolute placement) instead of the
    * default offset-preserving drag, where the node moves by the cursor's
@@ -1958,6 +1960,13 @@ export type MovableConfig = {
    * cabinet run turning to face a wall.
    */
   groupMoveSnap?: (args: GroupMoveSnapArgs) => GroupMoveSnapResult | null
+  /**
+   * Kind-owned grid resolver for a planar move. Unlike scalar grid snapping,
+   * this receives the complete candidate pose so a kind can snap a visible
+   * footprint edge (including a local bounds offset and rotation) rather than
+   * blindly rounding its stored origin.
+   */
+  gridSnapPosition?: (args: GridSnapPositionArgs) => [number, number, number]
   override?: (ctx: CapabilityCtx) => MovableConfig | null
 }
 
@@ -2031,6 +2040,10 @@ export type GroupMoveSnapArgs = {
 export type GroupMoveSnapResult = {
   position: [number, number, number]
   rotation?: number
+}
+
+export type GridSnapPositionArgs = GroupMoveSnapArgs & {
+  gridStep: number
 }
 
 export type LiveTransformLike = {

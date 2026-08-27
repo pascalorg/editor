@@ -391,6 +391,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // to settle a dragged run flush against a wall without forking the move tool.
   const groupMoveSnapConfig =
     nodeRegistry.get(node.type)?.capabilities?.movable?.groupMoveSnap ?? null
+  const gridSnapPositionConfig =
+    nodeRegistry.get(node.type)?.capabilities?.movable?.gridSnapPosition ?? null
   // Mirrors of `valid` / Alt for the event handlers inside the effect, which
   // can't read React state without stale closures.
   const validRef = useRef(true)
@@ -628,7 +630,29 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         anchor: dragAnchorRef.current,
         mode: useAbsoluteCursorPlacement || cursorAttached ? 'absolute' : 'relative',
         // Snap follows the mode (raw in Off via snapToGridStep); Alt = force only.
-        snap: snapToGridStep,
+        snap: gridSnapPositionConfig ? undefined : snapToGridStep,
+        snapPoint:
+          isGridSnapActive() && gridSnapPositionConfig
+            ? ([planX, planZ]) => {
+                const snappedPosition = gridSnapPositionConfig({
+                  node,
+                  candidatePosition: canonicalPositionFromPlan(planX, originalPosition[1], planZ),
+                  candidateRotation: freeRotationRef.current,
+                  movingIds: [node.id as AnyNodeId],
+                  nodes: useScene.getState().nodes as Record<string, AnyNode>,
+                  levelId:
+                    (useViewer.getState().selection.levelId as AnyNodeId | null) ??
+                    (node.parentId as AnyNodeId | undefined) ??
+                    null,
+                  gridStep: useEditor.getState().gridSnapStep,
+                })
+                const snappedPlanPosition = getVisualPosition(
+                  snappedPosition,
+                  freeRotationRef.current,
+                )
+                return [snappedPlanPosition[0], snappedPlanPosition[2]]
+              }
+            : undefined,
         resolveAttachment:
           attachmentEnabled && groupMoveSnapConfig
             ? ([planX, planZ]) => {
@@ -638,7 +662,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
                   candidateRotation: rotationRef.current,
                   movingIds: [node.id as AnyNodeId],
                   nodes: useScene.getState().nodes as Record<string, AnyNode>,
-                  levelId: (useViewer.getState().selection.levelId as AnyNodeId | null) ?? null,
+                  levelId:
+                    (useViewer.getState().selection.levelId as AnyNodeId | null) ??
+                    (node.parentId as AnyNodeId | undefined) ??
+                    null,
                 })
                 if (!snappedPosition) return null
                 attachmentRotationY = snappedPosition.rotation ?? null
@@ -1100,6 +1127,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     cursorAttached,
     portSnapConfig,
     groupMoveSnapConfig,
+    gridSnapPositionConfig,
     exitMoveMode,
     isFreshPlacement,
     node,

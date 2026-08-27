@@ -15,7 +15,7 @@ Temporary working checklist for the UX cases supplied on 2026-08-27.
 
   Expected: A cabinet dragged near a curved wall follows the local wall tangent, remains back-flush to the wall face, and updates its rotation as it moves along the curve.
 
-  Result: Awaiting investigation; the original checklist identifies curved walls as unsupported.
+  Result: Implemented with local-arc projection and tangent-facing rotation in 2D and 3D. Existing placed cabinets now enter the run-level mover from a normal left-button body drag (no modifier or prior selection required), with wall-first rotation and footprint-edge grid snapping; ready for QA.
 
 ## Completed cases
 

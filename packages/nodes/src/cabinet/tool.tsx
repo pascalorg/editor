@@ -54,7 +54,7 @@ import {
   subscribeFloorPlacementDoubleClicks,
 } from '../shared/floor-placement'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { findClosestWallInPlan, type WallHit } from '../shared/wall-attach-target'
+import type { WallHit } from '../shared/wall-attach-target'
 import {
   type CabinetStretchPreview,
   cabinetStretchExitSide,
@@ -80,7 +80,11 @@ import useCabinetPlacementType from './placement-type'
 import { cabinetPresetById } from './presets'
 import { runLocalToPlan } from './run-layout'
 import { addCabinetModuleSide, addCornerRun, previewCornerAdditionLayout } from './run-ops'
-import { type CabinetWallSnapPlacement, resolveCabinetWallSnapPlacementInScene } from './wall-snap'
+import {
+  type CabinetWallSnapPlacement,
+  findClosestCabinetWallInPlan,
+  resolveCabinetWallSnapPlacementInScene,
+} from './wall-snap'
 
 const PREVIEW_OPACITY = 0.55
 const ROTATE_STEP_RAD = Math.PI / 4
@@ -624,7 +628,12 @@ const CabinetTool = () => {
     const resolveWallPlacement = (raw: [number, number, number]): CabinetPlacement | null => {
       if (!isWallSnapEligible()) return null
       const nodes = useScene.getState().nodes
-      const hit = findClosestWallInPlan([raw[0], raw[2]], nodes, activeLevelId as AnyNodeId)
+      const hit = findClosestCabinetWallInPlan({
+        excludeIds: [],
+        nodes,
+        parentLevelId: activeLevelId as AnyNodeId,
+        planPoint: [raw[0], raw[2]],
+      })
       if (!hit) return null
       return resolveWallHitPlacement(hit)
     }

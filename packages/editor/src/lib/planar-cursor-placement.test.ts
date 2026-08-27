@@ -135,4 +135,25 @@ describe('resolvePrioritizedPlanarCursorPosition', () => {
     expect(result.point).toEqual([0.5, 0.5])
     expect(result.attachmentSnapped).toBe(false)
   })
+
+  test('supports footprint-aware point snapping after attachment resolution', () => {
+    const pointProposals: [number, number][] = []
+    const result = resolvePrioritizedPlanarCursorPosition({
+      cursor: [1.03, 2.04],
+      original: [0.8, 1.8],
+      anchor: [0.9, 1.9],
+      mode: 'relative',
+      snapPoint: (proposal) => {
+        pointProposals.push(proposal)
+        return [0.8, 2.29]
+      },
+      resolveAttachment: () => null,
+    })
+
+    expect(pointProposals).toHaveLength(1)
+    expect(pointProposals[0]![0]).toBeCloseTo(0.93)
+    expect(pointProposals[0]![1]).toBeCloseTo(1.94)
+    expect(result.point).toEqual([0.8, 2.29])
+    expect(result.attachmentSnapped).toBe(false)
+  })
 })
