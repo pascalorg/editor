@@ -68,6 +68,7 @@
         "y-websocket": "^2.1.0",
         "yjs": "^13.6.32",
         "zod": "^4.3.5",
+        "zustand": "^5",
       },
       "devDependencies": {
         "@pascal/typescript-config": "*",

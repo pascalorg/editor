@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { calculateWarehouseBOM, generateWarehouseBomPdf } from '@ovurrsl/plugin-warehouse'
+import { calculateWarehouseBOM, generateWarehouseBomHtml, generateWarehouseBomSheets } from '../../../../../plugin-warehouse/src/bom'
 import { type AnyNode, ZoneNode } from '@pascal-app/core'
 import { collectZoneObjectIds } from '@pascal-app/editor'
 
@@ -151,7 +151,7 @@ describe('Zone BOM Export Action Wiring', () => {
     expect(bomA.totalPartsCount).toBeGreaterThan(0)
   })
 
-  test('generates valid binary PDF buffer from zone BOM without errors', async () => {
+  test('generates valid printable sheets and HTML buffer from zone BOM without errors', async () => {
     const contentIds = collectZoneObjectIds(sceneNodes, zoneA)
     const bomA = calculateWarehouseBOM(sceneNodes, {
       filterNodeIds: contentIds,
@@ -159,20 +159,16 @@ describe('Zone BOM Export Action Wiring', () => {
       scopeLabel: `Zone ${zoneA.name}`,
     })
 
-    const pdfBytes = await generateWarehouseBomPdf(bomA)
-    expect(pdfBytes).toBeDefined()
-    expect(pdfBytes.length).toBeGreaterThan(500)
+    const sheets = generateWarehouseBomSheets(bomA)
+    expect(sheets).toBeDefined()
+    expect(sheets.length).toBeGreaterThan(0)
+    expect(sheets[0]!.svg).toContain('Pallet Storage A')
 
-    // PDF magic bytes %PDF- (0x25 0x50 0x44 0x46 0x2D)
-    expect(pdfBytes[0]).toBe(0x25)
-    expect(pdfBytes[1]).toBe(0x50)
-    expect(pdfBytes[2]).toBe(0x44)
-    expect(pdfBytes[3]).toBe(0x46)
-    expect(pdfBytes[4]).toBe(0x2d)
-
-    // Check that Zone title was encoded into PDF stream
-    const pdfText = Buffer.from(pdfBytes).toString('latin1')
-    expect(pdfText).toContain('Pallet Storage A')
+    const html = generateWarehouseBomHtml(sheets, { title: 'Zone BOM Export' })
+    expect(html).toBeDefined()
+    expect(html).toContain('Zone BOM Export')
+    expect(html).toContain('Pallet Storage A')
+    expect(html).toContain('<!doctype html>')
   })
 
   test('calculates global warehouse BOM vs zone-scoped BOM', () => {
