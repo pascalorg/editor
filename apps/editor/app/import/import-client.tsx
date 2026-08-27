@@ -7,8 +7,12 @@ import { MAX_IMPORT_BYTES, parseImportSrc } from '@/lib/import-src'
 
 type Phase =
   | { kind: 'fetching' }
-  | { kind: 'review'; result: ValidateBuildJsonResult }
-  | { kind: 'creating' }
+  // createError keeps the review alive after a failed create: the
+  // validated graph stays on screen and Import can simply be retried —
+  // a refresh would re-fetch `src`, and a short-lived scan URL may
+  // already be gone (review feedback).
+  | { kind: 'review'; result: ValidateBuildJsonResult; createError?: string }
+  | { kind: 'creating'; result: ValidateBuildJsonResult }
   | { kind: 'error'; message: string }
 
 /**
@@ -96,7 +100,8 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
     if (phase.kind !== 'review' || !phase.result.parsed) return
     if (creating.current) return
     creating.current = true
-    setPhase({ kind: 'creating' })
+    const review = phase.result
+    setPhase({ kind: 'creating', result: review })
     try {
       const response = await fetch('/api/scenes', {
         method: 'POST',
@@ -108,8 +113,9 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
       })
       if (!response.ok) {
         setPhase({
-          kind: 'error',
-          message:
+          kind: 'review',
+          result: review,
+          createError:
             response.status === 401 || response.status === 403
               ? 'You need to be signed in to import a scene.'
               : response.status === 413
@@ -122,8 +128,10 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
       router.push(`/scene/${meta.id}`)
     } catch (error) {
       setPhase({
-        kind: 'error',
-        message: error instanceof Error ? error.message : 'Creating the scene failed.',
+        kind: 'review',
+        result: review,
+        createError:
+          error instanceof Error ? error.message : 'Creating the scene failed.',
       })
     } finally {
       // Released in every path: after an error the user may retry.
@@ -193,13 +201,16 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
         )}
       </div>
 
+      {phase.createError && (
+        <p className="text-destructive text-sm">{phase.createError}</p>
+      )}
       <button
         className="rounded-md border border-border bg-accent px-4 py-2 font-medium text-sm hover:bg-accent/80 disabled:opacity-50"
         disabled={!result.ok || !result.parsed}
         onClick={handleImport}
         type="button"
       >
-        Import as a new scene
+        {phase.createError ? 'Try again' : 'Import as a new scene'}
       </button>
     </div>
   )
