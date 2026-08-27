@@ -17,11 +17,13 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [measurements](measurements.md) | Persistent measurement data, 2D/3D draft ownership, snapping, units, and visibility |
 | [interaction-scope](interaction-scope.md) | The authoritative interaction state machine ("the spine"): `InteractionScope` union, the begin/update/end/endIf contract, the raycast hot-set, and the overlay scope matrix |
 | [viewer-isolation](viewer-isolation.md) | Keeping `@pascal-app/viewer` editor-agnostic |
+| [capture-runtime](capture-runtime.md) | Open capture protocol, host source boundary, static/live viewer layers, and stream extension |
 | [selection-managers](selection-managers.md) | Two-layer selection (viewer + editor), events, outliner |
 | [selection-groups](selection-groups.md) | Session multi-select groups (Ctrl/Cmd+G), expand-on-click, how they differ from collections |
 | [scene-registry](scene-registry.md) | Global node ID → Object3D map and `useRegistry` |
 | [spatial-queries](spatial-queries.md) | Placement validation (`canPlaceOnFloor`/`Wall`/`Ceiling`) for tools |
 | [node-schemas](node-schemas.md) | Zod schema pattern for node types, `createNode`, `updateNode` |
+| [inspector-field-limits](inspector-field-limits.md) | When a numeric inspector field may and may not have `min`/`max` — no arbitrary caps on dimensions |
 | [vertical-model](vertical-model.md) | Stored level heights, plane-bound wall/ceiling tops, slab placement + thickness, support hosts, clamp rules, and the load migration |
 | [events](events.md) | Typed event bus — emitting and listening to node and grid events |
 | [creating-rules](creating-rules.md) | How to add or update a page in this folder |

@@ -369,7 +369,7 @@ export default function ChimneyPanel() {
         />
         <SliderControl
           label={(node.bodyShape ?? 'square') === 'round' ? 'Diameter' : 'Width'}
-          max={3}
+          max={1000}
           min={0.2}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => commitProp({ width: v })}
@@ -382,7 +382,7 @@ export default function ChimneyPanel() {
         {(node.bodyShape ?? 'square') !== 'round' && (
           <SliderControl
             label="Depth"
-            max={3}
+            max={1000}
             min={0.2}
             onChange={(v) => previewProp({ depth: v })}
             onCommit={(v) => commitProp({ depth: v })}
@@ -436,7 +436,7 @@ export default function ChimneyPanel() {
       <PanelSection title="Height">
         <SliderControl
           label="Above Ridge"
-          max={5}
+          max={1000}
           min={0.1}
           onChange={(v) => previewProp({ heightAboveRidge: v })}
           onCommit={(v) => commitProp({ heightAboveRidge: v })}

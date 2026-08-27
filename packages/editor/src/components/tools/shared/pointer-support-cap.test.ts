@@ -241,4 +241,39 @@ describe('resolvePointerSupportSurface node tops', () => {
       wallSupport.baseSegments.every((segment) => Math.abs(segment.elevation - 2) < 1e-6),
     ).toBe(true)
   })
+
+  test('tolerates a registered definition without capabilities', () => {
+    // Gates the pollution class behind the night-8 CI flake (run
+    // 32580694134): `capabilities` is typed required, but a minimal plugin
+    // definition (or a leaked test fixture) can ship without it at runtime.
+    // The resolver enumerates every registered kind, so one capabilities-less
+    // entry must read as "no top surface" — not crash the election.
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      registerNode({
+        kind: 'plugin-minimal-capless',
+        schemaVersion: 1,
+        schema: z.object({}),
+        category: 'structure',
+        defaults: () => ({}),
+        // No `capabilities` — deliberately.
+      } as unknown as AnyNodeDefinition)
+      addPluginPlatform()
+
+      const camera = new PerspectiveCamera()
+      camera.position.set(0, 5, 0)
+      camera.updateMatrixWorld(true)
+
+      const support = resolvePointerSupportSurface(camera, [0, 0, 0], {
+        includeNodeTopSurfaces: true,
+      })
+
+      // No throw, and the election still works: the capabilities-less kind is
+      // skipped while the platform's declared top is found as usual.
+      expect(support?.sourceNodeId).toBe(PLATFORM_ID)
+      expect(support?.elevation).toBeCloseTo(2)
+    } finally {
+      restoreRegistry()
+    }
+  })
 })

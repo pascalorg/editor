@@ -2,9 +2,10 @@ import { Icon as IconifyIcon } from '@iconify/react'
 import { type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
-import { memo, useCallback, useEffect, useState } from 'react'
+import { memo, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { resolveNodeDisplayName } from '../../../../../lib/node-display-name'
+import { editorHostTreeChildrenRegistry } from '../../../../../lib/host-tree-children'
 import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import { InlineRenameInput } from './inline-rename-input'
 import {
@@ -44,8 +45,19 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+  useSyncExternalStore(
+    editorHostTreeChildrenRegistry.subscribe,
+    editorHostTreeChildrenRegistry.getSnapshot,
+    editorHostTreeChildrenRegistry.getSnapshot,
+  )
 
   const presentation = node ? nodeRegistry.get(node.type)?.presentation : undefined
+  const tree = node ? nodeRegistry.get(node.type)?.tree : undefined
+  const hostChildren = node
+    ? editorHostTreeChildrenRegistry.childrenForKind(node.type)
+    : undefined
+  const hasHostChildren = Boolean(node && hostChildren?.hasChildren(node))
+  const HostChildren = hasHostChildren ? hostChildren?.component : undefined
   const icon = presentation?.icon
   const iconSrc = icon?.kind === 'url' ? icon.src : '/icons/roof.webp'
   const iconElement =
@@ -61,8 +73,10 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
       />
     )
   const snapTarget = resolveNodeSnapTarget(node)
-  const defaultName = resolveNodeDisplayName(node, useScene.getState().nodes) || 'Node'
-  const hasChildren = children.length > 0
+  const defaultName =
+    resolveNodeDisplayName(node, useScene.getState().nodes) ||
+    (node ? tree?.label?.(node, useScene.getState().nodes) || node.name || presentation?.label || 'Node' : 'Node')
+  const hasChildren = children.length > 0 || hasHostChildren
 
   useEffect(() => {
     return useViewer.subscribe((state) => {
@@ -125,15 +139,21 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
       onMouseLeave={() => setHoveredId(null)}
       onToggle={() => setExpanded((prev) => !prev)}
     >
-      {hasChildren &&
-        children.map((childId, index) => (
-          <TreeNode
-            depth={depth + 1}
-            isLast={index === children.length - 1}
-            key={childId}
-            nodeId={childId as AnyNodeId}
-          />
-        ))}
+      {hasChildren && (
+        <>
+          {children.map((childId, index) => (
+            <TreeNode
+              depth={depth + 1}
+              isLast={!hasHostChildren && index === children.length - 1}
+              key={childId}
+              nodeId={childId as AnyNodeId}
+            />
+          ))}
+          {HostChildren ? (
+            <HostChildren depth={depth + 1} nodeId={nodeId} parentVisible={isVisible} />
+          ) : null}
+        </>
+      )}
     </TreeNodeWrapper>
   )
 })

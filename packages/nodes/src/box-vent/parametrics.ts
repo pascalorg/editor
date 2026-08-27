@@ -28,9 +28,9 @@ export const boxVentParametrics: ParametricDescriptor<BoxVentNode> = {
     {
       label: 'Dimensions',
       fields: [
-        { key: 'width', kind: 'number', unit: 'm', min: 0.15, max: 0.8, step: 0.01 },
-        { key: 'depth', kind: 'number', unit: 'm', min: 0.15, max: 0.8, step: 0.01 },
-        { key: 'height', kind: 'number', unit: 'm', min: 0.05, max: 0.4, step: 0.01 },
+        { key: 'width', kind: 'number', unit: 'm', min: 0.15, max: 1000, step: 0.01 },
+        { key: 'depth', kind: 'number', unit: 'm', min: 0.15, max: 1000, step: 0.01 },
+        { key: 'height', kind: 'number', unit: 'm', min: 0.05, max: 1000, step: 0.01 },
         { key: 'hoodOverhang', kind: 'number', unit: 'm', min: 0, max: 0.12, step: 0.005 },
       ],
     },

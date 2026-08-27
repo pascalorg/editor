@@ -25,7 +25,7 @@
     "@pascal-app/mcp": "*",
     "@pascal-app/nodes": "*",
     "@pascal-app/plugin-articraft": "workspace:*",
-    "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#85238a8eb4e221cc1f779f47fb8aa8ef6922627c",
+    "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
     "@pascal-app/plugin-boots": "github:pascalorg/plugin-boots",
     "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
     "@pascal-app/plugin-trees": "workspace:*",

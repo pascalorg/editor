@@ -141,6 +141,7 @@ function SceneMaterialRow({
       className={`rounded-md border border-border/60 bg-background/40 p-2 ${
         isActive ? 'ring-1 ring-primary ring-inset' : ''
       }`}
+      data-testid={`scene-material-row-${id}`}
     >
       <div className="flex items-center gap-2">
         <span

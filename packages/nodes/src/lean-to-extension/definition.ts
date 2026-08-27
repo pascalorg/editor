@@ -47,7 +47,7 @@ function highEdgeHeightHandle(): HandleDescriptor<LeanToExtensionNode> {
     anchor: 'min',
     shape: 'tracker',
     min: 0.8,
-    max: 10,
+    max: 1000,
     currentValue: (node) => node.highEdgeHeight,
     magneticSnap: (node, newValue, sceneApi) => {
       const wall = resolveHostWall(node, sceneApi)
@@ -199,7 +199,7 @@ function spanHandle(side: 'left' | 'right'): HandleDescriptor<LeanToExtensionNod
     axis: 'x',
     anchor: side === 'right' ? 'min' : 'max',
     min: 0.5,
-    max: 100,
+    max: 1000,
     currentValue: (node) => node.span,
     apply: (node, span) => spanPatch(node, span, side),
     previewOverrides: (node, span, sceneApi) =>
@@ -225,7 +225,7 @@ leanToExtensionHandles.push({
   axis: 'z',
   anchor: 'min',
   min: 0.5,
-  max: 10,
+  max: 1000,
   currentValue: (node) => node.projection,
   apply: (node, projection) => ({
     projection,

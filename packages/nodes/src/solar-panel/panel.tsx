@@ -278,7 +278,7 @@ export default function SolarPanelPanel() {
       <PanelSection title="Panel">
         <SliderControl
           label="Width"
-          max={2.5}
+          max={1000}
           min={0.3}
           onChange={(v) => previewProp({ panelWidth: v })}
           onCommit={(v) => commitProp({ panelWidth: v })}
@@ -290,7 +290,7 @@ export default function SolarPanelPanel() {
         />
         <SliderControl
           label="Height"
-          max={3}
+          max={1000}
           min={0.3}
           onChange={(v) => previewProp({ panelHeight: v })}
           onCommit={(v) => commitProp({ panelHeight: v })}

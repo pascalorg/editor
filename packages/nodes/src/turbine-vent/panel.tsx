@@ -181,7 +181,7 @@ export default function TurbineVentPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Diameter"
-          max={0.7}
+          max={1000}
           min={0.15}
           onChange={(v) => previewProp({ diameter: v })}
           onCommit={(v) => handleUpdate({ diameter: v })}
@@ -193,7 +193,7 @@ export default function TurbineVentPanel() {
         />
         <SliderControl
           label="Height"
-          max={0.9}
+          max={1000}
           min={0.2}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => handleUpdate({ height: v })}

@@ -13,6 +13,7 @@ import {
   EyeOff,
   LocateFixed,
   Lock,
+  Move,
   RotateCcw,
   Ruler,
   Trash2,
@@ -144,6 +145,12 @@ export function ReferencePanel() {
     guideEmitter.emit('guide:cancel-reference-scale')
   }, [])
 
+  const handleMoveScan = useCallback(() => {
+    if (node?.type !== 'scan') return
+    useEditor.getState().setMovingNode(node as never)
+    setSelectedReferenceId(null)
+  }, [node, setSelectedReferenceId])
+
   useEffect(() => {
     if (node?.type !== 'guide' || !node.url.startsWith('asset://')) {
       setIsAssetMissing(false)
@@ -172,7 +179,7 @@ export function ReferencePanel() {
   return (
     <PanelWrapper
       onClose={handleClose}
-      title={node.name || (isScan ? '3D Scan' : 'Guide Image')}
+      title={node.name || (isScan ? 'Capture' : 'Guide Image')}
       width={300}
     >
       {!isScan && (
@@ -327,6 +334,29 @@ export function ReferencePanel() {
             </ActionGroup>
           </PanelSection>
         </>
+      )}
+
+      {isScan && (
+        <PanelSection title="Capture">
+          <ActionGroup>
+            <ActionButton
+              icon={<Move className="h-3.5 w-3.5" />}
+              label="Move"
+              onClick={handleMoveScan}
+            />
+            <ActionButton
+              icon={
+                node.visible === false ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )
+              }
+              label={node.visible === false ? 'Show' : 'Hide'}
+              onClick={() => handleUpdate({ visible: node.visible === false })}
+            />
+          </ActionGroup>
+        </PanelSection>
       )}
 
       <PanelSection title="Position">

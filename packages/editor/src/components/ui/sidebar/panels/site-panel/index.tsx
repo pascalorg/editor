@@ -15,7 +15,10 @@ import { useViewer } from '@pascal-app/viewer'
 import {
   Camera,
   ChevronDown,
+  ChevronRight,
   Copy,
+  Eye,
+  EyeOff,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -25,7 +28,7 @@ import {
   X,
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
@@ -49,6 +52,7 @@ import {
   squareMetersToAreaUnit,
 } from './../../../../../lib/measurements'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
+import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
@@ -351,8 +355,25 @@ const ReferenceItem = memo(function ReferenceItem({
   handleDelete: (id: string, e: React.MouseEvent) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(true)
+  const updateNode = useScene((state) => state.updateNode)
+  const selectedReferenceId = useEditor((state) => state.selectedReferenceId)
+  const isCapture = refNode.type === 'scan'
+  const isVisible = refNode.visible !== false
+  useSyncExternalStore(
+    editorHostTreeChildrenRegistry.subscribe,
+    editorHostTreeChildrenRegistry.getSnapshot,
+    editorHostTreeChildrenRegistry.getSnapshot,
+  )
+  const hostChildren = isCapture
+    ? editorHostTreeChildrenRegistry.childrenForKind(refNode.type)
+    : undefined
+  const hasHostChildren = Boolean(hostChildren?.hasChildren(refNode))
+  const HostChildren = hasHostChildren ? hostChildren?.component : undefined
+
   const handleSelect = () => {
     setSelectedReferenceId(refNode.id)
+    useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   }
 
   const handleDoubleClick = () => {
@@ -360,53 +381,98 @@ const ReferenceItem = memo(function ReferenceItem({
   }
 
   return (
-    <div
-      className="group/ref relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b pr-2 text-xs transition-colors hover:bg-accent/30"
-      onClick={handleSelect}
-      onDoubleClick={handleDoubleClick}
-    >
+    <div className="relative flex flex-col">
       <div
         className={cn(
-          'pointer-events-none absolute z-10 w-px bg-border/50',
-          isLastRow ? 'top-0 bottom-1/2' : 'top-0 bottom-0',
+          'group/ref relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b pr-2 text-xs transition-colors hover:bg-accent/30',
+          selectedReferenceId === refNode.id && 'bg-accent/50 text-foreground',
+          !isVisible && 'opacity-50',
         )}
-        style={{ left: 45 }}
-      />
-      <div
-        className="pointer-events-none absolute top-1/2 z-10 h-px bg-border/50"
-        style={{ left: 45, width: 8 }}
-      />
-
-      <div className="flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 py-0 pl-[60px] text-muted-foreground group-hover/ref:text-foreground">
-        {refNode.type === 'scan' ? (
-          <img
-            alt="Scan"
-            className="h-3.5 w-3.5 shrink-0 object-contain opacity-70 transition-opacity group-hover/ref:opacity-100"
-            src="/icons/mesh.webp"
-          />
-        ) : (
-          <img
-            alt="Guide"
-            className="h-3.5 w-3.5 shrink-0 object-contain opacity-70 transition-opacity group-hover/ref:opacity-100"
-            src="/icons/floorplan.webp"
-          />
-        )}
-        <InlineRenameInput
-          defaultName={refNode.type === 'scan' ? '3D Scan' : 'Guide Image'}
-          isEditing={isEditing}
-          nodeId={refNode.id}
-          onStartEditing={() => setIsEditing(true)}
-          onStopEditing={() => setIsEditing(false)}
-        />
-      </div>
-
-      <button
-        className="z-20 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/ref:opacity-100 dark:hover:bg-white/10"
-        onClick={(e) => handleDelete(refNode.id, e)}
-        title="Delete"
+        onClick={handleSelect}
+        onDoubleClick={handleDoubleClick}
       >
-        <Trash2 className="h-3 w-3" />
-      </button>
+        <div
+          className={cn(
+            'pointer-events-none absolute z-10 w-px bg-border/50',
+            isLastRow && !(hasHostChildren && isExpanded) ? 'top-0 bottom-1/2' : 'top-0 bottom-0',
+          )}
+          style={{ left: 45 }}
+        />
+        <div
+          className="pointer-events-none absolute top-1/2 z-10 h-px bg-border/50"
+          style={{ left: 45, width: 8 }}
+        />
+
+        {isCapture ? (
+          <button
+            className="z-20 ml-[52px] flex h-4 w-4 shrink-0 items-center justify-center"
+            onClick={(event) => {
+              event.stopPropagation()
+              if (hasHostChildren) setIsExpanded((expanded) => !expanded)
+            }}
+            type="button"
+          >
+            {hasHostChildren ? (
+              <ChevronRight
+                className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-90')}
+              />
+            ) : null}
+          </button>
+        ) : null}
+
+        <div
+          className={cn(
+            'flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 py-0 text-muted-foreground group-hover/ref:text-foreground',
+            !isCapture && 'pl-[60px]',
+          )}
+        >
+          {isCapture ? (
+            <img
+              alt="Capture"
+              className="h-3.5 w-3.5 shrink-0 object-contain opacity-70 transition-opacity group-hover/ref:opacity-100"
+              src="/icons/mesh.webp"
+            />
+          ) : (
+            <img
+              alt="Guide"
+              className="h-3.5 w-3.5 shrink-0 object-contain opacity-70 transition-opacity group-hover/ref:opacity-100"
+              src="/icons/floorplan.webp"
+            />
+          )}
+          <InlineRenameInput
+            defaultName={isCapture ? 'Capture' : 'Guide Image'}
+            isEditing={isEditing}
+            nodeId={refNode.id}
+            onStartEditing={() => setIsEditing(true)}
+            onStopEditing={() => setIsEditing(false)}
+          />
+        </div>
+
+        {isCapture ? (
+          <button
+            className="z-20 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/ref:opacity-100 dark:hover:bg-white/10"
+            onClick={(event) => {
+              event.stopPropagation()
+              updateNode(refNode.id, { visible: !isVisible })
+            }}
+            title={isVisible ? 'Hide' : 'Show'}
+            type="button"
+          >
+            {isVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </button>
+        ) : null}
+        <button
+          className="z-20 flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/ref:opacity-100 dark:hover:bg-white/10"
+          onClick={(e) => handleDelete(refNode.id, e)}
+          title="Delete"
+          type="button"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+      {isExpanded && HostChildren ? (
+        <HostChildren depth={3} nodeId={refNode.id} parentVisible={isVisible} />
+      ) : null}
     </div>
   )
 })
@@ -1391,7 +1457,7 @@ const ContentSection = memo(function ContentSection() {
       if (!lvl) return []
       return lvl.children.filter((childId) => {
         const child = s.nodes[childId]
-        if (!child || child.type === 'zone') return false
+        if (!child || child.type === 'zone' || child.type === 'scan' || child.type === 'guide') return false
         return elementBelongsToPanelTab(child.type, elementTab)
       })
     }),

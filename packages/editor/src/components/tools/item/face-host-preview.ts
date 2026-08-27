@@ -9,7 +9,7 @@ type FaceBounds = {
   maxV: number
 }
 
-export function applyBlockPreviewPose(
+export function applyFaceHostPreviewPose(
   mesh: Object3D,
   position: Vector3Tuple,
   rotation: Vector3Tuple,
@@ -18,7 +18,7 @@ export function applyBlockPreviewPose(
   mesh.rotation.set(rotation[0], rotation[1], rotation[2])
 }
 
-export function resolveBlockFaceSwitch(
+export function resolveFaceHostSwitch(
   currentFaceId: string | null | undefined,
   nextFaceId: string | null | undefined,
   pendingFaceId: string | null,
@@ -34,11 +34,16 @@ export function resolveBlockFaceSwitch(
   return { accept: false, pendingFaceId: nextFaceId }
 }
 
-export function shouldDetachBlockFaceOnLeave(attachTo: string | undefined): boolean {
-  return !attachTo
+export function shouldDetachFaceHostOnLeave(attachTo: string | undefined): boolean {
+  return (
+    attachTo === undefined ||
+    attachTo === 'wall' ||
+    attachTo === 'wall-side' ||
+    attachTo === 'ceiling'
+  )
 }
 
-export function clampBlockFacePosition(
+export function clampFaceHostPosition(
   position: Vector3Tuple,
   bounds: FaceBounds,
   dimensions: readonly [width: number, height: number],
@@ -57,7 +62,7 @@ export function clampBlockFacePosition(
   ]
 }
 
-export function clampBlockFaceCenterPosition(
+export function clampFaceHostCenterPosition(
   position: Vector3Tuple,
   bounds: FaceBounds,
   dimensions: readonly [width: number, depth: number],

@@ -107,6 +107,35 @@ describe('nodeRegistry', () => {
     registerNode(b)
     expect(nodeRegistry.schemas()).toEqual([a.schema, b.schema])
   })
+
+  test('_snapshot() restores definitions and plugin bookkeeping', async () => {
+    const kept = makeDefinition('kept')
+    registerNode(kept)
+    await loadPlugin({
+      id: 'test:kept-plugin',
+      apiVersion: 1,
+      nodes: [makeDefinition('kept-plugin-kind')],
+    } as Plugin)
+
+    const restore = nodeRegistry._snapshot()
+
+    // Mutate every kind of registry state a test can leak: a throwaway
+    // definition, a full reset, and a plugin load with its kind bookkeeping.
+    registerNode(makeDefinition('leaked'))
+    nodeRegistry._reset()
+    await loadPlugin({
+      id: 'test:leaked-plugin',
+      apiVersion: 1,
+      nodes: [makeDefinition('leaked-plugin-kind')],
+    } as Plugin)
+
+    restore()
+
+    expect(Array.from(nodeRegistry.entries(), ([k]) => k)).toEqual(['kept', 'kept-plugin-kind'])
+    expect(nodeRegistry.get('kept')).toBe(kept)
+    expect(getNodePluginId('kept-plugin-kind')).toBe('test:kept-plugin')
+    expect(getNodePluginId('leaked-plugin-kind')).toBeUndefined()
+  })
 })
 
 describe('isPresettable', () => {

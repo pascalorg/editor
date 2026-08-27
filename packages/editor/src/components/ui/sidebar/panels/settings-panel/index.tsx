@@ -6,12 +6,13 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
+import { Camera, Check, Copy, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
 import {
   type KeyboardEvent,
   type ReactNode,
   type SyntheticEvent,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -24,6 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from './../../../../../components/ui/primitives/dialog'
+import { Input } from './../../../../../components/ui/primitives/input'
 import { Slider } from './../../../../../components/ui/primitives/slider'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
@@ -31,6 +33,7 @@ import useFloorplanMode from './../../../../../store/use-floorplan-mode'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
+import { PrintExportButton } from './print-export-button'
 
 type SceneNode = Record<string, unknown> & {
   id?: unknown
@@ -193,13 +196,14 @@ export function SettingsPanel({
   accountSection,
 }: SettingsPanelProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const copyResetTimeoutRef = useRef<number | null>(null)
   const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const installedPlugins = useScene((state) => state.installedPlugins)
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
-  const exportScene = useViewer((state) => state.exportScene)
+  const modelExport = useEditor((state) => state.modelExport)
   const shadows = useViewer((state) => state.shadows)
   const walkthroughAutoSpeed = useViewer((state) => state.walkthroughAutoSpeed)
   const walkthroughSpeedMultiplier = useViewer((state) => state.walkthroughSpeedMultiplier)
@@ -207,7 +211,11 @@ export function SettingsPanel({
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const setFloorplanMode = useFloorplanMode((state) => state.setMode)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
+  const [exportOnlyVisible, setExportOnlyVisible] = useState(true)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
+  const [projectIdCopyState, setProjectIdCopyState] = useState<'idle' | 'copied' | 'error'>(
+    'idle',
+  )
   const sceneGraphValue = useMemo(
     () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
     [nodes, rootNodeIds],
@@ -222,6 +230,15 @@ export function SettingsPanel({
       event.stopPropagation()
     }
   }, [])
+
+  useEffect(
+    () => () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current)
+      }
+    },
+    [],
+  )
 
   const isLocalProject = false // Props-based; only show cloud sections when projectId provided
 
@@ -322,6 +339,25 @@ export function SettingsPanel({
     setTimeout(() => setIsGeneratingThumbnail(false), 3000)
   }
 
+  const handleCopyProjectId = async () => {
+    if (!projectId) return
+    if (copyResetTimeoutRef.current !== null) {
+      window.clearTimeout(copyResetTimeoutRef.current)
+    }
+
+    try {
+      await navigator.clipboard.writeText(projectId)
+      setProjectIdCopyState('copied')
+    } catch {
+      setProjectIdCopyState('error')
+    }
+
+    copyResetTimeoutRef.current = window.setTimeout(() => {
+      setProjectIdCopyState('idle')
+      copyResetTimeoutRef.current = null
+    }, 2000)
+  }
+
   const handleVisibilityChange = async (
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
@@ -332,6 +368,40 @@ export function SettingsPanel({
   return (
     <div className="flex flex-col gap-6 p-3">
       {accountSection}
+
+      {projectId && (
+        <div className="space-y-2">
+          <label className="font-medium text-muted-foreground text-xs uppercase">Project</label>
+          <div className="font-medium text-sm">Project ID</div>
+          <div className="flex items-center gap-2">
+            <Input
+              aria-label="Project ID"
+              className="font-mono text-xs"
+              readOnly
+              value={projectId}
+            />
+            <Button
+              aria-label={projectIdCopyState === 'copied' ? 'Project ID copied' : 'Copy project ID'}
+              className="rounded-full"
+              onClick={() => void handleCopyProjectId()}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {projectIdCopyState === 'copied' ? (
+                <Check className="size-3.5" />
+              ) : (
+                <Copy className="size-3.5" />
+              )}
+              {projectIdCopyState === 'copied'
+                ? 'Copied'
+                : projectIdCopyState === 'error'
+                  ? 'Try again'
+                  : 'Copy'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Visibility Section (only for cloud projects) */}
       {projectId && !isLocalProject && (
@@ -429,9 +499,18 @@ export function SettingsPanel({
 
         <div className="space-y-2">
           <div className="font-medium text-muted-foreground text-xs">3D model</div>
+          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+            <div>
+              <div className="font-medium text-sm">Visible nodes only</div>
+              <div className="text-muted-foreground text-xs">
+                Exclude hidden furniture and other hidden scene nodes
+              </div>
+            </div>
+            <Switch checked={exportOnlyVisible} onCheckedChange={setExportOnlyVisible} />
+          </div>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('glb')}
+            onClick={() => modelExport?.('glb', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
@@ -439,7 +518,7 @@ export function SettingsPanel({
           </Button>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('stl')}
+            onClick={() => modelExport?.('stl', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
@@ -447,12 +526,14 @@ export function SettingsPanel({
           </Button>
           <Button
             className="w-full justify-start gap-2"
-            onClick={() => exportScene?.('obj')}
+            onClick={() => modelExport?.('obj', { onlyVisible: exportOnlyVisible })}
             variant="outline"
           >
             <Download className="size-4" />
             Export OBJ
           </Button>
+
+          <PrintExportButton onlyVisible={exportOnlyVisible} />
         </div>
 
         <div className="space-y-2">
