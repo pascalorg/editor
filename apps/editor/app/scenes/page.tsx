@@ -46,7 +46,7 @@ export default async function ScenesPage() {
               Home
             </Link>
             <span className="text-muted-foreground">/</span>
-            <span className="font-medium text-foreground">Scenes</span>
+            <span className="font-medium text-foreground">Projects</span>
           </nav>
           <div className="flex items-center gap-3">
             {user?.role === 'admin' && (
@@ -68,21 +68,21 @@ export default async function ScenesPage() {
       </header>
 
       <main className="container mx-auto max-w-5xl px-6 py-12">
-        <h1 className="mb-2 font-bold text-3xl">Your scenes</h1>
+        <h1 className="mb-2 font-bold text-3xl">Your projects</h1>
         <p className="mb-8 text-muted-foreground text-sm">
           {scenes.length === 0
             ? editingAllowed
-              ? 'No scenes yet. Create one to get started.'
-              : 'No scenes have been shared with you yet.'
-            : `${scenes.length} scene${scenes.length === 1 ? '' : 's'}.`}
+              ? 'No projects yet. Create one to get started.'
+              : 'No projects have been shared with you yet.'
+            : `${scenes.length} project${scenes.length === 1 ? '' : 's'}.`}
         </p>
 
         {scenes.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-background p-12 text-center">
             <p className="text-muted-foreground text-sm">
               {editingAllowed
-                ? 'You haven’t saved any scenes yet. Start from scratch, or import an IFC model exported from Revit, ArchiCAD or similar.'
-                : 'Ask an administrator to assign a scene to your account.'}
+                ? 'You haven’t saved any projects yet. Start from scratch, or import an IFC model exported from Revit, ArchiCAD or similar.'
+                : 'Ask an administrator to assign a project to your account.'}
             </p>
             {editingAllowed && (
               <div className="mt-4 flex items-start justify-center gap-3">

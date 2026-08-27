@@ -729,10 +729,10 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               className="rounded-lg border border-white/15 bg-neutral-950/85 px-3 py-1.5 text-[11px] text-white/85 backdrop-blur-md transition-colors hover:bg-neutral-800/85 disabled:opacity-40"
               disabled={captureDisabled}
               onClick={() => handleCapture('scene-preview')}
-              title="Use this framing as the scene card's preview image"
+              title="Use this framing as the project card's preview image"
               type="button"
             >
-              Set scene preview
+              Set project preview
             </button>
           </div>
         )}

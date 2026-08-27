@@ -196,6 +196,15 @@ export interface SceneStore {
     email: string | null,
     opts: { claimEditor: boolean },
   ): Promise<PresenceClaim>
+  /**
+   * Atomically transfers the single edit lease from `fromUserId` to `toUserId`.
+   * If `fromUserId` does not hold the lease, no change is made.
+   */
+  transferPresenceEditor?(
+    sceneId: SceneId,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim>
   /** Everyone currently present (fresh within the TTL), the editor first. */
   listScenePresence?(sceneId: SceneId): Promise<ScenePresence[]>
   /** Removes a user's presence row (best-effort on leave). */

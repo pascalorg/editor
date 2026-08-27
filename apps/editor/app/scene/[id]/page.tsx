@@ -33,16 +33,16 @@ export default async function ScenePage({ params }: { params: Promise<{ id: stri
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-md rounded-2xl border border-border/60 bg-background p-6 text-center shadow-xl">
           <p className="font-mono text-muted-foreground text-xs uppercase tracking-wide">404</p>
-          <h1 className="mt-2 font-semibold text-lg">Scene not found</h1>
+          <h1 className="mt-2 font-semibold text-lg">Project not found</h1>
           <p className="mt-2 text-muted-foreground text-sm">
-            We couldn&apos;t find a scene with id <code className="font-mono">{id}</code>.
+            We couldn&apos;t find a project with id <code className="font-mono">{id}</code>.
           </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <Link
               className="rounded-md border border-border bg-accent px-3 py-2 font-medium text-sm hover:bg-accent/80"
               href="/scenes"
             >
-              Browse scenes
+              Browse projects
             </Link>
             <Link
               className="rounded-md border border-border bg-background px-3 py-2 font-medium text-sm hover:bg-accent/40"

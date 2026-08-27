@@ -5,13 +5,14 @@
 // import here.
 import { applySceneGraphToEditor, Editor, type SceneGraph, useEditor } from '@pascal-app/editor'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, startTransition } from 'react'
 import { AccountSettingsSection } from '@/components/account-settings-section'
 import { useSession } from '@/components/auth/session-provider'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
+import { usePluginManager } from '@/lib/plugins/use-plugin-manager'
+import { PluginManagerModal } from '@/components/plugin-manager/PluginManagerModal'
 import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
-import { PresenceBar } from './presence-bar'
 import { useScenePresence } from './use-scene-presence'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -102,7 +103,7 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const { openAuth } = useSession()
+  const { user, openAuth } = useSession()
 
   const presence = useScenePresence(meta.id, true)
   // Before presence loads, fall back to the server `readOnly` prop so an
@@ -123,8 +124,17 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
       })
       return unsub
     }
-    useEditor.getState().setPreviewMode(false)
+    // Leverage React Concurrent Mode transition for smooth role handoff
+    startTransition(() => {
+      useEditor.getState().setPreviewMode(false)
+    })
   }, [forcedReadOnly])
+
+  useEffect(() => {
+    if (initialScene.installedPlugins && initialScene.installedPlugins.length > 0) {
+      void usePluginManager.getState().syncWithScene(initialScene.installedPlugins)
+    }
+  }, [initialScene])
 
   const lightPreview = isLightPreviewQuery(searchParams)
 
@@ -262,16 +272,6 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
 
   return (
     <div className="relative h-screen w-screen">
-      {presence.loaded &&
-        (presence.present.length > 1 || (presence.canEdit && !presence.isEditor)) && (
-          <PresenceBar
-            canEdit={presence.canEdit}
-            editor={presence.editor}
-            isEditor={presence.isEditor}
-            onTakeOver={presence.takeOver}
-            present={presence.present}
-          />
-        )}
       {conflict && (
         <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
           <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
@@ -321,9 +321,15 @@ export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoade
         projectId={meta.projectId ?? 'default'}
         settingsPanelProps={{ accountSection: <AccountSettingsSection /> }}
         sidebarTabs={EDITOR_SIDEBAR_TABS}
-        viewerToolbarLeft={<CommunityViewerToolbarLeft />}
+        viewerToolbarLeft={
+          <CommunityViewerToolbarLeft
+            currentUserId={user?.id}
+            presence={presence}
+          />
+        }
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
+      <PluginManagerModal />
     </div>
   )
 }

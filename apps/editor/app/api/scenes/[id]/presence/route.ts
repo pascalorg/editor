@@ -14,6 +14,8 @@ const postSchema = z.object({
   // The client wants to hold the edit lease. Only honoured if the user also
   // has edit permission on the scene (owner / editor-share / admin-editor).
   claim: z.boolean().optional(),
+  wantsEdit: z.boolean().optional(),
+  transferToUserId: z.string().min(1).optional(),
 })
 
 /**
@@ -62,14 +64,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // An empty/na body is fine — a bare heartbeat with no claim.
   }
   const parsed = postSchema.safeParse(body)
-  const wantsClaim = parsed.success ? parsed.data.claim === true : false
+  const wantsClaim = parsed.success
+    ? parsed.data.claim === true || parsed.data.wantsEdit === true
+    : false
+  const transferToUserId = parsed.success ? parsed.data.transferToUserId : undefined
 
   // Edit permission for THIS scene (owner / editor-share / admin+editor-role).
   const canEdit = (await authorizeSceneMutation(id, scene.ownerId ?? null)).ok
 
-  const claim = await operations.touchScenePresence(id, user.id, user.email ?? null, {
-    claimEditor: wantsClaim && canEdit,
-  })
+  let claim: { isEditor: boolean; editorUserId: string | null; editorEmail: string | null }
+  if (transferToUserId) {
+    if (canEdit && typeof operations.transferPresenceEditor === 'function') {
+      claim = await operations.transferPresenceEditor(id, user.id, transferToUserId)
+    } else {
+      claim = await operations.touchScenePresence(id, user.id, user.email ?? null, {
+        claimEditor: false,
+      })
+    }
+  } else {
+    claim = await operations.touchScenePresence(id, user.id, user.email ?? null, {
+      claimEditor: wantsClaim && canEdit,
+    })
+  }
   const present = await operations.listScenePresence(id)
 
   return sceneApiJson(request, {

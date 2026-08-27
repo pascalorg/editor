@@ -69,7 +69,7 @@ export function SceneBackupsDialog({
         body: JSON.stringify({ version }),
       })
       if (response.status === 409) {
-        setError('Sahne bu sırada değişti, lütfen tekrar deneyin.')
+        setError('Proje bu sırada değişti, lütfen tekrar deneyin.')
         void load()
         return
       }

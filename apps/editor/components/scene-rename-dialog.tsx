@@ -52,7 +52,7 @@ export function SceneRenameDialog({
           className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50"
           maxLength={200}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Sahne adı"
+          placeholder="Proje adı"
           value={name}
         />
         {error && <p className="text-destructive text-xs">{error}</p>}

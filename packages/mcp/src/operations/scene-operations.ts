@@ -97,6 +97,16 @@ export interface SceneOperations {
     email: string | null,
     opts: { claimEditor: boolean },
   ): Promise<PresenceClaim>
+  transferPresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim>
+  transferScenePresenceEditor?(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim>
   listScenePresence(sceneId: string): Promise<ScenePresence[]>
   releaseScenePresence(sceneId: string, userId: string): Promise<void>
 }
@@ -413,6 +423,24 @@ class SceneOperationsFacade implements SceneOperations {
     const store = this.requireStore()
     if (!store.touchPresence) throw new Error('presence_unavailable')
     return store.touchPresence(sceneId, userId, email, opts)
+  }
+
+  async transferPresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim> {
+    const store = this.requireStore()
+    if (!store.transferPresenceEditor) throw new Error('presence_unavailable')
+    return store.transferPresenceEditor(sceneId, fromUserId, toUserId)
+  }
+
+  async transferScenePresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim> {
+    return this.transferPresenceEditor(sceneId, fromUserId, toUserId)
   }
 
   async listScenePresence(sceneId: string): Promise<ScenePresence[]> {

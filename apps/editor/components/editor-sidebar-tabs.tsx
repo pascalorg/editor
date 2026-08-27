@@ -49,7 +49,7 @@ export const EDITOR_SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType
   },
   {
     id: 'scenes',
-    label: 'Scenes',
+    label: 'Projects',
     component: ScenesTab,
     mobileDefaultSnap: 0.6,
     mobileIcon: <FolderOpen className="h-5 w-5" />,

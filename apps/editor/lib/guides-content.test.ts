@@ -30,6 +30,10 @@ const GONE = [
   'Create new scene',
   'Tüm sahneler',
   'Son sahneleri aç',
+  'Scenes tab in the left sidebar',
+  'Sahneler sekmesi',
+  'New scene',
+  'Yeni sahne',
 ]
 
 const TEXT = `${JSON.stringify(guidesFor('en'))}\n${JSON.stringify(guidesFor('tr'))}`
@@ -41,13 +45,13 @@ describe('kılavuz metni arayüzle tutarlı', () => {
 
   /**
    * Ters yön. Yukarıdaki testler yalnız "yokluk" ölçüyor; kılavuz tamamen
-   * boşalsa da yeşil yanardı. Sahne listesinin yeni evi kenar çubuğundaki
-   * Scenes sekmesi ve kılavuzun onu SÖYLEMESİ gerekiyor — iki dilde de.
+   * boşalsa da yeşil yanardı. Proje listesinin yeni evi kenar çubuğundaki
+   * Projects sekmesi ve kılavuzun onu SÖYLEMESİ gerekiyor — iki dilde de.
    */
   test.each([
-    ['en', 'Scenes tab in the left sidebar'],
-    ['tr', 'Sahneler sekmesi'],
-  ] as const)('%s kılavuzu sahne listesinin yeni yerini söylüyor', (lang, phrase) => {
+    ['en', 'Projects tab in the left sidebar'],
+    ['tr', 'Projeler sekmesi'],
+  ] as const)('%s kılavuzu proje listesinin yeni yerini söylüyor', (lang, phrase) => {
     expect(JSON.stringify(guidesFor(lang))).toContain(phrase)
   })
 })

@@ -31,6 +31,7 @@ import {
   writePersistedSelection,
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
+import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
@@ -59,7 +60,8 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
-import { ViewerStage } from '../viewer/viewer-stage'
+import { FloorplanPreview } from '../viewer/floorplan-preview'
+import { ViewerStageSwitcher } from '../viewer/viewer-stage-switcher'
 import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
@@ -88,8 +90,7 @@ import { WallMoveSideHandles } from './wall-move-side-handles'
 import { WallOpeningHighlights } from './wall-opening-highlights'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
-const PREVIEW_STAGE_SWITCHER_POSITION =
-  'top-28 right-4 left-auto translate-x-0 md:top-4 md:right-auto md:left-1/2 md:-translate-x-1/2'
+const PREVIEW_STAGE_SWITCHER_POSITION = 'top-4 right-4 left-auto translate-x-0'
 const DELETE_CURSOR_BADGE_COLOR = '#ef4444'
 const DELETE_CURSOR_BADGE_OFFSET_X = 14
 const DELETE_CURSOR_BADGE_OFFSET_Y = 14
@@ -756,12 +757,23 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   // Capture (snapshot) mode is camera-only for the same reason: suppress
   // selection, editing handles, and the tool manager (which mounts the site
   // boundary flags) so the framed shot stays clean.
+  // Preview mode is read-only inspection — suppress all 3D edit gizmos, handles,
+  // measurement labels, and grid so the canvas remains mounted across role handoffs.
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
-  const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode || isCaptureMode
+  const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const noEditing =
+    isVersionPreviewMode ||
+    isFirstPersonMode ||
+    isStudioMode ||
+    isCaptureMode ||
+    isPreviewMode
+
   return (
     <>
       <SceneEnvironment />
-      {!(isFirstPersonMode || isStudioMode || isCaptureMode) && <SelectionManager />}
+      {!(isFirstPersonMode || isStudioMode || isCaptureMode || isPreviewMode) && (
+        <SelectionManager />
+      )}
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}
@@ -773,20 +785,20 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <FloatingActionMenu />}
       {!noEditing && <GroupFloatingActionMenu />}
       {!noEditing && <FloatingBuildingActionMenu />}
-      {!isFirstPersonMode && <WallMeasurementLabel />}
+      {!(isFirstPersonMode || isPreviewMode) && <WallMeasurementLabel />}
       <ExportManager />
-      {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
+      {isFirstPersonMode || isPreviewMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
-      <CeilingSelectionAffordanceSystem />
+      {!noEditing && <CeilingSelectionAffordanceSystem />}
       {!noEditing && <SelectionAffordanceManager />}
       <RoofEditSystem />
       <StairEditSystem />
-      {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
+      {!(isLoading || isFirstPersonMode || isPreviewMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
-      {!isFirstPersonMode && <SiteEdgeLabels />}
+      {!(isFirstPersonMode || isPreviewMode) && <SiteEdgeLabels />}
       <InteractiveSystem />
       {!noEditing && viewerSceneSlot}
     </>
@@ -804,8 +816,9 @@ function DeleteCursorLayer({
   isVersionPreviewMode: boolean
 }) {
   const mode = useEditor((s) => s.mode)
+  const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const badgeRef = useRef<HTMLDivElement>(null)
-  const active = mode === 'delete' && !isVersionPreviewMode
+  const active = mode === 'delete' && !isVersionPreviewMode && !isPreviewMode
 
   useEffect(() => {
     if (!active) {
@@ -878,12 +891,13 @@ function PaintCursorLayer({
   isVersionPreviewMode: boolean
 }) {
   const mode = useEditor((s) => s.mode)
+  const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
   const paintEraser = useEditor((s) => s.paintEraser)
   const paintHover = useEditor((s) => s.paintHover)
   const sceneMaterials = useScene((s) => s.materials)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
-  const active = mode === 'material-paint' && !isVersionPreviewMode
+  const active = mode === 'material-paint' && !isVersionPreviewMode && !isPreviewMode
 
   useEffect(() => {
     if (!active) {
@@ -974,6 +988,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   viewerSceneSlot,
   floorplanSceneSlot,
   disablePostFx = false,
+  previewStageMode = '3d',
+  onPreviewStageModeChange,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -987,11 +1003,39 @@ const ViewerCanvas = memo(function ViewerCanvas({
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
+  previewStageMode?: ViewerStageMode
+  onPreviewStageModeChange?: (mode: ViewerStageMode) => void
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+
+  const hasFloorplan = useScene((state) =>
+    Object.values(state.nodes).some((node) => node.type === 'level'),
+  )
+
+  const handlePreviewModeChange = useCallback(
+    (nextMode: ViewerStageMode) => {
+      if (nextMode !== '3d') useEditor.getState().setFirstPersonMode(false)
+      onPreviewStageModeChange?.(nextMode)
+    },
+    [onPreviewStageModeChange],
+  )
+
+  const effectivePreviewStageMode: ViewerStageMode =
+    isFirstPersonMode || !hasFloorplan ? '3d' : previewStageMode
+  const previewStageModes =
+    hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
+
+  const show2d = !isPreviewMode && (viewMode === '2d' || viewMode === 'split')
+  const show3d = isPreviewMode
+    ? effectivePreviewStageMode === '3d' || effectivePreviewStageMode === 'split'
+    : viewMode === '3d' || viewMode === 'split'
+  const showPreview2d =
+    isPreviewMode &&
+    (effectivePreviewStageMode === '2d' || effectivePreviewStageMode === 'split')
+  const isPreviewSplit = isPreviewMode && effectivePreviewStageMode === 'split'
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -1045,52 +1089,77 @@ const ViewerCanvas = memo(function ViewerCanvas({
     writeCameraControlsHintDismissed(true)
   }, [])
 
-  const show2d = viewMode === '2d' || viewMode === 'split'
-  const show3d = viewMode === '3d' || viewMode === 'split'
-
   return (
     <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
       {/* `relative` so the floorplan compass (portaled here to stay visible in
           2d / 3d / split alike) can anchor to this container's bottom-left. */}
-      <div className="relative flex h-full" ref={setViewerAreaNode}>
-        <QuickMeasurementHud />
-        <DeleteConfirmationDialog />
-        {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
-        <div
-          className="relative h-full flex-shrink-0"
-          style={{
-            width: viewMode === '2d' ? '100%' : `${floorplanPaneRatio * 100}%`,
-            display: show2d ? undefined : 'none',
-          }}
-        >
-          <div className="h-full w-full overflow-hidden">
-            <FloorplanPanel compassHost={viewerAreaEl} floorplanSceneSlot={floorplanSceneSlot} />
-          </div>
-          {viewMode === 'split' && (
-            <div
-              className="absolute inset-y-0 -right-3 z-10 flex w-6 cursor-col-resize items-center justify-center"
-              onPointerDown={handleFloorplanDividerDown}
-            >
-              <div className="h-8 w-1 rounded-full bg-neutral-400" />
-            </div>
-          )}
-        </div>
+      <div className="relative flex h-full w-full" ref={setViewerAreaNode}>
+        {!isPreviewMode && <QuickMeasurementHud />}
+        {!isPreviewMode && <DeleteConfirmationDialog />}
 
-        {/* 3D viewer — always mounted, hidden via CSS to avoid destroying the WebGL context */}
+        {/* 2D floorplan editor — lazy mounted only when 2d or split */}
+        {show2d && (
+          <div
+            className="relative h-full flex-shrink-0"
+            style={{
+              width: viewMode === '2d' ? '100%' : `${floorplanPaneRatio * 100}%`,
+            }}
+          >
+            <div className="h-full w-full overflow-hidden">
+              <FloorplanPanel compassHost={viewerAreaEl} floorplanSceneSlot={floorplanSceneSlot} />
+            </div>
+            {viewMode === 'split' && !isPreviewMode && (
+              <div
+                className="absolute inset-y-0 -right-3 z-10 flex w-6 cursor-col-resize items-center justify-center"
+                onPointerDown={handleFloorplanDividerDown}
+              >
+                <div className="h-8 w-1 rounded-full bg-neutral-400" />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2D floorplan preview — mounted when in preview mode (2D or split) */}
+        {showPreview2d && (
+          <div
+            className={cn(
+              'relative h-full flex-shrink-0',
+              isPreviewSplit ? 'w-1/2 border-r border-border' : 'w-full',
+            )}
+          >
+            <FloorplanPreview
+              className="h-full w-full"
+              compassHost={viewerAreaEl}
+              navigationVisible={true}
+              showCompass={hasFloorplan && !isFirstPersonMode}
+              showLevelSelector={true}
+              synchronizeNavigation={true}
+            />
+          </div>
+        )}
+
+        {/* 3D viewer — always mounted to preserve WebGL context across preview/editor toggle */}
         <div
-          className="relative min-w-0 flex-1 overflow-hidden"
+          className={cn(
+            'relative min-w-0 overflow-hidden',
+            isPreviewSplit ? 'w-1/2 h-full' : 'flex-1 h-full',
+          )}
           data-pascal-viewer-3d
           ref={viewer3dRef}
           style={{ display: show3d ? undefined : 'none' }}
         >
-          <DeleteCursorLayer
-            containerRef={viewer3dRef}
-            isVersionPreviewMode={isVersionPreviewMode}
-          />
-          <PaintCursorLayer
-            containerRef={viewer3dRef}
-            isVersionPreviewMode={isVersionPreviewMode}
-          />
+          {!isPreviewMode && (
+            <DeleteCursorLayer
+              containerRef={viewer3dRef}
+              isVersionPreviewMode={isVersionPreviewMode}
+            />
+          )}
+          {!isPreviewMode && (
+            <PaintCursorLayer
+              containerRef={viewer3dRef}
+              isVersionPreviewMode={isVersionPreviewMode}
+            />
+          )}
           {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
             <ViewerCanvasControlsHint
               isPreviewMode={isPreviewMode}
@@ -1106,7 +1175,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             renderContext="editor"
             renderPaused={!show3d && !showLoader}
             sceneReadyKey={sceneReadyKey}
-            selectionManager={isFirstPersonMode ? 'default' : 'custom'}
+            selectionManager={isPreviewMode || isFirstPersonMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
@@ -1118,65 +1187,36 @@ const ViewerCanvas = memo(function ViewerCanvas({
             />
           </Viewer>
         </div>
+
+        {/* Preview stage overlays */}
+        {isPreviewMode && (
+          <>
+            {isFirstPersonMode ? (
+              <FirstPersonOverlay
+                onExit={() => useEditor.getState().setFirstPersonMode(false)}
+              />
+            ) : (
+              <ViewerOverlay
+                hideBottomBar={effectivePreviewStageMode !== '3d'}
+                onBack={() => useEditor.getState().setPreviewMode(false)}
+              />
+            )}
+            {hasFloorplan && !isFirstPersonMode && (
+              <ViewerStageSwitcher
+                className={`${PREVIEW_STAGE_SWITCHER_POSITION} ${showLoader ? 'z-[70]' : ''}`}
+                hideSplitOnMobile={true}
+                mode={effectivePreviewStageMode}
+                modes={previewStageModes}
+                onChange={handlePreviewModeChange}
+              />
+            )}
+          </>
+        )}
       </div>
-      {!(showLoader || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
+      {!(showLoader || isVersionPreviewMode || isPreviewMode) && <ZoneLabelEditorSystem />}
     </ErrorBoundary>
   )
 })
-
-function PreviewStage({
-  isFirstPersonMode,
-  mode,
-  onModeChange,
-  showLoader,
-  viewerContent,
-}: {
-  isFirstPersonMode: boolean
-  mode: ViewerStageMode
-  onModeChange: (mode: ViewerStageMode) => void
-  showLoader: boolean
-  viewerContent: ReactNode
-}) {
-  const hasFloorplan = useScene((state) =>
-    Object.values(state.nodes).some((node) => node.type === 'level'),
-  )
-
-  const handleModeChange = useCallback(
-    (nextMode: ViewerStageMode) => {
-      if (nextMode !== '3d') useEditor.getState().setFirstPersonMode(false)
-      onModeChange(nextMode)
-    },
-    [onModeChange],
-  )
-
-  const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
-  const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
-
-  return (
-    <div className="dark relative h-full w-full overflow-hidden bg-neutral-100 text-foreground">
-      {isFirstPersonMode ? (
-        <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-      ) : (
-        <ViewerOverlay
-          hideBottomBar={stageMode !== '3d'}
-          onBack={() => useEditor.getState().setPreviewMode(false)}
-        />
-      )}
-
-      <ViewerStage
-        className="absolute inset-0"
-        mode={stageMode}
-        modes={stageModes}
-        onModeChange={handleModeChange}
-        showCompass={hasFloorplan && !isFirstPersonMode}
-        showSwitcher={hasFloorplan && !isFirstPersonMode}
-        switcherClassName={`${PREVIEW_STAGE_SWITCHER_POSITION} ${showLoader ? 'z-[70]' : ''}`}
-      >
-        {viewerContent}
-      </ViewerStage>
-    </div>
-  )
-}
 
 export default function Editor({
   layoutVersion = 'v1',
@@ -1400,40 +1440,22 @@ export default function Editor({
     }
   }, [isFirstPersonMode])
 
-  const previewViewerContent = (
-    <Viewer
-      defaultRender={EDITOR_DEFAULT_RENDER}
-      disablePostFx={disablePostFx}
-      hoverStyles={EDITOR_HOVER_STYLES}
-      renderContext="editor"
-      selectionManager="default"
-    >
-      <ExportManager />
-      <ViewerZoneSystem />
-      <CeilingSystem />
-      <RoofEditSystem />
-      <StairEditSystem />
-      {isFirstPersonMode && <FirstPersonControls />}
-      <CustomCameraControls />
-      <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
-      <InteractiveSystem />
-    </Viewer>
-  )
-
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
+      floorplanSceneSlot={floorplanSceneSlot}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
       isStudioMode={isStudioMode}
       isVersionPreviewMode={isVersionPreviewMode}
+      onPreviewStageModeChange={setPreviewStageMode}
       onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
+      previewStageMode={previewStageMode}
       sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
       viewerSceneSlot={viewerSceneSlot}
-      floorplanSceneSlot={floorplanSceneSlot}
     />
   )
 
@@ -1494,60 +1516,49 @@ export default function Editor({
           </div>
         )}
 
-        {!isLoading && isPreviewMode ? (
-          <PreviewStage
-            isFirstPersonMode={isFirstPersonMode}
-            mode={previewStageMode}
-            onModeChange={setPreviewStageMode}
-            showLoader={visibleLoader}
-            viewerContent={previewViewerContent}
-          />
-        ) : (
-          <>
-            <EditorLayoutV2
-              navbarSlot={navbarSlot}
-              overlays={
-                <>
-                  {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
-                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
-                    <div className="pointer-events-auto">
-                      <ActionMenu />
-                    </div>
-                  )}
-                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
-                    <div className="pointer-events-auto">
-                      <PanelManager
-                        inspectorFooter={inspectorFooter}
-                        multiSelectionFooter={multiSelectionFooter}
-                      />
-                    </div>
-                  )}
-                  {!isCaptureMode && (
-                    <div className="pointer-events-auto">
-                      <HelperManager />
-                    </div>
-                  )}
-                  {isFirstPersonMode && (
-                    <FirstPersonOverlay
-                      onExit={() => useEditor.getState().setFirstPersonMode(false)}
-                    />
-                  )}
-                  {viewerBanner}
-                  {projectId ? <SnapshotCaptureOverlay projectId={projectId} /> : null}
-                </>
-              }
-              renderTabContent={renderTabContent}
-              sidebarOverlay={sidebarOverlay}
-              sidebarTabs={tabBarTabs}
-              stageOverlay={stageOverlay}
-              viewerContent={viewerCanvas}
-              viewerToolbarLeft={viewerToolbarLeft}
-              viewerToolbarRight={viewerToolbarRight}
-            />
-            <EditorCommands />
-            <CommandPalette emptyAction={commandPaletteEmptyAction} />
-          </>
-        )}
+        <EditorLayoutV2
+          isPreviewMode={isPreviewMode}
+          navbarSlot={navbarSlot}
+          overlays={
+            <>
+              {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
+              {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
+                <div className="pointer-events-auto">
+                  <ActionMenu />
+                </div>
+              )}
+              {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
+                <div className="pointer-events-auto">
+                  <PanelManager
+                    inspectorFooter={inspectorFooter}
+                    multiSelectionFooter={multiSelectionFooter}
+                  />
+                </div>
+              )}
+              {!isCaptureMode && (
+                <div className="pointer-events-auto">
+                  <HelperManager />
+                </div>
+              )}
+              {isFirstPersonMode && (
+                <FirstPersonOverlay
+                  onExit={() => useEditor.getState().setFirstPersonMode(false)}
+                />
+              )}
+              {viewerBanner}
+              {projectId ? <SnapshotCaptureOverlay projectId={projectId} /> : null}
+            </>
+          }
+          renderTabContent={renderTabContent}
+          sidebarOverlay={sidebarOverlay}
+          sidebarTabs={tabBarTabs}
+          stageOverlay={stageOverlay}
+          viewerContent={viewerCanvas}
+          viewerToolbarLeft={viewerToolbarLeft}
+          viewerToolbarRight={viewerToolbarRight}
+        />
+        {!isPreviewMode && <EditorCommands />}
+        {!isPreviewMode && <CommandPalette emptyAction={commandPaletteEmptyAction} />}
       </>
     )
   }
@@ -1559,7 +1570,12 @@ export default function Editor({
   const overlayLeft = LAYOUT_PADDING + (isSidebarCollapsed ? 8 : sidebarWidth) + LAYOUT_GAP
 
   return (
-    <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
+    <div
+      className={cn(
+        'dark flex h-full w-full gap-3 bg-neutral-100 text-foreground',
+        !isPreviewMode && 'p-3',
+      )}
+    >
       <FloorplanModeCoordinator />
       {visibleLoader && (
         <div className="fixed inset-0 z-60">
@@ -1567,48 +1583,47 @@ export default function Editor({
         </div>
       )}
 
-      {!isLoading && isPreviewMode ? (
-        <PreviewStage
-          isFirstPersonMode={isFirstPersonMode}
-          mode={previewStageMode}
-          onModeChange={setPreviewStageMode}
-          showLoader={visibleLoader}
-          viewerContent={previewViewerContent}
-        />
-      ) : (
-        <>
-          {/* Sidebar */}
-          <SidebarSlot>
-            <AppSidebar
-              appMenuButton={appMenuButton}
-              commandPaletteEmptyAction={commandPaletteEmptyAction}
-              extraPanels={extraSidebarPanels}
-              settingsPanelProps={settingsPanelProps}
-              sidebarTop={sidebarTop}
-              sitePanelProps={sitePanelProps}
-            />
-          </SidebarSlot>
+      {/* Sidebar */}
+      {!isPreviewMode && (
+        <SidebarSlot>
+          <AppSidebar
+            appMenuButton={appMenuButton}
+            commandPaletteEmptyAction={commandPaletteEmptyAction}
+            extraPanels={extraSidebarPanels}
+            settingsPanelProps={settingsPanelProps}
+            sidebarTop={sidebarTop}
+            sitePanelProps={sitePanelProps}
+          />
+        </SidebarSlot>
+      )}
 
-          {/* Viewer area */}
-          <div className="relative flex-1 overflow-hidden rounded-xl">{viewerCanvas}</div>
+      {/* Viewer area */}
+      <div
+        className={cn(
+          'relative flex-1 overflow-hidden',
+          !isPreviewMode && 'rounded-xl',
+        )}
+      >
+        {viewerCanvas}
+      </div>
 
-          {/* Fixed UI overlays scoped to the viewer area */}
-          <ViewerOverlays left={overlayLeft}>
-            <div className="pointer-events-auto">
-              <ActionMenu />
-            </div>
-            <div className="pointer-events-auto">
-              <PanelManager />
-            </div>
-            <div className="pointer-events-auto">
-              <HelperManager />
-            </div>
-            <RiserDiagramPanel />
-            {isFirstPersonMode && (
-              <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
-            )}
-          </ViewerOverlays>
-        </>
+      {/* Fixed UI overlays scoped to the viewer area */}
+      {!isPreviewMode && (
+        <ViewerOverlays left={overlayLeft}>
+          <div className="pointer-events-auto">
+            <ActionMenu />
+          </div>
+          <div className="pointer-events-auto">
+            <PanelManager />
+          </div>
+          <div className="pointer-events-auto">
+            <HelperManager />
+          </div>
+          <RiserDiagramPanel />
+          {isFirstPersonMode && (
+            <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+          )}
+        </ViewerOverlays>
       )}
     </div>
   )

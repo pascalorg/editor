@@ -59,13 +59,13 @@ export function ScenesTab() {
         return
       }
       if (!response.ok) {
-        setError(`Could not load scenes (${response.status})`)
+        setError(`Could not load projects (${response.status})`)
         return
       }
       const body = (await response.json()) as ScenesResponse
       setScenes(body.scenes ?? [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load scenes')
+      setError(err instanceof Error ? err.message : 'Could not load projects')
     }
   }, [])
 
@@ -84,20 +84,20 @@ export function ScenesTab() {
       const response = await fetch('/api/scenes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Untitled scene', graph: EMPTY_GRAPH }),
+        body: JSON.stringify({ name: 'Untitled project', graph: EMPTY_GRAPH }),
       })
       if (response.status === 401) {
         openAuth()
         return
       }
       if (!response.ok) {
-        setError(`Could not create a scene (${response.status})`)
+        setError(`Could not create a project (${response.status})`)
         return
       }
       const meta = (await response.json()) as { id: string }
       router.push(`/scene/${meta.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create a scene')
+      setError(err instanceof Error ? err.message : 'Could not create a project')
     } finally {
       setBusy(false)
     }
@@ -107,7 +107,7 @@ export function ScenesTab() {
     <div className="flex h-full flex-col gap-3 p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-muted-foreground text-xs">
-          {scenes === null ? 'Scenes' : scenes.length === 1 ? '1 scene' : `${scenes.length} scenes`}
+          {scenes === null ? 'Projects' : scenes.length === 1 ? '1 project' : `${scenes.length} projects`}
         </span>
         <button
           className="rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -126,7 +126,7 @@ export function ScenesTab() {
           onClick={() => void create()}
           type="button"
         >
-          {busy ? 'Creating…' : 'New scene'}
+          {busy ? 'Creating…' : 'New project'}
         </button>
       )}
 
@@ -140,8 +140,8 @@ export function ScenesTab() {
         ) : scenes.length === 0 ? (
           <p className="py-6 text-center text-muted-foreground text-xs leading-relaxed">
             {canEdit
-              ? 'Nothing saved yet. Start a new scene.'
-              : 'No scenes have been shared with your account yet.'}
+              ? 'Nothing saved yet. Start a new project.'
+              : 'No projects have been shared with your account yet.'}
           </p>
         ) : (
           <ul className="flex flex-col gap-1">
@@ -179,7 +179,7 @@ export function ScenesTab() {
         className="rounded-lg bg-muted/40 px-3 py-2 text-center font-medium text-sm transition-colors hover:bg-muted"
         href="/scenes"
       >
-        All scenes
+        All projects
       </a>
     </div>
   )

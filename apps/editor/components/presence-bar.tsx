@@ -2,12 +2,14 @@
 
 import type { Person } from './use-scene-presence'
 
-interface PresenceBarProps {
+export interface PresenceBarProps {
   present: Person[]
   isEditor: boolean
   canEdit: boolean
   editor: { userId: string; email: string | null } | null
   onTakeOver: () => void
+  onPassControl?: (targetUserId: string) => void | Promise<void>
+  currentUserId?: string | null
 }
 
 /** Local-part of an email, falling back to a short id, as a display name. */

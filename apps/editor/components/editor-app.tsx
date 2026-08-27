@@ -3,6 +3,7 @@
 import { Editor } from '@pascal-app/editor'
 import { AccountSettingsSection } from '@/components/account-settings-section'
 import { EDITOR_SIDEBAR_TABS } from '@/components/editor-sidebar-tabs'
+import { PluginManagerModal } from '@/components/plugin-manager/PluginManagerModal'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -30,6 +31,7 @@ export function EditorApp() {
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
+      <PluginManagerModal />
     </div>
   )
 }

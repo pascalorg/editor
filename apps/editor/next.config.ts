@@ -56,8 +56,10 @@ const nextConfig: NextConfig = {
     '@pascal-app/plugin-articraft',
     '@mint/pascal-plugin',
     '@pascal-app/plugin-bones',
+    '@pascal-app/plugin-boots',
     '@ovurrsl/plugin-warehouse',
     '@dgreenheck/ez-tree',
+    'three-mesh-bvh',
   ],
   turbopack: {
     resolveAlias: {

@@ -55,6 +55,11 @@
       "types": "./dist/systems/stair/stair-opening-sync.d.ts",
       "import": "./dist/systems/stair/stair-opening-sync.js",
       "default": "./dist/systems/stair/stair-opening-sync.js"
+    },
+    "./multiplayer": {
+      "types": "./dist/multiplayer/index.d.ts",
+      "import": "./dist/multiplayer/index.js",
+      "default": "./dist/multiplayer/index.js"
     }
   },
   "files": [
@@ -75,10 +80,15 @@
     "three": "^0.185"
   },
   "dependencies": {
+    "@types/ws": "^8.18.1",
     "dedent": "^1.7.1",
     "idb-keyval": "^6.2.2",
+    "lib0": "^0.2.117",
     "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
+    "ws": "^8.21.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32",
     "zod": "^4.3.5",
     "zundo": "^2.3.0",
     "zustand": "^5"

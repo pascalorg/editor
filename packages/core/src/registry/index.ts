@@ -173,3 +173,14 @@ export type {
   ZoneTakeoffReport,
 } from './types'
 export { useRegistryVersion } from './use-registry-version'
+export {
+  PluginManager,
+  pluginManager,
+  type LazyPluginAuthor,
+  type LazyPluginDescriptor,
+  type LazyPluginLoadedResult,
+  type PanelRegistrar,
+  type PluginManagerSnapshot,
+  type PluginState,
+  type PluginStatus,
+} from './plugin-manager'

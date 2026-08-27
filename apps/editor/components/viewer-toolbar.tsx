@@ -62,7 +62,10 @@ import Image from 'next/image'
 import { type ReactNode, useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { cn } from '@/lib/utils'
+import { PresencePopover } from './presence-popover'
+import { PluginManagerButton } from '@/components/plugin-manager/PluginManagerButton'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
+import type { ScenePresence } from './use-scene-presence'
 
 const TOOLBAR_CONTAINER =
   'inline-flex h-8 items-stretch overflow-hidden rounded-xl border border-border bg-background/90 shadow-2xl backdrop-blur-md'
@@ -751,9 +754,9 @@ function HistoryLockControls() {
           <Undo2 className="h-4 w-4" />
         </button>
       </ToolbarTooltip>
-      <ToolbarTooltip label={sceneLocked ? 'Unlock scene' : 'Lock scene'}>
+      <ToolbarTooltip label={sceneLocked ? 'Unlock project' : 'Lock project'}>
         <button
-          aria-label={sceneLocked ? 'Unlock scene' : 'Lock scene'}
+          aria-label={sceneLocked ? 'Unlock project' : 'Lock project'}
           aria-pressed={sceneLocked}
           className={cn(TOOLBAR_BTN, sceneLocked && 'bg-amber-500/15 text-amber-400')}
           onClick={() => setSceneLocked(!sceneLocked)}
@@ -850,11 +853,30 @@ function CategoriesMenu() {
   )
 }
 
-export function CommunityViewerToolbarLeft() {
+export interface CommunityViewerToolbarLeftProps {
+  presence?: ScenePresence | null
+  currentUserId?: string | null
+}
+
+export function CommunityViewerToolbarLeft({
+  presence,
+  currentUserId,
+}: CommunityViewerToolbarLeftProps = {}) {
   return (
     <>
       <CollapseSidebarButton />
       <ViewModeControl />
+      {presence?.loaded && presence.present.length > 0 ? (
+        <PresencePopover
+          canEdit={presence.canEdit}
+          currentUserId={currentUserId}
+          editor={presence.editor}
+          isEditor={presence.isEditor}
+          onPassControl={presence.passControl}
+          onTakeOver={presence.takeOver}
+          present={presence.present}
+        />
+      ) : null}
     </>
   )
 }
@@ -869,6 +891,8 @@ export function CommunityViewerToolbarRight() {
         <div className="my-1.5 w-px bg-border/50" />
         <CategoriesMenu />
         <DisplayMenu />
+        <div className="my-1.5 w-px bg-border/50" />
+        <PluginManagerButton />
         <div className="my-1.5 w-px bg-border/50" />
         <WalkthroughButton />
         <ScreenshotButton />

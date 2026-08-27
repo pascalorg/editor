@@ -20,7 +20,7 @@ interface SaveButtonProps {
 /**
  * Creates a new empty scene and navigates the user to it.
  */
-export function CreateSceneButton({ label = 'Create new scene' }: { label?: string } = {}) {
+export function CreateSceneButton({ label = 'Create new project' }: { label?: string } = {}) {
   const router = useRouter()
   const { user, openAuth } = useSession()
   const [isCreating, setIsCreating] = useState(false)
@@ -37,20 +37,20 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
       const response = await fetch('/api/scenes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Untitled scene', graph: EMPTY_GRAPH }),
+        body: JSON.stringify({ name: 'Untitled project', graph: EMPTY_GRAPH }),
       })
       if (response.status === 401) {
         openAuth()
         return
       }
       if (!response.ok) {
-        setError(`Failed to create scene (${response.status})`)
+        setError(`Failed to create project (${response.status})`)
         return
       }
       const meta = (await response.json()) as { id: string }
       router.push(`/scene/${meta.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create scene')
+      setError(err instanceof Error ? err.message : 'Failed to create project')
     } finally {
       setIsCreating(false)
     }
@@ -89,7 +89,7 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
     }
     const graph = getGraph()
     if (!graph) {
-      setStatus('No scene to save')
+      setStatus('No project to save')
       return
     }
     setIsSaving(true)
@@ -130,10 +130,10 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
     }
     const graph = getGraph()
     if (!graph) {
-      setStatus('No scene to save')
+      setStatus('No project to save')
       return
     }
-    const newName = typeof window !== 'undefined' ? window.prompt('New scene name', name) : null
+    const newName = typeof window !== 'undefined' ? window.prompt('New project name', name) : null
     if (!newName) return
     setIsSaving(true)
     setStatus(null)

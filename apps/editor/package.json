@@ -26,6 +26,7 @@
     "@pascal-app/nodes": "*",
     "@pascal-app/plugin-articraft": "workspace:*",
     "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#85238a8eb4e221cc1f779f47fb8aa8ef6922627c",
+    "@pascal-app/plugin-boots": "github:pascalorg/plugin-boots",
     "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
     "@pascal-app/plugin-trees": "workspace:*",
     "@pascal-app/viewer": "*",
@@ -49,6 +50,10 @@
     "three": "^0.185.0",
     "ulid": "^3.0.2",
     "web-ifc": "^0.0.77",
+    "lib0": "^0.2.117",
+    "y-protocols": "^1.0.7",
+    "y-websocket": "^2.1.0",
+    "yjs": "^13.6.32",
     "zod": "^4.3.5"
   },
   "devDependencies": {

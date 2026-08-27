@@ -35,7 +35,7 @@ export function SceneDeleteDialog({
   }
 
   return (
-    <SceneModal onClose={onClose} title="Sahneyi sil">
+    <SceneModal onClose={onClose} title="Projeyi sil">
       <div className="flex flex-col gap-3">
         <p className="text-muted-foreground text-sm">
           <span className="font-medium text-foreground">{scene.name}</span> silinsin mi? Bu geri

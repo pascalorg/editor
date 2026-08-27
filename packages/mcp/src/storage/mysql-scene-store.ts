@@ -724,6 +724,72 @@ export class MysqlSceneStore implements SceneStore {
     })
   }
 
+  async transferPresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim> {
+    const safeId = sanitizeSlug(sceneId)
+    const cutoff = presenceCutoffIso(Date.now())
+    return this.withWriteTransaction(async (conn) => {
+      // Prune stale rows first
+      await conn.execute('DELETE FROM scene_presence WHERE scene_id = ? AND last_seen < ?', [
+        safeId,
+        cutoff,
+      ])
+      const [editorResult] = await conn.execute(
+        'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND is_editor = 1 LIMIT 1 FOR UPDATE',
+        [safeId],
+      )
+      const editorRow = firstRow<{ user_id: string; email: string | null }>(editorResult)
+
+      if (!editorRow || editorRow.user_id !== fromUserId) {
+        return {
+          isEditor: false,
+          editorUserId: editorRow ? editorRow.user_id : null,
+          editorEmail: editorRow ? editorRow.email : null,
+        }
+      }
+
+      const [targetResult] = await conn.execute(
+        'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND user_id = ? LIMIT 1 FOR UPDATE',
+        [safeId, toUserId],
+      )
+      const targetUser = firstRow<{ user_id: string; email: string | null }>(targetResult)
+
+      if (!targetUser) {
+        return {
+          isEditor: true,
+          editorUserId: editorRow.user_id,
+          editorEmail: editorRow.email,
+        }
+      }
+
+      if (fromUserId === toUserId) {
+        return {
+          isEditor: true,
+          editorUserId: fromUserId,
+          editorEmail: editorRow.email,
+        }
+      }
+
+      await conn.execute(
+        'UPDATE scene_presence SET is_editor = 0 WHERE scene_id = ? AND user_id = ?',
+        [safeId, fromUserId],
+      )
+      await conn.execute(
+        'UPDATE scene_presence SET is_editor = 1 WHERE scene_id = ? AND user_id = ?',
+        [safeId, toUserId],
+      )
+
+      return {
+        isEditor: false,
+        editorUserId: targetUser.user_id,
+        editorEmail: targetUser.email,
+      }
+    })
+  }
+
   async listScenePresence(sceneId: string): Promise<ScenePresence[]> {
     const pool = await this.database()
     const cutoff = presenceCutoffIso(Date.now())

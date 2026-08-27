@@ -645,4 +645,259 @@ describe('SqliteSceneStore presence + edit lease', () => {
     const present = await store.listScenePresence('proj')
     expect(present.map((p) => p.userId)).toEqual(['bob'])
   })
+
+  // ── Tier 1: Feature Coverage (R3 Backend) ──────────────────────────────────
+  test('transferPresenceEditor atomically hands off the edit lease to a present viewer', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+
+    const claim = await store.transferPresenceEditor('proj', 'ann', 'bob')
+    expect(claim.isEditor).toBe(false)
+    expect(claim.editorUserId).toBe('bob')
+    expect(claim.editorEmail).toBe('bob@x')
+
+    const present = await store.listScenePresence('proj')
+    expect(present[0]!.userId).toBe('bob')
+    expect(present[0]!.isEditor).toBe(true)
+    expect(present[1]!.userId).toBe('ann')
+    expect(present[1]!.isEditor).toBe(false)
+  })
+
+  test('listScenePresence reflects transferred editor at index 0 and former editor as viewer', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+    await store.touchPresence('proj', 'cy', 'cy@x', { claimEditor: false })
+
+    await store.transferPresenceEditor('proj', 'ann', 'bob')
+
+    const present = await store.listScenePresence('proj')
+    expect(present.length).toBe(3)
+    expect(present[0]!.userId).toBe('bob')
+    expect(present[0]!.isEditor).toBe(true)
+    expect(present.filter((p) => !p.isEditor).map((p) => p.userId).sort()).toEqual(['ann', 'cy'])
+  })
+
+  test('new editor retains lease on subsequent heartbeat with claimEditor: true', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+
+    await store.transferPresenceEditor('proj', 'ann', 'bob')
+
+    const bobHeartbeat = await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: true })
+    expect(bobHeartbeat.isEditor).toBe(true)
+    expect(bobHeartbeat.editorUserId).toBe('bob')
+    expect(bobHeartbeat.editorEmail).toBe('bob@x')
+  })
+
+  test('former editor is rejected as editor on subsequent heartbeat while new editor holds lease', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+
+    await store.transferPresenceEditor('proj', 'ann', 'bob')
+
+    const annHeartbeat = await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    expect(annHeartbeat.isEditor).toBe(false)
+    expect(annHeartbeat.editorUserId).toBe('bob')
+    expect(annHeartbeat.editorEmail).toBe('bob@x')
+  })
+
+  test('atomic transaction guarantees single editor invariant across lease transfer', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+
+    await store.transferPresenceEditor('proj', 'ann', 'bob')
+
+    const present = await store.listScenePresence('proj')
+    const editors = present.filter((p) => p.isEditor)
+    expect(editors.length).toBe(1)
+    expect(editors[0]!.userId).toBe('bob')
+  })
+
+  // ── Tier 2: Boundary & Corner Cases (R3 Backend) ───────────────────────────
+  test('transferPresenceEditor fails if fromUserId is not the current editor', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+    await store.touchPresence('proj', 'cy', 'cy@x', { claimEditor: false })
+
+    // Bob (viewer) tries to transfer to Cy
+    const claim = await store.transferPresenceEditor('proj', 'bob', 'cy')
+    expect(claim.isEditor).toBe(false)
+    expect(claim.editorUserId).toBe('ann')
+
+    // Ann remains editor
+    const present = await store.listScenePresence('proj')
+    expect(present[0]!.userId).toBe('ann')
+    expect(present[0]!.isEditor).toBe(true)
+    expect(present.find((p) => p.userId === 'cy')!.isEditor).toBe(false)
+  })
+
+  test('transferPresenceEditor retains current editor if target user is not present', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+
+    const claim = await store.transferPresenceEditor('proj', 'ann', 'nonexistent_user')
+    expect(claim.isEditor).toBe(true)
+    expect(claim.editorUserId).toBe('ann')
+
+    const present = await store.listScenePresence('proj')
+    expect(present).toHaveLength(1)
+    expect(present[0]!.userId).toBe('ann')
+    expect(present[0]!.isEditor).toBe(true)
+  })
+
+  test('transferPresenceEditor handles same user fromUserId === toUserId as a no-op', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+
+    const claim = await store.transferPresenceEditor('proj', 'ann', 'ann')
+    expect(claim.isEditor).toBe(true)
+    expect(claim.editorUserId).toBe('ann')
+
+    const present = await store.listScenePresence('proj')
+    expect(present[0]!.userId).toBe('ann')
+    expect(present[0]!.isEditor).toBe(true)
+  })
+
+  test('transferPresenceEditor on non-existent scene returns empty claim without error', async () => {
+    const claim = await store.transferPresenceEditor('missing-scene-xyz', 'ann', 'bob')
+    expect(claim.isEditor).toBe(false)
+    expect(claim.editorUserId).toBeNull()
+    expect(claim.editorEmail).toBeNull()
+  })
+
+  test('transferPresenceEditor prunes expired target rows and rejects transfer to stale user', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+
+    // Simulate an ancient presence row for dave by direct insert
+    const db = await (store as unknown as { database: () => Promise<Database> }).database()
+    const ancient = new Date(Date.now() - 3600_000).toISOString()
+    db.query(
+      'INSERT INTO scene_presence (scene_id, user_id, email, last_seen, is_editor) VALUES (?, ?, ?, ?, ?)',
+    ).run('proj', 'dave', 'dave@x', ancient, 0)
+
+    // Attempt transfer to expired dave
+    const claim = await store.transferPresenceEditor('proj', 'ann', 'dave')
+    expect(claim.isEditor).toBe(true)
+    expect(claim.editorUserId).toBe('ann')
+
+    // Dave should have been pruned by cutoff
+    const present = await store.listScenePresence('proj')
+    expect(present.find((p) => p.userId === 'dave')).toBeUndefined()
+  })
+
+  // ── Tier 3: Cross-Feature Combinations (R3 Backend) ────────────────────────
+  test('rapid sequential role transfers A -> B -> C preserve atomic consistency', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+    await store.touchPresence('proj', 'cy', 'cy@x', { claimEditor: false })
+
+    // Step 1: Ann transfers to Bob
+    const claim1 = await store.transferPresenceEditor('proj', 'ann', 'bob')
+    expect(claim1.editorUserId).toBe('bob')
+
+    // Step 2: Bob transfers to Cy
+    const claim2 = await store.transferPresenceEditor('proj', 'bob', 'cy')
+    expect(claim2.editorUserId).toBe('cy')
+
+    // Step 3: Verify final presence state
+    const present = await store.listScenePresence('proj')
+    expect(present[0]!.userId).toBe('cy')
+    expect(present[0]!.isEditor).toBe(true)
+    expect(present.find((p) => p.userId === 'ann')!.isEditor).toBe(false)
+    expect(present.find((p) => p.userId === 'bob')!.isEditor).toBe(false)
+  })
+
+  test('transfer with multiple concurrent viewers leaves unselected viewers unaffected', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+    await store.touchPresence('proj', 'cy', 'cy@x', { claimEditor: false })
+    await store.touchPresence('proj', 'dan', 'dan@x', { claimEditor: false })
+
+    await store.transferPresenceEditor('proj', 'ann', 'bob')
+
+    const present = await store.listScenePresence('proj')
+    expect(present.find((p) => p.userId === 'bob')!.isEditor).toBe(true)
+    expect(present.find((p) => p.userId === 'ann')!.isEditor).toBe(false)
+    expect(present.find((p) => p.userId === 'cy')!.isEditor).toBe(false)
+    expect(present.find((p) => p.userId === 'dan')!.isEditor).toBe(false)
+  })
+
+  test('releasing editor after transfer allows remaining viewer to claim the vacant lease', async () => {
+    await store.save({ id: 'proj', name: 'Proj', ownerId: 'ann', graph: makeGraph() })
+    await store.touchPresence('proj', 'ann', 'ann@x', { claimEditor: true })
+    await store.touchPresence('proj', 'bob', 'bob@x', { claimEditor: false })
+    await store.touchPresence('proj', 'cy', 'cy@x', { claimEditor: false })
+
+    // Ann transfers to Bob
+    await store.transferPresenceEditor('proj', 'ann', 'bob')
+
+    // Bob leaves and releases presence
+    await store.releaseScenePresence('proj', 'bob')
+
+    // Cy heartbeats requesting editor lease
+    const cyClaim = await store.touchPresence('proj', 'cy', 'cy@x', { claimEditor: true })
+    expect(cyClaim.isEditor).toBe(true)
+    expect(cyClaim.editorUserId).toBe('cy')
+  })
+
+  // ── Tier 4: Real-World Scenarios (R3 Backend) ──────────────────────────────
+  test('full collaborative editing lifecycle: join -> transfer -> edit -> depart -> recover', async () => {
+    await store.save({ id: 'team-scene', name: 'Team Scene', ownerId: 'alice', graph: makeGraph() })
+
+    // Phase 1: Alice joins and becomes editor
+    const p1 = await store.touchPresence('team-scene', 'alice', 'alice@test.com', { claimEditor: true })
+    expect(p1.isEditor).toBe(true)
+
+    // Phase 2: Bob and Charlie join as viewers
+    const p2Bob = await store.touchPresence('team-scene', 'bob', 'bob@test.com', { claimEditor: false })
+    const p2Charlie = await store.touchPresence('team-scene', 'charlie', 'charlie@test.com', { claimEditor: false })
+    expect(p2Bob.isEditor).toBe(false)
+    expect(p2Charlie.isEditor).toBe(false)
+
+    // Phase 3: Alice passes control to Bob
+    const handoff = await store.transferPresenceEditor('team-scene', 'alice', 'bob')
+    expect(handoff.editorUserId).toBe('bob')
+
+    // Phase 4: Bob heartbeats and edits
+    const bobActive = await store.touchPresence('team-scene', 'bob', 'bob@test.com', { claimEditor: true })
+    expect(bobActive.isEditor).toBe(true)
+
+    // Phase 5: Bob departs cleanly
+    await store.releaseScenePresence('team-scene', 'bob')
+
+    // Phase 6: Alice reclaims editor role
+    const aliceRecover = await store.touchPresence('team-scene', 'alice', 'alice@test.com', { claimEditor: true })
+    expect(aliceRecover.isEditor).toBe(true)
+    expect(aliceRecover.editorUserId).toBe('alice')
+  })
+
+  test('interleaved sequential heartbeats and transfer attempts maintain strict consistency', async () => {
+    await store.save({ id: 'stress-scene', name: 'Stress Scene', ownerId: 'user1', graph: makeGraph() })
+    await store.touchPresence('stress-scene', 'user1', 'u1@x', { claimEditor: true })
+    await store.touchPresence('stress-scene', 'user2', 'u2@x', { claimEditor: false })
+
+    // Interleaved sequence: transfer from user1 to user2, user1 heartbeat as viewer, user2 heartbeat as editor
+    const tRes = await store.transferPresenceEditor('stress-scene', 'user1', 'user2')
+    expect(tRes.editorUserId).toBe('user2')
+
+    const hb1 = await store.touchPresence('stress-scene', 'user1', 'u1@x', { claimEditor: false })
+    expect(hb1.isEditor).toBe(false)
+
+    const hb2 = await store.touchPresence('stress-scene', 'user2', 'u2@x', { claimEditor: true })
+    expect(hb2.isEditor).toBe(true)
+
+    const present = await store.listScenePresence('stress-scene')
+    const activeEditors = present.filter((p) => p.isEditor)
+    expect(activeEditors.length).toBe(1)
+    expect(activeEditors[0]!.userId).toBe('user2')
+  })
 })

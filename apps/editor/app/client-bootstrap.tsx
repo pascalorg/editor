@@ -20,8 +20,11 @@ export function ClientBootstrap({
   enableDevDiagnostics: boolean
 }) {
   useEffect(() => {
-    if (!enableDevDiagnostics) return
-    import('react-scan').then(({ scan }) => scan({ enabled: true }))
+    if (process.env.NODE_ENV !== 'production' && enableDevDiagnostics) {
+      import('react-scan')
+        .then((mod) => (mod as unknown as { scan?: (opts: { enabled: boolean }) => void }).scan?.({ enabled: true }))
+        .catch(() => {})
+    }
   }, [enableDevDiagnostics])
   return <SessionProvider>{children}</SessionProvider>
 }

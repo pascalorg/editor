@@ -3,6 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import useEditor from './../../../store/use-editor'
 import { ItemCatalog, type ItemCatalogItem } from './item-catalog'
 
+if (typeof document === 'undefined') {
+  ;(globalThis as any).document = {
+    documentElement: { dataset: {} },
+    createElement: () => ({}),
+  }
+}
+
 const testItems: ItemCatalogItem[] = [
   {
     id: 'rack-standard',

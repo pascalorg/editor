@@ -385,7 +385,7 @@ export const tr: Dictionary = {
   jbLive: 'Canlı',
   jbPolling: 'Yoklama',
   igKeysTitle: 'API anahtarları',
-  igKeysLead: 'Sahne API’sine site kapsamlı erişim — ham anahtar yalnız bir kez gösterilir.',
+  igKeysLead: 'Proje API’sine site kapsamlı erişim — ham anahtar yalnız bir kez gösterilir.',
   igNewKey: '+ Yeni anahtar',
   igKeyNameLbl: 'Anahtar adı',
   igScopeLbl: 'Kapsam',
@@ -496,11 +496,11 @@ export const tr: Dictionary = {
   clPlugin: 'DigitalTwin depo eklentisi',
   clConsole: 'DigitalTwin konsol paneli',
 
-  /* ——— Sahneler sekmesi ——— */
-  scTitle: 'Sahneler',
+  /* ——— Projeler sekmesi ——— */
+  scTitle: 'Projeler',
   scLead:
-    'Sunucudaki tüm sahneler. Taslaklar çizen kişiye aittir; yayınlamak projeyi Siteler ve Projeler ekranına taşır.',
-  scScene: 'Sahne',
+    'Sunucudaki tüm projeler. Taslaklar çizen kişiye aittir; yayınlamak projeyi Siteler ve Projeler ekranına taşır.',
+  scScene: 'Proje',
   scOwner: 'Sahip',
   scNodes: 'Düğüm',
   scUpdated: 'Güncellenme',
@@ -516,10 +516,10 @@ export const tr: Dictionary = {
   scDuplicate: 'Kopyala',
   scDelete: 'Sil',
   scDeleteConfirm: '“{name}” ve içindeki her şey silinsin mi? Bu geri alınamaz.',
-  scAdopt: 'Sahipsiz sahneleri devral',
+  scAdopt: 'Sahipsiz projeleri devral',
   scSaved: 'Kaydedildi.',
   scSaveFailed: 'Kaydedilemedi — tekrar deneyin.',
-  scEmpty: 'Sunucuda henüz sahne yok.',
+  scEmpty: 'Sunucuda henüz proje yok.',
   clFetched: 'Çekildi',
   clEmpty: 'Sürüm notu bulunamadı.',
 
@@ -536,7 +536,7 @@ export const tr: Dictionary = {
     sessions: 'Oturumlar',
     changelog: 'Sürüm notları',
     sites: 'Siteler ve Projeler',
-    scenes: 'Sahneler',
+    scenes: 'Projeler',
     openEditor: 'Editör',
     jobs: 'İş kuyruğu',
     integrations: 'API ve Webhook',

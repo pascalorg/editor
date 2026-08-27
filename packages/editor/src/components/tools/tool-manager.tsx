@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { categoryOfActiveTool } from '../../lib/tool-category'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
@@ -148,7 +149,6 @@ export const ToolManager: React.FC = () => {
   const buildingId = useViewer((state) => state.selection.buildingId)
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
-  const nodes = useScene((state) => state.nodes)
   const registrySceneApi = useMemo(() => createSceneApi(useScene), [])
   const registryToolContext = useMemo(
     () => ({
@@ -159,28 +159,46 @@ export const ToolManager: React.FC = () => {
     [activeLevelId, registrySceneApi, setSelection],
   )
 
-  // Building transform for the local group — all building-relative tools live inside this group
+  // Building transform for the local group (memoized shallowly) — all building-relative tools live inside this group
   // so their cursor positions and committed data are naturally in building-local space.
-  const building = buildingId
-    ? (nodes[buildingId as AnyNodeId] as BuildingNode | undefined)
-    : undefined
-  const buildingPosition = building?.position ?? [0, 0, 0]
-  const buildingRotation = building?.rotation ?? [0, 0, 0]
+  const buildingTransform = useScene(
+    useShallow((state) => {
+      const building = buildingId
+        ? (state.nodes[buildingId as AnyNodeId] as BuildingNode | undefined)
+        : undefined
+      return {
+        position: building?.position ?? [0, 0, 0],
+        rotation: building?.rotation ?? [0, 0, 0],
+      }
+    }),
+  )
+  const buildingPosition = buildingTransform.position
+  const buildingRotation = buildingTransform.rotation
 
-  // Check if a slab is selected
-  const selectedSlabId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === 'slab') as
-    | SlabNode['id']
-    | undefined
-  const selectedSlab = selectedSlabId ? (nodes[selectedSlabId as AnyNodeId] as SlabNode) : null
-  const editingSlabHoleIsManual =
-    selectedSlabId !== undefined &&
-    editingHole?.nodeId === selectedSlabId &&
-    selectedSlab?.holeMetadata?.[editingHole.holeIndex]?.source === 'manual'
+  // Check if a slab is selected (memoized shallowly)
+  const { selectedSlabId, editingSlabHoleIsManual } = useScene(
+    useShallow((state) => {
+      const slabId = selectedIds.find((id) => state.nodes[id as AnyNodeId]?.type === 'slab') as
+        | SlabNode['id']
+        | undefined
+      const slab = slabId ? (state.nodes[slabId as AnyNodeId] as SlabNode | undefined) : null
+      const isManual =
+        slabId !== undefined &&
+        editingHole?.nodeId === slabId &&
+        slab?.holeMetadata?.[editingHole.holeIndex]?.source === 'manual'
+      return {
+        selectedSlabId: slabId,
+        editingSlabHoleIsManual: Boolean(isManual),
+      }
+    }),
+  )
 
-  // Check if a ceiling is selected
-  const selectedCeilingId = selectedIds.find((id) => nodes[id as AnyNodeId]?.type === 'ceiling') as
-    | CeilingNode['id']
-    | undefined
+  // Check if a ceiling is selected (primitive equality)
+  const selectedCeilingId = useScene((state) => {
+    return selectedIds.find((id) => state.nodes[id as AnyNodeId]?.type === 'ceiling') as
+      | CeilingNode['id']
+      | undefined
+  })
 
   // Site boundary handles normally share one 2D/3D rule. Sculpt is the deliberate
   // 3D exception: the brush only owns this canvas, where PolygonEditor can hand

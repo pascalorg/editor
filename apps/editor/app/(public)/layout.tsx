@@ -31,7 +31,7 @@ export default async function PublicLayout({ children }: { children: ReactNode }
     user === null
       ? { href: '/signin', label: t.signIn }
       : user.role === 'viewer'
-        ? { href: '/scenes', label: lang === 'tr' ? 'Sahnelerim' : 'My scenes' }
+        ? { href: '/scenes', label: lang === 'tr' ? 'Projelerim' : 'My projects' }
         : { href: '/', label: lang === 'tr' ? 'Editörü aç' : 'Open the editor' }
 
   return (

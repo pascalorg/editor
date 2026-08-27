@@ -14,7 +14,7 @@ export function ScenePreviewDialog({ scene, onClose }: { scene: SceneMeta; onClo
         />
       ) : (
         <p className="py-8 text-center text-muted-foreground text-sm leading-relaxed">
-          Önizleme henüz oluşmadı — sahneyi kaydedince oluşturulur.
+          Önizleme henüz oluşmadı — projeyi kaydedince oluşturulur.
         </p>
       )}
     </SceneModal>

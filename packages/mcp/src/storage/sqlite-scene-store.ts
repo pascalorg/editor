@@ -266,6 +266,7 @@ export class SqliteSceneStore implements SceneStore {
   private readonly maxSceneBytes: number
   private db: SqliteDatabase | null = null
   private dbPromise: Promise<SqliteDatabase> | null = null
+  private writeQueue: Promise<unknown> = Promise.resolve()
 
   constructor(opts: SqliteSceneStoreOptions = {}) {
     const env = opts.env ?? process.env
@@ -274,29 +275,30 @@ export class SqliteSceneStore implements SceneStore {
   }
 
   async createProject(opts: ProjectCreateOptions): Promise<ProjectStatus> {
-    const db = await this.database()
-    assertValidName(opts.name)
-    const id = opts.id ? sanitizeSlug(opts.id) : this.generateUniqueId(db)
-    if (!isValidSlug(id)) {
-      throw new SceneInvalidError(`Invalid project id after sanitization: "${id}"`)
-    }
-    if (this.getRow(db, id)) {
-      throw new SceneInvalidError(`Project with id "${id}" already exists`)
-    }
-    const now = new Date().toISOString()
-    const project: ProjectPlaceholder = {
-      id,
-      name: opts.name,
-      ownerId: opts.ownerId ?? null,
-      thumbnailUrl: null,
-      createdAt: now,
-      updatedAt: now,
-    }
-    db.query(
-      `INSERT INTO project_placeholders (id, name, owner_id, thumbnail_url, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(id, project.name, project.ownerId, project.thumbnailUrl, now, now)
-    return placeholderToProjectStatus(project)
+    return this.withWriteTransaction((db) => {
+      assertValidName(opts.name)
+      const id = opts.id ? sanitizeSlug(opts.id) : this.generateUniqueId(db)
+      if (!isValidSlug(id)) {
+        throw new SceneInvalidError(`Invalid project id after sanitization: "${id}"`)
+      }
+      if (this.getRow(db, id)) {
+        throw new SceneInvalidError(`Project with id "${id}" already exists`)
+      }
+      const now = new Date().toISOString()
+      const project: ProjectPlaceholder = {
+        id,
+        name: opts.name,
+        ownerId: opts.ownerId ?? null,
+        thumbnailUrl: null,
+        createdAt: now,
+        updatedAt: now,
+      }
+      db.query(
+        `INSERT INTO project_placeholders (id, name, owner_id, thumbnail_url, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(id, project.name, project.ownerId, project.thumbnailUrl, now, now)
+      return placeholderToProjectStatus(project)
+    })
   }
 
   async getProjectStatus(id: string): Promise<ProjectStatus | null> {
@@ -650,11 +652,12 @@ export class SqliteSceneStore implements SceneStore {
   }
 
   async updateThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void> {
-    const db = await this.database()
-    db.query('UPDATE scenes SET thumbnail_url = ? WHERE id = ?').run(
-      thumbnailUrl,
-      sanitizeSlug(sceneId),
-    )
+    return this.withWriteTransaction((db) => {
+      db.query('UPDATE scenes SET thumbnail_url = ? WHERE id = ?').run(
+        thumbnailUrl,
+        sanitizeSlug(sceneId),
+      )
+    })
   }
 
   async touchPresence(
@@ -707,6 +710,77 @@ export class SqliteSceneStore implements SceneStore {
     })
   }
 
+  async transferPresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim> {
+    const safeId = sanitizeSlug(sceneId)
+    const cutoff = presenceCutoffIso(Date.now())
+    return this.withWriteTransaction((db) => {
+      // Prune stale rows first
+      db.query('DELETE FROM scene_presence WHERE scene_id = ? AND last_seen < ?').run(
+        safeId,
+        cutoff,
+      )
+
+      const editorRow = db
+        .query(
+          'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND is_editor = 1 LIMIT 1',
+        )
+        .get(safeId) as { user_id: string; email: string | null } | null | undefined
+
+      // If fromUserId is not the current active editor, return current claim without transferring
+      if (!editorRow || editorRow.user_id !== fromUserId) {
+        return {
+          isEditor: false,
+          editorUserId: editorRow ? editorRow.user_id : null,
+          editorEmail: editorRow ? editorRow.email : null,
+        }
+      }
+
+      // Check if toUserId is active in scene_presence for sceneId
+      const targetUser = db
+        .query(
+          'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND user_id = ? LIMIT 1',
+        )
+        .get(safeId, toUserId) as { user_id: string; email: string | null } | null | undefined
+
+      if (!targetUser) {
+        // Target user is not active, no transfer occurs
+        return {
+          isEditor: true,
+          editorUserId: editorRow.user_id,
+          editorEmail: editorRow.email,
+        }
+      }
+
+      if (fromUserId === toUserId) {
+        return {
+          isEditor: true,
+          editorUserId: fromUserId,
+          editorEmail: editorRow.email,
+        }
+      }
+
+      // In an atomic transaction, update fromUserId to is_editor = 0 and toUserId to is_editor = 1
+      db.query('UPDATE scene_presence SET is_editor = 0 WHERE scene_id = ? AND user_id = ?').run(
+        safeId,
+        fromUserId,
+      )
+      db.query('UPDATE scene_presence SET is_editor = 1 WHERE scene_id = ? AND user_id = ?').run(
+        safeId,
+        toUserId,
+      )
+
+      return {
+        isEditor: false,
+        editorUserId: targetUser.user_id,
+        editorEmail: targetUser.email,
+      }
+    })
+  }
+
   async listScenePresence(sceneId: string): Promise<ScenePresence[]> {
     const db = await this.database()
     const cutoff = presenceCutoffIso(Date.now())
@@ -732,17 +806,19 @@ export class SqliteSceneStore implements SceneStore {
   }
 
   async releaseScenePresence(sceneId: string, userId: string): Promise<void> {
-    const db = await this.database()
-    db.query('DELETE FROM scene_presence WHERE scene_id = ? AND user_id = ?').run(
-      sanitizeSlug(sceneId),
-      userId,
-    )
+    return this.withWriteTransaction((db) => {
+      db.query('DELETE FROM scene_presence WHERE scene_id = ? AND user_id = ?').run(
+        sanitizeSlug(sceneId),
+        userId,
+      )
+    })
   }
 
   close(): void {
     this.db?.close()
     this.db = null
     this.dbPromise = null
+    this.writeQueue = Promise.resolve()
   }
 
   private async database(): Promise<SqliteDatabase> {
@@ -846,20 +922,26 @@ export class SqliteSceneStore implements SceneStore {
   }
 
   private async withWriteTransaction<T>(fn: (db: SqliteDatabase) => T | Promise<T>): Promise<T> {
-    const db = await this.database()
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      const result = await fn(db)
-      db.exec('COMMIT')
-      return result
-    } catch (err) {
+    const runTransaction = async (): Promise<T> => {
+      const db = await this.database()
+      db.exec('BEGIN IMMEDIATE')
       try {
-        db.exec('ROLLBACK')
-      } catch {
-        // Ignore rollback errors so the original failure is preserved.
+        const result = await fn(db)
+        db.exec('COMMIT')
+        return result
+      } catch (err) {
+        try {
+          db.exec('ROLLBACK')
+        } catch {
+          // Ignore rollback errors so the original failure is preserved.
+        }
+        throw err
       }
-      throw err
     }
+
+    const current = this.writeQueue.catch(() => {}).then(runTransaction)
+    this.writeQueue = current.catch(() => {})
+    return current
   }
 
   private getPlaceholder(db: SqliteDatabase, id: string): ProjectPlaceholder | null {

@@ -62,9 +62,9 @@ const EN: GuidesContent = {
           description: 'Draw a room, add a door and a window, and place your first items.',
           blocks: [
             {
-              heading: 'Create the scene',
+              heading: 'Create the project',
               body: [
-                'Open the Scenes tab in the left sidebar and choose “New scene”. You land in an empty editor with a ground floor already prepared.',
+                'Open the Projects tab in the left sidebar and choose “New project”. You land in an empty editor with a ground floor already prepared.',
               ],
             },
             {
@@ -91,7 +91,7 @@ const EN: GuidesContent = {
             {
               heading: 'Saving',
               body: [
-                'There is no save button: your work is written to the server as you go, and the Scenes tab in the left sidebar shows when each scene was last touched.',
+                'There is no save button: your work is written to the server as you go, and the Projects tab in the left sidebar shows when each project was last touched.',
               ],
             },
           ],
@@ -107,7 +107,7 @@ const EN: GuidesContent = {
                 'Scene — the structure of what you have built, level by level.',
                 'Build — walls, floors, doors, windows, roofs and stairs.',
                 'Items — the catalogue of furniture and equipment.',
-                'Scenes — every scene you have saved: open one, start a new one, or import an IFC model.',
+                'Projects — every project you have saved: open one, start a new one, or import an IFC model.',
                 'Settings — per-scene preferences.',
               ],
             },
@@ -342,13 +342,13 @@ const EN: GuidesContent = {
       pages: [
         {
           slug: 'scenes-and-publishing',
-          title: 'Scenes and publishing',
+          title: 'Projects and publishing',
           description: 'Private drafts, and the projects an administrator approves.',
           blocks: [
             {
-              heading: 'Your scenes are drafts',
+              heading: 'Your projects are drafts',
               body: [
-                'Everything you draw belongs to you. Your scene list shows only your own work; other people cannot see it, and administrators can see it only from the console.',
+                'Everything you draw belongs to you. Your project list shows only your own work; other people cannot see it, and administrators can see it only from the console.',
               ],
             },
             {
@@ -360,7 +360,7 @@ const EN: GuidesContent = {
             {
               heading: 'Withdrawing',
               body: [
-                'Withdrawing a published project removes its card from Sites & Projects and nothing else — the scene, its contents and its history stay exactly where they were.',
+                'Withdrawing a published project removes its card from Sites & Projects and nothing else — the project, its contents and its history stay exactly where they were.',
               ],
             },
           ],
@@ -373,13 +373,13 @@ const EN: GuidesContent = {
             {
               heading: 'How to import',
               body: [
-                'Open the Scenes tab in the left sidebar and choose “Import IFC”, then pick the .ifc file. A new scene is created from it and opens when the conversion finishes.',
+                'Open the Projects tab in the left sidebar and choose “Import IFC”, then pick the .ifc file. A new project is created from it and opens when the conversion finishes.',
               ],
             },
             {
               heading: 'What to expect',
               points: [
-                'Conversion runs inside your browser — the file is not uploaded anywhere until the resulting scene is saved.',
+                'Conversion runs inside your browser — the file is not uploaded anywhere until the resulting project is saved.',
                 'Large models take a while; leave the tab open until it completes.',
                 'Geometry and structure come across. Vendor-specific parametric behaviour does not, so expect to tidy up.',
               ],
@@ -405,8 +405,8 @@ const EN: GuidesContent = {
               table: {
                 columns: ['Role', 'What it allows'],
                 rows: [
-                  ['Viewer', 'Open scenes in preview: look around and measure, but never save'],
-                  ['Editor', 'Create and edit their own scenes'],
+                  ['Viewer', 'Open projects in preview: look around and measure, but never save'],
+                  ['Editor', 'Create and edit their own projects'],
                   [
                     'Administrator',
                     'Everything, plus the console: accounts, roles, sites, publishing, audit',
@@ -446,9 +446,9 @@ const TR: GuidesContent = {
           description: 'Bir oda çizin, kapı ve pencere ekleyin, ilk nesnelerinizi yerleştirin.',
           blocks: [
             {
-              heading: 'Sahneyi oluşturun',
+              heading: 'Projeyi oluşturun',
               body: [
-                'Sol kenar çubuğundaki Sahneler sekmesini açıp “Yeni sahne” deyin. Zemin katı hazır, boş bir editöre düşersiniz.',
+                'Sol kenar çubuğundaki Projeler sekmesini açıp “Yeni proje” deyin. Zemin katı hazır, boş bir editöre düşersiniz.',
               ],
             },
             {
@@ -475,7 +475,7 @@ const TR: GuidesContent = {
             {
               heading: 'Kaydetme',
               body: [
-                'Kaydet düğmesi yoktur: çalışmanız siz çizdikçe sunucuya yazılır ve sol kenar çubuğundaki Sahneler sekmesi her sahnenin en son ne zaman değiştiğini gösterir.',
+                'Kaydet düğmesi yoktur: çalışmanız siz çizdikçe sunucuya yazılır ve sol kenar çubuğundaki Projeler sekmesi her projenin en son ne zaman değiştiğini gösterir.',
               ],
             },
           ],
@@ -491,7 +491,7 @@ const TR: GuidesContent = {
                 'Sahne — kat kat, ne inşa ettiğinizin yapısı.',
                 'Yapı — duvar, döşeme, kapı, pencere, çatı ve merdiven.',
                 'Nesneler — mobilya ve ekipman kataloğu.',
-                'Sahneler — kaydettiğiniz bütün sahneler: birini açın, yenisini başlatın ya da IFC modeli içe aktarın.',
+                'Projeler — kaydettiğiniz bütün projeler: birini açın, yenisini başlatın ya da IFC modeli içe aktarın.',
                 'Ayarlar — sahneye özel tercihler.',
               ],
             },
@@ -726,13 +726,13 @@ const TR: GuidesContent = {
       pages: [
         {
           slug: 'scenes-and-publishing',
-          title: 'Sahneler ve yayınlama',
+          title: 'Projeler ve yayınlama',
           description: 'Özel taslaklar ve yöneticinin onayladığı projeler.',
           blocks: [
             {
-              heading: 'Sahneleriniz taslaktır',
+              heading: 'Projeleriniz taslaktır',
               body: [
-                'Çizdiğiniz her şey size aittir. Sahne listeniz yalnız sizin çalışmanızı gösterir; başkaları göremez, yöneticiler ise ancak konsoldan görebilir.',
+                'Çizdiğiniz her şey size aittir. Proje listeniz yalnız sizin çalışmanızı gösterir; başkaları göremez, yöneticiler ise ancak konsoldan görebilir.',
               ],
             },
             {
@@ -744,7 +744,7 @@ const TR: GuidesContent = {
             {
               heading: 'Geri çekmek',
               body: [
-                'Yayından geri çekmek yalnız kartı kaldırır — sahne, içeriği ve geçmişi olduğu yerde kalır.',
+                'Yayından geri çekmek yalnız kartı kaldırır — proje, içeriği ve geçmişi olduğu yerde kalır.',
               ],
             },
           ],
@@ -757,13 +757,13 @@ const TR: GuidesContent = {
             {
               heading: 'Nasıl aktarılır',
               body: [
-                'Sol kenar çubuğundaki Sahneler sekmesini açıp “IFC içe aktar” deyin ve .ifc dosyasını seçin. Dosyadan yeni bir sahne oluşturulur ve dönüşüm bitince açılır.',
+                'Sol kenar çubuğundaki Projeler sekmesini açıp “IFC içe aktar” deyin ve .ifc dosyasını seçin. Dosyadan yeni bir proje oluşturulur ve dönüşüm bitince açılır.',
               ],
             },
             {
               heading: 'Ne beklemeli',
               points: [
-                'Dönüşüm tarayıcınızda çalışır — oluşan sahne kaydedilene kadar dosya hiçbir yere yüklenmez.',
+                'Dönüşüm tarayıcınızda çalışır — oluşan proje kaydedilene kadar dosya hiçbir yere yüklenmez.',
                 'Büyük modeller zaman alır; bitene kadar sekmeyi açık bırakın.',
                 'Geometri ve yapı aktarılır. Üreticiye özgü parametrik davranışlar aktarılmaz; bir miktar düzeltme beklemelisiniz.',
               ],
@@ -789,8 +789,8 @@ const TR: GuidesContent = {
               table: {
                 columns: ['Rol', 'Neye izin verir'],
                 rows: [
-                  ['İzleyici', 'Sahneleri önizlemede açar: gezer ve ölçer, ama kaydedemez'],
-                  ['Editör', 'Kendi sahnelerini oluşturur ve düzenler'],
+                  ['İzleyici', 'Projeleri önizlemede açar: gezer ve ölçer, ama kaydedemez'],
+                  ['Editör', 'Kendi projelerini oluşturur ve düzenler'],
                   [
                     'Yönetici',
                     'Her şey, ayrıca konsol: hesaplar, roller, sahalar, yayınlama, denetim',

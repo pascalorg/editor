@@ -92,3 +92,42 @@ describe('SceneOperationsFacade exportSceneGraph', () => {
     expect(operations.exportSceneGraph().materials).toEqual(materials)
   })
 })
+
+describe('SceneOperationsFacade presence operations', () => {
+  let rootDir: string
+  let store: SqliteSceneStore
+
+  beforeEach(async () => {
+    rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pascal-scene-ops-presence-'))
+    store = new SqliteSceneStore({ databasePath: path.join(rootDir, 'pascal.db') })
+  })
+
+  afterEach(async () => {
+    store.close()
+    await fs.rm(rootDir, { recursive: true, force: true })
+  })
+
+  test('delegates touchScenePresence, transferPresenceEditor, and listScenePresence to store', async () => {
+    const operations = createSceneOperations({ store })
+    const graph = makeGraph()
+    await store.save({ id: 'room-1', name: 'Room 1', graph })
+
+    const claim1 = await operations.touchScenePresence('room-1', 'alice', 'alice@test.com', {
+      claimEditor: true,
+    })
+    expect(claim1.isEditor).toBe(true)
+
+    const claim2 = await operations.touchScenePresence('room-1', 'bob', 'bob@test.com', {
+      claimEditor: false,
+    })
+    expect(claim2.isEditor).toBe(false)
+
+    const transferClaim = await operations.transferPresenceEditor('room-1', 'alice', 'bob')
+    expect(transferClaim.isEditor).toBe(false)
+    expect(transferClaim.editorUserId).toBe('bob')
+
+    const present = await operations.listScenePresence('room-1')
+    expect(present[0]!.userId).toBe('bob')
+    expect(present[0]!.isEditor).toBe(true)
+  })
+})
