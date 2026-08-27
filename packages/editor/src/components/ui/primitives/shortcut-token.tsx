@@ -37,18 +37,21 @@ const IS_MAC =
 // than in any one consumer so every surface that prints a shortcut — the
 // Keyboard Shortcuts dialog, the community getting-started guide — resolves the
 // same glyph for the same key.
+//
+// Only symbols people actually read are listed. The arrows are unambiguous, and
+// ⌘ is printed on the key it means. The rest are not: ⎋, ␣ and ⌫ are typographic
+// conventions that no keyboard prints, so they read as "some symbol" rather than
+// as Escape, Space and Delete. Those spell their names out instead — and for
+// Delete, the name the current platform actually puts on the keycap.
 const KEY_DISPLAY_MAP: Record<string, string> = {
   'Arrow Down': '↓',
   'Arrow Up': '↑',
-  Esc: '⎋',
-  Shift: '⇧',
-  Space: '␣',
 }
 
 /** The glyph to print for a shortcut key on the current platform. */
 function shortcutDisplayValue(value: string): string {
   if (COMMAND_VALUES.has(value)) return IS_MAC ? '⌘' : 'Ctrl'
-  if (value === 'Delete / Backspace') return IS_MAC ? '⌫' : 'Backspace'
+  if (value === 'Delete / Backspace') return IS_MAC ? 'Delete' : 'Backspace'
   return KEY_DISPLAY_MAP[value] ?? value
 }
 

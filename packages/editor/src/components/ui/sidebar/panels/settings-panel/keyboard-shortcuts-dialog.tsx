@@ -142,6 +142,19 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: 'Drawing Tools',
     shortcuts: [
+      // Shift and Ctrl each mean one thing held and another tapped, and only
+      // the hold was documented — which read as the taps not existing. Both
+      // taps are listed first because they are the ones nobody discovers.
+      {
+        keys: ['Shift'],
+        action: 'Cycle the snapping mode',
+        note: 'Tap and release without pressing anything else, while a drawing or move gesture is available.',
+      },
+      {
+        keys: ['Cmd/Ctrl'],
+        action: 'Cycle the grid step: 0.5 m → 0.25 m → 0.1 m → 0.05 m',
+        note: 'Tap and release on its own. Use it when the default half-metre grid is too coarse — placing a window, for instance.',
+      },
       {
         keys: ['Shift'],
         action: 'Bypass guided snapping and angle constraints',
