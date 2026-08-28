@@ -58,6 +58,33 @@ describe('simple 3D print export', () => {
     expect(prepared).toEqual({ artifact, report })
   })
 
+  test('uses the same safe profile for printable STL files', async () => {
+    const calls: { format?: string; options?: ModelExportOptions }[] = []
+    const stlReport: PrintExportReport = { ...report, format: 'stl' }
+    const artifact = { blob: new Blob(['stl']), filename: 'house.zip', metadata: stlReport }
+    const modelExport: ModelExport = async (format, options) => {
+      calls.push({ format, options })
+      return artifact
+    }
+
+    const prepared = await preparePrintExport(modelExport, false, 'print-stl')
+
+    expect(calls).toEqual([
+      {
+        format: 'print-stl',
+        options: {
+          onlyVisible: false,
+          download: false,
+          printScale: 100,
+          printScope: 'levels',
+          printContent: 'structure',
+          printBase: 'none',
+        },
+      },
+    ])
+    expect(prepared).toEqual({ artifact, report: stlReport })
+  })
+
   test('blocks the download when preflight finds invalid geometry', async () => {
     const blockedReport: PrintExportReport = {
       ...report,
