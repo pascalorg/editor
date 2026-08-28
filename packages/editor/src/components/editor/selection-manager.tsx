@@ -1658,7 +1658,13 @@ export const SelectionManager = () => {
         const hasModifier = nativeEvent.shiftKey || isCommandModifier(nativeEvent)
         const isAlreadySole =
           selectedIdsBeforeRouting.length === 1 && selectedIdsBeforeRouting[0] === nodeToSelect.id
-        if (!hasModifier && isAlreadySole && !getMovingNode() && canDirectMoveNode(nodeToSelect)) {
+        if (
+          useEditor.getState().mode !== 'delete' &&
+          !hasModifier &&
+          isAlreadySole &&
+          !getMovingNode() &&
+          canDirectMoveNode(nodeToSelect)
+        ) {
           sfxEmitter.emit('sfx:item-pick')
           useEditor.getState().setMovingNode(nodeToSelect as never)
           useViewer.getState().setSelection({ selectedIds: [] })

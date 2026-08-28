@@ -316,10 +316,10 @@ const commitRoofFootprint = (
   if (roofType === 'conical') return null
   const roofCount = Object.values(nodes).filter((node) => node.type === 'roof').length
   const segment = RoofSegmentNode.parse({
-    wallHeight: 0,
     pitch: DEFAULT_PITCH_DEG,
     roofType: 'gable',
     ...defaults,
+    wallHeight: 0,
     width: quarterTurn ? target.depth : target.width,
     depth: quarterTurn ? target.width : target.depth,
     position: [0, 0, 0],
