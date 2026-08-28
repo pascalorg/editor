@@ -77,7 +77,10 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
         update({ kind: 'error', message: 'The file could not be read.' })
         return
       }
-      if (text.length > MAX_IMPORT_BYTES) {
+      // Blob measures BYTES — text.length counts UTF-16 code units, and
+      // a graph full of non-ASCII names could pass here yet still 413
+      // at the store (review feedback).
+      if (new Blob([text]).size > MAX_IMPORT_BYTES) {
         update({ kind: 'error', message: 'The file is too large to import.' })
         return
       }
