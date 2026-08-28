@@ -10,6 +10,7 @@ import {
   getWallArcData,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
+  isCurvedWall,
   type LevelNode,
   RoofNode,
   RoofSegmentNode,
@@ -19,6 +20,7 @@ import {
   resolveConicalRoofPlacement,
   sceneRegistry,
   useScene,
+  type WallEvent,
   type WallNode,
   wallSegmentAnchors,
 } from '@pascal-app/core'
@@ -131,7 +133,9 @@ function getRoofSnapWalls(
     ...getLevelWalls(currentLevelId, nodes),
     ...getBelowLevelWalls(currentLevelId, nodes),
   ]
-  return roofType === 'conical' ? walls : walls.filter(isStandardRoofWallEligible)
+  return roofType === 'conical'
+    ? walls.filter((wall) => isCurvedWall(wall))
+    : walls.filter(isStandardRoofWallEligible)
 }
 
 // Current-level alignment anchors plus the floor-below wall corners.
@@ -146,7 +150,12 @@ function collectRoofAlignmentAnchors(
       wallSegmentAnchors(wall.id, wall.start, wall.end, wall.thickness),
     ),
   ]
-  if (roofType === 'conical') return anchors
+  if (roofType === 'conical') {
+    return anchors.filter((anchor) => {
+      const node = nodes[anchor.nodeId]
+      return node?.type !== 'wall' || isCurvedWall(node)
+    })
+  }
   return anchors.filter((anchor) => {
     const node = nodes[anchor.nodeId]
     return node?.type !== 'wall' || isStandardRoofWallEligible(node)
@@ -582,6 +591,7 @@ export const RoofTool: React.FC = () => {
   const [footprintTarget, setFootprintTarget] = useState<RoofFootprintTarget | null>(null)
   const previewTargetIdRef = useRef<string | null>(null)
   const [previewedConicalWallId, setPreviewedConicalWallId] = useState<WallNode['id'] | null>(null)
+  const [invalidStandardWallHover, setInvalidStandardWallHover] = useState(false)
   const [preview, setPreview] = useState<PreviewState>({
     corner1: null,
     cursorPosition: [0, 0, 0],
@@ -712,18 +722,29 @@ export const RoofTool: React.FC = () => {
       if (!cursorRef.current) return
 
       if (footprintSource !== 'draw') {
-        const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+        const [snappedX, snappedZ] = resolveDraftPoint(event)
+        let target: RoofFootprintTarget | null = null
         if (footprintSource === 'room') {
-          updateFootprintPreview(
-            resolveRoomRoofFootprint(currentLevelId, useScene.getState().nodes, rawPoint, {
+          target = resolveRoomRoofFootprint(
+            currentLevelId,
+            useScene.getState().nodes,
+            [snappedX, snappedZ],
+            {
               rectangularOnly: true,
-            }),
+            },
           )
+          updateFootprintPreview(target)
         }
         cursorRef.current.position.set(
-          rawPoint[0],
-          event.localPosition[1] + GRID_OFFSET,
-          rawPoint[1],
+          snappedX,
+          target
+            ? resolveRoofFootprintWorldElevation(
+                currentLevelId,
+                target,
+                useScene.getState().nodes,
+              ) + GRID_OFFSET
+            : event.localPosition[1] + GRID_OFFSET,
+          snappedZ,
         )
         return
       }
@@ -766,10 +787,11 @@ export const RoofTool: React.FC = () => {
 
       if (footprintSource !== 'draw') {
         if (footprintSource !== 'room') return
+        const [snappedX, snappedZ] = resolveDraftPoint(event)
         const target = resolveRoomRoofFootprint(
           currentLevelId,
           useScene.getState().nodes,
-          [event.localPosition[0], event.localPosition[2]],
+          [snappedX, snappedZ],
           { rectangularOnly: true },
         )
         if (!target) return
@@ -877,6 +899,17 @@ export const RoofTool: React.FC = () => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    const onWallHover = (event: WallEvent) => {
+      setInvalidStandardWallHover(
+        footprintSource === 'draw' &&
+          roofType !== 'conical' &&
+          !isStandardRoofWallEligible(event.node),
+      )
+    }
+    const onWallLeave = () => setInvalidStandardWallHover(false)
+    emitter.on('wall:enter', onWallHover)
+    emitter.on('wall:move', onWallHover)
+    emitter.on('wall:leave', onWallLeave)
     const unsubscribeConicalRoofWallClicks = subscribeToConicalRoofWallClicks({
       footprintSource,
       currentLevelId,
@@ -904,11 +937,15 @@ export const RoofTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      emitter.off('wall:enter', onWallHover)
+      emitter.off('wall:move', onWallHover)
+      emitter.off('wall:leave', onWallLeave)
       unsubscribeConicalRoofWallClicks()
       window.removeEventListener('keydown', onKeyDown)
       clearSurfacePlanSnapFeedback()
       previewTargetIdRef.current = null
       setPreviewedConicalWallId(null)
+      setInvalidStandardWallHover(false)
       setPreviewSelectedIds([])
 
       corner1Ref.current = null
@@ -1012,7 +1049,11 @@ export const RoofTool: React.FC = () => {
             : '#818cf8'
 
   const roofGhostGeometry = useMemo(() => {
-    if (!resolvedPreviewDimensions || (roofType === 'conical' && footprintSource !== 'draw'))
+    if (
+      invalidStandardWallHover ||
+      !resolvedPreviewDimensions ||
+      (roofType === 'conical' && footprintSource !== 'draw')
+    )
       return null
     const placement = resolveRoofDraftPlacement(
       resolvedPreviewDimensions.length,
@@ -1031,6 +1072,7 @@ export const RoofTool: React.FC = () => {
   }, [
     footprintSource,
     ghostWallHeight,
+    invalidStandardWallHover,
     previewPitch,
     quarterTurn,
     resolvedPreviewDimensions,
@@ -1038,7 +1080,11 @@ export const RoofTool: React.FC = () => {
   ])
 
   const roofGhostEdges = useMemo(() => {
-    if (!resolvedPreviewDimensions || (roofType === 'conical' && footprintSource !== 'draw'))
+    if (
+      invalidStandardWallHover ||
+      !resolvedPreviewDimensions ||
+      (roofType === 'conical' && footprintSource !== 'draw')
+    )
       return null
     const placement = resolveRoofDraftPlacement(
       resolvedPreviewDimensions.length,
@@ -1057,11 +1103,16 @@ export const RoofTool: React.FC = () => {
   }, [
     footprintSource,
     ghostWallHeight,
+    invalidStandardWallHover,
     previewPitch,
     quarterTurn,
     resolvedPreviewDimensions,
     roofType,
   ])
+
+  useEffect(() => {
+    if (invalidStandardWallHover) outlineRef.current.visible = false
+  }, [invalidStandardWallHover])
 
   useEffect(
     () => () => {
@@ -1142,7 +1193,8 @@ export const RoofTool: React.FC = () => {
         </group>
       )}
 
-      {resolvedPreviewDimensions &&
+      {!invalidStandardWallHover &&
+        resolvedPreviewDimensions &&
         resolvedPreviewDimensions.length > 0.1 &&
         resolvedPreviewDimensions.width > 0.1 && (
           <group

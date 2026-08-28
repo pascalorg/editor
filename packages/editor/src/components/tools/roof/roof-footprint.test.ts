@@ -239,4 +239,31 @@ describe('roof footprint sources', () => {
     expect(previewed).toEqual([])
     expect(selected).toEqual([])
   })
+
+  test('ignores straight walls for conical roof hover and selection', () => {
+    const wall = WallNode.parse({
+      parentId: 'level_active',
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const level = LevelNode.parse({ id: 'level_active', children: [wall.id], level: 0 })
+    const nodes = Object.fromEntries([level, wall].map((node) => [node.id, node]))
+    const previewed: Array<string | null> = []
+    const selected: string[] = []
+    const unsubscribe = subscribeToConicalRoofWallClicks({
+      footprintSource: 'walls',
+      currentLevelId: level.id,
+      getNodes: () => nodes,
+      onPreview: (previewWall) => previewed.push(previewWall?.id ?? null),
+      onSelect: (selectedWall) => selected.push(selectedWall.id),
+      roofType: 'conical',
+    })
+
+    emitter.emit('wall:enter', { node: wall } as WallEvent)
+    emitter.emit('wall:click', { node: wall, stopPropagation: () => {} } as WallEvent)
+    unsubscribe()
+
+    expect(previewed).toEqual([])
+    expect(selected).toEqual([])
+  })
 })

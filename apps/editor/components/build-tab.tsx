@@ -435,7 +435,7 @@ export function BuildTab() {
 
           {activeRoofType !== 'conical' && (
             <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
-              <div className="px-0.5 font-medium text-muted-foreground text-xs">Footprint from</div>
+              <div className="px-0.5 font-medium text-muted-foreground text-xs">Create from</div>
               <div className="grid grid-cols-2 gap-1.5">
                 {footprintSources.map((source) => {
                   const active = activeTool === 'roof' && activeFootprintSource === source.value
