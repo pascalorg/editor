@@ -101,7 +101,6 @@ export {
   type ConicalRoofPlacement,
   type ConicalRoofSurfacePlacement,
   type ResolveConicalRoofPlacementInput,
-  type RoofPlacementMode,
   resolveConicalRoofPlacement,
 } from './lib/conical-roof-placement'
 export {

@@ -1,5 +1,6 @@
-import type { RoofPlacementMode } from '@pascal-app/core'
 import { create } from 'zustand'
+
+export type RoofPlacementMode = 'auto' | 'ground' | 'roof'
 
 const MODES: RoofPlacementMode[] = ['auto', 'ground', 'roof']
 

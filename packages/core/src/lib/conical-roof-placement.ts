@@ -1,8 +1,6 @@
 import type { AnyNode, LevelNode, RoofNode, RoofSegmentNode, RoofSupport } from '../schema'
 import { getRoofSegmentSurfaceY } from '../schema'
 
-export type RoofPlacementMode = 'auto' | 'ground' | 'roof'
-
 export type ConicalRoofLevelPlacement = {
   valid: true
   kind: 'level'
@@ -36,7 +34,8 @@ export type ResolveConicalRoofPlacementInput = {
   center: readonly [number, number]
   radius: number
   curbHeight: number
-  mode: RoofPlacementMode
+  allowRoofSupport: boolean
+  requireRoofSupport: boolean
 }
 
 const CUTTER_SEAT_DEPTH = 0.1
@@ -193,13 +192,14 @@ export function resolveConicalRoofPlacement({
   center,
   radius,
   curbHeight,
-  mode,
+  allowRoofSupport,
+  requireRoofSupport,
 }: ResolveConicalRoofPlacementInput): ConicalRoofPlacement {
-  if (mode === 'ground') return levelPlacement(center, curbHeight)
+  if (!allowRoofSupport) return levelPlacement(center, curbHeight)
 
   const candidate = findRoofCandidate(nodes, levelId, center, Math.max(0, radius))
   if (!candidate) {
-    return mode === 'roof'
+    return requireRoofSupport
       ? { valid: false, reason: 'no-roof-support' }
       : levelPlacement(center, curbHeight)
   }

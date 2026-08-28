@@ -12,7 +12,6 @@ import {
   getWallEffectiveHeightForNodes,
   type LevelNode,
   RoofNode,
-  type RoofPlacementMode,
   RoofSegmentNode,
   type RoofType,
   RoofType as RoofTypeSchema,
@@ -52,11 +51,18 @@ import {
   resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
-import useRoofPlacementMode from './roof-placement-mode'
+import useRoofPlacementMode, { type RoofPlacementMode } from './roof-placement-mode'
 
 const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
+
+function placementOptions(mode: RoofPlacementMode) {
+  return {
+    allowRoofSupport: mode !== 'ground',
+    requireRoofSupport: mode === 'roof',
+  }
+}
 
 function resolveRoofDraftPlacement(
   footprintWidth: number,
@@ -185,7 +191,7 @@ const commitRoofPlacement = (
       center: [centerX, centerZ],
       radius: diameter / 2,
       curbHeight,
-      mode: placementMode,
+      ...placementOptions(placementMode),
     })
     if (!resolved.valid) return null
 
@@ -551,7 +557,7 @@ export const RoofTool: React.FC = () => {
   const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
   const roofDefaults = useEditor((state) => state.toolDefaults.roof)
   const placementMode = useRoofPlacementMode((state) => state.mode)
-  const nodes = useScene((state) => state.nodes)
+  const nodes = useScene.getState().nodes
   const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
   const roofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
   const footprintSource = parseRoofFootprintSource(roofDefaults?.footprintSource, roofType)
@@ -661,7 +667,7 @@ export const RoofTool: React.FC = () => {
           center: [centerX, centerZ],
           radius: diameter / 2,
           curbHeight,
-          mode: useRoofPlacementMode.getState().mode,
+          ...placementOptions(useRoofPlacementMode.getState().mode),
         })
         if (placement.valid) {
           gridY =
@@ -944,7 +950,7 @@ export const RoofTool: React.FC = () => {
       center: [previewDimensions.centerX, previewDimensions.centerZ],
       radius: Math.max(previewDimensions.length, previewDimensions.width) / 2,
       curbHeight: previewWallHeight,
-      mode: placementMode,
+      ...placementOptions(placementMode),
     })
   }, [currentLevelId, nodes, placementMode, previewDimensions, previewWallHeight, roofType])
 

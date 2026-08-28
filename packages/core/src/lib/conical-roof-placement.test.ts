@@ -44,7 +44,8 @@ describe('conical roof placement', () => {
       center: [2, 3],
       radius: 1,
       curbHeight: 0.5,
-      mode: 'ground',
+      allowRoofSupport: false,
+      requireRoofSupport: false,
     })
 
     expect(placement).toEqual({
@@ -64,7 +65,8 @@ describe('conical roof placement', () => {
       center: [2, 3],
       radius: 1,
       curbHeight: 0.5,
-      mode: 'auto',
+      allowRoofSupport: true,
+      requireRoofSupport: false,
     })
 
     expect(placement.valid).toBe(true)
@@ -103,7 +105,8 @@ describe('conical roof placement', () => {
       center: [2, 3],
       radius: 1,
       curbHeight: 0.5,
-      mode: 'auto',
+      allowRoofSupport: true,
+      requireRoofSupport: false,
     })
 
     expect(placement.valid).toBe(true)
@@ -118,7 +121,8 @@ describe('conical roof placement', () => {
       center: [20, 20],
       radius: 1,
       curbHeight: 0.5,
-      mode: 'roof',
+      allowRoofSupport: true,
+      requireRoofSupport: true,
     })
 
     expect(placement).toEqual({ valid: false, reason: 'no-roof-support' })
@@ -132,7 +136,8 @@ describe('conical roof placement', () => {
       center: [20, 20],
       radius: 1,
       curbHeight: 0.75,
-      mode: 'auto',
+      allowRoofSupport: true,
+      requireRoofSupport: false,
     })
 
     expect(placement).toEqual({

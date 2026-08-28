@@ -445,23 +445,24 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       tickGridStep(target.event.nativeEvent?.timeStamp ?? -1, target.clampedX)
       // Keep the REAL node hidden and show a tinted ghost in the wall opening —
       // green when placeable, red when it collides — matching the free-follow
-      // ghost so validity reads at a glance (see MoveDoorTool). The node position
-      // is still written so the wall cuts the hole at the right spot.
-      if (currentHostId !== target.wallId) {
-        useLiveNodeOverrides.getState().clear(movingWindowNode.id)
-        useScene.getState().updateNode(movingWindowNode.id, {
-          position: [target.clampedX, target.clampedY, 0],
-          rotation: [0, target.itemRotation, 0],
-          side: target.side,
-          parentId: target.wallId,
-          wallId: target.wallId,
-          roofSegmentId: undefined,
-          roofFace: undefined,
-          visible: false,
-        })
+      // ghost so validity reads at a glance (see MoveDoorTool). The live
+      // override keeps the preview data-driven without mutating the scene.
+      const hostChanged = currentHostId !== target.wallId
+      if (hostChanged) {
         markHostDirty(currentHostId)
         currentHostId = target.wallId
-      } else {
+      }
+      useLiveNodeOverrides.getState().set(movingWindowNode.id, {
+        position: [target.clampedX, target.clampedY, 0],
+        rotation: [0, target.itemRotation, 0],
+        side: target.side,
+        parentId: target.wallId,
+        wallId: target.wallId,
+        roofSegmentId: undefined,
+        roofFace: undefined,
+        visible: false,
+      })
+      if (!hostChanged) {
         const windowMesh = sceneRegistry.nodes.get(movingWindowNode.id as AnyNodeId)
         if (windowMesh) {
           windowMesh.position.set(target.clampedX, target.clampedY, 0)
@@ -702,12 +703,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       setGhostPose(null)
       useFacingPose.getState().clear()
       clearPlacementSurface()
-      const live = useScene.getState().nodes[movingWindowNode.id as AnyNodeId] as
-        | WindowNode
-        | undefined
-      if (live && live.visible === false) {
-        useScene.getState().updateNode(movingWindowNode.id, { visible: true })
-      }
+      useLiveNodeOverrides.getState().set(movingWindowNode.id, { visible: true })
     }
 
     // Free-follow: over open floor there's no wall to host the window, so hide
@@ -734,25 +730,18 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const yaw = sideOverride === 'back' ? Math.PI : 0
       if (currentHostId !== levelId) {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
-        useScene.getState().updateNode(movingWindowNode.id, {
-          position: [localX, sillCenterY, localZ],
-          rotation: [0, yaw, 0],
-          side: sideOverride,
-          parentId: levelId ?? undefined,
-          wallId: undefined,
-          roofSegmentId: undefined,
-          roofFace: undefined,
-          visible: false,
-        })
         currentHostId = levelId
-      } else {
-        useLiveNodeOverrides.getState().set(movingWindowNode.id, {
-          position: [localX, sillCenterY, localZ],
-          rotation: [0, yaw, 0],
-          side: sideOverride,
-          visible: false,
-        })
       }
+      useLiveNodeOverrides.getState().set(movingWindowNode.id, {
+        position: [localX, sillCenterY, localZ],
+        rotation: [0, yaw, 0],
+        side: sideOverride,
+        parentId: levelId ?? undefined,
+        wallId: undefined,
+        roofSegmentId: undefined,
+        roofFace: undefined,
+        visible: false,
+      })
       // Float the red (invalid — no wall) ghost at the cursor, level-Y lifted to
       // the sill center (sideOverride carries the R-flip so the ghost matches).
       setGhostPose({
@@ -810,19 +799,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       const side = sideOverride ?? 'front'
       const rotation: [number, number, number] = [0, side === 'back' ? Math.PI : 0, 0]
       if (currentHostId !== target.dormer.id) {
-        useLiveNodeOverrides.getState().clear(movingWindowNode.id)
-        useScene.getState().updateNode(movingWindowNode.id, {
-          position: target.position,
-          rotation,
-          side,
-          parentId: target.dormer.id,
-          dormerId: target.dormer.id,
-          dormerFace: target.face,
-          wallId: undefined,
-          roofSegmentId: undefined,
-          roofFace: undefined,
-          visible: false,
-        })
         markHostDirty(currentHostId)
         currentHostId = target.dormer.id
       }
@@ -1033,8 +1009,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // On a roof face the real mesh is the preview — drop the ghost + reveal.
       revealRealNode()
       if (currentHostId !== target.segment.id) {
-        useLiveNodeOverrides.getState().clear(movingWindowNode.id)
-        useScene.getState().updateNode(movingWindowNode.id, {
+        markHostDirty(currentHostId)
+        currentHostId = target.segment.id
+        useLiveNodeOverrides.getState().set(movingWindowNode.id, {
           position: target.position,
           rotation: [0, 0, 0],
           side: 'front',
@@ -1044,8 +1021,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           roofFace: target.face.id,
           visible: true,
         })
-        markHostDirty(currentHostId)
-        currentHostId = target.segment.id
       } else {
         useLiveNodeOverrides.getState().set(movingWindowNode.id, {
           position: target.position,
