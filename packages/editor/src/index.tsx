@@ -536,6 +536,13 @@ export {
   type SlabPlanSnapInput,
   type SlabPlanSnapResult,
 } from './lib/slab-plan-snap'
+export {
+  getSnappingModeLabel,
+  resolveSnapFlags,
+  type SnapContext,
+  type SnapFlags,
+  type SnappingMode,
+} from './lib/snapping-mode'
 export { duplicateStairSubtree } from './lib/stair-duplication'
 export {
   getBuildingLevelsForLevel,
@@ -593,6 +600,8 @@ export type {
 export {
   default as useEditor,
   getActiveContinuationContext,
+  getActiveSnapContext,
+  getActiveSnappingMode,
   getContinuation,
   isAlignmentGuideActive,
   isAngleSnapActive,
