@@ -41,13 +41,10 @@ test('roof creation exposes every supported roof type', () => {
   ])
 })
 
-test('conical roofs expose wall and draw footprint sources', () => {
-  expect(getRoofFootprintSources('conical').map((source) => source.value)).toEqual([
-    'walls',
-    'draw',
-  ])
+test('conical roofs expose only curved-wall footprint source', () => {
+  expect(getRoofFootprintSources('conical').map((source) => source.value)).toEqual(['walls'])
   expect(getRoofFootprintSource('conical', 'room')).toBe('walls')
-  expect(getRoofFootprintSource('conical', 'draw')).toBe('draw')
+  expect(getRoofFootprintSource('conical', 'draw')).toBe('walls')
 })
 
 test('non-conical roofs expose room and draw footprint sources', () => {

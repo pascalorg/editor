@@ -41,8 +41,8 @@ export function isConicalRoofWallEligible(
 }
 
 export function parseRoofFootprintSource(value: unknown, roofType: RoofType): RoofFootprintSource {
-  if (value === 'draw') return 'draw'
-  return roofType === 'conical' ? 'walls' : 'room'
+  if (roofType === 'conical') return 'walls'
+  return value === 'draw' ? 'draw' : 'room'
 }
 
 export function subscribeToConicalRoofWallClicks(options: {

@@ -12,7 +12,7 @@ import {
 describe('roof footprint sources', () => {
   test('normalizes footprint sources for the selected roof type', () => {
     expect(parseRoofFootprintSource('room', 'conical')).toBe('walls')
-    expect(parseRoofFootprintSource('draw', 'conical')).toBe('draw')
+    expect(parseRoofFootprintSource('draw', 'conical')).toBe('walls')
     expect(parseRoofFootprintSource('walls', 'hip')).toBe('room')
     expect(parseRoofFootprintSource('draw', 'hip')).toBe('draw')
   })

@@ -486,43 +486,43 @@ export function BuildTab() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
-            <div className="px-0.5 font-medium text-muted-foreground text-xs">Footprint from</div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {footprintSources.map((source) => {
-                const active = activeTool === 'roof' && activeFootprintSource === source.value
-                return (
-                  <button
-                    aria-pressed={active}
-                    className={cn(
-                      'rounded-lg px-2 py-2 text-center font-medium text-xs transition-colors',
-                      active
-                        ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
-                        : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
-                    )}
-                    key={source.value}
-                    onClick={() => {
-                      triggerSFX('sfx:menu-click')
-                      activateRoofFootprintSource(source.value)
-                    }}
-                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                    type="button"
-                  >
-                    {source.label}
-                  </button>
-                )
-              })}
-            </div>
-            <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
-              {activeFootprintSource === 'room'
-                ? 'Hover a room to preview its boundary, then click to place.'
-                : activeFootprintSource === 'walls'
-                  ? 'Select a curved wall to match its radius and arc.'
-                  : activeRoofType === 'conical'
-                    ? 'Draw the cone diameter with two clicks.'
+          {activeRoofType !== 'conical' && (
+            <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
+              <div className="px-0.5 font-medium text-muted-foreground text-xs">Footprint from</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {footprintSources.map((source) => {
+                  const active = activeTool === 'roof' && activeFootprintSource === source.value
+                  return (
+                    <button
+                      aria-pressed={active}
+                      className={cn(
+                        'rounded-lg px-2 py-2 text-center font-medium text-xs transition-colors',
+                        active
+                          ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
+                          : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
+                      )}
+                      key={source.value}
+                      onClick={() => {
+                        triggerSFX('sfx:menu-click')
+                        activateRoofFootprintSource(source.value)
+                      }}
+                      onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                      type="button"
+                    >
+                      {source.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
+                {activeFootprintSource === 'room'
+                  ? 'Hover a room to preview its boundary, then click to place.'
+                  : activeFootprintSource === 'walls'
+                    ? 'Select a curved wall to match its radius and arc.'
                     : 'Draw the roof footprint with two corner clicks.'}
-            </p>
-          </div>
+              </p>
+            </div>
+          )}
 
           {roofFeatures.length > 0 ? (
             <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
