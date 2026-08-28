@@ -10,6 +10,7 @@ import {
   getWallArcData,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
+  isCurvedWall,
   type LevelNode,
   RoofNode,
   type RoofPlacementMode,
@@ -117,21 +118,32 @@ function getBelowLevelWalls(
 function getRoofSnapWalls(
   currentLevelId: string | null,
   nodes: Readonly<Record<string, AnyNode>>,
+  roofType: RoofType,
 ): WallNode[] {
-  return [...getLevelWalls(currentLevelId, nodes), ...getBelowLevelWalls(currentLevelId, nodes)]
+  const walls = [
+    ...getLevelWalls(currentLevelId, nodes),
+    ...getBelowLevelWalls(currentLevelId, nodes),
+  ]
+  return roofType === 'conical' ? walls : walls.filter((wall) => !isCurvedWall(wall))
 }
 
 // Current-level alignment anchors plus the floor-below wall corners.
 function collectRoofAlignmentAnchors(
   nodes: Readonly<Record<string, AnyNode>>,
   currentLevelId: string | null,
+  roofType: RoofType,
 ): AlignmentAnchor[] {
-  return [
+  const anchors = [
     ...collectAlignmentAnchors(nodes, '', currentLevelId),
     ...getBelowLevelWalls(currentLevelId, nodes).flatMap((wall) =>
       wallSegmentAnchors(wall.id, wall.start, wall.end, wall.thickness),
     ),
   ]
+  if (roofType === 'conical') return anchors
+  return anchors.filter((anchor) => {
+    const node = nodes[anchor.nodeId]
+    return node?.type !== 'wall' || !isCurvedWall(node)
+  })
 }
 
 /**
@@ -585,7 +597,11 @@ export const RoofTool: React.FC = () => {
     // level plus the wall corners of the floor directly below, so a roof drawn
     // on the upper floor aligns to the walls beneath it. Refreshed after each
     // roof commits. Both corners of the rectangle align.
-    let alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
+    let alignmentCandidates = collectRoofAlignmentAnchors(
+      useScene.getState().nodes,
+      currentLevelId,
+      roofType,
+    )
 
     // Resolve a grid:move/click into the drafted corner via the shared surface
     // snap pipeline: magnetic lock onto wall corners / midpoints / crossings /
@@ -608,7 +624,7 @@ export const RoofTool: React.FC = () => {
       return resolveSurfacePlanPointSnap({
         rawPoint,
         fallbackPoint: gridFallback,
-        walls: getRoofSnapWalls(currentLevelId, nodes),
+        walls: getRoofSnapWalls(currentLevelId, nodes, roofType),
         candidates: alignmentCandidates,
         movingId: '__roof-draft__',
         highlightWalls: true,
@@ -777,7 +793,11 @@ export const RoofTool: React.FC = () => {
         draftPreview.setRoofDraftStart(null)
         draftPreview.setRoofDraftEnd(null)
         outlineRef.current.visible = false
-        alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
+        alignmentCandidates = collectRoofAlignmentAnchors(
+          useScene.getState().nodes,
+          currentLevelId,
+          roofType,
+        )
         clearSurfacePlanSnapFeedback()
       } else {
         corner1Ref.current = [gridX, y, gridZ]
