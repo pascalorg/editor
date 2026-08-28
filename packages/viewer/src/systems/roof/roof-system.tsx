@@ -2489,10 +2489,7 @@ function shedJointNeighborLeanTos(node: RoofSegmentNode): Set<string> | null {
   return ids.length > 0 ? new Set(ids) : null
 }
 
-function isJoinedShedSibling(
-  node: RoofSegmentNode,
-  candidate: RoofSegmentNode,
-): boolean {
+function isJoinedShedSibling(node: RoofSegmentNode, candidate: RoofSegmentNode): boolean {
   const neighbors = shedJointNeighborLeanTos(node)
   if (!neighbors) return true
   const candidateOwner = readMetadataString(candidate, 'managedByLeanTo')

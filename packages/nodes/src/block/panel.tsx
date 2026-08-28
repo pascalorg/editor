@@ -277,8 +277,6 @@ export default function BlockPanel() {
           <SliderControl
             key={label}
             label={label}
-            max={node.position[axis] + 2}
-            min={node.position[axis] - 2}
             onChange={onChange}
             precision={2}
             step={0.01}

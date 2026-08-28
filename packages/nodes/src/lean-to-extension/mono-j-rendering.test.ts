@@ -35,7 +35,9 @@ describe('continuous mono canopy rendering', () => {
 
   for (const [name, points] of Object.entries(lShapes)) {
     test(`${name}: deterministic miter with clean coverage`, () => {
-      const builds = Array.from({ length: 8 }, (_, index) => buildCanopy(`${name}_${index}`, points))
+      const builds = Array.from({ length: 8 }, (_, index) =>
+        buildCanopy(`${name}_${index}`, points),
+      )
       const verticalAreaKeys = new Set(builds.map((build) => build.totalVertical.toFixed(4)))
       expect(verticalAreaKeys.size).toBe(1)
       for (const build of builds) {
@@ -129,9 +131,10 @@ function buildCanopy(name: string, points: readonly Pt[]) {
       (start, index) =>
         resolveLeanToFreestandingRunPlacement(level.id, start, points[index + 1]!, false, 'mono')!,
     )
-  const sourceNodes = Object.fromEntries(
-    [level, ...runs].map((node) => [node.id, node]),
-  ) as Record<string, AnyNode>
+  const sourceNodes = Object.fromEntries([level, ...runs].map((node) => [node.id, node])) as Record<
+    string,
+    AnyNode
+  >
   const assemblies = runs.map((run) => createLeanToAssembly(run, undefined, sourceNodes))
   const renderNodes = Object.fromEntries(
     [level, ...runs, ...assemblies.flatMap((a) => [a.roof, a.segment])].map((n) => [n.id, n]),

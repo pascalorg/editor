@@ -118,6 +118,9 @@ export function ControlModes() {
                 isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
                 isImageMode && !isActive && 'hover:bg-white/5',
               )}
+              // A static hook for a host app that wants to point a first-run
+              // tour at this button. Nothing here reads it.
+              data-guide-target={c.id === 'select' ? 'mode-select' : undefined}
               label={c.label}
               onClick={() => handleClick(c.id)}
               shortcut={c.shortcut}

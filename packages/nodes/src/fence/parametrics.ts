@@ -51,8 +51,8 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
           component: FenceCurveEditor,
           visibleIf: (n) => !isSplineFence(n),
         },
-        { key: 'height', kind: 'number', unit: 'm', min: 0.4, max: 4, step: 0.05 },
-        { key: 'thickness', kind: 'number', unit: 'm', min: 0.03, max: 0.5, step: 0.005 },
+        { key: 'height', kind: 'number', unit: 'm', min: 0.4, max: 1000, step: 0.05 },
+        { key: 'thickness', kind: 'number', unit: 'm', min: 0.03, max: 1000, step: 0.005 },
       ],
     },
     {
@@ -60,7 +60,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
       fields: [
         { key: 'baseHeight', kind: 'number', unit: 'm', min: 0.04, max: 1, step: 0.01 },
         { key: 'topRailHeight', kind: 'number', unit: 'm', min: 0.01, max: 0.25, step: 0.005 },
-        { key: 'postSpacing', kind: 'number', unit: 'm', min: 0.05, max: 5, step: 0.01 },
+        { key: 'postSpacing', kind: 'number', unit: 'm', min: 0.05, max: 1000, step: 0.01 },
         { key: 'postSize', kind: 'number', unit: 'm', min: 0.01, max: 0.4, step: 0.005 },
         {
           // Dropdown (not segmented) so the inspector renders its "Post Cap"

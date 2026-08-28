@@ -27,6 +27,7 @@ type SFXEvents = {
   'sfx:menu-hover': undefined
   'sfx:menu-click': undefined
   'sfx:paint-apply': undefined
+  'sfx:success': undefined
   'sfx:terrain-sculpt-start': TerrainVerb
   'sfx:terrain-sculpt-stop': undefined
 }
@@ -56,6 +57,7 @@ const handleSnapshotCapture = () => playSFX('snapshotCapture')
 const handleMenuHover = () => playSFX('menuHover')
 const handleMenuClick = () => playSFX('menuClick')
 const handlePaintApply = () => playSFX('paintApply')
+const handleSuccess = () => playSFX('success')
 const TERRAIN_LOOP_BY_VERB = {
   raise: 'terrainRaise',
   lower: 'terrainLower',
@@ -86,6 +88,7 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:menu-hover', handleMenuHover)
   sfxEmitter.on('sfx:menu-click', handleMenuClick)
   sfxEmitter.on('sfx:paint-apply', handlePaintApply)
+  sfxEmitter.on('sfx:success', handleSuccess)
   sfxEmitter.on('sfx:terrain-sculpt-start', handleTerrainSculptStart)
   sfxEmitter.on('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
   unsubscribeAudio = useAudio.subscribe(updateSFXVolumes)
@@ -106,6 +109,7 @@ export function disposeSFXBus() {
     sfxEmitter.off('sfx:menu-hover', handleMenuHover)
     sfxEmitter.off('sfx:menu-click', handleMenuClick)
     sfxEmitter.off('sfx:paint-apply', handlePaintApply)
+    sfxEmitter.off('sfx:success', handleSuccess)
     sfxEmitter.off('sfx:terrain-sculpt-start', handleTerrainSculptStart)
     sfxEmitter.off('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
     unsubscribeAudio?.()

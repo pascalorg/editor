@@ -261,6 +261,10 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './components/ui/primitives/dropdown-menu'
+export {
+  ShortcutToken,
+  shortcutDisplayValue,
+} from './components/ui/primitives/shortcut-token'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
 export { Slider } from './components/ui/primitives/slider'
 export { SceneLoader } from './components/ui/scene-loader'
@@ -536,6 +540,13 @@ export {
   type SlabPlanSnapInput,
   type SlabPlanSnapResult,
 } from './lib/slab-plan-snap'
+export {
+  getSnappingModeLabel,
+  resolveSnapFlags,
+  type SnapContext,
+  type SnapFlags,
+  type SnappingMode,
+} from './lib/snapping-mode'
 export { duplicateStairSubtree } from './lib/stair-duplication'
 export {
   getBuildingLevelsForLevel,
@@ -574,6 +585,7 @@ export {
 export { subscribeCameraPose } from './store/camera-pose-store'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
+export { type CameraHintAction, useCameraHintFocus } from './store/use-camera-hint-focus'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export {
   DRAWING_TYPE_OPTIONS,
@@ -593,6 +605,8 @@ export type {
 export {
   default as useEditor,
   getActiveContinuationContext,
+  getActiveSnapContext,
+  getActiveSnappingMode,
   getContinuation,
   isAlignmentGuideActive,
   isAngleSnapActive,

@@ -466,10 +466,18 @@ export default function RoofSegmentPanel() {
         </PanelSection>
       )}
 
+      <PanelSection title="Drainage">
+        <ToggleControl
+          checked={autoGutterEnabled}
+          label="Auto gutters"
+          onChange={handleAutoGutterToggle}
+        />
+      </PanelSection>
+
       <PanelSection title="Wall Height">
         <SliderControl
           label="Wall"
-          max={5}
+          max={1000}
           min={0}
           onChange={(v) => handleUpdate({ wallHeight: v })}
           precision={2}
@@ -662,8 +670,6 @@ export default function RoofSegmentPanel() {
       <PanelSection title="Position">
         <SliderControl
           label="X"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = v
@@ -676,8 +682,6 @@ export default function RoofSegmentPanel() {
         />
         <SliderControl
           label="Y"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
@@ -690,8 +694,6 @@ export default function RoofSegmentPanel() {
         />
         <SliderControl
           label="Z"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = v

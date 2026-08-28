@@ -585,7 +585,7 @@ export default function ColumnPanel() {
         {!managedByLeanTo && (
           <SliderControl
             label="Height"
-            max={20}
+            max={1000}
             min={0.8}
             onChange={(value) => handleUpdate({ height: value })}
             precision={2}
@@ -606,7 +606,7 @@ export default function ColumnPanel() {
               supportStyle === 'box-frame') && (
               <SliderControl
                 label="Bottom Spread"
-                max={4}
+                max={1000}
                 min={0.2}
                 onChange={(value) =>
                   handleUpdate({
@@ -667,7 +667,7 @@ export default function ColumnPanel() {
           <>
             <SliderControl
               label="Width"
-              max={1.6}
+              max={1000}
               min={0.12}
               onChange={(value) =>
                 handleUpdate({
@@ -684,7 +684,7 @@ export default function ColumnPanel() {
             {node.crossSection === 'rectangular' && (
               <SliderControl
                 label="Depth"
-                max={1.6}
+                max={1000}
                 min={0.12}
                 onChange={(value) => handleUpdate({ depth: value })}
                 precision={2}

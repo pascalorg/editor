@@ -24,9 +24,9 @@ export const cupolaParametrics: ParametricDescriptor<CupolaNode> = {
     {
       label: 'Dimensions',
       fields: [
-        { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 2, step: 0.05 },
-        { key: 'depth', kind: 'number', unit: 'm', min: 0.3, max: 2, step: 0.05 },
-        { key: 'height', kind: 'number', unit: 'm', min: 0.4, max: 2.5, step: 0.05 },
+        { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
+        { key: 'depth', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
+        { key: 'height', kind: 'number', unit: 'm', min: 0.4, max: 1000, step: 0.05 },
       ],
     },
   ],

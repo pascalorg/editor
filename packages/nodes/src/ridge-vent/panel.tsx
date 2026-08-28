@@ -157,7 +157,7 @@ export default function RidgeVentPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Length"
-          max={8}
+          max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ length: v })}
           onCommit={(v) => handleUpdate({ length: v })}
@@ -216,8 +216,6 @@ export default function RidgeVentPanel() {
         />
         <SliderControl
           label="Y"
-          max={2}
-          min={-2}
           onChange={(v) =>
             handleUpdate({
               position: [node.position[0] ?? 0, v, node.position[2] ?? 0],
