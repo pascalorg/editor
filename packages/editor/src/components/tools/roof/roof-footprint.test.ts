@@ -53,6 +53,23 @@ describe('roof footprint sources', () => {
     expect(target?.rectangular).toBe(false)
   })
 
+  test('keeps an L-shaped room available as straight-wall draw guides but not a room footprint', () => {
+    const target = fitRoofFootprint(
+      'room-l-shape',
+      [
+        [0, 0],
+        [4, 0],
+        [4, 2],
+        [2, 2],
+        [2, 4],
+        [0, 4],
+      ],
+      [],
+    )
+
+    expect(target?.rectangular).toBe(false)
+  })
+
   test('rejects curved and irregular rooms for rectangular-only roof footprints', () => {
     const walls = [
       WallNode.parse({ start: [0, 0], end: [4, 0] }),
