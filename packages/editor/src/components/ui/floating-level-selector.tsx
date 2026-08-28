@@ -577,6 +577,9 @@ export function FloatingLevelSelector() {
           {!draggingLevelId && (
             <button
               className={cn(addButtonClass, 'top-0 -translate-y-1/2')}
+              // A stable hook for host-app onboarding to point at. Static, and
+              // read only from outside: nothing here depends on it.
+              data-guide-target="level-add"
               onClick={handleAddAbove}
               title="Add level above"
               type="button"
@@ -613,7 +616,15 @@ export function FloatingLevelSelector() {
                   const showGapBelow = i < reversedLevels.length - 1
 
                   return (
-                    <div className="relative" key={level.id}>
+                    <div
+                      className="relative"
+                      // A stable hook for host-app onboarding to point at, on
+                      // the ground floor only — the one level a guide can name
+                      // without knowing the building. Static, and read only
+                      // from outside: nothing here depends on it.
+                      data-guide-target={level.level === 0 ? 'level-ground' : undefined}
+                      key={level.id}
+                    >
                       <SortableLevelRow
                         isSelected={isSelected}
                         level={level}

@@ -31,6 +31,7 @@ import {
   writePersistedSelection,
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
+import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useSessionGroups from '../../store/use-session-groups'
@@ -380,7 +381,7 @@ type ShortcutKey = {
 }
 
 type CameraControlHint = {
-  action: string
+  action: CameraHintAction
   keys: ShortcutKey[]
   alternativeKeys?: ShortcutKey[]
 }
@@ -514,7 +515,15 @@ function ViewerCanvasControlsHint({
   isPreviewMode: boolean
   onDismiss: () => void
 }) {
-  const hints = isPreviewMode ? PREVIEW_CAMERA_CONTROL_HINTS : EDITOR_CAMERA_CONTROL_HINTS
+  const all = isPreviewMode ? PREVIEW_CAMERA_CONTROL_HINTS : EDITOR_CAMERA_CONTROL_HINTS
+  // A host teaching one gesture at a time narrows this to the one it is asking
+  // for, and to nothing once it is done. Null — the default — is all of them.
+  const focus = useCameraHintFocus((state) => state.actions)
+  const hints = focus === null ? all : all.filter((hint) => focus.includes(hint.action))
+
+  if (hints.length === 0) {
+    return null
+  }
 
   return (
     <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
@@ -522,7 +531,10 @@ function ViewerCanvasControlsHint({
         aria-label="Camera controls hint"
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
       >
-        <div className="grid min-w-0 flex-1 grid-cols-3 items-start divide-x divide-border/18">
+        <div
+          className="grid min-w-0 flex-1 items-start divide-x divide-border/18"
+          style={{ gridTemplateColumns: `repeat(${hints.length}, minmax(0, 1fr))` }}
+        >
           {hints.map((hint) => (
             <CameraControlHintItem hint={hint} key={hint.action} />
           ))}
