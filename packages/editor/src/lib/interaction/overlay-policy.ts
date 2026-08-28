@@ -57,3 +57,7 @@ const ACTIVE_POLICY: OverlayPolicy = {
 export function resolveOverlayPolicy(scope: InteractionScope): OverlayPolicy {
   return isActive(scope) ? ACTIVE_POLICY : IDLE_POLICY
 }
+
+export function shouldShowEditingControls(readOnly: boolean): boolean {
+  return !readOnly
+}

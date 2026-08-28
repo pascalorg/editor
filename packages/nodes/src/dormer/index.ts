@@ -1,9 +1,5 @@
 export { dormerDefinition } from './definition'
-export {
-  buildDormerGhostGeometry,
-  dormerSupportsArch,
-  dormerSupportsCornerRadii,
-} from './geometry'
+export { buildDormerGhostGeometry } from './geometry'
 export type {
   DormerSurfaceMaterialRole,
   DormerSurfaceMaterialSpec,

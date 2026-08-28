@@ -171,6 +171,31 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
   return true
 }
 
+export const isToolOwnedRotation = () => {
+  const editor = useEditor.getState()
+  const moving = getMovingNode()
+  if (
+    moving?.type === 'door' ||
+    moving?.type === 'window' ||
+    moving?.type === 'item' ||
+    moving?.type === 'lean-to-extension'
+  )
+    return true
+  return (
+    editor.mode === 'build' &&
+    (editor.tool === 'door' ||
+      editor.tool === 'window' ||
+      editor.tool === 'roof' ||
+      editor.tool === 'item' ||
+      editor.tool === 'lean-to-extension')
+  )
+}
+
+export const isToolOwnedCanopyForm = () => {
+  const editor = useEditor.getState()
+  return editor.mode === 'build' && editor.tool === 'lean-to-extension'
+}
+
 export const canRunGlobalRotationShortcut = () =>
   useInteractionScope.getState().scope.kind !== 'mesh-editing'
 
@@ -190,18 +215,9 @@ export const useKeyboard = ({
     }
 
     // True while an active placement tool owns R/T. Door/window tools flip the
-    // draft and the roof tool turns its draft axes, so the global
-    // selection-based handler must stand down to avoid double-firing.
-    const isToolOwnedRotation = () => {
-      const ed = useEditor.getState()
-      const moving = getMovingNode()
-      if (moving?.type === 'door' || moving?.type === 'window') return true
-      return (
-        ed.mode === 'build' && (ed.tool === 'door' || ed.tool === 'window' || ed.tool === 'roof')
-      )
-    }
-
-    // A clean-tap Shift cycles the snapping mode (and a clean-tap Ctrl the grid step)
+    // draft, item / lean-to placement rotates its draft, and the roof tool turns
+    // its draft axes. The global selection handler must stand down to avoid double-firing.
+    // Shift cycles the snapping mode (and a clean-tap Ctrl the grid step)
     // whenever there's an active snapping context — i.e. exactly when the HUD
     // shows a snapping chip. That single source covers wall/fence/item drafting,
     // every node move (including wall-hosted items + door/window openings, which
@@ -362,6 +378,7 @@ export const useKeyboard = ({
         useEditor.getState().setMode('select')
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
+        if (isToolOwnedCanopyForm()) return
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
         useEditor.getState().setMode('build')
@@ -494,9 +511,9 @@ export const useKeyboard = ({
         // open/close toggle lives on E. Windows still use R to toggle
         // their open/closed state.
         //
-        // Skipped entirely while a door/window placement or roof draft is active:
-        // those tools own R, and the user can have a node selected at the same
-        // time. Without this guard both the draft and selection would rotate.
+        // Skipped while an item, door, window, or roof placement owns rotation.
+        // The user can still have a node selected during placement; without this
+        // guard both the draft and the selection would rotate.
         //
         // References (guide/scan) live in `selectedReferenceId`, not the viewer
         // selection — check them first, like the Delete arm below.

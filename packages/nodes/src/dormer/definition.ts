@@ -1,14 +1,11 @@
 import {
   type AnyNode,
-  type AnyNodeId,
   DormerNode as DormerNodeSchema,
   type DormerNode as DormerNodeType,
   type HandleDescriptor,
   type NodeDefinition,
-  type RoofSegmentNode as RoofSegmentNodeType,
-  type SceneApi,
 } from '@pascal-app/core'
-import { buildDormerRoofCut, getDormerExposedFaces } from './csg-geometry'
+import { buildDormerRoofCut } from './csg-geometry'
 import { buildDormerFloorplan } from './floorplan'
 import { dormerPaint } from './paint'
 import { dormerParametrics } from './parametrics'
@@ -26,21 +23,6 @@ const MIN_ROOF_HEIGHT = 0
 const MAX_ROOF_HEIGHT = 2
 const MIN_SKIRT = 0.2
 const MAX_SKIRT = 6
-// Window-handle constants. The window opening is parametric geometry
-// on the dormer's +Z gable face; chevrons sit just outside its rim
-// with a small forward Z offset so they pop in front of the wall plane
-// instead of z-fighting with the frame bars.
-const WINDOW_SIDE_HANDLE_OFFSET = 0.15
-const WINDOW_HEIGHT_HANDLE_OFFSET = 0.15
-const WINDOW_FACE_Z_OFFSET = 0.05
-// The four window-edge arrows latch behind a cube at the window center;
-// they stay hidden until the user clicks that cube to open the group.
-const WINDOW_LATCH_GROUP = 'dormer-window'
-// Lower clamp for window dims matches the geometry's internal clamp
-// in `getDormerSkirtWindowDims` (0.1m). Upper clamps depend on the
-// dormer dimensions and are resolved per-handle via the function form
-// of `max`.
-const MIN_WINDOW_DIM = 0.1
 // Clamp used for handle Y placement so side chevrons stay reachable on
 // dormers whose wall is flat (`height ≈ 0`). The dormer body is
 // `height + roofHeight` tall; if that collapses too, the side arrows
@@ -85,8 +67,7 @@ function dormerWidthHandle(side: 'left' | 'right'): HandleDescriptor<DormerNodeT
     // arrows become visible during selection without us reaching for
     // `portal: 'grandparent'` — which trips the same "Color target has
     // no corresponding fragment stage output" WebGPU pipeline error
-    // chimney already documents (likely an MRT interaction with the
-    // window-assembly's transparent glazing meshes).
+    // chimney already documents.
     min: MIN_DIM,
     currentValue: (n) => n.width,
     apply: (initial, newWidth) => {
@@ -252,159 +233,6 @@ function dormerRotateHandle(): HandleDescriptor<DormerNodeType> {
   }
 }
 
-// Window-center Y in dormer-local frame. The schema stores
-// `windowOffsetY` as the bottom-relative offset of the window center
-// from the bottom of the skirt; the geometry then maps it to
-// `centerY = -(skirtH / 2) + offsetY`. We mirror that here so handle
-// placements line up with what the inspector + window-assembly use.
-function getWindowCenterY(n: DormerNodeType): number {
-  return -(n.wallSkirtHeight / 2) + n.windowOffsetY
-}
-
-// Sign of the dormer-local Z direction where the visible window face
-// sits. The dormer renders the window on both +Z (front) and -Z (back)
-// gable faces, but only whichever face actually pokes above the host
-// roof slope is exposed — `getDormerExposedFaces` is the source of
-// truth there. The in-world handles need to attach to that exposed
-// face so the user is editing the window they can see; as the dormer
-// drags across the ridge, the exposed face flips and the chevrons
-// follow.
-//
-// Preference order when both faces are exposed (e.g. a tall gable that
-// pokes above the roof on both ends): keep handles on +Z so the
-// affordance stays put visually instead of flipping when the slope
-// math grazes the threshold from the other side. When neither face is
-// exposed (degenerate — wall buried on both sides), fall back to +Z so
-// the placement still produces a valid vector; the chevrons are just
-// not useful there.
-function getExposedFaceZSign(n: DormerNodeType, sceneApi: SceneApi): 1 | -1 {
-  if (!n.roofSegmentId) return 1
-  const segment = sceneApi.get<RoofSegmentNodeType>(n.roofSegmentId as AnyNodeId)
-  if (!segment) return 1
-  const exposed = getDormerExposedFaces(n, segment)
-  if (exposed.front) return 1
-  if (exposed.back) return -1
-  return 1
-}
-
-// Window-width chevron on the +X (right) or -X (left) edge of the
-// opening. Asymmetric: dragging one arrow grows the window outward
-// from its own edge while the opposite edge stays put. The framework
-// only knows about the scalar `windowWidth`; we re-emit `windowOffsetX`
-// in `apply` so the anchored edge stays at the same X in dormer-local.
-// Placement sits on the dormer's +Z gable face, where the window opens.
-function dormerWindowWidthHandle(side: 'left' | 'right'): HandleDescriptor<DormerNodeType> {
-  const sign = side === 'right' ? 1 : -1
-  return {
-    kind: 'linear-resize',
-    axis: 'x',
-    // Stand the blade up into the gable face so it reads flat-on like the
-    // top/bottom window-height arrows instead of edge-on.
-    faceNormal: true,
-    // Hidden until the user clicks the window-center latch cube.
-    latchGroup: WINDOW_LATCH_GROUP,
-    anchor: side === 'right' ? 'min' : 'max',
-    min: MIN_WINDOW_DIM,
-    // Cap at the dormer's window field — keep a 0.1m gap on each side
-    // to match the geometry's interior clamp (`maxW = width - 0.1`).
-    max: (n) => Math.max(MIN_WINDOW_DIM, n.width - 0.1),
-    currentValue: (n) => n.windowWidth,
-    apply: (initial, newWidth) => {
-      // Anchored edge stays fixed: anchor X = initial.windowOffsetX -
-      // sign * initial.windowWidth/2. New center = anchor + sign *
-      // newWidth/2 → new windowOffsetX.
-      const anchorX = initial.windowOffsetX - sign * (initial.windowWidth / 2)
-      const newOffsetX = anchorX + sign * (newWidth / 2)
-      return {
-        windowWidth: newWidth,
-        windowOffsetX: newOffsetX,
-      }
-    },
-    placement: {
-      position: (n, sceneApi) => {
-        const faceSign = getExposedFaceZSign(n, sceneApi)
-        return [
-          n.windowOffsetX + sign * (n.windowWidth / 2 + WINDOW_SIDE_HANDLE_OFFSET),
-          getWindowCenterY(n),
-          faceSign * (n.depth / 2 + WINDOW_FACE_Z_OFFSET),
-        ]
-      },
-      // Left chevron points -X; right points +X. LinearArrow doesn't
-      // auto-orient axis 'x' — descriptor handles the flip.
-      rotationY: () => (side === 'right' ? 0 : Math.PI),
-    },
-  }
-}
-
-// Window-height chevron on the +Y (top) or -Y (bottom) edge of the
-// opening. Same asymmetric pattern as the width handle, projected onto
-// the Y axis. The schema stores the window's vertical position as
-// `windowOffsetY` (distance from the BOTTOM of the skirt to the window
-// CENTER), not as a centerY in dormer-local — so `apply` translates
-// back through that mapping when it re-emits the offset.
-function dormerWindowHeightHandle(side: 'top' | 'bottom'): HandleDescriptor<DormerNodeType> {
-  const sign = side === 'top' ? 1 : -1
-  return {
-    kind: 'linear-resize',
-    axis: 'y',
-    // Hidden until the user clicks the window-center latch cube.
-    latchGroup: WINDOW_LATCH_GROUP,
-    // 'min' = bottom edge anchored (top arrow grows the top edge up).
-    // 'max' = top edge anchored (bottom arrow drops the bottom edge).
-    anchor: side === 'top' ? 'min' : 'max',
-    min: MIN_WINDOW_DIM,
-    // Cap at the skirt with a 0.1m interior margin — matches
-    // `maxH = skirtH - 0.1` from `getDormerSkirtWindowDims`.
-    max: (n) => Math.max(MIN_WINDOW_DIM, n.wallSkirtHeight - 0.1),
-    currentValue: (n) => n.windowHeight,
-    apply: (initial, newHeight) => {
-      // Compute the anchored edge in dormer-local Y, derive the new
-      // centerY, then map back to schema-form `windowOffsetY`.
-      const initialCenterY = -(initial.wallSkirtHeight / 2) + initial.windowOffsetY
-      const anchorY = initialCenterY - sign * (initial.windowHeight / 2)
-      const newCenterY = anchorY + sign * (newHeight / 2)
-      const newOffsetY = newCenterY + initial.wallSkirtHeight / 2
-      return {
-        windowHeight: newHeight,
-        windowOffsetY: newOffsetY,
-      }
-    },
-    placement: {
-      position: (n, sceneApi) => {
-        const faceSign = getExposedFaceZSign(n, sceneApi)
-        return [
-          n.windowOffsetX,
-          getWindowCenterY(n) + sign * (n.windowHeight / 2 + WINDOW_HEIGHT_HANDLE_OFFSET),
-          faceSign * (n.depth / 2 + WINDOW_FACE_Z_OFFSET),
-        ]
-      },
-    },
-  }
-}
-
-// Window-center latch cube. Sits at the window center on the exposed
-// gable face; clicking it reveals / hides the four window edge arrows
-// (width L/R + height top/bottom) tagged with `WINDOW_LATCH_GROUP`.
-// Mirrors the duct-fitting selection cube but driven by the shared
-// latch descriptor so the dense window cluster stays collapsed behind
-// one grip until the user opts in.
-function dormerWindowLatchHandle(): HandleDescriptor<DormerNodeType> {
-  return {
-    kind: 'latch',
-    group: WINDOW_LATCH_GROUP,
-    placement: {
-      position: (n, sceneApi) => {
-        const faceSign = getExposedFaceZSign(n, sceneApi)
-        return [
-          n.windowOffsetX,
-          getWindowCenterY(n),
-          faceSign * (n.depth / 2 + WINDOW_FACE_Z_OFFSET),
-        ]
-      },
-    },
-  }
-}
-
 const dormerHandles: HandleDescriptor<DormerNodeType>[] = [
   dormerWidthHandle('right'),
   dormerWidthHandle('left'),
@@ -412,11 +240,6 @@ const dormerHandles: HandleDescriptor<DormerNodeType>[] = [
   dormerDepthHandle('back'),
   dormerWallHeightHandle(),
   dormerRotateHandle(),
-  dormerWindowLatchHandle(),
-  dormerWindowWidthHandle('right'),
-  dormerWindowWidthHandle('left'),
-  dormerWindowHeightHandle('top'),
-  dormerWindowHeightHandle('bottom'),
   // The wall-skirt (downward chevron), roof-height (peak chevron), and
   // the asymmetric front/back depth split stay out for now. Re-adding
   // any of them previously fired the "Color target has no
@@ -425,31 +248,23 @@ const dormerHandles: HandleDescriptor<DormerNodeType>[] = [
   // extras — only reproducible while `portal: 'grandparent'` was set,
   // which we no longer rely on (RoofEditSystem reveals the wrapper
   // instead). The shapes themselves are valid; if the count budget
-  // turns out to also be sensitive without grandparent portal, drop
-  // the window handles first since the inspector covers them too.
+  // turns out to also be sensitive without grandparent portal, keep
+  // the current compact set.
   // dormerWallSkirtHandle(),
   // dormerRoofHeightHandle(),
 ]
 
 /**
  * Dormer — a small house-shaped protrusion sitting on top of a roof
- * segment. The window opening is inlined into the dormer's schema
- * (window* fields drive parametric geometry on the front face), not
- * a hosted child node — so `relations.hosts` stays unset.
+ * segment. Windows are hosted child nodes; the legacy window* fields remain
+ * in the schema only so scene migration can preserve older dormers.
  *
- * **Scope of this port — stub.** Schema is complete (every field from
- * the archive, including the four per-surface material slots and the
- * full window-opening field set). Geometry renders a simple house
- * silhouette (box body + triangular gable roof) for all `roofType`
- * variants — the archive's variant-specific dormer roof shapes,
- * window opening + frame, sill, and the CSG trim where the dormer
- * meets the host roof are deferred. Per-surface paints (`topMaterial`,
- * `sideMaterial`, `wallMaterial`) resolve via the shared helper from
- * core but only roof / wall surfaces are emitted by the stub geometry.
+ * The renderer cuts each hosted window from the dormer shell and mounts
+ * the regular WindowNode renderer in the selected wall-face frame.
  */
 export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   kind: 'dormer',
-  schemaVersion: 1,
+  schemaVersion: 4,
   schema: DormerNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -465,7 +280,9 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    duplicable: true,
+    // Dormers own their WindowNode children. Duplicate the complete subtree
+    // so the copied dormer never aliases windows from the source dormer.
+    duplicable: { subtree: true },
     deletable: true,
     // Mounts on a roof segment via `roofSegmentId`. Dirty marks
     // cascade to the host segment's parent roof so its merged shell
@@ -480,6 +297,11 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
     // preview through this entry rather than carrying a kind-name
     // arm.
     paint: dormerPaint,
+  },
+
+  relations: {
+    hosts: ['window'],
+    cascadeDelete: 'descendants',
   },
 
   affordanceTools: {
@@ -516,7 +338,6 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   },
 
   mcp: {
-    description:
-      'A dormer on a roof segment. Box body + gable roof + inlined window opening. Geometry beyond the stub silhouette coming later.',
+    description: 'A dormer on a roof segment. Its windows are hosted WindowNode children.',
   },
 }

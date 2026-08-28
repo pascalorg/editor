@@ -3,6 +3,7 @@ import {
   getActiveRoofHeight,
   type HandleDescriptor,
   type LinearResizeHandle,
+  type RadialResizeHandle,
   type RoofSegmentNode,
 } from '@pascal-app/core'
 import { roofSegmentDefinition } from './definition'
@@ -64,6 +65,32 @@ function pitchHandle(): LinearResizeHandle<RoofSegmentNode> {
 }
 
 describe('roof-segment resize handles', () => {
+  test('records the conical full-circle schema update', () => {
+    expect(roofSegmentDefinition.schemaVersion).toBe(4)
+  })
+
+  test('uses one center-anchored radius handle for a conical segment', () => {
+    const node = segment({ roofType: 'conical', width: 6, depth: 6 })
+    const conicalHandles = handles(node)
+    const radiusHandles = conicalHandles.filter(
+      (handle): handle is RadialResizeHandle<RoofSegmentNode> => handle.kind === 'radial-resize',
+    )
+    const sideHandles = conicalHandles.filter(
+      (handle) => handle.kind === 'linear-resize' && (handle.axis === 'x' || handle.axis === 'z'),
+    )
+    const radiusHandle = radiusHandles[0]
+
+    expect(radiusHandles).toHaveLength(1)
+    expect(sideHandles).toHaveLength(0)
+    expect(radiusHandle?.currentValue(node)).toBe(3)
+    expect({ ...node, ...radiusHandle?.apply(node, 4, undefined as never) }).toMatchObject({
+      width: 8,
+      depth: 8,
+      position: [10, 0, 20],
+    })
+    expect(conicalHandles.some((handle) => handle.kind === 'arc-resize')).toBe(false)
+  })
+
   test('place shed side handles at roof level', () => {
     const node = segment()
     const roofHeight = getActiveRoofHeight(node)
@@ -97,29 +124,15 @@ describe('roof-segment resize handles', () => {
     expect(backPatch).toMatchObject({ depth: 8, position: [10, 0, 19] })
   })
 
-  test('hides the pitch handle for managed lean-to roof segments', () => {
+  test('hides the pitch handle for parent-managed roof segments', () => {
     const handle = pitchHandle()
-    const managed = segment({
-      metadata: {
-        managedByLeanTo: 'lean_to_test',
-        leanToRole: 'roof-segment',
-      },
-    })
+    const managed = segment({ managedByParent: true })
 
     expect(handle.visible?.(segment(), undefined as never)).not.toBe(false)
     expect(handle.visible?.(managed, undefined as never)).toBe(false)
   })
 
-  test('hides all direct handles for managed lean-to roof segments', () => {
-    expect(
-      handles(
-        segment({
-          metadata: {
-            managedByLeanTo: 'lean_to_test',
-            leanToRole: 'roof-segment',
-          },
-        }),
-      ),
-    ).toEqual([])
+  test('hides all direct handles for parent-managed roof segments', () => {
+    expect(handles(segment({ managedByParent: true }))).toEqual([])
   })
 })

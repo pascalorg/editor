@@ -5,6 +5,7 @@ import { createContext, type ReactNode, useContext } from 'react'
 
 export type RegistryToolContextValue = {
   activeLevelId: LevelNode['id'] | null
+  isCameraDragging: () => boolean
   sceneApi: SceneApi
   selectNode: (nodeId: AnyNodeId) => void
 }

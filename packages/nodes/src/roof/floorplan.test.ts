@@ -82,4 +82,55 @@ describe('buildRoofFloorplan roof intersections', () => {
     expect(Math.min(...hostOutline.map(([x]) => x))).toBeCloseTo(-5, 6)
     expect(Math.max(...hostOutline.map(([x]) => x))).toBeCloseTo(5, 6)
   })
+
+  test('keeps a mounted conical roof visible above its host in plan view', () => {
+    const hostRoof = RoofNode.parse({
+      id: 'roof_host',
+      type: 'roof',
+      children: ['rseg_host'],
+    })
+    const conicalRoof = RoofNode.parse({
+      id: 'roof_conical',
+      type: 'roof',
+      children: ['rseg_conical'],
+      support: {
+        kind: 'roof',
+        roofSegmentId: 'rseg_host',
+        localPosition: [0, 0],
+        curbHeight: 0.5,
+      },
+    })
+    const hostSegment = RoofSegmentNode.parse({
+      id: 'rseg_host',
+      type: 'roof-segment',
+      parentId: hostRoof.id,
+      roofType: 'gable',
+      width: 10,
+      depth: 8,
+    })
+    const conicalSegment = RoofSegmentNode.parse({
+      id: 'rseg_conical',
+      type: 'roof-segment',
+      parentId: conicalRoof.id,
+      roofType: 'conical',
+      width: 3,
+      depth: 3,
+    })
+    const nodes = {
+      [hostRoof.id]: hostRoof,
+      [conicalRoof.id]: conicalRoof,
+      [hostSegment.id]: hostSegment,
+      [conicalSegment.id]: conicalSegment,
+    }
+
+    const geometry = buildRoofFloorplan(
+      conicalRoof,
+      buildContext(conicalRoof, [conicalSegment], [hostRoof], nodes),
+    )
+    const outline = outlinePoints(geometry)
+
+    expect(geometry).not.toBeNull()
+    expect(Math.min(...outline.map(([x]) => x))).toBeCloseTo(-1.5, 6)
+    expect(Math.max(...outline.map(([x]) => x))).toBeCloseTo(1.5, 6)
+  })
 })

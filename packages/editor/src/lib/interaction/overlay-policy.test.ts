@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode } from '@pascal-app/core'
-import { resolveOverlayPolicy } from './overlay-policy'
+import { resolveOverlayPolicy, shouldShowEditingControls } from './overlay-policy'
 import type { ActiveInteractionScope } from './scope'
 
 const mockNode = (id: string, type: string): AnyNode => ({ id, type }) as unknown as AnyNode
@@ -49,5 +49,12 @@ describe('resolveOverlayPolicy', () => {
       expect(p.activeAffordances).toBe('shown')
       expect(p.contextualHudInteractive).toBe(true)
     }
+  })
+})
+
+describe('shouldShowEditingControls', () => {
+  test('hides controls that can mutate a read-only scene', () => {
+    expect(shouldShowEditingControls(false)).toBe(true)
+    expect(shouldShowEditingControls(true)).toBe(false)
   })
 })

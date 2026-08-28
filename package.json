@@ -9,6 +9,7 @@
     "format": "biome format --write",
     "format:check": "biome format",
     "check": "biome check",
+    "checks": "bun run check && bun run check-types",
     "check:fix": "biome check --write",
     "check-types": "turbo run check-types",
     "test": "turbo run test",

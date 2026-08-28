@@ -94,6 +94,15 @@ export {
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
+export { createConicalRoofSectorAboveWall } from './lib/conical-roof'
+export {
+  type ConicalRoofInvalidPlacement,
+  type ConicalRoofLevelPlacement,
+  type ConicalRoofPlacement,
+  type ConicalRoofSurfacePlacement,
+  type ResolveConicalRoofPlacementInput,
+  resolveConicalRoofPlacement,
+} from './lib/conical-roof-placement'
 export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
@@ -144,6 +153,7 @@ export {
   type RoofPlanSegment,
   roofOverlapEntryOwns,
   roofPlanBoundsOverlap,
+  roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {

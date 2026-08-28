@@ -13,6 +13,88 @@ function box(size: [number, number, number], position: [number, number, number])
 }
 
 describe('roof system intersections', () => {
+  test('keeps a declared host solid and clips the mounted conical wall at its surface', () => {
+    const level = LevelNode.parse({
+      id: 'level_conical-cut',
+      type: 'level',
+      children: ['roof_host', 'roof_conical'],
+    })
+    const hostRoof = RoofNode.parse({
+      id: 'roof_host',
+      type: 'roof',
+      parentId: level.id,
+      children: ['rseg_host'],
+    })
+    const conicalRoof = RoofNode.parse({
+      id: 'roof_conical',
+      type: 'roof',
+      parentId: level.id,
+      position: [0, 3.0657691454, 0],
+      children: ['rseg_conical'],
+      support: {
+        kind: 'roof',
+        roofSegmentId: 'rseg_host',
+        localPosition: [0, 0],
+        curbHeight: 0.5,
+      },
+    })
+    const host = RoofSegmentNode.parse({
+      id: 'rseg_host',
+      type: 'roof-segment',
+      parentId: hostRoof.id,
+      roofType: 'gable',
+      width: 10,
+      depth: 8,
+      wallHeight: 2,
+      pitch: 25,
+    })
+    const conical = RoofSegmentNode.parse({
+      id: 'rseg_conical',
+      type: 'roof-segment',
+      parentId: conicalRoof.id,
+      roofType: 'conical',
+      width: 3,
+      depth: 3,
+      wallHeight: 1.2994614872,
+      pitch: 50,
+    })
+    const nodes = {
+      [level.id]: level,
+      [hostRoof.id]: hostRoof,
+      [conicalRoof.id]: conicalRoof,
+      [host.id]: host,
+      [conical.id]: conical,
+    }
+    const unclipped = generateRoofSegmentGeometry(host)
+    const clipped = generateRoofSegmentGeometry(host, nodes)
+    const meshBefore = new THREE.Mesh(unclipped)
+    const meshAfter = new THREE.Mesh(clipped)
+    const hitsAt = (mesh: THREE.Mesh, x: number, z: number) =>
+      new THREE.Raycaster(new THREE.Vector3(x, 10, z), new THREE.Vector3(0, -1, 0)).intersectObject(
+        mesh,
+      )
+
+    expect(hitsAt(meshBefore, 1.4, 0).length).toBeGreaterThan(0)
+    expect(hitsAt(meshAfter, 1.4, 0).length).toBeGreaterThan(0)
+    expect(Array.from(clipped.getAttribute('position').array).every(Number.isFinite)).toBe(true)
+
+    const unclippedConical = generateRoofSegmentGeometry(conical)
+    const clippedConical = generateRoofSegmentGeometry(conical, nodes)
+    const sideHitsAt = (geometry: THREE.BufferGeometry, y: number) =>
+      new THREE.Raycaster(new THREE.Vector3(3, y, 0), new THREE.Vector3(-1, 0, 0)).intersectObject(
+        new THREE.Mesh(geometry),
+      )
+
+    expect(sideHitsAt(unclippedConical, 0.7).length).toBeGreaterThan(0)
+    expect(sideHitsAt(clippedConical, 0.7)).toHaveLength(0)
+    expect(sideHitsAt(clippedConical, 0.9).length).toBeGreaterThan(0)
+
+    unclipped.dispose()
+    clipped.dispose()
+    unclippedConical.dispose()
+    clippedConical.dispose()
+  })
+
   test('removes a roof layer that continues through a sibling attic', () => {
     const layer = box([4, 0.2, 4], [0, 1, 0])
     const siblingInterior = box([2, 3, 2], [0, 1, 0])

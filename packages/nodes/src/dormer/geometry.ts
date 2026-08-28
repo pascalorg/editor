@@ -22,6 +22,11 @@ export const DORMER_PLACEMENT_SNAP_M = 0.05
  */
 export const DORMER_PLACEMENT_ROTATION_STEP = (15 * Math.PI) / 180
 
+export function getDormerBodyYaw(node: Pick<DormerNode, 'roofType' | 'shedHighSide'>): number {
+  if (node.roofType !== 'shed') return Math.PI / 2
+  return node.shedHighSide === 'front' ? Math.PI : 0
+}
+
 /**
  * Builds the lightweight placement and live-edit shell from the same
  * per-type face generator used by committed roof geometry.
@@ -80,23 +85,12 @@ export function buildDormerShellGeometry(node: DormerNode): THREE.BufferGeometry
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   for (const group of materialGroups)
     geometry.addGroup(group.start, group.count, group.materialIndex)
-  if (!isShed) geometry.rotateY(Math.PI / 2)
+  const bodyYaw = getDormerBodyYaw(node)
+  if (bodyYaw !== 0) geometry.rotateY(bodyYaw)
   geometry.computeVertexNormals()
   return geometry
 }
 
 export function buildDormerGhostGeometry(node: DormerNode): THREE.BufferGeometry {
   return buildDormerShellGeometry(node)
-}
-
-/**
- * Inspector helper: which window-shape sub-controls to surface for the
- * current dormer.
- */
-export function dormerSupportsArch(node: DormerNode): boolean {
-  return node.windowShape === 'arch'
-}
-
-export function dormerSupportsCornerRadii(node: DormerNode): boolean {
-  return node.windowShape === 'rounded'
 }

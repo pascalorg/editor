@@ -366,6 +366,7 @@ export {
   type ElevationGuideSource,
   type ElevationSnapMatch,
   type ElevationSnapTarget,
+  publishResolvedElevationGuide,
   publishStructuralElevationGuide,
   resolveElevationSnapMatch,
   resolveStructuralElevationSnap,
@@ -426,7 +427,10 @@ export {
   type FloorplanMode,
   isFloorplanToolAvailableInMode,
 } from './lib/floorplan/floorplan-mode'
-export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
+export {
+  commitFreshPlacementSubtree,
+  createFreshPlacementSubtree,
+} from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {
   getHistoryCommandState,

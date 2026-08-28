@@ -28,6 +28,7 @@ import {
   resolveLeanToPostGutterSetback,
 } from './assembly'
 import { resolveLeanToLayout, resolveLeanToWallPlacement } from './layout'
+import { resolveLeanToFreestandingRunPlacement } from './placement'
 import { applyLeanToWallAutoSpan } from './roof-attachment'
 
 beforeEach(() => spatialGridManager.clear())
@@ -606,6 +607,90 @@ describe('lean-to assembly', () => {
     )
   })
 
+  test('extends freestanding canopy posts from an upper level down to site ground', () => {
+    const building = BuildingNode.parse({
+      id: 'building_freestanding_post',
+      children: ['level_freestanding_lower', 'level_freestanding_upper'],
+    })
+    const lower = LevelNode.parse({
+      id: 'level_freestanding_lower',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+    })
+    const upper = LevelNode.parse({
+      id: 'level_freestanding_upper',
+      parentId: building.id,
+      level: 1,
+      height: 3,
+    })
+    const leanTo = LeanToExtensionNode.parse({
+      parentId: upper.id,
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      position: [0, 0, 0],
+    })
+    const nodes = {
+      [building.id]: building,
+      [lower.id]: lower,
+      [upper.id]: upper,
+      [leanTo.id]: leanTo,
+    } as Record<string, AnyNode>
+
+    const baseY = resolveLeanToPostBaseY(leanTo, undefined, nodes, 0)
+    const post = leanToPostLayoutPatch(leanTo, 0, baseY)
+
+    expect(post.position[1]).toBeCloseTo(-3.02, 6)
+    expect(post.position[1] + post.height).toBeCloseTo(
+      resolveLeanToLayout(leanTo).postHeight + 0.02,
+      6,
+    )
+  })
+
+  test('extends upper-storey pillars through open space to site ground', () => {
+    const building = BuildingNode.parse({
+      id: 'building_upper_post',
+      children: ['level_lower_post', 'level_upper_post'],
+    })
+    const lower = LevelNode.parse({
+      id: 'level_lower_post',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+    })
+    const upper = LevelNode.parse({
+      id: 'level_upper_post',
+      parentId: building.id,
+      level: 1,
+      height: 3,
+      children: ['wall_upper_post'],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_upper_post',
+      parentId: upper.id,
+      start: [-2, 0],
+      end: [2, 0],
+      thickness: 0.1,
+    })
+    const leanTo = LeanToExtensionNode.parse({
+      parentId: wall.id,
+      position: [2, 0, wall.thickness / 2],
+      projection: 2.5,
+    })
+    const nodes = Object.fromEntries(
+      [building, lower, upper, wall, leanTo].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const baseY = resolveLeanToPostBaseY(leanTo, wall, nodes, 0)
+    const post = leanToPostLayoutPatch(leanTo, 0, baseY)
+
+    expect(post.position[1]).toBeCloseTo(-3.02, 6)
+    expect(post.position[1] + post.height).toBeCloseTo(
+      resolveLeanToLayout(leanTo).postHeight + 0.02,
+      6,
+    )
+  })
+
   test('keeps a swapped pillar beneath the beam while its shaft clears the gutter', () => {
     const leanTo = LeanToExtensionNode.parse({ lowOverhang: 0.25, projection: 2.5 })
     const swapped = {
@@ -624,5 +709,219 @@ describe('lean-to assembly', () => {
     expect(post.position[2] + swapped.depth / 2 + 0.02).toBeLessThanOrEqual(
       leanTo.projection + leanTo.lowOverhang + 1e-6,
     )
+  })
+
+  test('composes a freestanding gable canopy with two eaves and two outer post rows', () => {
+    const leanTo = LeanToExtensionNode.parse({
+      canopyForm: 'gable',
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      postLayoutMode: 'count',
+      postCount: 3,
+      projection: 3,
+      lowOverhang: 0.25,
+    })
+    const layout = resolveLeanToLayout(leanTo)
+    const assembly = createLeanToAssembly(leanTo)
+
+    expect(assembly.segment.roofType).toBe('shed')
+    expect(assembly.oppositeSegment?.roofType).toBe('shed')
+    expect(assembly.segment.depth).toBeCloseTo(3.25)
+    expect(assembly.oppositeSegment?.depth).toBeCloseTo(3.25)
+    expect(assembly.segment.rotation).toBe(0)
+    expect(assembly.oppositeSegment?.rotation).toBeCloseTo(Math.PI)
+    expect(assembly.oppositeGutter).toBeDefined()
+    expect(assembly.oppositeDownspout?.gutterId).toBe(assembly.oppositeGutter?.id)
+    expect(assembly.gutter.position[2]).toBeCloseTo(1.625)
+    expect(assembly.oppositeGutter?.position[2]).toBeCloseTo(1.625)
+    expect(assembly.oppositeGutter?.parentId).toBe(assembly.oppositeSegment?.id)
+    expect(assembly.oppositeSegment?.children).toEqual([
+      assembly.oppositeGutter?.id,
+      assembly.oppositeDownspout?.id,
+    ])
+    expect(assembly.posts).toHaveLength(6)
+    expect(
+      assembly.posts
+        .filter((post) => managedLeanToPostSide(post) === 'high')
+        .map((post) => post.position[2]),
+    ).toEqual([layout.oppositeBeamZ, layout.oppositeBeamZ, layout.oppositeBeamZ])
+  })
+
+  test('composes a butterfly canopy from two inward shed planes with one valley drain', () => {
+    const leanTo = LeanToExtensionNode.parse({
+      canopyForm: 'butterfly',
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+      postLayoutMode: 'count',
+      postCount: 3,
+      projection: 3,
+      lowOverhang: 0.25,
+    })
+    const layout = resolveLeanToLayout(leanTo)
+    const assembly = createLeanToAssembly(leanTo)
+
+    expect(assembly.segment.roofType).toBe('shed')
+    expect(assembly.oppositeSegment?.roofType).toBe('shed')
+    expect(assembly.segment.rotation).toBeCloseTo(Math.PI)
+    expect(assembly.oppositeSegment?.rotation).toBe(0)
+    expect(assembly.roof.children).toHaveLength(2)
+    expect(assembly.oppositeGutter).toBeUndefined()
+    expect(assembly.oppositeDownspout).toBeUndefined()
+    const valleyWorldZ =
+      assembly.segment.position[2] +
+      Math.cos(assembly.segment.rotation) * assembly.gutter.position[2]
+    expect(valleyWorldZ).toBeCloseTo(0)
+    expect(assembly.posts).toHaveLength(6)
+    expect(
+      assembly.posts
+        .filter((post) => managedLeanToPostSide(post) === 'high')
+        .map((post) => post.position[2]),
+    ).toEqual([layout.oppositeBeamZ, layout.oppositeBeamZ, layout.oppositeBeamZ])
+  })
+
+  test('miters both halves of joined gable roofs and joins both eaves', () => {
+    const level = LevelNode.parse({ id: 'level_joined_gables', level: 0 })
+    const first = resolveLeanToFreestandingRunPlacement(level.id, [0, 0], [4, 0], false, 'gable')!
+    const second = resolveLeanToFreestandingRunPlacement(level.id, [4, 0], [4, 4], false, 'gable')!
+    const nodes = Object.fromEntries(
+      [level, first, second].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const assembly = createLeanToAssembly(first, undefined, nodes)
+    const run = first.projection + first.lowOverhang
+
+    expect(assembly.segment.trim.right).toBeCloseTo(first.rightOverhang)
+    expect(assembly.segment.trim.frontRightX).toBeCloseTo(run)
+    expect(assembly.segment.trim.frontRightZ).toBeCloseTo(run)
+    expect(assembly.segment.trim.backRightX).toBe(0)
+    expect(assembly.gutter.length).toBeCloseTo(first.span + first.leftOverhang - run)
+    expect(assembly.gutter.endCapRight).toBe(false)
+    expect(assembly.oppositeSegment?.width).toBeCloseTo(first.span + first.leftOverhang + run)
+    expect(assembly.oppositeSegment?.trim.backLeftX).toBeCloseTo(run)
+    expect(assembly.oppositeSegment?.trim.backLeftZ).toBeCloseTo(run)
+    expect(assembly.oppositeGutter?.length).toBeCloseTo(first.span + first.leftOverhang + run)
+    expect(assembly.oppositeGutter?.endCapLeft).toBe(false)
+  })
+
+  test('maps a joined butterfly cut onto the rotated roof plane and valley gutter', () => {
+    const level = LevelNode.parse({ id: 'level_joined_butterflies', level: 0 })
+    const first = resolveLeanToFreestandingRunPlacement(
+      level.id,
+      [0, 0],
+      [4, 0],
+      false,
+      'butterfly',
+    )!
+    const second = resolveLeanToFreestandingRunPlacement(
+      level.id,
+      [4, 0],
+      [4, 4],
+      false,
+      'butterfly',
+    )!
+    const nodes = Object.fromEntries(
+      [level, first, second].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const assembly = createLeanToAssembly(first, undefined, nodes)
+    const run = first.projection + first.lowOverhang
+
+    expect(assembly.segment.trim.left).toBeCloseTo(first.rightOverhang)
+    expect(assembly.segment.trim.backLeftX).toBeCloseTo(run)
+    expect(assembly.segment.trim.backLeftZ).toBeCloseTo(run)
+    expect(assembly.oppositeSegment?.width).toBeCloseTo(first.span + first.leftOverhang + run)
+    expect(assembly.oppositeSegment?.trim.frontRightX).toBeCloseTo(run)
+    expect(assembly.oppositeSegment?.trim.frontRightZ).toBeCloseTo(run)
+    expect(assembly.gutter.length).toBeCloseTo(first.span + first.leftOverhang)
+    expect(assembly.gutter.endCapLeft).toBe(false)
+  })
+
+  test.each([
+    'gable',
+    'butterfly',
+  ] as const)('replaces duplicate %s corner posts with one shared post on each support row', (canopyForm) => {
+    const level = LevelNode.parse({ id: `level_${canopyForm}_shared_posts`, level: 0 })
+    const first = resolveLeanToFreestandingRunPlacement(
+      level.id,
+      [0, 0],
+      [8, 0],
+      false,
+      canopyForm,
+    )!
+    const second = resolveLeanToFreestandingRunPlacement(
+      level.id,
+      [8, 0],
+      [8, 8],
+      false,
+      canopyForm,
+    )!
+    const nodes = Object.fromEntries(
+      [level, first, second].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const assemblies = [
+      createLeanToAssembly(first, undefined, nodes),
+      createLeanToAssembly(second, undefined, nodes),
+    ]
+    const posts = assemblies.flatMap((assembly) => assembly.posts)
+    const sharedPosts = posts.filter((post) => {
+      const index = managedLeanToPostIndex(post)
+      return index === leanToCornerPostIndex('left') || index === leanToCornerPostIndex('right')
+    })
+
+    expect(posts).toHaveLength(resolveLeanToLayout(first).postXs.length * 4 - 2)
+    expect(sharedPosts).toHaveLength(2)
+    expect(sharedPosts.map(managedLeanToPostSide).sort()).toEqual(['high', 'low'])
+  })
+
+  test('joins every valid freestanding direction for every canopy form', () => {
+    for (const canopyForm of ['mono', 'gable', 'butterfly'] as const) {
+      for (const turnDirection of [-1, 1] as const) {
+        for (const turnDegrees of [0, 5, 15, 25, 45, 90, 135, 155, 165, 175]) {
+          const level = LevelNode.parse({
+            id: `level_${canopyForm}_${turnDirection}_${turnDegrees}`,
+            level: 0,
+          })
+          const radians = (turnDirection * turnDegrees * Math.PI) / 180
+          const joint: [number, number] = [100, 0]
+          const end: [number, number] = [
+            joint[0] + 100 * Math.cos(radians),
+            joint[1] + 100 * Math.sin(radians),
+          ]
+          const first = resolveLeanToFreestandingRunPlacement(
+            level.id,
+            [0, 0],
+            joint,
+            false,
+            canopyForm,
+          )!
+          const second = resolveLeanToFreestandingRunPlacement(
+            level.id,
+            joint,
+            end,
+            false,
+            canopyForm,
+          )!
+          const nodes = Object.fromEntries(
+            [level, first, second].map((node) => [node.id, node]),
+          ) as Record<string, AnyNode>
+          const firstAssembly = createLeanToAssembly(first, undefined, nodes)
+          const secondAssembly = createLeanToAssembly(second, undefined, nodes)
+
+          if (canopyForm === 'butterfly') {
+            expect(firstAssembly.gutter.endCapLeft).toBe(false)
+            expect(secondAssembly.gutter.endCapRight).toBe(false)
+          } else {
+            expect(firstAssembly.gutter.endCapRight).toBe(false)
+            expect(secondAssembly.gutter.endCapLeft).toBe(false)
+          }
+          if (canopyForm === 'mono' && turnDegrees === 0) {
+            expect(firstAssembly.segment.trim.right).toBeCloseTo(first.rightOverhang)
+            expect(secondAssembly.segment.trim.left).toBeCloseTo(second.leftOverhang)
+          }
+          if (canopyForm === 'gable') {
+            expect(firstAssembly.oppositeGutter?.endCapLeft).toBe(false)
+            expect(secondAssembly.oppositeGutter?.endCapRight).toBe(false)
+          }
+        }
+      }
+    }
   })
 })
