@@ -47,6 +47,7 @@ import {
   parseRoofFootprintSource,
   type RoofFootprintTarget,
   resolveRoofFootprintElevation,
+  resolveRoofFootprintWorldElevation,
   resolveRoofWallTopWorldElevation,
   resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
@@ -986,7 +987,7 @@ export const RoofTool: React.FC = () => {
         : previewWallHeight
   const ghostBaseY =
     footprintSource !== 'draw' && footprintTarget && currentLevelId
-      ? resolveRoofFootprintElevation(currentLevelId, footprintTarget, nodes)
+      ? resolveRoofFootprintWorldElevation(currentLevelId, footprintTarget, nodes)
       : conicalPlacement?.valid === true
         ? conicalPlacement.position[1]
         : levelY

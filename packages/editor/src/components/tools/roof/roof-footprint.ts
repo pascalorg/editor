@@ -200,6 +200,19 @@ export function resolveRoofFootprintElevation(
   )
 }
 
+export function resolveRoofFootprintWorldElevation(
+  targetLevelId: LevelNode['id'],
+  target: RoofFootprintTarget,
+  nodes: Readonly<Record<string, AnyNode>>,
+): number {
+  const completeNodes = nodes as Record<string, AnyNode>
+  const elevations = getLevelElevations(completeNodes)
+  return (
+    (elevations.get(targetLevelId)?.baseY ?? 0) +
+    resolveRoofFootprintElevation(targetLevelId, target, nodes)
+  )
+}
+
 export function resolveRoofWallTopElevation(
   targetLevelId: LevelNode['id'],
   wall: WallNode,

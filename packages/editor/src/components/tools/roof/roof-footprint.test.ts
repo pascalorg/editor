@@ -4,6 +4,7 @@ import {
   fitRoofFootprint,
   parseRoofFootprintSource,
   resolveRoofFootprintElevation,
+  resolveRoofFootprintWorldElevation,
   resolveRoofWallTopWorldElevation,
   resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
@@ -128,6 +129,7 @@ describe('roof footprint sources', () => {
     )
 
     expect(target && resolveRoofFootprintElevation(activeLevel.id, target, nodes)).toBe(0)
+    expect(target && resolveRoofFootprintWorldElevation(activeLevel.id, target, nodes)).toBe(3)
   })
 
   test('keeps a lower-level curved wall hover ghost in the active level world frame', () => {
