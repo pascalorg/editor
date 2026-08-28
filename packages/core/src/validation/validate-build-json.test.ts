@@ -126,3 +126,48 @@ describe('validateBuildJson with registered plugin kinds', () => {
     expect(result.schemaIssues[0]?.nodeType).toBe('trees:tree')
   })
 })
+
+describe('scene materials', () => {
+  const minimalGraph = () => ({
+    nodes: {
+      building_1: { id: 'building_1', type: 'building', children: ['level_1'] },
+      level_1: { id: 'level_1', type: 'level', children: [] },
+    },
+    rootNodeIds: ['building_1'],
+  })
+
+  test('carries valid materials through to parsed', () => {
+    const result = validateBuildJson({
+      ...minimalGraph(),
+      materials: {
+        mat_a: {
+          id: 'mat_a',
+          name: 'Measured cabinet',
+          material: { properties: { color: '#595c5a' } },
+        },
+      },
+    })
+    expect(result.ok).toBe(true)
+    expect(result.parsed?.materials?.mat_a?.name).toBe('Measured cabinet')
+  })
+
+  test('skips invalid material entries with a warning, keeps the rest', () => {
+    const result = validateBuildJson({
+      ...minimalGraph(),
+      materials: {
+        mat_ok: { id: 'mat_ok', name: 'Fine', material: {} },
+        mat_bad: { name: 42 },
+      },
+    })
+    expect(result.ok).toBe(true)
+    expect(Object.keys(result.parsed?.materials ?? {})).toEqual(['mat_ok'])
+    expect(result.warnings.some((w) => w.code === 'invalid_materials')).toBe(true)
+  })
+
+  test('warns when materials is not an object', () => {
+    const result = validateBuildJson({ ...minimalGraph(), materials: 'nope' })
+    expect(result.ok).toBe(true)
+    expect(result.parsed?.materials).toBeUndefined()
+    expect(result.warnings.some((w) => w.code === 'invalid_materials')).toBe(true)
+  })
+})

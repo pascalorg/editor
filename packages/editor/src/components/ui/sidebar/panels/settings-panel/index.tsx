@@ -2,6 +2,7 @@ import {
   clearSceneHistory,
   emitter,
   useScene,
+  type ParsedBuildJson,
   validateBuildJson,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -287,16 +288,16 @@ export function SettingsPanel({
     e.target.value = ''
   }
 
-  const handleConfirmImport = (parsed: {
-    nodes: Record<string, unknown>
-    rootNodeIds: string[]
-    installedPlugins?: string[]
-  }) => {
+  const handleConfirmImport = (parsed: ParsedBuildJson) => {
     const currentScene = useScene.getState()
     setScene(
       parsed.nodes as Parameters<typeof setScene>[0],
       parsed.rootNodeIds as Parameters<typeof setScene>[1],
       {
+        // Without this, every `scene:<id>` slot ref in the imported file
+        // pointed at a material that no longer existed — custom finishes
+        // silently reverted to defaults on import.
+        materials: parsed.materials,
         installedPlugins: parsed.installedPlugins ?? currentScene.installedPlugins,
         hasExplicitPluginInstallState:
           parsed.installedPlugins !== undefined || currentScene.hasExplicitPluginInstallState,
