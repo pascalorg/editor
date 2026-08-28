@@ -1,8 +1,26 @@
+import type { AnyNode } from '@pascal-app/core'
+
 export function snapCabinetFootprintCenter(value: number, extent: number, step: number): number {
   if (step <= 0) return value
   const halfExtent = extent / 2
   const offset = ((halfExtent % step) + step) % step
   return Math.round((value - offset) / step) * step + offset
+}
+
+/** Resolve the XZ frame of a level from scene data, without consulting the
+ * mounted Three.js registry. Levels inherit their plan transform from their
+ * building; an unparented or unavailable level uses the plan origin. */
+export function resolveCabinetLevelPlanFrame(
+  levelId: string,
+  nodes: Readonly<Record<string, AnyNode>>,
+): { position: [number, number]; rotationY: number } {
+  const level = nodes[levelId]
+  const building = level?.parentId ? nodes[level.parentId] : undefined
+  if (building?.type !== 'building') return { position: [0, 0], rotationY: 0 }
+  return {
+    position: [building.position[0], building.position[2]],
+    rotationY: building.rotation[1],
+  }
 }
 
 export function resolveCabinetGridPosition({

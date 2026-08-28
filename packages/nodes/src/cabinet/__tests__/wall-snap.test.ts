@@ -93,7 +93,7 @@ describe('curved cabinet wall snap', () => {
       depth: 0.58,
     })
     const nodes = { ...wallNodes, [cabinet.id]: cabinet } as Record<AnyNodeId, AnyNode>
-    const groupMoveSnap = cabinetDefinition.capabilities?.movable?.groupMoveSnap
+    const groupMoveSnap = cabinetDefinition.capabilities?.movable?.groupMoveSnapPose
 
     expect(groupMoveSnap).toBeFunction()
     const snapped = groupMoveSnap!({

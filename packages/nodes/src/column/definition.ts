@@ -373,7 +373,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     movable: {
       axes: ['x', 'z'],
       gridSnap: true,
-      groupMoveSnap: resolveColumnStructuralGridMoveSnap,
+      groupMoveSnapPose: resolveColumnStructuralGridMoveSnap,
     },
     slots: (node) => columnSlots(node as ColumnNodeType),
     paint: columnPaint,

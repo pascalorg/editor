@@ -13,6 +13,7 @@ import {
   emitter,
   footprintAABBFrom,
   type GridEvent,
+  type GroupMoveSnapResult,
   getFloorPlacedFootprints,
   movingFootprintAnchors,
   type NodeEvent,
@@ -391,6 +392,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // to settle a dragged run flush against a wall without forking the move tool.
   const groupMoveSnapConfig =
     nodeRegistry.get(node.type)?.capabilities?.movable?.groupMoveSnap ?? null
+  const groupMoveSnapPoseConfig =
+    nodeRegistry.get(node.type)?.capabilities?.movable?.groupMoveSnapPose ?? null
   const gridSnapPositionConfig =
     nodeRegistry.get(node.type)?.capabilities?.movable?.gridSnapPosition ?? null
   // Mirrors of `valid` / Alt for the event handlers inside the effect, which
@@ -654,9 +657,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
               }
             : undefined,
         resolveAttachment:
-          attachmentEnabled && groupMoveSnapConfig
+          attachmentEnabled && (groupMoveSnapPoseConfig || groupMoveSnapConfig)
             ? ([planX, planZ]) => {
-                const snappedPosition = groupMoveSnapConfig({
+                const snapArgs: Parameters<NonNullable<typeof groupMoveSnapPoseConfig>>[0] = {
                   node,
                   candidatePosition: canonicalPositionFromPlan(planX, originalPosition[1], planZ),
                   candidateRotation: rotationRef.current,
@@ -666,7 +669,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
                     (useViewer.getState().selection.levelId as AnyNodeId | null) ??
                     (node.parentId as AnyNodeId | undefined) ??
                     null,
-                })
+                }
+                const snappedPosition: GroupMoveSnapResult | null = groupMoveSnapPoseConfig
+                  ? groupMoveSnapPoseConfig(snapArgs)
+                  : (() => {
+                      const position = groupMoveSnapConfig?.(snapArgs)
+                      return position ? { position } : null
+                    })()
                 if (!snappedPosition) return null
                 attachmentRotationY = snappedPosition.rotation ?? null
                 const snappedPlanPosition = getVisualPosition(
@@ -1127,6 +1136,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     cursorAttached,
     portSnapConfig,
     groupMoveSnapConfig,
+    groupMoveSnapPoseConfig,
     gridSnapPositionConfig,
     exitMoveMode,
     isFreshPlacement,

@@ -16,7 +16,6 @@ import {
   nodeRegistry,
   resolveAlignment,
   resolveSupportSlabPatch,
-  sceneRegistry,
   spatialGridManager,
   useScene,
   type WallEvent,
@@ -74,7 +73,11 @@ import {
   cabinetRunFootprint,
 } from './definition'
 import { buildCabinetGeometry } from './geometry'
-import { resolveCabinetGridPosition, resolveCabinetGridPositionInFrame } from './placement-snap'
+import {
+  resolveCabinetGridPosition,
+  resolveCabinetGridPositionInFrame,
+  resolveCabinetLevelPlanFrame,
+} from './placement-snap'
 import useCabinetPlacementStatus from './placement-status'
 import useCabinetPlacementType from './placement-type'
 import { cabinetPresetById } from './presets'
@@ -485,22 +488,15 @@ const CabinetTool = () => {
       bypassGrid = false,
     ): [number, number, number] => {
       const step = !bypassGrid && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
-      const levelObject = sceneRegistry.nodes.get(activeLevelId)
-      if (step > 0 && levelObject) {
-        levelObject.updateWorldMatrix(true, false)
-        const framePosition = levelObject.getWorldPosition(new Vector3())
-        const frameQuaternion = levelObject.getWorldQuaternion(new Quaternion())
-        const frameRotationY = Math.atan2(
-          2 * (frameQuaternion.w * frameQuaternion.y + frameQuaternion.x * frameQuaternion.z),
-          1 - 2 * (frameQuaternion.y * frameQuaternion.y + frameQuaternion.z * frameQuaternion.z),
-        )
+      if (step > 0) {
+        const frame = resolveCabinetLevelPlanFrame(activeLevelId, useScene.getState().nodes)
         return resolveCabinetGridPositionInFrame({
           raw,
           dimensions: placementSnapFootprint.dimensions,
           footprintOffset: placementSnapFootprint.offset,
           yaw: yawRef.current,
           step,
-          frame: { position: [framePosition.x, framePosition.z], rotationY: frameRotationY },
+          frame,
         })
       }
       return resolveCabinetGridPosition({
@@ -599,7 +595,7 @@ const CabinetTool = () => {
       const nodes = useScene.getState().nodes
       const wallPlacement = resolveCabinetWallSnapPlacementInScene({
         depth: previewNode.depth,
-        gridStep: 0,
+        gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
         hit,
         nodes,
         parentLevelId: activeLevelId as AnyNodeId,

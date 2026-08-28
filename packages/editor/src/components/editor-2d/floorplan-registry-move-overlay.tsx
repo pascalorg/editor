@@ -9,6 +9,7 @@ import {
   createSceneApi,
   emitter,
   type FloorplanMoveTargetSession,
+  type GroupMoveSnapResult,
   nodeRegistry,
   pauseSceneHistory,
   resumeSceneHistory,
@@ -595,6 +596,7 @@ export function FloorplanRegistryMoveOverlay() {
       const snap = (value: number) =>
         isGridSnapActive() ? Math.round(value / gridStep) * gridStep : value
       const groupMoveSnap = def?.capabilities?.movable?.groupMoveSnap
+      const groupMoveSnapPose = def?.capabilities?.movable?.groupMoveSnapPose
       const gridSnapPosition = def?.capabilities?.movable?.gridSnapPosition
       const attachmentEnabled = isGridSnapActive() || isMagneticSnapActive()
       let attachmentRotation: number | null = null
@@ -623,9 +625,9 @@ export function FloorplanRegistryMoveOverlay() {
               }
             : undefined,
         resolveAttachment:
-          attachmentEnabled && groupMoveSnap
+          attachmentEnabled && (groupMoveSnapPose || groupMoveSnap)
             ? ([planX, planZ]) => {
-                const snappedPosition = groupMoveSnap({
+                const snapArgs: Parameters<NonNullable<typeof groupMoveSnapPose>>[0] = {
                   node: movingNode,
                   candidatePosition: [planX, originalPosition[1], planZ],
                   candidateRotation: currentRotation,
@@ -635,7 +637,13 @@ export function FloorplanRegistryMoveOverlay() {
                     (useViewer.getState().selection.levelId as AnyNodeId | null) ??
                     (movingNode.parentId as AnyNodeId | undefined) ??
                     null,
-                })
+                }
+                const snappedPosition: GroupMoveSnapResult | null = groupMoveSnapPose
+                  ? groupMoveSnapPose(snapArgs)
+                  : (() => {
+                      const position = groupMoveSnap?.(snapArgs)
+                      return position ? { position } : null
+                    })()
                 if (!snappedPosition) return null
                 attachmentRotation = snappedPosition.rotation ?? null
                 return [snappedPosition.position[0], snappedPosition.position[2]]

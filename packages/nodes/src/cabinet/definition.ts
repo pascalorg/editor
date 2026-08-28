@@ -2092,7 +2092,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       directDrag: true,
       gridSnap: true,
       gridSnapPosition: resolveCabinetMoveGridSnap,
-      groupMoveSnap: resolveCabinetGroupMoveSnap,
+      groupMoveSnapPose: resolveCabinetGroupMoveSnap,
       override: ({ node }) =>
         selectionProxyIdFromMetadata((node as { metadata?: unknown }).metadata)
           ? { axes: [], gridSnap: false }
@@ -2289,7 +2289,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       directDrag: true,
       gridSnap: true,
       parentFrame: cabinetModuleParentFrame,
-      groupMoveSnap: resolveCabinetModuleGroupMoveSnap,
+      groupMoveSnapPose: resolveCabinetModuleGroupMoveSnap,
       override: ({ node }) =>
         selectionProxyIdFromMetadata((node as { metadata?: unknown }).metadata)
           ? { axes: [], gridSnap: false }

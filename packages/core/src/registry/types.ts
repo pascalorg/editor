@@ -1954,12 +1954,15 @@ export type MovableConfig = {
   parentFrame?: MovableParentFrame
   /**
    * Optional group-move snap for the generic multi-selection translate gizmo.
-   * Returns an adjusted candidate pose for this node when the moving group
-   * should magnetically settle onto a nearby feature. `rotation` is an
-   * optional level-frame Y yaw for attachments that also own facing, such as a
-   * cabinet run turning to face a wall.
+   * Returns an adjusted candidate position for this node when the moving
+   * group should magnetically settle onto a nearby feature.
    */
-  groupMoveSnap?: (args: GroupMoveSnapArgs) => GroupMoveSnapResult | null
+  groupMoveSnap?: (args: GroupMoveSnapArgs) => [number, number, number] | null
+  /**
+   * Optional rotation-aware group-move snap. This is additive to the original
+   * `groupMoveSnap` contract so existing v1 plugins remain valid.
+   */
+  groupMoveSnapPose?: (args: GroupMoveSnapArgs) => GroupMoveSnapResult | null
   /**
    * Kind-owned grid resolver for a planar move. Unlike scalar grid snapping,
    * this receives the complete candidate pose so a kind can snap a visible
@@ -2031,7 +2034,7 @@ export type ParentFrameSnapMatch = {
 export type GroupMoveSnapArgs = {
   node: AnyNode
   candidatePosition: [number, number, number]
-  candidateRotation: number
+  candidateRotation?: number
   movingIds: readonly AnyNodeId[]
   nodes: Readonly<Record<string, AnyNode>>
   levelId: AnyNodeId | null
@@ -2042,7 +2045,8 @@ export type GroupMoveSnapResult = {
   rotation?: number
 }
 
-export type GridSnapPositionArgs = GroupMoveSnapArgs & {
+export type GridSnapPositionArgs = Omit<GroupMoveSnapArgs, 'candidateRotation'> & {
+  candidateRotation: number
   gridStep: number
 }
 

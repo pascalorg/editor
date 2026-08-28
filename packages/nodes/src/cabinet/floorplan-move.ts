@@ -158,6 +158,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
         )
         const wallLocal = resolveCabinetModuleWallSnapLocal({
           candidateLocal: rawLocal,
+          gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
           module: node,
           nodes: useScene.getState().nodes,
           parentLevelId: run.parentId as AnyNodeId,
