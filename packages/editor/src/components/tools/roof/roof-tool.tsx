@@ -692,7 +692,9 @@ export const RoofTool: React.FC = () => {
         const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
         if (footprintSource === 'room') {
           updateFootprintPreview(
-            resolveRoomRoofFootprint(currentLevelId, useScene.getState().nodes, rawPoint),
+            resolveRoomRoofFootprint(currentLevelId, useScene.getState().nodes, rawPoint, {
+              rectangularOnly: true,
+            }),
           )
         }
         cursorRef.current.position.set(
@@ -741,10 +743,12 @@ export const RoofTool: React.FC = () => {
 
       if (footprintSource !== 'draw') {
         if (footprintSource !== 'room') return
-        const target = resolveRoomRoofFootprint(currentLevelId, useScene.getState().nodes, [
-          event.localPosition[0],
-          event.localPosition[2],
-        ])
+        const target = resolveRoomRoofFootprint(
+          currentLevelId,
+          useScene.getState().nodes,
+          [event.localPosition[0], event.localPosition[2]],
+          { rectangularOnly: true },
+        )
         if (!target) return
         const roofId = commitRoofFootprint(currentLevelId, target, quarterTurnRef.current)
         if (roofId) setSelection({ selectedIds: [roofId] })

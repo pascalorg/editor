@@ -52,6 +52,20 @@ describe('roof footprint sources', () => {
     expect(target?.rectangular).toBe(false)
   })
 
+  test('rejects curved and irregular rooms for rectangular-only roof footprints', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ start: [4, 0], end: [4, 2] }),
+      WallNode.parse({ start: [4, 2], end: [2, 3] }),
+      WallNode.parse({ start: [2, 3], end: [0, 2] }),
+      WallNode.parse({ start: [0, 2], end: [0, 0] }),
+    ]
+    const level = LevelNode.parse({ children: walls.map((wall) => wall.id) })
+    const nodes = Object.fromEntries([level, ...walls].map((node) => [node.id, node]))
+
+    expect(resolveRoomRoofFootprint(level.id, nodes, [2, 1], { rectangularOnly: true })).toBeNull()
+  })
+
   test('resolves the enclosed room beneath the pointer', () => {
     const walls = [
       WallNode.parse({ start: [0, 0], end: [4, 0] }),

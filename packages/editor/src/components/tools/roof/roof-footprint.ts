@@ -168,11 +168,18 @@ export function resolveRoomRoofFootprint(
   levelId: LevelNode['id'],
   nodes: Readonly<Record<string, AnyNode>>,
   point: [number, number],
+  options: { rectangularOnly?: boolean } = {},
 ): RoofFootprintTarget | null {
   const activeTarget = resolveRoomRoofFootprintOnLevel(levelId, nodes, point)
-  if (activeTarget) return activeTarget
+  if (activeTarget && (!options.rectangularOnly || activeTarget.rectangular)) return activeTarget
+  if (activeTarget) return null
   const levelBelow = getLevelBelow(levelId, nodes as Record<string, AnyNode>)
-  return levelBelow ? resolveRoomRoofFootprintOnLevel(levelBelow.id, nodes, point) : null
+  const levelBelowTarget = levelBelow
+    ? resolveRoomRoofFootprintOnLevel(levelBelow.id, nodes, point)
+    : null
+  return levelBelowTarget && (!options.rectangularOnly || levelBelowTarget.rectangular)
+    ? levelBelowTarget
+    : null
 }
 
 export function resolveRoofFootprintElevation(
