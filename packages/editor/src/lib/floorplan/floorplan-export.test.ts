@@ -320,43 +320,37 @@ describe('resolveFloorplanPageLayout', () => {
 })
 
 describe('isFloorplanNodeInExportScope', () => {
-  const node = (category?: NodeCategory) => ({ category })
+  const definition = (category?: NodeCategory) => ({ category })
 
-  test('includes structure-category nodes under structure, routing, and full', () => {
-    expect(isFloorplanNodeInExportScope(node('structure'), 'structure')).toBe(true)
-    expect(isFloorplanNodeInExportScope(node('structure'), 'routing')).toBe(true)
-    expect(isFloorplanNodeInExportScope(node('structure'), 'full')).toBe(true)
+  test('includes structure-category nodes under structure and full', () => {
+    expect(isFloorplanNodeInExportScope(definition('structure'), 'structure')).toBe(true)
+    expect(isFloorplanNodeInExportScope(definition('structure'), 'full')).toBe(true)
   })
 
-  test('includes utility-category nodes under routing and full, not structure', () => {
-    expect(isFloorplanNodeInExportScope(node('utility'), 'routing')).toBe(true)
-    expect(isFloorplanNodeInExportScope(node('utility'), 'full')).toBe(true)
-    expect(isFloorplanNodeInExportScope(node('utility'), 'structure')).toBe(false)
+  test('excludes utility-category nodes under structure', () => {
+    expect(isFloorplanNodeInExportScope(definition('utility'), 'full')).toBe(true)
+    expect(isFloorplanNodeInExportScope(definition('utility'), 'structure')).toBe(false)
   })
 
   test('includes furnish-category nodes only under full', () => {
-    expect(isFloorplanNodeInExportScope(node('furnish'), 'full')).toBe(true)
-    expect(isFloorplanNodeInExportScope(node('furnish'), 'structure')).toBe(false)
-    expect(isFloorplanNodeInExportScope(node('furnish'), 'routing')).toBe(false)
+    expect(isFloorplanNodeInExportScope(definition('furnish'), 'full')).toBe(true)
+    expect(isFloorplanNodeInExportScope(definition('furnish'), 'structure')).toBe(false)
   })
 
   test('includes analysis and site-category nodes only under full', () => {
     for (const category of ['analysis', 'site'] as const) {
-      expect(isFloorplanNodeInExportScope(node(category), 'full')).toBe(true)
-      expect(isFloorplanNodeInExportScope(node(category), 'structure')).toBe(false)
-      expect(isFloorplanNodeInExportScope(node(category), 'routing')).toBe(false)
+      expect(isFloorplanNodeInExportScope(definition(category), 'full')).toBe(true)
+      expect(isFloorplanNodeInExportScope(definition(category), 'structure')).toBe(false)
     }
   })
 
   test('excludes nodes with no category except under full', () => {
-    expect(isFloorplanNodeInExportScope(node(undefined), 'full')).toBe(true)
-    expect(isFloorplanNodeInExportScope(node(undefined), 'structure')).toBe(false)
-    expect(isFloorplanNodeInExportScope(node(undefined), 'routing')).toBe(false)
+    expect(isFloorplanNodeInExportScope(definition(undefined), 'full')).toBe(true)
+    expect(isFloorplanNodeInExportScope(definition(undefined), 'structure')).toBe(false)
   })
 
   test('handles an undefined definition like a no-category node', () => {
     expect(isFloorplanNodeInExportScope(undefined, 'full')).toBe(true)
     expect(isFloorplanNodeInExportScope(undefined, 'structure')).toBe(false)
-    expect(isFloorplanNodeInExportScope(undefined, 'routing')).toBe(false)
   })
 })
