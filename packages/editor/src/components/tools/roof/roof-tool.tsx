@@ -10,7 +10,6 @@ import {
   getWallArcData,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
-  isCurvedWall,
   type LevelNode,
   RoofNode,
   type RoofPlacementMode,
@@ -44,6 +43,7 @@ import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../stor
 import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 import {
+  isStandardRoofWallEligible,
   parseRoofFootprintSource,
   type RoofFootprintTarget,
   resolveRoofFootprintElevation,
@@ -125,7 +125,7 @@ function getRoofSnapWalls(
     ...getLevelWalls(currentLevelId, nodes),
     ...getBelowLevelWalls(currentLevelId, nodes),
   ]
-  return roofType === 'conical' ? walls : walls.filter((wall) => !isCurvedWall(wall))
+  return roofType === 'conical' ? walls : walls.filter(isStandardRoofWallEligible)
 }
 
 // Current-level alignment anchors plus the floor-below wall corners.
@@ -143,7 +143,7 @@ function collectRoofAlignmentAnchors(
   if (roofType === 'conical') return anchors
   return anchors.filter((anchor) => {
     const node = nodes[anchor.nodeId]
-    return node?.type !== 'wall' || !isCurvedWall(node)
+    return node?.type !== 'wall' || isStandardRoofWallEligible(node)
   })
 }
 

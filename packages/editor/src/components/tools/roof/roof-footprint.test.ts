@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { emitter, LevelNode, type WallEvent, WallNode } from '@pascal-app/core'
 import {
   fitRoofFootprint,
+  isStandardRoofWallEligible,
   parseRoofFootprintSource,
   resolveRoofFootprintElevation,
   resolveRoofFootprintWorldElevation,
@@ -51,6 +52,15 @@ describe('roof footprint sources', () => {
       [],
     )
     expect(target?.rectangular).toBe(false)
+  })
+
+  test('only treats axis-aligned straight walls as standard-roof draw guides', () => {
+    expect(isStandardRoofWallEligible(WallNode.parse({ start: [0, 0], end: [4, 0] }))).toBe(true)
+    expect(isStandardRoofWallEligible(WallNode.parse({ start: [0, 0], end: [0, 4] }))).toBe(true)
+    expect(isStandardRoofWallEligible(WallNode.parse({ start: [0, 0], end: [4, 3] }))).toBe(false)
+    expect(
+      isStandardRoofWallEligible(WallNode.parse({ start: [-2, 0], end: [2, 0], curveOffset: 2 })),
+    ).toBe(false)
   })
 
   test('keeps an L-shaped room available as straight-wall draw guides but not a room footprint', () => {

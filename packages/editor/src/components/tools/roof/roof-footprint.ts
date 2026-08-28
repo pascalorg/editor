@@ -28,6 +28,15 @@ export type RoofFootprintTarget = {
   rectangular: boolean
 }
 
+const ROOF_AXIS_ALIGNMENT_EPSILON = 1e-4
+
+export function isStandardRoofWallEligible(wall: WallNode): boolean {
+  if (isCurvedWall(wall)) return false
+  const deltaX = Math.abs(wall.end[0] - wall.start[0])
+  const deltaZ = Math.abs(wall.end[1] - wall.start[1])
+  return deltaX <= ROOF_AXIS_ALIGNMENT_EPSILON || deltaZ <= ROOF_AXIS_ALIGNMENT_EPSILON
+}
+
 export function isConicalRoofWallEligible(
   targetLevelId: LevelNode['id'],
   wall: WallNode,
