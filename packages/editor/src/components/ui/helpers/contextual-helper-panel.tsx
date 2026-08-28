@@ -90,6 +90,7 @@ function ShortcutSequence({
 function ChipRow({
   ariaLabel,
   disabled = false,
+  guideTarget,
   icon,
   label,
   onClick,
@@ -98,6 +99,11 @@ function ChipRow({
 }: {
   ariaLabel?: string
   disabled?: boolean
+  /**
+   * A static hook for a host app's first-run tour to point at, written to
+   * `data-guide-target`. Nothing here reads it.
+   */
+  guideTarget?: string
   icon?: string
   label: string
   onClick?: () => void
@@ -130,6 +136,7 @@ function ChipRow({
         'pointer-events-auto cursor-pointer items-center rounded-md text-left transition-colors hover:bg-muted/60',
         disabled && 'opacity-45 saturate-0',
       )}
+      data-guide-target={guideTarget}
       onClick={onClick}
       type="button"
     >
@@ -181,6 +188,7 @@ function SnappingChips({ context }: { context: SnapContext }) {
     <>
       <ChipRow
         ariaLabel={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        guideTarget="snap-mode"
         icon={SNAPPING_MODE_ICONS[snappingMode]}
         label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
         onClick={() => {
@@ -193,6 +201,7 @@ function SnappingChips({ context }: { context: SnapContext }) {
       {gridActive ? (
         <ChipRow
           ariaLabel={`Grid step: ${gridSnapStep.toFixed(2)} m`}
+          guideTarget="snap-grid-step"
           label={`Grid: ${gridSnapStep.toFixed(2)} m`}
           onClick={() => {
             setGridSnapStep(nextGridSnapStep(gridSnapStep))
