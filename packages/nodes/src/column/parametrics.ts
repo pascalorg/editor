@@ -1,5 +1,5 @@
 import type { ParametricDescriptor } from '@pascal-app/core'
-import { leanToPostOmissionPatchesOnDelete } from '../lean-to-extension/post-omissions'
+import { leanToPostOmissionPatchesOnDelete } from '../shared/lean-to-post-omissions'
 import type { ColumnNode } from './schema'
 
 /**

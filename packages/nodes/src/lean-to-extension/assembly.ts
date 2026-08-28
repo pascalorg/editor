@@ -22,6 +22,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { resolveEaveSnap } from '../gutter/eave-snap'
+import { isLeanToPostOmitted } from '../shared/lean-to-post-omissions'
 import { getRoofTopSurfaceY } from '../shared/roof-surface'
 import { bendLocalPoint, bendRotationYAtLocalX, isCurvedLeanTo } from './arc'
 import {
@@ -42,7 +43,6 @@ import {
   resolveLeanToCornerJoints,
 } from './corner-joint'
 import { isDualSlopeLeanToCanopy, resolveLeanToLayout } from './layout'
-import { isLeanToPostOmitted } from './post-omissions'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
@@ -539,7 +539,9 @@ function joinedNeighborLeanToIds(
     ([side, joint]) => joint?.kind === 'linear' && !cornerJoints[side as LeanToCornerSide],
   )
   const ids = [
-    ...Object.values(cornerJoints).flatMap((joint) => (joint?.neighborId ? [joint.neighborId] : [])),
+    ...Object.values(cornerJoints).flatMap((joint) =>
+      joint?.neighborId ? [joint.neighborId] : [],
+    ),
     ...linearCanopyJoints.flatMap(([, joint]) => (joint?.neighborId ? [joint.neighborId] : [])),
   ]
   return [...new Set(ids)]
@@ -551,10 +553,7 @@ function joinedNeighborLeanToIds(
  * 2, a J is 3, a closed square is 4. Corner mitering is only applied to a pure
  * L (chain of 2); longer chains render as plain overlapping runs.
  */
-function joinedRunChainSize(
-  leanTo: LeanToExtensionNode,
-  nodes?: Record<string, AnyNode>,
-): number {
+function joinedRunChainSize(leanTo: LeanToExtensionNode, nodes?: Record<string, AnyNode>): number {
   if (!nodes) return 1
   const seen = new Set<string>([leanTo.id])
   const queue: LeanToExtensionNode[] = [leanTo]
@@ -646,10 +645,8 @@ export function leanToRoofSegmentLayoutPatch(
   // closed loops render as plain overlapping runs — no footprint shaping, no
   // joint step closures, no corner extension. Curved and wall-attached canopies
   // keep their multi-corner mitering.
-  const isStraightFreestandingMono =
-    leanTo.hostKind === 'freestanding' && !isCurvedLeanTo(leanTo)
-  const miterAcrossCorner =
-    !isStraightFreestandingMono || joinedRunChainSize(leanTo, nodes) <= 2
+  const isStraightFreestandingMono = leanTo.hostKind === 'freestanding' && !isCurvedLeanTo(leanTo)
+  const miterAcrossCorner = !isStraightFreestandingMono || joinedRunChainSize(leanTo, nodes) <= 2
   const segmentExtension = (joint: LeanToCornerJoint | undefined) =>
     !miterAcrossCorner || (leanTo.hostKind === 'freestanding' && joint?.kind === 'concave')
       ? 0

@@ -12,11 +12,11 @@ import {
   type RoofSegmentNode,
   type WallNode,
 } from '@pascal-app/core'
+import { isLeanToPostOmitted } from '../shared/lean-to-post-omissions'
 import { bendLocalPoint, isCurvedLeanTo } from './arc'
 import { resolveFreestandingCanopyJoints } from './canopy-joint'
 import { leanToFacetCount } from './geometry'
 import { isDualSlopeLeanToCanopy, resolveLeanToLayout } from './layout'
-import { isLeanToPostOmitted } from './post-omissions'
 
 function conicalSegmentPlanPose(
   segment: RoofSegmentNode,

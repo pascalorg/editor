@@ -48,7 +48,7 @@ export function parseRoofFootprintSource(value: unknown, roofType: RoofType): Ro
 export function subscribeToConicalRoofWallClicks(options: {
   footprintSource: RoofFootprintSource
   currentLevelId: LevelNode['id'] | null
-  nodes: Readonly<Record<string, AnyNode>>
+  getNodes: () => Readonly<Record<string, AnyNode>>
   onPreview?: (wall: WallNode | null) => void
   onSelect: (wall: WallNode) => void
   roofType: RoofType
@@ -60,7 +60,7 @@ export function subscribeToConicalRoofWallClicks(options: {
     const wall =
       isCurvedWall(event.node) &&
       options.currentLevelId &&
-      isConicalRoofWallEligible(options.currentLevelId, event.node, options.nodes)
+      isConicalRoofWallEligible(options.currentLevelId, event.node, options.getNodes())
         ? event.node
         : null
     const nextId = wall?.id ?? null
@@ -77,7 +77,7 @@ export function subscribeToConicalRoofWallClicks(options: {
     if (
       !isCurvedWall(event.node) ||
       !options.currentLevelId ||
-      !isConicalRoofWallEligible(options.currentLevelId, event.node, options.nodes)
+      !isConicalRoofWallEligible(options.currentLevelId, event.node, options.getNodes())
     ) {
       return
     }

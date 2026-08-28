@@ -3,6 +3,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   collectAlignmentAnchors,
+  createConicalRoofSectorAboveWall,
+  createSceneApi,
   emitter,
   type GridEvent,
   getWallArcData,
@@ -847,7 +849,7 @@ export const RoofTool: React.FC = () => {
     const unsubscribeConicalRoofWallClicks = subscribeToConicalRoofWallClicks({
       footprintSource,
       currentLevelId,
-      nodes,
+      getNodes: () => useScene.getState().nodes,
       onPreview: (wall) => {
         setPreviewedConicalWallId(wall?.id ?? null)
         setPreviewSelectedIds(wall ? [wall.id] : [])
@@ -855,7 +857,13 @@ export const RoofTool: React.FC = () => {
       onSelect: (wall) => {
         setPreviewedConicalWallId(null)
         setPreviewSelectedIds([])
-        setSelection({ selectedIds: [wall.id] })
+        const segmentId = createConicalRoofSectorAboveWall(
+          wall,
+          useScene.getState().nodes,
+          createSceneApi(useScene),
+          currentLevelId as LevelNode['id'],
+        )
+        if (segmentId) setSelection({ selectedIds: [segmentId] })
       },
       roofType,
     })
@@ -878,7 +886,7 @@ export const RoofTool: React.FC = () => {
       draftPreview.setRoofDraftEnd(null)
       draftPreview.setRoofDraftQuarterTurn(false)
     }
-  }, [currentLevelId, footprintSource, nodes, roofType, setPreviewSelectedIds, setSelection])
+  }, [currentLevelId, footprintSource, roofType, setPreviewSelectedIds, setSelection])
 
   const { corner1, cursorPosition, levelY } = preview
 

@@ -6,7 +6,10 @@ import {
   LeanToExtensionNode,
   type LeanToExtensionNode as LeanToNode,
 } from '@pascal-app/core'
-import { isLeanToPostOmitted, leanToPostOmissionPatchesOnDelete } from './post-omissions'
+import {
+  isLeanToPostOmitted,
+  leanToPostOmissionPatchesOnDelete,
+} from '../shared/lean-to-post-omissions'
 
 describe('isLeanToPostOmitted', () => {
   test('treats a legacy node without omission data as having no omitted posts', () => {

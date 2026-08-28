@@ -1,14 +1,10 @@
 'use client'
 
 import {
-  type AnyNodeId,
-  createSceneApi,
-  isCurvedWall,
   nodeRegistry,
   type RoofType,
   RoofType as RoofTypeSchema,
   useRegistryVersion,
-  useScene,
 } from '@pascal-app/core'
 import {
   type FloorplanMode,
@@ -20,8 +16,7 @@ import {
   useEditor,
   useFloorplanMode,
 } from '@pascal-app/editor'
-import { createConicalRoofSectorAboveWall, useLiquidLineToolOptions } from '@pascal-app/nodes'
-import { useViewer } from '@pascal-app/viewer'
+import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import {
@@ -268,15 +263,6 @@ export function BuildTab() {
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
   const roofDefaults = useEditor((s) => s.toolDefaults.roof)
-  const selectedId = useViewer((s) =>
-    s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : undefined,
-  )
-  const currentLevelId = useViewer((s) => s.selection.levelId)
-  const setSelection = useViewer((s) => s.setSelection)
-  const selectedCurvedWall = useScene((s) => {
-    const node = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
-    return node?.type === 'wall' && isCurvedWall(node) ? node : null
-  })
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
@@ -327,45 +313,6 @@ export function BuildTab() {
     activeRoofType,
     roofDefaults?.footprintSource,
   )
-
-  const conicalSourceRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (
-      !(
-        mode === 'build' &&
-        activeTool === 'roof' &&
-        activeRoofType === 'conical' &&
-        activeFootprintSource === 'walls' &&
-        currentLevelId
-      )
-    ) {
-      conicalSourceRef.current = null
-      return
-    }
-    if (!selectedCurvedWall) {
-      conicalSourceRef.current = null
-      return
-    }
-    if (conicalSourceRef.current === selectedCurvedWall.id) return
-
-    const segmentId = createConicalRoofSectorAboveWall(
-      selectedCurvedWall,
-      useScene.getState().nodes,
-      createSceneApi(useScene),
-      currentLevelId,
-    )
-    if (!segmentId) return
-    conicalSourceRef.current = selectedCurvedWall.id
-    setSelection({ selectedIds: [segmentId] })
-  }, [
-    activeFootprintSource,
-    activeRoofType,
-    activeTool,
-    currentLevelId,
-    mode,
-    selectedCurvedWall,
-    setSelection,
-  ])
 
   const isTypeActive = (type: BuildType) => {
     if (type.mode) return mode === type.mode

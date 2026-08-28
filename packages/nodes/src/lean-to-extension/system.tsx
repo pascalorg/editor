@@ -13,6 +13,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import { useEffect } from 'react'
+import { isLeanToPostOmitted } from '../shared/lean-to-post-omissions'
 import { bendLocalPoint } from './arc'
 import {
   createManagedLeanToCanopyCornerPost,
@@ -61,7 +62,6 @@ import {
 } from './layout'
 import { reconcileLeanToSlabEdgePlacement } from './placement'
 import { resolveLeanToEndAbutments } from './placement-validation'
-import { isLeanToPostOmitted } from './post-omissions'
 import {
   applyLeanToAvailableWallSpan,
   applyLeanToRoofAttachment,

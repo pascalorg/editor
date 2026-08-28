@@ -77,7 +77,19 @@ function worldToSegmentPlan(
 
 function pointIsInsideSegment(segment: RoofSegmentNode, point: readonly [number, number]): boolean {
   if (segment.roofType === 'conical') {
-    return Math.hypot(point[0], point[1]) <= segment.width / 2 + FOOTPRINT_EPSILON
+    if (Math.hypot(point[0], point[1]) > segment.width / 2 + FOOTPRINT_EPSILON) return false
+    if (segment.conicalFullCircle) return true
+    const start = segment.conicalStartAngle ?? 0
+    const sweep = segment.conicalSweepAngle ?? Math.PI * 2
+    if (Math.abs(sweep) >= Math.PI * 2 - FOOTPRINT_EPSILON) return true
+    const angle = Math.atan2(point[1], point[0])
+    const directedDelta = (from: number, to: number) => {
+      const delta = (to - from) % (Math.PI * 2)
+      return delta < 0 ? delta + Math.PI * 2 : delta
+    }
+    return sweep >= 0
+      ? directedDelta(start, angle) <= sweep + FOOTPRINT_EPSILON
+      : directedDelta(angle, start) <= -sweep + FOOTPRINT_EPSILON
   }
   return (
     Math.abs(point[0]) <= segment.width / 2 + FOOTPRINT_EPSILON &&

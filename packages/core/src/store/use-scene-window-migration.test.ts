@@ -176,4 +176,24 @@ describe('scene window migrations', () => {
     >
     expect(window.dormerFace).toBe('back')
   })
+
+  test('does not recreate an intentionally empty dormer window list', () => {
+    useScene.getState().setScene(
+      {
+        dormer_test: {
+          object: 'node',
+          id: 'dormer_test',
+          type: 'dormer',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          children: [],
+        },
+      } as unknown as Record<string, AnyNode>,
+      ['dormer_test'] as never,
+    )
+
+    const dormer = useScene.getState().nodes.dormer_test as Extract<AnyNode, { type: 'dormer' }>
+    expect(dormer.children).toEqual([])
+  })
 })

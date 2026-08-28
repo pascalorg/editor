@@ -1,6 +1,6 @@
 import type { AnyNode, AnyNodeId, ColumnNode, LeanToExtensionNode } from '@pascal-app/core'
-import type { LeanToPostSide } from './assembly'
-import { resolveLeanToLayout } from './layout'
+import type { LeanToPostSide } from '../lean-to-extension/assembly'
+import { resolveLeanToLayout } from '../lean-to-extension/layout'
 
 function managedPostSlot(column: ColumnNode): { side: LeanToPostSide; index: number } | null {
   const metadata = column.metadata

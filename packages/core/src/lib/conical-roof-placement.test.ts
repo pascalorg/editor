@@ -81,6 +81,35 @@ describe('conical roof placement', () => {
     })
   })
 
+  test('auto mode does not mount a circle through the missing half of a conical sector', () => {
+    const { level, roof, nodes } = sceneWithHost()
+    const sector = RoofSegmentNode.parse({
+      id: 'rseg_host',
+      parentId: roof.id,
+      roofType: 'conical',
+      width: 10,
+      depth: 10,
+      wallHeight: 0,
+      pitch: 45,
+      conicalStartAngle: 0,
+      conicalSweepAngle: Math.PI / 2,
+      conicalFullCircle: false,
+    })
+    const sectorNodes = { ...nodes, [sector.id]: sector }
+
+    const placement = resolveConicalRoofPlacement({
+      nodes: sectorNodes,
+      levelId: level.id,
+      center: [2, 3],
+      radius: 1,
+      curbHeight: 0.5,
+      mode: 'auto',
+    })
+
+    expect(placement.valid).toBe(true)
+    expect(placement.support).toEqual({ kind: 'level' })
+  })
+
   test('roof mode rejects a circle that has no complete roof support', () => {
     const { level, nodes } = sceneWithHost()
     const placement = resolveConicalRoofPlacement({

@@ -805,6 +805,10 @@ function migrateNodes(nodes: Record<string, any>): {
     // default to a real hosted WindowNode so additional windows can use the
     // regular window tool and inspector without changing the old appearance.
     if (node.type === 'dormer') {
+      const hasLegacyInlineWindow = !Array.isArray(
+        (patchedNodes[id] as { children?: unknown }).children,
+      )
+      if (!hasLegacyInlineWindow) continue
       const dormer = DormerNodeSchema.parse({
         ...patchedNodes[id],
         children: getStringArray((patchedNodes[id] as { children?: unknown }).children),

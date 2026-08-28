@@ -144,7 +144,7 @@ describe('roof footprint sources', () => {
     const unsubscribe = subscribeToConicalRoofWallClicks({
       footprintSource: 'walls',
       currentLevelId: level.id,
-      nodes,
+      getNodes: () => nodes,
       onPreview: (previewWall) => previewed.push(previewWall?.id ?? null),
       onSelect: (selectedWall) => selected.push(selectedWall.id),
       roofType: 'conical',
@@ -183,7 +183,7 @@ describe('roof footprint sources', () => {
     const unsubscribe = subscribeToConicalRoofWallClicks({
       footprintSource: 'walls',
       currentLevelId: activeLevel.id,
-      nodes,
+      getNodes: () => nodes,
       onPreview: (previewWall) => previewed.push(previewWall?.id ?? null),
       onSelect: (selectedWall) => selected.push(selectedWall.id),
       roofType: 'conical',

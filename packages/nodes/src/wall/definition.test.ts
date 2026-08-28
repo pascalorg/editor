@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId, SceneApi } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  createConicalRoofSectorAboveWall,
+  RoofNode,
+  RoofSegmentNode,
+  type SceneApi,
+} from '@pascal-app/core'
 import { getFloorplanNodeExtension } from '@pascal-app/editor'
-import { createConicalRoofSectorAboveWall } from './conical-roof'
 import { wallDefinition } from './definition'
 
 test('wallDefinition records the lean-to child schema migration', () => {
@@ -142,6 +148,55 @@ test('curved wall roof builder parents the roof to the active level', () => {
   const createdRoof = created.find((entry) => entry.node.type === 'roof')
   expect(createdRoof?.parentId).toBe(activeLevel.id)
   expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0] })
+})
+
+test('curved wall roof builder reuses its existing hosted roof', () => {
+  const level = {
+    object: 'node',
+    id: 'level_test',
+    type: 'level',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: ['wall_test', 'roof_test'],
+    level: 0,
+    height: 3,
+  } as AnyNode
+  const wall = wallDefinition.schema.parse({
+    id: 'wall_test',
+    parentId: level.id,
+    start: [-2, 0],
+    end: [2, 0],
+    curveOffset: 2,
+    height: 3,
+  })
+  const segment = RoofSegmentNode.parse({
+    id: 'rseg_test',
+    parentId: 'roof_test',
+    roofType: 'conical',
+  })
+  const roof = RoofNode.parse({
+    id: 'roof_test',
+    parentId: level.id,
+    metadata: { conicalSourceWallId: wall.id },
+    children: [segment.id],
+  })
+  const nodes = {
+    [level.id]: level,
+    [wall.id]: wall,
+    [roof.id]: roof,
+    [segment.id]: segment,
+  } as Record<AnyNodeId, AnyNode>
+  const created: AnyNode[] = []
+  const sceneApi = {
+    createMany: (ops) => created.push(...ops.map((op) => op.node)),
+    nodes: () => nodes,
+  } as SceneApi
+
+  expect(createConicalRoofSectorAboveWall(wall, nodes, sceneApi, level.id as AnyNodeId)).toBe(
+    segment.id,
+  )
+  expect(created).toHaveLength(0)
 })
 
 test('curved wall roof builder clamps a lower-floor wall to the active floor', () => {
