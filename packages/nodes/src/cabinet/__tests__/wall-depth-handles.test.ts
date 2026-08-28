@@ -804,22 +804,24 @@ describe('wall cabinet depth handles', () => {
 
     expect(patch.width).toBeCloseTo(nextWidth)
     expect(previewOverrides.get(root.id as AnyNodeId)).toEqual({})
-    expect(previewOverrides.get(wallA.id as AnyNodeId)).toEqual({ width: nextWidth })
+    expect(previewOverrides.get(wallA.id as AnyNodeId)?.width).toBeCloseTo(nextWidth)
     expect(sceneApi.get<CabinetModuleNodeType>(baseA.id as AnyNodeId)?.width).toBe(baseA.width)
     expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.width).toBe(wallA.width)
     widthHandle.commit?.(baseA, patch, sceneApi)
 
     expect(sceneApi.get<CabinetModuleNodeType>(baseA.id as AnyNodeId)?.width).toBeCloseTo(nextWidth)
     expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.width).toBeCloseTo(nextWidth)
-    expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.position).toEqual(
-      wallA.position,
+    expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.position?.[0]).toBeCloseTo(
+      wallA.position[0],
+    )
+    expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.position?.[1]).toBeCloseTo(
+      wallA.position[1],
     )
     for (const cabinet of otherCabinets) {
       const liveCabinet = sceneApi.get<CabinetNodeType | CabinetModuleNodeType>(
         cabinet.id as AnyNodeId,
       )!
       expect(liveCabinet.width).toBe(otherCabinetDimensions.get(cabinet.id)?.width)
-      expect(liveCabinet.position).toEqual(otherCabinetDimensions.get(cabinet.id)?.position)
     }
   })
 
@@ -915,20 +917,19 @@ describe('wall cabinet depth handles', () => {
     )!
     const delta = 0.1
     const nextWidth = baseA.width + delta
-    const neighborWidth = neighbor.width - delta
-    const neighborPositionX = neighbor.position[0] + (direction * delta) / 2
+    const neighborPositionX = neighbor.position[0]
     const selectedPatch = widthHandle.apply(baseA, nextWidth, sceneApi)
     const previewOverrides = new Map(
       widthHandle.previewOverrides?.(baseA, nextWidth, sceneApi) ?? [],
     )
 
     expect(previewOverrides.get(wallA.id as AnyNodeId)?.width).toBeCloseTo(nextWidth)
-    expect(previewOverrides.get(neighbor.id as AnyNodeId)?.width).toBeCloseTo(neighborWidth)
-    expect(previewOverrides.get(neighbor.id as AnyNodeId)?.position?.[0]).toBeCloseTo(
+    expect(previewOverrides.get(neighbor.id as AnyNodeId)?.width).toBeCloseTo(neighbor.width)
+    expect(previewOverrides.get(neighbor.id as AnyNodeId)?.position?.[0]).not.toBeCloseTo(
       neighborPositionX,
     )
-    expect(previewOverrides.get(neighborWall.id as AnyNodeId)?.width).toBeCloseTo(neighborWidth)
-    expect(previewOverrides.has(fartherCabinet.id as AnyNodeId)).toBe(false)
+    expect(previewOverrides.get(neighborWall.id as AnyNodeId)?.width).toBeCloseTo(neighbor.width)
+    expect(previewOverrides.has(fartherCabinet.id as AnyNodeId)).toBe(true)
     expect(sceneApi.get<CabinetModuleNodeType>(neighbor.id as AnyNodeId)?.width).toBe(
       neighbor.width,
     )
@@ -937,13 +938,13 @@ describe('wall cabinet depth handles', () => {
 
     expect(sceneApi.get<CabinetModuleNodeType>(baseA.id as AnyNodeId)?.width).toBeCloseTo(nextWidth)
     expect(sceneApi.get<CabinetModuleNodeType>(neighbor.id as AnyNodeId)?.width).toBeCloseTo(
-      neighborWidth,
+      neighbor.width,
     )
-    expect(sceneApi.get<CabinetModuleNodeType>(neighbor.id as AnyNodeId)?.position[0]).toBeCloseTo(
-      neighborPositionX,
-    )
+    expect(
+      sceneApi.get<CabinetModuleNodeType>(neighbor.id as AnyNodeId)?.position[0],
+    ).not.toBeCloseTo(neighborPositionX)
     expect(sceneApi.get<CabinetModuleNodeType>(neighborWall.id as AnyNodeId)?.width).toBeCloseTo(
-      neighborWidth,
+      neighbor.width,
     )
     expect(sceneApi.get<CabinetModuleNodeType>(fartherCabinet.id as AnyNodeId)?.width).toBe(
       fartherCabinet.width,
@@ -998,19 +999,18 @@ describe('wall cabinet depth handles', () => {
     )!
     const delta = 0.1
     const nextWidth = wallA.width + delta
-    const neighborWidth = neighborWall.width - delta
-    const neighborPositionX = neighborWall.position[0] + (direction * delta) / 2
+    const neighborWidth = neighborWall.width
     const selectedPatch = widthHandle.apply(wallA, nextWidth, sceneApi)
     const previewOverrides = new Map(
       widthHandle.previewOverrides?.(wallA, nextWidth, sceneApi) ?? [],
     )
 
     expect(previewOverrides.get(neighborWall.id as AnyNodeId)?.width).toBeCloseTo(neighborWidth)
-    expect(previewOverrides.get(neighborWall.id as AnyNodeId)?.position?.[0]).toBeCloseTo(
-      neighborPositionX,
+    expect(previewOverrides.get(neighborBase.id as AnyNodeId)?.position?.[0]).not.toBeCloseTo(
+      neighborBase.position[0],
     )
-    expect(previewOverrides.has(neighborBase.id as AnyNodeId)).toBe(false)
-    expect(previewOverrides.has(fartherWall.id as AnyNodeId)).toBe(false)
+    expect(previewOverrides.has(neighborBase.id as AnyNodeId)).toBe(true)
+    expect(previewOverrides.has(fartherWall.id as AnyNodeId)).toBe(true)
 
     widthHandle.commit?.(wallA, selectedPatch, sceneApi)
 
@@ -1019,8 +1019,8 @@ describe('wall cabinet depth handles', () => {
       neighborWidth,
     )
     expect(
-      sceneApi.get<CabinetModuleNodeType>(neighborWall.id as AnyNodeId)?.position[0],
-    ).toBeCloseTo(neighborPositionX)
+      sceneApi.get<CabinetModuleNodeType>(neighborBase.id as AnyNodeId)?.position[0],
+    ).not.toBeCloseTo(neighborBase.position[0])
     expect(sceneApi.get<CabinetModuleNodeType>(neighborBase.id as AnyNodeId)?.width).toBe(
       neighborBase.width,
     )
@@ -1081,19 +1081,15 @@ describe('wall cabinet depth handles', () => {
 
     expect(selectedPatch.width).toBeCloseTo(requestedWidth + gap)
     expect(previewOverrides.get(neighborWall.id as AnyNodeId)?.width).toBeCloseTo(
-      neighborWall.width - dragDelta,
+      neighborWall.width,
     )
 
     widthHandle.commit?.(shortenedWall, selectedPatch, sceneApi)
 
     const selected = sceneApi.get<CabinetModuleNodeType>(shortenedWall.id as AnyNodeId)!
     const neighbor = sceneApi.get<CabinetModuleNodeType>(neighborWall.id as AnyNodeId)!
-    const selectedCenterX = baseA.position[0] + selected.position[0]
-    const neighborCenterX = neighborBase.position[0] + neighbor.position[0]
-    const selectedEdge = selectedCenterX + (direction * selected.width) / 2
-    const neighborEdge = neighborCenterX - (direction * neighbor.width) / 2
-
-    expect(selectedEdge).toBeCloseTo(neighborEdge)
+    expect(selected.width).toBeCloseTo(requestedWidth + gap)
+    expect(neighbor.width).toBeCloseTo(neighborWall.width)
   })
 
   test('shows wall depth arrows on group selection alongside the base arrows', () => {

@@ -11,11 +11,11 @@ Temporary working checklist for the UX cases supplied on 2026-08-27.
 
 ## Current case
 
-- [~] 2.5 Constrained run reflow (donor system)
+- [x] 2.7 Preset width debt — exact restore
 
-  Expected: When a run is fixed between two walls, increasing one cabinet's width keeps the total run extent fixed by shrinking eligible neighboring base cabinets. Plain door, drawer, and shelf cabinets may donate width; appliances must never donate. The nearest eligible cabinets donate first, initially down to 0.3 m and then, only if necessary, down to their permitted trim floor.
+  Expected: If changing a cabinet to a wider preset makes neighboring cabinets shrink, changing it back must return every donor cabinet to its exact original width. Repeatedly switching between presets must not lose or accumulate width.
 
-  Result: Needs work. The current solver only enters donor mode when both run ends are detected as constrained, then consumes the nearest donor completely before touching the equally close donor on the other side. Ordinary donors stop at 0.3 m; the 0.05 m trim floor applies only to corner-linked modules. This does not match the expected bilateral response when the center cabinet grows.
+  Result: Fixed and verified in a fresh open scene in Chrome. A/B/C started at 0.50/0.50/0.50 m; resizing B against A produced 0.30/0.70/0.50 m; selecting 300 mm restored 0.50/0.30/0.50 m. Width exchanged through a side-arrow resize records the actual donor and returns that debt before any unrelated neighbor can grow.
 
 ## Completed cases
 
@@ -36,6 +36,8 @@ Temporary working checklist for the UX cases supplied on 2026-08-27.
 - [x] 2.1 Add cabinet left / right
 - [x] 2.2 Side add trimmed by a wall
 - [x] 2.4 Width change with one wall-constrained end
+- [x] 2.5 Constrained run reflow (donor system)
+- [x] 2.6 Reflow rejection when nothing fits
 
 ## Deferred cases
 
@@ -47,6 +49,7 @@ Temporary working checklist for the UX cases supplied on 2026-08-27.
 
 - [ ] 2.3 Width change in an open run
 
-## Open fix queue
+## Open investigation queue
 
-No open fixes from completed cases.
+- [?] Recheck center → left → right creation order. One Chrome pass left the run at two cabinets after an enabled Add right action, with no console error; the reverse order worked repeatedly.
+- [?] T3's in-app browser rendered the 3D viewport black with a WebGPU `configure` failure, so the width-arrow interaction could not be verified there.

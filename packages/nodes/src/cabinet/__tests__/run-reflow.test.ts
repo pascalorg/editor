@@ -720,7 +720,7 @@ describe('cabinet preset run reflow', () => {
     expect(footprintAfter.maxZ).toBeCloseTo(footprintBefore.maxZ)
   })
 
-  test('uses the original straight run constraints when editing the nested L leg', () => {
+  test('uses the nested L leg axis when editing the nested L leg', () => {
     const level = LevelNode.parse({ id: 'level_reflow-nested-l-leg' })
     const run = CabinetNode.parse({
       id: 'cabinet_reflow-nested-l-leg',
@@ -805,7 +805,7 @@ describe('cabinet preset run reflow', () => {
 
     const nodesAfter = useScene.getState().nodes
     const footprintAfter = moduleSubtreeBounds(nestedRun.id, nodesAfter)
-    expect(footprintAfter.minX).toBeCloseTo(footprintBefore.minX)
+    expect(footprintAfter.minX).not.toBeCloseTo(footprintBefore.minX)
     expect(footprintAfter.maxX).toBeCloseTo(footprintBefore.maxX)
     expect(footprintAfter.minZ).toBeCloseTo(footprintBefore.minZ)
     expect(footprintAfter.maxZ).toBeCloseTo(footprintBefore.maxZ)
@@ -816,7 +816,7 @@ describe('cabinet preset run reflow', () => {
     { endSide: 'left', turnSide: 'right' },
     { endSide: 'right', turnSide: 'left' },
     { endSide: 'right', turnSide: 'right' },
-  ] as const)('ignores derived-leg walls for an open $endSide-end/$turnSide-turn source run', ({
+  ] as const)('honors derived-leg walls for an open $endSide-end/$turnSide-turn source run', ({
     endSide,
     turnSide,
   }) => {
@@ -905,7 +905,7 @@ describe('cabinet preset run reflow', () => {
     const footprintAfter = moduleSubtreeBounds(legRun.id, nodesAfter)
     const footprintLength = (bounds: ReturnType<typeof moduleSubtreeBounds>) =>
       bounds.maxX - bounds.minX + (bounds.maxZ - bounds.minZ)
-    expect(footprintLength(footprintAfter) - footprintLength(footprintBefore)).toBeCloseTo(0.26)
+    expect(footprintLength(footprintAfter) - footprintLength(footprintBefore)).toBeCloseTo(0)
   })
 
   test('uses only the real source wall when both source ends have L returns', () => {

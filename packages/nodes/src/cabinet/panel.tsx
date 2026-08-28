@@ -43,6 +43,7 @@ import {
   backAlignZ,
   type CabinetRunStylePatch,
   cabinetCeilingGap,
+  cabinetModulesForRun,
   resolveCabinetType,
   runModuleBaseY,
   switchCabinetToBase,
@@ -134,8 +135,14 @@ export default function CabinetPanel() {
     if (!selectedId) return undefined
     const selected = s.nodes[selectedId as AnyNodeId]
     if (selected?.type !== 'cabinet-module' || !selected.parentId) return undefined
-    const parent = s.nodes[selected.parentId as AnyNodeId] as CabinetEditableNode | undefined
-    return parent?.type === 'cabinet' ? parent : undefined
+    let current = s.nodes[selected.parentId as AnyNodeId]
+    const visited = new Set<AnyNodeId>()
+    while (current && !visited.has(current.id as AnyNodeId)) {
+      visited.add(current.id as AnyNodeId)
+      if (current.type === 'cabinet') return current
+      current = current.parentId ? s.nodes[current.parentId as AnyNodeId] : undefined
+    }
+    return undefined
   })
   const moduleIds = useScene((s) => {
     if (!selectedId) return EMPTY_MODULE_IDS
@@ -363,7 +370,39 @@ export default function CabinetPanel() {
 
   const stack = stackForCabinet(node)
   const planningRun = node.type === 'cabinet' ? node : parentRun
-  const planningReport = planningRun ? validateCabinetRun(planningRun, modules) : null
+  const planningReports = planningRun
+    ? (() => {
+        const reports = []
+        const pending = [planningRun]
+        const seen = new Set<AnyNodeId>()
+        while (pending.length > 0) {
+          const run = pending.pop()!
+          if (seen.has(run.id as AnyNodeId)) continue
+          seen.add(run.id as AnyNodeId)
+          reports.push(
+            validateCabinetRun(run, cabinetModulesForRun(run, useScene.getState().nodes)),
+          )
+          for (const childId of run.children ?? []) {
+            const child = useScene.getState().nodes[childId as AnyNodeId]
+            if (child?.type === 'cabinet') pending.push(child)
+            if (child?.type === 'cabinet-module') {
+              for (const nestedId of child.children ?? []) {
+                const nested = useScene.getState().nodes[nestedId as AnyNodeId]
+                if (nested?.type === 'cabinet') pending.push(nested)
+              }
+            }
+          }
+        }
+        return reports
+      })()
+    : []
+  const planningReport = planningReports.length
+    ? {
+        valid: planningReports.every((report) => report.valid),
+        errors: planningReports.flatMap((report) => report.errors),
+        warnings: planningReports.flatMap((report) => report.warnings),
+      }
+    : null
   const isHoodOnlyNode =
     stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
   const normalized = normalizeCabinetStack(node)
@@ -686,7 +725,7 @@ export default function CabinetPanel() {
                 <SliderControl
                   label="Top height"
                   max={1.2}
-                  min={0.05}
+                  min={0}
                   onChange={(value) => updateNode({ topFinishHeight: value })}
                   precision={2}
                   step={0.01}

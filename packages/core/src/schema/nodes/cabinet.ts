@@ -160,7 +160,7 @@ export const CabinetModuleNode = BaseNode.extend({
   // Optional upper termination for wall/tall compositions. It is deliberately
   // separate from carcassHeight so the main cabinet proportions stay stable.
   topFinish: CabinetTopFinishSchema.default('none'),
-  topFinishHeight: z.number().min(0.05).max(1.2).default(0.33),
+  topFinishHeight: z.number().min(0).max(1.2).default(0.33),
   topFinishDepth: z.number().min(0.15).max(1.2).default(0.32),
   ...cabinetBoxFields,
 }).describe('Parametric module inside a modular cabinet run')

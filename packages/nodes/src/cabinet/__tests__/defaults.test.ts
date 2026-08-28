@@ -109,6 +109,34 @@ test('tall modules expose a visible height resize handle', () => {
   expect(heightHandle?.visible?.(module, sceneApi)).not.toBe(false)
 })
 
+test('finish height is included in the module footprint and height handle position', () => {
+  const run = CabinetNode.parse({
+    id: 'cabinet_finish-footprint-run',
+    children: ['cabinet-module_finish-footprint-module'],
+  })
+  const module = CabinetModuleNode.parse({
+    id: 'cabinet-module_finish-footprint-module',
+    parentId: run.id,
+    cabinetType: 'tall',
+    topFinish: 'trim',
+    topFinishHeight: 0.4,
+  })
+  const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+  const handles = cabinetModuleDefinition.handles(module, sceneApi)
+  const heightHandle = handles?.find(
+    (handle) => handle.kind === 'linear-resize' && handle.axis === 'y',
+  )
+  const footprint = cabinetModuleDefinition.capabilities.floorPlaced?.footprint?.(module)
+  const totalHeight =
+    (module.showPlinth ? module.plinthHeight : 0) +
+    module.carcassHeight +
+    (module.withCountertop ? module.countertopThickness : 0) +
+    module.topFinishHeight
+
+  expect(footprint?.dimensions[1]).toBeCloseTo(totalHeight)
+  expect(heightHandle?.placement?.position(module, sceneApi)[1]).toBeCloseTo(totalHeight + 0.22)
+})
+
 test('a wall cabinet added from an inset base starts with overlay fronts', () => {
   const run = CabinetNode.parse({
     id: 'cabinet_default-front-run',

@@ -861,6 +861,45 @@ describe('reflowCabinetRunModules', () => {
     expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.75, 0.5])
   })
 
+  test('preserves existing gaps while moving only the affected side', () => {
+    const modules = [
+      { id: 'left', position: [-0.65, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.6 },
+      { id: 'right', position: [0.7, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.8, {
+      resizeSide: 'right',
+    })
+
+    expect(reflowed[0]!.position[0]).toBeCloseTo(-0.65)
+    expect(reflowed[1]!.position[0] - reflowed[1]!.width / 2).toBeCloseTo(-0.3)
+    expect(reflowed[1]!.position[0] + reflowed[1]!.width / 2).toBeCloseTo(0.5)
+    expect(reflowed[2]!.position[0] - reflowed[2]!.width / 2).toBeCloseTo(0.65)
+    expect(reflowed[2]!.position[0]).toBeCloseTo(0.9)
+  })
+
+  test('uses only the dragged outer wall when the selected module is interior', () => {
+    const modules = [
+      { id: 'left', position: [-0.6, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.7 },
+      { id: 'right', position: [0.65, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.8, {
+      resizeSide: 'right',
+      wallConstraints: {
+        left: { constrained: false, slack: 0 },
+        right: { constrained: true, slack: 0.1 },
+      },
+    })
+
+    expect(reflowed[1]!.width).toBeCloseTo(0.8)
+    expect(reflowed[0]!.position[0]).toBeCloseTo(-0.6)
+    expect(reflowed[2]!.position[0]).toBeCloseTo(0.75)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(1.0)
+  })
+
   test('grows an open left-end module outward without moving the opposite end', () => {
     const modules = [
       { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
@@ -913,6 +952,37 @@ describe('reflowCabinetRunModules', () => {
     expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.7, 0.5])
     expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.85)
     expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.85)
+  })
+
+  test.each([
+    ['left', 'right', -1],
+    ['right', 'left', 1],
+  ] as const)('manual %s resize uses only the dragged wall gap', (side, oppositeSide, direction) => {
+    const modules = [
+      { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.58, {
+      resizeSide: side,
+      wallConstraints: {
+        left: { constrained: true, slack: side === 'left' ? 0.1 : 0.2 },
+        right: { constrained: true, slack: side === 'right' ? 0.1 : 0.2 },
+      },
+    })
+    const left = reflowed.find((module) => module.id === 'left')!
+    const right = reflowed.find((module) => module.id === 'right')!
+    const oppositeEdge = reflowed.find((module) => module.id === oppositeSide)!
+
+    expect(reflowed.map((module) => module.width)).toEqual([0.5, 0.58, 0.5])
+    expect(oppositeEdge.width).toBeCloseTo(0.5)
+    if (direction > 0) {
+      expect(right.position[0]).toBeGreaterThan(0.5)
+      expect(left.position[0]).toBeCloseTo(-0.5)
+    } else {
+      expect(left.position[0]).toBeLessThan(-0.5)
+      expect(right.position[0]).toBeCloseTo(0.5)
+    }
   })
 
   test('detects perpendicular wall constraints at each run end', () => {

@@ -25,11 +25,13 @@ type ModuleLike = Pick<CabinetModuleNode, 'id' | 'position' | 'width'>
 
 type ReflowRunModulesOptions = {
   wallConstraints?: RunWallConstraints
+  resizeSide?: 'left' | 'right'
   eligibleDonorIds?: ReadonlySet<CabinetModuleNode['id']>
   maximumWidth?: number
   maximumWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
   minimumWidth?: number
   minimumWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
+  nominalWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
   restorableWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
 }
 
@@ -562,19 +564,25 @@ export function reflowRunModules<T extends ModuleLike>(
   widths.set(selectedId, selectedWidth)
 
   const selected = sorted[selectedIndex]!
+  const gaps = sorted.map((module, index) => {
+    const next = sorted[index + 1]
+    if (!next) return 0
+    return Math.max(0, moduleMinX(next) - moduleMaxX(module))
+  })
   const wallConstraints = options.wallConstraints
   const leftConstrained = wallConstraints?.left.constrained ?? false
   const rightConstrained = wallConstraints?.right.constrained ?? false
   const preserveExtent = leftConstrained && rightConstrained
   const widthGrowth = selectedWidth - selected.width
   let remainingGrowth = Math.max(0, widthGrowth)
+  const resizeSide = options.resizeSide
   const consumedRightSlack =
-    rightConstrained && !preserveExtent
+    rightConstrained && (!preserveExtent || resizeSide === 'right')
       ? Math.min(remainingGrowth, Math.max(0, wallConstraints?.right.slack ?? 0))
       : 0
   remainingGrowth -= consumedRightSlack
   const consumedLeftSlack =
-    leftConstrained && !preserveExtent
+    leftConstrained && (!preserveExtent || resizeSide === 'left')
       ? Math.min(remainingGrowth, Math.max(0, wallConstraints?.left.slack ?? 0))
       : 0
   remainingGrowth -= consumedLeftSlack
@@ -621,7 +629,7 @@ export function reflowRunModules<T extends ModuleLike>(
   }
 
   let remainingFreedWidth = selected.width - selectedWidth
-  if (preserveExtent && remainingFreedWidth > REFLOW_CAPACITY_EPSILON) {
+  if (remainingFreedWidth > REFLOW_CAPACITY_EPSILON) {
     const left = sorted.slice(0, selectedIndex).reverse()
     const right = sorted.slice(selectedIndex + 1)
     const restorable = (candidates: readonly T[]) =>
@@ -631,7 +639,6 @@ export function reflowRunModules<T extends ModuleLike>(
       )
     const candidates =
       restorable(left) > restorable(right) ? [...left, ...right] : [...right, ...left]
-
     for (const module of candidates) {
       if (remainingFreedWidth <= REFLOW_CAPACITY_EPSILON) break
       const available = Math.max(0, options.restorableWidthById?.get(module.id) ?? 0)
@@ -640,7 +647,7 @@ export function reflowRunModules<T extends ModuleLike>(
       remainingFreedWidth -= restoration
     }
 
-    if (remainingFreedWidth > REFLOW_CAPACITY_EPSILON) {
+    if (preserveExtent && remainingFreedWidth > REFLOW_CAPACITY_EPSILON) {
       const maximumWidth = options.maximumWidth ?? 1.2
       const fallbackCandidates = sorted
         .map((module, index) => ({ index, module }))
@@ -661,33 +668,60 @@ export function reflowRunModules<T extends ModuleLike>(
       }, 0)
       if (available + REFLOW_CAPACITY_EPSILON < remainingFreedWidth) return []
 
-      for (const { module } of fallbackCandidates) {
-        if (remainingFreedWidth <= REFLOW_CAPACITY_EPSILON) break
-        const currentWidth = widths.get(module.id) ?? module.width
-        const moduleMaximum = options.maximumWidthById?.get(module.id) ?? maximumWidth
-        const restoration = Math.min(Math.max(0, moduleMaximum - currentWidth), remainingFreedWidth)
-        widths.set(module.id, currentWidth + restoration)
-        remainingFreedWidth -= restoration
+      const absorbFreedWidth = (
+        receivers: typeof fallbackCandidates,
+        maximumFor: (module: T) => number,
+      ) => {
+        for (const { module } of receivers) {
+          if (remainingFreedWidth <= REFLOW_CAPACITY_EPSILON) break
+          const currentWidth = widths.get(module.id) ?? module.width
+          const restoration = Math.min(
+            Math.max(0, maximumFor(module) - currentWidth),
+            remainingFreedWidth,
+          )
+          widths.set(module.id, currentWidth + restoration)
+          remainingFreedWidth -= restoration
+        }
       }
+      absorbFreedWidth(
+        fallbackCandidates,
+        (module) => options.nominalWidthById?.get(module.id) ?? module.width,
+      )
+      absorbFreedWidth(
+        fallbackCandidates,
+        (module) => options.maximumWidthById?.get(module.id) ?? maximumWidth,
+      )
     }
   }
 
-  const totalWidth = sorted.reduce((total, module) => total + (widths.get(module.id) ?? 0), 0)
+  const totalWidth = sorted.reduce(
+    (total, module, index) => total + (widths.get(module.id) ?? 0) + (gaps[index] ?? 0),
+    0,
+  )
   let nextLeft = runMinX(sorted) - consumedLeftSlack
-  if (
-    (!leftConstrained && !rightConstrained && selectedIndex === 0) ||
-    (rightConstrained && !leftConstrained)
-  ) {
+  const preserveRightEdge = options.resizeSide === 'left'
+  const preserveLeftEdge = options.resizeSide === 'right'
+  if (rightConstrained && !leftConstrained) {
     nextLeft = runMaxX(sorted) + consumedRightSlack - totalWidth
+  } else if (leftConstrained && !rightConstrained) {
+    nextLeft = runMinX(sorted) - consumedLeftSlack
+  } else if (preserveExtent && resizeSide === 'right') {
+    nextLeft = runMinX(sorted) - consumedLeftSlack
+  } else if (preserveExtent && resizeSide === 'left') {
+    nextLeft = runMaxX(sorted) + consumedRightSlack - totalWidth
+  } else if (preserveRightEdge) {
+    nextLeft = runMaxX(sorted) - totalWidth
+  } else if (preserveLeftEdge || (!leftConstrained && !rightConstrained && selectedIndex === 0)) {
+    nextLeft = preserveLeftEdge ? runMinX(sorted) - consumedLeftSlack : runMaxX(sorted) - totalWidth
   }
-  return sorted.map((module) => {
+  return sorted.map((module, index) => {
     const width = widths.get(module.id) ?? module.width
     const position: T['position'] = [
       nextLeft + width / 2,
       module.position[1],
       module.position[2],
     ] as T['position']
-    nextLeft += width
+    nextLeft += width + (gaps[index] ?? 0)
     return { id: module.id, position, width }
   })
 }

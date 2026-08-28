@@ -309,6 +309,13 @@ export function totalCabinetHeight(
   )
 }
 
+export function cabinetModuleTotalHeight(node: CabinetModuleNode): number {
+  return (
+    totalCabinetHeight(node) +
+    (node.topFinish === 'top-cabinet' || node.topFinish === 'trim' ? node.topFinishHeight : 0)
+  )
+}
+
 /** Y where a wall cabinet's bottom lands so its top aligns with a tall unit's top. */
 export function wallBottomHeightForTallAlignment() {
   return (
@@ -356,7 +363,7 @@ export function cabinetCeilingGap(
     (node.showPlinth ? node.plinthHeight : 0) +
     node.carcassHeight +
     (node.withCountertop ? node.countertopThickness : 0)
-  return Math.max(0.05, ceilingHeight - currentTop)
+  return Math.min(1.2, Math.max(0, ceilingHeight - currentTop))
 }
 
 /** Local Z offset that makes a shallower wall cabinet's back flush with its deeper base. */

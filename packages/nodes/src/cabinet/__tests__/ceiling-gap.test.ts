@@ -26,3 +26,30 @@ test('ceiling gap resolves the remaining space above a nested tall module', () =
     } as Record<string, AnyNode>),
   ).toBeCloseTo(0.33)
 })
+
+test('ceiling gap clamps an oversized room gap to the finish maximum', () => {
+  const level = LevelNode.parse({ id: 'level_ceiling-gap-max', height: 4 })
+  const module = CabinetModuleNode.parse({
+    id: 'cabinet-module_ceiling-gap-max',
+    parentId: level.id,
+    carcassHeight: 1,
+    showPlinth: false,
+    withCountertop: false,
+  })
+
+  expect(cabinetCeilingGap(module, { [level.id]: level, [module.id]: module })).toBe(1.2)
+})
+
+test('ceiling gap returns zero when the module already reaches the ceiling', () => {
+  const level = LevelNode.parse({ id: 'level_ceiling-gap-zero', height: 2.4 })
+  const module = CabinetModuleNode.parse({
+    id: 'cabinet-module_ceiling-gap-zero',
+    parentId: level.id,
+    position: [0, 0, 0],
+    carcassHeight: 2.4,
+    showPlinth: false,
+    withCountertop: false,
+  })
+
+  expect(cabinetCeilingGap(module, { [level.id]: level, [module.id]: module })).toBe(0)
+})

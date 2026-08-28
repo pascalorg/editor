@@ -19,6 +19,13 @@ import { useViewer } from '@pascal-app/viewer'
 import { Plus, Trash } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import {
+  metadataForSelectedWidth,
+  metadataWithPresetWidthDebt,
+  presetNominalWidth,
+  presetWidthDebt,
+  recordedPresetNominalWidth,
+} from './preset-width-debt'
+import {
   CABINET_DIMENSION_PROFILES,
   type CabinetDimensionProfileId,
   cabinetDimensionProfileById,
@@ -53,6 +60,7 @@ import {
 } from './stack'
 
 export type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
+
 const RUN_POSITION_PATCH_KEYS = new Set<keyof CabinetNodeType>(['showPlinth', 'plinthHeight'])
 const RUN_MODULE_SYNC_PATCH_KEYS = new Set<keyof CabinetNodeType>([
   'frontStyle',
@@ -62,8 +70,6 @@ const RUN_MODULE_SYNC_PATCH_KEYS = new Set<keyof CabinetNodeType>([
   'frontGap',
 ])
 const RUN_DEPTH_PATCH_KEY = 'depth'
-const PRESET_WIDTH_DEBT_KEY = 'cabinetPresetWidthDebtBySource'
-const PRESET_NOMINAL_WIDTH_KEY = 'cabinetPresetNominalWidth'
 const MIN_TRIMMED_CORNER_PRESET_WIDTH = 0.05
 
 const FRONT_STYLE_OPTIONS = [
@@ -107,54 +113,6 @@ export function bumpRunLayoutRevisionViaStore(
   scene.markDirty(run.id as AnyNodeId)
 }
 
-function presetWidthDebt(
-  module: CabinetModuleNodeType,
-  sourceId: CabinetModuleNodeType['id'],
-): number {
-  const value = cabinetMetadataRecord(module.metadata)[PRESET_WIDTH_DEBT_KEY]
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return 0
-  const debt = (value as Record<string, unknown>)[sourceId]
-  return typeof debt === 'number' && debt > 0 ? debt : 0
-}
-
-function metadataWithPresetWidthDebt(
-  module: CabinetModuleNodeType,
-  sourceId: CabinetModuleNodeType['id'],
-  widthDelta: number,
-): CabinetModuleNodeType['metadata'] {
-  const metadata = cabinetMetadataRecord(module.metadata)
-  const value = metadata[PRESET_WIDTH_DEBT_KEY]
-  const debts =
-    value && typeof value === 'object' && !Array.isArray(value)
-      ? { ...(value as Record<string, unknown>) }
-      : {}
-  const nextDebt = Math.max(0, presetWidthDebt(module, sourceId) - widthDelta)
-  if (nextDebt > 1e-4) debts[sourceId] = nextDebt
-  else delete debts[sourceId]
-  const nextMetadata = { ...metadata }
-  if (widthDelta < -1e-4 && typeof nextMetadata[PRESET_NOMINAL_WIDTH_KEY] !== 'number') {
-    nextMetadata[PRESET_NOMINAL_WIDTH_KEY] = module.width
-  }
-  if (Object.keys(debts).length > 0) nextMetadata[PRESET_WIDTH_DEBT_KEY] = debts
-  else delete nextMetadata[PRESET_WIDTH_DEBT_KEY]
-  return nextMetadata as CabinetModuleNodeType['metadata']
-}
-
-function metadataForSelectedWidth(
-  module: CabinetModuleNodeType,
-  width: number,
-  patchMetadata?: CabinetModuleNodeType['metadata'],
-): CabinetModuleNodeType['metadata'] {
-  const metadata = cabinetMetadataRecord(patchMetadata ?? module.metadata)
-  const { [PRESET_WIDTH_DEBT_KEY]: _removed, ...rest } = metadata
-  return { ...rest, [PRESET_NOMINAL_WIDTH_KEY]: width } as CabinetModuleNodeType['metadata']
-}
-
-function presetNominalWidth(module: CabinetModuleNodeType): number {
-  const value = cabinetMetadataRecord(module.metadata)[PRESET_NOMINAL_WIDTH_KEY]
-  return typeof value === 'number' && value >= module.width ? value : MAX_CABINET_WIDTH
-}
-
 function canDonatePresetWidth(module: CabinetModuleNodeType, run: CabinetNodeType): boolean {
   return (
     resolveCabinetType(module, run) === 'base' &&
@@ -174,28 +132,6 @@ function hasLinkedCornerRun(module: CabinetModuleNodeType): boolean {
     Array.isArray((value as { linkedRunIds?: unknown }).linkedRunIds) &&
     (value as { linkedRunIds: unknown[] }).linkedRunIds.length > 0
   )
-}
-
-function governingConstraintRun(
-  run: CabinetNodeType,
-  runModules: CabinetModuleNodeType[],
-  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
-): { modules: CabinetModuleNodeType[]; run: CabinetNodeType } {
-  const value = cabinetMetadataRecord(run.metadata).cabinetCornerDerivedRun
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return { modules: runModules, run }
-  }
-
-  const sourceRunId = (value as { sourceRunId?: unknown }).sourceRunId
-  if (typeof sourceRunId !== 'string') return { modules: runModules, run }
-  const sourceRun = nodes[sourceRunId as AnyNodeId]
-  if (sourceRun?.type !== 'cabinet') return { modules: runModules, run }
-  return {
-    modules: (sourceRun.children ?? [])
-      .map((id) => nodes[id as AnyNodeId])
-      .filter((node): node is CabinetModuleNodeType => node?.type === 'cabinet-module'),
-    run: sourceRun,
-  }
 }
 
 function nestedCornerRuns(
@@ -241,18 +177,13 @@ export function reflowRunModules({
   scene: ReturnType<typeof useScene.getState>
   selected: CabinetModuleNodeType
 }): boolean {
-  const constraintOwner = governingConstraintRun(
+  const wallConstraints = runWallConstraints(
     parentRun,
     modules,
-    scene.nodes as Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
-  )
-  const wallConstraints = runWallConstraints(
-    constraintOwner.run,
-    constraintOwner.modules,
     scene.nodes as Record<AnyNodeId, AnyNode>,
     { widthGrowth: Math.max(0, (patch.width ?? selected.width) - selected.width) },
   )
-  const sortedModules = [...constraintOwner.modules].sort((a, b) => a.position[0] - b.position[0])
+  const sortedModules = [...modules].sort((a, b) => a.position[0] - b.position[0])
   const leftCornerAnchored = Boolean(sortedModules[0] && hasLinkedCornerRun(sortedModules[0]))
   const rightCornerAnchored = Boolean(
     sortedModules.at(-1) && hasLinkedCornerRun(sortedModules.at(-1)!),
@@ -273,7 +204,17 @@ export function reflowRunModules({
   const preserveExtent =
     effectiveWallConstraints.left.constrained && effectiveWallConstraints.right.constrained
   const selectedWillShrink = (patch.width ?? selected.width) < selected.width - 1e-4
+  const nominalWidthById = new Map(
+    modules.map((module) => [module.id, recordedPresetNominalWidth(module)]),
+  )
   const maximumWidthById = new Map(modules.map((module) => [module.id, presetNominalWidth(module)]))
+  const originalDonorIds = new Set(
+    modules
+      .filter(
+        (module) => eligibleDonorIds.has(module.id) && presetWidthDebt(module, selected.id) > 1e-4,
+      )
+      .map((module) => module.id),
+  )
   if (preserveExtent && selectedWillShrink) {
     const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
     const selectedIndex = sorted.findIndex((module) => module.id === selected.id)
@@ -286,12 +227,16 @@ export function reflowRunModules({
       })
     const freedWidth = selected.width - (patch.width ?? selected.width)
     const ordinaryCapacity = fallbackCandidates.reduce((total, { module }) => {
-      const debt = presetWidthDebt(module, selected.id)
-      const nominalWidth = maximumWidthById.get(module.id) ?? MAX_CABINET_WIDTH
-      return total + Math.max(debt, nominalWidth - module.width)
+      const maximumWidth = maximumWidthById.get(module.id) ?? MAX_CABINET_WIDTH
+      return total + Math.max(0, maximumWidth - module.width)
     }, 0)
     let extraCapacity = Math.max(0, freedWidth - ordinaryCapacity)
-    for (const { module } of [...fallbackCandidates].reverse()) {
+    const extensionCandidates = [...fallbackCandidates].sort((a, b) => {
+      const donorOrder =
+        Number(originalDonorIds.has(a.module.id)) - Number(originalDonorIds.has(b.module.id))
+      return donorOrder !== 0 ? donorOrder : 0
+    })
+    for (const { module } of extensionCandidates) {
       if (extraCapacity <= 1e-4) break
       const nominalWidth = maximumWidthById.get(module.id) ?? MAX_CABINET_WIDTH
       const addedCapacity = Math.min(extraCapacity, MAX_CABINET_WIDTH - nominalWidth)
@@ -309,6 +254,7 @@ export function reflowRunModules({
     ),
     maximumWidth: MAX_CABINET_WIDTH,
     maximumWidthById,
+    nominalWidthById,
     restorableWidthById: new Map(
       modules.map((module) => [module.id, presetWidthDebt(module, selected.id)]),
     ),
@@ -327,7 +273,7 @@ export function reflowRunModules({
     if (isSelected && Math.abs(widthDelta) > 1e-4) {
       nextPatch.metadata = metadataForSelectedWidth(module, reflow.width, nextPatch.metadata)
     }
-    if (!isSelected && preserveExtent && Math.abs(widthDelta) > 1e-4) {
+    if (!isSelected && Math.abs(widthDelta) > 1e-4) {
       nextPatch.metadata = metadataWithPresetWidthDebt(module, selected.id, widthDelta)
     }
     const nextPosition: CabinetModuleNodeType['position'] = [
