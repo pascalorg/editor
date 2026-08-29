@@ -139,6 +139,46 @@ afterEach(() => {
 })
 
 describe('cabinet preset run reflow', () => {
+  test('preserves customized base dimensions during width-only reflow', () => {
+    const level = LevelNode.parse({ id: 'level_reflow-width-only-dimensions' })
+    const run = CabinetNode.parse({
+      id: 'cabinet_reflow-width-only-dimensions',
+      parentId: level.id,
+      depth: 0.6,
+      carcassHeight: 0.8,
+      countertopThickness: 0.02,
+      children: ['cabinet-module_reflow-width-only-dimensions'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_reflow-width-only-dimensions',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.5,
+      depth: 0.7,
+      carcassHeight: 0.95,
+      countertopThickness: 0.04,
+    })
+    seedScene([level, run, module] as AnyNode[], level.id as AnyNodeId)
+
+    expect(
+      reflowRunModules({
+        modules: [module],
+        parentRun: run,
+        patch: { width: 0.7 },
+        scene: useScene.getState(),
+        selected: module,
+      }),
+    ).toBe(true)
+
+    const resized = useScene.getState().nodes[module.id] as ReturnType<
+      typeof CabinetModuleNode.parse
+    >
+    expect(resized.width).toBeCloseTo(0.7)
+    expect(resized.depth).toBeCloseTo(0.7)
+    expect(resized.carcassHeight).toBeCloseTo(0.95)
+    expect(resized.countertopThickness).toBeCloseTo(0.04)
+  })
+
   test('syncs both corner returns when shared run dimensions change', () => {
     const level = LevelNode.parse({ id: 'level_reflow-two-corner-depth' })
     const run = CabinetNode.parse({

@@ -255,12 +255,14 @@ export function reflowRunModules({
 
     if (isSelected) {
       const cabinetType = patch.cabinetType ?? module.cabinetType
-      if (cabinetType === 'base') {
+      const convertsToBase =
+        cabinetType === 'base' && resolveCabinetType(module, parentRun) !== 'base'
+      if (convertsToBase) {
         nextPatch.depth = patch.depth ?? parentRun.depth
         nextPatch.carcassHeight = patch.carcassHeight ?? parentRun.carcassHeight
         nextPatch.plinthHeight = patch.plinthHeight ?? parentRun.plinthHeight
         nextPatch.toeKickDepth = patch.toeKickDepth ?? parentRun.toeKickDepth
-        nextPatch.countertopThickness = patch.countertopThickness ?? 0
+        nextPatch.countertopThickness = patch.countertopThickness ?? parentRun.countertopThickness
         nextPatch.countertopOverhang = patch.countertopOverhang ?? parentRun.countertopOverhang
       }
     }

@@ -30,14 +30,9 @@ import useEditor from '../../../store/use-editor'
 // (`wall:move` for openings, `grid:move` for free movers), freezing the drag.
 // Make every handle hit area inert for the duration; the indicator mesh still
 // renders (it's already NO_RAYCAST + depthTest off) so the grip stays visible.
-function hitAreaRaycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
+export function hitAreaRaycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
   if (useEditor.getState().placementDragMode) return
-  const firstHitIndex = intersects.length
   Mesh.prototype.raycast.call(this, raycaster, intersects)
-  for (let index = firstHitIndex; index < intersects.length; index += 1) {
-    const intersection = intersects[index]
-    if (intersection) intersection.distance = 0
-  }
 }
 
 export const ARROW_SCALE = 0.65
