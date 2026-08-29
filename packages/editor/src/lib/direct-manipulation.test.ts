@@ -167,7 +167,7 @@ describe('shouldStartDirectMoveDrag', () => {
 })
 
 describe('pointerEventHitsEditorHandle', () => {
-  test('recognises a handle hit anywhere in the R3F intersection stack', () => {
+  test('does not let an occluded handle claim a nearer scene body', () => {
     expect(
       pointerEventHitsEditorHandle({
         intersections: [
@@ -177,6 +177,21 @@ describe('pointerEventHitsEditorHandle', () => {
               userData: { [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true },
             },
           },
+        ],
+      }),
+    ).toBe(false)
+  })
+
+  test('recognises a handle when it is the nearest R3F intersection', () => {
+    expect(
+      pointerEventHitsEditorHandle({
+        intersections: [
+          {
+            object: {
+              userData: { [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true },
+            },
+          },
+          { object: { userData: {} } },
         ],
       }),
     ).toBe(true)

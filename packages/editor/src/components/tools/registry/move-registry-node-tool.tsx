@@ -74,6 +74,15 @@ const snapToGridStep = (value: number) => {
 /** 45° steps, matching the GLB item placement rotation. */
 const ROTATION_STEP = Math.PI / 4
 
+export function resolveMoveRotationStep(
+  freeRotation: number,
+  delta: number,
+  attachmentRotation: number | null,
+): number | null {
+  if (attachmentRotation !== null) return null
+  return freeRotation + delta
+}
+
 /** Default magnetic radius (meters, XZ) for `movable.portSnap`. */
 const PORT_SNAP_RADIUS_M = 0.5
 const VALID_COLOR = 0x22_c5_5e
@@ -1036,9 +1045,14 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       else if (e.key === 't' || e.key === 'T') delta = -ROTATION_STEP
       else return
       e.preventDefault()
+      const nextFreeRotation = resolveMoveRotationStep(
+        freeRotationRef.current,
+        delta,
+        attachmentRotationRef.current,
+      )
+      if (nextFreeRotation === null) return
       sfxEmitter.emit('sfx:item-rotate')
-      freeRotationRef.current += delta
-      if (attachmentRotationRef.current !== null) return
+      freeRotationRef.current = nextFreeRotation
       rotationRef.current = freeRotationRef.current
       setCursorRotationY(previewRotationY(rotationRef.current))
       const position = lastCursorRef.current

@@ -56,12 +56,7 @@ export function pointerEventHitsEditorHandle(event: unknown): boolean {
       }[]
     }
   ).intersections
-  return (
-    intersections?.some(
-      (intersection) =>
-        intersection.object?.userData?.[EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY] === true,
-    ) ?? false
-  )
+  return intersections?.[0]?.object?.userData?.[EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY] === true
 }
 
 export function canDirectMoveNode(node: AnyNode): boolean {
