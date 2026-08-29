@@ -20,6 +20,16 @@ export function cabinetModuleSupportsPresets(module: CabinetModuleNode) {
   return module.moduleKind !== 'corner-filler'
 }
 
+export function cabinetModulePanelUsesRunReflow({
+  parentRun,
+  parentIsModule,
+}: {
+  parentRun?: CabinetNode
+  parentIsModule: boolean
+}) {
+  return parentRun?.type === 'cabinet' && !parentIsModule
+}
+
 export function cabinetModuleUsesFixedApplianceWidth(module: CabinetModuleNode) {
   return (
     module.stack?.some((compartment) => FIXED_WIDTH_APPLIANCE_TYPES.has(compartment.type)) ?? false
