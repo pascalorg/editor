@@ -3,7 +3,7 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { cabinetModulePanelContext } from '../panel-context'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
-test('maps a derived L-leg module to its source module and run for panel reflow', () => {
+test('keeps a derived L-leg module on its own run for panel reflow', () => {
   const sourceRun = CabinetNode.parse({
     id: 'cabinet_panel-context-source-run',
     children: ['cabinet-module_panel-context-source'],
@@ -36,8 +36,8 @@ test('maps a derived L-leg module to its source module and run for panel reflow'
 
   const context = cabinetModulePanelContext(derivedModule, nodes)
 
-  expect(context?.parentRun.id).toBe(sourceRun.id)
-  expect(context?.reflowModule?.id).toBe(sourceModule.id)
+  expect(context?.parentRun.id).toBe(derivedRun.id)
+  expect(context?.reflowModule?.id).toBe(derivedModule.id)
 })
 
 test('keeps a nested wall cabinet out of run reflow', () => {

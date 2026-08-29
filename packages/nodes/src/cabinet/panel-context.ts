@@ -1,5 +1,4 @@
 import type { AnyNode, AnyNodeId, CabinetModuleNode, CabinetNode } from '@pascal-app/core'
-import { cornerStyleSourceForRun } from './run-ops'
 
 export type CabinetModulePanelContext = {
   parentRun: CabinetNode
@@ -17,11 +16,9 @@ export function cabinetModulePanelContext(
   while (current && !visited.has(current.id as AnyNodeId)) {
     visited.add(current.id as AnyNodeId)
     if (current.type === 'cabinet') {
-      const source = cornerStyleSourceForRun(current, nodes)
-      const derivedSource = source && source.run.id !== current.id ? source : null
       return {
-        parentRun: derivedSource?.run ?? current,
-        reflowModule: current.id === directParentId ? (derivedSource?.module ?? module) : null,
+        parentRun: current,
+        reflowModule: current.id === directParentId ? module : null,
       }
     }
     current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
