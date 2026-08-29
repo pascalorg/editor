@@ -11,7 +11,7 @@ import {
 import { cabinetPresetById } from '../presets'
 import { runMaxX, runMinX, runWallConstraints } from '../run-layout'
 import { addCornerRun } from '../run-ops'
-import { reflowRunModules } from '../run-panel'
+import { reflowRunModules, updateCabinetRun } from '../run-panel'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
 function worldTransform(
@@ -139,6 +139,58 @@ afterEach(() => {
 })
 
 describe('cabinet preset run reflow', () => {
+  test('syncs both corner returns when shared run dimensions change', () => {
+    const level = LevelNode.parse({ id: 'level_reflow-two-corner-depth' })
+    const run = CabinetNode.parse({
+      id: 'cabinet_reflow-two-corner-depth',
+      parentId: level.id,
+      depth: 0.6,
+      children: [
+        'cabinet-module_reflow-two-corner-depth-left',
+        'cabinet-module_reflow-two-corner-depth-right',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_reflow-two-corner-depth-left',
+      parentId: run.id,
+      position: [-0.4, 0.1, 0],
+      width: 0.8,
+      depth: 0.6,
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_reflow-two-corner-depth-right',
+      parentId: run.id,
+      position: [0.4, 0.1, 0],
+      width: 0.8,
+      depth: 0.6,
+    })
+    seedScene([level, run, left, right] as AnyNode[], level.id as AnyNodeId)
+    const sceneApi = createSceneApi(useScene)
+    expect(addCornerRun({ module: left, run, sceneApi, side: 'left' })).toBeTruthy()
+    expect(addCornerRun({ module: right, run, sceneApi, side: 'right' })).toBeTruthy()
+
+    const nodesBefore = useScene.getState().nodes
+    const liveRun = nodesBefore[run.id] as ReturnType<typeof CabinetNode.parse>
+    const liveModules = liveRun.children
+      .map((id) => nodesBefore[id])
+      .filter((node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+        Boolean(node?.type === 'cabinet-module'),
+      )
+    updateCabinetRun({ modules: liveModules, node: liveRun, patch: { depth: 0.78 } })
+
+    const nodesAfter = useScene.getState().nodes
+    for (const source of [left, right]) {
+      const derivedRun = derivedBaseRunForSource(source.id, nodesAfter)
+      const filler = derivedRun.children
+        .map((id) => nodesAfter[id])
+        .find(
+          (node): node is ReturnType<typeof CabinetModuleNode.parse> =>
+            node?.type === 'cabinet-module' && node.name === 'Corner Filler',
+        )
+      expect(filler?.width).toBeCloseTo(0.78)
+    }
+  })
+
   test('reanchors an existing right L inside a newly recognized perpendicular wall', () => {
     const level = LevelNode.parse({ id: 'level_reflow-room-bound-right-l' })
     const run = CabinetNode.parse({

@@ -359,10 +359,7 @@ export function cabinetCeilingGap(
       ? level.height
       : DEFAULT_CEILING_HEIGHT
   const currentTop =
-    worldY +
-    (node.showPlinth ? node.plinthHeight : 0) +
-    node.carcassHeight +
-    (node.withCountertop ? node.countertopThickness : 0)
+    worldY + node.carcassHeight + (node.withCountertop ? node.countertopThickness : 0)
   return Math.min(1.2, Math.max(0, ceilingHeight - currentTop))
 }
 
@@ -380,6 +377,43 @@ export function wallChildOf(
     if (child?.type === 'cabinet-module') return child
   }
   return null
+}
+
+export function nestedCornerRunPositionOverrides(
+  module: CabinetModuleNode,
+  nextPosition: CabinetModuleNode['position'],
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const dx = nextPosition[0] - module.position[0]
+  const dy = nextPosition[1] - module.position[1]
+  const dz = nextPosition[2] - module.position[2]
+  if (
+    Math.abs(dx) <= CABINET_EDGE_EPSILON &&
+    Math.abs(dy) <= CABINET_EDGE_EPSILON &&
+    Math.abs(dz) <= CABINET_EDGE_EPSILON
+  ) {
+    return []
+  }
+
+  const cos = Math.cos(module.rotation)
+  const sin = Math.sin(module.rotation)
+  return Object.values(nodes).flatMap((node) => {
+    if (node?.type !== 'cabinet' || node.parentId !== module.id) return []
+    const link = cornerDerivedRunLink(node.metadata)
+    if (link?.role !== 'bridge' && link?.role !== 'wall-leg') return []
+    return [
+      [
+        node.id as AnyNodeId,
+        {
+          position: [
+            node.position[0] - (dx * cos - dz * sin),
+            node.position[1] - dy,
+            node.position[2] - (dx * sin + dz * cos),
+          ],
+        } as Partial<AnyNode>,
+      ] as const,
+    ]
+  })
 }
 
 export function applyCabinetModuleFrontPatch({

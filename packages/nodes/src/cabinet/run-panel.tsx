@@ -44,11 +44,10 @@ import {
   backAlignZ,
   bumpCabinetRunLayoutRevision,
   cabinetMetadataRecord,
-  cornerLinkedSourceModuleForRun,
+  nestedCornerRunPositionOverrides,
   resolveCabinetType,
   runModuleBaseY,
   syncCornerRunsFromRunSources,
-  syncCornerRunsFromSourceModule,
   syncCornerStyleGroupFromRun,
   wallChildOf,
 } from './run-ops'
@@ -132,36 +131,6 @@ function hasLinkedCornerRun(module: CabinetModuleNodeType): boolean {
     Array.isArray((value as { linkedRunIds?: unknown }).linkedRunIds) &&
     (value as { linkedRunIds: unknown[] }).linkedRunIds.length > 0
   )
-}
-
-function nestedCornerRuns(
-  module: CabinetModuleNodeType,
-  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
-): CabinetNodeType[] {
-  return Object.values(nodes).filter((node): node is CabinetNodeType => {
-    if (node?.type !== 'cabinet' || node.parentId !== module.id) return false
-    const value = cabinetMetadataRecord(node.metadata).cabinetCornerDerivedRun
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-    const role = (value as { role?: unknown }).role
-    return role === 'bridge' || role === 'wall-leg'
-  })
-}
-
-function positionKeepingWorldTransform(
-  child: CabinetNodeType,
-  parent: CabinetModuleNodeType,
-  nextParentPosition: CabinetModuleNodeType['position'],
-): CabinetNodeType['position'] {
-  const dx = nextParentPosition[0] - parent.position[0]
-  const dy = nextParentPosition[1] - parent.position[1]
-  const dz = nextParentPosition[2] - parent.position[2]
-  const cos = Math.cos(parent.rotation)
-  const sin = Math.sin(parent.rotation)
-  return [
-    child.position[0] - (dx * cos - dz * sin),
-    child.position[1] - dy,
-    child.position[2] - (dx * sin + dz * cos),
-  ]
 }
 
 export function reflowRunModules({
@@ -297,15 +266,14 @@ export function reflowRunModules({
     }
 
     nextPatch.position = nextPosition
-    const cornerRuns = nestedCornerRuns(
+    const nestedCornerOverrides = nestedCornerRunPositionOverrides(
       module,
+      nextPosition,
       scene.nodes as Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
     )
     scene.updateNode(module.id as AnyNodeId, nextPatch)
-    for (const cornerRun of cornerRuns) {
-      scene.updateNode(cornerRun.id as AnyNodeId, {
-        position: positionKeepingWorldTransform(cornerRun, module, nextPosition),
-      })
+    for (const [id, override] of nestedCornerOverrides) {
+      scene.updateNode(id, override)
     }
 
     const wallChild = wallChildOf(
@@ -335,6 +303,96 @@ export function reflowRunModules({
   return true
 }
 
+export function updateCabinetRun({
+  modules,
+  node,
+  patch,
+}: {
+  modules: CabinetModuleNodeType[]
+  node: CabinetNodeType
+  patch: Partial<CabinetNodeType>
+}) {
+  const scene = useScene.getState()
+  const sceneApi = createSceneApi(useScene)
+  const nextPatch = { ...patch }
+  if (typeof nextPatch.carcassHeight === 'number') {
+    const minModuleHeight = Math.max(
+      0.4,
+      ...modules.map((module) => minCabinetCarcassHeightForStack(module)),
+    )
+    nextPatch.carcassHeight = Math.max(nextPatch.carcassHeight, minModuleHeight)
+  }
+  const nextNode = { ...node, ...nextPatch }
+  scene.updateNode(node.id, nextPatch)
+
+  const shouldSyncDepth = RUN_DEPTH_PATCH_KEY in nextPatch
+  const shouldSyncHeight = 'carcassHeight' in nextPatch
+  const shouldSyncPosition = Object.keys(nextPatch).some((key) =>
+    RUN_POSITION_PATCH_KEYS.has(key as keyof CabinetNodeType),
+  )
+  const shouldSyncModules = Object.keys(nextPatch).some((key) =>
+    RUN_MODULE_SYNC_PATCH_KEYS.has(key as keyof CabinetNodeType),
+  )
+  if (!shouldSyncDepth && !shouldSyncHeight && !shouldSyncPosition && !shouldSyncModules) return
+
+  const stylePatch: Partial<CabinetNodeType> = {}
+  if ('frontStyle' in nextPatch) stylePatch.frontStyle = nextNode.frontStyle
+  if ('frontOverlay' in nextPatch) stylePatch.frontOverlay = nextNode.frontOverlay
+  if ('handleStyle' in nextPatch) stylePatch.handleStyle = nextNode.handleStyle
+  if ('handlePosition' in nextPatch) stylePatch.handlePosition = nextNode.handlePosition
+  if ('frontGap' in nextPatch) stylePatch.frontGap = nextNode.frontGap
+
+  for (const module of modules) {
+    const modulePatch: Partial<CabinetModuleNodeType> = {}
+    if (shouldSyncDepth) {
+      modulePatch.depth = nextNode.depth
+    }
+    if (shouldSyncHeight) {
+      modulePatch.carcassHeight = Math.max(
+        nextNode.carcassHeight,
+        minCabinetCarcassHeightForStack(module),
+      )
+    }
+    if (shouldSyncPosition) {
+      modulePatch.position = [module.position[0], runModuleBaseY(nextNode), module.position[2]]
+    }
+    if (shouldSyncModules) {
+      if ('frontStyle' in nextPatch) modulePatch.frontStyle = nextNode.frontStyle
+      if ('frontOverlay' in nextPatch) modulePatch.frontOverlay = nextNode.frontOverlay
+      if ('handleStyle' in nextPatch) modulePatch.handleStyle = nextNode.handleStyle
+      if ('handlePosition' in nextPatch) modulePatch.handlePosition = nextNode.handlePosition
+      if ('frontGap' in nextPatch) modulePatch.frontGap = nextNode.frontGap
+    }
+    scene.updateNode(module.id, modulePatch)
+
+    if (shouldSyncModules) {
+      const wallChild = wallChildOf(
+        module,
+        scene.nodes as Record<string, CabinetEditableNode | undefined>,
+      )
+      if (wallChild) {
+        scene.updateNode(wallChild.id, {
+          frontStyle: nextNode.frontStyle,
+          frontOverlay: nextNode.frontOverlay,
+          handleStyle: nextNode.handleStyle,
+          handlePosition: nextNode.handlePosition,
+          ...('frontGap' in nextPatch ? { frontGap: nextNode.frontGap } : {}),
+        })
+      }
+    }
+  }
+
+  if (shouldSyncModules) {
+    syncCornerStyleGroupFromRun({
+      run: nextNode,
+      patch: stylePatch,
+      sceneApi,
+    })
+  } else {
+    syncCornerRunsFromRunSources({ run: nextNode, sceneApi })
+  }
+}
+
 export function CabinetRunPanel({
   node,
   modules,
@@ -351,92 +409,7 @@ export function CabinetRunPanel({
   )
 
   const updateRun = useCallback(
-    (patch: Partial<CabinetNodeType>) => {
-      const scene = useScene.getState()
-      const sceneApi = createSceneApi(useScene)
-      const nextPatch = { ...patch }
-      if (typeof nextPatch.carcassHeight === 'number') {
-        const minModuleHeight = Math.max(
-          0.4,
-          ...modules.map((module) => minCabinetCarcassHeightForStack(module)),
-        )
-        nextPatch.carcassHeight = Math.max(nextPatch.carcassHeight, minModuleHeight)
-      }
-      const nextNode = { ...node, ...nextPatch }
-      scene.updateNode(node.id, nextPatch)
-
-      const shouldSyncDepth = RUN_DEPTH_PATCH_KEY in nextPatch
-      const shouldSyncHeight = 'carcassHeight' in nextPatch
-      const shouldSyncPosition = Object.keys(nextPatch).some((key) =>
-        RUN_POSITION_PATCH_KEYS.has(key as keyof CabinetNodeType),
-      )
-      const shouldSyncModules = Object.keys(nextPatch).some((key) =>
-        RUN_MODULE_SYNC_PATCH_KEYS.has(key as keyof CabinetNodeType),
-      )
-      if (!shouldSyncDepth && !shouldSyncHeight && !shouldSyncPosition && !shouldSyncModules) return
-
-      const stylePatch: Partial<CabinetNodeType> = {}
-      if ('frontStyle' in nextPatch) stylePatch.frontStyle = nextNode.frontStyle
-      if ('frontOverlay' in nextPatch) stylePatch.frontOverlay = nextNode.frontOverlay
-      if ('handleStyle' in nextPatch) stylePatch.handleStyle = nextNode.handleStyle
-      if ('handlePosition' in nextPatch) stylePatch.handlePosition = nextNode.handlePosition
-      if ('frontGap' in nextPatch) stylePatch.frontGap = nextNode.frontGap
-
-      for (const module of modules) {
-        const modulePatch: Partial<CabinetModuleNodeType> = {}
-        if (shouldSyncDepth) {
-          modulePatch.depth = nextNode.depth
-        }
-        if (shouldSyncHeight) {
-          modulePatch.carcassHeight = Math.max(
-            nextNode.carcassHeight,
-            minCabinetCarcassHeightForStack(module),
-          )
-        }
-        if (shouldSyncPosition) {
-          modulePatch.position = [module.position[0], runModuleBaseY(nextNode), module.position[2]]
-        }
-        if (shouldSyncModules) {
-          if ('frontStyle' in nextPatch) modulePatch.frontStyle = nextNode.frontStyle
-          if ('frontOverlay' in nextPatch) modulePatch.frontOverlay = nextNode.frontOverlay
-          if ('handleStyle' in nextPatch) modulePatch.handleStyle = nextNode.handleStyle
-          if ('handlePosition' in nextPatch) modulePatch.handlePosition = nextNode.handlePosition
-          if ('frontGap' in nextPatch) modulePatch.frontGap = nextNode.frontGap
-        }
-        scene.updateNode(module.id, modulePatch)
-
-        if (shouldSyncModules) {
-          const wallChild = wallChildOf(
-            module,
-            scene.nodes as Record<string, CabinetEditableNode | undefined>,
-          )
-          if (wallChild) {
-            scene.updateNode(wallChild.id, {
-              frontStyle: nextNode.frontStyle,
-              frontOverlay: nextNode.frontOverlay,
-              handleStyle: nextNode.handleStyle,
-              handlePosition: nextNode.handlePosition,
-              ...('frontGap' in nextPatch ? { frontGap: nextNode.frontGap } : {}),
-            })
-          }
-        }
-      }
-
-      const cornerSource = cornerLinkedSourceModuleForRun(nextNode, scene.nodes)
-      if (shouldSyncModules) {
-        syncCornerStyleGroupFromRun({
-          run: nextNode,
-          patch: stylePatch,
-          sceneApi,
-        })
-      } else if (cornerSource) {
-        syncCornerRunsFromSourceModule({
-          module: cornerSource,
-          run: nextNode,
-          sceneApi,
-        })
-      }
-    },
+    (patch: Partial<CabinetNodeType>) => updateCabinetRun({ modules, node, patch }),
     [modules, node],
   )
 

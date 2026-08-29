@@ -57,6 +57,7 @@ import {
   cabinetModuleTotalHeight,
   totalCabinetHeight as cabinetTotalHeight,
   cornerSourceWidthOverridesForDerivedDepth,
+  nestedCornerRunPositionOverrides,
   previewCornerRunsFromRunSources,
   resolveCabinetType,
   runModuleBaseY,
@@ -1197,7 +1198,15 @@ function commitCabinetManualWidth(
         next.width - module.width,
       )
     }
+    const nestedCornerOverrides = nestedCornerRunPositionOverrides(
+      module,
+      next.position,
+      sceneApi.nodes(),
+    )
     sceneApi.update(module.id as AnyNodeId, modulePatch as Partial<AnyNode>)
+    for (const [id, override] of nestedCornerOverrides) {
+      sceneApi.update(id, override)
+    }
     const wallChild = wallChildOf(module, sceneApi.nodes())
     if (wallChild) {
       sceneApi.update(
