@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { cabinetModuleDefinition } from '../definition'
+import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
 describe('cabinet module drag bounds', () => {
@@ -59,5 +60,39 @@ describe('cabinet module drag bounds', () => {
     expect(bounds?.center[0]).toBeCloseTo(0)
     expect(bounds?.center[1]).toBeCloseTo(0.985)
     expect(bounds?.center[2]).toBeCloseTo(0)
+  })
+})
+
+describe('cabinet run vertical bounds', () => {
+  test('counts a finished module countertop once and exposes the same top surface', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_finished-run-bounds',
+      children: ['cabinet-module_finished-run-bounds'],
+      showPlinth: true,
+      plinthHeight: 0.1,
+      carcassHeight: 0.8,
+      withCountertop: true,
+      countertopThickness: 0.04,
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_finished-run-bounds',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      showPlinth: false,
+      carcassHeight: 0.8,
+      withCountertop: true,
+      countertopThickness: 0.04,
+      topFinish: 'trim',
+      topFinishHeight: 0.2,
+    })
+    const nodes = { [run.id]: run, [module.id]: module } as Record<AnyNodeId, AnyNode>
+
+    const bounds = cabinetDefinition.capabilities.dragBounds?.(run, nodes)
+    const topHeight = cabinetDefinition.capabilities.surfaces?.top?.height
+    const surfaceHeight = typeof topHeight === 'function' ? topHeight(run, { nodes }) : topHeight
+
+    expect(bounds?.size[1]).toBeCloseTo(1.14)
+    expect(bounds?.center[1]).toBeCloseTo(0.57)
+    expect(surfaceHeight).toBeCloseTo(1.14)
   })
 })

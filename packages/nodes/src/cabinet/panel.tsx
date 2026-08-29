@@ -25,8 +25,8 @@ import {
   onCabinetAnimationChange,
   stopCabinetAnimation,
 } from './interaction'
+import { cabinetModulePanelContext } from './panel-context'
 import {
-  cabinetModulePanelUsesRunReflow,
   cabinetModuleSupportsPresets,
   cabinetModuleSupportsTopFinish,
   cabinetModuleUsesFixedApplianceWidth,
@@ -135,24 +135,20 @@ export default function CabinetPanel() {
   const parentRun = useScene((s) => {
     if (!selectedId) return undefined
     const selected = s.nodes[selectedId as AnyNodeId]
-    if (selected?.type !== 'cabinet-module' || !selected.parentId) return undefined
-    let current = s.nodes[selected.parentId as AnyNodeId]
-    const visited = new Set<AnyNodeId>()
-    while (current && !visited.has(current.id as AnyNodeId)) {
-      visited.add(current.id as AnyNodeId)
-      if (current.type === 'cabinet') return current
-      current = current.parentId ? s.nodes[current.parentId as AnyNodeId] : undefined
-    }
-    return undefined
+    return selected?.type === 'cabinet-module'
+      ? (cabinetModulePanelContext(selected, s.nodes)?.parentRun ?? undefined)
+      : undefined
   })
   const moduleIds = useScene((s) => {
     if (!selectedId) return EMPTY_MODULE_IDS
     const selected = s.nodes[selectedId as AnyNodeId] as CabinetEditableNode | undefined
+    const panelContext =
+      selected?.type === 'cabinet-module' ? cabinetModulePanelContext(selected, s.nodes) : null
     const parent =
       selected?.type === 'cabinet'
         ? selected
-        : selected?.type === 'cabinet-module' && selected.parentId
-          ? (s.nodes[selected.parentId as AnyNodeId] as CabinetNodeType | undefined)
+        : panelContext?.reflowModule
+          ? panelContext.parentRun
           : undefined
     if (parent?.type !== 'cabinet') return EMPTY_MODULE_IDS
     return (parent.children ?? EMPTY_MODULE_IDS) as AnyNodeId[]
@@ -205,6 +201,10 @@ export default function CabinetPanel() {
         | CabinetEditableNode
         | undefined
       const nextPatch = { ...patch }
+      const panelContext =
+        liveBeforeUpdate?.type === 'cabinet-module'
+          ? cabinetModulePanelContext(liveBeforeUpdate, scene.nodes)
+          : null
       if (
         liveBeforeUpdate?.type === 'cabinet-module' &&
         typeof nextPatch.carcassHeight === 'number'
@@ -256,17 +256,16 @@ export default function CabinetPanel() {
       if (
         liveBeforeUpdate?.type === 'cabinet-module' &&
         liveBeforeUpdate.parentId &&
-        parentRun?.type === 'cabinet' &&
-        cabinetModulePanelUsesRunReflow({ parentRun, parentIsModule }) &&
+        panelContext?.reflowModule &&
         'width' in nextPatch &&
         typeof nextPatch.width === 'number'
       ) {
         const applied = reflowRunModules({
           modules,
-          parentRun,
+          parentRun: panelContext.parentRun,
           patch: nextPatch as Partial<CabinetModuleNodeType>,
           scene,
-          selected: liveBeforeUpdate,
+          selected: panelContext.reflowModule,
         })
         if (applied) setReflowNotice(null)
         else showReflowRejected()
@@ -332,7 +331,7 @@ export default function CabinetPanel() {
         }
       }
     },
-    [modules, parentIsModule, parentRun, selectedId, showReflowRejected],
+    [modules, parentRun, selectedId, showReflowRejected],
   )
 
   const close = useCallback(() => {
@@ -414,9 +413,13 @@ export default function CabinetPanel() {
   const removeWallChildForTallPatch = (
     patch: Partial<CabinetModuleNodeType>,
     scene: ReturnType<typeof useScene.getState>,
+    target: CabinetEditableNode = node,
   ) => {
-    if (node.type !== 'cabinet-module' || patch.cabinetType !== 'tall') return
-    const child = wallChildOf(node, scene.nodes as Record<string, CabinetEditableNode | undefined>)
+    if (target.type !== 'cabinet-module' || patch.cabinetType !== 'tall') return
+    const child = wallChildOf(
+      target,
+      scene.nodes as Record<string, CabinetEditableNode | undefined>,
+    )
     if (child) scene.deleteNode(child.id as AnyNodeId)
   }
 
@@ -429,25 +432,22 @@ export default function CabinetPanel() {
     const targetCarcassHeight = patch.carcassHeight ?? node.carcassHeight
     if (targetCarcassHeight < minCarcassHeight) patch.carcassHeight = minCarcassHeight
     const scene = useScene.getState()
-    if (
-      node.type === 'cabinet-module' &&
-      parentRun?.type === 'cabinet' &&
-      cabinetModulePanelUsesRunReflow({ parentRun, parentIsModule }) &&
-      patch.width
-    ) {
+    const panelContext =
+      node.type === 'cabinet-module' ? cabinetModulePanelContext(node, scene.nodes) : null
+    if (node.type === 'cabinet-module' && panelContext?.reflowModule && patch.width) {
       const applied = reflowRunModules({
         modules,
-        parentRun,
+        parentRun: panelContext.parentRun,
         patch,
         scene,
-        selected: node,
+        selected: panelContext.reflowModule,
       })
       if (!applied) {
         showReflowRejected()
         return
       }
       setReflowNotice(null)
-      removeWallChildForTallPatch(patch, scene)
+      removeWallChildForTallPatch(patch, scene, panelContext.reflowModule)
       return
     }
     removeWallChildForTallPatch(patch, scene)
@@ -528,35 +528,34 @@ export default function CabinetPanel() {
     if (!preset) return
 
     const patch = preset.createPatch(parentRun)
-    const usesRunReflow = cabinetModulePanelUsesRunReflow({ parentRun, parentIsModule })
+    const panelContext = cabinetModulePanelContext(node, scene.nodes)
+    const reflowModule = panelContext?.reflowModule
 
     const nextPatch: Partial<CabinetModuleNodeType> = {
       ...patch,
       position: [
         node.position[0],
-        usesRunReflow && parentRun?.type === 'cabinet'
-          ? runModuleBaseY(parentRun)
-          : node.position[1],
+        reflowModule ? runModuleBaseY(panelContext.parentRun) : node.position[1],
         typeof patch.depth === 'number'
           ? backAnchoredModuleZ(node.position[2], node.depth, patch.depth)
           : node.position[2],
       ],
     }
 
-    if (usesRunReflow && parentRun?.type === 'cabinet') {
+    if (reflowModule) {
       const applied = reflowRunModules({
         modules,
-        parentRun,
+        parentRun: panelContext.parentRun,
         patch: nextPatch,
         scene,
-        selected: node,
+        selected: reflowModule,
       })
       if (!applied) {
         showReflowRejected()
         return
       }
       setReflowNotice(null)
-      removeWallChildForTallPatch(patch, scene)
+      removeWallChildForTallPatch(patch, scene, reflowModule)
     } else {
       removeWallChildForTallPatch(patch, scene)
       updateNode(nextPatch)

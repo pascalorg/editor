@@ -535,7 +535,7 @@ function cabinetLocalBounds(
       for (const module of modules) {
         includeCabinetModuleBounds(module, nodes, [0, 0, 0], bounds)
       }
-      bounds.maxY += node.withCountertop ? node.countertopThickness : 0
+      bounds.maxY = Math.max(bounds.maxY, cabinetTotalHeight(node))
       // A seating back overhang (unlike the small front/side overhang) is
       // deep enough to matter for selection and collision.
       if (node.withCountertop && node.barLedge?.edge !== 'back') {
@@ -2112,10 +2112,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     deletable: true,
     surfaces: {
       top: {
-        height: (node) => {
-          const n = node as CabinetNodeType
-          return n.plinthHeight + n.carcassHeight + (n.withCountertop ? n.countertopThickness : 0)
-        },
+        height: (node, context) => cabinetLocalBounds(node as CabinetNodeType, context.nodes).maxY,
       },
     },
     floorPlaced: {

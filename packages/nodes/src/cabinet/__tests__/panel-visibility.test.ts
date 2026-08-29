@@ -1,18 +1,10 @@
 import { expect, test } from 'bun:test'
-import { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
+import { CabinetModuleNode } from '@pascal-app/core'
 import {
-  cabinetModulePanelUsesRunReflow,
   cabinetModuleSupportsPresets,
   cabinetModuleSupportsTopFinish,
   cabinetModuleUsesFixedApplianceWidth,
 } from '../panel-visibility'
-
-test('only direct run modules use panel reflow', () => {
-  const run = CabinetNode.parse({})
-
-  expect(cabinetModulePanelUsesRunReflow({ parentRun: run, parentIsModule: false })).toBe(true)
-  expect(cabinetModulePanelUsesRunReflow({ parentRun: run, parentIsModule: true })).toBe(false)
-})
 
 test.each([
   'Corner Filler',
