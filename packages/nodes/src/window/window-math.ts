@@ -1,5 +1,9 @@
 import type { AnyNode, AnyNodeId, WallNode } from '@pascal-app/core'
-import { readHostWallCeiling, type WallCeilingSceneReader } from '../shared/wall-opening-ceiling'
+import {
+  readHostWallCeiling,
+  toWallCeilingSceneReader,
+  type WallCeilingSceneReader,
+} from '../shared/wall-opening-ceiling'
 
 /**
  * Default sill height (metres from the floor to the BOTTOM of a window) for a
@@ -64,52 +68,40 @@ export function clampToWall(
     return { clampedX: wallLength / 2, clampedY: height / 2, fits: false }
   }
 
-  const sceneReader: WallCeilingSceneReader =
-    typeof (sceneOrNodes as WallCeilingSceneReader).nodes === 'function'
-      ? (sceneOrNodes as WallCeilingSceneReader)
-      : {
-          get: (id: AnyNodeId) => (sceneOrNodes as Readonly<Record<AnyNodeId, AnyNode>>)[id],
-          nodes: () => sceneOrNodes as Readonly<Record<AnyNodeId, AnyNode>>,
-        }
+  const sceneReader = toWallCeilingSceneReader(sceneOrNodes)
+  const startCeiling = readHostWallCeiling(wallNode.id, sceneReader, 0)
+  const endCeiling = readHostWallCeiling(wallNode.id, sceneReader, wallLength)
+  const slope = (endCeiling - startCeiling) / wallLength
 
-  function getCeilingAt(testX: number) {
-    const leftHeight = readHostWallCeiling(wallNode.id, sceneReader, testX - width / 2)
-    const rightHeight = readHostWallCeiling(wallNode.id, sceneReader, testX + width / 2)
-    return Math.min(leftHeight, rightHeight)
-  }
+  let fitMinX = minX
+  let fitMaxX = maxX
 
-  let clampedX = Math.max(minX, Math.min(maxX, localX))
-  let ceilingAtX = getCeilingAt(clampedX)
-  let fits = ceilingAtX >= height - 1e-4
-
-  if (!fits) {
-    const step = 0.1
-    const maxSearch = wallLength / 2
-    for (let offset = step; offset <= maxSearch; offset += step) {
-      if (clampedX - offset >= minX) {
-        const ceiling = getCeilingAt(clampedX - offset)
-        if (ceiling >= height - 1e-4) {
-          clampedX -= offset
-          ceilingAtX = ceiling
-          fits = true
-          break
-        }
-      }
-      if (clampedX + offset <= maxX) {
-        const ceiling = getCeilingAt(clampedX + offset)
-        if (ceiling >= height - 1e-4) {
-          clampedX += offset
-          ceilingAtX = ceiling
-          fits = true
-          break
-        }
-      }
+  if (Math.abs(slope) < 1e-6) {
+    if (startCeiling < height - 1e-4) {
+      return { clampedX: Math.max(minX, Math.min(maxX, localX)), clampedY: height / 2, fits: false }
     }
+  } else if (slope > 0) {
+    // Upward slope: lowest ceiling point for window span is at left edge (x - width/2)
+    const minCenterForHeight = (height - startCeiling) / slope + width / 2
+    fitMinX = Math.max(minX, minCenterForHeight)
+  } else {
+    // Downward slope: lowest ceiling point for window span is at right edge (x + width/2)
+    const maxCenterForHeight = (height - startCeiling) / slope - width / 2
+    fitMaxX = Math.min(maxX, maxCenterForHeight)
   }
 
-  const clampedY = Math.max(height / 2, Math.min(ceilingAtX - height / 2, localY))
+  if (fitMinX > fitMaxX + 1e-4) {
+    return { clampedX: Math.max(minX, Math.min(maxX, localX)), clampedY: height / 2, fits: false }
+  }
 
-  return { clampedX, clampedY, fits }
+  const clampedX = Math.max(fitMinX, Math.min(fitMaxX, localX))
+  const leftCeil = startCeiling + slope * (clampedX - width / 2)
+  const rightCeil = startCeiling + slope * (clampedX + width / 2)
+  const ceilingAtX = Math.min(leftCeil, rightCeil)
+
+  const effectiveHeight = Math.min(height, Math.max(0.01, ceilingAtX))
+  const clampedY = Math.max(effectiveHeight / 2, Math.min(ceilingAtX - effectiveHeight / 2, localY))
+  return { clampedX, clampedY, fits: true }
 }
 
 /**

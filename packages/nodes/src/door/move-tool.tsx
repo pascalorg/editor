@@ -149,10 +149,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
     }
 
     let currentHostId: string | null = movingDoorNode.parentId
-    let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
-    // The wall the door was grabbed from. Nulled the first time the anchor
-    // seeds on any other host: the grab offset is then forgotten for good.
-    let grabWallId: string | null = movingDoorNode.parentId
     let committed = false
     // Off-wall free-follow: when the cursor is over empty floor (no wall under
     // the ray) the door is parented to the level and tracks the cursor like an
@@ -313,24 +309,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (event.node.parentId !== getLevelId()) return
 
       const { side, itemRotation } = getPlacementOrientation(event)
-
       const rawLocalX = event.localPosition[0]
-      if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
-        // Grab offset survives only on the original wall and only until the
-        // door anchors on any other host — after that every wall (the
-        // original included) centers the door under the cursor.
-        const preserveGrab = event.node.id === grabWallId
-        if (!preserveGrab) grabWallId = null
-        dragAnchor = {
-          wallId: event.node.id,
-          rawX: rawLocalX,
-          startX: preserveGrab ? original.position[0] : rawLocalX,
-        }
-      }
-      const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
       const localX = resolveWallSlideAlignment({
         wallNode: event.node,
-        rawLocalX: targetLocalX,
+        rawLocalX,
         width: movingDoorNode.width,
         candidates: alignmentCandidates,
         // Along-wall alignment guides display in every snapping mode; the
@@ -350,15 +332,17 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         sceneReader,
       )
 
-      const valid = fits && !hasWallChildOverlap(
-        event.node.id,
-        useScene.getState().nodes,
-        clampedX,
-        clampedY,
-        movingDoorNode.width,
-        movingDoorNode.height,
-        movingDoorNode.id,
-      )
+      const valid =
+        fits &&
+        !hasWallChildOverlap(
+          event.node.id,
+          useScene.getState().nodes,
+          clampedX,
+          clampedY,
+          movingDoorNode.width,
+          movingDoorNode.height,
+          movingDoorNode.id,
+        )
 
       return {
         wallNode: event.node,
@@ -634,7 +618,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       // back to the building origin between a wall and open floor.
       hideCursor()
       useLiveTransforms.getState().clear(movingDoorNode.id)
-      dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
     }
@@ -752,12 +735,8 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       // Valid roof hit owns the pointer for the next few frames; the floor
       // free-follow stands down until the cursor genuinely leaves the roof.
       markWallOwnedPointer()
-      // Wall-frame drag anchor / live transform don't apply on a roof face —
-      // and anchoring here counts as "elsewhere", so the original wall's grab
-      // offset is forgotten for good.
+      // Wall-frame live transform doesn't apply on a roof face.
       freeFollowing = false
-      dragAnchor = null
-      grabWallId = null
       lastTarget = null
       lastRoofEvent = event
       useLiveTransforms.getState().clear(movingDoorNode.id)
@@ -874,7 +853,6 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       // over on the same pointermove (snap to a nearby wall or free-follow).
       hideCursor()
       useLiveTransforms.getState().clear(movingDoorNode.id)
-      dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
     }

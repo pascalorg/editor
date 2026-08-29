@@ -16,6 +16,22 @@ export type WallCeilingSceneReader = {
 }
 
 /**
+ * Normalizes either a `WallCeilingSceneReader` or a raw nodes record into a
+ * `WallCeilingSceneReader`.
+ */
+export function toWallCeilingSceneReader(
+  sceneOrNodes: WallCeilingSceneReader | Readonly<Record<AnyNodeId, AnyNode>>,
+): WallCeilingSceneReader {
+  if (typeof (sceneOrNodes as WallCeilingSceneReader).nodes === 'function') {
+    return sceneOrNodes as WallCeilingSceneReader
+  }
+  return {
+    get: (id: AnyNodeId) => (sceneOrNodes as Readonly<Record<AnyNodeId, AnyNode>>)[id],
+    nodes: () => sceneOrNodes as Readonly<Record<AnyNodeId, AnyNode>>,
+  }
+}
+
+/**
  * Available wall-local Y span for an opening hosted on `wall`: the wall's
  * resolved top (storey plane for plane-bound walls, stored height for
  * explicit ones) minus the wall's elected slab base. Wall-local Y = 0 sits
@@ -47,7 +63,7 @@ export function readHostWallCeiling(
 ): number {
   if (!wallId) return Number.POSITIVE_INFINITY
   const wall = scene.get(wallId as AnyNodeId) as WallNode | undefined
-  if (!wall) return Number.POSITIVE_INFINITY
+  if (wall?.type !== 'wall' || !wall.start || !wall.end) return Number.POSITIVE_INFINITY
   if (positionS !== undefined) {
     // When positionS is given, convert it to a parametric t in the chord frame
     // (0 → wall start, 1 → wall end) to match the slope evaluation in
@@ -73,30 +89,31 @@ export function readHostWallCeilingMaxWidth(
 ): number {
   if (!wallId) return maxLength
   const wall = scene.get(wallId as AnyNodeId) as WallNode | undefined
-  if (!wall) return maxLength
+  if (wall?.type !== 'wall' || !wall.start || !wall.end) return maxLength
 
-  const anchorCeiling = readHostWallCeiling(wallId, scene, anchorS)
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const wallLength = Math.hypot(dx, dz)
+  if (wallLength < 1e-4) return 0
+
+  const startHeight = resolveWallOpeningCeiling(wall, scene.nodes(), 0)
+  const endHeight = resolveWallOpeningCeiling(wall, scene.nodes(), 1)
+  const slope = (endHeight - startHeight) / wallLength
+
+  // At anchorS, check if the anchor itself is below topY
+  const clampedAnchorS = Math.max(0, Math.min(wallLength, anchorS))
+  const anchorCeiling = startHeight + slope * clampedAnchorS
   if (anchorCeiling < topY - 1e-4) {
     return 0
   }
 
-  // Fast check: if the extreme end is also valid, the entire linear span fits
-  const endS = anchorS + growSign * maxLength
-  if (readHostWallCeiling(wallId, scene, endS) >= topY - 1e-4) {
+  // If slope grows in direction of growSign (or is flat), height stays >= topY
+  if (slope * growSign >= -1e-6) {
     return maxLength
   }
 
-  // Binary search for the intersection
-  let low = 0
-  let high = maxLength
-  for (let i = 0; i < 15; i++) {
-    const mid = (low + high) / 2
-    const testS = anchorS + growSign * mid
-    if (readHostWallCeiling(wallId, scene, testS) >= topY - 1e-4) {
-      low = mid
-    } else {
-      high = mid
-    }
-  }
-  return low
+  // Analytical intersection: startHeight + slope * s = topY => s = (topY - startHeight) / slope
+  const limitS = (topY - startHeight) / slope
+  const allowedLength = (limitS - anchorS) / growSign
+  return Math.max(0, Math.min(maxLength, allowedLength))
 }

@@ -53,5 +53,12 @@ describe('clampToWall for windows', () => {
     expect(result.fits).toBe(true)
     expect(result.clampedX).toBe(8)
     expect(result.clampedY).toBeCloseTo(1.225, 3)
+
+    // Window of height 2.0m cannot fit at X = 9 (ceiling only ~1.65m)
+    // Wall slope = -0.15. Required ceiling >= 2.0m.
+    // Exact analytical boundary: (2.0 - 3.0) / -0.15 - 0.5 = 6.666 - 0.5 = 6.166m
+    const slideResult = clampToWall(wall, 9, 1.0, 1.0, 2.0, nodes)
+    expect(slideResult.fits).toBe(true)
+    expect(slideResult.clampedX).toBeCloseTo(6.1667, 3)
   })
 })

@@ -38,7 +38,7 @@ function readWallLength(door: DoorNodeType, scene: { get: (id: AnyNodeId) => unk
   const hostId = door.wallId || door.parentId
   if (!hostId) return Number.POSITIVE_INFINITY
   const wall = scene.get(hostId as AnyNodeId) as WallNode | undefined
-  if (!wall) return Number.POSITIVE_INFINITY
+  if (wall?.type !== 'wall' || !wall.start || !wall.end) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
 }
 
@@ -84,14 +84,10 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
 
       const topY = n.position[1] + n.height / 2
       const hostId = n.wallId || n.parentId
-      return Math.max(MIN_DOOR_WIDTH, readHostWallCeilingMaxWidth(
-        hostId,
-        scene as any,
-        fixedEdgeS,
-        growSign,
-        topY,
-        maxWallBound,
-      ))
+      return Math.max(
+        MIN_DOOR_WIDTH,
+        readHostWallCeilingMaxWidth(hostId, scene as any, fixedEdgeS, growSign, topY, maxWallBound),
+      )
     },
     currentValue: (n) => n.width,
     onDrag: (node) => publishOpeningResizeGuides(node, false),

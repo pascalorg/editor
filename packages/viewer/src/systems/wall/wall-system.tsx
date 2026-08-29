@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  clampWallEndHeightOffset,
   DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
@@ -454,8 +455,7 @@ function getWallBandSplitPlanes(wall: WallNode, effectiveWallHeight: number): nu
   if (bands.count >= 4) planes.push(bands.upperTop)
   const maxWallHeight = effectiveWallHeight + Math.max(0, wall.endHeightOffset ?? 0)
   return planes.filter(
-    (plane) =>
-      plane > WALL_BAND_SPLIT_EPSILON && plane < maxWallHeight - WALL_BAND_SPLIT_EPSILON,
+    (plane) => plane > WALL_BAND_SPLIT_EPSILON && plane < maxWallHeight - WALL_BAND_SPLIT_EPSILON,
   )
 }
 
@@ -984,8 +984,7 @@ function applyWallEndHeightSlope(
   if (!rawOffset || wallLength < 1e-9) {
     return
   }
-  const minEndHeight = 0.01
-  const endHeightOffset = Math.max(rawOffset, -(bodyHeight - minEndHeight))
+  const endHeightOffset = clampWallEndHeightOffset(rawOffset, bodyHeight)
   const slope = endHeightOffset / wallLength
   const position = geometry.getAttribute('position') as THREE.BufferAttribute
 
@@ -1010,7 +1009,7 @@ export function generateExtrudedWall(
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
+  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation, 0)
   const effectiveWallHeight = topElevation - slabElevation
   const effectiveBaseElevation = Math.min(baseElevation, slabElevation)
   const localBottom = effectiveBaseElevation - slabElevation
@@ -1180,7 +1179,7 @@ export function generateExtrudedWall(
   // Apply base-profile and opening cutouts in one CSG pass.
   const cutoutBrushes = [
     ...baseProfileCutouts,
-    ...collectCutoutBrushes(wallNode, childrenNodes, thickness),
+    ...collectCutoutBrushes(wallNode, childrenNodes, thickness, effectiveWallHeight),
   ]
   if (cutoutBrushes.length === 0) {
     const splitGeometry = splitGeometryAtHorizontalPlanes(
@@ -1252,6 +1251,7 @@ function collectCutoutBrushes(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
   wallThickness: number,
+  effectiveWallHeight?: number,
 ): Brush[] {
   const brushes: Brush[] = []
   const wallMesh = sceneRegistry.nodes.get(wallNode.id) as THREE.Mesh
@@ -1265,7 +1265,7 @@ function collectCutoutBrushes(
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
     if (child.type === 'door' || child.type === 'window') {
-      brushes.push(createOpeningCutoutBrush(child, wallThickness))
+      brushes.push(createOpeningCutoutBrush(child, wallThickness, wallNode, effectiveWallHeight))
       continue
     }
 
@@ -1323,17 +1323,41 @@ function collectCutoutBrushes(
   return brushes
 }
 
-function createOpeningCutoutBrush(opening: DoorNode | WindowNode, wallThickness: number): Brush {
+function createOpeningCutoutBrush(
+  opening: DoorNode | WindowNode,
+  wallThickness: number,
+  wallNode?: WallNode,
+  effectiveWallHeight?: number,
+): Brush {
   const halfWidth = opening.width / 2
   const bottom = opening.position[1] - opening.height / 2
   const bottomPadding = getOpeningCutoutBottomPadding(opening, bottom)
+  let top = opening.position[1] + opening.height / 2
+
+  if (wallNode && effectiveWallHeight !== undefined) {
+    const endHeightOffset = clampWallEndHeightOffset(
+      wallNode.endHeightOffset,
+      effectiveWallHeight,
+    )
+    const dx = wallNode.end[0] - wallNode.start[0]
+    const dz = wallNode.end[1] - wallNode.start[1]
+    const wallLength = Math.hypot(dx, dz)
+    if (wallLength > 1e-4) {
+      const slope = endHeightOffset / wallLength
+      const leftCeiling = effectiveWallHeight + slope * (opening.position[0] - halfWidth)
+      const rightCeiling = effectiveWallHeight + slope * (opening.position[0] + halfWidth)
+      const minCeiling = Math.min(leftCeiling, rightCeiling)
+      top = Math.min(top, minCeiling)
+    }
+  }
+
   const geometry = buildOpeningCutoutGeometry(
     opening,
     {
       left: opening.position[0] - halfWidth,
       right: opening.position[0] + halfWidth,
       bottom: bottom - bottomPadding,
-      top: opening.position[1] + opening.height / 2,
+      top,
     },
     wallThickness * 2,
     wallThickness,

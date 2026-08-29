@@ -255,19 +255,17 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       if (!onWall || !lastValid) return false
       const live = useScene.getState().nodes[nodeId] as WindowNode | undefined
       if (live?.type !== 'window') return false
-      // Block on overlap or slope height breach UNLESS Alt force-places — same
-      // `placeable` rule as the 3D move + the shared `resolveOpeningPlacement`.
       const collides =
         !lastFits ||
         hasWallChildOverlap(
-        lastValid.parentId,
-        useScene.getState().nodes,
-        lastValid.position[0],
-        lastValid.position[1],
-        live.width,
-        live.height,
-        live.id,
-      )
+          lastValid.parentId,
+          useScene.getState().nodes,
+          lastValid.position[0],
+          lastValid.position[1],
+          live.width,
+          live.height,
+          live.id,
+        )
       return resolveOpeningPlacement({ collides, forcePlace }).placeable
     },
     commit() {

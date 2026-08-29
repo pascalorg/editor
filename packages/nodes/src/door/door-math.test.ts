@@ -40,18 +40,45 @@ describe('clampToWall for doors', () => {
       start: [0, 0],
       end: [10, 0],
       height: 3,
-      endHeightOffset: -2, // Slopes from 3m down to 1m
+      endHeightOffset: -2, // Slopes from 3m down to 1m (slope = -0.2)
     })
     const nodes = { [wall.id]: wall }
 
     // At X = 1 (near start), ceiling is ~2.8m -> 2.1m door fits
     const startResult = clampToWall(wall, 1, 1, 2.1, nodes)
     expect(startResult.fits).toBe(true)
+    expect(startResult.clampedX).toBe(1)
 
     // At X = 9 (near end), ceiling is ~1.2m -> 2.1m door cannot fit
-    // It should slide left toward the taller start until it fits
+    // Exact analytical boundary: (2.1 - 3) / -0.2 - 0.5 = 4.0m
     const endResult = clampToWall(wall, 9, 1, 2.1, nodes)
     expect(endResult.fits).toBe(true)
-    expect(endResult.clampedX).toBeLessThan(5)
+    expect(endResult.clampedX).toBeCloseTo(4, 5)
+
+    // Door taller than wall maximum height does not fit anywhere
+    const tooTall = clampToWall(wall, 1, 1, 3.5, nodes)
+    expect(tooTall.fits).toBe(false)
+  })
+
+  test('evaluates fits and slides on an upward sloped wall', () => {
+    const wall = WallNode.parse({
+      id: 'wall_upward',
+      start: [0, 0],
+      end: [10, 0],
+      height: 1,
+      endHeightOffset: 2, // Slopes from 1m up to 3m (slope = +0.2)
+    })
+    const nodes = { [wall.id]: wall }
+
+    // At X = 1 (near start), ceiling is ~1.2m -> 2.1m door cannot fit
+    // Exact analytical boundary: (2.1 - 1) / 0.2 + 0.5 = 6.0m
+    const startResult = clampToWall(wall, 1, 1, 2.1, nodes)
+    expect(startResult.fits).toBe(true)
+    expect(startResult.clampedX).toBe(6)
+
+    // At X = 8 (near end), ceiling is ~2.6m -> fits without sliding
+    const endResult = clampToWall(wall, 8, 1, 2.1, nodes)
+    expect(endResult.fits).toBe(true)
+    expect(endResult.clampedX).toBe(8)
   })
 })
